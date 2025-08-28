@@ -71,7 +71,9 @@ class TypeSystem {
    */
   const TypeVector& parent_chain(const DexType* type) const {
     const auto& parents = m_instanceof_table.find(type);
-    if (parents == m_instanceof_table.end()) return empty_vec;
+    if (parents == m_instanceof_table.end()) {
+      return empty_vec;
+    }
     return parents->second;
   }
 
@@ -114,7 +116,9 @@ class TypeSystem {
     }
     const auto& p_chain = parent_it->second;
     const auto& c_chain = child_it->second;
-    if (p_chain.size() > c_chain.size()) return false;
+    if (p_chain.size() > c_chain.size()) {
+      return false;
+    }
     return c_chain.at(p_chain.size() - 1) == parent;
   }
 
@@ -125,7 +129,9 @@ class TypeSystem {
    */
   bool implements(const DexType* cls, const DexType* intf) const {
     const auto& implementors = m_class_scopes.get_interface_map().find(intf);
-    if (implementors == m_class_scopes.get_interface_map().end()) return false;
+    if (implementors == m_class_scopes.get_interface_map().end()) {
+      return false;
+    }
     return implementors->second.count(cls) > 0;
   }
 
@@ -159,7 +165,9 @@ class TypeSystem {
    */
   const TypeSet& get_interface_children(const DexType* intf) const {
     const auto& children = m_intf_children.find(intf);
-    if (children == m_intf_children.end()) return empty_set;
+    if (children == m_intf_children.end()) {
+      return empty_set;
+    }
     return children->second;
   }
 

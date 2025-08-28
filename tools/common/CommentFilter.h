@@ -30,8 +30,9 @@ class CommentFilter {
     } else if (c_char == '#' && !m_in_quotes) {
       m_seen_backslash = false;
       for (c = boost::iostreams::get(src); c != EOF && (unsigned char)c != '\n';
-           c = boost::iostreams::get(src))
+           c = boost::iostreams::get(src)) {
         ;
+      }
     } else {
       m_seen_backslash = false;
     }

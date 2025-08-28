@@ -35,7 +35,9 @@ void OriginalNamePass::build_hierarchies(
   std::vector<DexClass*> base_classes;
   for (const auto& base : m_hierarchy_roots) {
     // skip comments
-    if (base.c_str()[0] == '#') continue;
+    if (base.c_str()[0] == '#') {
+      continue;
+    }
     auto base_type = DexType::get_type(base);
     auto base_class = base_type != nullptr ? type_class(base_type) : nullptr;
     if (base_class == nullptr) {

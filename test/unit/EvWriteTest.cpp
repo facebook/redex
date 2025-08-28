@@ -17,8 +17,9 @@ void testcase(uint64_t value, std::initializer_list<uint8_t> t) {
   int size = (t.end() - t.begin()) - 1;
   std::vector<uint8_t> vbuf;
   type_encoder_signext(vbuf, DEVT_INT, value);
-  for (size_t i = 0; i < 16 && i < vbuf.size(); i++)
+  for (size_t i = 0; i < 16 && i < vbuf.size(); i++) {
     buf[i] = vbuf[i];
+  }
   uint8_t* bufp = buf + vbuf.size();
   EXPECT_EQ(bufp - buf, size + 2);
   EXPECT_EQ(buf[0], ((size << 5) | DEVT_INT));

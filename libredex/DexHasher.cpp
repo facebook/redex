@@ -310,7 +310,9 @@ void Impl::hash_code_init(
       break;
     case MFLOW_CATCH:
       hash((uint8_t)MFLOW_CATCH);
-      if (mie.centry->catch_type) hash(mie.centry->catch_type);
+      if (mie.centry->catch_type) {
+        hash(mie.centry->catch_type);
+      }
       hash(get_mie_id(mie.centry->next));
       break;
     case MFLOW_TARGET:
@@ -327,10 +329,16 @@ void Impl::hash_code_init(
       auto old_hash2 = m_hash;
       m_hash = 0;
       hash((uint8_t)MFLOW_POSITION);
-      if (mie.pos->method) hash(mie.pos->method);
-      if (mie.pos->file) hash(mie.pos->file);
+      if (mie.pos->method) {
+        hash(mie.pos->method);
+      }
+      if (mie.pos->file) {
+        hash(mie.pos->file);
+      }
       hash(mie.pos->line);
-      if (mie.pos->parent) hash(get_pos_id(mie.pos->parent));
+      if (mie.pos->parent) {
+        hash(get_pos_id(mie.pos->parent));
+      }
       boost::hash_combine(m_positions_hash, m_hash);
       m_hash = old_hash2;
       break;

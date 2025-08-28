@@ -54,24 +54,36 @@ constexpr const char* METRIC_TYPES_WITH_ALLOWED_VIOLATIONS =
 
 bool class_contains(const DexField* field) {
   const auto* cls = type_class(field->get_class());
-  if (cls == nullptr) return true;
+  if (cls == nullptr) {
+    return true;
+  }
   for (const auto& cls_field : cls->get_ifields()) {
-    if (field == cls_field) return true;
+    if (field == cls_field) {
+      return true;
+    }
   }
   for (const auto& cls_field : cls->get_sfields()) {
-    if (field == cls_field) return true;
+    if (field == cls_field) {
+      return true;
+    }
   }
   return false;
 }
 
 bool class_contains(const DexMethod* method) {
   const auto* cls = type_class(method->get_class());
-  if (cls == nullptr) return true;
+  if (cls == nullptr) {
+    return true;
+  }
   for (const auto& cls_meth : cls->get_vmethods()) {
-    if (method == cls_meth) return true;
+    if (method == cls_meth) {
+      return true;
+    }
   }
   for (const auto& cls_meth : cls->get_dmethods()) {
-    if (method == cls_meth) return true;
+    if (method == cls_meth) {
+      return true;
+    }
   }
   return false;
 }
@@ -676,9 +688,15 @@ std::pair<bool, const DexType*> Breadcrumbs::is_illegal_cross_store(
 const DexType* Breadcrumbs::check_type(const DexType* type) {
   auto type_ref = type::get_element_type_if_array(type);
   const auto& cls = type_class(type_ref);
-  if (cls == nullptr) return nullptr;
-  if (cls->is_external()) return nullptr;
-  if (m_classes.count(cls) > 0) return nullptr;
+  if (cls == nullptr) {
+    return nullptr;
+  }
+  if (cls->is_external()) {
+    return nullptr;
+  }
+  if (m_classes.count(cls) > 0) {
+    return nullptr;
+  }
   return type_ref;
 }
 

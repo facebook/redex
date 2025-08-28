@@ -76,7 +76,9 @@ void load_generated_types(const ModelSpec& spec,
 template <class Set>
 bool is_subset(const Set& left, const Set& right) {
   for (const auto& el : left) {
-    if (right.count(el) == 0) return false;
+    if (right.count(el) == 0) {
+      return false;
+    }
   }
   return true;
 }
@@ -700,7 +702,9 @@ void Model::map_fields(MergerType& merger,
                        const std::vector<const DexType*>& classes) {
   TRACE(CLMG, 8, "Build field map for %s", SHOW(merger.type));
   always_assert(merger.is_shape());
-  if (merger.field_count() == 0) return;
+  if (merger.field_count() == 0) {
+    return;
+  }
   // for each mergeable type build order the field accroding to the
   // shape. The field order shape is implicit and defined by the shape itself
   for (const auto& type : classes) {
@@ -1175,7 +1179,9 @@ std::string Model::print(const DexType* type) const {
     ss << " interfaces(" << intfs->second.size() << ")";
     size_t count = 0;
     for (const auto& intf : intfs->second) {
-      if (count++ > 6) break;
+      if (count++ > 6) {
+        break;
+      }
       ss << ", " << SHOW(intf);
     }
   }

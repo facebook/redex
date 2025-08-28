@@ -389,7 +389,9 @@ DedupStrings::get_strings_to_dedup(
   for (auto& p : UnorderedIterable(occurrences)) {
     const auto& m = p.second;
     always_assert(!m.empty());
-    if (m.size() == 1) continue;
+    if (m.size() == 1) {
+      continue;
+    }
     ordered_strings.push_back(p.first);
   }
   std::sort(ordered_strings.begin(), ordered_strings.end(), compare_dexstrings);

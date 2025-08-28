@@ -92,7 +92,9 @@ void loosen_access_modifier(const DexClasses& classes) {
   }
 
   walk::annotations(classes, [&dalvikinner](DexAnnotation* anno) {
-    if (anno->type() != dalvikinner) return;
+    if (anno->type() != dalvikinner) {
+      return;
+    }
     auto& elems = anno->anno_elems();
     for (auto& elem : elems) {
       // Fix access flags on all @InnerClass annotations

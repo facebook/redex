@@ -130,7 +130,9 @@ TEST_F(StringTreeTest, testSubtreeOfDifferentSize) {
   // construct subtree of different sizes.
   std::vector<std::string> tmp;
   for (const auto& s : names) {
-    if (size >= max_char_count) continue;
+    if (size >= max_char_count) {
+      continue;
+    }
     auto subtree = buildSubtree(s, seed, size++);
     tmp.insert(tmp.end(), subtree.begin(), subtree.end());
   }

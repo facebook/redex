@@ -43,11 +43,16 @@ class StripDebugInfoTest : public RedexIntegrationTest {
       std::vector<DexMethodRef*> methods;
       cls->gather_methods(methods);
       for (auto method : methods) {
-        if (!method->is_def()) continue;
+        if (!method->is_def()) {
+          continue;
+        }
         IRCode* code = static_cast<DexMethod*>(method)->get_code();
-        if (!code) continue;
-        for (const auto& mei : *code)
+        if (!code) {
+          continue;
+        }
+        for (const auto& mei : *code) {
           callback(mei);
+        }
       }
     }
   }

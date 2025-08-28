@@ -103,7 +103,9 @@ class DexDebugOpcodeStartLocal : public DexDebugInstruction {
     m_name = name;
     m_type = type;
     m_sig = sig;
-    if (sig) m_opcode = DBG_START_LOCAL_EXTENDED;
+    if (sig) {
+      m_opcode = DBG_START_LOCAL_EXTENDED;
+    }
   }
 
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;

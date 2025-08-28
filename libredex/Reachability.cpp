@@ -240,14 +240,18 @@ void RootSetMarker::mark_with_exclusions(
 }
 
 void RootSetMarker::push_seed(const DexClass* cls) {
-  if (!cls) return;
+  if (!cls) {
+    return;
+  }
   record_is_seed(cls);
   m_reachable_objects->mark(cls);
   m_root_set->emplace(cls);
 }
 
 void RootSetMarker::push_seed(const DexField* field, Condition condition) {
-  if (!field) return;
+  if (!field) {
+    return;
+  }
   switch (condition) {
   case Condition::ClassRetained:
     m_cond_marked->if_class_retained.fields.insert(field);
@@ -264,7 +268,9 @@ void RootSetMarker::push_seed(const DexField* field, Condition condition) {
 }
 
 void RootSetMarker::push_seed(const DexMethod* method, Condition condition) {
-  if (!method) return;
+  if (!method) {
+    return;
+  }
   switch (condition) {
   case Condition::ClassRetained:
     m_cond_marked->if_class_retained.methods.insert(method);
@@ -429,7 +435,9 @@ void TransitiveClosureMarkerWorker::push(const DexMethodRef* parent,
 
 void TransitiveClosureMarkerWorker::push_if_class_instantiable(
     const DexMethod* method) {
-  if (!method || m_shared_state->reachable_objects->marked(method)) return;
+  if (!method || m_shared_state->reachable_objects->marked(method)) {
+    return;
+  }
   TRACE(REACH, 4,
         "Conditionally marking method if declaring class is instantiable: %s",
         SHOW(method));
@@ -449,7 +457,9 @@ void TransitiveClosureMarkerWorker::push_if_class_instantiable(
 
 void TransitiveClosureMarkerWorker::push_if_class_instantiable(
     const DexField* field) {
-  if (!field || m_shared_state->reachable_objects->marked(field)) return;
+  if (!field || m_shared_state->reachable_objects->marked(field)) {
+    return;
+  }
   TRACE(REACH, 4,
         "Conditionally marking field if declaring class is instantiable: %s",
         SHOW(field));
@@ -462,7 +472,9 @@ void TransitiveClosureMarkerWorker::push_if_class_instantiable(
 
 void TransitiveClosureMarkerWorker::push_if_class_instantiable(
     const DexClass* cls) {
-  if (!cls || m_shared_state->reachable_objects->marked(cls)) return;
+  if (!cls || m_shared_state->reachable_objects->marked(cls)) {
+    return;
+  }
   TRACE(REACH, 4, "Conditionally marking class if instantiable: %s", SHOW(cls));
   m_shared_state->cond_marked->if_class_instantiable.classes.insert(cls);
   if (m_shared_state->reachable_aspects->instantiable_types.count(cls)) {
@@ -523,7 +535,9 @@ void TransitiveClosureMarkerWorker::push_if_method_returning(
 
 void TransitiveClosureMarkerWorker::push_if_class_retained(
     const DexMethod* method) {
-  if (!method || m_shared_state->reachable_objects->marked(method)) return;
+  if (!method || m_shared_state->reachable_objects->marked(method)) {
+    return;
+  }
   TRACE(REACH, 4,
         "Conditionally marking method if declaring class is instantiable: %s",
         SHOW(method));
@@ -536,7 +550,9 @@ void TransitiveClosureMarkerWorker::push_if_class_retained(
 
 void TransitiveClosureMarkerWorker::push_if_class_retained(
     const DexField* field) {
-  if (!field || m_shared_state->reachable_objects->marked(field)) return;
+  if (!field || m_shared_state->reachable_objects->marked(field)) {
+    return;
+  }
   TRACE(REACH, 4,
         "Conditionally marking field if declaring class is instantiable: %s",
         SHOW(field));
@@ -1487,7 +1503,9 @@ void TransitiveClosureMarkerWorker::visit_method_references_gatherer_returning(
 
 const DexMethod* resolve_without_context(const DexMethodRef* method,
                                          const DexClass* cls) {
-  if (!cls) return nullptr;
+  if (!cls) {
+    return nullptr;
+  }
   for (auto const& m : cls->get_vmethods()) {
     if (method::signatures_match(method, m)) {
       return m;

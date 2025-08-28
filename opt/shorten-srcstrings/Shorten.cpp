@@ -29,13 +29,17 @@ constexpr const char* METRIC_SHORTENED_STRINGS = "num_shortened_strings";
 constexpr const char* METRIC_BYTES_SAVED = "num_shortening_bytes_saved";
 
 static bool maybe_file_name(const char* str, size_t len) {
-  if (len < 5) return false;
+  if (len < 5) {
+    return false;
+  }
   return strncmp(str + len - 5, ".java", 5) == 0;
 }
 
 static bool is_reasonable_string(const char* str, size_t len) {
   std::vector<char> avoid = {'\n', '\t', ':', ','};
-  if (len == 0) return false;
+  if (len == 0) {
+    return false;
+  }
   for (size_t i = 0; i < len; i++) {
     for (auto c : avoid) {
       if (str[i] == c) {

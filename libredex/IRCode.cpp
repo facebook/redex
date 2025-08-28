@@ -877,8 +877,9 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
     dex_code->set_registers_size(m_registers_size);
     dex_code->set_outs_size(calc_outs_size(this));
     dex_code->set_debug_item(std::move(m_dbg));
-    while (try_sync(dex_code.get()) == false)
+    while (try_sync(dex_code.get()) == false) {
       ;
+    }
   } catch (const std::exception& e) {
     std::cerr << "Failed to sync " << SHOW(method) << std::endl
               << SHOW(this) << std::endl;
@@ -1192,7 +1193,9 @@ void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
   } else {
     m_ir_list->gather_catch_types(ltype);
   }
-  if (m_dbg) m_dbg->gather_types(ltype);
+  if (m_dbg) {
+    m_dbg->gather_types(ltype);
+  }
 }
 
 void IRCode::gather_strings(std::vector<const DexString*>& lstring) const {
@@ -1201,7 +1204,9 @@ void IRCode::gather_strings(std::vector<const DexString*>& lstring) const {
   } else {
     m_ir_list->gather_strings(lstring);
   }
-  if (m_dbg) m_dbg->gather_strings(lstring);
+  if (m_dbg) {
+    m_dbg->gather_strings(lstring);
+  }
 }
 
 void IRCode::gather_types(std::vector<DexType*>& ltype) const {

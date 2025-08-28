@@ -11,7 +11,9 @@ namespace m {
 namespace detail {
 
 bool is_assignable_to_interface(const DexType* type, const DexType* iface) {
-  if (type == iface) return true;
+  if (type == iface) {
+    return true;
+  }
   auto cls = type_class(type);
   if (cls) {
     for (auto extends : *cls->get_interfaces()) {
@@ -27,9 +29,13 @@ bool is_assignable_to(const DexType* child, const DexType* parent) {
   // Check class hierarchy
   auto super = child;
   while (super != nullptr) {
-    if (parent == super) return true;
+    if (parent == super) {
+      return true;
+    }
     const auto cls = type_class(super);
-    if (cls == nullptr) break;
+    if (cls == nullptr) {
+      break;
+    }
     super = cls->get_super_class();
   }
   // Check interface hierarchy

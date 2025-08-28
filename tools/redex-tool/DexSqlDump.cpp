@@ -48,7 +48,9 @@ void dump_field_refs(FILE* fdout,
                      int field_id) {
   static int next_string_ref = 0;
   auto* static_value = field->get_static_value();
-  if (!static_value || (static_value->evtype() != DEVT_STRING)) return;
+  if (!static_value || (static_value->evtype() != DEVT_STRING)) {
+    return;
+  }
   auto* static_string_value = static_cast<DexEncodedValueString*>(static_value);
   auto string_id = string_ids[static_string_value->string()];
   fprintf(fdout,
@@ -64,7 +66,9 @@ void dump_method_refs(FILE* fdout,
                       DexMethod* method,
                       int method_id) {
   auto code = method->get_code();
-  if (!code) return;
+  if (!code) {
+    return;
+  }
 
   static int next_string_ref = 0;
   static int next_class_ref = 0;

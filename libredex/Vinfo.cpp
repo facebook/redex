@@ -39,7 +39,9 @@ void build_vinfos_for_meth(vinfos_t& vinfos, const DexMethod* meth) {
 vinfos_t build_vinfos(const std::vector<DexClass*>& scope) {
   vinfos_t vinfos;
   for (const DexClass* cls : scope) {
-    if (is_interface(cls)) continue;
+    if (is_interface(cls)) {
+      continue;
+    }
     for (const DexMethod* meth : cls->get_vmethods()) {
       build_vinfos_for_meth(vinfos, meth);
     }

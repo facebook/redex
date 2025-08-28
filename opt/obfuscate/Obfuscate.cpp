@@ -63,12 +63,14 @@ int obfuscate_elems(const RenamingContext<T>& context,
 void debug_logging(std::vector<DexClass*>& classes) {
   for (DexClass* cls : classes) {
     TRACE_NO_LINE(OBFUSCATE, 4, "Applying new names:\n  List of ifields\t");
-    for (DexField* f : cls->get_ifields())
+    for (DexField* f : cls->get_ifields()) {
       TRACE_NO_LINE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
+    }
     TRACE(OBFUSCATE, 4, "");
     TRACE_NO_LINE(OBFUSCATE, 4, "  List of sfields\t");
-    for (DexField* f : cls->get_sfields())
+    for (DexField* f : cls->get_sfields()) {
       TRACE_NO_LINE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
+    }
     TRACE(OBFUSCATE, 4, "");
   }
   TRACE(OBFUSCATE, 3, "Finished applying new names to defs");
@@ -112,7 +114,9 @@ void update_refs(Scope& scope,
     auto op = instr->opcode();
     if (instr->has_field()) {
       DexFieldRef* field_ref = instr->get_field();
-      if (field_ref->is_def()) return;
+      if (field_ref->is_def()) {
+        return;
+      }
       DexField* field_def =
           find_renamable_ref(field_ref, f_ref_def_cache, field_name_mapping);
       if (field_def != nullptr) {
@@ -129,7 +133,9 @@ void update_refs(Scope& scope,
       // conflate this virtual ref with a direct def that happens to have the
       // same name but isn't actually inherited.
       DexMethodRef* method_ref = instr->get_method();
-      if (method_ref->is_def()) return;
+      if (method_ref->is_def()) {
+        return;
+      }
       DexMethod* method_def =
           find_renamable_ref(method_ref, m_ref_def_cache, method_name_mapping);
       if (method_def != nullptr) {

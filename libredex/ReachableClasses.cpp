@@ -39,7 +39,9 @@ struct DexItemIter {};
 template <typename F>
 struct DexItemIter<DexField*, F> {
   static void iterate(DexClass* cls, F& yield) {
-    if (cls->is_external()) return;
+    if (cls->is_external()) {
+      return;
+    }
     for (auto* field : cls->get_sfields()) {
       yield(field);
     }
@@ -52,7 +54,9 @@ struct DexItemIter<DexField*, F> {
 template <typename F>
 struct DexItemIter<DexMethod*, F> {
   static void iterate(DexClass* cls, F& yield) {
-    if (cls->is_external()) return;
+    if (cls->is_external()) {
+      return;
+    }
     for (auto* method : cls->get_dmethods()) {
       yield(method);
     }
@@ -295,7 +299,9 @@ void analyze_reflection(const Scope& scope) {
  *     <com.facebook.MyTerrificView />
  */
 void mark_reachable_by_classname(DexClass* dclass) {
-  if (dclass == nullptr) return;
+  if (dclass == nullptr) {
+    return;
+  }
   dclass->rstate.referenced_by_string();
 }
 
@@ -679,7 +685,9 @@ void init_reachable_classes(const Scope& scope,
       auto native_classes = resources->get_native_classes();
       for (const std::string& classname : UnorderedIterable(native_classes)) {
         auto type = DexType::get_type(classname);
-        if (type == nullptr) continue;
+        if (type == nullptr) {
+          continue;
+        }
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
         mark_reachable_by_classname(type);
         mark_reachable_by_native(type);

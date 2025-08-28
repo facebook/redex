@@ -39,7 +39,9 @@ void opt_warn(OptWarning warn, const char* fmt, ...) {
 }
 
 void print_warning_summary() {
-  if (g_warning_level != WARN_COUNT) return;
+  if (g_warning_level != WARN_COUNT) {
+    return;
+  }
   for (size_t i = 0; i < kNumWarnings; i++) {
     size_t count = s_warning_counts[i];
     if (count > 0) {

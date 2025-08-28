@@ -148,7 +148,9 @@ DexClass* create_class(DexType* type,
                        bool external = false) {
   ClassCreator creator(type);
   creator.set_access(access);
-  if (external) creator.set_external();
+  if (external) {
+    creator.set_external();
+  }
   if (super != nullptr) {
     creator.set_super(super);
   }

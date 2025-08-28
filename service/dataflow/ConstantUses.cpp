@@ -369,7 +369,9 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_SHL_LONG:
   case OPCODE_SHR_LONG:
   case OPCODE_USHR_LONG:
-    if (src_index == 0) return TypeDemand::Long;
+    if (src_index == 0) {
+      return TypeDemand::Long;
+    }
     always_assert(src_index == 1);
     return TypeDemand::Int;
 
@@ -440,7 +442,9 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_AGET_SHORT:
   case OPCODE_AGET_WIDE:
   case OPCODE_AGET_OBJECT:
-    if (src_index == 0) return TypeDemand::Object;
+    if (src_index == 0) {
+      return TypeDemand::Object;
+    }
     always_assert(src_index == 1);
     return TypeDemand::Int;
 
@@ -451,8 +455,12 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_APUT_SHORT:
   case OPCODE_APUT_WIDE:
   case OPCODE_APUT_OBJECT:
-    if (src_index == 1) return TypeDemand::Object;
-    if (src_index == 2) return TypeDemand::Int;
+    if (src_index == 1) {
+      return TypeDemand::Object;
+    }
+    if (src_index == 2) {
+      return TypeDemand::Int;
+    }
     always_assert(src_index == 0);
     switch (insn->opcode()) {
     case OPCODE_APUT:
@@ -502,7 +510,9 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_IPUT_SHORT:
   case OPCODE_IPUT_WIDE:
   case OPCODE_IPUT_OBJECT:
-    if (src_index == 1) return TypeDemand::Object;
+    if (src_index == 1) {
+      return TypeDemand::Object;
+    }
     always_assert(src_index == 0);
     return get_type_demand(insn->get_field()->get_type());
 
@@ -529,7 +539,9 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       // The first argument is a reference to the object instance on which the
       // method is invoked.
-      if (src_index-- == 0) return TypeDemand::Object;
+      if (src_index-- == 0) {
+        return TypeDemand::Object;
+      }
     }
     return get_type_demand(arg_types->at(src_index));
   }

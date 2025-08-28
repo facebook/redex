@@ -122,7 +122,9 @@ std::vector<DexClassSet> collect_can_merge(
     anno->gather_types(types_in_anno);
     for (const auto& type : types_in_anno) {
       DexClass* type_cls = type_class(type);
-      if (type_cls == nullptr) continue;
+      if (type_cls == nullptr) {
+        continue;
+      }
       for (auto it = interface_set.begin(); it != interface_set.end(); ++it) {
         if (it->count(type_cls) > 0) {
           it->erase(type_cls);
@@ -566,7 +568,9 @@ void update_after_merge(
 void remove_merged_interfaces(
     Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& intf_merge_map) {
-  if (intf_merge_map.empty()) return;
+  if (intf_merge_map.empty()) {
+    return;
+  }
   Scope tscope(scope);
   scope.clear();
   for (DexClass* cls : tscope) {

@@ -293,12 +293,13 @@ void MethodBlock::move(Location src, Location& dst) {
   auto ch = type::type_shorty(dst.type);
   redex_assert(ch != 'V');
   IROpcode opcode;
-  if (ch == 'L')
+  if (ch == 'L') {
     opcode = OPCODE_MOVE_OBJECT;
-  else if (ch == 'J' || ch == 'D')
+  } else if (ch == 'J' || ch == 'D') {
     opcode = OPCODE_MOVE_WIDE;
-  else
+  } else {
     opcode = OPCODE_MOVE;
+  }
   IRInstruction* move = new IRInstruction(opcode);
   move->set_dest(dst.get_reg());
   move->set_src(0, src.get_reg());
@@ -311,12 +312,13 @@ void MethodBlock::move_result(Location& dst, DexType* type) {
   auto ch = type::type_shorty(type);
   redex_assert(ch != 'V');
   IROpcode opcode;
-  if (ch == 'L')
+  if (ch == 'L') {
     opcode = OPCODE_MOVE_RESULT_OBJECT;
-  else if (ch == 'J' || ch == 'D')
+  } else if (ch == 'J' || ch == 'D') {
     opcode = OPCODE_MOVE_RESULT_WIDE;
-  else
+  } else {
     opcode = OPCODE_MOVE_RESULT;
+  }
 
   IRInstruction* mov_res = new IRInstruction(opcode);
   mov_res->set_dest(dst.get_reg());
@@ -348,12 +350,13 @@ void MethodBlock::ret(Location loc) {
   auto ch = type::type_shorty(loc.type);
   redex_assert(ch != 'V');
   IROpcode opcode;
-  if (ch == 'L')
+  if (ch == 'L') {
     opcode = OPCODE_RETURN_OBJECT;
-  else if (ch == 'J' || ch == 'D')
+  } else if (ch == 'J' || ch == 'D') {
     opcode = OPCODE_RETURN_WIDE;
-  else
+  } else {
     opcode = OPCODE_RETURN;
+  }
 
   auto ret = new IRInstruction(opcode);
   ret->set_src(0, loc.get_reg());

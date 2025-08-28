@@ -21,8 +21,12 @@ void dump_viz(const Scope& scope,
               const char* cls_filter,
               const char* meth_filter) {
   walk::code(scope, [&](DexMethod* meth, IRCode& code) {
-    if (cls_filter && !strstr(meth->get_class()->c_str(), cls_filter)) return;
-    if (meth_filter && !strstr(meth->c_str(), meth_filter)) return;
+    if (cls_filter && !strstr(meth->get_class()->c_str(), cls_filter)) {
+      return;
+    }
+    if (meth_filter && !strstr(meth->c_str(), meth_filter)) {
+      return;
+    }
     code.build_cfg(/* editable */ false);
     const auto& blocks = code.cfg().blocks();
     fprintf(stderr, "digraph \"%s\" {\n", SHOW(meth));

@@ -35,7 +35,9 @@ static std::string get_proto(ddump_data* rd,
     int count = (int)*tl++;
     uint16_t* types = (uint16_t*)tl;
     for (int i = 0; i < count; i++) {
-      if (i != 0) ss << " ";
+      if (i != 0) {
+        ss << " ";
+      }
       ss << dex_string_by_type_idx(rd, *types++);
     }
   }
@@ -182,7 +184,9 @@ static std::string get_class_data_item(ddump_data* rd, uint32_t idx) {
   const dex_class_def* class_defs =
       (dex_class_def*)(rd->dexmmap + rd->dexh->class_defs_off) + idx;
   auto cls_off = class_defs->class_data_offset;
-  if (!cls_off) return "";
+  if (!cls_off) {
+    return "";
+  }
   ss << dex_string_by_type_idx(rd, class_defs->typeidx) << "\n";
   const uint8_t* class_data =
       reinterpret_cast<const uint8_t*>(rd->dexmmap + cls_off);
@@ -238,7 +242,9 @@ static std::string get_code_item(dex_code_item** pcode_item) {
       (const uint16_t*)(code_item + 1) + code_item->insns_size;
   *pcode_item = (dex_code_item*)dexptr;
   if (code_item->tries_size) {
-    if (code_item->insns_size & 1) dexptr++; // padding before tries
+    if (code_item->insns_size & 1) {
+      dexptr++; // padding before tries
+    }
     const dex_tries_item* tries = (const dex_tries_item*)dexptr;
     const uint8_t* handlers = (const uint8_t*)(tries + code_item->tries_size);
     for (auto i = 0; i < code_item->tries_size; i++) {

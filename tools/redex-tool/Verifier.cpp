@@ -83,12 +83,16 @@ void build_refs(const Scope& scope, refs_t& class_refs) {
       [&](const DexMethod* meth, IRInstruction* insn) {
         if (insn->has_type()) {
           const auto tref = type_class(insn->get_type());
-          if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
+          if (tref) {
+            class_refs[tref].emplace(type_class(meth->get_class()));
+          }
           return;
         }
         if (insn->has_field()) {
           const auto tref = type_class(insn->get_field()->get_class());
-          if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
+          if (tref) {
+            class_refs[tref].emplace(type_class(meth->get_class()));
+          }
           return;
         }
         if (insn->has_method()) {
@@ -96,7 +100,9 @@ void build_refs(const Scope& scope, refs_t& class_refs) {
           // exist and true verification would require that the binding refers
           // to a class that is valid.
           const auto mref = type_class(insn->get_method()->get_class());
-          if (mref) class_refs[mref].emplace(type_class(meth->get_class()));
+          if (mref) {
+            class_refs[mref].emplace(type_class(meth->get_class()));
+          }
 
           // don't log return type or types of parameters for now, but this is
           // how you might do it.

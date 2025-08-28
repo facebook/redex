@@ -535,7 +535,9 @@ class DexAnnotationSet : public Gatherable {
     cntanno = m_annotations.size();
     cntviz = 0;
     for (auto const& da : m_annotations) {
-      if (da->runtime_visible()) cntviz++;
+      if (da->runtime_visible()) {
+        cntviz++;
+      }
     }
   }
 

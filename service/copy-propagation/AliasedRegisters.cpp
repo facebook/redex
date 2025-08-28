@@ -478,7 +478,9 @@ void AliasedRegisters::handle_insert_order_at_merge(
     // return false if they compare equal or if `b` occurs
     // before `a`.
 
-    if (a == b) return false;
+    if (a == b) {
+      return false;
+    }
 
     auto i_sum = insert_order_sums.at(a);
     auto j_sum = insert_order_sums.at(b);

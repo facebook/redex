@@ -27,14 +27,20 @@ bool is_word(char c) { return is_digit(c) || is_alpha(c) || c == '_'; }
 // ".*\\$\\d+;"
 bool is_anonymous(std::string name) {
   for (uint32_t i = 0; i < name.length(); ++i) {
-    if (name[i] != '$') continue;
+    if (name[i] != '$') {
+      continue;
+    }
 
     uint32_t j = i + 1;
     for (; j < name.length(); ++j) {
-      if (is_digit(name[j])) continue;
+      if (is_digit(name[j])) {
+        continue;
+      }
     }
 
-    if (j == i + 1) continue;
+    if (j == i + 1) {
+      continue;
+    }
     if (name[j] == ';') {
       fprintf(stderr, "'%s' is anonymous\n", name.c_str());
       return true;
@@ -47,14 +53,20 @@ bool is_anonymous(std::string name) {
 // ".*\\$\\w+;"
 bool is_nested(std::string name) {
   for (uint32_t i = 0; i < name.length(); ++i) {
-    if (name[i] != '$') continue;
+    if (name[i] != '$') {
+      continue;
+    }
 
     uint32_t j = i + 1;
     for (; j < name.length(); ++j) {
-      if (is_word(name[j])) continue;
+      if (is_word(name[j])) {
+        continue;
+      }
     }
 
-    if (j == i + 1) continue;
+    if (j == i + 1) {
+      continue;
+    }
     if (name[j] == ';') {
       fprintf(stderr, "'%s' is nested\n", name.c_str());
       return true;
@@ -144,7 +156,9 @@ void class_type_stats(SingleImpls& single_impls) {
     auto name = intf_it.second.cls->get_name()->c_str();
     auto anon = is_anonymous(name);
     auto nested_cls = false;
-    if (!anon) nested_cls = is_nested(name);
+    if (!anon) {
+      nested_cls = is_nested(name);
+    }
     const auto& cls = type_class(intf_it.second.cls);
     if (type::is_object(cls->get_super_class()) &&
         cls->get_interfaces()->empty()) {

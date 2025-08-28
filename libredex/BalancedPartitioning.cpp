@@ -46,7 +46,9 @@ void BalancedPartitioning::run() const {
           const WorkItem& work_item) {
         uint32_t num_documents =
             std::distance(work_item.document_begin, work_item.document_end);
-        if (num_documents == 0) return;
+        if (num_documents == 0) {
+          return;
+        }
 
         // Reached the lowest level of the recursion tree
         if (work_item.rec_depth >= SPLIT_DEPTH || num_documents <= 1) {
@@ -109,7 +111,9 @@ void BalancedPartitioning::run_iterations(
     uint32_t num_moved_documents =
         run_iteration(document_begin, document_end, left_bucket, right_bucket,
                       signatures, rng);
-    if (num_moved_documents == 0) break;
+    if (num_moved_documents == 0) {
+      break;
+    }
   }
 }
 
@@ -233,7 +237,9 @@ uint32_t BalancedPartitioning::run_iteration(
   uint32_t min_size = std::min(std::distance(left_gains, left_end),
                                std::distance(right_gains, right_end));
   for (uint32_t I = 0; I < min_size; I++) {
-    if (left_gains[I].first + right_gains[I].first <= 0.0) break;
+    if (left_gains[I].first + right_gains[I].first <= 0.0) {
+      break;
+    }
     // Try to swap the two documents
     num_moved_data_vertices +=
         move_data_vertex(document_begin[left_gains[I].second], left_bucket,

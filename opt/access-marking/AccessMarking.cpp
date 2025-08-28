@@ -148,7 +148,9 @@ void fix_call_sites_private(const std::vector<DexClass*>& scope,
     auto& cfg = code.cfg();
     for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;
-      if (!insn->has_method()) continue;
+      if (!insn->has_method()) {
+        continue;
+      }
       auto callee =
           resolve_method(insn->get_method(), opcode_to_search(insn), caller);
       // should be safe to read `privates` here because there are no writers

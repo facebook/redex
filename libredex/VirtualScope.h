@@ -342,11 +342,15 @@ class ClassScopes {
         TypeSet intfs;
         for (auto& scope : sig_it.second) {
           redex_assert(type_class(scope.type) != nullptr);
-          if (scope.interfaces.empty()) continue;
+          if (scope.interfaces.empty()) {
+            continue;
+          }
           intf_scopes.emplace_back(&scope);
           intfs.insert(scope.interfaces.begin(), scope.interfaces.end());
         }
-        if (intf_scopes.empty()) continue;
+        if (intf_scopes.empty()) {
+          continue;
+        }
         walker(names_it.first, sig_it.first, intf_scopes, intfs);
       }
     }

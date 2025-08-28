@@ -162,7 +162,9 @@ inline DexMethod* resolve_static(const DexClass* cls,
 inline DexMethod* resolve_interface_method(const DexClass* cls,
                                            const DexString* name,
                                            const DexProto* proto) {
-  if (!is_interface(cls)) return nullptr;
+  if (!is_interface(cls)) {
+    return nullptr;
+  }
   return resolve_method(cls, name, proto, MethodSearch::Interface);
 }
 
@@ -214,7 +216,9 @@ inline DexMethod* resolve_method(DexMethodRef* method,
     return m;
   }
   auto cls = type_class(method->get_class());
-  if (cls == nullptr) return nullptr;
+  if (cls == nullptr) {
+    return nullptr;
+  }
   return resolve_method_ref(cls, method->get_name(), method->get_proto(),
                             search);
 }

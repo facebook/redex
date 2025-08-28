@@ -149,7 +149,9 @@ static void find_common_ctor_invocations(
   for (auto& s : switch_block->succs()) {
     targets.insert(s->target());
   }
-  if (targets.size() <= 1) return;
+  if (targets.size() <= 1) {
+    return;
+  }
 
   for (auto& target : UnorderedIterable(targets)) {
     if (return_block != target->goes_to_only_edge()) {

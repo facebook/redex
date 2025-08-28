@@ -239,7 +239,9 @@ uint16_t DexInstruction::src(int i) const {
     return (m_opcode >> 12) & 0xf;
   case FMT_f12x_2:
     redex_assert(i < 2);
-    if (i == 0) return (m_opcode >> 8) & 0xf;
+    if (i == 0) {
+      return (m_opcode >> 8) & 0xf;
+    }
     return (m_opcode >> 12) & 0xf;
   case FMT_f22x:
   case FMT_f3rc:
@@ -248,12 +250,18 @@ uint16_t DexInstruction::src(int i) const {
     return m_arg[0];
   case FMT_f23x_d:
     redex_assert(i < 2);
-    if (i == 0) return m_arg[0] & 0xff;
+    if (i == 0) {
+      return m_arg[0] & 0xff;
+    }
     return (m_arg[0] >> 8) & 0xff;
   case FMT_f23x_s:
     redex_assert(i < 3);
-    if (i == 0) return (m_opcode >> 8) & 0xff;
-    if (i == 1) return m_arg[0] & 0xff;
+    if (i == 0) {
+      return (m_opcode >> 8) & 0xff;
+    }
+    if (i == 1) {
+      return m_arg[0] & 0xff;
+    }
     return (m_arg[0] >> 8) & 0xff;
   case FMT_f22b:
     redex_assert(i == 0);
@@ -261,7 +269,9 @@ uint16_t DexInstruction::src(int i) const {
   case FMT_f22t:
   case FMT_f22c_s:
     redex_assert(i < 2);
-    if (i == 0) return (m_opcode >> 8) & 0xf;
+    if (i == 0) {
+      return (m_opcode >> 8) & 0xf;
+    }
     return (m_opcode >> 12) & 0xf; // i == 1
   case FMT_f32x:
     redex_assert(i == 0);
@@ -592,7 +602,9 @@ uint16_t DexInstruction::range_base() const {
 uint16_t DexInstruction::range_size() const {
   auto format = dex_opcode::format(opcode());
   redex_assert(format == FMT_f3rc || format == FMT_f4rcc || format == FMT_f5rc);
-  if (format == FMT_f5rc) return m_arg[0];
+  if (format == FMT_f5rc) {
+    return m_arg[0];
+  }
   return (m_opcode >> 8) & 0xff;
 }
 

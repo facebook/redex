@@ -37,7 +37,9 @@ void scope_info(const ClassScopes& class_scopes) {
   class_scopes.walk_virtual_scopes(
       [&](const DexType* type, const VirtualScope* scope) {
         const auto cls = type_class(type);
-        if (cls == nullptr || cls->is_external()) return;
+        if (cls == nullptr || cls->is_external()) {
+          return;
+        }
         auto scope_meth_count = scope->methods.size();
         if (scope_meth_count > 100) {
           TRACE(OBFUSCATE, 2, "BIG SCOPE: %zu on %s", scope_meth_count,
@@ -232,7 +234,9 @@ void VirtualRenamer::rename(DexMethodRef* meth, const DexString* name) {
 int VirtualRenamer::rename_scope_ref(DexMethod* meth, const DexString* name) {
   int renamed = 0;
   const auto& refs = def_refs.find(meth);
-  if (refs == def_refs.end()) return renamed;
+  if (refs == def_refs.end()) {
+    return renamed;
+  }
   for (auto& ref : refs->second) {
     rename(ref, name);
     renamed++;
@@ -248,9 +252,9 @@ int VirtualRenamer::rename_scope(const VirtualScope* scope,
   int renamed = 0;
   for (auto& vmeth : scope->methods) {
     rename(vmeth.first, name);
-    if (vmeth.first->is_concrete())
+    if (vmeth.first->is_concrete()) {
       renamed++;
-    else {
+    } else {
       TRACE(OBFUSCATE, 2, "not concrete %s", SHOW(vmeth.first));
     }
   }
@@ -320,7 +324,9 @@ const DexString* VirtualRenamer::get_unescaped_name(
     auto name = get_name(seed++);
     auto is_usable = [&]() {
       for (const auto& scope : scopes) {
-        if (!usable_name(name, scope)) return false;
+        if (!usable_name(name, scope)) {
+          return false;
+        }
       }
       return true;
     }();
@@ -483,11 +489,17 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
   walk::parallel::opcodes(
       scope, [](DexMethod*) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
-        if (!insn->has_method()) return;
+        if (!insn->has_method()) {
+          return;
+        }
         auto callee = insn->get_method();
-        if (callee->is_concrete()) return;
+        if (callee->is_concrete()) {
+          return;
+        }
         auto cls = type_class(callee->get_class());
-        if (cls == nullptr || cls->is_external()) return;
+        if (cls == nullptr || cls->is_external()) {
+          return;
+        }
         DexMethod* top = nullptr;
         if (is_interface(cls)) {
           top = resolve_method(callee, MethodSearch::Interface);
@@ -503,9 +515,13 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
             }
           }
         }
-        if (top == nullptr || top == callee) return;
+        if (top == nullptr || top == callee) {
+          return;
+        }
         redex_assert(type_class(top->get_class()) != nullptr);
-        if (type_class(top->get_class())->is_external()) return;
+        if (type_class(top->get_class())->is_external()) {
+          return;
+        }
         // it's a top definition on an internal class, save it
         def_refs.update(top,
                         [&](auto*, auto& set, bool) { set.insert(callee); });

@@ -141,7 +141,9 @@ VRegAliveRangeInBlock get_live_range_in_block(
     vreg_block_range.at(vreg).second = last;
   }
   for (auto it = block->rbegin(); it != block->rend(); ++it) {
-    if (it->type != MFLOW_OPCODE) continue;
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
     auto insn = it->insn;
     for (vreg_t vreg : insn->srcs()) {
       auto it2 = vreg_block_range.find(vreg);

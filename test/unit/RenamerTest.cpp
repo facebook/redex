@@ -23,7 +23,9 @@ namespace {
 
 bool has_method(DexType* type, const DexString* name) {
   for (const auto& vmeth : type_class(type)->get_vmethods()) {
-    if (vmeth->get_name() == name) return true;
+    if (vmeth->get_name() == name) {
+      return true;
+    }
   }
   return false;
 }

@@ -207,8 +207,12 @@ void create_store(const std::string& store_name,
  */
 template <typename T>
 bool has_anno(const T* t, const DexType* anno_type) {
-  if (anno_type == nullptr) return false;
-  if (t->get_anno_set() == nullptr) return false;
+  if (anno_type == nullptr) {
+    return false;
+  }
+  if (t->get_anno_set() == nullptr) {
+    return false;
+  }
   for (const auto& anno : t->get_anno_set()->get_annotations()) {
     if (anno->type() == anno_type) {
       return true;
@@ -219,7 +223,9 @@ bool has_anno(const T* t, const DexType* anno_type) {
 
 template <typename T>
 bool has_anno(const T* t, const UnorderedSet<DexType*>& anno_types) {
-  if (t->get_anno_set() == nullptr) return false;
+  if (t->get_anno_set() == nullptr) {
+    return false;
+  }
   for (const auto& anno : t->get_anno_set()->get_annotations()) {
     if (anno_types.count(anno->type())) {
       return true;

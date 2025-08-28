@@ -154,10 +154,12 @@ TEST_F(InjectDebugTest, TestMethods) {
       [](const DexClasses& classes) -> std::vector<std::string> {
         std::vector<std::string> method_names;
         for (DexClass* dex_class : classes) {
-          for (DexMethod* dex_method : dex_class->get_dmethods())
+          for (DexMethod* dex_method : dex_class->get_dmethods()) {
             method_names.push_back(dex_method->str_copy());
-          for (DexMethod* dex_method : dex_class->get_vmethods())
+          }
+          for (DexMethod* dex_method : dex_class->get_vmethods()) {
             method_names.push_back(dex_method->str_copy());
+          }
         }
         return method_names;
       });
@@ -278,7 +280,9 @@ TEST_F(InjectDebugTest, TestSpecificMethod) {
 
   DexClass* dex_class = nullptr;
   for (DexClass* class_it : classes) {
-    if (class_it->str() == CLASS_NAME) dex_class = class_it;
+    if (class_it->str() == CLASS_NAME) {
+      dex_class = class_it;
+    }
   }
   EXPECT_NE(dex_class, nullptr);
 
@@ -292,15 +296,18 @@ TEST_F(InjectDebugTest, TestSpecificMethod) {
     auto it = debug_entries.begin();
 
     // Skip the first position entry (0) - it doesn't map to a dex instruction
-    while (it->type != DexDebugEntryType::Position)
+    while (it->type != DexDebugEntryType::Position) {
       ++it;
+    }
 
     for (int i = 0; i < instructions.size(); ++i) {
       // Look at the following debug entries up until the next position entry
       // and track which registers were stored as local variables
       std::vector<reg_t> locals;
       for (++it; it != debug_entries.end(); ++it) {
-        if (it->type == DexDebugEntryType::Position) break;
+        if (it->type == DexDebugEntryType::Position) {
+          break;
+        }
         if (it->insn->opcode() == DexDebugItemOpcodeValues::DBG_START_LOCAL) {
           locals.push_back(it->insn->uvalue());
         }

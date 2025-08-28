@@ -357,7 +357,9 @@ void load_code_item(uint8_t* const code_item,
      * implemented not according to spec.  Just FYI in case
      * something weird happens in the future.
      */
-    if (code->insns_size & 1 && tries) cdata++;
+    if (code->insns_size & 1 && tries) {
+      cdata++;
+    }
   }
 }
 

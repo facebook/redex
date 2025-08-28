@@ -227,10 +227,14 @@ void type_encoder_signext(std::vector<uint8_t>& encdata,
     encdata.push_back(emit);
     bytes++;
     if (rest == 0) {
-      if ((emit & 0x80) == 0) break;
+      if ((emit & 0x80) == 0) {
+        break;
+      }
     }
     if (rest == -1) {
-      if ((emit & 0x80) == 0x80) break;
+      if ((emit & 0x80) == 0x80) {
+        break;
+      }
     }
     t = rest;
   }
@@ -621,7 +625,9 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
 
 std::unique_ptr<DexAnnotation> DexAnnotation::get_annotation(
     DexIdx* idx, uint32_t anno_off) {
-  if (anno_off == 0) return nullptr;
+  if (anno_off == 0) {
+    return nullptr;
+  }
   const uint8_t* encdata = idx->get_uleb_data(anno_off);
   always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
   uint8_t viz = *encdata++;
@@ -653,7 +659,9 @@ void DexAnnotation::add_element(DexAnnotationElement elem) {
 
 std::unique_ptr<DexAnnotationSet> DexAnnotationSet::get_annotation_set(
     DexIdx* idx, uint32_t aset_off) {
-  if (aset_off == 0) return nullptr;
+  if (aset_off == 0) {
+    return nullptr;
+  }
   const uint32_t* adata = idx->get_uint_data(aset_off);
   auto aset = std::make_unique<DexAnnotationSet>();
   uint32_t count = *adata++;
@@ -732,20 +740,25 @@ bool field_annotation_compare(std::pair<DexFieldRef*, DexAnnotationSet*> a,
 
 void DexAnnotationDirectory::gather_asets(
     std::vector<DexAnnotationSet*>& aset) {
-  if (m_class) aset.push_back(m_class);
+  if (m_class) {
+    aset.push_back(m_class);
+  }
   if (m_field) {
-    for (auto fanno : *m_field)
+    for (auto fanno : *m_field) {
       aset.push_back(fanno.second);
+    }
   }
   if (m_method) {
-    for (auto manno : *m_method)
+    for (auto manno : *m_method) {
       aset.push_back(manno.second);
+    }
   }
   if (m_method_param) {
     for (auto mpanno : *m_method_param) {
       ParamAnnotations* params = mpanno.second;
-      for (auto& param : *params)
+      for (auto& param : *params) {
         aset.push_back(param.second.get());
+      }
     }
   }
 }
@@ -765,7 +778,9 @@ void DexAnnotationDirectory::gather_xrefs(
 
 void DexAnnotationDirectory::gather_annotations(
     std::vector<DexAnnotation*>& alist) {
-  if (m_class) m_class->gather_annotations(alist);
+  if (m_class) {
+    m_class->gather_annotations(alist);
+  }
   if (m_field) {
     for (auto fanno : *m_field) {
       DexAnnotationSet* das = fanno.second;

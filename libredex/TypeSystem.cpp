@@ -36,7 +36,9 @@ void make_instanceof_table(InstanceOfTable& instance_of_table,
   always_assert(parent_chain.size() == depth);
 
   const auto& children = hierarchy.find(type);
-  if (children == hierarchy.end()) return;
+  if (children == hierarchy.end()) {
+    return;
+  }
   for (const auto& child : children->second) {
     make_instanceof_table(instance_of_table, hierarchy, child, depth + 1);
   }
@@ -54,14 +56,18 @@ void load_interface_children(ClassHierarchy& children, const DexClass* intf) {
 
 void load_interface_children(ClassHierarchy& children) {
   g_redex->walk_type_class([&](const DexType* type, const DexClass* cls) {
-    if (!cls->is_external() || !is_interface(cls)) return;
+    if (!cls->is_external() || !is_interface(cls)) {
+      return;
+    }
     load_interface_children(children, cls);
   });
 }
 
 void load_interface_children(const Scope& scope, ClassHierarchy& children) {
   for (const auto& cls : scope) {
-    if (!is_interface(cls)) continue;
+    if (!is_interface(cls)) {
+      continue;
+    }
     load_interface_children(children, cls);
   }
   load_interface_children(children);
@@ -80,7 +86,9 @@ TypeSystem::TypeSystem(const Scope& scope) : m_class_scopes(scope) {
 void TypeSystem::get_all_super_interfaces(const DexType* intf,
                                           TypeSet& supers) const {
   const auto cls = type_class(intf);
-  if (cls == nullptr) return;
+  if (cls == nullptr) {
+    return;
+  }
   for (const auto& super : *cls->get_interfaces()) {
     supers.insert(super);
     get_all_super_interfaces(super, supers);
@@ -138,7 +146,9 @@ const VirtualScope* TypeSystem::find_virtual_scope(
       }
     }
     const auto cls = type_class(type);
-    if (cls == nullptr) break;
+    if (cls == nullptr) {
+      break;
+    }
     type = cls->get_super_class();
   }
 
@@ -163,7 +173,9 @@ std::vector<const DexMethod*> TypeSystem::select_from(
     const auto& parents = parent_chain(type);
     for (auto parent = parents.rbegin(); parent != parents.rend(); ++parent) {
       const auto& meth = non_child_methods.find(*parent);
-      if (meth == non_child_methods.end()) continue;
+      if (meth == non_child_methods.end()) {
+        continue;
+      }
       refined_scope.emplace_back(meth->second);
       break;
     }
@@ -177,7 +189,9 @@ void TypeSystem::make_instanceof_interfaces_table() {
   for (const auto& children_it : UnorderedIterable(hierarchy)) {
     const auto parent = children_it.first;
     const auto parent_cls = type_class(parent);
-    if (parent_cls != nullptr) continue;
+    if (parent_cls != nullptr) {
+      continue;
+    }
     no_parents.emplace_back(parent);
   }
   no_parents.emplace_back(type::java_lang_Object());
@@ -208,7 +222,9 @@ void TypeSystem::make_interfaces_table(const DexType* type) {
 
   const auto& hierarchy = m_class_scopes.get_class_hierarchy();
   const auto& children = hierarchy.find(type);
-  if (children == hierarchy.end()) return;
+  if (children == hierarchy.end()) {
+    return;
+  }
   for (const auto& child : children->second) {
     make_interfaces_table(child);
   }
@@ -225,7 +241,9 @@ void TypeSystem::select_methods(const VirtualScope& scope,
   UnorderedMap<const DexType*, DexMethod*> type_method;
   for (const auto& vmeth : scope.methods) {
     const auto meth = vmeth.first;
-    if (!meth->is_def()) continue;
+    if (!meth->is_def()) {
+      continue;
+    }
     type_method[meth->get_class()] = meth;
   }
 
@@ -235,15 +253,21 @@ void TypeSystem::select_methods(const VirtualScope& scope,
     const auto type = *it;
     filter.erase(it);
     TRACE(VIRT, 1, "check... %s", SHOW(type));
-    if (!is_subtype(scope.type, type)) continue;
+    if (!is_subtype(scope.type, type)) {
+      continue;
+    }
     const auto& meth = type_method.find(type);
     if (meth != type_method.end()) {
       methods.insert(meth->second);
       continue;
     }
     const auto super = type_class(type)->get_super_class();
-    if (super == nullptr) continue;
-    if (types.count(super) > 0) continue;
+    if (super == nullptr) {
+      continue;
+    }
+    if (types.count(super) > 0) {
+      continue;
+    }
     filter.insert(super);
   }
 }

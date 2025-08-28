@@ -121,8 +121,9 @@ char* dex_raw_string_by_idx(ddump_data* rd, uint32_t idx) {
 
 char* dex_string_by_idx(ddump_data* rd, uint32_t idx) {
   char* rv = dex_raw_string_by_idx(rd, idx);
-  while (*((unsigned char*)rv++) > 0x7f)
+  while (*((unsigned char*)rv++) > 0x7f) {
     ; /* Skip uleb128 size */
+  }
   return rv;
 }
 

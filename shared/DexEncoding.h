@@ -74,13 +74,21 @@ inline uint32_t read_uleb128p1(const uint8_t** _ptr) {
  */
 inline uint8_t uleb128_encoding_size(uint32_t v) {
   v >>= 7;
-  if (v == 0) return 1;
+  if (v == 0) {
+    return 1;
+  }
   v >>= 7;
-  if (v == 0) return 2;
+  if (v == 0) {
+    return 2;
+  }
   v >>= 7;
-  if (v == 0) return 3;
+  if (v == 0) {
+    return 3;
+  }
   v >>= 7;
-  if (v == 0) return 4;
+  if (v == 0) {
+    return 4;
+  }
   return 5;
 }
 
@@ -238,7 +246,9 @@ inline uint8_t* write_sleb128(uint8_t* ptr, int32_t val) {
 inline uint32_t mutf8_next_code_point(const char*& s) {
   uint8_t v = *s++;
   /* Simple common case first, a utf8 char... */
-  if (!(v & 0x80)) return v;
+  if (!(v & 0x80)) {
+    return v;
+  }
   uint8_t v2 = *s++;
   if ((v2 & 0xc0) != 0x80) {
     /* Invalid string. */

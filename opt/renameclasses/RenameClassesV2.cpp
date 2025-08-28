@@ -182,9 +182,13 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
       [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_method()) {
           auto callee = insn->get_method();
-          if (callee == nullptr || !callee->is_concrete()) return;
+          if (callee == nullptr || !callee->is_concrete()) {
+            return;
+          }
           auto callee_method_cls = callee->get_class();
-          if (refl_map.count(callee_method_cls) == 0) return;
+          if (refl_map.count(callee_method_cls) == 0) {
+            return;
+          }
           const auto* classname = m->get_class()->get_name();
           TRACE(RENAME, 4,
                 "Found %s with known reflection usage. marking reachable",
@@ -214,7 +218,9 @@ RenameClassesPassV2::build_force_rename_hierarchies(
   std::vector<DexClass*> base_classes;
   for (const auto& base : m_force_rename_hierarchies) {
     // skip comments
-    if (base.c_str()[0] == '#') continue;
+    if (base.c_str()[0] == '#') {
+      continue;
+    }
     auto base_type = DexType::get_type(base);
     if (base_type != nullptr) {
       DexClass* base_class = type_class(base_type);
@@ -250,7 +256,9 @@ RenameClassesPassV2::build_dont_rename_hierarchies(
   std::vector<DexClass*> base_classes;
   for (const auto& base : m_dont_rename_hierarchies) {
     // skip comments
-    if (base.c_str()[0] == '#') continue;
+    if (base.c_str()[0] == '#') {
+      continue;
+    }
     auto base_type = DexType::get_type(base);
     if (base_type != nullptr) {
       DexClass* base_class = type_class(base_type);
@@ -321,10 +329,18 @@ RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
 
     if (dont_rename) {
       dont_rename_serde_relationships.insert(cls->get_type());
-      if (deser) dont_rename_serde_relationships.insert(deser);
-      if (flatbuf_deser) dont_rename_serde_relationships.insert(flatbuf_deser);
-      if (ser) dont_rename_serde_relationships.insert(ser);
-      if (flatbuf_ser) dont_rename_serde_relationships.insert(flatbuf_ser);
+      if (deser) {
+        dont_rename_serde_relationships.insert(deser);
+      }
+      if (flatbuf_deser) {
+        dont_rename_serde_relationships.insert(flatbuf_deser);
+      }
+      if (ser) {
+        dont_rename_serde_relationships.insert(ser);
+      }
+      if (flatbuf_ser) {
+        dont_rename_serde_relationships.insert(flatbuf_ser);
+      }
     }
   }
 
@@ -503,7 +519,9 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
         break;
       }
     }
-    if (annotated) continue;
+    if (annotated) {
+      continue;
+    }
 
     // Don't rename anything mentioned in resources. Two variants of checks here
     // to cover both configuration options (either we're relying on aapt to
@@ -537,7 +555,9 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
         break;
       }
     }
-    if (package_blocklisted) continue;
+    if (package_blocklisted) {
+      continue;
+    }
 
     if (dont_rename_class_name_literals.count(strname)) {
       clazz->rstate.set_dont_rename();
@@ -632,7 +652,9 @@ void RenameClassesPassV2::eval_classes_post(
         break;
       }
     }
-    if (package_blocklisted) continue;
+    if (package_blocklisted) {
+      continue;
+    }
 
     if (dont_rename_hierarchies.count(clazz->get_type())) {
       const auto* rule = dont_rename_hierarchies[clazz->get_type()];

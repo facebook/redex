@@ -453,7 +453,9 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
 
       } else if (opcode::is_an_iget(opcode)) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
-        if (field == nullptr) continue;
+        if (field == nullptr) {
+          continue;
+        }
         if (field->get_class() == builder->get_type()) {
           IROpcode move_opcode = get_move_opcode(insn);
           bool is_wide = move_opcode == OPCODE_MOVE_WIDE;
@@ -552,10 +554,14 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
       } else if (opcode == OPCODE_NEW_INSTANCE || opcode == OPCODE_CHECK_CAST) {
         DexType* cls = insn->get_type();
         if (type_class(cls) == builder) {
-          if (opcode == OPCODE_NEW_INSTANCE) num_builders++;
+          if (opcode == OPCODE_NEW_INSTANCE) {
+            num_builders++;
+          }
 
           // Safely avoiding the case where multiple builders are initialized.
-          if (num_builders > 1) return false;
+          if (num_builders > 1) {
+            return false;
+          }
 
           deletes.insert(insn);
           continue;

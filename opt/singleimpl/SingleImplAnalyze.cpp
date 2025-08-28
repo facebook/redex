@@ -86,11 +86,15 @@ void AnalysisImpl::create_single_impl(const TypeMap& single_impl,
     auto intf = intf_it.first;
     auto intf_cls = type_class(intf);
     always_assert(intf_cls && !intf_cls->is_external());
-    if (is_annotation(intf_cls)) continue;
+    if (is_annotation(intf_cls)) {
+      continue;
+    }
     auto impl = intf_it.second;
     auto impl_cls = type_class(impl);
     always_assert(impl_cls && !impl_cls->is_external());
-    if (is_annotation(impl_cls)) continue;
+    if (is_annotation(impl_cls)) {
+      continue;
+    }
     single_impls[intf].cls = impl;
   }
   collect_children(intfs);
@@ -106,7 +110,9 @@ void AnalysisImpl::create_single_impl(const TypeMap& single_impl,
  */
 void AnalysisImpl::filter_list(const std::vector<std::string>& list,
                                bool keep_match) {
-  if (list.empty()) return;
+  if (list.empty()) {
+    return;
+  }
 
   auto find_in_list = [&](const std::string_view name) {
     for (const std::string& el_name : list) {
@@ -122,8 +128,12 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
     const auto intf_cls = type_class(intf);
     const auto intf_name = intf_cls->get_deobfuscated_name_or_empty();
     bool match = find_in_list(intf_name);
-    if (match && keep_match) continue;
-    if (!match && !keep_match) continue;
+    if (match && keep_match) {
+      continue;
+    }
+    if (!match && !keep_match) {
+      continue;
+    }
     escape_interface(intf, FILTERED);
   }
 }
@@ -261,7 +271,9 @@ void AnalysisImpl::escape_with_sfields() {
     redex_assert(CONSTP(intf_cls)->get_ifields().empty());
     always_assert(!intf_cls->is_external());
     const auto& sfields = intf_cls->get_sfields();
-    if (sfields.empty()) continue;
+    if (sfields.empty()) {
+      continue;
+    }
     escape_interface(intf_it.first, HAS_SFIELDS);
     for (auto sfield : sfields) {
       auto ftype = sfield->get_class();
@@ -337,7 +349,9 @@ void AnalysisImpl::collect_method_defs() {
 
   auto check_method_arg = [&](DexType* type, DexMethod* method, bool native) {
     auto intf = get_and_check_single_impl(type);
-    if (!intf) return;
+    if (!intf) {
+      return;
+    }
     if (native) {
       escape_interface(intf, NATIVE_METHOD);
     }
@@ -565,8 +579,12 @@ std::unique_ptr<SingleImplAnalysis> SingleImplAnalysis::analyze(
 
 void SingleImplAnalysis::escape_interface(DexType* intf, EscapeReason reason) {
   auto sit = single_impls.find(intf);
-  if (sit == single_impls.end()) return;
-  if (sit->second.escape & reason) return;
+  if (sit == single_impls.end()) {
+    return;
+  }
+  if (sit->second.escape & reason) {
+    return;
+  }
   std::lock_guard<std::mutex> lock(sit->second.mutex);
   sit->second.escape |= reason;
   TRACE(INTF, 5, "(ESC) Escape %s => 0x%X", SHOW(intf), reason);

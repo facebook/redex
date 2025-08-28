@@ -243,7 +243,9 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       // The first argument is a reference to the object instance on which the
       // method is invoked.
-      if (src_index-- == 0) return insn_method->get_class();
+      if (src_index-- == 0) {
+        return insn_method->get_class();
+      }
     }
     return arg_types->at(src_index);
   }

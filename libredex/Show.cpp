@@ -97,19 +97,21 @@ std::string accessibility(uint32_t acc, bool method = false) {
     ss << "synchronized ";
   }
   if (acc & DexAccessFlags::ACC_VOLATILE) {
-    if (method)
+    if (method) {
       ss << "bridge ";
-    else
+    } else {
       ss << "volatile ";
+    }
   }
   if (acc & DexAccessFlags::ACC_NATIVE) {
     ss << "native ";
   }
   if (acc & DexAccessFlags::ACC_TRANSIENT) {
-    if (method)
+    if (method) {
       ss << "vararg ";
-    else
+    } else {
       ss << "transient ";
+    }
   }
   return ss.str();
 }
@@ -217,7 +219,9 @@ std::string show_methodhandle(const DexMethodHandle* ref, bool deobfuscated) {
 }
 
 std::string show_opcode(const DexInstruction* insn, bool deobfuscated = false) {
-  if (!insn) return "";
+  if (!insn) {
+    return "";
+  }
   std::ostringstream ss;
   auto opcode = insn->opcode();
   switch (opcode) {
@@ -914,7 +918,9 @@ std::string show_opcode(const DexInstruction* insn, bool deobfuscated = false) {
 }
 
 std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
-  if (!insn) return "";
+  if (!insn) {
+    return "";
+  }
   std::ostringstream ss;
   ss << show(insn->opcode()) << " ";
   bool first = true;
@@ -923,7 +929,9 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     first = false;
   }
   for (unsigned i = 0; i < insn->srcs_size(); ++i) {
-    if (!first) ss << ", ";
+    if (!first) {
+      ss << ", ";
+    }
     ss << "v" << insn->src(i);
     first = false;
   }
@@ -1011,7 +1019,9 @@ std::ostream& operator<<(std::ostream& o, const DexType& type) {
 }
 
 inline std::string show(const DexString* p) {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   return p->str_copy();
 }
 
@@ -1027,7 +1037,9 @@ std::ostream& operator<<(std::ostream& o, const DexFieldRef& p) {
 }
 
 std::string vshow(const DexField* p) {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   std::ostringstream ss;
   ss << accessibility(p->get_access()) << humanize(show(p->get_type())) << " "
      << humanize(show(p->get_class())) << "." << show(p->get_name());
@@ -1038,7 +1050,9 @@ std::string vshow(const DexField* p) {
 }
 
 std::string vshow(const DexTypeList* p) {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   std::ostringstream ss;
   bool first = true;
   for (auto const& type : *p) {
@@ -1053,7 +1067,9 @@ std::string vshow(const DexTypeList* p) {
 }
 
 std::string vshow(const DexProto* p, bool include_ret_type = true) {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   std::ostringstream ss;
   ss << "(" << vshow(p->get_args()) << ")";
   if (include_ret_type) {
@@ -1071,7 +1087,9 @@ std::string show(const DexTypeList* l) { return show_type_list(l, false); }
 std::string show(const DexProto* p) { return show_proto(p, false); }
 
 std::string show(const DexCode* code) {
-  if (!code) return "";
+  if (!code) {
+    return "";
+  }
   std::ostringstream ss;
   ss << "regs: " << code->get_registers_size()
      << ", ins: " << code->get_ins_size() << ", outs: " << code->get_outs_size()
@@ -1095,7 +1113,9 @@ std::string vshow(uint32_t acc, bool is_method) {
 std::string vshow(const DexType* t) { return humanize(show(t)); }
 
 std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   std::ostringstream ss;
   ss << (p->is_def() ? accessibility(p->get_access(), true)
                      : std::string("(?)"))
@@ -1128,7 +1148,9 @@ std::ostream& operator<<(std::ostream& o, const DexClass& cls) {
 }
 
 std::string vshow(const DexClass* p) {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   std::ostringstream ss;
   ss << accessibility(p->get_access()) << humanize(show(p->get_type()))
      << " extends " << humanize(show(p->get_super_class()));
@@ -1136,10 +1158,11 @@ std::string vshow(const DexClass* p) {
     ss << " implements ";
     bool first = true;
     for (auto const type : *p->get_interfaces()) {
-      if (first)
+      if (first) {
         first = false;
-      else
+      } else {
         ss << ", ";
+      }
       ss << humanize(show(type));
     }
   }
@@ -1150,7 +1173,9 @@ std::string vshow(const DexClass* p) {
 }
 
 std::string show(const DexEncodedValue* value) {
-  if (!value) return "";
+  if (!value) {
+    return "";
+  }
   return value->show();
 }
 
@@ -1161,11 +1186,15 @@ std::string show_deobfuscated(const DexAnnotation* anno) {
 }
 
 std::string show(const DexAnnotationSet* p) {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   std::ostringstream ss;
   bool first = true;
   for (auto const& anno : p->get_annotations()) {
-    if (!first) ss << ", ";
+    if (!first) {
+      ss << ", ";
+    }
     ss << show(anno.get());
     first = false;
   }
@@ -1173,7 +1202,9 @@ std::string show(const DexAnnotationSet* p) {
 }
 
 std::string show(const DexAnnotationDirectory* p) {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   std::ostringstream ss;
   if (p->m_class) {
     ss << "class annotations:\n" << show(p->m_class) << "\n";
@@ -1251,7 +1282,9 @@ static IntType read(const uint8_t*& data, uint16_t n_bytes) {
 }
 
 std::string show(const DexOpcodeData* insn) {
-  if (!insn) return "";
+  if (!insn) {
+    return "";
+  }
   std::ostringstream ss;
   ss << "{ ";
   const auto* data = insn->data();
@@ -1317,7 +1350,9 @@ std::string show(const DexOpcodeData* insn) {
 }
 
 std::string show_insn(const DexInstruction* insn, bool deobfuscated) {
-  if (!insn) return "";
+  if (!insn) {
+    return "";
+  }
   std::ostringstream ss;
   ss << show_opcode(insn, deobfuscated);
   if (dex_opcode::is_fopcode(insn->opcode())) {
@@ -1331,12 +1366,16 @@ std::string show_insn(const DexInstruction* insn, bool deobfuscated) {
     first = false;
   }
   for (unsigned i = 0; i < insn->srcs_size(); ++i) {
-    if (!first) ss << ",";
+    if (!first) {
+      ss << ",";
+    }
     ss << " v" << insn->src(i);
     first = false;
   }
   if (dex_opcode::has_literal(insn->opcode())) {
-    if (!first) ss << ",";
+    if (!first) {
+      ss << ",";
+    }
     ss << " " << insn->get_literal();
     first = false;
   }
@@ -1353,7 +1392,9 @@ std::ostream& operator<<(std::ostream& o, const IRInstruction& insn) {
 }
 
 std::string show(const DexDebugInstruction* insn) {
-  if (!insn) return "";
+  if (!insn) {
+    return "";
+  }
   std::ostringstream ss;
   switch (insn->opcode()) {
   case DBG_END_SEQUENCE:
@@ -1550,7 +1591,9 @@ std::string show(const cfg::ControlFlowGraph& cfg, bool code_only) {
 }
 
 std::string show(const MethodCreator* mc) {
-  if (!mc) return "";
+  if (!mc) {
+    return "";
+  }
   std::ostringstream ss;
   ss << "MethodCode for " << SHOW(mc->method) << "\n";
   ss << "locals: ";
@@ -1563,7 +1606,9 @@ std::string show(const MethodCreator* mc) {
 }
 
 std::string show(const MethodBlock* block) {
-  if (!block) return "";
+  if (!block) {
+    return "";
+  }
   std::ostringstream ss;
   return ss.str();
 }

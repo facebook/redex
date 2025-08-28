@@ -390,7 +390,9 @@ DexTypeList* extract_arguments(std::string_view& buf) {
   DexTypeList::ContainerType args;
   while (buf.at(0) != ')') {
     DexType* dtype = parse_type(buf);
-    if (dtype == nullptr) return nullptr;
+    if (dtype == nullptr) {
+      return nullptr;
+    }
     if (dtype == sSimpleTypeV) {
       std::cerr << "Invalid argument type 'V' in args, bailing\n";
       return nullptr;
@@ -418,9 +420,13 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
   auto name = DexString::make_string(nbuffer);
   std::string_view ptr = dbuffer;
   DexTypeList* tlist = extract_arguments(ptr);
-  if (tlist == nullptr) return nullptr;
+  if (tlist == nullptr) {
+    return nullptr;
+  }
   DexType* rtype = parse_type(ptr);
-  if (rtype == nullptr) return nullptr;
+  if (rtype == nullptr) {
+    return nullptr;
+  }
   DexProto* proto = DexProto::make_proto(rtype, tlist);
   DexMethod* method =
       static_cast<DexMethod*>(DexMethod::make_method(self, name, proto));
@@ -439,8 +445,9 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
     if (nbuffer[1] == 'i') {
       access |= ACC_CONSTRUCTOR;
     }
-  } else if (access & (ACC_PRIVATE | ACC_STATIC))
+  } else if (access & (ACC_PRIVATE | ACC_STATIC)) {
     is_virt = false;
+  }
   method->set_access((DexAccessFlags)access);
   method->set_virtual(is_virt);
   method->set_external();
@@ -468,7 +475,9 @@ bool parse_class(uint8_t* buffer,
   cpool.resize(cp_count);
   /* The zero'th entry is always empty.  Java is annoying. */
   for (size_t i = 1; i < cp_count; i++) {
-    if (!parse_cp_entry(buffer, buffer_end, cpool[i])) return false;
+    if (!parse_cp_entry(buffer, buffer_end, cpool[i])) {
+      return false;
+    }
     if (cpool[i].tag == CP_CONST_LONG || cpool[i].tag == CP_CONST_DOUBLE) {
       if (i + 1 >= cp_count) {
         std::cerr << "Bad long/double constant, bailing.\n";
@@ -586,7 +595,9 @@ bool parse_class(uint8_t* buffer,
     uint8_t* attrPtr = buffer;
     skip_attributes(buffer, buffer_end);
     DexField* field = make_dexfield(cpool, self, cpfield, added_fields);
-    if (field == nullptr) return false;
+    if (field == nullptr) {
+      return false;
+    }
     cc.add_field(field);
     invoke_attr_hook({field}, attrPtr);
   }
@@ -603,7 +614,9 @@ bool parse_class(uint8_t* buffer,
       uint8_t* attrPtr = buffer;
       skip_attributes(buffer, buffer_end);
       DexMethod* method = make_dexmethod(cpool, self, cpmethod, added_methods);
-      if (method == nullptr) return false;
+      if (method == nullptr) {
+        return false;
+      }
       cc.add_method(method);
       invoke_attr_hook({method}, attrPtr);
     }
@@ -745,8 +758,12 @@ bool find_central_directory(const uint8_t* mapping,
                             pk_cdir_end& pce) {
   ssize_t soffset = (size - sizeof(pk_cdir_end));
   ssize_t eoffset = soffset - kMaxCDirEndSearch;
-  if (soffset < 0) return false;
-  if (eoffset < 0) eoffset = 0;
+  if (soffset < 0) {
+    return false;
+  }
+  if (eoffset < 0) {
+    eoffset = 0;
+  }
   do {
     const uint8_t* cdsearch = mapping + soffset;
     if (memcmp(cdsearch, kCDirEnd.data(), kCDirEnd.size()) == 0) {
@@ -815,7 +832,9 @@ bool get_jar_entries(const uint8_t* mapping,
   files.resize(pce.cd_entries);
   size_t offset = pce.cd_disk_offset;
   for (int entry = 0; entry < pce.cd_entries; entry++) {
-    if (!extract_jar_entry(cdir, offset, size, files[entry])) return false;
+    if (!extract_jar_entry(cdir, offset, size, files[entry])) {
+      return false;
+    }
   }
   return true;
 }
@@ -847,7 +866,9 @@ int jar_uncompress(Bytef* dest,
   stream.zfree = (free_func)0;
 
   err = inflateInit2(&stream, -MAX_WBITS);
-  if (err != Z_OK) return err;
+  if (err != Z_OK) {
+    return err;
+  }
 
   err = inflate(&stream, Z_FINISH);
   if (err != Z_STREAM_END) {
@@ -947,19 +968,26 @@ bool process_jar_entries(
   constexpr std::string_view kClassEndString = ".class";
   init_basic_types();
   for (auto& file : files) {
-    if (file.cd_entry.ucomp_size == 0) continue;
+    if (file.cd_entry.ucomp_size == 0) {
+      continue;
+    }
 
     // Skip non-class files
     std::string_view filename = file.filename;
-    if (filename.length() < kClassEndString.length()) continue;
+    if (filename.length() < kClassEndString.length()) {
+      continue;
+    }
     auto endcomp =
         filename.substr(filename.length() - kClassEndString.length());
-    if (endcomp != kClassEndString) continue;
+    if (endcomp != kClassEndString) {
+      continue;
+    }
 
     // Resize output if necessary.
     if (bufsize < file.cd_entry.ucomp_size) {
-      while (bufsize < file.cd_entry.ucomp_size)
+      while (bufsize < file.cd_entry.ucomp_size) {
         bufsize *= 2;
+      }
       outbuffer = std::make_unique<uint8_t[]>(bufsize);
     }
 

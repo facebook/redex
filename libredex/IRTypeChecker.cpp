@@ -500,7 +500,9 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
           assert(insn->srcs().size() > 0);
           auto src = insn->srcs()[0];
           auto dest = insn->dest();
-          if (src == dest) continue;
+          if (src == dest) {
+            continue;
+          }
 
           auto it_src = uninitialized_regs.find(src);
           // We no longer care about the old dest
@@ -551,8 +553,9 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
 
           for (unsigned int i = 1; i < sources.size(); i++) {
             auto u_it = uninitialized_regs.find(sources[i]);
-            if (u_it != uninitialized_regs.end())
+            if (u_it != uninitialized_regs.end()) {
               return create_error(u_it->second, cfg);
+            }
           }
           continue;
         }
@@ -560,11 +563,14 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
         auto const& sources = insn->srcs();
         for (auto reg : sources) {
           auto u_it = uninitialized_regs.find(reg);
-          if (u_it != uninitialized_regs.end())
+          if (u_it != uninitialized_regs.end()) {
             return create_error(u_it->second, cfg);
+          }
         }
 
-        if (insn->has_dest()) remove_from_uninitialized_list(insn->dest());
+        if (insn->has_dest()) {
+          remove_from_uninitialized_list(insn->dest());
+        }
       }
       // get the the next block.
       if (current_block == big_block->get_last_block()) {
