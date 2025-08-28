@@ -22,6 +22,7 @@
 #include "RedexContext.h"
 #include "RedexOptions.h"
 #include "RedexTestUtils.h"
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
 #include "Show.h"
 #include "Walkers.h"
