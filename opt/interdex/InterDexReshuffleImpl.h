@@ -137,11 +137,10 @@ class MoveGains {
         }
         gain_t gain = 0;
         if (m_mergeability_aware) {
-          gain = compute_move_gain_after_merging(
-              cls, dex_index, removal_dex != 0 ? true : false);
+          gain =
+              compute_move_gain_after_merging(cls, dex_index, removal_dex != 0);
         } else {
-          gain = compute_move_gain(cls, dex_index,
-                                   removal_dex != 0 ? true : false);
+          gain = compute_move_gain(cls, dex_index, removal_dex != 0);
         }
         if (gain > 0 || removal_dex != 0) {
           // In InterDexReshufflePass, we require gain > 0. For DexRemovalPass,

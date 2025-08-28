@@ -1034,8 +1034,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
 
   // TODO(fengliu): We may need change this but leave it here for local test.
   if (m_options.instrumentation_strategy == METHOD_REPLACEMENT) {
-    bool exclude_primary_dex =
-        pm.get_redex_options().is_art_build ? false : true;
+    bool exclude_primary_dex = !pm.get_redex_options().is_art_build;
     auto num_wrapped_invocations =
         method_reference::wrap_instance_call_with_static(
             stores, m_options.methods_replacement, exclude_primary_dex);

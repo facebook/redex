@@ -562,8 +562,7 @@ struct Matcher {
         }
         case String::boolean_A_to_string: {
           bool a = matched_literals.at(Literal::A) != 0;
-          replace->set_string(
-              DexString::make_string(a == true ? "true" : "false"));
+          replace->set_string(DexString::make_string(a ? "true" : "false"));
           break;
         }
         case String::char_A_to_string: {
@@ -617,8 +616,8 @@ struct Matcher {
         case String::concat_string_A_boolean_A: {
           const auto* a = matched_strings.at(String::A)->c_str();
           bool b = matched_literals.at(Literal::A) != 0;
-          replace->set_string(DexString::make_string(
-              std::string(a) + (b == true ? "true" : "false")));
+          replace->set_string(
+              DexString::make_string(std::string(a) + (b ? "true" : "false")));
           break;
         }
         case String::concat_string_A_long_int_A: {

@@ -2810,10 +2810,7 @@ bool is_inlinable_resource_value(
        res_value->dataType == android::Res_value::TYPE_REFERENCE ||
        (res_value->dataType >= android::Res_value::TYPE_FIRST_INT &&
         res_value->dataType <= android::Res_value::TYPE_LAST_INT));
-  if (!is_valid_type) {
-    return false;
-  }
-  return true;
+  return is_valid_type;
 }
 
 /*

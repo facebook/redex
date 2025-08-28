@@ -90,10 +90,7 @@ bool is_model_gen(const DexMethod* m) {
   DexAnnotation* anno = get_annotation(
       cls, DexType::make_type("Lcom/facebook/annotationprocessors/modelgen/"
                               "iface/ModelDefinition;"));
-  if (anno != nullptr) {
-    return true;
-  }
-  return false;
+  return anno != nullptr;
 }
 
 bool is_generated(const DexMethod* m) {
@@ -106,10 +103,7 @@ bool is_generated(const DexMethod* m) {
       DexType::make_type(
           "Lcom/facebook/xapp/messaging/composer/annotation/Generated;"),
       DexType::make_type("Lcom/facebook/litho/annotations/Generated;")};
-  if (has_any_annotation(cls, generated_annos)) {
-    return true;
-  }
-  return false;
+  return has_any_annotation(cls, generated_annos);
 }
 
 struct MaybeParamName {

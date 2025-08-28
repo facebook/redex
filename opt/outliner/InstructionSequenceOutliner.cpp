@@ -569,12 +569,9 @@ static bool can_outline_opcode(IROpcode opcode, bool outline_control_flow) {
     return false;
 
   default:
-    if (!outline_control_flow && (opcode::is_a_conditional_branch(opcode) ||
-                                  opcode::is_switch(opcode))) {
-      return false;
-    }
-
-    return true;
+    return !(
+        !outline_control_flow &&
+        (opcode::is_a_conditional_branch(opcode) || opcode::is_switch(opcode)));
   }
 }
 
@@ -1185,12 +1182,8 @@ static MethodCandidates find_method_candidates(
 ////////////////////////////////////////////////////////////////////////////////
 
 static bool can_outline_from_method(DexMethod* method) {
-  if (method->rstate.no_optimizations() ||
-      method->rstate.should_not_outline() || method->rstate.outlined()) {
-    return false;
-  }
-
-  return true;
+  return !(method->rstate.no_optimizations() ||
+           method->rstate.should_not_outline() || method->rstate.outlined());
 }
 
 // Gather set of recurring small (MIN_INSNS_SIZE) adjacent instruction

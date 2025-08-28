@@ -247,11 +247,7 @@ bool RtypeSpecialization::shares_identical_rtype_candidate(
     return false;
   }
   const auto* candidate_rtype = m_candidates.at(meth);
-  if (candidate_rtype != better_rtype) {
-    return false;
-  }
-
-  return true;
+  return candidate_rtype == better_rtype;
 }
 
 bool RtypeSpecialization::share_common_rtype_candidate(

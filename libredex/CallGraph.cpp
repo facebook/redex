@@ -142,9 +142,9 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       return;
     }
     if (!root(method) && !method::is_argless_init(method) &&
-        !(method->is_virtual() &&
-          is_interface(type_class(method->get_class())) &&
-          !can_rename(method))) {
+        (!method->is_virtual() ||
+         !is_interface(type_class(method->get_class())) ||
+         can_rename(method))) {
       // For root methods and dynamically added classes, created via
       // Proxy.newProxyInstance, we need to add them and their overrides and
       // overriden to roots.
@@ -245,9 +245,9 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
         method::is_argless_init(method)) {
       roots.insert(method);
     }
-    if (!root(method) && !(method->is_virtual() &&
-                           is_interface(type_class(method->get_class())) &&
-                           !can_rename(method))) {
+    if (!root(method) && (!method->is_virtual() ||
+                          !is_interface(type_class(method->get_class())) ||
+                          can_rename(method))) {
       // For root methods and dynamically added classes, created via
       // Proxy.newProxyInstance, we need to add them and their overrides and
       // overriden to roots.

@@ -227,7 +227,7 @@ bool RuntimeAssertTransform::insert_return_value_assert(
     cfg::InstructionIterator& it) {
   auto* insn = it->insn;
   auto op = insn->opcode();
-  if (!(op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_STATIC)) {
+  if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC) {
     return false;
   }
   auto* callee = resolve_method(insn->get_method(), opcode_to_search(insn));

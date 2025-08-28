@@ -1269,11 +1269,8 @@ bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
   // INSTRUCTION_BUFFER is added because the final method size is often larger
   // than our estimate -- during the sync phase, we may have to pick larger
   // branch opcodes to encode large jumps.
-  if (estimated_caller_size + estimated_callee_size >
-      max - std::min(m_config.instruction_size_buffer, max)) {
-    return true;
-  }
-  return false;
+  return estimated_caller_size + estimated_callee_size >
+         max - std::min(m_config.instruction_size_buffer, max);
 }
 
 bool MultiMethodInliner::caller_too_large(DexType* /*caller_type*/,
@@ -1310,15 +1307,11 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
   // non-root methods that are only ever called once should always be inlined,
   // as the method can be removed afterwards
   const auto& callers = callee_caller.at_unsafe(callee);
-  if (callers.size() == 1 && unordered_any(callers)->second == 1 &&
-      !root(callee) && !method::is_argless_init(callee) &&
-      (m_recursive_callees.count(callee) == 0u) &&
-      (m_true_virtual_callees_with_other_call_sites.count(callee) == 0u) &&
-      !cross_hot_cold(unordered_any(callers)->first, callee)) {
-    return true;
-  }
-
-  return false;
+  return callers.size() == 1 && unordered_any(callers)->second == 1 &&
+         !root(callee) && !method::is_argless_init(callee) &&
+         (m_recursive_callees.count(callee) == 0u) &&
+         (m_true_virtual_callees_with_other_call_sites.count(callee) == 0u) &&
+         !cross_hot_cold(unordered_any(callers)->first, callee);
 }
 
 bool MultiMethodInliner::should_inline_always(const DexMethod* callee) {
@@ -1937,8 +1930,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
       // Inlining methods into different classes might lead to worse
       // cross-dex-ref minimization results.
       cross_dex_penalty = estimate_cross_dex_penalty(
-          inlined_cost, m_inliner_cost_config,
-          callee_caller_refs->classes > 1 ? true : false);
+          inlined_cost, m_inliner_cost_config, callee_caller_refs->classes > 1);
     }
   }
 

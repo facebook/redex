@@ -595,7 +595,7 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("warn") != 0u) {
     const auto& warns = vm["warn"].as<std::vector<int>>();
     for (int warn : warns) {
-      if (!(0 <= warn && warn <= 2)) {
+      if (0 > warn || warn > 2) {
         std::cerr << "warning: ignoring invalid warning level option: " << warn
                   << std::endl;
       }

@@ -423,11 +423,9 @@ bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
   return mog::any_overridden_methods(
       method_override_graph, method,
       [&](auto* overridden_method) {
-        if (is_interface(type_class(overridden_method->get_class())) &&
-            (root(overridden_method) || !can_rename(overridden_method))) {
-          return true;
-        }
-        return false;
+        return static_cast<bool>(
+            is_interface(type_class(overridden_method->get_class())) &&
+            (root(overridden_method) || !can_rename(overridden_method)));
       },
       /* include_interfaces */ true);
 };

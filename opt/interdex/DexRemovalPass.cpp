@@ -138,7 +138,7 @@ void DexRemovalPass::run_pass(DexStoresVector& stores,
     sanity_check(oscope, stores, dex_removed);
   }
 
-  while (true && m_class_reshuffle) {
+  while (m_class_reshuffle) {
     auto& root_store = stores.at(0);
     auto& root_dexen = root_store.get_dexen();
     if (root_dexen.size() == 1) {

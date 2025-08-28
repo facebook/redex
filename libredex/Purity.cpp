@@ -431,12 +431,10 @@ bool process_base_and_overriding_methods_impl(
         action = get_base_or_overriding_method_action(
             overriding_method, methods_to_ignore,
             ignore_methods_with_assumenosideeffects);
-        if (action == MethodOverrideAction::UNKNOWN ||
+        return !static_cast<bool>(
+            action == MethodOverrideAction::UNKNOWN ||
             (action == MethodOverrideAction::INCLUDE &&
-             !handler_func(const_cast<DexMethod*>(overriding_method)))) {
-          return false;
-        }
-        return true;
+             !handler_func(const_cast<DexMethod*>(overriding_method))));
       });
   return true;
 }

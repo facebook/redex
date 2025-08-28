@@ -72,10 +72,7 @@ constexpr bool kDebugForceInstrumentMode = false;
 using hash_t = std::size_t;
 
 bool is_instrument_mode() {
-  if (g_redex->instrument_mode || kDebugForceInstrumentMode) {
-    return true;
-  }
-  return false;
+  return g_redex->instrument_mode || kDebugForceInstrumentMode;
 }
 
 static bool is_branch_or_goto(const cfg::Edge* edge) {

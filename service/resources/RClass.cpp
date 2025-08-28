@@ -182,10 +182,7 @@ namespace resources {
 bool is_non_customized_r_class(const DexClass* cls) {
   const auto c_name = cls->get_name()->str();
   const auto d_name = cls->get_deobfuscated_name_or_empty();
-  if ((is_resource_class_name(c_name) || is_resource_class_name(d_name))) {
-    return true;
-  }
-  return false;
+  return is_resource_class_name(c_name) || is_resource_class_name(d_name);
 }
 
 void prepare_r_classes(DexStoresVector& stores,

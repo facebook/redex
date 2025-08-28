@@ -88,10 +88,7 @@ void gather_references(const reachability::ReachableObjects& reachables,
                        Container* c,
                        ConcurrentReferencesMap& references) {
   auto p = [&](const auto& m) {
-    if (reachables.marked_unsafe(m) == 0) {
-      return false;
-    }
-    return true;
+    return static_cast<bool>(reachables.marked_unsafe(m) != 0);
   };
   const auto it = std::partition(c->begin(), c->end(), p);
 

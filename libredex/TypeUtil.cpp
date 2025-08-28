@@ -575,20 +575,13 @@ bool is_kotlin_lambda(const DexClass* cls) {
     return false;
   }
   const auto* intf = intfs->at(0);
-  if (!is_kotlin_function_interface(intf)) {
-    return false;
-  }
-
-  return true;
+  return is_kotlin_function_interface(intf);
 }
 
 bool is_kotlin_class(DexClass* cls) {
   const auto* src_string = cls->get_source_file();
-  if ((src_string != nullptr) &&
-      boost::algorithm::ends_with(src_string->str(), ".kt")) {
-    return true;
-  }
-  return false;
+  return (src_string != nullptr) &&
+         boost::algorithm::ends_with(src_string->str(), ".kt");
 }
 
 bool is_kotlin_non_capturing_lambda(const DexClass* cls) {

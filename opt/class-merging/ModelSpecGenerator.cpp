@@ -51,11 +51,8 @@ bool can_delete_class(const DexClass* cls, bool is_anonymous_class) {
     return false;
   }
   const auto& sfields = cls->get_sfields();
-  if (std::any_of(sfields.begin(), sfields.end(),
-                  [](const DexField* f) { return !can_delete(f); })) {
-    return false;
-  }
-  return true;
+  return !std::any_of(sfields.begin(), sfields.end(),
+                      [](const DexField* f) { return !can_delete(f); });
 }
 
 TypeSet collect_reflected_mergeables(
