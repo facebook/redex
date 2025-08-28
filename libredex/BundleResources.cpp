@@ -2715,7 +2715,7 @@ UnorderedMap<uint32_t, int> get_resources_in_file(
   return resources_found;
 }
 
-void assert_resources_in_one_file(
+void assert_resources_in_at_most_one_file(
     const UnorderedSet<uint32_t>& resource_ids,
     const std::vector<std::string>& resources_pb_paths) {
   UnorderedMap<uint32_t, int> resource_occ_count;
@@ -2728,7 +2728,7 @@ void assert_resources_in_one_file(
   }
 
   for (const auto& resource_id : UnorderedIterable(resource_ids)) {
-    always_assert_log(resource_occ_count[resource_id] == 1,
+    always_assert_log(resource_occ_count[resource_id] <= 1,
                       "Resource 0x%x is not in exactly one file", resource_id);
   }
 }
@@ -3004,7 +3004,7 @@ void ResourcesPbFile::apply_style_merges(
     resource_ids.insert(resource_id);
     style_modifications[resource_id].push_back(mod);
   }
-  assert_resources_in_one_file(resource_ids, resources_pb_paths);
+  assert_resources_in_at_most_one_file(resource_ids, resources_pb_paths);
 
   auto style_merge_function =
       [](aapt::pb::Style* style,

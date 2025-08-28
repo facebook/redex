@@ -157,7 +157,7 @@ class BundleResources : public AndroidResources {
       size_t* out_num_renamed) override;
 };
 
-void assert_resources_in_one_file(
+void assert_resources_in_at_most_one_file(
     const UnorderedSet<uint32_t>& resource_ids,
     const std::vector<std::string>& resources_pb_paths);
 

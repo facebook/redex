@@ -965,16 +965,17 @@ TEST(BundleResources, TestResourceExists) {
       UnorderedSet<uint32_t> resource_ids;
       std::vector<std::string> names = {"ChooseMe", "ParentWithAttr",
                                         "IDontExist"};
+
       for (const auto& name : names) {
         auto ids = res_table->get_res_ids_by_name(name);
         if (ids.empty()) {
-          resource_ids.insert(0x0);
+          resource_ids.insert(0x12345678);
         } else {
           resource_ids.insert(ids[0]);
         }
       }
-      EXPECT_ANY_THROW(
-          assert_resources_in_one_file(resource_ids, {res_pb_file_path}));
+
+      assert_resources_in_at_most_one_file(resource_ids, {res_pb_file_path});
     }
 
     {
@@ -983,13 +984,14 @@ TEST(BundleResources, TestResourceExists) {
           "ChooseMe",
           "ParentWithAttr",
       };
+
       for (const auto& name : names) {
         auto ids = res_table->get_res_ids_by_name(name);
         EXPECT_THAT(ids, SizeIs(1));
         resource_ids.insert(ids[0]);
       }
 
-      assert_resources_in_one_file(resource_ids, {res_pb_file_path});
+      assert_resources_in_at_most_one_file(resource_ids, {res_pb_file_path});
     }
   });
 }
