@@ -429,7 +429,7 @@ std::map<uint16_t, cfg::InstructionIterator> compute_dead_insns(
     auto* insn = it->insn;
     if (opcode::is_a_load_param(insn->opcode())) {
       if (!live_vars.contains(insn->dest()) &&
-          !(is_instance_method && it->insn == first_insn)) {
+          (!is_instance_method || it->insn != first_insn)) {
         // Mark dead args as dead and never mark the "this" arg.
         dead_args_and_insns.emplace(
             last_arg_idx,

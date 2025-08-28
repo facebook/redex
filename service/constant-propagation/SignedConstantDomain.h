@@ -314,11 +314,7 @@ class SignedConstantDomain final
       }
 
       const auto determinable_zero_bits = get_determined_zero_bits();
-      if ((determinable_zero_bits & ~integer) != determinable_zero_bits) {
-        return true;
-      }
-
-      return false;
+      return (determinable_zero_bits & ~integer) != determinable_zero_bits;
     }
 
     static const Bitset& bottom() {

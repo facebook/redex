@@ -54,10 +54,7 @@ bool is_model_gen(const DexMethod* m) {
   DexAnnotation* anno = get_annotation(
       cls, DexType::make_type("Lcom/facebook/annotationprocessors/modelgen/"
                               "iface/ModelDefinition;"));
-  if (anno != nullptr) {
-    return true;
-  }
-  return false;
+  return anno != nullptr;
 }
 
 struct MaybeParamName {

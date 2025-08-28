@@ -99,31 +99,19 @@ bool is_method_known_to_be_public_helper(DexType* type, DexMethodRef* meth) {
   }
   static auto* ctx = DexType::get_type("Landroid/content/Context;");
   if (ctx == type) {
-    if (strcmp(meth_name, "getResources") == 0) {
-      return true;
-    }
-    return false;
+    return strcmp(meth_name, "getResources") == 0;
   }
   static auto* resrc = DexType::get_type("Landroid/content/res/Resources;");
   if (resrc == type) {
-    if (strcmp(meth_name, "getString") == 0) {
-      return true;
-    }
-    return false;
+    return strcmp(meth_name, "getString") == 0;
   }
   static auto* linf = DexType::get_type("Landroid/view/LayoutInflater;");
   if (linf == type) {
-    if (strcmp(meth_name, "inflate") == 0) {
-      return true;
-    }
-    return false;
+    return strcmp(meth_name, "inflate") == 0;
   }
   static auto* vg = DexType::get_type("Landroid/view/ViewGroup;");
   if (vg == type) {
-    if (strcmp(meth_name, "getContext") == 0) {
-      return true;
-    }
-    return false;
+    return strcmp(meth_name, "getContext") == 0;
   }
   return false;
 }
@@ -150,11 +138,7 @@ bool is_method_known_to_be_public(DexMethodRef* method) {
     type = cls->get_super_class();
     cls = type_class(type);
   }
-  if (type_ok(type) || is_method_known_to_be_public_helper(type, method)) {
-    return true;
-  }
-
-  return false;
+  return type_ok(type) || is_method_known_to_be_public_helper(type, method);
 }
 
 } // namespace unknown_virtuals

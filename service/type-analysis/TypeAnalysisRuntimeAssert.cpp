@@ -159,10 +159,7 @@ bool can_access(const DexType* from, const DexType* to) {
     return false;
   }
   auto is_same_package = type::same_package(from, to);
-  if (is_package_private(to_cls) && is_same_package) {
-    return true;
-  }
-  return false;
+  return is_package_private(to_cls) && is_same_package;
 }
 
 RuntimeAssertTransform::Stats RuntimeAssertTransform::apply(

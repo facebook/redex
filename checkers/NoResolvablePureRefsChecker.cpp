@@ -24,10 +24,7 @@ bool is_type_defined(const DexType* type) {
     return true;
   }
   const auto& cls = type_class(type_ref);
-  if (cls == nullptr) {
-    return false;
-  }
-  return true;
+  return cls != nullptr;
 }
 
 /*

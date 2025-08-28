@@ -102,10 +102,7 @@ bool is_fun_interface_class(const DexClass* cls) {
     return false;
   }
   const auto& vmethods = cls->get_vmethods();
-  if (vmethods.empty()) {
-    return false;
-  }
-  return true;
+  return !vmethods.empty();
 }
 
 /**

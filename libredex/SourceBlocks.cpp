@@ -2728,11 +2728,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
         }
 
         void start_block(std::ostream&, cfg::Block* b) {
-          if (b->preds().empty()) {
-            is_entry_block = true;
-          } else {
-            is_entry_block = false;
-          }
+          is_entry_block = b->preds().empty();
           first_in_block = true;
         }
         void end_block(std::ostream&, cfg::Block*) {}

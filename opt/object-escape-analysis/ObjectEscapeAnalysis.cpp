@@ -1173,12 +1173,9 @@ class RootMethodReducer {
     auto [param_index, type] = *unordered_any(src_indices);
     auto kind = m_types.at(type).kind;
     bool multiples = kind == InlinableTypeKind::CompleteMultipleRoots;
-    if (multiples && m_code_size_cache[callee] > m_config.max_inline_size &&
-        (m_expandable_method_params.get_expanded_method_ref(
-             callee, param_index) != nullptr)) {
-      return true;
-    }
-    return false;
+    return multiples && m_code_size_cache[callee] > m_config.max_inline_size &&
+           (m_expandable_method_params.get_expanded_method_ref(
+                callee, param_index) != nullptr);
   }
 
   live_range::DefUseChains get_augmented_du_chains_for_inlinable_new_instances(

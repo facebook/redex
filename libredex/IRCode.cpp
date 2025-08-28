@@ -893,7 +893,7 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
     dex_code->set_registers_size(m_registers_size);
     dex_code->set_outs_size(calc_outs_size(this));
     dex_code->set_debug_item(std::move(m_dbg));
-    while (try_sync(dex_code.get()) == false) {
+    while (!try_sync(dex_code.get())) {
       ;
     }
   } catch (const std::exception& e) {

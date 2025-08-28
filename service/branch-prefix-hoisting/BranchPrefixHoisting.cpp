@@ -140,10 +140,7 @@ std::vector<IRInstruction> get_insns_to_hoist(
           }
         }
         skip_handled_method_item_entries(it, end);
-        if (it == end) {
-          return false;
-        }
-        return true;
+        return static_cast<bool>(it != end);
       };
 
       size_t at_end = 0;

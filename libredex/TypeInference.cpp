@@ -323,11 +323,11 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   }
   IRType t1 = state->get_type(reg1).element();
   IRType t2 = state->get_type(reg2).element();
-  if (!((TypeDomain(t1).leq(TypeDomain(IRType::REFERENCE)) &&
-         TypeDomain(t2).leq(TypeDomain(IRType::REFERENCE))) ||
-        (TypeDomain(t1).leq(TypeDomain(IRType::SCALAR)) &&
-         TypeDomain(t2).leq(TypeDomain(IRType::SCALAR)) &&
-         (t1 != IRType::FLOAT) && (t2 != IRType::FLOAT)))) {
+  if ((!TypeDomain(t1).leq(TypeDomain(IRType::REFERENCE)) ||
+       !TypeDomain(t2).leq(TypeDomain(IRType::REFERENCE))) &&
+      (!TypeDomain(t1).leq(TypeDomain(IRType::SCALAR)) ||
+       !TypeDomain(t2).leq(TypeDomain(IRType::SCALAR)) ||
+       (t1 == IRType::FLOAT) || (t2 == IRType::FLOAT))) {
     // Two values can be used in a comparison operation if they either both
     // have the REFERENCE type or have non-float scalar types. Note that in
     // the case where one or both types have the SCALAR type, we can't

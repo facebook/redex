@@ -613,11 +613,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
 bool has_only_argument(DexMethod* method, DexType* type) {
   DexProto* proto = method->get_proto();
   const auto& args = *proto->get_args();
-  if (args.size() != 1 || args.at(0) != type) {
-    return false;
-  }
-
-  return true;
+  return !(args.size() != 1 || args.at(0) != type);
 }
 
 /**

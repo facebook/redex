@@ -340,10 +340,7 @@ bool is_likely_anonymous_class(const DexType* type) {
     return intfs->size() == 1;
   }
   const auto* super_cls = type_class(super_type);
-  if ((super_cls != nullptr) && is_abstract(super_cls)) {
-    return true;
-  }
-  return false;
+  return (super_cls != nullptr) && is_abstract(super_cls);
 }
 
 /*

@@ -28,11 +28,8 @@ constexpr const char* CONTINUATION_IMPL =
 // Check if cls is from Kotlin source
 bool is_kotlin_class(DexClass* cls) {
   const auto* src_string = cls->get_source_file();
-  if ((src_string != nullptr) &&
-      boost::algorithm::ends_with(src_string->str(), ".kt")) {
-    return true;
-  }
-  return false;
+  return (src_string != nullptr) &&
+         boost::algorithm::ends_with(src_string->str(), ".kt");
 }
 
 // Check cls name is in anonymous format

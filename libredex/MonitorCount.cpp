@@ -216,11 +216,7 @@ bool cannot_inline_sketchy_code(const cfg::ControlFlowGraph& caller_cfg,
   // method into a try region.
   auto is_callee_sketchy =
       !Analyzer(callee_cfg).get_sketchy_instructions().empty();
-  if (is_callee_sketchy && is_invoke_insn_in_try(caller_cfg, invoke_insn)) {
-    return true;
-  }
-
-  return false;
+  return is_callee_sketchy && is_invoke_insn_in_try(caller_cfg, invoke_insn);
 }
 
 } // namespace monitor_count

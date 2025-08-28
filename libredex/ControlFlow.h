@@ -1705,7 +1705,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
           always_assert(opcode::is_throw(op));
           // The only valid way to leave this block is via a throw edge.
           delete_succ_edge_if(b, [](const Edge* e) {
-            return !(e->type() == EDGE_THROW || e->type() == EDGE_GHOST);
+            return e->type() != EDGE_THROW && e->type() != EDGE_GHOST;
           });
         }
         // If this created unreachable blocks, they will be removed by simplify.

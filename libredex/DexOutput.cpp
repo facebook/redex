@@ -344,11 +344,7 @@ void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
     std::vector<DexMethod*>& lmeth) {
   std::stable_sort(lmeth.begin(), lmeth.end(),
                    [](const DexMethod* a, const DexMethod* b) {
-                     if (method::is_clinit(a) && !method::is_clinit(b)) {
-                       return true;
-                     } else {
-                       return false;
-                     }
+                     return method::is_clinit(a) && !method::is_clinit(b);
                    });
 }
 
