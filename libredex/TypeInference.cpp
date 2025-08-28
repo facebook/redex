@@ -209,7 +209,7 @@ void set_reference(TypeEnvironment* state,
                    const boost::optional<const DexType*>& dex_type_opt,
                    bool is_not_null = false) {
   state->set_type(reg, TypeDomain(IRType::REFERENCE));
-  auto* dex_type = dex_type_opt ? *dex_type_opt : nullptr;
+  const auto* dex_type = dex_type_opt ? *dex_type_opt : nullptr;
   always_assert(!is_not_null || dex_type != nullptr);
   const DexTypeDomain dex_type_domain =
       is_not_null ? DexTypeDomain::create_not_null(dex_type)
@@ -224,7 +224,7 @@ void set_reference_with_anno(
     const boost::optional<const DexType*>& dex_type_opt,
     const boost::optional<const DexType*>& annotation) {
   state->set_type(reg, TypeDomain(IRType::REFERENCE));
-  auto* dex_type = dex_type_opt ? *dex_type_opt : nullptr;
+  const auto* dex_type = dex_type_opt ? *dex_type_opt : nullptr;
   const auto anno = DexAnnoType(annotation);
   const DexTypeDomain dex_type_domain =
       DexTypeDomain::create_nullable(dex_type, &anno);
@@ -343,13 +343,13 @@ boost::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
     const UnorderedSet<DexType*>& typedef_annotations) {
   for (auto const& anno : annotations) {
-    auto const anno_class = type_class(anno->type());
-    if (!anno_class) {
+    auto* const anno_class = type_class(anno->type());
+    if (anno_class == nullptr) {
       continue;
     }
     bool has_typedef = false;
-    for (auto annotation : UnorderedIterable(typedef_annotations)) {
-      if (get_annotation(anno_class, annotation)) {
+    for (auto* annotation : UnorderedIterable(typedef_annotations)) {
+      if (get_annotation(anno_class, annotation) != nullptr) {
         if (has_typedef) {
           always_assert_log(
               false,
@@ -370,7 +370,7 @@ boost::optional<const DexType*> get_typedef_annotation(
 bool TypeInference::is_pure_virtual_with_annotation(
     DexMethodRef* dex_method) const {
   if (!m_annotations.empty() && dex_method->is_def() &&
-      !dex_method->as_def()->get_code()) {
+      (dex_method->as_def()->get_code() == nullptr)) {
     always_assert(m_method_override_graph != nullptr);
     return method_override_graph::is_true_virtual(*m_method_override_graph,
                                                   dex_method->as_def());
@@ -540,7 +540,7 @@ void TypeInference::run(bool is_static,
     boost::optional<const DexType*> annotation = boost::none;
 
     if (!first_param || is_static) {
-      if (!m_annotations.empty() && param_anno &&
+      if (!m_annotations.empty() && (param_anno != nullptr) &&
           param_anno->find(arg_index) != param_anno->end()) {
         annotation = get_typedef_annotation(
             (&param_anno->at(arg_index))->get()->get_annotations(),
@@ -690,7 +690,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_MOVE_EXCEPTION: {
-    if (!current_block) {
+    if (current_block == nullptr) {
       // We bail just in case the current block is dangling.
       TRACE(TYPE, 2,
             "Warning: Can't infer exception type from unknown catch block.");
@@ -807,19 +807,19 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CHECK_CAST: {
     refine_reference(current_state, insn->src(0));
-    auto to_type = insn->get_type();
+    auto* to_type = insn->get_type();
 
     if (!m_skip_check_cast_upcasting) {
       set_reference(current_state, RESULT_REGISTER, to_type);
     } else {
       // Avoid using this check-cast type if casting to base class or an
       // interface.
-      auto to_cls = type_class(to_type);
+      auto* to_cls = type_class(to_type);
       auto current_type_domain = current_state->get_type_domain(insn->src(0));
       auto current_type = current_type_domain.get_dex_type();
-      auto is_intf = to_cls && is_interface(to_cls);
+      auto is_intf = (to_cls != nullptr) && is_interface(to_cls);
       auto is_cast_to_base =
-          current_type && to_type &&
+          current_type && (to_type != nullptr) &&
           type::check_cast(*current_type, /* base_type */ to_type);
       if (is_intf || is_cast_to_base) {
         set_reference(current_state, RESULT_REGISTER, current_type_domain);
@@ -967,8 +967,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     refine_int(current_state, insn->src(1));
     const auto dex_type_opt = current_state->get_dex_type(insn->src(0));
-    if (dex_type_opt && *dex_type_opt && type::is_array(*dex_type_opt)) {
-      const auto etype = type::get_array_component_type(*dex_type_opt);
+    if (dex_type_opt && (*dex_type_opt != nullptr) &&
+        type::is_array(*dex_type_opt)) {
+      auto* const etype = type::get_array_component_type(*dex_type_opt);
       set_reference(current_state, RESULT_REGISTER, etype);
     } else {
       set_reference(current_state, RESULT_REGISTER, DexTypeDomain::top());
@@ -1026,7 +1027,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     boost::optional<const DexType*> src_anno =
         current_state->get_annotation(insn->src(0));
     DexField* field_def = field->as_def();
-    if (field_def &&
+    if ((field_def != nullptr) &&
         field_def->get_deobfuscated_name_or_empty() == KT_INT_REF) {
       annotation = src_anno;
     }
@@ -1072,11 +1073,11 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     boost::optional<const DexType*> annotation =
         get_typedef_anno_from_member(insn->get_field(), m_annotations);
     always_assert(insn->has_field());
-    const auto field = insn->get_field();
+    auto* const field = insn->get_field();
     boost::optional<const DexType*> src_anno =
         current_state->get_annotation(insn->src(0));
     DexField* field_def = field->as_def();
-    if (field_def &&
+    if ((field_def != nullptr) &&
         field_def->get_deobfuscated_name_or_empty() == KT_OBJ_REF) {
       annotation = src_anno;
     }
@@ -1162,7 +1163,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_SGET_OBJECT: {
     always_assert(insn->has_field());
-    const auto field = insn->get_field();
+    auto* const field = insn->get_field();
     boost::optional<const DexType*> annotation =
         get_typedef_anno_from_member(insn->get_field(), m_annotations);
     set_reference_with_anno(current_state, RESULT_REGISTER, field->get_type(),

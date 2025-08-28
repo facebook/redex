@@ -151,7 +151,7 @@ std::shared_ptr<InsnOptData> MethodOptData::get_insn_opt_data(
 
 ClassOptData::ClassOptData(const DexClass* cls) : m_cls(cls) {
   m_package = type::get_package_name(cls->get_type());
-  auto source_file = cls->get_source_file();
+  const auto* source_file = cls->get_source_file();
   if (source_file != nullptr) {
     m_has_srcfile = true;
     m_filename = source_file->str();
@@ -171,7 +171,7 @@ std::shared_ptr<MethodOptData> ClassOptData::get_meth_opt_data(
 
 std::shared_ptr<ClassOptData> OptDataMapper::get_cls_opt_data(
     DexType* cls_type) {
-  auto cls = type_class(cls_type);
+  auto* cls = type_class(cls_type);
   const auto& kv_pair = m_cls_opt_map.find(cls);
   if (kv_pair == m_cls_opt_map.end()) {
     auto cls_opt_data = std::make_shared<ClassOptData>(cls);
@@ -391,8 +391,9 @@ void OptDataMapper::serialize_method(
   meth_data["line_num"] = (uint32_t)meth_opt_data->m_line_num;
   meth_data["signature"] = get_deobfuscated_name(method);
   meth_data["code_size"] =
-      (uint32_t)(method->get_code() ? method->get_code()->sum_opcode_sizes()
-                                    : 0);
+      (uint32_t)(method->get_code() != nullptr
+                     ? method->get_code()->sum_opcode_sizes()
+                     : 0);
   arr->append(meth_data);
   serialize_opt_nopt_helper(meth_opt_data->m_opts, meth_opt_data->m_nopts,
                             meth_id, opt_arr, nopt_arr);

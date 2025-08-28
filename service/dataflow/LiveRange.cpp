@@ -65,7 +65,7 @@ class SymRegMapper {
  */
 void unify_defs(const UseDefChains& chains, DefSets* def_sets) {
   for (const auto& chain : UnorderedIterable(chains)) {
-    auto& defs = chain.second;
+    const auto& defs = chain.second;
     auto it = defs.begin();
     Def first = *it;
     auto end = defs.end();
@@ -88,7 +88,7 @@ void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
       continue;
     }
     for (const auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
         Use use{insn, i};
         auto src = insn->src(i);
@@ -131,7 +131,7 @@ DefUseChains get_def_use_chains_impl(const cfg::ControlFlowGraph& cfg,
   replay_analysis_with_callback(
       cfg, iter, ignore_unreachable,
       [&chains](const Use& use, const reaching_defs::Domain& defs) {
-        for (auto def : defs.elements()) {
+        for (auto* def : defs.elements()) {
           chains[def].emplace(use);
         }
       });
@@ -198,14 +198,14 @@ void renumber_registers(IRCode* code, bool width_aware) {
   unify_defs(ud_chains, &def_sets);
   SymRegMapper sym_reg_mapper(width_aware);
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->has_dest()) {
       auto sym_reg = sym_reg_mapper.make(def_sets.find_set(insn));
       insn->set_dest(sym_reg);
     }
   }
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
       auto defs = ud_chains.find(Use{insn, i});
       always_assert_log(defs != ud_chains.end(),

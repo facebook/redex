@@ -153,7 +153,7 @@ class XmlStringCollector : public arsc::SimpleXmlParser {
     auto idx = dtohl(ref.index);
     size_t len;
     auto& pool = global_strings();
-    auto chars = pool.stringAt(idx, &len);
+    const auto* chars = pool.stringAt(idx, &len);
     always_assert_log(chars != nullptr, "invalid string ref %d", idx);
     android::String16 s16(chars, len);
     android::String8 s8(s16);

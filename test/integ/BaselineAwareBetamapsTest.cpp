@@ -28,7 +28,7 @@ class BaselineAwareBetamapsTest : public RedexIntegrationTest {
     auto tmp_dir = redex::make_tmp_dir("redex_bab_test_%%%%%%%%");
 
     auto betamap_file = make_betamap_file(tmp_dir.path, betamap);
-    auto config_file_env = std::getenv("config_file");
+    auto* config_file_env = std::getenv("config_file");
     always_assert_log(
         config_file_env,
         "Config file must be specified to BaselineAwareBetamapsTest.\n");
@@ -77,7 +77,7 @@ class BaselineAwareBetamapsTest : public RedexIntegrationTest {
 };
 
 TEST_F(BaselineAwareBetamapsTest, test1) {
-  auto method_profile_path = std::getenv("method-profile");
+  auto* method_profile_path = std::getenv("method-profile");
   ASSERT_NE(method_profile_path, nullptr) << "Missing method-profile path.";
   define_test(
       {
@@ -132,7 +132,7 @@ TEST_F(BaselineAwareBetamapsTest, test1) {
 }
 
 TEST_F(BaselineAwareBetamapsTest, test2) {
-  auto method_profile_path = std::getenv("method-profile");
+  auto* method_profile_path = std::getenv("method-profile");
   ASSERT_NE(method_profile_path, nullptr) << "Missing method-profile path.";
 
   define_test(

@@ -70,7 +70,7 @@ namespace {
 const DexString* gen_new_name(std::string_view org_name, size_t seed) {
   std::string name(org_name);
   name.append("$REDEX$PPP$");
-  while (seed) {
+  while (seed != 0u) {
     int d = seed % 62;
     if (d < 10) {
       name.push_back(d + '0');
@@ -95,7 +95,7 @@ size_t hash_type(DexType* type) {
 // package-private visibility.
 const DexMethod* get_parent(const mog::Graph& graph, const DexMethod* method) {
   always_assert(!is_interface(type_class(method->get_class())));
-  auto& node = graph.get_node(method);
+  const auto& node = graph.get_node(method);
   for (auto* parent : UnorderedIterable(node.parents)) {
     if (parent->is_interface) {
       continue;
@@ -110,12 +110,12 @@ const DexMethod* get_parent(const mog::Graph& graph, const DexMethod* method) {
 // visibility.
 const DexMethod* get_true_parent(const mog::Graph& graph,
                                  const DexMethod* method) {
-  for (auto* parent = get_parent(graph, method); parent;) {
+  for (const auto* parent = get_parent(graph, method); parent != nullptr;) {
     if (is_public(parent) || is_protected(parent)) {
       return parent;
     }
     always_assert(is_package_private(parent));
-    auto parent_class = parent->get_class();
+    auto* parent_class = parent->get_class();
     if (type::same_package(parent_class, method->get_class()) &&
         !parent->is_external()) {
       return parent;
@@ -139,7 +139,7 @@ UnorderedSet<const DexMethod*> get_true_roots(const mog::Graph& graph,
   const DexMethod* public_or_protected_root{nullptr};
   UnorderedSet<const DexMethod*> res;
   while (!stack.empty()) {
-    auto* m = stack.top();
+    const auto* m = stack.top();
     stack.pop();
     auto package_name = type::get_package_name(m->get_class());
     if (is_package_private(m)) {
@@ -181,8 +181,8 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
     if (type::is_primitive(type)) {
       return;
     }
-    auto resolved = type_class(type);
-    if (!resolved) {
+    auto* resolved = type_class(type);
+    if (resolved == nullptr) {
       if (!boost::starts_with(type->str(), "Ldalvik/annotation/")) {
         TRACE(PPP, 5, "[%s] unresolved type: %s", SHOW(cls), SHOW(resolved));
         stats.unresolved_types++;
@@ -210,8 +210,8 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
   };
   auto visit_field = [&](DexFieldRef* field, FieldSearch fs,
                          DexMethod* caller = nullptr) {
-    auto resolved = resolve_field(field, fs);
-    if (!resolved) {
+    auto* resolved = resolve_field(field, fs);
+    if (resolved == nullptr) {
       TRACE(PPP, 5, "[%s] unresolved field: %s", SHOW(cls), SHOW(resolved));
       stats.unresolved_fields++;
       return;
@@ -241,7 +241,7 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
         std::lock_guard lock(*illegal_internal_accesses_stream_mutex);
         *illegal_internal_accesses_stream
             << "ERROR - access to invisible field " << show(resolved) << " in "
-            << (caller ? show(caller) : show(cls)) << "!\n";
+            << (caller != nullptr ? show(caller) : show(cls)) << "!\n";
         stats.internal_inaccessible_fields++;
       }
       return;
@@ -255,10 +255,10 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
         method->get_name()->str() == "clone") {
       return;
     }
-    auto resolved = resolve_method(method, ms, caller);
-    if (!resolved && ms == MethodSearch::Virtual) {
+    auto* resolved = resolve_method(method, ms, caller);
+    if ((resolved == nullptr) && ms == MethodSearch::Virtual) {
       resolved = resolve_method(method, MethodSearch::InterfaceVirtual, caller);
-      if (resolved) {
+      if (resolved != nullptr) {
         // We resolved to an interface method. Interface methods are always
         // public, and we don't have a visibility problem. Just log.
         TRACE(PPP, 6, "[%s] virtual method resolved to interface: %s",
@@ -266,7 +266,7 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
         return;
       }
     }
-    if (!resolved) {
+    if (resolved == nullptr) {
       TRACE(PPP, 5, "[%s] unresolved method: %s", SHOW(cls), SHOW(resolved));
       stats.unresolved_methods++;
       return;
@@ -296,14 +296,14 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
         std::lock_guard lock(*illegal_internal_accesses_stream_mutex);
         *illegal_internal_accesses_stream
             << "ERROR - access to invisible method " << show(resolved) << " in "
-            << (caller ? show(caller) : show(cls)) << "!\n";
+            << (caller != nullptr ? show(caller) : show(cls)) << "!\n";
       }
       stats.internal_inaccessible_methods++;
       return;
     }
     package_private_accessed_methods->insert(resolved);
   };
-  if (cls->get_super_class()) {
+  if (cls->get_super_class() != nullptr) {
     visit_type(cls->get_super_class());
   }
   for (auto* type : *cls->get_interfaces()) {
@@ -366,14 +366,14 @@ PackagePrivatePreprocessorPass::Stats analyze_graph(
       return;
     }
     for (auto* method : cls->get_vmethods()) {
-      auto* parent = get_parent(graph, method);
+      const auto* parent = get_parent(graph, method);
       if (parent == nullptr) {
         continue;
       }
       auto true_roots = get_true_roots(graph, method);
       always_assert(!true_roots.empty());
       bool unsupported = true_roots.size() > 1;
-      for (auto* true_root : UnorderedIterable(true_roots)) {
+      for (const auto* true_root : UnorderedIterable(true_roots)) {
         true_virtual_scopes->update(true_root, [&](auto*, auto& vs, auto) {
           vs.methods.insert(method);
           if (unsupported) {
@@ -389,14 +389,14 @@ PackagePrivatePreprocessorPass::Stats analyze_graph(
                             << show(method) << " overrides ";
         auto ordered_true_roots =
             unordered_to_ordered(true_roots, compare_dexmethods);
-        for (auto* root : ordered_true_roots) {
+        for (const auto* root : ordered_true_roots) {
           *unsupported_stream << show(root) << ", ";
         }
         *unsupported_stream << "\n";
         stats.unsupported_multiple_package_private_overrides++;
       }
 
-      auto* true_parent = get_true_parent(graph, method);
+      const auto* true_parent = get_true_parent(graph, method);
       if (true_parent == nullptr) {
         continue;
       }
@@ -457,7 +457,7 @@ PackagePrivatePreprocessorPass::Stats transform(
       publicize_method(method);
     }
   }
-  for (auto* root : UnorderedIterable(roots_to_publicize)) {
+  for (const auto* root : UnorderedIterable(roots_to_publicize)) {
     const auto& methods = true_virtual_scopes.at(root).methods;
     for (auto* method : UnorderedIterable(methods)) {
       publicize_method(method);
@@ -507,9 +507,9 @@ PackagePrivatePreprocessorPass::Stats transform(
   // Give unique names to all virtual scopes that apparently override
   // package-private methods, but truely don't. There might be cases where this
   // isn't possible; we can only report those.
-  for (auto root : UnorderedIterable(new_true_virtual_scopes)) {
+  for (const auto* root : UnorderedIterable(new_true_virtual_scopes)) {
     const auto& methods = true_virtual_scopes.at_unsafe(root).methods;
-    auto new_name =
+    const auto* new_name =
         gen_new_name(root->get_name()->str(), hash_type(root->get_class()));
     TRACE(PPP, 1, "New virtual scope of size %zu with root %s for: %s",
           methods.size(), new_name->c_str(), SHOW(root));
@@ -525,7 +525,7 @@ PackagePrivatePreprocessorPass::Stats transform(
         cannot_rename = true;
         stats.unsupported_unrenamable_methods++;
       }
-      if (may_be_interface_implementors.count_unsafe(method)) {
+      if (may_be_interface_implementors.count_unsafe(method) != 0u) {
         // TODO: Maybe we can rename more here.
         *unsupported_stream
             << "  Semantics will change! Cannot fix package-private overriding "
@@ -555,7 +555,7 @@ PackagePrivatePreprocessorPass::Stats transform(
       return;
     }
     auto* method = insn->get_method();
-    auto resolved = resolve_method(method, opcode_to_search(insn));
+    auto* resolved = resolve_method(method, opcode_to_search(insn));
     auto it = new_names.find(resolved);
     if (it == new_names.end()) {
       return;
@@ -566,7 +566,7 @@ PackagePrivatePreprocessorPass::Stats transform(
   auto ordered_methods_to_rename =
       unordered_to_ordered(methods_to_rename, compare_dexmethods);
   for (auto* method : ordered_methods_to_rename) {
-    auto* new_name = new_names.at(method);
+    const auto* new_name = new_names.at(method);
     always_assert(is_public(method));
     TRACE(PPP, 2, "  Renaming %s to %s", SHOW(method), new_name->c_str());
     DexMethodSpec spec;
@@ -579,7 +579,7 @@ PackagePrivatePreprocessorPass::Stats transform(
       [&](const std::pair<IRInstruction*, DexMethod*>& p) {
         auto* insn = p.first;
         auto* resolved = p.second;
-        auto* new_name = new_names.at(resolved);
+        const auto* new_name = new_names.at(resolved);
         auto* method = insn->get_method();
         auto* new_method = DexMethod::make_method(method->get_class(), new_name,
                                                   method->get_proto());

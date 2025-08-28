@@ -23,7 +23,7 @@ std::unique_ptr<PositionMap> read_map(const char* filename) {
     return nullptr;
   }
   struct stat buf;
-  if (fstat(fd, &buf)) {
+  if (fstat(fd, &buf) != 0) {
     std::cerr << "Cannot fstat file (" << filename
               << ") with error: " << strerror(errno) << std::endl;
     return nullptr;

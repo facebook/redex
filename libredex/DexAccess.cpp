@@ -44,7 +44,7 @@ void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
     if (is_final(method) && !pair.second.children.empty()) {
       overriden_should_not_be_public(
           &pair.second, graph.get(), &should_not_mark);
-      auto& children = pair.second.children;
+      const auto& children = pair.second.children;
       auto* first_child = *unordered_any(children);
       always_assert_log(!is_public(method) && !is_protected(method),
                         "%s is visible final but it has children %s",
@@ -54,7 +54,7 @@ void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
   }
   walk::parallel::classes(scope, [&should_not_mark](DexClass* cls) {
     for (auto* method : cls->get_vmethods()) {
-      if (!should_not_mark.count(method)) {
+      if (should_not_mark.count(method) == 0u) {
         set_public(method);
       }
     }
@@ -64,17 +64,17 @@ void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
 
 void loosen_access_modifier_except_vmethods(DexClass* clazz) {
   set_public(clazz);
-  for (auto field : clazz->get_ifields()) {
+  for (auto* field : clazz->get_ifields()) {
     set_public(field);
   }
-  for (auto field : clazz->get_sfields()) {
+  for (auto* field : clazz->get_sfields()) {
     set_public(field);
   }
   // Direct methods should have one of the modifiers, ACC_STATIC, ACC_PRIVATE
   // or ACC_CONSTRUCTOR.
-  for (auto method : clazz->get_dmethods()) {
+  for (auto* method : clazz->get_dmethods()) {
     auto access = method->get_access();
-    if (access & (ACC_STATIC | ACC_CONSTRUCTOR)) {
+    if ((access & (ACC_STATIC | ACC_CONSTRUCTOR)) != 0u) {
       set_public(method);
     }
   }
@@ -87,7 +87,7 @@ void loosen_access_modifier(const DexClasses& classes) {
   loosen_access_modifier_for_vmethods(classes);
 
   DexType* dalvikinner = DexType::get_type("Ldalvik/annotation/InnerClass;");
-  if (!dalvikinner) {
+  if (dalvikinner == nullptr) {
     return;
   }
 
@@ -95,10 +95,10 @@ void loosen_access_modifier(const DexClasses& classes) {
     if (anno->type() != dalvikinner) {
       return;
     }
-    auto& elems = anno->anno_elems();
-    for (auto& elem : elems) {
+    const auto& elems = anno->anno_elems();
+    for (const auto& elem : elems) {
       // Fix access flags on all @InnerClass annotations
-      if (!strcmp("accessFlags", elem.string->c_str())) {
+      if (strcmp("accessFlags", elem.string->c_str()) == 0) {
         always_assert(elem.encoded_value->evtype() == DEVT_INT);
         elem.encoded_value->value(
             (elem.encoded_value->value() & ~VISIBILITY_MASK) | ACC_PUBLIC);

@@ -149,7 +149,7 @@ class AliasFixpointIterator final
     if (it == m_check_cast_throw_targets_regs.end()) {
       return;
     }
-    auto& regs = it->second;
+    const auto& regs = it->second;
     for (auto reg : UnorderedIterable(regs)) {
       aliases.break_alias(Value::create_register(reg));
     }
@@ -169,7 +169,7 @@ class AliasFixpointIterator final
     size_t moves_eliminated = 0;
     const auto& iterable = InstructionIterable(block);
     for (auto it = iterable.begin(); it != iterable.end(); ++it) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       auto op = insn->opcode();
 
       if (m_config.replace_with_representative && mutation != nullptr) {
@@ -423,7 +423,7 @@ class AliasFixpointIterator final
       break;
     case OPCODE_CONST_STRING: {
       if (m_config.eliminate_const_strings) {
-        auto* str = insn->get_string();
+        const auto* str = insn->get_string();
         source.lower = Value{str};
       }
       break;
@@ -479,7 +479,7 @@ class AliasFixpointIterator final
 
 BlockRegs get_check_cast_throw_targets_regs(cfg::ControlFlowGraph& cfg) {
   BlockRegs check_cast_throw_targets_regs;
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); it++) {
       if (opcode::is_check_cast(it->insn->opcode())) {
@@ -551,10 +551,10 @@ Stats CopyPropagation::run(const Scope& scope) {
 
 Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   return run(code,
-             method ? is_static(method) : true,
-             method ? method->get_class() : nullptr,
-             method ? method->get_proto()->get_rtype() : nullptr,
-             method ? method->get_proto()->get_args() : nullptr,
+             method != nullptr ? is_static(method) : true,
+             method != nullptr ? method->get_class() : nullptr,
+             method != nullptr ? method->get_proto()->get_rtype() : nullptr,
+             method != nullptr ? method->get_proto()->get_args() : nullptr,
              [method]() { return show(method); });
 }
 
@@ -600,7 +600,7 @@ Stats CopyPropagation::run(IRCode* code,
   fixpoint.run(AliasDomain());
 
   cfg::CFGMutation mutation{cfg};
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     AliasDomain domain = fixpoint.get_entry_state_at(block);
     domain.update(
         [&fixpoint, block, &mutation, &stats](AliasedRegisters& aliases) {

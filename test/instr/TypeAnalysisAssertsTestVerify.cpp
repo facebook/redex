@@ -12,21 +12,21 @@
 #include "VerifyUtil.h"
 
 TEST_F(PreVerify, NoTypeChecks) {
-  auto assert_handler_cls = find_class_named(
+  auto* assert_handler_cls = find_class_named(
       classes, "Lcom/facebook/redex/ConstantPropagationAssertHandler;");
   ASSERT_NE(nullptr, assert_handler_cls);
-  auto field_error_m =
+  auto* field_error_m =
       find_dmethod_named(*assert_handler_cls, "fieldValueError");
   ASSERT_NE(nullptr, field_error_m);
-  auto method_error_m =
+  auto* method_error_m =
       find_dmethod_named(*assert_handler_cls, "returnValueError");
   ASSERT_NE(nullptr, method_error_m);
 
-  auto test_cls = find_class_named(
+  auto* test_cls = find_class_named(
       classes, "Lcom/facebook/redextest/TypeAnalysisAssertsTest;");
   ASSERT_NE(nullptr, test_cls);
-  auto test_field_m = find_vmethod_named(*test_cls, "getBase");
-  auto test_return_m = find_vmethod_named(*test_cls, "testSetAndGet");
+  auto* test_field_m = find_vmethod_named(*test_cls, "getBase");
+  auto* test_return_m = find_vmethod_named(*test_cls, "testSetAndGet");
   ASSERT_NE(nullptr, test_field_m);
   ASSERT_NE(nullptr, test_return_m);
   ASSERT_EQ(nullptr,
@@ -38,21 +38,21 @@ TEST_F(PreVerify, NoTypeChecks) {
 }
 
 TEST_F(PostVerify, HasTypeChecks) {
-  auto assert_handler_cls = find_class_named(
+  auto* assert_handler_cls = find_class_named(
       classes, "Lcom/facebook/redex/ConstantPropagationAssertHandler;");
   ASSERT_NE(nullptr, assert_handler_cls);
-  auto field_error_m =
+  auto* field_error_m =
       find_dmethod_named(*assert_handler_cls, "fieldValueError");
   ASSERT_NE(nullptr, field_error_m);
-  auto method_error_m =
+  auto* method_error_m =
       find_dmethod_named(*assert_handler_cls, "returnValueError");
   ASSERT_NE(nullptr, method_error_m);
 
-  auto test_cls = find_class_named(
+  auto* test_cls = find_class_named(
       classes, "Lcom/facebook/redextest/TypeAnalysisAssertsTest;");
   ASSERT_NE(nullptr, test_cls);
-  auto test_field_m = find_vmethod_named(*test_cls, "getBase");
-  auto test_return_m = find_vmethod_named(*test_cls, "testSetAndGet");
+  auto* test_field_m = find_vmethod_named(*test_cls, "getBase");
+  auto* test_return_m = find_vmethod_named(*test_cls, "testSetAndGet");
   ASSERT_NE(nullptr, test_field_m);
   ASSERT_NE(nullptr, test_return_m);
   ASSERT_EQ(nullptr,

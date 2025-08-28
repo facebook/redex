@@ -49,7 +49,7 @@ struct CheckCastAnalysisTest : public RedexTest {
 };
 
 TEST_F(CheckCastAnalysisTest, simple_string) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()Ljava/lang/String;"
       (
         (const-string "S1")
@@ -71,7 +71,7 @@ TEST_F(CheckCastAnalysisTest, simple_string) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "Ljava/lang/String;");
   EXPECT_EQ(it->replacement_insn, boost::none);
@@ -80,7 +80,7 @@ TEST_F(CheckCastAnalysisTest, simple_string) {
 }
 
 TEST_F(CheckCastAnalysisTest, new_instance) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()LFoo;"
       (
         (new-instance "LFoo;")
@@ -100,7 +100,7 @@ TEST_F(CheckCastAnalysisTest, new_instance) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LFoo;");
   EXPECT_EQ(it->replacement_insn, boost::none);
@@ -109,7 +109,7 @@ TEST_F(CheckCastAnalysisTest, new_instance) {
 }
 
 TEST_F(CheckCastAnalysisTest, parameter) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(LBar;)LBar;"
       (
         (load-param-object v0)
@@ -129,7 +129,7 @@ TEST_F(CheckCastAnalysisTest, parameter) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LBar;");
   EXPECT_NE(it->replacement_insn, boost::none);
@@ -138,7 +138,7 @@ TEST_F(CheckCastAnalysisTest, parameter) {
 }
 
 TEST_F(CheckCastAnalysisTest, array_parameter) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:([LBar;)V"
       (
         (load-param-object v0)
@@ -157,7 +157,7 @@ TEST_F(CheckCastAnalysisTest, array_parameter) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "Ljava/lang/Object;");
   EXPECT_NE(it->replacement_insn, boost::none);
@@ -166,7 +166,7 @@ TEST_F(CheckCastAnalysisTest, array_parameter) {
 }
 
 TEST_F(CheckCastAnalysisTest, this_parameter) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(LBar;)LFoo;"
       (
         (load-param-object v0)
@@ -186,7 +186,7 @@ TEST_F(CheckCastAnalysisTest, this_parameter) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LFoo;");
   EXPECT_EQ(it->replacement_insn, boost::none);
@@ -196,7 +196,7 @@ TEST_F(CheckCastAnalysisTest, this_parameter) {
 
 TEST_F(CheckCastAnalysisTest, get_field) {
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()LBar;"
       (
         (iget-object v0 "LFoo;.b:LBar;")
@@ -216,7 +216,7 @@ TEST_F(CheckCastAnalysisTest, get_field) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LBar;");
   EXPECT_NE(it->replacement_insn, boost::none);
@@ -226,7 +226,7 @@ TEST_F(CheckCastAnalysisTest, get_field) {
 }
 
 TEST_F(CheckCastAnalysisTest, weaken_disabled) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(Ljava/lang/Object;)Ljava/lang/Object;"
       (
         (load-param-object v0)
@@ -249,7 +249,7 @@ TEST_F(CheckCastAnalysisTest, weaken_disabled) {
 }
 
 TEST_F(CheckCastAnalysisTest, weaken_replace) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(Ljava/lang/Object;)Ljava/lang/Object;"
       (
         (load-param-object v0)
@@ -269,7 +269,7 @@ TEST_F(CheckCastAnalysisTest, weaken_replace) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LBar;");
   EXPECT_NE(it->replacement_insn, boost::none);
@@ -278,9 +278,9 @@ TEST_F(CheckCastAnalysisTest, weaken_replace) {
 }
 
 TEST_F(CheckCastAnalysisTest, weaken) {
-  auto a_type = DexType::make_type("LA;");
-  auto b_type = DexType::make_type("LB;");
-  auto c_type = DexType::make_type("LC;");
+  auto* a_type = DexType::make_type("LA;");
+  auto* b_type = DexType::make_type("LB;");
+  auto* c_type = DexType::make_type("LC;");
   ClassCreator a_creator(a_type);
   a_creator.set_super(type::java_lang_Object());
   ClassCreator b_creator(b_type);
@@ -291,7 +291,7 @@ TEST_F(CheckCastAnalysisTest, weaken) {
   b_creator.create();
   c_creator.create();
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(LA;)LB;"
       (
         (load-param-object v0)
@@ -311,7 +311,7 @@ TEST_F(CheckCastAnalysisTest, weaken) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LC;");
   EXPECT_EQ(it->replacement_insn, boost::none);
@@ -321,16 +321,16 @@ TEST_F(CheckCastAnalysisTest, weaken) {
 }
 
 TEST_F(CheckCastAnalysisTest, weaken_interface_to_interface) {
-  auto i_type = DexType::make_type("LI;");
+  auto* i_type = DexType::make_type("LI;");
   ClassCreator i_creator(i_type);
   i_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
   i_creator.set_super(type::java_lang_Object());
-  auto j_type = DexType::make_type("LJ;");
+  auto* j_type = DexType::make_type("LJ;");
   ClassCreator j_creator(j_type);
   j_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
   j_creator.set_super(type::java_lang_Object());
   j_creator.add_interface(i_type);
-  auto k_type = DexType::make_type("LK;");
+  auto* k_type = DexType::make_type("LK;");
   ClassCreator k_creator(k_type);
   k_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
   k_creator.set_super(type::java_lang_Object());
@@ -339,7 +339,7 @@ TEST_F(CheckCastAnalysisTest, weaken_interface_to_interface) {
   j_creator.create();
   k_creator.create();
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(LI;)LJ;"
       (
         (load-param-object v0)
@@ -359,7 +359,7 @@ TEST_F(CheckCastAnalysisTest, weaken_interface_to_interface) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LK;");
   EXPECT_EQ(it->replacement_insn, boost::none);
@@ -369,13 +369,13 @@ TEST_F(CheckCastAnalysisTest, weaken_interface_to_interface) {
 }
 
 TEST_F(CheckCastAnalysisTest, weaken_replace_class_to_interface) {
-  auto i_type = DexType::make_type("LI;");
+  auto* i_type = DexType::make_type("LI;");
   ClassCreator i_creator(i_type);
   i_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
   i_creator.set_super(type::java_lang_Object());
 
-  auto a_type = DexType::make_type("LA;");
-  auto b_type = DexType::make_type("LB;");
+  auto* a_type = DexType::make_type("LA;");
+  auto* b_type = DexType::make_type("LB;");
   ClassCreator a_creator(a_type);
   a_creator.set_super(type::java_lang_Object());
   a_creator.add_interface(i_type);
@@ -386,7 +386,7 @@ TEST_F(CheckCastAnalysisTest, weaken_replace_class_to_interface) {
   a_creator.create();
   b_creator.create();
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(LA;)LI;"
       (
         (load-param-object v0)
@@ -406,7 +406,7 @@ TEST_F(CheckCastAnalysisTest, weaken_replace_class_to_interface) {
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LB;");
   EXPECT_NE(it->replacement_insn, boost::none);
@@ -415,13 +415,13 @@ TEST_F(CheckCastAnalysisTest, weaken_replace_class_to_interface) {
 }
 
 TEST_F(CheckCastAnalysisTest, do_not_weaken_class_to_interface) {
-  auto i_type = DexType::make_type("LI;");
+  auto* i_type = DexType::make_type("LI;");
   ClassCreator i_creator(i_type);
   i_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
   i_creator.set_super(type::java_lang_Object());
 
-  auto a_type = DexType::make_type("LA;");
-  auto b_type = DexType::make_type("LB;");
+  auto* a_type = DexType::make_type("LA;");
+  auto* b_type = DexType::make_type("LB;");
   ClassCreator a_creator(a_type);
   a_creator.set_super(type::java_lang_Object());
   ClassCreator b_creator(b_type);
@@ -431,7 +431,7 @@ TEST_F(CheckCastAnalysisTest, do_not_weaken_class_to_interface) {
   a_creator.create();
   b_creator.create();
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(LA;)LI;"
       (
         (load-param-object v0)
@@ -453,7 +453,7 @@ TEST_F(CheckCastAnalysisTest, do_not_weaken_class_to_interface) {
 }
 
 TEST_F(CheckCastAnalysisTest, external) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()LUnknownExternalInterface;"
       (
         (new-instance "LFoo;")
@@ -479,7 +479,7 @@ namespace {
 std::tuple<DexType*, DexType*, DexType*, DexType*> create_chain_of_four() {
   auto create_class = [](const char* t_name, DexType* super_type,
                          bool external) {
-    auto t_type = DexType::make_type(t_name);
+    auto* t_type = DexType::make_type(t_name);
     ClassCreator t_creator(t_type);
     t_creator.set_super(super_type);
     if (external) {
@@ -489,10 +489,10 @@ std::tuple<DexType*, DexType*, DexType*, DexType*> create_chain_of_four() {
     return t_type;
   };
 
-  auto t1_type = create_class("LT1;", type::java_lang_Object(), true);
-  auto t2_type = create_class("LT2;", t1_type, true);
-  auto t3_type = create_class("LT3;", t2_type, true);
-  auto t4_type = create_class("LT4;", t3_type, false);
+  auto* t1_type = create_class("LT1;", type::java_lang_Object(), true);
+  auto* t2_type = create_class("LT2;", t1_type, true);
+  auto* t3_type = create_class("LT3;", t2_type, true);
+  auto* t4_type = create_class("LT4;", t3_type, false);
 
   return std::make_tuple(t1_type, t2_type, t3_type, t4_type);
 }
@@ -510,7 +510,7 @@ TEST_P(CheckCastAnalysisSDKTest, parameter) {
 
   auto api = api::AndroidSDK::from_string(std::get<1>(GetParam()));
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(LT3;)LT1;"
       (
         (load-param-object v0)

@@ -410,7 +410,7 @@ TEST_F(RenamerTest, Interface3) {
   });
   check_intf_common();
   // Intf2 method name must also be in H and F
-  auto name =
+  const auto* name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();
   EXPECT_TRUE(has_method(DexType::get_type("LF;"), name));
   EXPECT_TRUE(has_method(DexType::get_type("LH;"), name));
@@ -448,7 +448,7 @@ TEST_F(RenamerTest, Interface3Miranda) {
   });
   check_intf_common();
   // Intf2 method name must also be in F, G, I, K
-  auto name =
+  const auto* name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();
   EXPECT_TRUE(has_method(DexType::get_type("LF;"), name));
   EXPECT_TRUE(has_method(DexType::get_type("LG;"), name));
@@ -488,7 +488,7 @@ TEST_F(RenamerTest, Interface3MirandaMultiIntf) {
   });
   check_intf_common();
   // Intf2 method name must also be in F, G, I, K
-  auto name =
+  const auto* name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();
   EXPECT_TRUE(has_method(DexType::get_type("LF;"), name));
   EXPECT_TRUE(has_method(DexType::get_type("LG;"), name));
@@ -533,7 +533,7 @@ TEST_F(RenamerTest, Interface3IntfOverride) {
   });
   check_intf_common();
   // Intf2 method name must also be in F, G, I, K
-  auto name =
+  const auto* name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();
   EXPECT_TRUE(has_method(DexType::get_type("LF;"), name));
   EXPECT_TRUE(has_method(DexType::get_type("LG;"), name));
@@ -570,7 +570,7 @@ TEST_F(RenamerTest, Interface3IntfOverride) {
 TEST_F(RenamerTest, Interface3IntfOverEscape) {
   std::vector<DexClass*> scope = create_scope_11();
   // add static void A() {} in class A
-  auto cls = type_class(DexType::get_type("LA;"));
+  auto* cls = type_class(DexType::get_type("LA;"));
   create_empty_method(
       cls, "A",
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({})),
@@ -592,7 +592,7 @@ TEST_F(RenamerTest, Interface3IntfOverEscape) {
   });
   check_intf_common();
   // Intf2 method name must also be in F, G, I, K
-  auto name =
+  const auto* name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();
   EXPECT_TRUE(has_method(DexType::get_type("LF;"), name));
   EXPECT_TRUE(has_method(DexType::get_type("LG;"), name));

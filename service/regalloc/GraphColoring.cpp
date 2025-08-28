@@ -55,7 +55,7 @@ static void find_first_uses_dfs(
     blocks_with_uses->emplace_back(block);
     return;
   }
-  for (auto& s : block->succs()) {
+  for (const auto& s : block->succs()) {
     find_first_uses_dfs(reg, s->target(), blocks_with_uses, visited_blocks);
   }
 }
@@ -263,7 +263,7 @@ std::string show(const SpillPlan& spill_plan) {
   }
   ss << "Range spills:\n";
   for (const auto& pair : UnorderedIterable(spill_plan.range_spills)) {
-    auto* insn = pair.first;
+    const auto* insn = pair.first;
     ss << show(insn) << ": ";
     for (auto idx : pair.second) {
       ss << insn->src(idx) << " ";
@@ -363,7 +363,7 @@ bool Allocator::coalesce(interference::Graph* ig, cfg::ControlFlowGraph& cfg) {
   cfg::CFGMutation m(cfg);
   bool any_linked{false};
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     auto op = insn->opcode();
     if (!opcode::is_a_move(op) && !has_2addr_form(op) &&
         op != OPCODE_CHECK_CAST) {
@@ -465,7 +465,7 @@ void Allocator::simplify(interference::Graph* ig,
       ig->remove_node(reg);
       low.erase(reg);
       for (auto adj : node.adjacent()) {
-        auto& adj_node = ig->get_node(adj);
+        const auto& adj_node = ig->get_node(adj);
         if (!adj_node.is_active() || adj_node.is_param() ||
             adj_node.is_range()) {
           continue;
@@ -501,8 +501,8 @@ void Allocator::simplify(interference::Graph* ig,
     // spill cost).
     auto spill_candidate_it =
         unordered_min_element(high, [ig](reg_t a, reg_t b) {
-          auto& node_a = ig->get_node(a);
-          auto& node_b = ig->get_node(b);
+          const auto& node_a = ig->get_node(a);
+          const auto& node_b = ig->get_node(b);
           if (node_a.is_spilt() != node_b.is_spilt()) {
             return !node_a.is_spilt() && node_b.is_spilt();
           }
@@ -545,7 +545,7 @@ void Allocator::select(const cfg::ControlFlowGraph& /*cfg*/,
   while (!select_stack->empty()) {
     auto reg = select_stack->top();
     select_stack->pop();
-    auto& node = ig.get_node(reg);
+    const auto& node = ig.get_node(reg);
     VirtualRegistersFile vreg_file;
     mark_adjacent(ig, reg, reg_transform->map, &vreg_file);
     auto vreg = vreg_file.alloc(node.width());
@@ -626,8 +626,8 @@ void Allocator::select_params(const cfg::ControlFlowGraph& cfg,
 // will result in inserting move in between. Return true if there exist
 // this situation for register u and v, false otherwise.
 bool bad_move_result(reg_t u, reg_t v, const SplitCosts& split_costs) {
-  for (auto mei : UnorderedIterable(split_costs.get_write_result(u))) {
-    auto write_result_insn = mei->insn;
+  for (auto* mei : UnorderedIterable(split_costs.get_write_result(u))) {
+    auto* write_result_insn = mei->insn;
     for (size_t i = 0; i < write_result_insn->srcs_size(); ++i) {
       if (write_result_insn->src(i) == v) {
         return true;
@@ -678,7 +678,7 @@ void Allocator::find_split(const interference::Graph& ig,
     // Find all the vregs assigned to reg's neighbors.
     // Key is vreg, value is a set of registers that are mapped to this vreg.
     UnorderedMap<vreg_t, UnorderedSet<vreg_t>> mapped_neighbors;
-    auto& node = ig.get_node(reg);
+    const auto& node = ig.get_node(reg);
     for (auto adj : node.adjacent()) {
       auto it = reg_map.find(adj);
       if (it != reg_map.end()) {
@@ -865,7 +865,7 @@ void Allocator::split_params(const interference::Graph& ig,
   auto param_insns = InstructionIterable(params);
   UnorderedMap<reg_t, reg_t> param_to_temp;
   for (auto& mie : param_insns) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     auto dest = insn->dest();
     if (load_locations.find(dest) != load_locations.end()) {
       auto temp = cfg.allocate_temp();
@@ -911,13 +911,13 @@ void Allocator::spill(const interference::Graph& ig,
       // Spill range symregs
       auto to_spill_it = spill_plan.range_spills.find(insn);
       if (to_spill_it != spill_plan.range_spills.end()) {
-        auto& to_spill = to_spill_it->second;
+        const auto& to_spill = to_spill_it->second;
         for (auto idx : to_spill) {
           auto src = insn->src(idx);
-          auto& node = ig.get_node(src);
+          const auto& node = ig.get_node(src);
           auto temp = cfg.allocate_temp();
           insn->set_src(idx, temp);
-          auto mov = gen_move(node.type(), temp, src);
+          auto* mov = gen_move(node.type(), temp, src);
           m.insert_before(it, {mov});
           ++m_stats.range_spill_moves;
         }
@@ -933,12 +933,12 @@ void Allocator::spill(const interference::Graph& ig,
         if (sp_it == spill_plan.global_spills.end()) {
           continue;
         }
-        auto& node = ig.get_node(src);
+        const auto& node = ig.get_node(src);
         auto max_value = max_value_for_src(insn, i, node.width() == 2);
         if (sp_it->second > max_value) {
           auto temp = cfg.allocate_temp();
           insn->set_src(i, temp);
-          auto mov = gen_move(node.type(), temp, src);
+          auto* mov = gen_move(node.type(), temp, src);
           m.insert_before(it, {mov});
           ++m_stats.global_spill_moves;
         }
@@ -984,11 +984,11 @@ void Allocator::spill(const interference::Graph& ig,
 static void dedicate_this_register(cfg::ControlFlowGraph& cfg, bool is_static) {
   always_assert(!is_static);
   auto param_insns = cfg.get_param_instructions();
-  auto this_insn = param_insns.begin()->insn;
+  auto* this_insn = param_insns.begin()->insn;
 
   bool this_needs_split{false};
   for (const auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->has_dest() && insn->dest() == this_insn->dest() &&
         insn != this_insn) {
       this_needs_split = true;
@@ -1058,7 +1058,7 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
     // gets overwritten in the method. See check_no_overwrite_this in
     // IRTypeChecker.h for the rationale.
     if (no_overwrite_this) {
-      auto this_insn = cfg.get_param_instructions().begin()->insn;
+      auto* this_insn = cfg.get_param_instructions().begin()->insn;
       for (const auto& pair : UnorderedIterable(ig.nodes())) {
         ig.add_edge(this_insn->dest(), pair.first);
       }

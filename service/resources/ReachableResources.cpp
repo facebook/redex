@@ -45,7 +45,7 @@ UnorderedSet<uint32_t> get_disallowed_resources(
   for (size_t index = 0; index < sorted_res_ids.size(); ++index) {
     uint32_t id = sorted_res_ids[index];
     uint32_t type_id = id & TYPE_MASK_BIT;
-    if (disallowed_types.count(type_id)) {
+    if (disallowed_types.count(type_id) != 0u) {
       disallowed_resources.emplace(id);
     }
   }
@@ -90,8 +90,8 @@ UnorderedSet<uint32_t> find_code_resource_references(
     // Collect all accessed fields that could be R fields, or values that got
     // inlined elsewhere.
     if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
-      auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-      if (field && field->is_concrete()) {
+      auto* field = resolve_field(insn->get_field(), FieldSearch::Static);
+      if ((field != nullptr) && field->is_concrete()) {
         accessed_sfields.emplace(field);
       }
     } else if (insn->has_literal()) {
@@ -133,8 +133,8 @@ UnorderedSet<uint32_t> find_code_resource_references(
         }
       }
     } else if (assume_id_inlined && insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      auto op_data = insn->get_data();
-      auto cls = type_class(m->get_class());
+      auto* op_data = insn->get_data();
+      auto* cls = type_class(m->get_class());
       // Do not blanket assume the filling of customized arrays is a usage.
       auto customized_r = !resources::is_non_customized_r_class(cls) &&
                           r_class_reader.is_r_class(cls);
@@ -154,7 +154,8 @@ UnorderedSet<uint32_t> find_code_resource_references(
   for (auto* field : UnorderedIterable(accessed_sfields)) {
     auto is_r_field =
         resources::is_non_customized_r_class(type_class(field->get_class()));
-    if (type::is_primitive(field->get_type()) && field->get_static_value() &&
+    if (type::is_primitive(field->get_type()) &&
+        (field->get_static_value() != nullptr) &&
         resources::is_potential_resid(field->get_static_value()->value()) &&
         (is_r_field || assume_id_inlined)) {
       ids_from_code.emplace(field->get_static_value()->value());
@@ -240,7 +241,7 @@ UnorderedSet<uint32_t> ReachableResources::compute_transitive_closure(
 
   UnorderedSet<std::string> next_xml_files;
   while (!potential_file_paths.empty()) {
-    for (auto& str : UnorderedIterable(potential_file_paths)) {
+    for (const auto& str : UnorderedIterable(potential_file_paths)) {
       if (is_resource_xml(str)) {
         auto r_str = std::string(m_zip_dir).append("/").append(str);
         if (m_explored_xml_files.find(r_str) == m_explored_xml_files.end()) {
@@ -250,7 +251,7 @@ UnorderedSet<uint32_t> ReachableResources::compute_transitive_closure(
     }
 
     potential_file_paths.clear();
-    for (auto& str : UnorderedIterable(next_xml_files)) {
+    for (const auto& str : UnorderedIterable(next_xml_files)) {
       m_explored_xml_files.emplace(str);
       auto xml_reference_attributes =
           m_resources->get_xml_reference_attributes(str);

@@ -32,11 +32,11 @@ std::string to_string(const ReflectionSites& reflection_sites) {
 void test_analysis(const DexClasses& classes,
                    const char* method_name,
                    const char* expect_output) {
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redextest/ReflectionAnalysisTest$Reflector;");
   ASSERT_NE(cls, nullptr);
 
-  const auto meth = find_vmethod_named(*cls, method_name);
+  auto* const meth = find_vmethod_named(*cls, method_name);
   ASSERT_NE(meth, nullptr);
   meth->balloon();
   meth->get_code()->build_cfg();
@@ -52,11 +52,11 @@ void get_reflected_methods_by_test(Methods& out,
                                    const DexClasses& classes,
                                    const char* method_name) {
 
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redextest/ReflectionAnalysisTest$Reflector;");
   ASSERT_NE(cls, nullptr);
 
-  const auto meth = find_vmethod_named(*cls, method_name);
+  auto* const meth = find_vmethod_named(*cls, method_name);
   ASSERT_NE(meth, nullptr);
   meth->balloon();
   meth->get_code()->build_cfg();
@@ -137,15 +137,15 @@ void test_join_meet(const AbstractObject& foo,
 }
 
 TEST_F(PreVerify, TestAbstractDomain) {
-  auto foo_name = DexString::get_string(
+  const auto* foo_name = DexString::get_string(
       "Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;");
   ASSERT_NE(foo_name, nullptr);
-  auto bar_name = DexString::get_string(
+  const auto* bar_name = DexString::get_string(
       "Lcom/facebook/redextest/ReflectionAnalysisTest$Bar;");
   ASSERT_NE(bar_name, nullptr);
-  auto foo_type = DexType::get_type(foo_name);
+  auto* foo_type = DexType::get_type(foo_name);
   ASSERT_NE(foo_type, nullptr);
-  auto bar_type = DexType::get_type(bar_name);
+  auto* bar_type = DexType::get_type(bar_name);
   ASSERT_NE(bar_type, nullptr);
 
   test_join_meet(AbstractObject(AbstractObjectKind::CLASS, foo_type),

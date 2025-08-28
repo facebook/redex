@@ -20,7 +20,7 @@ class NopperTest : public RedexTest {
 };
 
 TEST_F(NopperTest, noppable_blocks_insert_nops) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (if-eqz v0 :L1)
@@ -41,7 +41,7 @@ TEST_F(NopperTest, noppable_blocks_insert_nops) {
   nopper_impl::insert_nops(code->cfg(), set);
   code->clear_cfg();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (nop)
@@ -61,7 +61,7 @@ TEST_F(NopperTest, noppable_blocks_insert_nops) {
 }
 
 TEST_F(NopperTest, noppable_blocks_exclusions) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
     (:L0)
@@ -76,7 +76,7 @@ TEST_F(NopperTest, noppable_blocks_exclusions) {
 }
 
 TEST_F(NopperTest, noppable_auxiliary_defs) {
-  auto nopper_type = DexType::make_type("Lnopper;");
+  auto* nopper_type = DexType::make_type("Lnopper;");
   auto ad = nopper_impl::create_auxiliary_defs(nopper_type);
   ASSERT_NE(ad.cls, nullptr);
   ASSERT_EQ(ad.cls->get_type(), nopper_type);
@@ -86,7 +86,7 @@ TEST_F(NopperTest, noppable_auxiliary_defs) {
 
   ASSERT_NE(ad.clinit, nullptr);
   ASSERT_EQ(show(ad.clinit), "Lnopper;.<clinit>:()V");
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (.pos:dbg_0 "Lnopper;.<clinit>:()V" RedexGenerated 0) 
       (const v0 10) 
@@ -126,7 +126,7 @@ TEST_F(NopperTest, noppable_auxiliary_defs) {
 }
 
 TEST_F(NopperTest, noppable_blocks_insert_nops_with_auxiliary_defs) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (return-void)
     )
@@ -138,12 +138,12 @@ TEST_F(NopperTest, noppable_blocks_insert_nops_with_auxiliary_defs) {
   EXPECT_EQ(noppable_blocks.size(), 1);
 
   UnorderedSet<cfg::Block*> set(noppable_blocks.begin(), noppable_blocks.end());
-  auto nopper_type = DexType::make_type("Lnopper;");
+  auto* nopper_type = DexType::make_type("Lnopper;");
   auto ad = nopper_impl::create_auxiliary_defs(nopper_type);
   nopper_impl::insert_nops(code->cfg(), set, &ad);
   code->clear_cfg();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 4) 
       (invoke-static (v0) "Lnopper;.fib:(I)I") 

@@ -168,11 +168,11 @@ SourceBlockDomTree<Kind>::SourceBlockDomTree(const cfg::ControlFlowGraph& cfg,
     return;
   }
 
-  auto first_block = *cfg.blocks().begin();
+  auto* first_block = *cfg.blocks().begin();
   always_assert(first_block);
-  auto first_sb = source_blocks::get_first_source_block(first_block);
+  auto* first_sb = source_blocks::get_first_source_block(first_block);
   always_assert(first_sb);
-  auto* dex_method = first_sb->src;
+  const auto* dex_method = first_sb->src;
 
   for (uint32_t i = 0; i < num_src_blks; i++) {
     m_leaves.insert({dex_method, i});
@@ -182,7 +182,7 @@ SourceBlockDomTree<Kind>::SourceBlockDomTree(const cfg::ControlFlowGraph& cfg,
 
   for (cfg::Block* block : cfg.blocks()) {
     if (block == cfg.exit_block() &&
-        cfg.get_pred_edge_of_type(block, EDGE_GHOST)) {
+        (cfg.get_pred_edge_of_type(block, EDGE_GHOST) != nullptr)) {
       continue;
     }
 
@@ -199,14 +199,14 @@ SourceBlockDomTree<Kind>::SourceBlockDomTree(const cfg::ControlFlowGraph& cfg,
 
   for (cfg::Block* block : cfg.blocks()) {
     if (block == cfg.exit_block() &&
-        cfg.get_pred_edge_of_type(block, EDGE_GHOST)) {
+        (cfg.get_pred_edge_of_type(block, EDGE_GHOST) != nullptr)) {
       continue;
     }
 
     SourceBlock* prev = nullptr;
-    auto first_sb_in_block = source_blocks::get_first_source_block(block);
+    auto* first_sb_in_block = source_blocks::get_first_source_block(block);
 
-    if (!first_sb_in_block) {
+    if (first_sb_in_block == nullptr) {
       continue;
     }
 

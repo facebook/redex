@@ -11,10 +11,10 @@
 #include "verify/VerifyUtil.h"
 
 TEST_F(PostVerify, MergeablesRemoval) {
-  auto cls_a = find_class_named(classes, "Lcom/facebook/redextest/A;");
-  auto cls_b = find_class_named(classes, "Lcom/facebook/redextest/B;");
-  auto cls_c = find_class_named(classes, "Lcom/facebook/redextest/C;");
-  auto cls_d = find_class_named(classes, "Lcom/facebook/redextest/D;");
+  auto* cls_a = find_class_named(classes, "Lcom/facebook/redextest/A;");
+  auto* cls_b = find_class_named(classes, "Lcom/facebook/redextest/B;");
+  auto* cls_c = find_class_named(classes, "Lcom/facebook/redextest/C;");
+  auto* cls_d = find_class_named(classes, "Lcom/facebook/redextest/D;");
   verify_class_merged(cls_a);
   verify_class_merged(cls_b);
   verify_class_merged(cls_c);
@@ -24,11 +24,12 @@ TEST_F(PostVerify, MergeablesRemoval) {
 TEST_F(PostVerify, SinkCommonCtorInvocation) {
   boost::regex shape_name_pattern(
       "^Lcom/facebook/redextest/SimpleBaseShape_S0000000_\\w+;$");
-  auto cls = find_class_named(classes, [&shape_name_pattern](const char* name) {
-    return boost::regex_match(name, shape_name_pattern);
-  });
+  auto* cls =
+      find_class_named(classes, [&shape_name_pattern](const char* name) {
+        return boost::regex_match(name, shape_name_pattern);
+      });
 
-  for (auto dm : cls->get_dmethods()) {
+  for (auto* dm : cls->get_dmethods()) {
     if (!boost::algorithm::ends_with(dm->get_deobfuscated_name_or_empty(),
                                      ".<init>:(Ljava/lang/String;I)V")) {
       continue;

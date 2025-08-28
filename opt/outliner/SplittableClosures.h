@@ -36,11 +36,11 @@ struct SplittableClosure {
   bool creates_large_sparse_switch{false};
   bool destroys_large_packed_switch{false};
 
-  int is_switch() const { return switch_block ? 1 : 0; }
+  int is_switch() const { return switch_block != nullptr ? 1 : 0; }
 
   // id is unique among all splittable closures where is_switch() is the same.
   size_t id() const {
-    if (switch_block) {
+    if (switch_block != nullptr) {
       return switch_block->id();
     }
     always_assert(closures.size() == 1);

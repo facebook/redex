@@ -212,14 +212,14 @@ TEST_F(CompactPointerVectorTest, MoveAssignment) {
 // Test erase with empty range returns the first iterator unchanged
 TEST_F(CompactPointerVectorTest, EraseEmptyRange) {
   vec.push_back(&a);
-  auto it = vec.erase(vec.begin(), vec.begin());
+  auto* it = vec.erase(vec.begin(), vec.begin());
   EXPECT_EQ(it, vec.begin());
   EXPECT_EQ(vec.size(), 1u);
 }
 
 TEST_F(CompactPointerVectorTest, EraseSingleElement) {
   vec.push_back(&a);
-  auto it = vec.erase(vec.begin(), vec.end());
+  auto* it = vec.erase(vec.begin(), vec.end());
   EXPECT_TRUE(vec.empty());
   EXPECT_EQ(it, vec.end());
 }
@@ -227,7 +227,7 @@ TEST_F(CompactPointerVectorTest, EraseSingleElement) {
 TEST_F(CompactPointerVectorTest, EraseFirstOfTwoElements) {
   vec.push_back(&a);
   vec.push_back(&b);
-  auto it = vec.erase(vec.begin(), vec.begin() + 1);
+  auto* it = vec.erase(vec.begin(), vec.begin() + 1);
   EXPECT_EQ(vec.size(), 1u);
   EXPECT_EQ(vec[0], &b);
   EXPECT_EQ(it, vec.begin());
@@ -236,7 +236,7 @@ TEST_F(CompactPointerVectorTest, EraseFirstOfTwoElements) {
 TEST_F(CompactPointerVectorTest, EraseSecondOfTwoElements) {
   vec.push_back(&a);
   vec.push_back(&b);
-  auto it = vec.erase(vec.begin() + 1, vec.end());
+  auto* it = vec.erase(vec.begin() + 1, vec.end());
   EXPECT_EQ(vec.size(), 1u);
   EXPECT_EQ(vec[0], &a);
   EXPECT_EQ(it, vec.end());
@@ -246,7 +246,7 @@ TEST_F(CompactPointerVectorTest, EraseFromManyToTwoElements) {
   vec.push_back(&a);
   vec.push_back(&b);
   vec.push_back(&c);
-  auto it = vec.erase(vec.begin() + 2, vec.end());
+  auto* it = vec.erase(vec.begin() + 2, vec.end());
   EXPECT_EQ(vec.size(), 2u);
   EXPECT_EQ(vec[0], &a);
   EXPECT_EQ(vec[1], &b);
@@ -256,7 +256,7 @@ TEST_F(CompactPointerVectorTest, EraseFromManyToTwoElements) {
 TEST_F(CompactPointerVectorTest, EraseFromManyToEmpty) {
   vec.push_back(&a);
   vec.push_back(&b);
-  auto it = vec.erase(vec.begin(), vec.end());
+  auto* it = vec.erase(vec.begin(), vec.end());
   EXPECT_TRUE(vec.empty());
   EXPECT_EQ(it, vec.end());
 }
@@ -265,7 +265,7 @@ TEST_F(CompactPointerVectorTest, EraseMiddle) {
   vec.push_back(&a);
   vec.push_back(&b);
   vec.push_back(&c);
-  auto it = vec.erase(vec.begin() + 1, vec.begin() + 2);
+  auto* it = vec.erase(vec.begin() + 1, vec.begin() + 2);
   EXPECT_EQ(vec.size(), 2u);
   EXPECT_EQ(vec[0], &a);
   EXPECT_EQ(vec[1], &c);

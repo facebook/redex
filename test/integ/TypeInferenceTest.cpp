@@ -32,7 +32,7 @@ struct TypeInferenceTest : public RedexIntegrationTest {
   }
 
   cfg::ControlFlowGraph& get_cfg(DexMethod* method) {
-    auto code = method->get_code();
+    auto* code = method->get_code();
     code->build_cfg();
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
@@ -43,12 +43,12 @@ struct TypeInferenceTest : public RedexIntegrationTest {
 TEST_F(TypeInferenceTest, test_move_exception_type) {
   auto scope = build_class_scope(stores);
 
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testExceptionTypeInference:()V")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testExceptionTypeInference:()V")
+                     ->as_def();
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg);
@@ -57,7 +57,7 @@ TEST_F(TypeInferenceTest, test_move_exception_type) {
   bool insn_found = false;
   auto& envs = inference.get_type_environments();
   for (auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         insn->get_method() == m_what_is_this) {
       auto& env = envs.at(insn);
@@ -75,12 +75,12 @@ TEST_F(TypeInferenceTest, test_move_exception_type) {
 TEST_F(TypeInferenceTest, test_dedup_blocks_exception_type) {
   auto scope = build_class_scope(stores);
 
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testCatch2Types:()V")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testCatch2Types:()V")
+                     ->as_def();
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto& cfg = code->cfg();
 
@@ -96,7 +96,7 @@ TEST_F(TypeInferenceTest, test_dedup_blocks_exception_type) {
   int insn_found = 0;
   auto& envs = inference.get_type_environments();
   for (auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         insn->get_method() == m_what_is_this) {
       auto& env = envs.at(insn);
@@ -113,20 +113,20 @@ TEST_F(TypeInferenceTest, test_dedup_blocks_exception_type) {
 
 TEST_F(TypeInferenceTest, test_join_with_null) {
   auto scope = build_class_scope(stores);
-  auto method1 = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypeInferenceTest;.testJoinWithNull1:()Lcom/facebook/"
-                     "redextest/Base;")
-                     ->as_def();
+  auto* method1 = DexMethod::get_method(
+                      "Lcom/facebook/redextest/"
+                      "TypeInferenceTest;.testJoinWithNull1:()Lcom/facebook/"
+                      "redextest/Base;")
+                      ->as_def();
   auto& cfg1 = get_cfg(method1);
 
   type_inference::TypeInference inference1(cfg1);
   inference1.run(method1);
-  auto exit_block = cfg1.exit_block();
+  auto* exit_block = cfg1.exit_block();
   auto exit_env = inference1.get_exit_state_at(exit_block);
 
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_a_return(insn->opcode())) {
       continue;
     }
@@ -136,11 +136,11 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
     EXPECT_TRUE(ret_type.is_nullable());
   }
 
-  auto method2 = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypeInferenceTest;.testJoinWithNull2:()Lcom/facebook/"
-                     "redextest/Base;")
-                     ->as_def();
+  auto* method2 = DexMethod::get_method(
+                      "Lcom/facebook/redextest/"
+                      "TypeInferenceTest;.testJoinWithNull2:()Lcom/facebook/"
+                      "redextest/Base;")
+                      ->as_def();
   auto& cfg2 = get_cfg(method2);
 
   type_inference::TypeInference inference2(cfg2);
@@ -149,7 +149,7 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
   exit_env = inference2.get_exit_state_at(exit_block);
 
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_a_return(insn->opcode())) {
       continue;
     }
@@ -159,11 +159,11 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
     EXPECT_TRUE(ret_type.is_nullable());
   }
 
-  auto method3 = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypeInferenceTest;.testJoinWithNull3:()Lcom/facebook/"
-                     "redextest/Base;")
-                     ->as_def();
+  auto* method3 = DexMethod::get_method(
+                      "Lcom/facebook/redextest/"
+                      "TypeInferenceTest;.testJoinWithNull3:()Lcom/facebook/"
+                      "redextest/Base;")
+                      ->as_def();
   auto& cfg3 = get_cfg(method3);
 
   type_inference::TypeInference inference3(cfg3);
@@ -172,7 +172,7 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
   exit_env = inference3.get_exit_state_at(exit_block);
 
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_a_return(insn->opcode())) {
       continue;
     }
@@ -181,10 +181,10 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
     EXPECT_TRUE(ret_type.is_null());
   }
 
-  auto method4 = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypeInferenceTest;.testJoinWithNull4:()I")
-                     ->as_def();
+  auto* method4 = DexMethod::get_method(
+                      "Lcom/facebook/redextest/"
+                      "TypeInferenceTest;.testJoinWithNull4:()I")
+                      ->as_def();
   auto& cfg4 = get_cfg(method4);
 
   type_inference::TypeInference inference4(cfg4);
@@ -193,7 +193,7 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
   exit_env = inference4.get_exit_state_at(exit_block);
 
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_a_return(insn->opcode())) {
       continue;
     }
@@ -208,19 +208,19 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
 
 TEST_F(TypeInferenceTest, test_small_set_domain) {
   auto scope = build_class_scope(stores);
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testSmallSetDomain:()V")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testSmallSetDomain:()V")
+                     ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
 
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }
@@ -239,18 +239,18 @@ TEST_F(TypeInferenceTest, test_small_set_domain) {
 
 TEST_F(TypeInferenceTest, test_join_with_interface) {
   auto scope = build_class_scope(stores);
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testJoinWithInterface:()V")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testJoinWithInterface:()V")
+                     ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }
@@ -263,19 +263,19 @@ TEST_F(TypeInferenceTest, test_join_with_interface) {
 }
 
 TEST_F(TypeInferenceTest, test_char) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testChar:()C")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testChar:()C")
+                     ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
 
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_a_return(insn->opcode())) {
       continue;
     }
@@ -289,19 +289,19 @@ TEST_F(TypeInferenceTest, test_char) {
 }
 
 TEST_F(TypeInferenceTest, test_short) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testShort:()S")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testShort:()S")
+                     ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
 
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_a_return(insn->opcode())) {
       continue;
     }
@@ -315,19 +315,19 @@ TEST_F(TypeInferenceTest, test_short) {
 }
 
 TEST_F(TypeInferenceTest, test_byte) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testByte:()B")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testByte:()B")
+                     ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
 
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_a_return(insn->opcode())) {
       continue;
     }
@@ -341,20 +341,20 @@ TEST_F(TypeInferenceTest, test_byte) {
 }
 
 TEST_F(TypeInferenceTest, test_char_int) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testCharToInt:()I")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testCharToInt:()I")
+                     ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
 
   bool has_int_to_char = false;
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->opcode() == IROpcode::OPCODE_INT_TO_CHAR) {
       has_int_to_char = true;
     }
@@ -372,20 +372,20 @@ TEST_F(TypeInferenceTest, test_char_int) {
 }
 
 TEST_F(TypeInferenceTest, test_byte_int) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testByteToInt:()I")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testByteToInt:()I")
+                     ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
 
   bool has_int_to_byte = false;
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->opcode() == IROpcode::OPCODE_INT_TO_BYTE) {
       has_int_to_byte = true;
     }
@@ -403,20 +403,20 @@ TEST_F(TypeInferenceTest, test_byte_int) {
 }
 
 TEST_F(TypeInferenceTest, test_short_int) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testShortToInt:()I")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testShortToInt:()I")
+                     ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
 
   bool has_int_to_short = false;
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->opcode() == IROpcode::OPCODE_INT_TO_SHORT) {
       has_int_to_short = true;
     }
@@ -434,21 +434,21 @@ TEST_F(TypeInferenceTest, test_short_int) {
 }
 
 TEST_F(TypeInferenceTest, test_byte_short) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypeInferenceTest;.testByteToShort:()S")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypeInferenceTest;.testByteToShort:()S")
+                     ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
 
   bool has_int_to_byte = false;
   bool has_int_to_short = false;
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->opcode() == IROpcode::OPCODE_INT_TO_BYTE) {
       has_int_to_byte = true;
     }
@@ -470,7 +470,7 @@ TEST_F(TypeInferenceTest, test_byte_short) {
 }
 
 TEST_F(TypeInferenceTest, test_int_bool) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
         (sget "Lcom/facebook/redextest/A;.m_a:I;")
@@ -483,11 +483,11 @@ TEST_F(TypeInferenceTest, test_int_bool) {
 
   type_inference::TypeInference inference(cfg);
   inference.run(method);
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto exit_env = inference.get_exit_state_at(exit_block);
 
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_a_return(insn->opcode())) {
       continue;
     }
@@ -501,7 +501,7 @@ TEST_F(TypeInferenceTest, test_int_bool) {
 }
 
 TEST_F(TypeInferenceTest, test_int_bool2) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
         (sget "Lcom/facebook/redextest/A;.m_a:I;")
@@ -532,7 +532,7 @@ TEST_F(TypeInferenceTest, test_int_bool2) {
   type_inference::TypeInference inference(cfg);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(exit_env.get_type(insn->src(0)),
@@ -545,7 +545,7 @@ TEST_F(TypeInferenceTest, test_int_bool2) {
 }
 
 TEST_F(TypeInferenceTest, test_bool_int) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()I"
       (
         (const v0 0)
@@ -561,7 +561,7 @@ TEST_F(TypeInferenceTest, test_bool_int) {
   type_inference::TypeInference inference(cfg);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(exit_env.get_type(insn->src(0)),
@@ -574,7 +574,7 @@ TEST_F(TypeInferenceTest, test_bool_int) {
 }
 
 TEST_F(TypeInferenceTest, test_and_int_lit) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()I"
       (
         (const v0 0)
@@ -588,7 +588,7 @@ TEST_F(TypeInferenceTest, test_and_int_lit) {
   type_inference::TypeInference inference(cfg);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(exit_env.get_type(insn->src(0)),
@@ -601,7 +601,7 @@ TEST_F(TypeInferenceTest, test_and_int_lit) {
 }
 
 TEST_F(TypeInferenceTest, test_instance_of) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()I"
       (
         (instance-of v0 "LFoo;")
@@ -615,7 +615,7 @@ TEST_F(TypeInferenceTest, test_instance_of) {
   type_inference::TypeInference inference(cfg);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(exit_env.get_type(insn->src(0)),

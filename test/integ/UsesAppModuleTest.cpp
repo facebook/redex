@@ -17,14 +17,14 @@ DexType* annotation() { return DexType::get_type(USES_AM_ANNO_DESCRIPTOR); }
 struct UsesAppModuleTest : public RedexIntegrationTest {};
 
 TEST_F(UsesAppModuleTest, testNoneMethod) {
-  auto method1 = DexMethod::get_method("LUsesAppModuleAnnotated;.method0:()V");
+  auto* method1 = DexMethod::get_method("LUsesAppModuleAnnotated;.method0:()V");
   auto method1_modules =
       AppModuleUsagePass::get_modules_used(method1->as_def(), annotation());
   ASSERT_EQ(method1_modules.size(), 0);
 }
 
 TEST_F(UsesAppModuleTest, testSingleMethod) {
-  auto method1 = DexMethod::get_method("LUsesAppModuleAnnotated;.method1:()V");
+  auto* method1 = DexMethod::get_method("LUsesAppModuleAnnotated;.method1:()V");
   auto method1_modules =
       AppModuleUsagePass::get_modules_used(method1->as_def(), annotation());
   ASSERT_EQ(method1_modules.size(), 1);
@@ -32,7 +32,7 @@ TEST_F(UsesAppModuleTest, testSingleMethod) {
 }
 
 TEST_F(UsesAppModuleTest, testListMethod) {
-  auto method2 = DexMethod::get_method("LUsesAppModuleAnnotated;.method2:()V");
+  auto* method2 = DexMethod::get_method("LUsesAppModuleAnnotated;.method2:()V");
   auto method2_modules =
       AppModuleUsagePass::get_modules_used(method2->as_def(), annotation());
   ASSERT_EQ(method2_modules.size(), 2);
@@ -41,7 +41,7 @@ TEST_F(UsesAppModuleTest, testListMethod) {
 }
 
 TEST_F(UsesAppModuleTest, testSingleField) {
-  auto field = DexField::get_field(
+  auto* field = DexField::get_field(
       "LUsesAppModuleAnnotated;.field:LAppModuleUsageOtherClass;");
   auto field_modules =
       AppModuleUsagePass::get_modules_used(field->as_def(), annotation());
@@ -50,7 +50,7 @@ TEST_F(UsesAppModuleTest, testSingleField) {
 }
 
 TEST_F(UsesAppModuleTest, testListField) {
-  auto field = DexField::get_field(
+  auto* field = DexField::get_field(
       "LUsesAppModuleAnnotated;.field2:LAppModuleUsageOtherClass;");
   auto field_modules =
       AppModuleUsagePass::get_modules_used(field->as_def(), annotation());

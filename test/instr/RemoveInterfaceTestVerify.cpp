@@ -12,36 +12,38 @@
 using namespace testing;
 
 TEST_F(PreVerify, TestInputIsComplete) {
-  auto root_cls =
+  auto* root_cls =
       find_class_named(classes, "Lcom/facebook/redextest/RootInterface;");
   ASSERT_NE(nullptr, root_cls);
-  auto super_cls =
+  auto* super_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SuperInterface;");
   ASSERT_NE(nullptr, super_cls);
 
-  auto a_cls = find_class_named(classes, "Lcom/facebook/redextest/AInterface;");
+  auto* a_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/AInterface;");
   ASSERT_NE(nullptr, a_cls);
-  auto b_cls = find_class_named(classes, "Lcom/facebook/redextest/BInterface;");
+  auto* b_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/BInterface;");
   ASSERT_NE(nullptr, b_cls);
-  auto ui_cls = find_class_named(
+  auto* ui_cls = find_class_named(
       classes, "Lcom/facebook/redextest/UnremovableInterface;");
   ASSERT_NE(nullptr, ui_cls);
 
-  auto fa_cls =
+  auto* fa_cls =
       find_class_named(classes, "Lcom/facebook/redextest/FirstAModel;");
   ASSERT_NE(nullptr, fa_cls);
-  auto sa_cls =
+  auto* sa_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SecondAModel;");
   ASSERT_NE(nullptr, sa_cls);
 
-  auto fb_cls =
+  auto* fb_cls =
       find_class_named(classes, "Lcom/facebook/redextest/FirstBModel;");
   ASSERT_NE(nullptr, fb_cls);
-  auto sb_cls =
+  auto* sb_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SecondBModel;");
   ASSERT_NE(nullptr, sb_cls);
 
-  auto um_cls =
+  auto* um_cls =
       find_class_named(classes, "Lcom/facebook/redextest/UnremovableModel;");
   ASSERT_NE(nullptr, um_cls);
 
@@ -87,10 +89,10 @@ TEST_F(PreVerify, TestInputIsComplete) {
 
   EXPECT_THAT(*um_cls->get_interfaces(), Contains(ui_cls->get_type()));
 
-  auto test_cls =
+  auto* test_cls =
       find_class_named(classes, "Lcom/facebook/redextest/RemoveInterfaceTest;");
   ASSERT_NE(nullptr, test_cls);
-  auto m = find_vmethod_named(*test_cls, "testInvokeInterfaceSimple");
+  auto* m = find_vmethod_named(*test_cls, "testInvokeInterfaceSimple");
   ASSERT_NE(nullptr, m);
 
   ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_INTERFACE, "getInt"));
@@ -100,10 +102,10 @@ TEST_F(PreVerify, TestInputIsComplete) {
 }
 
 TEST_F(PostVerify, InterfaceCallReplaced) {
-  auto test_cls =
+  auto* test_cls =
       find_class_named(classes, "Lcom/facebook/redextest/RemoveInterfaceTest;");
   ASSERT_NE(nullptr, test_cls);
-  auto m = find_vmethod_named(*test_cls, "testInvokeInterfaceSimple");
+  auto* m = find_vmethod_named(*test_cls, "testInvokeInterfaceSimple");
   ASSERT_NE(nullptr, m);
   ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_INTERFACE, "getInt"));
   ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_INTERFACE, "getStr"));
@@ -117,36 +119,38 @@ TEST_F(PostVerify, InterfaceCallReplaced) {
 }
 
 TEST_F(PostVerify, InterfaceInheritanceRemoved) {
-  auto root_cls =
+  auto* root_cls =
       find_class_named(classes, "Lcom/facebook/redextest/RootInterface;");
   ASSERT_NE(nullptr, root_cls);
-  auto super_cls =
+  auto* super_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SuperInterface;");
   ASSERT_NE(nullptr, super_cls);
 
-  auto a_cls = find_class_named(classes, "Lcom/facebook/redextest/AInterface;");
+  auto* a_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/AInterface;");
   ASSERT_NE(nullptr, a_cls);
-  auto b_cls = find_class_named(classes, "Lcom/facebook/redextest/BInterface;");
+  auto* b_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/BInterface;");
   ASSERT_NE(nullptr, b_cls);
-  auto ui_cls = find_class_named(
+  auto* ui_cls = find_class_named(
       classes, "Lcom/facebook/redextest/UnremovableInterface;");
   ASSERT_NE(nullptr, ui_cls);
 
-  auto fa_cls =
+  auto* fa_cls =
       find_class_named(classes, "Lcom/facebook/redextest/FirstAModel;");
   ASSERT_NE(nullptr, fa_cls);
-  auto sa_cls =
+  auto* sa_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SecondAModel;");
   ASSERT_NE(nullptr, sa_cls);
 
-  auto fb_cls =
+  auto* fb_cls =
       find_class_named(classes, "Lcom/facebook/redextest/FirstBModel;");
   ASSERT_NE(nullptr, fb_cls);
-  auto sb_cls =
+  auto* sb_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SecondBModel;");
   ASSERT_NE(nullptr, sb_cls);
 
-  auto um_cls =
+  auto* um_cls =
       find_class_named(classes, "Lcom/facebook/redextest/UnremovableModel;");
   ASSERT_NE(nullptr, um_cls);
 

@@ -83,7 +83,7 @@ bool UpCodeMotionPass::is_hot(cfg::Block* b) {
 bool UpCodeMotionPass::gather_movable_instructions(
     cfg::Block* b, std::vector<IRInstruction*>* instructions) {
   for (auto& mie : InstructionIterable(b)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
 
     // We really only support at this time...
     // - const, not const-wide, const-class, or const-string.
@@ -206,7 +206,7 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
   for (size_t i = 0; i < ordered_instructions_in_goto_block_index_end; i++) {
     IRInstruction* insn = ordered_instructions_in_goto_block[i];
     for (auto src : insn->srcs()) {
-      if (destroyed_dests.count(src)) {
+      if (destroyed_dests.count(src) != 0u) {
         TRACE(UCM, 5,
               "[up code motion] giving up: goto source overlaps with "
               "branch dest");
@@ -238,7 +238,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
   UnorderedSet<cfg::Block*> blocks_to_remove_set;
   std::vector<cfg::Block*> blocks_to_remove;
   for (cfg::Block* b : cfg.blocks()) {
-    if (blocks_to_remove_set.count(b)) {
+    if (blocks_to_remove_set.count(b) != 0u) {
       continue;
     }
 
@@ -250,7 +250,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
     auto last_insn_it = b->get_last_insn();
     always_assert(last_insn_it != b->end());
 
-    auto if_insn = last_insn_it->insn;
+    auto* if_insn = last_insn_it->insn;
     always_assert(opcode::is_a_conditional_branch(if_insn->opcode()));
     always_assert(!if_insn->is_wide());
 
@@ -302,7 +302,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
     // propagation.
 
     UnorderedMap<uint32_t, uint32_t> temps;
-    for (auto instruction_to_insert : instructions_to_insert) {
+    for (auto* instruction_to_insert : instructions_to_insert) {
       auto dest = instruction_to_insert->dest();
       const auto& srcs = if_insn->srcs();
       for (size_t i = 0; i < srcs.size(); i++) {
@@ -371,15 +371,16 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
-    const auto code = method->get_code();
-    if (!code || method->rstate.no_optimizations()) {
+    auto* const code = method->get_code();
+    if ((code == nullptr) || method->rstate.no_optimizations()) {
       return Stats{};
     }
 
     Stats stats_lambda = UpCodeMotionPass::process_code(
         is_static(method), method->get_class(), method->get_proto()->get_args(),
         code, m_check_if_branch_is_hot);
-    if (stats_lambda.instructions_moved || stats_lambda.branches_moved_over) {
+    if ((stats_lambda.instructions_moved != 0u) ||
+        (stats_lambda.branches_moved_over != 0u)) {
       TRACE(UCM, 3,
             "[up code motion] Moved %zu instructions over %zu conditional "
             "branches while inverting %zu conditional branches and dealing "

@@ -34,7 +34,7 @@ class InitClassBackwardFixpointIterator final
 
   void analyze_instruction(IRInstruction* insn,
                            LastInitClassDomain* current_state) const override {
-    auto init_class = m_init_classes_with_side_effects.refine(
+    const auto* init_class = m_init_classes_with_side_effects.refine(
         get_init_class_type_demand(insn));
     // When an instruction...
     // 1) has an init-class type demand, or
@@ -42,9 +42,9 @@ class InitClassBackwardFixpointIterator final
     //    initializers,
     // then we need to overwrite the current state with the
     // current init class type demand.
-    if (init_class || opcode::is_an_invoke(insn->opcode())) {
-      *current_state = init_class ? LastInitClassDomain(init_class)
-                                  : LastInitClassDomain::top();
+    if ((init_class != nullptr) || opcode::is_an_invoke(insn->opcode())) {
+      *current_state = init_class != nullptr ? LastInitClassDomain(init_class)
+                                             : LastInitClassDomain::top();
     }
   }
 
@@ -59,7 +59,7 @@ class InitClassBackwardFixpointIterator final
     auto last_insn_it = edge->src()->get_last_insn();
     always_assert(last_insn_it != edge->src()->end());
 
-    auto insn = last_insn_it->insn;
+    auto* insn = last_insn_it->insn;
     if (opcode::is_init_class(insn->opcode())) {
       // We have a throw-edge from an init-class instruction. We'll pretend that
       // this didn't happen, as when joining with normal control-flow it would

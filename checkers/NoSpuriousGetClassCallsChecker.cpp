@@ -24,11 +24,11 @@ void NoSpuriousGetClassCallsChecker::check_spurious_getClass(
   cfg::ScopedCFG cfg{code};
   for (auto* block : cfg->blocks()) {
     for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (!opcode::is_invoke_virtual(insn->opcode())) {
         continue;
       }
-      auto mref = insn->get_method();
+      auto* mref = insn->get_method();
       if (mref != m_getClass_ref) {
         continue;
       }

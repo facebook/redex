@@ -46,7 +46,7 @@ bool make_hot_tail_unique(cfg::ControlFlowGraph& cfg,
     return false;
   }
   auto* target_target = target->goes_to();
-  if (target_target) {
+  if (target_target != nullptr) {
     auto target_target_first_insn = target_target->get_first_insn();
     if (target_target_first_insn != target_target->end() &&
         opcode::is_move_result_any(target_target_first_insn->insn->opcode())) {
@@ -98,8 +98,9 @@ std::vector<cfg::Block*> get_ordered_blocks(const cfg::ControlFlowGraph& cfg) {
       cfg.entry_block(), [&](const cfg::Block* block) {
         std::vector<cfg::Block*> targets;
         UnorderedSet<cfg::Block*> set;
-        for (auto edge : block->succs()) {
-          if (edge->target() && set.emplace(edge->target()).second) {
+        for (auto* edge : block->succs()) {
+          if ((edge->target() != nullptr) &&
+              set.emplace(edge->target()).second) {
             targets.emplace_back(edge->target());
           }
         }
@@ -109,7 +110,7 @@ std::vector<cfg::Block*> get_ordered_blocks(const cfg::ControlFlowGraph& cfg) {
   std::vector<cfg::Block*> blocks;
   UnorderedSet<cfg::Block*> set;
   wto.visit_depth_first([&](cfg::Block* block) {
-    auto& preds = block->preds();
+    const auto& preds = block->preds();
     if (std::all_of(preds.begin(), preds.end(),
                     [&](auto* edge) { return set.count(edge->src()); })) {
       blocks.push_back(block);
@@ -154,13 +155,13 @@ size_t make_hot_tails_unique(cfg::ControlFlowGraph& cfg,
 
       auto* src = pred->src();
       always_assert(pred->target() == block);
-      if (!src || !source_blocks::is_hot(src)) {
+      if ((src == nullptr) || !source_blocks::is_hot(src)) {
         continue;
       }
 
       auto it = new_blocks.find(src);
-      auto old_src = it != new_blocks.end() ? it->second : src;
-      if (duplicated_blocks.count(old_src)) {
+      auto* old_src = it != new_blocks.end() ? it->second : src;
+      if (duplicated_blocks.count(old_src) != 0u) {
         // To avoid a combinatorial exploration, we'll only create at most one
         // duplicate target from any particular source block  (or one of its
         // duplicates).

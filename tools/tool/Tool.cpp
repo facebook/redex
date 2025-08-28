@@ -65,7 +65,7 @@ std::vector<std::string> find_store_dexen(const fs::path& store_dir_path) {
   for (fs::directory_iterator it(store_dir_path); it != end; ++it) {
     auto file = it->path();
     if (fs::is_regular_file(file) &&
-        !file.extension().compare(std::string(".dex"))) {
+        (file.extension().compare(std::string(".dex")) == 0)) {
       dexen.emplace_back(file.string());
     }
   }

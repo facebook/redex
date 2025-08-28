@@ -152,7 +152,7 @@ class CrossDexRefMinimizer {
 
       void advance() {
         for (const auto end = m_owner.m_base->end();
-             m_base_it != end && m_owner.m_diff.count(*m_base_it);
+             m_base_it != end && (m_owner.m_diff.count(*m_base_it) != 0u);
              m_base_it++) {
         }
       }

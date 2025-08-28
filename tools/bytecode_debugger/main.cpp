@@ -66,12 +66,12 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  if (vm.count("help")) {
+  if (vm.count("help") != 0u) {
     od.print(std::cout);
     exit(EXIT_SUCCESS);
   }
 
-  if (vm.count("dex-files")) {
+  if (vm.count("dex-files") != 0u) {
     args.dex_files = vm["dex-files"].as<std::vector<std::string>>();
   } else {
     std::cerr << "error: no input dex files" << std::endl << std::endl;
@@ -79,7 +79,7 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_SUCCESS);
   }
 
-  if (vm.count("outdir")) {
+  if (vm.count("outdir") != 0u) {
     args.out_dir = vm["outdir"].as<std::string>();
     if (!redex::dir_is_writable(args.out_dir)) {
       std::cerr << "error: outdir is not a writable directory: " << args.out_dir

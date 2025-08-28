@@ -102,13 +102,13 @@ struct MethodSummary {
   }
 
   const IRInstruction* allocation_insn() const {
-    auto ptr = std::get_if<const IRInstruction*>(&returns);
-    return ptr ? *ptr : nullptr;
+    const auto* ptr = std::get_if<const IRInstruction*>(&returns);
+    return ptr != nullptr ? *ptr : nullptr;
   }
 
   std::optional<src_index_t> returned_param_index() const {
-    auto ptr = std::get_if<src_index_t>(&returns);
-    return ptr ? std::optional<src_index_t>(*ptr) : std::nullopt;
+    const auto* ptr = std::get_if<src_index_t>(&returns);
+    return ptr != nullptr ? std::optional<src_index_t>(*ptr) : std::nullopt;
   }
 
   bool empty() const {

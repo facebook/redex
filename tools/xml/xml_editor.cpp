@@ -223,7 +223,7 @@ class XmlBuilder {
       end_node_ext.ns = node_ref;
       block.write(end_node_ext);
 
-      auto insert_pos = (char*)data + m_new_data_offset;
+      auto* insert_pos = (char*)data + m_new_data_offset;
       file_manipulator.add_at(insert_pos, std::move(block));
     } else {
       android::ResXMLTree_node* node =

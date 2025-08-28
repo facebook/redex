@@ -42,7 +42,7 @@ class RemoveNullcheckStringArgTest : public RedexTest {
 
 // Test the generated wrapper methods with expr.
 TEST_F(RemoveNullcheckStringArgTest, gen_methods_with_expr) {
-  auto str = R"(
+  const auto* str = R"(
     (
      (load-param-object v0)
      (const-string "args")
@@ -70,7 +70,7 @@ TEST_F(RemoveNullcheckStringArgTest, gen_methods_with_expr) {
 }
 
 TEST_F(RemoveNullcheckStringArgTest, simple) {
-  auto str = R"(
+  const auto* str = R"(
     (
      (load-param-object v0)
      (const-string "args")
@@ -92,7 +92,7 @@ TEST_F(RemoveNullcheckStringArgTest, simple) {
     pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
   }
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
      (load-param-object v0)
      (const-string "args")
@@ -109,7 +109,7 @@ TEST_F(RemoveNullcheckStringArgTest, simple) {
 }
 
 TEST_F(RemoveNullcheckStringArgTest, simpleVirtual) {
-  auto str = R"(
+  const auto* str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)
@@ -132,7 +132,7 @@ TEST_F(RemoveNullcheckStringArgTest, simpleVirtual) {
     pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, true);
   }
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)
@@ -150,7 +150,7 @@ TEST_F(RemoveNullcheckStringArgTest, simpleVirtual) {
 }
 
 TEST_F(RemoveNullcheckStringArgTest, simpleiVirtualiCpy) {
-  auto str = R"(
+  const auto* str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)
@@ -174,7 +174,7 @@ TEST_F(RemoveNullcheckStringArgTest, simpleiVirtualiCpy) {
     pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, true);
   }
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)
@@ -193,7 +193,7 @@ TEST_F(RemoveNullcheckStringArgTest, simpleiVirtualiCpy) {
 }
 
 TEST_F(RemoveNullcheckStringArgTest, simpleStatic) {
-  auto str = R"(
+  const auto* str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)
@@ -216,7 +216,7 @@ TEST_F(RemoveNullcheckStringArgTest, simpleStatic) {
     pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
   }
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)
@@ -234,7 +234,7 @@ TEST_F(RemoveNullcheckStringArgTest, simpleStatic) {
 }
 
 TEST_F(RemoveNullcheckStringArgTest, removeAssertPositive) {
-  auto str = R"(
+  const auto* str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)
@@ -256,7 +256,7 @@ TEST_F(RemoveNullcheckStringArgTest, removeAssertPositive) {
     pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
   }
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)
@@ -271,7 +271,7 @@ TEST_F(RemoveNullcheckStringArgTest, removeAssertPositive) {
 }
 
 TEST_F(RemoveNullcheckStringArgTest, removeAssertNegative) {
-  auto str = R"(
+  const auto* str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)
@@ -294,7 +294,7 @@ TEST_F(RemoveNullcheckStringArgTest, removeAssertNegative) {
     pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
   }
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
      (load-param-object v0)
      (load-param-object v1)

@@ -19,19 +19,19 @@
  */
 
 TEST_F(PreVerify, InlineWithFinalField) {
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redexinline/MethodInlineRelaxedInitTest;");
   ASSERT_NE(nullptr, cls);
-  auto m = find_vmethod_named(*cls, "testWithFinalField");
+  auto* m = find_vmethod_named(*cls, "testWithFinalField");
   ASSERT_NE(nullptr, m);
-  auto m_with_no_optimize =
+  auto* m_with_no_optimize =
       find_vmethod_named(*cls, "testWithFinalFieldAndNoOptimize");
   ASSERT_NE(nullptr, m_with_no_optimize);
 
-  auto final_field_cls =
+  auto* final_field_cls =
       find_class_named(classes, "Lcom/facebook/redexinline/WithFinalField;");
   ASSERT_NE(nullptr, final_field_cls);
-  auto f = find_field_named(*final_field_cls, "finalField");
+  auto* f = find_field_named(*final_field_cls, "finalField");
   ASSERT_NE(nullptr, f);
   ASSERT_TRUE(is_final(f));
 
@@ -48,22 +48,22 @@ TEST_F(PreVerify, InlineWithFinalField) {
 }
 
 TEST_F(PostVerify, InlineWithFinalField) {
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redexinline/MethodInlineRelaxedInitTest;");
   ASSERT_NE(nullptr, cls);
-  auto m = find_vmethod_named(*cls, "testWithFinalField");
+  auto* m = find_vmethod_named(*cls, "testWithFinalField");
   ASSERT_NE(nullptr, m);
-  auto m_with_no_optimize =
+  auto* m_with_no_optimize =
       find_vmethod_named(*cls, "testWithFinalFieldAndNoOptimize");
   ASSERT_NE(nullptr, m);
 
-  auto final_field_cls =
+  auto* final_field_cls =
       find_class_named(classes, "Lcom/facebook/redexinline/WithFinalField;");
   ASSERT_NE(nullptr, final_field_cls);
-  auto f = find_field_named(*final_field_cls, "finalField");
+  auto* f = find_field_named(*final_field_cls, "finalField");
   ASSERT_NE(nullptr, f);
   ASSERT_TRUE(is_final(f));
-  auto m_ctor = find_dmethod_named(*final_field_cls, "<init>");
+  auto* m_ctor = find_dmethod_named(*final_field_cls, "<init>");
   ASSERT_NE(nullptr, m_ctor);
 
   ASSERT_NE(nullptr,
@@ -87,16 +87,16 @@ TEST_F(PostVerify, InlineWithFinalField) {
  */
 
 TEST_F(PreVerify, NoInlineWithFinalize) {
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redexinline/MethodInlineRelaxedInitTest;");
   ASSERT_NE(nullptr, cls);
-  auto m = find_vmethod_named(*cls, "testWithFinalFieldAndFinalize");
+  auto* m = find_vmethod_named(*cls, "testWithFinalFieldAndFinalize");
   ASSERT_NE(nullptr, m);
 
-  auto final_field_cls = find_class_named(
+  auto* final_field_cls = find_class_named(
       classes, "Lcom/facebook/redexinline/WithFinalFieldAndFinalize;");
   ASSERT_NE(nullptr, final_field_cls);
-  auto f = find_field_named(*final_field_cls, "finalField");
+  auto* f = find_field_named(*final_field_cls, "finalField");
   ASSERT_NE(nullptr, f);
   ASSERT_TRUE(is_final(f));
 
@@ -107,16 +107,16 @@ TEST_F(PreVerify, NoInlineWithFinalize) {
 }
 
 TEST_F(PostVerify, NoInlineWithFinalize) {
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redexinline/MethodInlineRelaxedInitTest;");
   ASSERT_NE(nullptr, cls);
-  auto m = find_vmethod_named(*cls, "testWithFinalFieldAndFinalize");
+  auto* m = find_vmethod_named(*cls, "testWithFinalFieldAndFinalize");
   ASSERT_NE(nullptr, m);
 
-  auto final_field_cls = find_class_named(
+  auto* final_field_cls = find_class_named(
       classes, "Lcom/facebook/redexinline/WithFinalFieldAndFinalize;");
   ASSERT_NE(nullptr, final_field_cls);
-  auto f = find_field_named(*final_field_cls, "finalField");
+  auto* f = find_field_named(*final_field_cls, "finalField");
   ASSERT_NE(nullptr, f);
   ASSERT_TRUE(is_final(f));
 
@@ -133,16 +133,16 @@ TEST_F(PostVerify, NoInlineWithFinalize) {
  */
 
 TEST_F(PreVerify, InlineWithoutBarrier) {
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redexinline/MethodInlineRelaxedInitTest;");
   ASSERT_NE(nullptr, cls);
-  auto m = find_vmethod_named(*cls, "testWithNormalField");
+  auto* m = find_vmethod_named(*cls, "testWithNormalField");
   ASSERT_NE(nullptr, m);
 
-  auto normal_field_cls =
+  auto* normal_field_cls =
       find_class_named(classes, "Lcom/facebook/redexinline/WithNormalField;");
   ASSERT_NE(nullptr, normal_field_cls);
-  auto f = find_field_named(*normal_field_cls, "normalField");
+  auto* f = find_field_named(*normal_field_cls, "normalField");
   ASSERT_NE(nullptr, f);
   ASSERT_FALSE(is_final(f));
 
@@ -153,16 +153,16 @@ TEST_F(PreVerify, InlineWithoutBarrier) {
 }
 
 TEST_F(PostVerify, InlineWithoutBarrier) {
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redexinline/MethodInlineRelaxedInitTest;");
   ASSERT_NE(nullptr, cls);
-  auto m = find_vmethod_named(*cls, "testWithNormalField");
+  auto* m = find_vmethod_named(*cls, "testWithNormalField");
   ASSERT_NE(nullptr, m);
 
-  auto normal_field_cls =
+  auto* normal_field_cls =
       find_class_named(classes, "Lcom/facebook/redexinline/WithNormalField;");
   ASSERT_NE(nullptr, normal_field_cls);
-  auto f = find_field_named(*normal_field_cls, "normalField");
+  auto* f = find_field_named(*normal_field_cls, "normalField");
   ASSERT_NE(nullptr, f);
   ASSERT_FALSE(is_final(f));
 
@@ -180,16 +180,16 @@ TEST_F(PostVerify, InlineWithoutBarrier) {
  */
 
 TEST_F(PreVerify, InlineTwoCtorClass) {
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redexinline/MethodInlineRelaxedInitTest;");
   ASSERT_NE(nullptr, cls);
-  auto m = find_vmethod_named(*cls, "testWithFinalFieldTwoCtor");
+  auto* m = find_vmethod_named(*cls, "testWithFinalFieldTwoCtor");
   ASSERT_NE(nullptr, m);
 
-  auto final_field_cls = find_class_named(
+  auto* final_field_cls = find_class_named(
       classes, "Lcom/facebook/redexinline/WithFinalFieldTwoCtor;");
   ASSERT_NE(nullptr, final_field_cls);
-  auto f = find_field_named(*final_field_cls, "finalField");
+  auto* f = find_field_named(*final_field_cls, "finalField");
   ASSERT_NE(nullptr, f);
   ASSERT_TRUE(is_final(f));
 
@@ -199,7 +199,7 @@ TEST_F(PreVerify, InlineTwoCtorClass) {
           m, DOPCODE_INVOKE_DIRECT, "<init>", final_field_cls->get_type()));
 
   DexMethod* no_arg_ctor = nullptr;
-  for (auto ctor : final_field_cls->get_ctors()) {
+  for (auto* ctor : final_field_cls->get_ctors()) {
     if (ctor->get_proto()->get_args()->empty()) {
       no_arg_ctor = ctor;
       break;
@@ -214,16 +214,16 @@ TEST_F(PreVerify, InlineTwoCtorClass) {
 }
 
 TEST_F(PostVerify, InlineTwoCtorClass) {
-  auto cls = find_class_named(
+  auto* cls = find_class_named(
       classes, "Lcom/facebook/redexinline/MethodInlineRelaxedInitTest;");
   ASSERT_NE(nullptr, cls);
-  auto m = find_vmethod_named(*cls, "testWithFinalFieldTwoCtor");
+  auto* m = find_vmethod_named(*cls, "testWithFinalFieldTwoCtor");
   ASSERT_NE(nullptr, m);
 
-  auto final_field_cls = find_class_named(
+  auto* final_field_cls = find_class_named(
       classes, "Lcom/facebook/redexinline/WithFinalFieldTwoCtor;");
   ASSERT_NE(nullptr, final_field_cls);
-  auto f = find_field_named(*final_field_cls, "finalField");
+  auto* f = find_field_named(*final_field_cls, "finalField");
   ASSERT_NE(nullptr, f);
   ASSERT_TRUE(is_final(f));
 
@@ -234,7 +234,7 @@ TEST_F(PostVerify, InlineTwoCtorClass) {
   ASSERT_EQ(nullptr, find_instruction(m, DOPCODE_SPUT));
 
   DexMethod* no_arg_ctor = nullptr;
-  for (auto ctor : final_field_cls->get_ctors()) {
+  for (auto* ctor : final_field_cls->get_ctors()) {
     if (ctor->get_proto()->get_args()->empty()) {
       no_arg_ctor = ctor;
       break;

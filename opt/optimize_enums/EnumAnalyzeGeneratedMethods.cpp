@@ -28,9 +28,9 @@ size_t EnumAnalyzeGeneratedMethods::transform_code(const Scope& scope) {
   });
 
   size_t num_removed_methods = 0;
-  for (auto candidate_method : UnorderedIterable(m_candidate_methods)) {
+  for (const auto* candidate_method : UnorderedIterable(m_candidate_methods)) {
     const DexType* candidate_type = candidate_method->get_class();
-    if (m_candidate_types.count_unsafe(candidate_type)) {
+    if (m_candidate_types.count_unsafe(candidate_type) != 0u) {
       DexClass* candidate_class = type_class(candidate_type);
       always_assert(candidate_class);
       TRACE(ENUM, 4, "safe to remove method %s from %s", SHOW(candidate_method),
@@ -78,14 +78,14 @@ void EnumAnalyzeGeneratedMethods::process_instruction(
     break;
   case OPCODE_CHECK_CAST:
   case OPCODE_CONST_CLASS: {
-    auto type = type::get_element_type_if_array(insn->get_type());
-    if (m_candidate_types.count(type)) {
+    const auto* type = type::get_element_type_if_array(insn->get_type());
+    if (m_candidate_types.count(type) != 0u) {
       TRACE(ENUM, 4, "reject enum %s for using class type", SHOW(type));
       m_candidate_types.erase(type);
     }
   } break;
   case OPCODE_FILLED_NEW_ARRAY: {
-    auto base_type = type::get_array_element_type(insn->get_type());
+    auto* base_type = type::get_array_element_type(insn->get_type());
     always_assert(base_type);
     for (size_t src_id = 1; src_id < insn->srcs_size(); src_id++) {
       const EnumTypes elem_types = env->get(insn->src(src_id));
@@ -96,17 +96,19 @@ void EnumAnalyzeGeneratedMethods::process_instruction(
     const EnumTypes elem_types = env->get(insn->src(0));
     const EnumTypes array_types = env->get(insn->src(1));
     for (const DexType* escaping_type : array_types.elements()) {
-      auto base_escaping_type = type::get_element_type_if_array(escaping_type);
+      const auto* base_escaping_type =
+          type::get_element_type_if_array(escaping_type);
       reject_if_unsafe(base_escaping_type, elem_types, insn);
     }
   } break;
   case OPCODE_IPUT_OBJECT:
   case OPCODE_SPUT_OBJECT: {
-    auto type = type::get_element_type_if_array(insn->get_field()->get_type());
+    const auto* type =
+        type::get_element_type_if_array(insn->get_field()->get_type());
     reject_if_unsafe(type, env->get(insn->src(0)), insn);
   } break;
   case OPCODE_RETURN_OBJECT: {
-    auto return_type =
+    const auto* return_type =
         type::get_element_type_if_array(method->get_proto()->get_rtype());
     reject_if_unsafe(return_type, env->get(insn->src(0)), insn);
   } break;
@@ -122,9 +124,9 @@ void EnumAnalyzeGeneratedMethods::process_instruction(
  */
 void EnumAnalyzeGeneratedMethods::process_invocation(
     const IRInstruction* insn, const EnumTypeEnvironment* env) {
-  auto callee_ref = insn->get_method();
-  auto callee_class = callee_ref->get_class();
-  auto proto = callee_ref->get_proto();
+  auto* callee_ref = insn->get_method();
+  auto* callee_class = callee_ref->get_class();
+  auto* proto = callee_ref->get_proto();
 
   /**
    * A list of common enum methods that may upcast arguments, but cannot lead
@@ -141,10 +143,10 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
       DexMethod::get_method("Ljava/lang/Enum;.toString:()Ljava/lang/String;"),
   };
 
-  if (m_candidate_types.count(callee_class) ||
+  if ((m_candidate_types.count(callee_class) != 0u) ||
       type::java_lang_Enum() == callee_class ||
       type::java_lang_Object() == callee_class) {
-    for (auto allowlisted_method : allowlisted_methods) {
+    for (const auto* allowlisted_method : allowlisted_methods) {
       if (method::signatures_match(callee_ref, allowlisted_method)) {
         TRACE(ENUM, 9, "Skipping allowed invocation %s", SHOW(insn));
         return;
@@ -181,7 +183,7 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
         method::signatures_match(callee_ref, get_class_method)) {
       const EnumTypes possible_types = env->get(insn->src(0));
       for (const DexType* type : possible_types.elements()) {
-        if (m_candidate_types.count(type)) {
+        if (m_candidate_types.count(type) != 0u) {
           TRACE(ENUM, 4, "reject enum %s for using class type", SHOW(type));
           m_candidate_types.erase(type);
         }
@@ -189,8 +191,8 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
     }
   } break;
   case OPCODE_INVOKE_STATIC: {
-    auto callee = resolve_method(callee_ref, MethodSearch::Static);
-    if (m_candidate_methods.count(callee)) {
+    auto* callee = resolve_method(callee_ref, MethodSearch::Static);
+    if (m_candidate_methods.count(callee) != 0u) {
       if (is_enum_valueof(callee)) {
         // Enum.valueOf() calls Enum.values() and so we reject the whole type
         DexType* callee_type = callee->get_class();
@@ -212,8 +214,8 @@ void EnumAnalyzeGeneratedMethods::reject_if_unsafe(
     const EnumTypes& possible_types,
     const IRInstruction* insn) {
   for (const DexType* possible_type : possible_types.elements()) {
-    auto type = type::get_element_type_if_array(possible_type);
-    if (expected_type != type && m_candidate_types.count(type)) {
+    const auto* type = type::get_element_type_if_array(possible_type);
+    if (expected_type != type && (m_candidate_types.count(type) != 0u)) {
       TRACE(ENUM, 4, "reject enum %s for upcasting to %s in %s", SHOW(type),
             SHOW(expected_type), SHOW(insn));
       m_candidate_types.erase(type);

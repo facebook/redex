@@ -286,8 +286,8 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
  protected:
   bool should_inline_impl(const DexMethod* caller_method,
                           const DexMethod* callee_method) override {
-    auto& caller_context = get_or_create(caller_method);
-    auto& callee_context = get_or_create(callee_method);
+    const auto& caller_context = get_or_create(caller_method);
+    const auto& callee_context = get_or_create(callee_method);
 
     float accepted{0};
 
@@ -632,8 +632,8 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
       auto top = queue.top();
       queue.pop();
 
-      auto* caller = top.first;
-      auto* callee = top.second;
+      const auto* caller = top.first;
+      const auto* callee = top.second;
 
       if (filtered_map.at(caller).count(callee) == 0) {
         continue;

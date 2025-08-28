@@ -16,17 +16,17 @@
 class DexClassTest : public RedexTest {};
 
 TEST_F(DexClassTest, testUniqueMethodName) {
-  auto method = assembler::class_with_method("LFoo;",
-                                             R"(
+  auto* method = assembler::class_with_method("LFoo;",
+                                              R"(
       (method (private) "LFoo;.bar:(I)V"
        (
         (return-void)
        )
       )
     )");
-  auto type = DexType::make_type("LFoo;");
-  auto newname = DexMethod::get_unique_name(type, DexString::make_string("bar"),
-                                            method->get_proto());
+  auto* type = DexType::make_type("LFoo;");
+  const auto* newname = DexMethod::get_unique_name(
+      type, DexString::make_string("bar"), method->get_proto());
   EXPECT_EQ(newname->str(), "barr$0");
   DexMethod::make_method("LFoo;.barr$0:(I)V");
   newname = DexMethod::get_unique_name(type, DexString::make_string("bar"),
@@ -40,13 +40,13 @@ TEST_F(DexClassTest, testUniqueMethodName) {
 }
 
 TEST_F(DexClassTest, testUniqueFieldName) {
-  auto class_type = DexType::make_type(DexString::make_string("LFoo;"));
+  auto* class_type = DexType::make_type(DexString::make_string("LFoo;"));
   ClassCreator class_creator(class_type);
   class_creator.set_super(type::java_lang_Object());
   class_creator.create();
-  auto type = DexType::make_type("LFoo;");
-  auto newname = DexField::get_unique_name(type, DexString::make_string("bar"),
-                                           DexType::make_type("I"));
+  auto* type = DexType::make_type("LFoo;");
+  const auto* newname = DexField::get_unique_name(
+      type, DexString::make_string("bar"), DexType::make_type("I"));
   EXPECT_EQ(newname->str(), "bar"); // no conflict, should not be renamed
   DexField::make_field("LFoo;.bar:I");
   newname = DexField::get_unique_name(type, DexString::make_string("bar"),
@@ -60,10 +60,10 @@ TEST_F(DexClassTest, testUniqueFieldName) {
 
 TEST_F(DexClassTest, testUniqueTypeName) {
   DexType::make_type("LFoo;");
-  auto bar_type = DexType::make_unique_type("LBar;");
-  auto foor0_type = DexType::make_unique_type("LFoo;");
-  auto foor1_type = DexType::make_unique_type("LFoo;");
-  auto foor0r0_type = DexType::make_unique_type("LFoor$0;");
+  auto* bar_type = DexType::make_unique_type("LBar;");
+  auto* foor0_type = DexType::make_unique_type("LFoo;");
+  auto* foor1_type = DexType::make_unique_type("LFoo;");
+  auto* foor0r0_type = DexType::make_unique_type("LFoor$0;");
 
   EXPECT_EQ(bar_type->str(), "LBar;"); // no conflict, should not be renamed
   EXPECT_EQ(foor0_type->str(), "LFoor$0;");
@@ -76,7 +76,7 @@ TEST_F(DexClassTest, gather_load_types) {
 
   auto make_expected_type_set = [](std::initializer_list<DexClass*> l) {
     UnorderedSet<DexType*> ret;
-    for (auto c : l) {
+    for (auto* c : l) {
       ret.emplace(c->get_type());
     }
     return ret;
@@ -139,8 +139,8 @@ TEST_F(DexClassTest, gather_load_types) {
 }
 
 TEST_F(DexClassTest, testObfuscatedNames) {
-  auto method = assembler::class_with_method("LX/001;",
-                                             R"(
+  auto* method = assembler::class_with_method("LX/001;",
+                                              R"(
       (method (private) "LX/001;.A01:(I)V"
        (
         (return-void)
@@ -148,9 +148,10 @@ TEST_F(DexClassTest, testObfuscatedNames) {
       )
     )");
 
-  auto type = DexType::get_type("LX/001;");
-  auto clazz = type_class(type);
-  auto field = DexField::make_field("LX/001;.A00:I")->make_concrete(ACC_PUBLIC);
+  auto* type = DexType::get_type("LX/001;");
+  auto* clazz = type_class(type);
+  auto* field =
+      DexField::make_field("LX/001;.A00:I")->make_concrete(ACC_PUBLIC);
 
   EXPECT_EQ(clazz->get_deobfuscated_name_or_empty(), "LX/001;");
   EXPECT_EQ(method->get_deobfuscated_name_or_empty(), "");
@@ -202,7 +203,7 @@ TEST_F(DexClassTest, testShowStructure) {
   c->add_field(DexField::make_field("LShowStructure;.staticField:I")
                    ->make_concrete(ACC_PUBLIC));
 
-  auto expected = R"(ShowStructure
+  const auto* expected = R"(ShowStructure
 Fields:
   static LShowStructure;.staticField:I
   instance LShowStructure;.staticField:I

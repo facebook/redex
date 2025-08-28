@@ -221,7 +221,7 @@ TEST_F(CopyPropagationTest, non_zero_constant_cannot_have_object_type_demand) {
   // if-s on non-zero constants cannot effectively include Object in the
   // type demand, reducing the type demand to Int, allowing for more
   // copy-propagation
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (const v0 42)
@@ -233,7 +233,7 @@ TEST_F(CopyPropagationTest, non_zero_constant_cannot_have_object_type_demand) {
      )
     )
 )");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(2);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -253,7 +253,7 @@ TEST_F(CopyPropagationTest, non_zero_constant_cannot_have_object_type_demand) {
 }
 
 TEST_F(CopyPropagationTest, if_eqz_can_create_demand) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(ZZ)V"
      (
       (load-param v1)
@@ -279,7 +279,7 @@ TEST_F(CopyPropagationTest, if_eqz_can_create_demand) {
      )
     )
 )");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(2);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -314,7 +314,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
 
   // even with verify-none being disabled, the following is safe
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (const v0 0)
@@ -329,7 +329,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
      )
     )
 )");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(3);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -353,7 +353,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
 TEST_F(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
 
   // the following is not safe, and shall not be fully optimized
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (const v0 0)
@@ -368,7 +368,7 @@ TEST_F(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
      )
     )
 )");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(3);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -425,7 +425,7 @@ TEST_F(CopyPropagationTest, if_constraints_with_constant_uses) {
   // either being an object reference, or an integer.
   // This provides for further refinement of constant uses, allowing to
   // copy-propagate in more cases (but also disallowing in others).
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
        (const v0 0)
@@ -443,7 +443,7 @@ TEST_F(CopyPropagationTest, if_constraints_with_constant_uses) {
      )
     )
 )");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(4);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -536,7 +536,7 @@ TEST_F(CopyPropagationTest, loopNoChange) {
 }
 
 TEST_F(CopyPropagationTest, branchNoChange) {
-  auto no_change = R"(
+  const auto* no_change = R"(
     (
       (if-eqz v0 :true)
 
@@ -603,7 +603,7 @@ TEST_F(CopyPropagationTest, intersect1) {
 }
 
 TEST_F(CopyPropagationTest, intersect2) {
-  auto no_change = R"(
+  const auto* no_change = R"(
     (
       (move v0 v1)
       (if-eqz v0 :true)
@@ -793,7 +793,7 @@ TEST_F(CopyPropagationTest, repWide) {
 // whichRep and whichRep2 make sure that we deterministically choose the
 // representative after a merge point.
 TEST_F(CopyPropagationTest, whichRep) {
-  auto no_change = R"(
+  const auto* no_change = R"(
     (
       (if-eqz v0 :true)
 
@@ -821,7 +821,7 @@ TEST_F(CopyPropagationTest, whichRep) {
 }
 
 TEST_F(CopyPropagationTest, whichRep2) {
-  auto no_change = R"(
+  const auto* no_change = R"(
     (
       (if-eqz v0 :true)
 
@@ -890,7 +890,7 @@ TEST_F(CopyPropagationTest, whichRepPreserve) {
 
 TEST_F(CopyPropagationTest, wideInvokeSources) {
 
-  auto no_change = R"(
+  const auto* no_change = R"(
     (
       (move-wide v0 v15)
       (invoke-static (v0) "Lcom;.foo:(J)V")
@@ -912,7 +912,7 @@ TEST_F(CopyPropagationTest, wideInvokeSources) {
 }
 
 TEST_F(CopyPropagationTest, use_does_not_kill_type_demands) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
      (
        (const v0 0)
@@ -923,7 +923,7 @@ TEST_F(CopyPropagationTest, use_does_not_kill_type_demands) {
     )
   )
 )");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(2);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -942,7 +942,7 @@ TEST_F(CopyPropagationTest, use_does_not_kill_type_demands) {
 }
 
 TEST_F(CopyPropagationTest, instance_of_kills_type_demands) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
      (
        (const v0 0)
@@ -953,7 +953,7 @@ TEST_F(CopyPropagationTest, instance_of_kills_type_demands) {
     )
   )
 )");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(2);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -973,7 +973,7 @@ TEST_F(CopyPropagationTest, instance_of_kills_type_demands) {
 }
 
 TEST_F(CopyPropagationTest, ResueConst) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
     (
       (const v2 1)
@@ -986,7 +986,7 @@ TEST_F(CopyPropagationTest, ResueConst) {
   )
 )");
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(4);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -1008,7 +1008,7 @@ TEST_F(CopyPropagationTest, ResueConst) {
 }
 
 TEST_F(CopyPropagationTest, lock_canonicalization_none) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
      (
        (const v0 0)
@@ -1024,7 +1024,7 @@ TEST_F(CopyPropagationTest, lock_canonicalization_none) {
     )
   )
 )");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(4);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -1049,7 +1049,7 @@ TEST_F(CopyPropagationTest, lock_canonicalization_none) {
 }
 
 TEST_F(CopyPropagationTest, lock_canonicalization) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
      (
        (const v0 0)
@@ -1063,7 +1063,7 @@ TEST_F(CopyPropagationTest, lock_canonicalization) {
     )
   )
 )");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(2);
   code->build_cfg();
   copy_propagation_impl::Config config;
@@ -1092,7 +1092,7 @@ TEST_F(CopyPropagationTest, check_cast_throw_targets_regs) {
   // The register allocator tries to avoid that `v1` is not holding a live value
   // to make that work. Similarly, CopyProp must not replace `v2` with `v1` in
   // the catch block.
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (const v1 0)
@@ -1109,11 +1109,11 @@ TEST_F(CopyPropagationTest, check_cast_throw_targets_regs) {
       (return v2)
     )
   )";
-  auto method = assembler::method_from_string(
+  auto* method = assembler::method_from_string(
       std::string("(method (public) \"LFoo;.bar:()Ljava/lang/Object;\" ") +
       code_str + ")");
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->set_registers_size(3);
   code->build_cfg();
   copy_propagation_impl::Config config;

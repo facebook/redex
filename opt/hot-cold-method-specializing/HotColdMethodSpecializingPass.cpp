@@ -77,7 +77,7 @@ UnorderedSet<cfg::Block*> get_forward_reachable_blocks(
 
 bool does_not_read_mutable_heap(cfg::Block* block) {
   for (auto& mie : InstructionIterable(block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     auto op = insn->opcode();
     if (opcode::is_an_aget(op) || opcode::is_an_sget(op) ||
         opcode::is_an_iget(op)) {
@@ -90,7 +90,7 @@ bool does_not_read_mutable_heap(cfg::Block* block) {
 
 bool is_pure(cfg::Block* block) {
   for (auto& mie : InstructionIterable(block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     auto op = insn->opcode();
     if (opcode::is_an_aput(op) || opcode::is_an_sput(op) ||
         opcode::is_an_iput(op) || opcode::is_fill_array_data(op) ||
@@ -127,7 +127,7 @@ UnorderedSet<cfg::Block*> propose_cold_frontier(
   auto return_blocks = cfg.return_blocks();
   auto normal_blocks = get_backwards_reachable_blocks_from(cfg, return_blocks);
   insert_unordered_iterable(normal_blocks, return_blocks);
-  if (!normal_blocks.count(cfg.entry_block())) {
+  if (normal_blocks.count(cfg.entry_block()) == 0u) {
     // We are not interested in methods that always throw. Those certainly
     // exist.
     return {};
@@ -143,7 +143,8 @@ UnorderedSet<cfg::Block*> propose_cold_frontier(
     if (!visited_blocks.emplace(block).second) {
       continue;
     }
-    if (!normal_blocks.count(block) || !source_blocks::maybe_hot(block)) {
+    if ((normal_blocks.count(block) == 0u) ||
+        !source_blocks::maybe_hot(block)) {
       // We ignore blocks that are cold or will eventually throw exception.
       cold_frontier.insert(block);
       continue;
@@ -223,7 +224,7 @@ void specialize_hot_code(DexMethod* method,
   auto& cfg = code.cfg();
   std::vector<IRInstruction*> arg_copy_insns;
   std::vector<reg_t> arg_copies;
-  for (auto& mie : InstructionIterable(cfg.get_param_instructions())) {
+  for (const auto& mie : InstructionIterable(cfg.get_param_instructions())) {
     auto* insn = mie.insn;
     auto op = insn->opcode();
     switch (op) {
@@ -245,7 +246,7 @@ void specialize_hot_code(DexMethod* method,
         (new IRInstruction(op))->set_src(0, insn->dest())->set_dest(tmp_reg));
     arg_copies.push_back(tmp_reg);
   }
-  auto entry_block = cfg.entry_block();
+  auto* entry_block = cfg.entry_block();
   auto insert_it = entry_block->get_first_non_param_loading_insn();
   cfg.insert_before(entry_block->to_cfg_instruction_iterator(insert_it),
                     arg_copy_insns);
@@ -293,7 +294,7 @@ void specialize_hot_code(DexMethod* method,
   }
 
   for (auto* block : cfg.blocks()) {
-    if (!cold_frontier.count(block)) {
+    if (cold_frontier.count(block) == 0u) {
       continue;
     }
     always_assert(!starts_with_required_insn(block));
@@ -311,11 +312,11 @@ void specialize_cold_code(
     const UnorderedSet<cfg::Block*>& cold_closure_blocks) {
   std::vector<cfg::Edge*> to_redirect;
   for (auto* block : cfg.blocks()) {
-    if (!cold_closure_blocks.count(block)) {
+    if (cold_closure_blocks.count(block) == 0u) {
       continue;
     }
     for (auto* edge : block->succs()) {
-      if (cold_closure_blocks.count(edge->target())) {
+      if (cold_closure_blocks.count(edge->target()) != 0u) {
         continue;
       }
       always_assert(!starts_with_required_insn(edge->target()));
@@ -359,7 +360,7 @@ HotColdMethodSpecializingPass::analyze_and_specialize(
     shrinker::Shrinker* shrinker) {
   Stats stats;
 
-  if (shrinker) {
+  if (shrinker != nullptr) {
     shrinker->shrink_method(method);
     method->get_code()->cfg().reset_exit_block();
   }
@@ -416,7 +417,7 @@ HotColdMethodSpecializingPass::analyze_and_specialize(
   } else {
     stats.unspecializable_cold_code++;
   }
-  if (shrinker) {
+  if (shrinker != nullptr) {
     shrinker->shrink_code(hot_code.get(), is_static(method),
                           method::is_any_init(method), method->get_class(),
                           method->get_proto(), [&]() { return show(method); });
@@ -516,12 +517,12 @@ void HotColdMethodSpecializingPass::run_pass(DexStoresVector& stores,
 
     std::vector<DexMethod*> specialized_methods;
     for (auto* method : cls->get_all_methods()) {
-      if (!method->get_code() || method::is_any_init(method) ||
+      if ((method->get_code() == nullptr) || method::is_any_init(method) ||
           method->rstate.no_optimizations() ||
           method->rstate.should_not_outline()) {
         continue;
       }
-      if (method->is_virtual() && !non_true_virtuals.count(method)) {
+      if (method->is_virtual() && (non_true_virtuals.count(method) == 0u)) {
         continue;
       }
 
@@ -537,7 +538,7 @@ void HotColdMethodSpecializingPass::run_pass(DexStoresVector& stores,
         stats += local_stats;
       }
 
-      if (!cold_copy) {
+      if (cold_copy == nullptr) {
         continue;
       }
 

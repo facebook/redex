@@ -82,13 +82,13 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
         [&](const DexType* type) {
           return !init_classes_with_side_effects ||
-                 !init_classes_with_side_effects->refine(type);
+                 (init_classes_with_side_effects->refine(type) == nullptr);
         };
     computed_no_side_effects_methods_iterations =
         compute_no_side_effects_methods(
             scope, override_graph.get(), clinit_has_no_side_effects,
             pure_methods, &computed_no_side_effects_methods);
-    for (auto m : UnorderedIterable(computed_no_side_effects_methods)) {
+    for (const auto* m : UnorderedIterable(computed_no_side_effects_methods)) {
       pure_methods.insert(const_cast<DexMethod*>(m));
     }
   }

@@ -39,14 +39,14 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
     if (!can_rename(cls) || !can_delete(cls)) {
       return;
     }
-    auto instance = has_instance_field(cls, m_instance);
-    if (!instance) {
+    auto* instance = has_instance_field(cls, m_instance);
+    if (instance == nullptr) {
       return;
     }
     if (do_not_consider_type(cls)) {
       return;
     }
-    if (concurrent_instance_map.count(instance)) {
+    if (concurrent_instance_map.count(instance) != 0u) {
       return;
     }
     std::set<std::pair<IRInstruction*, DexMethod*>> insns;
@@ -67,8 +67,8 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
       walk::parallel::methods<KotlinInstanceRewriter::Stats>(
           scope, [&](DexMethod* method) {
             KotlinInstanceRewriter::Stats stats{};
-            auto code = method->get_code();
-            if (!code) {
+            auto* code = method->get_code();
+            if (code == nullptr) {
               return stats;
             }
 
@@ -76,18 +76,18 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
             auto& cfg = method->get_code()->cfg();
             auto iterable = cfg::InstructionIterable(cfg);
             for (auto it = iterable.begin(); it != iterable.end(); it++) {
-              auto insn = it->insn;
+              auto* insn = it->insn;
 
               if (!opcode::is_an_sget(insn->opcode()) &&
                   !opcode::is_an_sput(insn->opcode())) {
                 continue;
               }
 
-              auto field = insn->get_field();
-              if (!concurrent_instance_map.count(field)) {
+              auto* field = insn->get_field();
+              if (concurrent_instance_map.count(field) == 0u) {
                 continue;
               }
-              if (remove_list.count(field)) {
+              if (remove_list.count(field) != 0u) {
                 continue;
               }
               // If there is more SPUT otherthan the initial one.
@@ -134,7 +134,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
     if (insns.empty()) {
       continue;
     }
-    auto field = it.first;
+    auto* field = it.first;
     fields_to_rewrite.push_back(field);
   }
   std::sort(fields_to_rewrite.begin(), fields_to_rewrite.end(),
@@ -154,7 +154,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
         auto iterable = cfg::InstructionIterable(cfg);
         for (auto insn_it = iterable.begin(); insn_it != iterable.end();
              insn_it++) {
-          auto insn = insn_it->insn;
+          auto* insn = insn_it->insn;
           if (!opcode::is_an_sput(insn->opcode()) ||
               insn->get_field() != field) {
             continue;
@@ -171,7 +171,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
     }
 
     // Convert INSTANCE read to new instance creation
-    for (auto& method_it : concurrent_instance_map.find(field)->second) {
+    for (const auto& method_it : concurrent_instance_map.find(field)->second) {
       auto* meth = method_it.second;
       auto& cfg = meth->get_code()->cfg();
       cfg::CFGMutation m(cfg);
@@ -185,7 +185,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
       auto iterable = cfg::InstructionIterable(cfg);
       for (auto insn_it = iterable.begin(); insn_it != iterable.end();
            insn_it++) {
-        auto insn = insn_it->insn;
+        auto* insn = insn_it->insn;
         if (!opcode::is_an_sget(insn->opcode()) || insn->get_field() != field) {
           continue;
         }

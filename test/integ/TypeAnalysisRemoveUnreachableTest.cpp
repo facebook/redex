@@ -25,7 +25,7 @@
 class TypeAnalysisRemoveUnreachableTest : public RedexIntegrationTest {
   void SetUp() override {
     virt_scope::get_vmethods(type::java_lang_Object());
-    auto cls = type_class(type::java_lang_Object());
+    auto* cls = type_class(type::java_lang_Object());
     // To make the assertion in reachability analysis happy
     cls->set_external();
   }
@@ -118,11 +118,11 @@ TEST_F(TypeAnalysisRemoveUnreachableTest, TypeAnalysisRMUTest4) {
                new TypeAnalysisAwareRemoveUnreachablePass()}},
              std::move(pg_config));
   ASSERT_TRUE(find_class(*classes, "LBase4;"));
-  auto intermediate_cls = find_class(*classes, "LIntermediate4;");
+  auto* intermediate_cls = find_class(*classes, "LIntermediate4;");
   ASSERT_TRUE(intermediate_cls);
   ASSERT_TRUE(find_class(*classes, "LSub4;"));
   ASSERT_TRUE(find_vmethod(*classes, "LBase4;", "V", "foo", {}));
-  auto intermediate_foo =
+  auto* intermediate_foo =
       find_vmethod(*classes, "LIntermediate4;", "V", "foo", {});
   ASSERT_TRUE(intermediate_foo);
   ASSERT_TRUE(find_vmethod(*classes, "LSub4;", "V", "foo", {}));
@@ -159,7 +159,7 @@ TEST_F(TypeAnalysisRemoveUnreachableTest, TypeAnalysisRMUTest5) {
   ASSERT_TRUE(find_class(*classes, "LBase5;"));
   ASSERT_TRUE(find_class(*classes, "LSub5;"));
   ASSERT_TRUE(find_vmethod(*classes, "LSub5;", "V", "foo", {}));
-  auto base_foo = find_vmethod(*classes, "LBase5;", "V", "foo", {});
+  auto* base_foo = find_vmethod(*classes, "LBase5;", "V", "foo", {});
   ASSERT_TRUE(base_foo);
   auto ii = InstructionIterable(base_foo->get_code());
   ASSERT_TRUE(std::any_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {

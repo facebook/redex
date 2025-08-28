@@ -182,7 +182,7 @@ TEST_F(CallGraphTest, test_resolve_static_callees) {
   IRCode* code = clinit->get_code();
   IRInstruction* invoke_insn = nullptr;
   for (const auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         insn->get_method()->str() == "foo") {
       invoke_insn = mie.insn;

@@ -26,9 +26,9 @@ DexMethod* get_util_method(DexClass* cls, const char* name) {
   auto util_cls_str =
       cls->get_type()->str().substr(0, cls->get_type()->str().size() - 1) +
       "$Util;";
-  auto util_cls = type_class(DexType::make_type(util_cls_str));
+  auto* util_cls = type_class(DexType::make_type(util_cls_str));
   cls = util_cls;
-  if (!cls) {
+  if (cls == nullptr) {
     return nullptr;
   }
   return cls->find_method_from_simple_deobfuscated_name(name);
@@ -62,16 +62,16 @@ void TypedefAnnoOptPass::emit_old_to_new(DexMethod* k, DexMethod* v) {
 
 void TypedefAnnoOptPass::populate_value_of_opt_str(DexClass* cls) {
   const std::vector<DexField*>& fields = cls->get_sfields();
-  if (get_annotation(cls, m_config.str_typedef)) {
+  if (get_annotation(cls, m_config.str_typedef) != nullptr) {
 
-    auto m = get_util_method(cls, VALUE_OF_OPT);
+    auto* m = get_util_method(cls, VALUE_OF_OPT);
     if (m == nullptr) {
       return;
     }
 
     std::map<std::string, std::string> string_tree_items;
     for (auto* field : fields) {
-      auto field_value =
+      const auto* field_value =
           static_cast<DexEncodedValueString*>(field->get_static_value())
               ->string();
       string_tree_items.emplace(field->get_simple_deobfuscated_name(),
@@ -80,13 +80,13 @@ void TypedefAnnoOptPass::populate_value_of_opt_str(DexClass* cls) {
 
     auto encoded_str =
         StringTreeStringMap::encode_string_tree_map(string_tree_items);
-    auto encoded_dex_str = DexString::make_string(encoded_str);
+    const auto* encoded_dex_str = DexString::make_string(encoded_str);
     fill_encoded_string(m, encoded_dex_str);
     emit_old_to_new(get_util_method(cls, VALUE_OF), m);
 
-  } else if (get_annotation(cls, m_config.int_typedef)) {
+  } else if (get_annotation(cls, m_config.int_typedef) != nullptr) {
 
-    auto m = get_util_method(cls, VALUE_OF_OPT);
+    auto* m = get_util_method(cls, VALUE_OF_OPT);
     if (m == nullptr) {
       return;
     }
@@ -100,7 +100,7 @@ void TypedefAnnoOptPass::populate_value_of_opt_str(DexClass* cls) {
 
     auto encoded_str =
         StringTreeMap<int32_t>::encode_string_tree_map(string_tree_items);
-    auto encoded_dex_str = DexString::make_string(encoded_str);
+    const auto* encoded_dex_str = DexString::make_string(encoded_str);
     fill_encoded_string(m, encoded_dex_str);
     emit_old_to_new(get_util_method(cls, VALUE_OF), m);
   }

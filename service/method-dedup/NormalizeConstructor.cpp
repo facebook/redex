@@ -100,7 +100,7 @@ struct ConstructorSummary {
   // the == operator to make that decision.
   size_t hash() const {
     size_t hash = 0;
-    for (auto& field_origin : field_id_to_origin) {
+    for (const auto& field_origin : field_id_to_origin) {
       boost::hash_combine(hash, field_origin.type);
       if (field_origin.type == FieldOriginType::NO_ORIGIN) {
         boost::hash_combine(hash, 11);
@@ -200,7 +200,7 @@ bool is_simple_super_invoke(
         continue;
       }
 
-      if (used_args.count(arg_idx)) {
+      if (used_args.count(arg_idx) != 0u) {
         // Do not handle the case in which multiple iputs have their
         // values coming from the same parameters. This makes it simpler
         // to check whether two candidate constructors are actually
@@ -256,7 +256,7 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
       auto* insn = it->insn;
       auto opcode = insn->opcode();
       if (opcode::is_invoke_direct(opcode)) {
-        auto ref = insn->get_method();
+        auto* ref = insn->get_method();
         if (summary.super_ctor != nullptr || !method::is_init(ref) ||
             ref->get_class() == method->get_class()) {
           return boost::none;
@@ -281,7 +281,7 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
           return boost::none;
         }
         uint32_t arg_idx = load_params.at(def);
-        if (used_args.count(arg_idx)) {
+        if (used_args.count(arg_idx) != 0u) {
           // Do not handle the case in which multiple iputs have their
           // values coming from the same parameters. This makes it simpler
           // to check whether two candidate constructors are actually
@@ -304,7 +304,7 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
   if (summary.super_ctor == nullptr) {
     return boost::none;
   }
-  for (auto field : ifields) {
+  for (auto* field : ifields) {
     if (field_to_origin.count(field) == 0) {
       summary.field_id_to_origin.push_back(FieldOrigin());
       continue;
@@ -377,9 +377,9 @@ DexMethod* get_representative(
     MethodToType& global_pending_ctor_changes,
     MethodToType& pending_colliding_constructors_changes) {
   std::vector<DexType*> normalized_typelist;
-  auto super_ctor_args = super_ctor->get_proto()->get_args();
+  auto* super_ctor_args = super_ctor->get_proto()->get_args();
   normalized_typelist.reserve(fields.size() + super_ctor_args->size());
-  for (auto field : fields) {
+  for (auto* field : fields) {
     normalized_typelist.push_back(field->get_type());
   }
   normalized_typelist.insert(normalized_typelist.end(),
@@ -388,10 +388,10 @@ DexMethod* get_representative(
 
   DexProto* generalized_proto_for_collision{nullptr};
   DexMethod* representative_for_collision{nullptr};
-  for (auto& pair : methods) {
-    auto method = pair.first;
-    auto& summary = pair.second;
-    auto new_proto =
+  for (const auto& pair : methods) {
+    auto* method = pair.first;
+    const auto& summary = pair.second;
+    auto* new_proto =
         generalize_proto(normalized_typelist, *summary, method->get_proto());
     if (representative_for_collision == nullptr) {
       // Store representative and proto generalisation to use
@@ -403,12 +403,12 @@ DexMethod* get_representative(
     if (new_proto == method->get_proto()) {
       return method;
     }
-    if (pending_new_protos.count(new_proto)) {
+    if (pending_new_protos.count(new_proto) != 0u) {
       // The proto is pending for another constructor on this class.
       continue;
     }
     if (DexMethod::get_method(method->get_class(), method->get_name(),
-                              new_proto)) {
+                              new_proto) != nullptr) {
       // The method with the new proto exists, it's impossible to change the
       // spec of the `method` to the new.
       continue;
@@ -460,7 +460,7 @@ namespace method_dedup {
 uint32_t estimate_deduplicatable_ctor_code_size(const DexClass* cls) {
   const auto& ifields = cls->get_ifields();
   uint32_t estimated_size = 0;
-  for (auto method : cls->get_ctors()) {
+  for (auto* method : cls->get_ctors()) {
     auto summary = summarize_constructor_logic(ifields, method);
     if (!summary) {
       continue;
@@ -489,7 +489,7 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
     std::map<DexMethodRef*, std::map<size_t, CtorSummaries>,
              dexmethods_comparator>
         grouped_methods;
-    for (auto method : ctors) {
+    for (auto* method : ctors) {
       auto summary = summarize_constructor_logic(cls->get_ifields(), method);
       if (!summary) {
         TRACE(METH_DEDUP, 2, "no summary %s\n%s", SHOW(method),
@@ -509,11 +509,11 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
         }
         // The methods in this group are logically the same, we can use one to
         // represent others with proper transformation.
-        auto representative =
+        auto* representative =
             get_representative(cluster, cls->get_ifields(), pair.first,
                                pending_new_protos, global_pending_ctor_changes,
                                pending_colliding_constructors_changes);
-        if (!representative) {
+        if (representative == nullptr) {
           TRACE(METH_DEDUP,
                 2,
                 "%zu constructors in %s are in same cluster but not "
@@ -549,10 +549,10 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
   // Change callsites.
   auto call_sites = method_reference::collect_call_refs(scope, ctor_set);
   for (auto& callsite : call_sites) {
-    auto old_callee = callsite.callee;
+    auto* old_callee = callsite.callee;
     auto& old_field_id_to_arg_id =
         methods_summaries[old_callee]->field_id_to_origin;
-    auto new_callee = old_to_new[old_callee];
+    auto* new_callee = old_to_new[old_callee];
     redex_assert(new_callee != old_callee);
     auto new_field_id_to_arg_id =
         methods_summaries[new_callee]->field_id_to_origin;
@@ -562,7 +562,7 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
   }
   // Change the constructor representatives to new proto if they need be.
   for (auto& pair : global_pending_ctor_changes) {
-    auto method = pair.first;
+    auto* method = pair.first;
     DexMethodSpec spec;
     spec.proto = pair.second;
     if (pending_colliding_constructors_changes.count(method) != 0) {

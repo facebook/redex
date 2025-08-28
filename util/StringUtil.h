@@ -56,7 +56,7 @@ class StringStorage {
     auto it = m_set.find(str);
     if (it == m_set.end()) {
       auto data = std::make_unique<char[]>(str.size());
-      auto data_ptr = data.get();
+      auto* data_ptr = data.get();
       memcpy(data_ptr, str.data(), str.size());
       m_storage.push_back(std::move(data));
       it = m_set.emplace(std::string_view(data_ptr, str.size())).first;

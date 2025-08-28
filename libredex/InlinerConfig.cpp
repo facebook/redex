@@ -43,7 +43,7 @@ void InlinerConfig::populate(const Scope& scope) {
       std::string_view class_prefix_str = std::string_view(str).substr(
           0, std::min(str.size(), class_str.size()));
       if (boost::starts_with(class_str, class_prefix_str)) {
-        for (auto method : cls->get_all_methods()) {
+        for (auto* method : cls->get_all_methods()) {
           if (boost::starts_with(show(method), str)) {
             method->rstate.set_dont_inline();
           }
@@ -52,10 +52,10 @@ void InlinerConfig::populate(const Scope& scope) {
     }
     // Class may be annotated by no_inline_annos.
     if (has_any_annotation(cls, no_inline_annos)) {
-      for (auto method : cls->get_dmethods()) {
+      for (auto* method : cls->get_dmethods()) {
         method->rstate.set_dont_inline();
       }
-      for (auto method : cls->get_vmethods()) {
+      for (auto* method : cls->get_vmethods()) {
         method->rstate.set_dont_inline();
       }
     }

@@ -185,7 +185,7 @@ uint64_t read_evarg(const uint8_t*& encdata,
 ) {
   uint64_t v = *encdata++;
   int shift = 8;
-  while (evarg--) {
+  while ((evarg--) != 0u) {
     v |= uint64_t(*encdata++) << shift;
     shift += 8;
   }
@@ -199,7 +199,7 @@ void type_encoder(std::vector<uint8_t>& encdata, uint8_t type, uint64_t val) {
   uint8_t devtb = DEVT_HDR_TYPE(type);
   int count = 0;
   uint64_t t = (val >> 8);
-  while (t) {
+  while (t != 0u) {
     count++;
     t >>= 8;
   }
@@ -207,7 +207,7 @@ void type_encoder(std::vector<uint8_t>& encdata, uint8_t type, uint64_t val) {
   encdata.push_back(devtb);
   t = (val >> 8);
   encdata.push_back(val & 0xff);
-  while (t) {
+  while (t != 0u) {
     encdata.push_back(t & 0xff);
     t >>= 8;
   }
@@ -246,7 +246,7 @@ void type_encoder_fp(std::vector<uint8_t>& encdata,
                      uint64_t val) {
   // Ignore trailing zero bytes.
   int bytes = 0;
-  while (val && ((val & 0xff) == 0)) {
+  while ((val != 0u) && ((val & 0xff) == 0)) {
     val >>= 8;
     bytes++;
   }
@@ -306,7 +306,7 @@ void DexEncodedValue::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
 void DexEncodedValueBit::encode(DexOutputIdx* /*dodx*/,
                                 std::vector<uint8_t>& encdata) {
   uint8_t devtb = DEVT_HDR_TYPE(m_evtype);
-  if (m_val.m_value) {
+  if (m_val.m_value != 0u) {
     devtb |= TO_DEVT_HDR_ARG(1);
   }
   encdata.push_back(devtb);
@@ -372,7 +372,7 @@ void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx,
   uleb_append(encdata, tidx);
   uleb_append(encdata, (uint32_t)m_annotations.size());
   for (auto const& dae : m_annotations) {
-    auto str = dae.string;
+    const auto* str = dae.string;
     DexEncodedValue* dev = dae.encoded_value.get();
     uint32_t sidx = dodx->stringidx(str);
     uleb_append(encdata, sidx);
@@ -384,7 +384,7 @@ static DexAnnotationElement get_annotation_element(DexIdx* idx,
                                                    const uint8_t*& encdata) {
   always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t sidx = read_uleb128(&encdata);
-  auto name = idx->get_stringidx(sidx);
+  const auto* name = idx->get_stringidx(sidx);
   always_assert_type_log(name != nullptr, INVALID_DEX,
                          "Invalid string idx in annotation element");
   return DexAnnotationElement(name,
@@ -558,7 +558,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
     always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
                            "Dex overflow");
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
-    auto evstring = idx->get_stringidx(evidx);
+    const auto* evstring = idx->get_stringidx(evidx);
     always_assert_type_log(evstring != nullptr, INVALID_DEX,
                            "Invalid string idx in annotation element");
     return std::unique_ptr<DexEncodedValue>(
@@ -691,7 +691,7 @@ void DexAnnotationDirectory::calc_internals() {
     m_aset_count++;
     return cv;
   };
-  if (m_class) {
+  if (m_class != nullptr) {
     cntviz += updateCount(m_class);
   }
   if (m_field) {
@@ -712,7 +712,7 @@ void DexAnnotationDirectory::calc_internals() {
       m_xref_size += 4 + 4 * pa->size();
       m_xref_count++;
       for (auto const& pp : *pa) {
-        auto& das = pp.second;
+        const auto& das = pp.second;
         cntviz += updateCount(das.get());
       }
     }
@@ -740,7 +740,7 @@ bool field_annotation_compare(std::pair<DexFieldRef*, DexAnnotationSet*> a,
 
 void DexAnnotationDirectory::gather_asets(
     std::vector<DexAnnotationSet*>& aset) {
-  if (m_class) {
+  if (m_class != nullptr) {
     aset.push_back(m_class);
   }
   if (m_field) {
@@ -778,7 +778,7 @@ void DexAnnotationDirectory::gather_xrefs(
 
 void DexAnnotationDirectory::gather_annotations(
     std::vector<DexAnnotation*>& alist) {
-  if (m_class) {
+  if (m_class != nullptr) {
     m_class->gather_annotations(alist);
   }
   if (m_field) {
@@ -813,7 +813,7 @@ void DexAnnotationDirectory::vencode(
   uint32_t cntaf = 0;
   uint32_t cntam = 0;
   uint32_t cntamp = 0;
-  if (m_class) {
+  if (m_class != nullptr) {
     always_assert_log(asetmap.count(m_class) != 0, "Uninitialized aset %p '%s'",
                       m_class, show(m_class).c_str());
     classoff = asetmap[m_class];
@@ -899,7 +899,7 @@ void DexAnnotation::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
   uleb_append(bytes, dodx->typeidx(m_type));
   uleb_append(bytes, (uint32_t)m_anno_elems.size());
   for (auto& elem : m_anno_elems) {
-    auto string = elem.string;
+    const auto* string = elem.string;
     DexEncodedValue* ev = elem.encoded_value.get();
     uleb_append(bytes, dodx->stringidx(string));
     ev->vencode(dodx, bytes);
@@ -910,7 +910,7 @@ namespace {
 std::string show_helper(const DexEncodedValueArray* a, bool deobfuscated) {
   std::ostringstream ss;
   ss << (a->is_static_val() ? "(static) " : "");
-  if (a->evalues()) {
+  if (a->evalues() != nullptr) {
     bool first = true;
     for (const auto& evalue : *a->evalues()) {
       if (!first) {
@@ -928,7 +928,7 @@ std::string show_helper(const DexEncodedValueArray* a, bool deobfuscated) {
 }
 
 std::string show_helper(const EncodedAnnotations* annos, bool deobfuscated) {
-  if (!annos) {
+  if (annos == nullptr) {
     return "";
   }
   std::ostringstream ss;

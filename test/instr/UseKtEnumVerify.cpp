@@ -11,7 +11,7 @@
 TEST_F(PostVerify, EnumShouldStillExist) {
   std::vector<std::string> enum_names = {"Lredex/D;", "Lredex/F;"};
   for (auto& enum_name : enum_names) {
-    auto cls = find_class_named(classes, enum_name.c_str());
+    auto* cls = find_class_named(classes, enum_name.c_str());
     EXPECT_NE(cls, nullptr) << enum_name << " should still exist!";
     // OptimizeEnumsPass seems to clear the flag on the class, and hangs various
     // helper methods on it. Verify that it looks untouched.

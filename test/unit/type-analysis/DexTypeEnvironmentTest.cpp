@@ -252,7 +252,7 @@ struct DexTypeEnvironmentTest : public RedexTest {
 
   TypeSet get_type_set(std::initializer_list<DexType*> l) {
     TypeSet s;
-    for (const auto elem : l) {
+    for (auto* const elem : l) {
       s.insert(const_cast<const DexType*>(elem));
     }
     return s;
@@ -316,9 +316,9 @@ struct DexTypeEnvironmentTest : public RedexTest {
 TEST_F(DexTypeEnvironmentTest, BasicTest) {
   auto env = DexTypeEnvironment();
   EXPECT_TRUE(env.is_top());
-  auto& reg_env = env.get_reg_environment();
+  const auto& reg_env = env.get_reg_environment();
   EXPECT_TRUE(reg_env.is_top());
-  auto& field_env = env.get_field_environment();
+  const auto& field_env = env.get_field_environment();
   EXPECT_TRUE(field_env.is_top());
 }
 

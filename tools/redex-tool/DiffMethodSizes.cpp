@@ -156,9 +156,10 @@ DexMethodInfoMap load_dex_method_info(const std::string& dir) {
     auto key = show(method);
     always_assert(result.find(key) == end(result));
     const auto* code = method->get_dex_code();
-    result.emplace(key,
-                   std::make_tuple((code ? code->size() : 0),
-                                   (code ? code->get_registers_size() : 0)));
+    result.emplace(
+        key,
+        std::make_tuple((code != nullptr ? code->size() : 0),
+                        (code != nullptr ? code->get_registers_size() : 0)));
   });
 
   return result;
@@ -179,7 +180,7 @@ DexMethodInfoMap load_dex_method_move_info(const std::string& dir) {
     const auto* code = method->get_dex_code();
     int num_moves = 0;
     int moves_size = 0;
-    if (code) {
+    if (code != nullptr) {
       for (const auto& insn : code->get_instructions()) {
         if (dex_opcode::is_move(insn->opcode())) {
           ++num_moves;

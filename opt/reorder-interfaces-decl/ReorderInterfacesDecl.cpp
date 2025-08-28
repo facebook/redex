@@ -75,16 +75,16 @@ void ReorderInterfacesDeclImpl::run() {
 void ReorderInterfacesDeclImpl::compute_call_frequencies(IRInstruction* insn) {
   // Process only call instructions
   if (opcode::is_an_invoke(insn->opcode())) {
-    auto callee = insn->get_method();
-    auto def_callee = resolve_method(callee, opcode_to_search(insn));
+    auto* callee = insn->get_method();
+    auto* def_callee = resolve_method(callee, opcode_to_search(insn));
     if (def_callee != nullptr) {
       callee = def_callee;
     }
-    if (callee) {
+    if (callee != nullptr) {
       // Get the class this method is in. It may be an Interface or a Class
-      const auto callee_cls_type = callee->get_class();
-      const auto callee_cls = type_class(callee_cls_type);
-      if (callee_cls) {
+      auto* const callee_cls_type = callee->get_class();
+      auto* const callee_cls = type_class(callee_cls_type);
+      if (callee_cls != nullptr) {
         // If we are calling into an Interface, count this call.
         if (is_interface(callee_cls)) {
           m_call_frequency_map[callee_cls_type]++;
@@ -104,7 +104,7 @@ DexTypeList* ReorderInterfacesDeclImpl::sort_interfaces(
   // Create list of interfaces and store frequencies
   std::vector<std::pair<DexType*, int>> list_with_frequencies;
   list_with_frequencies.reserve(unsorted_list->size());
-  for (auto interface : *unsorted_list) {
+  for (auto* interface : *unsorted_list) {
     list_with_frequencies.emplace_back(interface,
                                        m_call_frequency_map[interface]);
   }
@@ -141,7 +141,7 @@ void ReorderInterfacesDeclImpl::reorder_interfaces_for_class(DexClass* cls) {
   }
 
   // Let's sort the Interface list
-  auto updated_interface_list = sort_interfaces(cur_interface_list);
+  auto* updated_interface_list = sort_interfaces(cur_interface_list);
 
   // Now that we have the sorted list of Interfaces, write it back.
   cls->set_interfaces(updated_interface_list);
@@ -151,7 +151,7 @@ void ReorderInterfacesDeclImpl::reorder_interfaces_for_class(DexClass* cls) {
  * Reorders Interface list for all Classes in the Scope
  */
 void ReorderInterfacesDeclImpl::reorder_interfaces() {
-  for (auto cls : m_scope) {
+  for (auto* cls : m_scope) {
     reorder_interfaces_for_class(cls);
   }
 }

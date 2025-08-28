@@ -42,20 +42,20 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   always_assert(method != nullptr);
   always_assert(!(method->get_access() & ACC_STATIC));
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   auto& cfg = code->cfg();
   auto ii = InstructionIterable(cfg.get_param_instructions());
   always_assert(ii.begin() != ii.end());
-  auto this_insn = ii.begin()->insn;
+  auto* this_insn = ii.begin()->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto regs_size = cfg.get_registers_size();
-  auto this_cls = method->get_class();
+  auto* this_cls = method->get_class();
   const auto& blocks = cfg.blocks_reverse_post_deprecated();
   std::function<void(cfg::InstructionIterator, TaintedRegs*)> trans =
       [&](const cfg::InstructionIterator& it, TaintedRegs* tregs) {
         auto* insn = it->insn;
         if (insn == this_insn) {
-          tregs->m_reg_set[insn->dest()] = 1;
+          tregs->m_reg_set[insn->dest()] = true;
         } else {
           transfer_object_reach(this_cls, regs_size, insn, tregs->m_reg_set);
         }
@@ -71,10 +71,10 @@ bool this_arg_escapes(DexClass* cls, bool enable_buildee_constr_change) {
 
   bool result = false;
   for (DexMethod* m : cls->get_dmethods()) {
-    if (!m->get_code()) {
+    if (m->get_code() == nullptr) {
       continue;
     }
-    if (!(m->get_access() & ACC_STATIC) &&
+    if (((m->get_access() & ACC_STATIC) == 0u) &&
         this_arg_escapes(m, enable_buildee_constr_change)) {
       TRACE(BUILDERS,
             3,
@@ -84,7 +84,7 @@ bool this_arg_escapes(DexClass* cls, bool enable_buildee_constr_change) {
     }
   }
   for (DexMethod* m : cls->get_vmethods()) {
-    if (!m->get_code()) {
+    if (m->get_code() == nullptr) {
       continue;
     }
     if (this_arg_escapes(m, enable_buildee_constr_change)) {
@@ -141,7 +141,7 @@ UnorderedSet<DexClass*> get_trivial_builders(
     }
 
     DexType* buildee_type = get_buildee(builder_class->get_type());
-    if (!buildee_type) {
+    if (buildee_type == nullptr) {
       continue;
     }
 
@@ -170,12 +170,12 @@ UnorderedSet<DexClass*> get_builders_with_subclasses(Scope& classes) {
 
   for (const auto& cls : classes) {
     DexType* super_type = cls->get_super_class();
-    if (!super_type) {
+    if (super_type == nullptr) {
       continue;
     }
 
     DexClass* super_cls = type_class(super_type);
-    if (!super_cls) {
+    if (super_cls == nullptr) {
       continue;
     }
 
@@ -193,13 +193,13 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
   always_assert(m != nullptr);
 
   std::vector<DexType*> builders;
-  auto code = m->get_code();
-  if (!code) {
+  auto* code = m->get_code();
+  if (code == nullptr) {
     return builders;
   }
   auto& cfg = code->cfg();
   for (auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
       DexType* cls = insn->get_type();
       if (m_builders.find(cls) != m_builders.end()) {
@@ -217,7 +217,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
   always_assert(builder != nullptr);
   always_assert(method != nullptr);
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   auto& cfg = code->cfg();
   const auto& blocks = cfg.blocks_reverse_post_deprecated();
   auto regs_size = cfg.get_registers_size();
@@ -232,7 +232,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   // Initialize couters.
   b_counter = {0, 0, 0, 0};
 
-  auto obj_type = type::java_lang_Object();
+  auto* obj_type = type::java_lang_Object();
   auto scope = build_class_scope(stores);
   for (DexClass* cls : scope) {
     if (is_annotation(cls) || is_interface(cls) ||
@@ -307,8 +307,8 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   size_t vmethod_count = 0;
   size_t build_count = 0;
   for (DexType* builder : UnorderedIterable(no_escapes)) {
-    auto cls = type_class(builder);
-    auto buildee = get_buildee(builder);
+    auto* cls = type_class(builder);
+    auto* buildee = get_buildee(builder);
     dmethod_count += cls->get_dmethods().size();
     vmethod_count += cls->get_vmethods().size();
     for (DexMethod* m : cls->get_vmethods()) {

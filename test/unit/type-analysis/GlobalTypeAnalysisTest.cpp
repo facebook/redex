@@ -20,11 +20,11 @@ using namespace type_analyzer::global;
 struct GlobalTypeAnalysisTest : public RedexTest {
  public:
   GlobalTypeAnalysisTest() {
-    auto cls_o = DexType::make_type("LO;");
+    auto* cls_o = DexType::make_type("LO;");
     ClassCreator creator(cls_o);
     creator.set_super(type::java_lang_Object());
 
-    auto m_init = assembler::method_from_string(R"(
+    auto* m_init = assembler::method_from_string(R"(
       (method (public constructor) "LO;.<init>:()V"
        (
         (return-void)
@@ -56,11 +56,11 @@ TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
   Scope scope;
   prepare_scope(scope);
 
-  auto cls_a = DexType::make_type("LA;");
+  auto* cls_a = DexType::make_type("LA;");
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto meth_bar = assembler::method_from_string(R"(
+  auto* meth_bar = assembler::method_from_string(R"(
     (method (public static) "LA;.bar:(LO;)V"
      (
       (load-param-object v0)
@@ -70,7 +70,7 @@ TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
   )");
   creator.add_method(meth_bar);
 
-  auto meth_foo = assembler::method_from_string(R"(
+  auto* meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (new-instance "LO;")
@@ -92,7 +92,7 @@ TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
   gta.run(ArgumentTypePartition{
       {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
-  auto& graph = gta.get_call_graph();
+  const auto& graph = gta.get_call_graph();
 
   auto foo_arg_env =
       gta.get_entry_state_at(graph.node(meth_foo)).get(CURRENT_PARTITION_LABEL);
@@ -107,11 +107,11 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
   Scope scope;
   prepare_scope(scope);
 
-  auto cls_a = DexType::make_type("LA;");
+  auto* cls_a = DexType::make_type("LA;");
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto meth_bar = assembler::method_from_string(R"(
+  auto* meth_bar = assembler::method_from_string(R"(
     (method (public static) "LA;.bar:(LO;LO;)V"
      (
       (load-param-object v0)
@@ -122,7 +122,7 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
   )");
   creator.add_method(meth_bar);
 
-  auto meth_foo = assembler::method_from_string(R"(
+  auto* meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (const v0 0)
@@ -154,7 +154,7 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
   gta.run(ArgumentTypePartition{
       {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
-  auto& graph = gta.get_call_graph();
+  const auto& graph = gta.get_call_graph();
 
   auto foo_arg_env =
       gta.get_entry_state_at(graph.node(meth_foo)).get(CURRENT_PARTITION_LABEL);
@@ -173,11 +173,11 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
   Scope scope;
   prepare_scope(scope);
 
-  auto cls_a = DexType::make_type("LA;");
+  auto* cls_a = DexType::make_type("LA;");
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto meth_bar = assembler::method_from_string(R"(
+  auto* meth_bar = assembler::method_from_string(R"(
     (method (public static) "LA;.bar:()LO;"
      (
       (new-instance "LO;")
@@ -189,7 +189,7 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
   )");
   creator.add_method(meth_bar);
 
-  auto meth_foo = assembler::method_from_string(R"(
+  auto* meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (invoke-static () "LA;.bar:()LO;")
@@ -212,7 +212,7 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
   EXPECT_EQ(wps.get_return_type(meth_bar), get_type_domain("LO;"));
 
   auto lta = gta->get_replayable_local_analysis(meth_foo);
-  auto code = meth_foo->get_code();
+  auto* code = meth_foo->get_code();
   auto bar_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
   EXPECT_EQ(bar_exit_env.get_reg_environment().get(0), get_type_domain("LO;"));
 }
@@ -221,14 +221,14 @@ TEST_F(GlobalTypeAnalysisTest, SimpleFieldTypeTest) {
   Scope scope;
   prepare_scope(scope);
 
-  auto cls_a = DexType::make_type("LA;");
+  auto* cls_a = DexType::make_type("LA;");
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto field_1 = DexField::make_field("LA;.f1:LO;")->make_concrete(ACC_PUBLIC);
+  auto* field_1 = DexField::make_field("LA;.f1:LO;")->make_concrete(ACC_PUBLIC);
   creator.add_field(field_1);
 
-  auto meth_init = assembler::method_from_string(R"(
+  auto* meth_init = assembler::method_from_string(R"(
     (method (public constructor) "LA;.<init>:()V"
      (
       (load-param-object v1) ; 'this' argument
@@ -242,7 +242,7 @@ TEST_F(GlobalTypeAnalysisTest, SimpleFieldTypeTest) {
   )");
   creator.add_method(meth_init);
 
-  auto meth_bar = assembler::method_from_string(R"(
+  auto* meth_bar = assembler::method_from_string(R"(
     (method (public) "LA;.bar:()LO;"
      (
       (load-param-object v1) ; 'this' argument
@@ -254,7 +254,7 @@ TEST_F(GlobalTypeAnalysisTest, SimpleFieldTypeTest) {
   )");
   creator.add_method(meth_bar);
 
-  auto meth_foo = assembler::method_from_string(R"(
+  auto* meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (new-instance "LA;")
@@ -282,7 +282,7 @@ TEST_F(GlobalTypeAnalysisTest, SimpleFieldTypeTest) {
   EXPECT_EQ(wps.get_return_type(meth_bar),
             get_type_domain("LO;").join(DexTypeDomain::null()));
   auto lta = gta->get_replayable_local_analysis(meth_foo);
-  auto code = meth_foo->get_code();
+  auto* code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
   EXPECT_EQ(foo_exit_env.get_reg_environment().get(1),
             get_type_domain("LO;").join(DexTypeDomain::null()));
@@ -292,15 +292,15 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
   Scope scope;
   prepare_scope(scope);
 
-  auto cls_a = DexType::make_type("LA;");
+  auto* cls_a = DexType::make_type("LA;");
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto field_1 = DexField::make_field("LA;.f1:LO;")
-                     ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+  auto* field_1 = DexField::make_field("LA;.f1:LO;")
+                      ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
   creator.add_field(field_1);
 
-  auto meth_clinit = assembler::method_from_string(R"(
+  auto* meth_clinit = assembler::method_from_string(R"(
     (method (public static constructor) "LA;.<clinit>:()V"
      (
       (new-instance "LO;")
@@ -313,7 +313,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
   )");
   creator.add_method(meth_clinit);
 
-  auto meth_init = assembler::method_from_string(R"(
+  auto* meth_init = assembler::method_from_string(R"(
     (method (public constructor) "LA;.<init>:()V"
      (
       (load-param-object v1) ; 'this' argument
@@ -323,7 +323,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
   )");
   creator.add_method(meth_init);
 
-  auto meth_bar = assembler::method_from_string(R"(
+  auto* meth_bar = assembler::method_from_string(R"(
     (method (public) "LA;.bar:()LO;"
      (
       (load-param-object v1) ; 'this' argument
@@ -335,7 +335,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
   )");
   creator.add_method(meth_bar);
 
-  auto meth_foo = assembler::method_from_string(R"(
+  auto* meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (new-instance "LA;")
@@ -361,7 +361,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
   EXPECT_TRUE(wps.get_field_type(field_1).is_top());
   EXPECT_TRUE(wps.get_return_type(meth_bar).is_top());
   auto lta = gta->get_replayable_local_analysis(meth_foo);
-  auto code = meth_foo->get_code();
+  auto* code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
   EXPECT_TRUE(foo_exit_env.get_reg_environment().get(1).is_top());
 }
@@ -370,18 +370,18 @@ TEST_F(GlobalTypeAnalysisTest, StaticFieldWithEncodedValueTest) {
   Scope scope;
   prepare_scope(scope);
 
-  auto cls_a = DexType::make_type("LA;");
+  auto* cls_a = DexType::make_type("LA;");
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto field_1 =
+  auto* field_1 =
       DexField::make_field("LA;.f1:LO;")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
                           std::unique_ptr<DexEncodedValue>(
                               new DexEncodedValueBit(DEVT_NULL, false)));
   creator.add_field(field_1);
 
-  auto field_2 =
+  auto* field_2 =
       DexField::make_field("LA;.f2:Ljava/lang/String;")
           ->make_concrete(
               ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
@@ -389,7 +389,7 @@ TEST_F(GlobalTypeAnalysisTest, StaticFieldWithEncodedValueTest) {
                   new DexEncodedValueString(DexString::make_string("yoyo"))));
   creator.add_field(field_2);
 
-  auto field_3 =
+  auto* field_3 =
       DexField::make_field("LA;.f3:Ljava/lang/Class;")
           ->make_concrete(
               ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
@@ -398,7 +398,7 @@ TEST_F(GlobalTypeAnalysisTest, StaticFieldWithEncodedValueTest) {
   creator.add_field(field_3);
 
   // No clinit
-  auto meth_init = assembler::method_from_string(R"(
+  auto* meth_init = assembler::method_from_string(R"(
     (method (public constructor) "LA;.<init>:()V"
      (
       (load-param-object v1) ; 'this' argument
@@ -408,7 +408,7 @@ TEST_F(GlobalTypeAnalysisTest, StaticFieldWithEncodedValueTest) {
   )");
   creator.add_method(meth_init);
 
-  auto meth_bar = assembler::method_from_string(R"(
+  auto* meth_bar = assembler::method_from_string(R"(
     (method (public) "LA;.bar:()LO;"
      (
       (load-param-object v1) ; 'this' argument
@@ -420,7 +420,7 @@ TEST_F(GlobalTypeAnalysisTest, StaticFieldWithEncodedValueTest) {
   )");
   creator.add_method(meth_bar);
 
-  auto meth_baz = assembler::method_from_string(R"(
+  auto* meth_baz = assembler::method_from_string(R"(
     (method (public) "LA;.baz:()Ljava/lang/String;"
      (
       (load-param-object v1) ; 'this' argument
@@ -432,7 +432,7 @@ TEST_F(GlobalTypeAnalysisTest, StaticFieldWithEncodedValueTest) {
   )");
   creator.add_method(meth_baz);
 
-  auto meth_buk = assembler::method_from_string(R"(
+  auto* meth_buk = assembler::method_from_string(R"(
     (method (public) "LA;.buk:()Ljava/lang/Class;"
      (
       (load-param-object v1) ; 'this' argument
@@ -444,7 +444,7 @@ TEST_F(GlobalTypeAnalysisTest, StaticFieldWithEncodedValueTest) {
   )");
   creator.add_method(meth_buk);
 
-  auto meth_foo = assembler::method_from_string(R"(
+  auto* meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (new-instance "LA;")

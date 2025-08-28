@@ -104,7 +104,7 @@ bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
     ++it;
     always_assert(it != ii.end());
   } else if (opcode::is_an_invoke(it->insn->opcode())) {
-    if (invoke_insn) {
+    if (invoke_insn != nullptr) {
       *invoke_insn = it->insn;
     }
     ++it;
@@ -128,11 +128,11 @@ void never_inline(bool attach_annotations,
       DexAnnotationVisibility::DAV_BUILD));
 
   auto consider_callee = [&](DexMethod* callee) {
-    if (callee == nullptr || !callee->get_code()) {
+    if (callee == nullptr || (callee->get_code() == nullptr)) {
       return false;
     }
     auto* cls = type_class(callee->get_class());
-    if (!cls || cls->is_external()) {
+    if ((cls == nullptr) || cls->is_external()) {
       return false;
     }
     if (callee->is_virtual() && (!is_final(callee) && !is_final(cls))) {
@@ -153,10 +153,10 @@ void never_inline(bool attach_annotations,
         const auto& map = caller_it->second;
         auto map_it = map.find(invoke_insn);
         if (map_it != map.end()) {
-          auto receiver_type = map_it->second;
-          auto receiver_cls = type_class(receiver_type);
-          if (receiver_cls && !is_interface(receiver_cls)) {
-            auto invoke_method = invoke_insn->get_method();
+          const auto* receiver_type = map_it->second;
+          auto* receiver_cls = type_class(receiver_type);
+          if ((receiver_cls != nullptr) && !is_interface(receiver_cls)) {
+            auto* invoke_method = invoke_insn->get_method();
             callee = resolve_virtual(receiver_cls, invoke_method->get_name(),
                                      invoke_method->get_proto());
           }
@@ -254,7 +254,7 @@ void never_inline(bool attach_annotations,
         }
 
         DexMethod* callee = get_callee(caller, insn);
-        if (!callee) {
+        if (callee == nullptr) {
           continue;
         }
 
@@ -296,11 +296,11 @@ void never_inline(bool attach_annotations,
       return;
     }
 
-    if (!hot_cold_callees.count_unsafe(method)) {
+    if (hot_cold_callees.count_unsafe(method) == 0u) {
       return;
     }
 
-    if (hot_hot_callees.count(method)) {
+    if (hot_hot_callees.count(method) != 0u) {
       callees_too_hot.fetch_add(1);
       return;
     }
@@ -332,7 +332,7 @@ void never_inline(bool attach_annotations,
     if (!attach_annotations) {
       return;
     }
-    if (method->get_anno_set()) {
+    if (method->get_anno_set() != nullptr) {
       method->get_anno_set()->combine_with(anno_set);
       return;
     }
@@ -466,8 +466,8 @@ bool never_compile_string_lookup_method_matches(
   if (!never_compile_strings_lookup_methods) {
     return false;
   }
-  auto cls = type_class(method->get_class());
-  if (!cls || !cls->rstate.is_generated() ||
+  auto* cls = type_class(method->get_class());
+  if ((cls == nullptr) || !cls->rstate.is_generated() ||
       cls->get_perf_sensitive() != PerfSensitiveGroup::STRINGS_LOOKUP) {
     return false;
   }
@@ -524,7 +524,7 @@ void never_compile_impl(
       if (!method_stats) {
         continue;
       }
-      if (excluded_interaction_ids.count(interaction_id) &&
+      if ((excluded_interaction_ids.count(interaction_id) != 0u) &&
           method_stats->appear_percent >
               harvest_config.never_compile_excluded_appear100_threshold &&
           method_stats->call_count >
@@ -820,9 +820,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         }
 
         DexType* type = DexType::get_type(entry);
-        if (type) {
-          auto coldstart_class = type_class(type);
-          if (coldstart_class) {
+        if (type != nullptr) {
+          auto* coldstart_class = type_class(type);
+          if (coldstart_class != nullptr) {
             coldstart_classes.push_back(coldstart_class);
             baseline_profile.classes.insert(coldstart_class);
           }
@@ -841,11 +841,11 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   never_compile(scope, conf.get_baseline_profile_configs(), method_profiles,
                 mgr, baseline_profiles);
-  auto store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
-  if (store_fence_helper_type) {
+  auto* store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
+  if (store_fence_helper_type != nullptr) {
     // helper class existing means we materialized IOPCODE_WRITE_BARRIER
     // Add it in for it to be compiled.
-    auto store_fence_helper_cls = type_class(store_fence_helper_type);
+    auto* store_fence_helper_cls = type_class(store_fence_helper_type);
     always_assert(store_fence_helper_cls);
     add_class(store_fence_helper_cls);
   }
@@ -1032,8 +1032,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   mgr.incr_metric("method_refs_without_def", method_refs_without_def.size());
 
-  mgr.incr_metric("used_bzl_baseline_profile_config",
-                  conf.get_did_use_bzl_baseline_profile_config());
+  mgr.incr_metric(
+      "used_bzl_baseline_profile_config",
+      static_cast<int64_t>(conf.get_did_use_bzl_baseline_profile_config()));
 
   InsertOnlyConcurrentMap<DexMethod*, uint32_t> huge_methods;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {

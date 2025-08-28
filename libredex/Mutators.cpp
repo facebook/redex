@@ -14,8 +14,8 @@
 
 namespace {
 void drop_this(DexMethod* method) {
-  auto code = method->get_code();
-  if (!code) {
+  auto* code = method->get_code();
+  if (code == nullptr) {
     return;
   }
   cfg::ScopedCFG cfg(code);
@@ -29,7 +29,7 @@ void drop_this(DexMethod* method) {
   first_block_with_insns->remove_insn(this_insn);
 
   for (auto& mie : InstructionIterable(*cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->has_dest()) {
       auto dest = insn->dest();
       redex_assert(dest != this_reg);
@@ -63,12 +63,12 @@ void drop_this(DexMethod* method) {
 namespace mutators {
 
 void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
-  auto proto = method->get_proto();
-  auto cls_type = method->get_class();
+  auto* proto = method->get_proto();
+  auto* cls_type = method->get_class();
   if (keep == KeepThis::Yes) {
     // make `this` an explicit parameter
     auto* new_args = proto->get_args()->push_front(cls_type);
-    auto new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
+    auto* new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
     DexMethodSpec spec;
     spec.proto = new_proto;
     method->change(spec, true /* rename on collision */);
@@ -79,7 +79,7 @@ void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
 
   // changing the method proto means that we need to change its position in the
   // dmethod list
-  auto cls = type_class(cls_type);
+  auto* cls = type_class(cls_type);
   cls->remove_method(method);
   method->set_virtual(false);
   cls->add_method(method);
@@ -87,13 +87,13 @@ void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
 
 void make_non_static(DexMethod* method, bool make_virtual) {
   always_assert(method->get_access() & ACC_STATIC);
-  auto proto = method->get_proto();
+  auto* proto = method->get_proto();
   // Limitation: We can only deal with static methods that have a first
   // of the parameter class type.
-  auto cls_type = method->get_class();
+  auto* cls_type = method->get_class();
   always_assert(cls_type == proto->get_args()->at(0));
-  auto new_args = proto->get_args()->pop_front();
-  auto new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
+  auto* new_args = proto->get_args()->pop_front();
+  auto* new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
   DexMethodSpec spec;
   spec.proto = new_proto;
   method->change(spec, true /* rename on collision */);
@@ -102,7 +102,7 @@ void make_non_static(DexMethod* method, bool make_virtual) {
 
   // changing the method proto means that we need to change its position in the
   // dmethod list
-  auto cls = type_class(cls_type);
+  auto* cls = type_class(cls_type);
   cls->remove_method(method);
   if (make_virtual) {
     method->set_virtual(true);

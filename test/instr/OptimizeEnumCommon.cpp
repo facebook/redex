@@ -10,7 +10,7 @@
 #include "MatchFlow.h"
 
 std::set<BranchCase> collect_const_branch_cases(DexMethodRef* method_ref) {
-  auto method = static_cast<DexMethod*>(method_ref);
+  auto* method = static_cast<DexMethod*>(method_ref);
   method->balloon();
 
   auto* code = method->get_code();
@@ -49,7 +49,8 @@ std::set<BranchCase> collect_const_branch_cases(DexMethodRef* method_ref) {
   for (auto cmp_location : cmp_locations) {
     // The lookup value goes to src 0 for every cmp instruction
     // we are checking, except for the flipped cmp_if_src1 set.
-    const src_index_t value_src = cmp_location == cmp_if_src1;
+    const src_index_t value_src =
+        static_cast<const src_index_t>(cmp_location == cmp_if_src1);
 
     for (auto* insn_cmp : res.matching(cmp_location)) {
       auto cmp_it = cfg.find_insn(insn_cmp);
@@ -103,7 +104,7 @@ std::set<BranchCase> collect_const_branch_cases(DexMethodRef* method_ref) {
 
       // And then determine which comparisons are being made.
       if (cmp_location == cmp_switch) {
-        for (auto& succ : cmp_it.block()->succs()) {
+        for (const auto& succ : cmp_it.block()->succs()) {
           if (succ->case_key()) {
             branch_cases.insert({branch_source, *succ->case_key()});
           }

@@ -36,22 +36,22 @@ void test(const Scope& scope,
           DexType* declaring_type = nullptr,
           DexTypeList* args = DexTypeList::make_type_list({}),
           const UnorderedSet<const DexString*>& finalish_field_names = {}) {
-  [[maybe_unused]] auto field_a =
+  [[maybe_unused]] auto* field_a =
       DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
-  [[maybe_unused]] auto field_b =
+  [[maybe_unused]] auto* field_b =
       DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);
 
-  [[maybe_unused]] auto field_s =
+  [[maybe_unused]] auto* field_s =
       DexField::make_field("LFoo;.s:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  [[maybe_unused]] auto field_t =
+  [[maybe_unused]] auto* field_t =
       DexField::make_field("LFoo;.t:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  [[maybe_unused]] auto field_u =
+  [[maybe_unused]] auto* field_u =
       DexField::make_field("LFoo;.u:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  [[maybe_unused]] auto field_v =
+  [[maybe_unused]] auto* field_v =
       DexField::make_field("LFoo;.v:I")
           ->make_concrete(ACC_PUBLIC | ACC_VOLATILE);
 
@@ -69,7 +69,7 @@ void test(const Scope& scope,
       scope, /* create_init_class_insns */ false);
   method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
       [&](const DexType* type) {
-        return !init_classes_with_side_effects.refine(type);
+        return init_classes_with_side_effects.refine(type) == nullptr;
       };
   shared_state.init_scope(scope, clinit_has_no_side_effects);
   cse_impl::CommonSubexpressionElimination cse(&shared_state, code->cfg(),
@@ -87,14 +87,14 @@ void test(const Scope& scope,
 };
 
 TEST_F(CommonSubexpressionEliminationTest, simple) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (add-int v1 v0 v0)
       (add-int v2 v0 v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (add-int v1 v0 v0)
@@ -113,13 +113,13 @@ TEST_F(CommonSubexpressionEliminationTest, pre_values) {
   // By not initializing v0, it will start out as 'top', and a pre-value will
   // be used internally to recover from that situation and still unify the
   // add-int instructions.
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (add-int v1 v0 v0)
       (add-int v2 v0 v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (add-int v1 v0 v0)
       (move v3 v1)
@@ -131,7 +131,7 @@ TEST_F(CommonSubexpressionEliminationTest, pre_values) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, mix) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 1)
       (const v1 2)
@@ -141,7 +141,7 @@ TEST_F(CommonSubexpressionEliminationTest, mix) {
       (add-int v5 v1 v1)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 1)
       (const v1 2)
@@ -159,7 +159,7 @@ TEST_F(CommonSubexpressionEliminationTest, mix) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, many) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (add-int v1 v0 v0)
@@ -167,7 +167,7 @@ TEST_F(CommonSubexpressionEliminationTest, many) {
       (add-int v3 v0 v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (add-int v1 v0 v0)
@@ -182,7 +182,7 @@ TEST_F(CommonSubexpressionEliminationTest, many) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, registers_dont_matter) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -190,7 +190,7 @@ TEST_F(CommonSubexpressionEliminationTest, registers_dont_matter) {
       (add-int v3 v1 v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -204,7 +204,7 @@ TEST_F(CommonSubexpressionEliminationTest, registers_dont_matter) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, commutative) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (const v1 1)
@@ -212,7 +212,7 @@ TEST_F(CommonSubexpressionEliminationTest, commutative) {
       (add-int v3 v1 v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (const v1 1)
@@ -226,14 +226,14 @@ TEST_F(CommonSubexpressionEliminationTest, commutative) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wide) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const-wide v0 0)
       (add-long v2 v0 v0)
       (add-long v4 v0 v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const-wide v0 0)
       (add-long v2 v0 v0)
@@ -246,7 +246,7 @@ TEST_F(CommonSubexpressionEliminationTest, wide) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, object) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const-string "hello")
       (move-result-pseudo-object v0)
@@ -254,7 +254,7 @@ TEST_F(CommonSubexpressionEliminationTest, object) {
       (move-result-pseudo-object v1)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const-string "hello")
       (move-result-pseudo-object v0)
@@ -268,7 +268,7 @@ TEST_F(CommonSubexpressionEliminationTest, object) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iget) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -277,7 +277,7 @@ TEST_F(CommonSubexpressionEliminationTest, iget) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -292,7 +292,7 @@ TEST_F(CommonSubexpressionEliminationTest, iget) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iget_volatile) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.v:I")
@@ -301,12 +301,12 @@ TEST_F(CommonSubexpressionEliminationTest, iget_volatile) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, affected_by_barrier) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -316,12 +316,12 @@ TEST_F(CommonSubexpressionEliminationTest, affected_by_barrier) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -331,7 +331,7 @@ TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -351,7 +351,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("Ljava/util/ArrayList;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = static_cast<DexMethod*>(
+  auto* method = static_cast<DexMethod*>(
       DexMethod::make_method("Ljava/util/ArrayList;.<init>:()V"));
   method->set_access(ACC_PUBLIC);
   method->set_external();
@@ -366,7 +366,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   // method->set_code(assembler::ircode_from_string("((return-void))"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -379,7 +379,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v3)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -401,7 +401,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
   // at a barrier, the mappings have been reset, but afterwards cse kicks in as
   // expected
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -413,7 +413,7 @@ TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
       (move-result-pseudo v3)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -431,7 +431,7 @@ TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const-string "hello")
       (move-result-pseudo-object v0)
@@ -440,7 +440,7 @@ TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
       (move-result-pseudo-object v1)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const-string "hello")
       (move-result-pseudo-object v0)
@@ -455,7 +455,7 @@ TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, top_move_tracking) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (move-object v1 v0)
       (iget v0 "LFoo;.a:I")
@@ -464,7 +464,7 @@ TEST_F(CommonSubexpressionEliminationTest, top_move_tracking) {
       (move-result-pseudo v3)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (move-object v1 v0)
       (iget v0 "LFoo;.a:I")
@@ -483,12 +483,12 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest0;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTest0;.test0:()V")
-                    ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto* method = DexMethod::make_method("LTest0;.test0:()V")
+                     ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -498,7 +498,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -525,8 +525,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator base_creator(DexType::make_type("LTestBase;"));
   base_creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTestBase;.m:()V")
-                    ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto* method = DexMethod::make_method("LTestBase;.m:()V")
+                     ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   base_creator.add_method(method);
   DexClass* base_class = base_creator.create();
@@ -542,7 +542,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   derived_creator.add_method(method);
   DexClass* derived_class = derived_creator.create();
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -552,7 +552,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -579,8 +579,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator base_creator(DexType::make_type("LTestBase;"));
   base_creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTestBase;.m:()V")
-                    ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto* method = DexMethod::make_method("LTestBase;.m:()V")
+                     ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   base_creator.add_method(method);
   DexClass* base_class = base_creator.create();
@@ -603,7 +603,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   derived_creator.add_method(method);
   DexClass* derived_class = derived_creator.create();
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -613,7 +613,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
 
   test(Scope{type_class(type::java_lang_Object()), base_class, derived_class},
        code_str,
@@ -626,12 +626,12 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest1;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTest1;.test1:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LTest1;.test1:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -641,7 +641,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -664,8 +664,8 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LA;.m:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LA;.m:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
      (
        (const v0 0)
@@ -686,7 +686,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
   method->set_code(assembler::ircode_from_string("((return-void))"));
   b_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -696,7 +696,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -718,8 +718,8 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LA;.m:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LA;.m:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
      (
        (const v0 0)
@@ -757,7 +757,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
   method->set_code(assembler::ircode_from_string("((return-void))"));
   c_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -767,7 +767,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -789,8 +789,8 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LA;.m:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LA;.m:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
      (
        (const v0 0)
@@ -818,7 +818,7 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
   )"));
   b_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -828,7 +828,7 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
 
   test(Scope{type_class(type::java_lang_Object()), a_creator.create(),
              b_creator.create()},
@@ -840,8 +840,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest2;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTest2;.test2:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LTest2;.test2:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -852,7 +852,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -862,7 +862,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
 
   test(Scope{type_class(type::java_lang_Object()), creator.create()},
        code_str,
@@ -875,8 +875,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest3;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTest3;.test3:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LTest3;.test3:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -886,7 +886,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget "LFoo;.s:I")
       (move-result-pseudo v0)
@@ -895,7 +895,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v1)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
 
   test(Scope{type_class(type::java_lang_Object()), creator.create()},
        code_str,
@@ -908,8 +908,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest4;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTest4;.test4:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LTest4;.test4:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -921,7 +921,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -932,7 +932,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v3)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
 
   test(Scope{type_class(type::java_lang_Object()), creator.create()},
        code_str,
@@ -945,8 +945,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest2;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTest2;.test2:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LTest2;.test2:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -957,7 +957,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -967,7 +967,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -991,8 +991,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest5;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTest5;.test5:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LTest5;.test5:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1002,7 +1002,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget "LFoo;.t:I")
       (move-result-pseudo v0)
@@ -1011,7 +1011,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v1)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (sget "LFoo;.t:I")
       (move-result-pseudo v0)
@@ -1034,8 +1034,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest6;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTest6;.test6:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LTest6;.test6:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1047,7 +1047,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -1058,7 +1058,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v3)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -1079,7 +1079,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iget_unrelated_iput) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -1089,7 +1089,7 @@ TEST_F(CommonSubexpressionEliminationTest, iget_unrelated_iput) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -1105,7 +1105,7 @@ TEST_F(CommonSubexpressionEliminationTest, iget_unrelated_iput) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, aget_unrelated_aput) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (aget v0 v1)
       (move-result-pseudo v2)
@@ -1114,7 +1114,7 @@ TEST_F(CommonSubexpressionEliminationTest, aget_unrelated_aput) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (aget v0 v1)
       (move-result-pseudo v2)
@@ -1128,7 +1128,7 @@ TEST_F(CommonSubexpressionEliminationTest, aget_unrelated_aput) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, aget_related_aput) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (aget v0 v1)
       (move-result-pseudo v2)
@@ -1137,12 +1137,12 @@ TEST_F(CommonSubexpressionEliminationTest, aget_related_aput) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, aput_related_aget) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -1152,7 +1152,7 @@ TEST_F(CommonSubexpressionEliminationTest, aput_related_aget) {
       (move-result-pseudo v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -1171,7 +1171,7 @@ TEST_F(CommonSubexpressionEliminationTest, aput_object_related_aget_object) {
   // We don't forward aput-object values to aget-object. (In general, a
   // check-cast instruction needs to get introduced, but that isn't implemented
   // yet.)
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -1185,7 +1185,7 @@ TEST_F(CommonSubexpressionEliminationTest, aput_object_related_aget_object) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -1194,7 +1194,7 @@ TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
       (move-result-pseudo v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -1209,7 +1209,7 @@ TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, sput_related_sget) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (sput v0 "LFoo;.s:I")
@@ -1217,7 +1217,7 @@ TEST_F(CommonSubexpressionEliminationTest, sput_related_sget) {
       (move-result-pseudo v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (sput v0 "LFoo;.s:I")
@@ -1231,7 +1231,7 @@ TEST_F(CommonSubexpressionEliminationTest, sput_related_sget) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, sput_related_sget_with_barrier) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (sput v0 "LFoo;.s:I")
@@ -1240,12 +1240,12 @@ TEST_F(CommonSubexpressionEliminationTest, sput_related_sget_with_barrier) {
       (move-result-pseudo v0)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, volatile_iput_related_iget) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (const v1 0)
@@ -1254,14 +1254,14 @@ TEST_F(CommonSubexpressionEliminationTest, volatile_iput_related_iget) {
       (move-result-pseudo v0)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, simple_with_put) {
   // The initial sget is there just so that CSE actually tracks the sput as a
   // potentially interesting operation
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget "LFoo;.s:I")
       (move-result-pseudo v2)
@@ -1271,7 +1271,7 @@ TEST_F(CommonSubexpressionEliminationTest, simple_with_put) {
       (add-int v1 v0 v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (sget "LFoo;.s:I")
       (move-result-pseudo v2)
@@ -1287,7 +1287,7 @@ TEST_F(CommonSubexpressionEliminationTest, simple_with_put) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const-wide v0 3)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
@@ -1298,7 +1298,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap) {
     )
   )";
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const-wide v0 3)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
@@ -1313,7 +1313,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_1) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const-wide v0 3)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
@@ -1324,7 +1324,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_1) {
     )
   )";
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const-wide v0 3)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
@@ -1341,7 +1341,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_1) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_2) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const-wide v0 3)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
@@ -1358,7 +1358,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_2) {
     )
   )";
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const-wide v0 3)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
@@ -1380,7 +1380,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_2) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_3) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const-wide v0 3)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
@@ -1397,7 +1397,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_3) {
     )
   )";
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const-wide v0 3)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
@@ -1420,7 +1420,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_3) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_4) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iput-object v0 v3 "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;")
@@ -1433,7 +1433,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_4) {
     )
   )";
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iput-object v0 v3 "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;")
@@ -1450,7 +1450,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_4) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_5) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iput-object v0 v3 "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;")
@@ -1463,7 +1463,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_5) {
     )
   )";
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iput-object v0 v3 "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;")
@@ -1480,7 +1480,7 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_5) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, unwrap_and_wrap) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const-wide v2 0)
       (invoke-virtual (v2) "Ljava/lang/Boolean;.booleanValue:()Z")
@@ -1491,7 +1491,7 @@ TEST_F(CommonSubexpressionEliminationTest, unwrap_and_wrap) {
     )
   )";
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const-wide v2 0)
       (invoke-virtual (v2) "Ljava/lang/Boolean;.booleanValue:()Z")
@@ -1506,7 +1506,7 @@ TEST_F(CommonSubexpressionEliminationTest, unwrap_and_wrap) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, array_length) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (new-array v0 "[I")
@@ -1516,7 +1516,7 @@ TEST_F(CommonSubexpressionEliminationTest, array_length) {
       (return v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (move v1 v0)
@@ -1533,7 +1533,7 @@ TEST_F(CommonSubexpressionEliminationTest, array_length) {
 
 TEST_F(CommonSubexpressionEliminationTest, cmp) {
   // See T46241704. We do not want to deduplicate cmp instructions.
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const-wide v0 0)
       (const-wide v2 0)
@@ -1541,12 +1541,12 @@ TEST_F(CommonSubexpressionEliminationTest, cmp) {
       (cmp-long v5 v0 v2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, pure_methods) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (invoke-static (v0) "Ljava/lang/Math;.abs:(I)I")
@@ -1555,7 +1555,7 @@ TEST_F(CommonSubexpressionEliminationTest, pure_methods) {
       (move-result v1)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (invoke-static (v0) "Ljava/lang/Math;.abs:(I)I")
@@ -1575,11 +1575,11 @@ TEST_F(CommonSubexpressionEliminationTest, conditionally_pure_methods) {
   ClassCreator o_creator(DexType::make_type("LO;"));
   o_creator.set_super(type::java_lang_Object());
 
-  [[maybe_unused]] auto field_x =
+  [[maybe_unused]] auto* field_x =
       DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
 
-  auto get_method = DexMethod::make_method("LO;.getX:()I")
-                        ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto* get_method = DexMethod::make_method("LO;.getX:()I")
+                         ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   get_method->set_code(assembler::ircode_from_string(R"(
     (
       (iget v2 "LO;.x:I")
@@ -1588,7 +1588,7 @@ TEST_F(CommonSubexpressionEliminationTest, conditionally_pure_methods) {
   )"));
   o_creator.add_method(get_method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (invoke-virtual (v0) "LO;.getX:()I")
@@ -1597,7 +1597,7 @@ TEST_F(CommonSubexpressionEliminationTest, conditionally_pure_methods) {
       (move-result v1)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (invoke-virtual (v0) "LO;.getX:()I")
@@ -1622,11 +1622,11 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator o_creator(DexType::make_type("LO;"));
   o_creator.set_super(type::java_lang_Object());
 
-  [[maybe_unused]] auto field_x =
+  [[maybe_unused]] auto* field_x =
       DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
 
-  auto get_method = DexMethod::make_method("LO;.getX:()I")
-                        ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto* get_method = DexMethod::make_method("LO;.getX:()I")
+                         ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   get_method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -1637,8 +1637,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   )"));
   o_creator.add_method(get_method);
   // set_method exists so that it cannot be inferred that x is finalizable
-  auto set_method = DexMethod::make_method("LO;.setX:(I)V")
-                        ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto* set_method = DexMethod::make_method("LO;.setX:(I)V")
+                         ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   set_method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -1649,7 +1649,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )"));
   o_creator.add_method(set_method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (invoke-virtual (v0) "LO;.getX:()I")
@@ -1659,7 +1659,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result v1)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object()), o_creator.create()},
        code_str,
        expected_str,
@@ -1676,11 +1676,11 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator base_creator(DexType::make_type("LBase;"));
   base_creator.set_super(type::java_lang_Object());
 
-  [[maybe_unused]] auto field_x =
+  [[maybe_unused]] auto* field_x =
       DexField::make_field("LBase;.x:I")->make_concrete(ACC_PRIVATE);
 
-  auto get_method = DexMethod::make_method("LBase;.getX:()I")
-                        ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto* get_method = DexMethod::make_method("LBase;.getX:()I")
+                         ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   get_method->set_code(assembler::ircode_from_string(R"(
     (
       (iget v2 "LBase;.x:I")
@@ -1711,7 +1711,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   derived_creator.add_method(get_method);
   DexClass* derived_class = derived_creator.create();
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (invoke-virtual (v0) "LBase;.getX:()I")
@@ -1720,7 +1720,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result v1)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object()), base_class, derived_class},
        code_str,
        expected_str,
@@ -1731,7 +1731,7 @@ TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.set_super(type::java_lang_Object());
 
-  auto method = static_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
+  auto* method = static_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
      (
@@ -1740,7 +1740,7 @@ TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
    )"));
   a_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -1750,7 +1750,7 @@ TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LFoo;.a:I")
@@ -1772,8 +1772,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest7;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = DexMethod::make_method("LTest7;.test7:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LTest7;.test7:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1785,7 +1785,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )"));
   creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget "LFoo;.u:I")
       (move-result-pseudo v0)
@@ -1798,7 +1798,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v1)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (sget "LFoo;.u:I")
       (move-result-pseudo v0)
@@ -1827,7 +1827,7 @@ TEST_F(CommonSubexpressionEliminationTest, tracked_final_field_within_clinit) {
   DexField::make_field("LBar;.x:I")
       ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget "LBar;.x:I")
       (move-result-pseudo v0)
@@ -1836,7 +1836,7 @@ TEST_F(CommonSubexpressionEliminationTest, tracked_final_field_within_clinit) {
       (move-result-pseudo v0)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   bool is_static = true;
   bool is_init_or_clinit = true;
   DexType* declaring_type = bar_creator.create()->get_type();
@@ -1852,7 +1852,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   DexField::make_field("LBar;.x:I")
       ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget "LBar;.x:I")
       (move-result-pseudo v0)
@@ -1861,7 +1861,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (sget "LBar;.x:I")
       (move-result-pseudo v0)
@@ -1885,7 +1885,7 @@ TEST_F(CommonSubexpressionEliminationTest, tracked_final_field_within_init) {
 
   DexField::make_field("LBar;.x:I")->make_concrete(ACC_PUBLIC | ACC_FINAL);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param-object v0)
       (iget v0 "LBar;.x:I")
@@ -1895,7 +1895,7 @@ TEST_F(CommonSubexpressionEliminationTest, tracked_final_field_within_init) {
       (move-result-pseudo v1)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   bool is_static = false;
   bool is_init_or_clinit = true;
   DexType* declaring_type = bar_creator.create()->get_type();
@@ -1909,7 +1909,7 @@ TEST_F(CommonSubexpressionEliminationTest, untracked_final_field_outside_init) {
 
   DexField::make_field("LBar;.x:I")->make_concrete(ACC_PUBLIC | ACC_FINAL);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param-object v0)
       (iget v0 "LBar;.x:I")
@@ -1919,7 +1919,7 @@ TEST_F(CommonSubexpressionEliminationTest, untracked_final_field_outside_init) {
       (move-result-pseudo v1)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param-object v0)
       (iget v0 "LBar;.x:I")
@@ -1939,7 +1939,7 @@ TEST_F(CommonSubexpressionEliminationTest, untracked_final_field_outside_init) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, phi_node) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (const v1 1)
@@ -1954,7 +1954,7 @@ TEST_F(CommonSubexpressionEliminationTest, phi_node) {
       (goto :L2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (const v1 1)
@@ -1976,7 +1976,7 @@ TEST_F(CommonSubexpressionEliminationTest, phi_node) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, no_phi_node) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (const v1 1)
@@ -1991,12 +1991,12 @@ TEST_F(CommonSubexpressionEliminationTest, no_phi_node) {
       (goto :L2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, phi_node_sget) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (if-eqz v0 :L1)
@@ -2012,7 +2012,7 @@ TEST_F(CommonSubexpressionEliminationTest, phi_node_sget) {
       (goto :L2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (if-eqz v0 :L1)
@@ -2035,7 +2035,7 @@ TEST_F(CommonSubexpressionEliminationTest, phi_node_sget) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, phi_node_sget_memory_barrier) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (if-eqz v0 :L1)
@@ -2052,12 +2052,12 @@ TEST_F(CommonSubexpressionEliminationTest, phi_node_sget_memory_barrier) {
       (goto :L2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, phi_node_sput_sget_forwarding) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2072,7 +2072,7 @@ TEST_F(CommonSubexpressionEliminationTest, phi_node_sput_sget_forwarding) {
       (goto :L2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2094,7 +2094,7 @@ TEST_F(CommonSubexpressionEliminationTest, phi_node_sput_sget_forwarding) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, phi_node_sput_sget_forwarding_try) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2114,13 +2114,13 @@ TEST_F(CommonSubexpressionEliminationTest, phi_node_sput_sget_forwarding_try) {
       (goto :L2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
        phi_node_sput_sget_forwarding_memory_barrier) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2136,7 +2136,7 @@ TEST_F(CommonSubexpressionEliminationTest,
       (goto :L2)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
@@ -2144,10 +2144,10 @@ TEST_F(CommonSubexpressionEliminationTest, untracked_finalish_field) {
   ClassCreator bar_creator(DexType::make_type("LBar;"));
   bar_creator.set_super(type::java_lang_Object());
 
-  auto finalish_field =
+  auto* finalish_field =
       DexField::make_field("LBar;.x:I")->make_concrete(ACC_PUBLIC);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param-object v0)
       (iget v0 "LBar;.x:I")
@@ -2157,7 +2157,7 @@ TEST_F(CommonSubexpressionEliminationTest, untracked_finalish_field) {
       (move-result-pseudo v1)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param-object v0)
       (iget v0 "LBar;.x:I")
@@ -2171,9 +2171,9 @@ TEST_F(CommonSubexpressionEliminationTest, untracked_finalish_field) {
   )";
   bool is_static = false;
   bool is_init_or_clinit = false;
-  auto declaring_type = bar_creator.create()->get_type();
-  auto args = DexTypeList::make_type_list({});
-  auto finalish_field_name = finalish_field->get_name();
+  auto* declaring_type = bar_creator.create()->get_type();
+  auto* args = DexTypeList::make_type_list({});
+  const auto* finalish_field_name = finalish_field->get_name();
   test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
        code_str, expected_str, 1, is_static, is_init_or_clinit, declaring_type,
        args, {finalish_field_name});
@@ -2185,10 +2185,10 @@ TEST_F(CommonSubexpressionEliminationTest, finalizable) {
   o_creator.set_super(type::java_lang_Object());
 
   // CSE will infer that x is finalizable
-  [[maybe_unused]] auto field_x =
+  [[maybe_unused]] auto* field_x =
       DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
 
-  auto init_method =
+  auto* init_method =
       DexMethod::make_method("LO;.<init>:()V")
           ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false /* is_virtual */);
   init_method->set_code(assembler::ircode_from_string(R"(
@@ -2202,7 +2202,7 @@ TEST_F(CommonSubexpressionEliminationTest, finalizable) {
   )"));
   o_creator.add_method(init_method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (iget v0 "LO;.x:I")
@@ -2212,7 +2212,7 @@ TEST_F(CommonSubexpressionEliminationTest, finalizable) {
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (iget v0 "LO;.x:I")
@@ -2231,7 +2231,7 @@ TEST_F(CommonSubexpressionEliminationTest, finalizable) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, const_regression) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param-object v3)
       (const v0 0)
@@ -2244,7 +2244,7 @@ TEST_F(CommonSubexpressionEliminationTest, const_regression) {
       (return v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param-object v3)
       (const v0 0)
@@ -2264,7 +2264,7 @@ TEST_F(CommonSubexpressionEliminationTest, const_regression) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, if_lt) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2280,7 +2280,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_lt) {
       (return v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2296,7 +2296,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_lt) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, if_ltz) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (const v1 0)
@@ -2312,7 +2312,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_ltz) {
       (return v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (const v1 0)
@@ -2328,7 +2328,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_ltz) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, if_eq_commutative) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2344,7 +2344,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_eq_commutative) {
       (return v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2360,7 +2360,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_eq_commutative) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, if_lt_negation) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2376,7 +2376,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_lt_negation) {
       (return v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2392,7 +2392,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_lt_negation) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, if_ne) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (if-eq v0 v0 :L1)
@@ -2403,7 +2403,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_ne) {
       (return v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (const v0 2)
@@ -2415,7 +2415,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_ne) {
 
 TEST_F(CommonSubexpressionEliminationTest, if_lt_after_join) {
   // When control-flow joints from two paths, we lose the branch conditions.
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -2429,14 +2429,14 @@ TEST_F(CommonSubexpressionEliminationTest, if_lt_after_join) {
       (return v0)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, if_lt_memory) {
   // When branch condition involve memory locations that get written to, we
   // cannot eliminate branches.
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param-object v1)
@@ -2458,7 +2458,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_lt_memory) {
       (return v0)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (load-param v0)
       (load-param-object v1)

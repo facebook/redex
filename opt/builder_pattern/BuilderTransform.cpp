@@ -46,8 +46,8 @@ UnorderedSet<IRInstruction*> BuilderTransform::try_inline_calls(
   auto* code = caller->get_code();
   auto& cfg = code->cfg();
   for (const auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
-    if (insns.count(insn)) {
+    auto* insn = mie.insn;
+    if (insns.count(insn) != 0u) {
       not_inlined_insns.emplace(insn);
     }
   }
@@ -60,7 +60,7 @@ UnorderedSet<IRInstruction*> BuilderTransform::try_inline_calls(
  * constructors of the super type. If any of them fails, return false.
  */
 bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
 
   std::vector<DexMethod*> methods = cls->get_dmethods();
   const std::vector<DexMethod*>& vmethods = cls->get_vmethods();
@@ -72,18 +72,18 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
                                        super_ctors_list.end());
 
   for (DexMethod* method : methods) {
-    if (!method->get_code()) {
+    if (method->get_code() == nullptr) {
       continue;
     }
     auto& cfg = method->get_code()->cfg();
     UnorderedSet<IRInstruction*> inlinable_insns;
     for (const auto& mie : InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
         inlinable_insns.emplace(insn);
       } else if (opcode::is_invoke_direct(insn->opcode())) {
-        auto callee = resolve_method(insn->get_method(), MethodSearch::Direct);
-        if (super_ctors.count(callee)) {
+        auto* callee = resolve_method(insn->get_method(), MethodSearch::Direct);
+        if (super_ctors.count(callee) != 0u) {
           inlinable_insns.emplace(insn);
         }
       }
@@ -117,20 +117,20 @@ void BuilderTransform::update_virtual_calls(
     const UnorderedMap<IRInstruction*, DexType*>& insn_to_type) {
 
   for (const auto& pair : UnorderedIterable(insn_to_type)) {
-    auto insn = pair.first;
-    auto current_instance = pair.second;
+    auto* insn = pair.first;
+    auto* current_instance = pair.second;
 
     if (opcode::is_invoke_virtual(insn->opcode())) {
-      auto method = resolve_method(insn->get_method(), MethodSearch::Virtual);
-      if (!method) {
+      auto* method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+      if (method == nullptr) {
         continue;
       }
 
       if (method->get_class() == m_root) {
         // replace it with the actual implementation if any provided.
-        auto virtual_scope = m_type_system.find_virtual_scope(method);
+        const auto* virtual_scope = m_type_system.find_virtual_scope(method);
         for (const auto& v_pair : virtual_scope->methods) {
-          auto m = v_pair.first;
+          auto* m = v_pair.first;
           if (m->get_class() == current_instance && m->is_def()) {
             TRACE(BLD_PATTERN, 3,
                   "Replace virtual method %s with the current implementation "
@@ -152,7 +152,7 @@ void initialize_regs(
     cfg::ControlFlowGraph& cfg) {
 
   for (const auto& pair : field_to_reg) {
-    auto field = pair.first;
+    auto* field = pair.first;
     auto reg = pair.second;
 
     IRInstruction* initialization_insn = nullptr;
@@ -175,7 +175,7 @@ void initialize_regs(
 
 void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
                                       DexMethod* method) {
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   std::vector<std::pair<cfg::InstructionIterator, IRInstruction*>> to_replace;
 
@@ -183,8 +183,8 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
   auto& cfg = code->cfg();
 
   for (const auto& mie : InstructionIterable(cfg)) {
-    auto instantiation_insn = mie.insn;
-    if (!usage.count(instantiation_insn)) {
+    auto* instantiation_insn = mie.insn;
+    if (usage.count(instantiation_insn) == 0u) {
       continue;
     }
 
@@ -203,7 +203,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
 
       if (opcode::is_an_iput(insn->opcode()) ||
           opcode::is_an_iget(insn->opcode())) {
-        auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
+        auto* field = resolve_field(insn->get_field(), FieldSearch::Instance);
         always_assert(field);
 
         if (field_to_reg.count(field) == 0) {
@@ -244,7 +244,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
                               insn->opcode() == OPCODE_CHECK_CAST,
                           "Different insn %s", SHOW(insn));
         if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
-          auto invoked =
+          auto* invoked =
               resolve_method(insn->get_method(), MethodSearch::Direct);
 
           // We only accept `Object.<init>()` here, since we can't inline it
@@ -275,8 +275,8 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
 
 void BuilderTransform::cleanup() {
   for (const auto& pair : UnorderedIterable(m_method_copy)) {
-    auto method = pair.first;
-    auto copy = pair.second;
+    auto* method = pair.first;
+    auto* copy = pair.second;
 
     TRACE(BLD_PATTERN,
           8,

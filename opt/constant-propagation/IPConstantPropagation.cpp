@@ -90,7 +90,7 @@ class AnalyzerGenerator {
       const WholeProgramState& wps,
       ArgumentDomain args) {
     always_assert(method->get_code() != nullptr);
-    auto& code = *method->get_code();
+    const auto& code = *method->get_code();
     // Currently, our callgraph does not include calls to non-devirtualizable
     // virtual methods. So those methods may appear unreachable despite being
     // reachable.
@@ -109,8 +109,8 @@ class AnalyzerGenerator {
     TRACE(ICONSTP, 5, "%s", SHOW(code.cfg()));
 
     auto wps_accessor = std::make_unique<WholeProgramStateAccessor>(wps);
-    auto wps_accessor_ptr = wps_accessor.get();
-    auto immut_analyzer_state =
+    auto* wps_accessor_ptr = wps_accessor.get();
+    auto* immut_analyzer_state =
         const_cast<ImmutableAttributeAnalyzerState*>(m_immut_analyzer_state);
     return std::make_unique<IntraproceduralAnalysis>(
         &m_cp_state, std::move(wps_accessor), code.cfg(),
@@ -202,13 +202,13 @@ void PassImpl::compute_analysis_stats(
     const WholeProgramState& wps,
     const UnorderedSet<const DexField*>& definitely_assigned_ifields) {
   if (!wps.get_field_partition().is_top()) {
-    for (auto& pair : wps.get_field_partition().bindings()) {
-      auto* field = pair.first;
-      auto& value = pair.second;
+    for (const auto& pair : wps.get_field_partition().bindings()) {
+      const auto* field = pair.first;
+      const auto& value = pair.second;
       if (value.is_top() || !is_useful(field->get_type(), value)) {
         continue;
       }
-      if (definitely_assigned_ifields.count(field)) {
+      if (definitely_assigned_ifields.count(field) != 0u) {
         ++m_stats.constant_definitely_assigned_ifields;
         TRACE(ICONSTP, 4, "definitely assigned field partition for %s: %s",
               SHOW(field), SHOW(value));
@@ -220,9 +220,9 @@ void PassImpl::compute_analysis_stats(
     }
   }
   if (!wps.get_method_partition().is_top()) {
-    for (auto& pair : wps.get_method_partition().bindings()) {
-      auto* method = pair.first;
-      auto& value = pair.second;
+    for (const auto& pair : wps.get_method_partition().bindings()) {
+      const auto* method = pair.first;
+      const auto& value = pair.second;
       if (value.is_top() ||
           !is_useful(method->get_proto()->get_rtype(), value)) {
         continue;
@@ -331,7 +331,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
         RuntimeAssertTransform::Config(config.get_proguard_map());
   }
 
-  auto& options = mgr.get_redex_options();
+  const auto& options = mgr.get_redex_options();
   run(stores, options.min_sdk, options.package_name);
 
   ScopedMetrics sm(mgr);

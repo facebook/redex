@@ -346,7 +346,7 @@ void load_code_item(uint8_t* const code_item,
 
   uint32_t tries = code->tries_size;
   const uint16_t* cdata = reinterpret_cast<const uint16_t*>(dex_code_item_end);
-  if (code->insns_size) {
+  if (code->insns_size != 0u) {
     const uint16_t* const end = cdata + code->insns_size;
     while (cdata < end) {
       make_instruction(&cdata, quick_data, dex, file_ptr, out_buffer);
@@ -357,7 +357,7 @@ void load_code_item(uint8_t* const code_item,
      * implemented not according to spec.  Just FYI in case
      * something weird happens in the future.
      */
-    if (code->insns_size & 1 && tries) {
+    if (((code->insns_size & 1) != 0u) && (tries != 0u)) {
       cdata++;
     }
   }
@@ -561,7 +561,7 @@ void process_code_item(const uint8_t* code_item, InsnWalkerFn walker) {
          code->outs_size);
 #endif
   const uint16_t* cdata = reinterpret_cast<const uint16_t*>(dex_code_item_end);
-  if (code->insns_size) {
+  if (code->insns_size != 0u) {
     const uint16_t* const end = cdata + code->insns_size;
     while (cdata < end) {
       process_instruction(&cdata, walker);
@@ -613,7 +613,7 @@ void quicken_dex(const char* location,
   printf("Success: mmap() of file '%s'\n", location);
 #endif
 
-  auto dh = reinterpret_cast<const dex_header*>(map->begin());
+  const auto* dh = reinterpret_cast<const dex_header*>(map->begin());
   auto class_defs_off = dh->class_defs_off;
   std::unordered_map<uint32_t, uint32_t> class_data_offset;
   std::unordered_map<uint32_t, uint32_t> code_item_offset;
@@ -653,7 +653,7 @@ void quicken_dex(const char* location,
           canary_name = std::move(class_name);
         }
 
-        if (cdef->class_data_offset) {
+        if (cdef->class_data_offset != 0u) {
           load_class_data_item(map->begin() + cdef->class_data_offset,
                                code_item_offset);
         }
@@ -727,7 +727,7 @@ void stream::stream_dex(const uint8_t* begin,
                         const size_t size,
                         InsnWalkerFn insn_walker,
                         CodeItemWalkerFn code_item_walker) {
-  auto dh = reinterpret_cast<const dex_header*>(begin);
+  const auto* dh = reinterpret_cast<const dex_header*>(begin);
   auto class_defs_off = dh->class_defs_off;
   std::unordered_map<uint32_t, uint32_t> code_item_offset;
   {

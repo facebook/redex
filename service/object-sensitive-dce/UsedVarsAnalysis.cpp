@@ -84,7 +84,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
       if (!pointers.is_value()) {
         continue;
       }
-      for (auto pointer : pointers.elements()) {
+      for (const auto* pointer : pointers.elements()) {
         if (ptrs::may_alloc(pointer->opcode())) {
           used_vars->add(pointer);
         }
@@ -104,7 +104,7 @@ bool FixpointIterator::is_used_or_escaping_write(const ptrs::Environment& env,
   if (!pointers.is_value()) {
     return true;
   }
-  for (auto pointer : pointers.elements()) {
+  for (const auto* pointer : pointers.elements()) {
     if (pointer->opcode() == IOPCODE_LOAD_PARAM_OBJECT ||
         used_vars.contains(pointer) || env.may_have_escaped(pointer)) {
       return true;
@@ -179,7 +179,7 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_VIRTUAL: {
-    auto method = resolve_invoke_method(insn, m_method);
+    auto* method = resolve_invoke_method(insn, m_method);
     const auto& env = m_insn_env_map.at(insn);
     if (method != nullptr) {
       if (method::is_init(method)) {
@@ -191,13 +191,13 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
         return used_vars.contains(RESULT_REGISTER);
       }
     }
-    if (!m_invoke_to_summary_map.count(insn)) {
+    if (m_invoke_to_summary_map.count(insn) == 0u) {
       return true;
     }
     // A call is required if it has a side-effect, if its return value is used,
     // or if it mutates an argument that may later be read somewhere up the
     // callstack.
-    auto& summary = m_invoke_to_summary_map.at(insn);
+    const auto& summary = m_invoke_to_summary_map.at(insn);
     if (summary.effects != side_effects::EFF_NONE ||
         used_vars.contains(RESULT_REGISTER)) {
       return true;

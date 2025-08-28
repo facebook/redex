@@ -27,7 +27,7 @@ class PeepholeTest : public RedexTest {
     ClassCreator creator(DexType::make_type(class_name));
     creator.set_super(type::java_lang_Object());
     auto signature = class_name + ".foo:()V";
-    auto method = DexMethod::make_method(signature)->make_concrete(
+    auto* method = DexMethod::make_method(signature)->make_concrete(
         ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(assembler::ircode_from_string(code));
     creator.add_method(method);
@@ -79,7 +79,7 @@ std::atomic<size_t> PeepholeTest::count_{0};
 class PeepholeStringBuilderTest : public PeepholeTest {};
 
 TEST_F(PeepholeStringBuilderTest, ReduceEmptyInitMoveResultSame) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (new-instance "Ljava/lang/StringBuilder;")
       (move-result-pseudo-object v0)
@@ -91,7 +91,7 @@ TEST_F(PeepholeStringBuilderTest, ReduceEmptyInitMoveResultSame) {
       (return-void)
      )
     )";
-  auto expected_code = R"(
+  const auto* expected_code = R"(
      (
       (new-instance "Ljava/lang/StringBuilder;")
       (move-result-pseudo-object v0)
@@ -105,7 +105,7 @@ TEST_F(PeepholeStringBuilderTest, ReduceEmptyInitMoveResultSame) {
 }
 
 TEST_F(PeepholeStringBuilderTest, ReduceEmptyInitNoMoveResult) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (new-instance "Ljava/lang/StringBuilder;")
       (move-result-pseudo-object v0)
@@ -116,7 +116,7 @@ TEST_F(PeepholeStringBuilderTest, ReduceEmptyInitNoMoveResult) {
       (return-void)
      )
     )";
-  auto expected_code = R"(
+  const auto* expected_code = R"(
      (
       (new-instance "Ljava/lang/StringBuilder;")
       (move-result-pseudo-object v0)
@@ -130,7 +130,7 @@ TEST_F(PeepholeStringBuilderTest, ReduceEmptyInitNoMoveResult) {
 }
 
 TEST_F(PeepholeStringBuilderTest, ReduceEmptyInitMoveResultOther) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (new-instance "Ljava/lang/StringBuilder;")
       (move-result-pseudo-object v0)
@@ -142,7 +142,7 @@ TEST_F(PeepholeStringBuilderTest, ReduceEmptyInitMoveResultOther) {
       (return-void)
      )
     )";
-  auto expected_code = R"(
+  const auto* expected_code = R"(
      (
       (new-instance "Ljava/lang/StringBuilder;")
       (move-result-pseudo-object v0)
@@ -159,7 +159,7 @@ TEST_F(PeepholeStringBuilderTest, ReduceEmptyInitMoveResultOther) {
 class PeepholeNPETest : public PeepholeTest {};
 
 TEST_F(PeepholeNPETest, ThrowNPEEmpty) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (new-instance "Ljava/lang/NullPointerException;")
       (move-result-pseudo-object v0)
@@ -167,7 +167,7 @@ TEST_F(PeepholeNPETest, ThrowNPEEmpty) {
       (throw v0)
      )
     )";
-  auto expected_code = R"(
+  const auto* expected_code = R"(
      (
       (const v0 0)
       (throw v0)
@@ -177,7 +177,7 @@ TEST_F(PeepholeNPETest, ThrowNPEEmpty) {
 }
 
 TEST_F(PeepholeNPETest, ThrowNPENotEmpty) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (const-string "Test")
       (move-result-pseudo-object v1)
@@ -191,7 +191,7 @@ TEST_F(PeepholeNPETest, ThrowNPENotEmpty) {
 }
 
 TEST_F(PeepholeNPETest, ThrowNonNPEVerifiable) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (new-instance "Ljava/lang/IllegalArgumentException;")
       (move-result-pseudo-object v0)
@@ -205,7 +205,7 @@ TEST_F(PeepholeNPETest, ThrowNonNPEVerifiable) {
 }
 
 TEST_F(PeepholeNPETest, ThrowNonNPENotVerifiable) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (new-instance "Ljava/lang/IllegalArgumentException;")
       (move-result-pseudo-object v0)
@@ -219,7 +219,7 @@ TEST_F(PeepholeNPETest, ThrowNonNPENotVerifiable) {
 }
 
 TEST_F(PeepholeNPETest, ThrowNPEBasicBlock) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (const v1 0)
       (if-eqz v1 :other_exception)
@@ -237,7 +237,7 @@ TEST_F(PeepholeNPETest, ThrowNPEBasicBlock) {
       (throw v0)
      )
     )";
-  auto original_code_reordered = R"(
+  const auto* original_code_reordered = R"(
      (
       (const v1 0)
       (if-eqz v1 :other_exception)

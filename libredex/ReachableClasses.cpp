@@ -90,7 +90,7 @@ void blocklist_field(DexMethod* reflecting_method,
   };
   DexItemIter<DexField*, decltype(yield)>::iterate(cls, yield);
   if (!declared) {
-    auto super_cls = cls->get_super_class();
+    auto* super_cls = cls->get_super_class();
     if (super_cls != nullptr) {
       blocklist_field(reflecting_method, super_cls, name, declared);
     }
@@ -121,7 +121,7 @@ void blocklist_method(DexMethod* reflecting_method,
   };
   DexItemIter<DexMethod*, decltype(yield)>::iterate(cls, yield);
   if (!declared) {
-    auto super_cls = cls->get_super_class();
+    auto* super_cls = cls->get_super_class();
     if (super_cls != nullptr) {
       blocklist_method(reflecting_method, super_cls, name, params, declared);
     }
@@ -141,12 +141,12 @@ void analyze_reflection(const Scope& scope) {
     REF_UPDATER,
   };
 
-  const auto JAVA_LANG_CLASS = "Ljava/lang/Class;";
-  const auto ATOMIC_INT_FIELD_UPDATER =
+  const auto* const JAVA_LANG_CLASS = "Ljava/lang/Class;";
+  const auto* const ATOMIC_INT_FIELD_UPDATER =
       "Ljava/util/concurrent/atomic/AtomicIntegerFieldUpdater;";
-  const auto ATOMIC_LONG_FIELD_UPDATER =
+  const auto* const ATOMIC_LONG_FIELD_UPDATER =
       "Ljava/util/concurrent/atomic/AtomicLongFieldUpdater;";
-  const auto ATOMIC_REF_FIELD_UPDATER =
+  const auto* const ATOMIC_REF_FIELD_UPDATER =
       "Ljava/util/concurrent/atomic/AtomicReferenceFieldUpdater;";
 
   const UnorderedMap<std::string_view,
@@ -238,7 +238,7 @@ void analyze_reflection(const Scope& scope) {
       }
 
       // Deal with methods that take a varying number of arguments.
-      auto arg_str_value = dex_string_lookup(*analysis, refl_type, insn);
+      const auto* arg_str_value = dex_string_lookup(*analysis, refl_type, insn);
       if (arg_str_value == nullptr) {
         continue;
       }
@@ -306,7 +306,7 @@ void mark_reachable_by_classname(DexClass* dclass) {
 }
 
 void mark_reachable_by_native(const DexType* dtype) {
-  auto dclass = type_class_internal(dtype);
+  auto* dclass = type_class_internal(dtype);
   if (dclass == nullptr) {
     return;
   }
@@ -329,7 +329,7 @@ void mark_reachable_by_string(DexMethod* method) {
   if (method == nullptr) {
     return;
   }
-  if (auto cls = type_class_internal(method->get_class())) {
+  if (auto* cls = type_class_internal(method->get_class())) {
     cls->rstate.referenced_by_string();
   }
 }
@@ -346,10 +346,10 @@ void mark_reachable_by_classname(DexType* dtype) {
 bool matches_onclick_method(
     const DexMethod* dmethod,
     const UnorderedSet<std::string_view>& names_to_keep) {
-  auto prototype = dmethod->get_proto();
-  auto args_list = prototype->get_args();
+  auto* prototype = dmethod->get_proto();
+  auto* args_list = prototype->get_args();
   if (args_list->size() == 1) {
-    auto first_type = args_list->at(0);
+    auto* first_type = args_list->at(0);
     if (first_type->str() == "Landroid/view/View;") {
       return names_to_keep.count(dmethod->str()) > 0;
     }
@@ -371,14 +371,14 @@ void mark_onclick_attributes_reachable(
   if (onclick_attribute_values.empty()) {
     return;
   }
-  auto type_context = DexType::get_type("Landroid/content/Context;");
+  auto* type_context = DexType::get_type("Landroid/content/Context;");
   always_assert(type_context != nullptr);
 
   auto class_hierarchy = build_type_hierarchy(scope);
   auto children = get_all_children(class_hierarchy, type_context);
 
   for (const auto& t : children) {
-    auto dclass = type_class(t);
+    auto* dclass = type_class(t);
     if (dclass->is_external()) {
       continue;
     }
@@ -394,11 +394,11 @@ void mark_onclick_attributes_reachable(
 }
 
 DexClass* maybe_class_from_string(const std::string& classname) {
-  auto dtype = DexType::get_type(classname);
+  auto* dtype = DexType::get_type(classname);
   if (dtype == nullptr) {
     return nullptr;
   }
-  auto dclass = type_class(dtype);
+  auto* dclass = type_class(dtype);
   if (dclass == nullptr) {
     return nullptr;
   }
@@ -406,7 +406,7 @@ DexClass* maybe_class_from_string(const std::string& classname) {
 }
 
 void mark_manifest_root(const std::string& classname) {
-  auto dclass = maybe_class_from_string(classname);
+  auto* dclass = maybe_class_from_string(classname);
   if (dclass == nullptr) {
     TRACE(PGR, 3, "Dangling reference from manifest: %s", classname.c_str());
     return;
@@ -481,12 +481,12 @@ void analyze_reachable_from_manifest(
     case ComponentTag::ActivityAlias: {
       if (tag_info.is_exported == BooleanXMLAttribute::True ||
           tag_info.has_intent_filters ||
-          !prune_unexported_components.count(tag_info.tag)) {
+          (prune_unexported_components.count(tag_info.tag) == 0u)) {
         mark_manifest_root(tag_info.classname);
       } else {
         TRACE(PGR, 3, "%s not exported", tag_info.classname.c_str());
-        auto dclass = maybe_class_from_string(tag_info.classname);
-        if (dclass) {
+        auto* dclass = maybe_class_from_string(tag_info.classname);
+        if (dclass != nullptr) {
           dclass->rstate.set_keepnames();
         }
       }
@@ -511,7 +511,7 @@ void analyze_reachable_from_manifest(
 
 void mark_reachable_by_xml(const std::string& external_classname) {
   auto classname = java_names::external_to_internal(external_classname);
-  auto dclass = maybe_class_from_string(classname);
+  auto* dclass = maybe_class_from_string(classname);
   if (dclass == nullptr) {
     return;
   }
@@ -565,9 +565,9 @@ void analyze_reachable_from_xml_layouts(const Scope& scope,
 void initialize_reachable_for_json_serde(
     const Scope& scope, const std::vector<std::string>& supercls_names) {
   UnorderedSet<const DexType*> serde_superclses;
-  for (auto& cls_name : supercls_names) {
+  for (const auto& cls_name : supercls_names) {
     const DexType* supercls = DexType::get_type(cls_name);
-    if (supercls) {
+    if (supercls != nullptr) {
       serde_superclses.emplace(supercls);
     }
   }
@@ -575,8 +575,8 @@ void initialize_reachable_for_json_serde(
     return;
   }
   ClassHierarchy ch = build_type_hierarchy(scope);
-  for (auto* serde_supercls : UnorderedIterable(serde_superclses)) {
-    for (auto* child : get_all_children(ch, serde_supercls)) {
+  for (const auto* serde_supercls : UnorderedIterable(serde_superclses)) {
+    for (const auto* child : get_all_children(ch, serde_supercls)) {
       type_class(child)->rstate.set_is_serde();
     }
   }
@@ -593,7 +593,7 @@ bool in_reflected_pkg(DexClass* dclass,
     return false;
   }
 
-  if (reflected_pkg_classes.count(dclass)) {
+  if (reflected_pkg_classes.count(dclass) != 0u) {
     return true;
   }
   return in_reflected_pkg(type_class_internal(dclass->get_super_class()),
@@ -606,23 +606,23 @@ bool in_reflected_pkg(DexClass* dclass,
  */
 void analyze_serializable(const Scope& scope) {
   DexType* serializable = DexType::get_type("Ljava/io/Serializable;");
-  if (!serializable) {
+  if (serializable == nullptr) {
     return;
   }
   TypeSet children;
   get_all_implementors(scope, serializable, children);
 
-  for (auto* child : children) {
+  for (const auto* child : children) {
     DexClass* child_cls = type_class(child);
     DexType* child_super_type = child_cls->get_super_class();
     DexClass* child_supercls = type_class(child_super_type);
-    if (!child_supercls || child_supercls->is_external()) {
+    if ((child_supercls == nullptr) || child_supercls->is_external()) {
       continue;
     }
     // We should keep the no argument constructors of the superclasses of
     // any Serializable class, if they are themselves not Serializable.
-    if (!children.count(child_super_type)) {
-      for (auto meth : child_supercls->get_dmethods()) {
+    if (children.count(child_super_type) == 0u) {
+      for (auto* meth : child_supercls->get_dmethods()) {
         if (method::is_init(meth) && meth->get_proto()->get_args()->empty()) {
           TRACE(PGR, 3, "serializable super class: no-arg ctor %s", SHOW(meth));
           meth->rstate.set_root(keep_reason::SERIALIZABLE);
@@ -639,7 +639,7 @@ void analyze_serializable(const Scope& scope) {
 } // namespace
 
 void mark_meta_inf_root(const std::string& classname) {
-  auto dclass = maybe_class_from_string(classname);
+  auto* dclass = maybe_class_from_string(classname);
   if (dclass == nullptr) {
     TRACE(PGR, 3, "Dangling reference from META-INF: %s", classname.c_str());
     return;
@@ -684,7 +684,7 @@ void init_reachable_classes(const Scope& scope,
       // Classnames present in native libraries (lib/*/*.so)
       auto native_classes = resources->get_native_classes();
       for (const std::string& classname : UnorderedIterable(native_classes)) {
-        auto type = DexType::get_type(classname);
+        auto* type = DexType::get_type(classname);
         if (type == nullptr) {
           continue;
         }
@@ -712,7 +712,7 @@ void init_reachable_classes(const Scope& scope,
     Timer t{"Analyzing reflection"};
     analyze_reflection(scope);
     UnorderedSet<DexClass*> reflected_package_classes;
-    for (auto clazz : scope) {
+    for (auto* clazz : scope) {
       const auto name = clazz->get_type()->get_name()->str();
       for (const auto& pkg : config.reflected_package_names) {
         if (boost::starts_with(name, pkg)) {
@@ -721,7 +721,7 @@ void init_reachable_classes(const Scope& scope,
         }
       }
     }
-    for (auto clazz : scope) {
+    for (auto* clazz : scope) {
       if (in_reflected_pkg(clazz, reflected_package_classes)) {
         reflected_package_classes.insert(clazz);
         /* Note:

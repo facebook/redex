@@ -220,8 +220,9 @@ class value_to_instruction_visitor final
     if (!cst) {
       return {};
     }
-    auto type = const_cast<DexType*>(*cst);
-    if (!m_xstores || m_xstores->illegal_ref(m_declaring_type, type)) {
+    auto* type = const_cast<DexType*>(*cst);
+    if ((m_xstores == nullptr) ||
+        m_xstores->illegal_ref(m_declaring_type, type)) {
       return {};
     }
     IRInstruction* insn = new IRInstruction(OPCODE_CONST_CLASS);

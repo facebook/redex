@@ -222,7 +222,7 @@ void obfuscate(Scope& scope,
 
       direct_method_name_gen.bind_names();
       auto next_ctr = direct_method_name_gen.next_ctr();
-      if (next_ctr) {
+      if (next_ctr != 0) {
         next_dmethod_seeds.emplace(cls, direct_method_name_gen.next_ctr());
       }
     }

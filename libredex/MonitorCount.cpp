@@ -18,18 +18,18 @@
 namespace {
 
 bool has_catch(const cfg::ControlFlowGraph& cfg, const cfg::Block* block) {
-  return !!cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW);
+  return !(cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW) == nullptr);
 }
 
 bool has_catch_all(const cfg::ControlFlowGraph& cfg, const cfg::Block* block) {
-  return !!cfg.get_succ_edge_if(block, [](const auto* edge) {
+  return !(cfg.get_succ_edge_if(block, [](const auto* edge) {
     return edge->type() == cfg::EDGE_THROW &&
            edge->throw_info()->catch_type == nullptr;
-  });
+  }) == nullptr);
 }
 
 bool has_try(const cfg::ControlFlowGraph& cfg) {
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     if (has_catch(cfg, block)) {
       return true;
     }
@@ -38,7 +38,7 @@ bool has_try(const cfg::ControlFlowGraph& cfg) {
 }
 
 bool has_try_without_catch_all(const cfg::ControlFlowGraph& cfg) {
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     if (has_catch(cfg, block) && !has_catch_all(cfg, block)) {
       return true;
     }
@@ -48,11 +48,11 @@ bool has_try_without_catch_all(const cfg::ControlFlowGraph& cfg) {
 
 static bool is_invoke_insn_in_try(const cfg::ControlFlowGraph& cfg,
                                   const IRInstruction* invoke_insn) {
-  if (invoke_insn) {
+  if (invoke_insn != nullptr) {
     auto it = cfg.find_insn(const_cast<IRInstruction*>(invoke_insn));
     return !it.is_end() && has_catch(cfg, it.block());
   }
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     if (!has_catch(cfg, block)) {
       continue;
     }
@@ -68,14 +68,14 @@ static bool is_invoke_insn_in_try(const cfg::ControlFlowGraph& cfg,
 static bool contains_invoke_insn(
     const std::vector<cfg::InstructionIterator>& insns,
     const IRInstruction* invoke_insn) {
-  if (invoke_insn) {
-    for (auto& it : insns) {
+  if (invoke_insn != nullptr) {
+    for (const auto& it : insns) {
       if (it->insn == invoke_insn) {
         return true;
       }
     }
   } else {
-    for (auto& it : insns) {
+    for (const auto& it : insns) {
       if (opcode::is_an_invoke(it->insn->opcode())) {
         return true;
       }
@@ -96,7 +96,7 @@ std::vector<cfg::Block*> Analyzer::get_monitor_mismatches() {
       continue;
     }
     if (count.is_top() &&
-        !m_cfg.get_pred_edge_of_type(block, cfg::EDGE_GHOST)) {
+        (m_cfg.get_pred_edge_of_type(block, cfg::EDGE_GHOST) == nullptr)) {
       blocks.push_back(block);
     }
   }
@@ -119,7 +119,7 @@ std::vector<cfg::InstructionIterator> Analyzer::get_sketchy_instructions() {
     }
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); it++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       analyze_instruction(insn, &count);
 
       auto op = insn->opcode();
@@ -147,7 +147,7 @@ MonitorCountDomain Analyzer::analyze_edge(
   always_assert(last_insn_it != edge->src()->end());
 
   // undo counter change in case of failure (throw-edge)
-  auto insn = last_insn_it->insn;
+  auto* insn = last_insn_it->insn;
   auto op = insn->opcode();
   switch (op) {
   case OPCODE_MONITOR_ENTER:
@@ -162,8 +162,8 @@ MonitorCountDomain Analyzer::analyze_edge(
     // We have observed that the Kotlin compiler injects invocations to a
     // certain marker in a way that causes imbalanced monitor stack. We choose
     // to ignore that here.
-    auto method = insn->get_method()->as_def();
-    if (method) {
+    auto* method = insn->get_method()->as_def();
+    if (method != nullptr) {
       const auto& name = method->get_fully_deobfuscated_name();
       if (name == "Lkotlin/jvm/internal/InlineMarker;.finallyStart:(I)V") {
         return MonitorCountDomain::bottom();

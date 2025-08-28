@@ -17,8 +17,8 @@ inline void verify_exception_handlers_kept(const DexClasses& classes) {
   const char* const IMPLEMENTATION_NAME =
       "Lkotlinx/coroutines/android/AndroidExceptionPreHandler;";
 
-  auto iface = find_class_named(classes, INTERFACE_NAME);
+  auto* iface = find_class_named(classes, INTERFACE_NAME);
   EXPECT_NE(iface, nullptr) << "Did not find class " << INTERFACE_NAME;
-  auto cls = find_class_named(classes, IMPLEMENTATION_NAME);
+  auto* cls = find_class_named(classes, IMPLEMENTATION_NAME);
   EXPECT_NE(cls, nullptr) << "Did not find class " << IMPLEMENTATION_NAME;
 }

@@ -58,7 +58,7 @@ std::ostream& print_type_hierarchy(std::ostream& out, const DexType* type) {
   };
 
   for (; type != nullptr; ++indent) {
-    auto klass = type_class(type);
+    auto* klass = type_class(type);
     if (klass == nullptr) {
       print_indent();
       out << vshow(type) << " (no class)\n";
@@ -73,7 +73,7 @@ std::ostream& print_type_hierarchy(std::ostream& out, const DexType* type) {
     if (klass->get_interfaces() != nullptr &&
         !klass->get_interfaces()->empty()) {
       out << " (implements";
-      for (auto& intf : *klass->get_interfaces()) {
+      for (const auto& intf : *klass->get_interfaces()) {
         out << " ";
         out << vshow(intf);
       }
@@ -131,18 +131,18 @@ bool check_cast_helper(const DexType* from, const DexType* to) {
   }
   // If we have any external types (aside from Object and the other well known
   // types), allow them.
-  auto from_cls = type_class(from);
-  auto to_cls = type_class(to);
-  if (!from_cls || !to_cls) {
+  auto* from_cls = type_class(from);
+  auto* to_cls = type_class(to);
+  if ((from_cls == nullptr) || (to_cls == nullptr)) {
     return true;
   }
   // Assume the type hierarchies of the well known external types are stable
   // across Android versions. When their class definitions present, perform the
   // regular type inheritance check.
   if ((from_cls->is_external() &&
-       !g_redex->pointers_cache().m_well_known_types.count(from)) ||
+       (g_redex->pointers_cache().m_well_known_types.count(from) == 0u)) ||
       (to_cls->is_external() &&
-       !g_redex->pointers_cache().m_well_known_types.count(to))) {
+       (g_redex->pointers_cache().m_well_known_types.count(to) == 0u))) {
     return true;
   }
   return type::check_cast(from, to);
@@ -179,14 +179,14 @@ bool check_is_assignable_from(const DexType* from,
     if (type::get_array_level(from) != type::get_array_level(to)) {
       return false;
     }
-    auto efrom = type::get_array_element_type(from);
-    auto eto = type::get_array_element_type(to);
+    auto* efrom = type::get_array_element_type(from);
+    auto* eto = type::get_array_element_type(to);
     return check_cast_helper(efrom, eto);
   }
   if (!strict) {
     // If `to` is an interface, allow any assignment when non-strict.
     // This behavior is copied from AOSP.
-    auto to_cls = type_class(to);
+    auto* to_cls = type_class(to);
     if (to_cls != nullptr && is_interface(to_cls)) {
       return true;
     }
@@ -424,7 +424,8 @@ Result check_load_params(const DexMethod* method) {
   }
 
   size_t expected_load_params_cnt =
-      method->get_proto()->get_args()->size() + !is_static_method;
+      method->get_proto()->get_args()->size() +
+      static_cast<unsigned long>(!is_static_method);
   if (load_insns_cnt != expected_load_params_cnt) {
     return Result::make_error(
         "Number of existing load-param instructions (" + show(load_insns_cnt) +
@@ -439,7 +440,7 @@ Result check_load_params(const DexMethod* method) {
 // missing calls resulting in use of uninitialized variables. We correctly track
 // variables in a "big block", the most common form of allocation+init.
 Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
-  auto code = (const_cast<DexMethod*>(method))->get_code();
+  auto* code = (const_cast<DexMethod*>(method))->get_code();
   always_assert(code->cfg_built());
   auto& cfg = code->cfg();
 
@@ -447,7 +448,7 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
   auto ordered_blocks = cfg.order();
 
   for (cfg::Block* block : ordered_blocks) {
-    if (block_visited.count(block->id())) {
+    if (block_visited.count(block->id()) != 0u) {
       continue;
     }
     auto big_block = big_blocks::get_big_block(block);
@@ -455,7 +456,7 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
       continue;
     }
     // Find a big block starting from current block.
-    for (auto b : big_block->get_blocks()) {
+    for (auto* b : big_block->get_blocks()) {
       block_visited.emplace(b->id());
     }
     UnorderedMap<reg_t, IRInstruction*> uninitialized_regs;
@@ -468,8 +469,8 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
       }
     };
 
-    auto current_block = big_block->get_first_block();
-    while (current_block) {
+    auto* current_block = big_block->get_first_block();
+    while (current_block != nullptr) {
       auto ii = InstructionIterable(current_block);
       for (auto it = ii.begin(); it != ii.end(); it++) {
         auto* insn = it->insn;
@@ -591,7 +592,7 @@ Result check_structure(const DexMethod* method,
                        bool relaxed_init_check) {
   check_no_overwrite_this &= !is_static(method);
   IRInstruction* this_insn = nullptr;
-  auto entry_block = cfg.entry_block();
+  auto* entry_block = cfg.entry_block();
   for (cfg::Block* block : cfg.blocks()) {
     bool has_seen_non_load_param_opcode{false};
     auto ii = InstructionIterable(block);
@@ -675,21 +676,21 @@ Result check_positions_cfg(cfg::ControlFlowGraph& cfg) {
     if (it->type != MFLOW_POSITION) {
       continue;
     }
-    auto pos = it->pos.get();
+    auto* pos = it->pos.get();
     if (!positions.insert(pos).second) {
       return Result::make_error("Duplicate position " + show(pos));
     }
   }
 
   UnorderedSet<DexPosition*> visited_parents;
-  for (auto pos : UnorderedIterable(positions)) {
-    if (!pos->parent) {
+  for (auto* pos : UnorderedIterable(positions)) {
+    if (pos->parent == nullptr) {
       continue;
     }
-    if (!positions.count(pos->parent)) {
+    if (positions.count(pos->parent) == 0u) {
       return Result::make_error("Missing parent " + show(pos));
     }
-    for (auto p = pos; p; p = p->parent) {
+    for (auto* p = pos; p != nullptr; p = p->parent) {
       if (!visited_parents.insert(p).second) {
         return Result::make_error("Cyclic parents around " + show(pos));
       }
@@ -706,16 +707,16 @@ Result check_positions_cfg(cfg::ControlFlowGraph& cfg) {
  *   a catch-all.
  */
 Result check_monitors(const DexMethod* method) {
-  auto code = method->get_code();
+  const auto* code = method->get_code();
   monitor_count::Analyzer monitor_analyzer(code->cfg());
   auto blocks = monitor_analyzer.get_monitor_mismatches();
   if (!blocks.empty()) {
     std::ostringstream out;
     out << "Monitor-stack mismatch (unverifiable code) in "
         << method->get_deobfuscated_name_or_empty() << " at blocks ";
-    for (auto b : blocks) {
+    for (auto* b : blocks) {
       out << "(";
-      for (auto e : b->preds()) {
+      for (auto* e : b->preds()) {
         auto count = monitor_analyzer.get_exit_state_at(e->src());
         count = monitor_analyzer.analyze_edge(e, count);
         if (!count.is_bottom()) {
@@ -744,7 +745,7 @@ Result check_monitors(const DexMethod* method) {
         << method->get_deobfuscated_name_or_empty();
     bool first = true;
     for (auto& it : sketchy_insns) {
-      if (!sketchy_blocks.count(it.block())) {
+      if (sketchy_blocks.count(it.block()) == 0u) {
         continue;
       }
       if (first) {
@@ -862,8 +863,8 @@ void validate_invoke_super(const DexMethod* caller,
     throw TypeCheckingException(out.str());
   }
 
-  auto callee_cls = type_class(callee->get_class());
-  if (!callee_cls || !is_interface(callee_cls)) {
+  auto* callee_cls = type_class(callee->get_class());
+  if ((callee_cls == nullptr) || !is_interface(callee_cls)) {
     return;
   }
 
@@ -927,8 +928,8 @@ void validate_invoke_virtual(const DexMethod* caller,
 
   if (callee->as_def()->is_virtual()) {
     // Make sure the callee is not known to be an interface.
-    auto callee_type = callee->as_def()->get_class();
-    auto callee_cls = type_class(callee_type);
+    auto* callee_type = callee->as_def()->get_class();
+    auto* callee_cls = type_class(callee_type);
     if (callee_cls != nullptr && is_interface(callee_cls)) {
       std::ostringstream out;
       out << "\nillegal invoke-virtual to interface type "
@@ -986,8 +987,8 @@ void validate_invoke_interface(const DexMethod* caller,
     return;
   }
 
-  auto callee_cls = type_class(callee->get_class());
-  if (!callee_cls ||
+  auto* callee_cls = type_class(callee->get_class());
+  if ((callee_cls == nullptr) ||
       (is_interface(callee_cls) && callee->as_def()->is_virtual())) {
     return;
   }
@@ -1259,7 +1260,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_RETURN_OBJECT: {
     assume_reference(current_state, insn->src(0));
     auto dtype = current_state->get_dex_type(insn->src(0));
-    auto rtype = m_dex_method->get_proto()->get_rtype();
+    auto* rtype = m_dex_method->get_proto()->get_rtype();
     // If the inferred type is a fallback, there's no point performing the
     // accurate type assignment checking.
     if (dtype && !is_inference_fallback_type(*dtype)) {
@@ -1537,7 +1538,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_IGET: {
     assume_reference(current_state, insn->src(0));
-    const auto f_cls = insn->get_field()->get_class();
+    auto* const f_cls = insn->get_field()->get_class();
     assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
     break;
   }
@@ -1547,14 +1548,14 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_IGET_SHORT:
   case OPCODE_IGET_WIDE: {
     assume_reference(current_state, insn->src(0));
-    const auto f_cls = insn->get_field()->get_class();
+    auto* const f_cls = insn->get_field()->get_class();
     assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
     break;
   }
   case OPCODE_IGET_OBJECT: {
     assume_reference(current_state, insn->src(0));
     always_assert(insn->has_field());
-    const auto f_cls = insn->get_field()->get_class();
+    auto* const f_cls = insn->get_field()->get_class();
     assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
     break;
   }
@@ -1566,7 +1567,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_integer(current_state, insn->src(0));
     }
     assume_reference(current_state, insn->src(1));
-    const auto f_cls = insn->get_field()->get_class();
+    auto* const f_cls = insn->get_field()->get_class();
     assume_assignable(current_state->get_dex_type(insn->src(1)), f_cls);
     break;
   }
@@ -1576,14 +1577,14 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_IPUT_SHORT: {
     assume_integer(current_state, insn->src(0));
     assume_reference(current_state, insn->src(1));
-    const auto f_cls = insn->get_field()->get_class();
+    auto* const f_cls = insn->get_field()->get_class();
     assume_assignable(current_state->get_dex_type(insn->src(1)), f_cls);
     break;
   }
   case OPCODE_IPUT_WIDE: {
     assume_wide_scalar(current_state, insn->src(0));
     assume_reference(current_state, insn->src(1));
-    const auto f_cls = insn->get_field()->get_class();
+    auto* const f_cls = insn->get_field()->get_class();
     assume_assignable(current_state->get_dex_type(insn->src(1)), f_cls);
     break;
   }
@@ -1591,9 +1592,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     assume_reference(current_state, insn->src(0));
     assume_reference(current_state, insn->src(1));
     always_assert(insn->has_field());
-    const auto f_type = insn->get_field()->get_type();
+    auto* const f_type = insn->get_field()->get_type();
     assume_assignable(current_state->get_dex_type(insn->src(0)), f_type);
-    const auto f_cls = insn->get_field()->get_class();
+    auto* const f_cls = insn->get_field()->get_class();
     assume_assignable(current_state->get_dex_type(insn->src(1)), f_cls);
 
     break;
@@ -1636,7 +1637,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_SPUT_OBJECT: {
     assume_reference(current_state, insn->src(0));
     always_assert(insn->has_field());
-    const auto f_type = insn->get_field()->get_type();
+    auto* const f_type = insn->get_field()->get_type();
     assume_assignable(current_state->get_dex_type(insn->src(0)), f_type);
     break;
   }
@@ -1709,7 +1710,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       }
     }
     if (m_validate_access) {
-      auto resolved =
+      auto* resolved =
           resolve_method(dex_method, opcode_to_search(insn), m_dex_method);
       ::validate_access(m_dex_method, resolved);
     }
@@ -1888,7 +1889,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     auto search = opcode::is_an_sfield_op(insn->opcode())
                       ? FieldSearch::Static
                       : FieldSearch::Instance;
-    auto resolved = resolve_field(insn->get_field(), search);
+    auto* resolved = resolve_field(insn->get_field(), search);
     ::validate_access(m_dex_method, resolved);
   }
 }

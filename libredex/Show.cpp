@@ -73,43 +73,43 @@ std::string humanize(std::string const& type) {
 //       i.e. ACC_VOLATILE and ACC_BRIDGE etc.
 std::string accessibility(uint32_t acc, bool method = false) {
   std::ostringstream ss;
-  if (acc & DexAccessFlags::ACC_PUBLIC) {
+  if ((acc & DexAccessFlags::ACC_PUBLIC) != 0u) {
     ss << "public ";
   }
-  if (acc & DexAccessFlags::ACC_PRIVATE) {
+  if ((acc & DexAccessFlags::ACC_PRIVATE) != 0u) {
     ss << "private ";
   }
-  if (acc & DexAccessFlags::ACC_PROTECTED) {
+  if ((acc & DexAccessFlags::ACC_PROTECTED) != 0u) {
     ss << "protected ";
   }
-  if (acc & DexAccessFlags::ACC_STATIC) {
+  if ((acc & DexAccessFlags::ACC_STATIC) != 0u) {
     ss << "static ";
   }
-  if (acc & DexAccessFlags::ACC_FINAL) {
+  if ((acc & DexAccessFlags::ACC_FINAL) != 0u) {
     ss << "final ";
   }
-  if (acc & DexAccessFlags::ACC_INTERFACE) {
+  if ((acc & DexAccessFlags::ACC_INTERFACE) != 0u) {
     ss << "interface ";
-  } else if (acc & DexAccessFlags::ACC_ABSTRACT) {
+  } else if ((acc & DexAccessFlags::ACC_ABSTRACT) != 0u) {
     ss << "abstract ";
   }
-  if (acc & DexAccessFlags::ACC_ENUM) {
+  if ((acc & DexAccessFlags::ACC_ENUM) != 0u) {
     ss << "enum ";
   }
-  if (acc & DexAccessFlags::ACC_SYNCHRONIZED) {
+  if ((acc & DexAccessFlags::ACC_SYNCHRONIZED) != 0u) {
     ss << "synchronized ";
   }
-  if (acc & DexAccessFlags::ACC_VOLATILE) {
+  if ((acc & DexAccessFlags::ACC_VOLATILE) != 0u) {
     if (method) {
       ss << "bridge ";
     } else {
       ss << "volatile ";
     }
   }
-  if (acc & DexAccessFlags::ACC_NATIVE) {
+  if ((acc & DexAccessFlags::ACC_NATIVE) != 0u) {
     ss << "native ";
   }
-  if (acc & DexAccessFlags::ACC_TRANSIENT) {
+  if ((acc & DexAccessFlags::ACC_TRANSIENT) != 0u) {
     if (method) {
       ss << "vararg ";
     } else {
@@ -141,7 +141,7 @@ std::string show_type(const DexType* t, bool deobfuscated) {
           return str_copy(name);
         }
         if (name[0] == 'L') {
-          auto cls = type_class(t);
+          auto* cls = type_class(t);
           if (cls != nullptr &&
               !cls->get_deobfuscated_name_or_empty().empty()) {
             return cls->get_deobfuscated_name_or_empty_copy();
@@ -222,7 +222,7 @@ std::string show_methodhandle(const DexMethodHandle* ref, bool deobfuscated) {
 }
 
 std::string show_opcode(const DexInstruction* insn, bool deobfuscated = false) {
-  if (!insn) {
+  if (insn == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -921,7 +921,7 @@ std::string show_opcode(const DexInstruction* insn, bool deobfuscated = false) {
 }
 
 std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
-  if (!insn) {
+  if (insn == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -993,7 +993,7 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
 }
 
 std::string show_helper(const DexAnnotation* anno, bool deobfuscated) {
-  if (!anno) {
+  if (anno == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1022,7 +1022,7 @@ std::ostream& operator<<(std::ostream& o, const DexType& type) {
 }
 
 inline std::string show(const DexString* p) {
-  if (!p) {
+  if (p == nullptr) {
     return "";
   }
   return p->str_copy();
@@ -1040,20 +1040,20 @@ std::ostream& operator<<(std::ostream& o, const DexFieldRef& p) {
 }
 
 std::string vshow(const DexField* p) {
-  if (!p) {
+  if (p == nullptr) {
     return "";
   }
   std::ostringstream ss;
   ss << accessibility(p->get_access()) << humanize(show(p->get_type())) << " "
      << humanize(show(p->get_class())) << "." << show(p->get_name());
-  if (p->get_anno_set()) {
+  if (p->get_anno_set() != nullptr) {
     ss << "\n  annotations:" << show(p->get_anno_set());
   }
   return ss.str();
 }
 
 std::string vshow(const DexTypeList* p) {
-  if (!p) {
+  if (p == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1070,7 +1070,7 @@ std::string vshow(const DexTypeList* p) {
 }
 
 std::string vshow(const DexProto* p, bool include_ret_type = true) {
-  if (!p) {
+  if (p == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1090,7 +1090,7 @@ std::string show(const DexTypeList* l) { return show_type_list(l, false); }
 std::string show(const DexProto* p) { return show_proto(p, false); }
 
 std::string show(const DexCode* code) {
-  if (!code) {
+  if (code == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1116,7 +1116,7 @@ std::string vshow(uint32_t acc, bool is_method) {
 std::string vshow(const DexType* t) { return humanize(show(t)); }
 
 std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
-  if (!p) {
+  if (p == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1126,7 +1126,7 @@ std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
      << humanize(show(p->get_class())) << "." << show(p->get_name())
      << vshow(p->get_proto(), false);
   if (include_annotations) {
-    if (p->get_anno_set()) {
+    if (p->get_anno_set() != nullptr) {
       ss << "\n  annotations:" << show(p->get_anno_set());
     }
     bool first = true;
@@ -1151,16 +1151,16 @@ std::ostream& operator<<(std::ostream& o, const DexClass& cls) {
 }
 
 std::string vshow(const DexClass* p) {
-  if (!p) {
+  if (p == nullptr) {
     return "";
   }
   std::ostringstream ss;
   ss << accessibility(p->get_access()) << humanize(show(p->get_type()))
      << " extends " << humanize(show(p->get_super_class()));
-  if (p->get_interfaces() && !p->get_interfaces()->empty()) {
+  if ((p->get_interfaces() != nullptr) && !p->get_interfaces()->empty()) {
     ss << " implements ";
     bool first = true;
-    for (auto const type : *p->get_interfaces()) {
+    for (auto* const type : *p->get_interfaces()) {
       if (first) {
         first = false;
       } else {
@@ -1169,14 +1169,14 @@ std::string vshow(const DexClass* p) {
       ss << humanize(show(type));
     }
   }
-  if (p->get_anno_set()) {
+  if (p->get_anno_set() != nullptr) {
     ss << "\n  annotations:" << show(p->get_anno_set());
   }
   return ss.str();
 }
 
 std::string show(const DexEncodedValue* value) {
-  if (!value) {
+  if (value == nullptr) {
     return "";
   }
   return value->show();
@@ -1189,7 +1189,7 @@ std::string show_deobfuscated(const DexAnnotation* anno) {
 }
 
 std::string show(const DexAnnotationSet* p) {
-  if (!p) {
+  if (p == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1205,11 +1205,11 @@ std::string show(const DexAnnotationSet* p) {
 }
 
 std::string show(const DexAnnotationDirectory* p) {
-  if (!p) {
+  if (p == nullptr) {
     return "";
   }
   std::ostringstream ss;
-  if (p->m_class) {
+  if (p->m_class != nullptr) {
     ss << "class annotations:\n" << show(p->m_class) << "\n";
   }
   if (p->m_field) {
@@ -1285,7 +1285,7 @@ static IntType read(const uint8_t*& data, uint16_t n_bytes) {
 }
 
 std::string show(const DexOpcodeData* insn) {
-  if (!insn) {
+  if (insn == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1353,7 +1353,7 @@ std::string show(const DexOpcodeData* insn) {
 }
 
 std::string show_insn(const DexInstruction* insn, bool deobfuscated) {
-  if (!insn) {
+  if (insn == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1395,7 +1395,7 @@ std::ostream& operator<<(std::ostream& o, const IRInstruction& insn) {
 }
 
 std::string show(const DexDebugInstruction* insn) {
-  if (!insn) {
+  if (insn == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1410,13 +1410,13 @@ std::string show(const DexDebugInstruction* insn) {
     ss << "DBG_ADVANCE_LINE " << insn->value();
     break;
   case DBG_START_LOCAL: {
-    auto sl = static_cast<const DexDebugOpcodeStartLocal*>(insn);
+    const auto* sl = static_cast<const DexDebugOpcodeStartLocal*>(insn);
     ss << "DBG_START_LOCAL v" << sl->uvalue() << " " << show(sl->name()) << ":"
        << show(sl->type());
     break;
   }
   case DBG_START_LOCAL_EXTENDED: {
-    auto sl = static_cast<const DexDebugOpcodeStartLocal*>(insn);
+    const auto* sl = static_cast<const DexDebugOpcodeStartLocal*>(insn);
     ss << "DBG_START_LOCAL v" << sl->uvalue() << " " << show(sl->name()) << ":"
        << show(sl->type()) << ";" << show(sl->sig());
     break;
@@ -1434,7 +1434,7 @@ std::string show(const DexDebugInstruction* insn) {
     ss << "DBG_SET_EPILOGUE_BEGIN";
     break;
   case DBG_SET_FILE: {
-    auto sf = static_cast<const DexDebugOpcodeSetFile*>(insn);
+    const auto* sf = static_cast<const DexDebugOpcodeSetFile*>(insn);
     ss << "DBG_SET_FILE " << show(sf->file());
     break;
   }
@@ -1594,13 +1594,13 @@ std::string show(const cfg::ControlFlowGraph& cfg, bool code_only) {
 }
 
 std::string show(const MethodCreator* mc) {
-  if (!mc) {
+  if (mc == nullptr) {
     return "";
   }
   std::ostringstream ss;
   ss << "MethodCode for " << SHOW(mc->method) << "\n";
   ss << "locals: ";
-  for (auto& loc : mc->locals) {
+  for (const auto& loc : mc->locals) {
     ss << "[" << loc.get_reg() << "] " << SHOW(loc.get_type());
   }
   ss << "\ninstructions:\n";
@@ -1609,7 +1609,7 @@ std::string show(const MethodCreator* mc) {
 }
 
 std::string show(const MethodBlock* block) {
-  if (!block) {
+  if (block == nullptr) {
     return "";
   }
   std::ostringstream ss;
@@ -1675,14 +1675,14 @@ std::string show_context(IRCode const* code, IRInstruction const* insn) {
 }
 
 std::string show_deobfuscated(const DexClass* cls) {
-  if (!cls) {
+  if (cls == nullptr) {
     return "";
   }
   const auto& deob = cls->get_deobfuscated_name_or_empty();
   if (!deob.empty()) {
     return str_copy(deob);
   }
-  return cls->get_name() ? cls->get_name()->str_copy() : show(cls);
+  return cls->get_name() != nullptr ? cls->get_name()->str_copy() : show(cls);
 }
 
 std::string show_deobfuscated(const DexFieldRef* ref) {
@@ -1717,7 +1717,7 @@ std::string show_deobfuscated(const DexTypeList* l) {
 std::string show_deobfuscated(const DexProto* p) { return show_proto(p, true); }
 
 std::string show_deobfuscated(const DexCallSite* callsite) {
-  if (!callsite) {
+  if (callsite == nullptr) {
     return "";
   }
   // TODO(T58570881) - actually deobfuscate
@@ -1725,7 +1725,7 @@ std::string show_deobfuscated(const DexCallSite* callsite) {
 }
 
 std::string show_deobfuscated(const DexMethodHandle* methodhandle) {
-  if (!methodhandle) {
+  if (methodhandle == nullptr) {
     return "";
   }
   // TODO(T58570881) - actually deobfuscate

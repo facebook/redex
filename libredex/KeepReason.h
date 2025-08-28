@@ -93,7 +93,7 @@ struct ReasonPtrHash {
 struct ReasonPtrEqual {
   size_t operator()(const keep_reason::Reason* r1,
                     const keep_reason::Reason* r2) const {
-    return *r1 == *r2;
+    return static_cast<size_t>(*r1 == *r2);
   }
 };
 

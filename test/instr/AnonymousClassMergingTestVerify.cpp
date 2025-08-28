@@ -65,14 +65,14 @@ TEST_F(PostVerify, MergeablesRemoval) {
 TEST_F(PostVerify, InterfaceMethodsOnShape) {
   boost::regex shape_name_pattern(
       "^Lcom/facebook/redex/AnonInterface1Shape_S0100000_\\w+;$");
-  auto shape =
+  auto* shape =
       find_class_named(classes, [&shape_name_pattern](const char* name) {
         return boost::regex_match(name, shape_name_pattern);
       });
   ASSERT_NE(shape, nullptr) << "Not find merged shape for Interface1\n";
-  auto magic1 = find_vmethod_named(*shape, "magic1");
+  auto* magic1 = find_vmethod_named(*shape, "magic1");
   ASSERT_NE(magic1, nullptr);
-  auto magic2 = find_vmethod_named(*shape, "magic2");
+  auto* magic2 = find_vmethod_named(*shape, "magic2");
   ASSERT_NE(magic2, nullptr);
 
   boost::regex comparator_shape_name_pattern(
@@ -82,6 +82,6 @@ TEST_F(PostVerify, InterfaceMethodsOnShape) {
         return boost::regex_match(name, comparator_shape_name_pattern);
       });
   ASSERT_NE(shape, nullptr) << "Not find merged shape for Comparator\n";
-  auto reversed = find_vmethod_named(*shape, "reversed");
+  auto* reversed = find_vmethod_named(*shape, "reversed");
   ASSERT_NE(reversed, nullptr);
 }

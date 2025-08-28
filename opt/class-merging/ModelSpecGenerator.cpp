@@ -32,12 +32,12 @@ bool can_delete_class(const DexClass* cls, bool is_anonymous_class) {
   if (!can_delete(cls)) {
     return false;
   }
-  auto& vmethods = cls->get_vmethods();
+  const auto& vmethods = cls->get_vmethods();
   if (std::any_of(vmethods.begin(), vmethods.end(),
                   [](const DexMethod* m) { return !can_delete(m); })) {
     return false;
   }
-  auto& dmethods = cls->get_dmethods();
+  const auto& dmethods = cls->get_dmethods();
   if (std::any_of(dmethods.begin(), dmethods.end(),
                   [&is_anonymous_class](const DexMethod* m) {
                     return (!is_anonymous_class || !is_constructor(m)) &&
@@ -45,12 +45,12 @@ bool can_delete_class(const DexClass* cls, bool is_anonymous_class) {
                   })) {
     return false;
   }
-  auto& ifields = cls->get_ifields();
+  const auto& ifields = cls->get_ifields();
   if (std::any_of(ifields.begin(), ifields.end(),
                   [](const DexField* f) { return !can_delete(f); })) {
     return false;
   }
-  auto& sfields = cls->get_sfields();
+  const auto& sfields = cls->get_sfields();
   if (std::any_of(sfields.begin(), sfields.end(),
                   [](const DexField* f) { return !can_delete(f); })) {
     return false;
@@ -63,8 +63,8 @@ TypeSet collect_reflected_mergeables(
     class_merging::ModelSpec* merging_spec,
     DexMethod* method) {
   TypeSet non_mergeables;
-  auto code = method->get_code();
-  if (!code) {
+  auto* code = method->get_code();
+  if (code == nullptr) {
     return non_mergeables;
   }
   std::unique_ptr<reflection::ReflectionAnalysis> analysis =
@@ -83,11 +83,11 @@ TypeSet collect_reflected_mergeables(
   live_range::DefUseChains du_chains = chains.get_def_use_chains();
 
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     auto aobj = analysis->get_result_abstract_object(insn);
 
     DexType* reflected_type = nullptr;
-    if (aobj && aobj->is_class() && aobj->get_dex_type()) {
+    if (aobj && aobj->is_class() && (aobj->get_dex_type() != nullptr)) {
       reflected_type = const_cast<DexType*>(
           type::get_element_type_if_array(aobj->get_dex_type()));
     }
@@ -142,9 +142,9 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
   TypeSet throwable;
   type_system.get_all_children(type::java_lang_Throwable(), throwable);
   for (const auto* cls : scope) {
-    auto cur_type = cls->get_type();
+    auto* cur_type = cls->get_type();
     if (is_interface(cls) || is_abstract(cls) || cls->rstate.is_generated() ||
-        cls->get_clinit() || throwable.count(cur_type)) {
+        (cls->get_clinit() != nullptr) || (throwable.count(cur_type) != 0u)) {
       continue;
     }
     if (skip_dynamically_dead && cls->is_dynamically_dead()) {
@@ -164,7 +164,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
       continue;
     }
     auto* intfs = cls->get_interfaces();
-    auto super_cls = cls->get_super_class();
+    auto* super_cls = cls->get_super_class();
     if (super_cls != type::java_lang_Object()) {
       parent_children[super_cls].push_back(cur_type);
     } else if (!intfs->empty()) {
@@ -175,11 +175,11 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
     }
   }
   for (const auto& pair : UnorderedIterable(parent_children)) {
-    auto parent = pair.first;
-    if (!type_class(parent)) {
+    const auto* parent = pair.first;
+    if (type_class(parent) == nullptr) {
       continue;
     }
-    auto& children = pair.second;
+    const auto& children = pair.second;
     if (children.size() >= global_min_count) {
       TRACE(CLMG,
             9,
@@ -192,10 +192,10 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
     }
   }
   for (const auto& pair : UnorderedIterable(intfs_implementors)) {
-    auto intfs = pair.first;
+    const auto* intfs = pair.first;
     const auto has_defs = [&intfs]() {
       for (const auto* intf : *intfs) {
-        if (!type_class(intf)) {
+        if (type_class(intf) == nullptr) {
           return false;
         }
       }
@@ -205,14 +205,14 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
       // Skip if any interface definition is missing.
       continue;
     }
-    auto& implementors = pair.second;
+    const auto& implementors = pair.second;
     if (implementors.size() >= global_min_count) {
       TRACE(CLMG,
             9,
             "Discover interface root %s with %zu implementors",
             SHOW(intfs),
             pair.second.size());
-      auto first_implementor = type_class(implementors[0]);
+      auto* first_implementor = type_class(implementors[0]);
       merging_spec->roots.insert(first_implementor->get_super_class());
       merging_spec->merging_targets.insert(implementors.begin(),
                                            implementors.end());

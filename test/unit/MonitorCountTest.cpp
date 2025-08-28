@@ -60,7 +60,7 @@ TEST_F(MonitorCountTest, noCatch) {
   )");
   code->build_cfg();
 
-  auto bad_insn = find_synchronized_throw_outside_catch_all(*code);
+  auto* bad_insn = find_synchronized_throw_outside_catch_all(*code);
   ASSERT_NE(bad_insn, nullptr);
   EXPECT_EQ(bad_insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(bad_insn->get_type(), DexType::get_type("LBar;"));
@@ -88,7 +88,7 @@ TEST_F(MonitorCountTest, catchButNotCatchAll) {
   )");
   code->build_cfg();
 
-  auto bad_insn = find_synchronized_throw_outside_catch_all(*code);
+  auto* bad_insn = find_synchronized_throw_outside_catch_all(*code);
   ASSERT_NE(bad_insn, nullptr);
   EXPECT_EQ(bad_insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(bad_insn->get_type(), DexType::get_type("LFoo;"));

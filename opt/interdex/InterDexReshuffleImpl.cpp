@@ -67,7 +67,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
   m_linear_alloc_limit = (it != interdex_metrics.end() ? it->second : 0) +
                          m_config.extra_linear_alloc_limit;
   it = interdex_metrics.find(interdex::METRIC_ORDER_INTERDEX);
-  m_order_interdex = it == interdex_metrics.end() || it->second;
+  m_order_interdex = it == interdex_metrics.end() || (it->second != 0);
   auto refs_info = mgr.get_reserved_refs();
   m_dexes_structure.set_reserve_frefs(refs_info.frefs +
                                       m_config.reserved_extra_frefs);
@@ -99,7 +99,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
       m_first_dex_index++;
       continue;
     }
-    for (auto cls : dex) {
+    for (auto* cls : dex) {
       classes.push_back(cls);
       m_class_refs.emplace(cls, Refs());
       if (!can_move(cls) && !is_reshufflable_class(cls, reshufflable_classes)) {
@@ -125,7 +125,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
         auto& dex = dexen.at(dex_idx);
         auto& mutable_dex = m_mutable_dexen.at(dex_idx);
         auto& mutable_dex_strings = m_mutable_dexen_strings.at(dex_idx);
-        for (auto cls : dex) {
+        for (auto* cls : dex) {
           always_assert(m_class_refs.count(cls));
           const auto& refs = m_class_refs.at(cls);
           TypeRefs pending_init_class_fields;
@@ -138,7 +138,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
           mutable_dex.add_class_no_checks(
               refs.mrefs, refs.frefs, refs.trefs, pending_init_class_fields,
               pending_init_class_types, laclazz, cls);
-          for (auto* sref : UnorderedIterable(refs.srefs)) {
+          for (const auto* sref : UnorderedIterable(refs.srefs)) {
             mutable_dex_strings[sref]++;
           }
         }
@@ -156,7 +156,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
       return;
     }
     for (const DexType* mergeable : merger.mergeables) {
-      const auto cls = type_class(mergeable);
+      auto* const cls = type_class(mergeable);
       if (cls != nullptr) {
         m_class_to_merging_info.emplace(cls, MergingInfo());
         auto& merging_info = m_class_to_merging_info.at(cls);
@@ -167,7 +167,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
     if (!merger.vmethods.empty()) {
       for (const auto& vmeths : merger.vmethods) {
         for (const auto* meth : vmeths.overrides) {
-          const auto meth_cls = type_class(meth->get_class());
+          auto* const meth_cls = type_class(meth->get_class());
           auto& merging_info = m_class_to_merging_info.at(meth_cls);
           merging_info.dedupable_mrefs[meth] = group;
         }
@@ -177,7 +177,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
     if (!merger.intfs_methods.empty()) {
       for (const auto& intf_meths : merger.intfs_methods) {
         for (const auto* meth : intf_meths.methods) {
-          const auto meth_cls = type_class(meth->get_class());
+          auto* const meth_cls = type_class(meth->get_class());
           auto& merging_info = m_class_to_merging_info.at(meth_cls);
           merging_info.dedupable_mrefs[meth] = group;
         }
@@ -198,8 +198,8 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
     UnorderedMap<MergerIndex, size_t> merging_type_usage;
     int num_new_methods = 0;
     int num_deduped_methods = 0;
-    for (auto cls : dex) {
-      if (m_class_to_merging_info.count(cls)) {
+    for (auto* cls : dex) {
+      if (m_class_to_merging_info.count(cls) != 0u) {
         const auto& merging_info = m_class_to_merging_info.at(cls);
         MergerIndex merging_type = merging_info.merging_type;
         merging_type_usage[merging_type]++;
@@ -338,7 +338,7 @@ bool InterDexReshuffleImpl::compute_dex_removal_plan() {
        dex_index++) {
     dex_eliminate.emplace(dex_index, true);
     auto& dex = m_dexen.at(dex_index);
-    for (auto cls : dex) {
+    for (auto* cls : dex) {
       if (!can_move(cls)) {
         if (!is_canary(cls)) {
           // If a dex contains any non-canary classes which couldn't be
@@ -360,7 +360,7 @@ bool InterDexReshuffleImpl::compute_dex_removal_plan() {
   std::vector<DexClass*> movable_classes;
   UnorderedMap<DexClass*, size_t> class_dex_indices;
   auto& dex = m_dexen.at(removal_dex);
-  for (auto cls : dex) {
+  for (auto* cls : dex) {
     if (is_canary(cls)) {
       continue;
     }
@@ -462,7 +462,7 @@ void InterDexReshuffleImpl::print_stats() {
 bool InterDexReshuffleImpl::try_plan_move(const Move& move,
                                           bool mergeability_aware) {
   bool special_case =
-      mergeability_aware && m_class_to_merging_info.count(move.cls);
+      mergeability_aware && (m_class_to_merging_info.count(move.cls) != 0u);
   auto& target_dex = m_mutable_dexen.at(move.target_dex_index);
   always_assert(m_class_refs.count(move.cls));
   const auto& refs = m_class_refs.at(move.cls);
@@ -504,7 +504,7 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move,
     return false;
   }
   auto& target_dex_strings = m_mutable_dexen_strings.at(move.target_dex_index);
-  for (auto* sref : UnorderedIterable(refs.srefs)) {
+  for (const auto* sref : UnorderedIterable(refs.srefs)) {
     target_dex_strings[sref]++;
   }
   always_assert(m_class_dex_indices.count(move.cls));
@@ -514,7 +514,7 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move,
                           refs.frefs, refs.trefs, pending_init_class_fields,
                           pending_init_class_types, laclazz, move.cls);
   auto& source_dex_strings = m_mutable_dexen_strings.at(dex_index);
-  for (auto* sref : UnorderedIterable(refs.srefs)) {
+  for (const auto* sref : UnorderedIterable(refs.srefs)) {
     auto it = source_dex_strings.find(sref);
     if (--it->second == 0) {
       source_dex_strings.erase(it);

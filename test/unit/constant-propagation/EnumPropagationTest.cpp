@@ -19,13 +19,13 @@ struct EnumTest : public ConstantPropagationTest {
   EnumTest() { always_assert(load_class_file(std::getenv("enum_class_file"))); }
 
   static DexClass* create_enum() {
-    auto cls_ty = DexType::make_type("LFoo;");
+    auto* cls_ty = DexType::make_type("LFoo;");
     ClassCreator creator(cls_ty);
     creator.set_super(type::java_lang_Enum());
     creator.set_access(ACC_PUBLIC | ACC_FINAL | ACC_ENUM);
 
-    auto enum_x = static_cast<DexField*>(DexField::make_field("LFoo;.X:I"));
-    auto enum_y = static_cast<DexField*>(DexField::make_field("LFoo;.Y:I"));
+    auto* enum_x = static_cast<DexField*>(DexField::make_field("LFoo;.X:I"));
+    auto* enum_y = static_cast<DexField*>(DexField::make_field("LFoo;.Y:I"));
     enum_x->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_ENUM);
     enum_y->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_ENUM);
     creator.add_field(enum_x);

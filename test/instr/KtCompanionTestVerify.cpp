@@ -37,7 +37,7 @@ TEST_F(PreVerify, CompanionClass) {
   EXPECT_NE(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_VIRTUAL, "getS"));
   // Before opt, in LCompanionClass; there should be a sfield "Companion" with
   // type 'LCompanionClass$Companion;'
-  auto field = find_sfield_named(*outer_cls, "Companion");
+  auto* field = find_sfield_named(*outer_cls, "Companion");
   EXPECT_NE(nullptr, field);
   EXPECT_EQ(field->get_type(), companion_cls->get_type());
 }
@@ -97,7 +97,7 @@ TEST_F(PreVerify, AnotherCompanionClass) {
   EXPECT_NE(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_VIRTUAL, "funX"));
   // Before opt, in LCompanionClass; there should be a sfield "Test" with type
   // 'LAnotherCompanionClass$Test;'
-  auto field = find_sfield_named(*outer_cls, "Test");
+  auto* field = find_sfield_named(*outer_cls, "Test");
   EXPECT_NE(nullptr, field);
   EXPECT_EQ(field->get_type(), companion_cls->get_type());
 }
@@ -140,7 +140,7 @@ TEST_F(PreVerify, ThirdCompanionClass) {
   ASSERT_NE(nullptr, find_instruction(meth_clinit, DOPCODE_NEW_INSTANCE));
   // Before opt, in LThirdCompanionClass; there should be a sfield "Test" with
   // type 'LThirdCompanionClass$Companion;'
-  auto field = find_sfield_named(*outer_cls, "Test");
+  auto* field = find_sfield_named(*outer_cls, "Test");
   EXPECT_NE(nullptr, field);
   EXPECT_EQ(field->get_type(), companion_cls->get_type());
   // In 'LThirdCompanionClass$Companion;', since funY is marked as priviate,
@@ -189,7 +189,7 @@ TEST_F(PostVerify, AnnoClass) {
   EXPECT_NE(nullptr, foo_cls);
 
   // After opt, there is still Companion obj in LAnnoClass static fields.
-  auto field = find_sfield_named(*outer_cls, "Companion");
+  auto* field = find_sfield_named(*outer_cls, "Companion");
   EXPECT_NE(nullptr, field);
   EXPECT_EQ(field->get_type(), companion_cls->get_type());
 }

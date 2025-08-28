@@ -60,7 +60,7 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
   // callsite
   const uint8_t* callsite_data = m_dexbase + m_callsite_ids[csidx].callsite_off;
   auto callsite_eva = get_encoded_value_array(this, callsite_data);
-  auto evalues = callsite_eva->evalues();
+  auto* evalues = callsite_eva->evalues();
   DexEncodedValue* ev_linker_method_handle = evalues->at(0).get();
   always_assert_type_log(ev_linker_method_handle->evtype() ==
                              DEVT_METHOD_HANDLE,
@@ -79,7 +79,7 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
                          ev_linker_method_type->evtype());
   DexMethodHandle* linker_method_handle =
       ((DexEncodedValueMethodHandle*)ev_linker_method_handle)->methodhandle();
-  auto linker_method_name =
+  const auto* linker_method_name =
       ((DexEncodedValueString*)ev_linker_method_name)->string();
   DexProto* linker_method_proto =
       ((DexEncodedValueMethodType*)ev_linker_method_type)->proto();
@@ -88,10 +88,10 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
     auto& ev = evalues->at(i);
     linker_args.emplace_back(std::move(ev));
   }
-  auto callsite = new DexCallSite(linker_method_handle,
-                                  linker_method_name,
-                                  linker_method_proto,
-                                  std::move(linker_args));
+  auto* callsite = new DexCallSite(linker_method_handle,
+                                   linker_method_name,
+                                   linker_method_proto,
+                                   std::move(linker_args));
   return callsite;
 }
 
@@ -131,7 +131,7 @@ std::string_view DexIdx::get_string_data(uint32_t stridx,
     *utfsize = utfsize_local;
   }
   // Find null terminator.
-  auto null_cur = dstr;
+  const auto* null_cur = dstr;
   while (*null_cur != '\0' && null_cur < m_dexbase + get_file_size()) {
     ++null_cur;
   }
@@ -142,7 +142,7 @@ std::string_view DexIdx::get_string_data(uint32_t stridx,
 const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
   uint32_t utfsize;
   auto str_data = get_string_data(stridx, &utfsize);
-  auto ret = DexString::make_string(str_data);
+  const auto* ret = DexString::make_string(str_data);
   always_assert_type_log(
       ret->length() == utfsize,
       INVALID_DEX,
@@ -155,7 +155,7 @@ const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
 DexType* DexIdx::get_typeidx_fromdex(uint32_t typeidx) {
   redex_assert(typeidx < m_type_ids_size);
   uint32_t stridx = m_type_ids[typeidx].string_idx;
-  auto dexstr = get_stringidx(stridx);
+  const auto* dexstr = get_stringidx(stridx);
   always_assert_type_log(type::is_valid(dexstr->str()), INVALID_DEX,
                          "Not a valid type descriptor");
   return DexType::make_type(dexstr);
@@ -165,7 +165,7 @@ DexFieldRef* DexIdx::get_fieldidx_fromdex(uint32_t fidx) {
   redex_assert(fidx < m_field_ids_size);
   DexType* container = get_typeidx(m_field_ids[fidx].classidx);
   DexType* ftype = get_typeidx(m_field_ids[fidx].typeidx);
-  auto name = get_stringidx(m_field_ids[fidx].nameidx);
+  const auto* name = get_stringidx(m_field_ids[fidx].nameidx);
   return DexField::make_field(container, name, ftype);
 }
 
@@ -173,14 +173,14 @@ DexMethodRef* DexIdx::get_methodidx_fromdex(uint32_t midx) {
   redex_assert(midx < m_method_ids_size);
   DexType* container = get_typeidx(m_method_ids[midx].classidx);
   DexProto* proto = get_protoidx(m_method_ids[midx].protoidx);
-  auto name = get_stringidx(m_method_ids[midx].nameidx);
+  const auto* name = get_stringidx(m_method_ids[midx].nameidx);
   return DexMethod::make_method(container, name, proto);
 }
 
 DexProto* DexIdx::get_protoidx_fromdex(uint32_t pidx) {
   redex_assert(pidx < m_proto_ids_size);
   DexType* rtype = get_typeidx(m_proto_ids[pidx].rtypeidx);
-  auto shorty = get_stringidx(m_proto_ids[pidx].shortyidx);
+  const auto* shorty = get_stringidx(m_proto_ids[pidx].shortyidx);
   DexTypeList* args = get_type_list(m_proto_ids[pidx].param_off);
   return DexProto::make_proto(rtype, args, shorty);
 }

@@ -33,7 +33,8 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
     // we need in the tests to create a proper scope
     virt_scope::get_vmethods(type::java_lang_Object());
 
-    auto object_ctor = static_cast<DexMethod*>(method::java_lang_Object_ctor());
+    auto* object_ctor =
+        static_cast<DexMethod*>(method::java_lang_Object_ctor());
     object_ctor->set_access(ACC_PUBLIC | ACC_CONSTRUCTOR);
     object_ctor->set_external();
     type_class(type::java_lang_Object())->add_method(object_ctor);
@@ -65,11 +66,11 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
   // argument. baz() should be optimized for that constant argument.
 
   Scope scope;
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
      (
       (load-param v0) ; the `this` argument
@@ -82,7 +83,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
   m1->rstate.set_root();
   creator.add_method(m1);
   m1->get_code()->build_cfg();
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(I)V"
      (
       (load-param v0) ; the `this` argument
@@ -96,7 +97,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
   )");
   creator.add_method(m2);
   m2->get_code()->build_cfg();
-  auto cls = creator.create();
+  auto* cls = creator.create();
   scope.push_back(cls);
   InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
 
@@ -119,11 +120,11 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgumentClass) {
   // which happens to be a type.
 
   Scope scope;
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
      (
       (load-param v0) ; the `this` argument
@@ -137,7 +138,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgumentClass) {
   m1->rstate.set_root();
   creator.add_method(m1);
   m1->get_code()->build_cfg();
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(Ljava/lang/Class;)V"
      (
       (load-param v0) ; the `this` argument
@@ -151,7 +152,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgumentClass) {
   )");
   creator.add_method(m2);
   m2->get_code()->build_cfg();
-  auto cls = creator.create();
+  auto* cls = creator.create();
   scope.push_back(cls);
   InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
 
@@ -176,11 +177,11 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgumentClassXStore) {
   // the knowledge that the type value is not zero will be used to optimize the
   // conditional branching in baz.
 
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
      (
       (load-param v0) ; the `this` argument
@@ -195,7 +196,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgumentClassXStore) {
   creator.add_method(m1);
   m1->get_code()->build_cfg();
 
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(Ljava/lang/Class;)V"
      (
       (load-param v0) ; the `this` argument
@@ -210,14 +211,14 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgumentClassXStore) {
   creator.add_method(m2);
   m2->get_code()->build_cfg();
 
-  auto cls = creator.create();
+  auto* cls = creator.create();
   auto store1 = DexStore("classes");
   store1.add_classes({cls});
 
-  auto cls_ty2 = DexType::make_type("LBar;");
+  auto* cls_ty2 = DexType::make_type("LBar;");
   ClassCreator creator2(cls_ty2);
   creator2.set_super(type::java_lang_Object());
-  auto cls2 = creator2.create();
+  auto* cls2 = creator2.create();
   auto store2 = DexStore("other_store");
   store2.add_classes({cls2});
   DexStoresVector stores({store1, store2});
@@ -240,11 +241,11 @@ TEST_F(InterproceduralConstantPropagationTest, constantTwoArgument) {
   // a constant argument. baz() should be optimized for constant arguments.
 
   Scope scope;
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
      (
       (load-param v0) ; the `this` argument
@@ -259,7 +260,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantTwoArgument) {
   m1->rstate.set_root();
   creator.add_method(m1);
   m1->get_code()->build_cfg();
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(ILjava/lang/String;)V"
      (
       (load-param v0) ; the `this` argument
@@ -274,7 +275,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantTwoArgument) {
   )");
   creator.add_method(m2);
   m2->get_code()->build_cfg();
-  auto cls = creator.create();
+  auto* cls = creator.create();
   scope.push_back(cls);
   InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
 
@@ -300,11 +301,11 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
   // baz() cannot be optimized for a constant argument here.
 
   Scope scope;
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.foo:()V"
      (
       (load-param v0) ; the `this` argument
@@ -317,7 +318,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
   m1->rstate.set_root();
   creator.add_method(m1);
   m1->get_code()->build_cfg();
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
      (
       (load-param v0) ; the `this` argument
@@ -330,7 +331,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
   m2->rstate.set_root();
   creator.add_method(m2);
   m2->get_code()->build_cfg();
-  auto m3 = assembler::method_from_string(R"(
+  auto* m3 = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(I)V"
      (
       (load-param v0) ; the `this` argument
@@ -344,7 +345,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
   )");
   creator.add_method(m3);
   m3->get_code()->build_cfg();
-  auto cls = creator.create();
+  auto* cls = creator.create();
   scope.push_back(cls);
 
   // m3's code should be unchanged since it cannot be optimized
@@ -361,11 +362,11 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
   // optimized for that scenario.
 
   Scope scope;
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
      (
       (load-param v0) ; the `this` argument
@@ -378,7 +379,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
   m1->rstate.set_root();
   creator.add_method(m1);
   m1->get_code()->build_cfg();
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar2:()V"
      (
       (load-param v0) ; the `this` argument
@@ -391,7 +392,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
   m2->rstate.set_root();
   creator.add_method(m2);
   m2->get_code()->build_cfg();
-  auto m3 = assembler::method_from_string(R"(
+  auto* m3 = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(I)V"
      (
       (load-param v0) ; the `this` argument
@@ -405,7 +406,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
   )");
   creator.add_method(m3);
   m3->get_code()->build_cfg();
-  auto cls = creator.create();
+  auto* cls = creator.create();
   scope.push_back(cls);
   InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
 
@@ -425,11 +426,11 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
 // we handle it correctly.
 TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   Scope scope;
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (const v0 0)
@@ -444,7 +445,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   m1->rstate.set_root();
   creator.add_method(m1);
 
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:(I)V"
      (
       (load-param v0)
@@ -454,7 +455,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   )");
   creator.add_method(m2);
 
-  auto m3 = assembler::method_from_string(R"(
+  auto* m3 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.qux:(I)V"
       (
        (load-param v0)
@@ -464,7 +465,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   )");
   creator.add_method(m3);
 
-  auto cls = creator.create();
+  auto* cls = creator.create();
   scope.push_back(cls);
 
   auto cg = std::make_shared<call_graph::Graph>(call_graph::single_callee_graph(
@@ -475,7 +476,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
                            [&cp_state](const DexMethod* method,
                                        const WholeProgramState&,
                                        const ArgumentDomain& args) {
-                             auto& code = *method->get_code();
+                             const auto& code = *method->get_code();
                              auto env = env_with_params(is_static(method),
                                                         &code, args);
                              return std::make_unique<IntraproceduralAnalysis>(
@@ -489,7 +490,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   fp_iter.run(Domain{{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
 
   // Check m2 is reachable, despite m3 being unreachable
-  auto& graph = fp_iter.get_call_graph();
+  const auto& graph = fp_iter.get_call_graph();
 
   signal(SIGABRT, crash_backtrace_handler);
 
@@ -526,7 +527,7 @@ struct RuntimeAssertTest : public InterproceduralConstantPropagationTest {
 };
 
 TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(I)V"
      (
       (load-param v0)
@@ -537,7 +538,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
 
   ConstantEnvironment env{{0, SignedConstantDomain(5)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   intraprocedural::FixpointIterator intra_cp(
       /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
@@ -562,7 +563,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
 TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
   using sign_domain::Interval;
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(II)V"
      (
       (load-param v0)
@@ -575,7 +576,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
   ConstantEnvironment env{{0, SignedConstantDomain(Interval::GEZ)},
                           {1, SignedConstantDomain(Interval::LTZ)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   intraprocedural::FixpointIterator intra_cp(
       /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
@@ -605,7 +606,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
 TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
   using sign_domain::Interval;
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(JI)V"
      (
        (load-param v0) ; long -- we don't handle this yet
@@ -618,7 +619,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
   ConstantEnvironment env{{0, SignedConstantDomain(Interval::GEZ)},
                           {1, SignedConstantDomain(Interval::LTZ)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   intraprocedural::FixpointIterator intra_cp(
       /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
@@ -643,7 +644,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
 TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
   using sign_domain::Interval;
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(I)V"
      (
       (load-param v0) ; `this` argument
@@ -655,7 +656,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
 
   ConstantEnvironment env{{1, SignedConstantDomain(Interval::LTZ)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   intraprocedural::FixpointIterator intra_cp(
       /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
@@ -678,20 +679,21 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertField) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
   // We must create a field def and attach it to the DexClass instance (instead
   // of just creating an unattached field ref) so that when IPC calls
   // resolve_field() on Foo.qux, they will find it and treat it as a known field
-  auto field = DexField::make_field("LFoo;.qux:I")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   std::unique_ptr<DexEncodedValue>(
-                                       new DexEncodedValueBit(DEVT_INT, 1)));
+  auto* field =
+      DexField::make_field("LFoo;.qux:I")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                          std::unique_ptr<DexEncodedValue>(
+                              new DexEncodedValueBit(DEVT_INT, true)));
   creator.add_field(field);
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (sget "LFoo;.qux:I")
@@ -726,11 +728,11 @@ TEST_F(RuntimeAssertTest, RuntimeAssertField) {
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (invoke-static () "LFoo;.constantReturnValue:()I")
@@ -742,7 +744,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
   method->get_code()->build_cfg();
   creator.add_method(method);
 
-  auto constant_return_method = assembler::method_from_string(R"(
+  auto* constant_return_method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.constantReturnValue:()I"
      (
       (const v0 1)
@@ -777,11 +779,11 @@ TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (invoke-static () "LFoo;.neverReturns:()V")
@@ -791,7 +793,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
   )");
   creator.add_method(method);
   method->get_code()->build_cfg();
-  auto never_returns = assembler::method_from_string(R"(
+  auto* never_returns = assembler::method_from_string(R"(
     (method (public static) "LFoo;.neverReturns:()V"
      (
        (:loop)
@@ -821,11 +823,11 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (invoke-static () "LFoo;.neverReturns:()I")
@@ -836,7 +838,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
   )");
   creator.add_method(method);
   method->get_code()->build_cfg();
-  auto never_returns = assembler::method_from_string(R"(
+  auto* never_returns = assembler::method_from_string(R"(
     (method (public static) "LFoo;.neverReturns:()I"
      (
        (:loop)
@@ -867,17 +869,18 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, constantField) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto field = DexField::make_field("LFoo;.qux:I")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   std::unique_ptr<DexEncodedValue>(
-                                       new DexEncodedValueBit(DEVT_INT, 1)));
+  auto* field =
+      DexField::make_field("LFoo;.qux:I")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                          std::unique_ptr<DexEncodedValue>(
+                              new DexEncodedValueBit(DEVT_INT, true)));
   creator.add_field(field);
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (const v0 1)
@@ -889,7 +892,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
   m1->rstate.set_root(); // Make this an entry point
   creator.add_method(m1);
 
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:()V"
      (
       (sget "LFoo;.qux:I")
@@ -922,17 +925,18 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto field = DexField::make_field("LFoo;.qux:I")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   std::unique_ptr<DexEncodedValue>(
-                                       new DexEncodedValueBit(DEVT_INT, 1)));
+  auto* field =
+      DexField::make_field("LFoo;.qux:I")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                          std::unique_ptr<DexEncodedValue>(
+                              new DexEncodedValueBit(DEVT_INT, true)));
   creator.add_field(field);
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (const v0 0) ; this differs from the original encoded value of Foo.qux
@@ -943,7 +947,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
   )");
   m1->rstate.set_root(); // Make this an entry point
   creator.add_method(m1);
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:()V"
      (
       (sget "LFoo;.qux:I")
@@ -972,17 +976,18 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto field = DexField::make_field("LFoo;.qux:I")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   std::unique_ptr<DexEncodedValue>(
-                                       new DexEncodedValueBit(DEVT_INT, 1)));
+  auto* field =
+      DexField::make_field("LFoo;.qux:I")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                          std::unique_ptr<DexEncodedValue>(
+                              new DexEncodedValueBit(DEVT_INT, true)));
   creator.add_field(field);
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (const v0 1)
@@ -994,7 +999,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
   m1->rstate.set_root(); // Make this an entry point
   creator.add_method(m1);
 
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:()V"
      (
       (sget "LFoo;.qux:I")
@@ -1025,22 +1030,22 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto field_qux =
+  auto* field_qux =
       DexField::make_field("LFoo;.qux:I")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC,
                           std::unique_ptr<DexEncodedValue>(
-                              new DexEncodedValueBit(DEVT_INT, 1)));
+                              new DexEncodedValueBit(DEVT_INT, true)));
   creator.add_field(field_qux);
 
-  auto field_corge = DexField::make_field("LFoo;.corge:I")
-                         ->make_concrete(ACC_PUBLIC | ACC_STATIC);
+  auto* field_corge = DexField::make_field("LFoo;.corge:I")
+                          ->make_concrete(ACC_PUBLIC | ACC_STATIC);
   creator.add_field(field_corge);
 
-  auto clinit = assembler::method_from_string(R"(
+  auto* clinit = assembler::method_from_string(R"(
     (method (public static) "LFoo;.<clinit>:()V"
      (
       (sget "LFoo;.qux:I")     ; Foo.qux is the constant 0 outside this clinit,
@@ -1059,7 +1064,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   clinit->rstate.set_root(); // Make this an entry point
   creator.add_method(clinit);
 
-  auto m = assembler::method_from_string(R"(
+  auto* m = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:()V"
      (
       (sget "LFoo;.qux:I")
@@ -1086,7 +1091,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), SignedConstantDomain(0));
   EXPECT_EQ(wps.get_field_value(field_corge), SignedConstantDomain(1));
 
@@ -1117,17 +1122,17 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
 
 TEST_F(InterproceduralConstantPropagationTest,
        nonConstantFieldDueToInvokeInClinit) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
-  auto field_qux =
+  auto* field_qux =
       DexField::make_field("LFoo;.qux:I")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC,
                           std::unique_ptr<DexEncodedValue>(
-                              new DexEncodedValueBit(DEVT_INT, 0)));
+                              new DexEncodedValueBit(DEVT_INT, false)));
   creator.add_field(field_qux);
 
-  auto clinit = assembler::method_from_string(R"(
+  auto* clinit = assembler::method_from_string(R"(
     (method (public static) "LFoo;.<clinit>:()V"
      (
       (invoke-static () "LFoo;.initQux:()V")
@@ -1138,7 +1143,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   clinit->rstate.set_root(); // Make this an entry point
   creator.add_method(clinit);
 
-  auto init_qux = assembler::method_from_string(R"(
+  auto* init_qux = assembler::method_from_string(R"(
     (method (public static) "LFoo;.initQux:()V"
      (
       (const v0 1) ; this differs from the original encoded value of Foo.qux
@@ -1149,7 +1154,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   )");
   creator.add_method(init_qux);
 
-  auto m = assembler::method_from_string(R"(
+  auto* m = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:()V"
      (
       (sget "LFoo;.qux:I")
@@ -1179,7 +1184,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), ConstantValue::top());
 
   InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
@@ -1188,11 +1193,11 @@ TEST_F(InterproceduralConstantPropagationTest,
 }
 
 TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
      (
       (invoke-static () "LFoo;.constantReturnValue:()I")
@@ -1206,7 +1211,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
   )");
   creator.add_method(m1);
 
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.constantReturnValue:()I"
      (
       (const v0 0)
@@ -1235,12 +1240,12 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
   creator.set_access(creator.get_access() | ACC_NATIVE);
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
      (
       (load-param-object v0)
@@ -1255,7 +1260,7 @@ TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
   )");
   creator.add_method(m1);
 
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public) "LFoo;.virtualMethod:()I"
      (
       (const v0 0)
@@ -1284,12 +1289,12 @@ TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
   creator.set_access(creator.get_access() | ACC_NATIVE);
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
      (
       (load-param-object v0)
@@ -1304,7 +1309,7 @@ TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
   )");
   creator.add_method(m1);
 
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public) "LFoo;.virtualMethod:()I"
      (
       (const v0 0)
@@ -1337,12 +1342,12 @@ TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, NativeImplementReturnValue) {
-  auto cls1_ty = DexType::make_type("LFoo;");
+  auto* cls1_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls1_ty);
   creator.set_super(type::java_lang_Object());
   creator.set_access(creator.get_access() | ACC_NATIVE);
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
      (
       (load-param-object v0)
@@ -1357,20 +1362,20 @@ TEST_F(InterproceduralConstantPropagationTest, NativeImplementReturnValue) {
   )");
   m1->rstate.set_root();
   creator.add_method(m1);
-  auto cls1 = creator.create();
-  auto void_int =
+  auto* cls1 = creator.create();
+  auto* void_int =
       DexProto::make_proto(type::_int(), DexTypeList::make_type_list({}));
-  auto method_base = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method_base = static_cast<DexMethod*>(DexMethod::make_method(
       cls1_ty, DexString::make_string("virtualMethod"), void_int));
   method_base->make_concrete(ACC_PUBLIC | ACC_ABSTRACT,
                              std::unique_ptr<IRCode>(nullptr), true);
   cls1->add_method(method_base);
 
-  auto cls2_ty = DexType::make_type("LBoo;");
+  auto* cls2_ty = DexType::make_type("LBoo;");
   ClassCreator creator2(cls2_ty);
   creator2.set_super(cls1_ty);
   creator2.set_access(creator2.get_access() | ACC_NATIVE);
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public) "LBoo;.virtualMethod:()I"
      (
       (const v0 0)
@@ -1379,16 +1384,16 @@ TEST_F(InterproceduralConstantPropagationTest, NativeImplementReturnValue) {
     )
   )");
   creator2.add_method(m2);
-  auto cls2 = creator2.create();
+  auto* cls2 = creator2.create();
 
-  auto cls3_ty = DexType::make_type("LBar;");
+  auto* cls3_ty = DexType::make_type("LBar;");
   ClassCreator creator3(cls3_ty);
   creator3.set_super(cls1_ty);
   creator3.set_access(creator3.get_access() | ACC_NATIVE);
   DexMethodRef* m3_ref = DexMethod::make_method("LBar;.virtualMethod:()I");
-  auto m3 = m3_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, true);
+  auto* m3 = m3_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, true);
   creator3.add_method(m3);
-  auto cls3 = creator3.create();
+  auto* cls3 = creator3.create();
 
   Scope scope{cls1, cls2, cls3};
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
@@ -1415,12 +1420,12 @@ TEST_F(InterproceduralConstantPropagationTest, NativeImplementReturnValue) {
 
 TEST_F(InterproceduralConstantPropagationTest,
        NativeInterfaceImplementReturnValue) {
-  auto cls1_ty = DexType::make_type("LFoo;");
+  auto* cls1_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls1_ty);
   creator.set_super(type::java_lang_Object());
   creator.set_access(creator.get_access() | ACC_NATIVE | ACC_INTERFACE);
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
      (
       (load-param-object v0)
@@ -1435,21 +1440,21 @@ TEST_F(InterproceduralConstantPropagationTest,
   )");
   m1->rstate.set_root();
   creator.add_method(m1);
-  auto cls1 = creator.create();
-  auto void_int =
+  auto* cls1 = creator.create();
+  auto* void_int =
       DexProto::make_proto(type::_int(), DexTypeList::make_type_list({}));
-  auto method_base = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method_base = static_cast<DexMethod*>(DexMethod::make_method(
       cls1_ty, DexString::make_string("virtualMethod"), void_int));
   method_base->make_concrete(ACC_PUBLIC | ACC_INTERFACE,
                              std::unique_ptr<IRCode>(nullptr), true);
   cls1->add_method(method_base);
 
-  auto cls2_ty = DexType::make_type("LBoo;");
+  auto* cls2_ty = DexType::make_type("LBoo;");
   ClassCreator creator2(cls2_ty);
   creator2.set_super(type::java_lang_Object());
   creator2.add_interface(cls1_ty);
   creator2.set_access(creator2.get_access() | ACC_NATIVE);
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public) "LBoo;.virtualMethod:()I"
      (
       (const v0 0)
@@ -1458,17 +1463,17 @@ TEST_F(InterproceduralConstantPropagationTest,
     )
   )");
   creator2.add_method(m2);
-  auto cls2 = creator2.create();
+  auto* cls2 = creator2.create();
 
-  auto cls3_ty = DexType::make_type("LBar;");
+  auto* cls3_ty = DexType::make_type("LBar;");
   ClassCreator creator3(cls3_ty);
   creator3.set_super(type::java_lang_Object());
   creator3.add_interface(cls1_ty);
   creator3.set_access(creator3.get_access() | ACC_NATIVE);
   DexMethodRef* m3_ref = DexMethod::make_method("LBar;.virtualMethod:()I");
-  auto m3 = m3_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, true);
+  auto* m3 = m3_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, true);
   creator3.add_method(m3);
-  auto cls3 = creator3.create();
+  auto* cls3 = creator3.create();
 
   Scope scope{cls1, cls2, cls3};
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
@@ -1495,17 +1500,17 @@ TEST_F(InterproceduralConstantPropagationTest,
 
 TEST_F(InterproceduralConstantPropagationTest,
        OverrideVirtualMethodReturnValue) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
   creator.set_access(creator.get_access() | ACC_NATIVE);
 
-  auto cls_child_ty = DexType::make_type("LBoo;");
+  auto* cls_child_ty = DexType::make_type("LBoo;");
   ClassCreator child_creator(cls_child_ty);
   child_creator.set_super(cls_ty);
   child_creator.set_access(child_creator.get_access() | ACC_NATIVE);
 
-  auto m1 = assembler::method_from_string(R"(
+  auto* m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
      (
       (load-param-object v0)
@@ -1520,7 +1525,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   )");
   creator.add_method(m1);
 
-  auto m2 = assembler::method_from_string(R"(
+  auto* m2 = assembler::method_from_string(R"(
     (method (public) "LFoo;.virtualMethod:()I"
      (
       (const v0 0)
@@ -1530,7 +1535,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   )");
   creator.add_method(m2);
 
-  auto child_m3 = assembler::method_from_string(R"(
+  auto* child_m3 = assembler::method_from_string(R"(
     (method (public) "LBoo;.virtualMethod:()I"
      (
       (const v0 0)
@@ -1559,11 +1564,11 @@ TEST_F(InterproceduralConstantPropagationTest,
 }
 
 TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(I)V"
      (
       (load-param v0)
@@ -1586,7 +1591,7 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
   creator.add_method(method);
   method->rstate.set_root(); // Make this an entry point
 
-  auto never_returns = assembler::method_from_string(R"(
+  auto* never_returns = assembler::method_from_string(R"(
     (method (public static) "LFoo;.neverReturns:()V"
      (
        (:loop)
@@ -1624,11 +1629,11 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto returns_void = assembler::method_from_string(R"(
+  auto* returns_void = assembler::method_from_string(R"(
     (method (public static) "LFoo;.returnsVoid:()V"
      (
       (return-void)
@@ -1637,7 +1642,7 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   )");
   creator.add_method(returns_void);
 
-  auto never_returns = assembler::method_from_string(R"(
+  auto* never_returns = assembler::method_from_string(R"(
     (method (public static) "LFoo;.neverReturns:()V"
      (
        (:loop)
@@ -1647,7 +1652,7 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   )");
   creator.add_method(never_returns);
 
-  auto returns_constant = assembler::method_from_string(R"(
+  auto* returns_constant = assembler::method_from_string(R"(
     (method (public static) "LFoo;.returnsConstant:()I"
      (
       (const v0 1)
@@ -1657,8 +1662,9 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   )");
   creator.add_method(returns_constant);
 
-  auto no_code = DexMethod::make_method("LFoo;.no_code:()V")
-                     ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE, true);
+  auto* no_code =
+      DexMethod::make_method("LFoo;.no_code:()V")
+          ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE, true);
   creator.add_method(no_code);
 
   Scope scope{creator.create()};
@@ -1669,7 +1675,7 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
 
   // Make sure we mark methods that have a reachable return-void statement as
   // "returning" Top.
@@ -1683,11 +1689,11 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, min_sdk) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto returns_min_sdk = assembler::method_from_string(R"(
+  auto* returns_min_sdk = assembler::method_from_string(R"(
     (method (public static) "LFoo;.returnsConstant:()I"
      (
       (sget "Landroid/os/Build$VERSION;.SDK_INT:I")
@@ -1706,7 +1712,7 @@ TEST_F(InterproceduralConstantPropagationTest, min_sdk) {
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
 
   // Make sure we mark methods that have a reachable return-void statement as
   // "returning" Top.
@@ -1717,11 +1723,11 @@ TEST_F(InterproceduralConstantPropagationTest, min_sdk) {
 }
 
 TEST_F(InterproceduralConstantPropagationTest, ghost_edges) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto does_not_return = assembler::method_from_string(R"(
+  auto* does_not_return = assembler::method_from_string(R"(
     (method (public static) "LFoo;.doesNotTerminate:()I"
      (
       (load-param v0)
@@ -1744,10 +1750,10 @@ TEST_F(InterproceduralConstantPropagationTest, ghost_edges) {
   Scope scope{creator.create()};
 
   // Check that cfg will indeed have ghost edges...
-  auto code = does_not_return->get_code();
+  auto* code = does_not_return->get_code();
   code->build_cfg();
   code->cfg().calculate_exit_block();
-  auto exit_block = does_not_return->get_code()->cfg().exit_block();
+  auto* exit_block = does_not_return->get_code()->cfg().exit_block();
   EXPECT_NE(exit_block, nullptr);
   EXPECT_EQ(exit_block->preds().size(), 2);
   EXPECT_EQ(exit_block->preds().front()->type(), cfg::EDGE_GHOST);
@@ -1774,14 +1780,14 @@ TEST_F(InterproceduralConstantPropagationTest, ghost_edges) {
 
 TEST_F(InterproceduralConstantPropagationTest,
        nezConstantFieldAfterInit_simple) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  auto* field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
   creator.add_field(field_f);
 
-  auto init = assembler::method_from_string(R"(
+  auto* init = assembler::method_from_string(R"(
     (method (public constructor) "LFoo;.<init>:()V"
      (
       (load-param-object v0)
@@ -1795,7 +1801,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   init->rstate.set_root(); // Make this an entry point
   creator.add_method(init);
 
-  auto m = assembler::method_from_string(R"(
+  auto* m = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:(LFoo;)I"
      (
       (load-param-object v0)
@@ -1820,7 +1826,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
   // as the field is definitely-assigned, 0 was not added to the numeric
   // interval domain
   EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(42));
@@ -1840,14 +1846,14 @@ TEST_F(InterproceduralConstantPropagationTest,
 
 TEST_F(InterproceduralConstantPropagationTest,
        nezConstantFieldAfterInit_branching) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  auto* field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
   creator.add_field(field_f);
 
-  auto init = assembler::method_from_string(R"(
+  auto* init = assembler::method_from_string(R"(
     (method (public constructor) "LFoo;.<init>:(Z)V"
      (
       (load-param-object v0)
@@ -1867,7 +1873,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   init->rstate.set_root(); // Make this an entry point
   creator.add_method(init);
 
-  auto m = assembler::method_from_string(R"(
+  auto* m = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:(LFoo;)I"
      (
       (load-param-object v0)
@@ -1896,7 +1902,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
   // as the field is definitely-assigned, even with the branching in the
   // constructor, 0 was not added to the numeric interval domain
   EXPECT_EQ(wps.get_field_value(field_f),
@@ -1919,14 +1925,14 @@ TEST_F(InterproceduralConstantPropagationTest,
 
 TEST_F(InterproceduralConstantPropagationTest,
        constantFieldAfterInit_this_escaped) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  auto* field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
   creator.add_field(field_f);
 
-  auto init = assembler::method_from_string(R"(
+  auto* init = assembler::method_from_string(R"(
     (method (public constructor) "LFoo;.<init>:()V"
      (
       (load-param-object v0)
@@ -1941,7 +1947,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   init->rstate.set_root(); // Make this an entry point
   creator.add_method(init);
 
-  auto m = assembler::method_from_string(R"(
+  auto* m = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:(LFoo;)I"
      (
       (load-param-object v0)
@@ -1966,7 +1972,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as 'this' escaped before the
   // assignment
   EXPECT_EQ(wps.get_field_value(field_f),
@@ -1988,14 +1994,14 @@ TEST_F(InterproceduralConstantPropagationTest,
 
 TEST_F(InterproceduralConstantPropagationTest,
        constantFieldAfterInit_nontrivial_external_base_ctor) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Throwable());
 
-  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  auto* field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
   creator.add_field(field_f);
 
-  auto init = assembler::method_from_string(R"(
+  auto* init = assembler::method_from_string(R"(
     (method (public constructor) "LFoo;.<init>:()V"
      (
       (load-param-object v0)
@@ -2009,7 +2015,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   init->rstate.set_root(); // Make this an entry point
   creator.add_method(init);
 
-  auto m = assembler::method_from_string(R"(
+  auto* m = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:(LFoo;)I"
      (
       (load-param-object v0)
@@ -2034,7 +2040,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as 'this' escaped before the
   // assignment
   EXPECT_EQ(wps.get_field_value(field_f),
@@ -2056,14 +2062,14 @@ TEST_F(InterproceduralConstantPropagationTest,
 
 TEST_F(InterproceduralConstantPropagationTest,
        constantFieldAfterInit_relaxed_init) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Throwable());
 
-  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  auto* field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
   creator.add_field(field_f);
 
-  auto init = assembler::method_from_string(R"(
+  auto* init = assembler::method_from_string(R"(
     (method (public constructor) "LFoo;.<init>:()V"
      (
       (load-param-object v0)
@@ -2076,7 +2082,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   init->rstate.set_root(); // Make this an entry point
   creator.add_method(init);
 
-  auto m = assembler::method_from_string(R"(
+  auto* m = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:(LFoo;)I"
      (
       (new-instance "LFoo;")
@@ -2103,7 +2109,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as no actual constructor was ever
   // called
   EXPECT_EQ(wps.get_field_value(field_f),
@@ -2127,14 +2133,14 @@ TEST_F(InterproceduralConstantPropagationTest,
 
 TEST_F(InterproceduralConstantPropagationTest,
        constantFieldAfterInit_read_before_write) {
-  auto cls_ty = DexType::make_type("LFoo;");
+  auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  auto* field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
   creator.add_field(field_f);
 
-  auto init = assembler::method_from_string(R"(
+  auto* init = assembler::method_from_string(R"(
     (method (public constructor) "LFoo;.<init>:()V"
      (
       (load-param-object v0)
@@ -2150,7 +2156,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   init->rstate.set_root(); // Make this an entry point
   creator.add_method(init);
 
-  auto m = assembler::method_from_string(R"(
+  auto* m = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:(LFoo;)I"
      (
       (load-param-object v0)
@@ -2175,7 +2181,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
-  auto& wps = fp_iter->get_whole_program_state();
+  const auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as the field was read before written
   EXPECT_EQ(wps.get_field_value(field_f),
             SignedConstantDomain::from_constants({0, 42}));

@@ -25,35 +25,35 @@ TEST_F(TypeAnalysisTransformTest, MethodHasNoEqDefined) {
   auto scope = build_class_scope(stores);
   set_root_method("LTypeAnalysisRemoveRedundantCmp;.main:()V");
 
-  auto gta = new GlobalTypeAnalysisPass();
-  auto dce = new LocalDcePass();
+  auto* gta = new GlobalTypeAnalysisPass();
+  auto* dce = new LocalDcePass();
   gta->get_config().transform.remove_redundant_null_checks = true;
   std::vector<Pass*> passes{gta, dce};
   run_passes(passes);
 
-  auto x_method =
+  auto* x_method =
       DexMethod::get_method("LTypeAnalysisRemoveRedundantCmp;.getX:()I")
           ->as_def();
-  auto codex = x_method->get_code();
+  auto* codex = x_method->get_code();
   ASSERT_NE(nullptr, codex);
   auto ii = InstructionIterable(x_method->get_code());
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     EXPECT_NE(insn->opcode(), OPCODE_IF_EQZ);
     EXPECT_NE(insn->opcode(), OPCODE_IF_NEZ);
   }
 
-  auto y_method =
+  auto* y_method =
       DexMethod::get_method(
           "LTypeAnalysisRemoveRedundantCmp;.getYy:()Ljava/lang/String;")
           ->as_def();
-  auto codey = y_method->get_code();
+  auto* codey = y_method->get_code();
   ASSERT_NE(nullptr, codey);
   auto jj = InstructionIterable(y_method->get_code());
   auto end2 = jj.end();
   for (auto it = jj.begin(); it != end2; ++it) {
-    [[maybe_unused]] auto insn = it->insn;
+    [[maybe_unused]] auto* insn = it->insn;
   }
 }
 

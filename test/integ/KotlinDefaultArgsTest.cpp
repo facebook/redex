@@ -25,7 +25,7 @@ using ::testing::NotNull;
 class KotlinDefaultArgsTest : public RedexIntegrationTest {
  private:
   void set_root_method(std::string_view full_name) {
-    auto method = DexMethod::get_method(full_name)->as_def();
+    auto* method = DexMethod::get_method(full_name)->as_def();
     ASSERT_THAT(method, NotNull()) << "method " << full_name << " not found";
     method->rstate.set_root();
   }
@@ -37,8 +37,8 @@ class KotlinDefaultArgsTest : public RedexIntegrationTest {
     RedexIntegrationTest::SetUp();
 
     set_root_method(main_method_sig);
-    const auto main_method = DexMethod::get_method(main_method_sig)->as_def();
-    auto code_main = main_method->get_code();
+    auto* const main_method = DexMethod::get_method(main_method_sig)->as_def();
+    auto* code_main = main_method->get_code();
     ASSERT_THAT(code_main, NotNull()) << "main method not found";
   }
 
@@ -52,13 +52,14 @@ class KotlinDefaultArgsTest : public RedexIntegrationTest {
 TEST_F(KotlinDefaultArgsTest, UnoptimizedGreetHasHelloAnd) {
   // Sanity check on unoptimized code.
 
-  const auto default_arg_method = DexMethod::get_method(greet_method_signature);
-  auto code_default_arg = default_arg_method->as_def()->get_code();
+  auto* const default_arg_method =
+      DexMethod::get_method(greet_method_signature);
+  auto* code_default_arg = default_arg_method->as_def()->get_code();
   ASSERT_THAT(code_default_arg, NotNull());
 
-  const auto syn_default_arg_method =
+  auto* const syn_default_arg_method =
       DexMethod::get_method(greet_default_method_signature);
-  auto code_syn_default_arg = syn_default_arg_method->as_def()->get_code();
+  auto* code_syn_default_arg = syn_default_arg_method->as_def()->get_code();
   ASSERT_THAT(code_syn_default_arg, NotNull())
       << "Synthetic default method not found";
   EXPECT_THAT(assembler::to_string(code_syn_default_arg), HasSubstr("Hello"))
@@ -70,17 +71,18 @@ TEST_F(KotlinDefaultArgsTest, UnoptimizedGreetHasHelloAnd) {
 }
 
 TEST_F(KotlinDefaultArgsTest, OptimizedGreetDoesNotHaveHelloAnd) {
-  const auto default_arg_method = DexMethod::get_method(greet_method_signature);
-  auto code_default_arg = default_arg_method->as_def()->get_code();
+  auto* const default_arg_method =
+      DexMethod::get_method(greet_method_signature);
+  auto* code_default_arg = default_arg_method->as_def()->get_code();
   ASSERT_THAT(code_default_arg, NotNull());
 
   Pass* constp = new InterproceduralConstantPropagationPass();
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto syn_default_arg_method =
+  auto* const syn_default_arg_method =
       DexMethod::get_method(greet_default_method_signature);
-  auto code_syn_default_arg = syn_default_arg_method->as_def()->get_code();
+  auto* code_syn_default_arg = syn_default_arg_method->as_def()->get_code();
   ASSERT_THAT(code_syn_default_arg, NotNull())
       << "Synthetic default method not found";
   EXPECT_THAT(assembler::to_string(code_syn_default_arg), HasSubstr("Guest"))

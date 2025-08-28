@@ -12,21 +12,21 @@
 #include "VerifyUtil.h"
 
 TEST_F(PreVerify, SimpleInvokeVirtual) {
-  auto base_cls = find_class_named(classes, "Lcom/facebook/redextest/Base;");
+  auto* base_cls = find_class_named(classes, "Lcom/facebook/redextest/Base;");
   ASSERT_NE(nullptr, base_cls);
-  auto sub1_cls = find_class_named(classes, "Lcom/facebook/redextest/SubOne;");
+  auto* sub1_cls = find_class_named(classes, "Lcom/facebook/redextest/SubOne;");
   ASSERT_NE(nullptr, sub1_cls);
-  auto sub2_cls = find_class_named(classes, "Lcom/facebook/redextest/SubTwo;");
+  auto* sub2_cls = find_class_named(classes, "Lcom/facebook/redextest/SubTwo;");
   ASSERT_NE(nullptr, sub2_cls);
-  auto sub3_cls =
+  auto* sub3_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SubThree;");
   ASSERT_NE(nullptr, sub3_cls);
 
   // Verify invoke-virtual bindings.
-  auto test_cls =
+  auto* test_cls =
       find_class_named(classes, "Lcom/facebook/redextest/ResolveRefsTest;");
   ASSERT_NE(nullptr, test_cls);
-  auto m = find_vmethod_named(*test_cls, "testSimpleInvokeVirtual");
+  auto* m = find_vmethod_named(*test_cls, "testSimpleInvokeVirtual");
   ASSERT_NE(nullptr, m);
   ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  base_cls->get_type()));
@@ -39,21 +39,21 @@ TEST_F(PreVerify, SimpleInvokeVirtual) {
 }
 
 TEST_F(PostVerify, SimpleInvokeVirtual) {
-  auto base_cls = find_class_named(classes, "Lcom/facebook/redextest/Base;");
+  auto* base_cls = find_class_named(classes, "Lcom/facebook/redextest/Base;");
   ASSERT_NE(nullptr, base_cls);
-  auto sub1_cls = find_class_named(classes, "Lcom/facebook/redextest/SubOne;");
+  auto* sub1_cls = find_class_named(classes, "Lcom/facebook/redextest/SubOne;");
   ASSERT_NE(nullptr, sub1_cls);
-  auto sub2_cls = find_class_named(classes, "Lcom/facebook/redextest/SubTwo;");
+  auto* sub2_cls = find_class_named(classes, "Lcom/facebook/redextest/SubTwo;");
   ASSERT_NE(nullptr, sub2_cls);
-  auto sub3_cls =
+  auto* sub3_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SubThree;");
   ASSERT_NE(nullptr, sub3_cls);
 
   // Verify invoke-virtual bindings.
-  auto test_cls =
+  auto* test_cls =
       find_class_named(classes, "Lcom/facebook/redextest/ResolveRefsTest;");
   ASSERT_NE(nullptr, test_cls);
-  auto m = find_vmethod_named(*test_cls, "testSimpleInvokeVirtual");
+  auto* m = find_vmethod_named(*test_cls, "testSimpleInvokeVirtual");
   ASSERT_NE(nullptr, m);
   ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  base_cls->get_type()));
@@ -66,21 +66,21 @@ TEST_F(PostVerify, SimpleInvokeVirtual) {
 }
 
 TEST_F(PostVerify, FactoryBaseInvokeVirtual) {
-  auto base_cls = find_class_named(classes, "Lcom/facebook/redextest/Base;");
+  auto* base_cls = find_class_named(classes, "Lcom/facebook/redextest/Base;");
   ASSERT_NE(nullptr, base_cls);
-  auto sub1_cls = find_class_named(classes, "Lcom/facebook/redextest/SubOne;");
+  auto* sub1_cls = find_class_named(classes, "Lcom/facebook/redextest/SubOne;");
   ASSERT_NE(nullptr, sub1_cls);
-  auto sub2_cls = find_class_named(classes, "Lcom/facebook/redextest/SubTwo;");
+  auto* sub2_cls = find_class_named(classes, "Lcom/facebook/redextest/SubTwo;");
   ASSERT_NE(nullptr, sub2_cls);
-  auto sub3_cls =
+  auto* sub3_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SubThree;");
   ASSERT_NE(nullptr, sub3_cls);
 
   // Verify invoke-virtual bindings.
-  auto test_cls =
+  auto* test_cls =
       find_class_named(classes, "Lcom/facebook/redextest/ResolveRefsTest;");
   ASSERT_NE(nullptr, test_cls);
-  auto m = find_vmethod_named(*test_cls, "testFactoryBaseInvokeVirtual");
+  auto* m = find_vmethod_named(*test_cls, "testFactoryBaseInvokeVirtual");
   ASSERT_NE(nullptr, m);
   ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  base_cls->get_type()));
@@ -92,27 +92,27 @@ TEST_F(PostVerify, FactoryBaseInvokeVirtual) {
                                  sub3_cls->get_type()));
 
   // rtype is specialized
-  auto s1_getinstance = find_dmethod_named(*sub1_cls, "getInstance");
+  auto* s1_getinstance = find_dmethod_named(*sub1_cls, "getInstance");
   ASSERT_NE(nullptr, s1_getinstance);
   ASSERT_EQ(s1_getinstance->get_proto()->get_rtype(), sub1_cls->get_type());
 }
 
 TEST_F(PostVerify, FactoryCastInvokeVirtual) {
-  auto base_cls = find_class_named(classes, "Lcom/facebook/redextest/Base;");
+  auto* base_cls = find_class_named(classes, "Lcom/facebook/redextest/Base;");
   ASSERT_NE(nullptr, base_cls);
-  auto sub1_cls = find_class_named(classes, "Lcom/facebook/redextest/SubOne;");
+  auto* sub1_cls = find_class_named(classes, "Lcom/facebook/redextest/SubOne;");
   ASSERT_NE(nullptr, sub1_cls);
-  auto sub2_cls = find_class_named(classes, "Lcom/facebook/redextest/SubTwo;");
+  auto* sub2_cls = find_class_named(classes, "Lcom/facebook/redextest/SubTwo;");
   ASSERT_NE(nullptr, sub2_cls);
-  auto sub3_cls =
+  auto* sub3_cls =
       find_class_named(classes, "Lcom/facebook/redextest/SubThree;");
   ASSERT_NE(nullptr, sub3_cls);
 
   // Verify invoke-virtual bindings.
-  auto test_cls =
+  auto* test_cls =
       find_class_named(classes, "Lcom/facebook/redextest/ResolveRefsTest;");
   ASSERT_NE(nullptr, test_cls);
-  auto m = find_vmethod_named(*test_cls, "testFactoryCastInvokeVirtual");
+  auto* m = find_vmethod_named(*test_cls, "testFactoryCastInvokeVirtual");
   ASSERT_NE(nullptr, m);
   ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  base_cls->get_type()));
@@ -125,48 +125,48 @@ TEST_F(PostVerify, FactoryCastInvokeVirtual) {
 }
 
 TEST_F(PreVerify, SimpleRTypeSpecialization) {
-  auto intf_cls = find_class_named(classes, "Lcom/facebook/redextest/Intf;");
+  auto* intf_cls = find_class_named(classes, "Lcom/facebook/redextest/Intf;");
   ASSERT_NE(nullptr, intf_cls);
-  auto impl_cls = find_class_named(classes, "Lcom/facebook/redextest/Impl;");
+  auto* impl_cls = find_class_named(classes, "Lcom/facebook/redextest/Impl;");
   ASSERT_NE(nullptr, impl_cls);
 
   // rtype is specialized
-  auto intf_getinstance = find_vmethod_named(*intf_cls, "getInstance");
+  auto* intf_getinstance = find_vmethod_named(*intf_cls, "getInstance");
   ASSERT_NE(nullptr, intf_getinstance);
   ASSERT_EQ(intf_getinstance->get_proto()->get_rtype(), intf_cls->get_type());
 
-  auto impl_getinstance = find_vmethod_named(*impl_cls, "getInstance");
+  auto* impl_getinstance = find_vmethod_named(*impl_cls, "getInstance");
   ASSERT_NE(nullptr, impl_getinstance);
   ASSERT_EQ(impl_getinstance->get_proto()->get_rtype(), intf_cls->get_type());
 }
 
 TEST_F(PostVerify, SimpleRTypeSpecialization) {
-  auto intf_cls = find_class_named(classes, "Lcom/facebook/redextest/Intf;");
+  auto* intf_cls = find_class_named(classes, "Lcom/facebook/redextest/Intf;");
   ASSERT_NE(nullptr, intf_cls);
-  auto impl_cls = find_class_named(classes, "Lcom/facebook/redextest/Impl;");
+  auto* impl_cls = find_class_named(classes, "Lcom/facebook/redextest/Impl;");
   ASSERT_NE(nullptr, impl_cls);
 
   // rtype is specialized
-  auto intf_getinstance = find_vmethod_named(*intf_cls, "getInstance");
+  auto* intf_getinstance = find_vmethod_named(*intf_cls, "getInstance");
   ASSERT_NE(nullptr, intf_getinstance);
   ASSERT_EQ(intf_getinstance->get_proto()->get_rtype(), impl_cls->get_type());
 
-  auto impl_getinstance = find_vmethod_named(*impl_cls, "getInstance");
+  auto* impl_getinstance = find_vmethod_named(*impl_cls, "getInstance");
   ASSERT_NE(nullptr, impl_getinstance);
   ASSERT_EQ(impl_getinstance->get_proto()->get_rtype(), impl_cls->get_type());
 }
 
 TEST_F(PostVerify, RTypeSpecializationCollision) {
-  auto ani_cls = find_class_named(classes, "Lcom/facebook/redextest/Animal;");
+  auto* ani_cls = find_class_named(classes, "Lcom/facebook/redextest/Animal;");
   ASSERT_NE(nullptr, ani_cls);
-  auto cat_cls = find_class_named(classes, "Lcom/facebook/redextest/Cat;");
+  auto* cat_cls = find_class_named(classes, "Lcom/facebook/redextest/Cat;");
   ASSERT_NE(nullptr, cat_cls);
-  auto badcat_cls =
+  auto* badcat_cls =
       find_class_named(classes, "Lcom/facebook/redextest/NotYourFavoriteCat;");
   ASSERT_NE(nullptr, badcat_cls);
 
   // rtype is not specializd due to collision.
-  auto cat_foo = find_vmethod_named(*cat_cls, "foo");
+  auto* cat_foo = find_vmethod_named(*cat_cls, "foo");
   ASSERT_NE(nullptr, cat_foo);
   ASSERT_EQ(cat_foo->get_proto()->get_rtype(), ani_cls->get_type());
   // Likewise, rtype is not specialized in the subclass.
@@ -180,7 +180,7 @@ TEST_F(PostVerify, RTypeSpecializationCollision) {
   auto* foo_badcat_proto = DexProto::make_proto(
       badcat_cls->get_type(), cat_foo->get_proto()->get_args());
   ASSERT_NE(nullptr, foo_badcat_proto);
-  auto foo_badcat = find_vmethod(*badcat_cls, "foo", foo_badcat_proto);
+  auto* foo_badcat = find_vmethod(*badcat_cls, "foo", foo_badcat_proto);
   ASSERT_NE(nullptr, foo_badcat);
   auto* foo_cat_proto = DexProto::make_proto(cat_cls->get_type(),
                                              cat_foo->get_proto()->get_args());
@@ -189,105 +189,107 @@ TEST_F(PostVerify, RTypeSpecializationCollision) {
 }
 
 TEST_F(PostVerify, testRTypeSpecializationOnMirandaOverridden) {
-  auto ani_cls = find_class_named(classes, "Lcom/facebook/redextest/Animal;");
+  auto* ani_cls = find_class_named(classes, "Lcom/facebook/redextest/Animal;");
   ASSERT_NE(nullptr, ani_cls);
-  auto cat_cls = find_class_named(classes, "Lcom/facebook/redextest/Cat;");
+  auto* cat_cls = find_class_named(classes, "Lcom/facebook/redextest/Cat;");
   ASSERT_NE(nullptr, cat_cls);
 
-  auto mad_cls = find_class_named(classes, "Lcom/facebook/redextest/Mad;");
+  auto* mad_cls = find_class_named(classes, "Lcom/facebook/redextest/Mad;");
   ASSERT_NE(nullptr, mad_cls);
-  auto madman_cls =
+  auto* madman_cls =
       find_class_named(classes, "Lcom/facebook/redextest/MadMan;");
   ASSERT_NE(nullptr, madman_cls);
-  auto madwoman_cls =
+  auto* madwoman_cls =
       find_class_named(classes, "Lcom/facebook/redextest/MadWoman;");
   ASSERT_NE(nullptr, madwoman_cls);
 
-  auto crazy_cls = find_class_named(classes, "Lcom/facebook/redextest/Crazy;");
+  auto* crazy_cls = find_class_named(classes, "Lcom/facebook/redextest/Crazy;");
   ASSERT_NE(nullptr, crazy_cls);
-  auto crazyperson_cls =
+  auto* crazyperson_cls =
       find_class_named(classes, "Lcom/facebook/redextest/CrazyPerson;");
   ASSERT_NE(nullptr, crazyperson_cls);
 
   // rtype is not specialized due to complex miranda overridden.
-  auto mad_baz = find_vmethod_named(*mad_cls, "baz");
+  auto* mad_baz = find_vmethod_named(*mad_cls, "baz");
   ASSERT_NE(nullptr, mad_baz);
   ASSERT_EQ(mad_baz->get_proto()->get_rtype(), ani_cls->get_type());
 
-  auto madman_baz = find_vmethod_named(*madman_cls, "baz");
+  auto* madman_baz = find_vmethod_named(*madman_cls, "baz");
   ASSERT_NE(nullptr, madman_baz);
   ASSERT_EQ(madman_baz->get_proto()->get_rtype(), ani_cls->get_type());
 
-  auto madwoman_baz = find_vmethod_named(*madwoman_cls, "baz");
+  auto* madwoman_baz = find_vmethod_named(*madwoman_cls, "baz");
   ASSERT_NE(nullptr, madwoman_baz);
   ASSERT_EQ(madwoman_baz->get_proto()->get_rtype(), ani_cls->get_type());
 
-  auto crazy_baz = find_vmethod_named(*crazy_cls, "baz");
+  auto* crazy_baz = find_vmethod_named(*crazy_cls, "baz");
   ASSERT_NE(nullptr, crazy_baz);
   ASSERT_EQ(crazy_baz->get_proto()->get_rtype(), ani_cls->get_type());
 }
 
 TEST_F(PreVerify, ResolveMirandaToInterface) {
-  auto conc_cls = find_class_named(classes, "Lcom/facebook/redextest/Concept;");
+  auto* conc_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/Concept;");
   ASSERT_NE(nullptr, conc_cls);
-  auto incomp_cls =
+  auto* incomp_cls =
       find_class_named(classes, "Lcom/facebook/redextest/Incomplete;");
   ASSERT_NE(nullptr, incomp_cls);
-  auto comp_cls =
+  auto* comp_cls =
       find_class_named(classes, "Lcom/facebook/redextest/Complete;");
   ASSERT_NE(nullptr, comp_cls);
 
   // Miranda pure ref
-  auto incomp_getfake = find_vmethod_named(*incomp_cls, "getFake");
+  auto* incomp_getfake = find_vmethod_named(*incomp_cls, "getFake");
   ASSERT_NE(nullptr, incomp_getfake);
   ASSERT_NE(nullptr, find_invoke(incomp_getfake, DOPCODE_INVOKE_VIRTUAL,
                                  "getReal", incomp_cls->get_type()));
 
   // Interface virtual scope rtype not specialized
-  auto conc_getreal = find_vmethod_named(*conc_cls, "getReal");
+  auto* conc_getreal = find_vmethod_named(*conc_cls, "getReal");
   ASSERT_EQ(conc_getreal->get_proto()->get_rtype(), conc_cls->get_type());
-  auto comp_getreal = find_vmethod_named(*comp_cls, "getReal");
+  auto* comp_getreal = find_vmethod_named(*comp_cls, "getReal");
   ASSERT_EQ(comp_getreal->get_proto()->get_rtype(), conc_cls->get_type());
 }
 
 TEST_F(PostVerify, ResolveMirandaToInterface) {
-  auto conc_cls = find_class_named(classes, "Lcom/facebook/redextest/Concept;");
+  auto* conc_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/Concept;");
   ASSERT_NE(nullptr, conc_cls);
-  auto incomp_cls =
+  auto* incomp_cls =
       find_class_named(classes, "Lcom/facebook/redextest/Incomplete;");
   ASSERT_NE(nullptr, incomp_cls);
-  auto comp_cls =
+  auto* comp_cls =
       find_class_named(classes, "Lcom/facebook/redextest/Complete;");
   ASSERT_NE(nullptr, comp_cls);
 
   // Pure ref resolved to interface method
-  auto incomp_getfake = find_vmethod_named(*incomp_cls, "getFake");
+  auto* incomp_getfake = find_vmethod_named(*incomp_cls, "getFake");
   ASSERT_NE(nullptr, incomp_getfake);
   ASSERT_NE(nullptr, find_invoke(incomp_getfake, DOPCODE_INVOKE_INTERFACE,
                                  "getReal", conc_cls->get_type()));
 
   // Interface virtual scope rtype specialized
-  auto conc_getreal = find_vmethod_named(*conc_cls, "getReal");
+  auto* conc_getreal = find_vmethod_named(*conc_cls, "getReal");
   ASSERT_EQ(conc_getreal->get_proto()->get_rtype(), comp_cls->get_type());
-  auto comp_getreal = find_vmethod_named(*comp_cls, "getReal");
+  auto* comp_getreal = find_vmethod_named(*comp_cls, "getReal");
   ASSERT_EQ(comp_getreal->get_proto()->get_rtype(), comp_cls->get_type());
 }
 
 TEST_F(PreVerify, ResolveObjectArrayClone) {
-  auto cp_cls = find_class_named(classes, "Lcom/facebook/redextest/Copiable;");
+  auto* cp_cls = find_class_named(classes, "Lcom/facebook/redextest/Copiable;");
   ASSERT_NE(nullptr, cp_cls);
 
-  auto cp_to_array = find_vmethod_named(*cp_cls, "copyToArray");
+  auto* cp_to_array = find_vmethod_named(*cp_cls, "copyToArray");
   ASSERT_NE(nullptr, cp_to_array);
   ASSERT_NE(nullptr, find_invoke(cp_to_array, DOPCODE_INVOKE_VIRTUAL, "clone",
                                  type::make_array_type(cp_cls->get_type())));
 }
 
 TEST_F(PostVerify, ResolveObjectArrayClone) {
-  auto cp_cls = find_class_named(classes, "Lcom/facebook/redextest/Copiable;");
+  auto* cp_cls = find_class_named(classes, "Lcom/facebook/redextest/Copiable;");
   ASSERT_NE(nullptr, cp_cls);
 
-  auto cp_to_array = find_vmethod_named(*cp_cls, "copyToArray");
+  auto* cp_to_array = find_vmethod_named(*cp_cls, "copyToArray");
   ASSERT_NE(nullptr, cp_to_array);
   ASSERT_NE(nullptr,
             find_invoke(cp_to_array, DOPCODE_INVOKE_VIRTUAL, "clone",

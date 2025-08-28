@@ -36,7 +36,8 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
     // we need in the tests to create a proper scope
     virt_scope::get_vmethods(type::java_lang_Object());
 
-    auto object_ctor = static_cast<DexMethod*>(method::java_lang_Object_ctor());
+    auto* object_ctor =
+        static_cast<DexMethod*>(method::java_lang_Object_ctor());
     object_ctor->set_access(ACC_PUBLIC | ACC_CONSTRUCTOR);
     object_ctor->set_external();
     type_class(type::java_lang_Object())->add_method(object_ctor);
@@ -44,7 +45,7 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
   }
 
   void run() {
-    auto config_file_env = std::getenv("config_file");
+    auto* config_file_env = std::getenv("config_file");
     always_assert_log(
         config_file_env,
         "Config file must be specified to ObjectEscapeAnalysisTest.\n");
@@ -62,10 +63,10 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
   }
 
   sparta::s_expr get_s_expr(const char* method_name) {
-    auto method = DexMethod::get_method(method_name);
+    auto* method = DexMethod::get_method(method_name);
     always_assert(method);
     always_assert(method->is_def());
-    auto code = method->as_def()->get_code();
+    auto* code = method->as_def()->get_code();
     always_assert(code);
     for (auto ii = code->begin(); ii != code->end();) {
       if (ii->type == MFLOW_DEBUG || ii->type == MFLOW_POSITION) {
@@ -78,10 +79,10 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
   }
 
   bool contains_invoke(const char* method_name) {
-    auto method = DexMethod::get_method(method_name);
+    auto* method = DexMethod::get_method(method_name);
     always_assert(method);
     always_assert(method->is_def());
-    auto code = method->as_def()->get_code();
+    auto* code = method->as_def()->get_code();
     always_assert(code);
     for (auto& mie : InstructionIterable(code)) {
       if (opcode::is_an_invoke(mie.insn->opcode())) {

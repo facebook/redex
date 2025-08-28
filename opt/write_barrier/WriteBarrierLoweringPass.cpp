@@ -20,8 +20,8 @@ using namespace dex_asm;
 
 // Lredex/$StoreFenceHelper;.DUMMY_VOLATILE:I
 DexField* make_volatile_field(DexClass* cls) {
-  auto name = DexString::make_string("DUMMY_VOLATILE");
-  auto unsafe_field =
+  const auto* name = DexString::make_string("DUMMY_VOLATILE");
+  auto* unsafe_field =
       DexField::make_field(cls->get_type(), name, DexType::make_type("I"))
           ->make_concrete(ACC_PUBLIC | ACC_VOLATILE | ACC_STATIC);
   cls->add_field(unsafe_field);
@@ -35,14 +35,14 @@ DexField* make_volatile_field(DexClass* cls) {
  */
 DexFieldRef* materialize_write_barrier_field(DexStoresVector* stores) {
   std::string helper_cls_name = "Lredex/$StoreFenceHelper;";
-  auto helper_type = DexType::get_type(helper_cls_name);
+  auto* helper_type = DexType::get_type(helper_cls_name);
   always_assert(!helper_type);
   helper_type = DexType::make_type(helper_cls_name);
   ClassCreator cc(helper_type);
   cc.set_access(ACC_PUBLIC | ACC_FINAL);
   cc.set_super(type::java_lang_Object());
   DexClass* write_barrier_cls = cc.create();
-  auto dummy_volatile_field = make_volatile_field(write_barrier_cls);
+  auto* dummy_volatile_field = make_volatile_field(write_barrier_cls);
 
   // Put in primary dex.
   auto& dexen = (*stores)[0].get_dexen()[0];
@@ -155,7 +155,7 @@ void WriteBarrierLoweringPass::run_pass(DexStoresVector& stores,
     return;
   }
   DexFieldRef* volatile_field = materialize_write_barrier_field(&stores);
-  for (auto insn : UnorderedIterable(volatile_field_writes)) {
+  for (auto* insn : UnorderedIterable(volatile_field_writes)) {
     insn->set_field(volatile_field);
   }
 }

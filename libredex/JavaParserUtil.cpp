@@ -60,7 +60,8 @@ bool is_field_modifier(std::string_view token) {
       JAVA_TRANSIENT_MODIFIER,
       JAVA_VOLATILE_MODIFIER,
   };
-  return JAVA_ACCESS_MODIFIERS.count(token) || field_modifiers.count(token);
+  return (JAVA_ACCESS_MODIFIERS.count(token) != 0u) ||
+         (field_modifiers.count(token) != 0u);
 }
 
 bool is_method_modifier(std::string_view token) {
@@ -68,7 +69,8 @@ bool is_method_modifier(std::string_view token) {
       JAVA_STATIC_MODIFIER,       JAVA_FINAL_MODIFIER,  JAVA_ABSTRACT_MODIFIER,
       JAVA_SYNCHRONIZED_MODIFIER, JAVA_NATIVE_MODIFIER, JAVA_STRICTFP_MODIFIER,
   };
-  return JAVA_ACCESS_MODIFIERS.count(token) || method_modifiers.count(token);
+  return (JAVA_ACCESS_MODIFIERS.count(token) != 0u) ||
+         (method_modifiers.count(token) != 0u);
 }
 
 dex_member_refs::FieldDescriptorTokens parse_field_declaration(

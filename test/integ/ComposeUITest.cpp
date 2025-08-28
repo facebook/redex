@@ -41,7 +41,7 @@ MATCHER(ContainsGetTestDefaultCall, "Contains getTestDefault call") {
 class ComposeUITest : public RedexIntegrationTest {
  private:
   static void set_root_method(std::string_view full_name) {
-    auto method = DexMethod::get_method(full_name)->as_def();
+    auto* method = DexMethod::get_method(full_name)->as_def();
     ASSERT_THAT(method, NotNull()) << "method " << full_name << " not found";
     method->rstate.set_root();
   }
@@ -54,8 +54,8 @@ class ComposeUITest : public RedexIntegrationTest {
     RedexIntegrationTest::SetUp();
 
     set_root_method(main_method_sig);
-    const auto main_method = DexMethod::get_method(main_method_sig)->as_def();
-    auto code_main = main_method->get_code();
+    auto* const main_method = DexMethod::get_method(main_method_sig)->as_def();
+    auto* code_main = main_method->get_code();
     ASSERT_THAT(code_main, NotNull()) << "HelloWorldText method not found";
   }
 
@@ -66,9 +66,9 @@ class ComposeUITest : public RedexIntegrationTest {
 
 TEST_F(ComposeUITest, UnoptimizedHasTestDefault) {
   // Sanity check that ensures input isn't already optimized.
-  const auto super_text_method =
+  auto* const super_text_method =
       DexMethod::get_method(super_text_printer_method_signature);
-  const auto code_super_text = super_text_method->as_def()->get_code();
+  auto* const code_super_text = super_text_method->as_def()->get_code();
   ASSERT_THAT(code_super_text, NotNull()) << "SuperText method not found";
   EXPECT_THAT(*code_super_text, ContainsGetTestDefaultCall())
       << default_method_name << " call is unexpectedly optimized out: "
@@ -80,9 +80,9 @@ TEST_F(ComposeUITest, OptimizedDoesNotHaveTestDefault) {
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto super_text_method =
+  auto* const super_text_method =
       DexMethod::get_method(super_text_printer_method_signature);
-  auto code_super_text = super_text_method->as_def()->get_code();
+  auto* code_super_text = super_text_method->as_def()->get_code();
   ASSERT_THAT(code_super_text, NotNull()) << "SuperText method not found";
   EXPECT_THAT(*code_super_text, Not(ContainsGetTestDefaultCall()))
       << default_method_name << " call is unexpectedly optimized out: "

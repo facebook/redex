@@ -65,10 +65,10 @@ void gather_sufficiently_warm_and_hot_methods(
     auto& method_profiles = config_files.get_method_profiles();
     if (method_profiles.has_stats()) {
       has_method_profiles = true;
-      for (auto& p : method_profiles.all_interactions()) {
+      for (const auto& p : method_profiles.all_interactions()) {
         bool is_throughput_interaction =
             throughput_interaction_ids.count(p.first) != 0;
-        auto& method_stats = p.second;
+        const auto& method_stats = p.second;
         walk::methods(
             scope,
             [throughput_methods, sufficiently_warm_methods,
@@ -114,7 +114,7 @@ void gather_sufficiently_warm_and_hot_methods(
   } else {
     for (const auto& str : config_files.get_coldstart_classes()) {
       DexType* type = DexType::get_type(str);
-      if (type) {
+      if (type != nullptr) {
         perf_sensitive_classes.insert(type);
       }
     }
@@ -133,7 +133,8 @@ void gather_sufficiently_warm_and_hot_methods(
     walk::methods(scope,
                   [sufficiently_warm_methods,
                    &perf_sensitive_classes](DexMethod* method) {
-                    if (perf_sensitive_classes.count(method->get_class())) {
+                    if (perf_sensitive_classes.count(method->get_class()) !=
+                        0u) {
                       sufficiently_warm_methods->insert(method);
                     }
                   });
@@ -148,7 +149,7 @@ void gather_sufficiently_warm_and_hot_methods(
     walk::methods(
         scope,
         [sufficiently_hot_methods, &perf_sensitive_classes](DexMethod* method) {
-          if (perf_sensitive_classes.count(method->get_class())) {
+          if (perf_sensitive_classes.count(method->get_class()) != 0u) {
             sufficiently_hot_methods->insert(method);
           }
         });
@@ -198,13 +199,13 @@ std::vector<DexMethod*> get_possibly_warm_or_hot_methods(
           [&method_profiles, sufficiently_hot_methods,
            sufficiently_warm_methods,
            block_profiles_hits](DexMethod* m, std::vector<DexMethod*>* acc) {
-            auto code = m->get_code();
-            if (!code) {
+            auto* code = m->get_code();
+            if (code == nullptr) {
               return;
             }
 
-            if (sufficiently_hot_methods->count(m) ||
-                sufficiently_warm_methods->count(m)) {
+            if ((sufficiently_hot_methods->count(m) != 0u) ||
+                (sufficiently_warm_methods->count(m) != 0u)) {
               return;
             }
 
@@ -231,9 +232,9 @@ std::vector<DexMethod*> get_possibly_warm_or_hot_methods(
             // interactions.
             always_assert(code->cfg_built());
             auto& cfg = code->cfg();
-            auto entry_block = cfg.entry_block();
-            auto entry_sb = source_blocks::get_first_source_block(entry_block);
-            if (!entry_sb) {
+            auto* entry_block = cfg.entry_block();
+            auto* entry_sb = source_blocks::get_first_source_block(entry_block);
+            if (entry_sb == nullptr) {
               return;
             }
 
@@ -291,17 +292,17 @@ void mark_callees_warm_or_hot(
         continue;
       }
 
-      bool curr_is_warm = sufficiently_warm_methods->count(m);
+      bool curr_is_warm = sufficiently_warm_methods->count(m) != 0u;
 
       bool erase_elem = false;
 
-      auto node = cg.node(m);
+      const auto* node = cg.node(m);
       const auto& callerEdges = node->callers();
       for (const auto& callerEdge : callerEdges) {
-        auto callerNode = callerEdge->caller();
+        const auto* callerNode = callerEdge->caller();
         // call_graph::Node probably should not be holding a const DexMethod*
-        auto caller = const_cast<DexMethod*>(callerNode->method());
-        if (sufficiently_hot_methods->count(caller)) {
+        auto* caller = const_cast<DexMethod*>(callerNode->method());
+        if (sufficiently_hot_methods->count(caller) != 0u) {
           sufficiently_hot_methods->insert(m);
           changed = true;
           num_new_hot++;
@@ -309,7 +310,7 @@ void mark_callees_warm_or_hot(
           break;
         }
 
-        if (!curr_is_warm && sufficiently_warm_methods->count(caller)) {
+        if (!curr_is_warm && (sufficiently_warm_methods->count(caller) != 0u)) {
           sufficiently_warm_methods->insert(m);
           curr_is_warm = true;
           changed = true;
@@ -417,17 +418,17 @@ CanOutlineBlockDecider::can_outline_from_big_block(
           new LazyUnorderedMap<cfg::Block*, bool>([](cfg::Block* block) {
             UnorderedSet<cfg::Block*> visited;
             std::queue<cfg::Block*> work_queue;
-            for (auto e : block->succs()) {
+            for (auto* e : block->succs()) {
               work_queue.push(e->target());
             }
             while (!work_queue.empty()) {
-              auto other_block = work_queue.front();
+              auto* other_block = work_queue.front();
               work_queue.pop();
               if (visited.insert(other_block).second) {
                 if (block == other_block) {
                   return true;
                 }
-                for (auto e : other_block->succs()) {
+                for (auto* e : other_block->succs()) {
                   work_queue.push(e->target());
                 }
               }
@@ -457,7 +458,7 @@ CanOutlineBlockDecider::can_outline_from_big_block(
                 return false;
               }));
         }
-        for (auto block : big_block.get_blocks()) {
+        for (auto* block : big_block.get_blocks()) {
           if ((*m_is_throughput)[block]) {
             has_throughput_source_block = true;
             break;
@@ -502,7 +503,7 @@ CanOutlineBlockDecider::can_outline_from_big_block(
   // Via m_max_vals, we consider the maximum hit number for each block.
   // Across all blocks, we are also computing the maximum value.
   boost::optional<float> val;
-  for (auto block : big_block.get_blocks()) {
+  for (auto* block : big_block.get_blocks()) {
     auto block_val = (*m_max_vals)[block];
     if (!val || (block_val && *block_val > *val)) {
       val = block_val;

@@ -592,7 +592,7 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
   invoke_inst->set_src(0, reg_method_offset);
   prologues.at(num_vectors + 2) = invoke_inst;
 
-  auto eb = cfg.entry_block();
+  auto* eb = cfg.entry_block();
   IRInstruction* eb_insn = nullptr;
   if (!blocks.empty()) {
     auto& b = blocks.front();
@@ -726,25 +726,25 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       return inst;
     };
 
-    auto checked_invoke = create_call(onMethodExit_map);
+    auto* checked_invoke = create_call(onMethodExit_map);
     if (v == 0) {
       // No tail of unchecked calls, don't create control flow.
       block->insert_before(before_it, checked_invoke);
       return block;
     }
 
-    auto head_block = cfg.split_block_before(block, before_it.unwrap());
+    auto* head_block = cfg.split_block_before(block, before_it.unwrap());
     // Assumption: block has no instructions before before_it, so that
     // head_block is empty.
     redex_assert(head_block->num_opcodes() == 0);
     head_block->push_back(checked_invoke);
     head_block->push_back((new IRInstruction(OPCODE_MOVE_RESULT))
                               ->set_dest(*invoke_result_tmp_reg));
-    auto cmp_insn =
+    auto* cmp_insn =
         (new IRInstruction(OPCODE_IF_NEZ))->set_src(0, *invoke_result_tmp_reg);
 
     // Create a new block with the unchecked calls.
-    auto unchecked_block = cfg.create_block();
+    auto* unchecked_block = cfg.create_block();
     while (v != 0) {
       // Move forward the offset.
       offset += max_vector_arity;
@@ -859,7 +859,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
                                     cfg::Block* b, CatchCoverage& cv,
                                     RegType reg_type) {
     auto pushback_move = [reg_type](cfg::Block* b, reg_t from, reg_t to) {
-      auto move_insn =
+      auto* move_insn =
           new IRInstruction(reg_type == RegType::kObject ? OPCODE_MOVE_OBJECT
                             : reg_type == RegType::kWide ? OPCODE_MOVE_WIDE
                                                          : OPCODE_MOVE);
@@ -871,9 +871,9 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
     auto it = map.find(cv);
     if (it == map.end()) {
       // Split before the last instruction.
-      auto new_pred = cfg.split_block_before(b, b->get_last_insn());
+      auto* new_pred = cfg.split_block_before(b, b->get_last_insn());
 
-      auto last_insn = b->get_last_insn()->insn;
+      auto* last_insn = b->get_last_insn()->insn;
 
       // If there is a reg involved, check for a temp reg, rename the
       // operand operand, and insert a move.
@@ -902,7 +902,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       // And store in the cache.
       map.emplace(std::move(cv), b);
     } else {
-      auto last_insn = b->get_last_insn()->insn;
+      auto* last_insn = b->get_last_insn()->insn;
       std::optional<reg_t> ret_reg =
           reg_type == RegType::kNone ? std::nullopt
                                      : std::optional<reg_t>(last_insn->src(0));
@@ -930,7 +930,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
     auto cv = create_catch_coverage(b);
 
     if (b->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
-      auto ret_insn = b->get_last_insn()->insn;
+      auto* ret_insn = b->get_last_insn()->insn;
       auto ret_opcode = ret_insn->opcode();
       redex_assert(opcode::is_a_return(ret_opcode));
       handle_instrumentation(
@@ -1866,7 +1866,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     always_assert(blockHit_code->cfg_built());
   }
 
-  for (auto& en : onNonLoopBlockHit_map) {
+  for (const auto& en : onNonLoopBlockHit_map) {
     IRCode* nonLoopBlockHit_code = en.second->get_code();
     always_assert(nonLoopBlockHit_code->cfg_built());
   }
@@ -1942,7 +1942,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       std::ref(concurrent_method_resolver), inliner_config, min_sdk,
       MultiMethodInlinerMode::None);
 
-  for (auto& en : onNonLoopBlockHit_map) {
+  for (const auto& en : onNonLoopBlockHit_map) {
     UnorderedSet<DexMethod*> insns;
     insns.insert(binaryIncrementer);
     inliner.inline_callees(en.second, insns);

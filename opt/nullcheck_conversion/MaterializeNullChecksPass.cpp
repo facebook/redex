@@ -46,11 +46,11 @@ MaterializeNullChecksPass::Stats MaterializeNullChecksPass::rewrite_null_check(
   auto& cfg = code->cfg();
   for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (!opcode::is_invoke_static(insn->opcode())) {
         continue;
       }
-      auto mtype = insn->get_method()->get_class();
+      auto* mtype = insn->get_method()->get_class();
       if (mtype != m_null_check_type || insn->srcs().size() > 1) {
         continue;
       }

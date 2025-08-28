@@ -42,8 +42,8 @@ namespace {
 
 void load_method_sizes(DexClasses& classes,
                        std::unordered_map<std::string, int>& map) {
-  auto cls = find_class_named(classes,
-                              "Lcom/facebook/redex/test/instr/SimplifyString;");
+  auto* cls = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/SimplifyString;");
   ASSERT_NE(nullptr, cls);
 
 #define WORK(name, ...)                                   \

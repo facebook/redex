@@ -139,7 +139,7 @@ std::string get_string_attribute_value(const aapt::pb::XmlElement& element,
 boost::optional<resources::StringOrReference>
 get_string_or_reference_from_attribute(const aapt::pb::XmlAttribute& pb_attr) {
   if (pb_attr.has_compiled_item()) {
-    auto& item = pb_attr.compiled_item();
+    const auto& item = pb_attr.compiled_item();
     // None of this was previously supported; just check for regular references
     // punting on theme refs for now.
     always_assert_log(item.has_ref(),
@@ -357,7 +357,7 @@ void read_single_manifest(const std::string& manifest,
                   manifest_classes->instrumentation_classes.emplace(
                       resources::fully_qualified_external_name(package_name,
                                                                classname));
-                } else if (string_to_tag.count(tag)) {
+                } else if (string_to_tag.count(tag) != 0u) {
                   std::string classname = get_string_attribute_value(
                       element,
                       tag != "activity-alias" ? "name" : "targetActivity");
@@ -849,7 +849,7 @@ void apply_rename_map(const std::map<std::string, std::string>& rename_map,
   // wherever it might be in the document. This is simply checking tag
   // names, attribute values and text.
   if (node->has_element()) {
-    auto element = node->mutable_element();
+    auto* element = node->mutable_element();
     {
       auto search = rename_map.find(element->name());
       if (search != rename_map.end()) {
@@ -859,7 +859,7 @@ void apply_rename_map(const std::map<std::string, std::string>& rename_map,
     }
     auto attr_size = element->attribute_size();
     for (int i = 0; i < attr_size; i++) {
-      auto pb_attr = element->mutable_attribute(i);
+      auto* pb_attr = element->mutable_attribute(i);
       auto search = rename_map.find(pb_attr->value());
       if (search != rename_map.end()) {
         pb_attr->set_value(search->second);
@@ -868,7 +868,7 @@ void apply_rename_map(const std::map<std::string, std::string>& rename_map,
     }
     auto child_size = element->child_size();
     for (int i = 0; i < child_size; i++) {
-      auto child = element->mutable_child(i);
+      auto* child = element->mutable_child(i);
       apply_rename_map(rename_map, child, out_num_renamed);
     }
   } else {
@@ -885,7 +885,7 @@ void fully_qualify_element(
     aapt::pb::XmlNode* node,
     size_t* out_num_changed) {
   if (node->has_element()) {
-    auto element = node->mutable_element();
+    auto* element = node->mutable_element();
     auto search = element_to_class_name.find(element->name());
     if (search != element_to_class_name.end()) {
       bool can_edit = true;
@@ -901,8 +901,8 @@ void fully_qualify_element(
       }
       if (can_edit) {
         element->set_name("view");
-        auto mutable_attributes = element->mutable_attribute();
-        auto class_attribute = new aapt::pb::XmlAttribute();
+        auto* mutable_attributes = element->mutable_attribute();
+        auto* class_attribute = new aapt::pb::XmlAttribute();
         class_attribute->set_name("class");
         class_attribute->set_value(search->second);
         mutable_attributes->AddAllocated(class_attribute);
@@ -912,7 +912,7 @@ void fully_qualify_element(
 
     auto child_size = element->child_size();
     for (int i = 0; i < child_size; i++) {
-      auto child = element->mutable_child(i);
+      auto* child = element->mutable_child(i);
       fully_qualify_element(element_to_class_name, child, out_num_changed);
     }
   }
@@ -1082,7 +1082,7 @@ void collect_layout_classes_and_attributes_for_element(
 void change_resource_id_in_pb_reference(
     const std::map<uint32_t, uint32_t>& old_to_new, aapt::pb::Reference* ref) {
   auto ref_id = ref->id();
-  if (old_to_new.count(ref_id)) {
+  if (old_to_new.count(ref_id) != 0u) {
     auto new_id = old_to_new.at(ref_id);
     ref->set_id(new_id);
   }
@@ -1092,36 +1092,36 @@ void change_resource_id_in_value_reference(
     const std::map<uint32_t, uint32_t>& old_to_new, aapt::pb::Value* value) {
 
   if (value->has_item()) {
-    auto pb_item = value->mutable_item();
+    auto* pb_item = value->mutable_item();
     if (pb_item->has_ref()) {
       change_resource_id_in_pb_reference(old_to_new, pb_item->mutable_ref());
     }
   } else if (value->has_compound_value()) {
-    auto pb_compound_value = value->mutable_compound_value();
+    auto* pb_compound_value = value->mutable_compound_value();
     if (pb_compound_value->has_attr()) {
-      auto pb_attr = pb_compound_value->mutable_attr();
+      auto* pb_attr = pb_compound_value->mutable_attr();
       auto symbol_size = pb_attr->symbol_size();
       for (int i = 0; i < symbol_size; ++i) {
-        auto symbol = pb_attr->mutable_symbol(i);
+        auto* symbol = pb_attr->mutable_symbol(i);
         if (symbol->has_name()) {
           change_resource_id_in_pb_reference(old_to_new,
                                              symbol->mutable_name());
         }
       }
     } else if (pb_compound_value->has_style()) {
-      auto pb_style = pb_compound_value->mutable_style();
+      auto* pb_style = pb_compound_value->mutable_style();
       if (pb_style->has_parent()) {
         change_resource_id_in_pb_reference(old_to_new,
                                            pb_style->mutable_parent());
       }
       auto entry_size = pb_style->entry_size();
       for (int i = 0; i < entry_size; ++i) {
-        auto entry = pb_style->mutable_entry(i);
+        auto* entry = pb_style->mutable_entry(i);
         if (entry->has_key()) {
           change_resource_id_in_pb_reference(old_to_new, entry->mutable_key());
         }
         if (entry->has_item()) {
-          auto pb_item = entry->mutable_item();
+          auto* pb_item = entry->mutable_item();
           if (pb_item->has_ref()) {
             change_resource_id_in_pb_reference(old_to_new,
                                                pb_item->mutable_ref());
@@ -1129,21 +1129,21 @@ void change_resource_id_in_value_reference(
         }
       }
     } else if (pb_compound_value->has_styleable()) {
-      auto pb_styleable = pb_compound_value->mutable_styleable();
+      auto* pb_styleable = pb_compound_value->mutable_styleable();
       auto entry_size = pb_styleable->entry_size();
       for (int i = 0; i < entry_size; ++i) {
-        auto entry = pb_styleable->mutable_entry(i);
+        auto* entry = pb_styleable->mutable_entry(i);
         if (entry->has_attr()) {
           change_resource_id_in_pb_reference(old_to_new, entry->mutable_attr());
         }
       }
     } else if (pb_compound_value->has_array()) {
-      auto pb_array = pb_compound_value->mutable_array();
+      auto* pb_array = pb_compound_value->mutable_array();
       auto entry_size = pb_array->element_size();
       for (int i = 0; i < entry_size; ++i) {
-        auto element = pb_array->mutable_element(i);
+        auto* element = pb_array->mutable_element(i);
         if (element->has_item()) {
-          auto pb_item = element->mutable_item();
+          auto* pb_item = element->mutable_item();
           if (pb_item->has_ref()) {
             change_resource_id_in_pb_reference(old_to_new,
                                                pb_item->mutable_ref());
@@ -1151,12 +1151,12 @@ void change_resource_id_in_value_reference(
         }
       }
     } else if (pb_compound_value->has_plural()) {
-      auto pb_plural = pb_compound_value->mutable_plural();
+      auto* pb_plural = pb_compound_value->mutable_plural();
       auto entry_size = pb_plural->entry_size();
       for (int i = 0; i < entry_size; ++i) {
-        auto entry = pb_plural->mutable_entry(i);
+        auto* entry = pb_plural->mutable_entry(i);
         if (entry->has_item()) {
-          auto pb_item = entry->mutable_item();
+          auto* pb_item = entry->mutable_item();
           if (pb_item->has_ref()) {
             change_resource_id_in_pb_reference(old_to_new,
                                                pb_item->mutable_ref());
@@ -1173,23 +1173,23 @@ aapt::pb::Entry* new_remapped_entry(
     const aapt::pb::Entry& entry,
     uint32_t res_id,
     const std::map<uint32_t, uint32_t>& old_to_new) {
-  auto copy_entry = new aapt::pb::Entry(entry);
-  if (old_to_new.count(res_id)) {
+  auto* copy_entry = new aapt::pb::Entry(entry);
+  if (old_to_new.count(res_id) != 0u) {
     uint32_t new_res_id = old_to_new.at(res_id);
     uint32_t new_entry_id = ENTRY_MASK_BIT & new_res_id;
     always_assert_log(copy_entry->has_entry_id(),
                       "Entry doesn't have id: %s",
                       copy_entry->DebugString().c_str());
-    auto entry_id = copy_entry->mutable_entry_id();
+    auto* entry_id = copy_entry->mutable_entry_id();
     entry_id->set_id(new_entry_id);
     auto config_value_size = copy_entry->config_value_size();
     for (int i = 0; i < config_value_size; ++i) {
-      auto config_value = copy_entry->mutable_config_value(i);
+      auto* config_value = copy_entry->mutable_config_value(i);
       always_assert_log(config_value->has_value(),
                         "ConfigValue doesn't have value: %s\nEntry:\n%s",
                         config_value->DebugString().c_str(),
                         copy_entry->DebugString().c_str());
-      auto value = config_value->mutable_value();
+      auto* value = config_value->mutable_value();
       change_resource_id_in_value_reference(old_to_new, value);
     }
   }
@@ -1205,10 +1205,10 @@ void remove_or_change_resource_ids(
   for (const auto& entry : type->entry()) {
     uint32_t res_id =
         MAKE_RES_ID(package_id, type->type_id().id(), entry.entry_id().id());
-    if (ids_to_remove.count(res_id)) {
+    if (ids_to_remove.count(res_id) != 0u) {
       continue;
     }
-    auto copy_entry = new_remapped_entry(entry, res_id, old_to_new);
+    auto* copy_entry = new_remapped_entry(entry, res_id, old_to_new);
     new_entries.AddAllocated(copy_entry);
   }
   type->clear_entry();
@@ -1221,10 +1221,10 @@ void nullify_resource_ids(const UnorderedSet<uint32_t>& ids_to_remove,
   int entry_size = type->entry_size();
   int last_non_deleted = 0;
   for (int k = 0; k < entry_size; k++) {
-    auto entry = type->mutable_entry(k);
+    auto* entry = type->mutable_entry(k);
     uint32_t res_id =
         MAKE_RES_ID(package_id, type->type_id().id(), entry->entry_id().id());
-    if (ids_to_remove.count(res_id)) {
+    if (ids_to_remove.count(res_id) != 0u) {
       entry->clear_name();
       entry->clear_visibility();
       entry->clear_allow_new();
@@ -1248,12 +1248,12 @@ void change_resource_id_in_xml_references(
   if (!node->has_element()) {
     return;
   }
-  auto element = node->mutable_element();
+  auto* element = node->mutable_element();
   auto attr_size = element->attribute_size();
   for (int i = 0; i < attr_size; i++) {
-    auto pb_attr = element->mutable_attribute(i);
+    auto* pb_attr = element->mutable_attribute(i);
     auto attr_id = pb_attr->resource_id();
-    if (attr_id > 0 && kept_to_remapped_ids.count(attr_id)) {
+    if (attr_id > 0 && (kept_to_remapped_ids.count(attr_id) != 0u)) {
       auto new_id = kept_to_remapped_ids.at(attr_id);
       if (new_id != attr_id) {
         (*num_resource_id_changed)++;
@@ -1261,11 +1261,11 @@ void change_resource_id_in_xml_references(
       }
     }
     if (pb_attr->has_compiled_item()) {
-      auto pb_item = pb_attr->mutable_compiled_item();
+      auto* pb_item = pb_attr->mutable_compiled_item();
       if (pb_item->has_ref()) {
-        auto ref = pb_item->mutable_ref();
+        auto* ref = pb_item->mutable_ref();
         auto ref_id = ref->id();
-        if (kept_to_remapped_ids.count(ref_id)) {
+        if (kept_to_remapped_ids.count(ref_id) != 0u) {
           auto new_id = kept_to_remapped_ids.at(ref_id);
           (*num_resource_id_changed)++;
           ref->set_id(new_id);
@@ -1275,7 +1275,7 @@ void change_resource_id_in_xml_references(
   }
   auto child_size = element->child_size();
   for (int i = 0; i < child_size; i++) {
-    auto child = element->mutable_child(i);
+    auto* child = element->mutable_child(i);
     change_resource_id_in_xml_references(kept_to_remapped_ids, child,
                                          num_resource_id_changed);
   }
@@ -1466,7 +1466,7 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
                             resources_pb_path.c_str());
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
-            auto package = pb_restable.mutable_package(i);
+            auto* package = pb_restable.mutable_package(i);
             auto current_package_id = package->package_id().id();
             int original_type_size = package->type_size();
             // Apply newly added types. Source res ids must have their data
@@ -1477,7 +1477,7 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
                 TRACE(RES, 9, "Appending type %s (ID 0x%x) to package 0x%x",
                       type_def.name.c_str(), type_def.type_id,
                       type_def.package_id);
-                auto new_type = package->add_type();
+                auto* new_type = package->add_type();
                 new_type->set_name(type_def.name);
                 new_type->mutable_type_id()->set_id(type_def.type_id);
 
@@ -1485,7 +1485,7 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
                 size_t current_entry_id = 0;
                 for (const auto& source_id : type_def.source_res_ids) {
                   auto& source_name = id_to_name.at(source_id);
-                  auto& source_config_values =
+                  const auto& source_config_values =
                       m_res_id_to_configvalue.at(source_id);
 
                   auto source_entry = std::make_shared<aapt::pb::Entry>();
@@ -1497,13 +1497,13 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
                       new aapt::pb::Visibility(
                           m_res_id_to_entry.at(source_id).visibility()));
                   for (const auto& source_cv : source_config_values) {
-                    auto new_config_value = source_entry->add_config_value();
+                    auto* new_config_value = source_entry->add_config_value();
                     new_config_value->set_allocated_config(
                         new aapt::pb::Configuration(source_cv.config()));
                     new_config_value->set_allocated_value(
                         new aapt::pb::Value(source_cv.value()));
                   }
-                  auto remapped_entry =
+                  auto* remapped_entry =
                       new_remapped_entry(*source_entry, source_id, old_to_new);
                   remapped_entry->mutable_entry_id()->set_id(
                       current_entry_id++);
@@ -1515,7 +1515,7 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
             }
             // Remap and apply deletions for the original types in the table.
             for (int j = 0; j < original_type_size; j++) {
-              auto type = package->mutable_type(j);
+              auto* type = package->mutable_type(j);
               remove_or_change_resource_ids(m_ids_to_remove, old_to_new,
                                             current_package_id, type);
             }
@@ -1544,11 +1544,11 @@ void ResourcesPbFile::nullify_res_ids_and_serialize(
                             resources_pb_path.c_str());
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
-            auto package = pb_restable.mutable_package(i);
+            auto* package = pb_restable.mutable_package(i);
             auto current_package_id = package->package_id().id();
             int type_size = package->type_size();
             for (int j = 0; j < type_size; j++) {
-              auto type = package->mutable_type(j);
+              auto* type = package->mutable_type(j);
               nullify_resource_ids(m_ids_to_remove, current_package_id, type);
             }
           }
@@ -1572,11 +1572,11 @@ void remap_entry_file_paths(const std::function<void(aapt::pb::FileReference*,
                             aapt::pb::Entry* entry) {
   auto config_size = entry->config_value_size();
   for (int i = 0; i < config_size; i++) {
-    auto value = entry->mutable_config_value(i)->mutable_value();
+    auto* value = entry->mutable_config_value(i)->mutable_value();
     if (value->has_item()) {
-      auto item = value->mutable_item();
+      auto* item = value->mutable_item();
       if (item->has_file()) {
-        auto file = item->mutable_file();
+        auto* file = item->mutable_file();
         file_remapper(file, res_id);
       }
     }
@@ -1612,15 +1612,15 @@ void ResourcesPbFile::remap_file_paths_and_serialize(
                             resources_pb_path.c_str());
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
-            auto package = pb_restable.mutable_package(i);
+            auto* package = pb_restable.mutable_package(i);
             auto current_package_id = package->package_id().id();
             int type_size = package->type_size();
             for (int j = 0; j < type_size; j++) {
-              auto type = package->mutable_type(j);
+              auto* type = package->mutable_type(j);
               auto current_type_id = type->type_id().id();
               int entry_size = type->entry_size();
               for (int k = 0; k < entry_size; k++) {
-                auto entry = type->mutable_entry(k);
+                auto* entry = type->mutable_entry(k);
                 uint32_t res_id =
                     MAKE_RES_ID(current_package_id, current_type_id,
                                 entry->entry_id().id());
@@ -1667,7 +1667,7 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
                             resources_pb_path.c_str());
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
-            auto package = pb_restable.mutable_package(i);
+            auto* package = pb_restable.mutable_package(i);
             auto current_package_id = package->package_id().id();
             auto cur_module_name =
                 resolve_module_name_for_package_id(current_package_id) + "/";
@@ -1686,7 +1686,7 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
             };
             int type_size = package->type_size();
             for (int j = 0; j < type_size; j++) {
-              auto type = package->mutable_type(j);
+              auto* type = package->mutable_type(j);
               auto current_type_id = type->type_id().id();
               auto is_allow_type = allowed_types.count(current_type_id) > 0;
               if (!is_allow_type && filepath_old_to_new.empty()) {
@@ -1697,7 +1697,7 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
               }
               int entry_size = type->entry_size();
               for (int k = 0; k < entry_size; k++) {
-                auto entry = type->mutable_entry(k);
+                auto* entry = type->mutable_entry(k);
                 const auto& entry_name = entry->name();
                 uint32_t res_id =
                     MAKE_RES_ID(current_package_id, current_type_id,
@@ -1773,12 +1773,12 @@ void reset_pb_source(google::protobuf::Message* message) {
         // Note: HasField not relevant for repeated fields.
         auto size = refl->FieldSize(*message, field_desc);
         for (int j = 0; j < size; j++) {
-          auto sub_message =
+          auto* sub_message =
               refl->MutableRepeatedMessage(message, field_desc, j);
           reset_pb_source(sub_message);
         }
       } else if (refl->HasField(*message, field_desc)) {
-        auto sub_message = refl->MutableMessage(message, field_desc);
+        auto* sub_message = refl->MutableMessage(message, field_desc);
         reset_pb_source(sub_message);
       }
     }
@@ -1834,17 +1834,17 @@ void reorder_style(aapt::pb::Style* style) {
 void reorder_config_value_repeated_field(aapt::pb::ResourceTable* pb_restable) {
   for (int package_idx = 0; package_idx < pb_restable->package_size();
        package_idx++) {
-    auto package = pb_restable->mutable_package(package_idx);
+    auto* package = pb_restable->mutable_package(package_idx);
     for (int type_idx = 0; type_idx < package->type_size(); type_idx++) {
-      auto type = package->mutable_type(type_idx);
+      auto* type = package->mutable_type(type_idx);
       for (int entry_idx = 0; entry_idx < type->entry_size(); entry_idx++) {
-        auto entry = type->mutable_entry(entry_idx);
+        auto* entry = type->mutable_entry(entry_idx);
         for (int cv_idx = 0; cv_idx < entry->config_value_size(); cv_idx++) {
-          auto config_value = entry->mutable_config_value(cv_idx);
+          auto* config_value = entry->mutable_config_value(cv_idx);
           if (config_value->has_value()) {
-            auto value = config_value->mutable_value();
+            auto* value = config_value->mutable_value();
             if (value->has_compound_value()) {
-              auto compound_value = value->mutable_compound_value();
+              auto* compound_value = value->mutable_compound_value();
               if (compound_value->has_style()) {
                 reorder_style(compound_value->mutable_style());
               }
@@ -2064,9 +2064,9 @@ void ResourcesPbFile::walk_references_for_resource(
       // We might have some potential resource ID that does not actually exist.
       return;
     }
-    auto& config_values = res_id_search->second;
-    for (auto& cv : config_values) {
-      auto& value = cv.value();
+    const auto& config_values = res_id_search->second;
+    for (const auto& cv : config_values) {
+      const auto& value = cv.value();
       std::vector<aapt::pb::Item> items;
       std::vector<aapt::pb::Reference> references;
       if (reachability_options.granular_style_reachability &&
@@ -2175,7 +2175,7 @@ void ResourcesPbFile::get_configurations(
         if (type_id == (res_id >> TYPE_INDEX_BIT_SHIFT & 0xFF) &&
             package_id == (res_id >> PACKAGE_INDEX_BIT_SHIFT & 0xFF)) {
           for (const auto& cv : cv_pair.second) {
-            auto& pb_config = cv.config();
+            const auto& pb_config = cv.config();
             auto arsc_config = convert_to_arsc_config(res_id, pb_config);
             if (traceEnabled(RES, 9)) {
               auto arsc_config_string = arsc_config.toString();
@@ -2199,12 +2199,12 @@ void ResourcesPbFile::get_configurations(
 std::set<android::ResTable_config> ResourcesPbFile::get_configs_with_values(
     uint32_t id) {
   std::set<android::ResTable_config> config_set;
-  auto& config_values = m_res_id_to_configvalue.at(id);
+  const auto& config_values = m_res_id_to_configvalue.at(id);
   for (const auto& cv : config_values) {
     if (cv.has_value()) {
-      auto& pb_value = cv.value();
+      const auto& pb_value = cv.value();
       if (!is_value_null_or_empty(pb_value)) {
-        auto& pb_config = cv.config();
+        const auto& pb_config = cv.config();
         auto arsc_config = convert_to_arsc_config(id, pb_config);
         config_set.emplace(arsc_config);
       }
@@ -2315,7 +2315,7 @@ void maybe_obfuscate_element(
   }
   auto attr_count = pb_element->attribute_size();
   for (int i = 0; i < attr_count; i++) {
-    auto pb_attr = pb_element->mutable_attribute(i);
+    auto* pb_attr = pb_element->mutable_attribute(i);
     if (pb_attr->resource_id() > 0) {
       pb_attr->set_name("");
       (*change_count)++;
@@ -2323,9 +2323,9 @@ void maybe_obfuscate_element(
   }
   auto child_size = pb_element->child_size();
   for (int i = 0; i < child_size; i++) {
-    auto pb_child = pb_element->mutable_child(i);
+    auto* pb_child = pb_element->mutable_child(i);
     if (pb_child->has_element()) {
-      auto pb_child_element = pb_child->mutable_element();
+      auto* pb_child_element = pb_child->mutable_element();
       maybe_obfuscate_element(do_not_obfuscate_elements, pb_child_element,
                               change_count);
     }
@@ -2344,7 +2344,7 @@ void obfuscate_xml_attributes(
                           filename.c_str());
         size_t change_count = 0;
         if (pb_node.has_element()) {
-          auto pb_element = pb_node.mutable_element();
+          auto* pb_element = pb_node.mutable_element();
           maybe_obfuscate_element(do_not_obfuscate_elements, pb_element,
                                   &change_count);
         }
@@ -2395,7 +2395,7 @@ void BundleResources::finalize_bundle_config(const ResourceConfig& config) {
           always_assert_log(bundle_config.ParseFromCodedStream(&input),
                             "BundleResource failed to read %s",
                             bundle_config_path.c_str());
-          auto pb_resource_optimizations =
+          auto* pb_resource_optimizations =
               bundle_config.mutable_optimizations()
                   ->mutable_resource_optimizations();
           pb_resource_optimizations->mutable_collapsed_resource_names()
@@ -2424,11 +2424,11 @@ void resolve_strings_for_id(
   seen->insert(id);
   auto search = table_snapshot.find(id);
   if (search != table_snapshot.end()) {
-    auto& config_values = search->second;
+    const auto& config_values = search->second;
     for (auto i = 0; i < config_values.size(); i++) {
       const auto& value = config_values[i].value();
       always_assert_log(value.has_item(), "Item expected for id 0x%x", id);
-      auto& item = value.item();
+      const auto& item = value.item();
       if (item.has_str()) {
         values->emplace(item.str().value());
       } else {
@@ -2588,7 +2588,7 @@ std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
     break;
   case aapt::pb::Primitive::kBooleanValue:
     data_type = android::Res_value::TYPE_INT_BOOLEAN;
-    value = prim.boolean_value();
+    value = static_cast<uint32_t>(prim.boolean_value());
     break;
   case aapt::pb::Primitive::kColorArgb4Value:
     data_type = android::Res_value::TYPE_INT_COLOR_ARGB4;
@@ -2955,7 +2955,7 @@ void ResourcesPbFile::apply_attribute_removals_and_additions(
       auto* style_entry = style->mutable_entry(attr);
       if (style_entry->has_key()) {
         uint32_t attr_id = style_entry->key().id();
-        if (removals.count(attr_id)) {
+        if (removals.count(attr_id) != 0u) {
           style->mutable_entry()->DeleteSubrange(attr, 1);
           modified = true;
         }

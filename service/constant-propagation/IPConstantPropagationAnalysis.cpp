@@ -57,7 +57,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   if (method == nullptr) {
     return;
   }
-  auto code = method->get_code();
+  const auto* code = method->get_code();
   if (code == nullptr) {
     return;
   }
@@ -69,8 +69,8 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   auto& method_cache = get_method_cache(method);
   const auto* method_cache_entry =
       find_matching_method_cache_entry(method_cache, args);
-  if (method_cache_entry) {
-    for (auto& [insn, out_args] :
+  if (method_cache_entry != nullptr) {
+    for (const auto& [insn, out_args] :
          UnorderedIterable(method_cache_entry->result)) {
       current_state->set(insn, out_args);
     }
@@ -78,7 +78,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
     return;
   }
 
-  auto& cfg = code->cfg();
+  const auto& cfg = code->cfg();
   auto ipa =
       m_proc_analysis_factory(method, this->get_whole_program_state(), args);
   auto& intra_cp = ipa->fp_iter;
@@ -102,7 +102,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
       if (insn->has_method()) {
-        if (outgoing_insns.count(insn)) {
+        if (outgoing_insns.count(insn) != 0u) {
           ArgumentDomain out_args;
           for (size_t i = 0; i < insn->srcs_size(); ++i) {
             out_args.set(i, state.get(insn->src(i)));
@@ -127,7 +127,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
 Domain FixpointIterator::analyze_edge(
     const call_graph::EdgeId& edge, const Domain& exit_state_at_source) const {
   Domain entry_state_at_dest;
-  auto insn = edge->invoke_insn();
+  auto* insn = edge->invoke_insn();
   if (insn == nullptr) {
     entry_state_at_dest.set(CURRENT_PARTITION_LABEL, ArgumentDomain::top());
   } else {
@@ -224,7 +224,7 @@ void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
   always_assert(!cls->is_external());
   for (auto* sfield : cls->get_sfields()) {
     always_assert(!sfield->is_external());
-    auto value = sfield->get_static_value();
+    auto* value = sfield->get_static_value();
     if (value == nullptr || value->evtype() == DEVT_NULL) {
       env->set(sfield, SignedConstantDomain(0));
     } else if (type::is_primitive(sfield->get_type())) {
@@ -255,7 +255,7 @@ void set_ifield_values(const DexClass* cls,
   always_assert(!cls->is_external());
   for (auto* ifield : cls->get_ifields()) {
     always_assert(!ifield->is_external());
-    if (!eligible_ifields.count(ifield)) {
+    if (eligible_ifields.count(ifield) == 0u) {
       // If the field is not a eligible ifield, move on.
       continue;
     }

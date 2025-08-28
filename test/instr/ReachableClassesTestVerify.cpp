@@ -15,7 +15,7 @@
 #include "Walkers.h"
 
 void verify_class_kept(const DexClasses& classes, const char* name) {
-  auto cls = find_class_named(classes, name);
+  auto* cls = find_class_named(classes, name);
   EXPECT_NE(cls, nullptr) << "Did not find class: " << name;
   EXPECT_NE(find_dmethod_named(*cls, "<init>"), nullptr)
       << "Did not find <init>!";
@@ -36,7 +36,7 @@ TEST_F(PostVerify, TestClassesUsedByReflectionKept) {
 
   // Check distinction between getMethod() and getDeclaredMethod().
   {
-    auto cls = find_class_named(classes, "Lcom/redex/reachable/Super;");
+    auto* cls = find_class_named(classes, "Lcom/redex/reachable/Super;");
     EXPECT_NE(cls, nullptr) << "Did not find class Super!";
     // Should keep a public virtual foo.
     auto vmethods = cls->get_vmethods();
@@ -49,7 +49,7 @@ TEST_F(PostVerify, TestClassesUsedByReflectionKept) {
   }
 
   {
-    auto cls = find_class_named(classes, "Lcom/redex/reachable/Sub;");
+    auto* cls = find_class_named(classes, "Lcom/redex/reachable/Sub;");
     EXPECT_NE(cls, nullptr) << "Did not find class Sub!";
     // Should keep the public virtuals foo and bar.
     auto vmethods = cls->get_vmethods();

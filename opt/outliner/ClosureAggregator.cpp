@@ -51,7 +51,8 @@ ClosureAggregator::ClosureAggregator(
 
 void ClosureAggregator::reprioritize(
     const AffectedClosures& affected_closures) {
-  for (auto& [affected_closure, delta] : UnorderedIterable(affected_closures)) {
+  for (const auto& [affected_closure, delta] :
+       UnorderedIterable(affected_closures)) {
     auto& affected_closure_info = m_closure_infos.at(affected_closure);
     affected_closure_info.applied_code_size += delta.applied_code_size;
     for (size_t i = 0; i < INFREQUENT_COUNT; ++i) {
@@ -66,8 +67,8 @@ void ClosureAggregator::reprioritize(
 
 void ClosureAggregator::insert(const Closure* c) {
   UnorderedSet<const ReducedBlock*> components;
-  for (auto* component : UnorderedIterable(c->reduced_components)) {
-    if (m_critical_components.count(component)) {
+  for (const auto* component : UnorderedIterable(c->reduced_components)) {
+    if (m_critical_components.count(component) != 0u) {
       components.insert(component);
     }
   }

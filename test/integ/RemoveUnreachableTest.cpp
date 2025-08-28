@@ -27,7 +27,7 @@
 class RemoveUnreachableTest : public RedexIntegrationTest {
   void SetUp() override {
     virt_scope::get_vmethods(type::java_lang_Object());
-    auto cls = type_class(type::java_lang_Object());
+    auto* cls = type_class(type::java_lang_Object());
     // To make the assertion in reachability analysis happy
     cls->set_external();
   }

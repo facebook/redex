@@ -26,21 +26,21 @@ std::vector<DexMethod*> delete_methods(
       scope, [](DexMethod* /*meth*/) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (opcode::is_an_invoke(insn->opcode())) {
-          auto callee = concurrent_resolver(insn->get_method(),
-                                            opcode_to_search(insn), meth);
-          if (callee != nullptr && removable.count(callee)) {
+          auto* callee = concurrent_resolver(insn->get_method(),
+                                             opcode_to_search(insn), meth);
+          if (callee != nullptr && (removable.count(callee) != 0u)) {
             removable_to_erase.insert(callee);
           }
         }
       });
-  for (auto method : UnorderedIterable(removable_to_erase)) {
+  for (auto* method : UnorderedIterable(removable_to_erase)) {
     removable.erase(method);
   }
 
   // if a removable candidate is referenced by an annotation do not delete
   walk::annotations(scope, [&](DexAnnotation* anno) {
-    for (auto& anno_element : anno->anno_elems()) {
-      auto& ev = anno_element.encoded_value;
+    for (const auto& anno_element : anno->anno_elems()) {
+      const auto& ev = anno_element.encoded_value;
       if (ev->evtype() == DEVT_METHOD) {
         DexEncodedValueMethod* evm =
             static_cast<DexEncodedValueMethod*>(ev.get());
@@ -52,7 +52,7 @@ std::vector<DexMethod*> delete_methods(
   });
 
   std::vector<DexMethod*> deleted;
-  for (auto callee : UnorderedIterable(removable)) {
+  for (auto* callee : UnorderedIterable(removable)) {
     if (!callee->is_concrete()) {
       continue;
     }
@@ -62,7 +62,7 @@ std::vector<DexMethod*> delete_methods(
     if (method::is_argless_init(callee)) {
       continue;
     }
-    auto cls = type_class(callee->get_class());
+    auto* cls = type_class(callee->get_class());
     always_assert_log(cls != nullptr,
                       "%s is concrete but does not have a DexClass\n",
                       SHOW(callee));

@@ -25,12 +25,12 @@ TEST_F(PostVerify, DelSuper) {
 
   // Should have C1 and 2 C2 still
 
-  auto c1 = find_class_named(classes,
-                             "Lcom/facebook/redex/test/instr/DelSuperTest$C1;");
+  auto* c1 = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/DelSuperTest$C1;");
   ASSERT_NE(nullptr, c1);
 
-  auto c2 = find_class_named(classes,
-                             "Lcom/facebook/redex/test/instr/DelSuperTest$C2;");
+  auto* c2 = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/DelSuperTest$C2;");
   ASSERT_NE(nullptr, c2);
 
   // C2.optimized1 and C2.optimized2 should be gone
@@ -50,14 +50,14 @@ TEST_F(PostVerify, DelSuper) {
   ASSERT_TRUE(m3.matches(c2));
 
   // check that the invoke instructions are fixed up as well
-  auto test_class =
+  auto* test_class =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/DelSuperTest;");
-  auto test_opt_1 = find_vmethod_named(*test_class, "testOptimized1");
+  auto* test_opt_1 = find_vmethod_named(*test_class, "testOptimized1");
   int optimized1_count = 0;
   for (auto& insn : test_opt_1->get_dex_code()->get_instructions()) {
     if (dex_opcode::is_invoke(insn->opcode())) {
-      auto mop = static_cast<DexOpcodeMethod*>(insn);
-      auto m = mop->get_method();
+      auto* mop = static_cast<DexOpcodeMethod*>(insn);
+      auto* m = mop->get_method();
       if (strcmp(m->get_name()->c_str(), "optimized1") == 0) {
         ASSERT_STREQ(m->get_class()->get_name()->c_str(),
                      "Lcom/facebook/redex/test/instr/DelSuperTest$C1;");

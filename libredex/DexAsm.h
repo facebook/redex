@@ -82,7 +82,7 @@ IRInstruction* dasm(IROpcode opcode,
                     DexMethodRef* method,
                     Iterator begin,
                     Iterator end) {
-  auto insn = new IRInstruction(opcode);
+  auto* insn = new IRInstruction(opcode);
   insn->set_method(method);
   insn->set_srcs_size(std::distance(begin, end));
   assemble(insn, begin, end);

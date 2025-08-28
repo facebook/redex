@@ -27,7 +27,8 @@ NonOverriddenVirtuals::NonOverriddenVirtuals(
 
 size_t NonOverriddenVirtuals::count(const DexMethod* method) const {
   if (method->is_external()) {
-    return is_final(method) || is_final(type_class(method->get_class()));
+    return static_cast<size_t>(is_final(method) ||
+                               is_final(type_class(method->get_class())));
   }
   return m_non_overridden_virtuals.count_unsafe(method);
 }

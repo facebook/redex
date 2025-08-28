@@ -34,7 +34,7 @@ void write(const char* format, ...) {
   bool not_stdout = strcmp(g_dump_file, "stdout") != 0;
   if (not_stdout) {
     FILE* tmp = fopen(g_dump_file, g_open_mode);
-    if (!tmp) {
+    if (tmp == nullptr) {
       printf("%s does not exist, writing to stdout\n", g_dump_file);
     } else {
       dump_file_ptr = tmp;
@@ -52,18 +52,18 @@ void write(const char* format, ...) {
 }
 
 const DexMethod* get_current_dex_method() {
-  auto* trace_context = TraceContextAccess::get_s_context();
-  if (!trace_context) {
+  const auto* trace_context = TraceContextAccess::get_s_context();
+  if (trace_context == nullptr) {
     return nullptr;
   }
-  auto* dex_method_ref = trace_context->get_dex_method_ref();
-  if (!dex_method_ref) {
+  const auto* dex_method_ref = trace_context->get_dex_method_ref();
+  if (dex_method_ref == nullptr) {
     write("No DexMethodRef set in current TraceContext\n");
     return nullptr;
   }
 
-  auto dex_method = dex_method_ref->as_def();
-  if (!dex_method) {
+  const auto* dex_method = dex_method_ref->as_def();
+  if (dex_method == nullptr) {
     write("DexMethodRef (%s) in current TraceContext is not a DexMethod\n",
           dex_method_ref->c_str());
     return nullptr;
@@ -73,13 +73,13 @@ const DexMethod* get_current_dex_method() {
 }
 
 const IRCode* get_current_ir_code() {
-  auto dex_method = get_current_dex_method();
-  if (!dex_method) {
+  const auto* dex_method = get_current_dex_method();
+  if (dex_method == nullptr) {
     return nullptr;
   }
 
-  auto code = dex_method->get_code();
-  if (!code) {
+  const auto* code = dex_method->get_code();
+  if (code == nullptr) {
     write("DexMethod (%s) has no IRCode\n", dex_method->c_str());
     return nullptr;
   }
@@ -123,7 +123,7 @@ void dumpcfg(const cfg::ControlFlowGraph& cfg) {
 
 void dumpcfg() {
   const IRCode* ir_code = get_current_ir_code();
-  if (!ir_code) {
+  if (ir_code == nullptr) {
     return;
   }
 
@@ -139,7 +139,7 @@ void dumpblock(const cfg::Block* block) {
 
 void dumpblock(cfg::BlockId block_id) {
   const IRCode* ir_code = get_current_ir_code();
-  if (!ir_code) {
+  if (ir_code == nullptr) {
     return;
   }
 
@@ -158,7 +158,7 @@ void dumpblock(cfg::BlockId block_id) {
 }
 
 void dumpir(const IRCode* ir_code) {
-  if (!ir_code) {
+  if (ir_code == nullptr) {
     return;
   }
 
@@ -188,8 +188,8 @@ void setdumpfilemode(const char* mode) {
 }
 
 const char* methname() {
-  auto dex_method = get_current_dex_method();
-  if (!dex_method) {
+  const auto* dex_method = get_current_dex_method();
+  if (dex_method == nullptr) {
     return "";
   }
 

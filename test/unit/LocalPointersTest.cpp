@@ -23,12 +23,12 @@ class LocalPointersTest : public RedexTest {};
 TEST_F(LocalPointersTest, domainOperations) {
   ptrs::Environment env1;
   ptrs::Environment env2;
-  auto insn1 = (new IRInstruction(OPCODE_NEW_INSTANCE))
-                   ->set_type(DexType::make_type("LFoo;"));
-  auto insn2 = (new IRInstruction(OPCODE_NEW_INSTANCE))
-                   ->set_type(DexType::make_type("LBar;"));
-  auto insn3 = (new IRInstruction(OPCODE_NEW_INSTANCE))
-                   ->set_type(DexType::make_type("LBaz;"));
+  auto* insn1 = (new IRInstruction(OPCODE_NEW_INSTANCE))
+                    ->set_type(DexType::make_type("LFoo;"));
+  auto* insn2 = (new IRInstruction(OPCODE_NEW_INSTANCE))
+                    ->set_type(DexType::make_type("LBar;"));
+  auto* insn3 = (new IRInstruction(OPCODE_NEW_INSTANCE))
+                    ->set_type(DexType::make_type("LBaz;"));
 
   env1.set_fresh_pointer(0, insn1);
   env2.set_fresh_pointer(0, insn1);
@@ -95,7 +95,7 @@ TEST_F(LocalPointersTest, simple) {
                   Pointee(Eq(*(
                       IRInstruction(IOPCODE_LOAD_PARAM_OBJECT).set_dest(0))))));
   const auto& pointers = exit_env.get_pointers(0);
-  for (auto insn : pointers.elements()) {
+  for (const auto* insn : pointers.elements()) {
     if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT ||
         insn->opcode() == OPCODE_NEW_INSTANCE) {
       EXPECT_FALSE(exit_env.may_have_escaped(insn));
@@ -136,7 +136,7 @@ TEST_F(LocalPointersTest, aliasEscape) {
           Pointee(*(IRInstruction(OPCODE_NEW_INSTANCE)
                         .set_type(DexType::get_type("LFoo;")))),
           Pointee(*(IRInstruction(IOPCODE_LOAD_PARAM_OBJECT).set_dest(0)))));
-  for (auto insn : returned_ptrs.elements()) {
+  for (const auto* insn : returned_ptrs.elements()) {
     EXPECT_TRUE(exit_env.may_have_escaped(insn));
   }
 }
@@ -340,7 +340,7 @@ TEST_F(LocalPointersTest, returnFreshValue) {
     ptrs::InvokeToSummaryMap invoke_to_summary_map;
     const IRInstruction* invoke_insn{nullptr};
     for (const auto& mie : InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (opcode::is_an_invoke(insn->opcode())) {
         invoke_insn = insn;
         invoke_to_summary_map.emplace(insn, fresh_return_summary);
@@ -410,7 +410,7 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
     ptrs::InvokeToSummaryMap invoke_to_summary_map;
     const IRInstruction* invoke_insn{nullptr};
     for (const auto& mie : InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (opcode::is_an_invoke(insn->opcode())) {
         invoke_insn = insn;
         invoke_to_summary_map.emplace(insn, fresh_return_summary);

@@ -57,7 +57,7 @@ bool verify_model_spec(const std::vector<ModelSpec>& model_specs,
     return false;
   }
 
-  for (const auto root : model_spec.roots) {
+  for (const auto* const root : model_spec.roots) {
     always_assert_log(
         root,
         "[ClassMerging] Wrong specification: model %s must have \"roots\"",

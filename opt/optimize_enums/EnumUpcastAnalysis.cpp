@@ -24,7 +24,7 @@ bool need_analyze(const DexMethod* method,
                   const ConcurrentSet<DexType*>& candidate_enums,
                   const ConcurrentSet<DexType*>& rejected_enums) {
   const IRCode* code = method->get_code();
-  if (!code) {
+  if (code == nullptr) {
     return false;
   }
   std::vector<DexType*> types;
@@ -33,7 +33,8 @@ bool need_analyze(const DexMethod* method,
     if (type::is_array(t)) {
       t = type::get_array_element_type(t);
     }
-    if (candidate_enums.count_unsafe(t) && !rejected_enums.count(t)) {
+    if ((candidate_enums.count_unsafe(t) != 0u) &&
+        (rejected_enums.count(t) == 0u)) {
       return true;
     }
   }
@@ -42,7 +43,7 @@ bool need_analyze(const DexMethod* method,
 
 UnorderedSet<DexType*> discard_primitives(const EnumTypes& types) {
   UnorderedSet<DexType*> res;
-  for (auto type : types.elements()) {
+  for (auto* type : types.elements()) {
     if (!type::is_primitive(type)) {
       res.insert(type);
     }
@@ -86,7 +87,7 @@ class EnumUpcastDetector {
                            const EnumTypeEnvironment* env) {
     switch (insn->opcode()) {
     case OPCODE_CHECK_CAST: {
-      auto type = insn->get_type();
+      auto* type = insn->get_type();
       // Assume the local upcast is safe and we only care about upcasting when
       // the value is escaping.
       if (type != OBJECT_TYPE) {
@@ -174,8 +175,8 @@ class EnumUpcastDetector {
     if (!is_enum_entries(field)) {
       return;
     }
-    auto enum_cls = field->get_class();
-    auto method_cls = m_method->get_class();
+    auto* enum_cls = field->get_class();
+    auto* method_cls = m_method->get_class();
     TRACE(ENUM, 5, "sget_object enum entries %s in %s", SHOW(field),
           SHOW(m_method));
     if (enum_cls == method_cls && method::is_clinit(m_method)) {
@@ -196,7 +197,7 @@ class EnumUpcastDetector {
     UnorderedSet<DexType*> acceptable_elem_types;
     for (DexType* type : array_types.elements()) {
       DexType* elem = type::get_array_element_type(type);
-      if (elem && !type::is_primitive(elem)) {
+      if ((elem != nullptr) && !type::is_primitive(elem)) {
         acceptable_elem_types.insert(elem); // An array of one type of objects.
       }
     }
@@ -220,9 +221,9 @@ class EnumUpcastDetector {
   void process_direct_invocation(const IRInstruction* insn,
                                  const EnumTypeEnvironment* env) const {
     always_assert(insn->opcode() == OPCODE_INVOKE_DIRECT);
-    auto invoked = insn->get_method();
-    auto container = invoked->get_class();
-    if (m_candidate_enums->count_unsafe(container) &&
+    auto* invoked = insn->get_method();
+    auto* container = invoked->get_class();
+    if ((m_candidate_enums->count_unsafe(container) != 0u) &&
         method::is_init(invoked) && method::is_clinit(m_method)) {
       return;
     }
@@ -241,20 +242,21 @@ class EnumUpcastDetector {
   void process_static_invocation(const IRInstruction* insn,
                                  const EnumTypeEnvironment* env) {
     always_assert(insn->opcode() == OPCODE_INVOKE_STATIC);
-    auto method_ref = insn->get_method();
+    auto* method_ref = insn->get_method();
     if (method_ref == STRING_VALUEOF_METHOD) {
       EnumTypes types = env->get(insn->src(0));
       check_object_cast(types, insn);
       return;
     }
-    auto container = method_ref->get_class();
-    if (m_candidate_enums->count_unsafe(container)) {
+    auto* container = method_ref->get_class();
+    if (m_candidate_enums->count_unsafe(container) != 0u) {
       if (is_enum_values(method_ref) || is_enum_valueof(method_ref)) {
         return;
       }
     }
-    auto method = resolve_method(method_ref, MethodSearch::Static);
-    if (!method || !params_contain_object_type(method, OBJECT_TYPE)) {
+    auto* method = resolve_method(method_ref, MethodSearch::Static);
+    if ((method == nullptr) ||
+        !params_contain_object_type(method, OBJECT_TYPE)) {
       process_general_invocation(insn, env);
       return;
     }
@@ -265,10 +267,10 @@ class EnumUpcastDetector {
       safe_params = summary.safe_params;
     }
 
-    const auto args = method->get_proto()->get_args();
+    auto* const args = method->get_proto()->get_args();
     auto it = args->begin();
     for (size_t arg_id = 0; arg_id < insn->srcs_size(); ++arg_id, ++it) {
-      if (safe_params && safe_params->count(arg_id)) {
+      if (safe_params && (safe_params->count(arg_id) != 0u)) {
         continue;
       }
       reject_if_inconsistent(insn, env->get(insn->src(arg_id)), *it,
@@ -308,7 +310,8 @@ class EnumUpcastDetector {
     DexType* container = method->get_class();
 
     // Class is Enum or a candidate enum class.
-    if (container == ENUM_TYPE || m_candidate_enums->count_unsafe(container)) {
+    if (container == ENUM_TYPE ||
+        (m_candidate_enums->count_unsafe(container) != 0u)) {
       EnumTypes a_types = env->get(insn->src(0));
       auto this_types = discard_primitives(a_types);
       // Method is equals or compareTo.
@@ -322,7 +325,8 @@ class EnumUpcastDetector {
             that_types.empty() ? nullptr : *unordered_any(that_types);
         // Reject multiple types in the registers.
         if (this_types.size() > 1 || that_types.size() > 1 ||
-            (this_type && that_type && this_type != that_type)) {
+            ((this_type != nullptr) && (that_type != nullptr) &&
+             this_type != that_type)) {
           reject(insn, this_types, UnsafeType::kUsageCastThisPointer);
           reject(insn, that_types, UnsafeType::kUsageCastParameter);
         }
@@ -352,9 +356,9 @@ class EnumUpcastDetector {
   void process_general_invocation(const IRInstruction* insn,
                                   const EnumTypeEnvironment* env) const {
     always_assert(insn->has_method());
-    auto method = insn->get_method();
-    auto proto = method->get_proto();
-    auto container = method->get_class();
+    auto* method = insn->get_method();
+    auto* proto = method->get_proto();
+    auto* container = method->get_class();
     // Check the type of arguments.
     auto* args = proto->get_args();
     always_assert(args->size() == insn->srcs_size() ||
@@ -379,7 +383,7 @@ class EnumUpcastDetector {
       return false;
     }
     type = const_cast<DexType*>(type::get_element_type_if_array(type));
-    return m_candidate_enums->count_unsafe(type);
+    return m_candidate_enums->count_unsafe(type) != 0u;
   }
 
   void check_object_cast(const EnumTypes& types,
@@ -403,7 +407,7 @@ class EnumUpcastDetector {
                               UnsafeType reason = UnsafeType::kUsage) const {
     if (is_candidate(required_type)) {
       bool need_delete = false;
-      for (auto possible_type : types.elements()) {
+      for (auto* possible_type : types.elements()) {
         if (!type::is_primitive(possible_type) &&
             possible_type != required_type) {
           need_delete = true;
@@ -414,8 +418,8 @@ class EnumUpcastDetector {
         reject(insn, required_type, reason);
       }
     } else {
-      for (auto possible_type : types.elements()) {
-        const auto possible_elem_type =
+      for (auto* possible_type : types.elements()) {
+        auto* const possible_elem_type =
             type::get_array_component_type(possible_type);
         if (m_config->support_kt_19_enum_entries &&
             method::is_clinit(m_method) &&
@@ -453,7 +457,7 @@ class EnumUpcastDetector {
               DexType* type,
               UnsafeType reason = UnsafeType::kUsage) const {
     type = const_cast<DexType*>(type::get_element_type_if_array(type));
-    if (m_candidate_enums->count_unsafe(type)) {
+    if (m_candidate_enums->count_unsafe(type) != 0u) {
       m_reject_fn(type, reason);
       if (traceEnabled(ENUM, 9)) {
         std::ostringstream os;
@@ -490,21 +494,21 @@ class EnumUpcastDetector {
 };
 
 bool is_static_method_on_enum_class(const DexMethodRef* ref) {
-  auto method = static_cast<const DexMethod*>(ref);
-  if (!method || !method->is_def() || !is_static(method)) {
+  const auto* method = static_cast<const DexMethod*>(ref);
+  if ((method == nullptr) || !method->is_def() || !is_static(method)) {
     return false;
   }
-  auto container = type_class(method->get_class());
-  return container && is_enum(container);
+  auto* container = type_class(method->get_class());
+  return (container != nullptr) && is_enum(container);
 }
 
 bool is_static_field_on_enum_class(const DexFieldRef* fref) {
-  auto field = fref->as_def();
-  if (!field || !is_static(field)) {
+  const auto* field = fref->as_def();
+  if ((field == nullptr) || !is_static(field)) {
     return false;
   }
-  auto container = type_class(field->get_class());
-  return container && is_enum(container);
+  auto* container = type_class(field->get_class());
+  return (container != nullptr) && is_enum(container);
 }
 } // namespace
 
@@ -530,14 +534,14 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
       env->set(dest, env->get(insn->src(0)));
       break;
     case OPCODE_INVOKE_STATIC: {
-      auto method = resolve_method(insn->get_method(), MethodSearch::Static);
-      if (method) {
+      auto* method = resolve_method(insn->get_method(), MethodSearch::Static);
+      if (method != nullptr) {
         auto it = m_config.param_summary_map.find(method);
         if (it != m_config.param_summary_map.end()) {
           const auto& summary = it->second;
           if (summary.returned_param) {
             auto returned = summary.returned_param.get();
-            if (summary.safe_params.count(returned)) {
+            if (summary.safe_params.count(returned) != 0u) {
               env->set(dest, env->get(insn->src(returned)));
               return;
             }
@@ -556,7 +560,7 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
       env->set(dest, EnumTypes(type::java_lang_Class()));
       break;
     case OPCODE_CHECK_CAST: {
-      auto type = insn->get_type();
+      auto* type = insn->get_type();
       if (type == OBJECT_TYPE) {
         env->set(dest, env->get(insn->src(0)));
       } else {
@@ -577,9 +581,9 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
     case OPCODE_AGET_OBJECT: {
       EnumTypes types;
       EnumTypes array_types = env->get(insn->src(0));
-      for (auto const array_type : array_types.elements()) {
-        const auto type = type::get_array_element_type(array_type);
-        if (type && !type::is_primitive(type)) {
+      for (auto* const array_type : array_types.elements()) {
+        auto* const type = type::get_array_element_type(array_type);
+        if ((type != nullptr) && !type::is_primitive(type)) {
           types.add(type);
         }
       }
@@ -651,23 +655,23 @@ void reject_enums_for_colliding_constructors(
       return;
     }
     UnorderedSet<DexTypeList*> modified_params_lists;
-    for (auto ctor : ctors) {
+    for (auto* ctor : ctors) {
       UnorderedSet<DexType*> transforming_enums;
       DexTypeList::ContainerType param_types{
           ctor->get_proto()->get_args()->begin(),
           ctor->get_proto()->get_args()->end()};
       for (size_t i = 0; i < param_types.size(); i++) {
-        auto base_type = const_cast<DexType*>(
+        auto* base_type = const_cast<DexType*>(
             type::get_element_type_if_array(param_types[i]));
-        if (candidate_enums->count(base_type)) {
+        if (candidate_enums->count(base_type) != 0u) {
           transforming_enums.insert(base_type);
           param_types[i] = type::make_array_type(
               type::java_lang_Integer(), type::get_array_level(param_types[i]));
         }
       }
-      auto new_params = DexTypeList::make_type_list(std::move(param_types));
-      if (modified_params_lists.count(new_params)) {
-        for (auto enum_type : UnorderedIterable(transforming_enums)) {
+      auto* new_params = DexTypeList::make_type_list(std::move(param_types));
+      if (modified_params_lists.count(new_params) != 0u) {
+        for (auto* enum_type : UnorderedIterable(transforming_enums)) {
           TRACE(ENUM, 4,
                 "Reject %s because it would create a method prototype "
                 "collision for %s",
@@ -675,10 +679,10 @@ void reject_enums_for_colliding_constructors(
           rejected_enums.insert(enum_type);
         }
       } else {
-        auto new_proto = DexProto::make_proto(type::_void(), new_params);
+        auto* new_proto = DexProto::make_proto(type::_void(), new_params);
         if (DexMethod::get_method(ctor->get_class(), ctor->get_name(),
                                   new_proto) != nullptr) {
-          for (auto enum_type : UnorderedIterable(transforming_enums)) {
+          for (auto* enum_type : UnorderedIterable(transforming_enums)) {
             TRACE(ENUM, 4,
                   "Reject %s because it would create a method prototype "
                   "collision for %s",
@@ -704,9 +708,9 @@ void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
     auto& cfg = code.cfg();
     UnorderedSet<const IRInstruction*> new_instances_to_verify;
     for (auto& mie : InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() != OPCODE_NEW_INSTANCE ||
-          !candidate_enums->count(insn->get_type())) {
+          (candidate_enums->count(insn->get_type()) == 0u)) {
         continue;
       }
       new_instances_to_verify.insert(insn);
@@ -718,7 +722,8 @@ void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
         cfg, /* ignore_unreachable */ false,
         [&](auto* insn) { return new_instances_to_verify.count(insn); });
     live_range::DefUseChains du_chains = chains.get_def_use_chains();
-    for (auto* new_instance_insn : UnorderedIterable(new_instances_to_verify)) {
+    for (const auto* new_instance_insn :
+         UnorderedIterable(new_instances_to_verify)) {
       auto* enum_type = new_instance_insn->get_type();
       const auto& use_set =
           du_chains[const_cast<IRInstruction*>(new_instance_insn)];
@@ -726,7 +731,7 @@ void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
         if (use.src_index != 0) {
           continue;
         }
-        auto use_insn = use.insn;
+        auto* use_insn = use.insn;
         if (opcode::is_a_move(use_insn->opcode())) {
           // Ignore moves
           continue;
@@ -734,13 +739,14 @@ void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
         if (!use_insn->has_method()) {
           continue;
         }
-        auto callee = use_insn->get_method();
+        auto* callee = use_insn->get_method();
         if (!method::is_init(callee)) {
           continue;
         }
         const auto* resolved_callee =
             resolve_method(callee, opcode_to_search(use_insn), method);
-        if (!resolved_callee || resolved_callee->get_class() != enum_type) {
+        if ((resolved_callee == nullptr) ||
+            resolved_callee->get_class() != enum_type) {
           TRACE(ENUM, 4,
                 "Reject %s because base constructor %s in invoke instruction "
                 "%s may be called on new-instance instruction %s in %s",
@@ -761,7 +767,7 @@ void reject_unsafe_enums(
     const std::vector<DexClass*>& classes,
     Config* config,
     const std::function<void(const DexType*, UnsafeType u)>& reject_fn) {
-  auto candidate_enums = &config->candidate_enums;
+  auto* candidate_enums = &config->candidate_enums;
   ConcurrentSet<DexType*> rejected_enums;
 
   walk::parallel::fields(
@@ -769,16 +775,16 @@ void reject_unsafe_enums(
         if (can_rename(field)) {
           return;
         }
-        if (candidate_enums->count_unsafe(field->get_class())) {
+        if (candidate_enums->count_unsafe(field->get_class()) != 0u) {
           auto access = field->get_access();
           if (check_required_access_flags(enum_field_access(), access) ||
               check_required_access_flags(synth_access(), access)) {
             return;
           }
         }
-        auto type = const_cast<DexType*>(
+        auto* type = const_cast<DexType*>(
             type::get_element_type_if_array(field->get_type()));
-        if (candidate_enums->count_unsafe(type)) {
+        if (candidate_enums->count_unsafe(type) != 0u) {
           rejected_enums.insert(type);
           reject_fn(type, UnsafeType::kUsageUnrenamableFieldType);
         }
@@ -787,8 +793,8 @@ void reject_unsafe_enums(
   walk::parallel::methods(classes, [&](DexMethod* method) {
     // When doing static analysis, simply skip some javac-generated enum
     // methods <init>, values(), and valueOf(String).
-    if (candidate_enums->count_unsafe(method->get_class()) &&
-        !rejected_enums.count(method->get_class()) &&
+    if ((candidate_enums->count_unsafe(method->get_class()) != 0u) &&
+        (rejected_enums.count(method->get_class()) == 0u) &&
         (method::is_init(method) || is_enum_values(method) ||
          is_enum_valueof(method))) {
       return;
@@ -797,10 +803,10 @@ void reject_unsafe_enums(
     auto reject_proto_types = [&](DexMethod* method, UnsafeType u) {
       std::vector<DexType*> types;
       method->get_proto()->gather_types(types);
-      for (auto type : types) {
-        auto elem_type =
+      for (auto* type : types) {
+        auto* elem_type =
             const_cast<DexType*>(type::get_element_type_if_array(type));
-        if (candidate_enums->count_unsafe(elem_type)) {
+        if (candidate_enums->count_unsafe(elem_type) != 0u) {
           TRACE(ENUM, 5,
                 "Rejecting %s due to !can_rename or usage from annotation",
                 SHOW(elem_type));
@@ -813,12 +819,12 @@ void reject_unsafe_enums(
     if (!can_rename(method)) {
       reject_proto_types(method, UnsafeType::kUsageUnrenamableMethodRef);
       if (!is_static(method) &&
-          candidate_enums->count_unsafe(method->get_class())) {
+          (candidate_enums->count_unsafe(method->get_class()) != 0u)) {
         rejected_enums.insert(method->get_class());
       }
     }
 
-    auto method_cls = type_class(method->get_class());
+    auto* method_cls = type_class(method->get_class());
     if (method_cls != nullptr && is_annotation(method_cls)) {
       reject_proto_types(method, UnsafeType::kUsageAnnotationMethodRef);
     }
@@ -853,7 +859,7 @@ bool is_enum_valueof(const DexMethodRef* method) {
   if (!is_static_method_on_enum_class(method) || method->str() != "valueOf") {
     return false;
   }
-  auto proto = method->get_proto();
+  auto* proto = method->get_proto();
   if (method->get_class() != proto->get_rtype()) {
     return false;
   }
@@ -865,7 +871,7 @@ bool is_enum_values(const DexMethodRef* method) {
   if (!is_static_method_on_enum_class(method) || method->str() != "values") {
     return false;
   }
-  auto proto = method->get_proto();
+  auto* proto = method->get_proto();
   if (!proto->get_args()->empty()) {
     return false;
   }

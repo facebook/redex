@@ -39,7 +39,8 @@ class Iterator {
   reference operator*() const { return *m_it; }
   pointer operator->() const { return &(this->operator*()); }
   bool operator==(const Iterator& other) const {
-    return m_block == other.m_block && (!m_block || m_it == other.m_it);
+    return m_block == other.m_block &&
+           ((m_block == nullptr) || m_it == other.m_it);
   }
   bool operator!=(Iterator& other) const { return !(*this == other); }
   Iterator operator++(int);

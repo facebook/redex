@@ -14,7 +14,7 @@
 static bool HasCatchBlock(IRCode* code) {
   code->build_cfg();
   bool has_catch = false;
-  for (auto it : code->cfg().blocks()) {
+  for (auto* it : code->cfg().blocks()) {
     if (it->is_catch()) {
       has_catch = true;
     }
@@ -24,7 +24,7 @@ static bool HasCatchBlock(IRCode* code) {
 }
 
 TEST_F(PreVerify, CheckRecursionTest) {
-  auto cls =
+  auto* cls =
       find_class_named(classes, "Lcom/facebook/redextest/CheckRecursionTest;");
   ASSERT_NE(nullptr, cls);
 
@@ -42,7 +42,7 @@ TEST_F(PreVerify, CheckRecursionTest) {
 }
 
 TEST_F(PostVerify, CheckRecursionTest) {
-  auto cls =
+  auto* cls =
       find_class_named(classes, "Lcom/facebook/redextest/CheckRecursionTest;");
   ASSERT_NE(nullptr, cls);
 

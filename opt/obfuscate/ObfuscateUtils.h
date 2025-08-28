@@ -185,7 +185,7 @@ class MethodNameWrapper : public DexMethodWrapper {
     always_assert(other != this);
     always_assert(get()->get_name() == other->get()->get_name());
 
-    auto this_end = find_end_link();
+    auto* this_end = find_end_link();
     // Make sure they aren't already linked
     if (this_end == other->find_end_link()) {
       return;
@@ -326,7 +326,7 @@ class MethodNameGenerator : public NameGenerator<DexMethod*> {
 
   void bind_names() override {
     for (auto p : methods) {
-      auto wrap = p.second;
+      auto* wrap = p.second;
       always_assert(!wrap->is_modified());
       do {
         std::string new_name(this->next_name());
@@ -356,10 +356,10 @@ struct static_value_biased_dexfields_comparator {
       return !is_static(a);
     }
 
-    auto eva = a->get_static_value();
-    auto evb = b->get_static_value();
-    auto is_eva_relevant = eva && !eva->is_zero();
-    auto is_evb_relevant = evb && !evb->is_zero();
+    auto* eva = a->get_static_value();
+    auto* evb = b->get_static_value();
+    auto is_eva_relevant = (eva != nullptr) && !eva->is_zero();
+    auto is_evb_relevant = (evb != nullptr) && !evb->is_zero();
     always_assert(!is_eva_relevant || is_static(a));
     always_assert(!is_evb_relevant || is_static(b));
     // We prefer fields that have relevant static values
@@ -376,45 +376,48 @@ struct static_value_biased_dexfields_comparator {
       }
       switch (eva->evtype()) {
       case DEVT_STRING: {
-        auto evastring = static_cast<DexEncodedValueString*>(eva)->string();
-        auto evbstring = static_cast<DexEncodedValueString*>(evb)->string();
+        const auto* evastring =
+            static_cast<DexEncodedValueString*>(eva)->string();
+        const auto* evbstring =
+            static_cast<DexEncodedValueString*>(evb)->string();
         if (evastring != evbstring) {
           return compare_dexstrings(evastring, evbstring);
         }
         break;
       }
       case DEVT_TYPE: {
-        auto evatype = static_cast<DexEncodedValueType*>(eva)->type();
-        auto evbtype = static_cast<DexEncodedValueType*>(evb)->type();
+        auto* evatype = static_cast<DexEncodedValueType*>(eva)->type();
+        auto* evbtype = static_cast<DexEncodedValueType*>(evb)->type();
         if (evatype != evbtype) {
           return compare_dextypes(evatype, evbtype);
         }
         break;
       }
       case DEVT_FIELD: {
-        auto evafield = static_cast<DexEncodedValueField*>(eva)->field();
-        auto evbfield = static_cast<DexEncodedValueField*>(evb)->field();
+        auto* evafield = static_cast<DexEncodedValueField*>(eva)->field();
+        auto* evbfield = static_cast<DexEncodedValueField*>(evb)->field();
         if (evafield != evbfield) {
           return compare_dexfields(evafield, evbfield);
         }
         break;
       }
       case DEVT_METHOD: {
-        auto evamethod = static_cast<DexEncodedValueMethod*>(eva)->method();
-        auto evbmethod = static_cast<DexEncodedValueMethod*>(evb)->method();
+        auto* evamethod = static_cast<DexEncodedValueMethod*>(eva)->method();
+        auto* evbmethod = static_cast<DexEncodedValueMethod*>(evb)->method();
         if (evamethod != evbmethod) {
           return compare_dexmethods(evamethod, evbmethod);
         }
         break;
       }
       case DEVT_ARRAY: {
-        auto evaarray = static_cast<DexEncodedValueArray*>(eva);
-        auto evbarray = static_cast<DexEncodedValueArray*>(evb);
+        auto* evaarray = static_cast<DexEncodedValueArray*>(eva);
+        auto* evbarray = static_cast<DexEncodedValueArray*>(evb);
         if (evaarray->is_static_val() != evbarray->is_static_val()) {
-          return evaarray->is_static_val() < evbarray->is_static_val();
+          return static_cast<int>(evaarray->is_static_val()) <
+                 static_cast<int>(evbarray->is_static_val());
         }
-        auto evavalues = evaarray->evalues();
-        auto evbvalues = evbarray->evalues();
+        auto* evavalues = evaarray->evalues();
+        auto* evbvalues = evbarray->evalues();
         if (evavalues->size() != evbvalues->size()) {
           return evavalues->size() < evbvalues->size();
         }
@@ -467,7 +470,7 @@ class FieldNameGenerator : public NameGenerator<DexField*> {
 
   void bind_names() override {
     for (auto p : fields) {
-      auto wrap = p.second;
+      auto* wrap = p.second;
       always_assert(!wrap->is_modified());
       do {
         std::string new_name(this->next_name());
@@ -609,7 +612,7 @@ class DexElemManager {
     if (found_def != nullptr) {
       return found_def;
     }
-    for (auto& intf : *cls->get_interfaces()) {
+    for (const auto& intf : *cls->get_interfaces()) {
       auto found = find_def_in_class_and_intf(ref, type_class(intf));
       if (found != nullptr) {
         return found;
@@ -624,7 +627,7 @@ class DexElemManager {
   // Note: we also have to look in superclasses in the case that this is a ref
   T def_of_ref(R ref) const {
     DexClass* cls = type_class(ref->get_class());
-    while (cls && !cls->is_external()) {
+    while ((cls != nullptr) && !cls->is_external()) {
       auto found = find_def_in_class_and_intf(ref, cls);
       if (found) {
         return found;
@@ -728,10 +731,10 @@ class FieldObfuscationState
   void populate_ids_to_avoid(DexClass* base,
                              DexFieldManager& name_manager,
                              const ClassHierarchy& /* unused */) override {
-    for (auto f : base->get_ifields()) {
+    for (auto* f : base->get_ifields()) {
       ids_to_avoid.insert(std::string(name_manager[f]->get_name()));
     }
-    for (auto f : base->get_sfields()) {
+    for (auto* f : base->get_sfields()) {
       ids_to_avoid.insert(std::string(name_manager[f]->get_name()));
     }
   }
@@ -760,13 +763,13 @@ void walk_hierarchy(DexClass* cls,
     return;
   }
   auto visit = [&](DexClass* cls) {
-    for (const auto meth : const_cast<const DexClass*>(cls)->get_dmethods()) {
+    for (auto* const meth : const_cast<const DexClass*>(cls)->get_dmethods()) {
       if (!is_private(meth) || visit_private) {
         on_member(const_cast<DexMethod*>(meth));
       }
     }
 
-    for (const auto meth : const_cast<const DexClass*>(cls)->get_vmethods()) {
+    for (auto* const meth : const_cast<const DexClass*>(cls)->get_vmethods()) {
       if (!is_private(meth) || visit_private) {
         on_member(const_cast<DexMethod*>(meth));
       }
@@ -779,7 +782,7 @@ void walk_hierarchy(DexClass* cls,
   // We shouldn't need to visit object because we shouldn't ever be renaming
   // to the name of a java.lang.Object method
   if (h_dir & HierarchyDirection::VisitSuperClasses) {
-    auto clazz = cls;
+    auto* clazz = cls;
     while (clazz) {
       visit(clazz);
       if (clazz->get_super_class() == nullptr) {
@@ -790,7 +793,7 @@ void walk_hierarchy(DexClass* cls,
   }
 
   if (h_dir & HierarchyDirection::VisitSubClasses) {
-    for (auto subcls_type : get_children(ch, cls->get_type())) {
+    for (const auto* subcls_type : get_children(ch, cls->get_type())) {
       walk_hierarchy(type_class(subcls_type), on_member, visit_private,
                      HierarchyDirection::VisitSubClasses, ch);
     }
@@ -809,7 +812,7 @@ class MethodObfuscationState : public ObfuscationState<DexMethod*,
                              DexMethodManager& name_manager,
                              const ClassHierarchy& ch) override {
     auto visit_member = [&](DexMethod* m) {
-      auto wrap(name_manager[m]);
+      auto* wrap(name_manager[m]);
       if (wrap->name_has_changed()) {
         ids_to_avoid.insert(wrap->get()->get_name()->str_copy());
       }

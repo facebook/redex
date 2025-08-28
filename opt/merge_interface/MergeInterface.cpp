@@ -60,7 +60,7 @@ std::string show(const std::vector<DexClassSet>& to_merge) {
 
 std::string show(const TypeSet& type_set) {
   std::ostringstream ss;
-  for (auto type : type_set) {
+  for (const auto* type : type_set) {
     ss << type << ":" << SHOW(type) << " ";
   }
   ss << "\n";
@@ -80,7 +80,7 @@ std::vector<DexClassSet> collect_can_merge(
     UnorderedSet<DexClass*> ifaces;
     // Find interfaces that are not external, can be deleted, and can be
     // renamed.
-    for (auto cls : classes_group) {
+    for (auto* cls : classes_group) {
       if (is_interface(cls) && !cls->is_external() && can_delete(cls) &&
           can_rename(cls)) {
         ifaces.emplace(cls);
@@ -187,7 +187,7 @@ void strip_out_collision(const Scope& scope,
     }
     DexProto* new_proto = type_reference::get_new_proto(proto, intf_merge_map);
     DexType* type = meth->get_class();
-    auto* name = meth->get_name();
+    const auto* name = meth->get_name();
     DexMethodRef* existing_meth = DexMethod::get_method(type, name, new_proto);
     if (existing_meth == nullptr) {
       // When there is no virtual method conflict if we are merging the
@@ -211,7 +211,7 @@ void strip_out_collision(const Scope& scope,
     if (mergeables.count(rtype) > 0) {
       to_delete.emplace(rtype);
     }
-    for (const auto arg_type : *proto->get_args()) {
+    for (auto* const arg_type : *proto->get_args()) {
       const DexType* extracted_arg_type =
           type::get_element_type_if_array(arg_type);
       if (mergeables.count(extracted_arg_type) > 0) {
@@ -253,7 +253,7 @@ bool will_fail_relocate(DexMethod* method) {
     if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
       DexMethod* meth =
           resolve_method(insn->get_method(), MethodSearch::Direct);
-      if (!meth) {
+      if (meth == nullptr) {
         return true;
       }
 
@@ -656,7 +656,7 @@ void MergeInterfacePass::run_pass(DexStoresVector& stores,
   UnorderedMap<DexMethodRef*, DexMethodRef*> old_to_new_method;
   auto intf_merge_map =
       merge_interfaces(can_merge, &m_metric, &old_to_new_method);
-  auto& ch = type_system.get_class_scopes().get_parent_to_children();
+  const auto& ch = type_system.get_class_scopes().get_parent_to_children();
   update_after_merge(scope, intf_merge_map, old_to_new_method, ch);
   remove_merged_interfaces(scope, intf_merge_map);
   post_dexen_changes(scope, stores);

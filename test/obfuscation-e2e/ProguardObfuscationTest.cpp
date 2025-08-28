@@ -64,7 +64,7 @@ int ProguardObfuscationTest::method_is_renamed_helper(
   for (const auto& method : methods) {
     auto deobfuscated_name = proguard_map.deobfuscate_method(show(method));
     if (name == std::string(method->c_str()) || name == deobfuscated_name) {
-      return deobfuscated_name != show(method);
+      return static_cast<int>(deobfuscated_name != show(method));
     }
   }
   return -1;

@@ -21,7 +21,7 @@ struct TypeReferenceTest : public RedexTest {
   std::vector<DexClass*> m_scope;
 
   TypeReferenceTest() {
-    auto type = DexType::make_type("Lcom/TestClass;");
+    auto* type = DexType::make_type("Lcom/TestClass;");
     ClassCreator creator(type);
     creator.set_super(type::java_lang_Object());
     m_class = creator.create();
@@ -36,8 +36,8 @@ struct TypeReferenceTest : public RedexTest {
   ~TypeReferenceTest() {}
 
   DexField* make_a_field(const std::string& name, const DexType* type) {
-    auto fname = DexString::make_string(name);
-    auto field = static_cast<DexField*>(
+    const auto* fname = DexString::make_string(name);
+    auto* field = static_cast<DexField*>(
         DexField::make_field(m_class->get_type(), fname, type));
     field->make_concrete(ACC_PUBLIC);
     m_class->add_field(field);
@@ -47,16 +47,16 @@ struct TypeReferenceTest : public RedexTest {
   void check_proto_update(const DexProto* /*proto*/,
                           DexType* rtype,
                           DexTypeList* args) {
-    auto new_proto = DexProto::make_proto(rtype, args);
+    auto* new_proto = DexProto::make_proto(rtype, args);
     EXPECT_EQ(new_proto, new_proto);
   }
 };
 
 TEST_F(TypeReferenceTest, get_new_proto) {
-  auto empty_list = DexTypeList::make_type_list({});
+  auto* empty_list = DexTypeList::make_type_list({});
 
   // ()V => ()V
-  auto proto = DexProto::make_proto(type::_void(), empty_list);
+  auto* proto = DexProto::make_proto(type::_void(), empty_list);
   check_proto_update(proto, type::_void(), empty_list);
 
   // ()E; => ()I
@@ -87,14 +87,15 @@ TEST_F(TypeReferenceTest, get_new_proto) {
 }
 
 TEST_F(TypeReferenceTest, update_field_type_references) {
-  auto f_b = make_a_field("f_b", type::_byte());
-  auto f_i = make_a_field("f_i", type::_int());
-  auto f_e0 = make_a_field("f_e0", type::java_lang_Enum());
-  auto f_e1 =
+  auto* f_b = make_a_field("f_b", type::_byte());
+  auto* f_i = make_a_field("f_i", type::_int());
+  auto* f_e0 = make_a_field("f_e0", type::java_lang_Enum());
+  auto* f_e1 =
       make_a_field("f_e1", type::make_array_type(type::java_lang_Enum()));
-  auto f_e3 = make_a_field("f_e3",
-                           type::make_array_type(type::make_array_type(
-                               type::make_array_type(type::java_lang_Enum()))));
+  auto* f_e3 =
+      make_a_field("f_e3",
+                   type::make_array_type(type::make_array_type(
+                       type::make_array_type(type::java_lang_Enum()))));
   update_field_type_references(m_scope, m_old_to_new);
   // f:B => f:B
   EXPECT_EQ(f_b->get_type(), type::_byte());

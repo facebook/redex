@@ -73,7 +73,7 @@ TEST_F(SynthTest1, synthetic) {
 
   // Make sure synthetic method is removed from class Alpha.
   for (const auto& cls : *classes) {
-    const auto class_name = cls->get_type()->get_name()->c_str();
+    const auto* const class_name = cls->get_type()->get_name()->c_str();
     // Make sure the synthetic method has been removed.
     if (strcmp(class_name, "Lcom/facebook/redextest/Alpha;") == 0) {
       for (const auto& method : cls->get_dmethods()) {
@@ -87,12 +87,12 @@ TEST_F(SynthTest1, synthetic) {
         auto* code = method->get_code();
         code->build_cfg();
         for (auto& mie : InstructionIterable(code->cfg())) {
-          auto insn = mie.insn;
+          auto* insn = mie.insn;
           std::cout << SHOW(insn) << std::endl;
           if (opcode::is_an_invoke(insn->opcode())) {
-            const auto clazz =
+            const auto* const clazz =
                 insn->get_method()->get_class()->get_name()->c_str();
-            const auto n = insn->get_method()->get_name()->c_str();
+            const auto* const n = insn->get_method()->get_name()->c_str();
             auto invocation = std::string(clazz) + "." + std::string(n);
             ASSERT_STRNE("Lcom/facebook/redextest/Alpha;.access$000",
                          invocation.c_str());
@@ -124,7 +124,7 @@ TEST_F(SynthTest1, synthetic) {
         if (strcmp(method->get_name()->c_str(), "<init>") == 0) {
           TRACE(DCE, 2, "dmethod: %s", SHOW(method->get_code()));
           for (auto& mie : InstructionIterable(method->get_code())) {
-            auto instruction = mie.insn;
+            auto* instruction = mie.insn;
             // Make sure there is no const-4 in the optimized method.
             ASSERT_NE(instruction->opcode(), OPCODE_CONST);
           }

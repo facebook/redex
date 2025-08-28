@@ -65,7 +65,7 @@ DexClass* create_a_class(const char* description) {
 }
 
 void create_runtime_exception_init() {
-  auto init_method =
+  auto* init_method =
       static_cast<DexMethod*>(method::java_lang_RuntimeException_init_String());
   init_method->set_external();
 }
@@ -87,17 +87,17 @@ static void remove_position(IRCode* code) {
  * }
  */
 DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
-  auto proto =
+  auto* proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto ref = DexMethod::make_method(cls->get_type(),
-                                    DexString::make_string(name), proto);
+  auto* ref = DexMethod::make_method(cls->get_type(),
+                                     DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
                    /*with_debug_item*/ false);
-  auto main_block = mc.get_main_block();
+  auto* main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
   main_block->load_const(loc, val);
   main_block->ret_void();
-  auto method = mc.create();
+  auto* method = mc.create();
   cls->add_method(method);
   return method;
 }
@@ -111,9 +111,9 @@ DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
  */
 DexMethod* make_small_method_with_one_arg(DexClass* cls, const char* name) {
   auto method_name = cls->get_name()->str() + "." + name;
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) ")" + method_name +
-                                              R"(:(Z)V"
+                                               R"(:(Z)V"
       (
         (load-param v0)
         (return-void)
@@ -131,13 +131,13 @@ DexMethod* make_small_method_with_one_arg(DexClass* cls, const char* name) {
  * }
  */
 DexMethod* make_loopy_method(DexClass* cls, const char* name) {
-  auto proto =
+  auto* proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto ref = DexMethod::make_method(cls->get_type(),
-                                    DexString::make_string(name), proto);
+  auto* ref = DexMethod::make_method(cls->get_type(),
+                                     DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
                    /*with_debug_item*/ false);
-  auto method = mc.create();
+  auto* method = mc.create();
   method->set_code(assembler::ircode_from_string("((:begin) (goto :begin))"));
   cls->add_method(method);
   return method;
@@ -153,9 +153,9 @@ DexMethod* make_loopy_method(DexClass* cls, const char* name) {
  */
 DexMethod* make_precondition_method(DexClass* cls, const char* name) {
   auto method_name = cls->get_name()->str() + "." + name;
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) ")" + method_name +
-                                              R"(:(I)V"
+                                               R"(:(I)V"
       (
         (load-param v0)
         (if-eqz v0 :fail)
@@ -185,9 +185,9 @@ DexMethod* make_precondition_method(DexClass* cls, const char* name) {
  */
 DexMethod* make_silly_precondition_method(DexClass* cls, const char* name) {
   auto method_name = cls->get_name()->str() + "." + name;
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) ")" + method_name +
-                                              R"(:(I)V"
+                                               R"(:(I)V"
       (
         (load-param v0)
         (add-int/lit v0 v0 0)
@@ -221,9 +221,9 @@ DexMethod* make_silly_precondition_method(DexClass* cls, const char* name) {
  */
 DexMethod* make_unboxing_precondition_method(DexClass* cls, const char* name) {
   auto method_name = cls->get_name()->str() + "." + name;
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) ")" + method_name +
-                                              R"(:(Ljava/lang/Boolean;)V"
+                                               R"(:(Ljava/lang/Boolean;)V"
       (
         (load-param-object v0)
         (invoke-virtual (v0) "Ljava/lang/Boolean;.booleanValue:()Z")
@@ -256,18 +256,18 @@ DexMethod* make_unboxing_precondition_method(DexClass* cls, const char* name) {
 DexMethod* make_a_method_calls_others(DexClass* cls,
                                       const char* name,
                                       const std::vector<DexMethod*>& methods) {
-  auto proto =
+  auto* proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto ref = DexMethod::make_method(cls->get_type(),
-                                    DexString::make_string(name), proto);
+  auto* ref = DexMethod::make_method(cls->get_type(),
+                                     DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
                    /*with_debug_item*/ false);
-  auto main_block = mc.get_main_block();
-  for (auto callee : methods) {
+  auto* main_block = mc.get_main_block();
+  for (auto* callee : methods) {
     main_block->invoke(callee, {});
   }
   main_block->ret_void();
-  auto method = mc.create();
+  auto* method = mc.create();
   cls->add_method(method);
   return method;
 }
@@ -276,20 +276,20 @@ DexMethod* make_a_method_calls_others_with_arg(
     DexClass* cls,
     const char* name,
     const std::vector<std::pair<DexMethod*, int32_t>>& methods) {
-  auto proto =
+  auto* proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto ref = DexMethod::make_method(cls->get_type(),
-                                    DexString::make_string(name), proto);
+  auto* ref = DexMethod::make_method(cls->get_type(),
+                                     DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
                    /*with_debug_item*/ false);
-  auto main_block = mc.get_main_block();
+  auto* main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
-  for (auto& p : methods) {
+  for (const auto& p : methods) {
     main_block->load_const(loc, p.second);
     main_block->invoke(p.first, {loc});
   }
   main_block->ret_void();
-  auto method = mc.create();
+  auto* method = mc.create();
   cls->add_method(method);
   return method;
 }
@@ -298,20 +298,20 @@ DexMethod* make_a_method_calls_others_with_arg(
     DexClass* cls,
     const char* name,
     const std::vector<std::pair<DexMethod*, DexField*>>& methods) {
-  auto proto =
+  auto* proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto ref = DexMethod::make_method(cls->get_type(),
-                                    DexString::make_string(name), proto);
+  auto* ref = DexMethod::make_method(cls->get_type(),
+                                     DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
                    /*with_debug_item*/ false);
-  auto main_block = mc.get_main_block();
+  auto* main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
-  for (auto& p : methods) {
+  for (const auto& p : methods) {
     main_block->sget(p.second, loc);
     main_block->invoke(p.first, {loc});
   }
   main_block->ret_void();
-  auto method = mc.create();
+  auto* method = mc.create();
   cls->add_method(method);
   return method;
 }
@@ -322,22 +322,22 @@ DexMethod* make_a_method_calls_others_with_arg(
  */
 TEST_F(MethodInlineTest, insertMoves) {
   using namespace dex_asm;
-  auto callee = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* callee = static_cast<DexMethod*>(DexMethod::make_method(
       "Lfoo;", "testCallee", "V", {"I", "Ljava/lang/Object;"}));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   callee->set_code(std::make_unique<IRCode>(callee, 0));
 
-  auto caller = static_cast<DexMethod*>(
+  auto* caller = static_cast<DexMethod*>(
       DexMethod::make_method("Lfoo;", "testCaller", "V", {}));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   caller->set_code(std::make_unique<IRCode>(caller, 0));
 
-  auto invoke = dasm(OPCODE_INVOKE_STATIC, callee, {});
+  auto* invoke = dasm(OPCODE_INVOKE_STATIC, callee, {});
   invoke->set_srcs_size(2);
   invoke->set_src(0, 1);
   invoke->set_src(1, 2);
 
-  auto caller_code = caller->get_code();
+  auto* caller_code = caller->get_code();
   caller_code->push_back(dasm(OPCODE_CONST, {1_v, 1_L}));
   caller_code->push_back(dasm(OPCODE_CONST, {2_v, 0_L})); // load null ref
   caller_code->push_back(invoke);
@@ -345,7 +345,7 @@ TEST_F(MethodInlineTest, insertMoves) {
   caller_code->push_back(dasm(OPCODE_RETURN_VOID));
   caller_code->set_registers_size(3);
 
-  auto callee_code = callee->get_code();
+  auto* callee_code = callee->get_code();
   callee_code->push_back(dasm(OPCODE_CONST, {1_v, 1_L}));
   callee_code->push_back(dasm(OPCODE_RETURN_VOID));
 
@@ -437,8 +437,8 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> canidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
-  auto bar_cls = create_a_class("Lbar;");
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* bar_cls = create_a_class("Lbar;");
   {
     // foo is in dex 2, bar is in dex 3.
     DexStore store("root");
@@ -448,17 +448,17 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
     stores.push_back(std::move(store));
   }
   {
-    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
-    auto bar_m1 = make_a_method(bar_cls, "bar_m1", 2001);
-    auto bar_m2 = make_a_method(bar_cls, "bar_m2", 2002);
+    auto* foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto* bar_m1 = make_a_method(bar_cls, "bar_m1", 2001);
+    auto* bar_m2 = make_a_method(bar_cls, "bar_m2", 2002);
     canidates.insert(foo_m1);
     canidates.insert(bar_m1);
     canidates.insert(bar_m2);
     // foo_main calls foo_m1 and bar_m2.
-    [[maybe_unused]] auto foo_main =
+    [[maybe_unused]] auto* foo_main =
         make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m2});
     // bar_main calls bar_m1.
-    [[maybe_unused]] auto bar_main =
+    [[maybe_unused]] auto* bar_main =
         make_a_method_calls_others(bar_cls, "bar_main", {bar_m1});
     // Expect foo_m1 and bar_m1 be inlined if `intra_dex` is true.
     expected_inlined.insert(foo_m1);
@@ -483,7 +483,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 }
@@ -497,9 +497,9 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> canidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
-  auto bar_cls = create_a_class("Lbar;");
-  auto baz_cls = create_a_class("Lbaz;");
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* bar_cls = create_a_class("Lbar;");
+  auto* baz_cls = create_a_class("Lbaz;");
   {
     // foo is in dex 2, bar is in dex 3.
     DexStore store("root");
@@ -509,14 +509,14 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
     stores.push_back(std::move(store));
   }
   {
-    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
-    auto baz_m1 = make_a_method(baz_cls, "baz_m1", 3001);
+    auto* foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto* baz_m1 = make_a_method(baz_cls, "baz_m1", 3001);
 
     // bar_m1 calls baz_m1.
-    auto bar_m1 = make_a_method_calls_others(bar_cls, "bar_m1", {baz_m1});
+    auto* bar_m1 = make_a_method_calls_others(bar_cls, "bar_m1", {baz_m1});
 
     // foo_main calls foo_m1 and bar_m1.
-    [[maybe_unused]] auto foo_main =
+    [[maybe_unused]] auto* foo_main =
         make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m1});
 
     canidates.insert(foo_m1);
@@ -544,7 +544,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 }
@@ -560,25 +560,25 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> canidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
-  auto bar_cls = create_a_class("Lbar;");
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* bar_cls = create_a_class("Lbar;");
 
   {
-    auto clinit_name = DexString::make_string("<clinit>");
-    auto void_args = DexTypeList::make_type_list({});
-    auto void_void = DexProto::make_proto(type::_void(), void_args);
-    auto clinit = static_cast<DexMethod*>(
+    const auto* clinit_name = DexString::make_string("<clinit>");
+    auto* void_args = DexTypeList::make_type_list({});
+    auto* void_void = DexProto::make_proto(type::_void(), void_args);
+    auto* clinit = static_cast<DexMethod*>(
         DexMethod::make_method(bar_cls->get_type(), clinit_name, void_void));
     clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
     clinit->set_code(std::make_unique<IRCode>());
-    auto code = clinit->get_code();
-    auto method = DexMethod::make_method("Lunknown;.unknown:()V");
+    auto* code = clinit->get_code();
+    auto* method = DexMethod::make_method("Lunknown;.unknown:()V");
     code->push_back(dex_asm::dasm(OPCODE_INVOKE_STATIC, method, {}));
     code->push_back(dex_asm::dasm(OPCODE_RETURN_VOID));
     bar_cls->add_method(clinit);
 
-    auto sfield_name = DexString::make_string("existing_field");
-    auto field = static_cast<DexField*>(
+    const auto* sfield_name = DexString::make_string("existing_field");
+    auto* field = static_cast<DexField*>(
         DexField::make_field(bar_cls->get_type(), sfield_name, type::_int()));
     field->make_concrete(ACC_PUBLIC | ACC_STATIC);
     type_class(bar_cls->get_type())->add_field(field);
@@ -592,8 +592,8 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
     stores.push_back(std::move(store));
   }
   {
-    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
-    auto bar_m1 = make_a_method(bar_cls, "bar_m1", 10);
+    auto* foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto* bar_m1 = make_a_method(bar_cls, "bar_m1", 10);
     auto init_code = assembler::ircode_from_string(R"(
     (
       (init-class "Lbar;")
@@ -603,7 +603,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
     bar_m1->set_code(std::move(init_code));
 
     // foo_main calls foo_m1 and init.
-    [[maybe_unused]] auto foo_main =
+    [[maybe_unused]] auto* foo_main =
         make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m1});
 
     canidates.insert(foo_m1);
@@ -630,7 +630,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 }
@@ -642,8 +642,8 @@ TEST_F(MethodInlineTest, size_limit) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> canidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
-  auto bar_cls = create_a_class("Lbar;");
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* bar_cls = create_a_class("Lbar;");
   {
     // foo is in dex 2, bar is in dex 3.
     DexStore store("root");
@@ -653,9 +653,9 @@ TEST_F(MethodInlineTest, size_limit) {
     stores.push_back(std::move(store));
   }
   {
-    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
-    auto bar_m1 = make_a_method(bar_cls, "bar_m1", 2001);
-    auto bar_m2 = make_a_method(bar_cls, "bar_m2", 2002);
+    auto* foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto* bar_m1 = make_a_method(bar_cls, "bar_m1", 2001);
+    auto* bar_m2 = make_a_method(bar_cls, "bar_m2", 2002);
     canidates.insert(foo_m1);
     canidates.insert(bar_m1);
     canidates.insert(bar_m2);
@@ -690,7 +690,7 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -698,7 +698,7 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
     stores.push_back(std::move(store));
   }
   {
-    auto foo_m1 = make_loopy_method(foo_cls, "foo_m1");
+    auto* foo_m1 = make_loopy_method(foo_cls, "foo_m1");
     candidates.insert(foo_m1);
     // foo_main calls foo_m1.
     make_a_method_calls_others(foo_cls, "foo_main", {foo_m1});
@@ -719,7 +719,7 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 }
@@ -732,7 +732,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -741,8 +741,8 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
   }
   DexMethod* foo_main;
   {
-    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
-    auto foo_m2 = make_a_method(foo_cls, "foo_m2", 2);
+    auto* foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto* foo_m2 = make_a_method(foo_cls, "foo_m2", 2);
     candidates.insert(foo_m1);
     candidates.insert(foo_m2);
     // foo_main calls foo_m1 and foo_m2.
@@ -767,7 +767,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
@@ -781,7 +781,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
       (return-void)
     )
   )";
-  auto actual = foo_main->get_code();
+  auto* actual = foo_main->get_code();
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
@@ -794,7 +794,7 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -838,7 +838,7 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
@@ -848,7 +848,7 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
     )
   )";
   foo_main->get_code()->clear_cfg();
-  auto actual = foo_main->get_code();
+  auto* actual = foo_main->get_code();
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
@@ -862,7 +862,7 @@ TEST_F(MethodInlineTest,
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -906,7 +906,7 @@ TEST_F(MethodInlineTest,
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
@@ -926,7 +926,7 @@ TEST_F(MethodInlineTest,
     )
   )";
   foo_main->get_code()->clear_cfg();
-  auto actual = foo_main->get_code();
+  auto* actual = foo_main->get_code();
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
@@ -939,8 +939,8 @@ TEST_F(MethodInlineTest, intradex_legal_after_constant_prop) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
-  auto bar_cls = create_a_class("Lbar;");
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* bar_cls = create_a_class("Lbar;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -985,7 +985,7 @@ TEST_F(MethodInlineTest, intradex_legal_after_constant_prop) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
@@ -1005,7 +1005,7 @@ TEST_F(MethodInlineTest, intradex_legal_after_constant_prop) {
     )
   )";
   foo_main->get_code()->clear_cfg();
-  auto actual = foo_main->get_code();
+  auto* actual = foo_main->get_code();
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
@@ -1020,7 +1020,7 @@ TEST_F(
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -1064,7 +1064,7 @@ TEST_F(
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
@@ -1084,7 +1084,7 @@ TEST_F(
     )
   )";
   foo_main->get_code()->clear_cfg();
-  auto actual = foo_main->get_code();
+  auto* actual = foo_main->get_code();
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
@@ -1096,7 +1096,7 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
 
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -1146,7 +1146,7 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
     )
   )";
   foo_main->get_code()->clear_cfg();
-  auto actual = foo_main->get_code();
+  auto* actual = foo_main->get_code();
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
@@ -1159,7 +1159,7 @@ TEST_F(MethodInlineTest, boxed_boolean) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -1172,10 +1172,10 @@ TEST_F(MethodInlineTest, boxed_boolean) {
     check_method = make_unboxing_precondition_method(foo_cls, "check");
     candidates.insert(check_method);
     // foo_main calls check_method a few times.
-    auto FALSE_field = (DexField*)DexField::get_field(
+    auto* FALSE_field = (DexField*)DexField::get_field(
         "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
     always_assert(FALSE_field != nullptr);
-    auto TRUE_field = (DexField*)DexField::get_field(
+    auto* TRUE_field = (DexField*)DexField::get_field(
         "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
     always_assert(TRUE_field != nullptr);
     foo_main =
@@ -1216,7 +1216,7 @@ TEST_F(MethodInlineTest, boxed_boolean) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
@@ -1242,7 +1242,7 @@ TEST_F(MethodInlineTest, boxed_boolean) {
     )
   )";
   foo_main->get_code()->clear_cfg();
-  auto actual = foo_main->get_code();
+  auto* actual = foo_main->get_code();
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
@@ -1255,7 +1255,7 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -1268,10 +1268,10 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
     check_method = make_unboxing_precondition_method(foo_cls, "check");
     candidates.insert(check_method);
     // foo_main calls check_method a few times.
-    auto FALSE_field = (DexField*)DexField::get_field(
+    auto* FALSE_field = (DexField*)DexField::get_field(
         "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
     always_assert(FALSE_field != nullptr);
-    auto TRUE_field = (DexField*)DexField::get_field(
+    auto* TRUE_field = (DexField*)DexField::get_field(
         "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
     always_assert(TRUE_field != nullptr);
     foo_main =
@@ -1305,7 +1305,7 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
-  for (auto method : expected_inlined) {
+  for (auto* method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
@@ -1323,14 +1323,14 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   )";
 
   foo_main->get_code()->clear_cfg();
-  auto actual = foo_main->get_code();
+  auto* actual = foo_main->get_code();
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
 
 TEST_F(MethodInlineTest, visibility_change_static_invoke) {
-  auto foo_cls = create_a_class("LFoo;");
-  auto bar_cls = create_a_class("LBar;");
+  auto* foo_cls = create_a_class("LFoo;");
+  auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
@@ -1485,7 +1485,7 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -1526,7 +1526,7 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
     )
   )";
 
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 
@@ -1542,7 +1542,7 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
     )
   )";
 
-  auto caller_inside_actual = caller_inside->get_code();
+  auto* caller_inside_actual = caller_inside->get_code();
   auto caller_inside_expected =
       assembler::ircode_from_string(caller_inside_expected_str);
   EXPECT_CODE_EQ(caller_inside_actual, caller_inside_expected.get());
@@ -1556,15 +1556,15 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
     )
   )";
 
-  auto nested_callee_actual = nested_callee->get_code();
+  auto* nested_callee_actual = nested_callee->get_code();
   auto nested_callee_expected =
       assembler::ircode_from_string(nested_callee_expected_str);
   EXPECT_CODE_EQ(nested_callee_actual, nested_callee_expected.get());
 }
 
 TEST_F(MethodInlineTest, unused_result) {
-  auto foo_cls = create_a_class("LFoo;");
-  auto bar_cls = create_a_class("LBar;");
+  auto* foo_cls = create_a_class("LFoo;");
+  auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
@@ -1660,7 +1660,7 @@ TEST_F(MethodInlineTest, unused_result) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -1674,7 +1674,7 @@ TEST_F(MethodInlineTest, unused_result) {
     )
   )";
 
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
@@ -1682,7 +1682,7 @@ TEST_F(MethodInlineTest, unused_result) {
 // top-down call-site analysis will determine that it's beneficial to inline
 // across all nested call-sites
 TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
-  auto foo_cls = create_a_class("LFoo;");
+  auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* outer_caller =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.outer_caller:()V"));
@@ -1808,7 +1808,7 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -1823,7 +1823,7 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
     )
   )";
 
-  auto outer_caller_actual = outer_caller->get_code();
+  auto* outer_caller_actual = outer_caller->get_code();
 
   // Let's filter out all positions.
   // TODO: Enhance position filtering so that we don't get redundant positions.
@@ -1836,7 +1836,7 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
 
 TEST_F(MethodInlineTest,
        dont_inline_callee_with_tries_and_no_catch_all_at_sketchy_call_site) {
-  auto foo_cls = create_a_class("LFoo;");
+  auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller = static_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.sketchyCaller:()V"));
@@ -1918,7 +1918,7 @@ TEST_F(MethodInlineTest,
 }
 
 TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
-  auto foo_cls = create_a_class("LFoo;");
+  auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
@@ -2000,7 +2000,7 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
 }
 
 TEST_F(MethodInlineTest, inline_with_string_analyzer) {
-  auto foo_cls = create_a_class("LFoo;");
+  auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
@@ -2097,7 +2097,7 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -2111,7 +2111,7 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
     )
   )";
 
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
 
   // Let's filter out all positions.
   // TODO: Enhance position filtering so that we don't get redundant positions.
@@ -2128,7 +2128,7 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
   bool intra_dex = false;
   DexStoresVector stores;
   UnorderedSet<DexMethod*> candidates;
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
     store.add_classes({});
@@ -2143,10 +2143,10 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
     candidates.insert(check_method);
     candidates.insert(small_method);
     // foo_main calls check_method a few times.
-    auto FALSE_field = (DexField*)DexField::get_field(
+    auto* FALSE_field = (DexField*)DexField::get_field(
         "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
     always_assert(FALSE_field != nullptr);
-    auto TRUE_field = (DexField*)DexField::get_field(
+    auto* TRUE_field = (DexField*)DexField::get_field(
         "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
     always_assert(TRUE_field != nullptr);
     foo_main =
@@ -2198,8 +2198,8 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
 }
 
 TEST_F(MethodInlineTest, inline_init_not_relaxed) {
-  auto foo_cls = create_a_class("LFoo;");
-  auto bar_cls = create_a_class("LBar;");
+  auto* foo_cls = create_a_class("LFoo;");
+  auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
@@ -2273,7 +2273,7 @@ TEST_F(MethodInlineTest, inline_init_not_relaxed) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -2282,14 +2282,14 @@ TEST_F(MethodInlineTest, inline_init_not_relaxed) {
   init->get_code()->clear_cfg();
 
   const auto& caller_expected_str = caller_str;
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
 
 TEST_F(MethodInlineTest, inline_init_relaxed) {
-  auto foo_cls = create_a_class("LFoo;");
-  auto bar_cls = create_a_class("LBar;");
+  auto* foo_cls = create_a_class("LFoo;");
+  auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
@@ -2368,7 +2368,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -2384,15 +2384,15 @@ TEST_F(MethodInlineTest, inline_init_relaxed) {
       (return-void)
     )
   )";
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   remove_position(caller_actual);
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
 
 TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
-  auto foo_cls = create_a_class("LFoo;");
-  auto bar_cls = create_a_class("LBar;");
+  auto* foo_cls = create_a_class("LFoo;");
+  auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
@@ -2474,7 +2474,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -2483,14 +2483,14 @@ TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
   init->get_code()->clear_cfg();
 
   const auto& caller_expected_str = caller_str;
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   remove_position(caller_actual);
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
 
 TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
-  auto s = assembler::class_from_string(R"(
+  auto* s = assembler::class_from_string(R"(
     (class (public) "LS;"
       (method (public constructor) "LS;.<init>:()V"
         (
@@ -2502,7 +2502,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
     )
   )");
 
-  auto x = assembler::class_from_string(R"(
+  auto* x = assembler::class_from_string(R"(
     (class (public) "LX;" extends "LS;"
       (method (public constructor) "LX;.<init>:()V"
         (
@@ -2513,9 +2513,9 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
       )
     )
   )");
-  auto x_init = x->get_ctors().at(0);
+  auto* x_init = x->get_ctors().at(0);
 
-  auto use = assembler::class_from_string(R"(
+  auto* use = assembler::class_from_string(R"(
     (class (public) "LUse;"
       (method (public static) "LUse;.a:()V"
         (
@@ -2527,7 +2527,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
       )
     )
   )");
-  auto caller = use->get_all_methods().at(0);
+  auto* caller = use->get_all_methods().at(0);
 
   ConcurrentMethodResolver concurrent_method_resolver;
 
@@ -2551,9 +2551,9 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
   candidates.insert(x_init);
 
   auto scope = build_class_scope(stores);
-  for (auto cls : scope) {
-    for (auto m : cls->get_all_methods()) {
-      auto code = m->get_code();
+  for (auto* cls : scope) {
+    for (auto* m : cls->get_all_methods()) {
+      auto* code = m->get_code();
       if (code != nullptr) {
         code->build_cfg();
       }
@@ -2584,7 +2584,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -2600,15 +2600,15 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
       (return-void)
     )
   )";
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   remove_position(caller_actual);
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
 
 TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
-  auto foo_cls = create_a_class("LFoo;");
-  auto bar_cls = create_a_class("LBar;");
+  auto* foo_cls = create_a_class("LFoo;");
+  auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
@@ -2701,7 +2701,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -2720,15 +2720,15 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
       (return-void)
     )
   )";
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   remove_position(caller_actual);
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
 
 TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
-  auto foo_cls = create_a_class("LFoo;");
-  auto bar_cls = create_a_class("LBar;");
+  auto* foo_cls = create_a_class("LFoo;");
+  auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
@@ -2820,7 +2820,7 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -2838,15 +2838,15 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
       (return-void)
     )
   )";
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   remove_position(caller_actual);
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
 
 TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
-  auto foo_cls = create_a_class("LFoo;");
-  auto bar_cls = create_a_class("LBar;");
+  auto* foo_cls = create_a_class("LFoo;");
+  auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
@@ -2957,7 +2957,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
       (return-void)
     )
   )";
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   remove_position(caller_actual);
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
@@ -2968,7 +2968,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
 // inliner peels off the hot (and pure) portion of the callee and inlines it,
 // leaving behind a call to the callee as a fallthrough case.
 TEST_F(MethodInlineTest, partially_inline) {
-  auto foo_cls = create_a_class("LFoo;");
+  auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
@@ -3062,7 +3062,7 @@ TEST_F(MethodInlineTest, partially_inline) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -3099,7 +3099,7 @@ TEST_F(MethodInlineTest, partially_inline) {
     )
   )";
 
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
 
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
@@ -3107,10 +3107,10 @@ TEST_F(MethodInlineTest, partially_inline) {
 
 // Partially inlining invoke-super is not supported.
 TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
-  auto base_cls = create_a_class("LBase;");
+  auto* base_cls = create_a_class("LBase;");
   ClassCreator foo_cc(DexType::make_type("LFoo;"));
   foo_cc.set_super(base_cls->get_type());
-  auto foo_cls = foo_cc.create();
+  auto* foo_cls = foo_cc.create();
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
@@ -3220,7 +3220,7 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -3229,7 +3229,7 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   caller->get_code()->clear_cfg();
   callee->get_code()->clear_cfg();
 
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   auto caller_expected = assembler::ircode_from_string(caller_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
@@ -3237,11 +3237,11 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
 // Partially inlining non-matching formal methods is not supported.
 TEST_F(MethodInlineTest,
        partially_inline_non_matching_formal_method_regression) {
-  auto base_cls = create_a_class("LBase;");
+  auto* base_cls = create_a_class("LBase;");
   base_cls->set_access(base_cls->get_access() | ACC_ABSTRACT);
   ClassCreator foo_cc(DexType::make_type("LFoo;"));
   foo_cc.set_super(base_cls->get_type());
-  auto foo_cls = foo_cc.create();
+  auto* foo_cls = foo_cc.create();
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
@@ -3349,7 +3349,7 @@ TEST_F(MethodInlineTest,
 
     auto inlined = inliner.get_inlined();
     EXPECT_EQ(inlined.size(), expected_inlined.size());
-    for (auto method : expected_inlined) {
+    for (auto* method : expected_inlined) {
       EXPECT_EQ(inlined.count(method), 1);
     }
   }
@@ -3357,7 +3357,7 @@ TEST_F(MethodInlineTest,
   caller->get_code()->clear_cfg();
   callee->get_code()->clear_cfg();
 
-  auto caller_actual = caller->get_code();
+  auto* caller_actual = caller->get_code();
   auto caller_expected = assembler::ircode_from_string(caller_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }

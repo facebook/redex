@@ -34,10 +34,10 @@ void process_no_optimizations_rules(
         method->rstate.set_no_optimizations();
       }
     };
-    for (auto m : cls->get_vmethods()) {
+    for (auto* m : cls->get_vmethods()) {
       process_method(m);
     }
-    for (auto m : cls->get_dmethods()) {
+    for (auto* m : cls->get_dmethods()) {
       process_method(m);
     }
   });

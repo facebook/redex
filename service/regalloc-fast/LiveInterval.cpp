@@ -44,12 +44,13 @@ LiveIntervals init_live_intervals(
     live_interval_points->push_back(lip);
   };
   auto ordered_blocks = get_ordered_blocks(cfg, liveness_fixpoint_iter);
-  for (auto block : ordered_blocks) {
+  for (auto* block : ordered_blocks) {
     for (auto& mie : InstructionIterable(block)) {
       add_lip(LiveIntervalPoint::get(mie.insn));
     }
-    if (cfg.get_succ_edge_if(
-            block, [](cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; })) {
+    if (cfg.get_succ_edge_if(block, [](cfg::Edge* e) {
+          return e->type() != cfg::EDGE_GHOST;
+        }) != nullptr) {
       // Any block with continuing control-flow could have a live-out registers,
       // and thus we allocate a block-end point for it.
       add_lip(LiveIntervalPoint::get_block_end(block));
@@ -72,7 +73,7 @@ IntervalEndPoints calculate_live_interval(
   uint32_t max_index = indices.size() - 1;
   uint32_t interval_start = max_index;
   uint32_t interval_end = 0;
-  for (auto& range : ranges) {
+  for (const auto& range : ranges) {
     always_assert(!range.first.is_missing());
     auto range_start = indices.at(range.first);
     interval_start = std::min(interval_start, range_start);
@@ -106,7 +107,7 @@ VRegAliveRangeInBlock get_live_range_in_block(
   }
   auto ii = InstructionIterable(block);
   for (auto it = ii.begin(); it != ii.end(); it++) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (!insn->has_dest()) {
       continue;
     }
@@ -130,8 +131,8 @@ VRegAliveRangeInBlock get_live_range_in_block(
     // We need to remember for all catch handlers which check-cast
     // move-result-pseudo-object dest registers should be kept alive to
     // deal with a special quirk of our check-cast instruction lowering.
-    auto src_block = primary_insn_it.block();
-    for (auto e : cfg.get_succ_edges_of_type(src_block, cfg::EDGE_THROW)) {
+    auto* src_block = primary_insn_it.block();
+    for (auto* e : cfg.get_succ_edges_of_type(src_block, cfg::EDGE_THROW)) {
       (*check_cast_throw_targets_vregs)[e->target()].insert(vreg);
     }
   }
@@ -144,7 +145,7 @@ VRegAliveRangeInBlock get_live_range_in_block(
     if (it->type != MFLOW_OPCODE) {
       continue;
     }
-    auto insn = it->insn;
+    auto* insn = it->insn;
     for (vreg_t vreg : insn->srcs()) {
       auto it2 = vreg_block_range.find(vreg);
       if (it2 != vreg_block_range.end() && it2->second.second.is_missing()) {
@@ -187,7 +188,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
     if (!block_depths.emplace(block, depth).second) {
       continue;
     }
-    for (auto e : block->preds()) {
+    for (auto* e : block->preds()) {
       work_queue.emplace(e->src(), depth + 1);
     }
   }
@@ -195,7 +196,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
   // Compute (maximum) depth (in number of blocks, from exit-block) of each
   // assigned register
   UnorderedMap<vreg_t, size_t> vreg_defs_depths;
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {
       if (mie.insn->has_dest()) {
         auto& depth = vreg_defs_depths[mie.insn->dest()];
@@ -227,7 +228,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
       return;
     }
     std::vector<cfg::Block*> pred_blocks;
-    for (auto e : block->preds()) {
+    for (auto* e : block->preds()) {
       pred_blocks.push_back(e->src());
     }
     // We might have duplicates, but that's okay.
@@ -241,7 +242,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
                 }
                 return a->id() < b->id();
               });
-    for (auto pred_block : pred_blocks) {
+    for (auto* pred_block : pred_blocks) {
       visit(pred_block);
     }
     ordered_blocks.push_back(block);

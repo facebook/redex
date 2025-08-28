@@ -141,7 +141,7 @@ bool Transform::eliminate_redundant_put(
   case OPCODE_IPUT_SHORT:
   case OPCODE_IPUT_WIDE: {
     auto* field = resolve_field(insn->get_field());
-    if (!field) {
+    if (field == nullptr) {
       break;
     }
     // WholeProgramState tells us the observable abstract value of a field
@@ -232,7 +232,7 @@ void try_simplify(const ConstantEnvironment& env,
       not_reached();
     }();
 
-    auto repl = new IRInstruction(new_op);
+    auto* repl = new IRInstruction(new_op);
     repl->set_src(0, insn->src(idx == 0 ? 1 : 0));
     repl->set_dest(insn->dest());
     repl->set_literal(*val);
@@ -534,7 +534,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
     auto& cfg = cfg_it.cfg();
-    auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
+    auto* primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
     auto op = primary_insn->opcode();
     if (opcode::is_an_sget(op) || opcode::is_an_iget(op) ||
         opcode::is_an_aget(op) || opcode::is_div_int_lit(op) ||
@@ -557,29 +557,29 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
       replace_with_const(env, cfg_it, xstores, declaring_type);
       break;
     }
-    if (!m_config.getter_methods_for_immutable_fields &&
-        !m_config.pure_methods) {
+    if ((m_config.getter_methods_for_immutable_fields == nullptr) &&
+        (m_config.pure_methods == nullptr)) {
       break;
     }
 
     auto& cfg = cfg_it.cfg();
-    auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
+    auto* primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
     if (!opcode::is_an_invoke(primary_insn->opcode())) {
       break;
     }
-    auto invoked = resolve_method(primary_insn->get_method(),
-                                  opcode_to_search(primary_insn));
-    if (!invoked) {
+    auto* invoked = resolve_method(primary_insn->get_method(),
+                                   opcode_to_search(primary_insn));
+    if (invoked == nullptr) {
       break;
     }
-    if (m_config.getter_methods_for_immutable_fields &&
+    if ((m_config.getter_methods_for_immutable_fields != nullptr) &&
         opcode::is_invoke_virtual(primary_insn->opcode()) &&
-        m_config.getter_methods_for_immutable_fields->count(invoked)) {
+        (m_config.getter_methods_for_immutable_fields->count(invoked) != 0u)) {
       replace_with_const(env, cfg_it, xstores, declaring_type);
       break;
     }
 
-    if (m_config.pure_methods &&
+    if ((m_config.pure_methods != nullptr) &&
         assumenosideeffects(primary_insn->get_method(), invoked)) {
       replace_with_const(env, cfg_it, xstores, declaring_type);
       break;
@@ -660,7 +660,8 @@ void Transform::remove_dead_switch(
   cfg::Block* goto_target = goto_edge->target();
   UnorderedMap<cfg::Block*, uint32_t> remaining_branch_targets;
   std::vector<cfg::Edge*> remaining_branch_edges;
-  for (auto branch_edge : cfg.get_succ_edges_of_type(block, cfg::EDGE_BRANCH)) {
+  for (auto* branch_edge :
+       cfg.get_succ_edges_of_type(block, cfg::EDGE_BRANCH)) {
     auto branch_is_feasible =
         !intra_cp.analyze_edge(branch_edge, env).is_bottom();
     if (branch_is_feasible) {
@@ -680,7 +681,7 @@ void Transform::remove_dead_switch(
     UnorderedSet<cfg::Block*> visited;
     for (cfg::Edge* e : remaining_branch_edges) {
       auto case_key = *e->case_key();
-      auto target = e->target();
+      auto* target = e->target();
       auto count = remaining_branch_targets.at(target);
       always_assert(count > 0);
       if (count > most_common_target_count ||
@@ -766,7 +767,7 @@ void Transform::eliminate_dead_branch(
   always_assert_log(succs.size() == 2, "actually %zu\n%s in B%zu:\n%s",
                     succs.size(), SHOW(InstructionIterable(*block)),
                     block->id(), SHOW(cfg));
-  for (auto& edge : succs) {
+  for (const auto& edge : succs) {
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable
     if (intra_cp.analyze_edge(edge, env).is_bottom()) {
@@ -834,7 +835,7 @@ void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
     // Insert after last load-param (and not before first non-load-param
     // instructions, as that may suggest that the added instructions are to be
     // associated with the position of the non-load-param instruction).
-    auto block = cfg.entry_block();
+    auto* block = cfg.entry_block();
     auto last_load_params_it = block->get_last_param_loading_insn();
     if (last_load_params_it == block->end()) {
       block->push_front(m_added_param_values);
@@ -855,7 +856,7 @@ void Transform::apply(const intraprocedural::FixpointIterator& fp_iter,
                       DexProto* proto) {
   legacy_apply_constants_and_prune_unreachable(fp_iter, wps, cfg, xstores,
                                                declaring_type);
-  if (xstores && !g_redex->instrument_mode) {
+  if ((xstores != nullptr) && !g_redex->instrument_mode) {
     m_stats.unreachable_instructions_removed += cfg.simplify();
     fp_iter.clear_switch_succ_cache();
     // legacy_apply_constants_and_prune_unreachable creates some new blocks that
@@ -893,7 +894,7 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
                          replace_with_throw(env, cfg_it, &npe_creator);
       auto* insn = cfg_it->insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
-      if (!any_changes && !m_redundant_move_results.count(insn)) {
+      if (!any_changes && (m_redundant_move_results.count(insn) == 0u)) {
         simplify_instruction(env, wps, cfg_it, xstores, declaring_type);
       }
     }
@@ -937,7 +938,7 @@ void Transform::forward_targets(
     UnorderedSet<cfg::Block*> visited;
     while (true) {
       auto& last_unconditional_target = unconditional_targets.back();
-      auto succ = last_unconditional_target.target;
+      auto* succ = last_unconditional_target.target;
       if (!visited.insert(succ).second) {
         // We found a loop; give up.
         return {};
@@ -947,7 +948,7 @@ void Transform::forward_targets(
       auto assigned_regs = last_unconditional_target.assigned_regs;
       auto last_insn = succ->get_last_insn();
       for (auto& mie : InstructionIterable(succ)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (opcode::is_branch(insn->opcode())) {
           continue;
         }
@@ -968,7 +969,7 @@ void Transform::forward_targets(
 
       boost::optional<std::pair<cfg::Block*, ConstantEnvironment>>
           only_feasible;
-      for (auto succ_succ_edge : cfg.get_succ_edges_if(succ, is_normal)) {
+      for (auto* succ_succ_edge : cfg.get_succ_edges_if(succ, is_normal)) {
         auto succ_succ_env = intra_cp.analyze_edge(succ_succ_edge, succ_env);
         if (succ_succ_env.is_bottom()) {
           continue;
@@ -993,7 +994,7 @@ void Transform::forward_targets(
   auto is_any_assigned_reg_live_at_target =
       [&liveness_fixpoint_iter,
        &cfg](const TargetAndAssignedRegs& unconditional_target) {
-        auto& assigned_regs = unconditional_target.assigned_regs;
+        const auto& assigned_regs = unconditional_target.assigned_regs;
         if (assigned_regs.empty()) {
           return false;
         }
@@ -1008,7 +1009,7 @@ void Transform::forward_targets(
           return true;
         }
         always_assert(!live_in_vars.is_top());
-        auto& elements = live_in_vars.elements();
+        const auto& elements = live_in_vars.elements();
         return unordered_any_of(assigned_regs, [&elements](reg_t reg) {
           return elements.contains(reg);
         });
@@ -1028,7 +1029,7 @@ void Transform::forward_targets(
 
     // Find last successor where no assigned reg is live
     for (int i = unconditional_targets.size() - 1; i >= 1; --i) {
-      auto& unconditional_target = unconditional_targets.at(i);
+      const auto& unconditional_target = unconditional_targets.at(i);
       if (is_any_assigned_reg_live_at_target(unconditional_target)) {
         continue;
       }
@@ -1043,11 +1044,11 @@ void Transform::forward_targets(
 
   // Main loop over, analyzing and potentially rewriting all normal successor
   // edges to the furthest unconditional feasible target
-  for (auto succ_edge : cfg.get_succ_edges_if(block, is_normal)) {
+  for (auto* succ_edge : cfg.get_succ_edges_if(block, is_normal)) {
     auto unconditional_targets = get_unconditional_targets(succ_edge);
-    auto new_target =
+    auto* new_target =
         get_furthest_target_without_live_assigned_regs(unconditional_targets);
-    if (!new_target) {
+    if (new_target == nullptr) {
       continue;
     }
     // Found (last) successor where no assigned reg is live -- forward to
@@ -1093,12 +1094,12 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
   auto t = s_timer.scope();
 
   // Nothing to check without method information
-  if (!declaring_type || !proto) {
+  if ((declaring_type == nullptr) || (proto == nullptr)) {
     return false;
   }
 
   // No return issues when rtype is primitive
-  auto rtype = proto->get_rtype();
+  auto* rtype = proto->get_rtype();
   if (type::is_primitive(rtype)) {
     return false;
   }
@@ -1130,14 +1131,14 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
   auto declaring_class_idx = xstores->get_store_idx(declaring_type);
   auto is_problematic_return_type = [&](const DexType* t, IRInstruction* insn) {
     t = type::get_element_type_if_array(t);
-    if (!type_class_internal(t)) {
+    if (type_class_internal(t) == nullptr) {
       // An unavailable or external class
       TRACE(CONSTP, 2,
             "Skipping {%s::%s} because {%s} is unavailable/external in {%s}",
             SHOW(declaring_type), SHOW(proto), SHOW(t), SHOW(insn));
       return true;
     }
-    if (!xstores) {
+    if (xstores == nullptr) {
       return false;
     }
     auto t_idx = xstores->get_store_idx(t);
@@ -1166,7 +1167,7 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
         const auto& defs = env.get(insn->src(0));
         always_assert(!defs.is_bottom());
         always_assert(!defs.is_top());
-        for (auto def : defs.elements()) {
+        for (auto* def : defs.elements()) {
           auto op = def->opcode();
           if (def->has_type()) {
             if (is_problematic_return_type(def->get_type(), def)) {
@@ -1228,7 +1229,7 @@ void Transform::legacy_apply_forward_targets(
   // Note that the given intra_cp might not be aware of all blocks that exist in
   // the cfg.
   std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     const auto& env = intra_cp.get_exit_state_at(block);
     if (env.is_bottom()) {
       // We found an unreachable block, or one that was added the cfg after

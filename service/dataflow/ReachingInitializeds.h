@@ -54,7 +54,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
       current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
       current_state->set(RESULT_REGISTER, Domain::top());
     } else if (insn->has_move_result_any()) {
-      const auto value = Domain(!!m_first_init_load_param_insn ||
+      const auto value = Domain(!(m_first_init_load_param_insn == nullptr) ||
                                 opcode != OPCODE_NEW_INSTANCE);
       current_state->set(RESULT_REGISTER, value);
     } else if (insn->has_dest()) {
@@ -74,7 +74,7 @@ inline ReachingInitializedsEnvironments get_reaching_initializeds(
   reaching_initializeds::FixpointIterator fp_iter(cfg, mode);
   fp_iter.run({});
   ReachingInitializedsEnvironments res;
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     auto env = fp_iter.get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       res[mie.insn] = env;

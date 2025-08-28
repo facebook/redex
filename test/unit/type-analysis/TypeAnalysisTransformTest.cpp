@@ -20,11 +20,11 @@ using namespace type_analyzer;
 struct TypeAnalysisTransformTest : public RedexTest {
  public:
   TypeAnalysisTransformTest() {
-    auto cls_arg = DexType::make_type("LARG;");
+    auto* cls_arg = DexType::make_type("LARG;");
     ClassCreator creator_arg(cls_arg);
     creator_arg.set_super(type::java_lang_Object());
 
-    auto method_arg_init = assembler::method_from_string(R"(
+    auto* method_arg_init = assembler::method_from_string(R"(
       (method (public constructor) "LARG;.<init>:()V"
        (
         (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
@@ -35,7 +35,7 @@ struct TypeAnalysisTransformTest : public RedexTest {
     creator_arg.add_method(method_arg_init);
     m_cls_arg = creator_arg.create();
 
-    auto cls_o = DexType::make_type("LO;");
+    auto* cls_o = DexType::make_type("LO;");
     ClassCreator creator(cls_o);
     creator.set_super(type::java_lang_Object());
 
@@ -91,11 +91,11 @@ TEST_F(TypeAnalysisTransformTest, SimpleArgumentPassingTest) {
   Scope scope;
   prepare_scope(scope);
 
-  auto cls_a = DexType::make_type("LA;");
+  auto* cls_a = DexType::make_type("LA;");
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto meth_bar = assembler::method_from_string(R"(
+  auto* meth_bar = assembler::method_from_string(R"(
     (method (public static) "LA;.bar:(LO;)V"
      (
       (load-param-object v0)
@@ -105,7 +105,7 @@ TEST_F(TypeAnalysisTransformTest, SimpleArgumentPassingTest) {
   )");
   creator.add_method(meth_bar);
 
-  auto meth_foo = assembler::method_from_string(R"(
+  auto* meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (new-instance "LARG;")
@@ -137,11 +137,11 @@ TEST_F(TypeAnalysisTransformTest, NegativeArgumentPassingTest) {
   Scope scope;
   prepare_scope(scope);
 
-  auto cls_a = DexType::make_type("LA;");
+  auto* cls_a = DexType::make_type("LA;");
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto meth_bar = assembler::method_from_string(R"(
+  auto* meth_bar = assembler::method_from_string(R"(
     (method (public static) "LA;.bar:(LO;)V"
      (
       (const v0 0)
@@ -153,7 +153,7 @@ TEST_F(TypeAnalysisTransformTest, NegativeArgumentPassingTest) {
   meth_bar->rstate.set_root();
   creator.add_method(meth_bar);
 
-  auto meth_foo = assembler::method_from_string(R"(
+  auto* meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (new-instance "LARG;")
@@ -187,11 +187,11 @@ TEST_F(TypeAnalysisTransformTest, MultiArgumentPassingTest) {
   Scope scope;
   prepare_scope(scope);
 
-  auto cls_a = DexType::make_type("LA;");
+  auto* cls_a = DexType::make_type("LA;");
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto meth_bar = assembler::method_from_string(R"(
+  auto* meth_bar = assembler::method_from_string(R"(
     (method (public static) "LA;.bar:(LO;)V"
      (
       (new-instance "LARG;")
@@ -204,7 +204,7 @@ TEST_F(TypeAnalysisTransformTest, MultiArgumentPassingTest) {
   meth_bar->rstate.set_root();
   creator.add_method(meth_bar);
 
-  auto meth_foo = assembler::method_from_string(R"(
+  auto* meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (new-instance "LARG;")

@@ -43,28 +43,28 @@ bool eligible_code(const cfg::ControlFlowGraph& cfg) {
 void find_duplications(const method_override_graph::Graph* graph,
                        const DexMethod* root_method,
                        std::vector<DexMethod*>* result) {
-  auto root_code = root_method->get_code();
-  if (!root_code) {
+  const auto* root_code = root_method->get_code();
+  if (root_code == nullptr) {
     return;
   }
 
   always_assert(root_code->cfg_built());
-  auto& root_cfg = root_code->cfg();
+  const auto& root_cfg = root_code->cfg();
 
   for (auto* child_node :
        UnorderedIterable(graph->get_node(root_method).children)) {
-    auto* child = child_node->method;
+    const auto* child = child_node->method;
     // The method definition may be deleted after the overriding graph is
     // created, check if it's still a definition.
     if (root(child) || !child->is_def() || !can_rename(child)) {
       continue;
     }
-    auto child_code = child->get_code();
-    if (!child_code) {
+    const auto* child_code = child->get_code();
+    if (child_code == nullptr) {
       continue;
     }
     always_assert(child_code->cfg_built());
-    auto& child_cfg = child_code->cfg();
+    const auto& child_cfg = child_code->cfg();
     if (eligible_code(child_cfg)) {
       if (root_cfg.structural_equals(child_cfg)) {
         result->push_back(const_cast<DexMethod*>(child));
@@ -102,8 +102,8 @@ uint32_t remove_duplicated_vmethods(
   UnorderedMap<DexMethodRef*, DexMethodRef*> removed_vmethods;
 
   walk::classes(scope, [&](DexClass* cls) {
-    for (auto method : cls->get_vmethods()) {
-      if (!method->get_code()) {
+    for (auto* method : cls->get_vmethods()) {
+      if (method->get_code() == nullptr) {
         // TODO: look at the abstract methods and we can lift the
         // implementations to the abstract class if lots of them are identical.
         continue;
@@ -131,7 +131,7 @@ uint32_t remove_duplicated_vmethods(
           publicize_methods(graph.get(), method);
         }
         TRACE(VM, 8, "Same as %s", SHOW(method));
-        for (auto m : duplicates) {
+        for (auto* m : duplicates) {
           TRACE(VM, 8, "\t%s", SHOW(m));
           type_class(m->get_class())->remove_method(m);
           removed_vmethods.emplace(m, method);
@@ -155,9 +155,9 @@ void collect_all_invoke_super_called(
     const Scope& scope, ConcurrentSet<DexMethodRef*>* super_invoked_methods) {
   walk::parallel::code(scope, [&](DexMethod* /*method*/, IRCode& code) {
     cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-        auto callee_ref = insn->get_method();
+        auto* callee_ref = insn->get_method();
         super_invoked_methods->insert(callee_ref);
       }
       return cfg_adapter::LOOP_CONTINUE;

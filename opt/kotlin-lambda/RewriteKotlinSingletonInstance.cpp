@@ -28,11 +28,11 @@ bool check_inits_has_side_effects(
   side_effects::InvokeToSummaryMap summary_map;
 
   for (auto it = iterable.begin(); it != iterable.end(); it++) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (insn->opcode() != OPCODE_INVOKE_DIRECT) {
       continue;
     }
-    if (safe_base_invoke.count(insn->get_method())) {
+    if (safe_base_invoke.count(insn->get_method()) != 0u) {
       summary_map.emplace(insn, summary);
       continue;
     }
@@ -63,16 +63,17 @@ bool init_for_type_has_side_effects(
   }
   auto dmethods = cls->get_dmethods();
   DexMethod* init = nullptr;
-  for (auto method : dmethods) {
+  for (auto* method : dmethods) {
     if (method::is_init(method)) {
-      if (init) {
+      if (init != nullptr) {
         // multiple init
         return true;
       }
       init = method;
     }
   }
-  if (!init || !init->get_proto()->get_args()->empty() || !init->get_code()) {
+  if ((init == nullptr) || !init->get_proto()->get_args()->empty() ||
+      (init->get_code() == nullptr)) {
     return true;
   }
   auto is_pure = check_inits_has_side_effects(
@@ -84,10 +85,10 @@ bool init_for_type_has_side_effects(
 void RewriteKotlinSingletonInstance::run_pass(DexStoresVector& stores,
                                               ConfigFiles& conf,
                                               PassManager& mgr) {
-  auto lamda_base_invoke =
+  auto* lamda_base_invoke =
       DexMethod::get_method("Lkotlin/jvm/internal/Lambda;.<init>:(I)V");
-  auto obj_init = DexMethod::get_method("Ljava/lang/Object;.<init>:()V");
-  if (!lamda_base_invoke || !obj_init) {
+  auto* obj_init = DexMethod::get_method("Ljava/lang/Object;.<init>:()V");
+  if ((lamda_base_invoke == nullptr) || (obj_init == nullptr)) {
     return;
   }
   UnorderedSet<DexMethodRef*> safe_base_invoke;

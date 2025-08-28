@@ -45,7 +45,7 @@ std::unique_ptr<DexAnnotationSet> get_anno_set(DexType* anno_type) {
   return anno_set;
 }
 DexMethod* materialized_dispatch(DexType* owner, MethodCreator&& mc) {
-  auto dispatch = mc.create();
+  auto* dispatch = mc.create();
   TRACE(RM_INTF,
         9,
         "Generated dispatch %s\n%s",
@@ -83,12 +83,12 @@ DexMethod* generate_dispatch(const DexType* base_type,
   DexType* dispatch_owner = targets.front()->get_class();
   // Owner and proto
   auto orig_name = std::string(intf_method->c_str());
-  auto front_meth = targets.front();
-  auto new_arg_list = front_meth->get_proto()->get_args()->push_front(
+  auto* front_meth = targets.front();
+  auto* new_arg_list = front_meth->get_proto()->get_args()->push_front(
       const_cast<DexType*>(base_type));
-  auto rtype = front_meth->get_proto()->get_rtype();
-  auto new_proto = DexProto::make_proto(rtype, new_arg_list);
-  auto dispatch_name =
+  auto* rtype = front_meth->get_proto()->get_rtype();
+  auto* new_proto = DexProto::make_proto(rtype, new_arg_list);
+  const auto* dispatch_name =
       dispatch::gen_dispatch_name(dispatch_owner, new_proto, orig_name);
 
   TRACE(RM_INTF, 9, "generating dispatch %s.%s for targets of size %zu",
@@ -103,7 +103,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
   auto ret_loc = new_proto->is_void() ? mc.get_local(0) // not used
                                       : mc.make_local(new_proto->get_rtype());
   std::vector<Location> args = get_args_for(new_proto, mc);
-  auto mb = mc.get_main_block();
+  auto* mb = mc.get_main_block();
 
   /**
    * In case all interface scopes can only be resolved to a single concrete
@@ -113,8 +113,8 @@ DexMethod* generate_dispatch(const DexType* base_type,
    * TreeModels. Perhaps there's an even better way to handle this.
    */
   if (targets.size() == 1) {
-    auto target_meth = targets.front();
-    auto target_type = target_meth->get_class();
+    auto* target_meth = targets.front();
+    auto* target_type = target_meth->get_class();
     mb->check_cast(self_loc, target_type);
     mb->invoke(OPCODE_INVOKE_VIRTUAL, target_meth, args);
     if (!new_proto->is_void()) {
@@ -125,8 +125,8 @@ DexMethod* generate_dispatch(const DexType* base_type,
   }
   // Construct dispatchs
   for (size_t idx = 0; idx < targets.size(); idx++) {
-    auto target_meth = targets.at(idx);
-    auto target_type = target_meth->get_class();
+    auto* target_meth = targets.at(idx);
+    auto* target_type = target_meth->get_class();
     MethodBlock* curr_block;
 
     if (idx < targets.size() - 1) {
@@ -156,12 +156,12 @@ void update_interface_calls(
     if (!insn->has_method()) {
       return;
     }
-    const auto method =
+    auto* const method =
         resolve_method(insn->get_method(), opcode_to_search(insn), meth);
     if (method == nullptr || old_to_new_callee.count(method) == 0) {
       return;
     }
-    auto new_callee = old_to_new_callee.at(method);
+    auto* new_callee = old_to_new_callee.at(method);
     TRACE(RM_INTF, 9, "Updated call %s to %s", SHOW(insn), SHOW(new_callee));
     insn->set_method(new_callee);
     insn->set_opcode(OPCODE_INVOKE_STATIC);
@@ -177,14 +177,14 @@ void update_interface_calls(
 DexTypeList* get_new_impl_list(const DexType* impl,
                                const DexType* intf_to_remove) {
   std::set<DexType*, dextypes_comparator> new_intfs;
-  auto cls = type_class(impl);
-  for (const auto intf : *cls->get_interfaces()) {
+  auto* cls = type_class(impl);
+  for (auto* const intf : *cls->get_interfaces()) {
     if (intf == intf_to_remove) {
       continue;
     }
     new_intfs.insert(intf);
   }
-  auto cls_to_remove = type_class(intf_to_remove);
+  auto* cls_to_remove = type_class(intf_to_remove);
   auto* super_intfs = cls_to_remove->get_interfaces();
   new_intfs.insert(super_intfs->begin(), super_intfs->end());
   return DexTypeList::make_type_list(
@@ -236,8 +236,8 @@ void remove_interface_references(
     if (!insn->has_type()) {
       return;
     }
-    const auto ref_type = insn->get_type();
-    auto type = type::get_element_type_if_array(ref_type);
+    auto* const ref_type = insn->get_type();
+    const auto* type = type::get_element_type_if_array(ref_type);
     if (interfaces.count(type) == 0) {
       return;
     }
@@ -245,9 +245,9 @@ void remove_interface_references(
     always_assert_log(!is_opcode_excluded(opcode),
                       "Unexpected opcode %s on %s\n", SHOW(opcode), SHOW(type));
     always_assert(type_class(type));
-    auto new_type = get_replacement_type(type_system, type, root);
+    const auto* new_type = get_replacement_type(type_system, type, root);
     if (type::is_array(ref_type)) {
-      const auto array_merger_type = type::make_array_type(new_type);
+      auto* const array_merger_type = type::make_array_type(new_type);
       insn->set_type(array_merger_type);
       TRACE(RM_INTF,
             9,
@@ -263,11 +263,11 @@ void remove_interface_references(
   walk::parallel::opcodes(scope, patcher);
 
   UnorderedMap<const DexType*, DexType*> old_to_new;
-  for (const auto intf : UnorderedIterable(interfaces)) {
-    auto new_type = get_replacement_type(type_system, intf, root);
+  for (const auto* const intf : UnorderedIterable(interfaces)) {
+    const auto* new_type = get_replacement_type(type_system, intf, root);
     old_to_new[intf] = const_cast<DexType*>(new_type);
   }
-  auto& parent_to_children =
+  const auto& parent_to_children =
       type_system.get_class_scopes().get_parent_to_children();
   update_method_signature_type_references(scope, old_to_new,
                                           parent_to_children);
@@ -285,7 +285,7 @@ size_t exclude_unremovables(const Scope& scope,
   XStoreRefs xstores(stores);
 
   // Excluded by config
-  for (auto ex : excluded_interfaces) {
+  for (auto* ex : excluded_interfaces) {
     if (candidates.count(ex) != 0) {
       candidates.erase(ex);
       count++;
@@ -296,7 +296,7 @@ size_t exclude_unremovables(const Scope& scope,
   // not properly removed by either SingleImpl or RemoveUnreachablePass.
   // They are not the focus of this pass. We should address them elsewhere.
   std::vector<const DexType*> intf_list(candidates.begin(), candidates.end());
-  for (auto intf : intf_list) {
+  for (const auto* intf : intf_list) {
     const auto& impls = type_system.get_implementors(intf);
     if (impls.size() <= 1 || impls.size() > MAX_IMPLS_SIZE) {
       TRACE(RM_INTF, 5, "Excluding %s with impls of size %zu", SHOW(intf),
@@ -320,15 +320,15 @@ size_t exclude_unremovables(const Scope& scope,
   // Scan unsupported opcodes.
   auto patcher = [&](DexMethod* meth) {
     UnorderedSet<const DexType*> current_excluded;
-    auto code = meth->get_code();
-    if (!code) {
+    auto* code = meth->get_code();
+    if (code == nullptr) {
       return current_excluded;
     }
 
     if (!can_rename(meth)) {
       std::vector<DexType*> types;
       meth->get_proto()->gather_types(types);
-      for (auto type : types) {
+      for (auto* type : types) {
         if (candidates.count(type) != 0) {
           TRACE(RM_INTF, 5, "Excluding %s cannot rename %s", SHOW(type),
                 SHOW(meth));
@@ -340,11 +340,11 @@ size_t exclude_unremovables(const Scope& scope,
     always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (!insn->has_type() || insn->get_type() == nullptr) {
         continue;
       }
-      auto type = type::get_element_type_if_array(insn->get_type());
+      const auto* type = type::get_element_type_if_array(insn->get_type());
       if (candidates.count(type) == 0) {
         continue;
       }
@@ -362,7 +362,7 @@ size_t exclude_unremovables(const Scope& scope,
       UnorderedSet<const DexType*>,
       UnorderedMergeContainers<UnorderedSet<const DexType*>>>(scope, patcher);
 
-  for (const auto type : UnorderedIterable(excluded_by_opcode)) {
+  for (const auto* const type : UnorderedIterable(excluded_by_opcode)) {
     candidates.erase(type);
   }
   count += excluded_by_opcode.size();
@@ -380,7 +380,7 @@ DexMethod* find_matching_virtual_method(const TypeSystem& type_system,
                                         const DexType* owner,
                                         const VirtualScope* scope) {
   for (const auto& vmeth : scope->methods) {
-    auto method = vmeth.first;
+    auto* method = vmeth.first;
     if (!method->is_def() || !is_public(method)) {
       continue;
     }
@@ -408,9 +408,9 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
     TRACE(RM_INTF, 5, "Scanning virt scope %s[%zu]", SHOW(top_def.first),
           virt_scope->methods.size());
     std::vector<const DexType*> matched;
-    for (const auto impl : implementors) {
+    for (const auto* const impl : implementors) {
       if (type_system.is_subtype(virt_scope->type, impl)) {
-        auto target =
+        auto* target =
             find_matching_virtual_method(type_system, impl, virt_scope);
         TRACE(RM_INTF, 5, "Found target %s on impl %s", SHOW(target),
               SHOW(impl));
@@ -424,7 +424,7 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
         matched.push_back(impl);
       }
     }
-    for (const auto impl : matched) {
+    for (const auto* const impl : matched) {
       implementors.erase(impl);
     }
   }
@@ -443,8 +443,8 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
  */
 void include_parent_interfaces(const DexType* root, TypeSet& interfaces) {
   TypeSet parent_interfaces;
-  for (const auto intf : interfaces) {
-    for (const auto parent_intf : *type_class(intf)->get_interfaces()) {
+  for (const auto* const intf : interfaces) {
+    for (auto* const parent_intf : *type_class(intf)->get_interfaces()) {
       if (parent_intf != root) {
         parent_interfaces.insert(parent_intf);
       }
@@ -462,7 +462,7 @@ bool RemoveInterfacePass::is_leaf(const TypeSystem& type_system,
                                   const DexType* intf) {
   auto intf_children = type_system.get_interface_children(intf);
   size_t num_removed = 0;
-  for (const auto child : intf_children) {
+  for (const auto* const child : intf_children) {
     if (m_removed_interfaces.count(child) > 0) {
       ++num_removed;
     }
@@ -473,13 +473,13 @@ bool RemoveInterfacePass::is_leaf(const TypeSystem& type_system,
 void RemoveInterfacePass::remove_inheritance(const Scope& /*scope*/,
                                              const TypeSystem& type_system,
                                              const TypeSet& interfaces) {
-  for (const auto intf : interfaces) {
+  for (const auto* const intf : interfaces) {
     always_assert(is_leaf(type_system, intf));
     auto impls = type_system.get_implementors(intf);
-    for (const auto impl : impls) {
+    for (const auto* const impl : impls) {
       TRACE(RM_INTF, 5, "Remove inheritance for %s on %s", SHOW(intf),
             SHOW(impl));
-      auto new_impl_list = get_new_impl_list(impl, intf);
+      auto* new_impl_list = get_new_impl_list(impl, intf);
       type_class(impl)->set_interfaces(new_impl_list);
     }
     type_class(intf)->set_interfaces(DexTypeList::make_type_list({}));
@@ -492,21 +492,21 @@ TypeSet RemoveInterfacePass::remove_leaf_interfaces(
     const TypeSet& interfaces,
     const TypeSystem& type_system) {
   TypeSet leaf_interfaces;
-  for (const auto intf : interfaces) {
+  for (const auto* const intf : interfaces) {
     if (is_leaf(type_system, intf)) {
       leaf_interfaces.insert(intf);
     }
   }
 
   UnorderedMap<DexMethod*, DexMethod*> intf_meth_to_dispatch;
-  for (const auto intf : leaf_interfaces) {
+  for (const auto* const intf : leaf_interfaces) {
     TRACE(RM_INTF, 5, "Found leaf interface %s", SHOW(intf));
     UnorderedMap<DexMethod*, DexMethod*> local_intf_meth_to_dispatch;
     UnorderedMap<size_t, size_t> local_dispatch_stats;
 
     const auto& implementors = type_system.get_implementors(intf);
     auto intf_methods = type_class(intf)->get_vmethods();
-    for (const auto meth : intf_methods) {
+    for (auto* const meth : intf_methods) {
       TRACE(RM_INTF, 5, "Finding virt scope for %s", SHOW(meth));
       auto intf_scope = type_system.find_interface_scope(meth);
       MethodOrderedSet found_targets =
@@ -521,8 +521,9 @@ TypeSet RemoveInterfacePass::remove_leaf_interfaces(
 
       std::vector<DexMethod*> dispatch_targets(found_targets.begin(),
                                                found_targets.end());
-      auto replacement_type = get_replacement_type(type_system, intf, root);
-      auto dispatch =
+      const auto* replacement_type =
+          get_replacement_type(type_system, intf, root);
+      auto* dispatch =
           generate_dispatch(replacement_type, dispatch_targets, meth,
                             m_keep_debug_info, m_interface_dispatch_anno);
       dispatch->get_code()->build_cfg();
@@ -563,7 +564,7 @@ void RemoveInterfacePass::remove_interfaces_for_root(
       remove_leaf_interfaces(scope, root, interfaces, type_system);
 
   while (!removed.empty()) {
-    for (const auto intf : removed) {
+    for (const auto* const intf : removed) {
       interfaces.erase(intf);
       m_removed_interfaces.insert(intf);
     }
@@ -576,11 +577,11 @@ void RemoveInterfacePass::remove_interfaces_for_root(
 
   if (traceEnabled(RM_INTF, 9)) {
     TypeSystem updated_ts(scope);
-    for (const auto intf : interfaces) {
+    for (const auto* const intf : interfaces) {
       TRACE(RM_INTF, 9, "unremoved interface %s", SHOW(intf));
       TypeSet children;
       updated_ts.get_all_interface_children(intf, children);
-      for (const auto cintf : children) {
+      for (const auto* const cintf : children) {
         TRACE(RM_INTF, 9, "  child %s", SHOW(cintf));
       }
     }
@@ -605,7 +606,7 @@ void RemoveInterfacePass::run_pass(DexStoresVector& stores,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
   TypeSystem type_system(scope);
-  for (const auto root : m_interface_roots) {
+  for (auto* const root : m_interface_roots) {
     remove_interfaces_for_root(scope, stores, root, type_system);
   }
   mgr.incr_metric("num_total_interface", m_total_num_interface);

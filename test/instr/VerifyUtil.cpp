@@ -26,7 +26,7 @@
 
 int find_class_idx(const DexClasses& classes, const char* name) {
   for (size_t i = 0; i < classes.size(); ++i) {
-    if (!strcmp(name, classes[i]->get_name()->c_str())) {
+    if (strcmp(name, classes[i]->get_name()->c_str()) == 0) {
       return i;
     }
   }
@@ -36,7 +36,7 @@ int find_class_idx(const DexClasses& classes, const char* name) {
 DexClass* find_class_named(const DexClasses& classes, const char* name) {
   auto it =
       std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls) {
-        return !strcmp(name, cls->get_name()->c_str());
+        return strcmp(name, cls->get_name()->c_str()) == 0;
       });
   return it == classes.end() ? nullptr : *it;
 }
@@ -69,8 +69,8 @@ DexField* find_sfield_named(const DexClass& cls, const char* name) {
 }
 
 DexField* find_field_named(const DexClass& cls, const char* name) {
-  auto ret = find_ifield_named(cls, name);
-  if (ret) {
+  auto* ret = find_ifield_named(cls, name);
+  if (ret != nullptr) {
     return ret;
   }
   return find_sfield_named(cls, name);
@@ -105,7 +105,7 @@ DexMethod* find_dmethod_named(const DexClass& cls, const char* name) {
 }
 
 DexMethod* find_method_named(const DexClass& cls, const char* name) {
-  auto ret = find_dmethod_named(cls, name);
+  auto* ret = find_dmethod_named(cls, name);
   if (ret != nullptr) {
     return ret;
   }
@@ -131,11 +131,11 @@ DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
         if (insn->opcode() != opcode) {
           return false;
         }
-        auto meth = static_cast<DexOpcodeMethod*>(insn)->get_method();
-        if (receiver && meth->get_class() != receiver) {
+        auto* meth = static_cast<DexOpcodeMethod*>(insn)->get_method();
+        if ((receiver != nullptr) && meth->get_class() != receiver) {
           return false;
         }
-        auto mname =
+        const auto* mname =
             static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
         return mname == DexString::get_string(target_mname);
       });
@@ -151,11 +151,12 @@ size_t find_num_invoke(const DexMethod* m,
     if (insn->opcode() != opcode) {
       continue;
     }
-    auto meth = static_cast<DexOpcodeMethod*>(insn)->get_method();
-    if (receiver && meth->get_class() != receiver) {
+    auto* meth = static_cast<DexOpcodeMethod*>(insn)->get_method();
+    if ((receiver != nullptr) && meth->get_class() != receiver) {
       continue;
     }
-    auto mname = static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
+    const auto* mname =
+        static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
     if (mname == DexString::get_string(target_mname)) {
       num++;
     }
@@ -197,7 +198,7 @@ DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode) {
 }
 
 void verify_class_merged(const DexClass* cls, size_t num_dmethods) {
-  if (!cls) {
+  if (cls == nullptr) {
     ASSERT_EQ(num_dmethods, 0)
         << "cls is null, can not have " << num_dmethods << " dmethods\n";
     return;
@@ -211,7 +212,7 @@ void verify_class_merged(const DexClass* cls, size_t num_dmethods) {
   auto dmethods = cls->get_dmethods();
   ASSERT_EQ(dmethods.size(), num_dmethods)
       << show(cls) << " has " << dmethods.size() << " dmethods\n";
-  for (auto m : dmethods) {
+  for (auto* m : dmethods) {
     ASSERT_FALSE(method::is_init(m));
     ASSERT_NE(m->c_str(), "<init>");
   }
@@ -257,7 +258,7 @@ void dump_cfgs(bool is_prev_verify,
 
 std::string stringify_for_comparision(DexMethod* method) {
   method->balloon();
-  auto code = method->get_code();
+  auto* code = method->get_code();
   for (auto it = code->begin(); it != code->end();) {
     if (it->type == MFLOW_POSITION) {
       it = code->erase_and_dispose(it);

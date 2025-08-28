@@ -67,7 +67,7 @@ void MethodRegisterChecker::run_checker(DexStoresVector& stores,
     auto ii = cfg::InstructionIterable(*cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       // Checking several things for each method:
-      auto insn = it->insn;
+      auto* insn = it->insn;
 
       // 2. dest register is below max param reg and register limit.
       if (insn->has_dest()) {

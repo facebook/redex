@@ -1612,7 +1612,7 @@ void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
   DexAccessFlags access_flags = dex_method->get_access();
   MethodKind kind;
   if (dex_method->get_code() == nullptr) {
-    if ((access_flags & DexAccessFlags::ACC_ABSTRACT)) {
+    if ((access_flags & DexAccessFlags::ACC_ABSTRACT) != 0u) {
       kind = PTS_ABSTRACT;
     } else {
       // The definition of a method that is neither abstract nor native should

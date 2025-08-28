@@ -55,19 +55,19 @@ TEST_F(IPReflectionAnalysisTest, test_results) {
   auto scope = build_class_scope(stores);
 
   // otherwise call graph won't include the calls
-  for (auto cls : scope) {
-    for (auto m : cls->get_dmethods()) {
+  for (auto* cls : scope) {
+    for (auto* m : cls->get_dmethods()) {
       m->rstate.set_root();
     }
 
-    for (auto m : cls->get_vmethods()) {
+    for (auto* m : cls->get_vmethods()) {
       m->rstate.set_root();
     }
   }
 
   run_passes();
 
-  auto analysis =
+  auto* analysis =
       pass_manager->get_preserved_analysis<IPReflectionAnalysisPass>();
   ASSERT_NE(nullptr, analysis);
 

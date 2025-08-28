@@ -325,13 +325,14 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentMapTest) {
         map.insert({s, sample[i]});
         ptrs.emplace(s, map.get(s));
       } else if (i % 3 == 1) {
-        auto ptr =
+        const auto* ptr =
             map.get_or_create_and_assert_equal(
                    s, [](const auto& t) { return (uint32_t)atoi(t.c_str()); })
                 .first;
         ptrs.emplace(s, ptr);
       } else {
-        auto ptr = map.get_or_emplace_and_assert_equal(s, sample[i]).first;
+        const auto* ptr =
+            map.get_or_emplace_and_assert_equal(s, sample[i]).first;
         ptrs.emplace(s, ptr);
       }
       EXPECT_EQ(1, map.count(s));
@@ -358,7 +359,7 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentMapTest) {
     EXPECT_NE(map.end(), it);
     EXPECT_EQ(s, it->first);
     EXPECT_EQ(x, it->second);
-    auto p = ptrs.at(s);
+    const auto* p = ptrs.at(s);
     EXPECT_EQ(p, map.get(s));
     EXPECT_EQ(p, map.get_unsafe(s));
   }

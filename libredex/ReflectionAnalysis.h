@@ -153,7 +153,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   }
 
   bool is_known_class_array() const {
-    const auto class_array_type =
+    auto* const class_array_type =
         DexType::get_type(DexString::make_string("[Ljava/lang/Class;"));
     return this->obj_kind == OBJECT && this->dex_type == class_array_type &&
            heap_address != 0;

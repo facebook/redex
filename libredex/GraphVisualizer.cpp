@@ -242,13 +242,13 @@ class CodeVisualizer : public TaggedBase {
   virtual ~CodeVisualizer() {}
 
   static void dex_string(std::ostream& os, const DexString* s) {
-    os << (s ? s->str() : "<null>");
+    os << (s != nullptr ? s->str() : "<null>");
   }
 
   void instruction(IRInstruction* insn) {
     m_output << SHOW(insn->opcode());
 
-    if (insn->srcs_size() || insn->has_dest()) {
+    if ((insn->srcs_size() != 0u) || insn->has_dest()) {
       List input_list;
       if (insn->has_dest()) {
         input_list.next() << "v" << insn->dest();
@@ -381,7 +381,7 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
  public:
   CFGVisualizer(ControlFlowGraph* cfg, std::ostream& output)
       : CodeVisualizer(output), m_cfg(cfg) {
-    if (m_cfg) {
+    if (m_cfg != nullptr) {
       prepare();
     }
   }
@@ -426,7 +426,7 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
     CodeVisualizer::instruction(insn);
 
     if (opcode::is_a_conditional_branch(insn->opcode())) {
-      auto edge = m_cfg->get_succ_edge_if(
+      auto* edge = m_cfg->get_succ_edge_if(
           from, [](Edge* e) { return e->type() == EDGE_BRANCH; });
       redex_assert(edge);
       attribute("target") << "B" << edge->target()->id();
@@ -449,7 +449,7 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
 
   void prepare() {
     size_t index = 0;
-    for (auto block : m_cfg->blocks()) {
+    for (auto* block : m_cfg->blocks()) {
       for (auto& mie : *block) {
         m_mie_id_map[&mie] = index;
         if (mie.type == MFLOW_OPCODE) {
@@ -457,10 +457,10 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
         }
         ++index;
       }
-      for (auto edge : m_cfg->get_succ_edges_if(block, is_throw_edge)) {
+      for (auto* edge : m_cfg->get_succ_edges_if(block, is_throw_edge)) {
         m_exc_blocks.insert(edge->target());
       }
-      if (m_cfg->get_pred_edge_if(block, is_throw_edge)) {
+      if (m_cfg->get_pred_edge_if(block, is_throw_edge) != nullptr) {
         m_exc_blocks.insert(block);
       }
     }
@@ -472,18 +472,19 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
       value<QUOTED>("name") << name;
       if (prefix) {
         Block fake_block(m_cfg, std::numeric_limits<BlockId>::max());
-        auto first_real = (!m_cfg || m_cfg->blocks().empty())
-                              ? nullptr
-                              : *m_cfg->blocks().begin();
-        Edge fake_edge(&fake_block, first_real ? first_real : &fake_block,
+        auto* first_real = ((m_cfg == nullptr) || m_cfg->blocks().empty())
+                               ? nullptr
+                               : *m_cfg->blocks().begin();
+        Edge fake_edge(&fake_block,
+                       first_real != nullptr ? first_real : &fake_block,
                        EDGE_GOTO);
         const_cast<cfg::CompactEdgeVector&>(fake_block.succs())
             .push_back(&fake_edge);
         prefix_block(&fake_block, *prefix);
       }
-      if (m_cfg) {
-        for (auto b : m_cfg->blocks()) {
-          CodeVisualizer::block(b, b->id(), m_exc_blocks.count(b),
+      if (m_cfg != nullptr) {
+        for (auto* b : m_cfg->blocks()) {
+          CodeVisualizer::block(b, b->id(), m_exc_blocks.count(b) != 0u,
                                 [&](Block*) { mie_list(b); });
         }
       }
@@ -501,7 +502,7 @@ class IRCodeVisualizer : public CodeVisualizer<IRCodeVisualizer> {
  public:
   IRCodeVisualizer(IRCode* code, std::ostream& output)
       : CodeVisualizer(output), m_code(code) {
-    if (m_code) {
+    if (m_code != nullptr) {
       prepare();
     }
   }
@@ -560,7 +561,7 @@ class IRCodeVisualizer : public CodeVisualizer<IRCodeVisualizer> {
       if (prefix) {
         prefix_block(*prefix);
       }
-      if (m_code) {
+      if (m_code != nullptr) {
         CodeVisualizer::block(m_code, 0, false,
                               [&](IRCode*) { mie_list(m_code); });
       }
@@ -596,7 +597,7 @@ void print_ircode(std::ostream& os,
                   IRCode* code,
                   const std::string& name,
                   const optional<std::string>& prefix_block) {
-  if (code && code->cfg_built()) {
+  if ((code != nullptr) && code->cfg_built()) {
     print_cfg(os, &code->cfg(), name, prefix_block);
     return;
   }
@@ -631,10 +632,10 @@ void MethodCFGStream::add_pass(const std::string& pass_name,
                                Options o,
                                const optional<std::string>& extra_prefix) {
   auto cur_name = vshow(m_method, false);
-  auto code = m_method->get_code();
-  if (!code) {
+  auto* code = m_method->get_code();
+  if (code == nullptr) {
     cur_name += " (NO CODE)";
-  } else if (!(o & PRINT_CODE)) {
+  } else if ((o & PRINT_CODE) == 0) {
     code = nullptr;
   }
   if (extra_prefix) {
@@ -642,9 +643,9 @@ void MethodCFGStream::add_pass(const std::string& pass_name,
   }
 
   std::stringstream tmp;
-  if ((o & FORCE_CFG) && code) {
+  if (((o & FORCE_CFG) != 0) && (code != nullptr)) {
     bool built_cfg = false;
-    if (code && !code->cfg_built()) {
+    if ((code != nullptr) && !code->cfg_built()) {
       built_cfg = true;
       code->build_cfg();
     }
@@ -657,7 +658,7 @@ void MethodCFGStream::add_pass(const std::string& pass_name,
   }
 
   std::string new_pass = tmp.str();
-  if (new_pass != m_last || !(o & SKIP_NO_CHANGE)) {
+  if (new_pass != m_last || ((o & SKIP_NO_CHANGE) == 0)) {
     m_last = new_pass;
 
     // Replace pass name.
@@ -698,7 +699,7 @@ void ClassCFGStream::add_pass(const std::string& pass_name, Options o) {
 }
 
 void ClassCFGStream::write(std::ostream& os) const {
-  for (auto& m : m_methods) {
+  for (const auto& m : m_methods) {
     os << m.stream.get_output();
   }
 }
@@ -723,9 +724,9 @@ void Classes::add_all(const std::string& class_names) {
 }
 
 bool Classes::add(const std::string& class_name, bool add_initial_pass) {
-  auto type = DexType::make_type(class_name);
-  auto klass = type_class(type);
-  if (!klass) {
+  auto* type = DexType::make_type(class_name);
+  auto* klass = type_class(type);
+  if (klass == nullptr) {
     return false;
   }
   add(klass, add_initial_pass);

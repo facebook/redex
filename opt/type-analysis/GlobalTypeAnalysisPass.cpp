@@ -79,8 +79,8 @@ void trace_analysis_diff(DexMethod* method,
         auto gparam = genv.get(RESULT_REGISTER);
         auto it = block->to_cfg_instruction_iterator(mie);
         auto move_res = cfg.move_result_of(it);
-        auto field = insn->get_field();
-        if (fields.count(field)) {
+        auto* field = insn->get_field();
+        if (fields.count(field) != 0u) {
           continue;
         }
         fields.insert(field);
@@ -91,9 +91,9 @@ void trace_analysis_diff(DexMethod* method,
       } else if (opcode::is_an_invoke(insn->opcode())) {
         auto gparam = genv.get(RESULT_REGISTER);
         auto it = block->to_cfg_instruction_iterator(mie);
-        auto callee = insn->get_method();
+        auto* callee = insn->get_method();
         it.move_next_in_block();
-        if (!lenvs.count(it->insn) || callees.count(callee)) {
+        if ((lenvs.count(it->insn) == 0u) || (callees.count(callee) != 0u)) {
           continue;
         }
         callees.insert(callee);

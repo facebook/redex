@@ -156,24 +156,29 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_RESERVED_FREFS, refs_info.frefs);
   mgr.set_metric(METRIC_RESERVED_TREFS, refs_info.trefs);
   mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
-  mgr.set_metric(METRIC_EMIT_CANARIES, m_emit_canaries);
-  mgr.set_metric(METRIC_ORDER_INTERDEX, m_order_interdex);
+  mgr.set_metric(METRIC_EMIT_CANARIES, static_cast<int64_t>(m_emit_canaries));
+  mgr.set_metric(METRIC_ORDER_INTERDEX, static_cast<int64_t>(m_order_interdex));
 
   // Reflect configuration in stats.
-  mgr.set_metric("config.normal_primary_dex", m_normal_primary_dex);
-  mgr.set_metric("config.static_prune", m_static_prune);
-  mgr.set_metric("config.keep_primary_order", m_keep_primary_order);
-  mgr.set_metric("config.can_touch_coldstart_cls", m_can_touch_coldstart_cls);
+  mgr.set_metric("config.normal_primary_dex",
+                 static_cast<int64_t>(m_normal_primary_dex));
+  mgr.set_metric("config.static_prune", static_cast<int64_t>(m_static_prune));
+  mgr.set_metric("config.keep_primary_order",
+                 static_cast<int64_t>(m_keep_primary_order));
+  mgr.set_metric("config.can_touch_coldstart_cls",
+                 static_cast<int64_t>(m_can_touch_coldstart_cls));
   mgr.set_metric("config.can_touch_coldstart_extended_cls",
-                 m_can_touch_coldstart_extended_cls);
-  mgr.set_metric("config.minimize_cross_dex_refs", m_minimize_cross_dex_refs);
+                 static_cast<int64_t>(m_can_touch_coldstart_extended_cls));
+  mgr.set_metric("config.minimize_cross_dex_refs",
+                 static_cast<int64_t>(m_minimize_cross_dex_refs));
   mgr.set_metric("config.minimize_cross_dex_refs_explore_alternatives",
                  m_minimize_cross_dex_refs_explore_alternatives);
   mgr.set_metric("config.transitively_close_interdex_order",
-                 m_transitively_close_interdex_order);
+                 static_cast<int64_t>(m_transitively_close_interdex_order));
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
-  mgr.set_metric("config.force_single_dex", force_single_dex);
+  mgr.set_metric("config.force_single_dex",
+                 static_cast<int64_t>(force_single_dex));
 
   InterDex interdex(
       original_scope, dexen, mgr.asset_manager(), conf, plugins,
@@ -205,13 +210,17 @@ void InterDexPass::run_pass(
   for (size_t i = 0; i != dexen.size(); ++i) {
     std::string key_prefix = "root_store.dexes." + std::to_string(i) + ".";
     mgr.set_metric(key_prefix + "classes", dexen[i].size());
-    auto& info = interdex.get_dex_info()[i];
-    mgr.set_metric(key_prefix + "primary", info.primary);
-    mgr.set_metric(key_prefix + "coldstart", info.coldstart);
-    mgr.set_metric(key_prefix + "extended", info.extended);
-    mgr.set_metric(key_prefix + "scroll", info.scroll);
-    mgr.set_metric(key_prefix + "background", info.background);
-    mgr.set_metric(key_prefix + "betamap_ordered", info.betamap_ordered);
+    const auto& info = interdex.get_dex_info()[i];
+    mgr.set_metric(key_prefix + "primary", static_cast<int64_t>(info.primary));
+    mgr.set_metric(key_prefix + "coldstart",
+                   static_cast<int64_t>(info.coldstart));
+    mgr.set_metric(key_prefix + "extended",
+                   static_cast<int64_t>(info.extended));
+    mgr.set_metric(key_prefix + "scroll", static_cast<int64_t>(info.scroll));
+    mgr.set_metric(key_prefix + "background",
+                   static_cast<int64_t>(info.background));
+    mgr.set_metric(key_prefix + "betamap_ordered",
+                   static_cast<int64_t>(info.betamap_ordered));
     mgr.set_metric(key_prefix + "class_freqs_moved_classes",
                    info.class_freqs_moved_classes);
     size_t hash{0};
@@ -242,7 +251,7 @@ void InterDexPass::run_pass(
                  cross_dex_ref_minimizer_stats.reprioritizations);
   const auto& seed_classes = cross_dex_ref_minimizer_stats.seed_classes;
   for (size_t i = 0; i < seed_classes.size(); ++i) {
-    auto& p = seed_classes.at(i);
+    const auto& p = seed_classes.at(i);
     std::string metric =
         METRIC_REORDER_CLASSES_SEEDS + std::to_string(i) + "_" + SHOW(p.first);
     mgr.set_metric(metric, p.second);
@@ -251,7 +260,7 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_CURRENT_CLASSES_WHEN_EMITTING_REMAINING,
                  interdex.get_current_classes_when_emitting_remaining());
 
-  auto& over = interdex.get_overflow_stats();
+  const auto& over = interdex.get_overflow_stats();
   mgr.set_metric("num_overflows.linear_alloc", over.linear_alloc_overflow);
   mgr.set_metric("num_overflows.method_refs", over.method_refs_overflow);
   mgr.set_metric("num_overflows.field_refs", over.field_refs_overflow);
@@ -266,7 +275,7 @@ void InterDexPass::run_pass(
     for (size_t dex_index = 1; dex_index < root_dexen.size(); dex_index++) {
       auto& dex = root_dexen.at(dex_index);
       bool not_dynamically_dead = false;
-      for (auto cls : dex) {
+      for (auto* cls : dex) {
         if (is_canary(cls)) {
           continue;
         }

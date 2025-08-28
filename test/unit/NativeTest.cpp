@@ -33,24 +33,24 @@ TEST_F(NativeTest, testBuildingContext) {
   auto path_to_native_results =
       boost::filesystem::path(get_env("native_jni_output_path")) / "JNI_OUTPUT";
 
-  auto type = DexType::make_type("Lredex/JNIExample;");
+  auto* type = DexType::make_type("Lredex/JNIExample;");
   ClassCreator creator(type);
   creator.set_super(type::java_lang_Object());
 
   DexMethodRef* init_hybrid_ref =
       DexMethod::make_method("Lredex/JNIExample;.initHybrid:()V");
-  auto init_hybrid =
+  auto* init_hybrid =
       init_hybrid_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, false);
 
   creator.add_method(init_hybrid);
 
   DexMethodRef* foo_ref =
       DexMethod::make_method("Lredex/JNIExample;.foo:(II)I");
-  auto foo = foo_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, false);
+  auto* foo = foo_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, false);
 
   creator.add_method(foo);
 
-  auto cls = creator.create();
+  auto* cls = creator.create();
 
   Scope java_scope;
   java_scope.push_back(cls);
@@ -64,8 +64,8 @@ TEST_F(NativeTest, testBuildingContext) {
     auto java_decl_of =
         [&](const std::string& native_func) -> UnorderedSet<DexMethod*> {
       for (auto& lib : context.so_libraries) {
-        auto f = lib.get_function(native_func);
-        if (f) {
+        auto* f = lib.get_function(native_func);
+        if (f != nullptr) {
           return f->get_java_declarations();
         }
       }

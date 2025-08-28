@@ -259,7 +259,7 @@ TEST_F(InjectDebugTest, TestLocalVarDebugInfoCreated) {
                 DexDebugItemOpcodeValues::DBG_START_LOCAL) {
           ++local_var_count;
           // Check that the format of local variable names is like "v1", "v2"...
-          auto start_local = static_cast<DexDebugOpcodeStartLocal*>(
+          auto* start_local = static_cast<DexDebugOpcodeStartLocal*>(
               debug_entries[i].insn.get());
           EXPECT_EQ("v" + std::to_string(debug_entries[i].insn->uvalue()),
                     start_local->name()->str());

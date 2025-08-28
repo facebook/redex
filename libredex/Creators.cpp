@@ -24,13 +24,13 @@ const DexString* get_name(DexMethod* meth) {
 }
 
 DexProto* make_static_sig(DexMethod* meth) {
-  auto proto = meth->get_proto();
-  auto rtype = proto->get_rtype();
+  auto* proto = meth->get_proto();
+  auto* rtype = proto->get_rtype();
   DexTypeList::ContainerType arg_list;
   arg_list.push_back(meth->get_class());
   auto* args = proto->get_args();
   arg_list.insert(arg_list.end(), args->begin(), args->end());
-  auto new_args = DexTypeList::make_type_list(std::move(arg_list));
+  auto* new_args = DexTypeList::make_type_list(std::move(arg_list));
   return DexProto::make_proto(rtype, new_args);
 }
 
@@ -70,7 +70,7 @@ void MethodBlock::invoke(IROpcode opcode,
                          DexMethodRef* meth,
                          const std::vector<Location>& args) {
   always_assert(opcode::is_an_invoke(opcode));
-  auto invk = new IRInstruction(opcode);
+  auto* invk = new IRInstruction(opcode);
   uint16_t arg_count = static_cast<uint16_t>(args.size());
   invk->set_method(meth)->set_srcs_size(arg_count);
   for (uint16_t i = 0; i < arg_count; i++) {
@@ -81,7 +81,7 @@ void MethodBlock::invoke(IROpcode opcode,
 }
 
 void MethodBlock::new_instance(DexType* type, Location& dst) {
-  auto insn = new IRInstruction(OPCODE_NEW_INSTANCE);
+  auto* insn = new IRInstruction(OPCODE_NEW_INSTANCE);
   insn->set_type(type);
   push_instruction(insn);
   push_instruction((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
@@ -91,7 +91,7 @@ void MethodBlock::new_instance(DexType* type, Location& dst) {
 void MethodBlock::new_array(DexType* type,
                             const Location& size,
                             const Location& dst) {
-  auto insn = new IRInstruction(OPCODE_NEW_ARRAY);
+  auto* insn = new IRInstruction(OPCODE_NEW_ARRAY);
   insn->set_type(type);
   insn->set_srcs_size(1);
   insn->set_src(0, size.get_reg());
@@ -101,7 +101,7 @@ void MethodBlock::new_array(DexType* type,
 }
 
 void MethodBlock::throwex(Location ex) {
-  auto insn = new IRInstruction(OPCODE_THROW);
+  auto* insn = new IRInstruction(OPCODE_THROW);
   insn->set_src(0, ex.get_reg());
   push_instruction(insn);
 }
@@ -182,7 +182,7 @@ void MethodBlock::ifield_op(IROpcode opcode,
                             Location& src_or_dst) {
   always_assert(opcode::is_an_ifield_op(opcode));
   if (opcode::is_an_iget(opcode)) {
-    auto iget = new IRInstruction(opcode);
+    auto* iget = new IRInstruction(opcode);
     iget->set_field(field);
     src_or_dst.type = field->get_type();
     iget->set_src(0, obj.get_reg());
@@ -191,7 +191,7 @@ void MethodBlock::ifield_op(IROpcode opcode,
         (new IRInstruction(opcode::move_result_pseudo_for_iget(opcode)))
             ->set_dest(src_or_dst.get_reg()));
   } else {
-    auto iput = new IRInstruction(opcode);
+    auto* iput = new IRInstruction(opcode);
     iput->set_field(field);
     iput->set_src(0, src_or_dst.get_reg());
     iput->set_src(1, obj.get_reg());
@@ -274,7 +274,7 @@ void MethodBlock::sfield_op(IROpcode opcode,
                             Location& src_or_dst) {
   always_assert(opcode::is_an_sfield_op(opcode));
   if (opcode::is_an_sget(opcode)) {
-    auto sget = new IRInstruction(opcode);
+    auto* sget = new IRInstruction(opcode);
     sget->set_field(field);
     src_or_dst.type = field->get_type();
     push_instruction(sget);
@@ -282,7 +282,7 @@ void MethodBlock::sfield_op(IROpcode opcode,
         (new IRInstruction(opcode::move_result_pseudo_for_sget(opcode)))
             ->set_dest(src_or_dst.get_reg()));
   } else {
-    auto sput = new IRInstruction(opcode);
+    auto* sput = new IRInstruction(opcode);
     sput->set_field(field)->set_src(0, src_or_dst.get_reg());
     push_instruction(sput);
   }
@@ -358,7 +358,7 @@ void MethodBlock::ret(Location loc) {
     opcode = OPCODE_RETURN;
   }
 
-  auto ret = new IRInstruction(opcode);
+  auto* ret = new IRInstruction(opcode);
   ret->set_src(0, loc.get_reg());
   push_instruction(ret);
 }
@@ -513,7 +513,7 @@ MethodBlock* MethodBlock::if_else_testz(IROpcode if_op,
 
 MethodBlock* MethodBlock::switch_op(Location test,
                                     std::map<int, MethodBlock*>& cases) {
-  auto sw_opcode = new IRInstruction(OPCODE_SWITCH);
+  auto* sw_opcode = new IRInstruction(OPCODE_SWITCH);
   sw_opcode->set_src(0, test.get_reg());
   // Convert to SwitchIndices map.
   std::map<SwitchIndices, MethodBlock*> indices_cases;
@@ -521,7 +521,7 @@ MethodBlock* MethodBlock::switch_op(Location test,
     SwitchIndices indices = {it.first};
     indices_cases[indices] = it.second;
   }
-  auto mb = make_switch_block(sw_opcode, indices_cases);
+  auto* mb = make_switch_block(sw_opcode, indices_cases);
   // Copy initialized case blocks back.
   for (const auto& it : indices_cases) {
     SwitchIndices indices = it.first;
@@ -534,7 +534,7 @@ MethodBlock* MethodBlock::switch_op(Location test,
 
 MethodBlock* MethodBlock::switch_op(
     Location test, std::map<SwitchIndices, MethodBlock*>& cases) {
-  auto sw_opcode = new IRInstruction(OPCODE_SWITCH);
+  auto* sw_opcode = new IRInstruction(OPCODE_SWITCH);
   sw_opcode->set_src(0, test.get_reg());
   return make_switch_block(sw_opcode, cases);
 }
@@ -546,10 +546,10 @@ void MethodCreator::load_locals(DexMethod* meth) {
     make_local_at(meth->get_class(), it->insn->dest());
     ++it;
   }
-  auto proto = meth->get_proto();
-  auto args = proto->get_args();
-  if (args) {
-    for (auto arg : *args) {
+  auto* proto = meth->get_proto();
+  auto* args = proto->get_args();
+  if (args != nullptr) {
+    for (auto* arg : *args) {
       make_local_at(arg, it->insn->dest());
       ++it;
     }
@@ -693,7 +693,7 @@ MethodCreator::MethodCreator(DexType* cls,
     always_assert(res);
   }
   method->make_concrete(
-      access, !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
+      access, (access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)) == 0u);
   method->set_deobfuscated_name(show_deobfuscated(method));
   method->set_code(std::make_unique<IRCode>(method, 0));
   meth_code = method->get_code();
@@ -710,7 +710,7 @@ DexMethod* MethodCreator::create() {
   transform::RegMap reg_map;
   // allocate all the params at the end of the register frame
   for (const auto& mie : boost::adaptors::reverse(param_insns)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     param_reg -= insn->dest_is_wide() ? 2 : 1;
     reg_map[insn->dest()] = param_reg;
     if (insn->dest_is_wide()) {
@@ -742,14 +742,14 @@ DexMethod* MethodCreator::create() {
 
 DexMethod* MethodCreator::make_static_from(DexMethod* meth,
                                            DexClass* target_cls) {
-  auto name = get_name(meth);
+  const auto* name = get_name(meth);
   return make_static_from(name, meth, target_cls);
 }
 
 DexMethod* MethodCreator::make_static_from(const DexString* name,
                                            DexMethod* meth,
                                            DexClass* target_cls) {
-  auto proto = make_static_sig(meth);
+  auto* proto = make_static_sig(meth);
   return make_static_from(name, proto, meth, target_cls);
 }
 
@@ -759,7 +759,7 @@ DexMethod* MethodCreator::make_static_from(const DexString* name,
                                            DexClass* target_cls) {
   redex_assert(!is_static(meth));
   redex_assert(!method::is_init(meth) && !method::is_clinit(meth));
-  auto smeth = static_cast<DexMethod*>(
+  auto* smeth = static_cast<DexMethod*>(
       DexMethod::make_method(target_cls->get_type(), name, proto));
   smeth->make_concrete(meth->get_access() | ACC_STATIC, meth->release_code(),
                        false);

@@ -25,15 +25,16 @@ namespace {
 void dump_sizes(std::ostream& ofs, DexStoresVector& stores) {
   auto print = [&](DexMethod* method) {
     ofs << method->get_fully_deobfuscated_name() << ", "
-        << (method->get_dex_code() ? method->get_dex_code()->size() : -1)
+        << (method->get_dex_code() != nullptr ? method->get_dex_code()->size()
+                                              : -1)
         << ", " << method->is_virtual() << ", " << method->is_external() << ", "
         << method->is_concrete() << std::endl;
   };
   walk::classes(build_class_scope(stores), [&](DexClass* cls) {
-    for (auto dmethod : cls->get_dmethods()) {
+    for (auto* dmethod : cls->get_dmethods()) {
       print(dmethod);
     }
-    for (auto vmethod : cls->get_vmethods()) {
+    for (auto* vmethod : cls->get_vmethods()) {
       print(vmethod);
     }
   });
@@ -60,7 +61,7 @@ class SizeMap : public Tool {
         options["jars"].as<std::string>(), options["apkdir"].as<std::string>(),
         options["dexendir"].as<std::string>(), false /* balloon */);
 
-    ProguardMap pgmap(options.count("rename-map")
+    ProguardMap pgmap(options.count("rename-map") != 0u
                           ? options["rename-map"].as<std::string>()
                           : "/dev/null");
 
@@ -70,7 +71,7 @@ class SizeMap : public Tool {
     }
 
     std::ofstream ofs;
-    if (options.count("output")) {
+    if (options.count("output") != 0u) {
       ofs.open(options["output"].as<std::string>(),
                std::ofstream::out | std::ofstream::trunc);
       dump_sizes(ofs, stores);

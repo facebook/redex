@@ -34,7 +34,7 @@ struct ExternalMethodData {
 void sanity_check_method_summary(const DexMethodRef* method,
                                  const optimize_enums::ParamSummary& summary,
                                  const DexType* object_type) {
-  auto args = method->get_proto()->get_args();
+  auto* args = method->get_proto()->get_args();
   for (auto param : UnorderedIterable(summary.safe_params)) {
     always_assert_log(param < args->size() &&
                           *(args->begin() + param) == object_type,
@@ -52,7 +52,7 @@ void sanity_check_method_summary(const DexMethodRef* method,
     // 2. Run the method summary analysis muliple times until no new discovery.
     TRACE(ENUM, 9, "%s is not external but its method summary is hardcoded",
           SHOW(method));
-    auto code = method->as_def()->get_code();
+    const auto* code = method->as_def()->get_code();
     TRACE(ENUM, 9, "%s", (code ? SHOW(code) : "**no code**"));
   }
 }
@@ -68,8 +68,8 @@ void load_external_method_summaries(
                           "Object;)Z",
                           boost::none, {0, 1})});
   for (auto& item : methods) {
-    auto method = DexMethod::get_method(item.method_name);
-    if (!method) {
+    auto* method = DexMethod::get_method(item.method_name);
+    if (method == nullptr) {
       continue;
     }
     always_assert(!param_summary_map->count(method));
@@ -81,8 +81,8 @@ void load_external_method_summaries(
   // Load summaries for kotlin null assertion methods.
   auto null_check_methods =
       kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
-  for (auto method : UnorderedIterable(null_check_methods)) {
-    if (param_summary_map->count(method)) {
+  for (auto* method : UnorderedIterable(null_check_methods)) {
+    if (param_summary_map->count(method) != 0u) {
       // The method is defined in the apk and their summaries are analyzed from
       // the method code.
       continue;
@@ -119,8 +119,8 @@ void ParamSummary::print(const DexMethodRef* method) const {
  */
 bool params_contain_object_type(const DexMethod* method,
                                 const DexType* object_type) {
-  auto args = method->get_proto()->get_args();
-  for (auto arg : *args) {
+  auto* args = method->get_proto()->get_args();
+  for (auto* arg : *args) {
     if (arg == object_type) {
       return true;
     }
@@ -143,13 +143,14 @@ ParamSummary calculate_param_summary(DexMethod* method,
   auto escape_summary =
       ptrs::get_escape_summary(fp_iter, code, result_may_be_pointer);
 
-  auto args = method->get_proto()->get_args();
+  auto* args = method->get_proto()->get_args();
   auto& escaping_params = escape_summary.escaping_parameters;
   auto& returned_elements = escape_summary.returned_parameters;
-  if (!returned_elements.count(ptrs::ESCAPED_FRESH_RETURN)) {
+  if (returned_elements.count(ptrs::ESCAPED_FRESH_RETURN) == 0u) {
     if (returned_elements.size() == 1) {
       auto returned = *unordered_any(returned_elements);
-      if (returned != ptrs::FRESH_RETURN && !escaping_params.count(returned)) {
+      if (returned != ptrs::FRESH_RETURN &&
+          (escaping_params.count(returned) == 0u)) {
         DexType* cmp = is_static(method) ? *(args->begin() + returned)
                        : returned == 0 ? method->get_class() // Implicit `this`
                                        : *(args->begin() + returned - 1);
@@ -172,7 +173,7 @@ ParamSummary calculate_param_summary(DexMethod* method,
     index = 1;
   }
   for (; arg_it != args->end(); ++arg_it, ++index) {
-    if (!escaping_params.count(index) && (*arg_it == object_type)) {
+    if ((escaping_params.count(index) == 0u) && (*arg_it == object_type)) {
       summary.safe_params.insert(index);
     }
   }
@@ -187,11 +188,11 @@ void calculate_param_summaries(
     const Scope& scope,
     const method_override_graph::Graph& override_graph,
     SummaryMap* param_summary_map) {
-  auto object_type = type::java_lang_Object();
+  auto* object_type = type::java_lang_Object();
   walk::parallel::code(
       scope,
       [object_type, &override_graph](DexMethod* method) {
-        return method->get_code() &&
+        return (method->get_code() != nullptr) &&
                !method_override_graph::is_true_virtual(override_graph,
                                                        method) &&
 

@@ -35,9 +35,9 @@ void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
 
   Scope scope = build_class_scope(stores);
   Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
-    auto code = method->get_code();
+    auto* code = method->get_code();
     if (method->rstate.no_optimizations() || code == nullptr ||
-        new_methods.count(method)) {
+        (new_methods.count(method) != 0u)) {
       return Stats();
     }
     always_assert(code->cfg_built());
@@ -61,32 +61,32 @@ bool RemoveNullcheckStringArg::setup(TransferMapForParam& transfer_map_param,
       DexMethod::get_method(CHECK_EXPR_NULL_SIGNATURE_V1_3);
   DexMethodRef* builtin_expr_V1_4 =
       DexMethod::get_method(CHECK_EXPR_NULL_SIGNATURE_V1_4);
-  if (builtin_param_V1_3) {
-    auto new_check_param_method = get_wrapper_method_with_int_index(
+  if (builtin_param_V1_3 != nullptr) {
+    auto* new_check_param_method = get_wrapper_method_with_int_index(
         NEW_CHECK_PARAM_NULL_SIGNATURE_V1_3,
         WRAPPER_CHECK_PARAM_NULL_METHOD_V1_3, builtin_param_V1_3);
-    if (new_check_param_method) {
+    if (new_check_param_method != nullptr) {
       transfer_map_param[builtin_param_V1_3] = new_check_param_method;
       new_methods.insert(new_check_param_method);
     }
   }
-  if (builtin_param_V1_4) {
-    auto new_check_param_method = get_wrapper_method_with_int_index(
+  if (builtin_param_V1_4 != nullptr) {
+    auto* new_check_param_method = get_wrapper_method_with_int_index(
         NEW_CHECK_PARAM_NULL_SIGNATURE_V1_4,
         WRAPPER_CHECK_PARAM_NULL_METHOD_V1_4, builtin_param_V1_4);
-    if (new_check_param_method) {
+    if (new_check_param_method != nullptr) {
       transfer_map_param[builtin_param_V1_4] = new_check_param_method;
       new_methods.insert(new_check_param_method);
     }
   }
 
-  if (builtin_expr_V1_3) {
+  if (builtin_expr_V1_3 != nullptr) {
     for (auto err : all_NullErrSrc) {
       auto err_msg = get_err_msg(err);
-      auto new_check_expr_method = get_wrapper_method_with_msg(
+      auto* new_check_expr_method = get_wrapper_method_with_msg(
           NEW_CHECK_EXPR_NULL_SIGNATURE_V1_3_PRE,
           WRAPPER_CHECK_EXPR_NULL_METHOD_V1_3_PRE, err_msg, builtin_expr_V1_3);
-      if (new_check_expr_method) {
+      if (new_check_expr_method != nullptr) {
         transfer_map_expr[builtin_expr_V1_3].emplace(err,
                                                      new_check_expr_method);
         new_methods.insert(new_check_expr_method);
@@ -94,13 +94,13 @@ bool RemoveNullcheckStringArg::setup(TransferMapForParam& transfer_map_param,
     }
   }
 
-  if (builtin_expr_V1_4) {
+  if (builtin_expr_V1_4 != nullptr) {
     for (auto err : all_NullErrSrc) {
       auto err_msg = get_err_msg(err);
-      auto new_check_expr_method = get_wrapper_method_with_msg(
+      auto* new_check_expr_method = get_wrapper_method_with_msg(
           NEW_CHECK_EXPR_NULL_SIGNATURE_V1_4_PRE,
           WRAPPER_CHECK_EXPR_NULL_METHOD_V1_4_PRE, err_msg, builtin_expr_V1_4);
-      if (new_check_expr_method) {
+      if (new_check_expr_method != nullptr) {
         transfer_map_expr[builtin_expr_V1_4].emplace(err,
                                                      new_check_expr_method);
         new_methods.insert(new_check_expr_method);
@@ -127,29 +127,29 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_msg(
   std::string wrapper_name;
   wrapper_name.append(name);
   wrapper_name.append(msg);
-  if (DexMethod::get_method(wrapper_signature)) {
+  if (DexMethod::get_method(wrapper_signature) != nullptr) {
     /* Wrapper method already exist. */
     return nullptr;
   }
 
   auto* host_cls = type_class(builtin->get_class());
-  if (!host_cls || host_cls->is_external()) {
+  if ((host_cls == nullptr) || host_cls->is_external()) {
     return nullptr;
   }
 
   DexTypeList* arg_signature =
       DexTypeList::make_type_list({type::java_lang_Object()});
-  const auto proto = DexProto::make_proto(type::_void(), arg_signature);
+  auto* const proto = DexProto::make_proto(type::_void(), arg_signature);
   MethodCreator method_creator(host_cls->get_type(),
                                DexString::make_string(wrapper_name),
                                proto,
                                ACC_PUBLIC | ACC_STATIC);
   auto obj_arg = method_creator.get_local(0);
 
-  auto main_block = method_creator.get_main_block();
-  auto if_block = main_block->if_testz(OPCODE_IF_NEZ, obj_arg);
-  auto str_type = DexType::get_type("Ljava/lang/String;");
-  if (!str_type) {
+  auto* main_block = method_creator.get_main_block();
+  auto* if_block = main_block->if_testz(OPCODE_IF_NEZ, obj_arg);
+  auto* str_type = DexType::get_type("Ljava/lang/String;");
+  if (str_type == nullptr) {
     return nullptr;
   }
 
@@ -162,7 +162,7 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_msg(
   if_block->ret_void();
   main_block->ret_void();
 
-  auto new_method = method_creator.create();
+  auto* new_method = method_creator.create();
   new_method->get_code()->build_cfg();
   TRACE(NULLCHECK, 5, "Created Method : %s", SHOW(new_method->get_code()));
   host_cls->add_method(new_method);
@@ -174,19 +174,19 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
     const char* wrapper_name,
     DexMethodRef* builtin) {
 
-  if (DexMethod::get_method(wrapper_signature)) {
+  if (DexMethod::get_method(wrapper_signature) != nullptr) {
     /* Wrapper method already exist. */
     return nullptr;
   }
 
-  auto host_cls = type_class(builtin->get_class());
-  if (!host_cls) {
+  auto* host_cls = type_class(builtin->get_class());
+  if (host_cls == nullptr) {
     return nullptr;
   }
 
   DexTypeList* arg_signature =
       DexTypeList::make_type_list({type::java_lang_Object(), type::_int()});
-  const auto proto = DexProto::make_proto(type::_void(), arg_signature);
+  auto* const proto = DexProto::make_proto(type::_void(), arg_signature);
   MethodCreator method_creator(host_cls->get_type(),
                                DexString::make_string(wrapper_name),
                                proto,
@@ -196,32 +196,33 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
   // If the wrapper is going to print the index of the param as a string, we
   // will have to construct a string from the index with additional
   // information as part of the wrapper method.
-  auto main_block = method_creator.get_main_block();
+  auto* main_block = method_creator.get_main_block();
   auto int_ind = method_creator.get_local(1);
-  auto str_type = DexType::get_type("Ljava/lang/String;");
-  auto str_builder_type = DexType::get_type("Ljava/lang/StringBuilder;");
-  if (!str_type || !str_builder_type) {
+  auto* str_type = DexType::get_type("Ljava/lang/String;");
+  auto* str_builder_type = DexType::get_type("Ljava/lang/StringBuilder;");
+  if ((str_type == nullptr) || (str_builder_type == nullptr)) {
     return nullptr;
   }
 
-  auto to_str_method = DexMethod::get_method(
+  auto* to_str_method = DexMethod::get_method(
       "Ljava/lang/Integer;.toString:(I)Ljava/lang/String;");
-  auto str_builder_init_method =
+  auto* str_builder_init_method =
       DexMethod::get_method("Ljava/lang/StringBuilder;.<init>:()V");
-  auto append_method = DexMethod::get_method(
+  auto* append_method = DexMethod::get_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/"
       "String;)Ljava/lang/StringBuilder;");
-  auto str_builder_to_str_method = DexMethod::get_method(
+  auto* str_builder_to_str_method = DexMethod::get_method(
       "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;");
 
-  if (!to_str_method || !append_method || !str_builder_to_str_method) {
+  if ((to_str_method == nullptr) || (append_method == nullptr) ||
+      (str_builder_to_str_method == nullptr)) {
     return nullptr;
   }
   auto str_ind = method_creator.make_local(str_type);
   auto str_builder = method_creator.make_local(str_builder_type);
   auto str_const = method_creator.make_local(str_type);
   auto str_res = method_creator.make_local(str_type);
-  auto if_block = main_block->if_testz(OPCODE_IF_NEZ, obj_arg);
+  auto* if_block = main_block->if_testz(OPCODE_IF_NEZ, obj_arg);
 
   // invoke-static {v3}, Ljava/lang/Integer;.toString:(I)Ljava/lang/String;
   if_block->invoke(OPCODE_INVOKE_STATIC, to_str_method, {int_ind});
@@ -253,7 +254,7 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
   if_block->ret_void();
   main_block->ret_void();
 
-  auto new_method = method_creator.create();
+  auto* new_method = method_creator.create();
   new_method->get_code()->build_cfg();
   TRACE(NULLCHECK, 5, "Created Method : %s", SHOW(new_method->get_code()));
   host_cls->add_method(new_method);
@@ -275,7 +276,7 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
   reaching_defs_iter.run({});
 
   for (const auto& mie : InstructionIterable(params)) {
-    auto load_insn = mie.insn;
+    auto* load_insn = mie.insn;
     always_assert(opcode::is_a_load_param(load_insn->opcode()));
     param_index.insert(std::make_pair(load_insn->dest(), arg_index++));
   }
@@ -293,7 +294,7 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end();
          reaching_defs_iter.analyze_instruction(it++->insn, &env)) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (insn->opcode() != OPCODE_INVOKE_STATIC) {
         continue;
       }
@@ -313,14 +314,14 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
           if (!opcode::is_a_load_param(def->opcode())) {
             continue;
           }
-          if (param_load_insn) {
+          if (param_load_insn != nullptr) {
             /* Multiple param load insns. Should never happen.*/
             param_load_insn = nullptr;
             break;
           }
           param_load_insn = def;
         }
-        if (!param_load_insn) {
+        if (param_load_insn == nullptr) {
           /* No param load insn. Should never happen. In any case, skipping this
            * insn is OK. */
           stats.null_check_insns_unchanged++;
@@ -357,7 +358,7 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
         // Handle null check for expr. Get the proper wrapper function to throw
         // more accurate exception message.
         always_assert(!defs.empty());
-        auto def = *defs.elements().begin();
+        auto* def = *defs.elements().begin();
         NullErrSrc err_msg;
         if (defs.size() > 1) {
           // Should never happened based on the way that null_check is inserted

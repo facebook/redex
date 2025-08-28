@@ -27,7 +27,7 @@ namespace {
 void create_object_class() {
   std::vector<DexMethod*> object_methods;
 
-  auto type = type::java_lang_Object();
+  auto* type = type::java_lang_Object();
   // create the following methods:
   // protected java.lang.Object.clone()Ljava/lang/Object;
   // public java.lang.Object.equals(Ljava/lang/Object;)Z
@@ -42,31 +42,31 @@ void create_object_class() {
   // public final native java.lang.Object.wait(JI)V
 
   // required sigs
-  auto void_args = DexTypeList::make_type_list({});
-  auto void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
-  auto object_bool = DexProto::make_proto(
+  auto* void_args = DexTypeList::make_type_list({});
+  auto* void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
+  auto* object_bool = DexProto::make_proto(
       type::_boolean(),
       DexTypeList::make_type_list({type::java_lang_Object()}));
-  auto void_void = DexProto::make_proto(type::_void(), void_args);
-  auto void_class = DexProto::make_proto(type::java_lang_Class(), void_args);
-  auto void_int = DexProto::make_proto(type::_int(), void_args);
-  auto void_string = DexProto::make_proto(type::java_lang_String(), void_args);
-  auto long_void = DexProto::make_proto(
+  auto* void_void = DexProto::make_proto(type::_void(), void_args);
+  auto* void_class = DexProto::make_proto(type::java_lang_Class(), void_args);
+  auto* void_int = DexProto::make_proto(type::_int(), void_args);
+  auto* void_string = DexProto::make_proto(type::java_lang_String(), void_args);
+  auto* long_void = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto long_int_void = DexProto::make_proto(
+  auto* long_int_void = DexProto::make_proto(
       type::_void(),
       DexTypeList::make_type_list({type::_long(), type::_int()}));
 
   // required names
-  auto clone = DexString::make_string("clone");
-  auto equals = DexString::make_string("equals");
-  auto finalize = DexString::make_string("finalize");
-  auto getClass = DexString::make_string("getClass");
-  auto hashCode = DexString::make_string("hashCode");
-  auto notify = DexString::make_string("notify");
-  auto notifyAll = DexString::make_string("notifyAll");
-  auto toString = DexString::make_string("toString");
-  auto wait = DexString::make_string("wait");
+  const auto* clone = DexString::make_string("clone");
+  const auto* equals = DexString::make_string("equals");
+  const auto* finalize = DexString::make_string("finalize");
+  const auto* getClass = DexString::make_string("getClass");
+  const auto* hashCode = DexString::make_string("hashCode");
+  const auto* notify = DexString::make_string("notify");
+  const auto* notifyAll = DexString::make_string("notifyAll");
+  const auto* toString = DexString::make_string("toString");
+  const auto* wait = DexString::make_string("wait");
 
   // create methods and add to the list of object methods
   // All the checks to see if the methods exist are because we cannot set
@@ -74,7 +74,7 @@ void create_object_class() {
   // function is called multiple times with type::java_lang_Object()), we
   // will fail an assertion. This only happens in tests when no external jars
   // are available protected java.lang.Object.clone()Ljava/lang/Object;
-  auto method =
+  auto* method =
       static_cast<DexMethod*>(DexMethod::make_method(type, clone, void_object));
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
@@ -164,7 +164,7 @@ void create_object_class() {
   if (type_class(type) == nullptr) {
     ClassCreator cc(type);
     cc.set_access(ACC_PUBLIC);
-    auto object_class = cc.create();
+    auto* object_class = cc.create();
     for (auto const& m : object_methods) {
       object_class->add_method(m);
     }
@@ -252,7 +252,7 @@ void mark_methods(const DexType* type,
                   const BaseSigs& base_sigs,
                   bool escape) {
   for (const auto& protos_it : base_sigs) {
-    const auto name = protos_it.first;
+    const auto* const name = protos_it.first;
     for (const auto& proto : protos_it.second) {
       auto& scopes = sig_map[name][proto];
       always_assert(!scopes.empty());
@@ -368,11 +368,11 @@ void merge(const BaseSigs& base_sigs,
 
   // walk all derived signatures
   for (const auto& derived_sig_entry : derived_sig_map) {
-    const auto name = derived_sig_entry.first;
+    const auto* const name = derived_sig_entry.first;
     auto& name_map = base_sig_map[name];
-    auto& derived_protos_map = derived_sig_entry.second;
+    const auto& derived_protos_map = derived_sig_entry.second;
     for (const auto& derived_scopes_it : derived_protos_map) {
-      const auto proto = derived_scopes_it.first;
+      const auto* const proto = derived_scopes_it.first;
       auto& virt_scopes = name_map[proto];
       // the signature in derived does not exists in base
       if (!is_base_sig(name, proto)) {
@@ -478,7 +478,7 @@ void merge(const BaseSigs& base_sigs,
 DexMethod* make_miranda(const DexType* type,
                         const DexString* name,
                         const DexProto* proto) {
-  auto miranda = DexMethod::make_method(
+  auto* miranda = DexMethod::make_method(
       const_cast<DexType*>(type), name, const_cast<DexProto*>(proto));
   // The next assert may fire because we don't delete DexMethod from the
   // cache and we may find one we have deleted and it was a def.
@@ -517,7 +517,7 @@ bool load_interfaces_methods(const DexTypeList* interfaces,
                              BaseIntfSigs& intf_methods) {
   bool escaped = false;
   for (const auto& intf : *interfaces) {
-    auto intf_cls = type_class(intf);
+    auto* intf_cls = type_class(intf);
     if (intf_cls == nullptr) {
       TRACE(VIRT, 5, "[Unknown interface: %s]", SHOW(intf));
       escaped = true;
@@ -539,7 +539,7 @@ bool get_interface_methods(const DexType* type, BaseIntfSigs& intf_methods) {
   if (type == type::java_lang_Object()) {
     return false;
   }
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   always_assert_log(
       cls != nullptr, "DexClass must exist for type %s\n", SHOW(type));
   bool escaped = false;
@@ -582,7 +582,7 @@ bool load_interfaces(const DexType* type,
         // type. The class is abstract or a definition up the
         // hierarchy is present.
         // Make a pure miranda entry
-        auto mir_meth = make_miranda(type, name, proto);
+        auto* mir_meth = make_miranda(type, name, proto);
         VirtualScope scope;
         scope.type = type;
         scope.methods.emplace_back(mir_meth, intf_flags);
@@ -612,7 +612,7 @@ bool load_interfaces(const DexType* type,
 void load_methods(const DexType* type, SignatureMap& sig_map) {
   auto const& vmethods = get_vmethods(type);
   // add each virtual method to the SignatureMap
-  for (auto& vmeth : vmethods) {
+  for (const auto& vmeth : vmethods) {
     auto& proto_map = sig_map[vmeth->get_name()];
     auto& scopes = proto_map[vmeth->get_proto()];
     always_assert(scopes.empty());
@@ -699,7 +699,7 @@ bool build_signature_map(const ClassHierarchy& hierarchy,
   }
 
   TRACE(VIRT, 3, "* Visited %s(%d, %d)", SHOW(type), escape_up, escape_down);
-  return escape_up | escape_down;
+  return static_cast<int>(escape_up) | static_cast<int>(escape_down);
 }
 
 const VirtualScope* find_rooted_scope(const SignatureMap& sig_map,
@@ -736,7 +736,7 @@ void get_rooted_interface_scope(const SignatureMap& sig_map,
       continue;
     }
     for (const auto& meth : intf_cls->get_vmethods()) {
-      const auto scope = find_rooted_scope(sig_map, type, meth);
+      const auto* const scope = find_rooted_scope(sig_map, type, meth);
       if (scope != nullptr && scope->type == type &&
           !scope->methods[0].first->is_def()) {
         const auto& existing_scopes = cls_scopes.find(type);
@@ -773,7 +773,7 @@ void get_root_scopes(const SignatureMap& sig_map,
                      Scopes& cls_scopes) {
   const std::vector<DexMethod*>& methods = get_vmethods(type);
   TRACE(VIRT, 9, "found %zu vmethods for %s", methods.size(), SHOW(type));
-  for (const auto meth : methods) {
+  for (auto* const meth : methods) {
     const auto& protos = sig_map.find(meth->get_name());
     always_assert(protos != sig_map.end());
     const auto& scopes = protos->second.find(meth->get_proto());
@@ -812,7 +812,7 @@ const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
   always_assert(protos != sig_map.end());
   const auto& scopes = protos->second.find(meth->get_proto());
   always_assert(scopes != protos->second.end());
-  const auto meth_type = meth->get_class();
+  auto* const meth_type = meth->get_class();
   for (const auto& scope : scopes->second) {
     if (scope.type == type::java_lang_Object()) {
       return scope;
@@ -848,9 +848,9 @@ std::vector<const DexMethod*> select_from(const VirtualScope* scope,
     }
   }
   if (!found_root_method) {
-    auto cls = type_class(type);
+    auto* cls = type_class(type);
     while (cls != nullptr) {
-      const auto super = cls->get_super_class();
+      auto* const super = cls->get_super_class();
       const auto& meth = non_child_methods.find(super);
       if (meth != non_child_methods.end()) {
         refined_scope.emplace_back(meth->second);
@@ -886,7 +886,7 @@ const ClassHierarchy& ClassScopes::get_parent_to_children() const {
  * for the entire system as redex knows it.
  */
 void ClassScopes::build_class_scopes(const DexType* type) {
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   always_assert(cls != nullptr || type == type::java_lang_Object());
   get_root_scopes(m_sig_map, type, m_scopes);
 

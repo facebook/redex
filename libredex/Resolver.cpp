@@ -22,7 +22,7 @@ DexMethod* resolve_intf_method_ref(const DexClass* cls,
 
   auto find_method = [&](const DexClass* cls) -> DexMethod* {
     const auto& vmethods = cls->get_vmethods();
-    for (const auto vmethod : vmethods) {
+    for (auto* const vmethod : vmethods) {
       if (vmethod->get_name() == name && vmethod->get_proto() == proto) {
         return vmethod;
       }
@@ -30,8 +30,8 @@ DexMethod* resolve_intf_method_ref(const DexClass* cls,
     return nullptr;
   };
 
-  auto method = find_method(cls);
-  if (method) {
+  auto* method = find_method(cls);
+  if (method != nullptr) {
     return method;
   }
   for (const auto& super_intf : *cls->get_interfaces()) {
@@ -40,7 +40,7 @@ DexMethod* resolve_intf_method_ref(const DexClass* cls,
       continue;
     }
     method = resolve_intf_method_ref(super_intf_cls, name, proto);
-    if (method) {
+    if (method != nullptr) {
       return method;
     }
   }
@@ -55,12 +55,12 @@ DexMethod* resolve_method(const DexClass* cls,
                           MethodSearch search,
                           const DexMethod* caller) {
   if (search == MethodSearch::Interface) {
-    if (cls) {
+    if (cls != nullptr) {
       return resolve_intf_method_ref(cls, name, proto);
     }
   }
   if (search == MethodSearch::Super) {
-    if (caller) {
+    if (caller != nullptr) {
       // caller must be provided. This condition is here to be compatible with
       // old behavior.
       DexType* containing_type = caller->get_class();
@@ -69,7 +69,7 @@ DexMethod* resolve_method(const DexClass* cls,
         return nullptr;
       }
       DexType* super_class = containing_class->get_super_class();
-      if (!super_class) {
+      if (super_class == nullptr) {
         return nullptr;
       }
       cls = type_class(super_class);
@@ -77,15 +77,15 @@ DexMethod* resolve_method(const DexClass* cls,
     // The rest is the same as virtual.
     search = MethodSearch::Virtual;
   }
-  while (cls) {
+  while (cls != nullptr) {
     if (search == MethodSearch::InterfaceVirtual) {
-      auto try_intf = resolve_intf_method_ref(cls, name, proto);
-      if (try_intf) {
+      auto* try_intf = resolve_intf_method_ref(cls, name, proto);
+      if (try_intf != nullptr) {
         return try_intf;
       }
     }
     if (search == MethodSearch::Virtual || search == MethodSearch::Any) {
-      for (auto& vmeth : cls->get_vmethods()) {
+      for (const auto& vmeth : cls->get_vmethods()) {
         if (match(name, proto, vmeth)) {
           return vmeth;
         }
@@ -93,7 +93,7 @@ DexMethod* resolve_method(const DexClass* cls,
     }
     if (search == MethodSearch::Direct || search == MethodSearch::Static ||
         search == MethodSearch::Any) {
-      for (auto& dmeth : cls->get_dmethods()) {
+      for (const auto& dmeth : cls->get_dmethods()) {
         if (match(name, proto, dmeth)) {
           return dmeth;
         }
@@ -117,8 +117,8 @@ DexMethod* resolve_method_ref(const DexClass* cls,
       return nullptr;
     }
     const auto& super_cls = type_class(super);
-    auto resolved = resolve_method(super_cls, name, proto, search);
-    if (resolved || search != MethodSearch::InterfaceVirtual) {
+    auto* resolved = resolve_method(super_cls, name, proto, search);
+    if ((resolved != nullptr) || search != MethodSearch::InterfaceVirtual) {
       return resolved;
     }
   }
@@ -127,8 +127,8 @@ DexMethod* resolve_method_ref(const DexClass* cls,
     if (super_intf_cls == nullptr) {
       continue;
     }
-    auto method = resolve_intf_method_ref(super_intf_cls, name, proto);
-    if (method) {
+    auto* method = resolve_intf_method_ref(super_intf_cls, name, proto);
+    if (method != nullptr) {
       return method;
     }
   }
@@ -144,16 +144,16 @@ DexField* resolve_field(const DexType* owner,
   };
 
   const DexClass* cls = type_class(owner);
-  while (cls) {
+  while (cls != nullptr) {
     if (fs == FieldSearch::Instance || fs == FieldSearch::Any) {
-      for (auto ifield : cls->get_ifields()) {
+      for (auto* ifield : cls->get_ifields()) {
         if (field_eq(ifield)) {
           return ifield;
         }
       }
     }
     if (fs == FieldSearch::Static || fs == FieldSearch::Any) {
-      for (auto sfield : cls->get_sfields()) {
+      for (auto* sfield : cls->get_sfields()) {
         if (field_eq(sfield)) {
           return sfield;
         }
@@ -161,7 +161,7 @@ DexField* resolve_field(const DexType* owner,
       // static final fields may be coming from interfaces so we
       // have to walk up the interface hierarchy too
       for (const auto& intf : *cls->get_interfaces()) {
-        auto field = resolve_field(intf, name, type, fs);
+        auto* field = resolve_field(intf, name, type, fs);
         if (field != nullptr) {
           return field;
         }
@@ -176,7 +176,7 @@ DexMethod* find_top_impl(const DexClass* cls,
                          const DexString* name,
                          const DexProto* proto) {
   DexMethod* top_impl = nullptr;
-  while (cls) {
+  while (cls != nullptr) {
     for (const auto& vmeth : cls->get_vmethods()) {
       if (match(name, proto, vmeth)) {
         top_impl = vmeth;
@@ -191,7 +191,7 @@ DexMethod* find_top_intf_impl(const DexClass* cls,
                               const DexString* name,
                               const DexProto* proto) {
   DexMethod* top_impl = nullptr;
-  while (cls) {
+  while (cls != nullptr) {
     DexMethod* top_mir_impl = resolve_intf_method_ref(cls, name, proto);
     if (top_mir_impl != nullptr) {
       top_impl = top_mir_impl;

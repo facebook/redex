@@ -69,7 +69,7 @@ void run_throw_propagation(const ConcurrentSet<DexMethod*>& no_return_methods,
         insn->opcode() == OPCODE_INVOKE_SUPER) {
       return false;
     }
-    auto method_ref = insn->get_method();
+    auto* method_ref = insn->get_method();
     DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
     if (method == nullptr) {
       return false;
@@ -83,7 +83,7 @@ void run_throw_propagation(const ConcurrentSet<DexMethod*>& no_return_methods,
       if (exclude_method(other_method)) {
         return false;
       }
-      if (!no_return_methods.count_unsafe(other_method)) {
+      if (no_return_methods.count_unsafe(other_method) == 0u) {
         return_methods.push_back(other_method);
       }
       return true;
@@ -99,10 +99,10 @@ void run_throw_propagation(const ConcurrentSet<DexMethod*>& no_return_methods,
 
   throw_propagation_impl::ThrowPropagator impl(cfg, nullptr);
   size_t throws_inserted{0};
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); it++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (!is_no_return_invoke(insn)) {
         continue;
       }
@@ -138,7 +138,7 @@ void test(const Scope& scope,
 };
 
 TEST_F(ThrowPropagationTest, dont_change_unknown) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (invoke-static () "LWhat;.ever:()V")
       (return-void)
@@ -151,13 +151,13 @@ TEST_F(ThrowPropagationTest, can_return_simple) {
   ClassCreator foo_creator(DexType::make_type("LFoo;"));
   foo_creator.set_super(type::java_lang_Object());
 
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   foo_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (invoke-static () "LFoo;.bar:()V")
       (return-void)
@@ -172,7 +172,7 @@ TEST_F(ThrowPropagationTest, cannot_return_simple) {
   ClassCreator foo_creator(DexType::make_type("LFoo;"));
   foo_creator.set_super(type::java_lang_Object());
 
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
   method->set_code(assembler::ircode_from_string(R"(
@@ -181,13 +181,13 @@ TEST_F(ThrowPropagationTest, cannot_return_simple) {
       )"));
   foo_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (invoke-static () "LFoo;.bar:()V")
       (return-void)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (invoke-static () "LFoo;.bar:()V")
       (const v0 0)
@@ -203,7 +203,7 @@ TEST_F(ThrowPropagationTest, cannot_return_remove_move_result) {
   ClassCreator foo_creator(DexType::make_type("LFoo;"));
   foo_creator.set_super(type::java_lang_Object());
 
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()I")
           ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
   method->set_code(assembler::ircode_from_string(R"(
@@ -212,14 +212,14 @@ TEST_F(ThrowPropagationTest, cannot_return_remove_move_result) {
       )"));
   foo_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (invoke-static () "LFoo;.bar:()I")
       (move-result v1)
       (return-void)
     )
   )";
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (invoke-static () "LFoo;.bar:()I")
       (const v2 0)
@@ -235,7 +235,7 @@ TEST_F(ThrowPropagationTest, cannot_return_simple_already_throws) {
   ClassCreator foo_creator(DexType::make_type("LFoo;"));
   foo_creator.set_super(type::java_lang_Object());
 
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
   method->set_code(assembler::ircode_from_string(R"(
@@ -244,7 +244,7 @@ TEST_F(ThrowPropagationTest, cannot_return_simple_already_throws) {
       )"));
   foo_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (invoke-static () "LFoo;.bar:()V")
       (const v0 0)
@@ -260,7 +260,7 @@ TEST_F(ThrowPropagationTest, cannot_return_simple_already_does_not_terminate) {
   ClassCreator foo_creator(DexType::make_type("LFoo;"));
   foo_creator.set_super(type::java_lang_Object());
 
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
   method->set_code(assembler::ircode_from_string(R"(
@@ -269,7 +269,7 @@ TEST_F(ThrowPropagationTest, cannot_return_simple_already_does_not_terminate) {
       )"));
   foo_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (invoke-static () "LFoo;.bar:()V")
       (:b)
@@ -286,7 +286,7 @@ TEST_F(ThrowPropagationTest, dont_change_throw_result) {
   ClassCreator foo_creator(DexType::make_type("LFoo;"));
   foo_creator.set_super(type::java_lang_Object());
 
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()Ljava/lang/Exception;")
           ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
   method->set_code(assembler::ircode_from_string(R"(
@@ -295,14 +295,14 @@ TEST_F(ThrowPropagationTest, dont_change_throw_result) {
       )"));
   foo_creator.add_method(method);
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (invoke-static () "LFoo;.bar:()Ljava/lang/Exception;")
       (move-result-object v0)
       (throw v0)
     )
   )";
-  auto expected_str = code_str;
+  const auto* expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object()), foo_creator.create()},
        code_str,
        expected_str);

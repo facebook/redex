@@ -48,8 +48,8 @@ UnorderedSet<DexType*> get_associated_buildees(
     std::string buildee_name =
         builder_name.substr(0, builder_name.size() - 9) + ";";
 
-    auto type = DexType::get_type(buildee_name);
-    if (type) {
+    auto* type = DexType::get_type(buildee_name);
+    if (type != nullptr) {
       buildees.emplace(type);
     }
   }
@@ -59,7 +59,7 @@ UnorderedSet<DexType*> get_associated_buildees(
 
 bool has_statics(const DexClass* cls) {
   always_assert(cls);
-  auto& dmethods = cls->get_dmethods();
+  const auto& dmethods = cls->get_dmethods();
   for (const auto* m : dmethods) {
     if (is_static(m)) {
       return true;
@@ -72,7 +72,7 @@ bool has_statics(const DexClass* cls) {
 bool has_large_escaping_calls(const UnorderedSet<IRInstruction*>& to_inline) {
   for (const auto* invoke : UnorderedIterable(to_inline)) {
     always_assert(invoke->has_method());
-    auto callee = invoke->get_method()->as_def();
+    auto* callee = invoke->get_method()->as_def();
     size_t callee_size = callee->get_code()->sum_opcode_sizes();
     if (callee_size > ESCAPING_CALLEE_SIZE_THRESHOLD) {
       return true;
@@ -165,8 +165,8 @@ class RemoveClasses {
         continue;
       }
 
-      auto cls = type_class(type);
-      if (!cls || cls->is_external()) {
+      auto* cls = type_class(type);
+      if ((cls == nullptr) || cls->is_external()) {
         continue;
       }
 
@@ -188,12 +188,13 @@ class RemoveClasses {
     std::vector<DexMethod*> methods;
 
     walk::parallel::methods(m_scope, [&](DexMethod* method) {
-      if (!method || !method->get_code() || method->rstate.no_optimizations()) {
+      if ((method == nullptr) || (method->get_code() == nullptr) ||
+          method->rstate.no_optimizations()) {
         return;
       }
 
-      if (m_classes.count(method->get_class()) ||
-          buildee_types.count(method->get_class())) {
+      if ((m_classes.count(method->get_class()) != 0u) ||
+          (buildee_types.count(method->get_class()) != 0u)) {
         // Skip builder and associated buildee methods.
         return;
       }
@@ -211,7 +212,7 @@ class RemoveClasses {
     }
     std::sort(methods.begin(), methods.end(), compare_dexmethods);
 
-    for (auto method : methods) {
+    for (auto* method : methods) {
       BuilderAnalysis analysis(m_classes, m_excluded_types, method);
 
       bool have_builders_to_remove =
@@ -254,8 +255,8 @@ class RemoveClasses {
 
   void collect_excluded_types() {
     walk::fields(m_scope, [&](DexField* field) {
-      auto type = field->get_type();
-      if (m_classes.count(type)) {
+      auto* type = field->get_type();
+      if (m_classes.count(type) != 0u) {
         TRACE(BLD_PATTERN, 2,
               "Excluding type since it is stored in a field: %s", SHOW(type));
         m_excluded_types.emplace(type);
@@ -263,7 +264,7 @@ class RemoveClasses {
     });
 
     for (DexType* type : m_blocklist) {
-      if (m_classes.count(type)) {
+      if (m_classes.count(type) != 0u) {
         TRACE(BLD_PATTERN, 2,
               "Excluding type since it was in the blocklist: %s", SHOW(type));
         m_excluded_types.emplace(type);
@@ -406,14 +407,14 @@ void RemoveBuilderPatternPass::bind_config() {
   // TODO(T44502473): if we could pass a binding filter lambda instead of
   // bindflags, this could be more simply expressed
   after_configuration([this, roots] {
-    auto object_type = type::java_lang_Object();
+    auto* object_type = type::java_lang_Object();
     m_roots.clear();
     for (const auto& root : roots) {
-      if (!type_class(root)) {
+      if (type_class(root) == nullptr) {
         continue;
       }
       if (root != object_type) {
-        auto super_cls = type_class(root)->get_super_class();
+        auto* super_cls = type_class(root)->get_super_class();
         if (super_cls != object_type) {
           fprintf(stderr,
                   "[builders]: %s isn't a valid root as it extends %s\n",

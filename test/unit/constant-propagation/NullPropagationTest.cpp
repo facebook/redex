@@ -20,7 +20,7 @@ struct NullPropagationTest : public ConstantPropagationTest {
     creator.set_super(type::java_lang_Object());
     creator.set_external();
 
-    auto booleanvalue =
+    auto* booleanvalue =
         DexMethod::make_method("Ljava/lang/Boolean;.booleanValue:()Z")
             ->make_concrete(ACC_PUBLIC, true);
     creator.add_method(booleanvalue);

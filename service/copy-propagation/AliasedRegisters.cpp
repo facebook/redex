@@ -352,7 +352,7 @@ bool AliasedRegisters::leq(const AliasedRegisters& other) const {
   // for all edges in `other` (the potential subset), make sure `this` has that
   // alias relationship
   auto inv_vertex_mapping = other.get_vertex_mapping(*this);
-  for (auto& [other_v, other_v_ins] : UnorderedIterable(
+  for (const auto& [other_v, other_v_ins] : UnorderedIterable(
            other.m_graph.get_vertices_with_inv_adjacent_vertices())) {
     auto v = inv_vertex_mapping(other_v);
     auto v_root = find_root(v);
@@ -525,7 +525,7 @@ void AliasedRegisters::renumber_insert_order(
 std::vector<std::vector<vertex_t>> AliasedRegisters::all_groups() {
   std::vector<std::vector<vertex_t>> result;
 
-  for (auto& [root, in_adj] : UnorderedIterable(
+  for (const auto& [root, in_adj] : UnorderedIterable(
            this->m_graph.get_vertices_with_inv_adjacent_vertices())) {
     std::vector<vertex_t> group;
     group.reserve(in_adj.size() + 1);

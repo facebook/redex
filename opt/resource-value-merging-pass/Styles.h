@@ -39,7 +39,7 @@ class StyleAnalysis {
     for (auto root : UnorderedIterable(code_roots)) {
       m_roots.insert(root);
     }
-    auto res_table = m_reachable_resources->get_res_table();
+    auto* res_table = m_reachable_resources->get_res_table();
     m_style_info = res_table->load_style_info();
   }
 

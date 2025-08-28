@@ -20,7 +20,7 @@ OutlinerTypeAnalysis::OutlinerTypeAnalysis(DexMethod* method)
         reaching_defs::MoveAwareFixpointIterator reaching_defs_fp_iter(cfg);
         reaching_defs_fp_iter.run({});
         ReachingDefsEnvironments res;
-        for (auto block : cfg.blocks()) {
+        for (auto* block : cfg.blocks()) {
           auto env = reaching_defs_fp_iter.get_entry_state_at(block);
           for (auto& mie : InstructionIterable(block)) {
             res[mie.insn] = env;
@@ -37,7 +37,7 @@ OutlinerTypeAnalysis::OutlinerTypeAnalysis(DexMethod* method)
         auto& cfg = method->get_code()->cfg();
         const auto& reaching_defs_fp_iter = m_immediate_chains->get_fp_iter();
         ReachingDefsEnvironments res;
-        for (auto block : cfg.blocks()) {
+        for (auto* block : cfg.blocks()) {
           auto env = reaching_defs_fp_iter.get_entry_state_at(block);
           for (auto& mie : InstructionIterable(block)) {
             res[mie.insn] = env;
@@ -77,7 +77,7 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(const CandidateAdapter& ca,
   UnorderedSet<reg_t> regs_to_track{reg};
   UnorderedSet<const DexType*> type_demands;
   get_type_demand_helper(ca, std::move(regs_to_track), &type_demands);
-  auto type_demand = narrow_type_demands(std::move(type_demands));
+  const auto* type_demand = narrow_type_demands(std::move(type_demands));
   if (type_demand == nullptr) {
     type_demand = get_inferred_type(ca, reg);
   }
@@ -122,31 +122,31 @@ const DexType* OutlinerTypeAnalysis::get_inferred_type(
 
 const DexType* OutlinerTypeAnalysis::narrow_type_demands(
     UnorderedSet<const DexType*> type_demands) {
-  if (type_demands.empty() || type_demands.count(nullptr)) {
+  if (type_demands.empty() || (type_demands.count(nullptr) != 0u)) {
     return nullptr;
   }
 
   if (type_demands.size() > 1) {
     // Less strict primitive type demands can be removed
-    if (type_demands.count(type::_boolean())) {
+    if (type_demands.count(type::_boolean()) != 0u) {
       type_demands.erase(type::_byte());
       type_demands.erase(type::_short());
       type_demands.erase(type::_char());
       type_demands.erase(type::_int());
-    } else if (type_demands.count(type::_byte())) {
-      if (type_demands.count(type::_char())) {
+    } else if (type_demands.count(type::_byte()) != 0u) {
+      if (type_demands.count(type::_char()) != 0u) {
         type_demands = {type::_int()};
       } else {
         type_demands.erase(type::_short());
         type_demands.erase(type::_int());
       }
-    } else if (type_demands.count(type::_short())) {
-      if (type_demands.count(type::_char())) {
+    } else if (type_demands.count(type::_short()) != 0u) {
+      if (type_demands.count(type::_char()) != 0u) {
         type_demands = {type::_int()};
       } else {
         type_demands.erase(type::_int());
       }
-    } else if (type_demands.count(type::_char())) {
+    } else if (type_demands.count(type::_char()) != 0u) {
       type_demands.erase(type::_int());
     }
 
@@ -171,7 +171,7 @@ const DexType* OutlinerTypeAnalysis::narrow_type_demands(
 static bool any_outside_range(const UnorderedSet<const IRInstruction*>& insns,
                               int64_t min,
                               int64_t max) {
-  for (auto insn : UnorderedIterable(insns)) {
+  for (const auto* insn : UnorderedIterable(insns)) {
     if (insn->get_literal() < min || insn->get_literal() > max) {
       return true;
     }
@@ -768,11 +768,11 @@ boost::optional<UnorderedSet<const IRInstruction*>>
 OutlinerTypeAnalysis::get_defs(
     const UnorderedSet<const IRInstruction*>& insns) {
   UnorderedSet<const IRInstruction*> res;
-  for (auto insn : UnorderedIterable(insns)) {
+  for (const auto* insn : UnorderedIterable(insns)) {
     always_assert(insn->has_dest());
     if (opcode::is_a_move(insn->opcode()) ||
         opcode::is_move_result_any(insn->opcode())) {
-      auto reg = insn->srcs_size() ? insn->src(0) : RESULT_REGISTER;
+      auto reg = insn->srcs_size() != 0u ? insn->src(0) : RESULT_REGISTER;
       auto defs = m_reaching_defs_environments->at(insn).get(reg);
       if (defs.is_bottom() || defs.is_top()) {
         return boost::none;
@@ -815,7 +815,7 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
   always_assert(!const_insns.empty());
   // 1. Let's see if we can get something out of the constant-uses analysis.
   constant_uses::TypeDemand type_demand{constant_uses::TypeDemand::None};
-  for (auto insn : UnorderedIterable(const_insns)) {
+  for (const auto* insn : UnorderedIterable(const_insns)) {
     type_demand = (constant_uses::TypeDemand)(
         type_demand & m_constant_uses->get_constant_type_demand(
                           const_cast<IRInstruction*>(insn)));
@@ -823,15 +823,15 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
       return nullptr;
     }
   }
-  if (type_demand & constant_uses::TypeDemand::Object) {
+  if ((type_demand & constant_uses::TypeDemand::Object) != 0) {
     always_assert(unordered_none_of(const_insns, [](const IRInstruction* insn) {
       return insn->get_literal() != 0;
     }));
-  } else if (type_demand & constant_uses::TypeDemand::Long) {
+  } else if ((type_demand & constant_uses::TypeDemand::Long) != 0) {
     return type::_long();
-  } else if (type_demand & constant_uses::TypeDemand::Float) {
+  } else if ((type_demand & constant_uses::TypeDemand::Float) != 0) {
     return type::_float();
-  } else if (type_demand & constant_uses::TypeDemand::Double) {
+  } else if ((type_demand & constant_uses::TypeDemand::Double) != 0) {
     return type::_double();
   } else {
     always_assert(type_demand == constant_uses::TypeDemand::Int);
@@ -854,10 +854,10 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
   // 2. Let's go over all constant-uses, and use our own judgement.
   UnorderedSet<const DexType*> type_demands;
   bool not_object{false};
-  for (auto insn : UnorderedIterable(const_insns)) {
-    for (auto& p :
+  for (const auto* insn : UnorderedIterable(const_insns)) {
+    for (const auto& p :
          m_constant_uses->get_constant_uses(const_cast<IRInstruction*>(insn))) {
-      if (ca && ca->contains(p.first)) {
+      if ((ca != nullptr) && ca->contains(p.first)) {
         continue;
       }
       switch (p.first->opcode()) {
@@ -906,9 +906,9 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
     return (*unordered_any(const_insns))->dest_is_wide() ? type::_long()
                                                          : type::_int();
   }
-  auto narrowed_type_demand = narrow_type_demands(type_demands);
-  if (narrowed_type_demand && type::is_object(narrowed_type_demand) &&
-      not_object) {
+  const auto* narrowed_type_demand = narrow_type_demands(type_demands);
+  if ((narrowed_type_demand != nullptr) &&
+      type::is_object(narrowed_type_demand) && not_object) {
     return nullptr;
   }
   return narrowed_type_demand;
@@ -917,7 +917,7 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
 static const DexType* compute_joined_type(
     const UnorderedSet<const DexType*>& types) {
   boost::optional<dtv_impl::DexTypeValue> joined_type_value;
-  for (auto t : UnorderedIterable(types)) {
+  for (const auto* t : UnorderedIterable(types)) {
     if (!type::is_object(t)) {
       return nullptr;
     }
@@ -945,7 +945,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
     types.insert(optional_extra_type);
   }
   UnorderedSet<const IRInstruction*> const_insns;
-  for (auto def : UnorderedIterable(defs)) {
+  for (const auto* def : UnorderedIterable(defs)) {
     always_assert(!opcode::is_a_move(def->opcode()) &&
                   !opcode::is_move_result_any(def->opcode()));
     UnorderedSet<const IRInstruction*> expanded_defs;
@@ -972,7 +972,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
         }
         for (auto src : def->srcs()) {
           auto inner_defs = m_reaching_defs_environments->at(def).get(src);
-          for (auto inner_def : inner_defs.elements()) {
+          for (auto* inner_def : inner_defs.elements()) {
             if (expand(inner_def)) {
               return true;
             }
@@ -992,7 +992,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
     if (expand(def)) {
       return type::_int();
     }
-    for (auto inner_def : UnorderedIterable(expanded_defs)) {
+    for (const auto* inner_def : UnorderedIterable(expanded_defs)) {
       const DexType* t = get_result_type_helper(inner_def);
       types.insert(t);
     }
@@ -1000,7 +1000,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
   // TODO: Figure out a most general way of doing this.
   // In practice, the following special cases seem to most of what matters.
 
-  if (types.count(nullptr)) {
+  if (types.count(nullptr) != 0u) {
     return nullptr;
   }
 
@@ -1010,22 +1010,24 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
   }
 
   // Stricter primitive types can be removed
-  if (types.count(type::_int())) {
+  if (types.count(type::_int()) != 0u) {
     types.erase(type::_boolean());
     types.erase(type::_byte());
     types.erase(type::_short());
     types.erase(type::_char());
   } else {
-    if (types.count(type::_short())) {
+    if (types.count(type::_short()) != 0u) {
       types.erase(type::_boolean());
       types.erase(type::_byte());
     }
-    if (types.count(type::_byte()) || types.count(type::_char())) {
+    if ((types.count(type::_byte()) != 0u) ||
+        (types.count(type::_char()) != 0u)) {
       types.erase(type::_boolean());
     }
     // Widen primitive types
-    if (types.count(type::_char()) &&
-        (types.count(type::_byte()) || types.count(type::_short()))) {
+    if ((types.count(type::_char()) != 0u) &&
+        ((types.count(type::_byte()) != 0u) ||
+         (types.count(type::_short()) != 0u))) {
       types.erase(type::_byte());
       types.erase(type::_short());
       types.erase(type::_char());
@@ -1052,7 +1054,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
 
   // Give up when we have an incompatible constant.
   // TODO: Do some careful widening.
-  auto defs_type = *unordered_any(types);
+  const auto* defs_type = *unordered_any(types);
   if ((defs_type == type::_short() && any_outside<int16_t>(const_insns)) ||
       (defs_type == type::_byte() && any_outside<int8_t>(const_insns)) ||
       (defs_type == type::_char() && any_outside<uint16_t>(const_insns)) ||

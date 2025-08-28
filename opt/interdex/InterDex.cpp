@@ -81,10 +81,10 @@ UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
           return coldstart_classes.count(meth->get_class()) > 0;
         },
         [&](DexMethod* meth, const IRCode& /*code*/) {
-          auto base_cls = meth->get_class();
+          auto* base_cls = meth->get_class();
           always_assert(meth->get_code()->cfg_built());
           for (auto& mie : cfg::InstructionIterable(meth->get_code()->cfg())) {
-            auto inst = mie.insn;
+            auto* inst = mie.insn;
             DexType* called_cls = nullptr;
             if (inst->has_method()) {
               called_cls = inst->get_method()->get_class();
@@ -110,7 +110,7 @@ UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
     // Get all classes in the reference set, even if they are not referenced by
     // opcodes directly.
     for (const auto& cls : input_scope) {
-      if (cold_cold_references.count(cls->get_type())) {
+      if (cold_cold_references.count(cls->get_type()) != 0u) {
         const auto& refs = class_references_cache.get(cls);
         for (const auto& type : refs.types) {
           cold_cold_references.insert(type);
@@ -119,7 +119,7 @@ UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
     }
 
     Scope output_scope;
-    for (auto& cls : UnorderedIterable(coldstart_classes)) {
+    for (const auto& cls : UnorderedIterable(coldstart_classes)) {
       if (can_rename(type_class(cls)) && cold_cold_references.count(cls) == 0) {
         new_no_ref++;
         unreferenced_classes.insert(type_class(cls));
@@ -194,7 +194,7 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
   uint32_t priority = 0;
   for (const auto& class_name : coldstart_class_names) {
     if (DexType* type = DexType::get_type(class_name)) {
-      if (auto cls = type_class(type)) {
+      if (auto* cls = type_class(type)) {
         class_to_priority[cls] = priority++;
         cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
       }
@@ -225,7 +225,7 @@ void exclude_extra_dynamically_dead_class(
   for (auto const& cls : candidates) {
     DexType* super_type;
     super_type = cls->get_super_class();
-    while (super_type) {
+    while (super_type != nullptr) {
       DexClass* super_cls = type_class(super_type);
       if (super_cls->is_dynamically_dead()) {
         super_cls->set_dynamically_dead(false);
@@ -268,7 +268,7 @@ void InterDex::get_movable_coldstart_classes(
 
   for (auto* type : interdex_types) {
     DexClass* cls = type_class(type);
-    if (!cls) {
+    if (cls == nullptr) {
       auto index_it = interactions.end();
       auto cls_name = type->get_name()->str();
       if (is_interaction_id_start_marker(cls_name)) {
@@ -434,7 +434,7 @@ InterDex::EmitResult InterDex::emit_class(
     auto fodr = flush_out_dex(emitting_state, dex_info, *canary_cls);
     *canary_cls = get_canary_cls(emitting_state, dex_info);
 
-    if (opt_fodr) {
+    if (opt_fodr != nullptr) {
       *opt_fodr = fodr;
       return {false, true};
     }
@@ -466,7 +466,7 @@ void InterDex::emit_primary_dex(
   // they appear there).
   for (DexType* type : interdex_order) {
     DexClass* cls = type_class(type);
-    if (!cls) {
+    if (cls == nullptr) {
       continue;
     }
 
@@ -527,7 +527,7 @@ void InterDex::emit_interdex_classes(
     // interdex classes appropriately.
     for (auto* type : interdex_types) {
       DexClass* cls = type_class(type);
-      if (cls && !unreferenced_classes.count(cls)) {
+      if ((cls != nullptr) && (unreferenced_classes.count(cls) == 0u)) {
         cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
         m_interdex_order.emplace(cls, m_interdex_order.size());
       }
@@ -552,7 +552,7 @@ void InterDex::emit_interdex_classes(
   for (auto it = interdex_types.begin(); it != interdex_types.end(); ++it) {
     DexType* type = *it;
     DexClass* cls = type_class(type);
-    if (!cls) {
+    if (cls == nullptr) {
       TRACE(IDEX, 5, "[interdex classes]: No such entry %s.", SHOW(type));
       if (boost::algorithm::starts_with(type->get_name()->str(),
                                         SCROLL_SET_START_FORMAT)) {
@@ -626,7 +626,7 @@ void InterDex::emit_interdex_classes(
         }
       }
     } else {
-      if (unreferenced_classes.count(cls)) {
+      if (unreferenced_classes.count(cls) != 0u) {
         TRACE(IDEX, 3, "%s no longer linked to coldstart set.", SHOW(cls));
         cls_skipped_in_secondary++;
         continue;
@@ -638,7 +638,8 @@ void InterDex::emit_interdex_classes(
       }
       dex_info.betamap_ordered = true;
 
-      if (m_move_coldstart_classes && move_coldstart_classes.count(cls)) {
+      if (m_move_coldstart_classes &&
+          (move_coldstart_classes.count(cls) != 0u)) {
         auto interaction = move_coldstart_classes.at(cls);
         if (!boost::starts_with(curr_interaction,
                                 INTERACTION_ID_FORMAT + interaction)) {
@@ -668,7 +669,7 @@ void InterDex::emit_interdex_classes(
   for (DexType* type : interdex_types) {
     DexClass* cls = type_class(type);
 
-    if (cls && unreferenced_classes.count(cls)) {
+    if ((cls != nullptr) && (unreferenced_classes.count(cls) != 0u)) {
       auto res =
           emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
                      /* perf_sensitive */ false, canary_cls);
@@ -758,7 +759,7 @@ void InterDex::load_interdex_types() {
 
   for (const auto& entry : interdexorder) {
     DexType* type = DexType::get_type(entry);
-    if (!type) {
+    if (type == nullptr) {
       if (boost::algorithm::starts_with(entry, END_MARKER_FORMAT)) {
         type = DexType::make_type(entry);
         m_end_markers.emplace_back(type);
@@ -812,7 +813,7 @@ void InterDex::load_interdex_types() {
       }
     } else {
       DexClass* cls = type_class(type);
-      if (!cls || classes.count(cls) == 0) {
+      if ((cls == nullptr) || classes.count(cls) == 0) {
         continue;
       }
 
@@ -965,7 +966,7 @@ void InterDex::init_cross_dex_ref_minimizer() {
   // A few classes might have already been emitted to the current dex which we
   // are about to fill up. Make it so that the minimizer knows that all the refs
   // of those classes have already been emitted.
-  for (auto cls :
+  for (auto* cls :
        m_emitting_state.dexes_structure.get_current_dex().get_classes()) {
     m_cross_dex_ref_minimizer.sample(cls);
     m_cross_dex_ref_minimizer.insert(cls);
@@ -1051,7 +1052,7 @@ void InterDex::emit_remaining_classes_legacy(DexInfo& dex_info,
     DexClass* cls{nullptr};
     if (pick_worst) {
       // Figure out which class has the most unapplied references
-      auto worst = m_cross_dex_ref_minimizer.worst();
+      auto* worst = m_cross_dex_ref_minimizer.worst();
       // Use that worst class if it has more unapplied refs than already applied
       // refs
       if (m_cross_dex_ref_minimizer.get_unapplied_refs(worst) >
@@ -1059,7 +1060,7 @@ void InterDex::emit_remaining_classes_legacy(DexInfo& dex_info,
         cls = worst;
       }
     }
-    if (!cls) {
+    if (cls == nullptr) {
       // Default case
       cls = m_cross_dex_ref_minimizer.front();
     }
@@ -1105,7 +1106,7 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
     double fill_current_dex(const InterDex* inter_dex, DexClass* seed_cls) {
       while (!cross_dex_ref_minimizer.empty()) {
         DexClass* cls;
-        if (seed_cls) {
+        if (seed_cls != nullptr) {
           cls = seed_cls;
           seed_cls = nullptr;
         } else {
@@ -1162,7 +1163,7 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
         0, worst_classes.size(),
         [this, &worst_classes, &last, &best, &best_remaining_difficulty,
          &best_index, &best_mutex](size_t index) {
-          auto seed_cls = worst_classes.at(index);
+          auto* seed_cls = worst_classes.at(index);
 
           auto alt = std::make_unique<Alternative>(*last);
           auto remaining_difficulty = alt->fill_current_dex(this, seed_cls);
@@ -1280,9 +1281,9 @@ void InterDex::run() {
   emit_interdex_classes(dex_info, m_interdex_types, unreferenced_classes,
                         &canary_cls);
 
-  auto json_classes = m_cross_dex_ref_minimizer.get_json_classes();
+  auto* json_classes = m_cross_dex_ref_minimizer.get_json_classes();
   Json::Value json_first_dex;
-  if (json_classes) {
+  if (json_classes != nullptr) {
     json_first_dex = m_cross_dex_ref_minimizer.get_json_class_indices(
         m_emitting_state.dexes_structure.get_current_dex().get_classes());
   }
@@ -1344,7 +1345,7 @@ void InterDex::run() {
     }
   }
 
-  if (json_classes) {
+  if (json_classes != nullptr) {
     Json::Value json_solution = Json::arrayValue;
     for (size_t dex_idx = remaining_classes_first_dex_idx;
          dex_idx < m_emitting_state.outdex.size();
@@ -1402,7 +1403,7 @@ void InterDex::run() {
 
 void InterDex::run_on_nonroot_store() {
   TRACE(IDEX, 2, "IDEX: Running on non-root store");
-  auto canary_cls = get_canary_cls(m_emitting_state, EMPTY_DEX_INFO);
+  auto* canary_cls = get_canary_cls(m_emitting_state, EMPTY_DEX_INFO);
   for (DexClass* cls : m_scope) {
     emit_class(m_emitting_state, EMPTY_DEX_INFO, cls,
                /* check_if_skip */ false,
@@ -1419,7 +1420,7 @@ void InterDex::run_on_nonroot_store() {
 }
 
 void InterDex::add_dexes_from_store(const DexStore& store) {
-  auto canary_cls = get_canary_cls(m_emitting_state, EMPTY_DEX_INFO);
+  auto* canary_cls = get_canary_cls(m_emitting_state, EMPTY_DEX_INFO);
   const auto& dexes = store.get_dexen();
   for (const DexClasses& classes : dexes) {
     for (DexClass* cls : classes) {
@@ -1488,7 +1489,7 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
   }
 
   // Add the Canary class, if any.
-  if (canary_cls) {
+  if (canary_cls != nullptr) {
     always_assert(emitting_state.dexes_structure.current_dex_has_tref(
         canary_cls->get_type()));
 
@@ -1538,7 +1539,7 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
   auto& classes = emitting_state.outdex.at(fodr.dex_count);
 
   for (auto& plugin : m_plugins) {
-    for (auto cls : plugin->additional_classes(fodr.dex_count, classes)) {
+    for (auto* cls : plugin->additional_classes(fodr.dex_count, classes)) {
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
             plugin->name().c_str(), SHOW(cls));
       classes.push_back(cls);

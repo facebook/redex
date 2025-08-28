@@ -82,7 +82,7 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
   for (auto reg : live_out_vars.elements()) {
     prepare_and_get_reg(regs, reg);
   }
-  auto ptr = block_value.get();
+  auto* ptr = block_value.get();
   m_block_values.emplace(block, std::move(block_value));
   return ptr;
 };

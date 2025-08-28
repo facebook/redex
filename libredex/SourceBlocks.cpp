@@ -64,7 +64,7 @@ static char get_edge_char(const Edge* e) {
 }
 
 bool is_ghost_block(Block* block) {
-  for (auto& edge : block->preds()) {
+  for (const auto& edge : block->preds()) {
     if (edge->type() == cfg::EDGE_GHOST) {
       return true;
     }
@@ -141,7 +141,7 @@ struct InsertHelper {
                             s_expr_input.what().c_str());
           bool root_expr_is_nil = root_expr.is_nil();
           std::vector<s_expr> expr_stack{s_expr({std::move(root_expr)})};
-          auto* error_val = error_val_opt ? &*error_val_opt : nullptr;
+          const auto* error_val = error_val_opt ? &*error_val_opt : nullptr;
           parser_state.emplace_back(std::move(expr_stack), root_expr_is_nil,
                                     /* default_val */ nullptr, error_val);
           break;
@@ -149,7 +149,7 @@ struct InsertHelper {
 
       case 2: {
         // A default Val.
-        auto* default_val = &std::get<2>(p);
+        const auto* default_val = &std::get<2>(p);
         parser_state.emplace_back(std::vector<s_expr>(),
                                   /* root_expr_is_nil */ true, default_val,
                                   /* error_val */ nullptr);
@@ -264,7 +264,7 @@ struct InsertHelper {
       return kFailVal;
     }
     if (p_state.root_expr_is_nil) {
-      if (p_state.default_val) {
+      if (p_state.default_val != nullptr) {
         return *p_state.default_val;
       }
       return kFailVal;
@@ -407,8 +407,8 @@ struct InsertHelper {
         TRACE(MMINL, 3, "For %s, expected profile of the form %s", SHOW(method),
               oss.str().c_str());
       }
-      auto val =
-          p_state.error_val ? *p_state.error_val : SourceBlock::Val::none();
+      auto val = p_state.error_val != nullptr ? *p_state.error_val
+                                              : SourceBlock::Val::none();
       for (auto* b : cfg.blocks()) {
         auto vec = gather_source_blocks(b);
         for (auto* sb : vec) {
@@ -497,7 +497,7 @@ struct CustomValueInsertHelper {
     ret.reserve(interaction_size);
 
     for (size_t i = 0; i < interaction_size; ++i) {
-      auto& value_to_insert =
+      const auto& value_to_insert =
           use_fuzzing ? fuzzing_values.at(i) : global_default_val;
       ret.emplace_back(value_to_insert);
     }
@@ -764,13 +764,13 @@ struct TopoTraversalHelper {
   // sets a random child to be HOT
   void set_succ_randomly_hot(Block* block) {
     auto& metadata = value_insert_helper->fuzzing_metadata_map;
-    auto& successors = block->succs();
+    const auto& successors = block->succs();
     size_t successor_size = successors.size();
     size_t next_hot_block_idx =
         generator->generate_random_number_in_range(0, successor_size - 1);
 
     for (size_t i = 0; i < successor_size; ++i) {
-      auto succ_block = successors.at(i)->target();
+      auto* succ_block = successors.at(i)->target();
 
       if (next_hot_block_idx == i) {
         metadata.at(succ_block).should_be_hot = true;
@@ -814,13 +814,14 @@ struct TopoTraversalHelper {
       }
     }
 
-    auto last_source_block_or_throw = get_last_source_block_if_after_throw(cur);
+    auto* last_source_block_or_throw =
+        get_last_source_block_if_after_throw(cur);
     // This is to check if there is a throw after a source block, if there is a
     // throw, last_source_block_or_throw is null, and therefore the successors
     // can be COLD. Otherwise, if there exists a source block at the end of this
     // block and it is hot, then the hot path must continue into at least one
     // successor
-    if (last_source_block_or_throw &&
+    if ((last_source_block_or_throw != nullptr) &&
         has_source_block_positive_val(last_source_block_or_throw)) {
       set_succ_randomly_hot(cur);
     }
@@ -859,20 +860,20 @@ static std::string get_serialized_idom_map(ControlFlowGraph* cfg) {
 
   for (cfg::Block* block : cfg->blocks()) {
     if (block == cfg->exit_block() &&
-        cfg->get_pred_edge_of_type(block, EDGE_GHOST)) {
+        (cfg->get_pred_edge_of_type(block, EDGE_GHOST) != nullptr)) {
       continue;
     }
 
-    auto first_sb_in_block = source_blocks::get_first_source_block(block);
-    if (!first_sb_in_block) {
+    auto* first_sb_in_block = source_blocks::get_first_source_block(block);
+    if (first_sb_in_block == nullptr) {
       continue;
     }
 
-    auto curr_idom = doms.get_idom(block);
-    if (curr_idom && curr_idom != block) {
+    auto* curr_idom = doms.get_idom(block);
+    if ((curr_idom != nullptr) && curr_idom != block) {
       if (curr_idom != cfg->exit_block() ||
-          !cfg->get_pred_edge_of_type(curr_idom, EDGE_GHOST)) {
-        auto sb_in_idom = source_blocks::get_last_source_block(curr_idom);
+          (cfg->get_pred_edge_of_type(curr_idom, EDGE_GHOST) == nullptr)) {
+        auto* sb_in_idom = source_blocks::get_last_source_block(curr_idom);
         always_assert(sb_in_idom);
         write_idom_map_elem(first_sb_in_block->id, sb_in_idom->id);
       }
@@ -1324,7 +1325,7 @@ void fix_idom_violation(
           SourceBlock::Val(1, sb->get_appear100(vals_index).value_or(1)));
     }
   });
-  auto idom = dom.get_idom(cur);
+  auto* idom = dom.get_idom(cur);
   if (first_source_block_changed && idom != cur) {
     fix_idom_violation(idom, vals_index, dom);
   }
@@ -1335,8 +1336,8 @@ void fix_idom_violations(ControlFlowGraph* cfg) {
   impl::visit_in_order(
       cfg,
       [&](Block* cur) {
-        auto first_sb = source_blocks::get_first_source_block(cur);
-        auto idom = dom.get_idom(cur);
+        auto* first_sb = source_blocks::get_first_source_block(cur);
+        auto* idom = dom.get_idom(cur);
         if (idom != cur) {
           uint32_t vals_size = first_sb->vals_size;
           for (uint32_t i = 0; i < vals_size; i++) {
@@ -1432,11 +1433,12 @@ size_t count_block_has_sbs(
 }
 size_t count_block_has_incomplete_sbs(
     Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  auto sb = get_first_source_block(b);
+  auto* sb = get_first_source_block(b);
   if (sb == nullptr) {
     return 0;
   }
-  return sb->foreach_val_early([&](const auto& val) { return !val; });
+  return static_cast<size_t>(
+      sb->foreach_val_early([&](const auto& val) { return !val; }));
 }
 size_t count_all_sbs(
     Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
@@ -1456,8 +1458,8 @@ size_t hot_immediate_dom_not_hot(
     return 0;
   }
 
-  auto immediate_dominator = dominators.get_idom(block);
-  if (!immediate_dominator) {
+  auto* immediate_dominator = dominators.get_idom(block);
+  if (immediate_dominator == nullptr) {
     return 0;
   }
   auto* first_sb_immediate_dominator =
@@ -1480,7 +1482,7 @@ size_t hot_no_hot_pred(
     return 0;
   }
 
-  for (auto predecessor : block->preds()) {
+  for (auto* predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
     if (has_source_block_positive_val(first_sb_pred)) {
@@ -1494,13 +1496,13 @@ size_t hot_all_children_cold(Block* block) {
   auto* last_sb_before_throw =
       source_blocks::get_last_source_block_if_after_throw(block);
 
-  if (!last_sb_before_throw ||
+  if ((last_sb_before_throw == nullptr) ||
       !has_source_block_positive_val(last_sb_before_throw)) {
     return 0;
   }
 
   bool has_successor = false;
-  for (auto successor : block->succs()) {
+  for (auto* successor : block->succs()) {
     auto* first_sb_succ =
         source_blocks::get_first_source_block(successor->src());
     has_successor = true;
@@ -1522,7 +1524,7 @@ size_t hot_callee_all_cold_callers(call_graph::NodeId node,
     return 0;
   }
 
-  auto callee_method = const_cast<DexMethod*>(node->method());
+  auto* callee_method = const_cast<DexMethod*>(node->method());
   if (callee_method == nullptr || callee_method->get_code() == nullptr) {
     return 0;
   }
@@ -1530,14 +1532,14 @@ size_t hot_callee_all_cold_callers(call_graph::NodeId node,
   ScopedCFG callee_cfg(callee_method->get_code());
 
   // Cold Callees do not count
-  auto callee_entry_block = get_first_source_block(callee_cfg->entry_block());
-  if (!callee_entry_block || callee_entry_block->vals_size == 0 ||
+  auto* callee_entry_block = get_first_source_block(callee_cfg->entry_block());
+  if ((callee_entry_block == nullptr) || callee_entry_block->vals_size == 0 ||
       callee_entry_block->get_val(0).value_or(0) == 0) {
     return 0;
   }
 
-  for (auto caller_edge : node->callers()) {
-    auto caller = caller_edge->caller();
+  for (const auto* caller_edge : node->callers()) {
+    const auto* caller = caller_edge->caller();
     // If a node is connected to the ghost entry node, we should not count it
     // as a violation because we can treat a ghost node's transition to its
     // successors as hot
@@ -1545,12 +1547,12 @@ size_t hot_callee_all_cold_callers(call_graph::NodeId node,
       return 0;
     }
 
-    auto caller_method = const_cast<DexMethod*>(caller->method());
+    auto* caller_method = const_cast<DexMethod*>(caller->method());
     if (caller_method == nullptr || caller_method->get_code() == nullptr) {
       continue;
     }
 
-    auto invoke_insn = caller_edge->invoke_insn();
+    auto* invoke_insn = caller_edge->invoke_insn();
     // TODO(T229471397): With multiple-callee graphs, there might be more
     // accurate way to check which specific method is calling the callee
     // (method override check)
@@ -1629,7 +1631,7 @@ size_t hot_all_children_cold_violations_tmpl(Block* block, const Fn& fn) {
       has_source_block_positive_val(last_sb_before_throw)) {
     bool has_successor = false;
     bool has_cold_child = true;
-    for (auto successor : block->succs()) {
+    for (auto* successor : block->succs()) {
       auto* first_sb_succ =
           source_blocks::get_first_source_block(successor->src());
       has_successor = true;
@@ -1909,8 +1911,8 @@ void track_source_block_coverage(ScopedMetrics& sm,
   auto stats = walk::parallel::methods<SourceBlocksStats>(
       build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
         SourceBlocksStats ret;
-        auto code = m->get_code();
-        if (!code) {
+        auto* code = m->get_code();
+        if (code == nullptr) {
           return ret;
         }
         code->build_cfg();
@@ -1918,7 +1920,7 @@ void track_source_block_coverage(ScopedMetrics& sm,
         auto dominators =
             dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
 
-        for (auto block : cfg.blocks()) {
+        for (auto* block : cfg.blocks()) {
           for (size_t i = 0; i != gCounters.size(); ++i) {
             ret.global[i].count += (*gCounters[i].second)(block, dominators);
           }
@@ -1986,20 +1988,20 @@ size_t compute_method_violations(const call_graph::Graph& call_graph,
     cfg->remove_unreachable_blocks();
 
     IRInstruction* current_invoke_insn = nullptr;
-    for (auto block : cfg->blocks()) {
+    for (auto* block : cfg->blocks()) {
       for (auto it = block->rbegin(); it != block->rend(); ++it) {
         if (it->type == MFLOW_OPCODE) {
-          auto instruction = it->insn;
+          auto* instruction = it->insn;
           if (opcode::is_an_invoke(instruction->opcode())) {
             current_invoke_insn = instruction;
           }
         } else if (it->type == MFLOW_SOURCE_BLOCK) {
-          if (current_invoke_insn) {
+          if (current_invoke_insn != nullptr) {
             SourceBlock* sb = it->src_block.get();
-            if (sb && sb->vals_size == 0) {
+            if ((sb != nullptr) && sb->vals_size == 0) {
               continue;
             }
-            bool is_hot = sb && sb->get_val(0).value_or(0) > 0;
+            bool is_hot = (sb != nullptr) && sb->get_val(0).value_or(0) > 0;
             src_block_invoke_map.update(
                 current_method, [&](const DexMethod*, auto& method_map, bool) {
                   method_map[current_invoke_insn].push_back(is_hot);
@@ -2424,12 +2426,12 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
     std::stringstream ss;
     ss << "=== Violations ===\n";
-    for (auto block : cfg->blocks()) {
+    for (auto* block : cfg->blocks()) {
       auto source_block_vector = gather_source_blocks(block);
       bool block_has_violations = false;
       std::stringstream block_ss;
       block_ss << "B" << std::to_string(block->id()) << ":\n";
-      for (auto source_block : source_block_vector) {
+      for (auto* source_block : source_block_vector) {
         block_ss << " Source Block[" << source_block
                  << "]: " << source_block->src->c_str() << "@"
                  << source_block->id << ":\n";
@@ -2438,10 +2440,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
              v = static_cast<Violation>(static_cast<int>(v) + 1)) {
           if (v != Violation::kUncoveredSourceBlocks) {
             block_ss << "  " << get_violation_name(v) << ": ";
-            if (violation_blocks.count(source_block)) {
+            if (violation_blocks.count(source_block) != 0u) {
               block_has_violations = true;
               auto& violation_map = violation_blocks.at(source_block);
-              if (violation_map.count(v)) {
+              if (violation_map.count(v) != 0u) {
                 for (const auto& str : violation_map[v]) {
                   block_ss << str << ", ";
                 }
@@ -2456,10 +2458,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
       }
     }
     // Add uncovered source blocks into the string
-    if (violation_blocks.count(nullptr)) {
+    if (violation_blocks.count(nullptr) != 0u) {
       auto& violation_map = violation_blocks.at(nullptr);
       Violation uncovered = Violation::kUncoveredSourceBlocks;
-      if (violation_map.count(uncovered)) {
+      if (violation_map.count(uncovered) != 0u) {
         ss << "  " << get_violation_name(uncovered) << ": ";
         for (const auto& str : violation_map[uncovered]) {
           ss << str << ", ";
@@ -2498,8 +2500,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
             return;
           }
 
-          auto immediate_dominator = dom.get_idom(cur);
-          if (!immediate_dominator) {
+          auto* immediate_dominator = dom.get_idom(cur);
+          if (immediate_dominator == nullptr) {
             os << " NO DOMINATOR\n";
             return;
           }
@@ -2512,7 +2514,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
           auto* first_sb_immediate_dominator =
               source_blocks::get_first_source_block(immediate_dominator);
-          if (!first_sb_immediate_dominator) {
+          if (first_sb_immediate_dominator == nullptr) {
             os << " NO DOMINATOR SOURCE BLOCK B" << immediate_dominator->id()
                << "\n";
             return;
@@ -2531,7 +2533,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
                 "B" + std::to_string(immediate_dominator->id()));
           }
           os << " !!! B" << immediate_dominator->id() << ": ";
-          auto sb = first_sb_immediate_dominator;
+          auto* sb = first_sb_immediate_dominator;
           os << " \"" << show(sb->src) << "\"@" << sb->id;
           sb->foreach_val([&](const auto& val) {
             os << " ";
@@ -2776,7 +2778,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           }
 
           std::vector<std::string> cold_preds;
-          for (auto predecessor : cur->preds()) {
+          for (auto* predecessor : cur->preds()) {
             auto* first_sb_pred =
                 source_blocks::get_first_source_block(predecessor->src());
             if (source_blocks::has_source_block_positive_val(first_sb_pred)) {
@@ -2836,7 +2838,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
             return;
           }
 
-          if (!last_sb_before_throw ||
+          if ((last_sb_before_throw == nullptr) ||
               !has_source_block_positive_val(last_sb_before_throw)) {
             return;
           }
@@ -2845,7 +2847,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
           bool has_successor = false;
           std::vector<std::string> cold_succs;
-          for (auto successor : cur->succs()) {
+          for (auto* successor : cur->succs()) {
             auto* first_sb_succ =
                 source_blocks::get_first_source_block(successor->src());
             has_successor = true;
@@ -2918,11 +2920,11 @@ ViolationsHelper& ViolationsHelper::operator=(ViolationsHelper&& rhs) noexcept {
 }
 
 SourceBlock* get_first_source_block_of_method(const DexMethod* m) {
-  auto code = m->get_code();
+  const auto* code = m->get_code();
   if (code->cfg_built()) {
     return get_first_source_block(code->cfg().entry_block());
   } else {
-    for (auto& mie : *code) {
+    for (const auto& mie : *code) {
       if (mie.type == MFLOW_SOURCE_BLOCK) {
         return mie.src_block.get();
       }
@@ -2933,7 +2935,7 @@ SourceBlock* get_first_source_block_of_method(const DexMethod* m) {
 
 SourceBlock* get_any_first_source_block_of_methods(
     const std::vector<const DexMethod*>& methods) {
-  for (auto* m : methods) {
+  for (const auto* m : methods) {
     auto* sb = get_first_source_block_of_method(m);
     if (sb != nullptr) {
       return sb;
@@ -2974,7 +2976,7 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
   std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
   new_sb->next.reset();
   new_sb->id = SourceBlock::kSyntheticId;
-  if (ref) {
+  if (ref != nullptr) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
   new_sb->fill(val);
@@ -2988,7 +2990,7 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
   std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
   new_sb->next.reset();
   new_sb->id = SourceBlock::kSyntheticId;
-  if (ref) {
+  if (ref != nullptr) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
   if (opt_val) {
@@ -3004,11 +3006,11 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
   std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
   new_sb->next.reset();
   new_sb->id = SourceBlock::kSyntheticId;
-  if (ref) {
+  if (ref != nullptr) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
   new_sb->fill(SourceBlock::Val::none());
-  for (auto& other : many) {
+  for (const auto& other : many) {
     new_sb->max(*other);
   }
   return new_sb;

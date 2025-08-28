@@ -618,7 +618,7 @@ std::string convert_utf8_to_mutf8(std::u8string_view input) {
 void resources_inlining_find_refs(
     const UnorderedMap<uint32_t, uint32_t>& past_refs,
     UnorderedMap<uint32_t, resources::InlinableValue>* inlinable_resources) {
-  for (auto& ref : UnorderedIterable(past_refs)) {
+  for (const auto& ref : UnorderedIterable(past_refs)) {
     uint32_t id = ref.first;
     uint32_t ref_id = ref.second;
     uint32_t current_ref_id = ref_id;
@@ -728,7 +728,7 @@ std::string StyleInfo::print_as_dot(
     bool first{true};
     auto search = node_options.find(id);
     if (search != node_options.end()) {
-      auto& dot_options = search->second;
+      const auto& dot_options = search->second;
       for (auto& k : unordered_to_ordered_keys(dot_options)) {
         if (k == "label") {
           emitted_label = true;

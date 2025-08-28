@@ -151,8 +151,8 @@ static void insert_type_check_with_throw(cfg::ControlFlowGraph& cfg,
 // production settings. So the rules are more relaxed.
 bool can_access(const DexType* from, const DexType* to) {
   always_assert(from && to);
-  auto to_cls = type_class(to);
-  if (!to_cls || is_public(to_cls) || from == to) {
+  auto* to_cls = type_class(to);
+  if ((to_cls == nullptr) || is_public(to_cls) || from == to) {
     return true;
   }
   if (is_private(to_cls)) {
@@ -301,7 +301,7 @@ bool RuntimeAssertTransform::insert_return_value_assert(
     if (callee == nullptr) {
       return false;
     }
-    auto ret_type = callee->get_proto()->get_rtype();
+    auto* ret_type = callee->get_proto()->get_rtype();
     if (!type::is_object(ret_type)) {
       return false;
     }

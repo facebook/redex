@@ -19,7 +19,7 @@
 namespace {
 
 bool is_type_defined(const DexType* type) {
-  auto type_ref = type::get_element_type_if_array(type);
+  const auto* type_ref = type::get_element_type_if_array(type);
   if (!type::is_object(type_ref)) {
     return true;
   }
@@ -35,7 +35,7 @@ bool is_type_defined(const DexType* type) {
  */
 bool is_array_clone(const DexMethodRef* mref) {
   auto* type = mref->get_class();
-  if (!type || !type::is_array(type) ||
+  if ((type == nullptr) || !type::is_array(type) ||
       type::is_primitive(type::get_array_element_type(type))) {
     return false;
   }
@@ -53,7 +53,7 @@ bool is_resolvable(const DexMethodRef* mref) {
   }
   std::vector<DexType*> type_refs;
   mref->gather_types_shallow(type_refs);
-  for (auto type : type_refs) {
+  for (auto* type : type_refs) {
     if (!is_type_defined(type)) {
       return false;
     }
@@ -64,7 +64,7 @@ bool is_resolvable(const DexMethodRef* mref) {
 bool is_resolvable(const DexFieldRef* fref) {
   std::vector<DexType*> type_refs;
   fref->gather_types_shallow(type_refs);
-  for (auto type : type_refs) {
+  for (auto* type : type_refs) {
     if (!is_type_defined(type)) {
       return false;
     }
@@ -110,7 +110,7 @@ void NoResolvablePureRefsChecker::run_checker(DexStoresVector& stores,
               SHOW(mdef));
         return;
       }
-      if (!mdef) {
+      if (mdef == nullptr) {
         // The existing Resolver logic cannot find the method definition. Other
         // passes probably cannot do anything with the pure ref. Therefore, it's
         // harmless.
@@ -149,7 +149,7 @@ void NoResolvablePureRefsChecker::run_checker(DexStoresVector& stores,
               SHOW(fdef));
         return;
       }
-      if (!fdef) {
+      if (fdef == nullptr) {
         // The existing Resolver logic cannot find the field definition. Other
         // passes probably cannot do anything with the pure ref. Therefore, it's
         // harmless.

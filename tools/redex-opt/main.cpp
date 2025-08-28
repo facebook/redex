@@ -73,18 +73,18 @@ Arguments parse_args(int argc, char* argv[]) {
   po::store(po::parse_command_line(argc, argv, desc), vm);
   po::notify(vm);
 
-  if (vm.count("help")) {
+  if (vm.count("help") != 0u) {
     desc.print(std::cout);
     exit(EXIT_SUCCESS);
   }
 
   Arguments args;
 
-  if (vm.count("input-ir")) {
+  if (vm.count("input-ir") != 0u) {
     args.input_ir_dir = vm["input-ir"].as<std::string>();
   }
 
-  if (vm.count("output-ir")) {
+  if (vm.count("output-ir") != 0u) {
     args.output_ir_dir = vm["output-ir"].as<std::string>();
   }
   if (args.output_ir_dir.empty()) {
@@ -98,18 +98,18 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  if (vm.count("pass-name")) {
+  if (vm.count("pass-name") != 0u) {
     args.pass_names = vm["pass-name"].as<std::vector<std::string>>();
   }
 
-  if (vm.count("config")) {
+  if (vm.count("config") != 0u) {
     args.config_file = vm["config"].as<std::string>();
   }
 
-  if (vm.count("-S")) {
+  if (vm.count("-S") != 0u) {
     args.s_args = vm["-S"].as<std::vector<std::string>>();
   }
-  if (vm.count("-J")) {
+  if (vm.count("-J") != 0u) {
     args.j_args = vm["-J"].as<std::vector<std::string>>();
   }
 
@@ -185,12 +185,12 @@ Json::Value process_entry_data(const Json::Value& entry_data,
   }
 
   // Include -S and -J params.
-  for (auto& key_value : args.s_args) {
+  for (const auto& key_value : args.s_args) {
     if (!add_value_to_config(config_data, key_value, false)) {
       std::cerr << "warning: cannot parse -S" << key_value << std::endl;
     }
   }
-  for (auto& key_value : args.j_args) {
+  for (const auto& key_value : args.j_args) {
     if (!add_value_to_config(config_data, key_value, true)) {
       std::cerr << "warning: cannot parse -S" << key_value << std::endl;
     }
@@ -216,7 +216,8 @@ int main(int argc, char* argv[]) {
   if (!stores.empty()) {
     auto first_dex_path = boost::filesystem::path(args.input_ir_dir) /
                           entry_data["dex_list"][0]["list"][0].asString();
-    auto location = DexLocation::make_location("dex", first_dex_path.string());
+    const auto* location =
+        DexLocation::make_location("dex", first_dex_path.string());
     stores[0].set_dex_magic(load_dex_magic_from_dex(location));
   }
 

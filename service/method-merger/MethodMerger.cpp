@@ -21,7 +21,7 @@ namespace {
 UnorderedSet<DexMethod*> methodgroups_to_methodset(
     const method_merger::MethodGroups& method_groups) {
   UnorderedSet<DexMethod*> method_set;
-  for (auto& methods : method_groups) {
+  for (const auto& methods : method_groups) {
     method_set.insert(methods.begin(), methods.end());
   }
   return method_set;
@@ -38,7 +38,7 @@ class RefCounter {
     }
   }
   bool too_less_callers(DexMethod* method) const {
-    if (!m_counter.count(method)) {
+    if (m_counter.count(method) == 0u) {
       return true;
     }
     return m_counter.at(method) < 2;
@@ -56,13 +56,13 @@ void create_one_dispatch(
   if (indices_to_callee.size() < min_size) {
     return;
   }
-  auto first_method = indices_to_callee.begin()->second;
-  auto method = dispatch::create_simple_dispatch(indices_to_callee);
+  auto* first_method = indices_to_callee.begin()->second;
+  auto* method = dispatch::create_simple_dispatch(indices_to_callee);
   always_assert_log(method != nullptr, "Dispatch null for %s\n",
                     SHOW(first_method));
-  auto cls = type_class(first_method->get_class());
+  auto* cls = type_class(first_method->get_class());
   cls->add_method(method);
-  for (auto& id_meth : indices_to_callee) {
+  for (const auto& id_meth : indices_to_callee) {
     uint32_t tag = *id_meth.first.begin();
     method_reference::NewCallee new_callee(method, tag);
     old_to_new->emplace(id_meth.second, std::move(new_callee));
@@ -91,7 +91,7 @@ void generate_dispatches(
   constexpr uint32_t min_method_group_size = 3;
   UnorderedMap<DexProto*, std::set<DexMethod*, dexmethods_comparator>>
       proto_to_methods;
-  for (auto method : methods) {
+  for (auto* method : methods) {
     // Use dispatch::may_be_dispatch(method) to heuristically exclude large
     // dispatches.
     if (!root(method) && can_rename(method) &&
@@ -108,7 +108,7 @@ void generate_dispatches(
     uint64_t code_size = 0;
     uint32_t id = 0;
     for (auto it = p.second.begin(); it != p.second.end(); ++it) {
-      auto cur_meth = *it;
+      auto* cur_meth = *it;
       code_size += cur_meth->get_code()->estimate_code_units();
       if (code_size > HARD_MAX_INSTRUCTION_SIZE) {
         create_one_dispatch(indices_to_callee, min_method_group_size,
@@ -140,15 +140,15 @@ Stats merge_methods(const MethodGroups& method_groups,
       method_reference::collect_call_refs(scope, all_methods);
   RefCounter ref_counter(callsites);
   UnorderedMap<DexMethod*, method_reference::NewCallee> old_to_new;
-  for (auto& methods : method_groups) {
+  for (const auto& methods : method_groups) {
     generate_dispatches(methods, ref_counter, &old_to_new, &stats);
   }
   if (old_to_new.empty()) {
     return stats;
   }
   for (auto& callsite : callsites) {
-    auto old_callee = callsite.callee;
-    if (!old_to_new.count(old_callee)) {
+    auto* old_callee = callsite.callee;
+    if (old_to_new.count(old_callee) == 0u) {
       continue;
     }
     auto& new_callee = old_to_new.at(old_callee);

@@ -33,14 +33,14 @@ bool Loop::contains(Loop* l) const {
   if (l == this) {
     return true;
   }
-  if (!l) {
+  if (l == nullptr) {
     return false;
   }
   return contains(l->get_parent_loop());
 }
 
 bool Loop::contains(cfg::Block* block) const {
-  return m_block_set.count(block);
+  return m_block_set.count(block) != 0u;
 }
 
 /**
@@ -49,7 +49,7 @@ bool Loop::contains(cfg::Block* block) const {
  */
 int Loop::get_loop_depth() const {
   int depth = 1;
-  for (auto current = m_parent_loop; current;
+  for (auto* current = m_parent_loop; current != nullptr;
        current = current->m_parent_loop) {
     ++depth;
   }
@@ -62,8 +62,8 @@ int Loop::get_loop_depth() const {
  */
 UnorderedSet<cfg::Block*> Loop::get_exit_blocks() const {
   UnorderedSet<cfg::Block*> result;
-  for (auto block : m_blocks) {
-    for (auto edge : block->succs()) {
+  for (auto* block : m_blocks) {
+    for (auto* edge : block->succs()) {
       if (!contains(edge->target())) {
         result.emplace(edge->target());
       }
@@ -81,7 +81,7 @@ std::vector<cfg::Block*> Loop::get_blocks() const { return m_blocks; }
  * Recursively updates the parent_loop fields for this loop and all subloops
  */
 void Loop::update_parent_loop_fields() {
-  for (auto sub : UnorderedIterable(m_subloops)) {
+  for (auto* sub : UnorderedIterable(m_subloops)) {
     sub->m_parent_loop = this;
     sub->update_parent_loop_fields();
   }
@@ -122,7 +122,7 @@ LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
     }
 
     // connect the preheader with the header
-    auto edge =
+    auto* edge =
         new cfg::Edge(loop_preheader, loop_header, cfg::EdgeType::EDGE_GOTO);
     cfg.add_edge(edge);
     return loop_preheader;
@@ -134,7 +134,7 @@ void LoopInfo::init(T& cfg, Fn preheader_fn) {
   sparta::WeakTopologicalOrdering<cfg::Block*> wto(
       cfg.entry_block(), [&](const cfg::Block* block) {
         std::vector<cfg::Block*> blocks;
-        for (auto edge : block->succs()) {
+        for (auto* edge : block->succs()) {
           blocks.emplace_back(edge->target());
         }
         return blocks;
@@ -159,7 +159,7 @@ void LoopInfo::init(T& cfg, Fn preheader_fn) {
     std::vector<cfg::Block*> blocks_in_loop;
     UnorderedSet<cfg::Block*> block_set;
     UnorderedSet<Loop*> subloops;
-    auto& wto_comp = it->get();
+    const auto& wto_comp = it->get();
 
     // construct blocks_in_loop, block_set, and subloops
     visit_depth_first<cfg::Block*>(wto_comp, [&](cfg::Block* block) {
@@ -184,7 +184,7 @@ void LoopInfo::init(T& cfg, Fn preheader_fn) {
     }
 
     always_assert(!blocks_in_loop.empty());
-    auto loop_header = blocks_in_loop.front();
+    auto* loop_header = blocks_in_loop.front();
     auto loop_preheader = preheader_fn(cfg, block_set, loop_header);
 
     // we are traversing level_order backwards, so we insert in front to make it
@@ -193,7 +193,7 @@ void LoopInfo::init(T& cfg, Fn preheader_fn) {
     auto& loop =
         m_loops.emplace_front(blocks_in_loop, subloops, loop_preheader);
 
-    for (auto block : blocks_in_loop) {
+    for (auto* block : blocks_in_loop) {
       m_block_location.emplace(block, &loop);
     }
 

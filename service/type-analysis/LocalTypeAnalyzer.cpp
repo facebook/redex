@@ -91,14 +91,14 @@ bool RegisterTypeAnalyzer::analyze_const_class(const IRInstruction*,
 bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
                                         DexTypeEnvironment* env) {
   auto array_type = env->get(insn->src(0)).get_dex_type();
-  if (!array_type || !*array_type) {
+  if (!array_type || (*array_type == nullptr)) {
     env->set(RESULT_REGISTER, DexTypeDomain::top());
     return true;
   }
 
   always_assert_log(type::is_array(*array_type), "Wrong array type %s in %s",
                     SHOW(*array_type), SHOW(insn));
-  const auto ctype = type::get_array_component_type(*array_type);
+  auto* const ctype = type::get_array_component_type(*array_type);
   env->set(RESULT_REGISTER, DexTypeDomain::create_nullable(ctype));
   return true;
 }
@@ -145,7 +145,7 @@ bool RegisterTypeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_invoke(const IRInstruction* insn,
                                           DexTypeEnvironment* env) {
-  auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr) {
     return analyze_default(insn, env);
   }
@@ -160,7 +160,7 @@ namespace {
 bool field_get_helper(const DexType* class_under_init,
                       const IRInstruction* insn,
                       DexTypeEnvironment* env) {
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
   }
@@ -174,7 +174,7 @@ bool field_get_helper(const DexType* class_under_init,
 bool field_put_helper(const DexType* class_under_init,
                       const IRInstruction* insn,
                       DexTypeEnvironment* env) {
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
   }
@@ -190,7 +190,7 @@ bool field_put_helper(const DexType* class_under_init,
 bool CtorFieldAnalyzer::analyze_default(const DexType* class_under_init,
                                         const IRInstruction* insn,
                                         DexTypeEnvironment* env) {
-  if (!class_under_init) {
+  if (class_under_init == nullptr) {
     return false;
   }
   if (insn->has_dest()) {
@@ -207,7 +207,8 @@ bool CtorFieldAnalyzer::analyze_default(const DexType* class_under_init,
 bool CtorFieldAnalyzer::analyze_load_param(const DexType* class_under_init,
                                            const IRInstruction* insn,
                                            DexTypeEnvironment* env) {
-  if (!class_under_init || insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+  if ((class_under_init == nullptr) ||
+      insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
     return false;
   }
   if (env->get_this_ptr_environment().is_top()) {
@@ -237,7 +238,7 @@ bool CtorFieldAnalyzer::analyze_iput(const DexType* class_under_init,
 bool CtorFieldAnalyzer::analyze_move(const DexType* class_under_init,
                                      const IRInstruction* insn,
                                      DexTypeEnvironment* env) {
-  if (!class_under_init) {
+  if (class_under_init == nullptr) {
     return false;
   }
   env->set_this_ptr(insn->dest(), env->get_this_ptr(insn->src(0)));
@@ -247,7 +248,7 @@ bool CtorFieldAnalyzer::analyze_move(const DexType* class_under_init,
 bool CtorFieldAnalyzer::analyze_move_result(const DexType* class_under_init,
                                             const IRInstruction* insn,
                                             DexTypeEnvironment* env) {
-  if (!class_under_init) {
+  if (class_under_init == nullptr) {
     return false;
   }
   env->set_this_ptr(insn->dest(), env->get_this_ptr(RESULT_REGISTER));

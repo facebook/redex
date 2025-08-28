@@ -415,9 +415,9 @@ TEST(ResStringPool, AppendStringInXmlLayout) {
             android::OK);
   EXPECT_EQ(new_idx, 19);
   EXPECT_FALSE(serialized.empty());
-  auto serialized_data = (char*)serialized.array();
+  auto* serialized_data = (char*)serialized.array();
   const auto chunk_size = sizeof(android::ResChunk_header);
-  auto pool_ptr =
+  auto* pool_ptr =
       (android::ResStringPool_header*)(serialized_data + chunk_size);
   android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
   auto new_str = arsc::get_string_from_pool(pool, new_idx);
@@ -452,8 +452,8 @@ TEST(ResStringPool, AppendStringsInXmlLayout) {
   EXPECT_EQ(string_to_idx.at("aaaaa"), 19);
   EXPECT_EQ(string_to_idx.at("bbbbb"), 20);
   EXPECT_FALSE(serialized.empty());
-  auto serialized_data = (char*)serialized.array();
-  auto pool_ptr =
+  auto* serialized_data = (char*)serialized.array();
+  auto* pool_ptr =
       (android::ResStringPool_header*)(serialized_data +
                                        sizeof(android::ResChunk_header));
   android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
@@ -515,8 +515,8 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
       EXPECT_LT(tag_count, 5);
       size_t len;
       android::String8 tag(parser.getElementName(&len));
-      auto actual_chars = tag.string();
-      auto expected_chars = expected_xml_tags[tag_count].c_str();
+      const auto* actual_chars = tag.string();
+      const auto* expected_chars = expected_xml_tags[tag_count].c_str();
       EXPECT_STREQ(actual_chars, expected_chars);
       tag_count++;
     }
@@ -620,7 +620,7 @@ TEST(ResStringPoolBuilder, TestPoolRebuild8) {
   arsc::ResStringPoolBuilder builder(flags);
   for (size_t i = 0; i < pool_size; i++) {
     size_t out_len;
-    auto s = pool.string8At(i, &out_len);
+    const auto* s = pool.string8At(i, &out_len);
     builder.add_string(s, out_len);
   }
   android::Vector<char> serialized;
@@ -638,7 +638,7 @@ TEST(ResStringPoolBuilder, TestPoolRebuild16) {
   arsc::ResStringPoolBuilder builder(flags);
   for (size_t i = 0; i < pool_size; i++) {
     size_t out_len;
-    auto s = pool.stringAt(i, &out_len);
+    const auto* s = pool.stringAt(i, &out_len);
     builder.add_string(s, out_len);
   }
   android::Vector<char> serialized;
@@ -657,7 +657,7 @@ TEST(ResStringPoolBuilder, TestPoolRebuild16OneChar) {
   arsc::ResStringPoolBuilder builder(flags);
   for (size_t i = 0; i < pool_size; i++) {
     size_t out_len;
-    auto s = pool.stringAt(i, &out_len);
+    const auto* s = pool.stringAt(i, &out_len);
     builder.add_string(s, out_len);
   }
   android::Vector<char> serialized;
@@ -697,10 +697,10 @@ TEST(ResStringPoolBuilder, TestPoolRebuildStyle8) {
   arsc::ResStringPoolBuilder builder(flags);
   for (size_t i = 0; i < pool_size; i++) {
     size_t out_len;
-    auto s = pool.string8At(i, &out_len);
+    const auto* s = pool.string8At(i, &out_len);
     if (i < style_count) {
       arsc::SpanVector vec;
-      auto span = (android::ResStringPool_span*)pool.styleAt(i);
+      auto* span = (android::ResStringPool_span*)pool.styleAt(i);
       arsc::collect_spans(span, &vec);
       builder.add_style(s, out_len, vec);
     } else {
@@ -724,10 +724,10 @@ TEST(ResStringPoolBuilder, TestPoolRebuildStyle8EmptyChar) {
   arsc::ResStringPoolBuilder builder(flags);
   for (size_t i = 0; i < pool_size; i++) {
     size_t out_len;
-    auto s = pool.string8At(i, &out_len);
+    const auto* s = pool.string8At(i, &out_len);
     if (i < style_count) {
       arsc::SpanVector vec;
-      auto span = (android::ResStringPool_span*)pool.styleAt(i);
+      auto* span = (android::ResStringPool_span*)pool.styleAt(i);
       arsc::collect_spans(span, &vec);
       builder.add_style(s, out_len, vec);
     } else {
@@ -983,7 +983,7 @@ UNUSED int32_t load_global_strings(const RedexMappedFile& arsc_file,
                                    android::ResStringPool* pool) {
   apk::TableParser parser;
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
-  auto pool_header = parser.m_global_pool_header;
+  auto* pool_header = parser.m_global_pool_header;
   return pool->setTo(pool_header, pool_header->header.size, true);
 }
 
@@ -992,7 +992,7 @@ int32_t load_key_strings(const RedexMappedFile& arsc_file,
   apk::TableParser parser;
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
   // Only 1 package in our test arsc file.
-  auto pool_header = parser.m_package_key_string_headers.begin()->second;
+  auto* pool_header = parser.m_package_key_string_headers.begin()->second;
   return pool->setTo(pool_header, pool_header->header.size, true);
 }
 
@@ -1001,7 +1001,7 @@ int32_t load_type_strings(const RedexMappedFile& arsc_file,
   apk::TableParser parser;
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
   // Only 1 package in our test arsc file.
-  auto pool_header = parser.m_package_type_string_headers.begin()->second;
+  auto* pool_header = parser.m_package_type_string_headers.begin()->second;
   return pool->setTo(pool_header, pool_header->header.size, true);
 }
 
@@ -1811,7 +1811,7 @@ class AttributeCounter : public arsc::SimpleXmlParser {
 TEST(FileManipulator, RebuildXmlFile) {
   auto path = get_env("xml_path");
   auto f = RedexMappedFile::open(path);
-  auto data = (char*)f.const_data();
+  auto* data = (char*)f.const_data();
 
   arsc::ResFileManipulator file_manipulator(data, f.size());
   ButtonFiddler fiddler(&file_manipulator);
@@ -1832,7 +1832,7 @@ TEST(FileManipulator, RebuildXmlFile) {
 TEST(FileManipulator, AppendAtEnd) {
   auto path = get_env("xml_path");
   auto f = RedexMappedFile::open(path);
-  auto data_ptr = (char*)f.const_data();
+  auto* data_ptr = (char*)f.const_data();
 
   arsc::ResFileManipulator file_manipulator(data_ptr, f.size());
   android::ResChunk_header new_data;
@@ -1937,7 +1937,7 @@ TEST(Xml, AttributeSorting) {
   style_attr.typedValue.data = 0x7f050005;
   block.write(style_attr);
 
-  auto extension_ptr = (android::ResXMLTree_attrExt*)block.buffer.get();
+  auto* extension_ptr = (android::ResXMLTree_attrExt*)block.buffer.get();
 
   // class attribute should come before style.
   {

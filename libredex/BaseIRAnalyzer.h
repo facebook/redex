@@ -65,7 +65,7 @@ class BaseEdgeAwareIRAnalyzer
     }
 
     auto env = exit_state_at_source;
-    auto insn = last_insn_it->insn;
+    auto* insn = last_insn_it->insn;
     auto op = insn->opcode();
     if (opcode::is_a_conditional_branch(op)) {
       analyze_if(insn, edge, &env);

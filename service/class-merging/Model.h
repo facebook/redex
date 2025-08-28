@@ -257,7 +257,7 @@ class Model {
   std::vector<const DexType*> get_roots() const {
     std::vector<const DexType*> res;
     res.reserve(m_roots.size());
-    for (const auto root_merger : m_roots) {
+    for (auto* const root_merger : m_roots) {
       res.push_back(root_merger->type);
     }
     return res;
@@ -265,7 +265,7 @@ class Model {
 
   template <class HierarchyWalkerFn = void(const MergerType&)>
   void walk_hierarchy(HierarchyWalkerFn walker) {
-    for (const auto root_merger : m_roots) {
+    for (auto* const root_merger : m_roots) {
       if (!root_merger->dummy) {
         walker(*root_merger);
       }

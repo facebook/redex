@@ -94,7 +94,7 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
     return true;
   }
   for (const auto& mie : InstructionIterable(b)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     auto op = insn->opcode();
     if (!(is_valid_load_for_nonleaf(op) || opcode::is_branch(op))) {
       // non-leaf nodes only have const and branch instructions
@@ -108,7 +108,7 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
     }
   }
 
-  auto last_insn = last->insn;
+  auto* last_insn = last->insn;
   auto last_op = last_insn->opcode();
   if (opcode::is_branch(last_op) && has_src(last_insn, reg)) {
     // The only non-leaf block is one that branches on the switching reg
@@ -133,8 +133,8 @@ bool pred_creates_extra_loads(const SwitchEquivFinder::ExtraLoads& extra_loads,
       insns.emplace(insn);
     }
   }
-  for (auto e : leaf->preds()) {
-    auto block = e->src();
+  for (auto* e : leaf->preds()) {
+    auto* block = e->src();
     for (auto it = block->begin(); it != block->end(); it++) {
       if (it->type == MFLOW_OPCODE && insns.count(it->insn) > 0) {
         return true;
@@ -145,7 +145,7 @@ bool pred_creates_extra_loads(const SwitchEquivFinder::ExtraLoads& extra_loads,
 }
 
 bool is_sled(cfg::Block* b) {
-  auto only = b->goes_to_only_edge();
+  auto* only = b->goes_to_only_edge();
   if (only == nullptr || only == b) {
     return false;
   }
@@ -223,7 +223,7 @@ SwitchEquivFinder::SwitchEquivFinder(
       m_def_use_blocks(std::move(def_use_blocks)) {
   {
     // make sure the input is well-formed
-    auto insn = m_root_branch->insn;
+    auto* insn = m_root_branch->insn;
     auto op = insn->opcode();
     always_assert(opcode::is_branch(op));
     always_assert(has_src(insn, m_switching_reg));
@@ -340,7 +340,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
           // comparisons, however, the leaf blocks may also use those registers,
           // so this function finds any loads that occur in non-leaf blocks that
           // lead to `leaf`.
-          auto insn = mie.insn;
+          auto* insn = mie.insn;
           auto op = insn->opcode();
           if (is_valid_load_for_nonleaf(op)) {
             if (next_loads == boost::none) {
@@ -422,7 +422,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
   for (auto& [blk, source_blocks] : UnorderedIterable(source_blocks_to_move)) {
     auto it_insert = source_blocks::find_first_block_insert_point(blk);
 
-    for (auto source_block : source_blocks) {
+    for (auto* source_block : source_blocks) {
       blk->insert_before(it_insert,
                          std::make_unique<SourceBlock>(*source_block));
     }
@@ -498,7 +498,7 @@ SwitchEquivFinder::DefUseBlocks SwitchEquivFinder::GetDefUseBlocks(
       continue;
     }
     for (const auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         auto src = insn->src(i);
         const auto& defs = defs_in.get(src);
@@ -654,7 +654,7 @@ size_t SwitchEquivEditor::copy_extra_loads_to_leaf_block(
     cfg::Block* leaf) {
   size_t changes = 0;
   auto push_front = [&](IRInstruction* insn) {
-    auto copy = new IRInstruction(*insn);
+    auto* copy = new IRInstruction(*insn);
     TRACE(SWITCH_EQUIV, 4, "adding %s to B%zu", SHOW(copy), leaf->id());
     changes++;
     leaf->push_front(copy);
@@ -698,14 +698,14 @@ size_t SwitchEquivEditor::simplify_moves(IRCode* code) {
 
   auto ii = InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (insn->opcode() == OPCODE_MOVE_OBJECT) {
       auto search = udchains.find((live_range::Use){insn, 0});
       if (search != udchains.end() && search->second.size() == 1) {
         auto* def = *search->second.begin();
         if (def->opcode() == OPCODE_CONST_CLASS) {
-          auto duplicated_const_class = new IRInstruction(*def);
-          auto move_pseudo =
+          auto* duplicated_const_class = new IRInstruction(*def);
+          auto* move_pseudo =
               new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
           move_pseudo->set_dest(insn->dest());
           mutation.replace(it, {duplicated_const_class, move_pseudo});
@@ -721,16 +721,16 @@ size_t SwitchEquivEditor::simplify_moves(IRCode* code) {
 size_t SwitchEquivEditor::normalize_sled_blocks(
     cfg::ControlFlowGraph* cfg, const uint32_t leaf_duplication_threshold) {
   size_t changes{0};
-  for (auto b : cfg->blocks()) {
+  for (auto* b : cfg->blocks()) {
     if (is_sled(b)) {
-      auto dest = b->goes_to_only_edge();
+      auto* dest = b->goes_to_only_edge();
       if (!is_sled(dest) && dest->num_opcodes() < leaf_duplication_threshold) {
         // Make a replacement for b, which is b's source blocks plus dest.
         TRACE(SWITCH_EQUIV, 2,
               "Removing sled block B%zu; duplicating instructions from B%zu",
               b->id(), dest->id());
-        auto replacement = cfg->duplicate_block(dest);
-        for (auto succ : dest->succs()) {
+        auto* replacement = cfg->duplicate_block(dest);
+        for (auto* succ : dest->succs()) {
           cfg->add_edge(replacement, succ->target(), succ->type());
         }
         // Put b's source blocks into b's replacement.

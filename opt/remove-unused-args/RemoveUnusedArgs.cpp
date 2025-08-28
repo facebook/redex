@@ -90,7 +90,7 @@ void RemoveArgs::gather_results_used() {
     auto& cfg = code.cfg();
     auto ii = InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
@@ -98,12 +98,12 @@ void RemoveArgs::gather_results_used() {
       if (move_result.is_end()) {
         continue;
       }
-      auto method =
+      auto* method =
           resolve_method(insn->get_method(), opcode_to_search(insn->opcode()));
       // The above should return any callee for a virtual callsite. Because we
       // only remove results for groups of related methods where every result
       // can be removed, the logic works for true virtuals.
-      if (!method) {
+      if (method == nullptr) {
         continue;
       }
       result_used.insert(method);
@@ -169,7 +169,7 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
       m_scope,
       [&override_graph, &record_fixed_proto,
        &defined_protos](DexMethod* caller) {
-        auto caller_proto = caller->get_proto();
+        auto* caller_proto = caller->get_proto();
         defined_protos.insert(caller_proto);
         if (!can_rename(caller) || is_native(caller) ||
             caller->rstate.no_optimizations() ||
@@ -184,7 +184,7 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
             // we assume the worst.
             record_fixed_proto(caller_proto, 0);
           } else {
-            auto& node = override_graph.get_node(caller);
+            const auto& node = override_graph.get_node(caller);
             if (any_external(node.parents)) {
               // We can't change the signature of an overriding method when the
               // overridden method is external
@@ -205,8 +205,8 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
         always_assert(code->cfg_built());
         for (const auto& mie : InstructionIterable(code->cfg())) {
           if (mie.insn->has_method()) {
-            auto callee = mie.insn->get_method();
-            auto callee_proto = callee->get_proto();
+            auto* callee = mie.insn->get_method();
+            auto* callee_proto = callee->get_proto();
             // We don't resolve here, but just check if the provided callee is
             // already resolved. If not, we are going to be conservative. (Note
             // that this matches what update_callsite does below.) We are also
@@ -228,16 +228,16 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
             compare_weighted_dexprotos);
   UnorderedMap<DexProto*, DexProto*> fixed_representatives;
   for (auto p : ordered_fixed_protos) {
-    auto proto = p.first;
-    auto normalized_proto = normalize_proto(proto);
+    auto* proto = p.first;
+    auto* normalized_proto = normalize_proto(proto);
     // First one (with most references) wins
     fixed_representatives.emplace(normalized_proto, proto);
   }
-  for (auto proto : UnorderedIterable(defined_protos)) {
-    if (fixed_protos.count(proto)) {
+  for (auto* proto : UnorderedIterable(defined_protos)) {
+    if (fixed_protos.count(proto) != 0u) {
       continue;
     }
-    auto reordered_proto = normalize_proto(proto);
+    auto* reordered_proto = normalize_proto(proto);
     auto it = fixed_representatives.find(reordered_proto);
     if (it != fixed_representatives.end()) {
       reordered_proto = it->second;
@@ -258,7 +258,7 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
 DexTypeList::ContainerType RemoveArgs::get_live_arg_type_list(
     const DexMethod* method, const std::deque<uint16_t>& live_arg_idxs) {
   DexTypeList::ContainerType live_args;
-  auto args_list = method->get_proto()->get_args();
+  auto* args_list = method->get_proto()->get_args();
 
   for (uint16_t arg_num : live_arg_idxs) {
     if (!is_static(method)) {
@@ -279,17 +279,18 @@ DexTypeList::ContainerType RemoveArgs::get_live_arg_type_list(
 bool RemoveArgs::update_method_signature(DexMethod* method,
                                          DexProto* updated_proto,
                                          bool is_reordered) {
-  auto colliding_mref = DexMethod::get_method(
+  auto* colliding_mref = DexMethod::get_method(
       method->get_class(), method->get_name(), updated_proto);
-  if (colliding_mref) {
-    auto colliding_method = colliding_mref->as_def();
-    if (colliding_method && method::is_constructor(colliding_method)) {
+  if (colliding_mref != nullptr) {
+    auto* colliding_method = colliding_mref->as_def();
+    if ((colliding_method != nullptr) &&
+        method::is_constructor(colliding_method)) {
       // We can't rename constructors, so we give up on removing args.
       return false;
     }
   }
 
-  auto name = method->get_name();
+  const auto* name = method->get_name();
   if (method->is_virtual()) {
 
     // When changing the proto, we need to worry about changes to virtual scopes
@@ -307,7 +308,7 @@ bool RemoveArgs::update_method_signature(DexMethod* method,
 
       // "rvp" stands for reordered virtual proto
       kind = "$rvp";
-      auto original_args = method->get_proto()->get_args();
+      auto* original_args = method->get_proto()->get_args();
       auto [it, emplaced] = named_rename_map.reordering_uniquifiers.emplace(
           original_args, named_rename_map.next_reordering_uniquifiers);
       if (emplaced) {
@@ -364,14 +365,14 @@ bool RemoveArgs::update_method_signature(DexMethod* method,
 
 std::deque<uint16_t> live_args(const DexMethod* method,
                                const std::set<uint16_t>& dead_args) {
-  auto proto = method->get_proto();
+  auto* proto = method->get_proto();
   auto num_args = proto->get_args()->size();
   if (!is_static(method)) {
     num_args++;
   }
   std::deque<uint16_t> live_args;
   for (uint16_t i = 0; i < num_args; i++) {
-    if (!dead_args.count(i)) {
+    if (dead_args.count(i) == 0u) {
       live_args.emplace_back(i);
     }
   }
@@ -379,8 +380,8 @@ std::deque<uint16_t> live_args(const DexMethod* method,
 }
 
 bool RemoveArgs::compute_remove_result(const DexMethod* method) {
-  auto proto = method->get_proto();
-  return !proto->is_void() && !m_result_used.count_unsafe(method);
+  auto* proto = method->get_proto();
+  return !proto->is_void() && (m_result_used.count_unsafe(method) == 0u);
 }
 
 /**
@@ -396,7 +397,7 @@ bool RemoveArgs::compute_remove_result(const DexMethod* method) {
  */
 std::map<uint16_t, cfg::InstructionIterator> compute_dead_insns(
     const DexMethod* method, const IRCode& code) {
-  auto proto = method->get_proto();
+  auto* proto = method->get_proto();
   auto num_args = proto->get_args()->size();
 
   always_assert(method->get_code() != nullptr);
@@ -410,13 +411,13 @@ std::map<uint16_t, cfg::InstructionIterator> compute_dead_insns(
   }
 
   always_assert(code.cfg_built());
-  auto& cfg = code.cfg();
+  const auto& cfg = code.cfg();
   LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain());
-  auto entry_block = cfg.entry_block();
+  auto* entry_block = cfg.entry_block();
   bool is_instance_method = !is_static(method);
   size_t last_arg_idx = is_instance_method ? num_args : num_args - 1;
-  auto first_insn = entry_block->get_first_insn()->insn;
+  auto* first_insn = entry_block->get_first_insn()->insn;
   // live_vars contains all the registers needed by entry_block's
   // successors.
   auto live_vars = fixpoint_iter.get_live_out_vars_at(entry_block);
@@ -425,7 +426,7 @@ std::map<uint16_t, cfg::InstructionIterator> compute_dead_insns(
     if (it->type != MFLOW_OPCODE) {
       continue;
     }
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_a_load_param(insn->opcode())) {
       if (!live_vars.contains(insn->dest()) &&
           !(is_instance_method && it->insn == first_insn)) {
@@ -456,7 +457,7 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
   };
   std::vector<LoadParamInfo> load_param_infos;
   boost::optional<std::vector<LoadParamInfo>::iterator> load_param_infos_it;
-  if (method->get_code()) {
+  if (method->get_code() != nullptr) {
     auto param_insns = method->get_code()->cfg().get_param_instructions();
     for (const auto& mie : InstructionIterable(param_insns)) {
       load_param_infos.push_back(
@@ -474,11 +475,11 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
       (*load_param_infos_it)++;
     }
   }
-  for (auto t : *original_proto->get_args()) {
+  for (auto* t : *original_proto->get_args()) {
     idxs_by_type[t].push_back(idx++);
   }
 
-  for (auto t : *reordered_proto->get_args()) {
+  for (auto* t : *reordered_proto->get_args()) {
     auto& deque = idxs_by_type.find(t)->second;
     auto new_idx = deque.front();
     deque.pop_front();
@@ -486,7 +487,7 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
     idxs.push_back(new_idx);
 
     if (load_param_infos_it) {
-      auto load_param_insn = (*load_param_infos_it)++->insn;
+      auto* load_param_insn = (*load_param_infos_it)++->insn;
       auto& info = load_param_infos.at(new_idx);
       load_param_insn->set_opcode(info.opcode);
       load_param_insn->set_dest(info.reg);
@@ -508,8 +509,8 @@ void run_cleanup(DexMethod* method,
   auto local_dce = LocalDce(init_classes_with_side_effects, pure_methods);
   local_dce.dce(cfg, /* normalize_new_instances */ true, method->get_class());
   const auto& local_stats = local_dce.get_stats();
-  if (local_stats.dead_instruction_count |
-      local_stats.unreachable_instruction_count) {
+  if ((local_stats.dead_instruction_count |
+       local_stats.unreachable_instruction_count) != 0u) {
     std::lock_guard<std::mutex> lock(mutex);
     stats += local_stats;
   }
@@ -531,17 +532,17 @@ void RemoveArgs::populate_representative_ids(
   // Group methods that are related (somehow connect in override graph)
   // For each related group, assign a single representative method.
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
-    if (m_method_representative_map.count(method)) {
+    if (m_method_representative_map.count(method) != 0u) {
       return;
     }
     UnorderedSet<const DexMethod*> visited;
     visited.insert(method);
     override_graph.get_node(method).gather_connected_methods(&visited);
-    auto representative =
+    const auto* representative =
         *unordered_min_element(visited, dexmethods_comparator());
     m_related_method_groups.get_or_emplace_and_assert_equal(representative,
                                                             visited);
-    for (auto m : UnorderedIterable(visited)) {
+    for (const auto* m : UnorderedIterable(visited)) {
       auto existing_representative =
           m_method_representative_map.emplace(m, representative);
       always_assert(*existing_representative.first == representative);
@@ -579,7 +580,7 @@ void RemoveArgs::gather_updated_entries(
 
         // First iteration, perform some basic checks for whether we can edit
         // this method.
-        for (auto m : UnorderedIterable(kvp->second)) {
+        for (const auto* m : UnorderedIterable(kvp->second)) {
           // If we can't edit, just skip
           if (!can_rename(m) || is_native(m) || m->rstate.no_optimizations() ||
               has_any_annotation(m, no_devirtualize_annos) ||
@@ -612,9 +613,9 @@ void RemoveArgs::gather_updated_entries(
         for (uint16_t i = (is_static(kvp->first) ? 0 : 1); i < num_args; i++) {
           running_dead_args.insert(i);
         }
-        for (auto m : UnorderedIterable(kvp->second)) {
-          if (m->get_code()) {
-            auto& dead_insn_map = all_dead_insns.at(m);
+        for (const auto* m : UnorderedIterable(kvp->second)) {
+          if (m->get_code() != nullptr) {
+            const auto& dead_insn_map = all_dead_insns.at(m);
             std::erase_if(running_dead_args,
                           [&](auto e) { return !dead_insn_map.count(e); });
           }
@@ -622,8 +623,8 @@ void RemoveArgs::gather_updated_entries(
 
         // Third iteration, delete all args/insns that aren't in
         // `running_dead_args`.
-        for (auto m : UnorderedIterable(kvp->second)) {
-          if (m->get_code()) {
+        for (const auto* m : UnorderedIterable(kvp->second)) {
+          if (m->get_code() != nullptr) {
             auto& dead_insn_map = all_dead_insns.at_unsafe(m);
             std::erase_if(dead_insn_map, [&](auto e) {
               return !running_dead_args.count(e.first);
@@ -647,7 +648,7 @@ void RemoveArgs::gather_updated_entries(
           // Otherwise, try to construct the dead args proto
           live_arg_idxs = live_args(kvp->first, running_dead_args);
           auto live_args = get_live_arg_type_list(kvp->first, live_arg_idxs);
-          auto live_args_list =
+          auto* live_args_list =
               DexTypeList::make_type_list(std::move(live_args));
           DexType* rtype = remove_result ? type::_void()
                                          : kvp->first->get_proto()->get_rtype();
@@ -659,12 +660,12 @@ void RemoveArgs::gather_updated_entries(
 
         // Fourth iteration, check that none of the renamed methods collide.
         if (method::is_constructor(kvp->first)) {
-          for (auto m : UnorderedIterable(kvp->second)) {
-            auto colliding_mref = DexMethod::get_method(
+          for (const auto* m : UnorderedIterable(kvp->second)) {
+            auto* colliding_mref = DexMethod::get_method(
                 m->get_class(), m->get_name(), updated_proto);
-            if (colliding_mref) {
-              auto colliding_method = colliding_mref->as_def();
-              if (colliding_method) {
+            if (colliding_mref != nullptr) {
+              auto* colliding_method = colliding_mref->as_def();
+              if (colliding_method != nullptr) {
                 // We can't rename constructors, so we give up on removing args.
                 return;
               }
@@ -674,7 +675,7 @@ void RemoveArgs::gather_updated_entries(
 
         // Fifth iteration, we loop one more time and add all the updated protos
         // to the final data structure.
-        for (auto method : UnorderedIterable(kvp->second)) {
+        for (const auto* method : UnorderedIterable(kvp->second)) {
           std::vector<cfg::InstructionIterator> dead_insns;
           // Compile the list of dead instructions that we computed earlier
           if (!is_reordered) {
@@ -709,7 +710,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
 
   // Phase 1: Calculate exit blocks for all methods
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
-    auto code = method->get_code();
+    auto* code = method->get_code();
     if (code != nullptr) {
       always_assert(code->cfg_built());
       auto& cfg = code->cfg();
@@ -790,7 +791,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
         always_assert(method->get_code()->cfg_built());
         auto& cfg = method->get_code()->cfg();
         for (const auto& mie : InstructionIterable(cfg)) {
-          auto insn = mie.insn;
+          auto* insn = mie.insn;
           if (opcode::is_a_return_value(insn->opcode())) {
             insn->set_opcode(OPCODE_RETURN_VOID);
             insn->set_srcs_size(0);
@@ -820,8 +821,8 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
  * Returns the number of arguments removed.
  */
 size_t RemoveArgs::update_callsite(IRInstruction* instr) {
-  auto method = instr->get_method()->as_def();
-  if (!method) {
+  auto* method = instr->get_method()->as_def();
+  if (method == nullptr) {
     // TODO: Properly resolve method.
     return 0;
   };
@@ -857,7 +858,7 @@ std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
   LocalDce::Stats local_dce_stats{};
   auto cnt = walk::parallel::methods<size_t>(
       m_scope, [&](DexMethod* method) -> size_t {
-        auto code = method->get_code();
+        auto* code = method->get_code();
         if (code == nullptr) {
           return 0;
         }
@@ -865,7 +866,7 @@ std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
         auto& cfg = code->cfg();
         size_t callsite_args_removed = 0;
         for (const auto& mie : InstructionIterable(cfg)) {
-          auto insn = mie.insn;
+          auto* insn = mie.insn;
           if (opcode::is_an_invoke(insn->opcode())) {
             size_t insn_args_removed = update_callsite(insn);
             if (insn_args_removed > 0) {
@@ -875,7 +876,7 @@ std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
           }
         }
 
-        if (callsite_args_removed) {
+        if (callsite_args_removed != 0u) {
           run_cleanup(method,
                       cfg,
                       &m_init_classes_with_side_effects,

@@ -99,15 +99,15 @@ class GraphBuilder {
  private:
   const ClassSignatureMap& analyze_non_interface(const DexClass* cls) {
     always_assert(!is_interface(cls));
-    auto* res = m_class_signature_maps.get(cls);
-    if (res) {
+    const auto* res = m_class_signature_maps.get(cls);
+    if (res != nullptr) {
       return *res;
     }
 
     // Initialize the signature maps from those of the superclass.
     ClassSignatureMap class_signatures;
     if (cls->get_super_class() != nullptr) {
-      auto super_cls = type_class(cls->get_super_class());
+      auto* super_cls = type_class(cls->get_super_class());
       if (super_cls != nullptr) {
         class_signatures = analyze_non_interface(super_cls);
       }
@@ -131,20 +131,20 @@ class GraphBuilder {
     std::vector<std::pair<MethodSet, const DexMethod*>>
         unimplemented_implementations;
     for (const auto& protos_pair : class_signatures.unimplemented) {
-      auto name = protos_pair.first;
+      const auto* name = protos_pair.first;
       const auto& named_implemented_protos =
           class_signatures.implemented.at(name);
       if (named_implemented_protos.empty()) {
         continue;
       }
       for (const auto& ms_pair : protos_pair.second) {
-        auto proto = ms_pair.first;
+        const auto* proto = ms_pair.first;
         const auto& implemented_set = named_implemented_protos.at(proto);
         if (implemented_set.empty()) {
           continue;
         }
         always_assert(implemented_set.size() == 1);
-        auto implementation = *implemented_set.begin();
+        const auto* implementation = *implemented_set.begin();
         unimplemented_implementations.emplace_back(ms_pair.second,
                                                    implementation);
       }
@@ -164,7 +164,7 @@ class GraphBuilder {
         const auto& overridden_set =
             inherited_implemented.at(method->get_name())
                 .at(method->get_proto());
-        for (auto overridden : overridden_set) {
+        for (const auto* overridden : overridden_set) {
           m_graph->add_edge(overridden, /* overridden_is_interface */ false,
                             method, /* overriding_is_interface */ false);
         }
@@ -173,7 +173,7 @@ class GraphBuilder {
       // methods.
       for (auto&& [unimplementeds, implementation] :
            unimplemented_implementations) {
-        for (auto unimplemented : unimplementeds) {
+        for (const auto* unimplemented : unimplementeds) {
           if (implementation->get_class() == cls->get_type() ||
               m_graph->add_other_implementation_class(unimplemented,
                                                       implementation, cls)) {
@@ -191,8 +191,8 @@ class GraphBuilder {
 
   const SignatureMap& analyze_interface(const DexClass* cls) {
     always_assert(is_interface(cls));
-    auto* res = m_interface_signature_maps.get(cls);
-    if (res) {
+    const auto* res = m_interface_signature_maps.get(cls);
+    if (res != nullptr) {
       return *res;
     }
 
@@ -226,7 +226,7 @@ class GraphBuilder {
         // get all the implementors of IA::m, we need to traverse the edges
         // added here to find them. This design reduces the number of edges
         // necessary for building the graph.
-        for (auto overridden : overridden_set) {
+        for (const auto* overridden : overridden_set) {
           m_graph->add_edge(overridden, /* overridden_is_interface */ true,
                             method, /* overriding_is_interface */ true);
         }
@@ -238,14 +238,14 @@ class GraphBuilder {
 
   const SignatureMap& unify_super_interface_signatures(const DexClass* cls) {
     auto* type_list = cls->get_interfaces();
-    auto* res = m_unified_interfaces_signature_maps.get(type_list);
-    if (res) {
+    const auto* res = m_unified_interfaces_signature_maps.get(type_list);
+    if (res != nullptr) {
       return *res;
     }
 
     SignatureMap super_interface_signatures;
     for (auto* intf : *type_list) {
-      auto intf_cls = type_class(intf);
+      auto* intf_cls = type_class(intf);
       if (intf_cls != nullptr) {
         unify_signature_maps(analyze_interface(intf_cls),
                              &super_interface_signatures);
@@ -380,7 +380,7 @@ bool Node::overrides(const DexMethod* current, const DexType* base_type) const {
   if (!other_interface_implementations) {
     return false;
   }
-  for (auto* cls :
+  for (const auto* cls :
        UnorderedIterable(other_interface_implementations->classes)) {
     if (type::check_cast(cls->get_type(), base_type)) {
       return true;
@@ -401,8 +401,8 @@ void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
   // The type-class lookup should only ever fail during testing if the
   // environment isn't fully build up.
   auto may_be_interface = [](DexType* t) {
-    auto cls = type_class(t);
-    return !cls || is_interface(cls);
+    auto* cls = type_class(t);
+    return (cls == nullptr) || is_interface(cls);
   };
   add_edge(overridden, may_be_interface(overridden->get_class()), overriding,
            may_be_interface(overridden->get_class()));
@@ -446,13 +446,13 @@ void Node::gather_connected_methods(
   }
   visited->insert(method);
   for (auto* child : UnorderedIterable(children)) {
-    if (visited->count(child->method)) {
+    if (visited->count(child->method) != 0u) {
       continue;
     }
     child->gather_connected_methods(visited);
   }
   for (auto* parent : UnorderedIterable(parents)) {
-    if (visited->count(parent->method)) {
+    if (visited->count(parent->method) != 0u) {
       continue;
     }
     parent->gather_connected_methods(visited);
@@ -596,15 +596,15 @@ UnorderedSet<DexClass*> get_classes_with_overridden_finalize(
   UnorderedSet<DexClass*> res;
   auto overriding_methods = method_override_graph::get_overriding_methods(
       method_override_graph, method::java_lang_Object_finalize());
-  for (auto* overriding_method : UnorderedIterable(overriding_methods)) {
-    auto type = overriding_method->get_class();
+  for (const auto* overriding_method : UnorderedIterable(overriding_methods)) {
+    auto* type = overriding_method->get_class();
     auto* cls = type_class(type);
-    if (cls && !cls->is_external()) {
+    if ((cls != nullptr) && !cls->is_external()) {
       res.insert(cls);
       auto children = get_all_children(class_hierarchy, type);
-      for (auto child : children) {
+      for (const auto* child : children) {
         auto* child_cls = type_class(child);
-        if (child_cls && !child_cls->is_external()) {
+        if ((child_cls != nullptr) && !child_cls->is_external()) {
           res.insert(child_cls);
         }
       }

@@ -69,11 +69,11 @@ TEST_F(RegAllocTest, RegTypeInvoke) {
   using namespace dex_asm;
   DexMethodRef* method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"});
 
-  auto insn = dasm(OPCODE_INVOKE_DIRECT, method, {0_v, 1_v});
+  auto* insn = dasm(OPCODE_INVOKE_DIRECT, method, {0_v, 1_v});
   EXPECT_EQ(regalloc::src_reg_type(insn, 0), RegisterType::OBJECT);
   EXPECT_EQ(regalloc::src_reg_type(insn, 1), RegisterType::NORMAL);
 
-  auto static_insn = dasm(OPCODE_INVOKE_STATIC, method, {0_v});
+  auto* static_insn = dasm(OPCODE_INVOKE_STATIC, method, {0_v});
   EXPECT_EQ(regalloc::src_reg_type(static_insn, 0), RegisterType::NORMAL);
 }
 
@@ -361,7 +361,7 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
 }
 
 TEST_F(RegAllocTest, NoOverlapWideSrcs) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Z"
      (
       (const-wide v0 0)
@@ -480,7 +480,7 @@ TEST_F(RegAllocTest, SelectRange) {
   interference::Graph ig = interference::build_graph(
       fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
   for (size_t i = 0; i < 6; ++i) {
-    auto& node = ig.get_node(i);
+    const auto& node = ig.get_node(i);
     EXPECT_TRUE(node.is_range() && node.is_param());
   }
   EXPECT_FALSE(ig.get_node(6).is_range());
@@ -524,7 +524,7 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
                mie.insn->opcode() == OPCODE_INVOKE_STATIC;
       });
   ASSERT_NE(invoke_it, ii.end());
-  auto invoke = invoke_it->insn;
+  auto* invoke = invoke_it->insn;
   RangeSet range_set;
   range_set.emplace(invoke);
   interference::Graph ig = interference::build_graph(
@@ -878,7 +878,7 @@ TEST_F(RegAllocTest, ParamFirstUse) {
 }
 
 TEST_F(RegAllocTest, NoOverwriteThis) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(I)LFoo;"
      (
       (load-param-object v0)

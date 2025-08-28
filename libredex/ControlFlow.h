@@ -1546,7 +1546,7 @@ bool ControlFlowGraph::replace_insns(const InstructionIterator& it,
                                      const ForwardIt& end) {
   // Save these values before we insert in case the insertion causes iterator
   // invalidation.
-  auto insn_to_del = it->insn;
+  auto* insn_to_del = it->insn;
 
   bool invalidated = insert(it, begin, end, true /* before */);
   if (invalidated) {

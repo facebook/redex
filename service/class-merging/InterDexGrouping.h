@@ -71,7 +71,7 @@ class InterDexGrouping final {
     if (m_config.type == InterDexGroupingType::DISABLED) {
       return false;
     }
-    return m_ordered_set.count(type);
+    return m_ordered_set.count(type) != 0u;
   }
 
  private:

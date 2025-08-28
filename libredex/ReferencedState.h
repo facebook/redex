@@ -227,69 +227,75 @@ class ReferencedState {
 
     // Common flags.
     this->inner_struct.m_by_resources =
-        this->inner_struct.m_by_resources | other.inner_struct.m_by_resources;
+        ((this->inner_struct.m_by_resources |
+          other.inner_struct.m_by_resources) != 0);
     this->inner_struct.m_keep =
-        this->inner_struct.m_keep | other.inner_struct.m_keep;
+        ((this->inner_struct.m_keep | other.inner_struct.m_keep) != 0);
 
     this->inner_struct.m_whyareyoukeeping =
-        this->inner_struct.m_whyareyoukeeping |
-        other.inner_struct.m_whyareyoukeeping;
+        ((this->inner_struct.m_whyareyoukeeping |
+          other.inner_struct.m_whyareyoukeeping) != 0);
 
     this->inner_struct.m_set_allowshrinking =
-        this->inner_struct.m_set_allowshrinking &
-        other.inner_struct.m_set_allowshrinking;
+        ((this->inner_struct.m_set_allowshrinking &
+          other.inner_struct.m_set_allowshrinking) != 0);
     this->inner_struct.m_unset_allowshrinking =
-        this->inner_struct.m_unset_allowshrinking |
-        other.inner_struct.m_unset_allowshrinking;
+        ((this->inner_struct.m_unset_allowshrinking |
+          other.inner_struct.m_unset_allowshrinking) != 0);
     this->inner_struct.m_set_allowobfuscation =
-        this->inner_struct.m_set_allowobfuscation &
-        other.inner_struct.m_set_allowobfuscation;
+        ((this->inner_struct.m_set_allowobfuscation &
+          other.inner_struct.m_set_allowobfuscation) != 0);
     this->inner_struct.m_unset_allowobfuscation =
-        this->inner_struct.m_unset_allowobfuscation |
-        other.inner_struct.m_unset_allowobfuscation;
+        ((this->inner_struct.m_unset_allowobfuscation |
+          other.inner_struct.m_unset_allowobfuscation) != 0);
 
     this->inner_struct.m_includedescriptorclasses =
-        this->inner_struct.m_includedescriptorclasses |
-        other.inner_struct.m_includedescriptorclasses;
+        ((this->inner_struct.m_includedescriptorclasses |
+          other.inner_struct.m_includedescriptorclasses) != 0);
 
     // m_generated skipped.
 
     this->inner_struct.m_outlined =
-        this->inner_struct.m_outlined & other.inner_struct.m_outlined;
+        ((this->inner_struct.m_outlined & other.inner_struct.m_outlined) != 0);
 
     // m_name_used skipped.
 
     if (this->inner_struct.is_class()) {
-      this->inner_struct.m_is_serde =
-          this->inner_struct.m_is_serde | other.inner_struct.m_is_serde;
-      this->inner_struct.m_by_string =
-          this->inner_struct.m_by_string | other.inner_struct.m_by_string;
-      this->inner_struct.m_is_kotlin =
-          this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
+      this->inner_struct.m_is_serde = ((this->inner_struct.m_is_serde |
+                                        other.inner_struct.m_is_serde) != 0);
+      this->inner_struct.m_by_string = ((this->inner_struct.m_by_string |
+                                         other.inner_struct.m_by_string) != 0);
+      this->inner_struct.m_is_kotlin = ((this->inner_struct.m_is_kotlin &
+                                         other.inner_struct.m_is_kotlin) != 0);
     } else if (this->inner_struct.is_method()) {
       this->inner_struct.m_assumenosideeffects =
-          this->inner_struct.m_assumenosideeffects &
-          other.inner_struct.m_assumenosideeffects;
+          ((this->inner_struct.m_assumenosideeffects &
+            other.inner_struct.m_assumenosideeffects) != 0);
       this->inner_struct.m_no_optimizations =
-          this->inner_struct.m_no_optimizations |
-          other.inner_struct.m_no_optimizations;
+          ((this->inner_struct.m_no_optimizations |
+            other.inner_struct.m_no_optimizations) != 0);
       this->inner_struct.m_pure_method =
-          this->inner_struct.m_pure_method & other.inner_struct.m_pure_method;
+          ((this->inner_struct.m_pure_method &
+            other.inner_struct.m_pure_method) != 0);
       this->inner_struct.m_immutable_getter =
-          this->inner_struct.m_immutable_getter &
-          other.inner_struct.m_immutable_getter;
+          ((this->inner_struct.m_immutable_getter &
+            other.inner_struct.m_immutable_getter) != 0);
       this->inner_struct.m_dont_inline =
-          this->inner_struct.m_dont_inline | other.inner_struct.m_dont_inline;
+          ((this->inner_struct.m_dont_inline |
+            other.inner_struct.m_dont_inline) != 0);
       this->inner_struct.m_force_inline =
-          this->inner_struct.m_force_inline & other.inner_struct.m_force_inline;
+          ((this->inner_struct.m_force_inline &
+            other.inner_struct.m_force_inline) != 0);
       this->inner_struct.m_too_large_for_inlining_into =
-          this->inner_struct.m_too_large_for_inlining_into |
-          other.inner_struct.m_too_large_for_inlining_into;
+          ((this->inner_struct.m_too_large_for_inlining_into |
+            other.inner_struct.m_too_large_for_inlining_into) != 0);
       this->inner_struct.m_dont_outline =
-          this->inner_struct.m_dont_outline | other.inner_struct.m_dont_outline;
+          ((this->inner_struct.m_dont_outline |
+            other.inner_struct.m_dont_outline) != 0);
     } else if (this->inner_struct.is_field()) {
       this->inner_struct.m_init_class =
-          this->inner_struct.m_init_class | other.inner_struct.m_init_class;
+          ((this->inner_struct.m_init_class |
+            other.inner_struct.m_init_class) != 0);
     } else {
       always_assert_log(0, "invalid state\n");
     }
@@ -656,7 +662,7 @@ class ReferencedState {
   KeepReasons& ensure_keep_reasons() const {
     always_assert(keep_reason::Reason::record_keep_reasons());
     // First see whether it's already done to avoid allocating.
-    auto attempt = m_keep_reasons.load();
+    auto* attempt = m_keep_reasons.load();
     if (attempt != nullptr) {
       return *attempt;
     }

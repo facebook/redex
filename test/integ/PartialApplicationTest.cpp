@@ -23,7 +23,7 @@
 #include "PartialApplication.h"
 
 static IRCode* get_code(const std::string& s) {
-  auto method = DexMethod::get_method(s);
+  auto* method = DexMethod::get_method(s);
   return method->as_def()->get_code();
 }
 
@@ -34,13 +34,13 @@ class PartialApplicationTest : public RedexIntegrationTest {
     creator.set_super(type::java_lang_Object());
     creator.set_external();
 
-    auto valueof = static_cast<DexMethod*>(DexMethod::make_method(
+    auto* valueof = static_cast<DexMethod*>(DexMethod::make_method(
         "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;"));
     valueof->set_external();
     valueof->make_concrete(ACC_PUBLIC | ACC_STATIC, true);
     creator.add_method(valueof);
 
-    auto value = static_cast<DexMethod*>(
+    auto* value = static_cast<DexMethod*>(
         DexMethod::make_method("Ljava/lang/Integer;.intValue:()I"));
     value->set_external();
     value->make_concrete(ACC_PUBLIC, true);

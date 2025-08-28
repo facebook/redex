@@ -23,7 +23,7 @@ constexpr const char* DEFAULT_SUFFIX = "$default";
 namespace {
 
 DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
-  auto def_method =
+  auto* def_method =
       resolve_method(insn->get_method(), opcode_to_search(insn), caller);
   if (def_method == nullptr && insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
     def_method =
@@ -42,19 +42,19 @@ bool is_model_gen(const DexMethod* m) {
   auto model_gen_cls_name =
       type->str().substr(0, type->str().size() - 1) + "Spec;";
   DexClass* cls = type_class(DexType::make_type(model_gen_cls_name));
-  if (!cls) {
+  if (cls == nullptr) {
     // the class could end in $Builder or $Deserializer
     auto model_gen_cls_name_from_builder =
         type->str().substr(0, type->str().find('$')) + "Spec;";
     cls = type_class(DexType::make_type(model_gen_cls_name_from_builder));
   }
-  if (!cls || !cls->get_anno_set()) {
+  if ((cls == nullptr) || (cls->get_anno_set() == nullptr)) {
     return false;
   }
   DexAnnotation* anno = get_annotation(
       cls, DexType::make_type("Lcom/facebook/annotationprocessors/modelgen/"
                               "iface/ModelDefinition;"));
-  if (anno) {
+  if (anno != nullptr) {
     return true;
   }
   return false;
@@ -81,33 +81,33 @@ bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
   }
 
   // the util class
-  auto cls = type_class(m->get_class());
+  auto* cls = type_class(m->get_class());
   if (!boost::ends_with(cls->get_deobfuscated_name_or_empty_copy(), "$Util;")) {
     return false;
   }
 
-  if (!cls || !cls->get_anno_set()) {
+  if ((cls == nullptr) || (cls->get_anno_set() == nullptr)) {
     return false;
   }
 
   DexClass* typedef_cls = nullptr;
   DexAnnotation* anno = get_annotation(
       cls, DexType::make_type("Ldalvik/annotation/EnclosingClass;"));
-  if (anno) {
-    auto& value = anno->anno_elems().begin()->encoded_value;
+  if (anno != nullptr) {
+    const auto& value = anno->anno_elems().begin()->encoded_value;
     if (value->evtype() == DexEncodedValueTypes::DEVT_TYPE) {
-      auto type_value = static_cast<DexEncodedValueType*>(value.get());
+      auto* type_value = static_cast<DexEncodedValueType*>(value.get());
       auto type_name = type_value->show_deobfuscated();
       typedef_cls = type_class(DexType::make_type(type_name));
     }
   }
 
-  if (!typedef_cls || !typedef_cls->get_anno_set()) {
+  if ((typedef_cls == nullptr) || (typedef_cls->get_anno_set() == nullptr)) {
     return false;
   }
 
-  if (!get_annotation(typedef_cls, m_config.int_typedef) &&
-      !get_annotation(typedef_cls, m_config.str_typedef)) {
+  if ((get_annotation(typedef_cls, m_config.int_typedef) == nullptr) &&
+      (get_annotation(typedef_cls, m_config.str_typedef) == nullptr)) {
     return false;
   }
   return true;
@@ -119,7 +119,7 @@ bool TypedefAnnoChecker::is_generated(const DexMethod* m) const {
   }
   DexType* type = m->get_class();
   DexClass* cls = type_class(type);
-  if (!cls->get_anno_set()) {
+  if (cls->get_anno_set() == nullptr) {
     return false;
   }
   if (has_any_annotation(cls, m_config.generated_type_annos)) {
@@ -155,7 +155,7 @@ bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
     return false;
   }
 
-  auto& cfg = m->get_code()->cfg();
+  const auto& cfg = m->get_code()->cfg();
   DexField* delegate = nullptr;
 
   for (auto* block : cfg.blocks()) {
@@ -163,7 +163,7 @@ bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
       auto* insn = mie.insn;
       if (insn->opcode() == OPCODE_IGET_OBJECT) {
         DexField* field = insn->get_field()->as_def();
-        if (!field) {
+        if (field == nullptr) {
           continue;
         }
         // find methods that delegate with $$delegate_ P1697234372
@@ -173,15 +173,16 @@ bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
         } else {
           // find methods that delegate without $$delegate_ P1698648093
           // the field type must match one of the interfaces
-          for (auto interface : *interfaces) {
+          for (auto* interface : *interfaces) {
             if (interface->get_name() == field->get_type()->get_name()) {
               delegate = field;
             }
           }
         }
-      } else if (opcode::is_an_invoke(insn->opcode()) && delegate) {
+      } else if (opcode::is_an_invoke(insn->opcode()) &&
+                 (delegate != nullptr)) {
         auto* callee = insn->get_method()->as_def();
-        if (!callee) {
+        if (callee == nullptr) {
           continue;
         }
         if (m->get_simple_deobfuscated_name() ==
@@ -198,7 +199,7 @@ bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
 
 void TypedefAnnoChecker::run(DexMethod* m) {
   IRCode* code = m->get_code();
-  if (!code) {
+  if (code == nullptr) {
     return;
   }
 
@@ -221,7 +222,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
 
   boost::optional<const DexType*> return_annotation = boost::none;
   DexAnnotationSet* return_annos = m->get_anno_set();
-  if (return_annos) {
+  if (return_annos != nullptr) {
     return_annotation = type_inference::get_typedef_annotation(
         return_annos->get_annotations(), inference.get_annotations());
   }
@@ -240,7 +241,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     TRACE(TAC, 2, "Done checking %s", SHOW(m));
   }
   // Clean up the param names from dex debug items
-  if (code->get_debug_item()) {
+  if (code->get_debug_item() != nullptr) {
     code->get_debug_item()->remove_param_names();
   }
 }
@@ -277,18 +278,18 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     auto* callee_def = resolve_method(m, insn);
-    if (!callee_def) {
+    if (callee_def == nullptr) {
       return;
     }
     UnorderedBag<const DexMethod*> callees;
     if (mog::is_true_virtual(m_method_override_graph, callee_def) &&
-        !callee_def->get_code()) {
+        (callee_def->get_code() == nullptr)) {
       callees =
           mog::get_overriding_methods(m_method_override_graph, callee_def);
     }
     callees.insert(callee_def);
     for (const DexMethod* callee : UnorderedIterable(callees)) {
-      if (!callee->get_param_anno()) {
+      if (callee->get_param_anno() == nullptr) {
         // Callee does not expect any Typedef value. Nothing to do.
         return;
       }
@@ -458,7 +459,7 @@ bool TypedefAnnoChecker::check_typedef_value(
     const type_inference::TypeInference* inference,
     TypeEnvironments& envs) {
 
-  auto anno_class = type_class(annotation.value());
+  auto* anno_class = type_class(annotation.value());
   const auto* str_value_set = m_strdef_constants.get_unsafe(anno_class);
   const auto* int_value_set = m_intdef_constants.get_unsafe(anno_class);
 
@@ -478,7 +479,7 @@ bool TypedefAnnoChecker::check_typedef_value(
   for (IRInstruction* def : defs_set) {
     switch (def->opcode()) {
     case OPCODE_CONST_STRING: {
-      auto const const_value = def->get_string();
+      const auto* const const_value = def->get_string();
       if (const_value->str().empty() && is_generated(m)) {
         break;
       }
@@ -503,7 +504,8 @@ bool TypedefAnnoChecker::check_typedef_value(
         // nullness.
         break;
       }
-      if (int_value_set && int_value_set->count(const_value) == 0) {
+      if ((int_value_set != nullptr) &&
+          int_value_set->count(const_value) == 0) {
         // when passing an integer to a default method, the value will be 0 if
         // the default method will the default value. The const 0 is not
         // annotated and might not be in the IntDef. Since the checker will
@@ -569,8 +571,8 @@ bool TypedefAnnoChecker::check_typedef_value(
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_INTERFACE: {
-      auto def_method = resolve_method(m, def);
-      if (!def_method) {
+      auto* def_method = resolve_method(m, def);
+      if (def_method == nullptr) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in the method " << show(m)
             << "\n the source of the value with annotation " << show(annotation)
@@ -585,7 +587,7 @@ bool TypedefAnnoChecker::check_typedef_value(
       }
       UnorderedBag<const DexMethod*> callees;
       if (mog::is_true_virtual(m_method_override_graph, def_method) &&
-          !def_method->get_code()) {
+          (def_method->get_code() == nullptr)) {
         callees =
             mog::get_overriding_methods(m_method_override_graph, def_method);
       }
@@ -741,7 +743,7 @@ void TypedefAnnoCheckerPass::gather_typedef_values(
     StrDefConstants& strdef_constants,
     IntDefConstants& intdef_constants) {
   const std::vector<DexField*>& fields = cls->get_sfields();
-  if (get_annotation(cls, m_config.str_typedef)) {
+  if (get_annotation(cls, m_config.str_typedef) != nullptr) {
     UnorderedSet<const DexString*> str_values;
     for (auto* field : fields) {
       str_values.emplace(
@@ -749,7 +751,7 @@ void TypedefAnnoCheckerPass::gather_typedef_values(
               ->string());
     }
     strdef_constants.emplace(cls, std::move(str_values));
-  } else if (get_annotation(cls, m_config.int_typedef)) {
+  } else if (get_annotation(cls, m_config.int_typedef) != nullptr) {
     UnorderedSet<uint64_t> int_values;
     for (auto* field : fields) {
       int_values.emplace(field->get_static_value()->value());

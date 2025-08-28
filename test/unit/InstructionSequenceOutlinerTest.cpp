@@ -55,8 +55,8 @@ struct InstructionSequenceOutlinerTest : public RedexTest {
                                    no_interfaces, ACC_PUBLIC);
     m_classes.push_back(c_cls);
 
-    auto args = DexTypeList::make_type_list({});
-    auto proto = DexProto::make_proto(type::_void(), args);
+    auto* args = DexTypeList::make_type_list({});
+    auto* proto = DexProto::make_proto(type::_void(), args);
 
     m_init =
         DexMethod::make_method(c_type, DexString::make_string("<init>"), proto)
@@ -70,8 +70,8 @@ struct InstructionSequenceOutlinerTest : public RedexTest {
     m_other->set_code(std::make_unique<IRCode>(m_other, 1));
     c_cls->add_method(m_other);
 
-    auto field = DexField::make_field("LC;.f:Ljava/lang/Object;")
-                     ->make_concrete(ACC_PUBLIC);
+    auto* field = DexField::make_field("LC;.f:Ljava/lang/Object;")
+                      ->make_concrete(ACC_PUBLIC);
     c_cls->add_field(field);
   }
 
@@ -95,7 +95,7 @@ TEST_F(InstructionSequenceOutlinerTest, iputsBeforeBaseInitInvocation) {
   using namespace dex_asm;
   create();
 
-  auto init_str = R"(
+  const auto* init_str = R"(
     (
       (load-param-object v0)
       (iput-object v0 v0 "LC;.f:Ljava/lang/Object;")
@@ -131,7 +131,7 @@ TEST_F(InstructionSequenceOutlinerTest, iputsBeforeBaseInitInvocation) {
     )
   )";
 
-  auto other_str = R"(
+  const auto* other_str = R"(
     (
       (load-param-object v0)
       (iput-object v0 v0 "LC;.f:Ljava/lang/Object;")
@@ -160,7 +160,7 @@ TEST_F(InstructionSequenceOutlinerTest, iputsBeforeBaseInitInvocation) {
 
   run();
 
-  auto expected_init_str = R"(
+  const auto* expected_init_str = R"(
     (
       (load-param-object v0)
       (iput-object v0 v0 "LC;.f:Ljava/lang/Object;")
@@ -185,7 +185,7 @@ TEST_F(InstructionSequenceOutlinerTest, iputsBeforeBaseInitInvocation) {
   )";
 
   auto expected_init_code = assembler::ircode_from_string(expected_init_str);
-  auto outlined_init_code = m_init->get_code();
+  auto* outlined_init_code = m_init->get_code();
   // remove positions, we are not testing that here
   for (auto it = outlined_init_code->begin();
        it != outlined_init_code->end();) {

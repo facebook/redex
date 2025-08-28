@@ -70,7 +70,8 @@ bool can_update_rtype_for(DexMethod* meth, const DexProto* new_proto) {
   if (!is_safe_to_specialize(meth)) {
     return false;
   }
-  if (DexMethod::get_method(meth->get_class(), meth->get_name(), new_proto)) {
+  if (DexMethod::get_method(meth->get_class(), meth->get_name(), new_proto) !=
+      nullptr) {
     // Bail on collision.
     TRACE(RESO, 4, "specialize bail on proto collision w/ %s -> %s", SHOW(meth),
           SHOW(new_proto));
@@ -78,7 +79,7 @@ bool can_update_rtype_for(DexMethod* meth, const DexProto* new_proto) {
   }
   auto* resolved = resolve_method(type_class(meth->get_class()),
                                   meth->get_name(), new_proto);
-  if (resolved) {
+  if (resolved != nullptr) {
     // Bail on virtual scope collision.
     TRACE(RESO, 4, "specialize bail on virtual scope collision w/ %s",
           SHOW(resolved));
@@ -95,7 +96,7 @@ bool can_update_rtype_for(DexMethod* meth, const DexType* new_rtype) {
 
 bool can_update_rtype_for_list(const UnorderedBag<const DexMethod*>& meths,
                                const DexProto* new_proto) {
-  for (auto* m : UnorderedIterable(meths)) {
+  for (const auto* m : UnorderedIterable(meths)) {
     auto* meth = const_cast<DexMethod*>(m);
     if (!can_update_rtype_for(meth, new_proto)) {
       return false;
@@ -113,7 +114,7 @@ bool share_common_overriddens_size(
     const method_override_graph::Graph& override_graph,
     const UnorderedBag<const DexMethod*>& meths) {
   std::optional<size_t> num_overriddens;
-  for (auto* meth : UnorderedIterable(meths)) {
+  for (const auto* meth : UnorderedIterable(meths)) {
     auto overriddens = method_override_graph::get_overridden_methods(
         override_graph, meth, true);
     if (!num_overriddens) {
@@ -161,14 +162,14 @@ bool update_rtype_for_list(const UnorderedBag<const DexMethod*>& meths,
   DexProto* updated_proto = DexProto::make_proto(
       new_rtype, (*unordered_any(meths))->get_proto()->get_args());
 
-  for (auto* m : UnorderedIterable(meths)) {
+  for (const auto* m : UnorderedIterable(meths)) {
     auto* meth = const_cast<DexMethod*>(m);
     if (!can_update_rtype_for(meth, updated_proto)) {
       return false;
     }
   }
 
-  for (auto* m : UnorderedIterable(meths)) {
+  for (const auto* m : UnorderedIterable(meths)) {
     auto* meth = const_cast<DexMethod*>(m);
     update_rtype_unsafe_for(meth, new_rtype, stats);
   }
@@ -211,8 +212,8 @@ void RtypeCandidates::collect_specializable_rtype(
 
   TRACE(RESO, 3, "collect rtype for %s inferred %s", SHOW(meth),
         SHOW(*better_rtype));
-  auto better_rtype_cls = type_class(*better_rtype);
-  if (better_rtype_cls && better_rtype_cls->is_external() &&
+  auto* better_rtype_cls = type_class(*better_rtype);
+  if ((better_rtype_cls != nullptr) && better_rtype_cls->is_external() &&
       !min_sdk_api->has_type(*better_rtype)) {
     return;
   }
@@ -234,7 +235,7 @@ bool RtypeSpecialization::shares_identical_rtype_candidate(
     // Cannot modify external method.
     return false;
   }
-  if (!meth->get_code()) {
+  if (meth->get_code() == nullptr) {
     // Interface methods w/ no code are not in the rtype_candidates map. Cross
     // dex store refs check was not done earlier.
     bool is_illegal_ref =
@@ -257,12 +258,12 @@ bool RtypeSpecialization::share_common_rtype_candidate(
     const MethodToInferredReturnType& rtype_candidates,
     const UnorderedBag<const DexMethod*>& meths,
     const DexType* better_rtype) const {
-  for (auto* m : UnorderedIterable(meths)) {
+  for (const auto* m : UnorderedIterable(meths)) {
     if (type_class_internal(m->get_class()) == nullptr) {
       // Cannot modify external method.
       return false;
     }
-    if (!m->get_code()) {
+    if (m->get_code() == nullptr) {
       // Interface methods w/ no code are not in the rtype_candidates map. Cross
       // dex store refs check was not done earlier.
       if (m_xstores.illegal_ref(m->get_class(), better_rtype)) {
@@ -408,7 +409,7 @@ void RtypeSpecialization::specialize_rtypes(const Scope& scope) {
                                                        m_candidates);
 
   // Update direct targets.
-  for (auto& pair : m_candidates) {
+  for (const auto& pair : m_candidates) {
     auto* meth = pair.first;
     if (meth->is_virtual()) {
       continue;
@@ -437,7 +438,7 @@ void RtypeSpecialization::specialize_rtypes(const Scope& scope) {
         DexProto::make_proto(better_rtype, root->get_proto()->get_args());
     auto* cls = type_class(root->get_class());
     if (find_collision(ch, root->get_name(), new_proto, cls,
-                       /* is_virtual */ true)) {
+                       /* is_virtual */ true) != nullptr) {
       TRACE(RESO, 4, "Bail on virtual collision %s w/ rtype %s", SHOW(root),
             SHOW(better_rtype));
       continue;

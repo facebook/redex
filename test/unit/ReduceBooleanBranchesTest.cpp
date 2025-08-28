@@ -40,7 +40,7 @@ void test(const std::string& code_str,
 }
 
 TEST_F(ReduceBooleanBranchesTest, boolean_negation_diamond) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)
@@ -65,7 +65,7 @@ TEST_F(ReduceBooleanBranchesTest, boolean_negation_diamond) {
 }
 
 TEST_F(ReduceBooleanBranchesTest, boolean_redundant_diamond) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)
@@ -90,7 +90,7 @@ TEST_F(ReduceBooleanBranchesTest, boolean_redundant_diamond) {
 }
 
 TEST_F(ReduceBooleanBranchesTest, boolean_redundant_diamond2) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)
@@ -115,7 +115,7 @@ TEST_F(ReduceBooleanBranchesTest, boolean_redundant_diamond2) {
 }
 
 TEST_F(ReduceBooleanBranchesTest, object_positive_diamond) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget-object "LFoo;.bar:LBar;")
       (move-result-pseudo-object v0)
@@ -141,7 +141,7 @@ TEST_F(ReduceBooleanBranchesTest, object_positive_diamond) {
 }
 
 TEST_F(ReduceBooleanBranchesTest, object_negative_diamond) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget-object "LFoo;.bar:LBar;")
       (move-result-pseudo-object v0)
@@ -168,7 +168,7 @@ TEST_F(ReduceBooleanBranchesTest, object_negative_diamond) {
 }
 
 TEST_F(ReduceBooleanBranchesTest, reduce_xor_conditional_branch) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)
@@ -199,7 +199,7 @@ TEST_F(ReduceBooleanBranchesTest, reduce_xor_conditional_branch) {
 }
 
 TEST_F(ReduceBooleanBranchesTest, reduce_xor_xor) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)

@@ -42,8 +42,8 @@ void print_type_chain(std::ostream& os, const DexType* type, size_t indent) {
     os << ' ';
   }
   os << show(type);
-  auto kls = type_class(type);
-  if (kls) {
+  auto* kls = type_class(type);
+  if (kls != nullptr) {
     if (kls->is_external()) {
       os << " (E)";
     }
@@ -198,7 +198,7 @@ void analyze_true_instance_ofs(
     // Need a temp to have access to unmodified v0.
     reg_t src_tmp = cfg.allocate_temp();
     {
-      auto copy_reg_insn = new IRInstruction(OPCODE_MOVE_OBJECT);
+      auto* copy_reg_insn = new IRInstruction(OPCODE_MOVE_OBJECT);
       copy_reg_insn->set_src(0, mie->insn->src(0));
       copy_reg_insn->set_dest(src_tmp);
       mutation.insert_before(def_it, {copy_reg_insn});
@@ -235,17 +235,17 @@ RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
     };
 
     for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() != OPCODE_INSTANCE_OF) {
         continue;
       }
 
-      auto state = get_state(insn);
+      const auto* state = get_state(insn);
       if (state == nullptr) {
         continue;
       }
 
-      auto test_type = insn->get_type();
+      auto* test_type = insn->get_type();
 
       auto src_type_state = state->get_dex_type(insn->src(0));
       if (!src_type_state) {
@@ -285,7 +285,7 @@ RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
       reg_t trg_reg = move_it->insn->dest();
 
       // Schedule a bypass.
-      auto set_result = new IRInstruction(OPCODE_CONST);
+      auto* set_result = new IRInstruction(OPCODE_CONST);
       set_result->set_dest(trg_reg);
       set_result->set_literal(0);
       mutation.insert_after(move_it, {set_result});
@@ -332,7 +332,7 @@ void handle_false_case(IRInstruction* insn,
   }
 
   // Schedule a bypass.
-  auto set_result = new IRInstruction(OPCODE_CONST);
+  auto* set_result = new IRInstruction(OPCODE_CONST);
   set_result->set_dest(trg_reg);
   set_result->set_literal(0);
   mutation.insert_after(move_it, {set_result});
@@ -364,17 +364,17 @@ RemoveResult analyze_and_evaluate(DexMethod* method) {
     };
 
     for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() != OPCODE_CHECK_CAST) {
         continue;
       }
 
-      auto state = get_state(insn);
+      const auto* state = get_state(insn);
       if (state == nullptr) {
         continue;
       }
 
-      auto test_type = insn->get_type();
+      auto* test_type = insn->get_type();
 
       auto src_type_state = state->get_dex_type(insn->src(0));
       if (!src_type_state) {
@@ -415,7 +415,7 @@ RemoveResult analyze_and_evaluate(DexMethod* method) {
       reg_t trg_reg = move_it->insn->dest();
 
       // Schedule a bypass.
-      auto move_result = new IRInstruction(OPCODE_MOVE_OBJECT);
+      auto* move_result = new IRInstruction(OPCODE_MOVE_OBJECT);
       move_result->set_src(0, src_reg);
       move_result->set_dest(trg_reg);
       mutation.replace(def_it, {move_result});
@@ -434,7 +434,7 @@ RemoveResult analyze_and_evaluate(DexMethod* method) {
 size_t post_process(DexMethod* method,
                     size_t overrides,
                     shrinker::Shrinker& shrinker) {
-  auto code = method->get_code();
+  auto* code = method->get_code();
   size_t num_insns_before = code->count_opcodes() - overrides;
 
   shrinker.shrink_method(method);
@@ -501,7 +501,7 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
 
   auto stats = walk::parallel::methods<RemoveResult>(
       scope, [&shrinker](DexMethod* method) {
-        auto code = method->get_code();
+        auto* code = method->get_code();
         if (code == nullptr || method->rstate.no_optimizations()) {
           return RemoveResult{};
         }

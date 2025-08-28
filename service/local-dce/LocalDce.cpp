@@ -110,14 +110,14 @@ LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
   do {
     changed = false;
     dead_instructions.clear();
-    for (auto& b : blocks) {
+    for (const auto& b : blocks) {
       auto prev_liveness = liveness.at(b->id());
       auto& bliveness = liveness.at(b->id());
       bliveness.reset();
       TRACE(DCE, 5, "B%zu: %s", b->id(), show(bliveness).c_str());
 
       // Compute live-out for this block from its successors.
-      for (auto& s : b->succs()) {
+      for (const auto& s : b->succs()) {
         if (s->target()->id() == b->id()) {
           bliveness |= prev_liveness;
         }
@@ -180,7 +180,7 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
   for (const auto& pair : dead_instructions) {
     cfg::Block* b = pair.first;
     const IRList::iterator& it = pair.second;
-    auto insn = it->insn;
+    auto* insn = it->insn;
     auto cfg_it = b->to_cfg_instruction_iterator(it);
     auto has_no_implementors = [&](auto* method) {
       if (method == nullptr) {
@@ -188,7 +188,7 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
       }
       return !has_implementor(m_method_override_graph, method);
     };
-    if (m_may_allocate_registers && m_method_override_graph &&
+    if (m_may_allocate_registers && (m_method_override_graph != nullptr) &&
         (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
          insn->opcode() == OPCODE_INVOKE_INTERFACE) &&
         has_no_implementors(
@@ -201,12 +201,12 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
       npe_instructions++;
     } else {
       TRACE(DCE, 2, "DEAD: %s", SHOW(insn));
-      auto init_class_insn =
-          m_init_classes_with_side_effects
+      auto* init_class_insn =
+          m_init_classes_with_side_effects != nullptr
               ? m_init_classes_with_side_effects->create_init_class_insn(
                     get_init_class_type_demand(insn))
               : nullptr;
-      if (init_class_insn) {
+      if (init_class_insn != nullptr) {
         init_class_instructions_added++;
         mutation.replace(cfg_it, {init_class_insn});
         any_init_class_insns = true;
@@ -217,8 +217,8 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
   }
   mutation.flush();
 
-  if (any_init_class_insns && m_init_classes_with_side_effects &&
-      declaring_type) {
+  if (any_init_class_insns && (m_init_classes_with_side_effects != nullptr) &&
+      (declaring_type != nullptr)) {
     prune_init_classes(cfg, declaring_type);
   }
 
@@ -251,7 +251,7 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
                            const boost::dynamic_bitset<>& bliveness) {
   if (opcode::has_side_effects(inst->opcode())) {
     if (opcode::is_an_invoke(inst->opcode())) {
-      const auto meth =
+      auto* const meth =
           resolve_method(inst->get_method(), opcode_to_search(inst));
       if (meth == nullptr) {
         return true;
@@ -260,10 +260,10 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
           method::is_init(meth)) {
         return true;
       }
-      if (!m_init_classes_with_side_effects &&
+      if ((m_init_classes_with_side_effects == nullptr) &&
           inst->opcode() == OPCODE_INVOKE_STATIC) {
         if (!m_ignore_pure_method_init_classes ||
-            !m_pure_methods.count(inst->get_method())) {
+            (m_pure_methods.count(inst->get_method()) == 0u)) {
           return true;
         }
       }
@@ -291,12 +291,12 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
   } else if (opcode::is_filled_new_array(inst->opcode()) ||
              inst->has_move_result_pseudo()) {
     if (opcode::is_an_sget(inst->opcode())) {
-      auto field = resolve_field(inst->get_field(), FieldSearch::Static);
-      if (field && field->rstate.init_class()) {
+      auto* field = resolve_field(inst->get_field(), FieldSearch::Static);
+      if ((field != nullptr) && field->rstate.init_class()) {
         return true;
       }
     }
-    if (!m_init_classes_with_side_effects &&
+    if ((m_init_classes_with_side_effects == nullptr) &&
         (inst->opcode() == OPCODE_NEW_INSTANCE ||
          opcode::is_an_sfield_op(inst->opcode()))) {
       return true;
@@ -331,7 +331,7 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
 
   // Let's not do the transformation if there's a chance that it could leave
   // behind dangling new-instance instructions that LocalDce couldn't remove.
-  if (!m_init_classes_with_side_effects) {
+  if (m_init_classes_with_side_effects == nullptr) {
     return;
   }
   if (!has_normalizable_new_instance(cfg)) {
@@ -355,7 +355,7 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
           !method::is_init(insn->get_method())) {
         continue;
       }
-      auto init_declaring_type = insn->get_method()->get_class();
+      auto* init_declaring_type = insn->get_method()->get_class();
       auto reg = insn->src(0);
       const auto& defs = env.get(reg);
       always_assert(!defs.is_top());
@@ -426,9 +426,9 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
       // We don't bother removing the old new-instance instruction (or other
       // intermediate move-object instructions) here, as LocalDce will do that
       // as part of its normal operation.
-      auto new_instance_insn = new IRInstruction(OPCODE_NEW_INSTANCE);
+      auto* new_instance_insn = new IRInstruction(OPCODE_NEW_INSTANCE);
       new_instance_insn->set_type(type);
-      auto move_result_pseudo_object_insn =
+      auto* move_result_pseudo_object_insn =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       move_result_pseudo_object_insn->set_dest(reg);
       if (sb_copy == nullptr) {

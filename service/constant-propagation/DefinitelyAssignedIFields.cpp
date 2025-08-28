@@ -143,7 +143,7 @@ class ConstructorAnalysisEnvironment final
 
   AnalysisResult get_analysis_result(DexClass* cls) const {
     AnalysisResult res{{}, may_this_have_escaped()};
-    for (auto field : cls->get_ifields()) {
+    for (auto* field : cls->get_ifields()) {
       if (get_written_unread_fields().unwrap().contains(field)) {
         always_assert(!get_read_unwritten_fields().contains(field));
         res.definitely_assigned_ifields.insert(field);
@@ -155,8 +155,8 @@ class ConstructorAnalysisEnvironment final
 
 const IRInstruction* get_first_load_param(const cfg::ControlFlowGraph& cfg) {
   const auto param_insns = InstructionIterable(cfg.get_param_instructions());
-  auto& mie = *param_insns.begin();
-  const auto insn = mie.insn;
+  const auto& mie = *param_insns.begin();
+  auto* const insn = mie.insn;
   always_assert(insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   return insn;
 }
@@ -210,7 +210,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
         continue;
       }
       if (opcode::is_an_iput(opcode) && src_idx == 1) {
-        auto field_ref = insn->get_field();
+        auto* field_ref = insn->get_field();
         DexField* field = resolve_field(field_ref, FieldSearch::Instance);
         if (field != nullptr && field->get_class() == m_declaring_type) {
           if (!current_state->get_read_unwritten_fields().contains(field)) {
@@ -219,7 +219,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
         }
         continue;
       } else if (opcode::is_an_iget(opcode) && src_idx == 0) {
-        auto field_ref = insn->get_field();
+        auto* field_ref = insn->get_field();
         DexField* field = resolve_field(field_ref, FieldSearch::Instance);
         if (field != nullptr && field->get_class() == m_declaring_type) {
           if (!current_state->get_written_unread_fields().unwrap().contains(
@@ -229,11 +229,11 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
         }
         continue;
       } else if (opcode == OPCODE_INVOKE_DIRECT && src_idx == 0) {
-        auto method_ref = insn->get_method();
+        auto* method_ref = insn->get_method();
         if (method::is_init(method_ref)) {
           DexMethod* method = resolve_method(method_ref, MethodSearch::Direct);
           if (method != nullptr) {
-            auto method_class = method->get_class();
+            auto* method_class = method->get_class();
             if (method_class == m_declaring_type ||
                 method_class == m_super_type) {
               invoked_ctor_on_this = method;
@@ -247,13 +247,13 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
       return;
     }
 
-    if (invoked_ctor_on_this) {
+    if (invoked_ctor_on_this != nullptr) {
       // Run this after the loop over the src registers, to make sure we abort
       // when the `this` parameter escapes
       const auto* analysis_result = m_get_analysis_result(invoked_ctor_on_this);
       if (invoked_ctor_on_this->get_class() == m_declaring_type) {
-        for (auto field : type_class(m_declaring_type)->get_ifields()) {
-          if (analysis_result->definitely_assigned_ifields.count(field)) {
+        for (auto* field : type_class(m_declaring_type)->get_ifields()) {
+          if (analysis_result->definitely_assigned_ifields.count(field) != 0u) {
             // If we haven't read the field yet, then we can also mark the field
             // as written.
             if (!current_state->get_read_unwritten_fields().contains(field)) {
@@ -307,7 +307,7 @@ UnorderedSet<const DexField*> get_definitely_assigned_ifields(
                 auto& cfg = ctor->get_code()->cfg();
                 Analyzer analyzer(cfg, ctor->get_class(), get_analysis_result);
                 const auto& env = analyzer.get_exit_state_at(cfg.exit_block());
-                auto cls = type_class(ctor->get_class());
+                auto* cls = type_class(ctor->get_class());
                 return env.get_analysis_result(cls);
               }
               AnalysisResult res;
@@ -338,10 +338,10 @@ UnorderedSet<const DexField*> get_definitely_assigned_ifields(
     auto def_use_chains = chains.get_def_use_chains();
     for (auto& [def, uses] : UnorderedIterable(def_use_chains)) {
       always_assert(opcode::is_new_instance(def->opcode()));
-      for (auto& use : UnorderedIterable(uses)) {
+      for (const auto& use : UnorderedIterable(uses)) {
         if (opcode::is_invoke_direct(use.insn->opcode()) &&
             use.src_index == 0 && method::is_init(use.insn->get_method())) {
-          auto resolved =
+          auto* resolved =
               resolve_method(use.insn->get_method(), MethodSearch::Direct);
           if (resolved == nullptr || resolved->get_class() != def->get_type()) {
             classes_with_relaxed_invoke_init.insert(def->get_type());
@@ -352,7 +352,7 @@ UnorderedSet<const DexField*> get_definitely_assigned_ifields(
   });
   ConcurrentSet<const DexField*> res;
   walk::parallel::classes(scope, [&](DexClass* cls) {
-    if (classes_with_relaxed_invoke_init.count(cls->get_type())) {
+    if (classes_with_relaxed_invoke_init.count(cls->get_type()) != 0u) {
       // All constructors, if any, of this class may be skipped.
       // TODO: Analyze all new-instance occurrences to see if the fields still
       // get initialized before being used.
@@ -369,8 +369,8 @@ UnorderedSet<const DexField*> get_definitely_assigned_ifields(
     std::erase_if(definitely_assigned_ifields, [&](const auto* f) {
       return !can_delete(f) || !can_rename(f);
     });
-    for (auto ctor : ctors) {
-      auto analysis_result = get_analysis_result(ctor);
+    for (auto* ctor : ctors) {
+      const auto* analysis_result = get_analysis_result(ctor);
       std::erase_if(definitely_assigned_ifields, [&](auto* f) {
         return !analysis_result->definitely_assigned_ifields.count(f);
       });

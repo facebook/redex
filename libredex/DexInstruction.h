@@ -378,7 +378,7 @@ inline uint32_t fill_array_data_payload_element_count(
   always_assert_log(op_data->opcode() == FOPCODE_FILLED_ARRAY,
                     "DexOpcodeData is not an array payload");
   always_assert(op_data->data_size() >= 3);
-  auto size_ptr = (uint32_t*)(op_data->data() + 1);
+  auto* size_ptr = (uint32_t*)(op_data->data() + 1);
   return *size_ptr;
 }
 
@@ -428,13 +428,13 @@ std::vector<IntType> get_fill_array_data_payload(const DexOpcodeData* op_data) {
   static_assert(std::is_integral<IntType>::value,
                 "fill-array-data-payload can only contain integral values.");
   int width = sizeof(IntType);
-  auto data = op_data->data();
+  const auto* data = op_data->data();
   always_assert_log(*data++ == width, "Incorrect width");
   auto count = *((uint32_t*)data);
   data += 2;
   std::vector<IntType> vec;
   vec.reserve(count);
-  auto element_data = (uint8_t*)data;
+  auto* element_data = (uint8_t*)data;
   for (size_t i = 0; i < count; i++) {
     IntType result = 0;
     memcpy(&result, element_data, width);

@@ -18,7 +18,7 @@ bool implements(const DexClass* cls, const DexType* intf) {
   if (is_interface(cls)) {
     return false;
   }
-  for (const auto interface : *cls->get_interfaces()) {
+  for (auto* const interface : *cls->get_interfaces()) {
     if (interface == intf) {
       return true;
     }
@@ -26,7 +26,7 @@ bool implements(const DexClass* cls, const DexType* intf) {
 
   auto* super_type = cls->get_super_class();
   auto* super_cls = type_class(cls->get_super_class());
-  if (super_cls && super_type != type::java_lang_Object()) {
+  if ((super_cls != nullptr) && super_type != type::java_lang_Object()) {
     return implements(super_cls, intf);
   }
   return false;
@@ -35,7 +35,7 @@ bool implements(const DexClass* cls, const DexType* intf) {
 // Is `left` a subset of `right`
 bool is_subset(DexTypeList* left, DexTypeList* right) {
   std::unordered_set<DexType*> rset(right->begin(), right->end());
-  for (auto ltype : *left) {
+  for (auto* ltype : *left) {
     if (rset.count(ltype) == 0) {
       return false;
     }
@@ -60,13 +60,13 @@ const DexType* find_common_super_class(const DexType* l, const DexType* r) {
   if (l == r) {
     return l;
   }
-  auto parent = l;
-  while (parent) {
+  const auto* parent = l;
+  while (parent != nullptr) {
     if (type::is_subclass(parent, r)) {
       return parent;
     }
-    auto parent_cls = type_class(parent);
-    if (!parent_cls) {
+    auto* parent_cls = type_class(parent);
+    if (parent_cls == nullptr) {
       break;
     }
     parent = parent_cls->get_super_class();
@@ -77,7 +77,7 @@ const DexType* find_common_super_class(const DexType* l, const DexType* r) {
 const DexType* find_common_type(const DexType* l, const DexType* r) {
   const DexClass* l_cls = const_cast<const DexClass*>(type_class(l));
   const DexClass* r_cls = const_cast<const DexClass*>(type_class(r));
-  if (!l_cls || !r_cls) {
+  if ((l_cls == nullptr) || (r_cls == nullptr)) {
     return nullptr;
   }
 
@@ -89,9 +89,9 @@ const DexType* find_common_type(const DexType* l, const DexType* r) {
     return r;
   }
 
-  auto parent = find_common_super_class(l, r);
-  auto parent_cls = type_class(parent);
-  if (parent && parent_cls) {
+  const auto* parent = find_common_super_class(l, r);
+  auto* parent_cls = type_class(parent);
+  if ((parent != nullptr) && (parent_cls != nullptr)) {
     if (are_interfaces_mergeable_to(l_cls, parent_cls) &&
         are_interfaces_mergeable_to(r_cls, parent_cls)) {
       return parent;
@@ -111,14 +111,15 @@ const DexType* find_common_array_type(const DexType* l, const DexType* r) {
   uint32_t r_dim = type::get_array_level(r);
 
   bool has_primitive = false;
-  auto l_elem_type = type::get_array_element_type(l);
-  auto r_elem_type = type::get_array_element_type(r);
+  auto* l_elem_type = type::get_array_element_type(l);
+  auto* r_elem_type = type::get_array_element_type(r);
   if (type::is_primitive(l_elem_type) || type::is_primitive(r_elem_type)) {
     has_primitive = true;
   }
   if (!has_primitive && l_dim == r_dim) {
-    auto common_element_type = find_common_type(l_elem_type, r_elem_type);
-    return common_element_type
+    const auto* common_element_type =
+        find_common_type(l_elem_type, r_elem_type);
+    return common_element_type != nullptr
                ? type::make_array_type(common_element_type, l_dim)
                : nullptr;
   }
@@ -141,17 +142,17 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
     return sparta::AbstractValueKind::Value;
   }
 
-  auto l = get_dex_type();
-  auto r = other.get_dex_type();
+  const auto* l = get_dex_type();
+  const auto* r = other.get_dex_type();
   if (type::is_array(l) && type::is_array(r)) {
-    auto common_array_type = find_common_array_type(l, r);
-    if (common_array_type) {
+    const auto* common_array_type = find_common_array_type(l, r);
+    if (common_array_type != nullptr) {
       m_dex_type = common_array_type;
       return sparta::AbstractValueKind::Value;
     }
   } else {
-    auto common_type = find_common_type(l, r);
-    if (common_type) {
+    const auto* common_type = find_common_type(l, r);
+    if (common_type != nullptr) {
       m_dex_type = common_type;
       return sparta::AbstractValueKind::Value;
     }

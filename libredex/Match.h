@@ -376,7 +376,7 @@ inline auto is_default_constructor() {
 inline auto can_be_default_constructor() {
   return matcher<DexMethodRef*>([](const DexMethodRef* meth) {
     const DexMethod* def = meth->as_def();
-    return def && detail::is_default_constructor(def);
+    return (def != nullptr) && detail::is_default_constructor(def);
   });
 }
 
@@ -550,7 +550,7 @@ inline auto as_type(match_t<DexType*, P> p) {
 template <typename P>
 inline auto as_class(match_t<DexClass*, P> p) {
   return matcher<DexType*>([p = std::move(p)](const DexType* t) {
-    auto cls = type_class(t);
+    auto* cls = type_class(t);
     return cls && p.matches(cls);
   });
 }

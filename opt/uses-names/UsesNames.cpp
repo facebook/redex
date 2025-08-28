@@ -68,7 +68,7 @@ class UsesNamesMarker {
     } else {
       subclass_types = get_all_children(m_ch, cls->get_type());
     }
-    for (auto type : subclass_types) {
+    for (const auto* type : subclass_types) {
       DexClass* c = type_class(type);
       if (c == nullptr) {
         TRACE(USES_NAMES, 2, "Class not found: %s", show(type).c_str());
@@ -118,7 +118,7 @@ class UsesNamesMarker {
 
   static bool match_uses_names_annotation(const DexAnnotationSet* annos,
                                           DexType* anno_type) {
-    if (!annos) {
+    if (annos == nullptr) {
       return false;
     }
     for (const auto& anno : annos->get_annotations()) {
@@ -130,7 +130,7 @@ class UsesNamesMarker {
   }
 
   void mark_uses_names_for_method(const DexMethod* meth) {
-    if (!meth->get_param_anno()) {
+    if (meth->get_param_anno() == nullptr) {
       return;
     }
     for (auto const& pair : *meth->get_param_anno()) {

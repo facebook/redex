@@ -96,7 +96,7 @@ void sort_classes_for_compressed_size(const std::string& name,
   mpoc.min_appear_percent = 1.0f;
   dexmethods_profiled_comparator comparator({}, &conf.get_method_profiles(),
                                             &mpoc);
-  for (auto cls : *classes) {
+  for (auto* cls : *classes) {
     if (cls->is_perf_sensitive() || is_canary(cls)) {
       perf_sensitive_classes.push_back(cls);
       continue;
@@ -160,7 +160,7 @@ void sort_classes_for_speed_and_compression(
   std::vector<DexClassWithSortNum> classes_with_sort_num;
   std::vector<DexClass*> remaining_classes;
 
-  for (auto cls : *classes) {
+  for (auto* cls : *classes) {
     if (cls->is_perf_sensitive() || is_canary(cls)) {
       perf_sensitive_classes.push_back(cls);
       continue;
@@ -247,9 +247,9 @@ void SortRemainingClassesPass::run_pass(DexStoresVector& stores,
   }
 
   if (m_sort_for_speed) {
-    auto& coldstart_methods = conf.get_coldstart_methods();
+    const auto& coldstart_methods = conf.get_coldstart_methods();
     UnorderedMap<const DexMethod*, unsigned int> coldstart_method_ordering;
-    for (auto& method : coldstart_methods) {
+    for (const auto& method : coldstart_methods) {
       DexMethodRef* method_ref = DexMethod::get_method(method);
       if (method_ref == nullptr || !method_ref->is_def()) {
         continue;

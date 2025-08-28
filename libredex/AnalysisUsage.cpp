@@ -24,13 +24,13 @@ void AnalysisUsage::do_pass_invalidation(
   // Invalidate existing preserved analyses.
   for (const auto& entry : UnorderedIterable(*preserved_analysis_passes)) {
     AnalysisID id = entry.first;
-    if (m_preserve_specific.count(id)) {
+    if (m_preserve_specific.count(id) != 0u) {
       continue;
     }
 
     Pass* pass = entry.second;
     // `pass` may be null in an invalidation dry run for assertion purposes.
-    if (pass) {
+    if (pass != nullptr) {
       pass->destroy_analysis_result();
     }
     erase_list.emplace(id);
@@ -55,7 +55,7 @@ void AnalysisUsage::check_dependencies(const std::vector<Pass*>& passes) {
 
     const auto& required_passes = analysis_usage.get_required_passes();
     for (const auto& required_pass : UnorderedIterable(required_passes)) {
-      if (!preserved_passes.count(required_pass)) {
+      if (preserved_passes.count(required_pass) == 0u) {
         if (!has_error) {
           has_error = true;
         } else {

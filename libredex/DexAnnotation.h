@@ -133,7 +133,7 @@ inline size_t hash_value(const DexEncodedValue& v) { return v.hash_value(); }
 class DexEncodedValueBit : public DexEncodedValue {
  public:
   DexEncodedValueBit(DexEncodedValueTypes type, bool bit)
-      : DexEncodedValue(type, bit) {}
+      : DexEncodedValue(type, static_cast<uint64_t>(bit)) {}
 
   void encode(DexOutputIdx* dodx, std::vector<uint8_t>& encdata) override;
 

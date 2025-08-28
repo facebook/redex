@@ -28,7 +28,7 @@ void AccessibilityChecker::run_checker(DexStoresVector& stores,
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     std::optional<std::string> fail_str;
     if (insn->has_field()) {
-      auto f = insn->get_field();
+      auto* f = insn->get_field();
       if (!f->is_external() && f->is_def() &&
           !type::can_access(method, f->as_def())) {
         fail_str = vshow(method) + " -> " + vshow(f->as_def());
@@ -36,7 +36,7 @@ void AccessibilityChecker::run_checker(DexStoresVector& stores,
     }
 
     if (insn->has_method()) {
-      auto m = insn->get_method();
+      auto* m = insn->get_method();
       if (!m->is_external() && m->is_def() &&
           !type::can_access(method, m->as_def())) {
         fail_str = vshow(method) + " -> " + vshow(m->as_def());
@@ -44,7 +44,7 @@ void AccessibilityChecker::run_checker(DexStoresVector& stores,
     }
 
     if (insn->has_type()) {
-      auto t = type_class(insn->get_type());
+      auto* t = type_class(insn->get_type());
       if (t != nullptr && !t->is_external() && !type::can_access(method, t)) {
         fail_str = vshow(method) + " -> " + vshow(t);
       }

@@ -187,7 +187,7 @@ class Concatenator {
     bool has_string_builder = false;
     bool has_to_string = false;
     for (auto& mie : ir_list::InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       auto op = insn->opcode();
 
       const auto& move = [&registers](reg_t dest, reg_t source) {
@@ -265,7 +265,7 @@ class Concatenator {
       }
       case OPCODE_INVOKE_VIRTUAL:
       case OPCODE_INVOKE_DIRECT: {
-        auto method = insn->get_method();
+        auto* method = insn->get_method();
         if (method == m_config.init_void) {
           continue;
         } else if (method == m_config.init_string) {
@@ -379,7 +379,7 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
   Stats stats = walk::parallel::methods<Stats>(
       scope,
       [&config, &methods_to_remove](DexMethod* m) {
-        auto code = m->get_code();
+        auto* code = m->get_code();
         if (code == nullptr) {
           return Stats{};
         }
@@ -404,7 +404,7 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
   for (DexMethod* method : methods_to_remove.get()) {
     // We can delete the method without finding callsites because these are all
     // <clinit> methods, which don't have explicit callsites
-    auto cls = type_class(method->get_class());
+    auto* cls = type_class(method->get_class());
     always_assert_log(cls != nullptr, "%s comes from an unknown class",
                       SHOW(method));
     cls->remove_method(method);

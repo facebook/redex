@@ -40,7 +40,7 @@ SummaryBuilder::SummaryBuilder(
   auto idx = 0;
   auto params = code->get_param_instructions();
   for (auto& mie : InstructionIterable(params)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     m_param_insn_map.emplace(insn, idx++);
   }
 }
@@ -49,7 +49,7 @@ Summary SummaryBuilder::build() {
   Summary summary;
 
   // Aggregate the effects of each individual instruction in the code object.
-  auto& cfg = m_code->cfg();
+  const auto& cfg = m_code->cfg();
   for (auto* block : cfg.blocks()) {
     auto env = m_ptrs_fp_iter.get_entry_state_at(block);
     reaching_defs::Environment reaching_def_env;
@@ -79,8 +79,8 @@ void SummaryBuilder::analyze_instruction_effects(
     const reaching_defs::Environment& reaching_def_env,
     const IRInstruction* insn,
     Summary* summary) {
-  auto init_class = !!m_init_classes_with_side_effects.refine(
-      get_init_class_type_demand(insn));
+  auto init_class = !(m_init_classes_with_side_effects.refine(
+                          get_init_class_type_demand(insn)) == nullptr);
   if (init_class) {
     summary->effects |= EFF_INIT_CLASS;
   }
@@ -176,7 +176,7 @@ void SummaryBuilder::analyze_instruction_effects(
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_VIRTUAL: {
-    if (m_invoke_to_summary_cmap.count(insn)) {
+    if (m_invoke_to_summary_cmap.count(insn) != 0u) {
       const auto& callee_summary = m_invoke_to_summary_cmap.at(insn);
       summary->effects |= callee_summary.effects;
       summary->may_read_external |= callee_summary.may_read_external;
@@ -208,7 +208,7 @@ void SummaryBuilder::classify_heap_write(const ptrs::Environment& env,
     summary->effects |= EFF_WRITE_MAY_ESCAPE;
     return;
   }
-  for (auto insn : pointers.elements()) {
+  for (const auto* insn : pointers.elements()) {
     if (!env.may_have_escaped(insn)) {
       if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
         summary->modified_params.emplace(m_param_insn_map.at(insn));
@@ -230,9 +230,9 @@ InvokeToSummaryMap build_summary_map(const SummaryMap& summary_map,
       if (edge->callee() == call_graph.exit()) {
         continue;
       }
-      auto invoke_insn = edge->invoke_insn();
+      auto* invoke_insn = edge->invoke_insn();
       auto& callee_summary = invoke_to_summary_map[invoke_insn];
-      auto* callee = edge->callee()->method();
+      const auto* callee = edge->callee()->method();
       auto it = summary_map.find(callee);
       if (it != summary_map.end()) {
         callee_summary.join_with(it->second);

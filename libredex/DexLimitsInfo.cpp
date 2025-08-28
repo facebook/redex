@@ -13,7 +13,7 @@ DexLimitsInfo::DexLimitsInfo(
     init_classes::InitClassesWithSideEffects* init_classes_with_side_effects,
     const DexClasses& dex) {
   m_init_classes_with_side_effects = init_classes_with_side_effects;
-  for (const auto cls : dex) {
+  for (auto* const cls : dex) {
     always_assert_log(update_refs_by_adding_class(cls),
                       "Dex limitation breaks");
   }
@@ -28,7 +28,7 @@ bool DexLimitsInfo::update_refs_by_adding_class(DexClass* cls) {
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 
-  if (m_init_classes_with_side_effects) {
+  if (m_init_classes_with_side_effects != nullptr) {
     cls->gather_init_classes(itrefs);
     init_refs.insert(itrefs.begin(), itrefs.end());
   }
@@ -61,7 +61,7 @@ void DexLimitsInfo::update_refs_by_always_adding_class(DexClass* cls) {
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 
-  if (m_init_classes_with_side_effects) {
+  if (m_init_classes_with_side_effects != nullptr) {
     cls->gather_init_classes(itrefs);
     init_refs.insert(itrefs.begin(), itrefs.end());
   }
@@ -91,7 +91,7 @@ void DexLimitsInfo::update_refs_by_erasing_class(DexClass* cls) {
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 
-  if (m_init_classes_with_side_effects) {
+  if (m_init_classes_with_side_effects != nullptr) {
     cls->gather_init_classes(itrefs);
     init_refs.insert(itrefs.begin(), itrefs.end());
   }

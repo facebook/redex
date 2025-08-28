@@ -21,7 +21,7 @@ namespace native_names {
 // NOTE: This doesn't yet support Unicode characters, even though "$" is
 // represented using Unicode.
 void escape_char(std::ostringstream& out, char c) {
-  if (isalnum(c)) {
+  if (isalnum(c) != 0) {
     out << c;
     return;
   }

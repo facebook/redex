@@ -23,7 +23,7 @@ using ::testing::Not;
 class BitwiseOpsConstantPropagationTest : public RedexIntegrationTest {
  protected:
   void set_root_method(std::string_view full_name) {
-    auto method = DexMethod::get_method(full_name)->as_def();
+    auto* method = DexMethod::get_method(full_name)->as_def();
     ASSERT_NE(nullptr, method) << "Could not find method " << full_name;
     method->rstate.set_root();
   }
@@ -42,8 +42,8 @@ TEST_F(BitwiseOpsConstantPropagationTest, ExtractGreenInt) {
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto method = DexMethod::get_method(root_method_name)->as_def();
-  const auto code = method->get_code();
+  auto* const method = DexMethod::get_method(root_method_name)->as_def();
+  auto* const code = method->get_code();
   ASSERT_NE(nullptr, code);
   const auto code_str = assembler::to_string(code);
   EXPECT_THAT(code_str, HasSubstr("8-bit deep green"))
@@ -64,8 +64,8 @@ TEST_F(BitwiseOpsConstantPropagationTest, ExtractGreenLong) {
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto method = DexMethod::get_method(root_method_name)->as_def();
-  const auto code = method->get_code();
+  auto* const method = DexMethod::get_method(root_method_name)->as_def();
+  auto* const code = method->get_code();
   ASSERT_NE(nullptr, code);
   const auto code_str = assembler::to_string(code);
   EXPECT_THAT(code_str, HasSubstr("16-bit deep green"))
@@ -86,8 +86,8 @@ TEST_F(BitwiseOpsConstantPropagationTest, HasNonRedInt) {
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto method = DexMethod::get_method(root_method_name)->as_def();
-  const auto code = method->get_code();
+  auto* const method = DexMethod::get_method(root_method_name)->as_def();
+  auto* const code = method->get_code();
   ASSERT_NE(nullptr, code);
   const auto code_str = assembler::to_string(code);
   EXPECT_THAT(code_str, Not(HasSubstr("int onlyLowerRed has non-red")))
@@ -113,8 +113,8 @@ TEST_F(BitwiseOpsConstantPropagationTest, HasNonRedLong) {
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto method = DexMethod::get_method(root_method_name)->as_def();
-  const auto code = method->get_code();
+  auto* const method = DexMethod::get_method(root_method_name)->as_def();
+  auto* const code = method->get_code();
   ASSERT_NE(nullptr, code);
   const auto code_str = assembler::to_string(code);
   EXPECT_THAT(code_str, Not(HasSubstr("long ohnlyLowerRed has non-red")))
@@ -140,8 +140,8 @@ TEST_F(BitwiseOpsConstantPropagationTest, InvertInt) {
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto method = DexMethod::get_method(root_method_name)->as_def();
-  const auto code = method->get_code();
+  auto* const method = DexMethod::get_method(root_method_name)->as_def();
+  auto* const code = method->get_code();
   ASSERT_NE(nullptr, code);
   const auto code_str = assembler::to_string(code);
   EXPECT_THAT(code_str, Not(HasSubstr("int alphaless inverted is zero")))
@@ -179,8 +179,8 @@ TEST_F(BitwiseOpsConstantPropagationTest, InvertLong) {
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto method = DexMethod::get_method(root_method_name)->as_def();
-  const auto code = method->get_code();
+  auto* const method = DexMethod::get_method(root_method_name)->as_def();
+  auto* const code = method->get_code();
   ASSERT_NE(nullptr, code);
   const auto code_str = assembler::to_string(code);
   EXPECT_THAT(code_str, Not(HasSubstr("long alphaless inverted is zero")))

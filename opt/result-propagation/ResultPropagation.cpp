@@ -239,8 +239,8 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
         methods_which_return_parameter,
     MethodRefCache& resolved_refs) const {
   always_assert(opcode::is_an_invoke(insn->opcode()));
-  const auto method = insn->get_method();
-  const auto proto = method->get_proto();
+  auto* const method = insn->get_method();
+  auto* const proto = method->get_proto();
   if (proto->is_void()) {
     // No point in doing any further analysis
     return boost::none;
@@ -251,7 +251,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     return 0;
   }
 
-  auto callee = resolve_invoke_method(insn, resolved_refs);
+  auto* callee = resolve_invoke_method(insn, resolved_refs);
   if (callee == nullptr) {
     return boost::none;
   }
@@ -285,11 +285,11 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
       return boost::none;
     }
 
-    auto static_base_type = method->get_class();
+    auto* static_base_type = method->get_class();
     const auto overriding_methods =
         method_override_graph::get_overriding_methods(
             m_graph, callee, /* include_interfaces */ false, static_base_type);
-    for (auto* overriding : UnorderedIterable(overriding_methods)) {
+    for (const auto* overriding : UnorderedIterable(overriding_methods)) {
       if (!method::may_be_invoke_target(overriding)) {
         continue;
       }
@@ -318,12 +318,12 @@ bool ReturnParamResolver::returns_compatible_with_receiver(
   // synthesized bridge method that formally returns something weaker than the
   // receiver (an implemented interface). Still, the actually returned value can
   // be substituted by the receiver.
-  auto ctype = method->get_class();
-  auto rtype = method->get_proto()->get_rtype();
+  auto* ctype = method->get_class();
+  auto* rtype = method->get_proto()->get_rtype();
   if (ctype == rtype) {
     return true;
   }
-  auto cls = type_class(ctype);
+  auto* cls = type_class(ctype);
   if (cls == nullptr) {
     // Hm, we don't have framework types available.
     return true;
@@ -354,7 +354,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
       cls == m_double_buffer_type || cls == m_float_buffer_type ||
       cls == m_int_buffer_type || cls == m_long_buffer_type ||
       cls == m_short_buffer_type) {
-    auto name = method->get_name();
+    const auto* name = method->get_name();
     if (name == DexString::make_string("compact") ||
         name == DexString::make_string("put")) {
       always_assert(returns_compatible_with_receiver(method));
@@ -363,7 +363,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
   }
 
   if (cls == m_byte_buffer_type) {
-    auto name = method->get_name();
+    const auto* name = method->get_name();
     if (name == DexString::make_string("putChar") ||
         name == DexString::make_string("putDouble") ||
         name == DexString::make_string("putFloat") ||
@@ -376,7 +376,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
   }
 
   if (cls == m_print_stream_type || cls == m_print_writer_type) {
-    auto name = method->get_name();
+    const auto* name = method->get_name();
     if (name == DexString::make_string("format") ||
         name == DexString::make_string("printf")) {
       always_assert(returns_compatible_with_receiver(method));
@@ -385,7 +385,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
   }
 
   if (cls == m_string_buffer_type || cls == m_string_builder_type) {
-    auto name = method->get_name();
+    const auto* name = method->get_name();
     if (name == DexString::make_string("appendCodePoint") ||
         name == DexString::make_string("delete") ||
         name == DexString::make_string("deleteCharAt") ||
@@ -412,7 +412,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
   auto return_param_index = ParamDomain::bottom();
   // join together return values of all blocks which end with a
   // return instruction
-  for (const auto block : cfg.blocks()) {
+  for (auto* const block : cfg.blocks()) {
     const auto& last = block->get_last_insn();
     if (last == block->end() || !opcode::is_a_return(last->insn->opcode())) {
       continue;
@@ -432,7 +432,7 @@ void ResultPropagation::patch(PassManager& mgr, cfg::ControlFlowGraph& cfg) {
   auto ii = InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); it++) {
     // do we have a sequence of invoke + move-result instruction?
-    const auto insn = it->insn;
+    auto* const insn = it->insn;
     TRACE(RP, 6, "  evaluating instruction  %s", SHOW(insn));
 
     if (!opcode::is_a_move_result(insn->opcode())) {
@@ -445,7 +445,7 @@ void ResultPropagation::patch(PassManager& mgr, cfg::ControlFlowGraph& cfg) {
       continue;
     }
 
-    auto primary_insn = primary_it->insn;
+    auto* primary_insn = primary_it->insn;
 
     if (!opcode::is_an_invoke(primary_insn->opcode())) {
       TRACE(RP, 6, "  primary instruction not an invoke.");
@@ -469,9 +469,9 @@ void ResultPropagation::patch(PassManager& mgr, cfg::ControlFlowGraph& cfg) {
       // register flowing into the invoke instruction was defined, and what
       // its statically known type is.
       const auto is_static = primary_insn->opcode() == OPCODE_INVOKE_STATIC;
-      const auto param_type =
+      const auto* const param_type =
           get_param_type(is_static, primary_insn->get_method(), *param_index);
-      const auto rtype = primary_insn->get_method()->get_proto()->get_rtype();
+      auto* const rtype = primary_insn->get_method()->get_proto()->get_rtype();
       if (!type::check_cast(param_type, rtype)) {
         ++m_stats.unverifiable_move_results;
         continue;
@@ -480,7 +480,7 @@ void ResultPropagation::patch(PassManager& mgr, cfg::ControlFlowGraph& cfg) {
 
     if (m_callee_blocklist.count(resolve_method(primary_insn->get_method(),
                                                 opcode_to_search(primary_insn),
-                                                m_resolved_refs))) {
+                                                m_resolved_refs)) != 0u) {
       continue;
     }
 
@@ -510,7 +510,7 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
 
   const auto stats = walk::parallel::methods<ResultPropagation::Stats>(
       scope, [&](DexMethod* m) {
-        const auto code = m->get_code();
+        auto* const code = m->get_code();
         if (code == nullptr || m->rstate.no_optimizations()) {
           return ResultPropagation::Stats();
         }
@@ -575,7 +575,7 @@ ResultPropagationPass::find_methods_which_return_parameter(
               }
 
               always_assert(code->cfg_built());
-              auto& cfg = code->cfg();
+              const auto& cfg = code->cfg();
               const auto return_param_index = resolver.get_return_param_index(
                   cfg, methods_which_return_parameter);
               if (return_param_index) {

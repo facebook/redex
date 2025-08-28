@@ -39,7 +39,7 @@ namespace {
  * Rewrite all typerefs from the interfaces to the concrete type.
  */
 void set_type_refs(const DexType* intf, const SingleImplData& data) {
-  for (auto opcode : data.typerefs) {
+  for (auto* opcode : data.typerefs) {
     TRACE(INTF, 3, "(TREF) %s", SHOW(opcode));
     redex_assert(opcode->get_type() == intf);
     opcode->set_type(data.cls);
@@ -60,9 +60,9 @@ DexProto* get_or_make_proto(const DexType* intf,
     rtype = impl;
   }
   DexTypeList* new_args = nullptr;
-  const auto args = proto->get_args();
+  auto* const args = proto->get_args();
   DexTypeList::ContainerType new_arg_list;
-  for (const auto arg : *args) {
+  for (auto* const arg : *args) {
     new_arg_list.push_back(arg == intf ? impl : arg);
   }
   if (skip_args) {
@@ -78,14 +78,14 @@ DexProto* get_or_make_proto(const DexType* intf,
  * with everything from the original one.
  */
 void setup_method(DexMethod* orig_method, DexMethod* new_method) {
-  auto method_anno = orig_method->get_anno_set();
-  if (method_anno) {
+  auto* method_anno = orig_method->get_anno_set();
+  if (method_anno != nullptr) {
     auto res = new_method->attach_annotation_set(
         std::make_unique<DexAnnotationSet>(*method_anno));
     always_assert(res);
   }
   const auto& params_anno = orig_method->get_param_anno();
-  if (params_anno) {
+  if (params_anno != nullptr) {
     for (auto const& param_anno : *params_anno) {
       new_method->attach_param_annotation_set(
           param_anno.first,
@@ -104,12 +104,12 @@ void setup_method(DexMethod* orig_method, DexMethod* new_method) {
  * outer class).
  */
 void combine_class_annotations(DexClass* cls, DexClass* intf_cls) {
-  auto interface_annos = intf_cls->get_anno_set();
+  auto* interface_annos = intf_cls->get_anno_set();
   if (interface_annos == nullptr) {
     return;
   }
-  auto enclosing_cls = DexType::get_type("Ldalvik/annotation/EnclosingClass;");
-  auto inner_cls = DexType::get_type("Ldalvik/annotation/InnerClass;");
+  auto* enclosing_cls = DexType::get_type("Ldalvik/annotation/EnclosingClass;");
+  auto* inner_cls = DexType::get_type("Ldalvik/annotation/InnerClass;");
   if (enclosing_cls == nullptr || inner_cls == nullptr) {
     // Not expected.
     return;
@@ -129,7 +129,7 @@ void combine_class_annotations(DexClass* cls, DexClass* intf_cls) {
  * the same.
  */
 void remove_interface(const DexType* intf, const SingleImplData& data) {
-  auto cls = type_class(data.cls);
+  auto* cls = type_class(data.cls);
   TRACE(INTF, 3, "(REMI) %s", SHOW(intf));
 
   // the interface and all its methods are public, but the impl may not be.
@@ -142,14 +142,14 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   // concrete class, so use a set to guarantee uniqueness
   UnorderedSet<DexType*> new_intfs;
   auto collect_interfaces = [&](DexClass* impl) {
-    auto intfs = impl->get_interfaces();
-    for (auto type : *intfs) {
+    auto* intfs = impl->get_interfaces();
+    for (auto* type : *intfs) {
       if (intf != type) {
         // make interface public if it was not already. It may happen
         // the parent interface is package protected (a type cannot be
         // private or protected) but the type implementing it is in a
         // different package. Make the interface public then
-        auto type_cls = type_class(type);
+        auto* type_cls = type_class(type);
         if (type_cls != nullptr) {
           if (!is_public(cls)) {
             set_public(type_cls);
@@ -163,7 +163,7 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   };
 
   collect_interfaces(cls);
-  auto intf_cls = type_class(intf);
+  auto* intf_cls = type_class(intf);
   collect_interfaces(intf_cls);
 
   auto revisited_intfs = unordered_to_ordered(new_intfs, compare_dextypes);
@@ -193,7 +193,7 @@ bool must_set_interface_annotations(const SingleImplConfig& config) {
 bool update_method_proto(const DexType* old_type_ref,
                          DexType* new_type_ref,
                          DexMethodRef* method) {
-  auto proto =
+  auto* proto =
       get_or_make_proto(old_type_ref, new_type_ref, method->get_proto());
   if (proto == method->get_proto()) {
     return false;
@@ -263,7 +263,7 @@ struct OptimizationImpl {
 void OptimizationImpl::set_field_defs(const SingleImplData& data) {
   for (const auto& field : data.fielddefs) {
     redex_assert(!single_impls->is_escaped(field->get_class()));
-    auto f = static_cast<DexField*>(
+    auto* f = static_cast<DexField*>(
         DexField::make_field(field->get_class(), field->get_name(), data.cls));
     redex_assert(f != field);
     TRACE(INTF, 3, "(FDEF) %s", SHOW(field));
@@ -278,7 +278,7 @@ void OptimizationImpl::set_field_defs(const SingleImplData& data) {
                      field->get_static_value() == nullptr
                          ? std::unique_ptr<DexEncodedValue>()
                          : field->get_static_value()->clone());
-    auto cls = type_class(field->get_class());
+    auto* cls = type_class(field->get_class());
     cls->remove_field(field);
     cls->add_field(f);
     TRACE(INTF, 3, "(FDEF)\t=> %s", SHOW(f));
@@ -290,11 +290,11 @@ void OptimizationImpl::set_field_defs(const SingleImplData& data) {
  */
 void OptimizationImpl::set_field_refs(const SingleImplData& data) {
   for (const auto& fieldrefs : UnorderedIterable(data.fieldrefs)) {
-    const auto field = fieldrefs.first;
+    auto* const field = fieldrefs.first;
     redex_assert(!single_impls->is_escaped(field->get_class()));
     DexFieldRef* f =
         DexField::make_field(field->get_class(), field->get_name(), data.cls);
-    for (const auto opcode : fieldrefs.second) {
+    for (auto* const opcode : fieldrefs.second) {
       TRACE(INTF, 3, "(FREF) %s", SHOW(opcode));
       redex_assert(f != opcode->get_field());
       opcode->set_field(f);
@@ -310,7 +310,7 @@ void OptimizationImpl::set_field_refs(const SingleImplData& data) {
  */
 void OptimizationImpl::set_method_defs(const DexType* intf,
                                        const SingleImplData& data) {
-  for (auto method : data.methoddefs) {
+  for (auto* method : data.methoddefs) {
     TRACE(INTF, 3, "(MDEF) %s", SHOW(method));
     TRACE(INTF, 5, "(MDEF) Update method: %s", SHOW(method));
     bool res = update_method_proto(intf, data.cls, method);
@@ -367,7 +367,7 @@ CheckCastSet OptimizationImpl::fix_instructions(
   for_all_methods(
       methods,
       [&](const DexMethod* caller_const) {
-        auto caller = const_cast<DexMethod*>(caller_const);
+        auto* caller = const_cast<DexMethod*>(caller_const);
         std::vector<reg_t> temps; // Cached temps.
         auto* code = caller->get_code();
         always_assert(code->cfg_built());
@@ -376,14 +376,14 @@ CheckCastSet OptimizationImpl::fix_instructions(
         for (const auto& insn_it_pair :
              UnorderedIterable(data.referencing_methods.at(caller))) {
           auto insn_it = insn_it_pair.second;
-          auto insn = insn_it_pair.first;
+          auto* insn = insn_it_pair.first;
           always_assert(&insn_it.cfg() == &cfg);
 
           auto temp_it = temps.begin();
           auto add_check_cast = [&](reg_t reg) {
             std::vector<IRInstruction*> new_insns;
             new_insns.reserve(2);
-            auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
+            auto* check_cast = new IRInstruction(OPCODE_CHECK_CAST);
             check_cast->set_src(0, reg);
             check_cast->set_type(data.cls);
             new_insns.push_back(check_cast);
@@ -407,7 +407,7 @@ CheckCastSet OptimizationImpl::fix_instructions(
               temp_it++;
             }
 
-            auto pseudo_move_result =
+            auto* pseudo_move_result =
                 new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
             pseudo_move_result->set_dest(out);
             new_insns.push_back(pseudo_move_result);
@@ -419,7 +419,7 @@ CheckCastSet OptimizationImpl::fix_instructions(
             // We need check-casts for receiver and parameters, but not
             // return type.
 
-            auto mref = insn->get_method();
+            auto* mref = insn->get_method();
 
             // Receiver.
             if (mref->get_class() == intf) {
@@ -430,7 +430,7 @@ CheckCastSet OptimizationImpl::fix_instructions(
             // Parameters.
             const auto* arg_list = mref->get_proto()->get_args();
             size_t idx = insn->opcode() == OPCODE_INVOKE_STATIC ? 0 : 1;
-            for (const auto arg : *arg_list) {
+            for (auto* const arg : *arg_list) {
               if (arg != intf) {
                 idx++;
                 continue;
@@ -446,7 +446,7 @@ CheckCastSet OptimizationImpl::fix_instructions(
           if (opcode::is_an_iput(insn->opcode()) ||
               opcode::is_an_sput(insn->opcode())) {
             // If the field type is the interface, need a check-cast.
-            auto fdef = insn->get_field();
+            auto* fdef = insn->get_field();
             if (fdef->get_type() == intf) {
               reg_t new_param = add_check_cast(insn->src(0));
               insn->set_src(0, new_param);
@@ -474,7 +474,7 @@ CheckCastSet OptimizationImpl::fix_instructions(
 void OptimizationImpl::set_method_refs(const DexType* intf,
                                        const SingleImplData& data) {
   for (const auto& mrefit : UnorderedIterable(data.methodrefs)) {
-    auto method = mrefit.first;
+    auto* method = mrefit.first;
     TRACE(INTF, 3, "(MREF) update ref %s", SHOW(method));
     // next 2 lines will generate no new proto or method when the ref matches
     // a def, which should be very common.
@@ -497,9 +497,9 @@ void OptimizationImpl::set_method_refs(const DexType* intf,
  */
 void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
                                                  const SingleImplData& data) {
-  auto intf_cls = type_class(intf);
-  auto impl = type_class(data.cls);
-  for (auto meth : intf_cls->get_vmethods()) {
+  auto* intf_cls = type_class(intf);
+  auto* impl = type_class(data.cls);
+  for (auto* meth : intf_cls->get_vmethods()) {
     // Given an interface method and a class determine whether the method
     // is already defined in the class and use it if so.
     // An interface method can be defined in some base class for "convenience"
@@ -514,8 +514,8 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
     // get the new method if one was created (interface method with a single
     // impl in signature)
     TRACE(INTF, 3, "(MITF) interface method %s", SHOW(meth));
-    auto new_meth = resolve_virtual(impl, meth->get_name(), meth->get_proto());
-    if (!new_meth) {
+    auto* new_meth = resolve_virtual(impl, meth->get_name(), meth->get_proto());
+    if (new_meth == nullptr) {
       new_meth = static_cast<DexMethod*>(DexMethod::make_method(
           impl->get_type(), meth->get_name(), meth->get_proto()));
       // new_meth may not be new, because RedexContext keeps methods around
@@ -546,12 +546,12 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
 
   // rewrite invoke-interface to invoke-virtual
   for (const auto& mref_it : UnorderedIterable(data.intf_methodrefs)) {
-    auto m = mref_it.first;
+    auto* m = mref_it.first;
     always_assert(m_intf_meth_to_impl_meth.count(m));
-    auto new_m = m_intf_meth_to_impl_meth[m];
+    auto* new_m = m_intf_meth_to_impl_meth[m];
     redex_assert(new_m && new_m != m);
     TRACE(INTF, 3, "(MITFOP) %s", SHOW(new_m));
-    for (auto mop : UnorderedIterable(mref_it.second)) {
+    for (auto* mop : UnorderedIterable(mref_it.second)) {
       TRACE(INTF, 3, "(MITFOP) %s", SHOW(mop));
       mop->set_method(new_m);
       always_assert(mop->opcode() == OPCODE_INVOKE_INTERFACE);
@@ -578,7 +578,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
   auto rewrite_enclosing_method = [&](const DexClass* cls, DexAnnotation* anno,
                                       DexEncodedValue* value) {
     if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
-      auto method_value = static_cast<DexEncodedValueMethod*>(value);
+      auto* method_value = static_cast<DexEncodedValueMethod*>(value);
       const auto& meth_it =
           m_intf_meth_to_impl_meth.find(method_value->method());
       if (meth_it == m_intf_meth_to_impl_meth.end()) {
@@ -602,8 +602,8 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
   auto rewrite_enclosing_class = [&](const DexClass*, DexAnnotation* anno,
                                      DexEncodedValue* value) {
     if (value->evtype() == DexEncodedValueTypes::DEVT_TYPE) {
-      auto type_value = static_cast<DexEncodedValueType*>(value);
-      auto iface = type_value->type();
+      auto* type_value = static_cast<DexEncodedValueType*>(value);
+      auto* iface = type_value->type();
       auto search = optimized.find(iface);
       if (search != optimized.end()) {
         auto& intf_data = single_impls->get_single_impl_data(iface);
@@ -614,9 +614,9 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
     }
   };
 
-  auto enclosing_method =
+  auto* enclosing_method =
       DexType::get_type("Ldalvik/annotation/EnclosingMethod;");
-  auto enclosing_class =
+  auto* enclosing_class =
       DexType::get_type("Ldalvik/annotation/EnclosingClass;");
   if (must_set_method_annotations(config) && enclosing_method != nullptr) {
     types_to_rewrite.emplace(enclosing_method, rewrite_enclosing_method);
@@ -629,7 +629,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
   }
 
   for (const auto& cls : scope) {
-    auto anno_set = cls->get_anno_set();
+    auto* anno_set = cls->get_anno_set();
     if (anno_set == nullptr) {
       continue;
     }
@@ -640,8 +640,8 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
       }
       auto& rewrite_fn = search->second;
       const auto& elems = anno->anno_elems();
-      for (auto& elem : elems) {
-        auto& value = elem.encoded_value;
+      for (const auto& elem : elems) {
+        const auto& value = elem.encoded_value;
         rewrite_fn(cls, anno.get(), value.get());
       }
     }
@@ -653,11 +653,11 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
  */
 EscapeReason OptimizationImpl::check_field_collision(
     const SingleImplData& data) {
-  for (const auto field : data.fielddefs) {
+  for (auto* const field : data.fielddefs) {
     redex_assert(!single_impls->is_escaped(field->get_class()));
-    auto collision =
+    auto* collision =
         resolve_field(field->get_class(), field->get_name(), data.cls);
-    if (collision) {
+    if (collision != nullptr) {
       return FIELD_COLLISION;
     }
   }
@@ -669,12 +669,12 @@ EscapeReason OptimizationImpl::check_field_collision(
  */
 EscapeReason OptimizationImpl::check_method_collision(
     const DexType* intf, const SingleImplData& data) {
-  for (auto method : data.methoddefs) {
-    auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
+  for (auto* method : data.methoddefs) {
+    auto* proto = get_or_make_proto(intf, data.cls, method->get_proto());
     redex_assert(proto != method->get_proto());
     DexMethodRef* collision =
         DexMethod::get_method(method->get_class(), method->get_name(), proto);
-    if (!collision) {
+    if (collision == nullptr) {
       collision = find_collision(ch,
                                  method->get_name(),
                                  proto,
@@ -697,13 +697,13 @@ EscapeReason OptimizationImpl::check_method_collision(
     // Alternatively, for the bridge method, we can perform additional collision
     // check by only update the rtype on the proto (Impl is Impl setup(Intf) in
     // the above example) just to be conservative.
-    if (!collision && is_bridge(method)) {
+    if ((collision == nullptr) && is_bridge(method)) {
       proto = get_or_make_proto(intf, data.cls, method->get_proto(),
                                 /* skip_args */ true);
       collision =
           DexMethod::get_method(method->get_class(), method->get_name(), proto);
     }
-    if (collision) {
+    if (collision != nullptr) {
       TRACE(INTF, 9, "Found collision %s", SHOW(method));
       TRACE(INTF, 9, "\t to %s", SHOW(collision));
       return SIG_COLLISION;
@@ -731,15 +731,15 @@ void OptimizationImpl::drop_single_impl_collision(const DexType* intf,
     }
   };
 
-  auto owner = method->get_class();
+  auto* owner = method->get_class();
   if (!single_impls->is_single_impl(owner)) {
     return;
   }
   check_type(owner);
-  auto proto = method->get_proto();
+  auto* proto = method->get_proto();
   check_type(proto->get_rtype());
-  auto args_list = proto->get_args();
-  for (auto arg : *args_list) {
+  auto* args_list = proto->get_args();
+  for (auto* arg : *args_list) {
     check_type(arg);
   }
 }
@@ -766,11 +766,11 @@ EscapeReason OptimizationImpl::can_optimize(const DexType* intf,
       return escape;
     }
   }
-  for (auto method : data.methoddefs) {
+  for (auto* method : data.methoddefs) {
     drop_single_impl_collision(intf, method);
   }
-  auto intf_cls = type_class(intf);
-  for (auto method : intf_cls->get_vmethods()) {
+  auto* intf_cls = type_class(intf);
+  for (auto* method : intf_cls->get_vmethods()) {
     drop_single_impl_collision(intf, method);
   }
   return NO_ESCAPE;
@@ -802,7 +802,7 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
     if (method::is_constructor(meth)) {
       continue;
     }
-    auto name = type_reference::new_name(meth);
+    const auto* name = type_reference::new_name(meth);
     TRACE(INTF, 9, "Changing def name for %s to %s", SHOW(meth), SHOW(name));
     rename(meth, name);
   }
@@ -811,7 +811,7 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
       continue;
     }
     always_assert(!method::is_init(refs_it.first));
-    auto name = type_reference::new_name(refs_it.first);
+    const auto* name = type_reference::new_name(refs_it.first);
     TRACE(INTF, 9, "Changing ref name for %s to %s", SHOW(refs_it.first),
           SHOW(name));
     rename(refs_it.first, name);
@@ -847,7 +847,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
 
   UnorderedMap<DexMethod*, cfg::CFGMutation> method_mutations;
   std::vector<DexMethod*> mutated_methods;
-  for (auto intf : to_optimize) {
+  for (auto* intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
     for (auto&& [method, _] :
          UnorderedIterable(intf_data.referencing_methods)) {
@@ -863,7 +863,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
   }
 
   CheckCastSet inserted_check_casts;
-  for (auto intf : to_optimize) {
+  for (auto* intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
     if (intf_data.is_escaped()) {
       continue;
@@ -885,7 +885,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
 
   // make a new scope deleting all single impl interfaces
   Scope new_scope;
-  for (auto cls : scope) {
+  for (auto* cls : scope) {
     if (optimized.find(cls->get_type()) != optimized.end()) {
       continue;
     }
@@ -903,9 +903,9 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
   std::atomic<size_t> retained{0};
   {
     for_all_methods(mutated_methods, [&](const DexMethod* m) {
-      auto* code = m->get_code();
+      const auto* code = m->get_code();
       always_assert(code->cfg_built());
-      auto& cfg = code->cfg();
+      const auto& cfg = code->cfg();
       size_t found = 0;
       for (const auto& mie : InstructionIterable(cfg)) {
         if (inserted_check_casts.count(mie.insn) != 0) {
@@ -936,12 +936,12 @@ check_casts::impl::Stats OptimizationImpl::post_process(
   // parallel.
   check_casts::impl::Stats stats;
   std::mutex mutex;
-  auto& api = m_api;
+  const auto& api = m_api;
   for_all_methods(
       methods,
       [&stats, &mutex, removed_instructions, &api](const DexMethod* m_const) {
-        auto m = const_cast<DexMethod*>(m_const);
-        auto code = m->get_code();
+        auto* m = const_cast<DexMethod*>(m_const);
+        auto* code = m->get_code();
         always_assert(code->cfg_built());
         auto& cfg = code->cfg();
         // T131253060 If enable weaken, we are hitting an assertion in

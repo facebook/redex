@@ -43,14 +43,15 @@ struct Assessment {
   uint64_t pattern_positions{0};
   uint32_t max_parent_depth{0};
   bool has_problems() {
-    return blocks_outside_try_without_positions ||
-           blocks_inside_try_without_positions || dangling_parent_positions ||
-           outlined_method_invocation_without_pattern_position ||
-           pattern_position_without_outlined_method_invocation ||
-           switch_positions_outside_outlined_methods ||
+    return (blocks_outside_try_without_positions != 0u) ||
+           (blocks_inside_try_without_positions != 0u) ||
+           (dangling_parent_positions != 0u) ||
+           (outlined_method_invocation_without_pattern_position != 0u) ||
+           (pattern_position_without_outlined_method_invocation != 0u) ||
+           (switch_positions_outside_outlined_methods != 0u) ||
            (!PositionPatternSwitchManager::
                 CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD &&
-            pattern_positions_inside_outlined_methods);
+            (pattern_positions_inside_outlined_methods != 0u));
   }
   Assessment& operator+=(const Assessment& other) {
     methods_without_positions += other.methods_without_positions;
@@ -147,7 +148,7 @@ class Assessor {
     UnorderedSet<DexPosition*> positions;
     UnorderedSet<DexPosition*> parents;
     bool any_unknown_source_position = false;
-    for (auto block : cfg.blocks()) {
+    for (auto* block : cfg.blocks()) {
       bool block_without_position_reported = false;
       DexPosition* last_position = nullptr;
       for (auto it = block->begin(); it != block->end(); it++) {
@@ -164,10 +165,11 @@ class Assessor {
             any_unknown_source_position = true;
           }
         } else if (it->type == MFLOW_OPCODE) {
-          auto insn = it->insn;
-          if (!last_position && !block_without_position_reported &&
+          auto* insn = it->insn;
+          if ((last_position == nullptr) && !block_without_position_reported &&
               needs_position(insn->opcode())) {
-            if (cfg.get_succ_edge_of_type(block, cfg::EdgeType::EDGE_THROW)) {
+            if (cfg.get_succ_edge_of_type(block, cfg::EdgeType::EDGE_THROW) !=
+                nullptr) {
               assessment.blocks_inside_try_without_positions++;
             } else {
               assessment.blocks_outside_try_without_positions++;
@@ -177,11 +179,11 @@ class Assessor {
           if (opcode::is_invoke_static(insn->opcode()) &&
               insn->get_method()->is_def() &&
               insn->get_method()->as_def()->rstate.outlined()) {
-            if (!last_position ||
+            if ((last_position == nullptr) ||
                 !m_manager->is_pattern_position(last_position)) {
               assessment.outlined_method_invocation_without_pattern_position++;
             }
-          } else if (last_position &&
+          } else if ((last_position != nullptr) &&
                      m_manager->is_pattern_position(last_position) &&
                      opcode::may_throw(insn->opcode())) {
             assessment.pattern_position_without_outlined_method_invocation++;
@@ -203,7 +205,7 @@ class Assessor {
         }
         return it->second;
       }
-      if (!positions.count(pos)) {
+      if (positions.count(pos) == 0u) {
         assessment.dangling_parent_positions++;
         return 0;
       }
@@ -214,7 +216,7 @@ class Assessor {
           std::max(assessment.max_parent_depth, depth);
       return depth;
     };
-    for (auto pos : UnorderedIterable(positions)) {
+    for (auto* pos : UnorderedIterable(positions)) {
       get_parent_depth(pos->parent);
       if (m_manager->is_pattern_position(pos)) {
         assessment.pattern_positions++;
@@ -261,7 +263,7 @@ std::string to_string(const DexAssessment& assessment) {
   std::ostringstream oss;
   bool first = true;
   for (auto& p : order(assessment)) {
-    if (p.second) {
+    if (p.second != 0u) {
       if (first) {
         first = false;
       } else {
@@ -392,8 +394,8 @@ DexAssessment DexScopeAssessor::run() {
       m_scope, [&dex_position_assessor](DexMethod* method) {
         Assessment assessment;
 
-        auto code = method->get_code();
-        if (!code) {
+        auto* code = method->get_code();
+        if (code == nullptr) {
           return assessment;
         }
 

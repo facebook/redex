@@ -27,8 +27,9 @@ constexpr const char* CONTINUATION_IMPL =
 
 // Check if cls is from Kotlin source
 bool is_kotlin_class(DexClass* cls) {
-  auto src_string = cls->get_source_file();
-  if (src_string && boost::algorithm::ends_with(src_string->str(), ".kt")) {
+  const auto* src_string = cls->get_source_file();
+  if ((src_string != nullptr) &&
+      boost::algorithm::ends_with(src_string->str(), ".kt")) {
     return true;
   }
   return false;
@@ -112,11 +113,11 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
   // Handle fields
   // Count delegated properties
   walk::fields(scope, [&](DexField* field) {
-    auto typ = field->get_type();
-    if (lazy_delegate_types.count(typ)) {
+    auto* typ = field->get_type();
+    if (lazy_delegate_types.count(typ) != 0u) {
       m_stats.kotlin_lazy_delegates++;
     }
-    if (delegate_types.count(typ)) {
+    if (delegate_types.count(typ) != 0u) {
       m_stats.kotlin_delegates++;
     }
   });
@@ -181,16 +182,16 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
 PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
   Stats stats;
 
-  if (!method->get_code()) {
+  if (method->get_code() == nullptr) {
     return stats;
   }
 
   DexClass* cls = type_class(method->get_class());
-  if (!cls) {
+  if (cls == nullptr) {
     return stats;
   }
 
-  if (method->get_access() & ACC_PUBLIC) {
+  if ((method->get_access() & ACC_PUBLIC) != 0u) {
     auto* arg_types = method->get_proto()->get_args();
     if (cls->rstate.is_cls_kotlin()) {
       stats.kotlin_public_param_objects += arg_types->size();
@@ -203,11 +204,11 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
   auto& cfg = method->get_code()->cfg();
 
   for (const auto& it : cfg::InstructionIterable(cfg)) {
-    auto insn = it.insn;
+    auto* insn = it.insn;
     switch (insn->opcode()) {
     case OPCODE_INVOKE_STATIC: {
-      auto called_method = insn->get_method();
-      if (m_kotlin_null_assertions.count(called_method)) {
+      auto* called_method = insn->get_method();
+      if (m_kotlin_null_assertions.count(called_method) != 0u) {
         stats.kotlin_null_check_insns++;
       }
     } break;

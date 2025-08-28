@@ -48,7 +48,7 @@ IRInstruction* get_next_common_insn(
   IRInstruction* representative_insn_opt = nullptr;
 
   for (size_t i = 0; i < block_iters.size(); i++) {
-    auto& it = block_iters[i];
+    const auto& it = block_iters[i];
     if (it == blocks[i]->end()) {
       return nullptr;
     }
@@ -56,8 +56,8 @@ IRInstruction* get_next_common_insn(
       return nullptr;
     }
 
-    auto insn = it->insn;
-    if (!representative_insn_opt) {
+    auto* insn = it->insn;
+    if (representative_insn_opt == nullptr) {
       representative_insn_opt = insn;
     } else if (*representative_insn_opt != *insn) {
       return nullptr;
@@ -69,8 +69,8 @@ IRInstruction* get_next_common_insn(
   if (opcode::is_a_literal_const(op)) {
     // record the (const val) uses and make sure they are the same
     std::optional<constant_uses::TypeDemand> type_demand_opt;
-    for (auto& it : block_iters) {
-      auto insn = it->insn;
+    for (const auto& it : block_iters) {
+      auto* insn = it->insn;
       // Make sure all the constant uses are of same type before hoisting.
       auto type_demand = constant_uses->get_constant_type_demand(insn);
       if (type_demand == constant_uses::TypeDemand::Error) {
@@ -116,7 +116,7 @@ std::vector<IRInstruction> get_insns_to_hoist(
   // get iterators that points to the beginning of each block
   std::vector<IRList::iterator> block_iters;
   block_iters.reserve(succ_blocks.size());
-  for (auto succ_block : succ_blocks) {
+  for (auto* succ_block : succ_blocks) {
     block_iters.push_back(succ_block->begin());
   }
 
@@ -164,11 +164,11 @@ std::vector<IRInstruction> get_insns_to_hoist(
 
     auto* common_insn =
         get_next_common_insn(block_iters, succ_blocks, constant_uses);
-    if (common_insn) {
+    if (common_insn != nullptr) {
       TRACE(BPH, 5, "Next common instruction: %s", SHOW(common_insn));
     }
 
-    if (common_insn && is_insn_eligible(common_insn)) {
+    if ((common_insn != nullptr) && is_insn_eligible(common_insn)) {
       if (common_insn->has_move_result_any()) {
         // need to check, for all succ blocks, the associated move-result must:
         // 1. be in the same block
@@ -195,7 +195,7 @@ std::vector<IRInstruction> get_insns_to_hoist(
         case kAllOngoing: {
           IRInstruction* next_common_insn =
               get_next_common_insn(copy, succ_blocks, constant_uses);
-          if (!next_common_insn) {
+          if (next_common_insn == nullptr) {
             TRACE(BPH, 5, "No common successor for move-result-any opcode.");
             proceed = false;
             break;
@@ -241,7 +241,7 @@ bool create_move_and_fix_clobbered(
     bool can_allocate_regs) {
   UnorderedMap<reg_t, reg_t> reg_map;
   auto it = block->to_cfg_instruction_iterator(pos);
-  auto cond_insn = it->insn;
+  auto* cond_insn = it->insn;
 
   // Go over the critical regs and make a copy before hoisted insns.
   for (size_t i = 0; i < cond_insn->srcs_size(); i++) {
@@ -252,14 +252,14 @@ bool create_move_and_fix_clobbered(
       if (!can_allocate_regs) {
         return false;
       }
-      auto& type_envs =
+      const auto& type_envs =
           constant_uses->get_type_inference()->get_type_environments();
-      auto& env = type_envs.at(cond_insn);
+      const auto& env = type_envs.at(cond_insn);
       auto type = env.get_type(reg);
 
       // If type_inference cannot infer type, give-up.
       if (type.is_top() || type.is_bottom()) {
-        for (auto insn_ptr : heap_insn_objs) {
+        for (auto* insn_ptr : heap_insn_objs) {
           delete insn_ptr;
         }
         return false;
@@ -396,7 +396,7 @@ size_t hoist_insns_for_block(
       }
     }
 
-    if (opcode::may_throw(insn.opcode()) && last_position) {
+    if (opcode::may_throw(insn.opcode()) && (last_position != nullptr)) {
       // We clone positions instead of moving, so that we don't move away
       // any initial positions from the sacrificial block. In case of
       // adjacent positions, the cfg will clean up obvious redundancy.
@@ -480,14 +480,14 @@ size_t process_hoisting_for_block(
     std::vector<cfg::Block*> succ_blocks;
     succ_blocks.reserve(succ_edges.size());
     for (auto* edge : succ_edges) {
-      auto succ_block = edge->target();
+      auto* succ_block = edge->target();
       const auto& preds_of_succ_block = succ_block->preds();
       if (!all_preds_are_same(preds_of_succ_block)) {
         // we can only hoist the prefix if the block has only one incoming edge
         return std::nullopt;
       }
 
-      if (cfg.get_succ_edge_of_type(succ_block, cfg::EDGE_THROW)) {
+      if (cfg.get_succ_edge_of_type(succ_block, cfg::EDGE_THROW) != nullptr) {
         return std::nullopt;
       }
 
@@ -570,7 +570,7 @@ size_t process_cfg(cfg::ControlFlowGraph& cfg,
       // when we are processing hoist for one block, other blocks may be changed
       size_t n_insn_hoisted = process_hoisting_for_block(
           block, cfg, constant_uses, can_allocate_regs);
-      if (n_insn_hoisted) {
+      if (n_insn_hoisted != 0u) {
         performed_transformation = true;
         ret_insns_hoisted += n_insn_hoisted;
         break;

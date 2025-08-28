@@ -120,14 +120,14 @@ class MaxDepthFunctionAnalyzer : public Base {
       : m_method(method), m_domain(0) {}
 
   void analyze() override {
-    if (!m_method) {
+    if (m_method == nullptr) {
       return;
     }
-    auto code = m_method->get_code();
-    if (!code) {
+    const auto* code = m_method->get_code();
+    if (code == nullptr) {
       return;
     }
-    for (auto& mie : InstructionIterable(code)) {
+    for (const auto& mie : InstructionIterable(code)) {
       always_assert_log(mie.insn,
                         "IR is malformed, MIE holding an nullptr instruction.");
 
@@ -142,10 +142,10 @@ class MaxDepthFunctionAnalyzer : public Base {
   }
 
   void analyze_invoke(IRInstruction* insn) {
-    auto callee = insn->get_method();
-    auto callee_method =
+    auto* callee = insn->get_method();
+    auto* callee_method =
         resolve_method(callee, opcode_to_search(insn), m_method);
-    if (callee_method) {
+    if (callee_method != nullptr) {
       auto summary =
           this->get_summaries()->get(callee_method, DepthDomain::top());
       if (summary.is_value()) {
@@ -159,7 +159,7 @@ class MaxDepthFunctionAnalyzer : public Base {
   }
 
   void summarize() override {
-    if (!m_method) {
+    if (m_method == nullptr) {
       return;
     }
     this->get_summaries()->update(m_method,

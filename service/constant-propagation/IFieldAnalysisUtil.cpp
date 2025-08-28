@@ -45,8 +45,8 @@ class ThisObjectAnalysis final
 
   boost::optional<UnorderedSet<DexMethod*>> collect_method_called_on_this() {
     UnorderedSet<DexMethod*> return_set;
-    auto* code = m_method->get_code();
-    auto& cfg = code->cfg();
+    const auto* code = m_method->get_code();
+    const auto& cfg = code->cfg();
     for (cfg::Block* block : cfg.blocks()) {
       auto env = get_entry_state_at(block);
 
@@ -64,8 +64,8 @@ class ThisObjectAnalysis final
             }
           }
           if (use_this) {
-            auto insn_method = insn->get_method();
-            auto callee =
+            auto* insn_method = insn->get_method();
+            auto* callee =
                 resolve_method(insn_method, opcode_to_search(insn), m_method);
             if (insn->opcode() == OPCODE_INVOKE_STATIC ||
                 insn->opcode() == OPCODE_INVOKE_DIRECT) {
@@ -148,12 +148,13 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
                       const DexMethod* method,
                       ConcurrentSet<DexField*>* blocklist_ifields,
                       UnorderedSet<const DexMethod*>* visited) {
-  if (visited->count(method)) {
+  if (visited->count(method) != 0u) {
     return true;
   }
   visited->emplace(method);
   if (method != nullptr) {
-    if (method::is_init(method) && parent_intf_set.count(method->get_class())) {
+    if (method::is_init(method) &&
+        (parent_intf_set.count(method->get_class()) != 0u)) {
       // For call on its parent's ctor, no need to proceed.
       return true;
     }
@@ -177,18 +178,18 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
   bool res = true;
   cfg_adapter::iterate_with_iterator(
       const_cast<IRCode*>(method->get_code()), [&](const IRList::iterator& it) {
-        auto insn = it->insn;
+        auto* insn = it->insn;
         if (opcode::is_an_iget(insn->opcode())) {
           // Meet accessing of a ifield in a method called from <init>, add
           // to blocklist.
-          auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
+          auto* field = resolve_field(insn->get_field(), FieldSearch::Instance);
           if (field != nullptr &&
               field->get_class() == ifield_cls->get_type()) {
             blocklist_ifields->emplace(field);
           }
         } else if (opcode::is_an_invoke(insn->opcode())) {
-          auto insn_method = insn->get_method();
-          auto callee =
+          auto* insn_method = insn->get_method();
+          auto* callee =
               resolve_method(insn_method, opcode_to_search(insn), method);
           if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
               insn->opcode() == OPCODE_INVOKE_STATIC) {
@@ -196,7 +197,7 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
             // there is no code after resolved, those must be methods not
             // not implemented by us, so they won't access our instance fields
             // as well.
-            if (!callee || !callee->get_code()) {
+            if ((callee == nullptr) || (callee->get_code() == nullptr)) {
               return cfg_adapter::LOOP_CONTINUE;
             }
           } else {
@@ -204,16 +205,17 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
             // No need to check on methods whose class/argumetns are not
             // superclass or interface of ifield_cls.
             if (callee != nullptr &&
-                !parent_intf_set.count(callee->get_class())) {
+                (parent_intf_set.count(callee->get_class()) == 0u)) {
               for (const auto& type : *callee->get_proto()->get_args()) {
-                if (parent_intf_set.count(type)) {
+                if (parent_intf_set.count(type) != 0u) {
                   no_current_type = false;
                 }
               }
             } else if (callee == nullptr &&
-                       !parent_intf_set.count(insn_method->get_class())) {
+                       (parent_intf_set.count(insn_method->get_class()) ==
+                        0u)) {
               for (const auto& type : *insn_method->get_proto()->get_args()) {
-                if (parent_intf_set.count(type)) {
+                if (parent_intf_set.count(type) != 0u) {
                   no_current_type = false;
                 }
               }
@@ -259,7 +261,7 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
   ConcurrentSet<DexField*> return_ifields;
   TypeSystem ts(scope);
   std::vector<DexClass*> relevant_classes;
-  for (auto cls : scope) {
+  for (auto* cls : scope) {
     if (cls->is_external()) {
       continue;
     }
@@ -270,22 +272,22 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
       // Also no need to proceed if there is no ifields for a class.
       continue;
     }
-    auto ctor = ctors.front();
-    auto code = ctor->get_code();
+    auto* ctor = ctors.front();
+    auto* code = ctor->get_code();
     if (code != nullptr) {
       relevant_classes.push_back(cls);
     }
   }
   walk::parallel::classes(relevant_classes, [](DexClass* cls) {
-    auto ctor = cls->get_ctors().front();
-    auto code = ctor->get_code();
+    auto* ctor = cls->get_ctors().front();
+    auto* code = ctor->get_code();
     code->cfg().calculate_exit_block();
   });
   walk::parallel::classes(
       relevant_classes,
       [&return_ifields, &ts, &allowlist_method_names](DexClass* cls) {
-        auto ctor = cls->get_ctors().front();
-        auto code = ctor->get_code();
+        auto* ctor = cls->get_ctors().front();
+        auto* code = ctor->get_code();
         always_assert(code != nullptr);
         auto& cfg = code->cfg();
         check_this::ThisObjectAnalysis fixpoint(
@@ -307,7 +309,7 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
                                                        parent_chain.end()};
           const auto& intf_set = ts.get_implemented_interfaces(cls->get_type());
           parent_intf_set.insert(intf_set.begin(), intf_set.end());
-          for (const auto method : UnorderedIterable(*check_methods)) {
+          for (auto* const method : UnorderedIterable(*check_methods)) {
             bool keep_going =
                 get_ifields_read(allowlist_method_names, parent_intf_set, cls,
                                  method, &return_ifields, &visited);
@@ -353,10 +355,10 @@ EligibleIfields gather_safely_inferable_ifield_candidates(
     // Remove candidate field if it was written in code other than its class'
     // init function.
     cfg_adapter::iterate_with_iterator(&code, [&](const IRList::iterator& it) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       auto op = insn->opcode();
       if (opcode::is_an_iput(op)) {
-        auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
+        auto* field = resolve_field(insn->get_field(), FieldSearch::Instance);
         if (field == nullptr || (method::is_init(method) &&
                                  method->get_class() == field->get_class())) {
           // If couldn't resolve the field, or this method is this field's
@@ -381,7 +383,7 @@ EligibleIfields gather_safely_inferable_ifield_candidates(
     });
   });
   for (DexField* field : UnorderedIterable(ifields_candidates)) {
-    if (!invalid_candidates.count(field)) {
+    if (invalid_candidates.count(field) == 0u) {
       eligible_ifields.emplace(field);
     }
   }

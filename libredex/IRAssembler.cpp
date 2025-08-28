@@ -78,7 +78,7 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   case opcode::Ref::None:
     break;
   case opcode::Ref::Data: {
-    auto op_data = insn->get_data();
+    auto* op_data = insn->get_data();
     if (op_data->opcode() == FOPCODE_FILLED_ARRAY) {
       auto ewidth = fill_array_data_payload_width(op_data);
       s_exprs.emplace_back(ewidth);
@@ -176,11 +176,11 @@ std::unique_ptr<DexOpcodeData> create_fill_array_data_payload_from_str(
 std::vector<s_expr> to_s_exprs(
     const DexPosition* pos,
     std::vector<const DexPosition*>* positions_emitted) {
-  if (pos->parent) {
+  if (pos->parent != nullptr) {
     // Get it? snay is redex's dad
-    auto snay = pos->parent;
+    auto* snay = pos->parent;
     for (size_t i = 0; i < positions_emitted->size(); i++) {
-      auto pos_emitted = positions_emitted->at(i);
+      const auto* pos_emitted = positions_emitted->at(i);
       if (*pos_emitted == *snay) {
         // Shane thought he could hide from us... hah! a quick linear search
         // got him
@@ -284,7 +284,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
     std::string str;
     s_patn({s_patn(&str)}, tail)
         .must_match(tail, "Expecting string literal for " + opcode_str);
-    auto* dex_str = DexString::make_string(str);
+    const auto* dex_str = DexString::make_string(str);
     insn->set_string(dex_str);
     break;
   }
@@ -387,16 +387,16 @@ std::unique_ptr<DexDebugInstruction> debug_info_from_s_expr(const s_expr& e) {
   } else if (opcode == "DBG_START_LOCAL") {
     check_arg_num(tail, 3);
     uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
-    auto name_idx = DexString::make_string(string_from_s_expr(tail[1]));
+    const auto* name_idx = DexString::make_string(string_from_s_expr(tail[1]));
     DexType* type_idx = DexType::make_type(string_from_s_expr(tail[2]));
     return std::make_unique<DexDebugOpcodeStartLocal>(register_num, name_idx,
                                                       type_idx);
   } else if (opcode == "DBG_START_LOCAL_EXTENDED") {
     check_arg_num(tail, 4);
     uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
-    auto name_idx = DexString::make_string(string_from_s_expr(tail[1]));
+    const auto* name_idx = DexString::make_string(string_from_s_expr(tail[1]));
     DexType* type_idx = DexType::make_type(string_from_s_expr(tail[2]));
-    auto sig_idx = DexString::make_string(string_from_s_expr(tail[3]));
+    const auto* sig_idx = DexString::make_string(string_from_s_expr(tail[3]));
     return std::make_unique<DexDebugOpcodeStartLocal>(register_num, name_idx,
                                                       type_idx, sig_idx);
   } else if (opcode == "DBG_END_LOCAL") {
@@ -416,7 +416,7 @@ std::unique_ptr<DexDebugInstruction> debug_info_from_s_expr(const s_expr& e) {
     return std::make_unique<DexDebugInstruction>(DBG_SET_EPILOGUE_BEGIN);
   } else if (opcode == "DBG_SET_FILE") {
     check_arg_num(tail, 1);
-    auto name_idx = DexString::make_string(string_from_s_expr(tail[0]));
+    const auto* name_idx = DexString::make_string(string_from_s_expr(tail[0]));
     return std::make_unique<DexDebugOpcodeSetFile>(name_idx);
   } else {
     always_assert_log(opcode == "EMIT", "Unknown opcode: %s", opcode.c_str());
@@ -444,7 +444,7 @@ std::unique_ptr<DexPosition> position_from_s_expr(
       },
       parent_expr)
       .must_match(e, "Expected 3 or 4 args for position directive");
-  auto* file = DexString::make_string(file_str);
+  const auto* file = DexString::make_string(file_str);
   uint32_t line;
   std::istringstream in(line_str);
   in >> line;
@@ -485,7 +485,7 @@ std::unique_ptr<SourceBlock> source_block_from_s_expr(const s_expr& e) {
       },
       val_expr)
       .must_match(e, "Expected 2+ args for src_block directive");
-  auto* method = DexString::make_string(method_str);
+  const auto* method = DexString::make_string(method_str);
   uint32_t id;
   {
     std::istringstream in(id_str);
@@ -535,9 +535,9 @@ void handle_labels(IRCode* code,
                    const LabelRefs& label_refs) {
   for (auto& mie : InstructionIterable(code)) {
     auto* insn = mie.insn;
-    if (label_refs.count(insn)) {
+    if (label_refs.count(insn) != 0u) {
       for (const std::string& label : label_refs.at(insn)) {
-        auto target_mie = label_defs.at(label);
+        auto* target_mie = label_defs.at(label);
         // Since one label can be the target of multiple branches, but one
         // MFLOW_TARGET can only point to one branching opcode, we may need to
         // create additional MFLOW_TARGET items here.
@@ -551,7 +551,7 @@ void handle_labels(IRCode* code,
               (target->type == BRANCH_SIMPLE)
                   ? new BranchTarget(&mie)
                   : new BranchTarget(&mie, target->case_key);
-          auto new_target_mie = new MethodItemEntry(new_target);
+          auto* new_target_mie = new MethodItemEntry(new_target);
           code->insert_before(code->iterator_to(*target_mie), *new_target_mie);
         }
       }
@@ -649,7 +649,8 @@ s_expr create_dbg_expr(const MethodItemEntry* mie) {
     break;
   case DBG_START_LOCAL: {
     result.emplace_back("DBG_START_LOCAL");
-    auto start_local = dynamic_cast<const DexDebugOpcodeStartLocal*>(dbg);
+    const auto* start_local =
+        dynamic_cast<const DexDebugOpcodeStartLocal*>(dbg);
     always_assert(start_local != nullptr);
     result.emplace_back(std::to_string(start_local->uvalue()));
     result.emplace_back(start_local->name()->str());
@@ -658,7 +659,8 @@ s_expr create_dbg_expr(const MethodItemEntry* mie) {
   }
   case DBG_START_LOCAL_EXTENDED: {
     result.emplace_back("DBG_START_LOCAL_EXTENDED");
-    auto start_local = dynamic_cast<const DexDebugOpcodeStartLocal*>(dbg);
+    const auto* start_local =
+        dynamic_cast<const DexDebugOpcodeStartLocal*>(dbg);
     always_assert(start_local != nullptr);
     result.emplace_back(std::to_string(start_local->uvalue()));
     result.emplace_back(start_local->name()->str());
@@ -682,7 +684,7 @@ s_expr create_dbg_expr(const MethodItemEntry* mie) {
     break;
   case DBG_SET_FILE: {
     result.emplace_back("DBG_SET_FILE");
-    auto set_file = dynamic_cast<const DexDebugOpcodeSetFile*>(dbg);
+    const auto* set_file = dynamic_cast<const DexDebugOpcodeSetFile*>(dbg);
     always_assert(set_file != nullptr);
     result.emplace_back(set_file->file()->str());
     break;
@@ -743,7 +745,7 @@ s_expr to_s_expr(const IRCode* code) {
   for (auto it = code->cbegin(); it != code->cend(); ++it) {
     switch (it->type) {
     case MFLOW_TARGET: {
-      auto bt = it->target;
+      auto* bt = it->target;
       always_assert_log(bt->src != nullptr, "%s", SHOW(code));
 
       // Don't generate redundant labels. If we would duplicate the previous
@@ -794,8 +796,8 @@ s_expr to_s_expr(const IRCode* code) {
       }
       break;
     case MFLOW_TARGET: {
-      auto branch_target = it->target;
-      auto insn = branch_target->src->insn;
+      auto* branch_target = it->target;
+      auto* insn = branch_target->src->insn;
       const auto& label_strs = label_refs.at(insn);
 
       if (branch_target->type == BRANCH_MULTI) {
@@ -899,8 +901,8 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
         s_patn({s_patn(&catch_name)})
             .must_match(tail, "try marker is missing a name");
         always_assert(!catch_name.empty());
-        auto try_marker = new MethodItemEntry(is_start ? TRY_START : TRY_END,
-                                              catches.at(catch_name));
+        auto* try_marker = new MethodItemEntry(is_start ? TRY_START : TRY_END,
+                                               catches.at(catch_name));
         code->push_back(*try_marker);
 
       } else if (keyword == ".catch") {
@@ -959,7 +961,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
           // An if target like (:label)
           bt = new BranchTarget(nullptr);
         }
-        auto maybe_target = new MethodItemEntry(bt);
+        auto* maybe_target = new MethodItemEntry(bt);
         label_defs.emplace(label, maybe_target);
         code->push_back(*maybe_target);
 
@@ -1029,7 +1031,7 @@ DexAccessFlags parse_access_flags(const s_expr& access_tokens) {
 DexField* create_concrete_field(const std::string& field_name,
                                 const DexAccessFlags& access_flags,
                                 s_expr tail) {
-  auto field = DexField::make_field(field_name);
+  auto* field = DexField::make_field(field_name);
 
   DexField* ret = field->make_concrete(access_flags);
 
@@ -1037,7 +1039,7 @@ DexField* create_concrete_field(const std::string& field_name,
   if (is_static(ret) && !tail.is_nil()) {
     s_expr code_expr;
     s_patn({s_patn(code_expr)}, tail).match_with(tail);
-    auto ret_type = ret->get_type();
+    auto* ret_type = ret->get_type();
 
     // CASE 1: is an integer (prefixed be #)
     if (code_expr.is_int32()) {
@@ -1053,7 +1055,8 @@ DexField* create_concrete_field(const std::string& field_name,
 
       // BOOLEAN
       if (type::is_boolean(ret_type)) {
-        ret->get_static_value()->value(code_expr_str == "true");
+        ret->get_static_value()->value(
+            static_cast<uint64_t>(code_expr_str == "true"));
       }
 
       // PRIMITIVE TYPE
@@ -1069,10 +1072,10 @@ DexField* create_concrete_field(const std::string& field_name,
 
       // REGULAR STRING
       else {
-        auto dex_string = DexString::make_string(code_expr_str);
+        const auto* dex_string = DexString::make_string(code_expr_str);
         always_assert_log(ret_type == type::java_lang_String(),
                           "Inputted string but did not expect string");
-        auto encoded_string = new DexEncodedValueString(dex_string);
+        auto* encoded_string = new DexEncodedValueString(dex_string);
         ret->set_value(std::unique_ptr<DexEncodedValue>(encoded_string));
       }
     } else {
@@ -1093,7 +1096,7 @@ DexMethod* method_from_s_expr(const s_expr& e) {
   s_patn({s_patn(access_tokens), s_patn(&method_name)}, tail)
       .must_match(tail, "Expecting access list and method name");
 
-  auto method = DexMethod::make_method(method_name);
+  auto* method = DexMethod::make_method(method_name);
   auto access_flags = parse_access_flags(access_tokens);
   if (method->get_name()->str() == "<init>" ||
       method->get_name()->str() == "<cinit>") {
@@ -1156,7 +1159,7 @@ std::variant<DexField*, DexMethod*> interface_member_from_s_expr(
         .must_match(tail, "Expecting method name");
     always_assert_log(method_name.find("<init>") == std::string::npos,
                       "Invalid method name: %s", method_name.c_str());
-    auto method = DexMethod::make_method(method_name);
+    auto* method = DexMethod::make_method(method_name);
     if (method_name.find("<clinit>") != std::string::npos) {
       s_expr code_expr;
       s_patn({s_patn(code_expr)}, tail).match_with(tail);
@@ -1210,7 +1213,7 @@ DexClass* class_from_s_expr(const sparta::s_expr& class_expr) {
   s_patn({s_patn(access_tokens), s_patn(&class_name)}, tail)
       .must_match(tail, "Expecting access list and class name");
 
-  auto class_type = DexType::make_type(DexString::make_string(class_name));
+  auto* class_type = DexType::make_type(DexString::make_string(class_name));
   ClassCreator class_creator(class_type);
   auto given_flags = parse_access_flags(access_tokens);
   if (iface) {
@@ -1223,7 +1226,7 @@ DexClass* class_from_s_expr(const sparta::s_expr& class_expr) {
   class_creator.set_access(implied_flags | given_flags);
 
   auto add_iface = [&](const std::string& iface_name) {
-    auto iface_type = DexType::make_type(DexString::make_string(iface_name));
+    auto* iface_type = DexType::make_type(DexString::make_string(iface_name));
     class_creator.add_interface(iface_type);
   };
   auto handle_interfaces = [&](const std::string& keyword) {
@@ -1250,7 +1253,7 @@ DexClass* class_from_s_expr(const sparta::s_expr& class_expr) {
     std::string super_class_name;
     if (s_patn({s_patn("extends"), s_patn(&super_class_name)}, superclass_tail)
             .match_with(tail)) {
-      auto super_class_type =
+      auto* super_class_type =
           DexType::make_type(DexString::make_string(super_class_name));
       class_creator.set_super(super_class_type);
       tail = std::move(superclass_tail);
@@ -1299,10 +1302,10 @@ DexClass* class_from_string(const std::string& class_def) {
 
 DexMethod* class_with_method(const std::string& class_name,
                              const std::string& method_instructions) {
-  auto class_type = DexType::make_type(DexString::make_string(class_name));
+  auto* class_type = DexType::make_type(DexString::make_string(class_name));
   ClassCreator class_creator(class_type);
   class_creator.set_super(type::java_lang_Object());
-  auto method = assembler::method_from_string(method_instructions);
+  auto* method = assembler::method_from_string(method_instructions);
   class_creator.add_method(method);
   class_creator.create();
   return method;
@@ -1310,13 +1313,13 @@ DexMethod* class_with_method(const std::string& class_name,
 
 DexClass* class_with_methods(const std::string& class_name,
                              const std::vector<DexMethod*>& methods) {
-  auto class_type = DexType::make_type(DexString::make_string(class_name));
+  auto* class_type = DexType::make_type(DexString::make_string(class_name));
   ClassCreator class_creator(class_type);
   class_creator.set_super(type::java_lang_Object());
   for (const auto& method : methods) {
     class_creator.add_method(method);
   }
-  auto cls = class_creator.create();
+  auto* cls = class_creator.create();
   return cls;
 }
 

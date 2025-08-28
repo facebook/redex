@@ -22,8 +22,8 @@ const std::vector<Tool*>& ToolRegistry::get_tools() const {
 }
 
 Tool* ToolRegistry::get_tool(const char* name) const {
-  for (const auto tool : m_registered_tools) {
-    if (!strcmp(name, tool->name().c_str())) {
+  for (auto* const tool : m_registered_tools) {
+    if (strcmp(name, tool->name().c_str()) == 0) {
       return tool;
     }
   }

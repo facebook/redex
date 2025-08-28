@@ -39,7 +39,7 @@ class DexState {
            size_t reserved_mrefs) {
     UnorderedSet<DexMethodRef*> method_refs;
     std::vector<DexType*> init_classes;
-    for (auto cls : dex) {
+    for (auto* cls : dex) {
       cls->gather_methods(method_refs);
       cls->gather_types(m_type_refs);
       cls->gather_init_classes(init_classes);
@@ -47,9 +47,9 @@ class DexState {
     m_method_refs_count = method_refs.size() + reserved_mrefs;
 
     UnorderedSet<DexType*> refined_types;
-    for (auto type : init_classes) {
-      auto refined_type = init_classes_with_side_effects.refine(type);
-      if (refined_type) {
+    for (auto* type : init_classes) {
+      const auto* refined_type = init_classes_with_side_effects.refine(type);
+      if (refined_type != nullptr) {
         m_type_refs.insert(const_cast<DexType*>(refined_type));
       }
     }
@@ -58,8 +58,8 @@ class DexState {
 
   bool can_insert_type_refs(const UnorderedSet<const DexType*>& types) {
     size_t inserted_count{0};
-    for (auto t : UnorderedIterable(types)) {
-      if (!m_type_refs.count(t)) {
+    for (const auto* t : UnorderedIterable(types)) {
+      if (m_type_refs.count(t) == 0u) {
         inserted_count++;
       }
     }
@@ -115,7 +115,7 @@ const DexString* get_split_method_name(
     const SplittableClosure& splittable_closure,
     const std::string& name_infix,
     size_t index) {
-  auto method = splittable_closure.method_closures->method;
+  auto* method = splittable_closure.method_closures->method;
   std::string_view base_name = method::is_init(method)     ? "$init$"
                                : method::is_clinit(method) ? "$clinit$"
                                                            : method->str();
@@ -150,7 +150,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
       if (it == splittable_closures.end()) {
         continue;
       }
-      for (auto& c : it->second) {
+      for (const auto& c : it->second) {
         ranked_splittable_closures.push_back(&c);
       }
     }
@@ -181,8 +181,8 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
                 return c->id() > d->id();
               });
     UnorderedSet<DexMethod*> affected_methods;
-    for (auto* splittable_closure : ranked_splittable_closures) {
-      auto method = splittable_closure->method_closures->method;
+    for (const auto* splittable_closure : ranked_splittable_closures) {
+      auto* method = splittable_closure->method_closures->method;
       std::string id =
           method->get_class()->str() + "." + method->get_name()->str();
       size_t index = uniquifiers->fetch_add(id, 1);
@@ -200,7 +200,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
       auto split_method =
           SplitMethod::create(*splittable_closure, method->get_class(),
                               split_name, std::move(arg_types));
-      auto new_method = split_method.get_new_method();
+      auto* new_method = split_method.get_new_method();
 
       new_method->rstate.set_dont_inline(); // Don't undo our work.
       if (method->rstate.too_large_for_inlining_into()) {
@@ -234,13 +234,14 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
       switch (splittable_closure->hot_split_kind) {
       case HotSplitKind::Hot: {
         stats->hot_split_count++;
-        if (concurrent_new_hot_split_methods) {
-          auto* ptr = concurrent_new_hot_split_methods->get(method);
-          auto* hot_root_method = ptr ? *ptr : method;
+        if (concurrent_new_hot_split_methods != nullptr) {
+          const auto* ptr = concurrent_new_hot_split_methods->get(method);
+          auto* hot_root_method = ptr != nullptr ? *ptr : method;
           concurrent_new_hot_split_methods->emplace(new_method,
                                                     hot_root_method);
         }
-        if (concurrent_hot_methods && concurrent_hot_methods->count(method)) {
+        if ((concurrent_hot_methods != nullptr) &&
+            (concurrent_hot_methods->count(method) != 0u)) {
           concurrent_hot_methods->insert(method);
         }
         break;
@@ -272,8 +273,8 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
                                 DexType* target_type,
                                 const DexString* split_name,
                                 std::vector<DexType*> arg_types) {
-  auto method = splittable_closure.method_closures->method;
-  auto code = method->get_code();
+  auto* method = splittable_closure.method_closures->method;
+  auto* code = method->get_code();
   auto& cfg = code->cfg();
 
   auto split_code =
@@ -281,16 +282,16 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   auto& split_cfg = split_code->cfg();
   split_code->set_debug_item(std::make_unique<DexDebugItem>());
   cfg.deep_copy(&split_cfg);
-  auto split_entry_block = split_cfg.create_block();
-  for (auto& arg : splittable_closure.args) {
-    if (arg.type) {
+  auto* split_entry_block = split_cfg.create_block();
+  for (const auto& arg : splittable_closure.args) {
+    if (arg.type != nullptr) {
       split_entry_block->push_back(
           (new IRInstruction(opcode::load_opcode(arg.type)))
               ->set_dest(arg.reg));
     }
   }
-  for (auto& arg : splittable_closure.args) {
-    if (!arg.type) {
+  for (const auto& arg : splittable_closure.args) {
+    if (arg.type == nullptr) {
       if (arg.def->has_move_result_pseudo()) {
         split_entry_block->push_back(new IRInstruction(*arg.def));
         split_entry_block->push_back(
@@ -307,7 +308,7 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   cfg::Block* split_landingpad;
   if (splittable_closure.closures.size() == 1) {
     always_assert(!splittable_closure.switch_block);
-    auto* closure = splittable_closure.closures.front();
+    const auto* closure = splittable_closure.closures.front();
     launchpad_template = closure->target;
     split_landingpad = split_cfg.get_block(closure->target->id());
   } else {
@@ -327,7 +328,7 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
     UnorderedSet<cfg::BlockId> split_target_ids;
     always_assert(!splittable_closure.closures.empty());
     launchpad_template = splittable_closure.closures.front()->target;
-    for (auto* closure : splittable_closure.closures) {
+    for (const auto* closure : splittable_closure.closures) {
       split_target_ids.insert(closure->target->id());
     }
     split_cfg.delete_succ_edge_if(split_landingpad, [&](auto* e) {
@@ -340,14 +341,14 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   }
   split_cfg.add_edge(split_entry_block, split_landingpad, cfg::EDGE_GOTO);
 
-  auto proto = method->get_proto();
-  auto split_type_list = DexTypeList::make_type_list(std::move(arg_types));
-  auto split_proto = DexProto::make_proto(proto->get_rtype(), split_type_list);
-  auto split_method_ref =
+  auto* proto = method->get_proto();
+  auto* split_type_list = DexTypeList::make_type_list(std::move(arg_types));
+  auto* split_proto = DexProto::make_proto(proto->get_rtype(), split_type_list);
+  auto* split_method_ref =
       DexMethod::make_method(target_type, split_name, split_proto);
   DexAccessFlags split_access_flags =
       DexAccessFlags::ACC_PRIVATE | DexAccessFlags::ACC_STATIC;
-  auto split_method = split_method_ref->make_concrete(
+  auto* split_method = split_method_ref->make_concrete(
       split_access_flags, std::move(split_code), /* is_virtual */ false);
 
   split_method->set_deobfuscated_name(show_deobfuscated(split_method));
@@ -362,8 +363,8 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   };
   // When splitting many cases out of a switch, we keep the positions of the
   // switch block, but not the source-block, so we insert a synthetic one here.
-  if (splittable_closure.switch_block) {
-    if (auto template_sb = source_blocks::get_first_source_block(
+  if (splittable_closure.switch_block != nullptr) {
+    if (auto* template_sb = source_blocks::get_first_source_block(
             splittable_closure.switch_block)) {
       auto split_landingpad_it = split_landingpad->get_first_insn();
       split_landingpad->insert_before(split_landingpad_it,
@@ -373,7 +374,7 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   // TODO: (Un)scale all source blocks in split method
 
   std::unique_ptr<SourceBlock> launchpad_sb;
-  if (auto template_sb =
+  if (auto* template_sb =
           source_blocks::get_first_source_block(launchpad_template)) {
     launchpad_sb = make_new_sb(method, template_sb);
   }
@@ -387,25 +388,25 @@ void SplitMethod::add_to_target() {
 }
 
 void SplitMethod::apply_code_changes() {
-  auto method = m_splittable_closure.method_closures->method;
-  auto proto = method->get_proto();
-  auto code = method->get_code();
+  auto* method = m_splittable_closure.method_closures->method;
+  auto* proto = method->get_proto();
+  auto* code = method->get_code();
   auto& cfg = code->cfg();
-  auto launchpad = cfg.create_block();
+  auto* launchpad = cfg.create_block();
   auto copy = m_launchpad_template->preds();
   for (auto* e : copy) {
-    if (!m_splittable_closure.switch_block ||
+    if ((m_splittable_closure.switch_block == nullptr) ||
         e->src() == m_splittable_closure.switch_block) {
       cfg.set_edge_target(e, launchpad);
     }
   }
-  auto invoke_insn =
+  auto* invoke_insn =
       (new IRInstruction(OPCODE_INVOKE_STATIC))
           ->set_method(m_new_method)
           ->set_srcs_size(m_new_method->get_proto()->get_args()->size());
   src_index_t i = 0;
-  for (auto& arg : m_splittable_closure.args) {
-    if (arg.type) {
+  for (const auto& arg : m_splittable_closure.args) {
+    if (arg.type != nullptr) {
       invoke_insn->set_src(i++, arg.reg);
     }
   }
@@ -413,7 +414,7 @@ void SplitMethod::apply_code_changes() {
   if (proto->is_void()) {
     launchpad->push_back(new IRInstruction(OPCODE_RETURN_VOID));
   } else {
-    auto rtype = proto->get_rtype();
+    auto* rtype = proto->get_rtype();
     reg_t min_registers_size = type::is_wide_type(rtype) ? 2 : 1;
     cfg.set_registers_size(
         std::max(cfg.get_registers_size(), min_registers_size));

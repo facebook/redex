@@ -31,7 +31,7 @@ class KotlinLambdaOptTest : public RedexIntegrationTest {
   }
 
   void set_root_method(const std::string& full_name) {
-    auto method = DexMethod::get_method(full_name)->as_def();
+    auto* method = DexMethod::get_method(full_name)->as_def();
     ASSERT_NE(nullptr, method);
     method->rstate.set_root();
   }
@@ -41,10 +41,10 @@ namespace {
 TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
   auto scope = build_class_scope(stores);
   set_root_method("Lcom/facebook/redextest/objtest/Foo;.main:()V");
-  auto main_method =
+  auto* main_method =
       DexMethod::get_method("Lcom/facebook/redextest/objtest/Foo;.main:()V")
           ->as_def();
-  auto codex = main_method->get_code();
+  auto* codex = main_method->get_code();
   ASSERT_NE(nullptr, codex);
 
   auto klr = std::make_unique<KotlinObjectInliner>();
@@ -65,7 +65,7 @@ TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
   outer_classes.insert(outer1);
   outer_classes.insert(outer2);
   for (const auto& mie : iterable) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }
@@ -87,11 +87,11 @@ TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
 TEST_F(KotlinLambdaOptTest, MethodCollideTest) {
   auto scope = build_class_scope(stores);
   set_root_method("Lcom/facebook/redextest/objtestjava/FooJava;.main:()V");
-  auto main_method =
+  auto* main_method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/objtestjava/FooJava;.main:()V")
           ->as_def();
-  auto codex = main_method->get_code();
+  auto* codex = main_method->get_code();
   ASSERT_NE(nullptr, codex);
 
   auto klr = std::make_unique<KotlinObjectInliner>();
@@ -109,7 +109,7 @@ TEST_F(KotlinLambdaOptTest, MethodCollideTest) {
   std::unordered_set<DexType*> outer_classes;
   outer_classes.insert(outer1);
   for (const auto& mie : iterable) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }

@@ -32,7 +32,7 @@ namespace {
 std::string to_string(const ModelSpec& spec) {
   std::ostringstream ss;
   ss << spec.name << "(roots: ";
-  for (const auto root : spec.roots) {
+  for (const auto* const root : spec.roots) {
     ss << SHOW(root);
   }
   ss << ", exclude: " << spec.exclude_types.size()
@@ -61,7 +61,7 @@ void load_generated_types(const ModelSpec& spec,
     }
   }
   if (!spec.gen_annos.empty()) {
-    for (const auto type : scope) {
+    for (auto* const type : scope) {
       if (has_any_annotation(type, spec.gen_annos)) {
         generated.insert(type->get_type());
       }
@@ -178,12 +178,12 @@ void Model::init(const Scope& scope,
                  const ModelSpec& spec,
                  const TypeSystem& type_system) {
   build_hierarchy(spec.roots);
-  for (const auto root : spec.roots) {
+  for (const auto* const root : spec.roots) {
     build_interface_map(root, {});
   }
   print_interface_maps(m_intf_to_classes, m_spec.merging_targets);
 
-  for (const auto root : spec.roots) {
+  for (const auto* const root : spec.roots) {
     MergerType* root_merger = build_mergers(root);
     m_roots.push_back(root_merger);
   }
@@ -206,8 +206,8 @@ void Model::build_hierarchy(const TypeSet& roots) {
     if (roots.count(type) > 0) {
       continue;
     }
-    const auto cls = type_class(type);
-    const auto super = cls->get_super_class();
+    auto* const cls = type_class(type);
+    auto* const super = cls->get_super_class();
     redex_assert(super != nullptr);
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
@@ -220,7 +220,7 @@ void Model::build_interface_map(const DexType* type, TypeSet implemented) {
     class_intfs.erase(impl);
   }
   if (!class_intfs.empty()) {
-    for (const auto intf : class_intfs) {
+    for (const auto* const intf : class_intfs) {
       m_class_to_intfs[type].insert(intf);
       m_intf_to_classes[intf].insert(type);
     }
@@ -401,7 +401,7 @@ void Model::exclude_types(const ConstTypeHashSet& exclude_types) {
 }
 
 bool Model::is_excluded(const DexType* type) const {
-  if (m_excluded.count(type)) {
+  if (m_excluded.count(type) != 0u) {
     return true;
   }
   for (const auto& prefix : UnorderedIterable(m_spec.exclude_prefixes)) {
@@ -437,7 +437,7 @@ void Model::shape_model() {
 
   InterDexGrouping interdex_grouping(m_scope, m_conf, m_spec.interdex_config,
                                      m_spec.merging_targets);
-  for (auto merger : mergers) {
+  for (auto* merger : mergers) {
     TRACE(CLMG, 6, "Build shapes from %s", SHOW(merger->type));
     MergerType::ShapeCollector shapes;
     shape_merger(*merger, interdex_grouping, shapes);
@@ -474,7 +474,7 @@ void Model::shape_merger(const MergerType& root,
       m_excluded.insert(child);
       continue;
     }
-    if (m_non_mergeables.count(child)) {
+    if (m_non_mergeables.count(child) != 0u) {
       continue;
     }
     const auto& cls = type_class(child);
@@ -587,7 +587,7 @@ TypeGroupByDex Model::group_per_dex(const TypeSet& types,
     return {{boost::none, group}};
   }
   std::vector<TypeSet> new_groups(m_x_dex.num_dexes());
-  for (auto type : types) {
+  for (const auto* type : types) {
     auto dex_id = m_x_dex.get_dex_idx(type);
     new_groups[dex_id].emplace(type);
   }
@@ -634,8 +634,8 @@ void Model::flatten_shapes(const InterDexGrouping& interdex_grouping,
     std::sort(intf_sets.begin(),
               intf_sets.end(),
               [&](const TypeSet* left, const TypeSet* right) {
-                auto& left_group = shape_hierarchy.groups.at(*left);
-                auto& right_group = shape_hierarchy.groups.at(*right);
+                const auto& left_group = shape_hierarchy.groups.at(*left);
+                const auto& right_group = shape_hierarchy.groups.at(*right);
 
                 if (left_group.size() == right_group.size()) {
                   const DexType* left_first_type = *left_group.begin();
@@ -707,7 +707,7 @@ void Model::map_fields(MergerType& merger,
       }
       std::ostringstream ss;
       ss << "placeholder_" << index;
-      auto field_type = merger.field_type_at(index);
+      auto* field_type = merger.field_type_at(index);
       fields[index] = DexField::make_field(
                           type, DexString::make_string(ss.str()), field_type)
                           ->make_concrete(ACC_PUBLIC);
@@ -811,8 +811,8 @@ void Model::collect_methods() {
     std::vector<const VirtualScope*> base_scopes;
     // get the first existing type from roots (has a DexClass)
     auto find_class = [&]() {
-      auto root_type = merger_root->type;
-      auto cls = type_class(root_type);
+      const auto* root_type = merger_root->type;
+      auto* cls = type_class(root_type);
       while (cls == nullptr) {
         const auto parent = m_parents.find(root_type);
         if (parent == m_parents.end()) {
@@ -823,14 +823,14 @@ void Model::collect_methods() {
       }
       return cls;
     };
-    auto cls = find_class();
+    auto* cls = find_class();
     always_assert_log(cls != nullptr, "No class for %s",
                       SHOW(merger_root->type));
     // load all parents scopes
     const auto& parents = m_type_system.parent_chain(cls->get_type());
     if (parents.size() > 1) {
       for (auto index = parents.size() - 1; index > 0; --index) {
-        const auto type = parents[index - 1];
+        const auto* const type = parents[index - 1];
         for (const auto& virt_scope :
              m_type_system.get_class_scopes().get(type)) {
           base_scopes.emplace_back(virt_scope);
@@ -908,7 +908,7 @@ void Model::add_interface_scope(MergerType& merger,
     // Here we check if the overridden interface is an external non-abstract
     // class. If it is, we assume it's an external default method, and
     // update MergerType.InterfaceMethod.overridden_method accordingly.
-    if (!intf_meth.overridden_meth) {
+    if (intf_meth.overridden_meth == nullptr) {
       const auto& intfs = intf_scope.interfaces;
       always_assert(!intfs.empty());
       for (const auto* intf : intfs) {
@@ -917,7 +917,7 @@ void Model::add_interface_scope(MergerType& merger,
         const auto* meth = intf_meth.methods.front();
         auto* intf_method = resolve_interface_method(intf_cls, meth->get_name(),
                                                      meth->get_proto());
-        if (intf_method && !is_abstract(intf_method)) {
+        if ((intf_method != nullptr) && !is_abstract(intf_method)) {
           intf_meth.overridden_meth = intf_method;
           TRACE(CLMG, 8, "Update InterfaceMethod.overridden_meth %s",
                 SHOW(intf_method));
@@ -1099,7 +1099,7 @@ std::string Model::print() const {
   ss << m_spec.name << " Model: all types " << m_spec.merging_targets.size()
      << ", merge types " << m_mergers.size() << ", mergeables " << count
      << "\n";
-  for (const auto root_merger : m_roots) {
+  for (auto* const root_merger : m_roots) {
     ss << print(root_merger->type, 1);
   }
   return ss.str();
@@ -1188,7 +1188,7 @@ std::string Model::print(const DexType* type, int nest) const {
     for (const auto& mergeable : merger.mergeables) {
       indent('-');
       ss << " " << print(mergeable) << "\n";
-      const auto cls = type_class(mergeable);
+      auto* const cls = type_class(mergeable);
       for (const auto& field : cls->get_ifields()) {
         indent('-');
         ss << "* " << show_deobfuscated(field) << " ("
@@ -1199,10 +1199,12 @@ std::string Model::print(const DexType* type, int nest) const {
     const auto meth_str = [&](const DexMethod* meth,
                               const std::string& suffix = "") {
       indent('-');
-      if (meth) {
+      if (meth != nullptr) {
         ss << "# " << show_deobfuscated(meth) << " ("
            << meth->get_name()->c_str() << ") ["
-           << (meth->get_code() ? meth->get_code()->cfg().num_opcodes() : 0)
+           << (meth->get_code() != nullptr
+                   ? meth->get_code()->cfg().num_opcodes()
+                   : 0)
            << "]";
       } else {
         ss << "# missing";
@@ -1246,7 +1248,7 @@ std::string Model::print(const DexType* type, int nest) const {
           meth_str(meth);
         }
         if (merger.mergeables.size() > intf_meths.methods.size()) {
-          if (!intf_meths.overridden_meth) {
+          if (intf_meths.overridden_meth == nullptr) {
             const auto& methods = intf_meths.methods;
             TRACE(CLMG, 8,
                   "interface method entry missing overridden method %s %zu",
@@ -1321,7 +1323,7 @@ void ModelStats::update_redex_stats(const std::string& prefix,
   mgr.incr_metric(prefix + "_excluded_types", m_excluded);
   mgr.incr_metric(prefix + "_dropped_types", m_dropped);
 
-  for (auto& pair : m_interdex_groups) {
+  for (const auto& pair : m_interdex_groups) {
     auto group_id = pair.first;
     auto group_size = pair.second;
     mgr.incr_metric(prefix + "_interdex_group_" + std::to_string(group_id),
@@ -1330,7 +1332,7 @@ void ModelStats::update_redex_stats(const std::string& prefix,
           group_size);
   }
 
-  for (auto& pair : m_merging_size_counts) {
+  for (const auto& pair : m_merging_size_counts) {
     auto merging_size = pair.first;
     auto count = pair.second;
     mgr.incr_metric(prefix + "_merging_size_" + std::to_string(merging_size),

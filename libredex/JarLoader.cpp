@@ -41,7 +41,7 @@
 namespace JarLoaderUtil {
 uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
   uint32_t rv;
-  auto next = buffer + sizeof(uint32_t);
+  auto* next = buffer + sizeof(uint32_t);
   always_assert_type_log(next <= buffer_end, BUFFER_END_EXCEEDED,
                          "Buffer overflow");
   memcpy(&rv, buffer, sizeof(uint32_t));
@@ -51,7 +51,7 @@ uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
 
 uint16_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
   uint16_t rv;
-  auto next = buffer + sizeof(uint16_t);
+  auto* next = buffer + sizeof(uint16_t);
   always_assert_type_log(next <= buffer_end, BUFFER_END_EXCEEDED,
                          "Buffer overflow");
   memcpy(&rv, buffer, sizeof(uint16_t));
@@ -237,7 +237,7 @@ DexField* make_dexfield(std::vector<cp_entry>& cpool,
   std::string_view nbuffer = extract_utf8(cpool, finfo.nameNdx);
   std::string_view dbuffer = extract_utf8(cpool, finfo.descNdx);
   always_assert_type_log(!nbuffer.empty(), INVALID_JAVA, "Empty field name");
-  auto name = DexString::make_string(nbuffer);
+  const auto* name = DexString::make_string(nbuffer);
   DexType* desc = DexType::make_type(dbuffer);
   DexField* field =
       static_cast<DexField*>(DexField::make_field(self, name, desc));
@@ -346,7 +346,7 @@ DexType* parse_type(std::string_view& buf) {
     redex_assert(elem_type != nullptr);
     redex_assert(!type::is_array(elem_type));
     redex_assert(buf.size() < start_size);
-    auto ret = type::make_array_type(elem_type, depth);
+    auto* ret = type::make_array_type(elem_type, depth);
 
     return ret;
   }
@@ -386,7 +386,7 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
   std::string_view nbuffer = extract_utf8(cpool, finfo.nameNdx);
   std::string_view dbuffer = extract_utf8(cpool, finfo.descNdx);
   always_assert_type_log(!nbuffer.empty(), INVALID_JAVA, "Empty method name");
-  auto name = DexString::make_string(nbuffer);
+  const auto* name = DexString::make_string(nbuffer);
   std::string_view ptr = dbuffer;
   DexTypeList* tlist = extract_arguments(ptr);
   redex_assert(tlist != nullptr);
@@ -408,7 +408,7 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
     if (nbuffer[1] == 'i') {
       access |= ACC_CONSTRUCTOR;
     }
-  } else if (access & (ACC_PRIVATE | ACC_STATIC)) {
+  } else if ((access & (ACC_PRIVATE | ACC_STATIC)) != 0u) {
     is_virt = false;
   }
   method->set_access((DexAccessFlags)access);
@@ -425,7 +425,7 @@ bool parse_class(uint8_t* buffer,
                  attribute_hook_t attr_hook,
                  const jar_loader::duplicate_allowed_hook_t& is_allowed,
                  const DexLocation* jar_location) {
-  auto buffer_end = buffer + buffer_size;
+  auto* buffer_end = buffer + buffer_size;
   uint32_t magic = read32(buffer, buffer_end);
   uint16_t vminor DEBUG_ONLY = read16(buffer, buffer_end);
   uint16_t vmajor DEBUG_ONLY = read16(buffer, buffer_end);
@@ -462,7 +462,7 @@ bool parse_class(uint8_t* buffer,
   always_assert_type_log(self != nullptr, RedexError::INVALID_JAVA,
                          "Bad class cpool index %u", clazz);
   DexClass* cls = type_class(self);
-  if (cls) {
+  if (cls != nullptr) {
     // We are seeing duplicate classes when parsing jar file
     if (cls->is_external()) {
       // Two external classes in .jar file has the same name
@@ -548,7 +548,7 @@ bool parse_class(uint8_t* buffer,
 
   uint16_t mcount = read16(buffer, buffer_end);
   UnorderedSet<const DexMethod*> added_methods;
-  if (mcount) {
+  if (mcount != 0u) {
     for (int i = 0; i < mcount; i++) {
       cp_method_info cpmethod;
       cpmethod.aflags = read16(buffer, buffer_end);
@@ -607,12 +607,12 @@ bool load_class_file(const std::string& filename, Scope* classes) {
   init_basic_types();
 
   std::ifstream ifs(filename, std::ifstream::binary);
-  auto buf = ifs.rdbuf();
+  auto* buf = ifs.rdbuf();
   size_t size = buf->pubseekoff(0, ifs.end, ifs.in);
   buf->pubseekpos(0, ifs.in);
   auto buffer = std::make_unique<char[]>(size);
   buf->sgetn(buffer.get(), size);
-  auto jar_location = DexLocation::make_location("", filename);
+  const auto* jar_location = DexLocation::make_location("", filename);
   return parse_class(
       reinterpret_cast<uint8_t*>(buffer.get()), size, classes,
       /* attr_hook */ nullptr,
@@ -951,7 +951,7 @@ bool load_jar_file(const DexLocation* location,
   file.open(location->get_file_name().c_str(),
             boost::iostreams::mapped_file::readonly);
 
-  auto mapping = reinterpret_cast<const uint8_t*>(file.const_data());
+  const auto* mapping = reinterpret_cast<const uint8_t*>(file.const_data());
   auto init_fn = []() { init_basic_types(); };
   auto on_class = [classes, &attr_hook, &is_allowed, location](uint8_t* buffer,
                                                                size_t size) {

@@ -241,12 +241,12 @@ uint32_t BalancedPartitioning::run_iteration(
       break;
     }
     // Try to swap the two documents
-    num_moved_data_vertices +=
+    num_moved_data_vertices += static_cast<unsigned int>(
         move_data_vertex(document_begin[left_gains[I].second], left_bucket,
-                         right_bucket, signatures, rng);
-    num_moved_data_vertices +=
+                         right_bucket, signatures, rng));
+    num_moved_data_vertices += static_cast<unsigned int>(
         move_data_vertex(document_begin[right_gains[I].second], left_bucket,
-                         right_bucket, signatures, rng);
+                         right_bucket, signatures, rng));
   }
   return num_moved_data_vertices;
 }

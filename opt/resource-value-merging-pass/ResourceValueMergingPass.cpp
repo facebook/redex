@@ -355,7 +355,7 @@ ResourceValueMergingPass::find_resource_optimization_candidates(
       get_resource_attributes(resource_id, style_info.styles);
 
   auto children_count = boost::out_degree(vertex, style_info.graph);
-  if (!children_count) {
+  if (children_count == 0u) {
     return resources_common_attributes;
   }
 

@@ -17,18 +17,18 @@ std::string CallSiteSummary::get_key() const {
   always_assert(!arguments.is_bottom());
   static std::array<std::string, 2> result_used_strs = {"-", "+"};
   if (arguments.is_top()) {
-    return result_used_strs[result_used];
+    return result_used_strs[static_cast<size_t>(result_used)];
   }
   const auto& bindings = arguments.bindings();
   std::vector<reg_t> ordered_arg_idxes;
   ordered_arg_idxes.reserve(bindings.size());
-  for (auto& p : bindings) {
+  for (const auto& p : bindings) {
     ordered_arg_idxes.push_back(p.first);
   }
   always_assert(!ordered_arg_idxes.empty());
   std::sort(ordered_arg_idxes.begin(), ordered_arg_idxes.end());
   std::ostringstream oss;
-  oss << result_used_strs[result_used];
+  oss << result_used_strs[static_cast<size_t>(result_used)];
   for (auto arg_idx : ordered_arg_idxes) {
     if (arg_idx != ordered_arg_idxes.front()) {
       oss << ",";
@@ -115,12 +115,12 @@ static void append_key_value(std::ostringstream& oss,
 static void append_key_value(std::ostringstream& oss,
                              const NewObjectDomain& new_obj_or_none) {
   oss << "(new-object)";
-  auto type = new_obj_or_none.get_type();
-  if (type) {
+  const auto* type = new_obj_or_none.get_type();
+  if (type != nullptr) {
     oss << show(type);
   }
-  auto new_object_insn = new_obj_or_none.get_new_object_insn();
-  if (new_object_insn) {
+  const auto* new_object_insn = new_obj_or_none.get_new_object_insn();
+  if (new_object_insn != nullptr) {
     // the IRInstruction* pointer is unique
     oss << "@" << new_object_insn;
   }
@@ -207,7 +207,7 @@ void CallSiteSummarizer::summarize() {
 
   summaries_scheduler.set_executor([&](DexMethod* method) {
     CallSiteArguments arguments;
-    if (!get_dependencies(method)) {
+    if (get_dependencies(method) == nullptr) {
       // There are no relevant callers from which we could gather incoming
       // constant arguments.
       arguments = CallSiteArguments::top();
@@ -240,15 +240,15 @@ void CallSiteSummarizer::summarize() {
       m_stats->constant_invoke_callers_unreachable++;
       return;
     }
-    auto& callees = m_caller_callee.at_unsafe(method);
+    const auto& callees = m_caller_callee.at_unsafe(method);
     ConstantEnvironment initial_env =
         constant_propagation::interprocedural::env_with_params(
             is_static(method), method->get_code(), arguments);
     auto res = get_invoke_call_site_summaries(method, callees, initial_env);
     for (auto& p : res.invoke_call_site_summaries) {
-      auto insn = p.first;
-      auto callee = m_get_callee_fn(method, insn);
-      auto call_site_summary = p.second;
+      auto* insn = p.first;
+      auto* callee = m_get_callee_fn(method, insn);
+      const auto* call_site_summary = p.second;
       m_callee_infos.update(
           callee, [&](const DexMethod*, CalleeInfo& ci, bool /* exists */) {
             auto [it, emplaced] =
@@ -270,12 +270,12 @@ void CallSiteSummarizer::summarize() {
 
   std::vector<DexMethod*> callers;
   callers.reserve(m_caller_callee.size());
-  for (auto& p : UnorderedIterable(m_caller_callee)) {
-    auto method = const_cast<DexMethod*>(p.first);
+  for (const auto& p : UnorderedIterable(m_caller_callee)) {
+    auto* method = const_cast<DexMethod*>(p.first);
     callers.push_back(method);
-    auto dependencies = get_dependencies(method);
-    if (dependencies) {
-      for (auto& q : UnorderedIterable(*dependencies)) {
+    const auto* dependencies = get_dependencies(method);
+    if (dependencies != nullptr) {
+      for (const auto& q : UnorderedIterable(*dependencies)) {
         summaries_scheduler.add_dependency(method, q.first);
       }
     }
@@ -316,9 +316,9 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
     auto last_insn = block->get_last_insn();
     auto iterable = InstructionIterable(block);
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
-      auto insn = it->insn;
-      auto callee = m_get_callee_fn(caller, insn);
-      if (callee && callees.count(callee)) {
+      auto* insn = it->insn;
+      auto* callee = m_get_callee_fn(caller, insn);
+      if ((callee != nullptr) && (callees.count(callee) != 0u)) {
         CallSiteSummary call_site_summary;
         const auto& srcs = insn->srcs();
         for (size_t i = is_static(callee) ? 0 : 1; i < srcs.size(); ++i) {
@@ -327,7 +327,7 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
           if (val.is_top()) {
             continue;
           }
-          if (m_filter_fn && !(*m_filter_fn)(val)) {
+          if ((m_filter_fn != nullptr) && !(*m_filter_fn)(val)) {
             continue;
           }
           call_site_summary.arguments.set(i, val);
@@ -353,20 +353,20 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
 const std::vector<CallSiteSummaryOccurrences>*
 CallSiteSummarizer::get_callee_call_site_summary_occurrences(
     const DexMethod* callee) const {
-  auto ptr = m_callee_infos.get_unsafe(callee);
+  const auto* ptr = m_callee_infos.get_unsafe(callee);
   return ptr == nullptr ? nullptr : &ptr->occurrences;
 }
 
 const std::vector<const IRInstruction*>*
 CallSiteSummarizer::get_callee_call_site_invokes(
     const DexMethod* callee) const {
-  auto ptr = m_callee_infos.get_unsafe(callee);
+  const auto* ptr = m_callee_infos.get_unsafe(callee);
   return ptr == nullptr ? nullptr : &ptr->invokes;
 }
 
 const CallSiteSummary* CallSiteSummarizer::get_instruction_call_site_summary(
     const IRInstruction* invoke_insn) const {
-  auto ptr = m_invoke_call_site_summaries.get_unsafe(invoke_insn);
+  const auto* ptr = m_invoke_call_site_summaries.get_unsafe(invoke_insn);
   return ptr == nullptr ? nullptr : *ptr;
 }
 

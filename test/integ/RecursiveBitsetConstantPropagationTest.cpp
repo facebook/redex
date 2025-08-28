@@ -28,7 +28,7 @@ class RecursiveBitsetConstantPropagationTest
       public ::testing::WithParamInterface<std::string> {
  private:
   void set_root_method(std::string_view full_name) {
-    auto method = DexMethod::get_method(full_name)->as_def();
+    auto* method = DexMethod::get_method(full_name)->as_def();
     ASSERT_THAT(method, NotNull()) << "method " << full_name << " not found";
     method->rstate.set_root();
   }
@@ -39,8 +39,8 @@ class RecursiveBitsetConstantPropagationTest
         "LRecursiveBitsetConstantPropagation;.main:()V";
     RedexIntegrationTest::SetUp();
     set_root_method(main_method_sig);
-    const auto main_method = DexMethod::get_method(main_method_sig)->as_def();
-    auto code_main = main_method->get_code();
+    auto* const main_method = DexMethod::get_method(main_method_sig)->as_def();
+    auto* code_main = main_method->get_code();
     ASSERT_THAT(code_main, NotNull()) << "main method not found";
   }
 
@@ -51,9 +51,9 @@ class RecursiveBitsetConstantPropagationTest
 
 TEST_P(RecursiveBitsetConstantPropagationTest,
        BeforeOptimizationAllBranchesArePresent) {
-  const auto process_method = DexMethod::get_method(process_method_sig);
+  auto* const process_method = DexMethod::get_method(process_method_sig);
   ASSERT_TRUE(process_method->is_def()) << "process method not defined";
-  const auto code_process_method = process_method->as_def()->get_code();
+  auto* const code_process_method = process_method->as_def()->get_code();
   ASSERT_THAT(code_process_method, NotNull()) << "process method not found";
   EXPECT_THAT(assembler::to_string(code_process_method),
               HasSubstr(lowest_bit_set))
@@ -69,9 +69,9 @@ TEST_P(RecursiveBitsetConstantPropagationTest,
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto process_method = DexMethod::get_method(process_method_sig);
+  auto* const process_method = DexMethod::get_method(process_method_sig);
   ASSERT_TRUE(process_method->is_def()) << "process method not defined";
-  const auto code_process_method = process_method->as_def()->get_code();
+  auto* const code_process_method = process_method->as_def()->get_code();
   ASSERT_THAT(code_process_method, NotNull()) << "process method not found";
   EXPECT_THAT(assembler::to_string(code_process_method),
               HasSubstr(lowest_bit_set))

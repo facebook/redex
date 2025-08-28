@@ -66,7 +66,7 @@ DexField* make_field_def(DexType* cls,
                          DexType* type,
                          DexAccessFlags access = ACC_PUBLIC,
                          bool external = false) {
-  auto field = static_cast<DexField*>(
+  auto* field = static_cast<DexField*>(
       DexField::make_field(cls, DexString::make_string(name), type));
   if (external) {
     field->set_access(access);
@@ -78,7 +78,7 @@ DexField* make_field_def(DexType* cls,
 }
 
 std::vector<DexMethod*> call_a_fields_and_methods_methods() {
-  auto call_a_pub_field = assembler::method_from_string(R"(
+  auto* call_a_pub_field = assembler::method_from_string(R"(
     (method (public) "LB;.call_a_pub_field:()I"
       (
         (sget "LB;.a_pub_field:I")
@@ -88,7 +88,7 @@ std::vector<DexMethod*> call_a_fields_and_methods_methods() {
     )
   )");
 
-  auto call_a_pro_field = assembler::method_from_string(R"(
+  auto* call_a_pro_field = assembler::method_from_string(R"(
     (method (public) "LB;.call_a_proc_field:()I"
       (
         (sget "LB;.a_pro_field:I")
@@ -98,7 +98,7 @@ std::vector<DexMethod*> call_a_fields_and_methods_methods() {
     )
   )");
 
-  auto call_a_pri_field = assembler::method_from_string(R"(
+  auto* call_a_pri_field = assembler::method_from_string(R"(
     (method (public) "LB;.call_a_pri_field:()I"
       (
         (sget "LB;.a_pri_field:I")
@@ -108,7 +108,7 @@ std::vector<DexMethod*> call_a_fields_and_methods_methods() {
     )
   )");
 
-  auto call_a_pub_fun = assembler::method_from_string(R"(
+  auto* call_a_pub_fun = assembler::method_from_string(R"(
     (method (public) "LB;.call_a_pub_fun:()V"
       (
         (invoke-static () "LA;.a_pub_fun:()V")
@@ -117,7 +117,7 @@ std::vector<DexMethod*> call_a_fields_and_methods_methods() {
     )
   )");
 
-  auto call_a_pro_fun = assembler::method_from_string(R"(
+  auto* call_a_pro_fun = assembler::method_from_string(R"(
     (method (public) "LB;.call_a_pro_fun:()V"
       (
         (invoke-static () "LA;.a_pro_fun:()V")
@@ -126,7 +126,7 @@ std::vector<DexMethod*> call_a_fields_and_methods_methods() {
     )
   )");
 
-  auto call_a_pri_fun = assembler::method_from_string(R"(
+  auto* call_a_pri_fun = assembler::method_from_string(R"(
     (method (public) "LB;.call_a_pri_fun:()V"
       (
         (invoke-static () "LA;.a_pri_fun:()V")
@@ -164,29 +164,29 @@ DexClass* create_class(DexType* type,
 }
 
 DexClass* create_class_A() {
-  auto int_t = type::_int();
-  auto a_t = DexType::make_type("LA;");
+  auto* int_t = type::_int();
+  auto* a_t = DexType::make_type("LA;");
 
   std::vector<DexField*> a_fields{
       make_field_def(a_t, "a_pub_field", int_t, ACC_PUBLIC | ACC_STATIC),
       make_field_def(a_t, "a_pro_field", int_t, ACC_PROTECTED | ACC_STATIC),
       make_field_def(a_t, "a_pri_field", int_t, ACC_PRIVATE | ACC_STATIC),
   };
-  auto a_pub_fun = DexMethod::make_method("LA;", "a_pub_fun", "V", {})
-                       ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* a_pub_fun = DexMethod::make_method("LA;", "a_pub_fun", "V", {})
+                        ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
-  auto a_pro_fun = DexMethod::make_method("LA;", "a_pro_fun", "V", {})
-                       ->make_concrete(ACC_PROTECTED | ACC_STATIC, false);
+  auto* a_pro_fun = DexMethod::make_method("LA;", "a_pro_fun", "V", {})
+                        ->make_concrete(ACC_PROTECTED | ACC_STATIC, false);
 
-  auto a_pri_fun = DexMethod::make_method("LA;", "a_pri_fun", "V", {})
-                       ->make_concrete(ACC_PRIVATE | ACC_STATIC, false);
+  auto* a_pri_fun = DexMethod::make_method("LA;", "a_pri_fun", "V", {})
+                        ->make_concrete(ACC_PRIVATE | ACC_STATIC, false);
   std::vector<DexMethod*> a_methods{a_pub_fun, a_pro_fun, a_pri_fun};
   return create_class(a_t, type::java_lang_Object(), a_methods, a_fields,
                       ACC_PUBLIC);
 }
 
 DexClass* create_class_B(DexType* super) {
-  auto b_t = DexType::make_type("LB;");
+  auto* b_t = DexType::make_type("LB;");
   std::vector<DexMethod*> b_methods = call_a_fields_and_methods_methods();
   std::vector<DexField*> b_fields{};
   return create_class(b_t, super, b_methods, b_fields);
@@ -195,11 +195,11 @@ DexClass* create_class_B(DexType* super) {
 std::vector<DexClass*> create_classes() {
   std::vector<DexClass*> classes;
   // Create A
-  auto a_t = DexType::make_type("LA;");
-  auto cls_a = create_class_A();
+  auto* a_t = DexType::make_type("LA;");
+  auto* cls_a = create_class_A();
   classes.push_back(cls_a);
   // Create B
-  auto cls_b = create_class_B(a_t);
+  auto* cls_b = create_class_B(a_t);
   classes.push_back(cls_b);
   return classes;
 }
@@ -286,7 +286,7 @@ TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
   DexMetadata dm_s_A_B_C;
   dm_s_A_B_C.set_id("s_A_B_C");
   DexStore store_s_A_B_C(dm_s_A_B_C);
-  auto type_s_A_B_C = DexType::make_type("LSABC;");
+  auto* type_s_A_B_C = DexType::make_type("LSABC;");
   store_s_A_B_C.add_classes(
       {create_class(type_s_A_B_C, type::java_lang_Object(), empty_method_vec,
                     empty_field_vecc)});
@@ -294,14 +294,14 @@ TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
   DexMetadata dm_s_A_B;
   dm_s_A_B.set_id("s_A_B");
   DexStore store_s_A_B(dm_s_A_B);
-  auto type_s_A_B = DexType::make_type("LSAB;");
+  auto* type_s_A_B = DexType::make_type("LSAB;");
   store_s_A_B.add_classes({create_class(type_s_A_B, type_s_A_B_C,
                                         empty_method_vec, empty_field_vecc)});
 
   DexMetadata dm_s_B_C;
   dm_s_B_C.set_id("s_B_C");
   DexStore store_s_B_C(dm_s_B_C);
-  auto type_s_B_C = DexType::make_type("LSBC;");
+  auto* type_s_B_C = DexType::make_type("LSBC;");
   store_s_B_C.add_classes({create_class(type_s_B_C, type_s_A_B,
                                         empty_method_vec, empty_field_vecc)});
 

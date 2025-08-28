@@ -33,7 +33,7 @@ ResourcesInliningPass::filter_inlinable_resources(
   uint32_t num_bools = 0;
   const auto& id_to_name = res_table->id_to_name;
   if (traceEnabled(RIP, 1)) {
-    for (auto& val : id_to_name) {
+    for (const auto& val : id_to_name) {
       auto id = val.first;
       auto masked_type = id & 0x00FF0000;
       const std::string& type_name =
@@ -53,9 +53,9 @@ ResourcesInliningPass::filter_inlinable_resources(
 
   UnorderedMap<uint32_t, resources::InlinableValue> refined_inlinable_resources;
 
-  for (auto& pair : UnorderedIterable(inlinable_resources)) {
-    auto& id = pair.first;
-    auto& value = pair.second;
+  for (const auto& pair : UnorderedIterable(inlinable_resources)) {
+    const auto& id = pair.first;
+    const auto& value = pair.second;
 
     auto masked_type = id & 0x00FF0000;
     const auto& id_name = id_to_name.at(id);
@@ -100,7 +100,7 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
           scope, inlinable_resources, id_to_name, type_names, package_name);
 
   for (auto& pair : UnorderedIterable(possible_transformations)) {
-    auto method = pair.first;
+    auto* method = pair.first;
     auto& transforms = pair.second;
     ResourcesInliningPass::inline_resource_values_dex(method, transforms, mgr);
   }
@@ -159,7 +159,7 @@ bool exists_possible_transformation(
     const UnorderedSet<DexMethodRef*>& name_method_refs) {
   for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
           (value_method_refs.find(insn->get_method()) !=
                value_method_refs.end() ||
@@ -205,7 +205,7 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
                                     cp::PrimitiveAnalyzer>;
 
     // Retrieving cfg
-    auto get_code = method->get_code();
+    auto* get_code = method->get_code();
     if (get_code == nullptr) {
       return;
     }
@@ -278,7 +278,7 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
       // Going through each instruction in the block and checking for invoke
       // virtual, if it is inlinable and if it is a valid API call
       for (auto& mie : InstructionIterable(block)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         handle_instruction(env, insn);
         intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       }
@@ -303,7 +303,7 @@ void ResourcesInliningPass::inline_resource_values_dex(
 
   IRInstruction* new_insn;
   for (const auto& elem : insn_inlinable) {
-    auto insn = elem.insn;
+    auto* insn = elem.insn;
     cfg::InstructionIterator it_invoke = cfg.find_insn(insn);
 
     if (std::holds_alternative<resources::InlinableValue>(elem.inlinable)) {
@@ -326,7 +326,7 @@ void ResourcesInliningPass::inline_resource_values_dex(
         mutator.remove(it_invoke);
         continue;
       }
-      auto move_insn = move_insn_it->insn;
+      auto* move_insn = move_insn_it->insn;
 
       if (move_insn->opcode() == OPCODE_MOVE_RESULT) {
         new_insn = new IRInstruction(OPCODE_CONST);
@@ -334,13 +334,14 @@ void ResourcesInliningPass::inline_resource_values_dex(
           if (method_ref ==
               DexMethod::get_method(
                   "Landroid/content/res/Resources;.getInteger:(I)I")) {
-            if (inlinable_value.bool_value == 1) {
+            if (static_cast<int>(inlinable_value.bool_value) == 1) {
               new_insn->set_literal((int32_t)0xffffffff);
             } else {
               new_insn->set_literal(0);
             }
           } else {
-            new_insn->set_literal(inlinable_value.bool_value);
+            new_insn->set_literal(
+                static_cast<int64_t>(inlinable_value.bool_value));
           }
           mgr.incr_metric("inlined_booleans", 1);
         } else {
@@ -396,7 +397,7 @@ void ResourcesInliningPass::inline_resource_values_dex(
         mutator.remove(it_invoke);
         continue;
       }
-      auto move_insn = move_insn_it->insn;
+      auto* move_insn = move_insn_it->insn;
       new_insn = new IRInstruction(OPCODE_CONST_STRING);
       new_insn->set_string(
           DexString::make_string(get<std::string>(elem.inlinable)));

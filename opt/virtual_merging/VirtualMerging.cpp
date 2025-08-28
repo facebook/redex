@@ -141,8 +141,8 @@ void VirtualMerging::find_unsupported_virtual_scopes() {
       [](const DexMethod*) { return true; },
       [&](const DexMethod*, IRInstruction* insn) {
         if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-          auto method_ref = insn->get_method();
-          auto method = resolve_method(method_ref, MethodSearch::Virtual);
+          auto* method_ref = insn->get_method();
+          auto* method = resolve_method(method_ref, MethodSearch::Virtual);
           if (method == nullptr) {
             invoke_super_unresolved_method_refs.insert(method_ref);
           } else {
@@ -155,12 +155,13 @@ void VirtualMerging::find_unsupported_virtual_scopes() {
   m_stats.invoke_super_unresolved_method_refs =
       invoke_super_unresolved_method_refs.size();
 
-  for (auto method : UnorderedIterable(invoke_super_methods)) {
+  for (const auto* method : UnorderedIterable(invoke_super_methods)) {
     m_unsupported_virtual_scopes.insert(
         m_type_system.find_virtual_scope(method));
   }
 
-  for (auto method : UnorderedIterable(invoke_super_unresolved_method_refs)) {
+  for (const auto* method :
+       UnorderedIterable(invoke_super_unresolved_method_refs)) {
     m_unsupported_named_protos[method->get_name()].insert(method->get_proto());
   }
 }
@@ -179,7 +180,8 @@ void VirtualMerging::compute_mergeable_scope_methods() {
     always_assert(!overriding_method->is_external());
     always_assert(overriding_method->get_code());
 
-    auto virtual_scope = m_type_system.find_virtual_scope(overriding_method);
+    const auto* virtual_scope =
+        m_type_system.find_virtual_scope(overriding_method);
     if (virtual_scope == nullptr) {
       TRACE(VM, 1, "[VM] virtual method {%s} has no virtual scope!",
             SHOW(overriding_method));
@@ -190,7 +192,7 @@ void VirtualMerging::compute_mergeable_scope_methods() {
       return;
     }
 
-    if (m_unsupported_virtual_scopes.count(virtual_scope)) {
+    if (m_unsupported_virtual_scopes.count(virtual_scope) != 0u) {
       TRACE(VM, 5, "[VM] virtual method {%s} in an unsupported virtual scope",
             SHOW(overriding_method));
       return;
@@ -198,7 +200,7 @@ void VirtualMerging::compute_mergeable_scope_methods() {
 
     auto it = m_unsupported_named_protos.find(overriding_method->get_name());
     if (it != m_unsupported_named_protos.end() &&
-        it->second.count(overriding_method->get_proto())) {
+        (it->second.count(overriding_method->get_proto()) != 0u)) {
       // Never observed in practice, but I guess it might happen
       TRACE(VM, 1, "[VM] virtual method {%s} has unsupported name/proto",
             SHOW(overriding_method));
@@ -247,13 +249,13 @@ struct SimpleOrdering {
       const method_profiles::MethodProfiles& profiles) {
     UnorderedMap<const DexMethodRef*, std::pair<double, double>> call_counts;
     // Fill first part with cold-start.
-    for (auto& p : UnorderedIterable(
+    for (const auto& p : UnorderedIterable(
              profiles.method_stats(method_profiles::COLD_START))) {
       call_counts.emplace(p.first, std::make_pair(p.second.call_count, 0.0));
     }
     // Second part with maximum of other interactions.
-    for (auto& p : profiles.all_interactions()) {
-      for (auto& q : UnorderedIterable(p.second)) {
+    for (const auto& p : profiles.all_interactions()) {
+      for (const auto& q : UnorderedIterable(p.second)) {
         auto& cc = call_counts[q.first].second;
         cc = std::max(cc, q.second.call_count);
       }
@@ -348,8 +350,8 @@ class MergePairsBuilder {
 
  private:
   bool init() {
-    for (auto& p : virtual_scope->methods) {
-      auto method = p.first;
+    for (const auto& p : virtual_scope->methods) {
+      auto* method = p.first;
       methods.push_back(method);
       types_to_methods.emplace(method->get_class(), method);
       if (!can_rename(method) || root(method) ||
@@ -370,15 +372,15 @@ class MergePairsBuilder {
     // sorting to make things deterministic
     std::sort(methods.begin(), methods.end(), dexmethods_comparator());
     for (DexMethod* overriding_method : methods) {
-      if (!mergeable_methods.count(overriding_method)) {
+      if (mergeable_methods.count(overriding_method) == 0u) {
         continue;
       }
       stats.overriding_methods++;
-      auto subtype = overriding_method->get_class();
+      auto* subtype = overriding_method->get_class();
       always_assert(subtype != virtual_scope->type);
-      auto overriding_cls = type_class(overriding_method->get_class());
+      auto* overriding_cls = type_class(overriding_method->get_class());
       always_assert(overriding_cls != nullptr);
-      auto supertype = overriding_cls->get_super_class();
+      auto* supertype = overriding_cls->get_super_class();
       always_assert(supertype != nullptr);
 
       auto run_fn = [](auto fn, DexType* start, DexType* trailing,
@@ -409,7 +411,7 @@ class MergePairsBuilder {
             if (it == types_to_methods.end()) {
               return false;
             }
-            auto overridden_method = it->second;
+            auto* overridden_method = it->second;
             if (!overridden_method->is_concrete() ||
                 is_native(overridden_method)) {
               stats.inconcrete_overridden_methods++;
@@ -461,7 +463,7 @@ class MergePairsBuilder {
           auto subtypes_it = subtypes.find(t);
           if (subtypes_it != subtypes.end()) {
             // This is ordered because `methods` was ordered.
-            for (auto subtype : subtypes_it->second) {
+            for (auto* subtype : subtypes_it->second) {
               self(self, subtype);
             }
           }
@@ -507,7 +509,7 @@ class MergePairsBuilder {
                   kAppear100Buckets;
             } else {
               double max_appear{0};
-              for (auto& i : profiles.all_interactions()) {
+              for (const auto& i : profiles.all_interactions()) {
                 auto it = i.second.find(t_method);
                 if (it != i.second.end()) {
                   max_appear = std::max(max_appear, it->second.appear_percent);
@@ -532,7 +534,7 @@ class MergePairsBuilder {
             if (!profiles.has_stats()) {
               return false;
             }
-            for (auto& interaction : m_perf_config.interactions) {
+            for (const auto& interaction : m_perf_config.interactions) {
               auto opt_stat = profiles.get_method_stat(interaction, t_method);
               if (opt_stat &&
                   opt_stat->appear_percent >=
@@ -585,7 +587,7 @@ class MergePairsBuilder {
                   } else if (assert_it->second != t_method) {
                     // When skipped for perf, we should find the elements as
                     // "descendants."
-                    auto* cur_m = assert_it->second;
+                    const auto* cur_m = assert_it->second;
                     while (cur_m != nullptr && cur_m != t_method) {
                       auto cur_it = mergeable_pairs_map.find(cur_m);
                       cur_m = (cur_it != mergeable_pairs_map.end())
@@ -659,7 +661,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
     VirtualMergingStats& stats) const {
   InsertOnlyConcurrentMap<const VirtualScope*, LocalStats> local_stats;
   std::vector<const VirtualScope*> virtual_scopes;
-  for (auto& p : UnorderedIterable(m_mergeable_scope_methods)) {
+  for (const auto& p : UnorderedIterable(m_mergeable_scope_methods)) {
     virtual_scopes.push_back(p.first);
   }
   InsertOnlyConcurrentMap<
@@ -731,12 +733,12 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
   {
     UnorderedMap<const DexMethod*, size_t> method_idx;
 
-    for (auto& p : mergable_pairs) {
-      auto virtual_scope = p.first;
+    for (const auto& p : mergable_pairs) {
+      const auto* virtual_scope = p.first;
       const auto& mergeable_pairs = p.second;
-      for (auto& q : mergeable_pairs) {
-        auto overridden_method = q.first;
-        auto overriding_method = q.second;
+      for (const auto& q : mergeable_pairs) {
+        const auto* overridden_method = q.first;
+        const auto* overriding_method = q.second;
 
         MethodData* method_data;
         {
@@ -775,7 +777,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
 
   // Sort out large methods already.
   for (auto& p : ordering) {
-    auto overridden_method = const_cast<DexMethod*>(p.first);
+    auto* overridden_method = const_cast<DexMethod*>(p.first);
     for (auto& q : p.second) {
       q.second.erase(
           std::remove_if(
@@ -833,7 +835,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
       size_t num_methods = 0;
       for (auto& q : p.second) {
         num_methods += q.second.size();
-        for (auto* m : q.second) {
+        for (const auto* m : q.second) {
           sum += method_inline_estimate(m);
         }
       }
@@ -881,7 +883,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
 
           // Fetch methods to get under limit.
           UnorderedSet<const DexMethod*> to_remove;
-          for (auto* m : m_tmp) {
+          for (const auto* m : m_tmp) {
             sum -= method_inline_estimate(m);
             to_remove.insert(m);
             if (sum <= kLimit) {
@@ -942,7 +944,7 @@ struct SBHelper {
             source_blocks::get_first_source_block_of_method(overridden) !=
                 nullptr),
         create_source_blocks([&]() {
-          for (auto* m : v) {
+          for (const auto* m : v) {
             if (source_blocks::get_first_source_block_of_method(m) != nullptr) {
               return true;
             }
@@ -959,7 +961,7 @@ struct SBHelper {
   }
 
   SourceBlock* get_arbitrary_first_sb() const {
-    auto sb = source_blocks::get_any_first_source_block_of_methods(v);
+    auto* sb = source_blocks::get_any_first_source_block_of_methods(v);
     always_assert(sb != nullptr);
     return sb;
   }
@@ -998,7 +1000,7 @@ struct SBHelper {
 
     ~ScopedSplitHelper() {
       if (block != nullptr) {
-        auto overriding_sb =
+        auto* overriding_sb =
             source_blocks::get_first_source_block_of_method(overriding);
         auto new_sb = source_blocks::clone_as_synthetic(
             overriding_sb != nullptr ? overriding_sb
@@ -1012,7 +1014,7 @@ struct SBHelper {
               return;
             }
             if (first_sb->get_val(i)) {
-              auto& first_val = first_sb->get_at(i);
+              const auto& first_val = first_sb->get_at(i);
               val->val += first_val->val;
               val->appear100 = std::max(val->appear100, first_val->val);
             }
@@ -1058,7 +1060,8 @@ struct SBHelper {
       const std::function<void(std::unique_ptr<SourceBlock>)>& push_sb) {
     if (create_source_blocks) {
       // Let's assume there's always normal return.
-      auto o_sb = source_blocks::get_first_source_block(overriding->get_code());
+      auto* o_sb =
+          source_blocks::get_first_source_block(overriding->get_code());
       if (o_sb != nullptr) {
         auto new_sb = std::make_unique<SourceBlock>(*o_sb);
         new_sb->src = overriding->get_deobfuscated_name_or_null();
@@ -1078,17 +1081,17 @@ VirtualMergingStats apply_ordering(
     VirtualMerging::InsertionStrategy insertion_strategy) {
   VirtualMergingStats stats;
   for (auto& p : ordering) {
-    auto overridden_method = const_cast<DexMethod*>(p.first);
+    auto* overridden_method = const_cast<DexMethod*>(p.first);
     for (auto& q : p.second) {
       if (q.second.empty()) {
         continue;
       }
       SBHelper sb_helper(overridden_method, q.second);
 
-      auto* virtual_scope = q.first;
+      const auto* virtual_scope = q.first;
 
-      for (auto* overriding_method_const : q.second) {
-        auto overriding_method =
+      for (const auto* overriding_method_const : q.second) {
+        auto* overriding_method =
             const_cast<DexMethod*>(overriding_method_const);
         size_t estimated_callee_size =
             overriding_method->get_code()->estimate_code_units();
@@ -1110,7 +1113,7 @@ VirtualMergingStats apply_ordering(
               SHOW(overriding_method),
               SHOW(overridden_method));
 
-        auto proto = overriding_method->get_proto();
+        auto* proto = overriding_method->get_proto();
         always_assert(overridden_method->get_proto() == proto);
         std::vector<uint32_t> param_regs;
         std::function<void(IRInstruction*)> push_insn;
@@ -1136,11 +1139,11 @@ VirtualMergingStats apply_ordering(
               std::make_unique<IRCode>(),
               true /* is_virtual */);
           overridden_code = overridden_method->get_code();
-          auto load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
+          auto* load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
           load_param_insn->set_dest(overridden_code->allocate_temp());
           overridden_code->push_back(load_param_insn);
           param_regs.push_back(load_param_insn->dest());
-          for (auto t : *proto->get_args()) {
+          for (auto* t : *proto->get_args()) {
             if (type::is_wide_type(t)) {
               load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
               load_param_insn->set_dest(overridden_code->allocate_wide_temp());
@@ -1218,16 +1221,16 @@ VirtualMergingStats apply_ordering(
             overridden_cfg.split_block(block, last_it);
           }
 
-          auto new_block = overridden_cfg.create_block();
+          auto* new_block = overridden_cfg.create_block();
           {
             // instance-of param0, DeclaringTypeOfOverridingMethod
-            auto instance_of_insn = new IRInstruction(OPCODE_INSTANCE_OF);
+            auto* instance_of_insn = new IRInstruction(OPCODE_INSTANCE_OF);
             instance_of_insn->set_type(overriding_method->get_class());
             instance_of_insn->set_src(0, param_regs.at(0));
             block->push_back(instance_of_insn);
             // move-result-pseudo if_temp
             auto if_temp_reg = overridden_cfg.allocate_temp();
-            auto move_result_pseudo_insn =
+            auto* move_result_pseudo_insn =
                 new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
             move_result_pseudo_insn->set_dest(if_temp_reg);
             block->push_back(move_result_pseudo_insn);
@@ -1236,7 +1239,7 @@ VirtualMergingStats apply_ordering(
             case VirtualMerging::InsertionStrategy::kJumpTo: {
               // if-nez if_temp, new_code
               // (fall through to old code)
-              auto if_insn = new IRInstruction(OPCODE_IF_NEZ);
+              auto* if_insn = new IRInstruction(OPCODE_IF_NEZ);
               if_insn->set_src(0, if_temp_reg);
               overridden_cfg.create_branch(
                   block, if_insn, /*fls=*/block->goes_to(), /*tru=*/new_block);
@@ -1246,7 +1249,7 @@ VirtualMergingStats apply_ordering(
             case VirtualMerging::InsertionStrategy::kFallthrough: {
               // if-eqz if_temp, old code
               // (fall through to new_code)
-              auto if_insn = new IRInstruction(OPCODE_IF_EQZ);
+              auto* if_insn = new IRInstruction(OPCODE_IF_EQZ);
               if_insn->set_src(0, if_temp_reg);
               overridden_cfg.create_branch(block, if_insn, /*fls=*/new_block,
                                            /*tru=*/block->goes_to());
@@ -1275,18 +1278,18 @@ VirtualMergingStats apply_ordering(
         always_assert(1 + proto->get_args()->size() == param_regs.size());
 
         // invoke-virtual temp, param1, ..., paramN, OverridingMethod
-        auto invoke_virtual_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
+        auto* invoke_virtual_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
         invoke_virtual_insn->set_method(overriding_method);
         invoke_virtual_insn->set_srcs_size(param_regs.size());
         for (size_t i = 0; i < param_regs.size(); i++) {
           uint32_t reg = param_regs[i];
           if (i == 0) {
             uint32_t temp_reg = allocate_temp();
-            auto check_cast_insn = new IRInstruction(OPCODE_CHECK_CAST);
+            auto* check_cast_insn = new IRInstruction(OPCODE_CHECK_CAST);
             check_cast_insn->set_type(overriding_method->get_class());
             check_cast_insn->set_src(0, reg);
             push_insn(check_cast_insn);
-            auto move_result_pseudo_insn =
+            auto* move_result_pseudo_insn =
                 new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
             move_result_pseudo_insn->set_dest(temp_reg);
             push_insn(move_result_pseudo_insn);
@@ -1298,13 +1301,13 @@ VirtualMergingStats apply_ordering(
         if (proto->is_void()) {
           // return-void
           sb_helper.add_return_sb(overriding_method, push_sb);
-          auto return_insn = new IRInstruction(OPCODE_RETURN_VOID);
+          auto* return_insn = new IRInstruction(OPCODE_RETURN_VOID);
           push_insn(return_insn);
         } else {
           // move-result result_temp
-          auto rtype = proto->get_rtype();
+          auto* rtype = proto->get_rtype();
           auto op = opcode::move_result_for_invoke(overriding_method);
-          auto move_result_insn = new IRInstruction(op);
+          auto* move_result_insn = new IRInstruction(op);
           auto result_temp = op == OPCODE_MOVE_RESULT_WIDE
                                  ? allocate_wide_temp()
                                  : allocate_temp();
@@ -1313,7 +1316,7 @@ VirtualMergingStats apply_ordering(
           sb_helper.add_return_sb(overriding_method, push_sb);
           // return result_temp
           op = opcode::return_opcode(rtype);
-          auto return_insn = new IRInstruction(op);
+          auto* return_insn = new IRInstruction(op);
           return_insn->set_src(0, result_temp);
           push_insn(return_insn);
         }
@@ -1386,7 +1389,7 @@ void VirtualMerging::remove_methods() {
 
   walk::parallel::classes(
       classes_with_virtual_methods_to_remove, [&](DexClass* cls) {
-        for (auto method : m_virtual_methods_to_remove.at(cls)) {
+        for (const auto* method : m_virtual_methods_to_remove.at(cls)) {
           cls->remove_method(method);
         }
       });
@@ -1400,8 +1403,8 @@ void VirtualMerging::remap_invoke_virtuals() {
       [](const DexMethod*) { return true; },
       [&](const DexMethod*, IRInstruction* insn) {
         if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
-          auto method_ref = insn->get_method();
-          auto method = resolve_method(method_ref, MethodSearch::Virtual);
+          auto* method_ref = insn->get_method();
+          auto* method = resolve_method(method_ref, MethodSearch::Virtual);
           auto it = m_virtual_methods_to_remap.find(method);
           if (it != m_virtual_methods_to_remap.end()) {
             insn->set_method(it->second);

@@ -42,12 +42,12 @@ class StripDebugInfoTest : public RedexIntegrationTest {
     for (const auto& cls : classes) {
       std::vector<DexMethodRef*> methods;
       cls->gather_methods(methods);
-      for (auto method : methods) {
+      for (auto* method : methods) {
         if (!method->is_def()) {
           continue;
         }
         IRCode* code = static_cast<DexMethod*>(method)->get_code();
-        if (!code) {
+        if (code == nullptr) {
           continue;
         }
         for (const auto& mei : *code) {

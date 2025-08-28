@@ -125,7 +125,7 @@ static void filter_candidates_bridge_synth_only(
     UnorderedSet<DexMethod*> invoked_methods;
     size_t other = 0;
     for (auto& mie : InstructionIterable(*cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       auto op = insn->opcode();
       if (insn->has_field()) {
         if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
@@ -134,9 +134,9 @@ static void filter_candidates_bridge_synth_only(
         }
       } else if (insn->has_method()) {
         if (opcode::is_invoke_static(op) || opcode::is_invoke_direct(op)) {
-          auto callee = resolve_method(insn->get_method(),
-                                       opcode_to_search(insn), method);
-          if (callee) {
+          auto* callee = resolve_method(insn->get_method(),
+                                        opcode_to_search(insn), method);
+          if (callee != nullptr) {
             invoked_methods.insert(callee);
             continue;
           }
@@ -152,7 +152,7 @@ static void filter_candidates_bridge_synth_only(
 
     if (field_refs.size() + other == 0 && invoked_methods.size() == 1 &&
         has_bridgelike_access(method)) {
-      auto bridgee = *unordered_any(invoked_methods);
+      auto* bridgee = *unordered_any(invoked_methods);
       if (method->get_class() == bridgee->get_class()) {
         bridgees.insert(bridgee);
       }
@@ -201,7 +201,7 @@ static void filter_candidates_local_only(
   walk::parallel::code(scope, [&large_candidates, &candidates,
                                max_relevant_invokes_when_local_only](
                                   DexMethod* caller, IRCode& code) {
-    if (!candidates.count(caller)) {
+    if (candidates.count(caller) == 0u) {
       return;
     }
     size_t relevant_invokes{0};
@@ -209,9 +209,9 @@ static void filter_candidates_local_only(
       if (!opcode::is_an_invoke(mie.insn->opcode())) {
         continue;
       }
-      auto callee = resolve_method(mie.insn->get_method(),
-                                   opcode_to_search(mie.insn), caller);
-      if (candidates.count(callee)) {
+      auto* callee = resolve_method(mie.insn->get_method(),
+                                    opcode_to_search(mie.insn), caller);
+      if (candidates.count(callee) != 0u) {
         relevant_invokes++;
       }
     }
@@ -252,7 +252,7 @@ UnorderedSet<DexMethod*> gather_non_virtual_methods(
       return;
     }
 
-    auto code = method->get_code();
+    auto* code = method->get_code();
     bool dont_inline = code == nullptr;
 
     direct_methods++;
@@ -274,10 +274,10 @@ UnorderedSet<DexMethod*> gather_non_virtual_methods(
 
     methods.insert(method);
   });
-  if (non_virtual) {
+  if (non_virtual != nullptr) {
     non_virt_methods = non_virtual->size();
     for (const auto& vmeth : UnorderedIterable(*non_virtual)) {
-      auto code = vmeth->get_code();
+      auto* code = vmeth->get_code();
       if (code == nullptr) {
         non_virtual_no_code++;
         continue;
@@ -327,7 +327,7 @@ SameImplementationMap get_same_implementation_map(
       method_to_implementations;
   walk::methods(scope, [&](DexMethod* method) {
     if (method->is_external() || !method->is_virtual() ||
-        (!method->get_code() && !is_abstract(method))) {
+        ((method->get_code() == nullptr) && !is_abstract(method))) {
       return;
     }
     // Why can_rename? To mirror what VirtualRenamer looks at.
@@ -359,11 +359,12 @@ SameImplementationMap get_same_implementation_map(
       same_implementation.methods.push_back(method);
       return true;
     };
-    for (auto overriding_method : UnorderedIterable(overriding_methods)) {
+    for (const auto* overriding_method :
+         UnorderedIterable(overriding_methods)) {
       if (!method::may_be_invoke_target(overriding_method)) {
         continue;
       }
-      if (!overriding_method->get_code()) {
+      if (overriding_method->get_code() == nullptr) {
         // If the method is not abstract method and it doesn't have
         // implementation, we bail out.
         return;
@@ -372,7 +373,7 @@ SameImplementationMap get_same_implementation_map(
         return;
       }
     }
-    if (method->get_code() && !consider_method(method)) {
+    if ((method->get_code() != nullptr) && !consider_method(method)) {
       return;
     }
     if (same_implementation.methods.size() <= 1) {
@@ -383,7 +384,8 @@ SameImplementationMap get_same_implementation_map(
     // methods and their representative implementation.
     auto sp = std::make_shared<SameImplementation>(same_implementation);
     method_to_implementations.emplace(method, sp);
-    for (auto overriding_method : UnorderedIterable(overriding_methods)) {
+    for (const auto* overriding_method :
+         UnorderedIterable(overriding_methods)) {
       method_to_implementations.emplace(overriding_method, sp);
     }
   });
@@ -517,14 +519,15 @@ void gather_true_virtual_methods(
                                   &same_implementation_invokes,
                                   &same_implementation_map,
                                   &get_overriding_methods](DexMethod* method) {
-    if (method->is_virtual() && !non_virtual.count_unsafe(method)) {
+    if (method->is_virtual() && (non_virtual.count_unsafe(method) == 0u)) {
       add_candidate(method);
       if (root(method)) {
         add_other_call_site(method);
       } else {
         const auto& overridden_methods = mog::get_overridden_methods(
             method_override_graph, method, /* include_interfaces */ true);
-        for (auto overridden_method : UnorderedIterable(overridden_methods)) {
+        for (const auto* overridden_method :
+             UnorderedIterable(overridden_methods)) {
           if (root(overridden_method) || overridden_method->is_external()) {
             add_other_call_site(method);
             break;
@@ -532,21 +535,21 @@ void gather_true_virtual_methods(
         }
       }
     }
-    auto code = method->get_code();
-    if (!code) {
+    auto* code = method->get_code();
+    if (code == nullptr) {
       return;
     }
     auto& cfg = code->cfg();
     for (auto* block : cfg.blocks()) {
       for (auto& mie : InstructionIterable(block)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
             insn->opcode() != OPCODE_INVOKE_INTERFACE &&
             insn->opcode() != OPCODE_INVOKE_SUPER) {
           continue;
         }
-        auto insn_method = insn->get_method();
-        auto callee = resolve_invoke_method(insn, method);
+        auto* insn_method = insn->get_method();
+        auto* callee = resolve_invoke_method(insn, method);
         if (callee == nullptr) {
           continue;
         }
@@ -554,7 +557,7 @@ void gather_true_virtual_methods(
           // Not true virtual, no need to continue;
           continue;
         }
-        auto static_base_type = insn_method->get_class();
+        auto* static_base_type = insn_method->get_class();
         if (can_have_unknown_implementations(method_override_graph, callee)) {
           bool consider_overriding_methods =
               insn->opcode() != OPCODE_INVOKE_SUPER;
@@ -562,7 +565,7 @@ void gather_true_virtual_methods(
               consider_overriding_methods) {
             const auto& overriding_methods =
                 get_overriding_methods(callee, static_base_type);
-            for (auto overriding_method :
+            for (const auto* overriding_method :
                  UnorderedIterable(overriding_methods)) {
               add_other_call_site(
                   overriding_method,
@@ -594,13 +597,13 @@ void gather_true_virtual_methods(
         } else if (is_abstract(callee) && overriding_methods.size() == 1) {
           // The method is an abstract method, the only override is its
           // implementation.
-          auto implementing_method = *unordered_any(overriding_methods);
+          const auto* implementing_method = *unordered_any(overriding_methods);
           add_monomorphic_call_site(method, insn, implementing_method);
         } else {
           if (!add_other_call_site(
                   callee,
                   /* other_call_sites_overriding_methods_added */ true)) {
-            for (auto overriding_method :
+            for (const auto* overriding_method :
                  UnorderedIterable(overriding_methods)) {
               add_other_call_site(
                   overriding_method,
@@ -624,8 +627,8 @@ void gather_true_virtual_methods(
         if (caller_to_invocations.caller_insns.empty()) {
           return;
         }
-        auto code = const_cast<DexMethod*>(callee)->get_code();
-        if (!code || !method::no_invoke_super(*code)) {
+        auto* code = const_cast<DexMethod*>(callee)->get_code();
+        if ((code == nullptr) || !method::no_invoke_super(*code)) {
           if (!caller_to_invocations.caller_insns.empty()) {
             caller_to_invocations.caller_insns =
                 decltype(caller_to_invocations.caller_insns)();
@@ -638,7 +641,7 @@ void gather_true_virtual_methods(
         live_range::Uses first_load_param_uses;
         {
           auto ii = InstructionIterable(code->cfg().get_param_instructions());
-          auto first_load_param = ii.begin()->insn;
+          auto* first_load_param = ii.begin()->insn;
           live_range::MoveAwareChains chains(code->cfg(),
                                              /* ignore_unreachable */ false,
                                              [first_load_param](auto* insn) {
@@ -650,9 +653,9 @@ void gather_true_virtual_methods(
         UnorderedSet<DexType*> formal_callee_types;
         bool any_same_implementation_invokes{false};
         for (auto& p : UnorderedIterable(caller_to_invocations.caller_insns)) {
-          for (auto insn : UnorderedIterable(p.second)) {
+          for (auto* insn : UnorderedIterable(p.second)) {
             formal_callee_types.insert(insn->get_method()->get_class());
-            if (same_implementation_invokes.count_unsafe(insn)) {
+            if (same_implementation_invokes.count_unsafe(insn) != 0u) {
               any_same_implementation_invokes = true;
             }
           }
@@ -660,12 +663,12 @@ void gather_true_virtual_methods(
         auto type_demands = std::make_unique<UnorderedSet<DexType*>>();
         // Note that the callee-rtype is the same for all methods in a
         // same-implementations cluster.
-        auto callee_rtype = callee->get_proto()->get_rtype();
+        auto* callee_rtype = callee->get_proto()->get_rtype();
         for (auto use : UnorderedIterable(first_load_param_uses)) {
           if (opcode::is_a_move(use.insn->opcode())) {
             continue;
           }
-          auto type_demand = get_receiver_type_demand(callee_rtype, use);
+          auto* type_demand = get_receiver_type_demand(callee_rtype, use);
           if (type_demand == nullptr) {
             formal_callee_types.clear();
             type_demands = nullptr;
@@ -687,7 +690,7 @@ void gather_true_virtual_methods(
               auto it2 = same_implementation_invokes.find(insn);
               if (it2 != same_implementation_invokes.end()) {
                 always_assert(any_same_implementation_invokes);
-                auto combined_type_demand = reduce_type_demands(type_demands);
+                auto* combined_type_demand = reduce_type_demands(type_demands);
                 if (combined_type_demand) {
                   for (auto same_implementation_callee : it2->second->methods) {
                     always_assert_log(
@@ -749,7 +752,7 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
     // unfinalized some fields and added write barrier in method already.
     // We need to take these method into consideration when we check
     // inlining eligibility.
-    for (auto method : cls->get_all_methods()) {
+    for (auto* method : cls->get_all_methods()) {
       if (method->get_code() == nullptr) {
         continue;
       }
@@ -822,7 +825,7 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
 void insert_barrier_at_init_return(DexMethod* init) {
   auto& cfg = init->get_code()->cfg();
   auto return_blocks = cfg.return_blocks();
-  for (auto ret_block : return_blocks) {
+  for (auto* ret_block : return_blocks) {
     auto last_insn_it = ret_block->get_last_insn();
     always_assert(opcode::is_return_void(last_insn_it->insn->opcode()));
     auto last_insn_cfg_it =
@@ -1018,7 +1021,7 @@ void run_inliner(
         // callsites, or it's called reflectively. We are inserting write
         // barrier for every constructors because can_inline_init can have early
         // return before registering written_final_fields.
-        for (auto init_method : type_class(field->get_class())->get_ctors()) {
+        for (auto* init_method : type_class(field->get_class())->get_ctors()) {
           auto emplaced = inits_inserted_barrier.emplace(init_method).second;
           if (!emplaced) {
             continue;
@@ -1129,7 +1132,7 @@ void run_inliner(
 
   // Log top-10 partially inlined callees
   std::vector<std::pair<const DexMethod*, size_t>> partially_inlined_callees;
-  auto& atomic_map = inliner.get_info().partially_inlined_callees;
+  const auto& atomic_map = inliner.get_info().partially_inlined_callees;
   partially_inlined_callees.reserve(atomic_map.size());
   for (auto&& [callee, count] : UnorderedIterable(atomic_map)) {
     partially_inlined_callees.emplace_back(callee, count.load());

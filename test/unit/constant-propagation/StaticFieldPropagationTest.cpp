@@ -20,7 +20,7 @@ struct StaticFieldTest : public ConstantPropagationTest {
     ClassCreator creator1(DexType::make_type("Lcom/facebook/R$bool;"));
     creator1.set_super(type::java_lang_Object());
 
-    auto boolean_should_log_I =
+    auto* boolean_should_log_I =
         DexField::make_field("Lcom/facebook/R$bool;.should_log:I")
             ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
     boolean_should_log_I->get_static_value()->value(123);
@@ -32,7 +32,7 @@ struct StaticFieldTest : public ConstantPropagationTest {
     ClassCreator creator2(DexType::make_type("Lcom/facebook/R$integer;"));
     creator2.set_super(type::java_lang_Object());
 
-    auto integer_loop_count =
+    auto* integer_loop_count =
         DexField::make_field("Lcom/facebook/R$integer;.loop_count:I")
             ->make_concrete(ACC_PUBLIC | ACC_STATIC);
     creator2.add_field(integer_loop_count);
@@ -93,7 +93,7 @@ TEST_F(StaticFieldTest, FinalLessThan) {
  * therefore we cannot be sure that it is greater than 0.
  */
 TEST_F(StaticFieldTest, NotFinalLessThan) {
-  auto code_expression = R"(
+  const auto* code_expression = R"(
   (
     (sget "Lcom/facebook/R$integer;.loop_count:I")
     (move-result-pseudo v0)

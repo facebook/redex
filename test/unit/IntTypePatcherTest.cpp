@@ -14,7 +14,7 @@
 class IntTypePatcherTest : public RedexTest {};
 
 TEST_F(IntTypePatcherTest, test_int_bool) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
         (sget "foo;.bar:I;")
@@ -49,7 +49,7 @@ TEST_F(IntTypePatcherTest, test_int_bool) {
 }
 
 TEST_F(IntTypePatcherTest, test_int_short) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()S"
       (
         (sget "foo;.bar:I;")
@@ -78,7 +78,7 @@ TEST_F(IntTypePatcherTest, test_int_short) {
 }
 
 TEST_F(IntTypePatcherTest, test_int_char) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()C"
       (
         (sget "foo;.bar:I;")
@@ -107,7 +107,7 @@ TEST_F(IntTypePatcherTest, test_int_char) {
 }
 
 TEST_F(IntTypePatcherTest, test_int_byte) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()B"
       (
         (sget "foo;.bar:I;")
@@ -136,7 +136,7 @@ TEST_F(IntTypePatcherTest, test_int_byte) {
 }
 
 TEST_F(IntTypePatcherTest, test_short_bool) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
         (sget "foo;.bar:S;")
@@ -173,7 +173,7 @@ TEST_F(IntTypePatcherTest, test_short_bool) {
 }
 
 TEST_F(IntTypePatcherTest, test_char_bool) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
         (sget "foo;.bar:C;")
@@ -210,7 +210,7 @@ TEST_F(IntTypePatcherTest, test_char_bool) {
 }
 
 TEST_F(IntTypePatcherTest, test_byte_bool) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
         (sget "foo;.bar:B;")
@@ -247,7 +247,7 @@ TEST_F(IntTypePatcherTest, test_byte_bool) {
 }
 
 TEST_F(IntTypePatcherTest, test_byte_char) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()C"
       (
         (sget "foo;.bar:B;")
@@ -278,7 +278,7 @@ TEST_F(IntTypePatcherTest, test_byte_char) {
 }
 
 TEST_F(IntTypePatcherTest, test_short_char) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()C"
       (
         (sget "foo;.bar:S;")
@@ -309,7 +309,7 @@ TEST_F(IntTypePatcherTest, test_short_char) {
 }
 
 TEST_F(IntTypePatcherTest, test_char_short) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()S"
       (
         (sget "foo;.bar:C;")
@@ -340,7 +340,7 @@ TEST_F(IntTypePatcherTest, test_char_short) {
 }
 
 TEST_F(IntTypePatcherTest, test_char_byte) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()B"
       (
         (sget "foo;.bar:C;")
@@ -371,7 +371,7 @@ TEST_F(IntTypePatcherTest, test_char_byte) {
 }
 
 TEST_F(IntTypePatcherTest, test_const) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()B"
       (
         (const v0 1)
@@ -397,7 +397,7 @@ TEST_F(IntTypePatcherTest, test_const) {
 }
 
 TEST_F(IntTypePatcherTest, test_convert_all_blocks) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
         (const v0 0)
@@ -459,7 +459,7 @@ TEST_F(IntTypePatcherTest, test_convert_all_blocks) {
 }
 
 TEST_F(IntTypePatcherTest, test_convert_one_block) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
         (const v0 0)

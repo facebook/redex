@@ -34,14 +34,14 @@ std::vector<ConstantObjectDomain>
 AbstractDomainPropertyTest<ConstantObjectDomain>::non_extremal_values() {
   ConstantObjectDomain empty_unescaped;
   ConstantObjectDomain one_field;
-  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
+  auto* field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
   field->make_concrete(ACC_PUBLIC);
   one_field.set(field, SignedConstantDomain(1));
   return {empty_unescaped, one_field};
 }
 
 TEST_F(ConstantPropagationTest, ObjectOperations) {
-  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
+  auto* field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
 
   ConstantObjectDomain obj;
   EXPECT_FALSE(obj.is_escaped());
@@ -70,7 +70,7 @@ TEST_F(ConstantPropagationTest, ConstantEnvironmentObjectOperations) {
   env.new_heap_value(1, insn.get(), ConstantObjectDomain());
   EXPECT_EQ(env.get<AbstractHeapPointer>(1), AbstractHeapPointer(insn.get()));
 
-  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
+  auto* field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
   env.set_object_field(1, field, SignedConstantDomain(1));
   EXPECT_EQ(
       env.get_pointee<ConstantObjectDomain>(1).get<SignedConstantDomain>(field),

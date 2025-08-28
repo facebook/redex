@@ -15,9 +15,9 @@ class BranchPrefixWhenTest : public RedexIntegrationTest {};
 TEST_F(BranchPrefixWhenTest, switch_test) {
   auto scope = build_class_scope(stores);
 
-  auto meth =
+  auto* meth =
       DexMethod::get_method("Lcom/facebook/redextest/Foo;.bar_packed:(I)V");
-  auto code = meth->as_def()->get_code();
+  auto* code = meth->as_def()->get_code();
   code->build_cfg();
   Lazy<const constant_uses::ConstantUses> constant_uses([&] {
     return std::make_unique<const constant_uses::ConstantUses>(

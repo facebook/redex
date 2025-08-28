@@ -113,8 +113,8 @@ bool analyze_enum_ctors(
                 m::member_of<DexMethod>(m::equals(cls->get_type()))))));
 
     for (const auto& ctor : cls->get_ctors()) {
-      auto code = ctor->get_code();
-      if (!code) {
+      auto* code = ctor->get_code();
+      if (code == nullptr) {
         return false;
       }
 
@@ -159,7 +159,7 @@ bool analyze_enum_ctors(
     auto res = f.find(dc.cfg, invoke_delegate);
 
     auto* load_ordinal = res.matching(param).unique();
-    if (!load_ordinal) {
+    if (load_ordinal == nullptr) {
       // Couldn't find a unique parameter flowing into the ordinal argument.
       return false;
     }
@@ -339,7 +339,7 @@ class OptimizeEnums {
     GeneratedSwitchCases generated_switch_cases;
 
     for (const auto& generated_cls : generated_classes) {
-      auto generated_clinit = generated_cls->get_clinit();
+      auto* generated_clinit = generated_cls->get_clinit();
       cfg::ControlFlowGraph& clinit_cfg = generated_clinit->get_code()->cfg();
 
       associate_lookup_tables_to_enums(generated_cls, clinit_cfg,
@@ -439,7 +439,7 @@ class OptimizeEnums {
         utypes.insert(UnsafeType::kComplexCtor);
       }
 
-      for (auto& dmethod : cls->get_dmethods()) {
+      for (const auto& dmethod : cls->get_dmethods()) {
         if (is_static(dmethod) || method::is_constructor(dmethod)) {
           continue;
         }
@@ -449,7 +449,7 @@ class OptimizeEnums {
         }
       }
 
-      for (auto& vmethod : cls->get_vmethods()) {
+      for (const auto& vmethod : cls->get_vmethods()) {
         if (!can_rename(vmethod)) {
           utypes.insert(UnsafeType::kUnrenamableVmethod);
           break;
@@ -459,7 +459,7 @@ class OptimizeEnums {
       const auto& ifields = cls->get_ifields();
       bool all_of =
           std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
-            auto type = field->get_type();
+            auto* type = field->get_type();
             return type::is_primitive(type) || type == type::java_lang_String();
           });
       if (!all_of) {
@@ -494,7 +494,7 @@ class OptimizeEnums {
 
     optimize_enums::reject_unsafe_enums(m_scope, &config, add_unsafe_usage);
     if (traceEnabled(ENUM, 4)) {
-      for (auto cls : UnorderedIterable(config.candidate_enums)) {
+      for (auto* cls : UnorderedIterable(config.candidate_enums)) {
         TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
       }
     }
@@ -511,7 +511,7 @@ class OptimizeEnums {
                         std::ofstream::out | std::ofstream::app);
       auto unsafe_types =
           unordered_to_ordered_keys(unsafe_enums, compare_dextypes);
-      for (auto* t : unsafe_types) {
+      for (const auto* t : unsafe_types) {
         const auto& unsafe_enums_at_t = unsafe_enums.at_unsafe(t);
         ofs << show(t) << ":" << unsafe_enums_at_t << "\n";
         for (auto u : unsafe_enums_at_t) {
@@ -549,7 +549,7 @@ class OptimizeEnums {
       // interfaces, and are not instance fields of any classes.
       return is_enum(cls) && !cls->is_external() && is_final(cls) &&
              can_delete(cls) && cls->get_interfaces()->empty() &&
-             !types_used_as_instance_fields.count(cls->get_type());
+             (types_used_as_instance_fields.count(cls->get_type()) == 0u);
     };
 
     walk::parallel::classes(
@@ -582,9 +582,9 @@ class OptimizeEnums {
   bool only_one_static_synth_field(const DexClass* cls) {
     DexField* synth_field = nullptr;
     auto synth_access = optimize_enums::synth_access();
-    for (auto field : cls->get_sfields()) {
+    for (auto* field : cls->get_sfields()) {
       if (check_required_access_flags(synth_access, field->get_access())) {
-        if (synth_field) {
+        if (synth_field != nullptr) {
           TRACE(ENUM, 2, "Multiple synthetic fields %s %s", SHOW(synth_field),
                 SHOW(field));
           return false;
@@ -592,7 +592,7 @@ class OptimizeEnums {
         synth_field = field;
       }
     }
-    if (!synth_field) {
+    if (synth_field == nullptr) {
       TRACE(ENUM, 2, "No synthetic field found on %s", SHOW(cls));
       return false;
     }
@@ -606,12 +606,12 @@ class OptimizeEnums {
     always_assert(enum_entries_type != nullptr);
     std::set<std::string> expected_fields = {ENUM_VALUES_FIELD,
                                              ENUM_ENTRIES_FIELD};
-    for (auto field : cls->get_sfields()) {
+    for (auto* field : cls->get_sfields()) {
       if (!check_required_access_flags(synth_access, field->get_access())) {
         continue;
       }
       auto fname = field->get_name()->str_copy();
-      if (expected_fields.count(fname)) {
+      if (expected_fields.count(fname) != 0u) {
         expected_fields.erase(fname);
         if (fname == ENUM_ENTRIES_FIELD &&
             field->get_type() != enum_entries_type) {
@@ -766,12 +766,12 @@ class OptimizeEnums {
    */
   void collect_enum_field_ordinals(const DexClass* cls,
                                    EnumFieldToOrdinal& enum_field_to_ordinal) {
-    if (!cls) {
+    if (cls == nullptr) {
       return;
     }
 
-    auto clinit = cls->get_clinit();
-    if (!clinit || !clinit->get_code()) {
+    auto* clinit = cls->get_clinit();
+    if ((clinit == nullptr) || (clinit->get_code() == nullptr)) {
       return;
     }
 

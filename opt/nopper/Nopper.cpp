@@ -37,10 +37,10 @@ AuxiliaryDefs create_auxiliary_defs(DexType* nopper_type) {
                       ->make_concrete(ACC_STATIC | ACC_PUBLIC);
   res.int_field->set_deobfuscated_name(show_deobfuscated(res.int_field));
 
-  auto void_void_proto =
+  auto* void_void_proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
 
-  auto int_int_proto = DexProto::make_proto(
+  auto* int_int_proto = DexProto::make_proto(
       type::_int(), DexTypeList::make_type_list({type::_int()}));
 
   res.fib_method = [&]() {
@@ -50,7 +50,7 @@ AuxiliaryDefs create_auxiliary_defs(DexType* nopper_type) {
     auto arg = mc.get_reg_args().front();
     auto v = mc.make_local(type::_int());
     block->load_const(v, 1);
-    auto termination_block = block->if_else_test(OPCODE_IF_GT, arg, v, &block);
+    auto* termination_block = block->if_else_test(OPCODE_IF_GT, arg, v, &block);
     termination_block->ret(arg);
 
     block->binop_lit(OPCODE_ADD_INT_LIT, v, v, -1);
@@ -121,7 +121,7 @@ size_t insert_nops(cfg::ControlFlowGraph& cfg,
   cfg::CFGMutation mutation(cfg);
   size_t nops_inserted = 0;
   for (auto* block : cfg.blocks()) {
-    if (!blocks.count(block)) {
+    if (blocks.count(block) == 0u) {
       continue;
     }
     auto ii = InstructionIterable(block);

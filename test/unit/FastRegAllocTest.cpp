@@ -19,7 +19,7 @@ struct FastRegAllocTest : public RedexTest {
  * version.
  */
 TEST_F(FastRegAllocTest, RegAlloc) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Z"
       (
         (const v0 1)
@@ -62,7 +62,7 @@ TEST_F(FastRegAllocTest, RegAlloc) {
  * end of code.
  */
 TEST_F(FastRegAllocTest, NoUseVReg) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Z"
       (
         (const v1 1)
@@ -91,7 +91,7 @@ TEST_F(FastRegAllocTest, NoUseVReg) {
  * Check allocation behavior on control flow.
  */
 TEST_F(FastRegAllocTest, ControlFlow) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Z"
       (
         (const v2 1)
@@ -132,7 +132,7 @@ TEST_F(FastRegAllocTest, ControlFlow) {
  * loops. See the next testcase.
  */
 TEST_F(FastRegAllocTest, CheckCodeFlow) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Z"
       (
         (goto :def)
@@ -166,7 +166,7 @@ TEST_F(FastRegAllocTest, CheckCodeFlow) {
  * vreg in loop header can be neither a Use or a Def of the vreg.
  */
 TEST_F(FastRegAllocTest, CheckVRegInLoop) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Z"
       (
         (const v1 10)
@@ -209,7 +209,7 @@ TEST_F(FastRegAllocTest, CheckVRegInLoop) {
  * Test behavior when there is wide arguments.
  */
 TEST_F(FastRegAllocTest, WideVReg) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()J"
       (
         (const v2 1)
@@ -243,7 +243,7 @@ TEST_F(FastRegAllocTest, WideVReg) {
  * point anyway.
  */
 TEST_F(FastRegAllocTest, ParamAlloc) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LUnexplainedConfig$3;.create:(LLacrimaConfig;)Ljava/lang/Object;"
       (
         (load-param-object v0)
@@ -319,7 +319,7 @@ TEST_F(FastRegAllocTest, EmptyBlocks) {
   // always merged into with their successor blocks, leaving behind blocks with
   // no instructions that need to be dealt with properly
   g_redex->instrument_mode = true;
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Z"
       (
         (const v999 0)
@@ -355,7 +355,7 @@ TEST_F(FastRegAllocTest, EmptyBlocks) {
 }
 
 TEST_F(FastRegAllocTest, DefUseIntervalBoundaries) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Z"
       (
         (const v0 0)
@@ -389,7 +389,7 @@ TEST_F(FastRegAllocTest, CheckCast) {
   // Interference.cpp / GraphBuilder::build for the long explanation. This is a
   // regression test to ensure that the two registers do *NOT* the unified, even
   // though they don't have overlapping live ranges.
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(Ljava/lang/Object;)Ljava/lang/Object;"
       (
         (load-param-object v111)
@@ -430,7 +430,7 @@ TEST_F(FastRegAllocTest, CheckCast) {
 
 TEST_F(FastRegAllocTest, CheckCast2) {
   // Don't unify v0 and v1!
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(LBaseType;Z)LSubType;"
      (
         (load-param-object v2)

@@ -102,7 +102,7 @@ class DexDebugOpcodeStartLocal : public DexDebugInstruction {
     m_name = name;
     m_type = type;
     m_sig = sig;
-    if (sig) {
+    if (sig != nullptr) {
       m_opcode = DBG_START_LOCAL_EXTENDED;
     }
   }

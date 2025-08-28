@@ -86,7 +86,7 @@ class PriorityThreadPool {
 
     sparta::AsyncRunner* async_runner =
         redex_thread_pool::ThreadPool::get_instance();
-    if (async_runner) {
+    if (async_runner != nullptr) {
       for (int i = 0; i < num_threads; ++i) {
         async_runner->run_async(&PriorityThreadPool::run, this);
       }

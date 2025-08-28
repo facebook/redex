@@ -68,7 +68,7 @@ class ResolveRefsTest : public RedexIntegrationTest {
 };
 
 TEST_F(ResolveRefsTest, test_rtype_specialized_with_no_cross_dexstore_refs) {
-  auto rtype = m_i_getval->get_proto()->get_rtype();
+  auto* rtype = m_i_getval->get_proto()->get_rtype();
   ASSERT_TRUE(rtype);
   EXPECT_EQ(rtype, m_base_cls->get_type());
 
@@ -82,7 +82,7 @@ TEST_F(ResolveRefsTest, test_rtype_specialized_with_no_cross_dexstore_refs) {
 
   run_passes(passes);
 
-  auto rtype_after = m_i_getval->get_proto()->get_rtype();
+  auto* rtype_after = m_i_getval->get_proto()->get_rtype();
   ASSERT_TRUE(rtype_after);
   EXPECT_EQ(rtype_after, m_sub_cls->get_type());
 
@@ -92,7 +92,7 @@ TEST_F(ResolveRefsTest, test_rtype_specialized_with_no_cross_dexstore_refs) {
 }
 
 TEST_F(ResolveRefsTest, test_rtype_not_specialized_with_cross_dexstore_refs) {
-  auto rtype = m_i_getval->get_proto()->get_rtype();
+  auto* rtype = m_i_getval->get_proto()->get_rtype();
   ASSERT_TRUE(rtype);
   EXPECT_EQ(rtype, m_base_cls->get_type());
 
@@ -108,7 +108,7 @@ TEST_F(ResolveRefsTest, test_rtype_not_specialized_with_cross_dexstore_refs) {
 
   run_passes(passes);
 
-  auto rtype_after = m_i_getval->get_proto()->get_rtype();
+  auto* rtype_after = m_i_getval->get_proto()->get_rtype();
   ASSERT_TRUE(rtype_after);
   EXPECT_EQ(rtype_after, m_base_cls->get_type());
 
@@ -129,10 +129,10 @@ TEST_F(ResolveRefsTest, test_invoke_virtual_specialization_to_interface) {
   ClassCreator foo_creator(DexType::make_type("LFoo;"));
   foo_creator.set_super(type::java_lang_Object());
 
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (sget-object "Landroid/os/Build;.BRAND:Ljava/lang/String;")
       (move-result-pseudo-object v0)
@@ -148,7 +148,7 @@ TEST_F(ResolveRefsTest, test_invoke_virtual_specialization_to_interface) {
   )";
   method->set_code(assembler::ircode_from_string(code_str));
   foo_creator.add_method(method);
-  auto cls = foo_creator.create();
+  auto* cls = foo_creator.create();
   method->get_code()->build_cfg();
 
   root_store.add_classes(std::vector<DexClass*>{cls});
@@ -163,7 +163,7 @@ TEST_F(ResolveRefsTest, test_invoke_virtual_specialization_to_interface) {
   options.min_sdk = 21;
 
   Json::Value root;
-  auto val_cstr = std::getenv("api");
+  auto* val_cstr = std::getenv("api");
   redex_assert(val_cstr != nullptr);
   root["android_sdk_api_21_file"] = val_cstr;
 
@@ -174,7 +174,7 @@ TEST_F(ResolveRefsTest, test_invoke_virtual_specialization_to_interface) {
   for (auto it = cfg::ConstInstructionIterator(*cfg, true); !it.is_end();
        ++it) {
     if (it->insn->has_method()) {
-      auto method_name = it->insn->get_method()->get_name();
+      const auto* method_name = it->insn->get_method()->get_name();
       if (method_name->str_copy() == "toString") {
         invoke_to_string = it->insn;
       }

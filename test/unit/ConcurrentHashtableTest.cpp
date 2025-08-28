@@ -44,7 +44,7 @@ TEST_F(ConcurrentHashtableTest, sequentialInsertGet) {
   }
   EXPECT_EQ(N, set.size());
   for (size_t i = 0; i < N; ++i) {
-    auto ptr = set.get(i);
+    auto* ptr = set.get(i);
     EXPECT_NE(nullptr, ptr);
     EXPECT_EQ(i, *ptr);
   }
@@ -64,7 +64,7 @@ TEST_F(ConcurrentHashtableTest, sequentialInsertEraseGet) {
   }
   EXPECT_EQ(N, set.size());
   for (size_t i = 0; i < N; ++i) {
-    auto erased = set.erase(i);
+    auto* erased = set.erase(i);
     EXPECT_TRUE(erased);
   }
   EXPECT_TRUE(set.empty());
@@ -92,7 +92,7 @@ TEST_F(ConcurrentHashtableTest, concurrentInsertGet) {
   }
   EXPECT_EQ(N, set.size());
   for (size_t i = 0; i < N; ++i) {
-    auto ptr = set.get(i);
+    auto* ptr = set.get(i);
     EXPECT_NE(nullptr, ptr);
     EXPECT_EQ(i, *ptr);
   }

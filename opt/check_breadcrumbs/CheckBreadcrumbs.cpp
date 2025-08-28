@@ -185,7 +185,7 @@ void print_allowed_violations_per_class(
     const MethodInsnsType& illegal_field_cls,
     const MethodInsnsType& illegal_method_call) {
   for (const auto& cls : scope) {
-    auto type = cls->get_type();
+    auto* type = cls->get_type();
     std::ostringstream fields_detail;
     auto fields = illegal_fields.find(type);
     if (fields != illegal_fields.end()) {
@@ -299,7 +299,7 @@ Breadcrumbs::Breadcrumbs(const Scope& scope,
   m_classes.insert(scope.begin(), scope.end());
   m_multiple_root_store_dexes = stores[0].get_dexen().size() > 1;
   if (only_verify_primary_dex) {
-    for (auto& c : scope) {
+    for (const auto& c : scope) {
       if (m_xstores.is_in_primary_dex(c->get_type())) {
         m_scope_to_walk.push_back(c);
       }
@@ -399,21 +399,21 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
 std::string Breadcrumbs::get_methods_with_bad_refs() {
   std::ostringstream ss;
   for (const auto& class_meth : m_bad_methods) {
-    const auto type = class_meth.first;
+    const auto* const type = class_meth.first;
     const auto& methods = class_meth.second;
     ss << "Bad methods in class " << type->get_name()->c_str() << std::endl;
-    for (const auto method : methods) {
+    for (const auto* const method : methods) {
       ss << "\t" << method->get_name()->c_str() << std::endl;
     }
     ss << std::endl;
   }
   for (const auto& meth_field : m_bad_fields_refs) {
-    const auto type = meth_field.first->get_class();
-    const auto method = meth_field.first;
+    auto* const type = meth_field.first->get_class();
+    const auto* const method = meth_field.first;
     const auto& fields = meth_field.second;
     ss << "Bad field refs in method " << type->get_name()->c_str() << "."
        << method->get_name()->c_str() << std::endl;
-    for (const auto field : fields) {
+    for (const auto* const field : fields) {
       ss << "\t" << field->get_name()->c_str() << std::endl;
     }
     ss << std::endl;
@@ -446,7 +446,7 @@ size_t Breadcrumbs::process_illegal_elements(
     std::ostream& ss) {
   size_t num_illegal_cross_store_refs = 0;
   for (const auto& pair : method_to_insns) {
-    const auto method = pair.first;
+    const auto* const method = pair.first;
     const auto& insns = pair.second;
     if (should_allow_violations(method->get_class())) {
       allowed.emplace(method, insns);
@@ -475,7 +475,7 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
   std::map<const DexType*, FieldsAndType, dextypes_comparator>
       allowed_illegal_fields;
   for (const auto& pair : m_illegal_field) {
-    const auto type = pair.first;
+    const auto* const type = pair.first;
     const auto& fields = pair.second;
     if (should_allow_violations(type)) {
       allowed_illegal_fields.emplace(type, fields);
@@ -499,7 +499,7 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
   std::map<const DexMethod*, TypesAndTypes, dexmethods_comparator>
       allowed_illegal_method;
   for (const auto& pair : m_illegal_method) {
-    const auto method = pair.first;
+    const auto* const method = pair.first;
     const auto& types = pair.second;
     if (should_allow_violations(method->get_class())) {
       allowed_illegal_method.emplace(method, types);
@@ -613,7 +613,7 @@ bool Breadcrumbs::has_illegal_access(const DexMethod* input_method) {
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
     auto* insn = mie.insn;
     if (insn->has_field()) {
-      auto res_field = resolve_field(insn->get_field());
+      auto* res_field = resolve_field(insn->get_field());
       if (res_field != nullptr) {
         if (!check_field_accessibility(input_method, res_field)) {
           result = true;
@@ -623,8 +623,8 @@ bool Breadcrumbs::has_illegal_access(const DexMethod* input_method) {
       }
     }
     if (insn->has_method()) {
-      auto res_method = resolve_method(insn->get_method(),
-                                       opcode_to_search(insn), input_method);
+      auto* res_method = resolve_method(insn->get_method(),
+                                        opcode_to_search(insn), input_method);
       if (res_method != nullptr) {
         if (!check_method_accessibility(input_method, res_method)) {
           result = true;
@@ -647,7 +647,7 @@ std::pair<bool, const DexType*> Breadcrumbs::is_illegal_cross_store(
 
   std::set<const DexType*, dextypes_comparator> load_types;
   if (m_verify_type_hierarchies) {
-    auto callee_cls = type_class(callee);
+    auto* callee_cls = type_class(callee);
     UnorderedSet<DexType*> types;
     callee_cls->gather_load_types(types);
     insert_unordered_iterable(load_types, types);
@@ -685,7 +685,7 @@ std::pair<bool, const DexType*> Breadcrumbs::is_illegal_cross_store(
  * null if the type reference is defined or external.
  */
 const DexType* Breadcrumbs::check_type(const DexType* type) {
-  auto type_ref = type::get_element_type_if_array(type);
+  const auto* type_ref = type::get_element_type_if_array(type);
   const auto& cls = type_class(type_ref);
   if (cls == nullptr) {
     return nullptr;
@@ -706,9 +706,9 @@ const DexType* Breadcrumbs::check_type(const DexType* type) {
 const DexType* Breadcrumbs::check_method(const DexMethodRef* method) {
   std::vector<DexType*> type_refs;
   method->gather_types_shallow(type_refs);
-  for (auto type : type_refs) {
-    auto bad_ref = check_type(type);
-    if (bad_ref) {
+  for (auto* type : type_refs) {
+    const auto* bad_ref = check_type(type);
+    if (bad_ref != nullptr) {
       return bad_ref;
     }
   }
@@ -716,14 +716,14 @@ const DexType* Breadcrumbs::check_method(const DexMethodRef* method) {
 }
 
 const DexType* Breadcrumbs::check_anno(const DexAnnotationSet* anno) {
-  if (!anno) {
+  if (anno == nullptr) {
     return nullptr;
   }
   std::vector<DexType*> type_refs;
   anno->gather_types(type_refs);
-  for (auto type : type_refs) {
-    auto bad_ref = check_type(type);
-    if (bad_ref) {
+  for (auto* type : type_refs) {
+    const auto* bad_ref = check_type(type);
+    if (bad_ref != nullptr) {
       return bad_ref;
     }
   }
@@ -742,16 +742,16 @@ void Breadcrumbs::check_fields() {
     bool check_cross_store_ref = true;
     std::vector<DexType*> type_refs;
     field->gather_types(type_refs);
-    for (auto type : type_refs) {
-      auto bad_ref = check_type(type);
-      if (bad_ref) {
+    for (auto* type : type_refs) {
+      const auto* bad_ref = check_type(type);
+      if (bad_ref != nullptr) {
         m_bad_fields[bad_ref].emplace_back(field);
         check_cross_store_ref = false;
       }
     }
     if (check_cross_store_ref) {
-      const auto cls = field->get_class();
-      const auto field_type = field->get_type();
+      auto* const cls = field->get_class();
+      auto* const field_type = field->get_type();
       auto pair = is_illegal_cross_store(cls, field_type);
       if (pair.first) {
         m_illegal_field[cls].emplace_back(field, pair.second);
@@ -768,13 +768,13 @@ void Breadcrumbs::check_methods() {
     bool check_cross_store_ref = true;
     // Check type references on the method signature.
     const auto* bad_ref = check_method(method);
-    if (bad_ref) {
+    if (bad_ref != nullptr) {
       m_bad_methods[bad_ref].emplace_back(method);
       check_cross_store_ref = false;
     }
     // Check type references on the annotations on the method.
     bad_ref = check_anno(method->get_anno_set());
-    if (bad_ref) {
+    if (bad_ref != nullptr) {
       m_bad_methods[bad_ref].emplace_back(method);
       check_cross_store_ref = false;
     }
@@ -784,7 +784,7 @@ void Breadcrumbs::check_methods() {
       if (m_verify_proto_cross_dex) {
         // Ensure type hierarchies of proto types, which might be meaningful for
         // verification on some OS versions.
-        const auto cls = method->get_class();
+        auto* const cls = method->get_class();
         std::vector<DexType*> proto_types;
         method->get_proto()->gather_types(proto_types);
         for (const auto& t : proto_types) {
@@ -801,8 +801,8 @@ void Breadcrumbs::check_methods() {
 /* verify that all method instructions that access fields are valid */
 bool Breadcrumbs::check_field_accessibility(const DexMethod* method,
                                             const DexField* res_field) {
-  const auto field_class = res_field->get_class();
-  const auto method_class = method->get_class();
+  auto* const field_class = res_field->get_class();
+  auto* const method_class = method->get_class();
   if (field_class != method_class && is_private(res_field)) {
     m_bad_fields_refs[method].emplace_back(res_field);
     return false;
@@ -811,20 +811,20 @@ bool Breadcrumbs::check_field_accessibility(const DexMethod* method,
 }
 
 bool Breadcrumbs::referenced_field_is_deleted(DexFieldRef* field_ref) {
-  auto field = field_ref->as_def();
-  return field && !class_contains(field);
+  auto* field = field_ref->as_def();
+  return (field != nullptr) && !class_contains(field);
 }
 
 bool Breadcrumbs::referenced_method_is_deleted(DexMethodRef* method_ref) {
-  auto method = method_ref->as_def();
-  return method && !class_contains(method);
+  auto* method = method_ref->as_def();
+  return (method != nullptr) && !class_contains(method);
 }
 
 /* verify that all method instructions that access methods are valid */
 bool Breadcrumbs::check_method_accessibility(
     const DexMethod* method, const DexMethod* res_called_method) {
-  const auto called_method_class = res_called_method->get_class();
-  const auto method_class = method->get_class();
+  auto* const called_method_class = res_called_method->get_class();
+  auto* const method_class = method->get_class();
   if (called_method_class != method_class && is_private(res_called_method)) {
     m_bad_methods[method_class].emplace_back(res_called_method);
     return false;
@@ -840,7 +840,7 @@ void Breadcrumbs::check_type_opcode(const DexMethod* method,
   if (type != nullptr) {
     bad_type(type, method, insn);
   } else {
-    const auto cls = method->get_class();
+    auto* const cls = method->get_class();
     auto pair = is_illegal_cross_store(cls, insn->get_type());
     if (pair.first) {
       m_illegal_type[method].emplace_back(insn, pair.second);
@@ -852,19 +852,19 @@ void Breadcrumbs::check_field_opcode(const DexMethod* method,
                                      IRInstruction* insn) {
   bool check_cross_store_ref = true;
 
-  auto field = insn->get_field();
+  auto* field = insn->get_field();
   std::vector<DexType*> type_refs;
   field->gather_types_shallow(type_refs);
-  for (auto type : type_refs) {
-    auto bad_ref = check_type(type);
-    if (bad_ref) {
+  for (auto* type : type_refs) {
+    const auto* bad_ref = check_type(type);
+    if (bad_ref != nullptr) {
       bad_type(bad_ref, method, insn);
       check_cross_store_ref = false;
     }
   }
 
   if (check_cross_store_ref) {
-    auto cls = method->get_class();
+    auto* cls = method->get_class();
     auto pair = is_illegal_cross_store(cls, field->get_type());
     if (pair.first) {
       m_illegal_field_type[method].emplace_back(insn, pair.second);
@@ -875,11 +875,11 @@ void Breadcrumbs::check_field_opcode(const DexMethod* method,
     }
   }
 
-  auto res_field = resolve_field(field);
+  auto* res_field = resolve_field(field);
   if (res_field != nullptr) {
     // a resolved field can only differ in the owner class
     if (field != res_field) {
-      auto bad_ref = check_type(field->get_class());
+      const auto* bad_ref = check_type(field->get_class());
       if (bad_ref != nullptr) {
         bad_type(bad_ref, method, insn);
         return;

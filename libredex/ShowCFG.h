@@ -50,7 +50,7 @@ std::string show(const cfg::ControlFlowGraph& cfg,
     ss << show(b, special, code_only);
 
     ss << "   succs:";
-    for (auto& s : b->succs()) {
+    for (const auto& s : b->succs()) {
       ss << " (" << *s << " B" << s->target()->id() << ")";
     }
     ss << "\n";
@@ -93,7 +93,7 @@ struct ArraysAndResIds {
   void mie_after(std::ostream& oss, const MethodItemEntry& mie) {
     const static std::string block_indent(3, ' ');
     if (mie.type == MFLOW_OPCODE) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() == OPCODE_CONST && insn->get_literal() >= 0x7f000000 &&
           insn->get_literal() <= 0x7fffffff) {
         std::string indent;
@@ -105,7 +105,7 @@ struct ArraysAndResIds {
         oss << block_indent << indent << "Resource ID: 0x" << std::hex
             << (uint32_t)insn->get_literal() << std::dec << std::endl;
       } else if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-        auto data = insn->get_data();
+        auto* data = insn->get_data();
         oss << block_indent << "  " << SHOW(data) << std::endl;
       }
     }

@@ -85,7 +85,7 @@ TEST_F(ResourcesInliningPassTest, TestOptimizationHappy_Sad) {
   EXPECT_EQ(transforms1.size(), 1);
   for (auto& val : UnorderedIterable(transforms1)) {
     for (auto& vec : val.second) {
-      auto insn = vec.insn;
+      auto* insn = vec.insn;
       auto inlinable_data = std::get<resources::InlinableValue>(vec.inlinable);
       EXPECT_TRUE(insn->opcode() == OPCODE_INVOKE_VIRTUAL);
       EXPECT_EQ(insn->get_method(),

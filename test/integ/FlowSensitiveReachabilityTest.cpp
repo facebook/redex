@@ -343,11 +343,11 @@ TEST_F(FlowSensitiveReachabilityTest, throw_propagation) {
       /* cfg_gathering_check_returning */ true);
 
   //// returning_methods
-  for (auto* m : UnorderedIterable(reachable_aspects.returning_methods)) {
+  for (const auto* m : UnorderedIterable(reachable_aspects.returning_methods)) {
     EXPECT_TRUE(method::is_init(m)); // only the FlowSensitiveReachabilityTest
                                      // contructor returns
   }
-  auto dead_cls = find_class(*classes, "LDead;");
+  auto* dead_cls = find_class(*classes, "LDead;");
   ASSERT_TRUE(dead_cls);
   ASSERT_FALSE(reachable_objects->marked_unsafe(dead_cls));
 
@@ -362,8 +362,8 @@ TEST_F(FlowSensitiveReachabilityTest, throw_propagation) {
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 
-  auto method = find_dmethod(*classes, "LFlowSensitiveReachabilityTest;", "V",
-                             "throw_propagation", {});
+  auto* method = find_dmethod(*classes, "LFlowSensitiveReachabilityTest;", "V",
+                              "throw_propagation", {});
   ASSERT_TRUE(method);
   auto ii = InstructionIterable(method->get_code());
   ASSERT_TRUE(ii.begin()->insn->opcode() == OPCODE_INVOKE_STATIC);

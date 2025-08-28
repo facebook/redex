@@ -47,12 +47,12 @@ std::string_view describe(HotSplitKind kind) {
 std::vector<const cfg::Edge*> ReducedBlock::expand_preds(
     cfg::Block* src) const {
   std::vector<const cfg::Edge*> res;
-  for (auto* reduced_edge : UnorderedIterable(preds)) {
+  for (const auto* reduced_edge : UnorderedIterable(preds)) {
     if (src == nullptr) {
       insert_unordered_iterable(res, res.end(), reduced_edge->edges);
       continue;
     }
-    for (auto* e : UnorderedIterable(reduced_edge->edges)) {
+    for (const auto* e : UnorderedIterable(reduced_edge->edges)) {
       if (e->src() == src) {
         res.push_back(e);
       }
@@ -68,14 +68,14 @@ ReducedControlFlowGraph::ReducedControlFlowGraph(cfg::ControlFlowGraph& cfg)
       cfg.entry_block(), [](cfg::Block* block) {
         std::vector<cfg::Block*> blocks;
         UnorderedSet<cfg::Block*> set;
-        for (auto edge : block->succs()) {
+        for (auto* edge : block->succs()) {
           if (edge->target() != block && set.insert(edge->target()).second) {
             blocks.emplace_back(edge->target());
           }
         }
         return blocks;
       });
-  for (auto& v : wto) {
+  for (const auto& v : wto) {
     auto reduced_block = std::make_unique<ReducedBlock>();
     self_recursive_fn(
         [&blocks = reduced_block->blocks](const auto& self, const auto& w) {
@@ -89,7 +89,7 @@ ReducedControlFlowGraph::ReducedControlFlowGraph(cfg::ControlFlowGraph& cfg)
         },
         v);
     reduced_block->id = m_reduced_blocks.size();
-    for (auto* b : UnorderedIterable(reduced_block->blocks)) {
+    for (const auto* b : UnorderedIterable(reduced_block->blocks)) {
       auto [it, emplaced] = m_blocks.emplace(b, reduced_block.get());
       always_assert(emplaced);
     }
@@ -98,20 +98,20 @@ ReducedControlFlowGraph::ReducedControlFlowGraph(cfg::ControlFlowGraph& cfg)
 
   for (auto& reduced_block : m_reduced_blocks) {
     auto& blocks = reduced_block->blocks;
-    for (auto* b : UnorderedIterable(blocks)) {
+    for (const auto* b : UnorderedIterable(blocks)) {
       for (auto* e : b->succs()) {
-        if (e->target() && !blocks.count(e->target())) {
+        if ((e->target() != nullptr) && (blocks.count(e->target()) == 0u)) {
           always_assert(m_blocks.count(e->target()));
-          auto reduced_edge =
+          auto* reduced_edge =
               get_edge(reduced_block.get(), m_blocks.at(e->target()));
           reduced_block->succs.insert(reduced_edge);
           reduced_edge->edges.insert(e);
         }
       }
       for (auto* e : b->preds()) {
-        if (e->src() && !blocks.count(e->src())) {
+        if ((e->src() != nullptr) && (blocks.count(e->src()) == 0u)) {
           always_assert(m_blocks.count(e->src()));
-          auto reduced_edge =
+          auto* reduced_edge =
               get_edge(m_blocks.at(e->src()), reduced_block.get());
           reduced_block->preds.insert(reduced_edge);
           reduced_edge->edges.insert(e);
@@ -130,7 +130,7 @@ ReducedControlFlowGraph::ReducedControlFlowGraph(cfg::ControlFlowGraph& cfg)
 std::vector<const ReducedBlock*> ReducedControlFlowGraph::blocks() const {
   std::vector<const ReducedBlock*> res;
   res.reserve(m_reduced_blocks.size());
-  for (auto& reduced_block : m_reduced_blocks) {
+  for (const auto& reduced_block : m_reduced_blocks) {
     res.push_back(reduced_block.get());
   }
   return res;
@@ -148,11 +148,11 @@ UnorderedSet<const ReducedBlock*> ReducedControlFlowGraph::reachable(
   std::queue<const ReducedBlock*> work_queue;
   work_queue.push(head);
   while (!work_queue.empty()) {
-    auto reduced_block = work_queue.front();
+    const auto* reduced_block = work_queue.front();
     work_queue.pop();
     if (set.insert(reduced_block).second) {
-      for (auto* e : UnorderedIterable(reduced_block->succs)) {
-        if (!except_edges.count(e)) {
+      for (const auto* e : UnorderedIterable(reduced_block->succs)) {
+        if (except_edges.count(e) == 0u) {
           work_queue.push(e->target);
         }
       }

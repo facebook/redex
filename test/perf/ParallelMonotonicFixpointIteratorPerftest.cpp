@@ -50,12 +50,12 @@ class Program final {
   explicit Program(uint32_t entry) : m_entry(entry), m_exit(entry) {}
 
   std::vector<EdgeId> successors(uint32_t node) const {
-    auto& succs = m_successors.at(node);
+    const auto& succs = m_successors.at(node);
     return std::vector<EdgeId>(succs.begin(), succs.end());
   }
 
   std::vector<EdgeId> predecessors(uint32_t node) const {
-    auto& preds = m_predecessors.at(node);
+    const auto& preds = m_predecessors.at(node);
     return std::vector<EdgeId>(preds.begin(), preds.end());
   }
 

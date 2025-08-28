@@ -22,7 +22,7 @@ std::unique_ptr<UnorderedMap<IRInstruction*, T>> forwards_dataflow(
   }
   std::deque<cfg::Block*> work_list(blocks.begin(), blocks.end());
   while (!work_list.empty()) {
-    auto block = work_list.front();
+    auto* block = work_list.front();
     work_list.pop_front();
     auto insn_in = bottom;
     if (block == entry_block) {
@@ -39,7 +39,7 @@ std::unique_ptr<UnorderedMap<IRInstruction*, T>> forwards_dataflow(
     }
     if (insn_in != block_outs[block]) {
       block_outs[block] = std::move(insn_in);
-      for (auto& succ : block->succs()) {
+      for (const auto& succ : block->succs()) {
         if (std::find(work_list.begin(), work_list.end(), succ->target()) ==
             work_list.end()) {
           work_list.push_back(succ->target());

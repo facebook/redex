@@ -98,7 +98,7 @@ struct InconsistentDFGNodesAnalysis
       return;
     }
 
-    auto& constraint = m_constraints.at(node_loc(n));
+    const auto& constraint = m_constraints.at(node_loc(n));
 
     const auto srcs = node_insn(n)->srcs_size();
     std::vector<size_t> consistent_edges(srcs, 0);
@@ -131,7 +131,7 @@ struct InconsistentDFGNodesAnalysis
 
     bool is_consistent = true;
     for (size_t i = 0; is_consistent && i < srcs; ++i) {
-      auto& src = constraint.src(i);
+      const auto& src = constraint.src(i);
       auto consistent_srcs = consistent_edges.at(i);
       auto inconsistent_srcs = inconsistent_edges.at(i);
 
@@ -175,7 +175,7 @@ struct InconsistentDFGNodesAnalysis
 
 const Constraint::Src& Constraint::src(src_index_t ix) const {
   if (ix < m_srcs.size()) {
-    if (auto& src = m_srcs[ix]; src.loc != NO_LOC) {
+    if (const auto& src = m_srcs[ix]; src.loc != NO_LOC) {
       return src;
     }
   }
@@ -274,14 +274,15 @@ size_t DataFlowGraph::size() const {
 }
 
 bool DataFlowGraph::has_node(LocationIx loc, IRInstruction* insn) const {
-  return m_adjacencies.count(Node(loc, insn));
+  return m_adjacencies.count(Node(loc, insn)) != 0u;
 }
 
 bool DataFlowGraph::has_inconsistency(LocationIx loc,
                                       IRInstruction* insn,
                                       src_index_t src) const {
   auto it = m_adjacencies.find(Node(loc, insn));
-  return it != m_adjacencies.end() && it->second.inconsistent.count(src);
+  return it != m_adjacencies.end() &&
+         (it->second.inconsistent.count(src) != 0u);
 }
 
 void DataFlowGraph::add_node(LocationIx loc, IRInstruction* insn) {
@@ -376,11 +377,11 @@ Locations DataFlowGraph::locations(
 
   // (1) Determine roots and count locations
   size_t locs = 0;
-  for (auto& adj : m_adjacencies) {
-    auto& n = adj.first;
+  for (const auto& adj : m_adjacencies) {
+    const auto& n = adj.first;
     auto loc = node_loc(n);
 
-    if (roots.count(loc)) {
+    if (roots.count(loc) != 0u) {
       frontier.push(n);
     }
 
@@ -397,9 +398,9 @@ Locations DataFlowGraph::locations(
     auto& n = frontier.front();
 
     if (auto* srcs = insert_node(n)) {
-      auto& in = m_adjacencies.find(n)->second.in;
+      const auto& in = m_adjacencies.find(n)->second.in;
 
-      for (auto& e : in) {
+      for (const auto& e : in) {
         if (e.src == NO_SRC) {
           continue;
         }
@@ -425,7 +426,7 @@ void DataFlowGraph::propagate_flow_constraints(
 
   // (1) Erase inconsistent nodes.
   for (auto it = m_adjacencies.begin(), end = m_adjacencies.end(); it != end;) {
-    auto& node = it->first;
+    const auto& node = it->first;
     const auto& part = analysis.get_exit_state_at(node);
 
     if (part.get(node_loc(node)).contains(node_insn(node))) {
@@ -441,12 +442,12 @@ void DataFlowGraph::propagate_flow_constraints(
   for (auto& adj : m_adjacencies) {
     auto& in = adj.second.in;
     auto in_rm = std::remove_if(in.begin(), in.end(), [this](Edge& e) {
-      return !m_adjacencies.count(e.from);
+      return m_adjacencies.count(e.from) == 0u;
     });
 
     auto& out = adj.second.out;
     auto out_rm = std::remove_if(out.begin(), out.end(), [this](Edge& e) {
-      return !m_adjacencies.count(e.to);
+      return m_adjacencies.count(e.to) == 0u;
     });
 
     in.erase(in_rm, in.end());
@@ -458,7 +459,7 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
                                 const std::vector<Constraint>& constraints,
                                 const std::unordered_set<LocationIx>& roots,
                                 Order* order) {
-  if (!cfg.exit_block()) {
+  if (cfg.exit_block() == nullptr) {
     // The instruction constraint analysis runs backwards and so requires a
     // single exit block to start from.
     cfg.calculate_exit_block();
@@ -476,7 +477,7 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
       return false;
     }
 
-    auto& constraint = constraints.at(loc);
+    const auto& constraint = constraints.at(loc);
     if (constraint.insn_matcher->matches(insn)) {
       TRACE(MFLOW, 6, "instruction_graph: L%zu matching %s", loc, SHOW(insn));
       graph.add_node(loc, insn);
@@ -492,10 +493,10 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
   // and add the appropriate edge to the graph if so.
   const auto test_edge = [&](Obligation o, IRInstruction* insn) {
     auto to_loc = std::get<0>(o);
-    auto to_insn = std::get<1>(o);
+    auto* to_insn = std::get<1>(o);
     auto to_src = std::get<2>(o);
 
-    auto& from_src = constraints.at(to_loc).src(to_src);
+    const auto& from_src = constraints.at(to_loc).src(to_src);
 
     if (opcode::is_a_move(insn->opcode())) {
       if (from_src.alias == AliasFlag::alias) {
@@ -542,7 +543,7 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
         }
       }
 
-      if (order) {
+      if (order != nullptr) {
         order->emplace(insn, order->size());
       }
       analysis.analyze_instruction(insn, &env);

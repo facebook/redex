@@ -109,12 +109,12 @@ ConcurrentSet<DexMethod*> find_private_methods(
   };
   workqueue_run<DexClass*>(
       [&](DexClass* cls) {
-        for (auto m : cls->get_dmethods()) {
+        for (auto* m : cls->get_dmethods()) {
           if (!is_excluded(m)) {
             candidates.insert(m);
           }
         }
-        for (auto m : cls->get_vmethods()) {
+        for (auto* m : cls->get_vmethods()) {
           if (!is_excluded(m) &&
               !method_override_graph::is_true_virtual(override_graph, m)) {
             candidates.insert(m);
@@ -130,7 +130,7 @@ ConcurrentSet<DexMethod*> find_private_methods(
         if (!inst->has_method()) {
           return;
         }
-        auto callee =
+        auto* callee =
             resolve_method(inst->get_method(), opcode_to_search(inst), caller);
         if (callee == nullptr || callee->get_class() == caller->get_class()) {
           return;
@@ -151,10 +151,10 @@ void fix_call_sites_private(const std::vector<DexClass*>& scope,
       if (!insn->has_method()) {
         continue;
       }
-      auto callee =
+      auto* callee =
           resolve_method(insn->get_method(), opcode_to_search(insn), caller);
       // should be safe to read `privates` here because there are no writers
-      if (callee != nullptr && privates.count_unsafe(callee)) {
+      if (callee != nullptr && (privates.count_unsafe(callee) != 0u)) {
         insn->set_method(callee);
         if (!is_static(callee)) {
           insn->set_opcode(OPCODE_INVOKE_DIRECT);
@@ -172,9 +172,9 @@ void mark_methods_private(const ConcurrentSet<DexMethod*>& privates) {
   // order in which we attempt to add matters.
   auto ordered_privates = unordered_to_ordered(privates, compare_dexmethods);
 
-  for (auto method : ordered_privates) {
+  for (auto* method : ordered_privates) {
     TRACE(ACCESS, 2, "Privatized method: %s", SHOW(method));
-    auto cls = type_class(method->get_class());
+    auto* cls = type_class(method->get_class());
     cls->remove_method(method);
     method->set_virtual(false);
     set_private(method);

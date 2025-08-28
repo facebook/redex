@@ -50,12 +50,12 @@ void InitClassPruner::apply_forward() {
          fp_iter.analyze_instruction(it->insn, &env,
                                      it->insn == ii.end()->insn),
               it++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (!opcode::is_init_class(insn->opcode())) {
         continue;
       }
       m_stats.init_class_instructions++;
-      auto refined_type =
+      const auto* refined_type =
           m_init_classes_with_side_effects.refine(insn->get_type());
       if (refined_type == nullptr ||
           env.unwrap().contains(type_class(refined_type))) {
@@ -82,7 +82,7 @@ void InitClassPruner::apply_backward() {
       if (it->type != MFLOW_OPCODE) {
         continue;
       }
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (opcode::is_init_class(insn->opcode())) {
         const auto& c = env.get_constant();
         if (c && insn->get_type() == *c) {

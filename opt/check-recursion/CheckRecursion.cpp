@@ -39,10 +39,10 @@ static CheckRecursionResult do_check_recursion(DexMethod* method,
       continue;
     }
 
-    auto callee_method_ref = insn->get_method();
-    auto callee_method =
+    auto* callee_method_ref = insn->get_method();
+    auto* callee_method =
         resolve_method(callee_method_ref, opcode_to_search(insn), method);
-    if (!callee_method) {
+    if (callee_method == nullptr) {
       continue;
     }
 
@@ -56,7 +56,7 @@ static CheckRecursionResult do_check_recursion(DexMethod* method,
     return CheckRecursionResult::NotFound;
   }
 
-  for (auto it : code.cfg().blocks()) {
+  for (auto* it : code.cfg().blocks()) {
     if (it->is_catch()) {
       // Catch handlers disables inlining, so if the method already has
       // catch handlers there is nothing to do.

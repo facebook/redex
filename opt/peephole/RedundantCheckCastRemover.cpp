@@ -61,8 +61,8 @@ bool RedundantCheckCastRemover::can_remove_check_cast(
   IRInstruction* check_cast_op = insns[2];
   IRInstruction* move_result_pseudo = insns[3];
 
-  auto invoke_return = invoke_op->get_method()->get_proto()->get_rtype();
-  auto check_type = check_cast_op->get_type();
+  auto* invoke_return = invoke_op->get_method()->get_proto()->get_rtype();
+  auto* check_type = check_cast_op->get_type();
   return move_result_op->dest() == check_cast_op->src(0) &&
          move_result_pseudo->dest() == check_cast_op->src(0) &&
          type::check_cast(invoke_return, check_type);

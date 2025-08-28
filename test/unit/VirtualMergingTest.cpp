@@ -36,14 +36,14 @@ class VirtualMergingTest : public RedexTest {
                           const char* name,
                           int32_t foo_val,
                           int32_t bar_val) {
-      const auto type = DexType::make_type(name);
+      auto* const type = DexType::make_type(name);
       ClassCreator cls_creator(type);
       cls_creator.set_super(super_class != nullptr ? super_class->get_type()
                                                    : type::java_lang_Object());
-      auto ctor = DexMethod::make_method(std::string(name) + ".<init>:()V")
-                      ->make_concrete(ACC_PUBLIC, false);
+      auto* ctor = DexMethod::make_method(std::string(name) + ".<init>:()V")
+                       ->make_concrete(ACC_PUBLIC, false);
       cls_creator.add_method(ctor);
-      if (ctor->get_code()) {
+      if (ctor->get_code() != nullptr) {
         ctor->get_code()->build_cfg();
       }
       // Should add a super call here, but...
@@ -62,15 +62,15 @@ class VirtualMergingTest : public RedexTest {
         src.replace(src.find('Y'), 1, show(mref));
         return assembler::ircode_from_string(src);
       };
-      auto foo_ref = DexMethod::make_method(std::string(name) + ".foo:()I");
-      auto foo =
+      auto* foo_ref = DexMethod::make_method(std::string(name) + ".foo:()I");
+      auto* foo =
           foo_ref->make_concrete(ACC_PUBLIC,
                                  make_code(foo_val, foo_ref, idx / 100.0f),
                                  /*is_virtual=*/true);
       cls_creator.add_method(foo);
       foo->get_code()->build_cfg();
-      auto bar_ref = DexMethod::make_method(std::string(name) + ".bar:()I");
-      auto bar =
+      auto* bar_ref = DexMethod::make_method(std::string(name) + ".bar:()I");
+      auto* bar =
           bar_ref->make_concrete(ACC_PUBLIC,
                                  make_code(bar_val, bar_ref, idx / 100.0f),
                                  /*is_virtual=*/true);
@@ -85,19 +85,19 @@ class VirtualMergingTest : public RedexTest {
       return res;
     };
 
-    auto a = make_class(0, nullptr, "LA;", 0, 0);
+    auto* a = make_class(0, nullptr, "LA;", 0, 0);
 
-    auto a1 = make_class(1, a, "LA1;", 1, -1);
+    auto* a1 = make_class(1, a, "LA1;", 1, -1);
     /* auto a11 = */ make_class(11, a1, "LA11;", 11, -11);
     /* auto a12 = */ make_class(12, a1, "LA12;", 12, -12);
     /* auto a13 = */ make_class(13, a1, "LA13;", 13, -13);
 
-    auto a2 = make_class(2, a, "LA2;", 2, -2);
+    auto* a2 = make_class(2, a, "LA2;", 2, -2);
     /* auto a21 = */ make_class(21, a2, "LA21;", 21, -21);
     /* auto a22 = */ make_class(22, a2, "LA22;", 22, -22);
     /* auto a23 = */ make_class(23, a2, "LA23;", 23, -23);
 
-    auto a3 = make_class(3, a, "LA3;", 3, -3);
+    auto* a3 = make_class(3, a, "LA3;", 3, -3);
     /* auto a31 = */ make_class(31, a3, "LA31;", 31, -31);
     /* auto a32 = */ make_class(32, a3, "LA32;", 32, -32);
     /* auto a33 = */ make_class(33, a3, "LA33;", 33, -33);
@@ -114,7 +114,7 @@ class VirtualMergingTest : public RedexTest {
   }
 
   const DexMethod* get_method(size_t idx, const char* name) {
-    for (auto m : types.at(idx)->get_vmethods()) {
+    for (auto* m : types.at(idx)->get_vmethods()) {
       if (m->get_name()->str() == name) {
         return m;
       }
@@ -166,9 +166,9 @@ class VirtualMergingTest : public RedexTest {
       for (auto it = cfg::ConstInstructionIterator(*cfg, true); !it.is_end();
            ++it) {
         if (it->insn->opcode() == OPCODE_INSTANCE_OF) {
-          auto t = it->insn->get_type();
+          auto* t = it->insn->get_type();
           if (all_types.count(t) != 0) {
-            if (found.count(t)) {
+            if (found.count(t) != 0u) {
               return ::testing::AssertionFailure()
                      << "Found type " << show(t) << " twice";
             }
@@ -182,7 +182,7 @@ class VirtualMergingTest : public RedexTest {
       if (!missing.empty()) {
         auto ret = ::testing::AssertionFailure();
         ret << "Did not find type-check(s) for";
-        for (auto* t : missing) {
+        for (const auto* t : missing) {
           ret << " " << show(t);
         }
         return ret;
@@ -196,8 +196,8 @@ class VirtualMergingTest : public RedexTest {
     for (const auto& v : order) {
       cfg::Block* last_block = nullptr;
       const DexType* last_type = nullptr;
-      for (auto t : v) {
-        auto b = all_blocks.at(t);
+      for (const auto* t : v) {
+        auto* b = all_blocks.at(t);
         if (last_block == nullptr) {
           last_block = b;
           last_type = t;
@@ -211,7 +211,7 @@ class VirtualMergingTest : public RedexTest {
         }
 
         while (b != nullptr && last_block != b) {
-          auto next = dom.get_idom(b);
+          auto* next = dom.get_idom(b);
           if (next == b) {
             next = nullptr;
           }
@@ -238,7 +238,7 @@ class VirtualMergingTest : public RedexTest {
                                                IROpcode expected) {
     cfg::ScopedCFG cfg(const_cast<DexMethod*>(m)->get_code());
     OptFail fail;
-    for (auto b : cfg->blocks()) {
+    for (auto* b : cfg->blocks()) {
       // Check if there's an INSTANCE_OF here.
       if (!b->contains_opcode(OPCODE_INSTANCE_OF)) {
         continue;
@@ -282,7 +282,7 @@ TEST_F(VirtualMergingTest, MergedFooNoProfiles) {
          VirtualMerging::Strategy::kLexicographical,
          VirtualMerging::InsertionStrategy::kJumpTo);
 
-  auto a_foo = get_method(0, "foo");
+  const auto* a_foo = get_method(0, "foo");
   ASSERT_NE(nullptr, a_foo);
 
   EXPECT_TRUE(instanceof_dominators(
@@ -330,7 +330,7 @@ TEST_F(VirtualMergingTest, MergedBarNoProfiles) {
          VirtualMerging::Strategy::kLexicographical,
          VirtualMerging::InsertionStrategy::kJumpTo);
 
-  auto a_bar = get_method(0, "bar");
+  const auto* a_bar = get_method(0, "bar");
   ASSERT_NE(nullptr, a_bar);
 
   EXPECT_TRUE(instanceof_dominators(
@@ -367,7 +367,7 @@ TEST_F(VirtualMergingTest, MergedFooProfiles) {
          VirtualMerging::Strategy::kProfileCallCount,
          VirtualMerging::InsertionStrategy::kJumpTo);
 
-  auto a_foo = get_method(0, "foo");
+  const auto* a_foo = get_method(0, "foo");
   ASSERT_NE(nullptr, a_foo);
 
   EXPECT_TRUE(instanceof_dominators(
@@ -404,7 +404,7 @@ TEST_F(VirtualMergingTest, MergedBarFooProfiles) {
          VirtualMerging::Strategy::kProfileCallCount,
          VirtualMerging::InsertionStrategy::kJumpTo);
 
-  auto a_bar = get_method(0, "bar");
+  const auto* a_bar = get_method(0, "bar");
   ASSERT_NE(nullptr, a_bar);
 
   EXPECT_TRUE(instanceof_dominators(
@@ -442,7 +442,7 @@ TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsAllAppear100) {
          VirtualMerging::Strategy::kProfileCallCount,
          VirtualMerging::InsertionStrategy::kJumpTo);
 
-  auto a_foo = get_method(0, "foo");
+  const auto* a_foo = get_method(0, "foo");
   ASSERT_NE(nullptr, a_foo);
 
   EXPECT_TRUE(instanceof_dominators(
@@ -481,7 +481,7 @@ TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsDiffAppear100) {
          VirtualMerging::Strategy::kProfileAppearBucketsAndCallCount,
          VirtualMerging::InsertionStrategy::kJumpTo);
 
-  auto a_foo = get_method(0, "foo");
+  const auto* a_foo = get_method(0, "foo");
   ASSERT_NE(nullptr, a_foo);
 
   EXPECT_TRUE(instanceof_dominators(
@@ -518,7 +518,7 @@ TEST_F(VirtualMergingTest, MergedFooNoProfilesFallthrough) {
          VirtualMerging::Strategy::kLexicographical,
          VirtualMerging::InsertionStrategy::kFallthrough);
 
-  auto a_foo = get_method(0, "foo");
+  const auto* a_foo = get_method(0, "foo");
   ASSERT_NE(nullptr, a_foo);
 
   EXPECT_TRUE(instanceof_dominators(

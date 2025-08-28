@@ -26,15 +26,15 @@ DexMethod* find_dmethod(const DexClass& cls,
 
 // Check argument reordering
 TEST_F(PostVerify, Reorderables) {
-  auto cls1 = find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo;");
+  auto* cls1 = find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo;");
   ASSERT_NE(nullptr, cls1);
-  auto cls2 = find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar;");
+  auto* cls2 = find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar;");
   ASSERT_NE(nullptr, cls1);
 
-  auto foo = find_dmethod(*cls1, "<init>", "()V");
+  auto* foo = find_dmethod(*cls1, "<init>", "()V");
   ASSERT_NE(nullptr, foo);
 
-  auto bar = find_dmethod(*cls2, "<init>", "(I)V");
+  auto* bar = find_dmethod(*cls2, "<init>", "(I)V");
   ASSERT_NE(nullptr, bar);
 }
 } // namespace

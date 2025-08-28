@@ -34,8 +34,8 @@ struct Caller {
                                                   reflection::CallingContext>;
 
   Domain analyze_edge(const call_graph::EdgeId edge, const Domain& original) {
-    auto callee = edge->callee()->method();
-    if (!callee) {
+    const auto* callee = edge->callee()->method();
+    if (callee == nullptr) {
       return Domain::bottom();
     }
 
@@ -142,7 +142,7 @@ class ReflectionAnalyzer : public Base {
   explicit ReflectionAnalyzer(const DexMethod* method) : m_method(method) {}
 
   void analyze() override {
-    if (!m_method) {
+    if (m_method == nullptr) {
       return;
     }
 
@@ -175,7 +175,7 @@ class ReflectionAnalyzer : public Base {
     auto partition = analysis.get_calling_context_partition();
     if (!partition.is_top() && !partition.is_bottom()) {
       for (const auto& entry : partition.bindings()) {
-        auto insn = entry.first;
+        const auto* insn = entry.first;
         auto calling_context = entry.second;
         auto op = insn->opcode();
         always_assert(opcode::is_an_invoke(op));
@@ -194,7 +194,7 @@ class ReflectionAnalyzer : public Base {
   }
 
   void summarize() override {
-    if (!m_method) {
+    if (m_method == nullptr) {
       return;
     }
     this->get_summaries()->maybe_update(m_method, [&](Summary& old) {

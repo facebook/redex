@@ -47,7 +47,7 @@ void IntTypePatcherPass::run(DexMethod* m) {
   }
 
   IRCode* code = m->get_code();
-  if (!code || m->rstate.no_optimizations()) {
+  if ((code == nullptr) || m->rstate.no_optimizations()) {
     return;
   }
   always_assert(code->cfg_built());
@@ -57,7 +57,7 @@ void IntTypePatcherPass::run(DexMethod* m) {
 
   type_inference::IntTypeDomain return_type;
   const std::vector<cfg::Block*> exits = cfg.real_exit_blocks();
-  for (auto block : exits) {
+  for (auto* block : exits) {
     if (block->get_last_insn() == block->end()) {
       continue;
     }

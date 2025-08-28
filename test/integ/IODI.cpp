@@ -38,7 +38,7 @@ namespace {
 class IODITest : public ::testing::Test {
  public:
   void reset_redex() {
-    if (g_redex) {
+    if (g_redex != nullptr) {
       delete g_redex;
     }
     g_redex = new RedexContext();
@@ -95,7 +95,7 @@ class IODITest : public ::testing::Test {
     output.prepare(
         // NOLINTNEXTLINE(bugprone-string-literal-with-embedded-nul)
         SortMode::DEFAULT, {SortMode::DEFAULT}, dummy_cfg, "dex\n035\0");
-    if (mids) {
+    if (mids != nullptr) {
       for (auto& iter : UnorderedIterable(method_to_id)) {
         DexMethod* method = iter.first;
         redex_assert(CONSTP(method)->get_dex_code() != nullptr);
@@ -104,7 +104,7 @@ class IODITest : public ::testing::Test {
         mids->emplace(show(method), iter.second);
       }
     }
-    if (iodi_data) {
+    if (iodi_data != nullptr) {
       std::stringstream sstream;
       iodi_metadata.write(sstream, method_to_id);
       *iodi_data = sstream.str();
@@ -139,7 +139,7 @@ class IODITest : public ::testing::Test {
 
     const auto& entries = debug_item.get_entries();
     for (size_t i = 0; i < entries.size(); i++) {
-      auto& entry = entries[i];
+      const auto& entry = entries[i];
       // IODI emits only DBG_FIRST_SPECIAL opcodes.
       // If we see anything else, its not IODI.
       if (entry.type != DexDebugEntryType::Position) {
@@ -170,7 +170,7 @@ class IODITest : public ::testing::Test {
   static size_t debug_item_line_table_size(const DexDebugItem& debug_item) {
     size_t result = 0;
     const auto& entries = debug_item.get_entries();
-    for (auto& entry : entries) {
+    for (const auto& entry : entries) {
       if (entry.type == DexDebugEntryType::Position) {
         result += 1;
       }
@@ -194,11 +194,11 @@ class IODITest : public ::testing::Test {
     DexDebugMap result;
     walk::methods(classes, [&](DexMethod* method) {
       DexCode* code = method->get_dex_code();
-      if (!code) {
+      if (code == nullptr) {
         return;
       }
       DexDebugItem* debug_item = code->get_debug_item();
-      if (!debug_item) {
+      if (debug_item == nullptr) {
         return;
       }
       result[debug_item].push_back(method);
@@ -209,7 +209,7 @@ class IODITest : public ::testing::Test {
   std::string dex_debug_item_to_str(const DexDebugItem& item) {
     std::ostringstream oss;
     oss << "\"positions\" : [\n";
-    for (auto& entry : item.get_entries()) {
+    for (const auto& entry : item.get_entries()) {
       if (entry.type != DexDebugEntryType::Position) {
         continue;
       }
@@ -412,11 +412,11 @@ TEST_F(IODITest, sameNameDontUseIODI) {
       }
       for (DexMethod* method : iter.second) {
         DexCode* code = method->get_dex_code();
-        if (!code) {
+        if (code == nullptr) {
           continue;
         }
         DexDebugItem* debug_item = code->get_debug_item();
-        if (!debug_item) {
+        if (debug_item == nullptr) {
           continue;
         }
         EXPECT_FALSE(is_iodi(*debug_item));
@@ -448,11 +448,11 @@ TEST_F(IODITest, sameNameIODILayered) {
       size_t iodi = 0;
       for (DexMethod* method : iter.second) {
         DexCode* code = method->get_dex_code();
-        if (!code) {
+        if (code == nullptr) {
           continue;
         }
         DexDebugItem* debug_item = code->get_debug_item();
-        if (!debug_item) {
+        if (debug_item == nullptr) {
           continue;
         }
         ++w_dbg;
@@ -463,11 +463,11 @@ TEST_F(IODITest, sameNameIODILayered) {
         std::ostringstream oss;
         for (DexMethod* method : iter.second) {
           DexCode* code = method->get_dex_code();
-          if (!code) {
+          if (code == nullptr) {
             continue;
           }
           DexDebugItem* debug_item = code->get_debug_item();
-          if (!debug_item) {
+          if (debug_item == nullptr) {
             continue;
           }
           oss << show(method) << ": " << dex_debug_item_to_str(*debug_item)
@@ -502,11 +502,11 @@ TEST_F(IODITest, iodiLayers) {
       bool have_non_iodi = false;
       for (DexMethod* method : iter.second) {
         DexCode* code = method->get_dex_code();
-        if (!code) {
+        if (code == nullptr) {
           continue;
         }
         DexDebugItem* debug_item = code->get_debug_item();
-        if (!debug_item) {
+        if (debug_item == nullptr) {
           continue;
         }
 
@@ -616,7 +616,7 @@ class IODIEncodingTest : public IODITest {
      *  key: char[klen]
      * }
      */
-    auto buffer = (uint8_t*)iodi_data.data();
+    auto* buffer = (uint8_t*)iodi_data.data();
     auto buffer_len = iodi_data.size();
     IODIParser p{buffer, buffer + buffer_len};
     struct __attribute__((__packed__)) Header {

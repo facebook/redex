@@ -30,9 +30,9 @@ struct RemoveUnusedArgsTest : public RedexTest {
     init_classes::InitClassesWithSideEffects
         dummy_init_classes_with_side_effects(
             dummy_scope, /* create_init_class_insns */ false);
-    auto obj_t = type::java_lang_Object();
-    auto dummy_t = DexType::make_type("LA;");
-    auto dummy_cls = create_internal_class(dummy_t, obj_t, {});
+    auto* obj_t = type::java_lang_Object();
+    auto* dummy_t = DexType::make_type("LA;");
+    auto* dummy_cls = create_internal_class(dummy_t, obj_t, {});
     dummy_scope.push_back(dummy_cls);
     m_remove_args = new remove_unused_args::RemoveArgs(
         dummy_scope, dummy_init_classes_with_side_effects, m_blocklist,
@@ -43,7 +43,7 @@ struct RemoveUnusedArgsTest : public RedexTest {
 };
 
 void calculate_exit_block(DexMethod* method) {
-  auto code = method->get_code();
+  auto* code = method->get_code();
   if (code != nullptr) {
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
@@ -63,7 +63,7 @@ std::vector<uint16_t> vector_from_map(
 // Checks argument liveness on a method with no arguments
 TEST_F(RemoveUnusedArgsTest, noArgs) {
   // no args alive
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (static) "LFoo;.baz:()V"
       (
         (const v0 0)
@@ -84,7 +84,7 @@ TEST_F(RemoveUnusedArgsTest, noArgs) {
 // Checks liveness on methods with a single used argument
 TEST_F(RemoveUnusedArgsTest, simpleUsedArg) {
   // only v_1 alive
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(D)V"
       (
         (load-param v1)
@@ -103,7 +103,7 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArg) {
 // Checks liveness on methods with a single used WIDE argument
 TEST_F(RemoveUnusedArgsTest, simpleUsedArgWide) {
   // only 0_v alive
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(D)V"
       (
         (load-param-wide v0)
@@ -123,7 +123,7 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgWide) {
 // Checks liveness on methods with multiple args, not wide
 TEST_F(RemoveUnusedArgsTest, simpleUsedArgs) {
   // only 3_v, 5_v alive
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(III)V"
       (
         (load-param v3)
@@ -147,7 +147,7 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgs) {
 // Checks liveness on methods with multiple wide args
 TEST_F(RemoveUnusedArgsTest, simpleUsedArgsWide) {
   // only 3_v, 5_v alive
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(DDD)V"
       (
         (load-param-wide v3)
@@ -170,7 +170,7 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgsWide) {
 // Checks liveness on methods with multiple blocks, only default sized args
 TEST_F(RemoveUnusedArgsTest, multipleBlocksRegularArgs) {
   // all regs 2_v, 3_v, 4_v alive
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(III)V"
       (
         (load-param v2)
@@ -203,7 +203,7 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksRegularArgs) {
 // Checks liveness on methods with multiple blocks, only wide sized args
 TEST_F(RemoveUnusedArgsTest, multipleBlocksWideArgs) {
   // all regs 2_v, 4_v, 6_v alive
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(DDD)V"
       (
         (load-param-wide v2)
@@ -236,7 +236,7 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksWideArgs) {
 // Checks liveness on methods with multiple blocks, mixed size args
 TEST_F(RemoveUnusedArgsTest, multipleBlocksMixedArgs) {
   // regs 2_v, 4_v, 5_v, 7_v
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (private) "LFoo;.baz:(DIDI)V"
       (
         (load-param-wide v2)

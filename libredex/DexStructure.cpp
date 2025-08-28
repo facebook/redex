@@ -249,31 +249,31 @@ void DexStructure::resolve_init_classes(
     const TypeRefs& itrefs,
     TypeRefs* pending_init_class_fields,
     TypeRefs* pending_init_class_types) {
-  if (!init_classes_with_side_effects || itrefs.empty()) {
+  if ((init_classes_with_side_effects == nullptr) || itrefs.empty()) {
     return;
   }
   UnorderedSet<DexType*> refined_types;
-  for (auto type : UnorderedIterable(itrefs)) {
-    auto refined_type = init_classes_with_side_effects->refine(type);
-    if (refined_type) {
+  for (auto* type : UnorderedIterable(itrefs)) {
+    const auto* refined_type = init_classes_with_side_effects->refine(type);
+    if (refined_type != nullptr) {
       refined_types.insert(const_cast<DexType*>(refined_type));
     }
   }
-  for (auto type : UnorderedIterable(refined_types)) {
-    auto cls = type_class(type);
+  for (auto* type : UnorderedIterable(refined_types)) {
+    auto* cls = type_class(type);
     always_assert(cls);
-    if (m_pending_init_class_fields.count(type)) {
+    if (m_pending_init_class_fields.count(type) != 0u) {
       continue;
     }
     const auto& fields = cls->get_sfields();
     if (std::any_of(fields.begin(), fields.end(), [&](DexField* field) {
-          return m_frefs.count(field) || frefs.count(field);
+          return (m_frefs.count(field) != 0u) || (frefs.count(field) != 0u);
         })) {
       continue;
     }
     pending_init_class_fields->insert(type);
     always_assert(!m_pending_init_class_types.count(type));
-    if (!m_trefs.count(type) && !trefs.count(type)) {
+    if ((m_trefs.count(type) == 0u) && (trefs.count(type) == 0u)) {
       pending_init_class_types->insert(type);
     }
   }
@@ -398,10 +398,10 @@ void DexStructure::add_refs_no_checks(
     const TypeRefs& clazz_trefs,
     const TypeRefs& pending_init_class_fields,
     const TypeRefs& pending_init_class_types) {
-  for (auto mref : UnorderedIterable(clazz_mrefs)) {
+  for (auto* mref : UnorderedIterable(clazz_mrefs)) {
     m_mrefs[mref]++;
   }
-  for (auto fref : UnorderedIterable(clazz_frefs)) {
+  for (auto* fref : UnorderedIterable(clazz_frefs)) {
     if (++m_frefs[fref] > 1) {
       continue;
     }
@@ -412,22 +412,22 @@ void DexStructure::add_refs_no_checks(
     if (it == m_pending_init_class_fields.end()) {
       continue;
     }
-    auto f = fref->as_def();
+    auto* f = fref->as_def();
     if (is_static(f)) {
       m_pending_init_class_fields.erase(it);
     }
   }
-  for (auto type : UnorderedIterable(clazz_trefs)) {
+  for (auto* type : UnorderedIterable(clazz_trefs)) {
     if (++m_trefs[type] > 1) {
       continue;
     }
     m_pending_init_class_types.erase(type);
   }
-  for (auto type : UnorderedIterable(pending_init_class_fields)) {
+  for (auto* type : UnorderedIterable(pending_init_class_fields)) {
     auto inserted = m_pending_init_class_fields.insert(type).second;
     always_assert(inserted);
   }
-  for (auto type : UnorderedIterable(pending_init_class_types)) {
+  for (auto* type : UnorderedIterable(pending_init_class_types)) {
     auto inserted = m_pending_init_class_types.insert(type).second;
     always_assert(inserted);
     always_assert(!m_trefs.count(type));
@@ -443,13 +443,13 @@ void DexStructure::remove_class(const init_classes::InitClassesWithSideEffects*
                                 const TypeRefs& /*pending_init_class_types*/,
                                 unsigned laclazz,
                                 DexClass* clazz) {
-  for (auto mref : UnorderedIterable(clazz_mrefs)) {
+  for (auto* mref : UnorderedIterable(clazz_mrefs)) {
     auto it = m_mrefs.find(mref);
     if (--it->second == 0) {
       m_mrefs.erase(it);
     }
   }
-  for (auto fref : UnorderedIterable(clazz_frefs)) {
+  for (auto* fref : UnorderedIterable(clazz_frefs)) {
     auto it = m_frefs.find(fref);
     if (--it->second > 0) {
       continue;
@@ -458,12 +458,12 @@ void DexStructure::remove_class(const init_classes::InitClassesWithSideEffects*
     if (!fref->is_def()) {
       continue;
     }
-    auto f = fref->as_def();
+    auto* f = fref->as_def();
     if (!is_static(f)) {
       continue;
     }
-    auto type = fref->get_class();
-    auto cls = type_class(type);
+    auto* type = fref->get_class();
+    auto* cls = type_class(type);
     if (cls->is_external()) {
       continue;
     }
@@ -477,17 +477,17 @@ void DexStructure::remove_class(const init_classes::InitClassesWithSideEffects*
     }
     auto inserted = m_pending_init_class_fields.insert(type).second;
     always_assert(inserted);
-    if (!m_trefs.count(type) && !clazz_trefs.count(type)) {
+    if ((m_trefs.count(type) == 0u) && (clazz_trefs.count(type) == 0u)) {
       m_pending_init_class_types.insert(fref->get_class());
     }
   }
-  for (auto type : UnorderedIterable(clazz_trefs)) {
+  for (auto* type : UnorderedIterable(clazz_trefs)) {
     auto it = m_trefs.find(type);
     if (--it->second > 0) {
       continue;
     }
     m_trefs.erase(it);
-    if (!m_pending_init_class_fields.count(type)) {
+    if (m_pending_init_class_fields.count(type) == 0u) {
       continue;
     }
     auto inserted = m_pending_init_class_types.insert(type).second;
@@ -518,7 +518,7 @@ void DexStructure::check_refs_count() {
   if (mrefs_set.size() > m_mrefs.size()) {
     auto mrefs_vec = unordered_to_ordered(mrefs_set, compare_dexmethods);
     for (DexMethodRef* mr : mrefs_vec) {
-      if (!m_mrefs.count(mr)) {
+      if (m_mrefs.count(mr) == 0u) {
         TRACE(IDEX, 4, "WARNING: Could not find %s in predicted mrefs set",
               SHOW(mr));
       }
@@ -533,7 +533,7 @@ void DexStructure::check_refs_count() {
   if (frefs_set.size() > m_frefs.size()) {
     auto frefs_vec = unordered_to_ordered(frefs_set, compare_dexfields);
     for (auto* fr : frefs_vec) {
-      if (!m_frefs.count(fr)) {
+      if (m_frefs.count(fr) == 0u) {
         TRACE(IDEX, 4, "WARNING: Could not find %s in predicted frefs set",
               SHOW(fr));
       }

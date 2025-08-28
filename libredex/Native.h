@@ -20,7 +20,7 @@ class Function {
  public:
   Function(const SoLibrary* lib, std::string name, DexMethod* java_declaration)
       : m_so_library(lib), m_name(std::move(name)), m_java_declarations({}) {
-    if (java_declaration) {
+    if (java_declaration != nullptr) {
       m_java_declarations.insert(java_declaration);
     }
   }

@@ -408,7 +408,7 @@ struct SourceBlock {
     return last;
   }
   const SourceBlock* get_last_in_chain() const {
-    auto* last = this;
+    const auto* last = this;
     while (last->next != nullptr) {
       last = last->next.get();
     }

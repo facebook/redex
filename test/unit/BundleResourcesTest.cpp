@@ -319,7 +319,7 @@ TEST(BundleResources, ReadResource) {
     std::unordered_set<std::string> drawable_res_names;
     for (const auto& pair : id_to_name) {
       auto id = pair.first;
-      if (drawable_type_id.count(id & TYPE_MASK_BIT)) {
+      if (drawable_type_id.count(id & TYPE_MASK_BIT) != 0u) {
         drawable_res_names.emplace(pair.second);
       }
     }
@@ -545,7 +545,7 @@ TEST(BundleResources, ObfuscateResourcesName) {
     UnorderedSet<std::string> types = {"color"};
     auto type_ids = res_table->get_types_by_name(types);
     UnorderedSet<uint32_t> shifted_allow_type_ids;
-    for (auto& type_id : UnorderedIterable(type_ids)) {
+    for (const auto& type_id : UnorderedIterable(type_ids)) {
       shifted_allow_type_ids.emplace(type_id >> TYPE_INDEX_BIT_SHIFT);
     }
     std::map<std::string, std::string> filepath_old_to_new;
@@ -758,7 +758,7 @@ TEST(BundleResources, TestAddStyleAttribute) {
 
     const std::vector<StyleModData> style_modifications = {
         {"CustomText.Prickly", kEnabledAttrId,
-         Value(android::Res_value::TYPE_INT_BOOLEAN, true)},
+         Value(android::Res_value::TYPE_INT_BOOLEAN, 1u)},
         {"CustomText.Unused", kTextStyleAttrId,
          Value(android::Res_value::TYPE_STRING,
                std::string("Test String Value"))},
@@ -890,7 +890,7 @@ TEST(BundleResources, TestRemoveAndAddStyleAttributes) {
 
     const std::vector<TestData> test_data = {
         {"CustomText.Prickly", get_first_attr(prickly_id), kEnabledAttrId,
-         Value(android::Res_value::TYPE_INT_BOOLEAN, true)},
+         Value(android::Res_value::TYPE_INT_BOOLEAN, 1u)},
         {"CustomText.Unused", get_first_attr(unused_id), kTextStyleAttrId,
          Value(android::Res_value::TYPE_STRING, std::string("New String"))},
         {"CustomText", get_first_attr(custom_id), kTextColorAttrId,

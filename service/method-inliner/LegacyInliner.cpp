@@ -31,7 +31,7 @@ std::unique_ptr<RegMap> gen_callee_reg_map(IRCode* caller_code,
                                            const IRCode* callee_code,
                                            const IRList::iterator& invoke_it) {
   auto callee_reg_start = caller_code->get_registers_size();
-  auto insn = invoke_it->insn;
+  auto* insn = invoke_it->insn;
   auto reg_map = std::make_unique<RegMap>();
 
   // generate the callee register map
@@ -45,10 +45,10 @@ std::unique_ptr<RegMap> gen_callee_reg_map(IRCode* caller_code,
   auto param_end = param_insns.end();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
     always_assert(param_it != param_end);
-    auto mov = (new IRInstruction(
-                    opcode::load_param_to_move(param_it->insn->opcode())))
-                   ->set_src(0, insn->src(i))
-                   ->set_dest(callee_reg_start + param_it->insn->dest());
+    auto* mov = (new IRInstruction(
+                     opcode::load_param_to_move(param_it->insn->opcode())))
+                    ->set_src(0, insn->src(i))
+                    ->set_dest(callee_reg_start + param_it->insn->dest());
     caller_code->insert_before(invoke_it, mov);
   }
   caller_code->set_registers_size(callee_reg_start +
@@ -92,7 +92,7 @@ class MethodSplicer {
         m_active_catch(active_catch) {}
 
   MethodItemEntry* clone(MethodItemEntry* mie) {
-    auto result = m_mie_cloner.clone(mie);
+    auto* result = m_mie_cloner.clone(mie);
     return result;
   }
 
@@ -108,10 +108,10 @@ class MethodSplicer {
           opcode::is_a_load_param(it->insn->opcode())) {
         continue;
       }
-      auto mie = clone(&*it);
+      auto* mie = clone(&*it);
       transform::remap_registers(*mie, m_callee_reg_map);
       if (mie->type == MFLOW_TRY && m_active_catch != nullptr) {
-        auto tentry = mie->tentry;
+        auto* tentry = mie->tentry;
         // try ranges cannot be nested, so we flatten them here
         switch (tentry->type) {
         case TRY_START:
@@ -245,14 +245,14 @@ void inline_method_unsafe(const DexMethod* caller_method,
   }
 
   // find the last position entry before the invoke.
-  const auto invoke_position = last_position_before(pos, caller_code);
-  if (invoke_position) {
+  auto* const invoke_position = last_position_before(pos, caller_code);
+  if (invoke_position != nullptr) {
     TRACE(INL, 3, "Inlining call at %s:%d", invoke_position->file->c_str(),
           invoke_position->line);
   }
 
   // check if we are in a try block
-  auto caller_catch = transform::find_active_catch(caller_code, pos);
+  auto* caller_catch = transform::find_active_catch(caller_code, pos);
 
   const auto& ret_it = std::find_if(
       callee_code->begin(), callee_code->end(), [](const MethodItemEntry& mei) {
@@ -267,7 +267,7 @@ void inline_method_unsafe(const DexMethod* caller_method,
   splice(pos, callee_code->begin(), ret_it);
 
   // try items can span across a return opcode
-  auto callee_catch =
+  auto* callee_catch =
       splice.clone(transform::find_active_catch(callee_code, ret_it));
   if (callee_catch != nullptr) {
     caller_code->insert_before(pos,
@@ -282,12 +282,12 @@ void inline_method_unsafe(const DexMethod* caller_method,
     auto ret_insn = std::make_unique<IRInstruction>(*ret_it->insn);
     transform::remap_registers(ret_insn.get(), *callee_reg_map);
     IRInstruction* move = move_result(ret_insn.get(), move_res->insn);
-    auto move_mei = new MethodItemEntry(move);
+    auto* move_mei = new MethodItemEntry(move);
     caller_code->insert_before(pos, *move_mei);
   }
   // ensure that the caller's code after the inlined method retain their
   // original position
-  if (invoke_position) {
+  if (invoke_position != nullptr) {
     caller_code->insert_before(
         pos,
         *(new MethodItemEntry(
@@ -309,8 +309,8 @@ void inline_method_unsafe(const DexMethod* caller_method,
     }
 
     if (std::next(ret_it) != callee_code->end()) {
-      const auto return_position = last_position_before(ret_it, callee_code);
-      if (return_position) {
+      auto* const return_position = last_position_before(ret_it, callee_code);
+      if (return_position != nullptr) {
         // If there are any opcodes between the callee's return and its next
         // position, we need to re-mark them with the correct line number,
         // otherwise they would inherit the line number from the end of the

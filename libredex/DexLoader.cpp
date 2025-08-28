@@ -40,7 +40,7 @@ std::pair<DexLoader::DataUPtr, size_t> mmap_data(const DexLocation* location) {
             location->get_file_name().c_str());
     exit(EXIT_FAILURE);
   }
-  auto mapped_file_ptr = mapped_file.get();
+  auto* mapped_file_ptr = mapped_file.get();
   auto data = DexLoader::DataUPtr((const uint8_t*)mapped_file->const_data(),
                                   [mapped_file_ptr](auto*) {
                                     // Data is mapped, don't actually destroy
@@ -163,20 +163,20 @@ void validate_dex_header(const dex_header* dh,
   bool supported = false;
   switch (support_dex_version) {
   case 39:
-    supported = supported ||
-                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V39, sizeof(dh->magic));
+    supported = supported || (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V39,
+                                     sizeof(dh->magic)) == 0);
     FALLTHROUGH_INTENDED; /* intentional fallthrough to also check for v38 */
   case 38:
-    supported = supported ||
-                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V38, sizeof(dh->magic));
+    supported = supported || (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V38,
+                                     sizeof(dh->magic)) == 0);
     FALLTHROUGH_INTENDED; /* intentional fallthrough to also check for v37 */
   case 37:
-    supported = supported ||
-                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37, sizeof(dh->magic));
+    supported = supported || (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37,
+                                     sizeof(dh->magic)) == 0);
     FALLTHROUGH_INTENDED; /* intentional fallthrough to also check for v35 */
   case 35:
-    supported = supported ||
-                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic));
+    supported = supported || (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35,
+                                     sizeof(dh->magic)) == 0);
     break;
   default:
     not_reached_log("Unrecognized support_dex_version %d\n",
@@ -191,7 +191,7 @@ void validate_dex_header(const dex_header* dh,
       .add_info("dexsize", dexsize)
       .add_info("header_size", dh->file_size);
 
-  auto map_list = [&]() {
+  const auto* map_list = [&]() {
     auto map_list_off = (uint64_t)dh->map_off;
     dex_range_assert(map_list_off, sizeof(dex_map_list), dexsize,
                      "map_off invalid", "map_list out of range (struct)",
@@ -206,7 +206,7 @@ void validate_dex_header(const dex_header* dh,
   }();
 
   for (uint32_t i = 0; i < map_list->size; i++) {
-    auto& item = map_list->items[i];
+    const auto& item = map_list->items[i];
     switch (item.type) {
     case TYPE_CALL_SITE_ID_ITEM: {
       auto callsite_ids_off = (uint64_t)item.offset;
@@ -253,7 +253,7 @@ void validate_type_ids_table(DexIdx* idx, const dex_header* dh) {
                            dh->type_ids_off);
   const auto str_size = dh->string_ids_size;
   for (size_t i = 0; i != dh->type_ids_size; ++i) {
-    auto& type_id = type_ids_base[i];
+    const auto& type_id = type_ids_base[i];
     always_assert_type_log(type_id.string_idx < str_size, INVALID_DEX,
                            "Type index out of bounds");
 
@@ -302,13 +302,13 @@ void DexLoader::gather_input_stats() {
       // Skip nulls, they may have been introduced by benign duplicate classes
       continue;
     }
-    auto* class_def = &m_class_defs[cidx];
+    const auto* class_def = &m_class_defs[cidx];
     auto anno_off = class_def->annotations_off;
-    if (anno_off) {
+    if (anno_off != 0u) {
       const dex_annotations_directory_item* anno_dir =
           m_idx->get_data<dex_annotations_directory_item>(anno_off);
       auto class_anno_off = anno_dir->class_annotations_off;
-      if (class_anno_off) {
+      if (class_anno_off != 0u) {
         const uint32_t* anno_data = m_idx->get_uint_data(class_anno_off);
         uint32_t count = *anno_data++;
         always_assert_type_log(anno_data <= anno_data + count, INVALID_DEX,
@@ -349,7 +349,7 @@ void DexLoader::gather_input_stats() {
     type_lists.insert(interfaces_type_list);
     auto deva = clz->get_static_values();
     if (deva) {
-      if (!enc_arrays.count(*deva)) {
+      if (enc_arrays.count(*deva) == 0u) {
         enc_arrays.emplace(std::move(*deva));
         m_stats.num_static_values++;
       }
@@ -378,7 +378,7 @@ void DexLoader::gather_input_stats() {
   m_stats.num_type_lists += type_lists.size();
 
   for (uint32_t sidx = 0; sidx < m_dh->string_ids_size; ++sidx) {
-    auto str = m_idx->get_stringidx(sidx);
+    const auto* str = m_idx->get_stringidx(sidx);
     m_stats.strings_total_size += str->get_entry_size();
   }
 
@@ -528,7 +528,7 @@ void DexLoader::gather_input_stats() {
       m_stats.code_count += item.size;
 
       for (uint32_t j = 0; j < item.size; j++) {
-        auto* code_item = get_and_consume<dex_code_item>(encdata, 4);
+        const auto* code_item = get_and_consume<dex_code_item>(encdata, 4);
 
         consume_encdata(code_item->insns_size * sizeof(uint16_t));
 
@@ -586,7 +586,7 @@ void DexLoader::gather_input_stats() {
         read_uleb128_checked<redex::DexAssert>(encdata);
         // param_count
         uint32_t param_count = read_uleb128_checked<redex::DexAssert>(encdata);
-        while (param_count--) {
+        while ((param_count--) != 0u) {
           // Each parameter is one uleb128p1
           read_uleb128_checked<redex::DexAssert>(encdata);
         }
@@ -658,7 +658,7 @@ void DexLoader::gather_input_stats() {
       m_stats.annotations_directory_count += item.size;
 
       for (uint32_t j = 0; j < item.size; ++j) {
-        auto* annotations_directory_item =
+        const auto* annotations_directory_item =
             get_and_consume<dex_annotations_directory_item>(encdata, 4);
 
         size_t advance = sizeof(dex_field_annotation) *
@@ -688,7 +688,7 @@ void DexLoader::gather_input_stats() {
 void DexLoader::load_dex_class(int num) {
   auto dexsize = m_file_size;
   const dex_class_def* cdef = m_class_defs + num;
-  auto idx = m_idx.get();
+  auto* idx = m_idx.get();
 
   // Validate dex_class_def layout
   auto annotations_off = cdef->annotations_off;
@@ -818,7 +818,7 @@ static void balloon_all(const Scope& scope,
   switch (p) {
   case DexLoader::Parallel::kNo: {
     walk::methods(scope, [&](DexMethod* m) {
-      if (m->get_dex_code()) {
+      if (m->get_dex_code() != nullptr) {
         m->balloon();
       }
     });
@@ -829,7 +829,7 @@ static void balloon_all(const Scope& scope,
                             std::pair<std::string, std::exception_ptr>>
         ir_balloon_errors;
     walk::parallel::methods(scope, [&](DexMethod* m) {
-      if (m->get_dex_code()) {
+      if (m->get_dex_code() != nullptr) {
         try {
           m->balloon();
         } catch (RedexException& re) {
@@ -922,7 +922,7 @@ std::string load_dex_magic_from_dex(const DexLocation* location) {
   }
   always_assert_type_log(file.size() >= sizeof(dex_header), INVALID_DEX,
                          "Dex too small");
-  auto dh = reinterpret_cast<const dex_header*>(file.const_data());
+  const auto* dh = reinterpret_cast<const dex_header*>(file.const_data());
   return dh->magic;
 }
 

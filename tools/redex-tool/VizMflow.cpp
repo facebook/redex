@@ -22,10 +22,12 @@ void dump_viz(const Scope& scope,
               const char* cls_filter,
               const char* meth_filter) {
   walk::code(scope, [&](DexMethod* meth, IRCode& code) {
-    if (cls_filter && !strstr(meth->get_class()->c_str(), cls_filter)) {
+    if ((cls_filter != nullptr) &&
+        (strstr(meth->get_class()->c_str(), cls_filter) == nullptr)) {
       return;
     }
-    if (meth_filter && !strstr(meth->c_str(), meth_filter)) {
+    if ((meth_filter != nullptr) &&
+        (strstr(meth->c_str(), meth_filter) == nullptr)) {
       return;
     }
     cfg::ScopedCFG cfg(&code);
@@ -73,11 +75,11 @@ class VizMflow : public Tool {
                        options["dexendir"].as<std::string>());
     const auto& scope = build_class_scope(stores);
     const char* class_filter =
-        options.count("class-filter")
+        options.count("class-filter") != 0u
             ? options["class-filter"].as<std::string>().c_str()
             : nullptr;
     const char* method_filter =
-        options.count("method-filter")
+        options.count("method-filter") != 0u
             ? options["method-filter"].as<std::string>().c_str()
             : nullptr;
     dump_viz(scope, class_filter, method_filter);

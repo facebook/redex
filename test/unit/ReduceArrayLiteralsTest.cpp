@@ -42,7 +42,7 @@ void test(const std::string& code_str,
 
 TEST_F(ReduceArrayLiteralsTest, empty_array) {
   // our optimization doesn't bother with empty arrays
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (new-array v0 "[I")
@@ -56,7 +56,7 @@ TEST_F(ReduceArrayLiteralsTest, empty_array) {
 
 TEST_F(ReduceArrayLiteralsTest, illegal_aput_on_empty_array) {
   // this could would crash at runtime, but shouldn't crash at compile time
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 0)
       (new-array v0 "[Ljava/lang/String;")
@@ -72,7 +72,7 @@ TEST_F(ReduceArrayLiteralsTest, illegal_aput_on_empty_array) {
 }
 
 TEST_F(ReduceArrayLiteralsTest, array_one_element) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 1)
       (new-array v0 "[Ljava/lang/String;")
@@ -102,7 +102,7 @@ TEST_F(ReduceArrayLiteralsTest, array_one_element) {
 
 TEST_F(ReduceArrayLiteralsTest, jelly_bean_x86) {
   // non-primitive elements before KitKat on x86 were buggy, and we bail
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 1)
       (new-array v0 "[Ljava/lang/String;")
@@ -114,7 +114,7 @@ TEST_F(ReduceArrayLiteralsTest, jelly_bean_x86) {
       (return-object v1)
     )
   )";
-  const auto expected_str = code_str;
+  const auto* const expected_str = code_str;
   test(code_str, expected_str, 0, 0, 222, 18, Architecture::X86);
 }
 
@@ -151,7 +151,7 @@ TEST_F(ReduceArrayLiteralsTest, jelly_bean_armv7) {
 
 TEST_F(ReduceArrayLiteralsTest, array_one_wide_element) {
   // wide arrays are not supported according to spec
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 1)
       (new-array v0 "[J")
@@ -168,7 +168,7 @@ TEST_F(ReduceArrayLiteralsTest, array_one_wide_element) {
 
 TEST_F(ReduceArrayLiteralsTest, array_one_boolean_element) {
   // non-int primitive arrays happen to be not implemented
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 1)
       (new-array v0 "[B")
@@ -185,7 +185,7 @@ TEST_F(ReduceArrayLiteralsTest, array_one_boolean_element) {
 
 TEST_F(ReduceArrayLiteralsTest, array_one_cyclic_element) {
   // storing the array itself in it amounts to escaping
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 1)
       (new-array v0 "[Ljava.lang.Object;")
@@ -204,7 +204,7 @@ TEST_F(ReduceArrayLiteralsTest, array_more_than_max_elements) {
       "Ljava/lang/System;.arraycopy:"
       "(Ljava/lang/Object;ILjava/lang/Object;II)V");
 
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 2)
       (new-array v0 "[Ljava/lang/String;")
@@ -254,7 +254,7 @@ TEST_F(ReduceArrayLiteralsTest, array_more_than_max_elements) {
 }
 
 TEST_F(ReduceArrayLiteralsTest, array_two_same_elements) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 2)
       (new-array v0 "[Ljava/lang/String;")
@@ -288,7 +288,7 @@ TEST_F(ReduceArrayLiteralsTest, array_two_same_elements) {
 }
 
 TEST_F(ReduceArrayLiteralsTest, array_two_different_elements) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (const v0 2)
       (new-array v0 "[Ljava/lang/String;")
@@ -326,7 +326,7 @@ TEST_F(ReduceArrayLiteralsTest, array_two_different_elements) {
 }
 
 TEST_F(ReduceArrayLiteralsTest, conditional_escape) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v3)
       (const v0 1)

@@ -64,15 +64,15 @@ auto compute_deps(const Scope& scope,
     // We are not considering externals here. This should be fine, as
     // a chain internal <- external <- internal should not exist.
     {
-      auto super_class = type_class_internal(cls->get_super_class());
+      auto* super_class = type_class_internal(cls->get_super_class());
       add_dep(super_class);
     }
 
-    auto clinit = cls->get_clinit();
+    auto* clinit = cls->get_clinit();
     if (clinit != nullptr && clinit->get_code() != nullptr) {
       cfg_adapter::iterate_with_iterator(
           clinit->get_code(), [&](const IRList::iterator& it) {
-            auto insn = it->insn;
+            auto* insn = it->insn;
             if (opcode::is_an_sfield_op(insn->opcode())) {
               add_dep(type_class(insn->get_field()->get_class()));
             } else if (opcode::is_invoke_static(insn->opcode())) {
@@ -194,7 +194,7 @@ Scope reverse_tsort_by_init_deps(const Scope& scope, size_t& possible_cycles) {
     if (visiting.count(cls) != 0) {
       ++possible_cycles;
       TRACE(FINALINLINE, 1, "Possible class init cycle (could be benign):");
-      for (auto visiting_cls : UnorderedIterable(visiting)) {
+      for (const auto* visiting_cls : UnorderedIterable(visiting)) {
         TRACE(FINALINLINE, 1, "  %s", SHOW(visiting_cls));
       }
       TRACE(FINALINLINE, 1, "  %s", SHOW(cls));
@@ -208,13 +208,13 @@ Scope reverse_tsort_by_init_deps(const Scope& scope, size_t& possible_cycles) {
     visiting.emplace(cls);
     const auto& ctors = cls->get_ctors();
     if (ctors.size() == 1) {
-      auto ctor = ctors[0];
+      auto* ctor = ctors[0];
       if (ctor != nullptr && ctor->get_code() != nullptr) {
         cfg_adapter::iterate_with_iterator(
             ctor->get_code(), [&](const IRList::iterator& it) {
-              auto insn = it->insn;
+              auto* insn = it->insn;
               if (opcode::is_an_iget(insn->opcode())) {
-                auto dependee_cls = type_class(insn->get_field()->get_class());
+                auto* dependee_cls = type_class(insn->get_field()->get_class());
                 if (dependee_cls == nullptr || dependee_cls == cls) {
                   return cfg_adapter::LOOP_CONTINUE;
                 }

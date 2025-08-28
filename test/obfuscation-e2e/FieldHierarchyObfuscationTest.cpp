@@ -28,7 +28,7 @@ template <std::size_t SIZE>
 void testClass(ProguardObfuscationTest* tester,
                const std::string& class_name,
                const std::array<std::string, SIZE>& fields) {
-  auto clazz = tester->find_class_named(class_name);
+  auto* clazz = tester->find_class_named(class_name);
   ASSERT_NE(nullptr, clazz) << class_name << " not found.";
 
   for (const std::string& fieldName : fields) {

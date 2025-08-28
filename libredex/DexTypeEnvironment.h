@@ -72,8 +72,8 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
     if (other.is_none()) {
       return false;
     }
-    auto l = get_dex_type();
-    auto r = other.get_dex_type();
+    const auto* l = get_dex_type();
+    const auto* r = other.get_dex_type();
     return type::check_cast(l, r);
   }
 
@@ -290,23 +290,23 @@ class DexTypeDomain final
                          const Nullness nullness,
                          bool is_dex_type_exact,
                          const DexAnnoType* annotation = nullptr)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(NullnessDomain(nullness),
-                            SingletonDexTypeDomain(dex_type),
-                            is_dex_type_exact ? SmallSetDexTypeDomain(dex_type)
-                                              : SmallSetDexTypeDomain::top(),
-                            (annotation && annotation->m_type)
-                                ? TypedefAnnotationDomain(annotation->m_type)
-                                : TypedefAnnotationDomain())) {}
+      : ReducedProductAbstractDomain(std::make_tuple(
+            NullnessDomain(nullness),
+            SingletonDexTypeDomain(dex_type),
+            is_dex_type_exact ? SmallSetDexTypeDomain(dex_type)
+                              : SmallSetDexTypeDomain::top(),
+            ((annotation != nullptr) && (annotation->m_type != nullptr))
+                ? TypedefAnnotationDomain(annotation->m_type)
+                : TypedefAnnotationDomain())) {}
 
   explicit DexTypeDomain(const DexAnnoType* annotation)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(NullnessDomain(),
-                            SingletonDexTypeDomain(),
-                            SmallSetDexTypeDomain::top(),
-                            (annotation && annotation->m_type)
-                                ? TypedefAnnotationDomain(annotation->m_type)
-                                : TypedefAnnotationDomain())) {}
+      : ReducedProductAbstractDomain(std::make_tuple(
+            NullnessDomain(),
+            SingletonDexTypeDomain(),
+            SmallSetDexTypeDomain::top(),
+            ((annotation != nullptr) && (annotation->m_type != nullptr))
+                ? TypedefAnnotationDomain(annotation->m_type)
+                : TypedefAnnotationDomain())) {}
 
  public:
   static void reduce_product(
@@ -366,8 +366,9 @@ class DexTypeDomain final
     if (!dex_type) {
       return boost::none;
     }
-    auto dex_cls = type_class(*dex_type);
-    return dex_cls ? boost::optional<const DexClass*>(dex_cls) : boost::none;
+    auto* dex_cls = type_class(*dex_type);
+    return dex_cls != nullptr ? boost::optional<const DexClass*>(dex_cls)
+                              : boost::none;
   }
 
   const SmallSetDexTypeDomain& get_set_domain() const { return get<2>(); }

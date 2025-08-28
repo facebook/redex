@@ -28,7 +28,7 @@ using ::testing::NotNull;
 class KotlinLambdaSingletonRemovalTest : public RedexIntegrationTest {
  protected:
   void set_root_method(std::string_view full_name) {
-    auto method = DexMethod::get_method(full_name)->as_def();
+    auto* method = DexMethod::get_method(full_name)->as_def();
     ASSERT_NE(nullptr, method);
     method->rstate.set_root();
   }
@@ -122,18 +122,18 @@ TEST_F(KotlinLambdaSingletonRemovalTest, LambdaSingletonIsRemoved) {
       << "Sanity check failed: singleton field not found in "
       << SHOW(lambda_class);
 
-  auto root_method = DexMethod::get_method(root_method_name)->as_def();
-  auto code_root = root_method->get_code();
+  auto* root_method = DexMethod::get_method(root_method_name)->as_def();
+  auto* code_root = root_method->get_code();
   ASSERT_THAT(code_root, NotNull());
   check_opcode_present(code_root, OPCODE_SGET_OBJECT);
 
-  const auto clinit_method =
+  auto* const clinit_method =
       DexMethod::get_method(clinit_method_name)->as_def();
-  auto code_clinit = clinit_method->get_code();
+  auto* code_clinit = clinit_method->get_code();
   ASSERT_THAT(code_clinit, NotNull());
   check_opcode_present(code_clinit, OPCODE_SPUT_OBJECT);
 
-  auto klr = new KotlinStatelessLambdaSingletonRemovalPass();
+  auto* klr = new KotlinStatelessLambdaSingletonRemovalPass();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
 
@@ -170,18 +170,18 @@ TEST_F(KotlinLambdaSingletonRemovalTest, NoEffectOnNamedClass) {
       << SHOW(lambda_class);
 
   set_root_method(root_method);
-  auto y_method = DexMethod::get_method(root_method)->as_def();
-  auto codey = y_method->get_code();
+  auto* y_method = DexMethod::get_method(root_method)->as_def();
+  auto* codey = y_method->get_code();
   ASSERT_THAT(codey, NotNull());
   check_opcode_present(codey, OPCODE_SGET_OBJECT);
 
-  const auto clinit_method =
+  auto* const clinit_method =
       DexMethod::get_method(clinit_method_name)->as_def();
-  auto code_clinit = clinit_method->get_code();
+  auto* code_clinit = clinit_method->get_code();
   ASSERT_THAT(code_clinit, NotNull());
   check_opcode_present(code_clinit, OPCODE_SPUT_OBJECT);
 
-  auto klr = new KotlinStatelessLambdaSingletonRemovalPass();
+  auto* klr = new KotlinStatelessLambdaSingletonRemovalPass();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
 

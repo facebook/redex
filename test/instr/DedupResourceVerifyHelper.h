@@ -30,22 +30,22 @@ namespace {
 
 inline void dedupresource_preverify(const DexClasses& classes,
                                     ResourceTableFile* res_table) {
-  auto dimen_cls = find_class_named(classes, "Lcom/facebook/R$dimen;");
+  auto* dimen_cls = find_class_named(classes, "Lcom/facebook/R$dimen;");
   EXPECT_NE(nullptr, dimen_cls);
-  auto margin_top = find_sfield_named(*dimen_cls, "margin_top");
-  auto padding_left = find_sfield_named(*dimen_cls, "padding_left");
-  auto padding_right = find_sfield_named(*dimen_cls, "padding_right");
-  auto unused_dimen_1 = find_sfield_named(*dimen_cls, "unused_dimen_1");
-  auto unused_dimen_2 = find_sfield_named(*dimen_cls, "unused_dimen_2");
-  auto welcome_text_size = find_sfield_named(*dimen_cls, "welcome_text_size");
-  auto small = find_sfield_named(*dimen_cls, "small");
-  auto medium = find_sfield_named(*dimen_cls, "medium");
-  auto medium2 = find_sfield_named(*dimen_cls, "medium2");
-  auto foo = find_sfield_named(*dimen_cls, "foo");
-  auto bar = find_sfield_named(*dimen_cls, "bar");
-  auto far = find_sfield_named(*dimen_cls, "far");
-  auto baz = find_sfield_named(*dimen_cls, "baz");
-  auto boo = find_sfield_named(*dimen_cls, "boo");
+  auto* margin_top = find_sfield_named(*dimen_cls, "margin_top");
+  auto* padding_left = find_sfield_named(*dimen_cls, "padding_left");
+  auto* padding_right = find_sfield_named(*dimen_cls, "padding_right");
+  auto* unused_dimen_1 = find_sfield_named(*dimen_cls, "unused_dimen_1");
+  auto* unused_dimen_2 = find_sfield_named(*dimen_cls, "unused_dimen_2");
+  auto* welcome_text_size = find_sfield_named(*dimen_cls, "welcome_text_size");
+  auto* small = find_sfield_named(*dimen_cls, "small");
+  auto* medium = find_sfield_named(*dimen_cls, "medium");
+  auto* medium2 = find_sfield_named(*dimen_cls, "medium2");
+  auto* foo = find_sfield_named(*dimen_cls, "foo");
+  auto* bar = find_sfield_named(*dimen_cls, "bar");
+  auto* far = find_sfield_named(*dimen_cls, "far");
+  auto* baz = find_sfield_named(*dimen_cls, "baz");
+  auto* boo = find_sfield_named(*dimen_cls, "boo");
 
   EXPECT_FIELDS_DIFFERENT(padding_right, padding_left);
   EXPECT_FIELDS_DIFFERENT(padding_right, unused_dimen_2);
@@ -106,17 +106,18 @@ inline void dedupresource_preverify(const DexClasses& classes,
   auto dup_theme2_ids = res_table->get_res_ids_by_name("DupTheme2");
   EXPECT_EQ(dup_theme1_ids.size(), 1);
   EXPECT_EQ(dup_theme2_ids.size(), 1);
-  auto style_cls = find_class_named(classes, "Lcom/facebook/R$style;");
-  auto dup_theme1_field = find_sfield_named(*style_cls, "DupTheme1");
-  auto dup_theme2_field = find_sfield_named(*style_cls, "DupTheme2");
+  auto* style_cls = find_class_named(classes, "Lcom/facebook/R$style;");
+  auto* dup_theme1_field = find_sfield_named(*style_cls, "DupTheme1");
+  auto* dup_theme2_field = find_sfield_named(*style_cls, "DupTheme2");
   EXPECT_FIELDS_DIFFERENT(dup_theme1_field, dup_theme2_field);
 
   auto style_not_sorted_ids = res_table->get_res_ids_by_name("StyleNotSorted");
   auto style_sorted_ids = res_table->get_res_ids_by_name("StyleSorted");
   EXPECT_EQ(style_not_sorted_ids.size(), 1);
   EXPECT_EQ(style_sorted_ids.size(), 1);
-  auto style_not_sorted_field = find_sfield_named(*style_cls, "StyleNotSorted");
-  auto style_sorted_field = find_sfield_named(*style_cls, "StyleSorted");
+  auto* style_not_sorted_field =
+      find_sfield_named(*style_cls, "StyleNotSorted");
+  auto* style_sorted_field = find_sfield_named(*style_cls, "StyleSorted");
   EXPECT_FIELDS_DIFFERENT(style_not_sorted_field, style_sorted_field);
 
   auto theme_different_a_ids =
@@ -125,9 +126,9 @@ inline void dedupresource_preverify(const DexClasses& classes,
       res_table->get_res_ids_by_name("ThemeDifferentB");
   EXPECT_EQ(theme_different_a_ids.size(), 1);
   EXPECT_EQ(theme_different_b_ids.size(), 1);
-  auto theme_different_a_field =
+  auto* theme_different_a_field =
       find_sfield_named(*style_cls, "ThemeDifferentA");
-  auto theme_different_b_field =
+  auto* theme_different_b_field =
       find_sfield_named(*style_cls, "ThemeDifferentB");
   EXPECT_FIELDS_DIFFERENT(theme_different_a_field, theme_different_b_field);
 
@@ -135,53 +136,53 @@ inline void dedupresource_preverify(const DexClasses& classes,
   auto same_attribute_b_ids = res_table->get_res_ids_by_name("SameAttributeB");
   EXPECT_EQ(same_attribute_a_ids.size(), 1);
   EXPECT_EQ(same_attribute_b_ids.size(), 1);
-  auto attr_cls = find_class_named(classes, "Lcom/facebook/R$attr;");
-  auto same_attribute_a_field = find_sfield_named(*attr_cls, "SameAttributeA");
-  auto same_attribute_b_field = find_sfield_named(*attr_cls, "SameAttributeB");
+  auto* attr_cls = find_class_named(classes, "Lcom/facebook/R$attr;");
+  auto* same_attribute_a_field = find_sfield_named(*attr_cls, "SameAttributeA");
+  auto* same_attribute_b_field = find_sfield_named(*attr_cls, "SameAttributeB");
   EXPECT_FIELDS_DIFFERENT(same_attribute_a_field, same_attribute_b_field);
 
   // drawable
-  auto drawable_cls = find_class_named(classes, "Lcom/facebook/R$drawable;");
+  auto* drawable_cls = find_class_named(classes, "Lcom/facebook/R$drawable;");
   EXPECT_NE(nullptr, drawable_cls);
-  auto icon = find_sfield_named(*drawable_cls, "icon");
-  auto x_icon = find_sfield_named(*drawable_cls, "x_icon");
+  auto* icon = find_sfield_named(*drawable_cls, "icon");
+  auto* x_icon = find_sfield_named(*drawable_cls, "x_icon");
   EXPECT_NE(nullptr, icon);
   EXPECT_NE(nullptr, x_icon);
   EXPECT_NE(icon->get_static_value()->value(),
             x_icon->get_static_value()->value());
-  auto prickly = find_sfield_named(*drawable_cls, "prickly");
-  auto x_prickly = find_sfield_named(*drawable_cls, "x_prickly");
+  auto* prickly = find_sfield_named(*drawable_cls, "prickly");
+  auto* x_prickly = find_sfield_named(*drawable_cls, "x_prickly");
   EXPECT_FIELDS_DIFFERENT(prickly, x_prickly);
 
   // color
-  auto color_cls = find_class_named(classes, "Lcom/facebook/R$color;");
+  auto* color_cls = find_class_named(classes, "Lcom/facebook/R$color;");
   EXPECT_NE(nullptr, color_cls);
-  auto hex_or_file = find_sfield_named(*color_cls, "hex_or_file");
-  auto hex_or_file2 = find_sfield_named(*color_cls, "hex_or_file2");
+  auto* hex_or_file = find_sfield_named(*color_cls, "hex_or_file");
+  auto* hex_or_file2 = find_sfield_named(*color_cls, "hex_or_file2");
   EXPECT_FIELDS_DIFFERENT(hex_or_file, hex_or_file2);
-  auto red = find_sfield_named(*color_cls, "red");
-  auto red_duplicate = find_sfield_named(*color_cls, "red_duplicate");
+  auto* red = find_sfield_named(*color_cls, "red");
+  auto* red_duplicate = find_sfield_named(*color_cls, "red_duplicate");
   EXPECT_FIELDS_DIFFERENT(red, red_duplicate);
 }
 
 inline void dedupresource_postverify(const DexClasses& classes,
                                      ResourceTableFile* res_table) {
-  auto dimen_cls = find_class_named(classes, "Lcom/facebook/R$dimen;");
+  auto* dimen_cls = find_class_named(classes, "Lcom/facebook/R$dimen;");
   EXPECT_NE(nullptr, dimen_cls);
-  auto margin_top = find_sfield_named(*dimen_cls, "margin_top");
-  auto padding_left = find_sfield_named(*dimen_cls, "padding_left");
-  auto padding_right = find_sfield_named(*dimen_cls, "padding_right");
-  auto unused_dimen_1 = find_sfield_named(*dimen_cls, "unused_dimen_1");
-  auto unused_dimen_2 = find_sfield_named(*dimen_cls, "unused_dimen_2");
-  auto welcome_text_size = find_sfield_named(*dimen_cls, "welcome_text_size");
-  [[maybe_unused]] auto small = find_sfield_named(*dimen_cls, "small");
-  auto medium = find_sfield_named(*dimen_cls, "medium");
-  auto medium2 = find_sfield_named(*dimen_cls, "medium2");
-  auto foo = find_sfield_named(*dimen_cls, "foo");
-  auto bar = find_sfield_named(*dimen_cls, "bar");
-  auto far = find_sfield_named(*dimen_cls, "far");
-  auto baz = find_sfield_named(*dimen_cls, "baz");
-  auto boo = find_sfield_named(*dimen_cls, "boo");
+  auto* margin_top = find_sfield_named(*dimen_cls, "margin_top");
+  auto* padding_left = find_sfield_named(*dimen_cls, "padding_left");
+  auto* padding_right = find_sfield_named(*dimen_cls, "padding_right");
+  auto* unused_dimen_1 = find_sfield_named(*dimen_cls, "unused_dimen_1");
+  auto* unused_dimen_2 = find_sfield_named(*dimen_cls, "unused_dimen_2");
+  auto* welcome_text_size = find_sfield_named(*dimen_cls, "welcome_text_size");
+  [[maybe_unused]] auto* small = find_sfield_named(*dimen_cls, "small");
+  auto* medium = find_sfield_named(*dimen_cls, "medium");
+  auto* medium2 = find_sfield_named(*dimen_cls, "medium2");
+  auto* foo = find_sfield_named(*dimen_cls, "foo");
+  auto* bar = find_sfield_named(*dimen_cls, "bar");
+  auto* far = find_sfield_named(*dimen_cls, "far");
+  auto* baz = find_sfield_named(*dimen_cls, "baz");
+  auto* boo = find_sfield_named(*dimen_cls, "boo");
 
   EXPECT_FIELDS_SAME(padding_right, padding_left);
   EXPECT_FIELDS_SAME(padding_right, unused_dimen_2);
@@ -263,16 +264,17 @@ inline void dedupresource_postverify(const DexClasses& classes,
   auto dup_theme1_ids = res_table->get_res_ids_by_name("DupTheme1");
   auto dup_theme2_ids = res_table->get_res_ids_by_name("DupTheme2");
   EXPECT_EQ(dup_theme1_ids.size() + dup_theme2_ids.size(), 1);
-  auto style_cls = find_class_named(classes, "Lcom/facebook/R$style;");
-  auto dup_theme1_field = find_sfield_named(*style_cls, "DupTheme1");
-  auto dup_theme2_field = find_sfield_named(*style_cls, "DupTheme2");
+  auto* style_cls = find_class_named(classes, "Lcom/facebook/R$style;");
+  auto* dup_theme1_field = find_sfield_named(*style_cls, "DupTheme1");
+  auto* dup_theme2_field = find_sfield_named(*style_cls, "DupTheme2");
   EXPECT_FIELDS_SAME(dup_theme1_field, dup_theme2_field);
 
   auto style_not_sorted_ids = res_table->get_res_ids_by_name("StyleNotSorted");
   auto style_sorted_ids = res_table->get_res_ids_by_name("StyleSorted");
   EXPECT_EQ(style_not_sorted_ids.size() + style_sorted_ids.size(), 1);
-  auto style_not_sorted_field = find_sfield_named(*style_cls, "StyleNotSorted");
-  auto style_sorted_field = find_sfield_named(*style_cls, "StyleSorted");
+  auto* style_not_sorted_field =
+      find_sfield_named(*style_cls, "StyleNotSorted");
+  auto* style_sorted_field = find_sfield_named(*style_cls, "StyleSorted");
   EXPECT_FIELDS_SAME(style_not_sorted_field, style_sorted_field);
 
   auto theme_different_a_ids =
@@ -281,43 +283,43 @@ inline void dedupresource_postverify(const DexClasses& classes,
       res_table->get_res_ids_by_name("ThemeDifferentB");
   EXPECT_EQ(theme_different_a_ids.size(), 1);
   EXPECT_EQ(theme_different_b_ids.size(), 1);
-  auto theme_different_a_field =
+  auto* theme_different_a_field =
       find_sfield_named(*style_cls, "ThemeDifferentA");
-  auto theme_different_b_field =
+  auto* theme_different_b_field =
       find_sfield_named(*style_cls, "ThemeDifferentB");
   EXPECT_FIELDS_DIFFERENT(theme_different_a_field, theme_different_b_field);
 
   auto same_attribute_a_ids = res_table->get_res_ids_by_name("SameAttributeA");
   auto same_attribute_b_ids = res_table->get_res_ids_by_name("SameAttributeB");
   EXPECT_EQ(same_attribute_a_ids.size() + same_attribute_b_ids.size(), 2);
-  auto attr_cls = find_class_named(classes, "Lcom/facebook/R$attr;");
-  auto same_attribute_a_field = find_sfield_named(*attr_cls, "SameAttributeA");
-  auto same_attribute_b_field = find_sfield_named(*attr_cls, "SameAttributeB");
+  auto* attr_cls = find_class_named(classes, "Lcom/facebook/R$attr;");
+  auto* same_attribute_a_field = find_sfield_named(*attr_cls, "SameAttributeA");
+  auto* same_attribute_b_field = find_sfield_named(*attr_cls, "SameAttributeB");
   EXPECT_FIELDS_DIFFERENT(same_attribute_a_field, same_attribute_b_field);
 
   // drawable
-  auto drawable_cls = find_class_named(classes, "Lcom/facebook/R$drawable;");
+  auto* drawable_cls = find_class_named(classes, "Lcom/facebook/R$drawable;");
   EXPECT_NE(nullptr, drawable_cls);
-  auto icon = find_sfield_named(*drawable_cls, "icon");
-  auto x_icon = find_sfield_named(*drawable_cls, "x_icon");
+  auto* icon = find_sfield_named(*drawable_cls, "icon");
+  auto* x_icon = find_sfield_named(*drawable_cls, "x_icon");
   EXPECT_NE(nullptr, icon);
   EXPECT_NE(nullptr, x_icon);
   EXPECT_EQ(icon->get_static_value()->value(),
             x_icon->get_static_value()->value());
-  auto prickly = find_sfield_named(*drawable_cls, "prickly");
-  auto x_prickly = find_sfield_named(*drawable_cls, "x_prickly");
+  auto* prickly = find_sfield_named(*drawable_cls, "prickly");
+  auto* x_prickly = find_sfield_named(*drawable_cls, "x_prickly");
   EXPECT_FIELDS_SAME(prickly, x_prickly);
 
   // color
-  auto color_cls = find_class_named(classes, "Lcom/facebook/R$color;");
+  auto* color_cls = find_class_named(classes, "Lcom/facebook/R$color;");
   EXPECT_NE(nullptr, color_cls);
-  auto hex_or_file = find_sfield_named(*color_cls, "hex_or_file");
-  auto hex_or_file2 = find_sfield_named(*color_cls, "hex_or_file2");
+  auto* hex_or_file = find_sfield_named(*color_cls, "hex_or_file");
+  auto* hex_or_file2 = find_sfield_named(*color_cls, "hex_or_file2");
   // Make sure an identical file that is among values in different configs do
   // not accidentially count as duplicates.
   EXPECT_FIELDS_DIFFERENT(hex_or_file, hex_or_file2);
   // Should get dedupped properly
-  auto red = find_sfield_named(*color_cls, "red");
-  auto red_duplicate = find_sfield_named(*color_cls, "red_duplicate");
+  auto* red = find_sfield_named(*color_cls, "red");
+  auto* red_duplicate = find_sfield_named(*color_cls, "red_duplicate");
   EXPECT_FIELDS_SAME(red, red_duplicate);
 }

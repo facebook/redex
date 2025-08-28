@@ -65,7 +65,7 @@ dex_data_map_t create_data(
         dex_limits.update_refs_by_always_adding_class(cls);
       }
 
-      auto& dex_struct = dex_limits.get_dex();
+      const auto& dex_struct = dex_limits.get_dex();
 
       dexes_data.emplace_back(DexLimitsChecker::DexData{
           extract(dex_struct.get_frefs()),
@@ -139,8 +139,8 @@ std::string print_new_entries(const dex_data_map_t& old_map_vec,
   auto old_map = to_set_type(old_map_vec);
   auto new_map = to_set_type(new_map_vec);
 
-  for (auto& i : issues) {
-    auto& store_name = i.store->get_name();
+  for (const auto& i : issues) {
+    const auto& store_name = i.store->get_name();
     auto st_it = old_map.find(store_name);
     if (st_it == old_map.end()) {
       // Totally new store, log that.
@@ -260,7 +260,7 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
   }
   Timer t("ref_validation");
   std::string pass_name = "initial state";
-  auto info = mgr.get_current_pass_info();
+  const auto* info = mgr.get_current_pass_info();
   if (info != nullptr) {
     pass_name = info->name;
   }

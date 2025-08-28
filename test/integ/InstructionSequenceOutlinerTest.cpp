@@ -25,7 +25,7 @@
 std::unordered_set<DexMethodRef*> find_invoked_methods(
     const cfg::ControlFlowGraph& cfg, const std::string& name) {
   std::unordered_set<DexMethodRef*> methods;
-  for (auto& mie : InstructionIterable(cfg)) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     if (mie.insn->has_method()) {
       DexMethodRef* m = mie.insn->get_method();
       if (m->get_name()->str().find(name) != std::string::npos) {
@@ -38,7 +38,7 @@ std::unordered_set<DexMethodRef*> find_invoked_methods(
 
 DexMethodRef* find_invoked_method(const cfg::ControlFlowGraph& cfg,
                                   const std::string& name) {
-  for (auto& mie : InstructionIterable(cfg)) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     if (mie.insn->has_method()) {
       DexMethodRef* m = mie.insn->get_method();
       if (m->get_name()->str().find(name) != std::string::npos) {
@@ -51,7 +51,7 @@ DexMethodRef* find_invoked_method(const cfg::ControlFlowGraph& cfg,
 
 size_t count_invokes(const cfg::ControlFlowGraph& cfg, DexMethodRef* m) {
   int count = 0;
-  for (auto& mie : InstructionIterable(cfg)) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     if (mie.insn->has_method() && mie.insn->get_method() == m) {
       count++;
     }
@@ -62,7 +62,7 @@ size_t count_invokes(const cfg::ControlFlowGraph& cfg, DexMethodRef* m) {
 size_t count_invokes(const cfg::ControlFlowGraph& cfg,
                      const std::string& name) {
   size_t count = 0;
-  for (auto m : find_invoked_methods(cfg, name)) {
+  for (auto* m : find_invoked_methods(cfg, name)) {
     count += count_invokes(cfg, m);
   }
   return count;
@@ -70,11 +70,11 @@ size_t count_invokes(const cfg::ControlFlowGraph& cfg,
 
 void get_positions(std::unordered_set<DexPosition*>& positions,
                    cfg::ControlFlowGraph& cfg) {
-  auto manager = g_redex->get_position_pattern_switch_manager();
-  for (auto block : cfg.blocks()) {
+  auto* manager = g_redex->get_position_pattern_switch_manager();
+  for (auto* block : cfg.blocks()) {
     for (auto it = block->begin(); it != block->end(); it++) {
       if (it->type == MFLOW_POSITION) {
-        auto position = it->pos.get();
+        auto* position = it->pos.get();
         if (manager->is_pattern_position(position) ||
             manager->is_switch_position(position)) {
           positions.insert(position);
@@ -88,7 +88,7 @@ class InstructionSequenceOutlinerTest : public RedexIntegrationTest {
  public:
   boost::optional<DexClasses&> classes;
   InstructionSequenceOutlinerTest() {
-    auto config_file_env = std::getenv("config_file");
+    auto* config_file_env = std::getenv("config_file");
     always_assert_log(config_file_env,
                       "Config file must be specified to InterDexTest.\n");
 
@@ -119,7 +119,7 @@ TEST_F(InstructionSequenceOutlinerTest, basic) {
       if (m->get_name()->str().find("basic") != std::string::npos) {
         IRCode* code = m->get_code();
         cfg::ScopedCFG scoped_cfg(code);
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.push_back(println_method);
         EXPECT_EQ(count_invokes(code->cfg(), println_method), 5);
@@ -129,7 +129,7 @@ TEST_F(InstructionSequenceOutlinerTest, basic) {
   }
   sort_unique(println_methods);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = println_methods.front();
+  auto* println_method = println_methods.front();
   EXPECT_EQ(basic_methods.size(), 4);
 
   std::vector<Pass*> passes = {
@@ -139,10 +139,10 @@ TEST_F(InstructionSequenceOutlinerTest, basic) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : basic_methods) {
+  for (auto* m : basic_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 0);
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_NE(outlined_method, nullptr);
     // outlined method should reside in the same class, as the outlined
     // code sequence is not used by any other classs
@@ -152,9 +152,9 @@ TEST_F(InstructionSequenceOutlinerTest, basic) {
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 1);
-  for (auto m : outlined_methods) {
+  for (auto* m : outlined_methods) {
     EXPECT_TRUE(is_static(m));
-    auto proto = m->get_proto();
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
     EXPECT_EQ(proto->get_args()->size(), 0);
     cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -184,10 +184,10 @@ TEST_F(InstructionSequenceOutlinerTest, twice) {
 
   run_passes(passes);
 
-  for (auto m : twice_methods) {
+  for (auto* m : twice_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 0);
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_NE(outlined_method, nullptr);
     EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 2);
   }
@@ -217,10 +217,10 @@ TEST_F(InstructionSequenceOutlinerTest, in_try) {
 
   run_passes(passes);
 
-  for (auto m : in_try_methods) {
+  for (auto* m : in_try_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 0);
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_NE(outlined_method, nullptr);
     EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
   }
@@ -255,12 +255,12 @@ TEST_F(InstructionSequenceOutlinerTest, in_try_ineligible_) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : in_try_ineligible_methods) {
+  for (auto* m : in_try_ineligible_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 2);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
@@ -288,20 +288,20 @@ TEST_F(InstructionSequenceOutlinerTest, param) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : param_methods) {
+  for (auto* m : param_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 2);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 2);
-  for (auto m : outlined_methods) {
+  for (auto* m : outlined_methods) {
     EXPECT_TRUE(is_static(m));
-    auto proto = m->get_proto();
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
     EXPECT_EQ(proto->get_args()->size(), 0);
   }
@@ -327,18 +327,18 @@ TEST_F(InstructionSequenceOutlinerTest, result) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : result_methods) {
+  for (auto* m : result_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_NE(outlined_method, nullptr);
     EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
     outlined_methods.push_back(outlined_method->as_def());
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 1);
-  for (auto m : outlined_methods) {
+  for (auto* m : outlined_methods) {
     EXPECT_TRUE(is_static(m));
-    auto proto = m->get_proto();
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_int());
     EXPECT_EQ(proto->get_args()->size(), 0);
   }
@@ -363,18 +363,18 @@ TEST_F(InstructionSequenceOutlinerTest, normalization) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : param_methods) {
+  for (auto* m : param_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_NE(outlined_method, nullptr);
     EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
     outlined_methods.push_back(outlined_method->as_def());
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 1);
-  for (auto m : outlined_methods) {
+  for (auto* m : outlined_methods) {
     EXPECT_TRUE(is_static(m));
-    auto proto = m->get_proto();
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_int());
     EXPECT_EQ(proto->get_args()->size(), 1);
     EXPECT_EQ(proto->get_args()->at(0), type::_int());
@@ -399,9 +399,9 @@ TEST_F(InstructionSequenceOutlinerTest, defined_reg_escapes_to_catch) {
 
   run_passes(passes);
 
-  for (auto m : defined_reg_escapes_to_catch_methods) {
+  for (auto* m : defined_reg_escapes_to_catch_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_EQ(outlined_method, nullptr);
   }
 }
@@ -430,9 +430,9 @@ TEST_F(InstructionSequenceOutlinerTest, big_block_can_end_with_no_tries) {
 
   run_passes(passes);
 
-  for (auto m : big_block_can_end_with_no_tries_methods) {
+  for (auto* m : big_block_can_end_with_no_tries_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_NE(outlined_method, nullptr);
     auto println_method_invokes = count_invokes(*scoped_cfg, println_method);
     EXPECT_EQ(println_method_invokes, 1);
@@ -457,9 +457,9 @@ TEST_F(InstructionSequenceOutlinerTest, two_out_regs) {
 
   run_passes(passes);
 
-  for (auto m : two_out_regs_methods) {
+  for (auto* m : two_out_regs_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_EQ(outlined_method, nullptr);
   }
 }
@@ -487,18 +487,18 @@ TEST_F(InstructionSequenceOutlinerTest, type_demand) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : param_methods) {
+  for (auto* m : param_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_NE(outlined_method, nullptr);
     EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
     outlined_methods.push_back(outlined_method->as_def());
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 1);
-  for (auto m : outlined_methods) {
+  for (auto* m : outlined_methods) {
     EXPECT_TRUE(is_static(m));
-    auto proto = m->get_proto();
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
     EXPECT_EQ(proto->get_args()->size(), 1);
     EXPECT_EQ(proto->get_args()->at(0), type::java_lang_Object());
@@ -515,7 +515,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_tree) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("cfg_tree") != std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.insert(println_method);
         EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
@@ -525,7 +525,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_tree) {
   }
   EXPECT_EQ(cfg_tree_methods.size(), 2);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = *println_methods.begin();
+  auto* println_method = *println_methods.begin();
 
   std::vector<Pass*> passes = {
       new InstructionSequenceOutliner(),
@@ -534,19 +534,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_tree) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : cfg_tree_methods) {
+  for (auto* m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 3);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 3);
-  for (auto m : outlined_methods) {
-    auto proto = m->get_proto();
+  for (auto* m : outlined_methods) {
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
     EXPECT_EQ(proto->get_args()->size(), 0);
     cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -563,7 +563,7 @@ TEST_F(InstructionSequenceOutlinerTest, switch) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("switch") != std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.insert(println_method);
         EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 4);
@@ -573,7 +573,7 @@ TEST_F(InstructionSequenceOutlinerTest, switch) {
   }
   EXPECT_EQ(cfg_tree_methods.size(), 2);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = *println_methods.begin();
+  auto* println_method = *println_methods.begin();
 
   std::vector<Pass*> passes = {
       new InstructionSequenceOutliner(),
@@ -582,18 +582,18 @@ TEST_F(InstructionSequenceOutlinerTest, switch) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : cfg_tree_methods) {
+  for (auto* m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 4);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 4);
-  for (auto m : outlined_methods) {
+  for (auto* m : outlined_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
@@ -609,7 +609,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_arg_and_res) {
       if (m->get_name()->str().find("cfg_with_arg_and_res") !=
           std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.insert(println_method);
         EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
@@ -619,7 +619,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_arg_and_res) {
   }
   EXPECT_EQ(cfg_tree_methods.size(), 2);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = *println_methods.begin();
+  auto* println_method = *println_methods.begin();
 
   std::vector<Pass*> passes = {
       new InstructionSequenceOutliner(),
@@ -628,19 +628,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_arg_and_res) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : cfg_tree_methods) {
+  for (auto* m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 3);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 3);
-  for (auto m : outlined_methods) {
-    auto proto = m->get_proto();
+  for (auto* m : outlined_methods) {
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
     EXPECT_EQ(proto->get_args()->size(), 0);
     cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -658,7 +658,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_const_res) {
       if (m->get_name()->str().find("cfg_with_const_res") !=
           std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.insert(println_method);
         EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
@@ -668,7 +668,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_const_res) {
   }
   EXPECT_EQ(cfg_tree_methods.size(), 2);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = *println_methods.begin();
+  auto* println_method = *println_methods.begin();
 
   std::vector<Pass*> passes = {
       new InstructionSequenceOutliner(),
@@ -677,19 +677,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_const_res) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : cfg_tree_methods) {
+  for (auto* m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 3);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 3);
-  for (auto m : outlined_methods) {
-    auto proto = m->get_proto();
+  for (auto* m : outlined_methods) {
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
@@ -709,7 +709,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_float_const_res) {
       if (m->get_name()->str().find("cfg_with_float_const_res") !=
           std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.insert(println_method);
         EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
@@ -719,7 +719,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_float_const_res) {
   }
   EXPECT_EQ(cfg_tree_methods.size(), 2);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = *println_methods.begin();
+  auto* println_method = *println_methods.begin();
 
   std::vector<Pass*> passes = {
       new InstructionSequenceOutliner(),
@@ -728,19 +728,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_float_const_res) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : cfg_tree_methods) {
+  for (auto* m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 3);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 3);
-  for (auto m : outlined_methods) {
-    auto proto = m->get_proto();
+  for (auto* m : outlined_methods) {
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
@@ -757,7 +757,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_res) {
       if (m->get_name()->str().find("cfg_with_object_res") !=
           std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.insert(println_method);
         EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
@@ -767,7 +767,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_res) {
   }
   EXPECT_EQ(cfg_tree_methods.size(), 2);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = *println_methods.begin();
+  auto* println_method = *println_methods.begin();
 
   std::vector<Pass*> passes = {
       new InstructionSequenceOutliner(),
@@ -776,19 +776,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_res) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : cfg_tree_methods) {
+  for (auto* m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 3);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 3);
-  for (auto m : outlined_methods) {
-    auto proto = m->get_proto();
+  for (auto* m : outlined_methods) {
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype()->str(), "V");
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
@@ -806,7 +806,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_joinable_object_res) {
       if (m->get_name()->str().find("cfg_with_joinable_object_res") !=
           std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.insert(println_method);
         EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
@@ -816,7 +816,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_joinable_object_res) {
   }
   EXPECT_EQ(cfg_tree_methods.size(), 2);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = *println_methods.begin();
+  auto* println_method = *println_methods.begin();
 
   std::vector<Pass*> passes = {
       new InstructionSequenceOutliner(),
@@ -825,19 +825,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_joinable_object_res) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : cfg_tree_methods) {
+  for (auto* m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 3);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 3);
-  for (auto m : outlined_methods) {
-    auto proto = m->get_proto();
+  for (auto* m : outlined_methods) {
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype()->str(), "V");
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
@@ -854,7 +854,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_arg) {
       if (m->get_name()->str().find("cfg_with_object_arg") !=
           std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.insert(println_method);
         EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 4);
@@ -864,7 +864,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_arg) {
   }
   EXPECT_EQ(cfg_tree_methods.size(), 2);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = *println_methods.begin();
+  auto* println_method = *println_methods.begin();
 
   std::vector<Pass*> passes = {
       new InstructionSequenceOutliner(),
@@ -873,19 +873,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_arg) {
   run_passes(passes);
 
   std::vector<DexMethod*> outlined_methods;
-  for (auto m : cfg_tree_methods) {
+  for (auto* m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 4);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 4);
-  for (auto m : outlined_methods) {
-    auto proto = m->get_proto();
+  for (auto* m : outlined_methods) {
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
     EXPECT_EQ(proto->get_args()->size(), 0);
     cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -902,7 +902,7 @@ TEST_F(InstructionSequenceOutlinerTest, distributed) {
     for (const auto& m : cls->get_dmethods()) {
       if (m->get_name()->str() == "distributed") {
         cfg::ScopedCFG scoped_cfg(m->get_code());
-        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        auto* println_method = find_invoked_method(*scoped_cfg, "println");
         EXPECT_NE(println_method, nullptr);
         println_methods.push_back(println_method);
         EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
@@ -913,7 +913,7 @@ TEST_F(InstructionSequenceOutlinerTest, distributed) {
   EXPECT_EQ(distributed_methods.size(), 2);
   sort_unique(println_methods);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = println_methods.front();
+  auto* println_method = println_methods.front();
 
   std::vector<Pass*> passes = {
       new InstructionSequenceOutliner(),
@@ -927,14 +927,14 @@ TEST_F(InstructionSequenceOutlinerTest, distributed) {
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
     EXPECT_EQ(methods.size(), 4);
-    for (auto outlined_method : methods) {
+    for (auto* outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 4);
-  for (auto m : outlined_methods) {
+  for (auto* m : outlined_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
@@ -963,14 +963,14 @@ TEST_F(InstructionSequenceOutlinerTest, colocate_with_refs) {
   std::vector<DexMethod*> outlined_methods;
   for (const auto& m : colocate_with_refs_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_NE(outlined_method, nullptr);
     EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 2);
     outlined_methods.push_back(outlined_method->as_def());
   }
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 1);
-  for (auto m : outlined_methods) {
+  for (auto* m : outlined_methods) {
     EXPECT_EQ(
         m->get_class()->get_name()->str(),
         "Lcom/facebook/redextest/InstructionSequenceOutlinerTest$Nested3;");
@@ -997,7 +997,7 @@ TEST_F(InstructionSequenceOutlinerTest, reuse_outlined_methods) {
 
             IRCode* code = m->get_code();
             cfg::ScopedCFG scoped_cfg(code);
-            auto println_method = find_invoked_method(*scoped_cfg, "println");
+            auto* println_method = find_invoked_method(*scoped_cfg, "println");
             EXPECT_NE(println_method, nullptr);
             println_methods.push_back(println_method);
             EXPECT_EQ(count_invokes(code->cfg(), println_method), 5);
@@ -1018,7 +1018,7 @@ TEST_F(InstructionSequenceOutlinerTest, reuse_outlined_methods) {
   // check methods before pass run
   sort_unique(println_methods);
   EXPECT_EQ(println_methods.size(), 1);
-  auto println_method = println_methods.front();
+  auto* println_method = println_methods.front();
   EXPECT_EQ(methods_in_secondary_dex.size(), 2);
 
   std::vector<Pass*> passes = {
@@ -1028,10 +1028,10 @@ TEST_F(InstructionSequenceOutlinerTest, reuse_outlined_methods) {
 
   std::vector<DexMethod*> outlined_methods;
   // check methods in secondary dex
-  for (auto m : methods_in_secondary_dex) {
+  for (auto* m : methods_in_secondary_dex) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 0);
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_NE(outlined_method, nullptr);
     // The reused outlined method should reside in the primary class
     EXPECT_EQ(outlined_method->get_class(), basic_methods.front()->get_class());
@@ -1042,9 +1042,9 @@ TEST_F(InstructionSequenceOutlinerTest, reuse_outlined_methods) {
   // check outlined methods
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 1);
-  for (auto m : outlined_methods) {
+  for (auto* m : outlined_methods) {
     EXPECT_TRUE(is_static(m));
-    auto proto = m->get_proto();
+    auto* proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
     EXPECT_EQ(proto->get_args()->size(), 0);
     cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -1067,7 +1067,7 @@ TEST_F(InstructionSequenceOutlinerTest, check_positions) {
     for (const auto& classes : dex) {
       for (const auto& cls : classes) {
         for (const auto& m : cls->get_vmethods()) {
-          if (method_names.count(m->get_name()->str())) {
+          if (method_names.count(m->get_name()->str()) != 0u) {
             methods.push_back(m);
           }
         }
@@ -1084,16 +1084,16 @@ TEST_F(InstructionSequenceOutlinerTest, check_positions) {
   std::unordered_set<DexPosition*> pattern_positions;
   std::vector<DexMethod*> outlined_methods;
   // get outlined methods
-  for (auto m : methods) {
+  for (auto* m : methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    auto* outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     outlined_methods.push_back(outlined_method->as_def());
   }
   // check outlined methods
   sort_unique(outlined_methods);
   EXPECT_EQ(outlined_methods.size(), 1);
-  for (auto m : outlined_methods) {
-    auto code = m->get_code();
+  for (auto* m : outlined_methods) {
+    auto* code = m->get_code();
     cfg::ScopedCFG scoped_cfg(code);
     // get switch positions from outlined method
     get_positions(switch_positions, *scoped_cfg);
@@ -1103,23 +1103,23 @@ TEST_F(InstructionSequenceOutlinerTest, check_positions) {
   std::unordered_map<uint32_t, std::vector<DexMethod*>>
       pattern_id_to_method_map;
   // callsite patterns
-  for (auto m : methods) {
-    auto code = m->get_code();
+  for (auto* m : methods) {
+    auto* code = m->get_code();
     cfg::ScopedCFG scoped_cfg(code);
     // get pattern positions
     get_positions(pattern_positions, *scoped_cfg);
-    for (auto pos : pattern_positions) {
+    for (auto* pos : pattern_positions) {
       pattern_id_to_method_map[pos->line].push_back(m);
     }
   }
 
-  auto manager = g_redex->get_position_pattern_switch_manager();
+  auto* manager = g_redex->get_position_pattern_switch_manager();
   const auto& switches = manager->get_switches();
   std::unordered_set<uint32_t> pattern_ids_from_switches;
 
   EXPECT_GT(switch_positions.size(), 0);
   // Get pattern ids from switches
-  for (auto sp : switch_positions) {
+  for (auto* sp : switch_positions) {
     auto s = switches.at(sp->line);
     for (auto pos_case : s) {
       pattern_ids_from_switches.insert(pos_case.pattern_id);
@@ -1129,7 +1129,7 @@ TEST_F(InstructionSequenceOutlinerTest, check_positions) {
   EXPECT_GT(pattern_positions.size(), 0);
   // check callsites pattern ids
   // should be in the switches
-  for (auto pp : pattern_positions) {
+  for (auto* pp : pattern_positions) {
     auto pattern_id = pp->line;
     EXPECT_NE(pattern_ids_from_switches.count(pattern_id), 0);
   }
@@ -1138,7 +1138,7 @@ TEST_F(InstructionSequenceOutlinerTest, check_positions) {
   // are from two classes (in two dexes).
   std::unordered_set<std::string> dex_cls_set;
   for (auto pattern_id : pattern_ids_from_switches) {
-    for (auto m : pattern_id_to_method_map.at(pattern_id)) {
+    for (auto* m : pattern_id_to_method_map.at(pattern_id)) {
       dex_cls_set.insert(m->get_class()->get_name()->c_str());
     }
   }

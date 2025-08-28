@@ -142,8 +142,8 @@ size_t dedup_methods_helper(
       group_identical_methods(to_dedup, dedup_fill_in_stack_trace);
   UnorderedMap<DexMethod*, DexMethod*> duplicates_to_replacement;
   for (auto& group : UnorderedIterable(grouped_methods)) {
-    auto replacement = *group.begin();
-    for (auto m : group) {
+    auto* replacement = *group.begin();
+    for (auto* m : group) {
       if (m != replacement) {
         duplicates_to_replacement[m] = replacement;
       }
@@ -154,7 +154,7 @@ size_t dedup_methods_helper(
       if (new_to_old->count(m) > 0) {
         auto orig_old_list = new_to_old->at(m);
         new_to_old->erase(m);
-        for (auto orig_old : orig_old_list) {
+        for (auto* orig_old : orig_old_list) {
           new_to_old.get()[replacement].insert(orig_old);
         }
       }

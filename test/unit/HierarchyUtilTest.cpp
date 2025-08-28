@@ -21,24 +21,25 @@ TEST_F(RedexTest, findNonOverriddenVirtuals) {
   ClassCreator cc(DexType::make_type("LFoo;"));
   cc.set_super(type::java_lang_Object());
 
-  auto final_method =
+  auto* final_method =
       DexMethod::make_method("LFoo;.final:()V")
           ->make_concrete(ACC_PUBLIC | ACC_FINAL, /* is_virtual */ true);
   cc.add_method(final_method);
 
   // This method is not explicitly marked as final, but no classes in scope
   // override its methods
-  auto nonfinal_method = DexMethod::make_method("LFoo;.nonfinal:()V")
-                             ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  auto* nonfinal_method =
+      DexMethod::make_method("LFoo;.nonfinal:()V")
+          ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
   cc.add_method(nonfinal_method);
-  auto cls = cc.create();
+  auto* cls = cc.create();
 
   // Begin creation of external class mock
   ClassCreator ext_cc(DexType::make_type("LExternal;"));
   ext_cc.set_super(type::java_lang_Object());
   ext_cc.set_external();
 
-  auto ext_final_method =
+  auto* ext_final_method =
       static_cast<DexMethod*>(DexMethod::make_method("LExternal;.final:()V"));
   ext_final_method->set_access(ACC_PUBLIC | ACC_FINAL);
   ext_final_method->set_virtual(true);
@@ -47,7 +48,7 @@ TEST_F(RedexTest, findNonOverriddenVirtuals) {
 
   // This method should not be included in the non-overridden set since it
   // could be overridden by some method we are not aware of.
-  auto ext_nonfinal_method = static_cast<DexMethod*>(
+  auto* ext_nonfinal_method = static_cast<DexMethod*>(
       DexMethod::make_method("LExternal;.nonfinal:()V"));
   ext_nonfinal_method->set_access(ACC_PUBLIC);
   ext_nonfinal_method->set_virtual(true);
@@ -60,7 +61,7 @@ TEST_F(RedexTest, findNonOverriddenVirtuals) {
   std::unordered_set<DexMethod*> set;
   g_redex->walk_type_class([&](const DexType*, const DexClass* cls) {
     for (auto* method : cls->get_vmethods()) {
-      if (non_overridden_virtuals.count(method)) {
+      if (non_overridden_virtuals.count(method) != 0u) {
         set.insert(method);
       }
     }

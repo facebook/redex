@@ -216,7 +216,7 @@ static void multiplex_sparse_switch_into_packed_and_sparse(
         goto_block, sparse_cases);
     return block;
   };
-  for (auto& cases : multiplexed_cases) {
+  for (const auto& cases : multiplexed_cases) {
     packed_cases.emplace_back(static_cast<int32_t>(packed_cases.size()),
                               get_inner_block(cases));
   }
@@ -265,7 +265,7 @@ static void expand_switch(
         next_block = default_target;
       } else {
         next_block = cfg.create_block();
-        if (switch_sb) {
+        if (switch_sb != nullptr) {
           auto next_sb = source_blocks::clone_as_synthetic(
               switch_sb, nullptr, SourceBlock::Val(0, 0));
           // While quadratic, we'll only ever going to "expand" relatively small
@@ -273,11 +273,11 @@ static void expand_switch(
           for (size_t j = i + 1; j < cases.size(); j++) {
             auto* later_target_sb =
                 source_blocks::get_first_source_block(cases[j].second);
-            if (later_target_sb) {
+            if (later_target_sb != nullptr) {
               next_sb->max(*later_target_sb);
             }
           }
-          if (default_sb) {
+          if (default_sb != nullptr) {
             next_sb->max(*default_sb);
           }
           source_blocks::impl::BlockAccessor::push_source_block(
@@ -651,7 +651,8 @@ ReduceSparseSwitchesPass::Stats ReduceSparseSwitchesPass::expand_transformation(
     // TODO: Consider sorting cases by target-hotness (for speed)
     std::sort(cases.begin(), cases.end(),
               [&](auto& p, auto& q) { return p.first < q.first; });
-    uint32_t original_size = (sparse ? 5 : 7) + (2 + 2 * sparse) * cases.size();
+    uint32_t original_size =
+        (sparse ? 5 : 7) + (2 + 2 * static_cast<int>(sparse)) * cases.size();
     uint32_t expanded_size = 0;
     std::optional<int32_t> prev_case_key;
     for (auto [case_key, _] : cases) {

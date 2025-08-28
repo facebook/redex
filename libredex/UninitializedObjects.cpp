@@ -18,8 +18,8 @@ using namespace ir_analyzer;
 
 const IRInstruction* get_first_load_param(const cfg::ControlFlowGraph& cfg) {
   const auto param_insns = InstructionIterable(cfg.get_param_instructions());
-  auto& mie = *param_insns.begin();
-  const auto insn = mie.insn;
+  const auto& mie = *param_insns.begin();
+  auto* const insn = mie.insn;
   always_assert(insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   return insn;
 }

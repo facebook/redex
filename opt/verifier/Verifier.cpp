@@ -52,7 +52,7 @@ void build_refs(const Scope& scope,
   walk::parallel::classes(scope, [&](DexClass* cls) {
     auto& store_class_refs = class_refs.at(map.at(cls));
     auto add_ref = [&](DexClass* target) {
-      if (target) {
+      if (target != nullptr) {
         store_class_refs.update(
             target, [cls](auto, auto& set, auto) { set.insert(cls); });
       }
@@ -61,12 +61,12 @@ void build_refs(const Scope& scope,
     walk::opcodes(
         std::vector{cls}, [&](const DexMethod*, const IRInstruction* insn) {
           if (insn->has_type()) {
-            const auto tref = type_class(insn->get_type());
+            auto* const tref = type_class(insn->get_type());
             add_ref(tref);
             return;
           }
           if (insn->has_field()) {
-            const auto tref = type_class(insn->get_field()->get_class());
+            auto* const tref = type_class(insn->get_field()->get_class());
             add_ref(tref);
             return;
           }
@@ -74,7 +74,7 @@ void build_refs(const Scope& scope,
             // log methods class type, for virtual methods, this may not
             // actually exist and true verification would require that the
             // binding refers to a class that is valid.
-            const auto mref = type_class(insn->get_method()->get_class());
+            auto* const mref = type_class(insn->get_method()->get_class());
             add_ref(mref);
 
             // don't log return type or types of parameters for now, but this is
@@ -94,7 +94,7 @@ void build_refs(const Scope& scope,
 }
 
 const DexStore& findStore(std::string& name, const DexStoresVector& stores) {
-  for (auto& store : stores) {
+  for (const auto& store : stores) {
     if (name == store.get_name()) {
       return store;
     }
@@ -132,14 +132,15 @@ uint64_t verifyStore(const DexStoresVector& stores,
                      FILE* fd) {
   const auto& allowed_stores = getAllowedStores(stores, store, store_map);
   uint64_t dependencies{0};
-  for (auto& [target, sources] : UnorderedIterable(class_refs.at(&store))) {
+  for (const auto& [target, sources] :
+       UnorderedIterable(class_refs.at(&store))) {
     always_assert(!sources.empty());
     auto find = map.find(target);
     static const std::string external_store_name = "external";
     const std::string& target_store_name =
         find != map.end() ? find->second->get_name() : external_store_name;
 
-    if (!allowed_stores.count(target_store_name)) {
+    if (allowed_stores.count(target_store_name) == 0u) {
       for (const auto& source : UnorderedIterable(sources)) {
         TRACE(VERIFY, 5, "BAD REFERENCE from %s %s to %s %s",
               store.get_name().c_str(), show_deobfuscated(source).c_str(),

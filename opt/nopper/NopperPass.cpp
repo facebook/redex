@@ -34,7 +34,7 @@ nopper_impl::AuxiliaryDefs create_auxiliary_defs(DexStore* store,
   }
   name += std::to_string(index);
   name += ";";
-  auto nopper_type = DexType::make_type(name);
+  auto* nopper_type = DexType::make_type(name);
   auto res = nopper_impl::create_auxiliary_defs(nopper_type);
   store->get_dexen().at(index).push_back(res.cls);
   res.cls->add_field(res.int_field);

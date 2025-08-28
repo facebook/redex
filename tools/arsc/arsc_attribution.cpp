@@ -99,17 +99,17 @@ void run(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  if (vm.count("help")) {
+  if (vm.count("help") != 0u) {
     std::cout << desc << "\n";
     exit(EXIT_SUCCESS);
   }
-  if (!vm.count("file")) {
+  if (vm.count("file") == 0u) {
     std::cerr << desc << "\n";
     exit(EXIT_FAILURE);
   }
 
   attribution::ResourceNames resid_to_name;
-  if (vm.count("resid")) {
+  if (vm.count("resid") != 0u) {
     auto resid_to_name_path = vm["resid"].as<std::string>();
     if (!read_rename_map(resid_to_name_path, &resid_to_name)) {
       std::cerr << "Failed to parse resid to name json file: "

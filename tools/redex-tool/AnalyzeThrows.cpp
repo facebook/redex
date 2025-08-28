@@ -128,10 +128,10 @@ void collect_throwing_blocks(DexMethod* meth, LogicalBlock& throwing_blocks) {
   }
   // get all preds of returning blocks until no more blocks are found
   while (!blocks_to_visit.empty()) {
-    const auto block = blocks_to_visit.front();
+    auto* const block = blocks_to_visit.front();
     blocks_to_visit.pop();
     for (const auto& pred_edge : block->preds()) {
-      auto pred = pred_edge->src();
+      auto* pred = pred_edge->src();
       if (no_throw_blocks.count(pred) == 0) {
         blocks_to_visit.push(pred);
         no_throw_blocks.insert(pred);
@@ -160,7 +160,7 @@ void collect_throwing_blocks(DexMethod* meth, LogicalBlock& throwing_blocks) {
   // in the remaining blocks find the one that throw and walk
   // predeccesors to see which belong to the same throwing block
   while (!throw_blocks.empty()) {
-    const auto block = throw_blocks.front();
+    auto* const block = throw_blocks.front();
     throw_blocks.pop();
     std::vector<cfg::Block*> throw_code;
     walk_predecessors(block, throw_code, left_blocks);

@@ -47,11 +47,11 @@ bool DexPosition::operator==(const DexPosition& that) const {
 
 std::unique_ptr<DexPosition> DexPosition::make_synthetic_entry_position(
     const DexMethod* method) {
-  auto method_str = DexString::make_string(show_deobfuscated(method));
+  const auto* method_str = DexString::make_string(show_deobfuscated(method));
 
   // For source, see if the class has a source.
   const DexString* source = nullptr;
-  auto cls = type_class(method->get_class());
+  auto* cls = type_class(method->get_class());
   if (cls != nullptr) {
     source = cls->get_source_file();
   }
@@ -75,8 +75,8 @@ DexPosition* PositionPatternSwitchManager::internalize(DexPosition* pos) {
     return it->second.get();
   }
 
-  auto cloned_position = new DexPosition(*pos);
-  if (pos->parent) {
+  auto* cloned_position = new DexPosition(*pos);
+  if (pos->parent != nullptr) {
     cloned_position->parent = internalize(pos->parent);
   }
   m_positions.emplace(cloned_position,
@@ -158,7 +158,7 @@ void RealPositionMapper::write_map() {
 }
 
 void RealPositionMapper::process_pattern_switch_positions() {
-  auto manager = g_redex->get_position_pattern_switch_manager();
+  auto* manager = g_redex->get_position_pattern_switch_manager();
   if (manager->empty()) {
     return;
   }
@@ -171,7 +171,7 @@ void RealPositionMapper::process_pattern_switch_positions() {
   std::function<void(DexPosition*)> visit;
   visit = [&](DexPosition* pos) {
     always_assert(pos);
-    for (; pos && visited.insert(pos).second; pos = pos->parent) {
+    for (; (pos != nullptr) && visited.insert(pos).second; pos = pos->parent) {
       if (manager->is_pattern_position(pos)) {
         std::vector<PositionCase> cases;
         reachable_patterns.update(pos->line,
@@ -206,9 +206,11 @@ void RealPositionMapper::process_pattern_switch_positions() {
 
   workqueue_run<DexPosition*>(visit, m_positions);
 
-  auto count_string = DexString::make_string("Lredex/$Position;.count:()V");
-  auto case_string = DexString::make_string("Lredex/$Position;.case:()V");
-  auto unknown_source_string = DexString::make_string("UnknownSource");
+  const auto* count_string =
+      DexString::make_string("Lredex/$Position;.count:()V");
+  const auto* case_string =
+      DexString::make_string("Lredex/$Position;.case:()V");
+  const auto* unknown_source_string = DexString::make_string("UnknownSource");
 
   // Second, we encode the switches and cases via extra positions.
   // For example, at some start line, we'll create 3 consecutive entries such
@@ -224,7 +226,7 @@ void RealPositionMapper::process_pattern_switch_positions() {
   // 103: method Lredex/$Position;.case:()V, line 54321, parent 42
   UnorderedMap<uint32_t, uint32_t> switch_line_map;
   for (uint32_t switch_id = 0; switch_id < switches.size(); ++switch_id) {
-    if (!reachable_switches.count(switch_id)) {
+    if (reachable_switches.count(switch_id) == 0u) {
       continue;
     }
     // We go over cases once to make sure all referenced positions are
@@ -232,10 +234,11 @@ void RealPositionMapper::process_pattern_switch_positions() {
     // file are considered.
     std::vector<PositionCase> reachable_cases;
     for (auto& c : switches.at(switch_id)) {
-      if (!reachable_patterns.count(c.pattern_id)) {
+      if (reachable_patterns.count(c.pattern_id) == 0u) {
         continue;
       }
-      for (auto pos = c.position; pos && pos->file; pos = pos->parent) {
+      for (auto* pos = c.position; (pos != nullptr) && (pos->file != nullptr);
+           pos = pos->parent) {
         auto [it, emplaced] = m_pos_line_map.emplace(pos, m_positions.size());
         if (emplaced) {
           m_positions.push_back(pos);
@@ -254,14 +257,14 @@ void RealPositionMapper::process_pattern_switch_positions() {
     // We emit a first entry holding the count
     switch_line_map.emplace(switch_id, m_positions.size());
     {
-      auto count_pos = new DexPosition(count_string, unknown_source_string,
-                                       reachable_cases.size());
+      auto* count_pos = new DexPosition(count_string, unknown_source_string,
+                                        reachable_cases.size());
       m_owned_auxiliary_positions.emplace_back(count_pos);
       add_position(count_pos);
     }
     // Then we emit consecutive list of cases
     for (auto& c : reachable_cases) {
-      auto case_pos =
+      auto* case_pos =
           new DexPosition(case_string, unknown_source_string, c.pattern_id);
       m_owned_auxiliary_positions.emplace_back(case_pos);
       always_assert(c.position);
@@ -283,7 +286,7 @@ void RealPositionMapper::process_pattern_switch_positions() {
   // (some line): method Lredex/$Position;.pattern:()V, line 12345
   //
   // TODO: Should we undo this when we are done writing the map?
-  for (auto pos : m_positions) {
+  for (auto* pos : m_positions) {
     if (manager->is_switch_position(pos)) {
       pos->line = switch_line_map.at(pos->line);
     }
@@ -331,7 +334,7 @@ void RealPositionMapper::write_map_v2() {
   auto semi_dense_id_of_string = [&](std::string_view s) -> uint32_t {
     // Fast path
     const uint32_t* opt_id = semi_dense_string_ids.get(s);
-    if (opt_id) {
+    if (opt_id != nullptr) {
       return *opt_id;
     }
 

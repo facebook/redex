@@ -48,10 +48,10 @@ class SourceBlocksDedupTest : public RedexIntegrationTest {
 TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
   g_redex->instrument_mode = true;
   IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
-  auto type =
+  auto* type =
       DexType::get_type("Lcom/facebook/redextest/SourceBlocksDedupTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -74,7 +74,7 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
                set_insert_after_excs(isbp, false);
              });
 
-  auto switch_method =
+  auto* switch_method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I")
           ->as_def()
@@ -131,7 +131,7 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    POSITION: Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I(SourceBlocksDedupTest.java:23)\n\
    succs: (goto B2)\n");
 
-  auto deepest_not_best =
+  auto* deepest_not_best =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "SourceBlocksDedupTest;.deepestIsNotTheBestCase:()I")
@@ -250,11 +250,11 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    SOURCE-BLOCKS: Lcom/facebook/redextest/SourceBlocksDedupTest;.deepestIsNotTheBestCase:()I@12()\n\
    succs: (goto B2)\n");
 
-  auto dedup_throws = DexMethod::get_method(
-                          "Lcom/facebook/redextest/"
-                          "SourceBlocksDedupTest;.dedupThrows:()V")
-                          ->as_def()
-                          ->get_code();
+  auto* dedup_throws = DexMethod::get_method(
+                           "Lcom/facebook/redextest/"
+                           "SourceBlocksDedupTest;.dedupThrows:()V")
+                           ->as_def()
+                           ->get_code();
   dedup_throws->build_cfg();
   std::string dedup_throws_cfg = remove_mies(show(dedup_throws->cfg()));
   EXPECT_EQ(dedup_throws_cfg,
@@ -290,7 +290,7 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    SOURCE-BLOCKS: Lcom/facebook/redextest/SourceBlocksDedupTest;.dedupThrows:()V@2()\n\
    succs: (goto B2)\n");
 
-  auto simplest_case =
+  auto* simplest_case =
       DexMethod::get_method(
           "Lcom/facebook/redextest/SourceBlocksDedupTest;.simplestCase:()V")
           ->as_def()
@@ -332,7 +332,7 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    OPCODE: MUL_INT v0, v0, v0\n\
    succs: (goto B2)\n");
 
-  auto postfix_discarding_one =
+  auto* postfix_discarding_one =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "SourceBlocksDedupTest;.postfixDiscardingOne:()V")
@@ -400,11 +400,11 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    OPCODE: ADD_INT v0, v0, v0\n\
    succs: (goto B3)\n");
 
-  auto self_loops = DexMethod::get_method(
-                        "Lcom/facebook/redextest/"
-                        "SourceBlocksDedupTest;.identicalSelfLoops:()V")
-                        ->as_def()
-                        ->get_code();
+  auto* self_loops = DexMethod::get_method(
+                         "Lcom/facebook/redextest/"
+                         "SourceBlocksDedupTest;.identicalSelfLoops:()V")
+                         ->as_def()
+                         ->get_code();
   self_loops->build_cfg();
   std::string self_loops_cfg = remove_mies(show(self_loops->cfg()));
   EXPECT_EQ(self_loops_cfg,
@@ -442,10 +442,10 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
 TEST_F(SourceBlocksDedupTest, source_blocks_chain) {
   g_redex->instrument_mode = true;
   IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
-  auto type =
+  auto* type =
       DexType::get_type("Lcom/facebook/redextest/SourceBlocksDedupTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -467,16 +467,16 @@ TEST_F(SourceBlocksDedupTest, source_blocks_chain) {
     set_insert_after_excs(isbp, false);
   });
 
-  auto switch_method =
+  auto* switch_method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I")
           ->as_def();
-  auto switch_code = switch_method->get_code();
+  auto* switch_code = switch_method->get_code();
   switch_code->build_cfg();
   auto& cfg = switch_code->cfg();
 
   for (int i = 3; i <= 5; i++) {
-    auto block = cfg.get_block(i);
+    auto* block = cfg.get_block(i);
     for (int j = 1; j < 4; j++) {
       auto new_sb = std::make_unique<SourceBlock>(
           *source_blocks::get_last_source_block(block));
@@ -547,10 +547,10 @@ TEST_F(SourceBlocksDedupTest, source_blocks_chain) {
 TEST_F(SourceBlocksDedupTest, multiple_source_blocks_in_one_block) {
   g_redex->instrument_mode = true;
   IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
-  auto type =
+  auto* type =
       DexType::get_type("Lcom/facebook/redextest/SourceBlocksDedupTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -572,15 +572,15 @@ TEST_F(SourceBlocksDedupTest, multiple_source_blocks_in_one_block) {
     set_insert_after_excs(isbp, false);
   });
 
-  auto simplest_method =
+  auto* simplest_method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/SourceBlocksDedupTest;.simplestCase:()V")
           ->as_def();
-  auto simpliest_code = simplest_method->get_code();
+  auto* simpliest_code = simplest_method->get_code();
   simpliest_code->build_cfg();
   auto& cfg = simpliest_code->cfg();
 
-  auto block = cfg.get_block(1);
+  auto* block = cfg.get_block(1);
   auto new_sb = std::make_unique<SourceBlock>(
       *source_blocks::get_last_source_block(block));
   new_sb->id = 100;

@@ -57,7 +57,7 @@ struct GroupStats {
 
 size_t estimate_vmethods_code_size(const DexClass* cls) {
   size_t estimated_size = 0;
-  for (auto method : cls->get_vmethods()) {
+  for (auto* method : cls->get_vmethods()) {
     estimated_size += method->get_code()->estimate_code_units();
   }
   return estimated_size;
@@ -106,7 +106,7 @@ void MergingStrategy::group_by_code_size(
   std::vector<const DexType*> current_group;
 
   size_t estimated_merged_code_size = 0;
-  for (auto type : mergeable_types) {
+  for (const auto* type : mergeable_types) {
     // Only check the code size of vmethods because these vmethods will be
     // merged into a large dispatch, dmethods will be relocated.
     auto vmethod_code_size = estimate_vmethods_code_size(type_class(type));
@@ -151,7 +151,7 @@ void MergingStrategy::group_by_refs(const TypeSet& mergeable_types,
 
   Scope mergeable_classes;
   mergeable_classes.reserve(mergeable_types.size());
-  for (auto* type : mergeable_types) {
+  for (const auto* type : mergeable_types) {
     mergeable_classes.push_back(type_class(type));
     ;
   }
@@ -168,8 +168,8 @@ void MergingStrategy::group_by_refs(const TypeSet& mergeable_types,
   size_t current_cls_refs = 0;
   GroupStats group_stats;
   while (!cross_dex_ref_minimizer.empty()) {
-    auto curr_cls = current_group.empty() ? cross_dex_ref_minimizer.worst()
-                                          : cross_dex_ref_minimizer.front();
+    auto* curr_cls = current_group.empty() ? cross_dex_ref_minimizer.worst()
+                                           : cross_dex_ref_minimizer.front();
     // Only check the code size of vmethods because these vmethods will be
     // merged into a large dispatch, dmethods will be relocated.
     auto vmethod_code_size = estimate_vmethods_code_size(curr_cls);

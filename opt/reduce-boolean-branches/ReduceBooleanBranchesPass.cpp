@@ -38,8 +38,8 @@ void ReduceBooleanBranchesPass::run_pass(DexStoresVector& stores,
   auto stats = walk::parallel::methods<reduce_boolean_branches_impl::Stats>(
       scope, [&config = m_config, &copy_prop_config,
               &pure_methods](DexMethod* method) {
-        const auto code = method->get_code();
-        if (!code || method->rstate.no_optimizations()) {
+        auto* const code = method->get_code();
+        if ((code == nullptr) || method->rstate.no_optimizations()) {
           return reduce_boolean_branches_impl::Stats{};
         }
         always_assert(code->cfg_built());

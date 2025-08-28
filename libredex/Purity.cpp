@@ -319,7 +319,7 @@ static const std::string_view pure_method_names[] = {
 UnorderedSet<DexMethodRef*> get_pure_methods() {
   UnorderedSet<DexMethodRef*> pure_methods;
   for (auto const pure_method_name : pure_method_names) {
-    auto method_ref = DexMethod::get_method(pure_method_name);
+    auto* method_ref = DexMethod::get_method(pure_method_name);
     if (method_ref == nullptr) {
       TRACE(CSE, 1, "[get_pure_methods]: Could not find pure method %s",
             str_copy(pure_method_name).c_str());
@@ -360,7 +360,8 @@ MethodOverrideAction get_base_or_overriding_method_action_impl(
     return MethodOverrideAction::UNKNOWN;
   }
 
-  if (methods_to_ignore && methods_to_ignore->count(method)) {
+  if ((methods_to_ignore != nullptr) &&
+      (methods_to_ignore->count(method) != 0u)) {
     return MethodOverrideAction::EXCLUDE;
   }
 
@@ -546,8 +547,8 @@ class WtoOrdering {
           auto it = inverse_dependencies.find(m);
           if (it != inverse_dependencies.end()) {
             // Note that we are filtering on an already pre-sorted vector
-            for (auto n : it->second) {
-              if (impacted_methods.count(n)) {
+            for (const auto* n : it->second) {
+              if (impacted_methods.count(n) != 0u) {
                 successors.push_back(n);
               }
             }
@@ -615,7 +616,7 @@ class WtoOrdering {
           inverse_dependencies) {
     size_t impacted_methods_size = impacted_methods.size();
     size_t inv_dep_sum{0}, inv_dep_max{0};
-    for (auto& entry : UnorderedIterable(inverse_dependencies)) {
+    for (const auto& entry : UnorderedIterable(inverse_dependencies)) {
       inv_dep_sum += entry.second.size();
       inv_dep_max = std::max(inv_dep_max, entry.second.size());
     }
@@ -700,7 +701,7 @@ size_t compute_locations_closure_impl(
     Timer t{"Compute inverse dependencies"};
     for (auto&& [method, lads] : UnorderedIterable(method_lads)) {
       if (!lads.dependencies.empty()) {
-        for (auto d : UnorderedIterable(lads.dependencies)) {
+        for (const auto* d : UnorderedIterable(lads.dependencies)) {
           inverse_dependencies[d].push_back(method);
         }
         impacted_methods.insert(method);
@@ -756,7 +757,7 @@ size_t compute_locations_closure_impl(
 
     // Given set of changed methods, determine set of dependents for which
     // we need to re-run the analysis in another iteration.
-    for (auto changed_method : changed_methods) {
+    for (const auto* changed_method : changed_methods) {
       auto it = inverse_dependencies.find(changed_method);
       if (it == inverse_dependencies.end()) {
         continue;
@@ -823,13 +824,13 @@ static size_t analyze_read_locations(
   UnorderedSet<const DexMethod*> pure_methods_closure;
   {
     Timer t{"Pure methods closure"};
-    for (auto pure_method_ref : UnorderedIterable(pure_methods)) {
-      auto pure_method = pure_method_ref->as_def();
+    for (auto* pure_method_ref : UnorderedIterable(pure_methods)) {
+      auto* pure_method = pure_method_ref->as_def();
       if (pure_method == nullptr) {
         continue;
       }
       pure_methods_closure.insert(pure_method);
-      if (pure_method->is_virtual() && method_override_graph) {
+      if (pure_method->is_virtual() && (method_override_graph != nullptr)) {
         const auto overriding_methods =
             method_override_graph::get_overriding_methods(
                 *method_override_graph, pure_method);
@@ -869,7 +870,7 @@ static size_t analyze_read_locations(
         bool unknown = false;
         cfg_adapter::iterate_with_iterator(
             method->get_code(), [&](const IRList::iterator& it) {
-              auto insn = it->insn;
+              auto* insn = it->insn;
               auto opcode = insn->opcode();
               switch (opcode) {
               case OPCODE_MONITOR_ENTER:
@@ -922,9 +923,10 @@ static size_t analyze_read_locations(
                     }
                   }
                 } else if (opcode::is_an_invoke(opcode)) {
-                  auto invoke_method = resolve_method(
+                  auto* invoke_method = resolve_method(
                       insn->get_method(), opcode_to_search(opcode), method);
-                  if ((invoke_method && opcode::is_invoke_static(opcode) &&
+                  if (((invoke_method != nullptr) &&
+                       opcode::is_invoke_static(opcode) &&
                        (!clinit_has_no_side_effects(
                            invoke_method->get_class()))) ||
                       !process_base_and_overriding_methods_impl(

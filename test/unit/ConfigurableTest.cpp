@@ -318,9 +318,9 @@ struct MethodsBindFlags : public Base {
 };
 
 TEST_F(ConfigurableTest, MethodsBindFlags) {
-  auto m1desc = "Ltype1;.foo:()V";
-  auto m2desc = "Ltype2;.foo:()V";
-  auto m3desc = "Ltype3;.foo:()V";
+  const auto* m1desc = "Ltype1;.foo:()V";
+  const auto* m2desc = "Ltype2;.foo:()V";
+  const auto* m3desc = "Ltype3;.foo:()V";
 
   DexMethod::make_method(m1desc);
   DexMethod::make_method(m3desc);
@@ -452,8 +452,8 @@ TEST_F(ConfigurableTest, MapBindings) {
     EXPECT_EQ(1, m.m_map_of_vector_strings.size());
   }
   {
-    auto m1desc = "Ltype1;.foo:()V";
-    auto m3desc = "Ltype3;.foo:()V";
+    const auto* m1desc = "Ltype1;.foo:()V";
+    const auto* m3desc = "Ltype3;.foo:()V";
 
     DexMethod::make_method(m1desc);
     DexMethod::make_method(m3desc);

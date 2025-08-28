@@ -367,7 +367,7 @@ struct ProfileFile {
                 std::string(access_val->first).c_str());
         }
 
-        auto mref = DexMethod::get_method</*kCheckFormat=*/true>(method_view);
+        auto* mref = DexMethod::get_method</*kCheckFormat=*/true>(method_view);
         if (mref == nullptr) {
           TRACE(METH_PROF,
                 6,
@@ -600,7 +600,7 @@ struct Injector {
         topo_comparator);
     UnorderedSet<call_graph::NodeId> visited;
     size_t insertion_order_id = 0;
-    auto start_node = call_graph.entry();
+    const auto* start_node = call_graph.entry();
 
     visited.insert(start_node);
     process_queue.insert(start_node);
@@ -716,7 +716,7 @@ struct Injector {
       bool serialize,
       bool exc_inject,
       bool must_be_cold = false) {
-    auto code = method->get_code();
+    auto* code = method->get_code();
     if (code != nullptr) {
       auto access_method = is_traditional_access_method(method);
       const DexType* access_method_type = nullptr;
@@ -735,7 +735,7 @@ struct Injector {
             hasher::hashed_name(hash_value, access_method_name);
       }
 
-      auto* sb_name = [&]() {
+      const auto* sb_name = [&]() {
         if (!access_method) {
           return &method->get_deobfuscated_name();
         }
@@ -827,7 +827,8 @@ struct Injector {
     InsertResult res;
     topo_traverse_callgraph(
         method_metadata, *call_graph, [&](call_graph::NodeId node) {
-          if (node->is_entry() || node->is_exit() || !node->method()) {
+          if (node->is_entry() || node->is_exit() ||
+              (node->method() == nullptr)) {
             return;
           }
           bool must_be_cold = false;
@@ -837,11 +838,12 @@ struct Injector {
           // block before the invoke instruction, if there is, then the callee
           // is hot
           for (const auto& edge : node->callers()) {
-            auto* caller = edge->caller();
-            if (caller->is_entry() || caller->is_exit() || !caller->method()) {
+            const auto* caller = edge->caller();
+            if (caller->is_entry() || caller->is_exit() ||
+                (caller->method() == nullptr)) {
               continue;
             }
-            auto caller_invoke_insn = edge->invoke_insn();
+            auto* caller_invoke_insn = edge->invoke_insn();
             if (caller_hit_lookup.find(caller_invoke_insn) ==
                 caller_hit_lookup.end()) {
               continue;
@@ -854,7 +856,7 @@ struct Injector {
           }
 
           must_be_cold = (seen_caller && all_cold_callers);
-          auto method = const_cast<DexMethod*>(node->method());
+          auto* method = const_cast<DexMethod*>(node->method());
           res += insert_source_blocks_into_method(
               method, failed_methods, smi, failed_methods_mutex, serialize,
               exc_inject, must_be_cold);
@@ -862,15 +864,15 @@ struct Injector {
 
           // Update the caller_hit_lookup map with the hit status of the
           // block with new source blocks
-          auto code = method->get_code();
+          auto* code = method->get_code();
           if (code != nullptr) {
             auto& cfg = code->cfg();
-            for (auto block : cfg.blocks()) {
+            for (auto* block : cfg.blocks()) {
               SourceBlock* prev_sb = nullptr;
               for (auto it = block->begin(); it != block->end(); it++) {
                 if (it->type == MFLOW_OPCODE) {
                   if (opcode::is_an_invoke(it->insn->opcode())) {
-                    if (prev_sb && prev_sb->vals_size > 0) {
+                    if ((prev_sb != nullptr) && prev_sb->vals_size > 0) {
                       auto* invoke_insn = it->insn;
                       bool hit = prev_sb->get_val(0).value_or(0) > 0;
                       caller_hit_lookup[invoke_insn] =
@@ -1039,7 +1041,7 @@ struct Injector {
     std::sort(methods.begin(), methods.end(), compare_dexmethods);
 
     std::ofstream ofs{fname};
-    for (auto* mref : methods) {
+    for (const auto* mref : methods) {
       ofs << show(mref) << "\n";
     }
   }
@@ -1048,7 +1050,7 @@ struct Injector {
       const std::string& profile_files_str,
       const std::vector<std::string>& ordered_interactions) {
     UnorderedMap<std::string, size_t> ordered_interactions_indices;
-    for (auto& s : ordered_interactions) {
+    for (const auto& s : ordered_interactions) {
       ordered_interactions_indices.emplace(s,
                                            ordered_interactions_indices.size());
     }
@@ -1116,11 +1118,11 @@ struct Injector {
     // Using a set to avoid hashing all of it. Similar approach to RedexContext.
     // Assumption is set is small overall. Also helps for sorting strings.
     std::set<std::string_view> unresolved_uniqued;
-    for (auto& p : profile_files) {
+    for (const auto& p : profile_files) {
       insert_unordered_iterable(unresolved_uniqued, p->unresolved_methods);
     }
     std::ofstream ofs{fname};
-    for (auto& sv : unresolved_uniqued) {
+    for (const auto& sv : unresolved_uniqued) {
       ofs << sv << "\n";
     }
   }

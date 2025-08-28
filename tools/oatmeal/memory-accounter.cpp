@@ -161,7 +161,7 @@ void MultiBufferMemoryAccounter::memcpyAndMark(void* dest,
                                                const char* src,
                                                size_t count) {
   for (auto& a : accounters_) {
-    auto ptr = a.buf_.ptr;
+    const auto* ptr = a.buf_.ptr;
     char* dst_ptr = reinterpret_cast<char*>(dest);
     if (ptr <= dest && dest <= dst_ptr + count) {
       a.memcpyAndMark(dest, src, count);
@@ -174,7 +174,7 @@ void MultiBufferMemoryAccounter::memcpyAndMark(void* dest,
 void MultiBufferMemoryAccounter::markRangeConsumed(const char* ptr,
                                                    uint32_t count) {
   for (auto& a : accounters_) {
-    auto base_ptr = a.buf_.ptr;
+    const auto* base_ptr = a.buf_.ptr;
     if (base_ptr <= ptr && ptr + count <= base_ptr + a.buf_.len) {
       a.markRangeConsumed(ptr, count);
       return;
@@ -185,10 +185,10 @@ void MultiBufferMemoryAccounter::markRangeConsumed(const char* ptr,
 
 void MultiBufferMemoryAccounter::markBufferConsumed(ConstBuffer subBuffer) {
   for (auto& a : accounters_) {
-    auto base_ptr = a.buf_.ptr;
+    const auto* base_ptr = a.buf_.ptr;
     auto base_len = a.buf_.len;
 
-    auto subbuf_ptr = subBuffer.ptr;
+    const auto* subbuf_ptr = subBuffer.ptr;
     auto subbuf_len = subBuffer.len;
 
     if (base_ptr <= subbuf_ptr &&
@@ -209,7 +209,7 @@ void MultiBufferMemoryAccounter::print() {
 void MultiBufferMemoryAccounter::addBuffer(ConstBuffer buf) {
   // Make sure this is no-ones sub-buffer in the currently accounted set.
   for (const auto& a : accounters_) {
-    auto a_end = a.buf_.ptr + a.buf_.len;
+    const auto* a_end = a.buf_.ptr + a.buf_.len;
     CHECK(a.buf_.ptr < buf.ptr || a.buf_.ptr > buf.ptr);
     CHECK(a_end < buf.ptr || a_end > buf.ptr + buf.len);
   }

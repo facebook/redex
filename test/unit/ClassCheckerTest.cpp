@@ -14,8 +14,8 @@ class ClassVCheckerTest : public RedexTest {};
 
 TEST_F(ClassVCheckerTest, testNonAbstractClassWithAbstractMethods) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
@@ -32,8 +32,8 @@ TEST_F(ClassVCheckerTest, testNonAbstractClassWithAbstractMethods) {
 
 TEST_F(ClassVCheckerTest, testNonAbstractClassWithNonAbstractMethods) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
@@ -50,8 +50,8 @@ TEST_F(ClassVCheckerTest, testNonAbstractClassWithNonAbstractMethods) {
 
 TEST_F(ClassVCheckerTest, testAbstractClassWithAbstractMethods) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
@@ -68,8 +68,8 @@ TEST_F(ClassVCheckerTest, testAbstractClassWithAbstractMethods) {
 
 TEST_F(ClassVCheckerTest, testInterfaceClassWithAbstractMethods) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
@@ -86,8 +86,8 @@ TEST_F(ClassVCheckerTest, testInterfaceClassWithAbstractMethods) {
 
 TEST_F(ClassVCheckerTest, testAbstractClassWithNonAbstractMethods) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
@@ -104,8 +104,8 @@ TEST_F(ClassVCheckerTest, testAbstractClassWithNonAbstractMethods) {
 
 TEST_F(ClassVCheckerTest, testInterfaceClassWithNonAbstractMethods) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
@@ -135,12 +135,12 @@ Scope make_scope_with_a_foo_b_foo(const std::string& a_package,
   DexClass* a_cls =
       create_internal_class(a_type, type::java_lang_Object(), {}, ACC_PUBLIC);
 
-  auto a_foo = create_empty_method(a_cls, "foo", a_foo_proto, a_foo_access);
+  auto* a_foo = create_empty_method(a_cls, "foo", a_foo_proto, a_foo_access);
   always_assert(a_foo->is_virtual());
 
   DexType* b_type = DexType::make_type(b_package + "B;");
   DexClass* b_cls = create_internal_class(b_type, a_type, {}, ACC_PUBLIC);
-  auto b_foo = create_empty_method(b_cls, "foo", b_foo_proto, b_foo_access);
+  auto* b_foo = create_empty_method(b_cls, "foo", b_foo_proto, b_foo_access);
   always_assert(b_foo->is_virtual());
 
   scope.push_back(a_cls);
@@ -158,9 +158,9 @@ Scope make_scope_with_a_foo_b_foo(DexProto* a_foo_proto,
 } // namespace
 
 TEST_F(ClassVCheckerTest, testFinalMethodNotInSubclassPasses) {
-  auto int_return_void = DexProto::make_proto(
+  auto* int_return_void = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto int_return_int = DexProto::make_proto(
+  auto* int_return_int = DexProto::make_proto(
       type::_int(), DexTypeList::make_type_list({type::_int()}));
   // A and B are in the same package, both defining foo() with different return
   // value. No problem.
@@ -173,7 +173,7 @@ TEST_F(ClassVCheckerTest, testFinalMethodNotInSubclassPasses) {
 }
 
 TEST_F(ClassVCheckerTest, testFinalMethodInSubclassFails) {
-  auto int_return_void = DexProto::make_proto(
+  auto* int_return_void = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
   // A and B are in the same package, both defining foo() with same proto.
   // A.foo() is final, which should be disallowed.
@@ -187,7 +187,7 @@ TEST_F(ClassVCheckerTest, testFinalMethodInSubclassFails) {
 }
 
 TEST_F(ClassVCheckerTest, testProtectedFinalMethodInSubclassFails) {
-  auto int_return_void = DexProto::make_proto(
+  auto* int_return_void = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
   // Same as above, but A.foo() is protected, still should be disallowed.
   auto scope = make_scope_with_a_foo_b_foo(
@@ -200,7 +200,7 @@ TEST_F(ClassVCheckerTest, testProtectedFinalMethodInSubclassFails) {
 }
 
 TEST_F(ClassVCheckerTest, testDefaultAccessFinalMethodInSubclassSamePkgFails) {
-  auto int_return_void = DexProto::make_proto(
+  auto* int_return_void = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
   // Same as above, but A.foo() is default access, still should be disallowed.
   auto scope = make_scope_with_a_foo_b_foo(int_return_void, ACC_FINAL,
@@ -213,7 +213,7 @@ TEST_F(ClassVCheckerTest, testDefaultAccessFinalMethodInSubclassSamePkgFails) {
 }
 
 TEST_F(ClassVCheckerTest, testDefaultAccessFinalMethodInSubclassOtherPkgPass) {
-  auto int_return_void = DexProto::make_proto(
+  auto* int_return_void = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
   // A.foo() is final, package-private, and B.foo() has same signature but in a
   // different package, should be fine.
@@ -227,7 +227,7 @@ TEST_F(ClassVCheckerTest, testDefaultAccessFinalMethodInSubclassOtherPkgPass) {
 }
 
 TEST_F(ClassVCheckerTest, testNonFinalOverrideInSubclassPasses) {
-  auto int_return_void = DexProto::make_proto(
+  auto* int_return_void = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
   // A and B are in the same package, both defining foo() with same proto.
   // A.foo() is not final, no problem.
@@ -244,7 +244,7 @@ TEST_F(ClassVCheckerTest, testNonFinalOverrideInSubclassPasses) {
 TEST_F(ClassVCheckerTest, testVeryFunnyBusiness) {
   Scope scope = create_empty_scope();
 
-  auto int_return_void = DexProto::make_proto(
+  auto* int_return_void = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
   DexAccessFlags def_access{};
 
@@ -252,17 +252,17 @@ TEST_F(ClassVCheckerTest, testVeryFunnyBusiness) {
   DexClass* a_cls =
       create_internal_class(a_type, type::java_lang_Object(), {}, ACC_PUBLIC);
 
-  auto a_foo = create_empty_method(a_cls, "foo", int_return_void, ACC_FINAL);
+  auto* a_foo = create_empty_method(a_cls, "foo", int_return_void, ACC_FINAL);
   always_assert(a_foo->is_virtual());
 
   DexType* b_type = DexType::make_type("Lother/B;");
   DexClass* b_cls = create_internal_class(b_type, a_type, {}, ACC_PUBLIC);
-  auto b_foo = create_empty_method(b_cls, "foo", int_return_void, def_access);
+  auto* b_foo = create_empty_method(b_cls, "foo", int_return_void, def_access);
   always_assert(b_foo->is_virtual());
 
   DexType* c_type = DexType::make_type("Lredex/C;");
   DexClass* c_cls = create_internal_class(c_type, b_type, {}, ACC_PUBLIC);
-  auto c_foo = create_empty_method(c_cls, "foo", int_return_void, def_access);
+  auto* c_foo = create_empty_method(c_cls, "foo", int_return_void, def_access);
   always_assert(c_foo->is_virtual());
 
   scope.push_back(a_cls);

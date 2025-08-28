@@ -29,8 +29,8 @@ void setup() {
   }
   ClassCreator cc(DexType::make_type("LFoo;"));
   cc.set_super(type::java_lang_Object());
-  auto field = DexField::make_field("LFoo;.table:[LBar;")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC);
+  auto* field = DexField::make_field("LFoo;.table:[LBar;")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC);
   cc.add_field(field);
   cc.create();
 }
@@ -555,25 +555,25 @@ TEST_F(SwitchEquivFinderTest, test_class_switch) {
   SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
   EXPECT_TRUE(finder.success());
   EXPECT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS));
-  auto& key_to_case = finder.key_to_case();
+  const auto& key_to_case = finder.key_to_case();
   EXPECT_EQ(key_to_case.size(), 3);
 
   auto default_case = finder.default_case();
   EXPECT_NE(default_case, boost::none);
   EXPECT_EQ(get_first_instruction_literal(*default_case), -1);
 
-  auto bar_type = DexType::get_type("LBar;");
-  auto bar_block = key_to_case.at(bar_type);
+  auto* bar_type = DexType::get_type("LBar;");
+  auto* bar_block = key_to_case.at(bar_type);
   EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
 
-  auto baz_type = DexType::get_type("LBaz;");
-  auto baz_block = key_to_case.at(baz_type);
+  auto* baz_type = DexType::get_type("LBaz;");
+  auto* baz_block = key_to_case.at(baz_type);
   EXPECT_EQ(get_first_instruction_literal(baz_block), 101);
 }
 
 TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
   setup();
-  auto baz_type = DexType::get_type("LBaz;");
+  auto* baz_type = DexType::get_type("LBaz;");
 
   // extra load never gets used in successor block
   auto code = assembler::ircode_from_string(R"(
@@ -611,7 +611,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
     auto& cfg = code->cfg();
     SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
     EXPECT_TRUE(finder.success());
-    auto& extra_loads = finder.extra_loads();
+    const auto& extra_loads = finder.extra_loads();
     print_extra_loads(extra_loads);
     EXPECT_EQ(extra_loads.size(), 0);
   }
@@ -654,7 +654,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
     auto& cfg = code_with_load->cfg();
     SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
     EXPECT_TRUE(finder.success());
-    auto& extra_loads = finder.extra_loads();
+    const auto& extra_loads = finder.extra_loads();
     EXPECT_EQ(extra_loads.size(), 2);
     for (const auto& [b, loads] : UnorderedIterable(extra_loads)) {
       auto id = b->id();
@@ -668,11 +668,11 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
     auto instructions_copied =
         SwitchEquivEditor::copy_extra_loads_to_leaf_blocks(finder, &cfg);
     EXPECT_EQ(instructions_copied, 2);
-    auto case1 = finder.key_to_case().at(baz_type);
+    auto* case1 = finder.key_to_case().at(baz_type);
     auto it = case1->get_first_insn();
     EXPECT_EQ(it->insn->opcode(), OPCODE_CONST);
     EXPECT_EQ(it->insn->get_literal(), 200);
-    auto default_case = *finder.default_case();
+    auto* default_case = *finder.default_case();
     it = default_case->get_first_insn();
     EXPECT_EQ(it->insn->get_literal(), 200);
   }
@@ -716,7 +716,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
     auto& cfg = code_with_cls_load->cfg();
     SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
     EXPECT_TRUE(finder.success());
-    auto& extra_loads = finder.extra_loads();
+    const auto& extra_loads = finder.extra_loads();
     EXPECT_EQ(extra_loads.size(), 2);
     for (const auto& [b, loads] : UnorderedIterable(extra_loads)) {
       auto id = b->id();
@@ -731,11 +731,11 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
     auto instructions_copied =
         SwitchEquivEditor::copy_extra_loads_to_leaf_blocks(finder, &cfg);
     EXPECT_EQ(instructions_copied, 4);
-    auto case1 = finder.key_to_case().at(baz_type);
+    auto* case1 = finder.key_to_case().at(baz_type);
     auto it = case1->get_first_insn();
     EXPECT_EQ(it->insn->opcode(), OPCODE_CONST_CLASS);
     EXPECT_EQ((++it)->insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-    auto default_case = *finder.default_case();
+    auto* default_case = *finder.default_case();
     it = default_case->get_first_insn();
     EXPECT_EQ(it->insn->opcode(), OPCODE_CONST_CLASS);
     EXPECT_EQ((++it)->insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
@@ -782,7 +782,7 @@ TEST_F(SwitchEquivFinderTest, test_unsupported_insn) {
   EXPECT_TRUE(finder.success());
   // conspicuous invoke-virtual won't be considered valid in the middle of a if
   // else series.
-  auto& key_to_case = finder.key_to_case();
+  const auto& key_to_case = finder.key_to_case();
   EXPECT_EQ(key_to_case.size(), 2);
 
   auto default_case = finder.default_case();
@@ -790,8 +790,8 @@ TEST_F(SwitchEquivFinderTest, test_unsupported_insn) {
   EXPECT_EQ((*default_case)->get_first_insn()->insn->opcode(),
             OPCODE_CONST_CLASS);
 
-  auto bar_type = DexType::get_type("LBar;");
-  auto bar_block = key_to_case.at(bar_type);
+  auto* bar_type = DexType::get_type("LBar;");
+  auto* bar_block = key_to_case.at(bar_type);
   EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
 }
 
@@ -844,15 +844,15 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_different_regs) {
   SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
   EXPECT_TRUE(finder.success());
   EXPECT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS));
-  auto& key_to_case = finder.key_to_case();
+  const auto& key_to_case = finder.key_to_case();
   EXPECT_EQ(key_to_case.size(), 2);
 
   auto default_case = finder.default_case();
   EXPECT_NE(default_case, boost::none);
   EXPECT_EQ(get_first_instruction_literal(*default_case), 999);
 
-  auto bar_type = DexType::get_type("LBar;");
-  auto bar_block = key_to_case.at(bar_type);
+  auto* bar_type = DexType::get_type("LBar;");
+  auto* bar_block = key_to_case.at(bar_type);
   EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
 }
 
@@ -980,29 +980,29 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_duplicate_keys) {
                              SwitchEquivFinder::EXECUTION_ORDER);
     EXPECT_TRUE(finder.success());
     EXPECT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS));
-    auto& key_to_case = finder.key_to_case();
+    const auto& key_to_case = finder.key_to_case();
     EXPECT_EQ(key_to_case.size(), 5);
 
     auto default_case = finder.default_case();
     EXPECT_NE(default_case, boost::none);
     EXPECT_EQ(get_first_instruction_literal(*default_case), -1);
 
-    auto bar_type = DexType::get_type("LBar;");
-    auto bar_block = key_to_case.at(bar_type);
+    auto* bar_type = DexType::get_type("LBar;");
+    auto* bar_block = key_to_case.at(bar_type);
     // The finder should not get confused, the case_decoy block should NOT be
     // chosen here!
     EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
 
-    auto baz_type = DexType::get_type("LBaz;");
-    auto baz_block = key_to_case.at(baz_type);
+    auto* baz_type = DexType::get_type("LBaz;");
+    auto* baz_block = key_to_case.at(baz_type);
     EXPECT_EQ(get_first_instruction_literal(baz_block), 101);
 
-    auto boo_type = DexType::get_type("LBoo;");
-    auto boo_block = key_to_case.at(boo_type);
+    auto* boo_type = DexType::get_type("LBoo;");
+    auto* boo_block = key_to_case.at(boo_type);
     EXPECT_EQ(get_first_instruction_literal(boo_block), 102);
 
-    auto foo_type = DexType::get_type("LFoo;");
-    auto foo_block = key_to_case.at(foo_type);
+    auto* foo_type = DexType::get_type("LFoo;");
+    auto* foo_block = key_to_case.at(foo_type);
     EXPECT_EQ(get_first_instruction_literal(foo_block), 103);
   }
 }
@@ -1153,29 +1153,29 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_move_duplicate) {
                            SwitchEquivFinder::EXECUTION_ORDER);
   EXPECT_TRUE(finder.success());
   EXPECT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS));
-  auto& key_to_case = finder.key_to_case();
+  const auto& key_to_case = finder.key_to_case();
   EXPECT_EQ(key_to_case.size(), 5);
 
   auto default_case = finder.default_case();
   EXPECT_NE(default_case, boost::none);
   EXPECT_EQ(get_first_instruction_literal(*default_case), -1);
 
-  auto bar_type = DexType::get_type("LBar;");
-  auto bar_block = key_to_case.at(bar_type);
+  auto* bar_type = DexType::get_type("LBar;");
+  auto* bar_block = key_to_case.at(bar_type);
   // The finder should not get confused, the case_decoy block should NOT be
   // chosen here!
   EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
 
-  auto baz_type = DexType::get_type("LBaz;");
-  auto baz_block = key_to_case.at(baz_type);
+  auto* baz_type = DexType::get_type("LBaz;");
+  auto* baz_block = key_to_case.at(baz_type);
   EXPECT_EQ(get_first_instruction_literal(baz_block), 101);
 
-  auto boo_type = DexType::get_type("LBoo;");
-  auto boo_block = key_to_case.at(boo_type);
+  auto* boo_type = DexType::get_type("LBoo;");
+  auto* boo_block = key_to_case.at(boo_type);
   EXPECT_EQ(get_first_instruction_literal(boo_block), 102);
 
-  auto foo_type = DexType::get_type("LFoo;");
-  auto foo_block = key_to_case.at(foo_type);
+  auto* foo_type = DexType::get_type("LFoo;");
+  auto* foo_block = key_to_case.at(foo_type);
   EXPECT_EQ(get_first_instruction_literal(foo_block), 103);
 
   // Make sure that the use of v2 from leaf blocks is handled properly.
@@ -1202,9 +1202,9 @@ TEST_F(SwitchEquivFinderTest,
   setup();
 
   constexpr uint32_t DEFAULT_LEAF_DUP_THRESHOLD = 50;
-  const auto method_name = "LTesting;.with_source_blocks:(I)I";
-  auto method = DexMethod::make_method(method_name)
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  const auto* const method_name = "LTesting;.with_source_blocks:(I)I";
+  auto* method = DexMethod::make_method(method_name)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   method->set_deobfuscated_name(method_name);
   {
     auto code = assembler::ircode_from_string(R"(
@@ -1274,20 +1274,20 @@ TEST_F(SwitchEquivFinderTest,
                            DEFAULT_LEAF_DUP_THRESHOLD);
   EXPECT_TRUE(finder.success());
   ASSERT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::INT));
-  auto& key_to_case = finder.key_to_case();
+  const auto& key_to_case = finder.key_to_case();
   EXPECT_EQ(key_to_case.size(), 5);
 
-  auto& extra_loads = finder.extra_loads();
+  const auto& extra_loads = finder.extra_loads();
   EXPECT_NE(extra_loads.size(), 0);
   print_extra_loads(extra_loads);
 
   auto verify_const_at_block = [&](uint32_t key, int64_t v1_expected_literal) {
     EXPECT_EQ(key_to_case.count(key), 1)
         << "Should have a case block for " << key;
-    auto case_block = key_to_case.at(key);
+    auto* case_block = key_to_case.at(key);
     EXPECT_EQ(extra_loads.count(case_block), 1)
         << "Should have an extra load at B" << case_block->id();
-    auto insn = extra_loads.at(case_block).begin()->second;
+    auto* insn = extra_loads.at(case_block).begin()->second;
     EXPECT_TRUE(insn->has_literal());
     EXPECT_EQ(insn->get_literal(), v1_expected_literal)
         << "Wrong const value flowing into B" << case_block->id();

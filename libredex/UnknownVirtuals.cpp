@@ -27,8 +27,8 @@ struct DexTypeCache {
   std::vector<DexType*> cache;
 
   DexTypeCache() {
-    for (auto const safe_type : safe_types_on_refs) {
-      auto type = DexType::get_type(safe_type);
+    for (const auto* const safe_type : safe_types_on_refs) {
+      auto* type = DexType::get_type(safe_type);
       if (type != nullptr) {
         cache.push_back(type);
       }
@@ -36,7 +36,7 @@ struct DexTypeCache {
   }
 
   bool has_type(DexType* type) {
-    for (auto cached_type : cache) {
+    for (auto* cached_type : cache) {
       if (cached_type == type) {
         return true;
       }
@@ -65,8 +65,8 @@ bool static type_ok(DexType* type) {
  * and are optimizable.
  */
 bool is_method_known_to_be_public_helper(DexType* type, DexMethodRef* meth) {
-  auto meth_name = meth->get_name()->c_str();
-  static auto view = DexType::get_type("Landroid/view/View;");
+  const auto* meth_name = meth->get_name()->c_str();
+  static auto* view = DexType::get_type("Landroid/view/View;");
   if (view == type) {
     if (strcmp(meth_name, "getContext") == 0) {
       return true;
@@ -79,9 +79,9 @@ bool is_method_known_to_be_public_helper(DexType* type, DexMethodRef* meth) {
     }
     return false;
   }
-  static auto il =
+  static auto* il =
       DexType::get_type("Lcom/google/common/collect/ImmutableList;");
-  static auto al = DexType::get_type("Ljava/util/ArrayList;");
+  static auto* al = DexType::get_type("Ljava/util/ArrayList;");
   if (il == type || al == type) {
     if (strcmp(meth_name, "get") == 0) {
       return true;
@@ -97,28 +97,28 @@ bool is_method_known_to_be_public_helper(DexType* type, DexMethodRef* meth) {
     }
     return false;
   }
-  static auto ctx = DexType::get_type("Landroid/content/Context;");
+  static auto* ctx = DexType::get_type("Landroid/content/Context;");
   if (ctx == type) {
     if (strcmp(meth_name, "getResources") == 0) {
       return true;
     }
     return false;
   }
-  static auto resrc = DexType::get_type("Landroid/content/res/Resources;");
+  static auto* resrc = DexType::get_type("Landroid/content/res/Resources;");
   if (resrc == type) {
     if (strcmp(meth_name, "getString") == 0) {
       return true;
     }
     return false;
   }
-  static auto linf = DexType::get_type("Landroid/view/LayoutInflater;");
+  static auto* linf = DexType::get_type("Landroid/view/LayoutInflater;");
   if (linf == type) {
     if (strcmp(meth_name, "inflate") == 0) {
       return true;
     }
     return false;
   }
-  static auto vg = DexType::get_type("Landroid/view/ViewGroup;");
+  static auto* vg = DexType::get_type("Landroid/view/ViewGroup;");
   if (vg == type) {
     if (strcmp(meth_name, "getContext") == 0) {
       return true;
@@ -137,7 +137,7 @@ bool is_method_known_to_be_public(DexMethodRef* method) {
   if (is_method_known_to_be_public_helper(method->get_class(), method)) {
     return true;
   }
-  auto type = method->get_class();
+  auto* type = method->get_class();
   if (type_ok(type)) {
     return true;
   }
@@ -145,7 +145,7 @@ bool is_method_known_to_be_public(DexMethodRef* method) {
   // the method ref is bound to a type known to redex but the method does
   // not exist in the hierarchy known to redex. Essentially the method
   // is from an external type i.e. A.equals(Object)
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   while (cls != nullptr) {
     type = cls->get_super_class();
     cls = type_class(type);

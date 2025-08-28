@@ -16,13 +16,13 @@ using namespace type_reference;
 class TypeRefUpdaterTest : public RedexTest {};
 
 TEST_F(TypeRefUpdaterTest, init_collision) {
-  auto foo = DexType::make_type("LFoo;");
-  auto bar = DexType::make_type("LBar;");
+  auto* foo = DexType::make_type("LFoo;");
+  auto* bar = DexType::make_type("LBar;");
   ClassCreator cc(foo);
   cc.set_super(type::java_lang_Object());
 
-  auto ctor_takes_foo = DexMethod::make_method("LFoo;.<init>:(LFoo;)V")
-                            ->make_concrete(ACC_PUBLIC, false);
+  auto* ctor_takes_foo = DexMethod::make_method("LFoo;.<init>:(LFoo;)V")
+                             ->make_concrete(ACC_PUBLIC, false);
   ctor_takes_foo->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -32,8 +32,8 @@ TEST_F(TypeRefUpdaterTest, init_collision) {
   )"));
   cc.add_method(ctor_takes_foo);
 
-  auto ctor_takes_bar = DexMethod::make_method("LFoo;.<init>:(LBar;)V")
-                            ->make_concrete(ACC_PUBLIC, false);
+  auto* ctor_takes_bar = DexMethod::make_method("LFoo;.<init>:(LBar;)V")
+                             ->make_concrete(ACC_PUBLIC, false);
   ctor_takes_bar->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -43,8 +43,8 @@ TEST_F(TypeRefUpdaterTest, init_collision) {
   )"));
   cc.add_method(ctor_takes_bar);
 
-  auto baz = DexMethod::make_method("LFoo;.baz:()V")
-                 ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* baz = DexMethod::make_method("LFoo;.baz:()V")
+                  ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   baz->set_code(assembler::ircode_from_string(R"(
     (
       (new-instance "LFoo;")
@@ -64,7 +64,7 @@ TEST_F(TypeRefUpdaterTest, init_collision) {
   )"));
   cc.add_method(baz);
 
-  auto cls_foo = cc.create();
+  auto* cls_foo = cc.create();
 
   Scope scope{cls_foo};
 

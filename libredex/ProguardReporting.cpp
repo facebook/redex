@@ -102,7 +102,7 @@ std::string form_java_args(const ProguardMap& pg_map, const DexTypeList* args) {
   std::string s;
   unsigned long i = 0;
   for (const auto& arg : *args) {
-    auto desc = arg->get_name()->c_str();
+    const auto* desc = arg->get_name()->c_str();
     auto deobfu_desc = deobfuscate_type_descriptor(pg_map, desc);
     s += type_descriptor_to_java(deobfu_desc);
     if (i < args->size() - 1) {
@@ -140,12 +140,12 @@ void redex::print_method(std::ostream& output,
       method_name = extract_member_name(deob);
     }
   }
-  auto proto = method->get_proto();
+  auto* proto = method->get_proto();
   auto* args = proto->get_args();
-  auto return_type = proto->get_rtype();
+  auto* return_type = proto->get_rtype();
   output << class_name << ": ";
   if (!is_constructor) {
-    auto return_type_desc = return_type->get_name()->c_str();
+    const auto* return_type_desc = return_type->get_name()->c_str();
     auto deobfu_return_type =
         deobfuscate_type_descriptor(pg_map, return_type_desc);
     output << type_descriptor_to_java(deobfu_return_type) << " ";
@@ -167,7 +167,7 @@ void redex::print_field(std::ostream& output,
                         const ProguardMap& pg_map,
                         const std::string& class_name,
                         const DexField* field) {
-  auto field_type = field->get_type()->get_name()->c_str();
+  const auto* field_type = field->get_type()->get_name()->c_str();
   std::string deobfu_field_type =
       deobfuscate_type_descriptor(pg_map, field_type);
   output << class_name << ": " << type_descriptor_to_java(deobfu_field_type)

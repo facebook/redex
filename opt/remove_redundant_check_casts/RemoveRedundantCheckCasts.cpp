@@ -19,7 +19,8 @@ namespace check_casts {
 impl::Stats remove_redundant_check_casts(const CheckCastConfig& config,
                                          DexMethod* method,
                                          const api::AndroidSDK& android_sdk) {
-  if (!method || !method->get_code() || method->rstate.no_optimizations()) {
+  if ((method == nullptr) || (method->get_code() == nullptr) ||
+      method->rstate.no_optimizations()) {
     return impl::Stats{};
   }
 

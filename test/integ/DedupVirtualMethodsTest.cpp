@@ -21,8 +21,8 @@ struct VMethodsStats {
 
 VMethodsStats count_methods(const Scope& scope, DexType* annotation) {
   VMethodsStats stats;
-  for (auto cls : scope) {
-    for (auto method : cls->get_vmethods()) {
+  for (auto* cls : scope) {
+    for (auto* method : cls->get_vmethods()) {
       stats.total++;
       stats.annotated +=
           (((get_annotation(method, annotation) == nullptr)) ? 0 : 1);
@@ -32,12 +32,12 @@ VMethodsStats count_methods(const Scope& scope, DexType* annotation) {
 }
 
 std::vector<DexMethod*> annotated_by_publicized(const Scope& scope) {
-  auto publicized_annotation =
+  auto* publicized_annotation =
       DexType::get_type("Lcom/facebook/redextest/Publicized;");
   std::vector<DexMethod*> result;
-  for (auto cls : scope) {
-    for (auto method : cls->get_vmethods()) {
-      if (get_annotation(method, publicized_annotation)) {
+  for (auto* cls : scope) {
+    for (auto* method : cls->get_vmethods()) {
+      if (get_annotation(method, publicized_annotation) != nullptr) {
         result.push_back(method);
       }
     }
@@ -47,7 +47,7 @@ std::vector<DexMethod*> annotated_by_publicized(const Scope& scope) {
 
 void check_public(const std::vector<DexMethod*>& methods,
                   bool should_be_public) {
-  for (auto method : methods) {
+  for (auto* method : methods) {
     if (!method->is_def()) {
       continue;
     }
@@ -60,7 +60,7 @@ void check_public(const std::vector<DexMethod*>& methods,
 TEST_F(DedupVirtualMethodsTest, dedup) {
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
-  auto annotation = DexType::get_type("Lcom/facebook/redextest/Duplication;");
+  auto* annotation = DexType::get_type("Lcom/facebook/redextest/Duplication;");
 
   auto methods_annotated_by_pub = annotated_by_publicized(scope);
   check_public(methods_annotated_by_pub, false);
@@ -78,7 +78,7 @@ TEST_F(DedupVirtualMethodsTest, dedup) {
 TEST_F(DedupVirtualMethodsTest, dedup_with_call) {
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
-  auto annotation = DexType::get_type("Lcom/facebook/redextest/Duplication;");
+  auto* annotation = DexType::get_type("Lcom/facebook/redextest/Duplication;");
 
   auto methods_annotated_by_pub = annotated_by_publicized(scope);
   check_public(methods_annotated_by_pub, false);

@@ -108,7 +108,7 @@ class ConsumeAnalysisAndInvalidatePass : public Pass {
   void run_pass(DexStoresVector& /* stores */,
                 ConfigFiles& /* conf */,
                 PassManager& mgr) override {
-    auto preserved = mgr.get_preserved_analysis<MyAnalysisPass>();
+    auto* preserved = mgr.get_preserved_analysis<MyAnalysisPass>();
     always_assert(preserved);
     auto result = preserved->get_result();
     always_assert(result);
@@ -134,7 +134,7 @@ class ConsumeAnalysisAndPreservePass : public Pass {
   void run_pass(DexStoresVector& /* stores */,
                 ConfigFiles& /* conf */,
                 PassManager& mgr) override {
-    auto preserved = mgr.get_preserved_analysis<MyAnalysisPass>();
+    auto* preserved = mgr.get_preserved_analysis<MyAnalysisPass>();
     always_assert(preserved);
     auto result = preserved->get_result();
     always_assert(result);
@@ -161,7 +161,7 @@ class ConsumeAnalysisAndPreserveOnePass : public Pass {
   void run_pass(DexStoresVector& /* stores */,
                 ConfigFiles& /* conf */,
                 PassManager& mgr) override {
-    auto preserved = mgr.get_preserved_analysis<MyAnalysisPass>();
+    auto* preserved = mgr.get_preserved_analysis<MyAnalysisPass>();
     always_assert(preserved);
     auto result = preserved->get_result();
     always_assert(result);
@@ -192,10 +192,10 @@ TEST_F(AnalysisUsageTest, testAnalysisInvalidation) {
   auto get_preserved_passes = []() {
     UnorderedMap<AnalysisID, Pass*> ret;
 
-    auto my = new MyAnalysisPass();
+    auto* my = new MyAnalysisPass();
     my->set_result();
     ret.emplace(get_analysis_id_by_pass<MyAnalysisPass>(), my);
-    auto my2 = new MyAnalysisPass2();
+    auto* my2 = new MyAnalysisPass2();
     my2->set_result();
     ret.emplace(get_analysis_id_by_pass<MyAnalysisPass2>(), my2);
     return ret;

@@ -241,7 +241,7 @@ class GlobalConfig : public Configurable {
 
   template <typename ConfigType>
   ConfigType* get_config_by_name(const std::string& name) const {
-    auto& type = m_global_configs.at(name);
+    const auto& type = m_global_configs.at(name);
     return static_cast<ConfigType*>(type.get());
   }
 

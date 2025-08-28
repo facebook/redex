@@ -122,7 +122,7 @@ Shrinker::Shrinker(
                     m_cse_shared_state->get_method_override_graph() == nullptr);
       std::unique_ptr<const method_override_graph::Graph>
           owned_method_override_graph;
-      if (!method_override_graph) {
+      if (method_override_graph == nullptr) {
         owned_method_override_graph = method_override_graph::build_graph(scope);
         method_override_graph = owned_method_override_graph.get();
       }
@@ -130,12 +130,13 @@ Shrinker::Shrinker(
       /* Returns computed_no_side_effects_methods_iterations */
       method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
           [&](const DexType* type) {
-            return !init_classes_with_side_effects.refine(type);
+            return init_classes_with_side_effects.refine(type) == nullptr;
           };
       compute_no_side_effects_methods(
           scope, method_override_graph, clinit_has_no_side_effects,
           m_pure_methods, &computed_no_side_effects_methods);
-      for (auto m : UnorderedIterable(computed_no_side_effects_methods)) {
+      for (const auto* m :
+           UnorderedIterable(computed_no_side_effects_methods)) {
         m_pure_methods.insert(const_cast<DexMethod*>(m));
       }
     }

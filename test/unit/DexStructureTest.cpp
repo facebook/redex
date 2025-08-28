@@ -23,8 +23,8 @@ DexClass* create_a_class(const char* description) {
 
 TEST_F(DexStructureTest, remove_class) {
   DexStoresVector stores;
-  auto foo_cls = create_a_class("Lfoo;");
-  auto bar_cls = create_a_class("Lbar;");
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* bar_cls = create_a_class("Lbar;");
   bar_cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
 
   {
@@ -40,9 +40,9 @@ TEST_F(DexStructureTest, remove_class) {
 
   DexType* ty = DexType::make_type("Lbaz;");
   DexProto* proto = DexProto::make_proto(ty, DexTypeList::make_type_list({}));
-  auto str1 = DexString::make_string("m1");
-  auto str2 = DexString::make_string("m2");
-  auto str3 = DexString::make_string("m3");
+  const auto* str1 = DexString::make_string("m1");
+  const auto* str2 = DexString::make_string("m2");
+  const auto* str3 = DexString::make_string("m3");
   DexMethodRef* m1 = DexMethod::make_method(ty, str1, proto);
   DexMethodRef* m2 = DexMethod::make_method(ty, str2, proto);
   DexMethodRef* m3 = DexMethod::make_method(ty, str3, proto);

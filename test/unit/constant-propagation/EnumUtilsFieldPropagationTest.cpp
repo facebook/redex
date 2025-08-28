@@ -22,8 +22,8 @@ struct EnumUtilsFieldTest : public ConstantPropagationTest {
  public:
   EnumUtilsFieldTest() {
     m_config.replace_move_result_with_consts = true;
-    auto integer_valueOf = method::java_lang_Integer_valueOf();
-    auto integer_intValue = method::java_lang_Integer_intValue();
+    auto* integer_valueOf = method::java_lang_Integer_valueOf();
+    auto* integer_intValue = method::java_lang_Integer_intValue();
     // The intValue of integer is initialized through the static invocation.
     m_immut_analyzer_state.add_initializer(integer_valueOf, integer_intValue)
         .set_src_id_of_attr(0)
@@ -34,12 +34,12 @@ struct EnumUtilsFieldTest : public ConstantPropagationTest {
   }
 
   static DexClass* create_enum_utils_field() {
-    auto cls_ty = DexType::make_type("Lredex/$EnumUtils;");
+    auto* cls_ty = DexType::make_type("Lredex/$EnumUtils;");
     ClassCreator creator(cls_ty);
     creator.set_super(type::java_lang_Object());
     creator.set_access(ACC_PUBLIC | ACC_FINAL);
 
-    auto f42 = static_cast<DexField*>(
+    auto* f42 = static_cast<DexField*>(
         DexField::make_field("Lredex/$EnumUtils;.f42:Ljava/lang/Integer;"));
     f42->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
     creator.add_field(f42);

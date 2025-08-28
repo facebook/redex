@@ -29,7 +29,7 @@ class ConfigFilesTest : public RedexTest {
 };
 
 TEST_F(ConfigFilesTest, read_class_frequencies) {
-  auto class_frequency_path = std::getenv("class_frequencies_path");
+  auto* class_frequency_path = std::getenv("class_frequencies_path");
 
   Json::Value json_cfg;
   std::istringstream temp_json(

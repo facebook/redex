@@ -53,7 +53,7 @@ TEST_F(IRAssemblerTest, empty) {
 }
 
 TEST_F(IRAssemblerTest, assembleMethod) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (private) "LFoo;.bar:(I)V"
      (
       (return-void)
@@ -65,7 +65,7 @@ TEST_F(IRAssemblerTest, assembleMethod) {
   EXPECT_STREQ(method->get_class()->get_name()->c_str(), "LFoo;");
   EXPECT_EQ(assembler::to_string(method->get_code()), "((return-void))");
 
-  auto static_method = assembler::method_from_string(R"(
+  auto* static_method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.baz:(I)V"
      (
       (return-void)
@@ -78,8 +78,8 @@ TEST_F(IRAssemblerTest, assembleMethod) {
 }
 
 TEST_F(IRAssemblerTest, assembleClassWithMethod) {
-  auto method = assembler::class_with_method("LFoo;",
-                                             R"(
+  auto* method = assembler::class_with_method("LFoo;",
+                                              R"(
       (method (private) "LFoo;.bar:(I)V"
        (
         (return-void)
@@ -110,7 +110,7 @@ TEST_F(IRAssemblerTest, assembleClassWithMethods) {
       )"),
   };
 
-  auto clazz = assembler::class_with_methods("LFoo;", methods);
+  auto* clazz = assembler::class_with_methods("LFoo;", methods);
 
   DexMethod* method0 = clazz->get_dmethods().at(0);
   EXPECT_EQ(method0->get_access(), ACC_PRIVATE);
@@ -359,7 +359,7 @@ std::vector<DexPosition*> get_positions(const std::unique_ptr<IRCode>& code) {
 }
 
 TEST_F(IRAssemblerTest, pos) {
-  [[maybe_unused]] auto method =
+  [[maybe_unused]] auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
@@ -376,7 +376,7 @@ TEST_F(IRAssemblerTest, pos) {
   EXPECT_EQ(code->count_opcodes(), 1);
   auto positions = get_positions(code);
   ASSERT_EQ(positions.size(), 1);
-  auto pos = positions[0];
+  auto* pos = positions[0];
   EXPECT_EQ(show(pos->method), std::string("LFoo;.bar:()V"));
   EXPECT_EQ(pos->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos->line, 420);
@@ -384,10 +384,10 @@ TEST_F(IRAssemblerTest, pos) {
 }
 
 TEST_F(IRAssemblerTest, posWithParent_DbgLabel) {
-  [[maybe_unused]] auto method =
+  [[maybe_unused]] auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  [[maybe_unused]] auto method2 =
+  [[maybe_unused]] auto* method2 =
       DexMethod::make_method("LFoo;.baz:()I")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
@@ -409,13 +409,13 @@ TEST_F(IRAssemblerTest, posWithParent_DbgLabel) {
   auto positions = get_positions(code);
   ASSERT_EQ(positions.size(), 2);
 
-  auto pos0 = positions[0];
+  auto* pos0 = positions[0];
   EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
   EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos0->line, 420);
   EXPECT_EQ(pos0->parent, nullptr);
 
-  auto pos1 = positions[1];
+  auto* pos1 = positions[1];
   EXPECT_EQ(show(pos1->method), std::string("LFoo;.baz:()I"));
   EXPECT_EQ(pos1->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos1->line, 440);
@@ -423,10 +423,10 @@ TEST_F(IRAssemblerTest, posWithParent_DbgLabel) {
 }
 
 TEST_F(IRAssemblerTest, posWithParent_UserLabel) {
-  [[maybe_unused]] auto method =
+  [[maybe_unused]] auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  [[maybe_unused]] auto method2 =
+  [[maybe_unused]] auto* method2 =
       DexMethod::make_method("LFoo;.baz:()I")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
@@ -448,13 +448,13 @@ TEST_F(IRAssemblerTest, posWithParent_UserLabel) {
   auto positions = get_positions(code);
   ASSERT_EQ(positions.size(), 2);
 
-  auto pos0 = positions[0];
+  auto* pos0 = positions[0];
   EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
   EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos0->line, 420);
   EXPECT_EQ(pos0->parent, nullptr);
 
-  auto pos1 = positions[1];
+  auto* pos1 = positions[1];
   EXPECT_EQ(show(pos1->method), std::string("LFoo;.baz:()I"));
   EXPECT_EQ(pos1->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos1->line, 440);
@@ -462,10 +462,10 @@ TEST_F(IRAssemblerTest, posWithParent_UserLabel) {
 }
 
 TEST_F(IRAssemblerTest, posWithParent_BadParent) {
-  [[maybe_unused]] auto method =
+  [[maybe_unused]] auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  [[maybe_unused]] auto method2 =
+  [[maybe_unused]] auto* method2 =
       DexMethod::make_method("LFoo;.baz:()I")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
@@ -487,13 +487,13 @@ TEST_F(IRAssemblerTest, posWithParent_BadParent) {
   auto positions = get_positions(code);
   ASSERT_EQ(positions.size(), 2);
 
-  auto pos0 = positions[0];
+  auto* pos0 = positions[0];
   EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
   EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos0->line, 420);
   EXPECT_EQ(pos0->parent, nullptr);
 
-  auto pos1 = positions[1];
+  auto* pos1 = positions[1];
   EXPECT_EQ(show(pos1->method), std::string("LFoo;.baz:()I"));
   EXPECT_EQ(pos1->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos1->line, 440);
@@ -501,13 +501,13 @@ TEST_F(IRAssemblerTest, posWithParent_BadParent) {
 }
 
 TEST_F(IRAssemblerTest, posWithGrandparent) {
-  [[maybe_unused]] auto method =
+  [[maybe_unused]] auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  [[maybe_unused]] auto method2 =
+  [[maybe_unused]] auto* method2 =
       DexMethod::make_method("LFoo;.baz:()I")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  [[maybe_unused]] auto method3 =
+  [[maybe_unused]] auto* method3 =
       DexMethod::make_method("LFoo;.baz:()Z")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
@@ -530,13 +530,13 @@ TEST_F(IRAssemblerTest, posWithGrandparent) {
   auto positions = get_positions(code);
   ASSERT_EQ(positions.size(), 3);
 
-  auto pos0 = positions[0];
+  auto* pos0 = positions[0];
   EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
   EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos0->line, 420);
   EXPECT_EQ(pos0->parent, nullptr);
 
-  auto pos2 = positions[2];
+  auto* pos2 = positions[2];
   EXPECT_EQ(show(pos2->method), std::string("LFoo;.baz:()Z"));
   EXPECT_EQ(pos2->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos2->line, 441);
@@ -544,13 +544,13 @@ TEST_F(IRAssemblerTest, posWithGrandparent) {
 }
 
 TEST_F(IRAssemblerTest, posWithGreatGrandparent) {
-  [[maybe_unused]] auto method =
+  [[maybe_unused]] auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  [[maybe_unused]] auto method2 =
+  [[maybe_unused]] auto* method2 =
       DexMethod::make_method("LFoo;.baz:()I")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  [[maybe_unused]] auto method3 =
+  [[maybe_unused]] auto* method3 =
       DexMethod::make_method("LFoo;.baz:()Z")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
@@ -574,13 +574,13 @@ TEST_F(IRAssemblerTest, posWithGreatGrandparent) {
   auto positions = get_positions(code);
   ASSERT_EQ(positions.size(), 4);
 
-  auto pos0 = positions[0];
+  auto* pos0 = positions[0];
   EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
   EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos0->line, 420);
   EXPECT_EQ(pos0->parent, nullptr);
 
-  auto pos3 = positions[3];
+  auto* pos3 = positions[3];
   EXPECT_EQ(show(pos3->method), std::string("LFoo;.baz:()Z"));
   EXPECT_EQ(pos3->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos3->line, 442);
@@ -599,7 +599,7 @@ std::vector<DexDebugInstruction*> get_debug_info(
 }
 
 TEST_F(IRAssemblerTest, dexDebugInstruction) {
-  [[maybe_unused]] auto method =
+  [[maybe_unused]] auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
@@ -630,69 +630,69 @@ TEST_F(IRAssemblerTest, dexDebugInstruction) {
   auto debug_info = get_debug_info(code);
   EXPECT_EQ(debug_info.size(), 11);
 
-  auto dbg0 = debug_info[0];
+  auto* dbg0 = debug_info[0];
   EXPECT_EQ(dbg0->opcode(), DBG_SET_FILE);
-  auto dbg0_ = dynamic_cast<DexDebugOpcodeSetFile*>(dbg0);
+  auto* dbg0_ = dynamic_cast<DexDebugOpcodeSetFile*>(dbg0);
   EXPECT_NE(dbg0_, nullptr);
   EXPECT_EQ(dbg0_->file()->str(), "foo.java");
 
-  auto dbg1 = debug_info[1];
+  auto* dbg1 = debug_info[1];
   EXPECT_EQ(dbg1->opcode(), DBG_SET_EPILOGUE_BEGIN);
   EXPECT_EQ(dbg1->uvalue(), DEX_NO_INDEX);
 
-  auto dbg2 = debug_info[2];
+  auto* dbg2 = debug_info[2];
   EXPECT_EQ(dbg2->opcode(), DBG_SET_PROLOGUE_END);
   EXPECT_EQ(dbg2->uvalue(), DEX_NO_INDEX);
 
-  auto dbg3 = debug_info[3];
+  auto* dbg3 = debug_info[3];
   EXPECT_EQ(dbg3->opcode(), DBG_RESTART_LOCAL);
   EXPECT_EQ(dbg3->uvalue(), 1);
 
-  auto dbg4 = debug_info[4];
+  auto* dbg4 = debug_info[4];
   EXPECT_EQ(dbg4->opcode(), DBG_END_LOCAL);
   EXPECT_EQ(dbg4->uvalue(), 2);
 
-  auto dbg5 = debug_info[5];
+  auto* dbg5 = debug_info[5];
   EXPECT_EQ(dbg5->opcode(), DBG_START_LOCAL_EXTENDED);
-  auto dbg5_ = dynamic_cast<DexDebugOpcodeStartLocal*>(dbg5);
+  auto* dbg5_ = dynamic_cast<DexDebugOpcodeStartLocal*>(dbg5);
   EXPECT_NE(dbg5_, nullptr);
   EXPECT_EQ(dbg5_->name()->str(), "name");
   EXPECT_EQ(dbg5_->type()->str(), "Ljava/lang/Objects;");
   EXPECT_EQ(dbg5_->sig()->str(), "sig");
 
-  auto dbg6 = debug_info[6];
+  auto* dbg6 = debug_info[6];
   EXPECT_EQ(dbg6->opcode(), DBG_START_LOCAL);
-  auto dbg6_ = dynamic_cast<DexDebugOpcodeStartLocal*>(dbg6);
+  auto* dbg6_ = dynamic_cast<DexDebugOpcodeStartLocal*>(dbg6);
   EXPECT_NE(dbg6_, nullptr);
   EXPECT_EQ(dbg6_->name()->str(), "name");
   EXPECT_EQ(dbg6_->type()->str(), "Ljava/lang/Objects;");
   EXPECT_EQ(dbg6_->sig(), nullptr);
 
-  auto dbg7 = debug_info[7];
+  auto* dbg7 = debug_info[7];
   EXPECT_EQ(dbg7->opcode(), DBG_ADVANCE_LINE);
   EXPECT_EQ(dbg7->value(), 5);
 
-  auto dbg8 = debug_info[8];
+  auto* dbg8 = debug_info[8];
   EXPECT_EQ(dbg8->opcode(), DBG_ADVANCE_PC);
   EXPECT_EQ(dbg8->uvalue(), 6);
 
-  auto dbg9 = debug_info[9];
+  auto* dbg9 = debug_info[9];
   EXPECT_EQ(dbg9->opcode(), DBG_END_SEQUENCE);
   EXPECT_EQ(dbg9->uvalue(), DEX_NO_INDEX);
 
-  auto dbg10 = debug_info[10];
+  auto* dbg10 = debug_info[10];
   EXPECT_EQ(dbg10->opcode(), DBG_FIRST_SPECIAL);
   EXPECT_EQ(dbg10->uvalue(), DEX_NO_INDEX);
 }
 
 TEST_F(IRAssemblerTest, assembleField) {
-  auto field =
+  auto* field =
       assembler::field_from_string("(field (private) \"LFoo;.bar:I\")");
   EXPECT_EQ(field->get_access(), ACC_PRIVATE);
   EXPECT_EQ(field->get_name()->str(), "bar");
   EXPECT_EQ(field->get_class()->get_name()->str(), "LFoo;");
 
-  auto static_field =
+  auto* static_field =
       assembler::field_from_string("(field (public static) \"LFoo;.baz:I\")");
   EXPECT_EQ(static_field->get_access(), ACC_PUBLIC | ACC_STATIC);
   EXPECT_EQ(static_field->get_name()->str(), "baz");
@@ -700,7 +700,7 @@ TEST_F(IRAssemblerTest, assembleField) {
 }
 
 TEST_F(IRAssemblerTest, assembleClassFromString) {
-  auto cls = assembler::class_from_string(R"(
+  auto* cls = assembler::class_from_string(R"(
     (class (public final) "LFoo;"
       (field (public) "LFoo;.bar:I")
       (field (public static) "LFoo;.barStatic:I")
@@ -724,7 +724,7 @@ TEST_F(IRAssemblerTest, assembleClassFromString) {
 
   EXPECT_EQ(cls->get_ifields().size(), 1);
   ASSERT_GE(cls->get_ifields().size(), 1);
-  auto i_field = cls->get_ifields()[0];
+  auto* i_field = cls->get_ifields()[0];
   EXPECT_EQ(i_field->get_class(), cls->get_type());
   EXPECT_EQ(i_field->get_name()->str(), "bar");
   EXPECT_EQ(i_field->get_static_value(), nullptr);
@@ -732,12 +732,12 @@ TEST_F(IRAssemblerTest, assembleClassFromString) {
   EXPECT_EQ(cls->get_sfields().size(), 2);
   ASSERT_GE(cls->get_sfields().size(), 2);
   {
-    auto s_field = cls->get_sfields()[0];
+    auto* s_field = cls->get_sfields()[0];
     EXPECT_EQ(s_field->get_class(), cls->get_type());
     EXPECT_EQ(s_field->get_name()->str(), "barStatic");
   }
   {
-    auto s_field = cls->get_sfields()[1];
+    auto* s_field = cls->get_sfields()[1];
     EXPECT_EQ(s_field->get_class(), cls->get_type());
     EXPECT_EQ(s_field->get_name()->str(), "bazStatic");
     EXPECT_NE(s_field->get_static_value(), nullptr);
@@ -746,17 +746,17 @@ TEST_F(IRAssemblerTest, assembleClassFromString) {
 
   EXPECT_EQ(cls->get_dmethods().size(), 1);
   ASSERT_GE(cls->get_dmethods().size(), 1);
-  auto d_method = cls->get_dmethods()[0];
+  auto* d_method = cls->get_dmethods()[0];
   EXPECT_EQ(d_method->get_class(), cls->get_type());
   EXPECT_EQ(d_method->get_name()->str(), "baz");
 
   EXPECT_EQ(cls->get_vmethods().size(), 1);
   ASSERT_GE(cls->get_vmethods().size(), 1);
-  auto v_method = cls->get_vmethods()[0];
+  auto* v_method = cls->get_vmethods()[0];
   EXPECT_EQ(v_method->get_class(), cls->get_type());
   EXPECT_EQ(v_method->get_name()->str(), "bazPublic");
 
-  auto sub = assembler::class_from_string(R"(
+  auto* sub = assembler::class_from_string(R"(
     (class (public final) "LSub;" extends "LFoo;"
       (method (public) "LSub;.bazPublic:(I)V"
         (
@@ -771,13 +771,13 @@ TEST_F(IRAssemblerTest, assembleClassFromString) {
 TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
   {
     // Non public interface
-    auto iface = assembler::class_from_string(R"(
+    auto* iface = assembler::class_from_string(R"(
       (interface () "LIfaceNotPub;")
     )");
     EXPECT_TRUE(is_interface(iface));
     EXPECT_FALSE(is_public(iface));
   }
-  auto iface = assembler::class_from_string(R"(
+  auto* iface = assembler::class_from_string(R"(
     (interface (public) "LIface;"
       (method "LIface;.one:(I)V")
       (method "LIface;.two:(Ljava/lang/String;)I")
@@ -823,57 +823,57 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
                 name == "twelve")
         << "Got unexpected field: " << name;
     if (name == "three") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), 0);
       EXPECT_EQ(static_value->evtype(), DEVT_INT);
     } else if (name == "four") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), false);
       EXPECT_EQ(static_value->evtype(), DEVT_NULL);
     } else if (name == "five") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), 5);
       EXPECT_EQ(static_value->evtype(), DEVT_INT);
     } else if (name == "six") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), 123);
       EXPECT_EQ(static_value->evtype(), DEVT_INT);
     } else if (name == "seven") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->evtype(), DEVT_STRING);
       EXPECT_EQ(static_value->show(), "hello");
     } else if (name == "eight") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), 1);
     } else if (name == "nine") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), 0);
     } else if (name == "ten") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), 10);
     } else if (name == "eleven") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), 11);
     } else if (name == "twelve") {
-      auto static_value = f->get_static_value();
+      auto* static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), 171);
     }
   }
 
   // Interfaces that extend other interfaces
-  auto a = assembler::class_from_string(R"(
+  auto* a = assembler::class_from_string(R"(
     (interface (public) "LA;"
       (method "LA;.one:(I)V")
     )
   )");
   EXPECT_EQ(a->get_interfaces()->size(), 0);
-  auto b = assembler::class_from_string(R"(
+  auto* b = assembler::class_from_string(R"(
     (interface (public) "LB;"
       (method "LB;.two:(Ljava/lang/String;)I")
     )
   )");
   EXPECT_EQ(b->get_interfaces()->size(), 0);
-  auto c = assembler::class_from_string(R"(
+  auto* c = assembler::class_from_string(R"(
     (interface (public) "LC;" extends "LA;")
   )");
   {
@@ -881,7 +881,7 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
     EXPECT_EQ(ifaces->size(), 1);
     EXPECT_EQ(ifaces->at(0)->str(), "LA;");
   }
-  auto d = assembler::class_from_string(R"(
+  auto* d = assembler::class_from_string(R"(
     (interface (public) "LD;" extends ("LA;" "LB;")
     (method "LD;.x:(II)V")
     )
@@ -894,11 +894,11 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
   }
   // Make sure the rest of the expression is parsed
   EXPECT_EQ(d->get_all_methods().size(), 1);
-  auto d_x = *d->get_all_methods().begin();
+  auto* d_x = *d->get_all_methods().begin();
   EXPECT_EQ(d_x->str(), "x");
 
   // Classes can implement interfaces
-  auto foo = assembler::class_from_string(R"(
+  auto* foo = assembler::class_from_string(R"(
     (class (public) "LFoo;" implements "LA;"
       (method (public) "LFoo;.one:(I)V"
         (
@@ -911,10 +911,10 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
   EXPECT_EQ(foo->get_interfaces()->size(), 1);
   EXPECT_EQ(foo->get_interfaces()->at(0), a->get_type());
   EXPECT_EQ(foo->get_vmethods().size(), 1);
-  auto foo_one = *foo->get_vmethods().begin();
+  auto* foo_one = *foo->get_vmethods().begin();
   EXPECT_EQ(foo_one->str(), "one");
 
-  auto bar = assembler::class_from_string(R"(
+  auto* bar = assembler::class_from_string(R"(
     (class (public) "LBar;" extends "LFoo;" implements ("Ljava/io/Serializable;" "LB;")
       (method (public) "LBar;.two:(Ljava/lang/String;)I"
         (
@@ -929,12 +929,12 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
   EXPECT_EQ(bar->get_interfaces()->at(0)->str(), "Ljava/io/Serializable;");
   EXPECT_EQ(bar->get_interfaces()->at(1), b->get_type());
   EXPECT_EQ(bar->get_vmethods().size(), 1);
-  auto bar_two = *bar->get_vmethods().begin();
+  auto* bar_two = *bar->get_vmethods().begin();
   EXPECT_EQ(bar_two->str(), "two");
 }
 
 TEST_F(IRAssemblerTest, assembleInterfaceWithClinit) {
-  auto iface = assembler::class_from_string(R"(
+  auto* iface = assembler::class_from_string(R"(
     (interface (public) "LIface;"
       (field "LIface;.one:I")
       (field "LIface;.two:Ljava/lang/Class;")
@@ -954,7 +954,7 @@ TEST_F(IRAssemblerTest, assembleInterfaceWithClinit) {
   EXPECT_TRUE(is_public(iface));
   const auto& methods = iface->get_all_methods();
   EXPECT_EQ(methods.size(), 1);
-  auto clinit = methods.at(0);
+  auto* clinit = methods.at(0);
   EXPECT_EQ(clinit, iface->get_clinit());
   EXPECT_EQ(clinit->get_access(),
             DexAccessFlags::ACC_STATIC | DexAccessFlags::ACC_CONSTRUCTOR);
@@ -1003,7 +1003,7 @@ TEST_F(IRAssemblerTest, fillArrayPayloads) {
   EXPECT_EQ(insns.size(), 4);
 
   {
-    auto data = insns.at(0)->get_data();
+    auto* data = insns.at(0)->get_data();
     auto values = get_fill_array_data_payload<uint8_t>(data);
     EXPECT_EQ(values.size(), 3);
     EXPECT_EQ(values.at(0), 0x0);
@@ -1011,7 +1011,7 @@ TEST_F(IRAssemblerTest, fillArrayPayloads) {
     EXPECT_EQ(values.at(2), 0x1);
   }
   {
-    auto data = insns.at(1)->get_data();
+    auto* data = insns.at(1)->get_data();
     auto values = get_fill_array_data_payload<uint16_t>(data);
     EXPECT_EQ(values.size(), 3);
     EXPECT_EQ(values.at(0), 0x61);
@@ -1019,7 +1019,7 @@ TEST_F(IRAssemblerTest, fillArrayPayloads) {
     EXPECT_EQ(values.at(2), 0x63);
   }
   {
-    auto data = insns.at(2)->get_data();
+    auto* data = insns.at(2)->get_data();
     auto values = get_fill_array_data_payload<uint32_t>(data);
     EXPECT_EQ(values.size(), 3);
     EXPECT_EQ(values.at(0), 0x3e7);
@@ -1027,7 +1027,7 @@ TEST_F(IRAssemblerTest, fillArrayPayloads) {
     EXPECT_EQ(values.at(2), 0x40000000);
   }
   {
-    auto data = insns.at(3)->get_data();
+    auto* data = insns.at(3)->get_data();
     auto values = get_fill_array_data_payload<uint64_t>(data);
     EXPECT_EQ(values.size(), 3);
     EXPECT_EQ(values.at(0), 0x3b9aca00);

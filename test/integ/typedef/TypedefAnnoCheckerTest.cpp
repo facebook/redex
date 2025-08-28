@@ -28,12 +28,12 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
     for (auto* cls : scope) {
       always_assert(cls);
       for (auto* m : cls->get_dmethods()) {
-        if (m && m->get_code()) {
+        if ((m != nullptr) && (m->get_code() != nullptr)) {
           m->get_code()->build_cfg();
         }
       }
       for (auto* m : cls->get_vmethods()) {
-        if (m && m->get_code()) {
+        if ((m != nullptr) && (m->get_code() != nullptr)) {
           m->get_code()->build_cfg();
         }
       }
@@ -631,10 +631,10 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElseZero) {
   type_inference::TypeInference inference(cfg);
   inference.run(method);
 
-  auto block = cfg.blocks().at(0);
+  auto* block = cfg.blocks().at(0);
   auto env = inference.get_entry_state_at(block);
   for (auto& mie : InstructionIterable(block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->opcode() == OPCODE_XOR_INT_LIT) {
       EXPECT_EQ(env.get_type(insn->src(0)),
                 type_inference::TypeDomain(IRType::ZERO));
@@ -1165,13 +1165,13 @@ TEST_F(TypedefAnnoCheckerTest, TestCompanionObjectGetter) {
                      "testCompanionObjectGetter:()Ljava/lang/String;")
                      ->as_def();
 
-  auto companion_class =
+  auto* companion_class =
       type_class(DexType::make_type("Lcom/facebook/redextest/"
                                     "TypedefAnnoCheckerKtTest$Companion;"));
   companion_class->set_deobfuscated_name(
       "Lcom/facebook/redextest/"
       "TypedefAnnoCheckerKtTest$Companion;");
-  auto enclosing_class =
+  auto* enclosing_class =
       type_class(DexType::make_type("Lcom/facebook/redextest/"
                                     "TypedefAnnoCheckerKtTest;"));
   enclosing_class->set_deobfuscated_name(
@@ -1305,7 +1305,7 @@ TEST_F(TypedefAnnoCheckerTest, testSGet) {
                      "TypedefAnnoCheckerTest;.testSGet:()I")
                      ->as_def();
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto method_override_graph = mog::build_graph(scope);
 
@@ -1323,7 +1323,7 @@ TEST_F(TypedefAnnoCheckerTest, TestAccessGet) {
                      "TypedefAnnoCheckerTest$1;.override_method:()V")
                      ->as_def();
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto method_override_graph = mog::build_graph(scope);
 
@@ -1347,7 +1347,7 @@ TEST_F(TypedefAnnoCheckerTest, TestAccessSet) {
                      "TypedefAnnoCheckerTest$2;.override_method:()V")
                      ->as_def();
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto method_override_graph = mog::build_graph(scope);
 
@@ -1377,7 +1377,7 @@ TEST_F(TypedefAnnoCheckerTest, TestSyntheticValField) {
                      "TypedefAnnoCheckerTest$3;.override_method:()V")
                      ->as_def();
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto method_override_graph = mog::build_graph(scope);
 
@@ -1399,7 +1399,7 @@ TEST_F(TypedefAnnoCheckerTest, TestNullString) {
           "TypedefAnnoCheckerTest;.testNullString:()Ljava/lang/String;")
           ->as_def();
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto method_override_graph = mog::build_graph(scope);
 

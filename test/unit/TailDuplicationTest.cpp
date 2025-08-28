@@ -81,7 +81,7 @@ size_t make_hot_tails_unique(DexMethod* method, bool shrink = false) {
 }
 
 TEST_F(TailDuplicationTest, nothing) {
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:()V"
       (
         (return-void)
@@ -101,7 +101,7 @@ TEST_F(TailDuplicationTest, nothing) {
 }
 
 TEST_F(TailDuplicationTest, basic) {
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:(I)I"
       (
         (load-param v0)
@@ -151,7 +151,7 @@ TEST_F(TailDuplicationTest, basic) {
 TEST_F(TailDuplicationTest, basic_shrink_undo_hot_hot) {
   // When there is nothing to specialize, shrinking will effectively undo the
   // duplication.
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:(I)I"
       (
         (load-param v0)
@@ -202,7 +202,7 @@ TEST_F(TailDuplicationTest, basic_shrink_undo_hot_hot) {
 TEST_F(TailDuplicationTest, basic_shrink_undo_hot_cold) {
   // When there is nothing to specialize, shrinking will effectively undo the
   // duplication.
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:(I)I"
       (
         (load-param v0)
@@ -253,7 +253,7 @@ TEST_F(TailDuplicationTest, basic_shrink_undo_hot_cold) {
 TEST_F(TailDuplicationTest, specialize) {
   // Specialization "survives" shrinking.
 
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:(I)I"
       (
         (load-param v0)
@@ -306,7 +306,7 @@ TEST_F(TailDuplicationTest, specialize2) {
   // Specialization "survives" shrinking, but can also lead to code size
   // increase.
 
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:(I)I"
       (
         (load-param v0)
@@ -364,7 +364,7 @@ TEST_F(TailDuplicationTest, specialize2) {
 TEST_F(TailDuplicationTest, hot_only_rewrite_cold_info) {
   // We can even rewrite the source block hotness of the remaining block to be
   // cold, as we duplicated all the hot instances.
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:(I)I"
       (
         (load-param v0)
@@ -432,7 +432,7 @@ TEST_F(TailDuplicationTest, hot_only_missing_cold_info) {
   // Without source blocks in all pred blocks, we cannot properly rewrite the
   // source block hotness of the remaining block.
 
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:(I)I"
       (
         (load-param v0)
@@ -493,7 +493,7 @@ TEST_F(TailDuplicationTest, hot_only_missing_cold_info) {
 TEST_F(TailDuplicationTest, loop) {
   // Don't duplicate the loop header (or any block with back-edges).
 
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:()I"
       (
         (.src_block "LTail;.duplication:(I)V" 1 (1.0 1.0))
@@ -542,7 +542,7 @@ TEST_F(TailDuplicationTest, loop) {
 
 TEST_F(TailDuplicationTest, no_explosion) {
   // Only duplicate a single hot path.
-  auto method = assembler::method_from_string(std::string("") + R"(
+  auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) "LTail;.duplication:(I)I"
       (
         (load-param v0)

@@ -80,11 +80,11 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
 
     UnorderedSet<DexField*> final_fields;
     for (auto& mie : InstructionIterable(code.cfg())) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (opcode::is_an_sput(insn->opcode())) {
-        auto field = insn->get_field();
-        auto resolved_field = resolve_field(field, FieldSearch::Static);
-        if (!resolved_field || !is_final(resolved_field)) {
+        auto* field = insn->get_field();
+        auto* resolved_field = resolve_field(field, FieldSearch::Static);
+        if ((resolved_field == nullptr) || !is_final(resolved_field)) {
           continue;
         }
         always_assert(field->get_class() == method->get_class());
@@ -94,7 +94,7 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
       }
     }
     affected_final_fields.fetch_add(final_fields.size());
-    auto outlined_clinit =
+    auto* outlined_clinit =
         DexMethod::make_method(method->get_class(),
                                DexString::make_string("clinit$outlined"),
                                method->get_proto())
@@ -108,9 +108,9 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
     outlined_clinit->set_deobfuscated_name(show_deobfuscated(outlined_clinit));
 
     method->set_code(std::make_unique<IRCode>());
-    auto new_code = method->get_code();
-    auto sb = source_blocks::get_first_source_block_of_method(outlined_clinit);
-    if (sb) {
+    auto* new_code = method->get_code();
+    auto* sb = source_blocks::get_first_source_block_of_method(outlined_clinit);
+    if (sb != nullptr) {
       auto new_sb = source_blocks::clone_as_synthetic(sb);
       new_code->push_back(std::move(new_sb));
     }

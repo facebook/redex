@@ -24,7 +24,7 @@ using ::testing::AnyOf;
 using ::testing::Eq;
 
 TEST_F(ComposeUIKotlinStatsTest, test) {
-  auto klr = new PrintKotlinStats();
+  auto* klr = new PrintKotlinStats();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
 

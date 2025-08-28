@@ -65,7 +65,7 @@ class TinyPRNG {
     constexpr auto state_size = sizeof(m_next_rand);
     char state[state_size] = {};
     std::string::size_type idx = 0;
-    for (auto& e : randSeed) {
+    for (const auto& e : randSeed) {
       state[idx % state_size] ^= e;
       idx++;
     }

@@ -86,8 +86,8 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
     }
 
     case OPCODE_SPUT_OBJECT: {
-      auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-      if (!field) {
+      auto* field = resolve_field(insn->get_field(), FieldSearch::Static);
+      if (field == nullptr) {
         default_case();
         break;
       }
@@ -100,8 +100,8 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
     }
 
     case OPCODE_INVOKE_DIRECT: {
-      auto invoked = resolve_method(insn->get_method(), MethodSearch::Direct);
-      if (!invoked) {
+      auto* invoked = resolve_method(insn->get_method(), MethodSearch::Direct);
+      if (invoked == nullptr) {
         default_case();
         break;
       }
@@ -148,7 +148,7 @@ OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
     const DexClass* enum_cls,
     const UnorderedMap<const DexMethod*, uint32_t>& ctor_to_arg_ordinal)
     : m_cls(enum_cls) {
-  auto clinit = m_cls->get_clinit();
+  auto* clinit = m_cls->get_clinit();
   always_assert(clinit && clinit->get_code());
   auto& clinit_cfg = clinit->get_code()->cfg();
 

@@ -59,7 +59,7 @@ struct MethodReferences {
     if (unknown_invoke_virtual_targets) {
       refs->unknown_invoke_virtual_targets = true;
     }
-    if (invoke_super_target) {
+    if (invoke_super_target != nullptr) {
       refs->invoke_super_targets.insert(invoke_super_target);
     }
   }
@@ -83,7 +83,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     mrefs_gatherer->default_gather_mie(mie, refs, default_gather_methods);
     if (!default_gather_methods) {
       if (insns_methods_cache->empty()) {
-        auto* method = mrefs_gatherer->get_method();
+        const auto* method = mrefs_gatherer->get_method();
         *insns_methods_cache = gather_methods_on_insns(method);
       }
       insns_methods_cache->at(mie.insn).add_to(refs);
@@ -143,9 +143,9 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
       const auto& types = set_domain.get_types();
       if (!types.contains(type::java_lang_Throwable())) {
         std::vector<std::pair<DexClass*, DexMethod*>> analysis_resolved_callees;
-        for (auto* type : types) {
-          auto analysis_cls = type_class(type);
-          if (!analysis_cls) {
+        for (const auto* type : types) {
+          auto* analysis_cls = type_class(type);
+          if (analysis_cls == nullptr) {
             break;
           }
           always_assert(!is_interface(analysis_cls));
@@ -153,10 +153,10 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
             refs.unknown_invoke_virtual_targets = true;
           }
           auto method_search = get_method_search(analysis_cls, invoke);
-          auto analysis_resolved_callee =
+          auto* analysis_resolved_callee =
               resolve_method(analysis_cls, callee_ref->get_name(),
                              callee_ref->get_proto(), method_search);
-          if (!analysis_resolved_callee) {
+          if (analysis_resolved_callee == nullptr) {
             break;
           }
           analysis_resolved_callees.emplace_back(analysis_cls,
@@ -187,7 +187,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     // Can we leverage best known approximation?
     auto analysis_cls = domain.get_dex_cls();
     DexMethod* analysis_resolved_callee = nullptr;
-    auto base_type = callee_ref->get_class();
+    auto* base_type = callee_ref->get_class();
     if (analysis_cls) {
       // If the analysis_cls is actually more precise than static_base_type,
       // then we can use that. However, sometimes it falls back to a too generic
@@ -201,7 +201,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
           resolve_method(*analysis_cls, callee_ref->get_name(),
                          callee_ref->get_proto(), method_search);
       TRACE(TRMU, 5, "Analysis type %s", SHOW(*analysis_cls));
-      if (analysis_resolved_callee) {
+      if (analysis_resolved_callee != nullptr) {
         TRACE(TRMU, 5, "Push analysis resolved callee %s",
               SHOW(analysis_resolved_callee));
         resolved_callee = analysis_resolved_callee;
@@ -216,7 +216,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
       }
     }
 
-    if (!resolved_callee) {
+    if (resolved_callee == nullptr) {
       // Typically clone() on an array, or other obscure external references
       TRACE(TRMU, 2, "Unresolved callee at %s without analysis cls",
             SHOW(invoke));
@@ -228,7 +228,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     always_assert(!refs.base_invoke_virtual_target_if_class_instantiable);
     refs.base_invoke_virtual_target_if_class_instantiable =
         std::make_pair(base_type, resolved_callee);
-    auto base_cls = type_class(base_type);
+    auto* base_cls = type_class(base_type);
     if (base_cls == nullptr || base_cls->is_external() ||
         (!is_abstract(resolved_callee) && resolved_callee->is_external())) {
       refs.unknown_invoke_virtual_targets = true;
@@ -276,7 +276,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
           always_assert(method_ref);
           refs.methods.push_back(method_ref);
           if (opcode::is_invoke_super(op)) {
-            if (resolved_callee && !resolved_callee->is_external()) {
+            if ((resolved_callee != nullptr) &&
+                !resolved_callee->is_external()) {
               always_assert(resolved_callee->is_virtual());
               always_assert(refs.invoke_super_target == nullptr);
               if (is_abstract(resolved_callee)) {
@@ -289,7 +290,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
             }
           } else if (opcode::is_invoke_virtual(op) ||
                      opcode::is_invoke_interface(op)) {
-            if (resolved_callee && !resolved_callee->is_external()) {
+            if ((resolved_callee != nullptr) &&
+                !resolved_callee->is_external()) {
               always_assert(resolved_callee->is_virtual());
               always_assert(!is_abstract(resolved_callee));
               refs.exact_invoke_virtual_targets_if_class_instantiable.push_back(
@@ -429,7 +431,7 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
     bool cfg_gathering_check_returning,
     bool remove_no_argument_constructors) {
   // Fetch analysis result
-  auto analysis = pm.template get_preserved_analysis<GlobalTypeAnalysisPass>();
+  auto* analysis = pm.template get_preserved_analysis<GlobalTypeAnalysisPass>();
   always_assert(analysis);
   auto gta = analysis->get_result();
   always_assert(gta);

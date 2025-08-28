@@ -22,7 +22,7 @@ void IntrinsifyNullChecksPass::create_null_check_class(
     DexStoresVector* stores) {
   std::string name = "Lredex/$NullCheck;";
   DexType* type = DexType::get_type(name);
-  while (type) {
+  while (type != nullptr) {
     name.insert(name.size() - 1, "$u");
     type = DexType::get_type(name);
   }
@@ -36,7 +36,7 @@ void IntrinsifyNullChecksPass::create_null_check_class(
   cls->rstate.set_name_used();
   cls->rstate.set_dont_rename();
   // Crate method for null check.
-  auto meth_name = DexString::make_string("null_check");
+  const auto* meth_name = DexString::make_string("null_check");
   DexProto* proto = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::java_lang_Object()}));
   DexMethod* method = DexMethod::make_method(cls->get_type(), meth_name, proto)
@@ -52,13 +52,13 @@ void IntrinsifyNullChecksPass::create_null_check_class(
   method->set_code(std::make_unique<IRCode>(method, 0));
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
-  auto entry_block = cfg.entry_block();
-  auto throw_block = cfg.create_block();
+  auto* entry_block = cfg.entry_block();
+  auto* throw_block = cfg.create_block();
   throw_block->push_back({dasm(OPCODE_NEW_INSTANCE, m_NPE_type, {}),
                           dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}),
                           dasm(OPCODE_INVOKE_DIRECT, m_NPE_ref, {0_v}),
                           dasm(OPCODE_THROW, {0_v})});
-  auto return_block = cfg.create_block();
+  auto* return_block = cfg.create_block();
   return_block->push_back(dasm(OPCODE_RETURN_VOID));
   cfg.create_branch(entry_block, dasm(OPCODE_IF_EQZ, {0_v}), return_block,
                     throw_block);
@@ -109,11 +109,11 @@ IntrinsifyNullChecksPass::Stats IntrinsifyNullChecksPass::convert_getClass(
   auto& cfg = code->cfg();
   for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (!opcode::is_invoke_virtual(insn->opcode())) {
         continue;
       }
-      auto mref = insn->get_method();
+      auto* mref = insn->get_method();
       if (mref != m_getClass_ref) {
         continue;
       }

@@ -46,12 +46,12 @@ DexMethod* get_or_create_clinit(DexClass* cls, bool need_cfg) {
 
   DexMethod* clinit = cls->get_clinit();
 
-  if (clinit) {
+  if (clinit != nullptr) {
     return clinit;
   }
 
-  auto clinit_name = DexString::make_string("<clinit>");
-  auto clinit_proto =
+  const auto* clinit_name = DexString::make_string("<clinit>");
+  auto* clinit_proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
 
   // clinit does not exist, create one
@@ -74,7 +74,7 @@ DexMethod* get_or_create_clinit(DexClass* cls, bool need_cfg) {
 bool has_hierarchy_in_scope(DexClass* cls) {
   DexType* super = nullptr;
   const DexClass* super_cls = cls;
-  while (super_cls) {
+  while (super_cls != nullptr) {
     super = super_cls->get_super_class();
     super_cls = type_class_internal(super);
   }

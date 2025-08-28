@@ -72,7 +72,7 @@ TEST(ManifestClassesTest, fully_qualify_class_names) {
   run_with_manifest("test_manifest_exported_path", [](ApkResources* resources) {
     const auto& class_info = resources->get_manifest_class_info();
     std::set<std::string> class_names;
-    for (auto& component : class_info.component_tags) {
+    for (const auto& component : class_info.component_tags) {
       class_names.emplace(component.classname);
     }
     EXPECT_THAT(class_names,

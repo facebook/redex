@@ -38,7 +38,7 @@ class ControlFlowTest : public RedexTest {
 TEST_F(ControlFlowTest, findExitBlocks) {
   {
     ControlFlowGraph cfg;
-    auto b0 = cfg.create_block();
+    auto* b0 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.calculate_exit_block();
     EXPECT_EQ(cfg.real_exit_blocks(/* include_infinite_loops */ true),
@@ -48,8 +48,8 @@ TEST_F(ControlFlowTest, findExitBlocks) {
   }
   {
     ControlFlowGraph cfg;
-    auto b0 = cfg.create_block();
-    auto b1 = cfg.create_block();
+    auto* b0 = cfg.create_block();
+    auto* b1 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.calculate_exit_block();
@@ -60,8 +60,8 @@ TEST_F(ControlFlowTest, findExitBlocks) {
   }
   {
     ControlFlowGraph cfg;
-    auto b0 = cfg.create_block();
-    auto b1 = cfg.create_block();
+    auto* b0 = cfg.create_block();
+    auto* b1 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b0, EDGE_GOTO);
@@ -78,9 +78,9 @@ TEST_F(ControlFlowTest, findExitBlocks) {
     // | 0 | --> | 1 | --> | 2 |
     // +---+     +---+     +---+
     ControlFlowGraph cfg;
-    auto b0 = cfg.create_block();
-    auto b1 = cfg.create_block();
-    auto b2 = cfg.create_block();
+    auto* b0 = cfg.create_block();
+    auto* b1 = cfg.create_block();
+    auto* b2 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b0, EDGE_GOTO);
@@ -98,9 +98,9 @@ TEST_F(ControlFlowTest, findExitBlocks) {
     // | 0 | --> | 1 | --> | 2 |
     // +---+     +---+     +---+
     ControlFlowGraph cfg;
-    auto b0 = cfg.create_block();
-    auto b1 = cfg.create_block();
-    auto b2 = cfg.create_block();
+    auto* b0 = cfg.create_block();
+    auto* b1 = cfg.create_block();
+    auto* b2 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b2, EDGE_GOTO);
@@ -124,10 +124,10 @@ TEST_F(ControlFlowTest, findExitBlocks) {
     // | 3 |
     // +---+
     ControlFlowGraph cfg;
-    auto b0 = cfg.create_block();
-    auto b1 = cfg.create_block();
-    auto b2 = cfg.create_block();
-    auto b3 = cfg.create_block();
+    auto* b0 = cfg.create_block();
+    auto* b1 = cfg.create_block();
+    auto* b2 = cfg.create_block();
+    auto* b3 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b2, EDGE_GOTO);
@@ -148,10 +148,10 @@ TEST_F(ControlFlowTest, findExitBlocks) {
     //   ^                             |
     //   +-----------------------------+
     ControlFlowGraph cfg;
-    auto b0 = cfg.create_block();
-    auto b1 = cfg.create_block();
-    auto b2 = cfg.create_block();
-    auto b3 = cfg.create_block();
+    auto* b0 = cfg.create_block();
+    auto* b1 = cfg.create_block();
+    auto* b2 = cfg.create_block();
+    auto* b3 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b2, EDGE_GOTO);
@@ -177,11 +177,11 @@ TEST_F(ControlFlowTest, findExitBlocks) {
     //  +> | 3 | --> | 4 |
     //     +---+     +---+
     ControlFlowGraph cfg;
-    auto b0 = cfg.create_block();
-    auto b1 = cfg.create_block();
-    auto b2 = cfg.create_block();
-    auto b3 = cfg.create_block();
-    auto b4 = cfg.create_block();
+    auto* b0 = cfg.create_block();
+    auto* b1 = cfg.create_block();
+    auto* b2 = cfg.create_block();
+    auto* b3 = cfg.create_block();
+    auto* b4 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b2, EDGE_GOTO);
@@ -208,12 +208,12 @@ TEST_F(ControlFlowTest, findExitBlocks) {
     //  +> | 3 | --> | 4 | ----------------+
     //     +---+     +---+
     ControlFlowGraph cfg;
-    auto b0 = cfg.create_block();
-    auto b1 = cfg.create_block();
-    auto b2 = cfg.create_block();
-    auto b3 = cfg.create_block();
-    auto b4 = cfg.create_block();
-    auto b5 = cfg.create_block();
+    auto* b0 = cfg.create_block();
+    auto* b1 = cfg.create_block();
+    auto* b2 = cfg.create_block();
+    auto* b3 = cfg.create_block();
+    auto* b4 = cfg.create_block();
+    auto* b5 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b2, EDGE_GOTO);
@@ -271,7 +271,7 @@ TEST_F(ControlFlowTest, iterate2) {
   auto iterable = cfg::InstructionIterable(code->cfg());
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     EXPECT_FALSE(it.is_end());
-    auto insn = it->insn;
+    auto* insn = it->insn;
     auto op = insn->opcode();
     if (op == OPCODE_CONST) {
       EXPECT_EQ(OPCODE_IF_GEZ, std::next(it)->insn->opcode());
@@ -331,7 +331,7 @@ TEST_F(ControlFlowTest, nullForwardIterators) {
   code->build_cfg();
   auto& cfg = code->cfg();
   for (int i = 0; i < 100; i++) {
-    auto a = new cfg::InstructionIterable(cfg);
+    auto* a = new cfg::InstructionIterable(cfg);
     EXPECT_TRUE(a->end() == cfg::InstructionIterable(cfg).end());
     delete a;
   }
@@ -340,14 +340,14 @@ TEST_F(ControlFlowTest, nullForwardIterators) {
   IRList::iterator b;
   EXPECT_EQ(a, b);
   for (int i = 0; i < 100; i++) {
-    auto iterable = new cfg::InstructionIterable(cfg);
+    auto* iterable = new cfg::InstructionIterable(cfg);
     EXPECT_EQ(a, iterable->end().unwrap());
     EXPECT_EQ(b, iterable->end().unwrap());
     delete iterable;
   }
 
   for (int i = 0; i < 100; i++) {
-    auto iterator = new ir_list::InstructionIterator();
+    auto* iterator = new ir_list::InstructionIterator();
     EXPECT_EQ(ir_list::InstructionIterator(), *iterator);
     delete iterator;
   }
@@ -375,7 +375,7 @@ TEST_F(ControlFlowTest, copyConstructibleIterator) {
 }
 
 TEST_F(ControlFlowTest, buildAndLinearizeNoChange) {
-  auto str = R"(
+  const auto* str = R"(
     (
       (const v0 0)
       (const v1 1)
@@ -393,7 +393,7 @@ TEST_F(ControlFlowTest, buildAndLinearizeNoChange) {
 }
 
 TEST_F(ControlFlowTest, infinite) {
-  auto str = R"(
+  const auto* str = R"(
     (
       (:lbl)
       (goto :lbl)
@@ -411,7 +411,7 @@ TEST_F(ControlFlowTest, infinite) {
 }
 
 TEST_F(ControlFlowTest, infinite2) {
-  auto str = R"(
+  const auto* str = R"(
     (
       (:lbl)
       (const v0 0)
@@ -1228,7 +1228,7 @@ TEST_F(ControlFlowTest, simple_push_back_it) {
 
   std::deque<IRInstruction*> to_insert;
   for (int i = 0; i < 5; i++) {
-    auto insn = new IRInstruction(OPCODE_CONST);
+    auto* insn = new IRInstruction(OPCODE_CONST);
     insn->set_literal(i);
     insn->set_dest(cfg.allocate_temp());
     to_insert.push_back(insn);
@@ -1262,7 +1262,7 @@ TEST_F(ControlFlowTest, simple_push_front_it) {
 
   std::deque<IRInstruction*> to_insert;
   for (int i = 0; i < 5; i++) {
-    auto insn = new IRInstruction(OPCODE_CONST);
+    auto* insn = new IRInstruction(OPCODE_CONST);
     insn->set_literal(i);
     insn->set_dest(cfg.allocate_temp());
     to_insert.push_back(insn);
@@ -1298,9 +1298,9 @@ TEST_F(ControlFlowTest, insertion) {
   add.set_literal(1);
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_a_const(insn->opcode())) {
-      auto new_insn = new IRInstruction(add);
+      auto* new_insn = new IRInstruction(add);
       new_insn->set_src(0, insn->dest());
       new_insn->set_dest(insn->dest());
       cfg.insert_after(it, new_insn);
@@ -1351,9 +1351,9 @@ TEST_F(ControlFlowTest, insertion_it) {
   add.set_literal(1);
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_a_const(insn->opcode())) {
-      auto new_insn = new IRInstruction(add);
+      auto* new_insn = new IRInstruction(add);
       new_insn->set_src(0, insn->dest());
       new_insn->set_dest(insn->dest());
 
@@ -1411,16 +1411,16 @@ TEST_F(ControlFlowTest, insertion_it_var) {
   add.set_literal(1);
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_a_const(insn->opcode())) {
-      auto new_insn = new IRInstruction(add);
+      auto* new_insn = new IRInstruction(add);
       new_insn->set_src(0, insn->dest());
       new_insn->set_dest(insn->dest());
 
       std::vector<cfg::ControlFlowGraph::InsertVariant> to_add;
       to_add.emplace_back(new IRInstruction(*new_insn));
 
-      auto* mref = DexString::make_string("LFoo;.bar:()V");
+      const auto* mref = DexString::make_string("LFoo;.bar:()V");
       to_add.emplace_back(std::make_unique<SourceBlock>(mref, 0));
       to_add.emplace_back(new IRInstruction(*new_insn));
 
@@ -1477,9 +1477,9 @@ TEST_F(ControlFlowTest, insertion_after_may_throw) {
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_an_aput(insn->opcode())) {
-      auto new_insn = new IRInstruction(*insn);
+      auto* new_insn = new IRInstruction(*insn);
       cfg.insert_after(it, new_insn);
       break;
     }
@@ -1526,10 +1526,10 @@ TEST_F(ControlFlowTest, insertion_after_may_throw_with_move_result) {
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_an_aput(insn->opcode())) {
       std::vector<IRInstruction*> new_insns;
-      auto new_insn = new IRInstruction(OPCODE_DIV_INT);
+      auto* new_insn = new IRInstruction(OPCODE_DIV_INT);
       new_insn->set_srcs_size(2);
       new_insn->set_src(0, 2);
       new_insn->set_src(1, 2);
@@ -1591,10 +1591,10 @@ TEST_F(ControlFlowTest, insertion_with_source_blocks) {
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_an_aput(insn->opcode())) {
       std::vector<IRInstruction*> new_insns;
-      auto new_insn = new IRInstruction(OPCODE_DIV_INT);
+      auto* new_insn = new IRInstruction(OPCODE_DIV_INT);
       new_insn->set_srcs_size(2);
       new_insn->set_src(0, 2);
       new_insn->set_src(1, 2);
@@ -1609,7 +1609,7 @@ TEST_F(ControlFlowTest, insertion_with_source_blocks) {
   code->clear_cfg();
   code->build_cfg();
   auto& cfg2 = code->cfg();
-  for (auto block : cfg2.blocks()) {
+  for (auto* block : cfg2.blocks()) {
     always_assert(source_blocks::has_source_blocks(block));
   }
 }
@@ -1644,10 +1644,10 @@ TEST_F(ControlFlowTest, insertion_with_source_blocks_middle) {
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (insn->opcode() == OPCODE_ADD_INT) {
       std::vector<IRInstruction*> new_insns;
-      auto new_insn = new IRInstruction(OPCODE_DIV_INT);
+      auto* new_insn = new IRInstruction(OPCODE_DIV_INT);
       new_insn->set_srcs_size(2);
       new_insn->set_src(0, 2);
       new_insn->set_src(1, 2);
@@ -1662,7 +1662,7 @@ TEST_F(ControlFlowTest, insertion_with_source_blocks_middle) {
   code->clear_cfg();
   code->build_cfg();
   auto& cfg2 = code->cfg();
-  for (auto block : cfg2.blocks()) {
+  for (auto* block : cfg2.blocks()) {
     always_assert(source_blocks::has_source_blocks(block));
   }
 }
@@ -1689,7 +1689,7 @@ TEST_F(ControlFlowTest, add_sget) {
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_a_conditional_branch(insn->opcode())) {
       IRInstruction* sget = new IRInstruction(OPCODE_SGET);
       sget->set_field(DexField::make_field("LFoo;.field:I"));
@@ -1744,9 +1744,9 @@ TEST_F(ControlFlowTest, add_return) {
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_a_conditional_branch(insn->opcode())) {
-      auto ret = new IRInstruction(OPCODE_RETURN_VOID);
+      auto* ret = new IRInstruction(OPCODE_RETURN_VOID);
       cfg.insert_before(it, ret);
       break;
     }
@@ -1792,9 +1792,9 @@ TEST_F(ControlFlowTest, add_throw) {
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (opcode::is_an_sget(insn->opcode())) {
-      auto thr = new IRInstruction(OPCODE_THROW);
+      auto* thr = new IRInstruction(OPCODE_THROW);
       cfg.insert_before(it, thr);
       break;
     }
@@ -1825,27 +1825,27 @@ TEST_F(ControlFlowTest, add_branch) {
   )");
   code->build_cfg();
   auto& cfg = code->cfg();
-  auto entry_block = cfg.entry_block();
+  auto* entry_block = cfg.entry_block();
   auto load_param =
       entry_block->to_cfg_instruction_iterator(*entry_block->begin());
   cfg.split_block(load_param);
   IRInstruction ret(OPCODE_RETURN);
   ret.set_src(0, 0);
-  auto fls = cfg.create_block();
+  auto* fls = cfg.create_block();
   {
-    auto load_zero = new IRInstruction(OPCODE_CONST);
+    auto* load_zero = new IRInstruction(OPCODE_CONST);
     load_zero->set_dest(0);
     load_zero->set_literal(0);
     fls->push_back({load_zero, new IRInstruction(ret)});
   }
-  auto tru = cfg.create_block();
+  auto* tru = cfg.create_block();
   {
-    auto load_one = new IRInstruction(OPCODE_CONST);
+    auto* load_one = new IRInstruction(OPCODE_CONST);
     load_one->set_dest(0);
     load_one->set_literal(1);
     tru->push_back({load_one, new IRInstruction(ret)});
   }
-  auto if_eqz = new IRInstruction(OPCODE_IF_EQZ);
+  auto* if_eqz = new IRInstruction(OPCODE_IF_EQZ);
   if_eqz->set_src(0, 0);
   cfg.create_branch(entry_block, if_eqz, fls, tru);
   cfg.recompute_registers_size();
@@ -1880,7 +1880,7 @@ TEST_F(ControlFlowTest, test_first_non_param_loading_insn) {
   )");
   code->build_cfg();
   auto& cfg = code->cfg();
-  auto entry_block = cfg.entry_block();
+  auto* entry_block = cfg.entry_block();
 
   auto it = entry_block->get_first_non_param_loading_insn();
   auto non_param = entry_block->to_cfg_instruction_iterator(it);
@@ -1897,12 +1897,12 @@ TEST_F(ControlFlowTest, test_first_non_param_loading_insn) {
 }
 
 Block* create_ret_const_block(ControlFlowGraph& cfg, uint64_t lit) {
-  auto b = cfg.create_block();
-  auto c = new IRInstruction(OPCODE_CONST);
+  auto* b = cfg.create_block();
+  auto* c = new IRInstruction(OPCODE_CONST);
   auto reg = cfg.allocate_temp();
   c->set_dest(reg);
   c->set_literal(lit);
-  auto r = new IRInstruction(OPCODE_RETURN);
+  auto* r = new IRInstruction(OPCODE_RETURN);
   r->set_src(0, reg);
   b->push_back({c, r});
   return b;
@@ -1927,12 +1927,12 @@ TEST_F(ControlFlowTest, add_branch_null_goto_block) {
   code->build_cfg();
   auto& cfg = code->cfg();
 
-  auto new_block = create_ret_const_block(cfg, 30);
+  auto* new_block = create_ret_const_block(cfg, 30);
 
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     if (it->insn->opcode() == OPCODE_CONST && it->insn->get_literal() == 10) {
-      auto br = new IRInstruction(OPCODE_IF_LEZ);
+      auto* br = new IRInstruction(OPCODE_IF_LEZ);
       br->set_src(0, 0);
       cfg.create_branch(it.block(), br, nullptr, new_block);
       break;
@@ -1982,13 +1982,13 @@ TEST_F(ControlFlowTest, add_branch_redirect_goto_block) {
   code->build_cfg();
   auto& cfg = code->cfg();
 
-  auto thirty = create_ret_const_block(cfg, 30);
-  auto forty = create_ret_const_block(cfg, 40);
+  auto* thirty = create_ret_const_block(cfg, 30);
+  auto* forty = create_ret_const_block(cfg, 40);
 
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     if (it->insn->opcode() == OPCODE_CONST && it->insn->get_literal() == 10) {
-      auto br = new IRInstruction(OPCODE_IF_LEZ);
+      auto* br = new IRInstruction(OPCODE_IF_LEZ);
       br->set_src(0, 0);
       cfg.create_branch(it.block(), br, thirty, forty);
       break;
@@ -2029,15 +2029,15 @@ TEST_F(ControlFlowTest, add_switch) {
   code->build_cfg();
   auto& cfg = code->cfg();
 
-  auto ten = create_ret_const_block(cfg, 10);
-  auto twenty = create_ret_const_block(cfg, 20);
-  auto thirty = create_ret_const_block(cfg, 30);
-  auto forty = create_ret_const_block(cfg, 40);
+  auto* ten = create_ret_const_block(cfg, 10);
+  auto* twenty = create_ret_const_block(cfg, 20);
+  auto* thirty = create_ret_const_block(cfg, 30);
+  auto* forty = create_ret_const_block(cfg, 40);
 
-  auto entry = cfg.entry_block();
-  auto exit_block =
+  auto* entry = cfg.entry_block();
+  auto* exit_block =
       cfg.split_block(entry->to_cfg_instruction_iterator(*entry->begin()));
-  auto sw = new IRInstruction(OPCODE_SWITCH);
+  auto* sw = new IRInstruction(OPCODE_SWITCH);
   sw->set_src(0, 0);
   cfg.create_branch(cfg.entry_block(),
                     sw,
@@ -2085,10 +2085,10 @@ TEST_F(ControlFlowTest, replace_insn_basic) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     if (it->insn->opcode() == OPCODE_CONST) {
-      auto new_const = new IRInstruction(OPCODE_CONST);
+      auto* new_const = new IRInstruction(OPCODE_CONST);
       new_const->set_literal(1);
       new_const->set_dest(0);
-      auto new_const2 = new IRInstruction(OPCODE_CONST);
+      auto* new_const2 = new IRInstruction(OPCODE_CONST);
       new_const2->set_literal(2);
       new_const2->set_dest(0);
       cfg.replace_insns(it, {new_const, new_const2});
@@ -2130,9 +2130,9 @@ TEST_F(ControlFlowTest, replace_insn_may_throw) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     if (it->insn->opcode() == OPCODE_CONST) {
-      auto sget = new IRInstruction(OPCODE_SGET);
+      auto* sget = new IRInstruction(OPCODE_SGET);
       sget->set_field(DexField::make_field("LFoo;.b:I"));
-      auto move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      auto* move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
       move_res->set_dest(0);
       cfg.replace_insns(it, {sget, move_res});
       break;
@@ -2178,9 +2178,9 @@ TEST_F(ControlFlowTest, replace_insn_may_throw2) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     if (it->insn->opcode() == OPCODE_SPUT) {
-      auto sget = new IRInstruction(OPCODE_SGET);
+      auto* sget = new IRInstruction(OPCODE_SGET);
       sget->set_field(DexField::make_field("LFoo;.a:I"));
-      auto move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      auto* move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
       move_res->set_dest(0);
       cfg.replace_insns(it, {sget, move_res});
       break;
@@ -2225,13 +2225,13 @@ TEST_F(ControlFlowTest, replace_insn_may_throw3) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     if (it->insn->opcode() == OPCODE_SGET) {
-      auto sget = new IRInstruction(OPCODE_SGET);
+      auto* sget = new IRInstruction(OPCODE_SGET);
       sget->set_field(DexField::make_field("LFoo;.b:I"));
-      auto move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      auto* move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
       auto temp = cfg.allocate_temp();
       move_res->set_dest(temp);
 
-      auto sput = new IRInstruction(OPCODE_SPUT);
+      auto* sput = new IRInstruction(OPCODE_SPUT);
       sput->set_field(DexField::make_field("LFoo;.a:I"));
       sput->set_src(0, temp);
       cfg.replace_insns(it, {sget, move_res, sput});
@@ -2309,7 +2309,7 @@ TEST_F(ControlFlowTest, replace_if_with_return) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     if (opcode::is_a_conditional_branch(it->insn->opcode())) {
-      auto ret = new IRInstruction(OPCODE_RETURN);
+      auto* ret = new IRInstruction(OPCODE_RETURN);
       ret->set_src(0, 0);
       cfg.replace_insn(it, ret);
       break;
@@ -2727,11 +2727,11 @@ TEST_F(ControlFlowTest, non_cfg_case_keys) {
   code->build_cfg();
   auto& cfg = code->cfg();
   std::vector<int32_t> case_keys;
-  auto switch_block = cfg.entry_block();
+  auto* switch_block = cfg.entry_block();
   auto switch_insn = switch_block->get_first_insn();
   EXPECT_NE(switch_insn, switch_block->end());
   EXPECT_EQ(switch_insn->insn->opcode(), OPCODE_SWITCH);
-  for (auto edge : switch_block->succs()) {
+  for (auto* edge : switch_block->succs()) {
     if (edge->type() == cfg::EDGE_GOTO) {
       continue;
     }
@@ -2765,20 +2765,20 @@ TEST_F(ControlFlowTest, insert_block_if) {
   auto& cfg = code->cfg();
   EXPECT_EQ(cfg.num_blocks(), 3);
 
-  auto nb0 = cfg.create_block();
-  auto nb1 = cfg.create_block();
+  auto* nb0 = cfg.create_block();
+  auto* nb1 = cfg.create_block();
 
   // Now the cfg should be:
   // entry_block --(GOTO)--> goto_block
   //      |
   //      ----(BRANCH) --> branch_block
-  auto entry_block = cfg.entry_block();
+  auto* entry_block = cfg.entry_block();
   EXPECT_TRUE(entry_block->succs().size() == 2);
-  auto goto_block = entry_block->goes_to();
+  auto* goto_block = entry_block->goes_to();
   EXPECT_TRUE(goto_block);
-  auto branch_edge = cfg.get_succ_edge_of_type(entry_block, cfg::EDGE_BRANCH);
+  auto* branch_edge = cfg.get_succ_edge_of_type(entry_block, cfg::EDGE_BRANCH);
   EXPECT_TRUE(branch_edge);
-  auto branch_block = branch_edge->target();
+  auto* branch_block = branch_edge->target();
 
   cfg.insert_block(entry_block, goto_block, nb0);
   cfg.insert_block(entry_block, branch_block, nb1);
@@ -2793,7 +2793,7 @@ TEST_F(ControlFlowTest, insert_block_if) {
               entry_block->goes_to() == nb0);
   EXPECT_TRUE(nb0->goes_to() != nullptr && nb0->goes_to() == goto_block);
 
-  auto new_branch_edge =
+  auto* new_branch_edge =
       cfg.get_succ_edge_of_type(entry_block, cfg::EDGE_BRANCH);
   EXPECT_TRUE(new_branch_edge);
   EXPECT_TRUE(new_branch_edge->target() == nb1);
@@ -2827,18 +2827,18 @@ TEST_F(ControlFlowTest, insert_block_switch) {
   //    |   |   ----(BRANCH case_key 1) --> branch_block
   //    |   --------(BRANCH case_key 2) -------^  ^
   //    ------------(BRANCH case_key 3)-----------|
-  auto switch_block = cfg.entry_block();
-  auto goto_edge = cfg.get_succ_edge_of_type(switch_block, cfg::EDGE_GOTO);
+  auto* switch_block = cfg.entry_block();
+  auto* goto_edge = cfg.get_succ_edge_of_type(switch_block, cfg::EDGE_GOTO);
   EXPECT_TRUE(goto_edge);
   auto branch_edges =
       cfg.get_succ_edges_of_type(switch_block, cfg::EDGE_BRANCH);
   EXPECT_EQ(branch_edges.size(), 3);
-  auto branch_block = branch_edges[0]->target();
+  auto* branch_block = branch_edges[0]->target();
   EXPECT_TRUE(branch_block);
   EXPECT_TRUE(branch_edges[1]->target() == branch_block &&
               branch_edges[2]->target() == branch_block);
 
-  auto nb0 = cfg.create_block();
+  auto* nb0 = cfg.create_block();
   cfg.insert_block(switch_block, branch_block, nb0);
 
   // After insertion the cfg should be:

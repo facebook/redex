@@ -33,7 +33,7 @@ std::set<std::string> collect_all_attributes(const std::string& file_path) {
         // all using UTF-8 pools. This logic is not generally portable, as some
         // files (like AndroidManifest.xml) will have their string pool entries
         // encoded as UTF-16.
-        auto name_chars = parser.getAttributeName8(i, &len);
+        const auto* name_chars = parser.getAttributeName8(i, &len);
         if (name_chars != nullptr) {
           std::string name_str(name_chars);
           results.emplace(name_str);

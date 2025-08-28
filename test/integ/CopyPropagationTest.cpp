@@ -45,7 +45,7 @@ TEST_F(CopyPropagationTest, useSwitch) {
     }
   }
 
-  auto copy_prop = new CopyPropagationPass();
+  auto* copy_prop = new CopyPropagationPass();
   copy_prop->m_config.static_finals = true;
   std::vector<Pass*> passes = {copy_prop};
   run_passes(passes);

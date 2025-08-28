@@ -19,11 +19,11 @@ void unmark_keep(const Scope& scope,
   }
   UnorderedSet<const DexType*> superclasses;
   UnorderedSet<const DexType*> interface_list;
-  for (auto& cls_name : supercls_list) {
+  for (const auto& cls_name : supercls_list) {
     const DexType* supercls_type = DexType::get_type(cls_name);
-    if (supercls_type) {
+    if (supercls_type != nullptr) {
       DexClass* supercls = type_class(supercls_type);
-      if (supercls && is_interface(supercls)) {
+      if ((supercls != nullptr) && is_interface(supercls)) {
         interface_list.emplace(supercls_type);
       } else {
         superclasses.emplace(supercls_type);
@@ -36,7 +36,7 @@ void unmark_keep(const Scope& scope,
   for (const DexType* intf_type : UnorderedIterable(interface_list)) {
     for (const DexType* implementor : ts.get_implementors(intf_type)) {
       DexClass* implementor_cls = type_class(implementor);
-      if (implementor_cls) {
+      if (implementor_cls != nullptr) {
         implementor_cls->rstate.force_unset_allowshrinking();
       }
     }

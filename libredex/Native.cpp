@@ -90,7 +90,7 @@ void SoLibrary::populate_functions() {
       };
 
       DexMethodRef* m = DexMethod::get_method(get_compound());
-      if (m) {
+      if (m != nullptr) {
         DexMethod* decl = m->as_def();
         always_assert_log(decl,
                           "Attempting to bind non-concrete native method.");

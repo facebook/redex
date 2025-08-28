@@ -55,10 +55,10 @@ get_baseline_profiles(
           method_profiles.method_stats_for_baseline_config(interaction_id,
                                                            config_name);
       for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
-        if (!method_candidates.count(method_ref)) {
+        if (method_candidates.count(method_ref) == 0u) {
           continue;
         }
-        auto method = method_ref->as_def();
+        const auto* method = method_ref->as_def();
         if (method == nullptr) {
           if (method_refs_without_def != nullptr) {
             method_refs_without_def->insert(method_ref);
@@ -91,10 +91,10 @@ get_baseline_profiles(
           method_profiles.method_stats_for_baseline_config(interaction_id,
                                                            config_name);
       for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
-        if (!method_candidates.count(method_ref)) {
+        if (method_candidates.count(method_ref) == 0u) {
           continue;
         }
-        auto method = method_ref->as_def();
+        const auto* method = method_ref->as_def();
         if (method == nullptr) {
           if (method_refs_without_def != nullptr) {
             method_refs_without_def->insert(method_ref);
@@ -119,21 +119,21 @@ get_baseline_profiles(
     insert_unordered_iterable(methods, hot_methods);
 
     baseline_profiles::BaselineProfile res;
-    for (auto* method : UnorderedIterable(methods)) {
+    for (const auto* method : UnorderedIterable(methods)) {
       auto& flags = res.methods[method];
-      if (startup_methods.count(method)) {
+      if (startup_methods.count(method) != 0u) {
         flags.startup = true;
       }
-      if (post_startup_methods.count(method)) {
+      if (post_startup_methods.count(method) != 0u) {
         flags.post_startup = true;
       }
-      if (hot_methods.count(method)) {
+      if (hot_methods.count(method) != 0u) {
         flags.hot = true;
       }
     }
-    for (auto* type : UnorderedIterable(classes)) {
+    for (const auto* type : UnorderedIterable(classes)) {
       auto* cls = type_class(type);
-      if (class_candidates.count(cls)) {
+      if (class_candidates.count(cls) != 0u) {
         res.classes.insert(type_class(type));
       }
     }

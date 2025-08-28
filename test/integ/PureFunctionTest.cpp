@@ -29,24 +29,24 @@ TEST_F(PureMethodTest, VirtuamMethodTest) {
 
   AnalyzePureMethodsPass pass;
   pass.analyze_and_set_pure_methods(scope);
-  auto b_f0 = get_method("Lcom/facebook/redextest/Base;.fn0:()I");
-  auto one_f0 = get_method("Lcom/facebook/redextest/SubOne;.fn0:()I");
-  auto two_f0 = get_method("Lcom/facebook/redextest/SubOne;.fn0:()I");
+  auto* b_f0 = get_method("Lcom/facebook/redextest/Base;.fn0:()I");
+  auto* one_f0 = get_method("Lcom/facebook/redextest/SubOne;.fn0:()I");
+  auto* two_f0 = get_method("Lcom/facebook/redextest/SubOne;.fn0:()I");
 
   EXPECT_TRUE(b_f0->rstate.pure_method() == true);
   EXPECT_TRUE(one_f0->rstate.pure_method() == true);
   EXPECT_TRUE(two_f0->rstate.pure_method() == true);
-  auto b_f3 = get_method(
+  auto* b_f3 = get_method(
       "Lcom/facebook/redextest/Base;.fn3:(Ljava/lang/String;)Ljava/lang/"
       "String;");
   EXPECT_TRUE(b_f3->rstate.pure_method() == false);
-  auto b_f4 = get_method("Lcom/facebook/redextest/Base;.fn4:(II)I");
+  auto* b_f4 = get_method("Lcom/facebook/redextest/Base;.fn4:(II)I");
   EXPECT_TRUE(b_f4->rstate.pure_method() == false);
-  auto b_f5 = get_method(
+  auto* b_f5 = get_method(
       "Lcom/facebook/redextest/Base;.fn5:(Ljava/lang/String;I)Ljava/lang/"
       "String;");
   EXPECT_TRUE(b_f5->rstate.pure_method() == false);
-  auto b_f6 = get_method(
+  auto* b_f6 = get_method(
       "Lcom/facebook/redextest/Base;.fn6:(Ljava/lang/String;)Ljava/lang/"
       "String;");
   EXPECT_TRUE(b_f6->rstate.pure_method() == false);

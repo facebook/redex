@@ -21,7 +21,7 @@ cfg::InstructionIterator find_instruction_matching(cfg::ControlFlowGraph* cfg,
                                                    IRInstruction* i) {
   auto iterable = cfg::InstructionIterable(*cfg);
   for (auto it = iterable.begin(); it != iterable.end(); it++) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (insn->opcode() == i->opcode()) {
       if (insn->srcs() != i->srcs() ||
           (insn->has_dest() && i->has_dest() && insn->dest() != i->dest()) ||
@@ -67,23 +67,23 @@ void test_object_inliner(
 
   std::vector<DexFieldRef*> field_refs = {};
   for (const auto& field_data : fields) {
-    auto field_ref = DexField::make_field(callee_class + field_data.first);
+    auto* field_ref = DexField::make_field(callee_class + field_data.first);
     field_ref->make_concrete(ACC_PUBLIC);
     field_refs.emplace_back(field_ref);
   }
 
   UnorderedMap<DexFieldRef*, DexFieldRef*> field_swap_refs;
   for (const auto& field_swap : swap_fields) {
-    auto callee_field = DexField::make_field(callee_class + field_swap.first);
+    auto* callee_field = DexField::make_field(callee_class + field_swap.first);
     callee_field->make_concrete(ACC_PUBLIC);
-    auto caller_field = DexField::make_field(caller_class + field_swap.second);
+    auto* caller_field = DexField::make_field(caller_class + field_swap.second);
     caller_field->make_concrete(ACC_PUBLIC);
     field_swap_refs.emplace(callee_field, caller_field);
   }
 
   FieldSetMap field_map = {};
 
-  [[maybe_unused]] auto field_b =
+  [[maybe_unused]] auto* field_b =
       DexField::make_field("LBaz;.wide:I")->make_concrete(ACC_PUBLIC);
   std::string final_cfg;
 
@@ -96,7 +96,7 @@ void test_object_inliner(
     auto& callee = callee_code->cfg();
 
     for (size_t i = 0; i < fields.size(); i++) {
-      auto field = field_refs[i];
+      auto* field = field_refs[i];
       auto field_data = fields[i];
       field_map.emplace(
           field,
@@ -106,14 +106,14 @@ void test_object_inliner(
     }
 
     auto instr_code = assembler::ircode_from_string(insert_before_instr);
-    auto insn = instr_code->begin()->insn;
+    auto* insn = instr_code->begin()->insn;
     auto it = find_instruction_matching(caller.get(), insn);
 
     if (callee_ctor_str) {
       auto callee_ctor_code = assembler::ircode_from_string(*callee_ctor_str);
       ScopedCFG callee_ctor(callee_ctor_code.get());
       for (size_t i = 0; i < fields.size(); i++) {
-        auto field = field_refs[i];
+        auto* field = field_refs[i];
         auto field_data = fields[i];
         field_map.emplace(
             field,

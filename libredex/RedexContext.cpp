@@ -142,7 +142,7 @@ RedexContext::~RedexContext() {
             // Delete DexMethods. Use set to prevent double freeing aliases
             UnorderedSet<DexMethod*> delete_methods;
             for (auto&& [_, loc] : UnorderedIterable(s_method_map)) {
-              auto method = static_cast<DexMethod*>(loc.load());
+              auto* method = static_cast<DexMethod*>(loc.load());
               if ((reinterpret_cast<size_t>(method) >> 16) %
                           method_buckets_count ==
                       bucket &&
@@ -166,7 +166,7 @@ RedexContext::~RedexContext() {
             // Delete DexFields. Use set to prevent double freeing aliases
             UnorderedSet<DexField*> delete_fields;
             for (auto&& [_, loc] : UnorderedIterable(s_field_map)) {
-              auto field = static_cast<DexField*>(loc.load());
+              auto* field = static_cast<DexField*>(loc.load());
               if ((reinterpret_cast<size_t>(field) >> 16) %
                           field_buckets_count ==
                       bucket &&
@@ -261,8 +261,8 @@ static StoredValue* try_insert(Key key,
 }
 
 RedexContext::ConcurrentStringStorage::Container::~Container() {
-  for (const auto* p = buffer; p;) {
-    auto next = p->next;
+  for (const auto* p = buffer; p != nullptr;) {
+    const auto* next = p->next;
     delete p;
     p = next;
   }
@@ -273,7 +273,7 @@ char* RedexContext::ConcurrentStringStorage::Container::allocate(
   if (buffer == nullptr || buffer->used + length > buffer->allocated) {
     buffer = new Buffer(default_size == 0 ? length : default_size, buffer);
   }
-  auto storage = buffer->chars.get() + buffer->used;
+  auto* storage = buffer->chars.get() + buffer->used;
   buffer->used += length;
   return storage;
 }
@@ -293,7 +293,7 @@ RedexContext::ConcurrentStringStorage::get_context() {
 
   while (true) {
     auto* string_storage = slots[index].container.exchange(nullptr);
-    if (string_storage) {
+    if (string_storage != nullptr) {
       std::atomic_thread_fence(std::memory_order_acquire);
       return {this, index, string_storage};
     }
@@ -340,10 +340,10 @@ RedexContext::ConcurrentStringStorage::get_stats() const {
     }
     stats.containers++;
   };
-  for (auto& slot : slots) {
+  for (const auto& slot : slots) {
     add(slot.container.load());
   }
-  for (auto& storage : pool) {
+  for (const auto& storage : pool) {
     add(storage.get());
   }
   return stats;
@@ -392,7 +392,7 @@ const DexString* RedexContext::make_string(std::string_view str) {
   auto mutf8_next_cp = [](const char*& s) -> uint32_t {
     uint8_t v = *s++;
     /* Simple common case first, a utf8 char... */
-    if (!(v & 0x80)) {
+    if ((v & 0x80) == 0) {
       return v;
     }
     uint8_t v2 = *s++;
@@ -430,7 +430,7 @@ const DexString* RedexContext::make_string(std::string_view str) {
   uint32_t dummy_utfsize{0};
   DexStringRepr repr{str.data(), (uint32_t)str.size(), dummy_utfsize};
   if (str.size() < s_small_string_set.size()) {
-    auto* rv_ptr = s_small_string_set[str.size()]->get(repr);
+    const auto* rv_ptr = s_small_string_set[str.size()]->get(repr);
     if (rv_ptr != nullptr) {
       return reinterpret_cast<const DexString*>(rv_ptr);
     }
@@ -443,9 +443,9 @@ const DexString* RedexContext::make_string(std::string_view str) {
     // If unsuccessful, we have wasted a bit of string storage. Oh well...
   }
 
-  auto* key = reinterpret_cast<const DexString*>(&repr);
+  const auto* key = reinterpret_cast<const DexString*>(&repr);
   auto& segment = s_large_string_set.at(key);
-  auto rv_ptr = segment.get(key);
+  const auto* rv_ptr = segment.get(key);
   if (rv_ptr != nullptr) {
     return *rv_ptr;
   }
@@ -500,15 +500,15 @@ const DexString* RedexContext::get_string(std::string_view str) {
         s_small_string_set[str.size()]->get(repr));
   }
 
-  auto* key = reinterpret_cast<const DexString*>(&repr);
+  const auto* key = reinterpret_cast<const DexString*>(&repr);
   const auto& segment = s_large_string_set.at(key);
-  auto rv_ptr = segment.get(key);
+  const auto* rv_ptr = segment.get(key);
   return rv_ptr == nullptr ? nullptr : *rv_ptr;
 }
 
 DexType* RedexContext::make_type(const DexString* dstring) {
   always_assert(dstring != nullptr);
-  auto rv = s_type_map.load(dstring, nullptr);
+  auto* rv = s_type_map.load(dstring, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -546,7 +546,7 @@ DexFieldRef* RedexContext::make_field(const DexType* container,
   always_assert(container != nullptr && name != nullptr && type != nullptr);
   DexFieldSpec r(const_cast<DexType*>(container), name,
                  const_cast<DexType*>(type));
-  auto rv = s_field_map.load(r, nullptr);
+  auto* rv = s_field_map.load(r, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -606,11 +606,11 @@ void RedexContext::mutate_field(DexFieldRef* field,
   r.type = ref.type != nullptr ? ref.type : field->m_spec.type;
   field->m_spec = r;
 
-  if (rename_on_collision && s_field_map.count(r)) {
+  if (rename_on_collision && (s_field_map.count(r) != 0u)) {
     uint32_t i = 0;
     while (true) {
       r.name = DexString::make_string("f$" + std::to_string(i++));
-      if (!s_field_map.count(r)) {
+      if (s_field_map.count(r) == 0u) {
         break;
       }
     }
@@ -623,12 +623,12 @@ void RedexContext::mutate_field(DexFieldRef* field,
 
 DexTypeList* RedexContext::make_type_list(
     RedexContext::DexTypeListContainerType&& p) {
-  auto rv = s_typelist_map.load(&p, nullptr);
+  auto* rv = s_typelist_map.load(&p, nullptr);
   if (rv != nullptr) {
     return rv;
   }
   std::unique_ptr<DexTypeList> typelist(new DexTypeList(std::move(p)));
-  auto key = &typelist->m_list;
+  const auto* key = &typelist->m_list;
   return try_insert(key, std::move(typelist), &s_typelist_map);
 }
 
@@ -651,7 +651,7 @@ DexProto* RedexContext::make_proto(const DexType* rtype,
   always_assert(rtype != nullptr && args != nullptr && shorty != nullptr);
   DexProto key(const_cast<DexType*>(rtype), const_cast<DexTypeList*>(args),
                nullptr);
-  auto rv_ptr = s_proto_set.get(&key);
+  const auto* rv_ptr = s_proto_set.get(&key);
   if (rv_ptr != nullptr) {
     return const_cast<DexProto*>(*rv_ptr);
   }
@@ -667,7 +667,7 @@ DexProto* RedexContext::get_proto(const DexType* rtype,
   }
   DexProto key(const_cast<DexType*>(rtype), const_cast<DexTypeList*>(args),
                nullptr);
-  auto rv_ptr = s_proto_set.get(&key);
+  const auto* rv_ptr = s_proto_set.get(&key);
   return rv_ptr == nullptr ? nullptr : const_cast<DexProto*>(*rv_ptr);
 }
 
@@ -677,12 +677,12 @@ DexMethodRef* RedexContext::make_method(const DexType* type_,
   // Ideally, DexMethodSpec would store const types, then these casts wouldn't
   // be necessary, but that would involve cleaning up quite a bit of existing
   // code.
-  auto type = const_cast<DexType*>(type_);
-  auto name = name_;
-  auto proto = const_cast<DexProto*>(proto_);
+  auto* type = const_cast<DexType*>(type_);
+  const auto* name = name_;
+  auto* proto = const_cast<DexProto*>(proto_);
   always_assert(type != nullptr && name != nullptr && proto != nullptr);
   DexMethodSpec r(type, name, proto);
-  auto rv = s_method_map.load(r, nullptr);
+  auto* rv = s_method_map.load(r, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -709,7 +709,7 @@ RedexContext::get_baseline_profile_method_map(
   auto baseline_profile_method_map =
       UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>();
   for (auto&& [method_spec, method] : UnorderedIterable(s_method_map)) {
-    if (parsed_methods.count(method)) {
+    if (parsed_methods.count(method) != 0u) {
       continue;
     }
     std::string descriptor = show_deobfuscated(method);
@@ -783,7 +783,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
   r.name = new_spec.name != nullptr ? new_spec.name : method->m_spec.name;
   r.proto = new_spec.proto != nullptr ? new_spec.proto : method->m_spec.proto;
 
-  if (s_method_map.count(r) && rename_on_collision) {
+  if ((s_method_map.count(r) != 0u) && rename_on_collision) {
     // Never rename constructors, which causes runtime verification error:
     // "Method 42(Foo;.$init$$0) is marked constructor, but doesn't match name"
     always_assert_log(
@@ -810,7 +810,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
       }
       do {
         r.name = DexString::make_string(prefix + std::to_string(i++));
-      } while (s_method_map.count(r));
+      } while (s_method_map.count(r) != 0u);
     } else {
       // We are about to change its class. Use a better name to remember its
       // original source class on a collision. Tokenize the class name into
@@ -836,7 +836,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
       for (auto part = parts.rbegin(); part != parts.rend(); ++part) {
         ss << "$" << *part;
         r.name = DexString::make_string(ss.str());
-        if (!s_method_map.count(r)) {
+        if (s_method_map.count(r) == 0u) {
           break;
         }
       }
@@ -844,7 +844,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
   }
 
   // We might still miss name collision cases. As of now, let's just assert.
-  if (s_method_map.count(r)) {
+  if (s_method_map.count(r) != 0u) {
     always_assert_log(!s_method_map.count(r),
                       "Another method of the same signature already exists %s"
                       " %s %s",
@@ -856,7 +856,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
 DexLocation* RedexContext::make_location(std::string_view store_name,
                                          std::string_view file_name) {
   auto key = std::make_pair(store_name, file_name);
-  auto rv = s_location_map.load(key, nullptr);
+  auto* rv = s_location_map.load(key, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -877,7 +877,7 @@ DexLocation* RedexContext::get_location(std::string_view store_name,
 
 PositionPatternSwitchManager*
 RedexContext::get_position_pattern_switch_manager() {
-  if (!m_position_pattern_switch_manager) {
+  if (m_position_pattern_switch_manager == nullptr) {
     m_position_pattern_switch_manager = new PositionPatternSwitchManager();
   }
   return m_position_pattern_switch_manager;
@@ -888,7 +888,7 @@ RedexContext::get_position_pattern_switch_manager() {
 // Throw RedexException on problematic duplicate classes
 bool RedexContext::class_already_loaded(DexClass* cls) {
   const DexType* type = cls->get_type();
-  auto prev_cls = type->m_self.load(std::memory_order_acquire);
+  auto* prev_cls = type->m_self.load(std::memory_order_acquire);
   if (prev_cls == nullptr) {
     return false;
   } else {
@@ -935,11 +935,11 @@ void RedexContext::publish_class(DexClass* cls) {
 }
 
 DexClass* RedexContext::type_class(const DexType* t) const {
-  return t ? t->m_self.load(std::memory_order_relaxed) : nullptr;
+  return t != nullptr ? t->m_self.load(std::memory_order_relaxed) : nullptr;
 }
 
 DexType* RedexContext::class_type(const DexClass* cls) const {
-  return cls ? cls->get_type() : nullptr;
+  return cls != nullptr ? cls->get_type() : nullptr;
 }
 
 void RedexContext::set_field_value(DexField* field,

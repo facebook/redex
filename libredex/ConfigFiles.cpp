@@ -135,7 +135,7 @@ const UnorderedSet<DexType*>& ConfigFiles::get_no_optimizations_annos() {
       for (auto const& config_anno_name : no_optimizations_anno) {
         std::string anno_name = config_anno_name.asString();
         DexType* anno = DexType::get_type(anno_name);
-        if (anno) {
+        if (anno != nullptr) {
           m_no_optimizations_annos.insert(anno);
         }
       }
@@ -169,7 +169,7 @@ const UnorderedSet<DexMethodRef*>& ConfigFiles::get_pure_methods() {
       for (auto const& method_name : pure_methods) {
         std::string name = method_name.asString();
         DexMethodRef* method = DexMethod::get_method(name);
-        if (method) {
+        if (method != nullptr) {
           m_pure_methods.insert(method);
         }
       }
@@ -188,8 +188,8 @@ const UnorderedSet<const DexString*>& ConfigFiles::get_finalish_field_names() {
     if (!finalish_field_names.empty()) {
       for (auto const& field_name : finalish_field_names) {
         std::string name = field_name.asString();
-        auto* str = DexString::make_string(name);
-        if (str) {
+        const auto* str = DexString::make_string(name);
+        if (str != nullptr) {
           m_finalish_field_names.insert(str);
         }
       }
@@ -209,7 +209,7 @@ const UnorderedSet<DexType*>& ConfigFiles::get_do_not_devirt_anon() {
     if (!no_devirtualize_anno_names.empty()) {
       for (auto& name : no_devirtualize_anno_names) {
         auto* typ = DexType::get_type(name);
-        if (typ) {
+        if (typ != nullptr) {
           m_no_devirtualize_annos.insert(typ);
         }
       }
@@ -300,7 +300,7 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
     const auto& coldstart_stats =
         get_method_profiles().method_stats(method_profiles::COLD_START);
     always_assert(!coldstart_stats.empty());
-    for (auto& meth_stats : UnorderedIterable(coldstart_stats)) {
+    for (const auto& meth_stats : UnorderedIterable(coldstart_stats)) {
       const DexMethodRef* method = meth_stats.first;
 
       const auto* clz = type_class(method->get_class());
@@ -338,9 +338,9 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
       auto* type = DexType::get_type(clzname);
       if (type == nullptr) {
         continue;
-      } else if (coldstart_20pct_classes.count(type)) {
+      } else if (coldstart_20pct_classes.count(type) != 0u) {
         coldstart_20pct_classes.erase(type);
-      } else if (coldstart_1pct_classes.count(type)) {
+      } else if (coldstart_1pct_classes.count(type) != 0u) {
         coldstart_1pct_classes.erase(type);
       }
     }
@@ -354,12 +354,12 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
 
     for (auto& cls_name : coldstart_classes) {
       if (cls_name.find(COLD_START_20PCT_END) != std::string::npos) {
-        for (auto* type : coldstart_20pct_classes) {
+        for (const auto* type : coldstart_20pct_classes) {
           coldstart_classes_with_method_profile_symbols.emplace_back(
               type->str_copy());
         }
       } else if (cls_name.find(COLD_START_1PCT_END) != std::string::npos) {
-        for (auto* type : coldstart_1pct_classes) {
+        for (const auto* type : coldstart_1pct_classes) {
           coldstart_classes_with_method_profile_symbols.emplace_back(
               type->str_copy());
         }
@@ -643,7 +643,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);
   for (const auto& type_s : no_inline_annos) {
-    auto type = DexType::get_type(type_s);
+    auto* type = DexType::get_type(type_s);
     if (type != nullptr) {
       inliner_config->no_inline_annos.emplace(type);
     } else {
@@ -655,7 +655,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   std::vector<std::string> force_inline_annos;
   jw.get("force_inline_annos", {}, force_inline_annos);
   for (const auto& type_s : force_inline_annos) {
-    auto type = DexType::get_type(type_s);
+    auto* type = DexType::get_type(type_s);
     if (type != nullptr) {
       inliner_config->force_inline_annos.emplace(type);
     } else {
@@ -947,7 +947,7 @@ void ConfigFiles::build_cls_interdex_groups() {
     }
 
     DexType* type = DexType::get_type(cls_name);
-    if (type && m_cls_to_interdex_group.count(type) == 0) {
+    if ((type != nullptr) && m_cls_to_interdex_group.count(type) == 0) {
       m_cls_to_interdex_group[type] = group_id;
     }
   }

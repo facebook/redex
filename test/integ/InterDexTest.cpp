@@ -42,7 +42,7 @@ class InterDexTest : public RedexIntegrationTest {
     auto tmp_dir = redex::make_tmp_dir("redex_interdex_test_%%%%%%%%");
 
     auto betmap_file = make_betmap_file(tmp_dir.path, betmap);
-    auto config_file_env = std::getenv("config_file");
+    auto* config_file_env = std::getenv("config_file");
     always_assert_log(config_file_env,
                       "Config file must be specified to InterDexTest.\n");
 

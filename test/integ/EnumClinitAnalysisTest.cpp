@@ -38,7 +38,7 @@ TEST_F(EnumClinitAnalysisTest, OrdinalAnalysis) {
   ASSERT_TRUE(load_class_file(std::getenv("enum_class_file")));
 
   // EnumSafe
-  auto enum_cls = type_class(DexType::get_type(ENUM_SAFE));
+  auto* enum_cls = type_class(DexType::get_type(ENUM_SAFE));
   for (auto* m : enum_cls->get_dmethods()) {
     m->get_code()->build_cfg();
   }
@@ -50,7 +50,7 @@ TEST_F(EnumClinitAnalysisTest, OrdinalAnalysis) {
   EXPECT_EQ(enum_constants.size(), 2);
   EXPECT_EQ(ifield_map.size(), 3);
 
-  auto field = static_cast<DexField*>(DexField::get_field(ENUM_SAFE_A));
+  auto* field = static_cast<DexField*>(DexField::get_field(ENUM_SAFE_A));
   ASSERT_EQ(enum_constants.count(field), 1);
   EXPECT_EQ(enum_constants[field].ordinal, 0);
   EXPECT_EQ(enum_constants[field].name, DexString::make_string("A"));
@@ -60,7 +60,7 @@ TEST_F(EnumClinitAnalysisTest, OrdinalAnalysis) {
   EXPECT_EQ(enum_constants[field].ordinal, 1);
   EXPECT_EQ(enum_constants[field].name, DexString::make_string("B"));
 
-  auto ifield = DexField::get_field(ENUM_SAFE_NAME);
+  auto* ifield = DexField::get_field(ENUM_SAFE_NAME);
   ASSERT_EQ(ifield_map.count(ifield), 1);
   ASSERT_EQ(ifield_map[ifield].size(), 2);
   EXPECT_EQ(ifield_map[ifield][0].string_value, DexString::make_string("zero"));

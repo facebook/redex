@@ -46,7 +46,7 @@ void MethodSimilarityGreedyOrderer::gather_code_hash_ids(
   // For any instruction, we can compute a (stable) hash representing it.
   for (size_t i = 0; i < instructions.size(); i++) {
     uint64_t code_hash{0};
-    auto insn = instructions.at(i);
+    auto* insn = instructions.at(i);
     auto op = insn->opcode();
     code_hash = code_hash * 23 + op;
     if (insn->has_range()) {
@@ -60,7 +60,7 @@ void MethodSimilarityGreedyOrderer::gather_code_hash_ids(
       code_hash = code_hash * 17 + insn->src(j);
     }
     if (insn->has_method()) {
-      auto callee = ((DexOpcodeMethod*)insn)->get_method();
+      auto* callee = ((DexOpcodeMethod*)insn)->get_method();
       stable_hashes.insert(std::hash<std::string>{}(show(callee)));
     }
     stable_hashes.insert(code_hash);
@@ -164,7 +164,7 @@ void MethodSimilarityGreedyOrderer::insert(DexMethod* method) {
 
   auto& code_hash_ids = m_method_id_to_code_hash_ids[index];
   auto* code = method->get_dex_code();
-  if (code) {
+  if (code != nullptr) {
     gather_code_hash_ids(code->get_instructions(), code_hash_ids);
   }
 }
@@ -185,7 +185,7 @@ MethodSimilarityGreedyOrderer::get_next() {
            meth_id = method_id_bitset.find_next(meth_id)) {
         // The first match is the one with the highest score
         // at the smallest index in the source order.
-        if (m_id_to_method.count(static_cast<MethodId>(meth_id))) {
+        if (m_id_to_method.count(static_cast<MethodId>(meth_id)) != 0u) {
           TRACE(OPUT, 3,
                 "[method-similarity-orderer] selected %s with score %d",
                 SHOW(m_id_to_method[static_cast<MethodId>(meth_id)]), score);
@@ -203,7 +203,7 @@ MethodSimilarityGreedyOrderer::get_next() {
 }
 
 void MethodSimilarityGreedyOrderer::remove_method(DexMethod* meth) {
-  if (!m_method_to_id.count(meth)) {
+  if (m_method_to_id.count(meth) == 0u) {
     return;
   }
 
@@ -230,7 +230,7 @@ void MethodSimilarityGreedyOrderer::order(std::vector<DexMethod*>& methods) {
        best_method_id != boost::none;
        best_method_id = get_next()) {
     m_last_method_id = best_method_id;
-    auto meth = m_id_to_method[*m_last_method_id];
+    auto* meth = m_id_to_method[*m_last_method_id];
     methods.push_back(meth);
     remove_method(meth);
   }

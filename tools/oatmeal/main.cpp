@@ -281,7 +281,7 @@ int dump(const Arguments& args) {
   }
 
   if (args.test_is_oatmeal) {
-    return oatfile->created_by_oatmeal();
+    return static_cast<int>(oatfile->created_by_oatmeal());
   }
 
   oatfile->print(

@@ -82,7 +82,7 @@ bool is_compiled(const baseline_profiles::BaselineProfile& baseline_profile,
 
 void ReduceGotosPass::shift_registers(cfg::ControlFlowGraph* cfg, reg_t* reg) {
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, insn->src(i) + 1);
     }
@@ -127,7 +127,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
   for (cfg::Block* b : switch_blocks) {
     auto it = b->get_last_insn();
     always_assert(it != b->end());
-    auto insn = it->insn;
+    auto* insn = it->insn;
     cfg::Block* goto_target = b->goes_to();
 
     UnorderedSet<cfg::Edge*> fallthrough_edges;
@@ -260,7 +260,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
     std::vector<std::pair<int32_t, cfg::Block*>> cases;
     for (cfg::Edge* branch_edge :
          cfg.get_succ_edges_of_type(b, cfg::EDGE_BRANCH)) {
-      if (!fallthrough_edges.count(branch_edge)) {
+      if (fallthrough_edges.count(branch_edge) == 0u) {
         cases.emplace_back(*branch_edge->case_key(), branch_edge->target());
       }
     }
@@ -392,7 +392,7 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
         // DedupBlocksPass. This optimization should always occur after
         // DedupBlocks because DedupBlocks doesn't check if deduplicating the
         // blocks is worth the extra goto.
-        auto new_block = cfg.create_block();
+        auto* new_block = cfg.create_block();
         new_block->push_back(cloned_insn.release());
         cfg.set_edge_target(e, new_block);
       } else {
@@ -437,7 +437,7 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
     // Let's find the (unique) branch and goto targets
     auto it = b->get_last_insn();
     always_assert(it != b->end());
-    auto insn = it->insn;
+    auto* insn = it->insn;
     auto opcode = insn->opcode();
     always_assert(opcode::is_a_conditional_branch(opcode));
     cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
@@ -549,8 +549,8 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
 
   Stats stats = walk::parallel::methods<Stats>(
       scope, [&baseline_profile](DexMethod* method) {
-        const auto code = method->get_code();
-        if (!code || method->rstate.no_optimizations()) {
+        auto* const code = method->get_code();
+        if ((code == nullptr) || method->rstate.no_optimizations()) {
           return Stats{};
         }
 
@@ -558,8 +558,8 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
             baseline_profile && is_compiled(*baseline_profile, method);
 
         Stats stats = ReduceGotosPass::process_code(code, for_performance);
-        if (stats.replaced_gotos_with_returns ||
-            stats.inverted_conditional_branches) {
+        if ((stats.replaced_gotos_with_returns != 0u) ||
+            (stats.inverted_conditional_branches != 0u)) {
           TRACE(RG, 3,
                 "[reduce gotos] Replaced %zu gotos with returns, "
                 "removed %zu trailing moves, "

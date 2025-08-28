@@ -250,7 +250,7 @@ void check_load_params(DexMethod* method) {
   always_assert(args_it == args_list->end());
   // check that the params are at the end of the frame
   for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->has_dest()) {
       always_assert_log(insn->dest() < next_ins,
                         "Instruction %s refers to a register (v%u) >= size (%u)"
@@ -333,7 +333,7 @@ size_t lower_check_cast(DexMethod*, IRCode* code, IRList::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   size_t extra_instructions{0};
-  auto move = ir_list::move_result_pseudo_of(it);
+  auto* move = ir_list::move_result_pseudo_of(it);
   if (move->dest() != insn->src(0)) {
     // convert check-cast v1; move-result-pseudo v0 into
     //
@@ -488,7 +488,8 @@ Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
         if (!method_is_hot) {
           if (conf != nullptr) {
             method_is_hot = [&]() {
-              for (auto& p : conf->get_method_profiles().all_interactions()) {
+              for (const auto& p :
+                   conf->get_method_profiles().all_interactions()) {
                 auto it = p.second.find(method);
                 if (it != p.second.end() &&
                     it->second.appear_percent >
@@ -513,7 +514,7 @@ Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
     if (it->type != MFLOW_DEX_OPCODE) {
       continue;
     }
-    stats.to_2addr += try_2addr_conversion(&*it);
+    stats.to_2addr += static_cast<unsigned long>(try_2addr_conversion(&*it));
   }
   return stats;
 }

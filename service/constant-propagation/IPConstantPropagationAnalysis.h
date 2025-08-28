@@ -93,7 +93,7 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
       : ParallelMonotonicFixpointIterator(*call_graph),
         m_proc_analysis_factory(proc_analysis_factory),
         m_call_graph(std::move(call_graph)) {
-    auto wps = new WholeProgramState(std::move(call_graph_for_wps));
+    auto* wps = new WholeProgramState(std::move(call_graph_for_wps));
     wps->set_to_top();
     m_wps.reset(wps);
   }

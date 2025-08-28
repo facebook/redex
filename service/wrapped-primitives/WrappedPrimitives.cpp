@@ -44,12 +44,12 @@ void initialize(const std::vector<Spec>& wrapper_specs) {
 void WrappedPrimitives::mark_roots() {
   for (auto& spec : m_wrapper_specs) {
     for (auto&& [from, to] : spec.allowed_invokes) {
-      auto def = to->as_def();
+      auto* def = to->as_def();
       if (def != nullptr && def->rstate.can_delete()) {
         TRACE(WP, 2, "Setting %s as root", SHOW(def));
         def->rstate.set_root();
         m_marked_root_methods.emplace(def);
-        auto cls = type_class(def->get_class());
+        auto* cls = type_class(def->get_class());
         if (cls->rstate.can_delete()) {
           TRACE(WP, 2, "Setting %s as root", SHOW(cls));
           cls->rstate.set_root();
@@ -67,11 +67,11 @@ void WrappedPrimitives::mark_roots() {
 }
 
 void WrappedPrimitives::unmark_roots() {
-  for (auto& def : UnorderedIterable(m_marked_root_methods)) {
+  for (const auto& def : UnorderedIterable(m_marked_root_methods)) {
     TRACE(WP, 2, "Unsetting %s as root", SHOW(def));
     def->rstate.unset_root();
   }
-  for (auto& cls : UnorderedIterable(m_marked_root_classes)) {
+  for (const auto& cls : UnorderedIterable(m_marked_root_classes)) {
     TRACE(WP, 2, "Unsetting %s as root", SHOW(cls));
     cls->rstate.unset_root();
   }
@@ -123,8 +123,8 @@ extract_object_with_attr_value(const ConstantValue& value) {
 bool needs_cast(const TypeSystem& type_system,
                 DexMethodRef* from_ref,
                 DexMethodRef* to_ref) {
-  auto from = from_ref->get_class();
-  auto to = to_ref->get_class();
+  auto* from = from_ref->get_class();
+  auto* to = to_ref->get_class();
   if (from == to) {
     return false;
   }
@@ -204,7 +204,7 @@ WrappedPrimitives::build_known_definitions(
     auto last_insn = block->get_last_insn();
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); it++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
         continue;
@@ -215,12 +215,12 @@ WrappedPrimitives::build_known_definitions(
       if (primary_it->insn->opcode() != OPCODE_SGET_OBJECT) {
         continue;
       }
-      auto primary_insn = primary_it->insn;
+      auto* primary_insn = primary_it->insn;
       auto search = m_type_to_spec.find(primary_insn->get_field()->get_type());
       if (search != m_type_to_spec.end()) {
-        auto& reg_env = env.get_register_environment();
+        const auto& reg_env = env.get_register_environment();
         auto dest_reg = insn->dest();
-        auto& value = reg_env.get(dest_reg);
+        const auto& value = reg_env.get(dest_reg);
         auto maybe_pair = extract_object_with_attr_value(value);
         if (maybe_pair != boost::none) {
           // Store a mapping of primary instruction to its dest register and
@@ -270,35 +270,35 @@ void WrappedPrimitives::optimize_method(
       auto cfg_it = block->to_cfg_instruction_iterator(it);
       auto move_result_it = cfg.move_result_of(cfg_it);
 
-      auto insn = cfg_it->insn;
+      auto* insn = cfg_it->insn;
       if (insn->has_method() &&
           m_all_wrapped_apis.count(insn->get_method()) > 0) {
         TRACE(WP, 2, "Relevant invoke: %s in B%zu", SHOW(insn), block->id());
-        auto ref = insn->get_method();
+        auto* ref = insn->get_method();
 
         // Inline the wrapped constant value and change method ref, if all
         // information is known.
         auto srcs_size = insn->srcs_size();
-        auto& reg_env = env.get_register_environment();
+        const auto& reg_env = env.get_register_environment();
 
         bool updated_ref{false};
-        auto updated_insn = new IRInstruction(*insn);
+        auto* updated_insn = new IRInstruction(*insn);
         // HELPER FUNCTIONS
         auto perform_unwrapping = [&](const DexType* wrapper_type,
                                       src_index_t idx, reg_t literal_reg) {
           updated_insn->set_src(idx, literal_reg);
-          auto unwrapped_ref = unwrapped_method_ref_for(wrapper_type, ref);
+          auto* unwrapped_ref = unwrapped_method_ref_for(wrapper_type, ref);
           if (!updated_ref) {
             if (needs_cast(type_system, ref, unwrapped_ref)) {
-              auto to_type = unwrapped_ref->get_class();
+              auto* to_type = unwrapped_ref->get_class();
               auto opcode = is_interface(type_class(to_type))
                                 ? OPCODE_INVOKE_INTERFACE
                                 : OPCODE_INVOKE_VIRTUAL;
               auto obj_reg = cfg.allocate_temp();
-              auto cast = (new IRInstruction(OPCODE_CHECK_CAST))
-                              ->set_type(to_type)
-                              ->set_src(0, insn->src(0));
-              auto move_pseudo =
+              auto* cast = (new IRInstruction(OPCODE_CHECK_CAST))
+                               ->set_type(to_type)
+                               ->set_src(0, insn->src(0));
+              auto* move_pseudo =
                   (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
                       ->set_dest(obj_reg);
               updated_insn->set_method(unwrapped_ref);
@@ -315,7 +315,7 @@ void WrappedPrimitives::optimize_method(
         auto inject_const = [&](const cfg::InstructionIterator& anchor,
                                 int64_t literal, reg_t literal_reg,
                                 bool is_wide) {
-          auto const_insn =
+          auto* const_insn =
               (new IRInstruction(is_wide ? OPCODE_CONST_WIDE : OPCODE_CONST))
                   ->set_literal(literal)
                   ->set_dest(literal_reg);
@@ -327,10 +327,10 @@ void WrappedPrimitives::optimize_method(
         for (size_t i = 0; i < srcs_size; i++) {
           auto current_reg = insn->src(i);
           TRACE(WP, 2, "  Checking v%d", current_reg);
-          auto& value = reg_env.get(current_reg);
+          const auto& value = reg_env.get(current_reg);
           auto maybe_pair = extract_object_with_attr_value(value);
           if (maybe_pair != boost::none) {
-            auto wrapper_type = maybe_pair->first;
+            const auto* wrapper_type = maybe_pair->first;
             auto literal = maybe_pair->second;
             TRACE(WP,
                   2,
@@ -371,7 +371,7 @@ void WrappedPrimitives::optimize_method(
               if (!valid_defs.empty()) {
                 TRACE(WP, 2,
                       " ** Should be able to patch dataflow to this invoke!!");
-                auto wrapper_type =
+                const auto* wrapper_type =
                     valid_defs.at(0).wrapper_type; // all types in vec will be
                                                    // the same, per validation
                                                    // step
@@ -412,7 +412,7 @@ void WrappedPrimitives::optimize_method(
 }
 
 bool is_wrapped_api(const DexMethodRef* ref) {
-  auto wp_instance = get_instance();
+  auto* wp_instance = get_instance();
   if (wp_instance == nullptr) {
     return false;
   }
@@ -424,7 +424,7 @@ void optimize_method(const TypeSystem& type_system,
                      const cp::WholeProgramState& wps,
                      DexMethod* method,
                      cfg::ControlFlowGraph& cfg) {
-  auto wp_instance = get_instance();
+  auto* wp_instance = get_instance();
   if (wp_instance == nullptr) {
     return;
   }
