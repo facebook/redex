@@ -75,6 +75,7 @@
 #include "RedexPropertyCheckerRegistry.h"
 #include "RedexResources.h"
 #include "Sanitizers.h"
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
 #include "ScopedMemStats.h"
 #include "Show.h"

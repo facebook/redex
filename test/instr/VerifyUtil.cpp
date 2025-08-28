@@ -19,6 +19,7 @@
 #include "Debug.h"
 #include "DexInstruction.h"
 #include "IRCode.h"
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
 #include "Show.h"
 #include "VerifyUtil.h"

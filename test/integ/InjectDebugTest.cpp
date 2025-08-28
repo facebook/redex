@@ -19,6 +19,7 @@
 #include "DexStore.h"
 #include "InstructionLowering.h"
 #include "RedexTestUtils.h"
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
 
 #include "tools/bytecode_debugger/InjectDebug.h"

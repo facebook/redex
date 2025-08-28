@@ -24,6 +24,7 @@
 #include "InstructionLowering.h"
 #include "RedexOptions.h"
 #include "RedexTestUtils.h"
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
 #include "TestGenerator.h"
 
