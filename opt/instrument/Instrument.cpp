@@ -564,7 +564,6 @@ namespace {
 // Possible finalize some fields to help Redex clean up unused instrumentation.
 void maybe_unset_dynamic_analysis(
     DexStoresVector& stores,
-    ConfigFiles& conf,
     const std::string& analysis_class_name,
     const std::optional<std::string>& analysis_package_prefix) {
   auto undo_rename_delete = [](auto* cls) {
@@ -606,7 +605,7 @@ void maybe_unset_dynamic_analysis(
 
       // Look through all methods and remove accesses.
       walk::code(std::vector<DexClass*>{analysis_cls},
-                 [&](auto* method, auto& code) {
+                 [&](auto* /*method*/, auto& code) {
                    cfg::ScopedCFG c{&code};
                    cfg::CFGMutation mut{*c};
                    bool found = false;
@@ -735,7 +734,7 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   if (!conf.get_json_config().get("instrument_pass_enabled", false) &&
       !mgr.get_redex_options().instrument_pass_enabled) {
-    maybe_unset_dynamic_analysis(stores, conf, m_options.analysis_class_name,
+    maybe_unset_dynamic_analysis(stores, m_options.analysis_class_name,
                                  m_options.analysis_package_prefix);
     return;
   }
@@ -845,7 +844,7 @@ InstrumentPass::generate_sharded_analysis_methods(
     walk::matching_opcodes_in_block(
         *new_method,
         std::make_tuple(m::sget_object_()),
-        [&](DexMethod* method,
+        [&](DexMethod* /*method*/,
             cfg::Block*,
             const std::vector<IRInstruction*>& insts) {
           DexField* field = static_cast<DexField*>(insts[0]->get_field());
@@ -902,7 +901,7 @@ InstrumentPass::patch_sharded_arrays(
       *clinit,
       std::make_tuple(m::new_array_(), m::move_result_pseudo_object_(),
                       m::sput_object_()),
-      [&](DexMethod* method,
+      [&](DexMethod* /*method*/,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
         DexField* template_field =
@@ -989,7 +988,7 @@ InstrumentPass::patch_sharded_arrays(
       *clinit,
       std::make_tuple(m::new_array_(), m::move_result_pseudo_object_(),
                       m::sput_object_()),
-      [&](DexMethod* method,
+      [&](DexMethod* /*method*/,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
         DexField* field = static_cast<DexField*>(insts[2]->get_field());

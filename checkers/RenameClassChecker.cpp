@@ -19,7 +19,7 @@ using facebook::Locator;
 namespace redex_properties {
 
 void RenameClassChecker::run_checker(DexStoresVector& stores,
-                                     ConfigFiles& conf,
+                                     ConfigFiles& /*conf*/,
                                      PassManager& /* mgr */,
                                      bool established) {
   if (!established) {

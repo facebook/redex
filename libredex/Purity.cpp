@@ -673,7 +673,7 @@ class WtoOrdering {
 template <typename InitFuncT>
 size_t compute_locations_closure_impl(
     const Scope& scope,
-    const method_override_graph::Graph* method_override_graph,
+    const method_override_graph::Graph* /*method_override_graph*/,
     const InitFuncT& init_func,
     UnorderedMap<const DexMethod*, CseUnorderedLocationSet>* result) {
   // 1. Let's initialize known method read locations and dependencies by

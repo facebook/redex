@@ -80,7 +80,7 @@ UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
         [&](DexMethod* meth) {
           return coldstart_classes.count(meth->get_class()) > 0;
         },
-        [&](DexMethod* meth, const IRCode& code) {
+        [&](DexMethod* meth, const IRCode& /*code*/) {
           auto base_cls = meth->get_class();
           always_assert(meth->get_code()->cfg_built());
           for (auto& mie : cfg::InstructionIterable(meth->get_code()->cfg())) {

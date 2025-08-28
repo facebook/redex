@@ -510,7 +510,7 @@ bool Transform::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) const {
 }
 
 void Transform::simplify_instruction(const ConstantEnvironment& env,
-                                     const WholeProgramState& wps,
+                                     const WholeProgramState& /*wps*/,
                                      const cfg::InstructionIterator& cfg_it,
                                      const XStoreRefs* xstores,
                                      const DexType* declaring_type) {

@@ -351,7 +351,7 @@ class OptimizeEnums {
       m_stats.num_lookup_tables += generated_cls->get_sfields().size();
     }
 
-    remove_generated_classes_usage(lookup_table_to_enum, enum_field_to_ordinal,
+    remove_generated_classes_usage(enum_field_to_ordinal,
                                    generated_switch_cases);
   }
 
@@ -435,7 +435,7 @@ class OptimizeEnums {
       const auto& ctors = cls->get_ctors();
       if (ctors.size() != 1) {
         utypes.insert(UnsafeType::kMultipleCtors);
-      } else if (!is_simple_enum_constructor(cls, ctors.front())) {
+      } else if (!is_simple_enum_constructor(ctors.front())) {
         utypes.insert(UnsafeType::kComplexCtor);
       }
 
@@ -655,8 +655,7 @@ class OptimizeEnums {
    * (iput|const) * // put/const instructions for primitive instance fields
    * return-void
    */
-  static bool is_simple_enum_constructor(const DexClass* cls,
-                                         const DexMethod* method) {
+  static bool is_simple_enum_constructor(const DexMethod* method) {
     const auto* params = method->get_proto()->get_args();
     if (!is_private(method) || params->size() < 2) {
       return false;
@@ -817,7 +816,6 @@ class OptimizeEnums {
    * }
    */
   void remove_generated_classes_usage(
-      const LookupTableToEnum& lookup_table_to_enum,
       const EnumFieldToOrdinal& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases) {
 

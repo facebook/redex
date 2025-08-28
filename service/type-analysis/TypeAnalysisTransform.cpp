@@ -146,7 +146,7 @@ void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
 
 Transform::Stats Transform::apply(
     const type_analyzer::local::LocalTypeAnalyzer& lta,
-    const WholeProgramState& wps,
+    const WholeProgramState& /*wps*/,
     DexMethod* method,
     const NullAssertionSet& null_assertion_set) {
   auto code = method->get_code();

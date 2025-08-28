@@ -108,7 +108,7 @@ DexClass* ClassSplitter::create_target_class(
   return target_cls;
 }
 
-size_t ClassSplitter::get_trampoline_method_cost(DexMethod* method) {
+size_t ClassSplitter::get_trampoline_method_cost(DexMethod* /*method*/) {
   // Maybe this can be calculated? Here goes the size of code for pushing
   // parameters, making the call, adding refs, etc For now, empirically derive
   // the best value.
@@ -766,7 +766,7 @@ void ClassSplitter::delayed_invoke_direct_to_static(const Scope& final_scope) {
     mutators::make_static(method);
   }
   walk::parallel::opcodes(
-      final_scope, [](DexMethod* meth) { return true; },
+      final_scope, [](DexMethod* /*meth*/) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
         auto op = insn->opcode();
         if (op == OPCODE_INVOKE_DIRECT) {

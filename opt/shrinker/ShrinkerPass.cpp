@@ -44,8 +44,8 @@ void ShrinkerPass::bind_config() {
        "relevant when using constant-propagaation)");
 }
 
-void ShrinkerPass::eval_pass(DexStoresVector& stores,
-                             ConfigFiles& conf,
+void ShrinkerPass::eval_pass(DexStoresVector& /*stores*/,
+                             ConfigFiles& /*conf*/,
                              PassManager&) {
   auto string_analyzer_state = constant_propagation::StringAnalyzerState::get();
   string_analyzer_state.set_methods_as_root();

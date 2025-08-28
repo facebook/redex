@@ -280,7 +280,7 @@ static void uleb_append(std::vector<uint8_t>& bytes, uint32_t v) {
   }
 }
 
-void DexEncodedValue::encode(DexOutputIdx* dodx,
+void DexEncodedValue::encode(DexOutputIdx* /*dodx*/,
                              std::vector<uint8_t>& encdata) {
   switch (m_evtype) {
   case DEVT_SHORT:
@@ -303,7 +303,7 @@ void DexEncodedValue::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
   encode(dodx, bytes);
 }
 
-void DexEncodedValueBit::encode(DexOutputIdx* dodx,
+void DexEncodedValueBit::encode(DexOutputIdx* /*dodx*/,
                                 std::vector<uint8_t>& encdata) {
   uint8_t devtb = DEVT_HDR_TYPE(m_evtype);
   if (m_val.m_value) {
@@ -877,7 +877,7 @@ void DexAnnotationSet::gather_annotations(std::vector<DexAnnotation*>& list) {
   }
 }
 
-void DexAnnotationSet::vencode(DexOutputIdx* dodx,
+void DexAnnotationSet::vencode(DexOutputIdx* /*dodx*/,
                                std::vector<uint32_t>& asetout,
                                std::map<DexAnnotation*, uint32_t>& annoout) {
   asetout.push_back((uint32_t)m_annotations.size());

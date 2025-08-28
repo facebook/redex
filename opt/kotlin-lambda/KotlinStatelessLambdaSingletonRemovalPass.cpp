@@ -20,7 +20,7 @@ bool is_kotlin_stateless_lambda(const DexClass* cls) {
 } // namespace
 
 void KotlinStatelessLambdaSingletonRemovalPass::run_pass(
-    DexStoresVector& stores, ConfigFiles& conf, PassManager& mgr) {
+    DexStoresVector& stores, ConfigFiles& /*conf*/, PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   KotlinInstanceRewriter rewriter;
   ConcurrentMap<DexFieldRef*, std::set<std::pair<IRInstruction*, DexMethod*>>>

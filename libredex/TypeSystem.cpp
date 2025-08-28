@@ -55,7 +55,7 @@ void load_interface_children(ClassHierarchy& children, const DexClass* intf) {
 }
 
 void load_interface_children(ClassHierarchy& children) {
-  g_redex->walk_type_class([&](const DexType* type, const DexClass* cls) {
+  g_redex->walk_type_class([&](const DexType* /*type*/, const DexClass* cls) {
     if (!cls->is_external() || !is_interface(cls)) {
       return;
     }

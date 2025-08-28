@@ -651,7 +651,7 @@ class CodeTransformer final {
     auto insn = mie->insn;
     switch (insn->opcode()) {
     case OPCODE_SGET_OBJECT:
-      update_sget_object(env, cfg, block, mie);
+      update_sget_object(cfg, block, mie);
       break;
     case OPCODE_IGET:
     case OPCODE_IGET_WIDE:
@@ -745,8 +745,7 @@ class CodeTransformer final {
    *   const v_ordinal #??
    *   invoke-static v_ordinal Integer.valueOf:(I)Integer
    */
-  void update_sget_object(const optimize_enums::EnumTypeEnvironment& env,
-                          cfg::ControlFlowGraph& cfg,
+  void update_sget_object(cfg::ControlFlowGraph& cfg,
                           cfg::Block* block,
                           MethodItemEntry* mie) {
     auto insn = mie->insn;
@@ -1178,7 +1177,7 @@ class EnumTransformer final {
             return (bool)try_convert_to_int_type(type);
           });
         },
-        [&](DexMethod* method, IRCode& code) {
+        [&](DexMethod* method, IRCode& /*code*/) {
           if (m_enum_attributes_map.count(method->get_class()) &&
               (!is_constructor(method) && !is_static(method))) {
             m_enum_util->m_instance_methods.insert(method);

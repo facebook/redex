@@ -119,8 +119,7 @@ std::map<uint32_t, uint32_t> find_duplicate_resources(
     ResourceTableFile* res_table,
     const std::vector<uint32_t>& sorted_res_ids,
     const UnorderedSet<uint32_t>& disallowed_types,
-    const UnorderedSet<uint32_t>& disallowed_ids,
-    PassManager& mgr) {
+    const UnorderedSet<uint32_t>& disallowed_ids) {
   always_assert(!sorted_res_ids.empty());
   std::map<uint32_t, uint32_t> dupe_to_canon;
   std::vector<std::vector<uint32_t>> all_duplicates;
@@ -169,7 +168,7 @@ std::map<uint32_t, uint32_t> deduplicate_restable_rows(
     const UnorderedSet<uint32_t>& disallowed_ids,
     PassManager& mgr) {
   auto dupe_to_canon = find_duplicate_resources(
-      res_table, sorted_res_ids, disallowed_types, disallowed_ids, mgr);
+      res_table, sorted_res_ids, disallowed_types, disallowed_ids);
   for (const auto& pair : dupe_to_canon) {
     res_table->delete_resource(pair.first);
   }
@@ -387,9 +386,9 @@ void deduplicate_resource_file_references(
   if (allow_reference_dedup) {
     auto effective_disallowed_types =
         res_table->get_types_by_name(effective_disallowed_type_names);
-    auto dupe_to_canon = find_duplicate_resources(
-        res_table.get(), res_table->sorted_res_ids, effective_disallowed_types,
-        disallowed_ids, mgr);
+    auto dupe_to_canon =
+        find_duplicate_resources(res_table.get(), res_table->sorted_res_ids,
+                                 effective_disallowed_types, disallowed_ids);
     TRACE(DEDUP_RES, 2, "Found %zu xml references to canonicalize.",
           dupe_to_canon.size());
     if (!dupe_to_canon.empty()) {

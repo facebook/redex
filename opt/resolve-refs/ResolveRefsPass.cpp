@@ -200,7 +200,7 @@ bool is_excluded_external(const std::vector<std::string>& excluded_externals,
 boost::optional<DexMethod*> get_inferred_method_def(
     const DexMethod* caller,
     const std::vector<std::string>& excluded_externals,
-    const bool is_support_lib,
+    const bool /*is_support_lib*/,
     DexMethod* callee,
     const IROpcode invoke_op,
     const DexType* inferred_type,

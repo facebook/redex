@@ -13,7 +13,7 @@
 #include "Walkers.h"
 
 void InsertDebugInfoPass::run_pass(DexStoresVector& stores,
-                                   ConfigFiles& conf,
+                                   ConfigFiles& /*conf*/,
                                    PassManager& mgr) {
   std::atomic<uint32_t> patched_method = 0;
   walk::parallel::code(

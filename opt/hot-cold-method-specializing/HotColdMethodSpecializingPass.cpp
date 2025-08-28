@@ -24,7 +24,7 @@ namespace {
 // otherwise).
 template <typename Collection>
 UnorderedSet<cfg::Block*> get_backwards_reachable_blocks_from(
-    const cfg::ControlFlowGraph& cfg,
+    const cfg::ControlFlowGraph& /*cfg*/,
     const Collection& succ_blocks,
     const UnorderedSet<cfg::Block*>* filter_blocks = nullptr) {
   UnorderedSet<cfg::Block*> res;
@@ -51,7 +51,7 @@ UnorderedSet<cfg::Block*> get_backwards_reachable_blocks_from(
 
 template <typename Collection>
 UnorderedSet<cfg::Block*> get_forward_reachable_blocks(
-    const cfg::ControlFlowGraph& cfg,
+    const cfg::ControlFlowGraph& /*cfg*/,
     const Collection& entry_blocks,
     const UnorderedSet<cfg::Block*>& frontier = {}) {
   UnorderedSet<cfg::Block*> res;

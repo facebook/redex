@@ -304,7 +304,7 @@ class WritesAnalyzer {
   }
 
  public:
-  explicit WritesAnalyzer(const Scope& scope,
+  explicit WritesAnalyzer(const Scope& /*scope*/,
                           const field_op_tracker::FieldStatsMap& field_stats,
                           const field_op_tracker::TypeLifetimes* type_lifetimes)
       : m_type_lifetimes(type_lifetimes), m_field_stats(field_stats) {}

@@ -116,7 +116,7 @@ void SoLibrary::populate_functions() {
 }
 
 NativeContext NativeContext::build(const std::string& path_to_native_results,
-                                   const Scope& java_scope) {
+                                   const Scope& /*java_scope*/) {
   NativeContext ret;
   fs::path path(path_to_native_results);
 

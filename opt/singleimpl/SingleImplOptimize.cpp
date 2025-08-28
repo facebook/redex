@@ -222,15 +222,12 @@ struct OptimizationImpl {
       const DexType* intf,
       const SingleImplData& data,
       UnorderedMap<DexMethod*, cfg::CFGMutation>& method_mutations);
-  EscapeReason check_field_collision(const DexType* intf,
-                                     const SingleImplData& data);
+  EscapeReason check_field_collision(const SingleImplData& data);
   EscapeReason check_method_collision(const DexType* intf,
                                       const SingleImplData& data);
-  void drop_single_impl_collision(const DexType* intf,
-                                  const SingleImplData& data,
-                                  DexMethod* method);
-  void set_field_defs(const DexType* intf, const SingleImplData& data);
-  void set_field_refs(const DexType* intf, const SingleImplData& data);
+  void drop_single_impl_collision(const DexType* intf, DexMethod* method);
+  void set_field_defs(const SingleImplData& data);
+  void set_field_refs(const SingleImplData& data);
   CheckCastSet fix_instructions(
       const DexType* intf,
       const SingleImplData& data,
@@ -263,8 +260,7 @@ struct OptimizationImpl {
  * old fields to the new ones. Remove old field and add the new one
  * to the list of fields.
  */
-void OptimizationImpl::set_field_defs(const DexType* intf,
-                                      const SingleImplData& data) {
+void OptimizationImpl::set_field_defs(const SingleImplData& data) {
   for (const auto& field : data.fielddefs) {
     redex_assert(!single_impls->is_escaped(field->get_class()));
     auto f = static_cast<DexField*>(
@@ -292,8 +288,7 @@ void OptimizationImpl::set_field_defs(const DexType* intf,
 /**
  * Rewrite all fieldref.
  */
-void OptimizationImpl::set_field_refs(const DexType* intf,
-                                      const SingleImplData& data) {
+void OptimizationImpl::set_field_refs(const SingleImplData& data) {
   for (const auto& fieldrefs : UnorderedIterable(data.fieldrefs)) {
     const auto field = fieldrefs.first;
     redex_assert(!single_impls->is_escaped(field->get_class()));
@@ -657,7 +652,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
  * Check collisions in field definition.
  */
 EscapeReason OptimizationImpl::check_field_collision(
-    const DexType* intf, const SingleImplData& data) {
+    const SingleImplData& data) {
   for (const auto field : data.fielddefs) {
     redex_assert(!single_impls->is_escaped(field->get_class()));
     auto collision =
@@ -727,7 +722,6 @@ EscapeReason OptimizationImpl::check_method_collision(
  * then m is changed in a single pass for both I1 and I2.
  */
 void OptimizationImpl::drop_single_impl_collision(const DexType* intf,
-                                                  const SingleImplData& data,
                                                   DexMethod* method) {
   auto check_type = [&](DexType* type) {
     if (type != intf && single_impls->is_single_impl(type) &&
@@ -758,7 +752,7 @@ void OptimizationImpl::drop_single_impl_collision(const DexType* intf,
 EscapeReason OptimizationImpl::can_optimize(const DexType* intf,
                                             const SingleImplData& data,
                                             bool rename_on_collision) {
-  auto escape = check_field_collision(intf, data);
+  auto escape = check_field_collision(data);
   if (escape != EscapeReason::NO_ESCAPE) {
     return escape;
   }
@@ -773,11 +767,11 @@ EscapeReason OptimizationImpl::can_optimize(const DexType* intf,
     }
   }
   for (auto method : data.methoddefs) {
-    drop_single_impl_collision(intf, data, method);
+    drop_single_impl_collision(intf, method);
   }
   auto intf_cls = type_class(intf);
   for (auto method : intf_cls->get_vmethods()) {
-    drop_single_impl_collision(intf, data, method);
+    drop_single_impl_collision(intf, method);
   }
   return NO_ESCAPE;
 }
@@ -833,8 +827,8 @@ CheckCastSet OptimizationImpl::do_optimize(
     UnorderedMap<DexMethod*, cfg::CFGMutation>& method_mutations) {
   CheckCastSet ret = fix_instructions(intf, data, method_mutations);
   set_type_refs(intf, data);
-  set_field_defs(intf, data);
-  set_field_refs(intf, data);
+  set_field_defs(data);
+  set_field_refs(data);
   set_method_defs(intf, data);
   set_method_refs(intf, data);
   rewrite_interface_methods(intf, data);

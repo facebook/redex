@@ -105,7 +105,7 @@ class EnumOrdinalAnalyzer
                                      ConstantEnvironment,
                                      EnumOrdinalAnalyzerState> {
  public:
-  static bool analyze_new_instance(const EnumOrdinalAnalyzerState& state,
+  static bool analyze_new_instance(const EnumOrdinalAnalyzerState& /*state*/,
                                    const IRInstruction* insn,
                                    ConstantEnvironment* env) {
     auto cls = type_class(insn->get_type());
@@ -147,9 +147,9 @@ class EnumOrdinalAnalyzer
     return false;
   }
 
-  static bool analyze_aput(const EnumOrdinalAnalyzerState& state,
+  static bool analyze_aput(const EnumOrdinalAnalyzerState& /*state*/,
                            const IRInstruction* insn,
-                           ConstantEnvironment* env) {
+                           ConstantEnvironment* /*env*/) {
     if (insn->opcode() == OPCODE_APUT_OBJECT) {
       // Simply not do further analysis for the aput-object instructions. Maybe
       // we can improve the analysis in the future.

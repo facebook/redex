@@ -87,7 +87,7 @@ void print_resources(
 
 void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,
-                                        PassManager& mgr) {
+                                        PassManager& /*mgr*/) {
   TRACE(RES, 1, "ResourceValueMergingPass excluded_resources count: %zu",
         m_excluded_resources.size());
 

@@ -201,7 +201,7 @@ void update_refs_to_mergeable_fields(
                               fields_lookup);
   }
   TRACE(CLMG, 8, "  Updating field refs");
-  walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
+  walk::parallel::code(scope, [&](DexMethod* /*meth*/, IRCode& code) {
     auto& cfg = code.cfg();
     auto ii = cfg::InstructionIterable(cfg);
     UnorderedMap<IRInstruction*, SourceBlock*> sb_before_igets;
@@ -370,7 +370,7 @@ void update_instance_of(
 void update_instance_of_no_type_tag(
     const Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger) {
-  walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
+  walk::parallel::code(scope, [&](DexMethod* /*caller*/, IRCode& code) {
     always_assert(code.cfg_built());
     auto& cfg = code.cfg();
     auto ii = cfg::InstructionIterable(cfg);

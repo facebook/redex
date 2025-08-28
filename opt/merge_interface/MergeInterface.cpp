@@ -271,8 +271,7 @@ bool will_fail_relocate(DexMethod* method) {
  * static methods when changed visibility or accessibilty relocating to merger
  * interface.
  */
-void strip_out_dmethod_relo_problem_intf(const Scope& scope,
-                                         std::vector<DexClassSet>* candidates) {
+void strip_out_dmethod_relo_problem_intf(std::vector<DexClassSet>* candidates) {
   UnorderedSet<DexClass*> to_delete;
   for (auto it = candidates->begin(); it != candidates->end(); ++it) {
     const DexClassSet& intf_set = *it;
@@ -653,7 +652,7 @@ void MergeInterfacePass::run_pass(DexStoresVector& stores,
       collect_can_merge(scope, type_system, classes_groups, &m_metric);
   // Remove interfaces that if merged could cause virtual method collision
   strip_out_collision(scope, &can_merge);
-  strip_out_dmethod_relo_problem_intf(scope, &can_merge);
+  strip_out_dmethod_relo_problem_intf(&can_merge);
   UnorderedMap<DexMethodRef*, DexMethodRef*> old_to_new_method;
   auto intf_merge_map =
       merge_interfaces(can_merge, &m_metric, &old_to_new_method);

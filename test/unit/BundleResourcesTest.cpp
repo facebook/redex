@@ -88,7 +88,7 @@ uint32_t get_resource_id(const std::string& name, BundleResources* resources) {
 
 TEST(BundleResources, TestReadManifest) {
   setup_resources_and_run(
-      [&](const std::string& extract_dir, BundleResources* resources) {
+      [&](const std::string& /*extract_dir*/, BundleResources* resources) {
         auto result = resources->get_min_sdk();
         EXPECT_EQ(*result, 21);
 
@@ -98,7 +98,7 @@ TEST(BundleResources, TestReadManifest) {
 }
 
 TEST(BundleResources, TestReadManifestClasses) {
-  setup_resources_and_run([&](const std::string& extract_dir,
+  setup_resources_and_run([&](const std::string& /*extract_dir*/,
                               BundleResources* resources) {
     auto manifest_info = resources->get_manifest_class_info();
     auto app_classes = manifest_info.application_classes;
@@ -201,7 +201,7 @@ TEST(BundleResources, TestCollectResFilesByRid) {
 }
 
 TEST(BundleResources, ReadLayout) {
-  setup_resources_and_run([&](const std::string& extract_dir,
+  setup_resources_and_run([&](const std::string& /*extract_dir*/,
                               BundleResources* resources) {
     resources::StringOrReferenceSet layout_classes;
     UnorderedSet<std::string> attrs_to_read;

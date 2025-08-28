@@ -491,9 +491,11 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
     rerun = false;
     {
       auto return_res = process_code_ifs_impl(
-          cfg.order(), cfg, [](const cfg::Block* b) { return false; },
+          cfg.order(), cfg, [](const cfg::Block* /*b*/) { return false; },
           [](IROpcode op) { return opcode::is_a_return(op); },
-          [](const cfg::Block* to, const cfg::Block* from) { return false; });
+          [](const cfg::Block* /*to*/, const cfg::Block* /*from*/) {
+            return false;
+          });
       rerun = std::get<0>(return_res);
       stats.removed_trailing_moves += std::get<1>(return_res);
       stats.replaced_gotos_with_returns += std::get<2>(return_res);
@@ -505,7 +507,7 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
             return !cfg.get_succ_edges_of_type(b, cfg::EDGE_THROW).empty();
           },
           [](IROpcode op) { return op == OPCODE_THROW; },
-          [&cfg](const cfg::Block* to, const cfg::Block* from) {
+          [&cfg](const cfg::Block* /*to*/, const cfg::Block* from) {
             return !cfg.get_succ_edges_of_type(from, cfg::EDGE_THROW).empty();
           });
       rerun |= std::get<0>(throw_res);

@@ -457,7 +457,7 @@ void Model::shape_model() {
 }
 
 void Model::shape_merger(const MergerType& root,
-                         const InterDexGrouping& interdex_grouping,
+                         const InterDexGrouping& /*interdex_grouping*/,
                          MergerType::ShapeCollector& shapes) {
   // if the root has got no children there is nothing to "shape"
   const auto& children = m_hierarchy.find(root.type);

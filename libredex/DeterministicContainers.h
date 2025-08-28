@@ -1563,7 +1563,7 @@ auto unordered_find(const Collection& collection, const T& value) {
 }
 
 template <class Collection, class T, bool skip_assert = false>
-auto unordered_find(Collection&& collection, const T& value) {
+auto unordered_find(Collection&& collection, const T& /*value*/) {
   static_assert(skip_assert,
                 "find_if from an rvalue collection would return an "
                 "undefined iterator");
@@ -1585,7 +1585,7 @@ auto unordered_find_if(const Collection& collection, UnaryPred pred) {
 }
 
 template <class Collection, class UnaryPred, bool skip_assert = false>
-auto unordered_find_if(Collection&& collection, UnaryPred pred) {
+auto unordered_find_if(Collection&& collection, UnaryPred /*pred*/) {
   static_assert(skip_assert,
                 "find_if from an rvalue collection would return an "
                 "undefined iterator");
@@ -1607,7 +1607,7 @@ auto unordered_find_if_not(const Collection& collection, UnaryPred pred) {
 }
 
 template <class Collection, class UnaryPred, bool skip_assert = false>
-auto unordered_find_if_not(Collection&& collection, UnaryPred pred) {
+auto unordered_find_if_not(Collection&& collection, UnaryPred /*pred*/) {
   static_assert(skip_assert,
                 "find_if from an rvalue collection would return an "
                 "undefined iterator");

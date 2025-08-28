@@ -23,7 +23,7 @@ std::vector<DexMethod*> delete_methods(
   // if a removable candidate is invoked do not delete
   ConcurrentSet<DexMethod*> removable_to_erase;
   walk::parallel::opcodes(
-      scope, [](DexMethod* meth) { return true; },
+      scope, [](DexMethod* /*meth*/) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (opcode::is_an_invoke(insn->opcode())) {
           auto callee = concurrent_resolver(insn->get_method(),

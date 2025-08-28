@@ -216,8 +216,8 @@ class OptimizeEnumsUnmapCfg {
             res.matching(cmp_location, insn_cmp, const_src);
         always_assert(insn_kase_range);
 
-        unmap_if(insn_cmp, cmp_it, case_to_enum, ordinal_reg, aget_src,
-                 const_src, insn_kase_range);
+        unmap_if(insn_cmp, case_to_enum, ordinal_reg, aget_src, const_src,
+                 insn_kase_range);
       }
     }
   }
@@ -387,7 +387,6 @@ class OptimizeEnumsUnmapCfg {
   }
 
   void unmap_if(IRInstruction* if_cmp_insn,
-                const cfg::InstructionIterator& if_cmp_it,
                 const GeneratedSwitchCasetoField& case_to_enum,
                 reg_t ordinal_reg,
                 reg_t aget_src,

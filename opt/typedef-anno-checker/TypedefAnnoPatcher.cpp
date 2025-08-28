@@ -673,8 +673,8 @@ void patch_synthetic_field_from_local_var_lambda(
     const TypedefAnnoType* anno,
     std::vector<const DexField*>* patched_fields,
     PatchingCandidates& candidates,
-    std::mutex& anno_patching_mutex,
-    Stats& class_stats) {
+    std::mutex& /*anno_patching_mutex*/,
+    Stats& /*class_stats*/) {
   live_range::Use use_of_id{insn, src};
   auto udchains_it = ud_chains.find(use_of_id);
   auto defs_set = udchains_it->second;

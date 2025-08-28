@@ -44,7 +44,7 @@ struct TypeReferenceTest : public RedexTest {
     return field;
   }
 
-  void check_proto_update(const DexProto* proto,
+  void check_proto_update(const DexProto* /*proto*/,
                           DexType* rtype,
                           DexTypeList* args) {
     auto new_proto = DexProto::make_proto(rtype, args);

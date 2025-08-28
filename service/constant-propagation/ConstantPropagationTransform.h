@@ -231,7 +231,7 @@ class value_to_instruction_visitor final
   }
 
   template <typename Domain>
-  std::vector<IRInstruction*> operator()(const Domain& dom) const {
+  std::vector<IRInstruction*> operator()(const Domain& /*dom*/) const {
     return {};
   }
 

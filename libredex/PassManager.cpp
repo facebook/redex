@@ -1296,7 +1296,7 @@ void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
   }
 }
 
-void PassManager::init_property_interactions(ConfigFiles& conf) {
+void PassManager::init_property_interactions(ConfigFiles& /*conf*/) {
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     auto* pass_info = &m_pass_info[i];
@@ -1422,7 +1422,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // For core loop legibility, have a lambda here.
 
-  auto pre_pass_verifiers = [&](Pass* pass, size_t i) {
+  auto pre_pass_verifiers = [&](Pass* /*pass*/, size_t i) {
     if (i == 0 && assessor_config->run_initially) {
       ::run_assessor(*this, scope, /* initially */ true);
     }

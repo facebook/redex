@@ -166,7 +166,7 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
 } // namespace
 
 void ObjectSensitiveDce::dce() {
-  walk::parallel::code(m_scope, [&](const DexMethod* method, IRCode& code) {
+  walk::parallel::code(m_scope, [&](const DexMethod* /*method*/, IRCode& code) {
     always_assert(code.cfg_built());
     // The backwards used_vars::FixpointIterator analysis will need it later.
     code.cfg().calculate_exit_block();

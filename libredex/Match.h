@@ -61,9 +61,9 @@ template <typename T>
 struct insns_matcher<
     T,
     std::integral_constant<size_t, std::tuple_size<T>::value>> {
-  static bool matches_at(int at,
-                         const std::vector<IRInstruction*>& insns,
-                         const T& t) {
+  static bool matches_at(int /*at*/,
+                         const std::vector<IRInstruction*>& /*insns*/,
+                         const T& /*t*/) {
     return true;
   }
 };

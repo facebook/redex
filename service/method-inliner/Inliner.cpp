@@ -374,7 +374,7 @@ void MultiMethodInliner::inline_methods() {
 
   // Third, schedule and run tasks for all selected methods.
   if (m_shrinker.enabled() && m_config.shrink_other_methods) {
-    walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
+    walk::code(m_scope, [&](DexMethod* method, IRCode& /*code*/) {
       methods_to_schedule.insert(method);
     });
   } else {
@@ -1265,7 +1265,7 @@ bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
   return false;
 }
 
-bool MultiMethodInliner::caller_too_large(DexType* caller_type,
+bool MultiMethodInliner::caller_too_large(DexType* /*caller_type*/,
                                           uint64_t estimated_caller_size,
                                           uint64_t estimated_callee_size) {
   if (is_estimate_over_max(estimated_caller_size, estimated_callee_size,
@@ -1456,8 +1456,7 @@ static size_t get_inlined_cost(IRInstruction* insn,
  */
 static size_t get_inlined_cost(const std::vector<cfg::Block*>& blocks,
                                size_t index,
-                               const cfg::CompactEdgeVector& succs,
-                               const InlinerCostConfig& cost_config) {
+                               const cfg::CompactEdgeVector& succs) {
   auto block = blocks.at(index);
   switch (block->branchingness()) {
   case opcode::Branchingness::BRANCH_GOTO:
@@ -1589,8 +1588,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
       cost += ::get_inlined_cost(insn, m_inliner_cost_config);
       analyze_refs(insn);
     }
-    cost +=
-        ::get_inlined_cost(blocks, i, block->succs(), m_inliner_cost_config);
+    cost += ::get_inlined_cost(blocks, i, block->succs());
     if (block->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
       returns++;
     }
@@ -2622,7 +2620,7 @@ void MultiMethodInliner::delayed_invoke_direct_to_static() {
     mutators::make_static(method);
   }
   walk::parallel::opcodes(
-      m_scope, [](DexMethod* meth) { return true; },
+      m_scope, [](DexMethod* /*meth*/) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
         auto op = insn->opcode();
         if (op == OPCODE_INVOKE_DIRECT) {

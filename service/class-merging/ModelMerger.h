@@ -46,10 +46,10 @@ class ModelMerger {
   const ModelStats& get_model_stats() const { return m_stats; }
 
  protected:
-  virtual void post_process(Model& model,
-                            TypeTags& type_tags,
+  virtual void post_process(Model& /*model*/,
+                            TypeTags& /*type_tags*/,
                             UnorderedMap<const DexType*, const DexMethod*>&
-                                mergeable_to_merger_ctor) {
+                            /*mergeable_to_merger_ctor*/) {
     TRACE(CLMG, 5, "[ClassMerging] default post process");
   }
 

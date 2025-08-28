@@ -11,8 +11,8 @@
 #include "DexUtil.h"
 
 void MakePublicPass::run_pass(DexStoresVector& stores,
-                              ConfigFiles& conf,
-                              PassManager& mgr) {
+                              ConfigFiles& /*conf*/,
+                              PassManager& /*mgr*/) {
   auto scope = build_class_scope(stores);
   loosen_access_modifier(scope);
 }

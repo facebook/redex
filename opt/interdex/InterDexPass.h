@@ -80,9 +80,9 @@ class InterDexPass : public Pass {
 
   void bind_config() override;
 
-  void eval_pass(DexStoresVector& stores,
-                 ConfigFiles& conf,
-                 PassManager& mgr) override {
+  void eval_pass(DexStoresVector& /*stores*/,
+                 ConfigFiles& /*conf*/,
+                 PassManager& /*mgr*/) override {
     ++m_eval;
   }
 

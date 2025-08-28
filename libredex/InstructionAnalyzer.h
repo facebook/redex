@@ -96,9 +96,9 @@ class InstructionAnalyzerBase {
   using Env = Env_;
   using State = State_;
 
-  static bool analyze_default(const State& state,
-                              const IRInstruction* insn,
-                              Env* env) {
+  static bool analyze_default(const State& /*state*/,
+                              const IRInstruction* /*insn*/,
+                              Env* /*env*/) {
     return false;
   }
 
@@ -126,7 +126,7 @@ class InstructionAnalyzerBase<Derived, Env_, std::nullptr_t> {
   using State = std::nullptr_t;
   using Env = Env_;
 
-  static bool analyze_default(const IRInstruction* insn, Env* env) {
+  static bool analyze_default(const IRInstruction* /*insn*/, Env* /*env*/) {
     return false;
   }
 

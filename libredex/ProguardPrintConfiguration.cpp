@@ -82,7 +82,7 @@ std::string keep_rules::show_simple_keep_rule(const KeepSpec& keep_rule,
 
 void keep_rules::show_configuration(
     std::ostream& output,
-    const Scope& classes,
+    const Scope& /*classes*/,
     const keep_rules::ProguardConfiguration& config) {
   for (const auto& keep : config.keep_rules) {
     output << keep_rules::show_keep(*keep) << std::endl;

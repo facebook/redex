@@ -64,7 +64,7 @@ void DexDebugOpcodeStartLocal::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   }
 }
 
-void DexDebugInstruction::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexDebugInstruction::encode(DexOutputIdx* /*dodx*/, uint8_t*& encdata) {
   *encdata++ = (uint8_t)m_opcode;
   if (m_signed) {
     encdata = write_sleb128(encdata, m_value);
