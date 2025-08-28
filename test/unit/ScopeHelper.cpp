@@ -19,7 +19,9 @@ namespace {
 DexClass* create_java_lang_object() {
   auto obj_t = type::java_lang_Object();
   auto obj_cls = type_class(obj_t);
-  if (obj_cls != nullptr) return obj_cls;
+  if (obj_cls != nullptr) {
+    return obj_cls;
+  }
 
   // create a DexClass for java.lang.Object
   ClassCreator creator(obj_t);
@@ -199,8 +201,12 @@ DexClass* create_class(DexType* type,
                        bool external) {
   ClassCreator creator(type);
   creator.set_access(access);
-  if (external) creator.set_external();
-  if (super == nullptr) super = type::java_lang_Object();
+  if (external) {
+    creator.set_external();
+  }
+  if (super == nullptr) {
+    super = type::java_lang_Object();
+  }
   creator.set_super(super);
   for (const auto& interface : interfaces) {
     creator.add_interface(interface);

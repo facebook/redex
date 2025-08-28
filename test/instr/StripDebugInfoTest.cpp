@@ -33,7 +33,9 @@ TEST_F(PostVerify, StripDebugInfo) {
       for (const auto& e : debug_item->get_entries()) {
         if (e.type == DexDebugEntryType::Instruction) {
           DexDebugInstruction* dbg_op = e.insn.get();
-          if (!dbg_op) continue;
+          if (!dbg_op) {
+            continue;
+          }
           auto op = dbg_op->opcode();
           // Make sure all prologue begin, epilogue end and local variable
           // references are gone.

@@ -39,8 +39,9 @@ enum ClassType {
 };
 
 ClassType filter_test_classes(const DexString* cls_name) {
-  if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Propagation;") == 0)
+  if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Propagation;") == 0) {
     return MAINCLASS;
+  }
   return OTHERCLASS;
 }
 

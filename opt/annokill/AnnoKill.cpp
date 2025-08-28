@@ -307,7 +307,9 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
                                     opcode::is_an_sfield_op(insn->opcode())
                                         ? FieldSearch::Static
                                         : FieldSearch::Instance);
-          if (fdef != nullptr) field = fdef;
+          if (fdef != nullptr) {
+            field = fdef;
+          }
 
           bool referenced = false;
           auto owner = field->get_class();
@@ -333,7 +335,9 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           auto method = insn->get_method();
           DexMethod* methdef =
               resolve_method(method, opcode_to_search(insn), meth);
-          if (methdef != nullptr) method = methdef;
+          if (methdef != nullptr) {
+            method = methdef;
+          }
 
           bool referenced = false;
           auto owner = method->get_class();
@@ -498,7 +502,9 @@ void AnnoKill::cleanup_aset(
 }
 
 bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) const {
-  if (!m_kill_bad_signatures) return false;
+  if (!m_kill_bad_signatures) {
+    return false;
+  }
   bool res = false;
   annotation_signature_parser::parse(da, [&](auto* devs, auto* sigcls) {
     if (sigcls && !sigcls->is_external() && !m_scope_set.count(sigcls)) {

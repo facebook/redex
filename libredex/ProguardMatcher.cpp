@@ -51,7 +51,9 @@ struct RegexWithCache {
 RegexWithCache make_rx(const std::string& s,
                        MatchingStringsCache* cache,
                        bool convert = true) {
-  if (s.empty()) return {{}, nullptr};
+  if (s.empty()) {
+    return {{}, nullptr};
+  }
   auto wc = convert ? proguard_parser::convert_wildcard_type(s) : s;
   auto rx =
       std::make_unique<boost::regex>(proguard_parser::form_type_regex(wc));
@@ -88,7 +90,9 @@ const DexString* get_deobfuscated_name(const DexType* type) {
 
 bool match_annotation_rx(const DexClass* cls, const RegexWithCache& annorx) {
   const auto* annos = cls->get_anno_set();
-  if (!annos) return false;
+  if (!annos) {
+    return false;
+  }
   for (const auto& anno : annos->get_annotations()) {
     if (match_with_cache(get_deobfuscated_name(anno->type()), annorx)) {
       return true;
@@ -155,18 +159,26 @@ struct ClassMatcher {
   }
 
   bool match_annotation(const DexClass* cls) const {
-    if (!m_anno) return true;
+    if (!m_anno) {
+      return true;
+    }
     return match_annotation_rx(cls, m_anno);
   }
 
   bool match_extends(const DexClass* cls) {
-    if (!m_extends) return true;
+    if (!m_extends) {
+      return true;
+    }
     return search_extends_and_interfaces(cls);
   }
 
   bool type_and_annotation_match(const DexClass* cls) const {
-    if (cls == nullptr) return false;
-    if (cls->get_type() == type::java_lang_Object()) return false;
+    if (cls == nullptr) {
+      return false;
+    }
+    if (cls->get_type() == type::java_lang_Object()) {
+      return false;
+    }
     // First check to see if an annotation type needs to be matched.
     if (m_extends_anno) {
       if (!match_annotation_rx(cls, m_extends_anno)) {
@@ -178,7 +190,9 @@ struct ClassMatcher {
 
   bool search_interfaces(const DexClass* cls) {
     const auto* interfaces = cls->get_interfaces();
-    if (!interfaces) return false;
+    if (!interfaces) {
+      return false;
+    }
     for (const auto& impl : *interfaces) {
       auto impl_class = type_class(impl);
       if (impl_class) {

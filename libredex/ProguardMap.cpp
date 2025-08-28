@@ -22,7 +22,9 @@ namespace {
 std::string find_or_same(const std::string& key,
                          const UnorderedMap<std::string, std::string>& map) {
   auto it = map.find(key);
-  if (it == map.end()) return key;
+  if (it == map.end()) {
+    return key;
+  }
   return it->second;
 }
 
@@ -88,7 +90,9 @@ template <typename F>
 bool id(const char*& p, std::string& s, F isseparator) {
   auto b = p;
   auto first = mutf8_next_code_point(p);
-  if (isdigit(first)) return false;
+  if (isdigit(first)) {
+    return false;
+  }
   while (true) {
     auto prev = p;
     auto cp = mutf8_next_code_point(p);
@@ -207,8 +211,12 @@ void inlined_method(std::string& classname, std::string& methodname) {
 bool is_maybe_proguard_generated_member(const std::string& s) {
   unsigned int count = 0;
   for (auto it = s.rbegin(); it != s.rend(); ++it, ++count) {
-    if (isxdigit(*it)) continue;
-    if (*it == '$') return count == 8;
+    if (isxdigit(*it)) {
+      continue;
+    }
+    if (*it == '$') {
+      return count == 8;
+    }
     return false;
   }
   return false;
@@ -344,10 +352,18 @@ bool ProguardMap::parse_class_full_format(const std::string& line) {
   std::string old_class_name;
   std::string new_class_name;
   auto p = line.c_str();
-  if (!literal(p, "type ")) return false;
-  if (!id(p, old_class_name)) return false;
-  if (!literal(p, " -> ")) return false;
-  if (!id(p, new_class_name)) return false;
+  if (!literal(p, "type ")) {
+    return false;
+  }
+  if (!id(p, old_class_name)) {
+    return false;
+  }
+  if (!literal(p, " -> ")) {
+    return false;
+  }
+  if (!id(p, new_class_name)) {
+    return false;
+  }
 
   m_currClass = old_class_name;
   m_currNewClass = new_class_name;
@@ -431,9 +447,15 @@ bool ProguardMap::parse_class(const std::string& line) {
   std::string classname;
   std::string newname;
   auto p = line.c_str();
-  if (!id(p, classname)) return false;
-  if (!literal(p, " -> ")) return false;
-  if (!id(p, newname)) return false;
+  if (!id(p, classname)) {
+    return false;
+  }
+  if (!literal(p, " -> ")) {
+    return false;
+  }
+  if (!id(p, newname)) {
+    return false;
+  }
   m_currClass = convert_type(classname);
   m_currNewClass = convert_type(newname);
   m_classMap[m_currClass] = m_currNewClass;
@@ -448,11 +470,19 @@ bool ProguardMap::parse_field(const std::string& line) {
 
   auto p = line.c_str();
   whitespace(p);
-  if (!id(p, type)) return false;
+  if (!id(p, type)) {
+    return false;
+  }
   whitespace(p);
-  if (!id(p, fieldname)) return false;
-  if (!literal(p, " -> ")) return false;
-  if (!id(p, newname)) return false;
+  if (!id(p, fieldname)) {
+    return false;
+  }
+  if (!literal(p, " -> ")) {
+    return false;
+  }
+  if (!id(p, newname)) {
+    return false;
+  }
 
   auto ctype = convert_type(type);
   auto xtype = translate_type(ctype, *this);
@@ -488,16 +518,24 @@ bool ProguardMap::parse_method(const std::string& line) {
   lines->end = line_number(p);
   literal(p, ':');
 
-  if (!id(p, type)) return false;
+  if (!id(p, type)) {
+    return false;
+  }
   whitespace(p);
 
-  if (!id(p, methodname)) return false;
+  if (!id(p, methodname)) {
+    return false;
+  }
   inlined_method(classname, methodname);
 
-  if (!literal(p, '(')) return false;
+  if (!literal(p, '(')) {
+    return false;
+  }
   while (true) {
     std::string arg;
-    if (literal(p, ')')) break;
+    if (literal(p, ')')) {
+      break;
+    }
     id(p, arg);
     auto old_arg = convert_type(arg);
     auto new_arg = translate_type(old_arg, *this);
@@ -512,7 +550,9 @@ bool ProguardMap::parse_method(const std::string& line) {
   lines->original_end = line_number(p);
   literal(p, " -> ");
 
-  if (!id(p, newname)) return false;
+  if (!id(p, newname)) {
+    return false;
+  }
 
   auto old_rtype = convert_type(type);
   auto new_rtype = translate_type(old_rtype, *this);

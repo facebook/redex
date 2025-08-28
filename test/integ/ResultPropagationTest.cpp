@@ -28,16 +28,20 @@ boost::optional<ParamIndex> find_return_param_index(
   auto exit_block = cfg.exit_block();
   auto it = exit_block->rbegin();
   if (it == exit_block->rend() ||
-      !opcode::is_a_return_value(it->insn->opcode()))
+      !opcode::is_a_return_value(it->insn->opcode())) {
     return boost::none;
+  }
   auto return_reg = it->insn->src(0);
   TRACE(RP, 2, "  returns v%d", return_reg);
   ++it;
-  if (it == exit_block->rend() || !opcode::is_a_move(it->insn->opcode()))
+  if (it == exit_block->rend() || !opcode::is_a_move(it->insn->opcode())) {
     return boost::none;
+  }
   auto src_reg = it->insn->src(0);
   TRACE(RP, 2, "  move v%d, v%d", it->insn->dest(), src_reg);
-  if (it->insn->dest() != return_reg) return boost::none;
+  if (it->insn->dest() != return_reg) {
+    return boost::none;
+  }
   // let's see if it came from a unique load-param
   IRInstruction* load_param = nullptr;
   for (auto& mie : InstructionIterable(cfg)) {

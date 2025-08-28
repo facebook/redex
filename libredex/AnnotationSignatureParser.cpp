@@ -18,11 +18,15 @@ void parse(
   const auto& elems = anno->anno_elems();
   for (const auto& elem : elems) {
     const auto& ev = elem.encoded_value;
-    if (ev->evtype() != DEVT_ARRAY) continue;
+    if (ev->evtype() != DEVT_ARRAY) {
+      continue;
+    }
     auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
     auto const& evs = arrayev->evalues();
     for (auto& strev : *evs) {
-      if (strev->evtype() != DEVT_STRING) continue;
+      if (strev->evtype() != DEVT_STRING) {
+        continue;
+      }
       auto* devs = static_cast<DexEncodedValueString*>(strev.get());
       const std::string sigstr = devs->string()->str_copy();
       always_assert(sigstr.length() > 0);

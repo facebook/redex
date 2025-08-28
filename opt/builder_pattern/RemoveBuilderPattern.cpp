@@ -409,7 +409,9 @@ void RemoveBuilderPatternPass::bind_config() {
     auto object_type = type::java_lang_Object();
     m_roots.clear();
     for (const auto& root : roots) {
-      if (!type_class(root)) continue;
+      if (!type_class(root)) {
+        continue;
+      }
       if (root != object_type) {
         auto super_cls = type_class(root)->get_super_class();
         if (super_cls != object_type) {

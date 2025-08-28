@@ -318,8 +318,9 @@ TEST_F(IODITest, couldIODIBeBetter) {
     auto next_biggest = methods.begin();
     uint32_t biggest_insns = (*next_biggest)->get_dex_code()->size();
     while ((*next_biggest)->get_dex_code()->size() == biggest_insns &&
-           ++next_biggest != methods.end())
+           ++next_biggest != methods.end()) {
       ;
+    }
 
     uint32_t total_debug_size = 0;
     for (auto iter = methods.begin(); iter != next_biggest; iter++) {

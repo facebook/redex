@@ -23,7 +23,9 @@ void redump(const char* format, ...) {
 void redump(uint32_t off, const char* format, ...) {
   va_list va;
   va_start(va, format);
-  if (!clean) printf("[0x%x] ", off);
+  if (!clean) {
+    printf("[0x%x] ", off);
+  }
   vprintf(format, va);
   va_end(va);
 }
@@ -31,7 +33,9 @@ void redump(uint32_t off, const char* format, ...) {
 void redump(uint32_t pos, uint32_t off, const char* format, ...) {
   va_list va;
   va_start(va, format);
-  if (!clean) printf("(0x%x) [0x%x] ", pos, off);
+  if (!clean) {
+    printf("(0x%x) [0x%x] ", pos, off);
+  }
   vprintf(format, va);
   va_end(va);
 }

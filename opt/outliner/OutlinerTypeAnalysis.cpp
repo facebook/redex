@@ -643,7 +643,9 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_SHL_LONG:
   case OPCODE_SHR_LONG:
   case OPCODE_USHR_LONG:
-    if (src_index == 0) return type::_long();
+    if (src_index == 0) {
+      return type::_long();
+    }
     always_assert(src_index == 1);
     return type::_int();
 
@@ -677,7 +679,9 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
       auto dex_type = env.get_dex_type(insn->src(1));
       return dex_type ? *dex_type : nullptr;
     }
-    if (src_index == 2) return type::_int();
+    if (src_index == 2) {
+      return type::_int();
+    }
     always_assert(src_index == 0);
     switch (insn->opcode()) {
     case OPCODE_APUT:
@@ -713,7 +717,9 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_IPUT_SHORT:
   case OPCODE_IPUT_WIDE:
   case OPCODE_IPUT_OBJECT:
-    if (src_index == 1) return insn->get_field()->get_class();
+    if (src_index == 1) {
+      return insn->get_field()->get_class();
+    }
     always_assert(src_index == 0);
     return insn->get_field()->get_type();
 
@@ -741,7 +747,9 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       // The first argument is a reference to the object instance on which the
       // method is invoked.
-      if (src_index-- == 0) return dex_method->get_class();
+      if (src_index-- == 0) {
+        return dex_method->get_class();
+      }
     }
     return arg_types->at(src_index);
   }

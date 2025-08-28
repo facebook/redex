@@ -642,7 +642,9 @@ void DexOutput::insert_map_item(uint16_t maptype,
                                 uint32_t size,
                                 uint32_t offset,
                                 uint32_t bytes) {
-  if (size == 0) return;
+  if (size == 0) {
+    return;
+  }
   dex_map_item item{};
   item.type = maptype;
   item.size = size;
@@ -894,7 +896,9 @@ void DexOutput::generate_class_data_items() {
   uint32_t count = 0;
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->at(i);
-    if (!clz->has_class_data()) continue;
+    if (!clz->has_class_data()) {
+      continue;
+    }
     /* No alignment constraints for this data */
     int size = clz->encode(&m_dodx, dco, m_output.get() + m_offset);
     if (m_dex_output_config.write_class_sizes) {
@@ -1070,7 +1074,9 @@ void DexOutput::generate_static_values() {
     auto& ifields = clz->get_ifields();
     std::sort(ifields.begin(), ifields.end(), compare_dexfields);
     std::unique_ptr<DexEncodedValueArray> deva(clz->get_static_values());
-    if (!deva) continue;
+    if (!deva) {
+      continue;
+    }
     if (enc_arrays.count(*deva)) {
       m_static_values[clz] = enc_arrays.at(*deva);
     } else {
@@ -1127,7 +1133,9 @@ void DexOutput::unique_annotations(annomap_t& annomap,
   uint32_t mentry_offset = m_offset;
   std::map<std::vector<uint8_t>, uint32_t> annotation_byte_offsets;
   for (auto anno : annolist) {
-    if (annomap.count(anno)) continue;
+    if (annomap.count(anno)) {
+      continue;
+    }
     std::vector<uint8_t> annotation_bytes;
     anno->vencode(&m_dodx, annotation_bytes);
     if (annotation_byte_offsets.count(annotation_bytes)) {
@@ -1157,7 +1165,9 @@ void DexOutput::unique_asets(annomap_t& annomap,
   uint32_t mentry_offset = align(m_offset);
   std::map<std::vector<uint32_t>, uint32_t> aset_offsets;
   for (auto aset : asetlist) {
-    if (asetmap.count(aset)) continue;
+    if (asetmap.count(aset)) {
+      continue;
+    }
     std::vector<uint32_t> aset_bytes;
     aset->vencode(&m_dodx, aset_bytes, annomap);
     if (aset_offsets.count(aset_bytes)) {
@@ -1187,7 +1197,9 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
   uint32_t mentry_offset = align(m_offset);
   std::map<std::vector<uint32_t>, uint32_t> xref_offsets;
   for (auto xref : xreflist) {
-    if (xrefmap.count(xref)) continue;
+    if (xrefmap.count(xref)) {
+      continue;
+    }
     std::vector<uint32_t> xref_bytes;
     xref_bytes.push_back((unsigned int)xref->size());
     for (auto& param : *xref) {
@@ -1224,7 +1236,9 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
   uint32_t mentry_offset = align(m_offset);
   std::map<std::vector<uint32_t>, uint32_t> adir_offsets;
   for (auto adir : adirlist) {
-    if (adirmap.count(adir)) continue;
+    if (adirmap.count(adir)) {
+      continue;
+    }
     std::vector<uint32_t> adir_bytes;
     adir->vencode(&m_dodx, adir_bytes, xrefmap, asetmap);
     if (adir_offsets.count(adir_bytes)) {
@@ -2248,7 +2262,9 @@ void DexOutput::generate_debug_items() {
       DexCode* dc = it.code;
       dex_code_item* dci = it.code_item;
       auto dbg = dc->get_debug_item();
-      if (dbg == nullptr) continue;
+      if (dbg == nullptr) {
+        continue;
+      }
       dbgcount++;
       size_t num_params = it.method->get_proto()->get_args()->size();
       inc_offset(emit_debug_info(&m_dodx, emit_positions, dbg, dc, dci,
@@ -2286,7 +2302,9 @@ void DexOutput::generate_map() {
  */
 static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
   auto code = method->get_code();
-  if (!code) return; // nothing to do for native methods
+  if (!code) {
+    return; // nothing to do for native methods
+  }
 
   for (auto& mie : *code) {
     if (mie.type != MFLOW_DEX_OPCODE) {
@@ -2433,7 +2451,9 @@ void compute_method_to_id_map(
         auto resm = resolve_method(method,
                                    is_interface(cls) ? MethodSearch::Interface
                                                      : MethodSearch::Any);
-        if (resm) return resm;
+        if (resm) {
+          return resm;
+        }
       }
       return method;
     }();
@@ -2478,7 +2498,9 @@ void write_method_mapping(const std::string& filename,
     auto deobf_class = [&] {
       if (cls) {
         auto deobname = cls->get_deobfuscated_name_or_empty();
-        if (!deobname.empty()) return str_copy(deobname);
+        if (!deobname.empty()) {
+          return str_copy(deobname);
+        }
       }
       return show(typecls);
     }();
@@ -2491,7 +2513,9 @@ void write_method_mapping(const std::string& filename,
         auto resm = resolve_method(method,
                                    is_interface(cls) ? MethodSearch::Interface
                                                      : MethodSearch::Any);
-        if (resm) return resm;
+        if (resm) {
+          return resm;
+        }
       }
       return method;
     }();
@@ -2538,7 +2562,9 @@ void write_class_mapping(const std::string& filename,
     auto deobf_class = [&] {
       if (cls) {
         auto deobname = cls->get_deobfuscated_name_or_empty();
-        if (!deobname.empty()) return str_copy(deobname);
+        if (!deobname.empty()) {
+          return str_copy(deobname);
+        }
       }
       return show(cls);
     }();
@@ -2579,7 +2605,9 @@ const char* deobf_primitive(char type) {
 }
 
 void write_invoke_mapping(const std::string& filename, DexClasses* classes) {
-  if (filename.empty()) return;
+  if (filename.empty()) {
+    return;
+  }
 
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
   Json::FastWriter writer; // minimal formatting and no intermittent new-lines
@@ -2647,12 +2675,16 @@ void write_invoke_mapping(const std::string& filename, DexClasses* classes) {
 }
 
 void write_pg_mapping(const std::string& filename, DexClasses* classes) {
-  if (filename.empty()) return;
+  if (filename.empty()) {
+    return;
+  }
 
   auto deobf_class = [&](DexClass* cls) {
     if (cls) {
       auto deobname = cls->get_deobfuscated_name_or_empty();
-      if (!deobname.empty()) return str_copy(deobname);
+      if (!deobname.empty()) {
+        return str_copy(deobname);
+      }
     }
     return show(cls);
   };
@@ -2782,7 +2814,9 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
 void write_full_mapping(const std::string& filename,
                         DexClasses* classes,
                         const std::string* store_name) {
-  if (filename.empty()) return;
+  if (filename.empty()) {
+    return;
+  }
 
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
   for (auto cls : *classes) {

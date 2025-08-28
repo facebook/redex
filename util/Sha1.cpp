@@ -48,10 +48,11 @@ static void sha_decode32(unsigned int* output,
                          unsigned int len) {
   unsigned int i, j;
 
-  for (i = 0, j = 0; j < len; i++, j += 4)
+  for (i = 0, j = 0; j < len; i++, j += 4) {
     output[i] =
         ((unsigned int)input[j + 3]) | (((unsigned int)input[j + 2]) << 8) |
         (((unsigned int)input[j + 1]) << 16) | (((unsigned int)input[j]) << 24);
+  }
 }
 
 /* F, G, H and I are basic SHA1 functions.
@@ -248,12 +249,14 @@ void sha1_update(Sha1Context* context,
            partLen);
     sha1_transform(context->state, context->buffer);
 
-    for (i = partLen; i + 63 < inputLen; i += 64)
+    for (i = partLen; i + 63 < inputLen; i += 64) {
       sha1_transform(context->state, &input[i]);
+    }
 
     index = 0;
-  } else
+  } else {
     i = 0;
+  }
 
   /* Buffer remaining input */
   memcpy((unsigned char*)&context->buffer[index], (unsigned char*)&input[i],

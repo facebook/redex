@@ -53,9 +53,15 @@ std::vector<DexMethod*> delete_methods(
 
   std::vector<DexMethod*> deleted;
   for (auto callee : UnorderedIterable(removable)) {
-    if (!callee->is_concrete()) continue;
-    if (!can_delete(callee)) continue;
-    if (method::is_argless_init(callee)) continue;
+    if (!callee->is_concrete()) {
+      continue;
+    }
+    if (!can_delete(callee)) {
+      continue;
+    }
+    if (method::is_argless_init(callee)) {
+      continue;
+    }
     auto cls = type_class(callee->get_class());
     always_assert_log(cls != nullptr,
                       "%s is concrete but does not have a DexClass\n",

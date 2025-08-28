@@ -408,8 +408,9 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
     if (nbuffer[1] == 'i') {
       access |= ACC_CONSTRUCTOR;
     }
-  } else if (access & (ACC_PRIVATE | ACC_STATIC))
+  } else if (access & (ACC_PRIVATE | ACC_STATIC)) {
     is_virt = false;
+  }
   method->set_access((DexAccessFlags)access);
   method->set_virtual(is_virt);
   method->set_external();
@@ -881,14 +882,20 @@ void process_jar_entries(std::vector<jar_entry>& files,
   constexpr std::string_view kClassEndString = ".class";
   init_fn();
   for (auto& file : files) {
-    if (file.cd_entry.ucomp_size == 0) continue;
+    if (file.cd_entry.ucomp_size == 0) {
+      continue;
+    }
 
     // Skip non-class files
     std::string_view filename = file.filename;
-    if (filename.length() < kClassEndString.length()) continue;
+    if (filename.length() < kClassEndString.length()) {
+      continue;
+    }
     auto endcomp =
         filename.substr(filename.length() - kClassEndString.length());
-    if (endcomp != kClassEndString) continue;
+    if (endcomp != kClassEndString) {
+      continue;
+    }
 
     // Reject uncharacteristically large files.
     always_assert_type_log(file.cd_entry.ucomp_size <= kMaxBufferSize,
@@ -897,8 +904,9 @@ void process_jar_entries(std::vector<jar_entry>& files,
 
     // Resize output if necessary.
     if (bufsize < file.cd_entry.ucomp_size) {
-      while (bufsize < file.cd_entry.ucomp_size)
+      while (bufsize < file.cd_entry.ucomp_size) {
         bufsize *= 2;
+      }
       outbuffer = std::make_unique<uint8_t[]>(bufsize);
     }
 

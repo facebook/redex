@@ -71,10 +71,14 @@ void InjectDebug::inject_register(
 
 void InjectDebug::inject_method(DexMethod* dex_method, int* line_start) {
   IRCode* ir_code = dex_method->get_code();
-  if (ir_code == nullptr) return;
+  if (ir_code == nullptr) {
+    return;
+  }
 
   DexDebugItem* dbg = ir_code->get_debug_item();
-  if (dbg != nullptr) dbg->get_entries().clear();
+  if (dbg != nullptr) {
+    dbg->get_entries().clear();
+  }
 
   auto type_envs = [&]() {
     cfg::ScopedCFG cfg(ir_code);

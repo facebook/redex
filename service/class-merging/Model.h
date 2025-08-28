@@ -487,7 +487,9 @@ class Model {
   template <class HierarchyWalkerFn = void(const MergerType&)>
   void walk_hierarchy_helper(HierarchyWalkerFn walker, const DexType* type) {
     const auto& children = m_hierarchy.find(type);
-    if (children == m_hierarchy.end()) return;
+    if (children == m_hierarchy.end()) {
+      return;
+    }
     for (const auto* child : children->second) {
       const auto& merger_it = m_mergers.find(child);
       if (merger_it != m_mergers.end()) {

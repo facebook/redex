@@ -41,18 +41,19 @@ void RedexOptions::deserialize(const Json::Value& entry_data) {
 }
 
 Architecture parse_architecture(const std::string& s) {
-  if (s == "arm")
+  if (s == "arm") {
     return Architecture::ARM;
-  else if (s == "armv7")
+  } else if (s == "armv7") {
     return Architecture::ARMV7;
-  else if (s == "arm64")
+  } else if (s == "arm64") {
     return Architecture::ARM64;
-  else if (s == "x86_64")
+  } else if (s == "x86_64") {
     return Architecture::X86_64;
-  else if (s == "x86")
+  } else if (s == "x86") {
     return Architecture::X86;
-  else
+  } else {
     return Architecture::UNKNOWN;
+  }
 }
 
 const char* architecture_to_string(Architecture arch) {

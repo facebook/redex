@@ -340,7 +340,9 @@ void merge(const BaseSigs& base_sigs,
   const auto is_base_sig = [&](const DexString* name, const DexProto* proto) {
     TRACE(VIRT, 5, "/check base sigs for %s:%s", SHOW(name), SHOW(proto));
     const auto sigs = base_sigs.find(name);
-    if (sigs == base_sigs.end()) return false;
+    if (sigs == base_sigs.end()) {
+      return false;
+    }
     return sigs->second.count(proto) > 0;
   };
 
@@ -354,9 +356,13 @@ void merge(const BaseSigs& base_sigs,
               SHOW(name),
               SHOW(proto));
         const auto& sigs = base_intf_sig_map.find(name);
-        if (sigs == base_intf_sig_map.end()) return false;
+        if (sigs == base_intf_sig_map.end()) {
+          return false;
+        }
         const auto& intfs_it = sigs->second.find(proto);
-        if (intfs_it == sigs->second.end()) return false;
+        if (intfs_it == sigs->second.end()) {
+          return false;
+        }
         return intfs_it->second.count(intf) > 0;
       };
 
@@ -530,14 +536,18 @@ bool load_interfaces_methods(const DexTypeList* interfaces,
 bool get_interface_methods(const DexType* type, BaseIntfSigs& intf_methods) {
   always_assert_log(intf_methods.empty(), "intf_methods is an out param");
   // REVIEW: should we always have a DexClass for java.lang.Object?
-  if (type == type::java_lang_Object()) return false;
+  if (type == type::java_lang_Object()) {
+    return false;
+  }
   auto cls = type_class(type);
   always_assert_log(
       cls != nullptr, "DexClass must exist for type %s\n", SHOW(type));
   bool escaped = false;
   const auto* interfaces = cls->get_interfaces();
   if (!interfaces->empty()) {
-    if (load_interfaces_methods(interfaces, intf_methods)) escaped = true;
+    if (load_interfaces_methods(interfaces, intf_methods)) {
+      escaped = true;
+    }
   }
   return escaped;
 }
@@ -722,7 +732,9 @@ void get_rooted_interface_scope(const SignatureMap& sig_map,
                                 Scopes& cls_scopes) {
   for (const auto& intf : *cls->get_interfaces()) {
     const DexClass* intf_cls = type_class(intf);
-    if (intf_cls == nullptr) continue;
+    if (intf_cls == nullptr) {
+      continue;
+    }
     for (const auto& meth : intf_cls->get_vmethods()) {
       const auto scope = find_rooted_scope(sig_map, type, meth);
       if (scope != nullptr && scope->type == type &&
@@ -735,7 +747,9 @@ void get_rooted_interface_scope(const SignatureMap& sig_map,
               already_found = true;
             }
           }
-          if (already_found) continue;
+          if (already_found) {
+            continue;
+          }
         }
         TRACE(VIRT,
               9,
@@ -800,8 +814,12 @@ const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
   always_assert(scopes != protos->second.end());
   const auto meth_type = meth->get_class();
   for (const auto& scope : scopes->second) {
-    if (scope.type == type::java_lang_Object()) return scope;
-    if (type::is_subclass(scope.type, meth_type)) return scope;
+    if (scope.type == type::java_lang_Object()) {
+      return scope;
+    }
+    if (type::is_subclass(scope.type, meth_type)) {
+      return scope;
+    }
   }
   not_reached_log("unreachable. Scope not found for %s\n", SHOW(meth));
 }
@@ -894,7 +912,9 @@ void ClassScopes::build_interface_scopes() {
       auto& intf_scope = m_interface_scopes[intf_it.first];
       intf_scope.push_back({});
       for (const auto& scope : scopes) {
-        if (scope.interfaces.count(intf_it.first) == 0) continue;
+        if (scope.interfaces.count(intf_it.first) == 0) {
+          continue;
+        }
         TRACE(VIRT, 9, "add interface scope for %s", SHOW(intf_it.first));
         intf_scope.back().push_back(&scope);
       }
@@ -913,7 +933,9 @@ InterfaceScope ClassScopes::find_interface_scope(const DexMethod* meth) const {
   const auto& scopes = m_sig_map.at(meth->get_name()).at(meth->get_proto());
   always_assert(!scopes.empty()); // at least the method itself
   for (const auto& scope : scopes) {
-    if (scope.interfaces.count(intf) == 0) continue;
+    if (scope.interfaces.count(intf) == 0) {
+      continue;
+    }
     TRACE_NO_LINE(VIRT, 9, "add interface scope for %s", SHOW(intf));
     intf_scope.push_back(&scope);
   }

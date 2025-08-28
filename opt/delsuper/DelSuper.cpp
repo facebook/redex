@@ -113,9 +113,13 @@ class DelSuper {
   bool are_opcs_equal(const std::vector<IRInstruction*>& insns,
                       const IROpcode* opcs,
                       size_t opcs_len) {
-    if (insns.size() != opcs_len) return false;
+    if (insns.size() != opcs_len) {
+      return false;
+    }
     for (size_t i = 0; i < opcs_len; ++i) {
-      if (insns[i]->opcode() != opcs[i]) return false;
+      if (insns[i]->opcode() != opcs[i]) {
+        return false;
+      }
     }
     return true;
   }

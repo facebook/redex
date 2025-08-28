@@ -60,9 +60,15 @@ const DexType* get_init_class_type_demand(const IRInstruction* insn) {
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
   vis1 &= VISIBILITY_MASK;
   vis2 &= VISIBILITY_MASK;
-  if ((vis1 & ACC_PUBLIC) || (vis2 & ACC_PUBLIC)) return ACC_PUBLIC;
-  if (vis1 == 0 || vis2 == 0) return static_cast<DexAccessFlags>(0);
-  if ((vis1 & ACC_PROTECTED) || (vis2 & ACC_PROTECTED)) return ACC_PROTECTED;
+  if ((vis1 & ACC_PUBLIC) || (vis2 & ACC_PUBLIC)) {
+    return ACC_PUBLIC;
+  }
+  if (vis1 == 0 || vis2 == 0) {
+    return static_cast<DexAccessFlags>(0);
+  }
+  if ((vis1 & ACC_PROTECTED) || (vis2 & ACC_PROTECTED)) {
+    return ACC_PROTECTED;
+  }
   return ACC_PRIVATE;
 }
 

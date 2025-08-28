@@ -16,7 +16,9 @@
 
 void DexDebugOpcodeSetFile::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  if (m_str) lstring.push_back(m_str);
+  if (m_str) {
+    lstring.push_back(m_str);
+  }
 }
 
 void DexDebugOpcodeSetFile::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
@@ -30,13 +32,19 @@ void DexDebugOpcodeSetFile::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 
 void DexDebugOpcodeStartLocal::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  if (m_name) lstring.push_back(m_name);
-  if (m_sig) lstring.push_back(m_sig);
+  if (m_name) {
+    lstring.push_back(m_name);
+  }
+  if (m_sig) {
+    lstring.push_back(m_sig);
+  }
 }
 
 void DexDebugOpcodeStartLocal::gather_types(
     std::vector<DexType*>& ltype) const {
-  if (m_type) ltype.push_back(m_type);
+  if (m_type) {
+    ltype.push_back(m_type);
+  }
 }
 
 void DexDebugOpcodeStartLocal::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
@@ -62,7 +70,9 @@ void DexDebugInstruction::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
     encdata = write_sleb128(encdata, m_value);
     return;
   }
-  if (m_uvalue == DEX_NO_INDEX) return;
+  if (m_uvalue == DEX_NO_INDEX) {
+    return;
+  }
   encdata = write_uleb128(encdata, m_uvalue);
 }
 

@@ -35,12 +35,16 @@ static CheckRecursionResult do_check_recursion(DexMethod* method,
   auto iterable = cfg::InstructionIterable(code.cfg());
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     auto* insn = it->insn;
-    if (!opcode::is_an_invoke(insn->opcode())) continue;
+    if (!opcode::is_an_invoke(insn->opcode())) {
+      continue;
+    }
 
     auto callee_method_ref = insn->get_method();
     auto callee_method =
         resolve_method(callee_method_ref, opcode_to_search(insn), method);
-    if (!callee_method) continue;
+    if (!callee_method) {
+      continue;
+    }
 
     if (method == callee_method) {
       self_recursion_count++;
@@ -73,7 +77,9 @@ static CheckRecursionResult do_check_recursion(DexMethod* method,
   // call instruction is not the first instruction in the block.
   auto split_insn = call_insn.unwrap();
   while (split_insn != block->begin()) {
-    if ((--split_insn)->type == MFLOW_OPCODE) break;
+    if ((--split_insn)->type == MFLOW_OPCODE) {
+      break;
+    }
   }
   if (split_insn != block->begin()) {
     always_assert(split_insn->type == MFLOW_OPCODE);

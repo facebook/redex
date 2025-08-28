@@ -50,7 +50,9 @@ type_to_string GMapTypes[] = {GMAP_TYPE(TYPE_HEADER_ITEM),
 inline const char* maptype_to_string(uint16_t maptype) {
   type_to_string* p = GMapTypes;
   while (p->name != nullptr) {
-    if (p->type == maptype) return p->name;
+    if (p->type == maptype) {
+      return p->name;
+    }
     p++;
   }
   return "Unknown";
@@ -198,7 +200,9 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
     char* rtype = nullptr;
     uint32_t protoidx = uint32_t(*aitem++);
     dex_proto_id* proto = rd->dex_proto_ids + protoidx;
-    if (proto->rtypeidx) rtype = dex_string_by_type_idx(rd, proto->rtypeidx);
+    if (proto->rtypeidx) {
+      rtype = dex_string_by_type_idx(rd, proto->rtypeidx);
+    }
     ss << "[METHOD_TYPE " << rtype << "(";
     if (proto->param_off) {
       uint32_t* tl = (uint32_t*)(rd->dexmmap + proto->param_off);
@@ -307,12 +311,16 @@ std::string format_method(ddump_data* rd, int idx) {
   dex_method_id* method = rd->dex_method_ids + idx;
   char* type = nullptr;
   char* name = nullptr;
-  if (method->classidx) type = dex_string_by_type_idx(rd, method->classidx);
+  if (method->classidx) {
+    type = dex_string_by_type_idx(rd, method->classidx);
+  }
   ss << "type: " << type << " ";
   char* rtype = nullptr;
   if (method->protoidx) {
     dex_proto_id* proto = rd->dex_proto_ids + method->protoidx;
-    if (proto->rtypeidx) rtype = dex_string_by_type_idx(rd, proto->rtypeidx);
+    if (proto->rtypeidx) {
+      rtype = dex_string_by_type_idx(rd, proto->rtypeidx);
+    }
     ss << "proto: rtype " << rtype << " args(";
     if (proto->param_off) {
       uint32_t* tl = (uint32_t*)(rd->dexmmap + proto->param_off);
@@ -329,7 +337,9 @@ std::string format_method(ddump_data* rd, int idx) {
     }
     ss << ") ";
   }
-  if (method->nameidx) name = dex_string_by_idx(rd, method->nameidx);
+  if (method->nameidx) {
+    name = dex_string_by_idx(rd, method->nameidx);
+  }
   ss << "name: " << name << "\n";
   return ss.str();
 }

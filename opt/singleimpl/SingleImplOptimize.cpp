@@ -662,7 +662,9 @@ EscapeReason OptimizationImpl::check_field_collision(
     redex_assert(!single_impls->is_escaped(field->get_class()));
     auto collision =
         resolve_field(field->get_class(), field->get_name(), data.cls);
-    if (collision) return FIELD_COLLISION;
+    if (collision) {
+      return FIELD_COLLISION;
+    }
   }
   return NO_ESCAPE;
 }
@@ -736,7 +738,9 @@ void OptimizationImpl::drop_single_impl_collision(const DexType* intf,
   };
 
   auto owner = method->get_class();
-  if (!single_impls->is_single_impl(owner)) return;
+  if (!single_impls->is_single_impl(owner)) {
+    return;
+  }
   check_type(owner);
   auto proto = method->get_proto();
   check_type(proto->get_rtype());
@@ -755,14 +759,18 @@ EscapeReason OptimizationImpl::can_optimize(const DexType* intf,
                                             const SingleImplData& data,
                                             bool rename_on_collision) {
   auto escape = check_field_collision(intf, data);
-  if (escape != EscapeReason::NO_ESCAPE) return escape;
+  if (escape != EscapeReason::NO_ESCAPE) {
+    return escape;
+  }
   escape = check_method_collision(intf, data);
   if (escape != EscapeReason::NO_ESCAPE) {
     if (rename_on_collision) {
       rename_possible_collisions(intf, data);
       escape = check_method_collision(intf, data);
     }
-    if (escape != EscapeReason::NO_ESCAPE) return escape;
+    if (escape != EscapeReason::NO_ESCAPE) {
+      return escape;
+    }
   }
   for (auto method : data.methoddefs) {
     drop_single_impl_collision(intf, data, method);
@@ -797,13 +805,17 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
   }
 
   for (const auto& meth : data.methoddefs) {
-    if (method::is_constructor(meth)) continue;
+    if (method::is_constructor(meth)) {
+      continue;
+    }
     auto name = type_reference::new_name(meth);
     TRACE(INTF, 9, "Changing def name for %s to %s", SHOW(meth), SHOW(name));
     rename(meth, name);
   }
   for (const auto& refs_it : UnorderedIterable(data.methodrefs)) {
-    if (refs_it.first->is_def()) continue;
+    if (refs_it.first->is_def()) {
+      continue;
+    }
     always_assert(!method::is_init(refs_it.first));
     auto name = type_reference::new_name(refs_it.first);
     TRACE(INTF, 9, "Changing ref name for %s to %s", SHOW(refs_it.first),
@@ -859,7 +871,9 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
   CheckCastSet inserted_check_casts;
   for (auto intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
-    if (intf_data.is_escaped()) continue;
+    if (intf_data.is_escaped()) {
+      continue;
+    }
     TRACE(INTF, 3, "(OPT) %s => %s", SHOW(intf), SHOW(intf_data.cls));
     auto escape = can_optimize(intf, intf_data, config.rename_on_collision);
     if (escape != EscapeReason::NO_ESCAPE) {
@@ -878,7 +892,9 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
   // make a new scope deleting all single impl interfaces
   Scope new_scope;
   for (auto cls : scope) {
-    if (optimized.find(cls->get_type()) != optimized.end()) continue;
+    if (optimized.find(cls->get_type()) != optimized.end()) {
+      continue;
+    }
     new_scope.push_back(cls);
   }
   scope.swap(new_scope);

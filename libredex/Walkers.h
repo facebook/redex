@@ -298,7 +298,9 @@ class walk {
     iterate_methods(cls, [&walker](DexMethod* method) {
       call_annotation_walker(method, walker);
       const auto& param_anno = method->get_param_anno();
-      if (!param_anno) return;
+      if (!param_anno) {
+        return;
+      }
       for (const auto& it : *param_anno) {
         auto& anno_list = it.second->get_annotations();
         for (auto& anno : anno_list) {
@@ -311,7 +313,9 @@ class walk {
   template <class T, typename WalkerFn>
   static void call_annotation_walker(T* dex_thingy, const WalkerFn& walker) {
     const auto& anno_set = dex_thingy->get_anno_set();
-    if (!anno_set) return;
+    if (!anno_set) {
+      return;
+    }
     auto& anno_list = anno_set->get_annotations();
     for (auto& anno : anno_list) {
       walker(anno.get());

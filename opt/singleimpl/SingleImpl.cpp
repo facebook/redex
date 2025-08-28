@@ -57,7 +57,9 @@ void map_interfaces(const DexTypeList* intf_list,
                     TypeToTypes& intfs_to_classes) {
   for (auto& intf : *intf_list) {
     const auto intf_cls = type_class(intf);
-    if (intf_cls == nullptr || intf_cls->is_external()) continue;
+    if (intf_cls == nullptr || intf_cls->is_external()) {
+      continue;
+    }
     if (std::find(intfs_to_classes[intf].begin(), intfs_to_classes[intf].end(),
                   cls->get_type()) == intfs_to_classes[intf].end()) {
       intfs_to_classes[intf].push_back(cls->get_type());
@@ -101,16 +103,22 @@ bool implements_all_intf_methods(const DexClass* impl_cls,
 void collect_single_impl(const TypeToTypes& intfs_to_classes,
                          TypeMap& single_impl) {
   for (const auto& intf_it : UnorderedIterable(intfs_to_classes)) {
-    if (intf_it.second.size() != 1) continue;
+    if (intf_it.second.size() != 1) {
+      continue;
+    }
     auto intf = intf_it.first;
     auto intf_cls = type_class(intf);
     always_assert(intf_cls && !intf_cls->is_external());
-    if (intf_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) continue;
+    if (intf_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) {
+      continue;
+    }
     auto impl = intf_it.second[0];
     auto impl_cls = type_class(impl);
     always_assert(impl_cls && !impl_cls->is_external());
     // I don't know if it's possible but it's cheap enough to check
-    if (impl_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) continue;
+    if (impl_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) {
+      continue;
+    }
     if (!is_abstract(impl_cls) &&
         !implements_all_intf_methods(impl_cls, intf_cls)) {
       continue;

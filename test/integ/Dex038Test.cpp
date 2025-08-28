@@ -30,7 +30,9 @@ using CallSitePredicate = const std::function<bool(DexCallSite*)>&;
 int ensureCallSite(DexIdx* idx, CallSitePredicate predicate) {
   for (int i = 0; i < idx->get_callsite_ids_size(); ++i) {
     auto cs = idx->get_callsiteidx(i);
-    if (predicate(cs)) return i;
+    if (predicate(cs)) {
+      return i;
+    }
   }
   return -1;
 }
@@ -39,7 +41,9 @@ using MethodHandlePredicate = const std::function<bool(DexMethodHandle*)>&;
 int ensureMethodHandle(DexIdx* idx, MethodHandlePredicate predicate) {
   for (int i = 0; i < idx->get_methodhandle_ids_size(); ++i) {
     auto mh = idx->get_methodhandleidx(i);
-    if (predicate(mh)) return i;
+    if (predicate(mh)) {
+      return i;
+    }
   }
   return -1;
 }

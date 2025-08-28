@@ -20,7 +20,9 @@ void remap_debug(DexDebugInstruction& dbgop, const RegMap& reg_map) {
   case DBG_END_LOCAL:
   case DBG_RESTART_LOCAL: {
     auto it = reg_map.find(dbgop.uvalue());
-    if (it == reg_map.end()) return;
+    if (it == reg_map.end()) {
+      return;
+    }
     dbgop.set_uvalue(it->second);
     break;
   }
@@ -30,16 +32,22 @@ void remap_debug(DexDebugInstruction& dbgop, const RegMap& reg_map) {
 }
 
 void remap_dest(IRInstruction* inst, const RegMap& reg_map) {
-  if (!inst->has_dest()) return;
+  if (!inst->has_dest()) {
+    return;
+  }
   auto it = reg_map.find(inst->dest());
-  if (it == reg_map.end()) return;
+  if (it == reg_map.end()) {
+    return;
+  }
   inst->set_dest(it->second);
 }
 
 void remap_srcs(IRInstruction* inst, const RegMap& reg_map) {
   for (unsigned i = 0; i < inst->srcs_size(); i++) {
     auto it = reg_map.find(inst->src(i));
-    if (it == reg_map.end()) continue;
+    if (it == reg_map.end()) {
+      continue;
+    }
     inst->set_src(i, it->second);
   }
 }
@@ -84,8 +92,9 @@ void remap_registers(cfg::ControlFlowGraph& cfg, const RegMap& reg_map) {
 }
 
 MethodItemEntry* find_active_catch(IRCode* code, IRList::iterator pos) {
-  while (++pos != code->end() && pos->type != MFLOW_TRY)
+  while (++pos != code->end() && pos->type != MFLOW_TRY) {
     ;
+  }
   return pos != code->end() && pos->tentry->type == TRY_END
              ? pos->tentry->catch_start
              : nullptr;

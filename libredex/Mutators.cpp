@@ -15,7 +15,9 @@
 namespace {
 void drop_this(DexMethod* method) {
   auto code = method->get_code();
-  if (!code) return;
+  if (!code) {
+    return;
+  }
   cfg::ScopedCFG cfg(code);
   auto nregs = cfg->get_registers_size();
   assert_log(nregs >= 1, "Too few regs: %s\n", SHOW(method));

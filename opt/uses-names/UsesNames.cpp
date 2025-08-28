@@ -118,7 +118,9 @@ class UsesNamesMarker {
 
   static bool match_uses_names_annotation(const DexAnnotationSet* annos,
                                           DexType* anno_type) {
-    if (!annos) return false;
+    if (!annos) {
+      return false;
+    }
     for (const auto& anno : annos->get_annotations()) {
       if (anno->type() == anno_type) {
         return true;

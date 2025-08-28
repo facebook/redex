@@ -169,7 +169,9 @@ bool analyze_enum_ctors(
     auto ii = InstructionIterable(dc.cfg.get_param_instructions());
     for (auto it = ii.begin(), end = ii.end();; ++it, ++ctor_ordinal) {
       always_assert(it != end && "Unable to locate load_ordinal");
-      if (it->insn == load_ordinal) break;
+      if (it->insn == load_ordinal) {
+        break;
+      }
     }
 
     ctor_to_arg_ordinal[dc.ctor] = ctor_ordinal;

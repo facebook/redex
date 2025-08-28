@@ -54,7 +54,9 @@ uint64_t compute_hash_code(
     always_assert_log(kmer_frequency.find(kmer)->second > 0,
                       "Incorrect kmer frequency");
     // Ignore rare k-mers so as we merge near-duplicate functions
-    if (kmer_frequency.find(kmer)->second <= k_min_kmer_frequency) continue;
+    if (kmer_frequency.find(kmer)->second <= k_min_kmer_frequency) {
+      continue;
+    }
 
     hash = hash_128_to_64(hash, kmer);
   }
@@ -79,8 +81,12 @@ void init_bipartite_graph(std::vector<BinaryFunction>& functions,
   for (auto it : UnorderedIterable(kmer_frequency)) {
     uint64_t kmer = it.first;
     uint32_t freq = it.second;
-    if (freq <= 1) continue;
-    if (freq * 2 >= functions.size()) continue;
+    if (freq <= 1) {
+      continue;
+    }
+    if (freq * 2 >= functions.size()) {
+      continue;
+    }
 
     uint32_t new_idx = kmer_index.size();
     kmer_index[kmer] = new_idx;
@@ -230,7 +236,9 @@ void MethodSimilarityCompressionConsciousOrderer::order(
     std::vector<DexMethod*>& methods, GatheredTypes* m_gtypes) {
   Timer t("Reordering " + std::to_string(methods.size()) +
           " methods by similarity using BPC");
-  if (methods.empty()) return;
+  if (methods.empty()) {
+    return;
+  }
 
   // We assume no method takes more than 512KB
   auto output = std::make_unique<uint8_t[]>(METHOD_MAX_OUTPUT_SIZE);

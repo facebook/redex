@@ -80,7 +80,9 @@ class DexIdx {
   }
 
   const DexString* get_nullable_stringidx(uint32_t stridx) {
-    if (stridx == DEX_NO_INDEX) return nullptr;
+    if (stridx == DEX_NO_INDEX) {
+      return nullptr;
+    }
     return get_stringidx(stridx);
   }
 
@@ -99,7 +101,9 @@ class DexIdx {
   }
 
   DexType* get_nullable_typeidx(uint32_t typeidx) {
-    if (typeidx == DEX_NO_INDEX) return nullptr;
+    if (typeidx == DEX_NO_INDEX) {
+      return nullptr;
+    }
     return get_typeidx(typeidx);
   }
 

@@ -376,7 +376,9 @@ PackagePrivatePreprocessorPass::Stats analyze_graph(
       for (auto* true_root : UnorderedIterable(true_roots)) {
         true_virtual_scopes->update(true_root, [&](auto*, auto& vs, auto) {
           vs.methods.insert(method);
-          if (unsupported) vs.unsupported = true;
+          if (unsupported) {
+            vs.unsupported = true;
+          }
         });
         true_virtual_roots->emplace(method, true_root);
       }

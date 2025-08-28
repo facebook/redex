@@ -37,7 +37,9 @@ struct DexTypeCache {
 
   bool has_type(DexType* type) {
     for (auto cached_type : cache) {
-      if (cached_type == type) return true;
+      if (cached_type == type) {
+        return true;
+      }
     }
     return false;
   }
@@ -66,39 +68,61 @@ bool is_method_known_to_be_public_helper(DexType* type, DexMethodRef* meth) {
   auto meth_name = meth->get_name()->c_str();
   static auto view = DexType::get_type("Landroid/view/View;");
   if (view == type) {
-    if (strcmp(meth_name, "getContext") == 0) return true;
-    if (strcmp(meth_name, "findViewById") == 0) return true;
-    if (strcmp(meth_name, "setVisibility") == 0) return true;
+    if (strcmp(meth_name, "getContext") == 0) {
+      return true;
+    }
+    if (strcmp(meth_name, "findViewById") == 0) {
+      return true;
+    }
+    if (strcmp(meth_name, "setVisibility") == 0) {
+      return true;
+    }
     return false;
   }
   static auto il =
       DexType::get_type("Lcom/google/common/collect/ImmutableList;");
   static auto al = DexType::get_type("Ljava/util/ArrayList;");
   if (il == type || al == type) {
-    if (strcmp(meth_name, "get") == 0) return true;
-    if (strcmp(meth_name, "isEmpty") == 0) return true;
-    if (strcmp(meth_name, "size") == 0) return true;
-    if (strcmp(meth_name, "add") == 0) return true;
+    if (strcmp(meth_name, "get") == 0) {
+      return true;
+    }
+    if (strcmp(meth_name, "isEmpty") == 0) {
+      return true;
+    }
+    if (strcmp(meth_name, "size") == 0) {
+      return true;
+    }
+    if (strcmp(meth_name, "add") == 0) {
+      return true;
+    }
     return false;
   }
   static auto ctx = DexType::get_type("Landroid/content/Context;");
   if (ctx == type) {
-    if (strcmp(meth_name, "getResources") == 0) return true;
+    if (strcmp(meth_name, "getResources") == 0) {
+      return true;
+    }
     return false;
   }
   static auto resrc = DexType::get_type("Landroid/content/res/Resources;");
   if (resrc == type) {
-    if (strcmp(meth_name, "getString") == 0) return true;
+    if (strcmp(meth_name, "getString") == 0) {
+      return true;
+    }
     return false;
   }
   static auto linf = DexType::get_type("Landroid/view/LayoutInflater;");
   if (linf == type) {
-    if (strcmp(meth_name, "inflate") == 0) return true;
+    if (strcmp(meth_name, "inflate") == 0) {
+      return true;
+    }
     return false;
   }
   static auto vg = DexType::get_type("Landroid/view/ViewGroup;");
   if (vg == type) {
-    if (strcmp(meth_name, "getContext") == 0) return true;
+    if (strcmp(meth_name, "getContext") == 0) {
+      return true;
+    }
     return false;
   }
   return false;

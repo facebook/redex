@@ -141,7 +141,9 @@ class MethodNameWrapper : public DexMethodWrapper {
   }
 
   MethodNameWrapper* find_end_link() {
-    if (next == nullptr) return this;
+    if (next == nullptr) {
+      return this;
+    }
     return next->find_end_link();
   }
 
@@ -154,13 +156,17 @@ class MethodNameWrapper : public DexMethodWrapper {
   }
 
   bool name_has_changed() override {
-    if (next == nullptr) return has_new_name;
+    if (next == nullptr) {
+      return has_new_name;
+    }
     update_link();
     return next->name_has_changed();
   }
 
   std::string_view get_name() override {
-    if (next == nullptr) return DexMethodWrapper::get_name();
+    if (next == nullptr) {
+      return DexMethodWrapper::get_name();
+    }
     update_link();
     return next->get_name();
   }
@@ -181,7 +187,9 @@ class MethodNameWrapper : public DexMethodWrapper {
 
     auto this_end = find_end_link();
     // Make sure they aren't already linked
-    if (this_end == other->find_end_link()) return;
+    if (this_end == other->find_end_link()) {
+      return;
+    }
 
     if (next == nullptr) {
       next = other;
@@ -206,7 +214,9 @@ class MethodNameWrapper : public DexMethodWrapper {
   }
 
   bool should_rename() override {
-    if (next == nullptr) return renamable;
+    if (next == nullptr) {
+      return renamable;
+    }
     update_link();
     return next->should_rename();
   }
@@ -564,7 +574,9 @@ class DexElemManager {
  private:
   // Returns the def for that class and ref if it exists, nullptr otherwise
   T find_def(R ref, DexType* cls) const {
-    if (cls == nullptr) return nullptr;
+    if (cls == nullptr) {
+      return nullptr;
+    }
     auto sig = sig_getter_fn(ref);
     auto name = ref->get_name();
     auto it = elements.find(cls);
@@ -590,12 +602,18 @@ class DexElemManager {
    * Look up in the class and all its interfaces.
    */
   T find_def_in_class_and_intf(R ref, DexClass* cls) const {
-    if (cls == nullptr) return nullptr;
+    if (cls == nullptr) {
+      return nullptr;
+    }
     auto found_def = find_def(ref, cls->get_type());
-    if (found_def != nullptr) return found_def;
+    if (found_def != nullptr) {
+      return found_def;
+    }
     for (auto& intf : *cls->get_interfaces()) {
       auto found = find_def_in_class_and_intf(ref, type_class(intf));
-      if (found != nullptr) return found;
+      if (found != nullptr) {
+        return found;
+      }
     }
     return nullptr;
   }
@@ -641,10 +659,12 @@ DexMethodManager new_dex_method_manager();
 template <class T, class R, class S, class K>
 bool contains_renamable_elem(const std::vector<T>& elems,
                              DexElemManager<T, R, S, K>& name_mapping) {
-  for (T e : elems)
+  for (T e : elems) {
     if (should_rename_elem(e) && !name_mapping[e]->name_has_changed() &&
-        name_mapping[e]->should_rename())
+        name_mapping[e]->should_rename()) {
       return true;
+    }
+  }
   return false;
 }
 
@@ -708,10 +728,12 @@ class FieldObfuscationState
   void populate_ids_to_avoid(DexClass* base,
                              DexFieldManager& name_manager,
                              const ClassHierarchy& /* unused */) override {
-    for (auto f : base->get_ifields())
+    for (auto f : base->get_ifields()) {
       ids_to_avoid.insert(std::string(name_manager[f]->get_name()));
-    for (auto f : base->get_sfields())
+    }
+    for (auto f : base->get_sfields()) {
       ids_to_avoid.insert(std::string(name_manager[f]->get_name()));
+    }
   }
 };
 
@@ -734,16 +756,20 @@ void walk_hierarchy(DexClass* cls,
                     bool visit_private,
                     HierarchyDirection h_dir,
                     const ClassHierarchy& ch) {
-  if (!cls) return;
+  if (!cls) {
+    return;
+  }
   auto visit = [&](DexClass* cls) {
     for (const auto meth : const_cast<const DexClass*>(cls)->get_dmethods()) {
-      if (!is_private(meth) || visit_private)
+      if (!is_private(meth) || visit_private) {
         on_member(const_cast<DexMethod*>(meth));
+      }
     }
 
     for (const auto meth : const_cast<const DexClass*>(cls)->get_vmethods()) {
-      if (!is_private(meth) || visit_private)
+      if (!is_private(meth) || visit_private) {
         on_member(const_cast<DexMethod*>(meth));
+      }
     }
   };
 
@@ -756,7 +782,9 @@ void walk_hierarchy(DexClass* cls,
     auto clazz = cls;
     while (clazz) {
       visit(clazz);
-      if (clazz->get_super_class() == nullptr) break;
+      if (clazz->get_super_class() == nullptr) {
+        break;
+      }
       clazz = type_class(clazz->get_super_class());
     }
   }

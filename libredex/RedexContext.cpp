@@ -392,7 +392,9 @@ const DexString* RedexContext::make_string(std::string_view str) {
   auto mutf8_next_cp = [](const char*& s) -> uint32_t {
     uint8_t v = *s++;
     /* Simple common case first, a utf8 char... */
-    if (!(v & 0x80)) return v;
+    if (!(v & 0x80)) {
+      return v;
+    }
     uint8_t v2 = *s++;
     always_assert_type_log((v2 & 0xc0) == 0x80, INVALID_DEX,
                            "Invalid 2nd byte on mutf8 string");

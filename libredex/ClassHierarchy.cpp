@@ -28,7 +28,9 @@ DexMethod* check_vmethods(const DexString* name,
                           const DexType* type) {
   const DexClass* cls = type_class(type);
   for (const auto& method : cls->get_vmethods()) {
-    if (match(name, proto, method)) return method;
+    if (match(name, proto, method)) {
+      return method;
+    }
   }
   return nullptr;
 }
@@ -38,7 +40,9 @@ DexMethod* check_dmethods(const DexString* name,
                           const DexType* type) {
   const DexClass* cls = type_class(type);
   for (const auto& method : cls->get_dmethods()) {
-    if (match(name, proto, method)) return method;
+    if (match(name, proto, method)) {
+      return method;
+    }
   }
   return nullptr;
 }
@@ -61,7 +65,9 @@ void build_class_hierarchy(ClassHierarchy& hierarchy, const DexClass* cls) {
 
 void build_external_hierarchy(ClassHierarchy& hierarchy) {
   g_redex->walk_type_class([&](const DexType* type, const DexClass* cls) {
-    if (!cls->is_external() || is_interface(cls)) return;
+    if (!cls->is_external() || is_interface(cls)) {
+      return;
+    }
     build_class_hierarchy(hierarchy, cls);
   });
 }
@@ -72,7 +78,9 @@ bool gather_intf_extenders(const DexType* extender,
                            UnorderedSet<const DexType*>& intf_extenders) {
   bool extends = false;
   const DexClass* extender_cls = type_class(extender);
-  if (!extender_cls) return extends;
+  if (!extender_cls) {
+    return extends;
+  }
   if (is_interface(extender_cls)) {
     for (const auto& extends_intf : *extender_cls->get_interfaces()) {
       if (extends_intf == intf ||
@@ -100,7 +108,9 @@ void build_interface_map(InterfaceMap& interfaces,
   for (const auto& intf : *current->get_interfaces()) {
     interfaces[intf].insert(implementors.begin(), implementors.end());
     const auto intf_cls = type_class(intf);
-    if (intf_cls == nullptr) continue;
+    if (intf_cls == nullptr) {
+      continue;
+    }
     build_interface_map(interfaces, hierarchy, intf_cls, implementors);
   }
 }
@@ -114,7 +124,9 @@ ClassHierarchy build_internal_type_hierarchy(const Scope& scope) {
   }));
   // build the type hierarchy
   for (const auto& cls : scope) {
-    if (is_interface(cls)) continue;
+    if (is_interface(cls)) {
+      continue;
+    }
     build_class_hierarchy(hierarchy, cls);
   }
   return hierarchy;
@@ -131,8 +143,12 @@ InterfaceMap build_interface_map(const ClassHierarchy& hierarchy) {
   // build the type hierarchy
   for (const auto& cls_it : UnorderedIterable(hierarchy)) {
     const auto cls = type_class(cls_it.first);
-    if (cls == nullptr) continue;
-    if (is_interface(cls)) continue;
+    if (cls == nullptr) {
+      continue;
+    }
+    if (is_interface(cls)) {
+      continue;
+    }
     TypeSet implementors;
     get_all_children(hierarchy, cls->get_type(), implementors);
     implementors.insert(cls->get_type());
@@ -197,27 +213,39 @@ DexMethod* find_collision_excepting(const ClassHierarchy& ch,
                                     bool is_virtual,
                                     bool check_direct) {
   for (auto& method : cls->get_dmethods()) {
-    if (match(name, proto, method) && method != except) return method;
+    if (match(name, proto, method) && method != except) {
+      return method;
+    }
   }
   for (auto& method : cls->get_vmethods()) {
-    if (match(name, proto, method) && method != except) return method;
+    if (match(name, proto, method) && method != except) {
+      return method;
+    }
   }
-  if (!is_virtual) return nullptr;
+  if (!is_virtual) {
+    return nullptr;
+  }
 
   auto super = type_class(cls->get_super_class());
   if (super) {
     auto method = resolve_virtual(super, name, proto);
-    if (method && method != except) return method;
+    if (method && method != except) {
+      return method;
+    }
   }
 
   TypeSet children;
   get_all_children(ch, cls->get_type(), children);
   for (const auto& child : children) {
     auto vmethod = check_vmethods(name, proto, child);
-    if (vmethod && vmethod != except) return vmethod;
+    if (vmethod && vmethod != except) {
+      return vmethod;
+    }
     if (check_direct) {
       auto dmethod = check_dmethods(name, proto, child);
-      if (dmethod && dmethod != except) return dmethod;
+      if (dmethod && dmethod != except) {
+        return dmethod;
+      }
     }
   }
   return nullptr;

@@ -203,7 +203,9 @@ MethodSimilarityGreedyOrderer::get_next() {
 }
 
 void MethodSimilarityGreedyOrderer::remove_method(DexMethod* meth) {
-  if (!m_method_to_id.count(meth)) return;
+  if (!m_method_to_id.count(meth)) {
+    return;
+  }
 
   auto method_id = m_method_to_id[meth];
   m_id_to_method.erase(method_id);

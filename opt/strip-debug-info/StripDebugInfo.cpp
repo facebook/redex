@@ -143,7 +143,9 @@ Stats StripDebugInfo::run(IRCode& code, bool should_drop_synth) {
       case MFLOW_DEBUG:
         // Any debug information op other than an end sequence means
         // we have debug info.
-        if (mie.dbgop->opcode() != DBG_END_SEQUENCE) debug_info_empty = false;
+        if (mie.dbgop->opcode() != DBG_END_SEQUENCE) {
+          debug_info_empty = false;
+        }
         break;
       case MFLOW_POSITION:
         // Any line position entry means we have debug info.
@@ -197,8 +199,9 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
 
   if (m_config.drop_src_files) {
     TRACE(DBGSTRIP, 1, "dropping src file strings");
-    for (auto& dex : scope)
+    for (auto& dex : scope) {
       dex->set_source_file(nullptr);
+    }
   }
 }
 

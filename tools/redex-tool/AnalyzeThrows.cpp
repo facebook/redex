@@ -26,7 +26,9 @@ using LogicalBlock = std::vector<std::vector<cfg::Block*>>;
 bool is_throw_block(const DexMethod* meth, cfg::Block* block) {
   // check last instruction of a block to see if it's a throw
   for (auto insn = block->rbegin(); insn != block->rend(); ++insn) {
-    if (insn->type != MFLOW_OPCODE) continue;
+    if (insn->type != MFLOW_OPCODE) {
+      continue;
+    }
     if (insn->insn->opcode() == OPCODE_THROW) {
       // debug only, a block ending with a throw should
       // only have catch successors
@@ -146,7 +148,9 @@ void collect_throwing_blocks(DexMethod* meth, LogicalBlock& throwing_blocks) {
   std::unordered_set<cfg::Block*> left_blocks;
   std::queue<cfg::Block*> throw_blocks;
   for (const auto& block : blocks) {
-    if (no_throw_blocks.count(block) > 0) continue;
+    if (no_throw_blocks.count(block) > 0) {
+      continue;
+    }
     if (is_throw_block(meth, block)) {
       throw_blocks.push(block);
     } else {

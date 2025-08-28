@@ -160,19 +160,45 @@ struct MergerType {
   // std::map comparator function
   struct ShapeComp {
     bool operator()(const Shape& left, const Shape& right) const {
-      if (left.string_fields < right.string_fields) return true;
-      if (left.string_fields > right.string_fields) return false;
-      if (left.reference_fields < right.reference_fields) return true;
-      if (left.reference_fields > right.reference_fields) return false;
-      if (left.bool_fields < right.bool_fields) return true;
-      if (left.bool_fields > right.bool_fields) return false;
-      if (left.int_fields < right.int_fields) return true;
-      if (left.int_fields > right.int_fields) return false;
-      if (left.long_fields < right.long_fields) return true;
-      if (left.long_fields > right.long_fields) return false;
-      if (left.double_fields < right.double_fields) return true;
-      if (left.double_fields > right.double_fields) return false;
-      if (left.float_fields < right.float_fields) return true;
+      if (left.string_fields < right.string_fields) {
+        return true;
+      }
+      if (left.string_fields > right.string_fields) {
+        return false;
+      }
+      if (left.reference_fields < right.reference_fields) {
+        return true;
+      }
+      if (left.reference_fields > right.reference_fields) {
+        return false;
+      }
+      if (left.bool_fields < right.bool_fields) {
+        return true;
+      }
+      if (left.bool_fields > right.bool_fields) {
+        return false;
+      }
+      if (left.int_fields < right.int_fields) {
+        return true;
+      }
+      if (left.int_fields > right.int_fields) {
+        return false;
+      }
+      if (left.long_fields < right.long_fields) {
+        return true;
+      }
+      if (left.long_fields > right.long_fields) {
+        return false;
+      }
+      if (left.double_fields < right.double_fields) {
+        return true;
+      }
+      if (left.double_fields > right.double_fields) {
+        return false;
+      }
+      if (left.float_fields < right.float_fields) {
+        return true;
+      }
       return false;
     }
   };
@@ -303,7 +329,9 @@ struct MergerType {
 
   int start_index_for(const DexType* t) const {
     static const auto string_type = type::java_lang_String();
-    if (t == string_type) return 0;
+    if (t == string_type) {
+      return 0;
+    }
     switch (type::type_shorty(t)) {
     case 'L':
     case '[':
