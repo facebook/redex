@@ -1071,7 +1071,9 @@ void Transform::forward_targets(
           // If we get to the new_target we're done, just break
           break;
         }
-        source_blocks::scale_source_blocks(target);
+        if (source_blocks::has_source_blocks(target)) {
+          source_blocks::scale_source_blocks(target);
+        }
       }
     }
 
