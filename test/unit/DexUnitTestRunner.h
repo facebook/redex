@@ -36,14 +36,14 @@ class DexUnitTestRunner {
   }
 
   DexClass* create_class(const std::string& name) {
-    auto type = DexType::make_type(DexString::make_string(name));
+    auto* type = DexType::make_type(DexString::make_string(name));
     ClassCreator creator(type);
     creator.set_super(type::java_lang_Object());
-    auto cls = creator.create();
-    auto clinit_name = DexString::make_string("<clinit>");
-    auto void_args = DexTypeList::make_type_list({});
-    auto void_void = DexProto::make_proto(type::_void(), void_args);
-    auto clinit = static_cast<DexMethod*>(
+    auto* cls = creator.create();
+    const auto* clinit_name = DexString::make_string("<clinit>");
+    auto* void_args = DexTypeList::make_type_list({});
+    auto* void_void = DexProto::make_proto(type::_void(), void_args);
+    auto* clinit = static_cast<DexMethod*>(
         DexMethod::make_method(type, clinit_name, void_void));
     clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
     clinit->set_code(std::make_unique<IRCode>(clinit, 1));
@@ -68,9 +68,9 @@ class DexUnitTestRunner {
                                       const std::string& name,
                                       DexType* type,
                                       const EvType& val) {
-    auto container = cls->get_type();
-    auto field_name = DexString::make_string(name);
-    auto field = static_cast<DexField*>(
+    auto* container = cls->get_type();
+    const auto* field_name = DexString::make_string(name);
+    auto* field = static_cast<DexField*>(
         DexField::make_field(container, field_name, type));
     field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
                          make_ev(type, val));

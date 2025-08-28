@@ -29,7 +29,7 @@ class ResolveProguardAssumeValuesTest : public RedexTest {
   DexMethod* create_method(DexClass* cls,
                            const char* method_name,
                            DexAccessFlags access) {
-    auto proto =
+    auto* proto =
         DexProto::make_proto(type::_boolean(), DexTypeList::make_type_list({}));
     DexMethod* method =
         DexMethod::make_method(cls->get_type(),
@@ -45,13 +45,13 @@ void test(const std::string& code_str, const std::string& expected_str) {
 
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
-  auto code_ptr = code.get();
+  auto* code_ptr = code.get();
   code_ptr->build_cfg();
   ResolveProguardAssumeValuesPass::process_for_code(code_ptr->cfg());
   auto& cfg = code_ptr->cfg();
   std::cerr << "after:" << std::endl << SHOW(cfg);
 
-  auto expected_ptr = expected.get();
+  auto* expected_ptr = expected.get();
   expected_ptr->build_cfg();
   auto& expected_cfg = expected_ptr->cfg();
   std::cerr << "expected:" << std::endl << SHOW(expected_cfg);
@@ -184,7 +184,7 @@ TEST_F(ResolveProguardAssumeValuesTest, simple_method_not_known) {
 
 TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool) {
   DexClass* classA = create_class_local("LCls;");
-  auto field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
+  auto* field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC,
                        DexEncodedValue::zero_for_type(field->get_type()));
   classA->add_field(field);
@@ -229,7 +229,7 @@ TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool) {
 
 TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool_with_no_rule) {
   DexClass* classA = create_class_local("LCls;");
-  auto field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
+  auto* field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC,
                        DexEncodedValue::zero_for_type(field->get_type()));
   classA->add_field(field);

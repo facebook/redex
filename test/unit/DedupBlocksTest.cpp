@@ -88,7 +88,7 @@ TEST_F(DedupBlocksTest, simplestCase) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("simplestCase");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const v0 0)
@@ -117,7 +117,7 @@ TEST_F(DedupBlocksTest, simplestCase) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       ; A
       (const v0 0)
@@ -153,7 +153,7 @@ TEST_F(DedupBlocksTest, simplestPostfixCase) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("simplestPostfixCase");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const v0 0)
@@ -188,7 +188,7 @@ TEST_F(DedupBlocksTest, simplestPostfixCase) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       ; A
       (const v0 0)
@@ -222,7 +222,7 @@ TEST_F(DedupBlocksTest, postfixDiscardingOneCase) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("postfixDiscardingOneCase");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const v0 0)
@@ -266,7 +266,7 @@ TEST_F(DedupBlocksTest, postfixDiscardingOneCase) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       ; A
       (const v0 0)
@@ -309,7 +309,7 @@ TEST_F(DedupBlocksTest, deepestIsNotTheBestCase) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("deepestIsNotTheBestCase");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (const v0 0)
       (const v1 1)
@@ -356,7 +356,7 @@ TEST_F(DedupBlocksTest, deepestIsNotTheBestCase) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (const v1 1)
@@ -393,7 +393,7 @@ TEST_F(DedupBlocksTest, postfixSwitchCase) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("postfixSwitchCase");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (const v0 0)
       (const v1 1)
@@ -423,7 +423,7 @@ TEST_F(DedupBlocksTest, postfixSwitchCase) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
       (const v1 1)
@@ -451,7 +451,7 @@ TEST_F(DedupBlocksTest, postfixSwitchCase) {
 }
 
 TEST_F(DedupBlocksTest, noDups) {
-  auto str = R"(
+  const auto* str = R"(
     (
       (const v0 0)
       (if-eqz v0 :lbl)
@@ -463,7 +463,7 @@ TEST_F(DedupBlocksTest, noDups) {
     )
   )";
 
-  auto method = get_fresh_method("noDups");
+  auto* method = get_fresh_method("noDups");
   auto code = assembler::ircode_from_string(str);
   method->set_code(std::move(code));
 
@@ -493,9 +493,9 @@ TEST_F(DedupBlocksTest, repeatedSwitchBlocks) {
     )
   )");
 
-  auto method = get_fresh_method("repeatedSwitchBlocks");
+  auto* method = get_fresh_method("repeatedSwitchBlocks");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -518,7 +518,7 @@ TEST_F(DedupBlocksTest, repeatedSwitchBlocks) {
 }
 
 TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
-  auto str = R"(
+  const auto* str = R"(
     (
       (const v0 0)
       (const v2 3)
@@ -550,9 +550,9 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
   )";
 
   auto input_code = assembler::ircode_from_string(str);
-  auto method = get_fresh_method("diffSuccessorsNoChange1");
+  auto* method = get_fresh_method("diffSuccessorsNoChange1");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -562,7 +562,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
 }
 
 TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
-  auto str = R"(
+  const auto* str = R"(
     (
       (const v0 0)
       (const v2 3)
@@ -592,9 +592,9 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
   )";
 
   auto input_code = assembler::ircode_from_string(str);
-  auto method = get_fresh_method("diffSuccessorsNoChange2");
+  auto* method = get_fresh_method("diffSuccessorsNoChange2");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -622,9 +622,9 @@ TEST_F(DedupBlocksTest, diamond) {
     )
   )");
 
-  auto method = get_fresh_method("diamond");
+  auto* method = get_fresh_method("diamond");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -672,9 +672,9 @@ TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
       (throw v0)
     )
   )");
-  auto method = get_fresh_method("blockWithNewInstanceAndConstroctor");
+  auto* method = get_fresh_method("blockWithNewInstanceAndConstroctor");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -732,9 +732,9 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
     )
   )";
   auto input_code = assembler::ircode_from_string(str_code);
-  auto method = get_fresh_method("constructsObjectFromAnotherBlock");
+  auto* method = get_fresh_method("constructsObjectFromAnotherBlock");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
   run_dedup_blocks();
   auto expect_code = assembler::ircode_from_string(str_code);
   EXPECT_CODE_EQ(expect_code.get(), code);
@@ -772,9 +772,9 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlockViaMove) {
     )
   )";
   auto input_code = assembler::ircode_from_string(str_code);
-  auto method = get_fresh_method("constructsObjectFromAnotherBlock");
+  auto* method = get_fresh_method("constructsObjectFromAnotherBlock");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
   run_dedup_blocks();
   auto expect_code = assembler::ircode_from_string(str_code);
   EXPECT_CODE_EQ(expect_code.get(), code);
@@ -817,9 +817,9 @@ TEST_F(DedupBlocksTest, dedupCatchBlocks) {
     )
   )";
   auto input_code = assembler::ircode_from_string(str_code);
-  auto method = get_fresh_method("dedupCatchBlocks");
+  auto* method = get_fresh_method("dedupCatchBlocks");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
   run_dedup_blocks();
 
   std::string expect_str = R"(
@@ -882,9 +882,9 @@ TEST_F(DedupBlocksTest, dontDedupCatchBlockAndNonCatchBlock) {
     )
   )";
   auto input_code = assembler::ircode_from_string(str_code);
-  auto method = get_fresh_method("dontDedupCatchBlockAndNonCatchBlock");
+  auto* method = get_fresh_method("dontDedupCatchBlockAndNonCatchBlock");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
   run_dedup_blocks();
 
   auto expect_code = assembler::ircode_from_string(str_code);
@@ -898,7 +898,7 @@ TEST_F(DedupBlocksTest, respectTypes) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("v");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const-string "hello")
@@ -927,7 +927,7 @@ TEST_F(DedupBlocksTest, respectTypes) {
 
   run_dedup_blocks();
 
-  auto expected_str = str;
+  const auto* expected_str = str;
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
@@ -936,7 +936,7 @@ TEST_F(DedupBlocksTest, dontRespectDexTypes) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("v");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const-string "hello")
@@ -966,7 +966,7 @@ TEST_F(DedupBlocksTest, dontRespectDexTypes) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       ; A
       (const-string "hello")
@@ -994,7 +994,7 @@ TEST_F(DedupBlocksTest, dontRespectDexTypesIncludingArraysIfNotUsedAsSuch) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("v");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const v0 0)
@@ -1025,7 +1025,7 @@ TEST_F(DedupBlocksTest, dontRespectDexTypesIncludingArraysIfNotUsedAsSuch) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       ; A
       (const v0 0)
@@ -1054,7 +1054,7 @@ TEST_F(DedupBlocksTest, referenceAndPrimitiveArraysHaveNoCommonBaseType) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("I");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const v1 0)
@@ -1089,7 +1089,7 @@ TEST_F(DedupBlocksTest, referenceAndPrimitiveArraysHaveNoCommonBaseType) {
 
   run_dedup_blocks();
 
-  auto expected_str = str;
+  const auto* expected_str = str;
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
@@ -1105,7 +1105,7 @@ TEST_F(DedupBlocksTest, allReferenceArraysHaveCommonBaseType) {
   some_object_creator.set_super(type::java_lang_Object());
   some_object_creator.create();
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const v1 0)
@@ -1140,7 +1140,7 @@ TEST_F(DedupBlocksTest, allReferenceArraysHaveCommonBaseType) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       ; A
       (const v1 0)
@@ -1178,7 +1178,7 @@ TEST_F(DedupBlocksTest, androidIsAfraidOfArraysOfInterfaces) {
   ClassCreator i_creator(DexType::make_type("LI;"));
   i_creator.set_access(ACC_INTERFACE);
   i_creator.set_super(type::java_lang_Object());
-  auto i_cls = i_creator.create();
+  auto* i_cls = i_creator.create();
 
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.add_interface(i_cls->get_type());
@@ -1189,7 +1189,7 @@ TEST_F(DedupBlocksTest, androidIsAfraidOfArraysOfInterfaces) {
   b_creator.add_interface(i_cls->get_type());
   b_creator.set_super(type::java_lang_Object());
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const v1 0)
@@ -1220,7 +1220,7 @@ TEST_F(DedupBlocksTest, androidIsAfraidOfArraysOfInterfaces) {
 
   run_dedup_blocks();
 
-  auto expected_str = str;
+  const auto* expected_str = str;
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
@@ -1235,14 +1235,14 @@ TEST_F(DedupBlocksTest, trivialJoinOfArrayOfClassesIsFine) {
   ClassCreator i_creator(DexType::make_type("LI;"));
   i_creator.set_access(ACC_INTERFACE);
   i_creator.set_super(type::java_lang_Object());
-  auto i_cls = i_creator.create();
+  auto* i_cls = i_creator.create();
 
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.add_interface(i_cls->get_type());
   a_creator.set_super(type::java_lang_Object());
   a_creator.create();
 
-  auto str = R"(
+  const auto* str = R"(
     (
       ; A
       (const v1 0)
@@ -1273,7 +1273,7 @@ TEST_F(DedupBlocksTest, trivialJoinOfArrayOfClassesIsFine) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       ; A
       (const v1 0)
@@ -1315,9 +1315,9 @@ TEST_F(DedupBlocksTest, self_loops_are_alike) {
       (goto :c)
     )
   )");
-  auto method = get_fresh_method("self_loops_are_alike");
+  auto* method = get_fresh_method("self_loops_are_alike");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -1358,9 +1358,9 @@ TEST_F(DedupBlocksTest, conditional_self_loops_are_alike) {
       (return-void)
     )
   )");
-  auto method = get_fresh_method("conditional_self_loops_are_alike");
+  auto* method = get_fresh_method("conditional_self_loops_are_alike");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -1392,9 +1392,9 @@ TEST_F(DedupBlocksTest, return_if_single) {
       (return-void)
     )
   )");
-  auto method = get_fresh_method("conditional_self_loops_are_alike");
+  auto* method = get_fresh_method("conditional_self_loops_are_alike");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -1436,9 +1436,9 @@ TEST_F(DedupBlocksTest, conditional_hashed_alike) {
       (:end)
     )
   )");
-  auto method = get_fresh_method("conditional_hashed_alike");
+  auto* method = get_fresh_method("conditional_hashed_alike");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -1482,9 +1482,9 @@ TEST_F(DedupBlocksTest, conditional_hashed_not_alike) {
     )
   )");
 
-  auto method = get_fresh_method("conditional_hashed_not_alike");
+  auto* method = get_fresh_method("conditional_hashed_not_alike");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -1523,9 +1523,9 @@ TEST_F(DedupBlocksTest, dedup_throws) {
       (throw v0)
     )
   )");
-  auto method = get_fresh_method("dedup_throws");
+  auto* method = get_fresh_method("dedup_throws");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -1545,7 +1545,7 @@ TEST_F(DedupBlocksTest, dedup_throws) {
 TEST_F(DedupBlocksTest, dont_dedup_fill_in_stack_trace) {
   ClassCreator throwable_creator(type::java_lang_Throwable());
   throwable_creator.set_super(type::java_lang_Object());
-  auto fillInStackeTrace_method =
+  auto* fillInStackeTrace_method =
       method::java_lang_Throwable_fillInStackTrace();
   fillInStackeTrace_method->set_virtual(true);
   fillInStackeTrace_method->set_external();
@@ -1566,9 +1566,9 @@ TEST_F(DedupBlocksTest, dont_dedup_fill_in_stack_trace) {
       (return-object v0)
     )
   )");
-  auto method = get_fresh_method("dont_dedup_fill_in_stack_trace");
+  auto* method = get_fresh_method("dont_dedup_fill_in_stack_trace");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -1594,7 +1594,7 @@ TEST_F(DedupBlocksTest, dont_dedup_fill_in_stack_trace) {
 TEST_F(DedupBlocksTest, dont_dedup_indirect_fill_in_stack_trace) {
   ClassCreator throwable_creator(type::java_lang_Throwable());
   throwable_creator.set_super(type::java_lang_Object());
-  auto throwable_cls = throwable_creator.create();
+  auto* throwable_cls = throwable_creator.create();
   throwable_cls->set_external();
 
   ClassCreator throwable2_creator(DexType::make_type("LThrowable2;"));
@@ -1619,9 +1619,9 @@ TEST_F(DedupBlocksTest, dont_dedup_indirect_fill_in_stack_trace) {
       (return-object v0)
     )
   )");
-  auto method = get_fresh_method("dont_dedup_indirect_fill_in_stack_trace");
+  auto* method = get_fresh_method("dont_dedup_indirect_fill_in_stack_trace");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -1654,7 +1654,7 @@ TEST_F(DedupBlocksTest, dont_dedup_dont_inline) {
       (return-void)
     )
   )");
-  auto callee = get_fresh_method("bar");
+  auto* callee = get_fresh_method("bar");
   callee->rstate.set_dont_inline();
   callee->set_code(std::move(callee_code));
 
@@ -1672,9 +1672,9 @@ TEST_F(DedupBlocksTest, dont_dedup_dont_inline) {
       (return-object v0)
     )
   )");
-  auto method = get_fresh_method("dont_dedup_dont_inline");
+  auto* method = get_fresh_method("dont_dedup_dont_inline");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks();
 
@@ -1700,7 +1700,7 @@ TEST_F(DedupBlocksTest, retainPositionWhenMayThrow) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("postfixSwitchCase");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
       (const v0 0)
@@ -1734,7 +1734,7 @@ TEST_F(DedupBlocksTest, retainPositionWhenMayThrow) {
 
   run_dedup_blocks();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
       (const v0 0)
@@ -1836,9 +1836,9 @@ TEST_F(DedupBlocksTest, blockWithIterativeLimit1) {
       (:n)
     )
   )");
-  auto method = get_fresh_method("blockWithIterativeExecution");
+  auto* method = get_fresh_method("blockWithIterativeExecution");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks_with_iteration(method, 1);
 
@@ -1975,9 +1975,9 @@ TEST_F(DedupBlocksTest, blockWithIterativeLimit2) {
       (:n)
     )
   )");
-  auto method = get_fresh_method("blockWithIterativeExecution");
+  auto* method = get_fresh_method("blockWithIterativeExecution");
   method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   run_dedup_blocks_with_iteration(method, 2);
 

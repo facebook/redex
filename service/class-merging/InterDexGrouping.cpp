@@ -49,7 +49,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
             .c_str());
   ConcurrentMap<DexType*, TypeHashSet> res;
   // Ensure all types will be handled.
-  for (auto* t : UnorderedIterable(types)) {
+  for (const auto* t : UnorderedIterable(types)) {
     res.emplace(const_cast<DexType*>(t), TypeHashSet());
   }
 
@@ -59,13 +59,13 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
                               bool /* already_exists */) { set.emplace(cls); };
 
     if (insn->has_type()) {
-      auto current_instance = check_current_instance(types, insn);
+      auto* current_instance = check_current_instance(types, insn);
       if (current_instance) {
         res.update(current_instance, updater);
       }
     } else if (insn->has_field()) {
       if (opcode::is_an_sfield_op(insn->opcode())) {
-        auto current_instance = check_current_instance(types, insn);
+        auto* current_instance = check_current_instance(types, insn);
         if (current_instance) {
           res.update(current_instance, updater);
         }
@@ -73,7 +73,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     } else if (insn->has_method()) {
       // Load and initialize class for static member access.
       if (opcode::is_invoke_static(insn->opcode())) {
-        auto current_instance = check_current_instance(types, insn);
+        auto* current_instance = check_current_instance(types, insn);
         if (current_instance) {
           res.update(current_instance, updater);
         }
@@ -84,7 +84,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
   switch (mode) {
   case InterDexGroupingInferringMode::kClassLoads: {
     walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
-      auto cls = method->get_class();
+      auto* cls = method->get_class();
       class_loads_update(insn, cls);
     });
     break;
@@ -101,7 +101,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
           [](const auto& v) { return v && v->val > 0; });
     };
     walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-      auto cls = method->get_class();
+      auto* cls = method->get_class();
 
       cfg::ScopedCFG cfg{&code};
 
@@ -130,7 +130,7 @@ size_t get_min_interdex_group(
   // By default, we consider the class in the last group.
   size_t group = interdex_groups - 1;
   for (DexType* type : UnorderedIterable(types)) {
-    if (cls_to_interdex_groups.count(type)) {
+    if (cls_to_interdex_groups.count(type) != 0u) {
       group = std::min(group, cls_to_interdex_groups.at(type));
     }
   }
@@ -142,7 +142,7 @@ size_t get_interdex_group(
     DexType* type,
     const UnorderedMap<DexType*, size_t>& cls_to_interdex_groups,
     size_t interdex_groups) {
-  if (cls_to_interdex_groups.count(type)) {
+  if (cls_to_interdex_groups.count(type) != 0u) {
     TRACE(CLMG, 5, "Found interdex group symbol match for %s", SHOW(type));
     return cls_to_interdex_groups.at(type);
   }
@@ -176,7 +176,7 @@ void InterDexGrouping::build_interdex_grouping(
 
   if (m_config.inferring_mode ==
       InterDexGroupingInferringMode::kExactSymbolMatch) {
-    for (auto* type : UnorderedIterable(merging_targets)) {
+    for (const auto* type : UnorderedIterable(merging_targets)) {
       size_t group_idx =
           get_interdex_group(const_cast<DexType*>(type), cls_to_interdex_groups,
                              num_interdex_groups);
@@ -226,10 +226,10 @@ void InterDexGrouping::build_interdex_grouping(
 
 TypeSet InterDexGrouping::get_types_in_group(const InterdexSubgroupIdx id,
                                              const TypeSet& types) const {
-  auto& interdex_group = m_all_interdexing_groups.at(id);
+  const auto& interdex_group = m_all_interdexing_groups.at(id);
   TypeSet group;
-  for (auto* type : types) {
-    if (interdex_group.count(type)) {
+  for (const auto* type : types) {
+    if (interdex_group.count(type) != 0u) {
       group.insert(type);
     }
   }

@@ -33,7 +33,7 @@ class MethodSplitterTest : public RedexTest {
     ClassCreator cc{DexType::make_type(name)};
     cc.set_super(type::java_lang_Object());
 
-    auto m =
+    auto* m =
         DexMethod::make_method(name + ".bar:" + sig)
             ->make_concrete(ACC_PUBLIC | ACC_STATIC,
                             assembler::ircode_from_string(code_str), false);
@@ -128,7 +128,7 @@ class MethodSplitterTest : public RedexTest {
     }
     auto ordered =
         unordered_to_ordered(stats.added_methods, compare_dexmethods);
-    for (auto out : ordered) {
+    for (auto* out : ordered) {
       auto out_error = compare(out);
       if (!out_error.empty()) {
         return ::testing::AssertionFailure() << show(out) << ": " << out_error;
@@ -146,11 +146,11 @@ class MethodSplitterTest : public RedexTest {
 std::atomic<size_t> MethodSplitterTest::s_counter{0};
 
 TEST_F(MethodSplitterTest, NothingToDo) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (return-void)
     ))";
-  auto after = before;
+  const auto* after = before;
   auto res = test("()V",
                   before,
                   defaultConfig(),
@@ -159,7 +159,7 @@ TEST_F(MethodSplitterTest, NothingToDo) {
 }
 
 TEST_F(MethodSplitterTest, SplitLargeBlock) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -169,7 +169,7 @@ TEST_F(MethodSplitterTest, SplitLargeBlock) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -180,7 +180,7 @@ TEST_F(MethodSplitterTest, SplitLargeBlock) {
       (move-result v0)
       (return v0)
     ))";
-  auto split0 = R"(
+  const auto* split0 = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -197,7 +197,7 @@ TEST_F(MethodSplitterTest, SplitLargeBlock) {
 }
 
 TEST_F(MethodSplitterTest, SplitConstants) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -211,7 +211,7 @@ TEST_F(MethodSplitterTest, SplitConstants) {
       (add-int v0 v0 v2)
       (return v0)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -223,7 +223,7 @@ TEST_F(MethodSplitterTest, SplitConstants) {
       (move-result v0)
       (return v0)
     ))";
-  auto split0 = R"(
+  const auto* split0 = R"(
     (
       (load-param v0)
       (const v1 1)
@@ -245,7 +245,7 @@ TEST_F(MethodSplitterTest, SplitConstants) {
 }
 
 TEST_F(MethodSplitterTest, CannotSplitUninitializedObject) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (new-instance "Ljava/lang/Object;")
@@ -258,7 +258,7 @@ TEST_F(MethodSplitterTest, CannotSplitUninitializedObject) {
       (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
       (return v0)
     ))";
-  auto after = before;
+  const auto* after = before;
   auto res = test("(I)I",
                   before,
                   defaultConfig(),
@@ -267,7 +267,7 @@ TEST_F(MethodSplitterTest, CannotSplitUninitializedObject) {
 }
 
 TEST_F(MethodSplitterTest, CanSplitInitializedObject) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (new-instance "Ljava/lang/Object;")
@@ -280,7 +280,7 @@ TEST_F(MethodSplitterTest, CanSplitInitializedObject) {
       (add-int v0 v0 v0)
       (return-object v1)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (new-instance "Ljava/lang/Object;")
@@ -291,7 +291,7 @@ TEST_F(MethodSplitterTest, CanSplitInitializedObject) {
       (move-result-object v0)
       (return-object v0)
     ))";
-  auto split0 = R"(
+  const auto* split0 = R"(
     (
       (load-param v0)
       (load-param-object v1)
@@ -312,7 +312,7 @@ TEST_F(MethodSplitterTest, CanSplitInitializedObject) {
 }
 
 TEST_F(MethodSplitterTest, SplitBranchFallthrough) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -325,7 +325,7 @@ TEST_F(MethodSplitterTest, SplitBranchFallthrough) {
     (:L0)
       (return v0)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -338,7 +338,7 @@ TEST_F(MethodSplitterTest, SplitBranchFallthrough) {
     (:L0)
       (return v0)
     ))";
-  auto split0 = R"(
+  const auto* split0 = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -357,7 +357,7 @@ TEST_F(MethodSplitterTest, SplitBranchFallthrough) {
 }
 
 TEST_F(MethodSplitterTest, SplitSwitch) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -383,7 +383,7 @@ TEST_F(MethodSplitterTest, SplitSwitch) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -402,7 +402,7 @@ TEST_F(MethodSplitterTest, SplitSwitch) {
       (move-result v0)
       (return v0)
     ))";
-  auto split0cd = R"(
+  const auto* split0cd = R"(
     (
       (load-param v0)
       (switch v0 (:d :c))
@@ -415,7 +415,7 @@ TEST_F(MethodSplitterTest, SplitSwitch) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto split1a = R"(
+  const auto* split1a = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -424,7 +424,7 @@ TEST_F(MethodSplitterTest, SplitSwitch) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto split2b = R"(
+  const auto* split2b = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -444,7 +444,7 @@ TEST_F(MethodSplitterTest, SplitSwitch) {
 }
 
 TEST_F(MethodSplitterTest, SplitHotColdSwitch) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (.src_block "LFoo;.bar:()V" 1 (0.5 0.5))
@@ -482,7 +482,7 @@ TEST_F(MethodSplitterTest, SplitHotColdSwitch) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (.src_block "LFoo;.bar:()V" 1 (0.5 0.5))
@@ -508,7 +508,7 @@ TEST_F(MethodSplitterTest, SplitHotColdSwitch) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto split0 = R"(
+  const auto* split0 = R"(
     (
       (load-param v0)
       (.src_block "LFoo;.bar$split$hot_cold0:(I)I" 4294967295 (0.0 0.0))
@@ -547,7 +547,7 @@ TEST_F(MethodSplitterTest, SplitHotColdSwitch) {
 }
 
 TEST_F(MethodSplitterTest, SplitSwitchPreferCasesWithSharedCode) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -581,7 +581,7 @@ TEST_F(MethodSplitterTest, SplitSwitchPreferCasesWithSharedCode) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -600,7 +600,7 @@ TEST_F(MethodSplitterTest, SplitSwitchPreferCasesWithSharedCode) {
       (move-result v0)
       (return v0)
     ))";
-  auto split0ad = R"(
+  const auto* split0ad = R"(
     (
       (load-param v0)
       (switch v0 (:d :a))
@@ -621,7 +621,7 @@ TEST_F(MethodSplitterTest, SplitSwitchPreferCasesWithSharedCode) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto split1b = R"(
+  const auto* split1b = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -629,7 +629,7 @@ TEST_F(MethodSplitterTest, SplitSwitchPreferCasesWithSharedCode) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto split2c = R"(
+  const auto* split2c = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -649,7 +649,7 @@ TEST_F(MethodSplitterTest, SplitSwitchPreferCasesWithSharedCode) {
 }
 
 TEST_F(MethodSplitterTest, SplitSwitchPreferNotBreakingLargePackedSwitches) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -683,7 +683,7 @@ TEST_F(MethodSplitterTest, SplitSwitchPreferNotBreakingLargePackedSwitches) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -702,7 +702,7 @@ TEST_F(MethodSplitterTest, SplitSwitchPreferNotBreakingLargePackedSwitches) {
       (move-result v0)
       (return v0)
     ))";
-  auto split0cd = R"(
+  const auto* split0cd = R"(
     (
       (load-param v0)
       (switch v0 (:d :c))
@@ -722,7 +722,7 @@ TEST_F(MethodSplitterTest, SplitSwitchPreferNotBreakingLargePackedSwitches) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto split1a = R"(
+  const auto* split1a = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -733,7 +733,7 @@ TEST_F(MethodSplitterTest, SplitSwitchPreferNotBreakingLargePackedSwitches) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto split2b = R"(
+  const auto* split2b = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -761,7 +761,7 @@ TEST_F(MethodSplitterTest, SplitTypeDemands) {
   cc.set_super(type::java_lang_Object());
   cc.create();
 
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -790,7 +790,7 @@ TEST_F(MethodSplitterTest, SplitTypeDemands) {
       (iput-object v2 v2 "LSpecificType;.foo:LSpecificType;")
       (return-object v2)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -812,7 +812,7 @@ TEST_F(MethodSplitterTest, SplitTypeDemands) {
       (iput-object v2 v2 "LSpecificType;.foo:LSpecificType;")
       (return-object v2)
     ))";
-  auto split0 = R"(
+  const auto* split0 = R"(
     (
       (load-param v0)
       (load-param-object v2)
@@ -847,7 +847,7 @@ TEST_F(MethodSplitterTest, SplitTypeDemandsRegression) {
   cc.set_super(type::java_lang_Object());
   cc.create();
 
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -878,7 +878,7 @@ TEST_F(MethodSplitterTest, SplitTypeDemandsRegression) {
       (iput-object v2 v2 "LSpecificType;.foo:LSpecificType;")
       (return-object v2)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -901,7 +901,7 @@ TEST_F(MethodSplitterTest, SplitTypeDemandsRegression) {
       (iput-object v2 v2 "LSpecificType;.foo:LSpecificType;")
       (return-object v2)
     ))";
-  auto split0 = R"(
+  const auto* split0 = R"(
     (
       (load-param v0)
       (load-param-object v2)
@@ -931,7 +931,7 @@ TEST_F(MethodSplitterTest, SplitTypeDemandsRegression) {
 }
 
 TEST_F(MethodSplitterTest, DontSplitLoadParamChains) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -955,7 +955,7 @@ TEST_F(MethodSplitterTest, DontSplitLoadParamChains) {
 }
 
 TEST_F(MethodSplitterTest, DuplicateSourceBlocksWithReturn) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -982,7 +982,7 @@ TEST_F(MethodSplitterTest, DuplicateSourceBlocksWithReturn) {
 }
 
 TEST_F(MethodSplitterTest, UndupReturns) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -1009,7 +1009,7 @@ TEST_F(MethodSplitterTest, UndupReturns) {
       (add-int v0 v0 v0)
       (goto :common)
     ))";
-  auto after = R"(
+  const auto* after = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -1028,7 +1028,7 @@ TEST_F(MethodSplitterTest, UndupReturns) {
       (move-result v0)
       (return v0)
     ))";
-  auto split0cd = R"(
+  const auto* split0cd = R"(
     (
       (load-param v0)
       (switch v0 (:d :c))
@@ -1041,7 +1041,7 @@ TEST_F(MethodSplitterTest, UndupReturns) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto split1a = R"(
+  const auto* split1a = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)
@@ -1050,7 +1050,7 @@ TEST_F(MethodSplitterTest, UndupReturns) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto split2b = R"(
+  const auto* split2b = R"(
     (
       (load-param v0)
       (add-int v0 v0 v0)

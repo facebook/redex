@@ -86,7 +86,7 @@ static bool is_branch_or_goto(const cfg::Edge* edge) {
 static std::vector<cfg::Edge*> get_branch_or_goto_succs(
     const cfg::Block* block) {
   std::vector<cfg::Edge*> succs;
-  for (auto edge : block->succs()) {
+  for (auto* edge : block->succs()) {
     if (is_branch_or_goto(edge)) {
       succs.push_back(edge);
     }
@@ -104,12 +104,12 @@ static bool same_branch_and_goto_successors(const cfg::Block* b1,
   }
   using Key = std::pair<cfg::EdgeType, cfg::Edge::CaseKey>;
   UnorderedMap<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
-  for (auto b2_succ : b2_succs) {
+  for (auto* b2_succ : b2_succs) {
     b2_succs_map.emplace(
         std::make_pair(b2_succ->type(), b2_succ->case_key().value_or(0)),
         b2_succ->target());
   }
-  for (auto b1_succ : b1_succs) {
+  for (auto* b1_succ : b1_succs) {
     // For successors being the same, we need to find a matching entry for
     // b1_succ in the b2_succs_map map.
     auto it = b2_succs_map.find(
@@ -117,7 +117,7 @@ static bool same_branch_and_goto_successors(const cfg::Block* b1,
     if (it == b2_succs_map.end()) {
       return false;
     }
-    auto b2_succ_target = it->second;
+    auto* b2_succ_target = it->second;
     // Either targets need to be the same, or both targets must be pointing to
     // same block (to support deduping of simple self-loops).
     if (b1_succ->target() != b2_succ_target &&
@@ -273,7 +273,7 @@ bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
       resolved_method =
           resolve_method(insn->get_method(), opcode_to_search(insn));
     }
-    if (resolved_method && resolved_method->rstate.dont_inline()) {
+    if ((resolved_method != nullptr) && resolved_method->rstate.dont_inline()) {
       return true;
     }
   }
@@ -686,7 +686,7 @@ class DedupBlocksImpl {
       // Get (reverse) iterators for all blocks.
       std::map<cfg::Block*, IRList::reverse_iterator, BlockCompare>
           block_iterator_map;
-      for (auto block : succ_blocks) {
+      for (auto* block : succ_blocks) {
         block_iterator_map[block] = block->rbegin();
       }
 
@@ -721,7 +721,7 @@ class DedupBlocksImpl {
             mie_count;
 
         for (auto& block_iterator_pair : block_iterator_map) {
-          const auto block = block_iterator_pair.first;
+          auto* const block = block_iterator_pair.first;
           auto& it = block_iterator_pair.second;
 
           // When instrumenting, do not deduplicate catch handler head blocks.
@@ -837,7 +837,8 @@ class DedupBlocksImpl {
   bool dedup_catch_handler_head_block(cfg::ControlFlowGraph& cfg,
                                       cfg::Block* block) {
     if (is_instrument_mode() &&
-        cfg.get_pred_edge_of_type(block, cfg::EdgeType::EDGE_THROW)) {
+        (cfg.get_pred_edge_of_type(block, cfg::EdgeType::EDGE_THROW) !=
+         nullptr)) {
       auto first = block->get_first_insn();
       if (first != block->end() &&
           opcode::is_move_exception(first->insn->opcode())) {
@@ -860,7 +861,7 @@ class DedupBlocksImpl {
       // Split the blocks at the reverse iterator where we determine to be
       // the best location.
       for (const auto& block_it_pair : group.postfix_block_its) {
-        auto block = block_it_pair.first;
+        auto* block = block_it_pair.first;
         auto it = block_it_pair.second;
 
         // This means we are to split the entire block, which is essentially a
@@ -932,7 +933,7 @@ class DedupBlocksImpl {
         auto cfg_it = block->to_cfg_instruction_iterator(fwd_it);
         // Split the block and add a source block in the beginning if there
         // isn't one already
-        auto split_block = cfg.split_block(cfg_it);
+        auto* split_block = cfg.split_block(cfg_it);
         if (split_block->begin()->type != MFLOW_SOURCE_BLOCK) {
           copy_over_source_block(block, split_block);
         }
@@ -943,8 +944,8 @@ class DedupBlocksImpl {
 
         // Position of first instruction of split-off successor block
         if (needs_pos(split_block->begin(), split_block->end())) {
-          auto pos = cfg.get_dbg_pos(cfg_it);
-          if (pos) {
+          auto* pos = cfg.get_dbg_pos(cfg_it);
+          if (pos != nullptr) {
             // Make sure new block gets proper position
             cfg.insert_before(split_block, split_block->begin(),
                               std::make_unique<DexPosition>(*pos));
@@ -1048,7 +1049,7 @@ class DedupBlocksImpl {
     std::vector<IRInstruction*> res;
     UnorderedSet<IRInstruction*> block_insns;
     for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (opcode::is_invoke_direct(insn->opcode()) &&
           method::is_init(insn->get_method())) {
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
@@ -1061,13 +1062,13 @@ class DedupBlocksImpl {
                 defs.size());
           return std::nullopt;
         }
-        auto def = *defs.begin();
+        auto* def = *defs.begin();
         auto def_opcode = def->opcode();
         always_assert(opcode::is_new_instance(def_opcode) ||
                       opcode::is_a_load_param(def_opcode));
         // Log def instruction if it is not an earlier instruction from the
         // current block.
-        if (!block_insns.count(def)) {
+        if (block_insns.count(def) == 0u) {
           res.push_back(def);
         } else {
           TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defined in block");
@@ -1231,7 +1232,7 @@ class DedupBlocksImpl {
         // the type demand of the instruction, and only give up if it involves
         // an array of an interface type.
         init_reaching_defs();
-        for (auto reaching_def : reaching_defs.elements()) {
+        for (auto* reaching_def : reaching_defs.elements()) {
           for (const auto& use : UnorderedIterable(
                    (*live_ranges->def_use_chains)[reaching_def])) {
             auto op = use.insn->opcode();
@@ -1253,7 +1254,7 @@ class DedupBlocksImpl {
       // ...then we need to make sure that register is not used with an
       // instruction that expects *some* array type.
       init_reaching_defs();
-      for (auto reaching_def : reaching_defs.elements()) {
+      for (auto* reaching_def : reaching_defs.elements()) {
         for (const auto& use :
              UnorderedIterable((*live_ranges->def_use_chains)[reaching_def])) {
           auto op = use.insn->opcode();
@@ -1328,7 +1329,7 @@ Stats& Stats::operator+=(const Stats& that) {
   insns_removed += that.insns_removed;
   blocks_split += that.blocks_split;
   positions_inserted += that.positions_inserted;
-  for (auto& p : UnorderedIterable(that.dup_sizes)) {
+  for (const auto& p : UnorderedIterable(that.dup_sizes)) {
     dup_sizes[p.first] += p.second;
   }
   return *this;

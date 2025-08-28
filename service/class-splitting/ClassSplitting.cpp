@@ -40,7 +40,7 @@ void update_coldstart_classes_order(
   for (const auto& str : previously_relocated_types) {
     auto initial_type = str.substr(0, str.size() - 11) + ";";
 
-    auto type = DexType::get_type(initial_type);
+    auto* type = DexType::get_type(initial_type);
     if (type == nullptr) {
       TRACE(CS, 2,
             "[class splitting] Cannot find previously relocated type %s in "
@@ -50,7 +50,7 @@ void update_coldstart_classes_order(
       continue;
     }
 
-    if (!coldstart_types.count(type)) {
+    if (coldstart_types.count(type) == 0u) {
       replacement[str] = initial_type;
     }
   }
@@ -59,7 +59,7 @@ void update_coldstart_classes_order(
     std::vector<std::string> new_coldstart_classes(coldstart_classes.size());
 
     for (const auto& str : coldstart_classes) {
-      if (replacement.count(str)) {
+      if (replacement.count(str) != 0u) {
         new_coldstart_classes.push_back(replacement[str]);
       } else {
         new_coldstart_classes.push_back(str);
@@ -102,7 +102,7 @@ DexClass* ClassSplitter::create_target_class(
   ClassCreator cc(target_type);
   cc.set_access(ACC_PUBLIC | ACC_FINAL);
   cc.set_super(type::java_lang_Object());
-  auto target_cls = cc.create();
+  auto* target_cls = cc.create();
   target_cls->rstate.set_generated();
   target_cls->set_deobfuscated_name(target_type_name);
   return target_cls;
@@ -132,13 +132,13 @@ DexMethod* ClassSplitter::create_trampoline_method(DexMethod* method,
   if (!is_static(method)) {
     arg_types.push_back(method->get_class());
   }
-  for (auto t : *method->get_proto()->get_args()) {
+  for (auto* t : *method->get_proto()->get_args()) {
     arg_types.push_back(const_cast<DexType*>(t));
   }
-  auto type_list = DexTypeList::make_type_list(std::move(arg_types));
-  auto proto =
+  auto* type_list = DexTypeList::make_type_list(std::move(arg_types));
+  auto* proto =
       DexProto::make_proto(method->get_proto()->get_rtype(), type_list);
-  auto trampoline_target_method =
+  auto* trampoline_target_method =
       DexMethod::make_method(target_cls->get_type(),
                              DexString::make_string(name), proto)
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -166,13 +166,13 @@ void ClassSplitter::prepare(const DexClass* cls,
   if (!can_relocate(cls)) {
     return;
   }
-  auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(
+  const auto* cls_has_problematic_clinit = method::clinit_may_have_side_effects(
       cls, /* allow_benign_method_invocations */ false);
 
   SplitClass& sc = m_split_classes[cls];
   always_assert(sc.relocatable_methods.empty());
   auto process_method = [&](DexMethod* method) {
-    if (!method->get_code()) {
+    if (method->get_code() == nullptr) {
       return;
     }
     auto& cfg = method->get_code()->cfg();
@@ -180,11 +180,11 @@ void ClassSplitter::prepare(const DexClass* cls,
       m_stats.method_size_too_small++;
       return;
     }
-    if (m_sufficiently_popular_methods.count(method)) {
+    if (m_sufficiently_popular_methods.count(method) != 0u) {
       return;
     }
     if (m_config.profile_only &&
-        !m_insufficiently_popular_methods.count(method)) {
+        (m_insufficiently_popular_methods.count(method) == 0u)) {
       return;
     }
     if (m_config.source_blocks && has_source_block_positive_val(method)) {
@@ -192,8 +192,8 @@ void ClassSplitter::prepare(const DexClass* cls,
     }
 
     bool requires_trampoline{false};
-    if (!can_relocate(cls_has_problematic_clinit, method, /* log */ true,
-                      &requires_trampoline)) {
+    if (!can_relocate(cls_has_problematic_clinit != nullptr, method,
+                      /* log */ true, &requires_trampoline)) {
       return;
     }
     if (requires_trampoline && !m_config.trampolines) {
@@ -220,7 +220,7 @@ void ClassSplitter::prepare(const DexClass* cls,
       }
       ++target_class_info.size;
     } else {
-      auto source_cls = method->get_class();
+      auto* source_cls = method->get_class();
       auto it = m_target_classes_by_source_classes.find(source_cls);
       if (it != m_target_classes_by_source_classes.end()) {
         target_cls = it->second;
@@ -252,9 +252,9 @@ void ClassSplitter::prepare(const DexClass* cls,
       m_instrumentation_callback(method);
     }
   };
-  auto& dmethods = cls->get_dmethods();
+  const auto& dmethods = cls->get_dmethods();
   std::for_each(dmethods.begin(), dmethods.end(), process_method);
-  auto& vmethods = cls->get_vmethods();
+  const auto& vmethods = cls->get_vmethods();
   std::for_each(vmethods.begin(), vmethods.end(), process_method);
 }
 
@@ -286,22 +286,23 @@ DexClasses ClassSplitter::additional_classes(const DexClasses& classes) {
             SHOW(cls));
       continue;
     }
-    auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(
-        cls, /* allow_benign_method_invocations */ false);
+    const auto* cls_has_problematic_clinit =
+        method::clinit_may_have_side_effects(
+            cls, /* allow_benign_method_invocations */ false);
     std::vector<DexMethod*> methods_to_relocate;
     // We iterate over the actually existing set of methods at this time
     // (other InterDex plug-ins might have added or removed or relocated
     // methods).
     auto process_method = [&](DexMethod* method) {
-      if (!method->get_code()) {
+      if (method->get_code() == nullptr) {
         return;
       }
-      if (m_sufficiently_popular_methods.count(method)) {
+      if (m_sufficiently_popular_methods.count(method) != 0u) {
         m_stats.popular_methods++;
         return;
       }
       if (m_config.profile_only &&
-          !m_insufficiently_popular_methods.count(method)) {
+          (m_insufficiently_popular_methods.count(method) == 0u)) {
         m_stats.non_relocated_methods++;
         return;
       }
@@ -317,8 +318,8 @@ DexClasses ClassSplitter::additional_classes(const DexClasses& classes) {
       }
       const RelocatableMethodInfo& method_info = it->second;
       bool requires_trampoline{false};
-      if (!can_relocate(cls_has_problematic_clinit, method, /* log */ false,
-                        &requires_trampoline)) {
+      if (!can_relocate(cls_has_problematic_clinit != nullptr, method,
+                        /* log */ false, &requires_trampoline)) {
         TRACE(CS,
               4,
               "[class splitting] Method earlier identified as relocatable is "
@@ -367,7 +368,7 @@ DexClasses ClassSplitter::additional_classes(const DexClasses& classes) {
         ++m_stats.relocated_static_methods;
       } else if (!method->is_virtual()) {
         ++m_stats.relocated_non_static_direct_methods;
-      } else if (m_non_true_virtual_methods.count_unsafe(method)) {
+      } else if (m_non_true_virtual_methods.count_unsafe(method) != 0u) {
         ++m_stats.relocated_non_true_virtual_methods;
       } else {
         ++m_stats.relocated_true_virtual_methods;
@@ -398,7 +399,7 @@ void ClassSplitter::materialize_trampoline_code(DexMethod* source,
   // "target" is the new trampoline target method, somewhere far away
   target->set_code(
       std::make_unique<IRCode>(std::make_unique<cfg::ControlFlowGraph>()));
-  auto code = source->get_code();
+  auto* code = source->get_code();
   auto& cfg = code->cfg();
   auto& target_cfg = target->get_code()->cfg();
   cfg.deep_copy(&target_cfg);
@@ -408,13 +409,13 @@ void ClassSplitter::materialize_trampoline_code(DexMethod* source,
   // Create a new block containing all the load instructions.
   cfg = source->get_code()->cfg();
   cfg::Block* new_block = cfg.create_block();
-  auto invoke_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
+  auto* invoke_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke_insn->set_method(target);
-  auto proto = target->get_proto();
+  auto* proto = target->get_proto();
   auto* type_list = proto->get_args();
   invoke_insn->set_srcs_size(type_list->size());
   for (size_t i = 0; i < type_list->size(); i++) {
-    auto t = type_list->at(i);
+    auto* t = type_list->at(i);
     IRInstruction* load_param_insn;
     if (type::is_wide_type(t)) {
       load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
@@ -430,7 +431,7 @@ void ClassSplitter::materialize_trampoline_code(DexMethod* source,
   new_block->push_back(invoke_insn);
   IRInstruction* return_insn;
   if (proto->get_rtype() != type::_void()) {
-    auto t = proto->get_rtype();
+    auto* t = proto->get_rtype();
     IRInstruction* move_result_insn;
     if (type::is_wide_type(t)) {
       move_result_insn = new IRInstruction(OPCODE_MOVE_RESULT_WIDE);
@@ -482,9 +483,10 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
         case OPCODE_INVOKE_DIRECT:
         case OPCODE_INVOKE_VIRTUAL:
         case OPCODE_INVOKE_SUPER: {
-          auto resolved_method = resolve_method(insn->get_method(),
-                                                opcode_to_search(insn), method);
-          if (resolved_method && methods_to_staticize.count(resolved_method)) {
+          auto* resolved_method = resolve_method(
+              insn->get_method(), opcode_to_search(insn), method);
+          if ((resolved_method != nullptr) &&
+              (methods_to_staticize.count(resolved_method) != 0u)) {
             insn->set_opcode(OPCODE_INVOKE_STATIC);
             insn->set_method(resolved_method);
             rewritten_invokes.at(op)++;
@@ -493,8 +495,8 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
         }
         case OPCODE_INVOKE_INTERFACE:
         case OPCODE_INVOKE_STATIC: {
-          auto resolved_method = resolve_method(insn->get_method(),
-                                                opcode_to_search(insn), method);
+          auto* resolved_method = resolve_method(
+              insn->get_method(), opcode_to_search(insn), method);
           always_assert(!resolved_method ||
                         !methods_to_staticize.count(resolved_method));
           break;
@@ -588,18 +590,18 @@ bool ClassSplitter::can_relocate(const DexClass* cls) {
 }
 
 bool ClassSplitter::has_unresolvable_or_external_field_ref(const DexMethod* m) {
-  auto code = const_cast<DexMethod*>(m)->get_code();
+  auto* code = const_cast<DexMethod*>(m)->get_code();
   always_assert(code);
   auto& cfg = code->cfg();
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->has_field()) {
-      auto field = resolve_field(insn->get_field(),
-                                 opcode::is_an_sfield_op(insn->opcode())
-                                     ? FieldSearch::Static
-                                     : FieldSearch::Instance);
+      auto* field = resolve_field(insn->get_field(),
+                                  opcode::is_an_sfield_op(insn->opcode())
+                                      ? FieldSearch::Static
+                                      : FieldSearch::Instance);
 
-      if (!field || (!is_public(field) && field->is_external())) {
+      if ((field == nullptr) || (!is_public(field) && field->is_external())) {
         return true;
       }
     }
@@ -613,7 +615,7 @@ bool ClassSplitter::can_relocate(bool cls_has_problematic_clinit,
                                  bool log,
                                  bool* requires_trampoline) {
   *requires_trampoline = false;
-  if (!m->is_concrete() || m->is_external() || !m->get_code()) {
+  if (!m->is_concrete() || m->is_external() || (m->get_code() == nullptr)) {
     return false;
   }
   if (!can_rename(m)) {
@@ -699,7 +701,7 @@ bool ClassSplitter::can_relocate(bool cls_has_problematic_clinit,
       return false;
     }
   } else if (m_non_true_virtual_methods.count_unsafe(
-                 const_cast<DexMethod*>(m))) {
+                 const_cast<DexMethod*>(m)) != 0u) {
     if (!m_config.relocate_non_true_virtual_methods) {
       return false;
     }
@@ -728,7 +730,8 @@ void ClassSplitter::delayed_visibility_changes_apply() {
   m_delayed_visibility_changes->apply();
   // any method that was just made public and isn't virtual or a constructor or
   // static must be made static
-  for (auto method : UnorderedIterable(m_delayed_visibility_changes->methods)) {
+  for (auto* method :
+       UnorderedIterable(m_delayed_visibility_changes->methods)) {
     always_assert(is_public(method));
     if (!method->is_virtual() && !method::is_init(method) &&
         !is_static(method)) {
@@ -761,7 +764,7 @@ void ClassSplitter::delayed_invoke_direct_to_static(const Scope& final_scope) {
   // would have to be rebalanced after the mutations.
   auto methods =
       unordered_to_ordered(m_delayed_make_static, compare_dexmethods);
-  for (auto method : methods) {
+  for (auto* method : methods) {
     TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
     mutators::make_static(method);
   }
@@ -770,8 +773,8 @@ void ClassSplitter::delayed_invoke_direct_to_static(const Scope& final_scope) {
       [&](DexMethod*, IRInstruction* insn) {
         auto op = insn->opcode();
         if (op == OPCODE_INVOKE_DIRECT) {
-          auto m = insn->get_method()->as_def();
-          if (m && m_delayed_make_static.count(m)) {
+          auto* m = insn->get_method()->as_def();
+          if ((m != nullptr) && (m_delayed_make_static.count(m) != 0u)) {
             insn->set_opcode(OPCODE_INVOKE_STATIC);
           }
         }

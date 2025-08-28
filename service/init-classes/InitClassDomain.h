@@ -40,7 +40,7 @@ class InitClassDomain final
     if (is_bottom()) {
       return;
     }
-    for (auto init_cls : *init_classes_with_side_effects.get(type)) {
+    for (const auto* init_cls : *init_classes_with_side_effects.get(type)) {
       if (unwrap().contains(init_cls)) {
         break;
       }

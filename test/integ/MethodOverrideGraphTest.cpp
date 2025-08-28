@@ -26,10 +26,10 @@ std::vector<std::string> get_overriding_methods(
     const DexType* parent_class = nullptr) {
   std::vector<std::string> overriding;
   always_assert(mref->is_def());
-  auto method = static_cast<const DexMethod*>(mref);
+  const auto* method = static_cast<const DexMethod*>(mref);
   auto overriding_methods = mog::get_overriding_methods(
       graph, method, include_interface, parent_class);
-  for (auto* overriding_method : UnorderedIterable(overriding_methods)) {
+  for (const auto* overriding_method : UnorderedIterable(overriding_methods)) {
     overriding.emplace_back(show(overriding_method));
   }
   return overriding;
@@ -40,10 +40,10 @@ std::vector<std::string> get_overridden_methods(const mog::Graph& graph,
                                                 bool include_interface) {
   std::vector<std::string> overridden;
   always_assert(mref->is_def());
-  auto method = static_cast<const DexMethod*>(mref);
+  const auto* method = static_cast<const DexMethod*>(mref);
   auto overridden_methods =
       mog::get_overridden_methods(graph, method, include_interface);
-  for (auto* overridden_method : UnorderedIterable(overridden_methods)) {
+  for (const auto* overridden_method : UnorderedIterable(overridden_methods)) {
     overridden.emplace_back(show(overridden_method));
   }
   return overridden;

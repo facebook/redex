@@ -38,7 +38,7 @@ TEST(Dex039Test, ReadDex039) {
   auto dl = DexLoader::create(
       DexLocation::make_location("", dexfile), 39, DexLoader::Parallel::kYes);
   const auto& classes = dl.get_classes();
-  auto idx = dl.get_idx();
+  auto* idx = dl.get_idx();
 
   // ensure that instructions can be shown
   std::ostringstream o;

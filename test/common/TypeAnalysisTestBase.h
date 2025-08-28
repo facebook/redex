@@ -17,7 +17,7 @@ using TypeSet = sparta::PatriciaTreeSet<const DexType*>;
 class TypeAnalysisTestBase : public RedexIntegrationTest {
  protected:
   void set_root_method(const std::string& full_name) {
-    auto method = DexMethod::get_method(full_name)->as_def();
+    auto* method = DexMethod::get_method(full_name)->as_def();
     method->rstate.set_root();
   }
 
@@ -73,7 +73,7 @@ class TypeAnalysisTestBase : public RedexIntegrationTest {
 
   TypeSet get_type_set(std::initializer_list<DexType*> l) {
     TypeSet s;
-    for (const auto elem : l) {
+    for (auto* const elem : l) {
       s.insert(const_cast<const DexType*>(elem));
     }
     return s;
@@ -83,7 +83,7 @@ class TypeAnalysisTestBase : public RedexIntegrationTest {
       std::initializer_list<const std::string> l) {
     SmallSetDexTypeDomain s;
     for (const auto& elem : l) {
-      auto type = get_type(elem);
+      auto* type = get_type(elem);
       auto domain = SmallSetDexTypeDomain(type);
       s.join_with(domain);
     }

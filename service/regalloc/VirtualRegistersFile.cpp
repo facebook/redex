@@ -48,11 +48,11 @@ vreg_t VirtualRegistersFile::find_free_range_at_end() const {
 
 void VirtualRegistersFile::alloc_at(vreg_t pos, size_t width) {
   if (m_free.size() < pos + width) {
-    m_free.resize(std::max(m_free.size(), pos + width), /* value */ 1);
+    m_free.resize(std::max(m_free.size(), pos + width), /* value */ true);
     always_assert(m_free.size() <= REG_MAX);
   }
   for (size_t i = 0; i < width; ++i) {
-    m_free[pos + i] = 0;
+    m_free[pos + i] = false;
   }
 }
 

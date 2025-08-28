@@ -24,56 +24,56 @@ TEST_F(TypeAnalysisTransformTest, RemoveRedundantNullCheckTest) {
   set_root_method(
       "Lcom/facebook/redextest/TestRemoveRedundantNullChecks;.main:()V");
 
-  auto gta = new GlobalTypeAnalysisPass();
+  auto* gta = new GlobalTypeAnalysisPass();
   gta->get_config().transform.remove_redundant_null_checks = true;
   std::vector<Pass*> passes{gta};
 
   run_passes(passes);
   {
-    auto meth_check_null_arg =
+    auto* meth_check_null_arg =
         get_method("TestRemoveRedundantNullChecks;.checkEQZNullArg",
                    "Lcom/facebook/redextest/Base;", "I");
-    auto code = meth_check_null_arg->get_code();
+    auto* code = meth_check_null_arg->get_code();
     const auto& insns = InstructionIterable(code);
     for (auto& mie : insns) {
       EXPECT_NE(mie.insn->opcode(), OPCODE_IF_EQZ);
     }
   }
   {
-    auto meth_check_not_null_arg =
+    auto* meth_check_not_null_arg =
         get_method("TestRemoveRedundantNullChecks;.checkEQZNotNullArg",
                    "Lcom/facebook/redextest/Base;", "I");
-    auto code = meth_check_not_null_arg->get_code();
+    auto* code = meth_check_not_null_arg->get_code();
     const auto& insns = InstructionIterable(code);
     for (auto& mie : insns) {
       EXPECT_NE(mie.insn->opcode(), OPCODE_IF_EQZ);
     }
   }
   {
-    auto meth_check_null_arg =
+    auto* meth_check_null_arg =
         get_method("TestRemoveRedundantNullChecks;.checkNEZNullArg",
                    "Lcom/facebook/redextest/Base;", "I");
-    auto code = meth_check_null_arg->get_code();
+    auto* code = meth_check_null_arg->get_code();
     const auto& insns = InstructionIterable(code);
     for (auto& mie : insns) {
       EXPECT_NE(mie.insn->opcode(), OPCODE_IF_NEZ);
     }
   }
   {
-    auto meth_check_null_arg =
+    auto* meth_check_null_arg =
         get_method("TestRemoveRedundantNullChecks;.checkNEZNotNullArg",
                    "Lcom/facebook/redextest/Base;", "I");
-    auto code = meth_check_null_arg->get_code();
+    auto* code = meth_check_null_arg->get_code();
     const auto& insns = InstructionIterable(code);
     for (auto& mie : insns) {
       EXPECT_NE(mie.insn->opcode(), OPCODE_IF_NEZ);
     }
   }
   {
-    auto meth_check_null_arg =
+    auto* meth_check_null_arg =
         get_method("TestRemoveRedundantNullChecks;.checkEQZInitReachable",
                    "Lcom/facebook/redextest/Base;", "I");
-    auto code = meth_check_null_arg->get_code();
+    auto* code = meth_check_null_arg->get_code();
     const auto& insns = InstructionIterable(code);
     bool found_if_eqz = false;
     for (auto& mie : insns) {
@@ -84,10 +84,10 @@ TEST_F(TypeAnalysisTransformTest, RemoveRedundantNullCheckTest) {
     EXPECT_TRUE(found_if_eqz);
   }
   {
-    auto meth_check_null_arg = get_method(
+    auto* meth_check_null_arg = get_method(
         "TestRemoveRedundantNullChecks;.checkEQZInitReachableGetField", "",
         "I");
-    auto code = meth_check_null_arg->get_code();
+    auto* code = meth_check_null_arg->get_code();
     const auto& insns = InstructionIterable(code);
     bool found_if_eqz = false;
     for (auto& mie : insns) {
@@ -98,9 +98,9 @@ TEST_F(TypeAnalysisTransformTest, RemoveRedundantNullCheckTest) {
     EXPECT_TRUE(found_if_eqz);
   }
   {
-    auto meth_check_primitive_array_field =
+    auto* meth_check_primitive_array_field =
         get_method("ReactNode;.getCool", "I", "Ljava/lang/String;");
-    auto code = meth_check_primitive_array_field->get_code();
+    auto* code = meth_check_primitive_array_field->get_code();
     const auto& insns = InstructionIterable(code);
     bool found_if_eqz = false;
     for (auto& mie : insns) {
@@ -117,20 +117,20 @@ TEST_F(TypeAnalysisTransformTest, TestRemoveRedundantTypeChecks) {
   set_root_method(
       "Lcom/facebook/redextest/TestRemoveRedundantTypeChecks;.main:()V");
 
-  auto gta = new GlobalTypeAnalysisPass();
+  auto* gta = new GlobalTypeAnalysisPass();
   gta->get_config().transform.remove_redundant_type_checks = true;
   std::vector<Pass*> passes{gta};
   run_passes(passes);
 
   {
-    auto meth_check_null_arg =
+    auto* meth_check_null_arg =
         get_method("TestRemoveRedundantTypeChecks;.checkInstanceOfBaseNullArg",
                    "Lcom/facebook/redextest/Base;", "I");
-    auto code = meth_check_null_arg->get_code();
+    auto* code = meth_check_null_arg->get_code();
     const auto& insns = InstructionIterable(code);
     bool found_const_0 = false;
     for (auto& mie : insns) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       EXPECT_NE(insn->opcode(), OPCODE_INSTANCE_OF);
       if (insn->opcode() == OPCODE_CONST && insn->get_literal() == 0) {
         found_const_0 = true;
@@ -139,14 +139,14 @@ TEST_F(TypeAnalysisTransformTest, TestRemoveRedundantTypeChecks) {
     EXPECT_TRUE(found_const_0);
   }
   {
-    auto meth_check_not_null_arg = get_method(
+    auto* meth_check_not_null_arg = get_method(
         "TestRemoveRedundantTypeChecks;.checkInstanceOfBaseNotNullArg",
         "Lcom/facebook/redextest/Base;", "I");
-    auto code = meth_check_not_null_arg->get_code();
+    auto* code = meth_check_not_null_arg->get_code();
     const auto& insns = InstructionIterable(code);
     bool found_const_1 = false;
     for (auto& mie : insns) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       EXPECT_NE(insn->opcode(), OPCODE_INSTANCE_OF);
       if (insn->opcode() == OPCODE_CONST && insn->get_literal() == 1) {
         found_const_1 = true;
@@ -155,14 +155,14 @@ TEST_F(TypeAnalysisTransformTest, TestRemoveRedundantTypeChecks) {
     EXPECT_TRUE(found_const_1);
   }
   {
-    auto meth_check_sub_one =
+    auto* meth_check_sub_one =
         get_method("TestRemoveRedundantTypeChecks;.checkInstanceOfSubOneArg",
                    "Lcom/facebook/redextest/Base;", "I");
-    auto code = meth_check_sub_one->get_code();
+    auto* code = meth_check_sub_one->get_code();
     const auto& insns = InstructionIterable(code);
     bool found_const_1 = false;
     for (auto& mie : insns) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       EXPECT_NE(insn->opcode(), OPCODE_INSTANCE_OF);
       if (insn->opcode() == OPCODE_CONST && insn->get_literal() == 1) {
         found_const_1 = true;
@@ -171,14 +171,14 @@ TEST_F(TypeAnalysisTransformTest, TestRemoveRedundantTypeChecks) {
     EXPECT_TRUE(found_const_1);
   }
   {
-    auto meth_check_sub_two =
+    auto* meth_check_sub_two =
         get_method("TestRemoveRedundantTypeChecks;.checkInstanceOfSubTwoArg",
                    "Lcom/facebook/redextest/Base;", "I");
-    auto code = meth_check_sub_two->get_code();
+    auto* code = meth_check_sub_two->get_code();
     const auto& insns = InstructionIterable(code);
     bool found_const_0 = false;
     for (auto& mie : insns) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       EXPECT_NE(insn->opcode(), OPCODE_INSTANCE_OF);
       if (insn->opcode() == OPCODE_CONST && insn->get_literal() == 0) {
         found_const_0 = true;
@@ -187,13 +187,13 @@ TEST_F(TypeAnalysisTransformTest, TestRemoveRedundantTypeChecks) {
     EXPECT_TRUE(found_const_0);
   }
   {
-    auto meth_check_nullable_field = get_method(
+    auto* meth_check_nullable_field = get_method(
         "TestRemoveRedundantTypeChecks;.checkInstanceOfNullableField", "", "I");
-    auto code = meth_check_nullable_field->get_code();
+    auto* code = meth_check_nullable_field->get_code();
     const auto& insns = InstructionIterable(code);
     bool found_instance_of = false;
     for (auto& mie : insns) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() == OPCODE_INSTANCE_OF) {
         found_instance_of = true;
       }

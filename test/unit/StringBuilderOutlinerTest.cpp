@@ -33,20 +33,20 @@ class StringBuilderOutlinerTest : public RedexTest {
     m_stores.emplace_back("classes");
     m_stores[0].get_dexen().emplace_back();
 
-    auto init_method =
+    auto* init_method =
         DexMethod::get_method("Ljava/lang/StringBuilder;.<init>:()V");
     ASSERT_NE(init_method, nullptr);
     m_escape_summary_map.emplace(init_method, ptrs::EscapeSummary{});
     m_effect_summary_map.emplace(init_method, side_effects::Summary({0}));
 
-    auto init_string_method = DexMethod::get_method(
+    auto* init_string_method = DexMethod::get_method(
         "Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V");
     ASSERT_NE(init_string_method, nullptr);
     m_escape_summary_map.emplace(init_string_method, ptrs::EscapeSummary{});
     m_effect_summary_map.emplace(init_string_method,
                                  side_effects::Summary({0}));
 
-    auto append_string_method = DexMethod::get_method(
+    auto* append_string_method = DexMethod::get_method(
         "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
         "StringBuilder;");
     ASSERT_NE(append_string_method, nullptr);
@@ -55,7 +55,7 @@ class StringBuilderOutlinerTest : public RedexTest {
     m_effect_summary_map.emplace(append_string_method,
                                  side_effects::Summary({0}));
 
-    auto append_long_method = DexMethod::get_method(
+    auto* append_long_method = DexMethod::get_method(
         "Ljava/lang/StringBuilder;.append:(J)Ljava/lang/StringBuilder;");
     ASSERT_NE(append_long_method, nullptr);
     m_escape_summary_map.emplace(append_long_method,
@@ -63,7 +63,7 @@ class StringBuilderOutlinerTest : public RedexTest {
     m_effect_summary_map.emplace(append_long_method,
                                  side_effects::Summary({0}));
 
-    auto tostring_method = DexMethod::get_method(
+    auto* tostring_method = DexMethod::get_method(
         "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;");
     ASSERT_NE(tostring_method, nullptr);
     m_escape_summary_map.emplace(
@@ -98,8 +98,8 @@ class StringBuilderOutlinerTest : public RedexTest {
         if (!opcode::is_an_invoke(insn->opcode())) {
           continue;
         }
-        auto method = insn->get_method();
-        if (!m_escape_summary_map.count(method)) {
+        auto* method = insn->get_method();
+        if (m_escape_summary_map.count(method) == 0u) {
           continue;
         }
         invoke_to_esc_summary_map->emplace(insn,
@@ -270,11 +270,11 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   )");
   EXPECT_CODE_EQ(expected_code.get(), code.get());
 
-  auto outline_cls =
+  auto* outline_cls =
       type_class(DexType::get_type("Lcom/redex/OutlinedStringBuilders;"));
   ASSERT_EQ(outline_cls->get_dmethods().size(), 1);
 
-  auto outline_helper_method = outline_cls->get_dmethods().at(0);
+  auto* outline_helper_method = outline_cls->get_dmethods().at(0);
   auto expected_outlined_code = assembler::ircode_from_string(R"(
     (
       (load-param-object v1)
@@ -295,7 +295,7 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   // Check that OSDCE recognizes the outline helper as side-effect-free. This
   // ensures that running StringBuilderOutlinerPass before OSDCE won't
   // inadvertently cause dead code to be retained.
-  auto outline_helper_code = outline_helper_method->get_code();
+  auto* outline_helper_code = outline_helper_method->get_code();
   // When outline_helper_method was created, it generated editable cfg.
   // Therefore, need to be cleared before comparing code.
   outline_helper_code->clear_cfg();

@@ -33,7 +33,7 @@ TEST_F(IRInstructionTest, RoundTrip) {
   using namespace instruction_lowering::impl;
 
   DexType* ty = DexType::make_type("Lfoo;");
-  auto str = DexString::make_string("foo");
+  const auto* str = DexString::make_string("foo");
   DexFieldRef* field = DexField::make_field(ty, str, ty);
   auto* method = static_cast<DexMethod*>(DexMethod::make_method(
       ty, str, DexProto::make_proto(ty, DexTypeList::make_type_list({}))));
@@ -60,7 +60,7 @@ TEST_F(IRInstructionTest, RoundTrip) {
       continue;
     }
 
-    auto insn = DexInstruction::make_instruction(op);
+    auto* insn = DexInstruction::make_instruction(op);
     // populate the instruction args with non-zero values so we can check
     // if we have copied everything correctly
     if (insn->has_dest()) {
@@ -101,7 +101,7 @@ TEST_F(IRInstructionTest, RoundTrip) {
     method->get_dex_code()->set_registers_size(0xff);
 
     // Create a copy of insn because balloon frees the DexInstructions
-    auto copy = insn->clone();
+    auto* copy = insn->clone();
     insn = nullptr;
 
     method->balloon();
@@ -117,12 +117,12 @@ TEST_F(IRInstructionTest, RoundTrip) {
 TEST_F(IRInstructionTest, NormalizeInvoke) {
   using namespace dex_asm;
 
-  auto method = DexMethod::make_method("LFoo;", "x", "V", {"J", "I", "J"});
-  auto insn =
+  auto* method = DexMethod::make_method("LFoo;", "x", "V", {"J", "I", "J"});
+  auto* insn =
       dasm(OPCODE_INVOKE_VIRTUAL, method, {1_v, 2_v, 3_v, 4_v, 5_v, 6_v});
   EXPECT_TRUE(needs_range_conversion(insn));
 
-  auto orig = new IRInstruction(*insn);
+  auto* orig = new IRInstruction(*insn);
 
   auto norm_res = insn->normalize_registers();
   ASSERT_TRUE(norm_res);
@@ -149,9 +149,9 @@ TEST_F(IRInstructionTest, NormalizeInvoke) {
 IRInstruction* select_instruction(IRInstruction* insn) {
   DexMethod* method =
       static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
-  method->make_concrete(ACC_STATIC, 0);
+  method->make_concrete(ACC_STATIC, false);
   method->set_code(std::make_unique<IRCode>(method, 0));
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->push_back(insn);
   instruction_lowering::lower(method);
   return code->begin()->insn;
@@ -217,9 +217,9 @@ TEST_F(IRInstructionTest, SelectCheckCast) {
 
   DexMethod* method =
       static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
-  method->make_concrete(ACC_STATIC, 0);
+  method->make_concrete(ACC_STATIC, false);
   method->set_code(std::make_unique<IRCode>(method, 0));
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->push_back(dasm(OPCODE_CHECK_CAST, type::java_lang_Object(), {1_v}));
   code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
   instruction_lowering::lower(method);
@@ -256,7 +256,7 @@ TEST_F(IRInstructionTest, SelectConst) {
   using namespace dex_asm;
   using namespace instruction_lowering::impl;
 
-  auto insn = dasm(OPCODE_CONST, {0_v});
+  auto* insn = dasm(OPCODE_CONST, {0_v});
   EXPECT_EQ(DOPCODE_CONST_4, select_const_opcode(insn));
 
   insn->set_literal(0xf);
@@ -284,7 +284,7 @@ TEST_F(IRInstructionTest, SelectConst) {
 
   delete insn;
 
-  auto wide_insn = dasm(OPCODE_CONST_WIDE, {0_v});
+  auto* wide_insn = dasm(OPCODE_CONST_WIDE, {0_v});
 
   EXPECT_EQ(DOPCODE_CONST_WIDE_16, select_const_opcode(wide_insn));
 
@@ -332,7 +332,7 @@ TEST_F(IRInstructionTest, SelectBinopLit) {
   size_t count_inst = sizeof(ops) / sizeof(ops[0]);
   for (int i = 0; i < count_inst; i++) {
     // literal set to default size (0)
-    auto insn = new IRInstruction(ops[i]);
+    auto* insn = new IRInstruction(ops[i]);
     EXPECT_EQ(expected_fit8[i], select_binop_lit_opcode(insn))
         << "at " << show(ops[i]);
 

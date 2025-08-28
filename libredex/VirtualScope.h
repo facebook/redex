@@ -146,7 +146,7 @@ struct VirtualScope {
   TypeSet interfaces;
 
   bool has_def() const {
-    for (auto& meth : methods) {
+    for (const auto& meth : methods) {
       if (meth.first->is_def()) {
         return true;
       }
@@ -340,7 +340,7 @@ class ClassScopes {
       for (const auto& sig_it : names_it.second) {
         std::vector<const VirtualScope*> intf_scopes;
         TypeSet intfs;
-        for (auto& scope : sig_it.second) {
+        for (const auto& scope : sig_it.second) {
           redex_assert(type_class(scope.type) != nullptr);
           if (scope.interfaces.empty()) {
             continue;

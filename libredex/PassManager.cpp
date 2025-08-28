@@ -80,7 +80,7 @@ const Pass* get_profiled_pass(const PassManager& mgr) {
   redex_assert(getenv("PROFILE_PASS") != nullptr);
   // Resolve the pass in the constructor so that any typos / references to
   // nonexistent passes are caught as early as possible
-  auto pass = mgr.find_pass(getenv("PROFILE_PASS"));
+  auto* pass = mgr.find_pass(getenv("PROFILE_PASS"));
   always_assert(pass != nullptr);
   std::cerr << "Will run profiler for " << pass->name() << std::endl;
   return pass;
@@ -123,25 +123,25 @@ class CheckerConfig {
     m_external_check = type_checker_args.get("external_check", false).asBool();
     m_definition_check =
         type_checker_args.get("definition_check", false).asBool();
-    for (auto& external_check_allow :
+    for (const auto& external_check_allow :
          type_checker_args["external_check_allowlist"]) {
       m_external_check_allowlist.insert(external_check_allow.asString());
     }
-    for (auto& definition_check_allow :
+    for (const auto& definition_check_allow :
          type_checker_args["definition_check_allowlist"]) {
       m_definition_check_allowlist.insert(definition_check_allow.asString());
     }
-    for (auto& external_check_allow_prefix :
+    for (const auto& external_check_allow_prefix :
          type_checker_args["external_check_allowlist_prefixes"]) {
       m_external_check_allowlist_prefixes.insert(
           external_check_allow_prefix.asString());
     }
-    for (auto& definition_check_allow_prefix :
+    for (const auto& definition_check_allow_prefix :
          type_checker_args["definition_check_allowlist_prefixes"]) {
       m_definition_check_allowlist_prefixes.insert(
           definition_check_allow_prefix.asString());
     }
-    for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
+    for (const auto& trigger_pass : type_checker_args["run_after_passes"]) {
       m_type_checker_trigger_passes.insert(trigger_pass.asString());
     }
   }
@@ -390,7 +390,7 @@ class CheckUniqueDeobfuscatedNames {
     Timer t("check_unique_deobfuscated_names");
     UnorderedMap<const DexString*, DexMethod*> method_names;
     walk::methods(scope, [&method_names, pass_name](DexMethod* dex_method) {
-      auto deob = dex_method->get_deobfuscated_name_or_null();
+      const auto* deob = dex_method->get_deobfuscated_name_or_null();
       auto it = method_names.find(deob);
       if (it != method_names.end()) {
         fprintf(
@@ -489,8 +489,8 @@ class JNINativeContextHelper {
       // Before running any passes, treat everything as removable.
       walk::methods(scope, [this](DexMethod* m) {
         if (is_native(m)) {
-          auto native_func = native::get_native_function_for_dex_method(m);
-          if (native_func) {
+          auto* native_func = native::get_native_function_for_dex_method(m);
+          if (native_func != nullptr) {
             TRACE(NATIVE, 2, "Found native function %s",
                   native_func->get_name().c_str());
             m_removable_natives.emplace(native_func);
@@ -514,15 +514,15 @@ class JNINativeContextHelper {
     // remove the ones should remain.
     walk::methods(scope, [this](DexMethod* m) {
       if (is_native(m)) {
-        auto native_func = native::get_native_function_for_dex_method(m);
-        if (native_func) {
+        auto* native_func = native::get_native_function_for_dex_method(m);
+        if (native_func != nullptr) {
           auto it = m_removable_natives.find(native_func);
           if (it != m_removable_natives.end()) {
             TRACE(NATIVE, 2, "Cannot remove native function %s, called as %s",
                   native_func->get_name().c_str(), SHOW(m));
             m_removable_natives.erase(it);
           }
-        } else if (!m_java_method_no_impl_on_input.count(m)) {
+        } else if (m_java_method_no_impl_on_input.count(m) == 0u) {
           // TODO: "Linking" error: Change this to an assertion failure
           TRACE(PM, 1, "Unable to find native implementation for %s.", SHOW(m));
         }
@@ -537,7 +537,7 @@ class JNINativeContextHelper {
     output_symbols.reserve(m_removable_natives.size());
 
     // Might be non-deterministic in order, put them in a vector and sort.
-    for (auto func : m_removable_natives) {
+    for (auto* func : m_removable_natives) {
       output_symbols.push_back(func->get_name());
     }
 
@@ -588,7 +588,7 @@ void maybe_write_hashes_outgoing(const ConfigFiles& conf, const Scope& scope) {
 
 void maybe_write_env_seeds_file(const ConfigFiles& conf, const Scope& scope) {
   char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
-  if (seeds_output_file) {
+  if (seeds_output_file != nullptr) {
     std::string seed_filename = seeds_output_file;
     Timer t("Writing seeds file " + seed_filename);
     std::ofstream seeds_file(seed_filename);
@@ -720,7 +720,7 @@ class AfterPassSizes {
       tmp_dir = dir_name;
     }
 
-    auto thread_pool_instance = redex_thread_pool::ThreadPool::get_instance();
+    auto* thread_pool_instance = redex_thread_pool::ThreadPool::get_instance();
     if (thread_pool_instance != nullptr) {
       thread_pool_instance->join();
     }
@@ -793,7 +793,7 @@ class AfterPassSizes {
     for (fs::directory_iterator it{job.tmp_dir}; it != end; ++it) {
       const auto& file = it->path();
       if (fs::is_regular_file(file) &&
-          !file.extension().compare(std::string(".dex"))) {
+          (file.extension().compare(std::string(".dex")) == 0)) {
         sum += fs::file_size(file);
       }
     }
@@ -822,7 +822,7 @@ class AfterPassSizes {
     set_abort_if_not_this_thread();
 
     auto maybe_run = [&](const char* pass_name) {
-      auto pass = m_mgr->find_pass(pass_name);
+      auto* pass = m_mgr->find_pass(pass_name);
       if (pass != nullptr) {
         if (m_debug) {
           std::cerr << "Running " << pass_name << std::endl;
@@ -899,23 +899,23 @@ class TraceClassAfterEachPass {
  public:
   TraceClassAfterEachPass() {
 
-    auto trace_class_file = getenv("TRACE_CLASS_FILE");
+    auto* trace_class_file = getenv("TRACE_CLASS_FILE");
     std::cerr << "TRACE_CLASS_FILE="
               << (trace_class_file == nullptr ? "" : trace_class_file)
               << std::endl;
 
-    auto trace_class_name = getenv("TRACE_CLASS_NAME");
+    auto* trace_class_name = getenv("TRACE_CLASS_NAME");
     m_trace_class_env = trace_class_name == nullptr ? "" : trace_class_name;
     std::cerr << "TRACE_CLASS_NAME=" << m_trace_class_env << std::endl;
     m_trace_class_names = extract_delimited_items(m_trace_class_env, ",");
 
-    auto trace_method_name = getenv("TRACE_METHOD_NAME");
+    auto* trace_method_name = getenv("TRACE_METHOD_NAME");
     m_trace_method_env = trace_method_name == nullptr ? "" : trace_method_name;
     std::cerr << "TRACE_METHOD_NAME=" << m_trace_method_env << std::endl;
     m_trace_method_names = extract_delimited_items(m_trace_method_env, ",");
 
     if (!m_trace_method_names.empty() || !m_trace_class_names.empty()) {
-      if (trace_class_file) {
+      if (trace_class_file != nullptr) {
         try {
           int int_fd = std::stoi(trace_class_file);
           m_fd = fdopen(int_fd, "w");
@@ -923,7 +923,7 @@ class TraceClassAfterEachPass {
           // Not an integer file descriptor; real file name.
           m_fd = fopen(trace_class_file, "w");
         }
-        if (!m_fd) {
+        if (m_fd == nullptr) {
           fprintf(stderr,
                   "Unable to open TRACE_CLASS_FILE, falling back to stderr\n");
           m_fd = stderr;
@@ -940,7 +940,7 @@ class TraceClassAfterEachPass {
 
   void dump_method(DexMethod* m) {
     fprintf(m_fd, "Method %s\n", SHOW(m));
-    auto code = m->get_code();
+    auto* code = m->get_code();
     if (code != nullptr) {
       if (code->editable_cfg_built()) {
         auto& cfg = code->cfg();
@@ -958,7 +958,7 @@ class TraceClassAfterEachPass {
 
   void dump_cls(DexClass* cls) {
     fprintf(m_fd, "Class %s\n", SHOW(cls));
-    auto anno_set = cls->get_anno_set();
+    auto* anno_set = cls->get_anno_set();
     if (anno_set != nullptr) {
       fprintf(m_fd, "  Annotations on class: %s\n", SHOW(anno_set));
     }
@@ -973,15 +973,15 @@ class TraceClassAfterEachPass {
   }
 
   boost::optional<std::string_view> matches_source_block(DexMethod* method) {
-    auto code = method->get_code();
+    auto* code = method->get_code();
     if (code == nullptr) {
       return boost::none;
     }
     if (code->editable_cfg_built()) {
       auto& cfg = code->cfg();
-      for (auto b : cfg.blocks()) {
+      for (auto* b : cfg.blocks()) {
         auto sbs = source_blocks::gather_source_blocks(b);
-        for (auto sb : sbs) {
+        for (auto* sb : sbs) {
           auto search = m_trace_method_names.find(sb->src->str());
           if (search != m_trace_method_names.end()) {
             return *search;
@@ -1009,7 +1009,7 @@ class TraceClassAfterEachPass {
     auto temp_scope = build_class_scope(stores);
     if (!m_trace_class_names.empty()) {
       UnorderedMap<std::string_view, DexClass*> to_print;
-      for (auto cls : temp_scope) {
+      for (auto* cls : temp_scope) {
         auto name = cls->get_deobfuscated_name_or_empty();
         if (name.empty()) {
           name = cls->get_name()->str();
@@ -1035,9 +1035,9 @@ class TraceClassAfterEachPass {
     if (!m_trace_method_names.empty()) {
       UnorderedMap<std::string_view, SetOfMethods> to_print;
       for (const auto& s : m_trace_method_names) {
-        auto ref = DexMethod::get_method(s);
+        auto* ref = DexMethod::get_method(s);
         if (ref != nullptr) {
-          auto def = ref->as_def();
+          auto* def = ref->as_def();
           if (def != nullptr) {
             SetOfMethods methods{def};
             to_print.emplace(s, std::move(methods));
@@ -1205,7 +1205,7 @@ PassManager::PassManager(
       m_internal_fields(new InternalFields()),
       m_properties_manager(properties_manager) {
   init(config);
-  if (getenv("MALLOC_PROFILE_PASS")) {
+  if (getenv("MALLOC_PROFILE_PASS") != nullptr) {
     m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
     always_assert(m_malloc_profile_pass != nullptr);
     fprintf(stderr, "Will run jemalloc profiler for %s\n",
@@ -1259,7 +1259,7 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
   auto timer = m_hashers_timer.scope();
   hashing::DexScopeHasher hasher(scope);
   auto hash = hasher.run();
-  if (pass_name) {
+  if (pass_name != nullptr) {
     // log metric value in a way that fits into JSON number value
     set_metric("~result~code~hash~",
                hash.code_hash & ((((size_t)1) << 52) - 1));
@@ -1743,7 +1743,7 @@ PassManager::ActivatedPasses PassManager::compute_activated_passes(
       // the pass list, which needs to be removed for matching.
       auto activate = [&registered_passes, &result](const std::string& n,
                                                     const std::string* a) {
-        for (auto pass : registered_passes) {
+        for (auto* pass : registered_passes) {
           if (n == pass->name()) {
             if (a != nullptr) {
               auto cloned_pass = pass->clone(*a);
@@ -1768,7 +1768,7 @@ PassManager::ActivatedPasses PassManager::compute_activated_passes(
       }
 
       // Can we find it under the given alias?
-      auto* alias = get_alias(pass_name);
+      const auto* alias = get_alias(pass_name);
       if (alias != nullptr && activate(*alias, &pass_name)) {
         continue;
       }

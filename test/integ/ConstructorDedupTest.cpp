@@ -15,9 +15,9 @@
 class ConstructorDedupTest : public RedexIntegrationTest {};
 
 TEST_F(ConstructorDedupTest, dedup) {
-  auto type =
+  auto* type =
       DexType::get_type("Lcom/facebook/redextest/ConstructorDedupTest;");
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   EXPECT_NE(cls, nullptr);
   std::vector<DexClass*> scope({cls});
   auto ctors = cls->get_ctors();
@@ -51,9 +51,9 @@ TEST_F(ConstructorDedupTest, dedup) {
     }
 
     for (auto& mie : InstructionIterable(method->get_code())) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->has_method()) {
-        auto callee = insn->get_method();
+        auto* callee = insn->get_method();
         if (callee->get_class() == type && method::is_init(callee)) {
           // Only one constructor is used.
           EXPECT_EQ(callee, ctor);

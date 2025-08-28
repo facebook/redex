@@ -24,7 +24,7 @@
 namespace {
 
 void dump_method(const DexMethod* m) {
-  auto code = m->get_code();
+  const auto* code = m->get_code();
   std::cout << "(method (" << vshow((uint32_t)m->get_access(), true) << " \""
             << show(m) << "\"";
   if (code == nullptr) {

@@ -74,8 +74,8 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
       }
 
       MethodSearch type = drop_this ? MethodSearch::Any : MethodSearch::Virtual;
-      auto method = resolve_method(insn->get_method(), type);
-      if (method == nullptr || !target_methods.count(method)) {
+      auto* method = resolve_method(insn->get_method(), type);
+      if (method == nullptr || (target_methods.count(method) == 0u)) {
         continue;
       }
 
@@ -118,18 +118,18 @@ void make_methods_static(const UnorderedSet<DexMethod*>& methods,
 }
 
 bool uses_this(const DexMethod* method) {
-  auto code = (const_cast<DexMethod*>(method))->get_code();
+  auto* code = (const_cast<DexMethod*>(method))->get_code();
   always_assert_log(!is_static(method) && code != nullptr, "%s", SHOW(method));
 
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   auto first = cfg.entry_block()->get_first_insn();
   always_assert(first != cfg.entry_block()->end());
-  auto this_insn = first->insn;
+  auto* this_insn = first->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto const this_reg = this_insn->dest();
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     for (unsigned i = 0; i < insn->srcs_size(); i++) {
       if (this_reg == insn->src(i)) {
         return true;
@@ -148,8 +148,8 @@ std::vector<DexMethod*> get_devirtualizable_vmethods(
   auto vmethods = mog::get_non_true_virtuals(*override_graph, scope);
   auto targets_set = UnorderedSet<DexClass*>(targets.begin(), targets.end());
 
-  for (auto m : UnorderedIterable(vmethods)) {
-    auto cls = type_class(m->get_class());
+  for (auto* m : UnorderedIterable(vmethods)) {
+    auto* cls = type_class(m->get_class());
     if (!has_any_annotation(m, do_not_devirt_anno) &&
         targets_set.count(cls) > 0) {
       ret.push_back(m);
@@ -164,11 +164,11 @@ std::vector<DexMethod*> get_devirtualizable_dmethods(
     const UnorderedSet<DexType*>& do_not_devirt_anno) {
   std::vector<DexMethod*> ret;
   auto targets_set = UnorderedSet<DexClass*>(targets.begin(), targets.end());
-  for (auto cls : scope) {
+  for (auto* cls : scope) {
     if (targets_set.count(cls) == 0) {
       continue;
     }
-    for (auto m : cls->get_dmethods()) {
+    for (auto* m : cls->get_dmethods()) {
       if (method::is_any_init(m) || is_static(m)) {
         continue;
       }
@@ -186,7 +186,7 @@ void MethodDevirtualizer::verify_and_split(
     const std::vector<DexMethod*>& candidates,
     UnorderedSet<DexMethod*>& using_this,
     UnorderedSet<DexMethod*>& not_using_this) {
-  for (const auto m : candidates) {
+  for (auto* const m : candidates) {
     if (!m_config.ignore_keep && !can_rename(m)) {
       TRACE(VIRT, 2, "failed to devirt method %s: keep", SHOW(m));
       continue;

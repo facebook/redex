@@ -21,7 +21,7 @@ ResolveMethodRefs::ResolveMethodRefs(
   Timer t("ResolveMethodRefs");
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto* code = const_cast<IRCode*>(method->get_code());
-    if (!code) {
+    if (code == nullptr) {
       return;
     }
     cfg::ScopedCFG cfg(code);
@@ -55,9 +55,9 @@ void ResolveMethodRefs::analyze_method(
       if (insn->opcode() != OPCODE_INVOKE_INTERFACE) {
         continue;
       }
-      auto insn_method = insn->get_method();
-      auto intf = resolve_method(insn_method, opcode_to_search(insn), method);
-      if (!intf) {
+      auto* insn_method = insn->get_method();
+      auto* intf = resolve_method(insn_method, opcode_to_search(insn), method);
+      if (intf == nullptr) {
         continue;
       }
       // Step1. Use GTA result to resolve the interface(i.e. the first param of
@@ -77,7 +77,7 @@ void ResolveMethodRefs::analyze_method(
                                        intf->get_proto(), ms);
       // Step2.  if this calle can be resolved, replace invoke-interface to
       // invoke-virtual.
-      if (!impl || xstores.cross_store_ref(method, impl)) {
+      if ((impl == nullptr) || xstores.cross_store_ref(method, impl)) {
         continue;
       }
 
@@ -90,14 +90,14 @@ void ResolveMethodRefs::analyze_method(
 
       // resolve the interface to its implenmentor.
       // 1. add check_cast.
-      auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
+      auto* check_cast = new IRInstruction(OPCODE_CHECK_CAST);
       check_cast->set_src(0, insn->src(0));
       check_cast->set_type(impl->get_class());
 
       // 2. add move_result_pseudo_object
       reg_t new_receiver;
       new_receiver = check_cast->src(0); // code->allocate_temp();
-      auto pseudo_move_result =
+      auto* pseudo_move_result =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       pseudo_move_result->set_dest(new_receiver);
 

@@ -24,8 +24,8 @@ constexpr uint64_t MAX_NUM_CONST_VALUE = 10;
 std::vector<IRInstruction*> make_string_const(reg_t dest,
                                               const std::string& val) {
   std::vector<IRInstruction*> res;
-  auto load = dasm(OPCODE_CONST_STRING, DexString::make_string(val));
-  auto move_res = dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, dest}});
+  auto* load = dasm(OPCODE_CONST_STRING, DexString::make_string(val));
+  auto* move_res = dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, dest}});
   res.push_back(load);
   res.push_back(move_res);
   return res;
@@ -42,7 +42,7 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
     m_kind = ConstantKind::INT;
     m_int_val = std::stoll(val_str);
   } else if (kind_str == "T") {
-    auto type_val = DexType::get_type(val_str);
+    auto* type_val = DexType::get_type(val_str);
     if (type_val != nullptr && type_tags->has_type_tag(type_val)) {
       m_kind = ConstantKind::TYPE;
       m_int_val = type_tags->get_type_tag(type_val);
@@ -82,7 +82,7 @@ ConstantValue::collect_constant_loads_in(cfg::ControlFlowGraph& cfg) {
   always_assert(is_valid());
   auto ii = InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (is_int_value() && opcode::is_a_literal_const(insn->opcode())) {
       int64_t literal = insn->get_literal();
       // Special handling for type tags to avoid sign extensionon on int64_t.
@@ -94,7 +94,7 @@ ConstantValue::collect_constant_loads_in(cfg::ControlFlowGraph& cfg) {
       }
     } else if (is_str_value() && insn->opcode() == OPCODE_CONST_STRING) {
       if (strcmp(insn->get_string()->c_str(), m_str_val.c_str()) == 0) {
-        auto pseudo_move = cfg.move_result_of(it)->insn;
+        auto* pseudo_move = cfg.move_result_of(it)->insn;
         always_assert(pseudo_move->opcode() ==
                       IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         res.emplace_back(it, pseudo_move->dest());
@@ -110,7 +110,7 @@ std::vector<IRInstruction*> ConstantValue::make_load_const(reg_t const_reg) {
 
   if (is_int_value()) {
     std::vector<IRInstruction*> res;
-    auto load = method_reference::make_load_const(const_reg, m_int_val);
+    auto* load = method_reference::make_load_const(const_reg, m_int_val);
     res.push_back(load);
     return res;
   } else {
@@ -223,11 +223,12 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   DexType* type = callee->get_class();
   // Assuming that callee's proto is already modified by appending the lifted
   // params.
-  auto appended_proto = callee->get_proto();
-  auto stub_arg_list = appended_proto->get_args()->pop_back(size());
-  auto stub_proto =
+  auto* appended_proto = callee->get_proto();
+  auto* stub_arg_list = appended_proto->get_args()->pop_back(size());
+  auto* stub_proto =
       DexProto::make_proto(appended_proto->get_rtype(), stub_arg_list);
-  auto name = DexString::make_string(callee->get_name()->str() + "$stub");
+  const auto* name =
+      DexString::make_string(callee->get_name()->str() + "$stub");
   name = DexMethod::get_unique_name(type, name, stub_proto);
   TRACE(METH_DEDUP, 9, "const value: stub name %s", name->c_str());
   auto mc = MethodCreator(type,
@@ -236,7 +237,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
                           callee->get_access(),
                           /* anno=*/nullptr,
                           /* with_debug_item= */ false);
-  auto mb = mc.get_main_block();
+  auto* mb = mc.get_main_block();
   // Setup args for calling the callee.
   size_t arg_loc = 0;
   std::vector<Location> args;
@@ -269,7 +270,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
     mb->ret(ret_type, ret_loc);
   }
 
-  auto stub = mc.create();
+  auto* stub = mc.create();
   // Propogate deobfuscated name
   const auto orig_name = callee->get_deobfuscated_name_or_empty();
   auto pos = orig_name.find(':');

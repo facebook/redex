@@ -133,9 +133,9 @@ UnorderedSet<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
     const DexClassesVector& dexen) {
   UnorderedSet<const DexMethodRef*> sufficiently_popular_methods;
   if (m_method_profiles.has_stats()) {
-    for (auto& p : m_method_profiles.all_interactions()) {
-      auto& method_stats = p.second;
-      for (auto& q : UnorderedIterable(method_stats)) {
+    for (const auto& p : m_method_profiles.all_interactions()) {
+      const auto& method_stats = p.second;
+      for (const auto& q : UnorderedIterable(method_stats)) {
         if (q.second.appear_percent >=
             m_method_profiles_appear_percent_threshold) {
           sufficiently_popular_methods.insert(q.first);
@@ -159,12 +159,12 @@ UnorderedSet<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
     if (!m_method_profiles.has_stats()) {
       return cls->is_perf_sensitive();
     }
-    return sufficiently_popular_methods.count(method);
+    return sufficiently_popular_methods.count(method) != 0u;
   };
   UnorderedSet<const DexMethod*> perf_sensitive_methods;
   for (size_t dexnr = 0; dexnr < dexen.size(); dexnr++) {
-    auto& classes = dexen[dexnr];
-    for (auto cls : classes) {
+    const auto& classes = dexen[dexnr];
+    for (auto* cls : classes) {
       auto process_method = [&](DexMethod* method) {
         if (method->get_code() != nullptr) {
           if (is_perf_sensitive(dexnr, cls, method)) {
@@ -192,14 +192,14 @@ UnorderedMap<const DexMethod*, size_t> DedupStrings::get_methods_to_dex(
 
   UnorderedMap<const DexMethod*, size_t> methods_to_dex;
   for (size_t dexnr = 0; dexnr < dexen.size(); dexnr++) {
-    auto& classes = dexen[dexnr];
-    for (auto cls : classes) {
-      for (auto method : cls->get_dmethods()) {
+    const auto& classes = dexen[dexnr];
+    for (auto* cls : classes) {
+      for (auto* method : cls->get_dmethods()) {
         if (method->get_code() != nullptr) {
           methods_to_dex.emplace(method, dexnr);
         }
       }
-      for (auto method : cls->get_vmethods()) {
+      for (auto* method : cls->get_vmethods()) {
         if (method->get_code() != nullptr) {
           methods_to_dex.emplace(method, dexnr);
         }
@@ -214,13 +214,13 @@ DexMethod* DedupStrings::make_const_string_loader_method(
     size_t dex_id,
     const std::vector<const DexString*>& strings) {
   // Create a new class to host the string lookup method
-  auto host_cls_name = DexString::make_string(m_host_class_name_prefix +
-                                              std::to_string(dex_id) + ";");
-  auto host_type = DexType::make_type(host_cls_name);
+  const auto* host_cls_name = DexString::make_string(
+      m_host_class_name_prefix + std::to_string(dex_id) + ";");
+  auto* host_type = DexType::make_type(host_cls_name);
   ClassCreator host_cls_creator(host_type);
   host_cls_creator.set_access(ACC_PUBLIC | ACC_FINAL);
   host_cls_creator.set_super(type::java_lang_Object());
-  auto host_cls = host_cls_creator.create();
+  auto* host_cls = host_cls_creator.create();
   host_cls->rstate.set_generated();
   host_cls->set_perf_sensitive(PerfSensitiveGroup::STRINGS_LOOKUP);
   // Insert class at beginning of dex, but after canary class, if any
@@ -231,8 +231,8 @@ DexMethod* DedupStrings::make_const_string_loader_method(
 
   // Here we build the string lookup method with a big switch statement.
   always_assert(!strings.empty());
-  const auto string_type = type::java_lang_String();
-  const auto proto = DexProto::make_proto(
+  auto* const string_type = type::java_lang_String();
+  auto* const proto = DexProto::make_proto(
       string_type, DexTypeList::make_type_list({type::_int()}));
   MethodCreator method_creator(host_cls->get_type(),
                                DexString::make_string("lookup"),
@@ -241,7 +241,7 @@ DexMethod* DedupStrings::make_const_string_loader_method(
   redex_assert(!strings.empty());
   auto id_arg = method_creator.get_local(0);
   auto res_var = method_creator.make_local(type::java_lang_String());
-  auto main_block = method_creator.get_main_block();
+  auto* main_block = method_creator.get_main_block();
 
   if (strings.size() == 1) {
     main_block->load_const(res_var, strings.at(0));
@@ -256,14 +256,14 @@ DexMethod* DedupStrings::make_const_string_loader_method(
     main_block->ret(string_type, res_var);
 
     for (size_t idx = 0; idx < strings.size() - 1; ++idx) {
-      auto case_block = cases.at(idx);
+      auto* case_block = cases.at(idx);
       case_block->load_const(res_var, strings.at(idx));
       // Note that a goto instruction at the end of the case block is
       // automatically generated (and then later replaced by a return
       // instruction by the replace-gotos-with-returns pass).
     }
   }
-  auto method = method_creator.create();
+  auto* method = method_creator.create();
   host_cls->add_method(method);
   method->get_code()->build_cfg(/* editable */ true);
   return method;
@@ -316,9 +316,9 @@ DedupStrings::get_occurrences(
         size_t local_non_perf_sensitive_insns{0};
         for (auto* block : cfg.blocks()) {
           for (auto& mie : InstructionIterable(block)) {
-            const auto insn = mie.insn;
+            auto* const insn = mie.insn;
             if (insn->opcode() == OPCODE_CONST_STRING) {
-              const auto str = insn->get_string();
+              const auto* const str = insn->get_string();
               if (perf_sensitive_method &&
                   (!check_for_hot_blocks || is_hot(block))) {
                 perf_sensitive_strings.update(
@@ -337,10 +337,10 @@ DedupStrings::get_occurrences(
             }
           }
         }
-        if (local_perf_sensitive_insns) {
+        if (local_perf_sensitive_insns != 0u) {
           perf_sensitive_insns += local_perf_sensitive_insns;
         }
-        if (local_non_perf_sensitive_insns) {
+        if (local_non_perf_sensitive_insns != 0u) {
           non_perf_sensitive_insns += local_non_perf_sensitive_insns;
         }
       });
@@ -348,7 +348,7 @@ DedupStrings::get_occurrences(
   // Also, add all the strings that occurred in perf-sensitive methods
   // to the non_load_strings datastructure, as we won't attempt to dedup them.
   for (const auto& it : UnorderedIterable(perf_sensitive_strings)) {
-    const auto str = it.first;
+    const auto* const str = it.first;
     TRACE(DS, 3, "[dedup strings] perf sensitive string: {%s}", SHOW(str));
 
     const auto& dexes = it.second;
@@ -386,7 +386,7 @@ DedupStrings::get_strings_to_dedup(
   UnorderedSet<size_t> hosting_dexnrs;
   std::vector<const DexString*> ordered_strings;
   ordered_strings.reserve(occurrences.size());
-  for (auto& p : UnorderedIterable(occurrences)) {
+  for (const auto& p : UnorderedIterable(occurrences)) {
     const auto& m = p.second;
     always_assert(!m.empty());
     if (m.size() == 1) {
@@ -395,7 +395,7 @@ DedupStrings::get_strings_to_dedup(
     ordered_strings.push_back(p.first);
   }
   std::sort(ordered_strings.begin(), ordered_strings.end(), compare_dexstrings);
-  for (auto* s : ordered_strings) {
+  for (const auto* s : ordered_strings) {
     // We are going to look at the situation of a particular string here
     const auto& m = occurrences.at_unsafe(s);
     always_assert(m.size() > 1);
@@ -569,11 +569,11 @@ DedupStrings::get_strings_to_dedup(
           }
           return dexstrings_comparator()(a, b);
         });
-    const auto const_string_method =
+    auto* const const_string_method =
         make_const_string_loader_method(dexen.at(dexnr), dexnr, strings);
     always_assert(strings.size() < 0xFFFFFFFF);
     for (uint32_t i = 0; i < strings.size(); i++) {
-      auto const s = strings[i];
+      const auto* const s = strings[i];
       auto& info = strings_to_dedup[s];
 
       TRACE(
@@ -637,7 +637,7 @@ void DedupStrings::rewrite_const_string_instructions(
           auto ii = InstructionIterable(block);
           for (auto it = ii.begin(); it != ii.end(); it++) {
             // Do we have a const-string instruction?
-            const auto insn = it->insn;
+            auto* const insn = it->insn;
             if (insn->opcode() != OPCODE_CONST_STRING) {
               continue;
             }

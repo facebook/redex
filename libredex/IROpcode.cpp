@@ -1137,7 +1137,7 @@ IROpcode move_result_pseudo_for_sget(IROpcode op) {
 }
 
 IROpcode move_result_for_invoke(const DexMethodRef* method) {
-  auto rtype = method->get_proto()->get_rtype();
+  auto* rtype = method->get_proto()->get_rtype();
   return type::is_wide_type(rtype) ? OPCODE_MOVE_RESULT_WIDE
          : type::is_object(rtype)  ? OPCODE_MOVE_RESULT_OBJECT
                                    : OPCODE_MOVE_RESULT;

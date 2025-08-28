@@ -207,7 +207,7 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
   Json::Value params = Json::arrayValue;
   Json::Value traits = Json::arrayValue;
   int params_idx = 0;
-  for (auto& entry : cr.params) {
+  for (const auto& entry : cr.params) {
     Json::Value param;
     param["name"] = entry.first;
     param["doc"] = entry.second.doc;
@@ -233,7 +233,7 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
     params[params_idx++] = param;
   }
   int traits_idx = 0;
-  for (auto& entry : cr.traits) {
+  for (const auto& entry : cr.traits) {
     Json::Value trait;
     trait["name"] = entry.first;
     trait["value"] = entry.second.value;
@@ -513,16 +513,16 @@ Arguments parse_args(int argc, char* argv[]) {
   }
 
   // -h, --help handling must be the first.
-  if (vm.count("help")) {
+  if (vm.count("help") != 0u) {
     od.print(std::cout);
     exit(EXIT_SUCCESS);
   }
 
-  if (vm.count("crash-file")) {
+  if (vm.count("crash-file") != 0u) {
     args.crash_file = vm["crash-file"].as<std::string>();
   }
 
-  if (vm.count("assert-abort")) {
+  if (vm.count("assert-abort") != 0u) {
     CrashFile crash_file;
     if (args.crash_file) {
       set_crash_fd(crash_file.open(*args.crash_file));
@@ -542,12 +542,12 @@ Arguments parse_args(int argc, char* argv[]) {
     });
     always_assert_log(false, "Should have failed by now. :-(");
   }
-  if (vm.count("asan-abort")) {
+  if (vm.count("asan-abort") != 0u) {
     asan_abort();
   }
 
   // --reflect-config handling must be next
-  if (vm.count("reflect-config")) {
+  if (vm.count("reflect-config") != 0u) {
     Json::Value reflected_config;
 
     GlobalConfig gc(GlobalConfig::default_registry());
@@ -556,7 +556,7 @@ Arguments parse_args(int argc, char* argv[]) {
     Json::Value pass_configs = Json::arrayValue;
     const auto& passes = PassRegistry::get().get_passes();
     for (size_t i = 0; i < passes.size(); ++i) {
-      auto& pass = passes[i];
+      const auto& pass = passes[i];
       pass_configs[static_cast<int>(i)] = reflect_config(pass->reflect());
       add_pass_properties_reflection(pass_configs[static_cast<int>(i)], pass);
     }
@@ -568,7 +568,7 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_SUCCESS);
   }
 
-  if (vm.count("show-passes")) {
+  if (vm.count("show-passes") != 0u) {
     const auto& passes = PassRegistry::get().get_passes();
     std::cout << "Registered passes: " << passes.size() << std::endl;
     for (size_t i = 0; i < passes.size(); ++i) {
@@ -577,14 +577,14 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_SUCCESS);
   }
 
-  if (vm.count("properties-check")) {
+  if (vm.count("properties-check") != 0u) {
     args.properties_check = true;
   }
-  if (vm.count("properties-check-allow-disabled")) {
+  if (vm.count("properties-check-allow-disabled") != 0u) {
     args.properties_check_allow_disabled = true;
   }
 
-  if (vm.count("dex-files")) {
+  if (vm.count("dex-files") != 0u) {
     args.dex_files = vm["dex-files"].as<std::vector<std::string>>();
   } else if (!args.properties_check) {
     std::cerr << "error: no input dex files" << std::endl << std::endl;
@@ -592,7 +592,7 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_SUCCESS);
   }
 
-  if (vm.count("warn")) {
+  if (vm.count("warn") != 0u) {
     const auto& warns = vm["warn"].as<std::vector<int>>();
     for (int warn : warns) {
       if (!(0 <= warn && warn <= 2)) {
@@ -607,14 +607,14 @@ Arguments parse_args(int argc, char* argv[]) {
     return value.template as<std::vector<std::string>>().back();
   };
 
-  if (vm.count("config")) {
+  if (vm.count("config") != 0u) {
     const std::string& config_file = take_last(vm["config"]);
     args.entry_data["config"] =
         boost::filesystem::absolute(config_file).string();
     args.config = redex::parse_config(config_file);
   }
 
-  if (vm.count("outdir")) {
+  if (vm.count("outdir") != 0u) {
     args.out_dir = take_last(vm["outdir"]);
     if (!redex::dir_is_writable(args.out_dir)) {
       std::cerr << "error: outdir is not a writable directory: " << args.out_dir
@@ -623,12 +623,12 @@ Arguments parse_args(int argc, char* argv[]) {
     }
   }
 
-  if (vm.count("proguard-config")) {
+  if (vm.count("proguard-config") != 0u) {
     args.proguard_config_paths =
         vm["proguard-config"].as<std::vector<std::string>>();
   }
 
-  if (vm.count("jarpath")) {
+  if (vm.count("jarpath") != 0u) {
     const auto& jar_paths = vm["jarpath"].as<std::vector<std::string>>();
     for (const auto& e : jar_paths) {
       TRACE(MAIN, 2, "Command line -j option: %s", e.c_str());
@@ -639,16 +639,16 @@ Arguments parse_args(int argc, char* argv[]) {
   // We add these values to the config at the end so that they will always
   // overwrite values read from the config file regardless of the order of
   // arguments.
-  if (vm.count("apkdir")) {
+  if (vm.count("apkdir") != 0u) {
     args.entry_data["apk_dir"] = args.config["apk_dir"] =
         take_last(vm["apkdir"]);
   }
 
-  if (vm.count("printseeds")) {
+  if (vm.count("printseeds") != 0u) {
     args.config["printseeds"] = take_last(vm["printseeds"]);
   }
 
-  if (vm.count("used-js-assets")) {
+  if (vm.count("used-js-assets") != 0u) {
     const auto& js_assets_lists =
         vm["used-js-assets"].as<std::vector<std::string>>();
     Json::Value array(Json::arrayValue);
@@ -658,11 +658,11 @@ Arguments parse_args(int argc, char* argv[]) {
     args.config["used-js-assets"] = array;
   }
 
-  if (vm.count("dump-string-locales")) {
+  if (vm.count("dump-string-locales") != 0u) {
     args.config["dump-string-locales"] = vm["dump-string-locales"].as<bool>();
   }
 
-  if (vm.count("arch")) {
+  if (vm.count("arch") != 0u) {
     std::string arch = take_last(vm["arch"]);
     args.redex_options.arch = parse_architecture(arch);
     if (args.redex_options.arch == Architecture::UNKNOWN) {
@@ -670,16 +670,16 @@ Arguments parse_args(int argc, char* argv[]) {
     }
   }
 
-  if (vm.count("-S")) {
-    for (auto& key_value : vm["-S"].as<std::vector<std::string>>()) {
+  if (vm.count("-S") != 0u) {
+    for (const auto& key_value : vm["-S"].as<std::vector<std::string>>()) {
       if (!add_value_to_config(args.config, key_value, false)) {
         std::cerr << "warning: cannot parse -S" << key_value << std::endl;
       }
     }
   }
 
-  if (vm.count("-J")) {
-    for (auto& key_value : vm["-J"].as<std::vector<std::string>>()) {
+  if (vm.count("-J") != 0u) {
+    for (const auto& key_value : vm["-J"].as<std::vector<std::string>>()) {
       if (!add_value_to_config(args.config, key_value, true)) {
         std::cerr << "warning: cannot parse -J" << key_value << std::endl;
       }
@@ -690,17 +690,17 @@ Arguments parse_args(int argc, char* argv[]) {
       parse_debug_info_kind(args.config.get("debug_info_kind", "").asString());
 
   // Development usage only
-  if (vm.count("stop-pass")) {
+  if (vm.count("stop-pass") != 0u) {
     args.stop_pass_idx = vm["stop-pass"].as<int>();
   }
 
-  if (vm.count("output-ir")) {
+  if (vm.count("output-ir") != 0u) {
     // The out_dir is for final apk only or intermediate results only.
     always_assert(args.stop_pass_idx);
     args.out_dir = vm["output-ir"].as<std::string>();
   }
 
-  if (vm.count("jni-summary")) {
+  if (vm.count("jni-summary") != 0u) {
     args.redex_options.jni_summary_path = vm["jni-summary"].as<std::string>();
   }
 
@@ -891,7 +891,7 @@ Json::Value get_lowering_stats(const instruction_lowering::Stats& stats) {
     sparse_switches["avg100"] = Json::UInt([&]() {
       size_t cnt = 0;
       size_t sum = 0;
-      for (auto& p : stats.sparse_switches.data) {
+      for (const auto& p : stats.sparse_switches.data) {
         cnt += p.second.all;
         sum += p.second.all * p.first;
       }
@@ -1070,7 +1070,7 @@ void write_debug_line_mapping(
   std::stable_sort(all_methods.begin(), all_methods.end(), compare_dexmethods);
 
   for (auto* method : all_methods) {
-    auto dex_code = method->get_dex_code();
+    auto* dex_code = method->get_dex_code();
     if (dex_code == nullptr ||
         code_debug_lines.find(dex_code) == code_debug_lines.end()) {
       continue;
@@ -1477,7 +1477,7 @@ void finalize_resource_table(ConfigFiles& conf) {
   TRACE(MAIN, 1, "Finalizing resource table.");
   auto resources = create_resource_reader(apk_dir);
   auto res_table = resources->load_res_table();
-  auto global_resources_config =
+  auto* global_resources_config =
       conf.get_global_config().get_config_by_name<ResourceConfig>("resources");
   res_table->finalize_resource_table(*global_resources_config);
 }
@@ -1713,7 +1713,7 @@ void redex_backend(ConfigFiles& conf,
       auto keys = unordered_to_ordered_keys(output_totals.class_size,
                                             compare_dexclasses);
       std::ofstream ofs{conf.metafile("redex-class-sizes.csv")};
-      for (auto* c : keys) {
+      for (const auto* c : keys) {
         ofs << c->get_deobfuscated_name_or_empty() << ","
             << output_totals.class_size.at(c) << "\n";
       }
@@ -1753,8 +1753,9 @@ void dump_class_method_info_map(const std::string& file_path,
   auto print = [&](const int cls_idx, const DexMethod* method) {
     ofs << "M," << cls_idx << "," << exclude_class_name(show(method)) << ","
         << exclude_class_name(method->get_fully_deobfuscated_name()) << ","
-        << (method->get_dex_code() ? method->get_dex_code()->size() : 0) << ","
-        << method->is_virtual() << "," << method->is_external() << ","
+        << (method->get_dex_code() != nullptr ? method->get_dex_code()->size()
+                                              : 0)
+        << "," << method->is_virtual() << "," << method->is_external() << ","
         << method->is_concrete() << std::endl;
   };
 
@@ -1764,7 +1765,7 @@ void dump_class_method_info_map(const std::string& file_path,
 
   walk::classes(build_class_scope(stores), [&](const DexClass* cls) {
     const auto& dexloc = cls->get_location()->get_file_name();
-    if (!dexloc_map.count(dexloc)) {
+    if (dexloc_map.count(dexloc) == 0u) {
       dexloc_map[dexloc] = dexloc_map.size();
       ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << std::endl;
     }
@@ -1776,10 +1777,10 @@ void dump_class_method_info_map(const std::string& file_path,
         << "," << cls->get_vmethods().size() << "," << dexloc_map[dexloc]
         << std::endl;
 
-    for (auto dmethod : cls->get_dmethods()) {
+    for (auto* dmethod : cls->get_dmethods()) {
       print(cls_idx, dmethod);
     }
-    for (auto vmethod : cls->get_vmethods()) {
+    for (auto* vmethod : cls->get_vmethods()) {
       print(cls_idx, vmethod);
     }
   });
@@ -2028,7 +2029,7 @@ int main(int argc, char* argv[]) {
       redex_frontend(conf, args, *pg_config, stores, stats);
       conf.parse_global_config();
       if (args.redex_options.instrument_pass_enabled) {
-        auto global_resources_config =
+        auto* global_resources_config =
             conf.get_global_config().get_config_by_name<ResourceConfig>(
                 "resources");
         global_resources_config->cleanup_r_class_rewriting = false;
@@ -2039,7 +2040,7 @@ int main(int argc, char* argv[]) {
     if (conf.evaluate_package_name()) {
       args.redex_options.package_name = resources->get_manifest_package_name();
       if (args.redex_options.package_name != boost::none) {
-        auto name_str = args.redex_options.package_name->c_str();
+        const auto* name_str = args.redex_options.package_name->c_str();
         TRACE(MAIN, 2, "Package name '%s' will be evaluated", name_str);
       }
     }

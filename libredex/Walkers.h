@@ -243,11 +243,11 @@ class walk {
    */
   template <typename WalkerFn>
   static void iterate_methods(const DexClass* cls, const WalkerFn& walker) {
-    for (auto dmethod : cls->get_dmethods()) {
+    for (auto* dmethod : cls->get_dmethods()) {
       TraceContext context(dmethod);
       walker(dmethod);
     }
-    for (auto vmethod : cls->get_vmethods()) {
+    for (auto* vmethod : cls->get_vmethods()) {
       TraceContext context(vmethod);
       walker(vmethod);
     }
@@ -255,10 +255,10 @@ class walk {
 
   template <typename WalkerFn>
   static void iterate_fields(const DexClass* cls, const WalkerFn& walker) {
-    for (auto ifield : cls->get_ifields()) {
+    for (auto* ifield : cls->get_ifields()) {
       walker(ifield);
     }
-    for (auto sfield : cls->get_sfields()) {
+    for (auto* sfield : cls->get_sfields()) {
       walker(sfield);
     }
   }
@@ -269,7 +269,7 @@ class walk {
                            const WalkerFn& walker) {
     iterate_methods(cls, [&filter, &walker](DexMethod* m) {
       if (filter(m)) {
-        auto code = m->get_code();
+        auto* code = m->get_code();
         if (code) {
           walker(m, *code);
         }
@@ -495,11 +495,11 @@ class walk {
       workqueue_run<DexClass*>(
           [&](sparta::WorkerState<DexClass*>* state, DexClass* cls) {
             Accumulator& acc = acc_vec[state->worker_id()];
-            for (auto dmethod : cls->get_dmethods()) {
+            for (auto* dmethod : cls->get_dmethods()) {
               TraceContext context(dmethod);
               walker(dmethod, &acc);
             }
-            for (auto vmethod : cls->get_vmethods()) {
+            for (auto* vmethod : cls->get_vmethods()) {
               TraceContext context(vmethod);
               walker(vmethod, &acc);
             }

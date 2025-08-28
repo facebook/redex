@@ -21,7 +21,7 @@ class RemoveRecursiveLocksTest : public RedexTest {
 };
 
 TEST_F(RemoveRecursiveLocksTest, no_single_blocks) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
       (
         (const v0 0)
@@ -40,7 +40,7 @@ TEST_F(RemoveRecursiveLocksTest, no_single_blocks) {
 }
 
 TEST_F(RemoveRecursiveLocksTest, recursion) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static ) "LTest;.foo:(Ljava/lang/Object;Ljava/lang/Object;)V"
       (
           (load-param-object v0)
@@ -81,7 +81,7 @@ TEST_F(RemoveRecursiveLocksTest, recursion) {
           (throw v1)
       )
     ))");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto res = RemoveRecursiveLocksPass::run(method, code);
   ASSERT_TRUE(res);
@@ -116,7 +116,7 @@ TEST_F(RemoveRecursiveLocksTest, recursion) {
 }
 
 TEST_F(RemoveRecursiveLocksTest, recursion_nested) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public static ) "LTest;.foo:(Ljava/lang/Object;Ljava/lang/Object;)V"
       (
           (load-param-object v1)
@@ -177,7 +177,7 @@ TEST_F(RemoveRecursiveLocksTest, recursion_nested) {
           (throw v2)
       )
     ))");
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto res = RemoveRecursiveLocksPass::run(method, code);
   ASSERT_TRUE(res);

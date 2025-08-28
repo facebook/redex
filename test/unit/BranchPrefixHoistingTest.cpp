@@ -27,15 +27,15 @@ void test(const std::string& code_str,
           bool can_allocate_regs = true) {
 
   DexType* type = DexType::make_type("testClass");
-  auto cls = create_class(type, type::java_lang_Object(), {}, ACC_PUBLIC);
-  auto args = DexTypeList::make_type_list({type::_int()});
-  auto proto = DexProto::make_proto(type::_void(), args);
+  auto* cls = create_class(type, type::java_lang_Object(), {}, ACC_PUBLIC);
+  auto* args = DexTypeList::make_type_list({type::_int()});
+  auto* proto = DexProto::make_proto(type::_void(), args);
   DexMethod* method =
       DexMethod::make_method(type, DexString::make_string("test"), proto)
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   cls->add_method(method);
   method->set_code(assembler::ircode_from_string(code_str));
-  auto code = method->get_code();
+  auto* code = method->get_code();
   code->build_cfg();
   auto& cfg = code->cfg();
   std::cerr << "before:" << std::endl << SHOW(cfg);
@@ -51,7 +51,7 @@ void test(const std::string& code_str,
   std::cerr << "after:" << std::endl << SHOW(code->cfg());
   EXPECT_EQ(expected_instructions_hoisted, actual_insns_hoisted);
   auto expected = assembler::ircode_from_string(expected_str);
-  auto expected_ptr = expected.get();
+  auto* expected_ptr = expected.get();
   expected_ptr->build_cfg();
   auto& expected_cfg = expected_ptr->cfg();
   std::cerr << "expected:" << std::endl << SHOW(expected_cfg);
@@ -481,7 +481,7 @@ TEST_F(BranchPrefixHoistingTest, switch_with_same_cases) {
     )
   )";
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
      (
       (load-param v0)
       (const v1 1)

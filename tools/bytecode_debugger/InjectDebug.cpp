@@ -21,7 +21,7 @@
 InjectDebug::InjectDebug(const std::string& outdir,
                          const std::vector<std::string>& dex_files)
     : m_conf(Json::Value(), outdir), m_dex_files(dex_files) {
-  if (!g_redex) {
+  if (g_redex == nullptr) {
     g_redex = new RedexContext();
   }
 }
@@ -62,7 +62,7 @@ void InjectDebug::inject_register(
     reg_type = type::_int();
   }
 
-  auto reg_string = DexString::make_string("v" + std::to_string(reg));
+  const auto* reg_string = DexString::make_string("v" + std::to_string(reg));
   ir_code->insert_before(
       ir_it,
       std::make_unique<DexDebugOpcodeStartLocal>(reg, reg_string, reg_type));

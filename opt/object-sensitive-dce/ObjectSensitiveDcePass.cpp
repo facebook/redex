@@ -69,7 +69,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
                           &effect_summaries);
   impl.dce();
 
-  auto& stats = impl.get_stats();
+  const auto& stats = impl.get_stats();
   auto invokes_with_summaries = stats.invokes_with_summaries;
   mgr.set_metric("removed_instructions", stats.removed_instructions);
   mgr.set_metric("init_class_instructions_added",

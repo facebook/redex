@@ -16,7 +16,7 @@
 
 void DexDebugOpcodeSetFile::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  if (m_str) {
+  if (m_str != nullptr) {
     lstring.push_back(m_str);
   }
 }
@@ -24,7 +24,7 @@ void DexDebugOpcodeSetFile::gather_strings(
 void DexDebugOpcodeSetFile::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   DexDebugInstruction::encode(dodx, encdata);
   uint32_t fidx = DEX_NO_INDEX;
-  if (m_str) {
+  if (m_str != nullptr) {
     fidx = dodx->stringidx(m_str);
   }
   encdata = write_uleb128p1(encdata, fidx);
@@ -32,17 +32,17 @@ void DexDebugOpcodeSetFile::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 
 void DexDebugOpcodeStartLocal::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  if (m_name) {
+  if (m_name != nullptr) {
     lstring.push_back(m_name);
   }
-  if (m_sig) {
+  if (m_sig != nullptr) {
     lstring.push_back(m_sig);
   }
 }
 
 void DexDebugOpcodeStartLocal::gather_types(
     std::vector<DexType*>& ltype) const {
-  if (m_type) {
+  if (m_type != nullptr) {
     ltype.push_back(m_type);
   }
 }
@@ -51,15 +51,15 @@ void DexDebugOpcodeStartLocal::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   DexDebugInstruction::encode(dodx, encdata);
   uint32_t nidx = DEX_NO_INDEX;
   uint32_t tidx = DEX_NO_INDEX;
-  if (m_name) {
+  if (m_name != nullptr) {
     nidx = dodx->stringidx(m_name);
   }
-  if (m_type) {
+  if (m_type != nullptr) {
     tidx = dodx->typeidx(m_type);
   }
   encdata = write_uleb128p1(encdata, nidx);
   encdata = write_uleb128p1(encdata, tidx);
-  if (m_sig) {
+  if (m_sig != nullptr) {
     encdata = write_uleb128p1(encdata, dodx->stringidx(m_sig));
   }
 }
@@ -97,19 +97,19 @@ DexDebugInstruction* DexDebugInstruction::make_instruction(
   }
   case DBG_START_LOCAL: {
     uint32_t rnum = read_uleb128_checked<redex::DexAssert>(encdata_ptr);
-    auto name = decode_noindexable_string(idx, encdata_ptr);
+    const auto* name = decode_noindexable_string(idx, encdata_ptr);
     DexType* type = decode_noindexable_type(idx, encdata_ptr);
     return new DexDebugOpcodeStartLocal(rnum, name, type);
   }
   case DBG_START_LOCAL_EXTENDED: {
     uint32_t rnum = read_uleb128_checked<redex::DexAssert>(encdata_ptr);
-    auto name = decode_noindexable_string(idx, encdata_ptr);
+    const auto* name = decode_noindexable_string(idx, encdata_ptr);
     DexType* type = decode_noindexable_type(idx, encdata_ptr);
-    auto sig = decode_noindexable_string(idx, encdata_ptr);
+    const auto* sig = decode_noindexable_string(idx, encdata_ptr);
     return new DexDebugOpcodeStartLocal(rnum, name, type, sig);
   }
   case DBG_SET_FILE: {
-    auto str = decode_noindexable_string(idx, encdata_ptr);
+    const auto* str = decode_noindexable_string(idx, encdata_ptr);
     return new DexDebugOpcodeSetFile(str);
   }
   default:

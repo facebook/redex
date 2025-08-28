@@ -148,8 +148,8 @@ boost::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
                                                     const State& state) {
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
-    auto method = insn->get_method();
-    if (state.kotlin_null_check_assertions().count(method)) {
+    auto* method = insn->get_method();
+    if (state.kotlin_null_check_assertions().count(method) != 0u) {
       // Note: We are not assuming here that the first argument is the checked
       // argument of type object, as it might not be. For example,
       // RemoveUnusedArgs may have removed or otherwise reordered the arguments.
@@ -347,7 +347,7 @@ bool LocalArrayAnalyzer::analyze_fill_array_data(const IRInstruction* insn,
   // If an too small array is encountered, mark it as escaped to avoid making
   // any assumptions.
   auto reg = insn->src(0);
-  auto op_data = insn->get_data();
+  auto* op_data = insn->get_data();
   auto heap_ptr = env->get(reg).maybe_get<AbstractHeapPointer>();
   if (heap_ptr) {
     auto array_domain = env->get_pointee<ConstantValueArrayDomain>(*heap_ptr);
@@ -936,7 +936,7 @@ bool InjectionIdAnalyzer::analyze_injection_id(const IRInstruction* insn,
 bool ClinitFieldAnalyzer::analyze_sget(const DexType* class_under_init,
                                        const IRInstruction* insn,
                                        ConstantEnvironment* env) {
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
   }
@@ -950,7 +950,7 @@ bool ClinitFieldAnalyzer::analyze_sget(const DexType* class_under_init,
 bool ClinitFieldAnalyzer::analyze_sput(const DexType* class_under_init,
                                        const IRInstruction* insn,
                                        ConstantEnvironment* env) {
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
   }
@@ -985,12 +985,12 @@ bool StaticFinalFieldAnalyzer::analyze_sget(const IRInstruction* insn,
     return false;
   }
 
-  auto field = insn->get_field();
-  auto* dex_field = static_cast<const DexField*>(field);
+  auto* field = insn->get_field();
+  const auto* dex_field = static_cast<const DexField*>(field);
   // Only want to set the environment of the variable has a static value
   // and is certainly final and will not be modified
-  if (field && field->is_def() && dex_field->get_static_value() &&
-      is_final(dex_field)) {
+  if ((field != nullptr) && field->is_def() &&
+      (dex_field->get_static_value() != nullptr) && is_final(dex_field)) {
     const auto constant =
         SignedConstantDomain(dex_field->get_static_value()->value());
     env->set(RESULT_REGISTER, constant);
@@ -1002,7 +1002,7 @@ bool StaticFinalFieldAnalyzer::analyze_sget(const IRInstruction* insn,
 bool InitFieldAnalyzer::analyze_iget(const DexType* class_under_init,
                                      const IRInstruction* insn,
                                      ConstantEnvironment* env) {
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
   }
@@ -1016,7 +1016,7 @@ bool InitFieldAnalyzer::analyze_iget(const DexType* class_under_init,
 bool InitFieldAnalyzer::analyze_iput(const DexType* class_under_init,
                                      const IRInstruction* insn,
                                      ConstantEnvironment* env) {
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
   }
@@ -1073,7 +1073,7 @@ bool EnumFieldAnalyzer::analyze_sget(const EnumFieldAnalyzerState&,
   if (insn->opcode() != OPCODE_SGET_OBJECT) {
     return false;
   }
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
   }
@@ -1111,7 +1111,8 @@ bool EnumFieldAnalyzer::analyze_invoke(const EnumFieldAnalyzerState& state,
         return false;
       }
       env->set(RESULT_REGISTER,
-               SignedConstantDomain(left_field == right_field));
+               SignedConstantDomain(
+                   static_cast<int64_t>(left_field == right_field)));
       return true;
     }
   }
@@ -1124,7 +1125,7 @@ bool BoxedBooleanAnalyzer::analyze_sget(const BoxedBooleanAnalyzerState& state,
   if (insn->opcode() != OPCODE_SGET_OBJECT) {
     return false;
   }
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
   }
@@ -1144,7 +1145,7 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
     const BoxedBooleanAnalyzerState& state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
-  auto method = insn->get_method();
+  auto* method = insn->get_method();
   if (method == nullptr || method->get_class() != state.boolean_class) {
     return false;
   }
@@ -1189,7 +1190,7 @@ StringAnalyzerState StringAnalyzerState::get() {
   std::lock_guard<std::mutex> lock(s_string_analyzer_state_mtx);
   if (s_string_analyzer_state == boost::none) {
     UnorderedSet<DexMethod*> methods;
-    auto kotlin_are_equal = DexMethod::get_method(
+    auto* kotlin_are_equal = DexMethod::get_method(
         "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
         "lang/Object;)Z");
     if (kotlin_are_equal != nullptr && kotlin_are_equal->as_def() != nullptr) {
@@ -1240,7 +1241,7 @@ bool StringAnalyzer::analyze_invoke(const StringAnalyzerState* state,
     if (const auto* arg0 = maybe_string(0)) {
       if (const auto* arg1 = maybe_string(1)) {
         // pointer comparison is okay, DexStrings are internalized
-        int64_t res = arg0 == arg1;
+        int64_t res = static_cast<int64_t>(arg0 == arg1);
         env->set(RESULT_REGISTER, SignedConstantDomain(res));
         return true;
       }
@@ -1264,8 +1265,8 @@ bool NewObjectAnalyzer::ignore_type(
       type == type::java_lang_String() || type == type::java_lang_Boolean()) {
     return true;
   }
-  auto cls = type_class(type);
-  return cls && is_enum(cls);
+  auto* cls = type_class(type);
+  return (cls != nullptr) && is_enum(cls);
 }
 
 bool NewObjectAnalyzer::analyze_new_instance(
@@ -1315,12 +1316,13 @@ bool NewObjectAnalyzer::analyze_instance_of(
   if (!new_obj_opt) {
     return false;
   }
-  auto obj_type = new_obj_opt->get_type();
-  if (!obj_type) {
+  const auto* obj_type = new_obj_opt->get_type();
+  if (obj_type == nullptr) {
     return false;
   }
-  auto cls = type_class(type::get_element_type_if_array(obj_type));
-  if (!cls || (cls->is_external() && obj_type != insn->get_type())) {
+  auto* cls = type_class(type::get_element_type_if_array(obj_type));
+  if ((cls == nullptr) ||
+      (cls->is_external() && obj_type != insn->get_type())) {
     return false;
   }
   auto res = type::check_cast(obj_type, insn->get_type());
@@ -1422,10 +1424,10 @@ ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
       BoxedTypeInfo{type::java_lang_Float(), 0, 0},
       BoxedTypeInfo{type::java_lang_Double(), 0, 0}};
   for (auto& bti : boxed_type_infos) {
-    auto valueOf = type::get_value_of_method_for_type(bti.type);
-    auto getter_method = type::get_unboxing_method_for_type(bti.type);
-    if (valueOf && getter_method && valueOf->is_def() &&
-        getter_method->is_def()) {
+    auto* valueOf = type::get_value_of_method_for_type(bti.type);
+    auto* getter_method = type::get_unboxing_method_for_type(bti.type);
+    if ((valueOf != nullptr) && (getter_method != nullptr) &&
+        valueOf->is_def() && getter_method->is_def()) {
       add_initializer(valueOf->as_def(), getter_method->as_def())
           .set_src_id_of_attr(0)
           .set_obj_to_dest();
@@ -1449,15 +1451,15 @@ bool ImmutableAttributeAnalyzerState::is_jvm_cached_object(
   if (it == cached_boxed_objects.end()) {
     return false;
   }
-  auto& cached_objects = it->second;
+  const auto& cached_objects = it->second;
   return value >= cached_objects.begin && value < cached_objects.end;
 }
 
 DexType* ImmutableAttributeAnalyzerState::initialized_type(
     const DexMethod* initialize_method) {
-  auto res = method::is_init(initialize_method)
-                 ? initialize_method->get_class()
-                 : initialize_method->get_proto()->get_rtype();
+  auto* res = method::is_init(initialize_method)
+                  ? initialize_method->get_class()
+                  : initialize_method->get_proto()->get_rtype();
   always_assert(!type::is_primitive(res));
   always_assert(res != type::java_lang_Object());
   always_assert(!type::is_array(res));
@@ -1484,18 +1486,18 @@ bool ImmutableAttributeAnalyzerState::compute_may_be_initialized_type(
   // Here we effectively check if check_cast(type, x) for any x in
   // initialized_types.
   always_assert(type != nullptr);
-  if (initialized_types.count_unsafe(type)) {
+  if (initialized_types.count_unsafe(type) != 0u) {
     return true;
   }
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   if (cls == nullptr) {
     return false;
   }
   if (may_be_initialized_type(cls->get_super_class())) {
     return true;
   }
-  auto intfs = cls->get_interfaces();
-  for (auto intf : *intfs) {
+  auto* intfs = cls->get_interfaces();
+  for (auto* intf : *intfs) {
     if (may_be_initialized_type(intf)) {
       return true;
     }
@@ -1507,15 +1509,15 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
     const ImmutableAttributeAnalyzerState* state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
-  auto field_ref = insn->get_field();
+  auto* field_ref = insn->get_field();
   DexField* field = resolve_field(field_ref, FieldSearch::Instance);
-  if (!field) {
+  if (field == nullptr) {
     field = static_cast<DexField*>(field_ref);
   }
 
   // Immutable state should not be updated in parallel with analysis.
 
-  if (!state->attribute_fields.count_unsafe(field)) {
+  if (state->attribute_fields.count_unsafe(field) == 0u) {
     return false;
   }
   auto this_domain = env->get(insn->src(0));
@@ -1546,9 +1548,9 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
     const ImmutableAttributeAnalyzerState* state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
-  auto method_ref = insn->get_method();
+  auto* method_ref = insn->get_method();
   DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
-  if (!method) {
+  if (method == nullptr) {
     // Redex may run without sdk as input, so the method resolving may fail.
     // Example: Integer.valueOf(I) is an external method.
     method = static_cast<DexMethod*>(method_ref);
@@ -1556,9 +1558,9 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
 
   // Immutable state should not be updated in parallel with analysis.
 
-  if (state->method_initializers.count_unsafe(method)) {
+  if (state->method_initializers.count_unsafe(method) != 0u) {
     return analyze_method_initialization(state, insn, env, method);
-  } else if (state->attribute_methods.count_unsafe(method)) {
+  } else if (state->attribute_methods.count_unsafe(method) != 0u) {
     return analyze_method_attr(state, insn, env, method);
   }
   return false;
@@ -1617,7 +1619,7 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
   // holding the same heap object.
   reg_t obj_reg;
   bool has_value = false;
-  for (auto& initializer : it->second) {
+  for (const auto& initializer : it->second) {
     obj_reg = initializer->obj_is_dest()
                   ? RESULT_REGISTER
                   : insn->src(*initializer->insn_src_id_of_obj);
@@ -1719,15 +1721,15 @@ bool EnumUtilsFieldAnalyzer::analyze_sget(
   // The $EnumUtils class contains fields named fXXX, where XXX encodes a 32-bit
   // number whose boxed value is stored as a java.lang.Integer instance in that
   // field. These fields are initialized through Integer.valueOf(...).
-  auto integer_type = type::java_lang_Integer();
-  auto field = resolve_field(insn->get_field());
+  auto* integer_type = type::java_lang_Integer();
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr || !is_final(field) ||
       field->get_type() != integer_type || field->str().empty() ||
       field->str()[0] != 'f' ||
       field->get_class() != DexType::make_type("Lredex/$EnumUtils;")) {
     return false;
   }
-  auto valueOf = method::java_lang_Integer_valueOf();
+  auto* valueOf = method::java_lang_Integer_valueOf();
   auto it = state->method_initializers.find(valueOf);
   if (it == state->method_initializers.end()) {
     return false;
@@ -1762,8 +1764,8 @@ ApiLevelAnalyzerState ApiLevelAnalyzerState::get(int32_t min_sdk) {
 bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
                                     const IRInstruction* insn,
                                     ConstantEnvironment* env) {
-  auto field = insn->get_field();
-  if (field && field == state.sdk_int_field) {
+  auto* field = insn->get_field();
+  if ((field != nullptr) && field == state.sdk_int_field) {
     // possible range is [min_sdk, max_int]
     env->set(RESULT_REGISTER,
              SignedConstantDomain(state.min_sdk,
@@ -1807,8 +1809,9 @@ PackageNameState PackageNameState::get(
 bool PackageNameAnalyzer::analyze_invoke(const PackageNameState* state,
                                          const IRInstruction* insn,
                                          ConstantEnvironment* env) {
-  auto method = insn->get_method();
-  if (method && state && state->package_name &&
+  auto* method = insn->get_method();
+  if ((method != nullptr) && (state != nullptr) &&
+      (state->package_name != nullptr) &&
       state->getter_methods.count(method) > 0) {
     env->set(RESULT_REGISTER, StringDomain(state->package_name));
     return true;
@@ -1836,12 +1839,12 @@ void FixpointIterator::analyze_instruction_normal(
 void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
                                         ConstantEnvironment* env) const {
   auto src_index = get_dereferenced_object_src_index(insn);
-  if (!src_index && m_state) {
+  if (!src_index && (m_state != nullptr)) {
     src_index = get_null_check_object_index(insn, *m_state);
   }
   if (!src_index) {
     // Check if it is redex null check.
-    if (!m_state || insn->opcode() != OPCODE_INVOKE_STATIC ||
+    if ((m_state == nullptr) || insn->opcode() != OPCODE_INVOKE_STATIC ||
         insn->get_method() != m_state->redex_null_check_assertion()) {
       return;
     }

@@ -132,7 +132,7 @@ bool is_primitive(const DexType* type) {
 }
 
 bool is_wide_type(const DexType* type) {
-  auto const name = type->get_name()->c_str();
+  const auto* const name = type->get_name()->c_str();
   switch (name[0]) {
   case 'J':
   case 'D':
@@ -170,7 +170,7 @@ bool is_reference_array(const DexType* type) {
   if (!is_array(type)) {
     return false;
   }
-  auto ctype = get_array_component_type(type);
+  auto* ctype = get_array_component_type(type);
   return !is_primitive(ctype);
 }
 
@@ -225,7 +225,7 @@ bool is_void(const DexType* type) {
 }
 
 char type_shorty(const DexType* type) {
-  auto const name = type->get_name()->c_str();
+  const auto* const name = type->get_name()->c_str();
   switch (name[0]) {
   case '[':
     return 'L';
@@ -250,8 +250,8 @@ bool check_cast(const DexType* type, const DexType* base_type) {
   }
   if (type != nullptr && is_array(type)) {
     if (base_type != nullptr && is_array(base_type)) {
-      auto component_type = get_array_component_type(type);
-      auto component_base_type = get_array_component_type(base_type);
+      auto* component_type = get_array_component_type(type);
+      auto* component_base_type = get_array_component_type(base_type);
       if (!is_primitive(component_type) && !is_primitive(component_base_type) &&
           check_cast(component_type, component_base_type)) {
         return true;
@@ -259,15 +259,15 @@ bool check_cast(const DexType* type, const DexType* base_type) {
     }
     return base_type == java_lang_Object();
   }
-  const auto cls = type_class(type);
+  auto* const cls = type_class(type);
   if (cls == nullptr) {
     return false;
   }
   if (check_cast(cls->get_super_class(), base_type)) {
     return true;
   }
-  auto intfs = cls->get_interfaces();
-  for (auto intf : *intfs) {
+  auto* intfs = cls->get_interfaces();
+  for (auto* intf : *intfs) {
     if (check_cast(intf, base_type)) {
       return true;
     }
@@ -296,9 +296,9 @@ std::string get_simple_name(const DexType* type) {
 }
 
 uint32_t get_array_level(const DexType* type) {
-  auto name = type->get_name()->c_str();
+  const auto* name = type->get_name()->c_str();
   uint32_t level = 0;
-  while (*name++ == '[' && ++level) {
+  while (*name++ == '[' && (++level != 0u)) {
     ;
   }
   return level;
@@ -308,7 +308,7 @@ DexType* get_array_component_type(const DexType* type) {
   if (!is_array(type)) {
     return nullptr;
   }
-  auto name = type->get_name()->c_str();
+  const auto* name = type->get_name()->c_str();
   name++;
   return DexType::make_type(name);
 }
@@ -317,7 +317,7 @@ DexType* get_array_element_type(const DexType* type) {
   if (!is_array(type)) {
     return nullptr;
   }
-  auto name = type->get_name()->c_str();
+  const auto* name = type->get_name()->c_str();
   while (*name == '[') {
     name++;
   }
@@ -448,7 +448,7 @@ DexMethodRef* get_value_of_method_for_type(const DexType* type) {
 }
 
 DataType to_datatype(const DexType* t) {
-  auto const name = t->get_name()->c_str();
+  const auto* const name = t->get_name()->c_str();
   switch (name[0]) {
   case 'V':
     return DataType::Void;
@@ -477,12 +477,12 @@ DataType to_datatype(const DexType* t) {
 }
 
 bool is_subclass(const DexType* parent, const DexType* child) {
-  auto super = child;
+  const auto* super = child;
   while (super != nullptr) {
     if (parent == super) {
       return true;
     }
-    const auto cls = type_class(super);
+    auto* const cls = type_class(super);
     if (cls == nullptr) {
       break;
     }
@@ -503,12 +503,12 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
     return 1;
   }
 
-  auto test_cls = type_class(test_type);
+  auto* test_cls = type_class(test_type);
   if (test_cls == nullptr) {
     return boost::none;
   }
 
-  auto src_cls = type_class(src_type);
+  auto* src_cls = type_class(src_type);
   if (src_cls == nullptr) {
     return boost::none;
   }
@@ -583,8 +583,9 @@ bool is_kotlin_lambda(const DexClass* cls) {
 }
 
 bool is_kotlin_class(DexClass* cls) {
-  auto src_string = cls->get_source_file();
-  if (src_string && boost::algorithm::ends_with(src_string->str(), ".kt")) {
+  const auto* src_string = cls->get_source_file();
+  if ((src_string != nullptr) &&
+      boost::algorithm::ends_with(src_string->str(), ".kt")) {
     return true;
   }
   return false;
@@ -612,7 +613,7 @@ bool is_min_sdk_acceptable_impl(const DexType* source_type,
     return true;
   }
 
-  const auto cls = type_class(cur_type);
+  auto* const cls = type_class(cur_type);
   if (cls == nullptr) {
     return false;
   }
@@ -637,8 +638,8 @@ bool is_min_sdk_acceptable_impl(const DexType* source_type,
     return true;
   }
 
-  auto intfs = cls->get_interfaces();
-  for (auto intf : *intfs) {
+  auto* intfs = cls->get_interfaces();
+  for (auto* intf : *intfs) {
     if (is_min_sdk_acceptable_impl(source_type, intf, target_type, api, msg)) {
       // We do not currently know implemented interfaces in AndroidSDK.
       return true;
@@ -656,7 +657,7 @@ bool is_min_sdk_acceptable_sdk_chain(const DexType* cur_type,
     return true;
   }
 
-  const auto cls = type_class(cur_type);
+  auto* const cls = type_class(cur_type);
   if (cls == nullptr) {
     return false;
   }
@@ -666,7 +667,7 @@ bool is_min_sdk_acceptable_sdk_chain(const DexType* cur_type,
     return false;
   }
 
-  auto superclass = cls->get_super_class();
+  auto* superclass = cls->get_super_class();
   if (is_external) {
     superclass = api.get_framework_classes().at(cur_type).super_cls;
   }

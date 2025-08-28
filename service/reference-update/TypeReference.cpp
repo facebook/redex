@@ -22,8 +22,8 @@ namespace {
  */
 void assert_old_types_have_definitions(
     const UnorderedMap<DexType*, DexType*>& old_to_new) {
-  for (auto& pair : UnorderedIterable(old_to_new)) {
-    auto cls = type_class(pair.first);
+  for (const auto& pair : UnorderedIterable(old_to_new)) {
+    auto* cls = type_class(pair.first);
     always_assert_log(
         cls && cls->is_def(),
         "\t[type-reference] Old type %s should have deffinition\n",
@@ -36,7 +36,7 @@ const DexString* gen_new_name(const std::string_view org_name, size_t seed) {
   auto end = org_name.find(mangling_affix);
   std::string new_name = str_copy(org_name.substr(0, end));
   new_name.append(mangling_affix);
-  while (seed) {
+  while (seed != 0u) {
     int d = seed % 62;
     if (d < 10) {
       new_name.push_back(d + '0');
@@ -55,7 +55,7 @@ const DexString* gen_new_name(const std::string_view org_name, size_t seed) {
  */
 size_t hash_signature(const DexMethodRef* method) {
   size_t seed = 0;
-  auto proto = method->get_proto();
+  auto* proto = method->get_proto();
   boost::hash_combine(seed, method->str());
   boost::hash_combine(seed, proto->get_rtype()->str());
   for (DexType* arg : *proto->get_args()) {
@@ -99,7 +99,7 @@ void add_vmethod_to_group(DexType* old_type_ref,
                           const DexString* possible_new_name,
                           DexMethod* method,
                           VMethodGroup* group) {
-  if (group->possible_new_name) {
+  if (group->possible_new_name != nullptr) {
     always_assert(possible_new_name == group->possible_new_name);
     always_assert(old_type_ref == group->old_type_ref);
     always_assert(new_type_ref == group->new_type_ref);
@@ -119,21 +119,22 @@ void add_vmethod_to_groups(
     DexMethod* method,
     VMethodsGroups* groups) {
   size_t org_signature_hash = hash_signature(method);
-  auto possible_new_name = gen_new_name(method->str(), org_signature_hash);
+  const auto* possible_new_name =
+      gen_new_name(method->str(), org_signature_hash);
 
-  auto proto = method->get_proto();
-  auto rtype =
+  auto* proto = method->get_proto();
+  auto* rtype =
       const_cast<DexType*>(type::get_element_type_if_array(proto->get_rtype()));
-  if (old_to_new.count(rtype)) {
+  if (old_to_new.count(rtype) != 0u) {
     VMethodGroupKey key = cal_group_key(rtype, org_signature_hash);
     auto& group = (*groups)[key];
     add_vmethod_to_group(
         rtype, old_to_new.at(rtype), possible_new_name, method, &group);
   }
-  for (const auto arg_type : *proto->get_args()) {
-    auto extracted_arg_type =
+  for (auto* const arg_type : *proto->get_args()) {
+    auto* extracted_arg_type =
         const_cast<DexType*>(type::get_element_type_if_array(arg_type));
-    if (old_to_new.count(extracted_arg_type)) {
+    if (old_to_new.count(extracted_arg_type) != 0u) {
       VMethodGroupKey key =
           cal_group_key(extracted_arg_type, org_signature_hash);
       auto& group = (*groups)[key];
@@ -162,18 +163,20 @@ DexProto* get_new_proto(const DexProto* proto,
  */
 void update_vmethods_group_one_type_ref(const VMethodGroup& group,
                                         const ClassHierarchy& ch) {
-  auto proto = (*unordered_any(group.methods))->get_proto();
-  auto new_proto = get_new_proto(proto, group.old_type_ref, group.new_type_ref);
+  auto* proto = (*unordered_any(group.methods))->get_proto();
+  auto* new_proto =
+      get_new_proto(proto, group.old_type_ref, group.new_type_ref);
   bool need_rename = false;
-  for (auto method : UnorderedIterable(group.methods)) {
+  for (auto* method : UnorderedIterable(group.methods)) {
     // if collision in the same container or in the hierarchy.
-    auto collision = DexMethod::get_method(
-                         method->get_class(), method->get_name(), new_proto) ||
-                     find_collision(ch,
-                                    method->get_name(),
-                                    new_proto,
-                                    type_class(method->get_class()),
-                                    method->is_virtual());
+    auto collision =
+        (DexMethod::get_method(
+             method->get_class(), method->get_name(), new_proto) != nullptr) ||
+        (find_collision(ch,
+                        method->get_name(),
+                        new_proto,
+                        type_class(method->get_class()),
+                        method->is_virtual()) != nullptr);
     if (collision) {
       need_rename = true;
       break;
@@ -181,14 +184,14 @@ void update_vmethods_group_one_type_ref(const VMethodGroup& group,
   }
   DexMethodSpec spec;
   if (need_rename) {
-    for (auto method : UnorderedIterable(group.methods)) {
+    for (auto* method : UnorderedIterable(group.methods)) {
       always_assert_log(
           can_rename(method), "Can not rename %s\n", SHOW(method));
     }
     spec.name = group.possible_new_name;
   }
   spec.proto = new_proto;
-  for (auto method : UnorderedIterable(group.methods)) {
+  for (auto* method : UnorderedIterable(group.methods)) {
     TRACE(REFU,
           8,
           "sig: updating virtual method %s to %s:%s",
@@ -223,7 +226,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   walk::parallel::code(scope, [&](DexMethod* /*method*/, IRCode& code) {
     if (code.editable_cfg_built()) {
       for (auto& mie : InstructionIterable(code.cfg())) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (insn->has_field()) {
           fields.insert(insn->get_field());
         } else if (insn->has_method()) {
@@ -232,7 +235,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
       }
     } else {
       for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (insn->has_field()) {
           fields.insert(insn->get_field());
         } else if (insn->has_method()) {
@@ -252,8 +255,8 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   for (auto& pair : inits) {
     auto* method = pair.first;
     auto* new_proto = pair.second;
-    if (!DexMethod::get_method(
-            method->get_class(), method->get_name(), new_proto)) {
+    if (DexMethod::get_method(
+            method->get_class(), method->get_name(), new_proto) == nullptr) {
       DexMethodSpec spec;
       spec.proto = new_proto;
       method->change(spec, false /* rename on collision */);
@@ -268,19 +271,19 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
 DexType* TypeRefUpdater::try_convert_to_new_type(DexType* type) {
   uint32_t level = type::get_array_level(type);
   DexType* elem_type = type;
-  if (level) {
+  if (level != 0u) {
     elem_type = type::get_array_element_type(type);
   }
-  if (m_old_to_new.count(elem_type)) {
-    auto new_type = m_old_to_new.at(elem_type);
-    return level ? type::make_array_type(new_type, level) : new_type;
+  if (m_old_to_new.count(elem_type) != 0u) {
+    auto* new_type = m_old_to_new.at(elem_type);
+    return level != 0u ? type::make_array_type(new_type, level) : new_type;
   }
   return nullptr;
 }
 
 bool TypeRefUpdater::mangling(DexFieldRef* field) {
   DexType* new_type = try_convert_to_new_type(field->get_type());
-  if (new_type) {
+  if (new_type != nullptr) {
     size_t seed = 0;
     boost::hash_combine(seed, field->get_type()->str());
     boost::hash_combine(seed, field->str());
@@ -298,7 +301,7 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   size_t seed = 0;
   DexProto* proto = method->get_proto();
   DexType* rtype = try_convert_to_new_type(proto->get_rtype());
-  if (rtype) {
+  if (rtype != nullptr) {
     boost::hash_combine(seed, -1);
     boost::hash_combine(seed, proto->get_rtype()->str());
   } else { // Keep unchanged.
@@ -308,7 +311,7 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   size_t id = 0;
   for (DexType* arg : *proto->get_args()) {
     DexType* new_arg = try_convert_to_new_type(arg);
-    if (new_arg) {
+    if (new_arg != nullptr) {
       boost::hash_combine(seed, id);
       boost::hash_combine(seed, arg->str());
     } else { // Keep unchanged.
@@ -371,13 +374,13 @@ const DexString* new_name(const DexFieldRef* field) {
 
 std::string get_method_signature(const DexMethod* method) {
   std::ostringstream ss;
-  auto proto = method->get_proto();
+  auto* proto = method->get_proto();
   ss << show(proto->get_rtype()) << " ";
   ss << method->get_simple_deobfuscated_name();
-  auto arg_list = proto->get_args();
+  auto* arg_list = proto->get_args();
   if (!arg_list->empty()) {
     ss << "(";
-    for (auto t : *arg_list) {
+    for (auto* t : *arg_list) {
       ss << show(t) << ", ";
     }
     ss.seekp(-2, std::ios_base::end);
@@ -389,13 +392,13 @@ std::string get_method_signature(const DexMethod* method) {
 
 bool proto_has_reference_to(const DexProto* proto,
                             const UnorderedTypeSet& targets) {
-  auto rtype = type::get_element_type_if_array(proto->get_rtype());
-  if (targets.count(rtype)) {
+  const auto* rtype = type::get_element_type_if_array(proto->get_rtype());
+  if (targets.count(rtype) != 0u) {
     return true;
   }
-  for (const auto arg_type : *proto->get_args()) {
-    auto extracted_arg_type = type::get_element_type_if_array(arg_type);
-    if (targets.count(extracted_arg_type)) {
+  for (auto* const arg_type : *proto->get_args()) {
+    const auto* extracted_arg_type = type::get_element_type_if_array(arg_type);
+    if (targets.count(extracted_arg_type) != 0u) {
       return true;
     }
   }
@@ -405,21 +408,21 @@ bool proto_has_reference_to(const DexProto* proto,
 DexProto* get_new_proto(
     const DexProto* proto,
     const UnorderedMap<const DexType*, DexType*>& old_to_new) {
-  auto rtype = type::get_element_type_if_array(proto->get_rtype());
+  const auto* rtype = type::get_element_type_if_array(proto->get_rtype());
   if (old_to_new.count(rtype) > 0) {
-    auto merger_type = old_to_new.at(rtype);
+    auto* merger_type = old_to_new.at(rtype);
     auto level = type::get_array_level(proto->get_rtype());
     rtype = type::make_array_type(merger_type, level);
   } else {
     rtype = proto->get_rtype();
   }
   DexTypeList::ContainerType lst;
-  for (const auto arg_type : *proto->get_args()) {
-    auto extracted_arg_type = type::get_element_type_if_array(arg_type);
+  for (auto* const arg_type : *proto->get_args()) {
+    const auto* extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (old_to_new.count(extracted_arg_type) > 0) {
-      auto merger_type = old_to_new.at(extracted_arg_type);
+      auto* merger_type = old_to_new.at(extracted_arg_type);
       auto level = type::get_array_level(arg_type);
-      auto new_arg_type = type::make_array_type(merger_type, level);
+      auto* new_arg_type = type::make_array_type(merger_type, level);
       lst.push_back(new_arg_type);
     } else {
       lst.push_back(arg_type);
@@ -451,25 +454,26 @@ void update_method_signature_type_references(
   }
 
   UnorderedTypeSet old_types;
-  for (auto& pair : UnorderedIterable(old_to_new)) {
+  for (const auto& pair : UnorderedIterable(old_to_new)) {
     old_types.insert(pair.first);
   }
 
   walk::methods(scope, [&](DexMethod* method) {
-    auto proto = method->get_proto();
+    auto* proto = method->get_proto();
     if (!proto_has_reference_to(proto, old_types)) {
       return;
     }
     update_method_debug_map(method);
     if (!method->is_virtual()) {
-      auto new_proto = get_new_proto(proto, old_to_new);
+      auto* new_proto = get_new_proto(proto, old_to_new);
       /// A. For direct methods:
       // If there is no collision, update spec directly.
       // If it's not constructor and renamable, rename on collision.
       // Otherwise, add it to colliding_directs.
-      auto collision = DexMethod::get_method(
+      auto* collision = DexMethod::get_method(
           method->get_class(), method->get_name(), new_proto);
-      if (!collision || (!method::is_init(method) && can_rename(method))) {
+      if ((collision == nullptr) ||
+          (!method::is_init(method) && can_rename(method))) {
         TRACE(REFU, 8, "sig: updating direct method %s", SHOW(method));
         DexMethodSpec spec;
         spec.proto = new_proto;
@@ -500,9 +504,9 @@ void update_method_signature_type_references(
     if (code.editable_cfg_built()) {
       auto& cfg = code.cfg();
       for (auto& mie : InstructionIterable(cfg)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (insn->has_method()) {
-          auto proto = insn->get_method()->get_proto();
+          auto* proto = insn->get_method()->get_proto();
           always_assert_log(
               !proto_has_reference_to(proto, old_types),
               "Find old type in method reference %s, please make sure that "
@@ -512,9 +516,9 @@ void update_method_signature_type_references(
       }
     } else {
       for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (insn->has_method()) {
-          auto proto = insn->get_method()->get_proto();
+          auto* proto = insn->get_method()->get_proto();
           always_assert_log(
               !proto_has_reference_to(proto, old_types),
               "Find old type in method reference %s, please make sure that "
@@ -531,15 +535,15 @@ void update_field_type_references(
     const UnorderedMap<const DexType*, DexType*>& old_to_new) {
   TRACE(REFU, 4, " updating field refs");
   const auto update_field = [&](DexFieldRef* field) {
-    const auto ref_type = field->get_type();
-    const auto type = type::get_element_type_if_array(ref_type);
+    auto* const ref_type = field->get_type();
+    const auto* const type = type::get_element_type_if_array(ref_type);
     if (old_to_new.count(type) == 0) {
       return;
     }
     DexFieldSpec spec;
-    auto new_type = old_to_new.at(type);
+    auto* new_type = old_to_new.at(type);
     auto level = type::get_array_level(ref_type);
-    auto new_type_incl_array = type::make_array_type(new_type, level);
+    auto* new_type_incl_array = type::make_array_type(new_type, level);
     spec.type = new_type_incl_array;
     field->change(spec);
     TRACE(REFU, 9, " updating field ref to %s", SHOW(type));
@@ -550,10 +554,10 @@ void update_field_type_references(
     if (code.editable_cfg_built()) {
       auto& cfg = code.cfg();
       for (auto& mie : InstructionIterable(cfg)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (insn->has_field()) {
-          const auto ref_type = insn->get_field()->get_type();
-          const auto type = type::get_element_type_if_array(ref_type);
+          auto* const ref_type = insn->get_field()->get_type();
+          const auto* const type = type::get_element_type_if_array(ref_type);
           always_assert_log(
               old_to_new.count(type) == 0,
               "Find old type in field reference %s, please make sure that "
@@ -563,10 +567,10 @@ void update_field_type_references(
       }
     } else {
       for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (insn->has_field()) {
-          const auto ref_type = insn->get_field()->get_type();
-          const auto type = type::get_element_type_if_array(ref_type);
+          auto* const ref_type = insn->get_field()->get_type();
+          const auto* const type = type::get_element_type_if_array(ref_type);
           always_assert_log(
               old_to_new.count(type) == 0,
               "Find old type in field reference %s, please make sure that "
@@ -588,9 +592,9 @@ void fix_colliding_dmethods(
   TRACE(REFU, 9, "sig: colliding_methods %zu", colliding_methods.size());
   UnorderedMap<DexMethod*, size_t> num_additional_args;
   for (auto it : colliding_methods) {
-    auto meth = it.first;
-    auto new_proto = it.second;
-    auto new_arg_list = new_proto->get_args()->push_back(type::_int());
+    auto* meth = it.first;
+    auto* new_proto = it.second;
+    auto* new_arg_list = new_proto->get_args()->push_back(type::_int());
     new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
     size_t arg_count = 1;
     while (DexMethod::get_method(
@@ -605,14 +609,14 @@ void fix_colliding_dmethods(
     meth->change(spec, false /* rename on collision */);
     num_additional_args[meth] = arg_count;
 
-    auto code = meth->get_code();
+    auto* code = meth->get_code();
     if (code->editable_cfg_built()) {
       auto& cfg = code->cfg();
-      auto block = cfg.entry_block();
+      auto* block = cfg.entry_block();
       auto last_loading = block->get_last_param_loading_insn();
       for (size_t i = 0; i < arg_count; ++i) {
         auto new_param_reg = cfg.allocate_temp();
-        auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
+        auto* new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
         new_param_load->set_dest(new_param_reg);
         if (last_loading != block->end()) {
           cfg.insert_after(block->to_cfg_instruction_iterator(last_loading),
@@ -628,7 +632,7 @@ void fix_colliding_dmethods(
       for (size_t i = 0; i < arg_count; ++i) {
         auto new_param_reg = code->allocate_temp();
         auto params = code->get_param_instructions();
-        auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
+        auto* new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
         new_param_load->set_dest(new_param_reg);
         code->insert_before(params.end(), new_param_load);
       }
@@ -645,11 +649,11 @@ void fix_colliding_dmethods(
     if (code.editable_cfg_built()) {
       auto& cfg = code.cfg();
       for (auto& mie : InstructionIterable(cfg)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (!insn->has_method()) {
           continue;
         }
-        const auto callee = resolve_method(
+        auto* const callee = resolve_method(
             insn->get_method(),
             opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
         if (callee == nullptr ||
@@ -660,11 +664,11 @@ void fix_colliding_dmethods(
       }
     } else {
       for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (!insn->has_method()) {
           continue;
         }
-        const auto callee = resolve_method(
+        auto* const callee = resolve_method(
             insn->get_method(),
             opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
         if (callee == nullptr ||
@@ -676,7 +680,7 @@ void fix_colliding_dmethods(
     }
 
     for (const auto& callsite : callsites) {
-      auto callee = callsite.callee;
+      auto* callee = callsite.callee;
       always_assert(callee != nullptr);
       TRACE(REFU,
             9,

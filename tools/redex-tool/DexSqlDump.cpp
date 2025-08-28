@@ -48,7 +48,7 @@ void dump_field_refs(FILE* fdout,
                      int field_id) {
   static int next_string_ref = 0;
   auto* static_value = field->get_static_value();
-  if (!static_value || (static_value->evtype() != DEVT_STRING)) {
+  if ((static_value == nullptr) || (static_value->evtype() != DEVT_STRING)) {
     return;
   }
   auto* static_string_value = static_cast<DexEncodedValueString*>(static_value);
@@ -65,8 +65,8 @@ void dump_method_refs(FILE* fdout,
                       const char* prefix,
                       DexMethod* method,
                       int method_id) {
-  auto code = method->get_code();
-  if (!code) {
+  auto* code = method->get_code();
+  if (code == nullptr) {
     return;
   }
 
@@ -76,9 +76,9 @@ void dump_method_refs(FILE* fdout,
   static int next_method_ref = 0;
 
   for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->has_string()) {
-      if (string_ids.count(insn->get_string())) {
+      if (string_ids.count(insn->get_string()) != 0u) {
         auto string_id = string_ids[insn->get_string()];
         fprintf(fdout,
                 "INSERT INTO %smethod_string_refs VALUES (%d, %d, %d, %d);\n",
@@ -90,8 +90,8 @@ void dump_method_refs(FILE* fdout,
       }
     }
     if (insn->has_type()) {
-      auto cls = type_class(insn->get_type());
-      if (cls && class_ids.count(cls)) {
+      auto* cls = type_class(insn->get_type());
+      if ((cls != nullptr) && (class_ids.count(cls) != 0u)) {
         auto class_id = class_ids[cls];
         fprintf(fdout,
                 "INSERT INTO %smethod_class_refs VALUES (%d, %d, %d, %d);\n",
@@ -103,8 +103,8 @@ void dump_method_refs(FILE* fdout,
       }
     }
     if (insn->has_field()) {
-      auto field = resolve_field(insn->get_field());
-      if (field != nullptr && field_ids.count(field)) {
+      auto* field = resolve_field(insn->get_field());
+      if (field != nullptr && (field_ids.count(field) != 0u)) {
         auto field_id = field_ids[field];
         fprintf(fdout,
                 "INSERT INTO %smethod_field_refs VALUES (%d, %d, %d, %d);\n",
@@ -116,9 +116,9 @@ void dump_method_refs(FILE* fdout,
       }
     }
     if (insn->has_method()) {
-      auto meth =
+      auto* meth =
           resolve_method(insn->get_method(), opcode_to_search(insn), method);
-      if (meth != nullptr && method_ids.count(meth)) {
+      if (meth != nullptr && (method_ids.count(meth) != 0u)) {
         auto method_ref_id = method_ids[meth];
         fprintf(fdout,
                 "INSERT INTO %smethod_method_refs VALUES (%d, %d, %d, %d);\n",
@@ -162,7 +162,7 @@ void dump_field(FILE* fdout,
   // TODO: annotations?
   // TODO: string usage (encoded_value for static fields)
   const auto& deobfuscated_name = field->get_deobfuscated_name();
-  auto field_name = strchr(deobfuscated_name.c_str(), ';');
+  const auto* field_name = strchr(deobfuscated_name.c_str(), ';');
   fprintf(fdout,
           "INSERT INTO %sfields VALUES(%d, %d, '%s', '%s', %u);\n",
           prefix,
@@ -185,7 +185,7 @@ void dump_method(FILE* fdout,
   // TODO: string usage
   // TODO: size estimate
   const auto& deobfuscated_name = method->get_deobfuscated_name();
-  auto method_name = strchr(deobfuscated_name.c_str(), ';');
+  const auto* method_name = strchr(deobfuscated_name.c_str(), ';');
   fprintf(fdout,
           "INSERT INTO %smethods VALUES (%d,%d,'%s','%s',%d,%zu);\n",
           prefix,
@@ -194,7 +194,8 @@ void dump_method(FILE* fdout,
           method_name,
           method->get_name()->c_str(),
           method->get_access(),
-          method->get_code() ? method->get_code()->sum_opcode_sizes() : 0);
+          method->get_code() != nullptr ? method->get_code()->sum_opcode_sizes()
+                                        : 0);
 }
 
 void dump_sql(FILE* fdout,
@@ -290,7 +291,7 @@ CREATE TABLE %1$smethod_string_refs (
       auto& dex = dexen[dex_idx];
       GatheredTypes gtypes(&dex);
       auto strings = gtypes.get_cls_order_dexstring_emitlist();
-      for (auto dexstr : strings) {
+      for (const auto* dexstr : strings) {
         int id = next_string_id++;
         string_ids[dexstr] = id;
         // Escape string before inserting. ' -> ''
@@ -308,12 +309,12 @@ CREATE TABLE %1$smethod_string_refs (
         int class_id = next_class_id++;
         dump_class(fdout, prefix, dex_id, cls, class_id);
         class_ids[cls] = class_id;
-        for (auto field : cls->get_ifields()) {
+        for (auto* field : cls->get_ifields()) {
           int field_id = next_field_id++;
           field_ids[field] = field_id;
           dump_field(fdout, prefix, class_id, field, field_id);
         }
-        for (auto field : cls->get_sfields()) {
+        for (auto* field : cls->get_sfields()) {
           int field_id = next_field_id++;
           field_ids[field] = field_id;
           dump_field(fdout, prefix, class_id, field, field_id);
@@ -369,9 +370,9 @@ CREATE TABLE %1$smethod_string_refs (
   for (auto& cls : scope) {
     TypeSet results;
     get_all_children_or_implementors(ch, scope, cls, results);
-    for (auto type : results) {
-      auto type_cls = type_class(type);
-      if (type_cls) {
+    for (const auto* type : results) {
+      auto* type_cls = type_class(type);
+      if (type_cls != nullptr) {
         fprintf(fdout,
                 "INSERT INTO %sis_a VALUES(%d, %d, %d);\n",
                 prefix,
@@ -407,22 +408,22 @@ class DexSqlDump : public Tool {
     auto stores = init(options["jars"].as<std::string>(),
                        options["apkdir"].as<std::string>(),
                        options["dexendir"].as<std::string>());
-    ProguardMap pgmap(options.count("proguard-map")
+    ProguardMap pgmap(options.count("proguard-map") != 0u
                           ? options["proguard-map"].as<std::string>()
                           : "/dev/null");
     const std::string& filename = options["output"].as<std::string>();
     FILE* fdout =
-        options.count("output") ? fopen(filename.c_str(), "w") : stdout;
-    std::string prefix = options.count("table-prefix")
+        options.count("output") != 0u ? fopen(filename.c_str(), "w") : stdout;
+    std::string prefix = options.count("table-prefix") != 0u
                              ? options["table-prefix"].as<std::string>()
                              : "";
-    if (!fdout) {
+    if (fdout == nullptr) {
       fprintf(stderr,
               "Could not open %s for writing; terminating\n",
               filename.c_str());
       exit(EXIT_FAILURE);
     }
-    auto* pfx_cstr = prefix.c_str();
+    const auto* pfx_cstr = prefix.c_str();
     dump_sql(fdout, stores, pgmap, pfx_cstr);
     fclose(fdout);
   }

@@ -69,7 +69,7 @@ std::string translate_type(const std::string& type, const ProguardMap& pm) {
 }
 
 void whitespace(const char*& p) {
-  while (isspace(*p)) {
+  while (isspace(*p) != 0) {
     ++p;
   }
 }
@@ -88,13 +88,13 @@ bool isseparator(uint32_t cp) {
 
 template <typename F>
 bool id(const char*& p, std::string& s, F isseparator) {
-  auto b = p;
+  const auto* b = p;
   auto first = mutf8_next_code_point(p);
   if (isdigit(first)) {
     return false;
   }
   while (true) {
-    auto prev = p;
+    const auto* prev = p;
     auto cp = mutf8_next_code_point(p);
     if (isseparator(cp)) {
       p = prev;
@@ -108,7 +108,7 @@ bool id(const char*& p, std::string& s) { return id(p, s, isseparator); }
 
 bool literal(const char*& p, const char* s) {
   auto len = strlen(s);
-  bool rv = !strncmp(p, s, len);
+  bool rv = strncmp(p, s, len) == 0;
   p += len;
   return rv;
 }
@@ -186,7 +186,7 @@ bool method_full_format(const char*& p, std::string& s) {
 }
 
 bool comment(const std::string& line) {
-  auto p = line.c_str();
+  const auto* p = line.c_str();
   whitespace(p);
   return literal(p, '#');
 }
@@ -211,7 +211,7 @@ void inlined_method(std::string& classname, std::string& methodname) {
 bool is_maybe_proguard_generated_member(const std::string& s) {
   unsigned int count = 0;
   for (auto it = s.rbegin(); it != s.rend(); ++it, ++count) {
-    if (isxdigit(*it)) {
+    if (isxdigit(*it) != 0) {
       continue;
     }
     if (*it == '$') {
@@ -351,7 +351,7 @@ void ProguardMap::parse_full_map(std::istream& fp) {
 bool ProguardMap::parse_class_full_format(const std::string& line) {
   std::string old_class_name;
   std::string new_class_name;
-  auto p = line.c_str();
+  const auto* p = line.c_str();
   if (!literal(p, "type ")) {
     return false;
   }
@@ -373,7 +373,7 @@ bool ProguardMap::parse_class_full_format(const std::string& line) {
 }
 
 bool ProguardMap::parse_store_full_format(const std::string& line) {
-  auto p = line.c_str();
+  const auto* p = line.c_str();
   if (!literal(p, "store` ")) {
     return false;
   }
@@ -387,7 +387,7 @@ bool ProguardMap::parse_field_full_format(const std::string& line) {
   std::string old_field_name;
   std::string new_field_name;
 
-  auto p = line.c_str();
+  const auto* p = line.c_str();
   if (!literal(p, "ifield ")) {
     // Reset the field pointer.
     p = line.c_str();
@@ -417,7 +417,7 @@ bool ProguardMap::parse_field_full_format(const std::string& line) {
 bool ProguardMap::parse_method_full_format(const std::string& line) {
   std::string old_method_name;
   std::string new_method_name;
-  auto p = line.c_str();
+  const auto* p = line.c_str();
   if (!literal(p, "dmethod ")) {
     // Reset the method pointer.
     p = line.c_str();
@@ -446,7 +446,7 @@ bool ProguardMap::parse_method_full_format(const std::string& line) {
 bool ProguardMap::parse_class(const std::string& line) {
   std::string classname;
   std::string newname;
-  auto p = line.c_str();
+  const auto* p = line.c_str();
   if (!id(p, classname)) {
     return false;
   }
@@ -468,7 +468,7 @@ bool ProguardMap::parse_field(const std::string& line) {
   std::string fieldname;
   std::string newname;
 
-  auto p = line.c_str();
+  const auto* p = line.c_str();
   whitespace(p);
   if (!id(p, type)) {
     return false;
@@ -511,7 +511,7 @@ bool ProguardMap::parse_method(const std::string& line) {
   std::string new_args;
   std::string newname;
   auto lines = std::make_unique<ProguardLineRange>();
-  auto p = line.c_str();
+  const auto* p = line.c_str();
   whitespace(p);
   lines->start = line_number(p);
   literal(p, ':');

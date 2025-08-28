@@ -21,6 +21,6 @@ TEST_F(PreVerify, ResourcesInliningPassTest) {
 }
 
 TEST_F(PostVerify, ResourcesInliningPassTest_DexPatching) {
-  auto cls = find_class_named(classes, "Lcom/fb/resources/MainActivity;");
+  auto* cls = find_class_named(classes, "Lcom/fb/resources/MainActivity;");
   resource_inlining_PostVerify(cls);
 }

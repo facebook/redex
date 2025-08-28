@@ -143,7 +143,7 @@ void Graph::remove_node(reg_t u) {
 }
 
 size_t dest_bit_width(const cfg::InstructionIterator& it) {
-  auto insn = it->insn;
+  auto* insn = it->insn;
   auto op = insn->opcode();
   if (opcode::is_a_move_result_pseudo(op)) {
     auto primary_op =
@@ -200,7 +200,7 @@ vreg_t max_value_for_src(const IRInstruction* insn,
 void GraphBuilder::update_node_constraints(const cfg::InstructionIterator& it,
                                            const RangeSet& range_set,
                                            Graph* graph) {
-  auto insn = it->insn;
+  auto* insn = it->insn;
   auto op = insn->opcode();
   if (insn->has_dest()) {
     auto dest = insn->dest();
@@ -296,7 +296,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       if (it->type != MFLOW_OPCODE) {
         continue;
       }
-      auto insn = it->insn;
+      auto* insn = it->insn;
       auto op = insn->opcode();
       if (insn->has_dest()) {
         for (auto reg : live_out.elements()) {
@@ -367,7 +367,7 @@ std::ostream& Graph::write_dot_format(std::ostream& o) const {
   o << "graph {\n";
   for (const auto& pair : UnorderedIterable(nodes())) {
     auto reg = pair.first;
-    auto& node = pair.second;
+    const auto& node = pair.second;
     o << reg << "[label=\"" << reg << " (" << node.weight() << ")\"]" << "\n";
     for (auto adj : node.adjacent()) {
       if (pair.first < adj) {

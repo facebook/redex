@@ -27,19 +27,19 @@ using ClassMap = UnorderedMap<DexClass*, DexClass*>;
 using MethodRefMap = UnorderedMap<DexMethodRef*, DexMethodRef*>;
 
 bool is_internal_def(DexMethodRef* method) {
-  if (!method || !method->is_def()) {
+  if ((method == nullptr) || !method->is_def()) {
     return false;
   }
-  auto cls = type_class(method->get_class());
-  if (!cls || cls->is_external()) {
+  auto* cls = type_class(method->get_class());
+  if ((cls == nullptr) || cls->is_external()) {
     return false;
   }
-  for (auto m : cls->get_vmethods()) {
+  for (auto* m : cls->get_vmethods()) {
     if (m == method) {
       return true;
     }
   }
-  for (auto m : cls->get_dmethods()) {
+  for (auto* m : cls->get_dmethods()) {
     if (m == method) {
       return true;
     }
@@ -94,11 +94,11 @@ void check_dont_merge_list(
     // Parent class is not referenced, and child class is not having kStrict
     // don't merge status, so we can merge parent class into child class.
     if (is_abstract(parent_cls) && !is_abstract(child_cls)) {
-      for (auto m : parent_cls->get_vmethods()) {
+      for (auto* m : parent_cls->get_vmethods()) {
         if (is_abstract(m)) {
-          auto possible_child_method_ref = DexMethod::get_method(
+          auto* possible_child_method_ref = DexMethod::get_method(
               child_cls->get_type(), m->get_name(), m->get_proto());
-          if (!possible_child_method_ref ||
+          if ((possible_child_method_ref == nullptr) ||
               !is_internal_def(possible_child_method_ref)) {
             // We have parent class having abstract method without implementor,
             // it's a weird situation which we should avoid further merging.
@@ -116,13 +116,13 @@ void check_dont_merge_list(
     if (find_parent->second != kStrict && can_delete(child_cls) &&
         can_rename(child_cls)) {
       if (is_abstract(child_cls)) {
-        for (auto method : child_cls->get_vmethods()) {
-          if (method->get_code()) {
+        for (auto* method : child_cls->get_vmethods()) {
+          if (method->get_code() != nullptr) {
             return;
           }
         }
-        for (auto method : child_cls->get_dmethods()) {
-          if (method->get_code()) {
+        for (auto* method : child_cls->get_dmethods()) {
+          if (method->get_code() != nullptr) {
             return;
           }
         }
@@ -140,16 +140,16 @@ void get_call_to_super(
     DexMethod* method,
     DexClass* parent_mergeable,
     UnorderedMap<DexMethodRef*, std::vector<IRInstruction*>>* callee_to_insns) {
-  if (!method->get_code()) {
+  if (method->get_code() == nullptr) {
     return;
   }
   auto& cfg = method->get_code()->cfg();
   for (auto& mie : cfg::InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!insn->has_method()) {
       continue;
     }
-    auto insn_method = insn->get_method();
+    auto* insn_method = insn->get_method();
     if (insn_method->get_class() == parent_mergeable->get_type() &&
         opcode::is_invoke_super(insn->opcode())) {
       (*callee_to_insns)[insn_method].push_back(insn);
@@ -175,16 +175,16 @@ void handle_invoke_super(
         return compare_dexmethods(call1.first, call2.first);
       });
   for (const auto& callee_to_insn : super_calls) {
-    auto callee_ref = callee_to_insn.first;
+    auto* callee_ref = callee_to_insn.first;
     if (is_internal_def(callee_ref)) {
       //  invoke-super Parent.v => invoke-virtual Child.relocated_parent_v
-      auto callee = callee_ref->as_def();
+      auto* callee = callee_ref->as_def();
       parent_mergeable->remove_method(callee);
       DexMethodSpec spec;
       spec.cls = merger->get_type();
       callee->change(spec, true /* rename_on_collision */);
       merger->add_method(callee);
-      for (auto insn : callee_to_insn.second) {
+      for (auto* insn : callee_to_insn.second) {
         redex_assert(insn->opcode() == OPCODE_INVOKE_SUPER);
         insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
         insn->set_method(callee);
@@ -192,10 +192,11 @@ void handle_invoke_super(
     } else {
       // The only pure ref we need handle.
       // invoke-super Parent.v => invoke-super GrandParent.v
-      auto new_ref = DexMethod::make_method(parent_mergeable->get_super_class(),
-                                            callee_ref->get_name(),
-                                            callee_ref->get_proto());
-      for (auto insn : callee_to_insn.second) {
+      auto* new_ref =
+          DexMethod::make_method(parent_mergeable->get_super_class(),
+                                 callee_ref->get_name(),
+                                 callee_ref->get_proto());
+      for (auto* insn : callee_to_insn.second) {
         insn->set_method(new_ref);
       }
     }
@@ -281,15 +282,16 @@ ClassMap collect_can_merge(
   auto throwables = get_all_children(ch, type::java_lang_Throwable());
   *num_single_extend_pairs = 0;
   for (DexClass* cls : scope) {
-    if (cls && !cls->is_external() && !is_interface(cls) && can_delete(cls) &&
-        can_rename(cls) && !throwables.count(cls->get_type())) {
+    if ((cls != nullptr) && !cls->is_external() && !is_interface(cls) &&
+        can_delete(cls) && can_rename(cls) &&
+        (throwables.count(cls->get_type()) == 0u)) {
       DexType* cls_type = cls->get_type();
       const auto& children_types = get_children(ch, cls_type);
       if (children_types.size() != 1) {
         continue;
       }
       const DexType* child_type = *children_types.begin();
-      if (throwables.count(child_type)) {
+      if (throwables.count(child_type) != 0u) {
         continue;
       }
       if (!get_children(ch, child_type).empty()) {
@@ -304,7 +306,7 @@ ClassMap collect_can_merge(
         continue;
       }
       DexClass* child_cls = type_class_internal(child_type);
-      if (child_cls) {
+      if (child_cls != nullptr) {
         (*num_single_extend_pairs)++;
         check_dont_merge_list(dont_merge_status, child_cls, cls,
                               &mergeable_to_merger);
@@ -352,7 +354,7 @@ void record_code_reference(
       [&deferred_record_dont_merge_state](DexMethod* /*method*/,
                                           IRInstruction* insn) {
         if (insn->has_type()) {
-          auto type = type::get_element_type_if_array(insn->get_type());
+          const auto* type = type::get_element_type_if_array(insn->get_type());
           if (opcode::is_instance_of(insn->opcode())) {
             // We don't want to merge class if either merger or
             // mergeable was ever accessed in instance_of to prevent
@@ -361,7 +363,7 @@ void record_code_reference(
             return;
           } else {
             DexClass* cls = type_class(type);
-            if (cls && !is_abstract(cls)) {
+            if ((cls != nullptr) && !is_abstract(cls)) {
               // If a type is referenced and not an abstract type then
               // add it to don't use this type as mergeable.
               deferred_record_dont_merge_state(type, kConditional);
@@ -390,7 +392,7 @@ void record_code_reference(
                                              kConditional);
           }
         } else if (insn->has_method()) {
-          auto callee_ref = insn->get_method();
+          auto* callee_ref = insn->get_method();
           if (opcode::is_invoke_super(insn->opcode())) {
             // The only allowed pure ref is in invoke-super.
             return;
@@ -400,7 +402,7 @@ void record_code_reference(
             TRACE(VMERGE, 9, "dont_merge %s for pure ref %s",
                   SHOW(callee_ref->get_class()), SHOW(callee_ref));
             DexMethod* callee = resolve_method(callee_ref, MethodSearch::Any);
-            if (callee) {
+            if (callee != nullptr) {
               deferred_record_dont_merge_state(callee->get_class(), kStrict);
               TRACE(VMERGE, 9,
                     "dont_merge %s for it may be invoked as a pure ref %s",
@@ -482,15 +484,15 @@ void remove_both_have_clinit(ClassMap* mergeable_to_merger) {
 void remove_unrenamable_collisions(ClassMap* mergeable_to_merger) {
   UnorderedBag<DexClass*> to_delete;
   for (const auto& pair : UnorderedIterable(*mergeable_to_merger)) {
-    auto mergeable = pair.first;
-    auto merger = pair.second;
-    for (auto m : mergeable->get_dmethods()) {
+    auto* mergeable = pair.first;
+    auto* merger = pair.second;
+    for (auto* m : mergeable->get_dmethods()) {
       if (is_constructor(m) || method::is_clinit(m) || can_rename(m)) {
         continue;
       }
-      auto merger_method_ref = DexMethod::get_method(
+      auto* merger_method_ref = DexMethod::get_method(
           merger->get_type(), m->get_name(), m->get_proto());
-      if (merger_method_ref) {
+      if (merger_method_ref != nullptr) {
         to_delete.insert(mergeable);
         break;
       }
@@ -511,7 +513,7 @@ void record_field_reference(
   walk::fields(scope, [&](DexField* field) {
     if (is_static(field) && field->get_type() == type::java_lang_Class()) {
       // Checking type which might be stored as class in field.
-      auto value = field->get_static_value();
+      auto* value = field->get_static_value();
       if (value != nullptr && value->evtype() == DEVT_TYPE) {
         record_dont_merge_state(
             static_cast<DexEncodedValueType*>(value)->type(), kStrict,
@@ -561,11 +563,11 @@ void update_references(const Scope& scope,
       [&update_map](DexMethod* method) {
         // Ignore references in methods in classes that are going to be
         // removed.
-        return !update_map.count(method->get_class());
+        return update_map.count(method->get_class()) == 0u;
       },
       [&](DexMethod* method, IRInstruction* insn) {
         if (insn->has_type()) {
-          auto ref_type = insn->get_type();
+          auto* ref_type = insn->get_type();
           DexType* type =
               const_cast<DexType*>(type::get_element_type_if_array(ref_type));
           auto find_mergeable = update_map.find(type);
@@ -575,20 +577,20 @@ void update_references(const Scope& scope,
           always_assert_log(insn->opcode() != OPCODE_NEW_INSTANCE,
                             "Vertical Merging: type reference still exists %s",
                             SHOW(insn));
-          auto merger_type = find_mergeable->second;
+          auto* merger_type = find_mergeable->second;
           if (type::is_array(ref_type)) {
-            auto array_merger_type = type::make_array_type(merger_type);
+            auto* array_merger_type = type::make_array_type(merger_type);
             insn->set_type(array_merger_type);
           } else {
             insn->set_type(const_cast<DexType*>(merger_type));
           }
         } else if (insn->has_field()) {
-          auto insn_field = insn->get_field();
+          auto* insn_field = insn->get_field();
           always_assert_log(!update_map.count(insn_field->get_class()),
                             "Vertical Merging: Field reference still exists %s",
                             SHOW(insn));
         } else if (insn->has_method()) {
-          auto insn_method = insn->get_method();
+          auto* insn_method = insn->get_method();
           auto find = methodref_update_map.find(insn_method);
           if (find != methodref_update_map.end()) {
             insn->set_method(find->second);
@@ -623,7 +625,7 @@ void update_implements(DexClass* from_cls, DexClass* to_cls) {
     deque.emplace_back(intf);
   }
 
-  auto implements = DexTypeList::make_type_list(std::move(deque));
+  auto* implements = DexTypeList::make_type_list(std::move(deque));
   to_cls->set_interfaces(implements);
 }
 
@@ -657,17 +659,17 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
   InsertOnlyConcurrentMap<IRInstruction*, DexMethodRef*> resolved_virtual_calls;
   walk::parallel::code(scope, [&](DexMethod* /* method */, IRCode& code) {
     editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (opcode::is_invoke_virtual(insn->opcode())) {
-        auto mergeable_method_ref = insn->get_method();
-        auto container = type_class(mergeable_method_ref->get_class());
-        if (!container) {
+        auto* mergeable_method_ref = insn->get_method();
+        auto* container = type_class(mergeable_method_ref->get_class());
+        if (container == nullptr) {
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
         auto find_merger = mergeable_to_merger.find(container);
         if (find_merger != mergeable_to_merger.end() &&
-            !excluded_mergeables.count(container)) {
-          auto merger_method_ref = DexMethod::get_method(
+            (excluded_mergeables.count(container) == 0u)) {
+          auto* merger_method_ref = DexMethod::get_method(
               find_merger->second->get_type(), mergeable_method_ref->get_name(),
               mergeable_method_ref->get_proto());
           // Merger is the subclass.
@@ -675,13 +677,14 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
             // XXX(fengliu): The possible overriding from subclasses of the
             // merger class is not checked because the case is excluded earlier
             // in collect_can_merge.
-            if (merger_method_ref && is_internal_def(merger_method_ref)) {
+            if ((merger_method_ref != nullptr) &&
+                is_internal_def(merger_method_ref)) {
               resolved_virtual_calls.emplace(insn, merger_method_ref);
             }
           } else { // Merger is the superclass.
             if (resolve_virtual(find_merger->second,
                                 mergeable_method_ref->get_name(),
-                                mergeable_method_ref->get_proto())) {
+                                mergeable_method_ref->get_proto()) != nullptr) {
               merger_method_ref =
                   DexMethod::make_method(find_merger->second->get_type(),
                                          mergeable_method_ref->get_name(),
@@ -705,13 +708,13 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
       return editable_cfg_adapter::LOOP_CONTINUE;
     });
   });
-  for (auto cls : UnorderedIterable(excluded_mergeables)) {
+  for (auto* cls : UnorderedIterable(excluded_mergeables)) {
     mergeable_to_merger.erase(cls);
   }
   for (auto& pair : UnorderedIterable(resolved_virtual_calls)) {
-    auto insn = pair.first;
-    auto container = type_class(insn->get_method()->get_class());
-    if (mergeable_to_merger.count(container)) {
+    auto* insn = pair.first;
+    auto* container = type_class(insn->get_method()->get_class());
+    if (mergeable_to_merger.count(container) != 0u) {
       insn->set_method(pair.second);
     }
   }
@@ -783,12 +786,12 @@ void VerticalMergingPass::change_init_calls(
     if (!insn->has_method()) {
       return;
     }
-    auto insn_method = insn->get_method();
+    auto* insn_method = insn->get_method();
     if (!method::is_init(insn_method)) {
       return;
     }
     auto* cls = type_class(insn_method->get_class());
-    if (!mergeable_to_merger.count(cls)) {
+    if (mergeable_to_merger.count(cls) == 0u) {
       return;
     }
     auto* insn_method_def = insn_method->as_def();
@@ -836,17 +839,17 @@ void VerticalMergingPass::move_methods(DexClass* from_cls,
     if (method::is_clinit(method)) {
       // We have removed pairs that both have clinit, so we can just move
       // clinit to target class.
-      auto target_method_ref = DexMethod::get_method(
+      auto* target_method_ref = DexMethod::get_method(
           target_cls_type, method->get_name(), method->get_proto());
-      if (target_method_ref) {
+      if (target_method_ref != nullptr) {
         DexMethodRef::erase_method(target_method_ref);
       }
       move_method(method, false /* rename_on_collision */);
     } else if (is_merging_super_to_sub) {
       // Super class is being merged into subclass
-      auto target_method_ref = DexMethod::get_method(
+      auto* target_method_ref = DexMethod::get_method(
           target_cls_type, method->get_name(), method->get_proto());
-      if (target_method_ref) {
+      if (target_method_ref != nullptr) {
         TRACE(VMERGE, 5, "ALREADY EXISTED METHODREF %s",
               SHOW(target_method_ref));
         if (!is_internal_def(target_method_ref)) {
@@ -878,7 +881,7 @@ void VerticalMergingPass::move_methods(DexClass* from_cls,
             // code. But we need to combine annotation of method and their
             // reference state into merger class's method because we are
             // basically merging two methods.
-            auto target_method_def = target_method_ref->as_def();
+            auto* target_method_def = target_method_ref->as_def();
             target_method_def->combine_annotations_with(method);
             target_method_def->rstate.join_with(method->rstate);
             (*methodref_update_map)[method] = target_method_ref;

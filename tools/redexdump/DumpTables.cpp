@@ -30,7 +30,7 @@ static std::string get_proto(ddump_data* rd,
     ss << dex_string_by_idx(rd, proto->shortyidx) << " ";
   }
   ss << "(";
-  if (proto->param_off) {
+  if (proto->param_off != 0u) {
     uint32_t* tl = (uint32_t*)(rd->dexmmap + proto->param_off);
     int count = (int)*tl++;
     uint16_t* types = (uint16_t*)tl;
@@ -78,42 +78,42 @@ static std::string get_flags(uint32_t flags,
                              bool cls = true,
                              bool method = false) {
   std::ostringstream ss;
-  if (flags & DexAccessFlags::ACC_PUBLIC) {
+  if ((flags & DexAccessFlags::ACC_PUBLIC) != 0u) {
     ss << "public ";
   }
-  if (flags & DexAccessFlags::ACC_PRIVATE) {
+  if ((flags & DexAccessFlags::ACC_PRIVATE) != 0u) {
     ss << "private ";
   }
-  if (flags & DexAccessFlags::ACC_PROTECTED) {
+  if ((flags & DexAccessFlags::ACC_PROTECTED) != 0u) {
     ss << "protected ";
   }
-  if (flags & DexAccessFlags::ACC_STATIC) {
+  if ((flags & DexAccessFlags::ACC_STATIC) != 0u) {
     ss << "static ";
   }
-  if (flags & DexAccessFlags::ACC_FINAL) {
+  if ((flags & DexAccessFlags::ACC_FINAL) != 0u) {
     ss << "final ";
   }
-  if (flags & DexAccessFlags::ACC_INTERFACE) {
+  if ((flags & DexAccessFlags::ACC_INTERFACE) != 0u) {
     ss << "interface ";
-  } else if (flags & DexAccessFlags::ACC_ABSTRACT) {
+  } else if ((flags & DexAccessFlags::ACC_ABSTRACT) != 0u) {
     ss << "abstract ";
   }
-  if (flags & DexAccessFlags::ACC_ENUM) {
+  if ((flags & DexAccessFlags::ACC_ENUM) != 0u) {
     ss << "enum ";
   }
-  if (flags & DexAccessFlags::ACC_SYNCHRONIZED) {
+  if ((flags & DexAccessFlags::ACC_SYNCHRONIZED) != 0u) {
     ss << "synchronized ";
   }
-  if (flags & DexAccessFlags::ACC_VOLATILE) {
+  if ((flags & DexAccessFlags::ACC_VOLATILE) != 0u) {
     ss << (cls || method ? "bridge " : "volatile ");
   }
-  if (flags & DexAccessFlags::ACC_NATIVE) {
+  if ((flags & DexAccessFlags::ACC_NATIVE) != 0u) {
     ss << "native ";
   }
-  if (flags & DexAccessFlags::ACC_TRANSIENT) {
+  if ((flags & DexAccessFlags::ACC_TRANSIENT) != 0u) {
     ss << (method ? "varargs " : "transient ");
   }
-  if (flags & DexAccessFlags::ACC_SYNTHETIC) {
+  if ((flags & DexAccessFlags::ACC_SYNTHETIC) != 0u) {
     ss << "synthetic ";
   }
   return ss.str();
@@ -135,11 +135,11 @@ static std::string get_class_def(ddump_data* rd,
   if (cls_def->super_idx != DEX_NO_INDEX) {
     ss << " extends " << dex_string_by_type_idx(rd, cls_def->super_idx);
   }
-  if (cls_def->interfaces_off) {
+  if (cls_def->interfaces_off != 0u) {
     ss << " implements ";
-    auto interfaces = (uint32_t*)(rd->dexmmap + cls_def->interfaces_off);
+    auto* interfaces = (uint32_t*)(rd->dexmmap + cls_def->interfaces_off);
     auto size = *interfaces++;
-    auto types = (uint16_t*)interfaces;
+    auto* types = (uint16_t*)interfaces;
     for (uint32_t i = 0; i < size; i++) {
       ss << dex_string_by_type_idx(rd, *types++);
     }
@@ -151,11 +151,11 @@ static std::string get_class_def(ddump_data* rd,
     } else {
       ss << "<no_file>";
     }
-    if (cls_def->annotations_off) {
+    if (cls_def->annotations_off != 0u) {
       ss << ", anno: " << "0x" << std::hex << cls_def->annotations_off;
     }
     ss << ", data: " << "0x" << std::hex << cls_def->class_data_offset;
-    if (cls_def->static_values_off) {
+    if (cls_def->static_values_off != 0u) {
       ss << ", static values: " << "0x" << std::hex
          << cls_def->static_values_off;
     }
@@ -184,7 +184,7 @@ static std::string get_class_data_item(ddump_data* rd, uint32_t idx) {
   const dex_class_def* class_defs =
       (dex_class_def*)(rd->dexmmap + rd->dexh->class_defs_off) + idx;
   auto cls_off = class_defs->class_data_offset;
-  if (!cls_off) {
+  if (cls_off == 0u) {
     return "";
   }
   ss << dex_string_by_type_idx(rd, class_defs->typeidx) << "\n";
@@ -241,8 +241,8 @@ static std::string get_code_item(dex_code_item** pcode_item) {
   const uint16_t* dexptr =
       (const uint16_t*)(code_item + 1) + code_item->insns_size;
   *pcode_item = (dex_code_item*)dexptr;
-  if (code_item->tries_size) {
-    if (code_item->insns_size & 1) {
+  if (code_item->tries_size != 0u) {
+    if ((code_item->insns_size & 1) != 0u) {
       dexptr++; // padding before tries
     }
     const dex_tries_item* tries = (const dex_tries_item*)dexptr;
@@ -251,7 +251,7 @@ static std::string get_code_item(dex_code_item** pcode_item) {
       ss << "\tstart_addr: " << tries->start_addr
          << ", insn_count: " << tries->insn_count
          << ", handler_off: " << tries->handler_off << "\n";
-      if (tries->handler_off) {
+      if (tries->handler_off != 0u) {
         const uint8_t* cur_handler = handlers + tries->handler_off;
         auto size = read_sleb128(&cur_handler);
         ss << "\t\t\thandlers size: " << size << ", ";
@@ -383,7 +383,7 @@ uint32_t count_debug_instructions(const uint8_t*& encdata) {
 
 void disassemble_debug(ddump_data* rd, uint32_t offset) {
   redump("Disassembling debug opcodes at 0x%x\n", offset);
-  auto data = (const uint8_t*)(rd->dexmmap + offset);
+  const auto* data = (const uint8_t*)(rd->dexmmap + offset);
   auto line_start = read_uleb128(&data);
   auto parameters_size = read_uleb128(&data);
   redump("line_start: %d, parameters_size: %d\n", line_start, parameters_size);
@@ -461,7 +461,7 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
   } else if (escape) { // Escape non-printable characters.
     cleansed_data.reserve(utf8_length); // Avoid some reallocation.
     for (size_t i = 0; i < utf8_length; i++) {
-      if (isprint(pos[i])) {
+      if (isprint(pos[i]) != 0) {
         cleansed_data.push_back(pos[i]);
       } else {
         char buf[5];
@@ -474,7 +474,7 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
     std::vector<char32_t> code_points;
     const char* enc_pos = (char*)pos;
     uint32_t cp;
-    while ((cp = mutf8_next_code_point(enc_pos))) {
+    while ((cp = mutf8_next_code_point(enc_pos)) != 0u) {
       if (cp < ' ' || cp == 255 /* DEL */) {
         cp = '.';
       }
@@ -631,7 +631,7 @@ void dump_clsdata(ddump_data* rd, bool print_headers) {
 }
 
 void dump_callsites(ddump_data* rd, bool print_headers) {
-  auto map = rd->dexmmap + rd->dexh->map_off;
+  auto* map = rd->dexmmap + rd->dexh->map_off;
   const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
   const dex_callsite_id* callsites = nullptr;
   int count = 0;
@@ -656,7 +656,7 @@ void dump_callsites(ddump_data* rd, bool print_headers) {
 }
 
 void dump_methodhandles(ddump_data* rd, bool print_headers) {
-  auto map = rd->dexmmap + rd->dexh->map_off;
+  auto* map = rd->dexmmap + rd->dexh->map_off;
   const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
   const dex_methodhandle_id* methodhandles = nullptr;
   int count = 0;
@@ -715,7 +715,7 @@ void dump_code(ddump_data* rd) {
       "insns_size: <count>\n");
   for (unsigned i = 0; i < count; i++) {
     if (maps[i].type == TYPE_CODE_ITEM) {
-      auto code_items = (dex_code_item*)(rd->dexmmap + maps[i].offset);
+      auto* code_items = (dex_code_item*)(rd->dexmmap + maps[i].offset);
       dump_code_items(rd, code_items, maps[i].size);
       return;
     }
@@ -735,7 +735,7 @@ static void dump_annotation_set_item(ddump_data* rd, uint32_t* aset) {
 
 static void dump_class_annotations(ddump_data* rd, dex_class_def* df) {
   char* cname = dex_string_by_type_idx(rd, df->typeidx);
-  if (df->annotations_off) {
+  if (df->annotations_off != 0u) {
     uint32_t* diritem = (uint32_t*)(rd->dexmmap + df->annotations_off);
     uint32_t aclass, afields, amethods, aparams;
     aclass = *diritem++;
@@ -743,11 +743,11 @@ static void dump_class_annotations(ddump_data* rd, dex_class_def* df) {
     amethods = *diritem++;
     aparams = *diritem++;
     redump(df->typeidx, "Class '%s':\n", cname);
-    if (aclass) {
+    if (aclass != 0u) {
       redump("    Class Annotations:\n");
       dump_annotation_set_item(rd, (uint32_t*)(rd->dexmmap + aclass));
     }
-    while (afields--) {
+    while ((afields--) != 0u) {
       uint32_t fidx = *diritem++;
       uint32_t aoff = *diritem++;
       const char* ftype =
@@ -757,7 +757,7 @@ static void dump_class_annotations(ddump_data* rd, dex_class_def* df) {
       redump("    Field '%s', Type '%s' Annotations:\n", ftype, fname);
       dump_annotation_set_item(rd, (uint32_t*)(rd->dexmmap + aoff));
     }
-    while (amethods--) {
+    while ((amethods--) != 0u) {
       uint32_t midx = *diritem++;
       uint32_t aoff = *diritem++;
       const char* mtype =
@@ -767,7 +767,7 @@ static void dump_class_annotations(ddump_data* rd, dex_class_def* df) {
       redump("    Method '%s', Type '%s' Annotations:\n", mtype, mname);
       dump_annotation_set_item(rd, (uint32_t*)(rd->dexmmap + aoff));
     }
-    while (aparams--) {
+    while ((aparams--) != 0u) {
       uint32_t midx = *diritem++;
       uint32_t asrefoff = *diritem++;
       uint32_t* asref = (uint32_t*)(rd->dexmmap + asrefoff);
@@ -779,7 +779,7 @@ static void dump_class_annotations(ddump_data* rd, dex_class_def* df) {
       redump("    Method '%s', Type '%s' Parameter Annotations:\n", mtype,
              mname);
       int param = 0;
-      while (asrefsize--) {
+      while ((asrefsize--) != 0u) {
         uint32_t aoff = *asref++;
         redump("%d: ", param++);
         dump_annotation_set_item(rd, (uint32_t*)(rd->dexmmap + aoff));
@@ -800,7 +800,7 @@ void dump_debug(ddump_data* rd) {
   get_dex_map_items(rd, &count, &maps);
   for (unsigned i = 0; i < count; i++) {
     if (maps[i].type == TYPE_DEBUG_INFO_ITEM) {
-      auto debug_items = (uint8_t*)(rd->dexmmap + maps[i].offset);
+      auto* debug_items = (uint8_t*)(rd->dexmmap + maps[i].offset);
       dump_debug_items(rd, debug_items, maps[i].size);
       return;
     }
@@ -813,7 +813,7 @@ void dump_enarr(ddump_data* rd) {
   get_dex_map_items(rd, &count, &maps);
   for (unsigned i = 0; i < count; i++) {
     if (maps[i].type == TYPE_ENCODED_ARRAY_ITEM) {
-      auto ptr = (const uint8_t*)(rd->dexmmap + maps[i].offset);
+      const auto* ptr = (const uint8_t*)(rd->dexmmap + maps[i].offset);
       for (unsigned j = 0; j < maps[i].size; j++) {
         redump((uint32_t)(ptr - (const uint8_t*)rd->dexmmap), ": ");
         uint32_t earray_size = read_uleb128(&ptr);

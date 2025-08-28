@@ -44,16 +44,16 @@ int main(int argc, char* argv[]) {
   od.add_options()("help,h", "show this screen and exit");
 
   Tool* tool = argc > 1 ? ToolRegistry::get().get_tool(argv[1]) : nullptr;
-  if (tool) {
+  if (tool != nullptr) {
     tool->add_options(od);
   }
 
   // This is annoying. Since arguments can be required, we can't parse
   // arguments to figure out that help was asked for. So, manually look
   // for '--help' or '-h' in all argv's >= 2
-  if (tool && argc >= 2) {
+  if ((tool != nullptr) && argc >= 2) {
     for (int i = 2; i < argc; ++i) {
-      if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
+      if ((strcmp(argv[i], "--help") == 0) || (strcmp(argv[i], "-h") == 0)) {
         show_help(od);
         return 0;
       }
@@ -64,10 +64,10 @@ int main(int argc, char* argv[]) {
   po::store(po::parse_command_line(argc, argv, od), vm);
   po::notify(vm);
 
-  if (vm.count("help")) {
+  if (vm.count("help") != 0u) {
     show_help(od);
     return 0;
-  } else if (!tool) {
+  } else if (tool == nullptr) {
     show_help(od);
     if (argc > 1) {
       std::cout << argv[1] << " is not a valid tool name!" << std::endl;

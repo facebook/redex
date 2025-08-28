@@ -66,10 +66,10 @@ void signatures_to_methods(
     const UnorderedMap<std::string, std::string>& signatures,
     UnorderedMap<DexMethod*, DexMethod*>* methods) {
   for (const auto& pair : UnorderedIterable(signatures)) {
-    auto first = DexMethod::get_method(pair.first);
+    auto* first = DexMethod::get_method(pair.first);
     always_assert_log(first != nullptr, "Did not find method %s",
                       pair.first.c_str());
-    auto second = DexMethod::get_method(pair.second);
+    auto* second = DexMethod::get_method(pair.second);
     always_assert_log(
         second != nullptr,
         "Method %s does not exist in the app dependencies (or "
@@ -77,7 +77,7 @@ void signatures_to_methods(
         "so edit the config to use a different "
         "wrapper method, or add this method to the app's dependencies.",
         pair.second.c_str());
-    auto resolved_second = resolve_method(second, MethodSearch::Static);
+    auto* resolved_second = resolve_method(second, MethodSearch::Static);
     always_assert_log(resolved_second != nullptr,
                       "No static method def found for %s",
                       pair.second.c_str());
@@ -365,7 +365,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
       for (size_t j = 0; j < cfg_size; j++) {
         auto c = configs[j];
         auto cname = c.toString();
-        auto cfg_name = cname.size() == 0 ? "(default)" : cname.string();
+        const auto* cfg_name = cname.size() == 0 ? "(default)" : cname.string();
         TRACE(SPLIT_RES, 3, "Type %s, config name: %s", name.c_str(), cfg_name);
         type_to_configs[i + 1].push_back(configs[j]);
       }
@@ -444,7 +444,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
   for (const auto& t : new_types) {
     std::vector<android::ResTable_config*> config_ptrs;
     config_ptrs.reserve(t.configs.size());
-    for (auto& config : t.configs) {
+    for (const auto& config : t.configs) {
       config_ptrs.emplace_back(const_cast<android::ResTable_config*>(&config));
     }
     res_table->define_type(package_id, t.type_idx, t.name, config_ptrs,

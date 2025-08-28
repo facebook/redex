@@ -71,11 +71,11 @@ class InitClassFields {
       const std::function<reg_t(DexField*)>& reg_getter) const {
     std::vector<IRInstruction*> insns;
     auto caller_dex_idx = m_class_dex_indices.at_unsafe(caller->get_class());
-    auto field = get(type, caller_dex_idx);
+    auto* field = get(type, caller_dex_idx);
     auto reg = reg_getter(field);
-    auto sget_insn = (new IRInstruction(opcode::sget_opcode_for_field(field)))
-                         ->set_field(field);
-    auto move_result_insn =
+    auto* sget_insn = (new IRInstruction(opcode::sget_opcode_for_field(field)))
+                          ->set_field(field);
+    auto* move_result_insn =
         (new IRInstruction(
              opcode::move_result_pseudo_for_sget(sget_insn->opcode())))
             ->set_dest(reg);
@@ -144,14 +144,14 @@ class InitClassFields {
   static DexField* get_preferred_field(const std::vector<DexField*>& sfields) {
     always_assert(!sfields.empty());
     // 1. non-wide primitive, if any.
-    for (auto f : sfields) {
+    for (auto* f : sfields) {
       if (!type::is_wide_type(f->get_type()) &&
           type::is_primitive(f->get_type())) {
         return f;
       }
     }
     // 2. non-wide, if any.
-    for (auto f : sfields) {
+    for (auto* f : sfields) {
       if (!type::is_wide_type(f->get_type())) {
         return f;
       }
@@ -161,7 +161,7 @@ class InitClassFields {
   }
 
   DexField* make_init_class_field(DexType* type, size_t dex_idx) const {
-    auto cls = type_class(type);
+    auto* cls = type_class(type);
     always_assert(cls);
     const auto& dex_referenced_sfields = m_dex_referenced_sfields.at(dex_idx);
     const auto& sfields = cls->get_sfields();
@@ -171,7 +171,7 @@ class InitClassFields {
                     [&](auto* f) { return !dex_referenced_sfields.count(f); });
     if (!referenced_sfields.empty()) {
       // Ideally, we can pick from the filtered list of referenced sfields
-      auto f = get_preferred_field(referenced_sfields);
+      auto* f = get_preferred_field(referenced_sfields);
       always_assert(f->get_name() != m_field_name);
       return f;
     }
@@ -188,7 +188,7 @@ class InitClassFields {
 
     // If we already created a new dummy field (for another dex), then we must
     // reuse that.
-    for (auto f : sfields) {
+    for (auto* f : sfields) {
       if (f->get_name() == m_field_name) {
         return f;
       }
@@ -197,8 +197,8 @@ class InitClassFields {
     always_assert_log(DexField::get_field(type, m_field_name, type) == nullptr,
                       "field %s already exists!",
                       redex_field_name);
-    auto field = DexField::make_field(type, m_field_name, type)
-                     ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+    auto* field = DexField::make_field(type, m_field_name, type)
+                      ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
     field->rstate.set_root();
     insert_sorted(cls->get_sfields(), field, compare_dexfields);
     field->set_deobfuscated_name(show_deobfuscated(field));
@@ -213,14 +213,14 @@ void make_public(const std::vector<DexField*>& fields,
   UnorderedSet<DexType*> visited;
   std::function<void(DexType*)> visit;
   visit = [&](DexType* type) {
-    auto cls = type_class(type);
-    if (cls && !cls->is_external() && !is_public(cls)) {
+    auto* cls = type_class(type);
+    if ((cls != nullptr) && !cls->is_external() && !is_public(cls)) {
       set_public(cls);
       (*types_made_public)++;
       visit(cls->get_super_class());
     }
   };
-  for (auto& f : fields) {
+  for (const auto& f : fields) {
     if (!is_public(f)) {
       set_public(f);
       (*fields_made_public)++;
@@ -240,20 +240,20 @@ class LogCreator {
                                         const DexString* tag_str,
                                         const std::string& message) const {
     auto tmp0 = cfg.allocate_temp();
-    auto tag_insn =
+    auto* tag_insn =
         (new IRInstruction(OPCODE_CONST_STRING))->set_string(tag_str);
-    auto tag_result_insn =
+    auto* tag_result_insn =
         (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))->set_dest(tmp0);
     auto tmp1 = cfg.allocate_temp();
-    auto message_insn = (new IRInstruction(OPCODE_CONST_STRING))
-                            ->set_string(DexString::make_string(message));
-    auto message_result_insn =
+    auto* message_insn = (new IRInstruction(OPCODE_CONST_STRING))
+                             ->set_string(DexString::make_string(message));
+    auto* message_result_insn =
         (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))->set_dest(tmp1);
-    auto invoke_insn = (new IRInstruction(OPCODE_INVOKE_STATIC))
-                           ->set_method(m_log_e_method)
-                           ->set_srcs_size(2)
-                           ->set_src(0, tmp0)
-                           ->set_src(1, tmp1);
+    auto* invoke_insn = (new IRInstruction(OPCODE_INVOKE_STATIC))
+                            ->set_method(m_log_e_method)
+                            ->set_srcs_size(2)
+                            ->set_src(0, tmp0)
+                            ->set_src(1, tmp1);
     return {tag_insn, tag_result_insn, message_insn, message_result_insn,
             invoke_insn};
   }
@@ -263,19 +263,19 @@ void log_in_clinits(const LogCreator& log_creator,
                     const Scope& scope,
                     const init_classes::InitClassesWithSideEffects&
                         init_classes_with_side_effects) {
-  auto tag_str = DexString::make_string("clinit-with-side-effects");
+  const auto* tag_str = DexString::make_string("clinit-with-side-effects");
   walk::parallel::classes(scope, [&](DexClass* cls) {
-    auto type = cls->get_type();
+    auto* type = cls->get_type();
     if (init_classes_with_side_effects.refine(type) != type) {
       return;
     }
-    auto clinit = cls->get_clinit();
-    if (!clinit || !clinit->get_code()) {
+    auto* clinit = cls->get_clinit();
+    if ((clinit == nullptr) || (clinit->get_code() == nullptr)) {
       return;
     }
     cfg::ScopedCFG cfg(clinit->get_code());
     auto insns = log_creator.get_insns(*cfg, tag_str, show_deobfuscated(type));
-    auto block = cfg->entry_block();
+    auto* block = cfg->entry_block();
     auto last_load_params_it = block->get_last_param_loading_insn();
     if (last_load_params_it == block->end()) {
       block->push_front(insns);
@@ -295,10 +295,10 @@ std::string get_init_class_message(DexMethod* method,
                                    DexType* type,
                                    const cfg::InstructionIterator& cfg_it) {
   std::ostringstream oss;
-  auto pos = cfg_it.cfg().get_dbg_pos(cfg_it);
-  if (pos) {
+  auto* pos = cfg_it.cfg().get_dbg_pos(cfg_it);
+  if (pos != nullptr) {
     UnorderedSet<DexPosition*> visited;
-    for (; pos; pos = pos->parent) {
+    for (; pos != nullptr; pos = pos->parent) {
       if (!visited.insert(pos).second) {
         oss << "Cyclic";
         break;
@@ -358,8 +358,8 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
   ConcurrentSet<DexMethod*> clinits;
   const auto stats =
       walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
-        auto code = method->get_code();
-        if (!code) {
+        auto* code = method->get_code();
+        if (code == nullptr) {
           return Stats();
         }
         always_assert(code->editable_cfg_built());
@@ -367,7 +367,7 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
         if (method::is_clinit(method)) {
           clinits.insert(method);
         }
-        if (!method::count_opcode_of_types(cfg, {IOPCODE_INIT_CLASS})) {
+        if (method::count_opcode_of_types(cfg, {IOPCODE_INIT_CLASS}) == 0u) {
           return Stats();
         }
         InitClassPruner pruner(init_classes_with_side_effects,
@@ -400,14 +400,14 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
         };
         cfg::CFGMutation mutation(cfg);
         size_t local_sget_instructions_added = 0;
-        for (auto block : cfg.blocks()) {
+        for (auto* block : cfg.blocks()) {
           auto ii = InstructionIterable(block);
           for (auto it = ii.begin(); it != ii.end(); it++) {
             if (it->insn->opcode() != IOPCODE_INIT_CLASS) {
               continue;
             }
             always_assert(create_init_class_insns);
-            auto type = it->insn->get_type();
+            auto* type = it->insn->get_type();
             std::vector<IRInstruction*> replacements;
             if (!m_drop) {
               replacements =
@@ -415,7 +415,7 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
               local_sget_instructions_added++;
             }
             auto cfg_it = block->to_cfg_instruction_iterator(it);
-            if (tag_str) {
+            if (tag_str != nullptr) {
               auto message = get_init_class_message(method, type, cfg_it);
               auto log_insns = log_creator.get_insns(cfg, tag_str, message);
               replacements.insert(replacements.begin(), log_insns.begin(),
@@ -425,14 +425,14 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
           }
         }
         mutation.flush();
-        if (local_sget_instructions_added) {
+        if (local_sget_instructions_added != 0u) {
           sget_instructions_added += local_sget_instructions_added;
         }
         return local_stats;
       });
 
   // Remove clinits that are now trivial.
-  for (auto clinit : UnorderedIterable(clinits)) {
+  for (auto* clinit : UnorderedIterable(clinits)) {
     if (method::is_trivial_clinit(*clinit->get_code())) {
       type_class(clinit->get_class())->remove_method(clinit);
     }
@@ -449,9 +449,9 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
   if (traceEnabled(ICL, 5)) {
     for (auto& p :
          init_class_fields.get_ordered_init_class_reference_counts()) {
-      auto cls = type_class(p.first);
+      auto* cls = type_class(p.first);
       auto count = p.second;
-      auto clinit = cls->get_clinit();
+      auto* clinit = cls->get_clinit();
       always_assert(clinit);
       auto& cfg = clinit->get_code()->cfg();
       TRACE(ICL, 5,

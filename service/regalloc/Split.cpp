@@ -20,7 +20,7 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     // Incrementing load number for each death in
     // LiveOut(block) - LiveIn(succs).
-    for (auto& succ : block->succs()) {
+    for (const auto& succ : block->succs()) {
       const LivenessDomain& live_in =
           fixpoint_iter.get_live_in_vars_at(succ->target());
       for (auto reg : live_out.elements()) {
@@ -40,7 +40,7 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
       if (it->type != MFLOW_OPCODE) {
         continue;
       }
-      auto insn = it->insn;
+      auto* insn = it->insn;
       // Add store cost for each define.
       if (insn->has_dest()) {
         split_costs->increase_store(insn->dest());
@@ -124,7 +124,7 @@ size_t split_for_block(const SplitPlan& split_plan,
                        cfg::ControlFlowGraph& cfg,
                        BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
-  for (auto& succ : block->succs()) {
+  for (const auto& succ : block->succs()) {
     const LivenessDomain& live_in =
         fixpoint_iter.get_live_in_vars_at(succ->target());
     for (auto reg : live_out.elements()) {
@@ -162,7 +162,7 @@ size_t split_for_block(const SplitPlan& split_plan,
                   other_loaded_it->second.end()) {
             // Get first opcode instruction and insert move
             // before it.
-            auto succ_block = succ->target();
+            auto* succ_block = succ->target();
             auto pos_it = succ_block->get_first_insn();
             cfg.insert_before(succ_block->to_cfg_instruction_iterator(pos_it),
                               mov);
@@ -282,7 +282,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
         // we would treat it like the case of
         // live_out(block) - live_in(succ_block).
         if (opcode::is_branch(insn->opcode()) && it == block->rbegin()) {
-          for (auto& succ : block->succs()) {
+          for (const auto& succ : block->succs()) {
             IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, cfg);
             auto block_edge =
                 std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
@@ -321,9 +321,9 @@ size_t split_for_last_use(const SplitPlan& split_plan,
 size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
                                   cfg::ControlFlowGraph& cfg) {
   size_t split_move = 0;
-  for (auto& pair : block_load_info.mode_and_insn) {
-    auto block = pair.first.first;
-    auto s = pair.first.second; // second block
+  for (const auto& pair : block_load_info.mode_and_insn) {
+    auto* block = pair.first.first;
+    auto* s = pair.first.second; // second block
     BlockMode block_mode = pair.second.block_mode;
     if (block_mode == TRYCATCH) {
       // Two blocks are connected by TRYCATCH edge.
@@ -339,7 +339,7 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
         cfg_pos_it.move_next_in_block();
       }
 
-      for (auto insn : UnorderedIterable(pair.second.block_insns)) {
+      for (auto* insn : UnorderedIterable(pair.second.block_insns)) {
         cfg.insert_before(cfg_pos_it, insn);
         ++split_move;
       }
@@ -352,7 +352,7 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
 
       // Create a new block containing all the load instructions.
       cfg::Block* new_block = cfg.create_block();
-      for (auto insn : UnorderedIterable(pair.second.block_insns)) {
+      for (auto* insn : UnorderedIterable(pair.second.block_insns)) {
         new_block->push_back(insn);
         ++split_move;
       }
@@ -395,7 +395,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
         continue;
       }
       // Split for define and last use of reg.
-      auto insn = it->insn;
+      auto* insn = it->insn;
       auto cfg_it = block->to_cfg_instruction_iterator(--(it.base()));
       split_move += split_for_define(split_plan, ig, insn, live_out, cfg,
                                      &load_store_reg, cfg_it);

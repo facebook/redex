@@ -113,7 +113,7 @@ ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
                       /* incomplete_marker_method */ nullptr, method,
                       callees_cache, method_summary_cache);
     auto inlinables = analyzer.get_inlinables();
-    for (auto insn : UnorderedIterable(inlinables)) {
+    for (auto* insn : UnorderedIterable(inlinables)) {
       auto [callee, type] = resolve_inlinable(method_summaries, method, insn);
       TRACE(OEA, 3, "[object escape analysis] inline anchor [%s] %s",
             SHOW(method), SHOW(insn));
@@ -170,7 +170,7 @@ live_range::DefUseChains get_augmented_du_chains(
   live_range::DefUseChains res;
   for (auto&& [def, def_uses] : UnorderedIterable(du_chains)) {
     auto* inline_anchor_type = selector(def);
-    if (!inline_anchor_type) {
+    if (inline_anchor_type == nullptr) {
       continue;
     }
     auto& augmented_uses = res[def];
@@ -234,20 +234,21 @@ class InlinedEstimator {
                   opcode::is_an_invoke(allocation_insn->opcode()) ||
                   opcode::is_load_param_object(allocation_insn->opcode()));
     if (opcode::is_an_invoke(allocation_insn->opcode())) {
-      auto callee = resolve_invoke_method(allocation_insn, method);
+      auto* callee = resolve_invoke_method(allocation_insn, method);
       always_assert(callee);
-      auto* callee_allocation_insn =
+      const auto* callee_allocation_insn =
           m_method_summaries.at(callee).allocation_insn();
       always_assert(callee_allocation_insn);
       gather_inlinable_methods(callee, callee_allocation_insn, recursive,
                                visiting);
     }
-    for (auto& use : UnorderedIterable(m_uses[{method, allocation_insn}])) {
+    for (const auto& use :
+         UnorderedIterable(m_uses[{method, allocation_insn}])) {
       if (opcode::is_an_invoke(use.insn->opcode())) {
         if (is_benign(use.insn->get_method())) {
           continue;
         }
-        auto callee = resolve_invoke_inlinable_callee(
+        auto* callee = resolve_invoke_inlinable_callee(
             m_method_override_graph, use.insn, method, m_callees_cache,
             [this, src_index = use.src_index]() {
               always_assert(src_index == 0);
@@ -299,7 +300,7 @@ class InlinedEstimator {
           return code_size;
         }),
         m_uses([this, method_summary_cache](Key key) {
-          auto allocation_insn = const_cast<IRInstruction*>(key.second);
+          auto* allocation_insn = const_cast<IRInstruction*>(key.second);
           auto du_chains = get_augmented_du_chains(
               m_method_override_graph, key.first, {m_inline_anchor_type},
               m_method_summaries, m_callees_cache, method_summary_cache,
@@ -316,9 +317,9 @@ class InlinedEstimator {
               opcode::is_load_param_object(allocation_insn->opcode()));
           int64_t delta = 0;
           if (opcode::is_an_invoke(allocation_insn->opcode())) {
-            auto callee = resolve_invoke_method(allocation_insn, method);
+            auto* callee = resolve_invoke_method(allocation_insn, method);
             always_assert(callee);
-            auto* callee_allocation_insn =
+            const auto* callee_allocation_insn =
                 m_method_summaries.at(callee).allocation_insn();
             always_assert(callee_allocation_insn);
             auto callee_delta = get_delta(callee, callee_allocation_insn);
@@ -330,13 +331,13 @@ class InlinedEstimator {
           } else if (allocation_insn->opcode() == OPCODE_NEW_INSTANCE) {
             delta -= config.cost_new_instance;
           }
-          for (auto& use : UnorderedIterable(m_uses[key])) {
+          for (const auto& use : UnorderedIterable(m_uses[key])) {
             if (opcode::is_an_invoke(use.insn->opcode())) {
               delta -= config.cost_invoke;
               if (is_benign(use.insn->get_method())) {
                 continue;
               }
-              auto callee = resolve_invoke_inlinable_callee(
+              auto* callee = resolve_invoke_inlinable_callee(
                   m_method_override_graph, use.insn, method, m_callees_cache,
                   [this, src_index = use.src_index]() {
                     always_assert(src_index == 0);
@@ -486,7 +487,8 @@ UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
         continue;
       }
       auto it2 = method_summaries.find(method);
-      if (it2 != method_summaries.end() && it2->second.allocation_insn() &&
+      if (it2 != method_summaries.end() &&
+          (it2->second.allocation_insn() != nullptr) &&
           resolve_inlinable(method_summaries, method,
                             it2->second.allocation_insn())
                   .second == type) {
@@ -549,7 +551,8 @@ UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
     }
   };
 
-  for (auto& [type, method_insn_pairs] : UnorderedIterable(new_instances)) {
+  for (const auto& [type, method_insn_pairs] :
+       UnorderedIterable(new_instances)) {
     auto it = inline_anchors.find(type);
     if (it == inline_anchors.end()) {
       continue;
@@ -648,9 +651,10 @@ size_t shrink_root_methods(
       if (it2 == method_summaries->end()) {
         continue;
       }
-      auto* allocation_insn = it2->second.allocation_insn();
-      if (allocation_insn && opcode::is_an_invoke(allocation_insn->opcode())) {
-        auto callee = resolve_invoke_method(allocation_insn, caller);
+      const auto* allocation_insn = it2->second.allocation_insn();
+      if ((allocation_insn != nullptr) &&
+          opcode::is_an_invoke(allocation_insn->opcode())) {
+        auto* callee = resolve_invoke_method(allocation_insn, caller);
         always_assert(callee);
         if (callee == method) {
           lose(caller);
@@ -664,7 +668,8 @@ size_t shrink_root_methods(
         inliner.get_shrinker().shrink_method(method);
         apply_shrinking_plugins(method);
         auto it = method_summaries->find(method);
-        if (it != method_summaries->end() && it->second.allocation_insn()) {
+        if (it != method_summaries->end() &&
+            (it->second.allocation_insn() != nullptr)) {
           auto ii = InstructionIterable(method->get_code()->cfg());
           if (std::none_of(
                   ii.begin(), ii.end(), [&](const MethodItemEntry& mie) {
@@ -772,13 +777,13 @@ struct ReducedMethod {
              types.at(type).kind == InlinableTypeKind::Incomplete ||
              irreducible_types.count(type);
     };
-    for (auto& [inlined_method, inlined_types] :
+    for (const auto& [inlined_method, inlined_types] :
          UnorderedIterable(inlined_methods)) {
       if (unordered_any_of(inlined_types, is_type_kept)) {
         continue;
       }
       if (root(inlined_method) || method::is_argless_init(inlined_method) ||
-          methods_kept.count(inlined_method)) {
+          (methods_kept.count(inlined_method) != 0u)) {
         continue;
       }
       refs->insert(Ref(inlined_method));
@@ -882,7 +887,7 @@ class RootMethodReducer {
     }
 
     auto* insn = find_rewritten_invoke_supers();
-    if (insn) {
+    if (insn != nullptr) {
       m_stats->invoke_supers++;
       return std::nullopt;
     }
@@ -940,8 +945,8 @@ class RootMethodReducer {
                               const cfg::InstructionIterator& it,
                               param_index_t param_index,
                               DexType* inlinable_type) {
-    auto insn = it->insn;
-    auto callee = resolve_invoke_inlinable_callee(
+    auto* insn = it->insn;
+    auto* callee = resolve_invoke_inlinable_callee(
         m_method_override_graph, insn, m_method, m_callees_cache, [&]() {
           always_assert(param_index == 0);
           return inlinable_type;
@@ -949,10 +954,10 @@ class RootMethodReducer {
     always_assert(callee);
     always_assert(callee->is_concrete());
     std::vector<DexField*> const* fields;
-    auto expanded_method_ref =
+    auto* expanded_method_ref =
         m_expandable_method_params.get_expanded_method_ref(callee, param_index,
                                                            &fields);
-    if (!expanded_method_ref) {
+    if (expanded_method_ref == nullptr) {
       return nullptr;
     }
 
@@ -968,7 +973,7 @@ class RootMethodReducer {
     }
     std::vector<IRInstruction*> instructions_to_insert;
     auto& cfg = m_method->get_code()->cfg();
-    for (auto field : *fields) {
+    for (auto* field : *fields) {
       auto reg = type::is_wide_type(field->get_type())
                      ? cfg.allocate_wide_temp()
                      : cfg.allocate_temp();
@@ -997,15 +1002,15 @@ class RootMethodReducer {
     cfg::CFGMutation mutation(cfg);
     auto ii = InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); it++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       auto it2 = invokes_to_expand.find(insn);
       if (it2 == invokes_to_expand.end()) {
         continue;
       }
       auto [param_index, inlinable_type] = it2->second;
-      auto expanded_method_ref =
+      auto* expanded_method_ref =
           expand_invoke(mutation, it, param_index, inlinable_type);
-      if (!expanded_method_ref) {
+      if (expanded_method_ref == nullptr) {
         mutation.clear();
         return false;
       }
@@ -1066,14 +1071,14 @@ class RootMethodReducer {
             if (move_result_it.is_end()) {
               continue;
             }
-            auto invoke_insn = (new IRInstruction(OPCODE_INVOKE_STATIC))
-                                   ->set_method(m_incomplete_marker_method)
-                                   ->set_srcs_size(1)
-                                   ->set_src(0, move_result_it->insn->dest());
+            auto* invoke_insn = (new IRInstruction(OPCODE_INVOKE_STATIC))
+                                    ->set_method(m_incomplete_marker_method)
+                                    ->set_srcs_size(1)
+                                    ->set_src(0, move_result_it->insn->dest());
             mutation.insert_after(move_result_it, {invoke_insn});
           }
         }
-        if (!callee) {
+        if (callee == nullptr) {
           continue;
         }
         invokes_to_inline.emplace(insn, callee);
@@ -1095,7 +1100,7 @@ class RootMethodReducer {
 
   bool is_inlinable_new_instance(const IRInstruction* insn) const {
     return insn->opcode() == OPCODE_NEW_INSTANCE &&
-           m_types.count(insn->get_type());
+           (m_types.count(insn->get_type()) != 0u);
   }
 
   bool is_incomplete_marker(const IRInstruction* insn) const {
@@ -1140,11 +1145,11 @@ class RootMethodReducer {
     always_assert(!throwing_check_cast);
     auto& cfg = m_method->get_code()->cfg();
     for (auto& mie : InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (!is_inlinable_new_instance(insn)) {
         continue;
       }
-      auto type = insn->get_type();
+      auto* type = insn->get_type();
       auto& uses = du_chains[insn];
       auto kind = m_types.at(type).kind;
       if (kind == InlinableTypeKind::Incomplete &&
@@ -1159,7 +1164,7 @@ class RootMethodReducer {
   bool should_expand(DexMethod* callee,
                      const UnorderedMap<src_index_t, DexType*>& src_indices) {
     always_assert(!src_indices.empty());
-    if (method::is_init(callee) && !src_indices.count(0)) {
+    if (method::is_init(callee) && (src_indices.count(0) == 0u)) {
       return true;
     }
     if (src_indices.size() > 1) {
@@ -1169,8 +1174,8 @@ class RootMethodReducer {
     auto kind = m_types.at(type).kind;
     bool multiples = kind == InlinableTypeKind::CompleteMultipleRoots;
     if (multiples && m_code_size_cache[callee] > m_config.max_inline_size &&
-        m_expandable_method_params.get_expanded_method_ref(callee,
-                                                           param_index)) {
+        (m_expandable_method_params.get_expanded_method_ref(
+             callee, param_index) != nullptr)) {
       return true;
     }
     return false;
@@ -1204,7 +1209,7 @@ class RootMethodReducer {
         // Hm, unlike that the program would unconditionally crash. It's
         // probably in dead code. We'll try to shrink (unless we are in a state
         // where rewritten invoke-supers are present).
-        if (!find_rewritten_invoke_supers()) {
+        if (find_rewritten_invoke_supers() == nullptr) {
           shrink();
           throwing_check_cast = false;
           du_chains = get_augmented_du_chains_for_inlinable_new_instances(
@@ -1219,13 +1224,13 @@ class RootMethodReducer {
           aggregated_uses;
       for (auto& [insn, uses] : UnorderedIterable(du_chains)) {
         always_assert(is_inlinable_new_instance(insn));
-        auto type = insn->get_type();
+        auto* type = insn->get_type();
         auto kind = m_types.at(type).kind;
         if (kind == InlinableTypeKind::Incomplete &&
             !has_incomplete_marker(uses)) {
           continue;
         }
-        for (auto& use : UnorderedIterable(uses)) {
+        for (const auto& use : UnorderedIterable(uses)) {
           auto emplaced =
               aggregated_uses[use.insn].emplace(use.src_index, type).second;
           always_assert(emplaced);
@@ -1238,11 +1243,11 @@ class RootMethodReducer {
             is_incomplete_marker(uses_insn)) {
           continue;
         }
-        if (expanded_method_refs.count(uses_insn->get_method())) {
+        if (expanded_method_refs.count(uses_insn->get_method()) != 0u) {
           m_stats->invokes_not_inlinable_callee_inconcrete++;
           return false;
         }
-        auto callee = resolve_invoke_inlinable_callee(
+        auto* callee = resolve_invoke_inlinable_callee(
             m_method_override_graph, uses_insn, m_method, m_callees_cache,
             [&_src_indices = src_indices]() {
               always_assert(_src_indices.size() == 1);
@@ -1315,7 +1320,7 @@ class RootMethodReducer {
     std::vector<DexField*> ordered_fields;
     auto get_field_reg = [&](DexFieldRef* ref) {
       always_assert(ref->is_def());
-      auto field = ref->as_def();
+      auto* field = ref->as_def();
       auto it = field_regs.find(field);
       if (it == field_regs.end()) {
         auto wide = type::is_wide_type(field->get_type());
@@ -1327,7 +1332,7 @@ class RootMethodReducer {
     };
 
     UnorderedSet<IRInstruction*> used_insns;
-    for (auto& use : UnorderedIterable(new_instance_insn_uses)) {
+    for (const auto& use : UnorderedIterable(new_instance_insn_uses)) {
       auto opcode = use.insn->opcode();
       if (opcode::is_an_iput(opcode)) {
         always_assert(use.src_index == 1);
@@ -1353,9 +1358,9 @@ class RootMethodReducer {
     auto new_instance_insn_it = ii.end();
     std::vector<std::pair<IRInstruction*, cfg::InstructionIterator>> zero_its;
     for (auto it = ii.begin(); it != ii.end(); it++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       auto opcode = insn->opcode();
-      if (!used_insns.count(insn)) {
+      if (used_insns.count(insn) == 0u) {
         if (insn == new_instance_insn) {
           new_instance_insn_it = it;
         } else if (opcode::is_const(opcode) || opcode::is_move_object(opcode)) {
@@ -1364,20 +1369,20 @@ class RootMethodReducer {
         continue;
       }
       if (opcode::is_move_object(opcode)) {
-        auto new_insn = (new IRInstruction(OPCODE_MOVE))
-                            ->set_src(0, get_created_reg(insn->src(0)))
-                            ->set_dest(get_created_reg(insn->dest()));
+        auto* new_insn = (new IRInstruction(OPCODE_MOVE))
+                             ->set_src(0, get_created_reg(insn->src(0)))
+                             ->set_dest(get_created_reg(insn->dest()));
         mutation.replace(it, {new_insn});
       } else if (opcode::is_an_iget(opcode)) {
         auto move_result_it = cfg.move_result_of(it);
-        auto new_insn = (new IRInstruction(opcode::iget_to_move(opcode)))
-                            ->set_src(0, get_field_reg(insn->get_field()))
-                            ->set_dest(move_result_it->insn->dest());
+        auto* new_insn = (new IRInstruction(opcode::iget_to_move(opcode)))
+                             ->set_src(0, get_field_reg(insn->get_field()))
+                             ->set_dest(move_result_it->insn->dest());
         mutation.replace(it, {new_insn});
       } else if (opcode::is_an_iput(opcode)) {
-        auto new_insn = (new IRInstruction(opcode::iput_to_move(opcode)))
-                            ->set_src(0, insn->src(0))
-                            ->set_dest(get_field_reg(insn->get_field()));
+        auto* new_insn = (new IRInstruction(opcode::iput_to_move(opcode)))
+                             ->set_src(0, insn->src(0))
+                             ->set_dest(get_field_reg(insn->get_field()));
         mutation.replace(it, {new_insn});
       } else if (opcode::is_an_invoke(opcode)) {
         always_assert(is_benign(insn->get_method()) ||
@@ -1385,7 +1390,7 @@ class RootMethodReducer {
         mutation.remove(it);
       } else if (opcode::is_instance_of(opcode)) {
         auto move_result_it = cfg.move_result_of(it);
-        auto new_insn =
+        auto* new_insn =
             (type::is_subclass(insn->get_type(), new_instance_insn->get_type())
                  ? (new IRInstruction(OPCODE_MOVE))
                        ->set_src(0, get_created_reg(insn->src(0)))
@@ -1399,9 +1404,9 @@ class RootMethodReducer {
       } else if (opcode::is_check_cast(opcode)) {
         auto move_result_it = cfg.move_result_of(it);
         auto dest = move_result_it->insn->dest();
-        auto new_insn = (new IRInstruction(OPCODE_MOVE))
-                            ->set_src(0, get_created_reg(insn->src(0)))
-                            ->set_dest(get_created_reg(dest));
+        auto* new_insn = (new IRInstruction(OPCODE_MOVE))
+                             ->set_src(0, get_created_reg(insn->src(0)))
+                             ->set_dest(get_created_reg(dest));
         mutation.replace(it, {new_insn});
       } else {
         not_reached_log("Unexpected insn: %s", SHOW(insn));
@@ -1413,19 +1418,19 @@ class RootMethodReducer {
     for (auto& [insn, it] : zero_its) {
       auto created_regs_it = created_regs.find(insn->dest());
       if (created_regs_it != created_regs.end()) {
-        auto new_insn = (new IRInstruction(OPCODE_CONST))
-                            ->set_literal(0)
-                            ->set_dest(created_regs_it->second);
+        auto* new_insn = (new IRInstruction(OPCODE_CONST))
+                             ->set_literal(0)
+                             ->set_dest(created_regs_it->second);
         mutation.insert_before(it, {new_insn});
       }
     }
 
     always_assert(!new_instance_insn_it.is_end());
-    auto init_class_insn =
+    auto* init_class_insn =
         m_inliner.get_shrinker()
             .get_init_classes_with_side_effects()
             .create_init_class_insn(new_instance_insn->get_type());
-    if (init_class_insn) {
+    if (init_class_insn != nullptr) {
       mutation.insert_before(new_instance_insn_it, {init_class_insn});
     }
     mutation.remove(new_instance_insn_it);
@@ -1440,21 +1445,22 @@ class RootMethodReducer {
     auto get_init_insns = [&](bool created) {
       std::vector<IRInstruction*> insns;
       insns.reserve(ordered_fields.size() + created_regs.size());
-      for (auto field : ordered_fields) {
+      for (auto* field : ordered_fields) {
         auto wide = type::is_wide_type(field->get_type());
         auto opcode = wide ? OPCODE_CONST_WIDE : OPCODE_CONST;
         auto reg = field_regs.at(field);
-        auto new_insn =
+        auto* new_insn =
             (new IRInstruction(opcode))->set_literal(0)->set_dest(reg);
         insns.push_back(new_insn);
       }
       auto ordered_created_regs = unordered_to_ordered_keys(created_regs);
       for (auto reg : ordered_created_regs) {
         auto created_reg = created_regs.at(reg);
-        auto new_insn =
+        auto* new_insn =
             (new IRInstruction(OPCODE_CONST))
-                ->set_literal(created &&
-                              reg == new_instance_move_result_it->insn->dest())
+                ->set_literal(static_cast<int64_t>(
+                    created &&
+                    reg == new_instance_move_result_it->insn->dest()))
                 ->set_dest(created_reg);
         insns.push_back(new_insn);
       }
@@ -1465,7 +1471,7 @@ class RootMethodReducer {
 
     mutation.flush();
 
-    auto entry_block = cfg.entry_block();
+    auto* entry_block = cfg.entry_block();
     auto entry_it = entry_block->to_cfg_instruction_iterator(
         entry_block->get_first_non_param_loading_insn());
     cfg.insert_before(entry_it, get_init_insns(/* created */ false));
@@ -1585,7 +1591,7 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
         const auto& types = p.second;
         auto copy_name_str = method->get_name()->str() + "$oea$internal$" +
                              std::to_string(types.size());
-        auto copy = DexMethod::make_method_from(
+        auto* copy = DexMethod::make_method_from(
             method, method->get_class(), DexString::make_string(copy_name_str));
         RootMethodReducer root_method_reducer{config,
                                               apply_shrinking_plugins,
@@ -1636,8 +1642,9 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
     const auto& largest_types =
         it == reduced_methods.end() ? no_types : it->second.front().types;
     for (auto&& [type, inlinable_info] : UnorderedIterable(types)) {
-      if (!largest_types.count(type)) {
-        for (auto* cls = type_class(type); cls && !cls->is_external();
+      if (largest_types.count(type) == 0u) {
+        for (auto* cls = type_class(type);
+             (cls != nullptr) && !cls->is_external();
              cls = type_class(cls->get_super_class())) {
           irreducible_types->insert(cls->get_type());
         }
@@ -1659,7 +1666,7 @@ void gather_references(
     InsertOnlyConcurrentMap<Ref, int>* ref_sizes) {
   workqueue_run<std::pair<DexMethod*, std::vector<ReducedMethod>>>(
       [&](const std::pair<DexMethod*, std::vector<ReducedMethod>>& p) {
-        auto method = p.first;
+        auto* method = p.first;
         const auto& reduced_methods_variants = p.second;
         UnorderedSet<Ref> dom_refs;
         for (size_t i = reduced_methods_variants.size(); i > 0; i--) {
@@ -1692,8 +1699,8 @@ int get_savings(
   int savings = 0;
 
   UnorderedMap<Ref, size_t> ref_counts;
-  for (auto& rmv : UnorderedIterable(ref_rmvs.at(seed_ref))) {
-    auto& reduced_methods_variants = reduced_methods.at(rmv.root_method);
+  for (const auto& rmv : UnorderedIterable(ref_rmvs.at(seed_ref))) {
+    const auto& reduced_methods_variants = reduced_methods.at(rmv.root_method);
     auto it = selected_reduced_methods.find(rmv.root_method);
     size_t end;
     if (it == selected_reduced_methods.end()) {
@@ -1701,11 +1708,12 @@ int get_savings(
       end = reduced_methods_variants.size();
     } else {
       always_assert(rmv.variant_index < it->second);
-      auto& selected_reduced_method = reduced_methods_variants.at(it->second);
+      const auto& selected_reduced_method =
+          reduced_methods_variants.at(it->second);
       savings += (int)code_size_cache[selected_reduced_method.method];
       end = it->second;
     }
-    auto& reduced_method = reduced_methods_variants.at(rmv.variant_index);
+    const auto& reduced_method = reduced_methods_variants.at(rmv.variant_index);
     savings -= (int)code_size_cache[reduced_method.method];
     for (size_t vi = rmv.variant_index; vi < end; vi++) {
       for (auto ref :
@@ -1812,8 +1820,9 @@ void select_reduced_methods(
     //   priority (savings) might have changed
     UnorderedMap<Ref, UnorderedSet<ReducedMethodVariant>> delta_ref_rmvs;
     UnorderedSet<ReducedMethodVariant> affected_rmvs;
-    for (auto& rmv : UnorderedIterable(ref_rmvs.at(seed_ref))) {
-      auto& reduced_methods_variants = reduced_methods.at(rmv.root_method);
+    for (const auto& rmv : UnorderedIterable(ref_rmvs.at(seed_ref))) {
+      const auto& reduced_methods_variants =
+          reduced_methods.at(rmv.root_method);
       size_t end;
       auto [it, emplaced] =
           selected_reduced_methods->emplace(rmv.root_method, rmv.variant_index);
@@ -1836,7 +1845,7 @@ void select_reduced_methods(
     }
 
     UnorderedSet<Ref> affected_refs;
-    for (auto& rmv : UnorderedIterable(affected_rmvs)) {
+    for (const auto& rmv : UnorderedIterable(affected_rmvs)) {
       for (size_t vi = 0; vi <= rmv.variant_index; vi++) {
         auto& refs = rmv_refs.at_unsafe({rmv.root_method, vi});
         insert_unordered_iterable(affected_refs, refs);
@@ -1846,7 +1855,7 @@ void select_reduced_methods(
     // We apply the determined delta to our refs/rmvs state.
     for (auto&& [ref, delta_rmvs] : UnorderedIterable(delta_ref_rmvs)) {
       auto it = ref_rmvs.find(ref);
-      for (auto& rmv : UnorderedIterable(delta_rmvs)) {
+      for (const auto& rmv : UnorderedIterable(delta_rmvs)) {
         auto erased = it->second.erase(rmv);
         always_assert(erased);
         auto& refs = rmv_refs.at_unsafe(rmv);
@@ -1889,7 +1898,7 @@ void select_reduced_methods(
   }
 
   for (auto&& [root_method, _] : UnorderedIterable(reduced_methods)) {
-    if (!selected_reduced_methods->count(root_method)) {
+    if (selected_reduced_methods->count(root_method) == 0u) {
       stats->too_costly_globally++;
     }
   }
@@ -1941,17 +1950,17 @@ void reduce(const Scope& scope,
   // reduced method clones
   workqueue_run<std::pair<DexMethod*, std::vector<ReducedMethod>>>(
       [&](const std::pair<DexMethod*, std::vector<ReducedMethod>>& p) {
-        auto& [method, reduced_methods_variants] = p;
+        const auto& [method, reduced_methods_variants] = p;
         auto it = selected_reduced_methods.find(method);
         if (it != selected_reduced_methods.end()) {
-          auto& reduced_method = reduced_methods_variants.at(it->second);
+          const auto& reduced_method = reduced_methods_variants.at(it->second);
           method->set_code(reduced_method.method->release_code());
           stats->calls_inlined += reduced_method.calls_inlined;
           stats->new_instances_eliminated +=
               reduced_method.new_instances_eliminated;
         }
         stats->reduced_methods_variants += reduced_methods_variants.size();
-        for (auto& reduced_method : reduced_methods_variants) {
+        for (const auto& reduced_method : reduced_methods_variants) {
           DexMethod::delete_method_DO_NOT_USE(reduced_method.method);
         }
       },
@@ -2000,7 +2009,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   auto* registry = static_cast<ObjectEscapeAnalysisRegistry*>(
       PluginRegistry::get().pass_registry(OBJECTESCAPEANALYSIS_PASS_NAME));
   std::vector<std::unique_ptr<ObjectEscapeAnalysisPlugin>> shrinking_plugins;
-  if (registry) {
+  if (registry != nullptr) {
     shrinking_plugins = registry->create_plugins();
   };
   auto apply_shrinking_plugins = [&](DexMethod* method) {

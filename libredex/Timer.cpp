@@ -50,7 +50,7 @@ AccumulatingTimer::AccumulatingTimer(std::string msg) {
 AccumulatingTimer::times_t AccumulatingTimer::get_times() {
   std::lock_guard<std::mutex> guard(s_lock);
   AccumulatingTimer::times_t res;
-  if (s_times) {
+  if (s_times != nullptr) {
     res.reserve(s_times->size());
     for (auto& [str, microseconds] : *s_times) {
       res.emplace_back(str, ((double)microseconds->load()) / 1000000);
@@ -62,7 +62,7 @@ AccumulatingTimer::times_t AccumulatingTimer::get_times() {
 void AccumulatingTimer::add_timer(
     std::string msg, std::shared_ptr<std::atomic<uint64_t>> microseconds) {
   std::lock_guard<std::mutex> guard(s_lock);
-  if (!s_times) {
+  if (s_times == nullptr) {
     s_times = new AccumulatingTimer::times_impl_t();
   }
   s_times->emplace_back(std::move(msg), std::move(microseconds));

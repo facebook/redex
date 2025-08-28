@@ -92,7 +92,7 @@ class WholeProgramState {
    * It will never return Bottom.
    */
   ConstantValue get_field_value(const DexField* field) const {
-    if (!m_known_fields.count(field)) {
+    if (m_known_fields.count(field) == 0u) {
       return ConstantValue::top();
     }
     return m_field_partition.get(field);
@@ -105,7 +105,7 @@ class WholeProgramState {
    * throws or loops indefinitely).
    */
   ConstantValue get_return_value(const DexMethod* method) const {
-    if (!m_known_methods.count(method)) {
+    if (m_known_methods.count(method) == 0u) {
       return ConstantValue::top();
     }
     return m_method_partition.get(method);
@@ -194,7 +194,7 @@ class WholeProgramStateAccessor {
 
   ConstantValue get_field_value(const DexField* field) const {
     auto val = m_wps.get_field_value(field);
-    if (m_record) {
+    if (m_record != nullptr) {
       m_record->field_dependencies.emplace(field, val);
       return val;
     }
@@ -208,7 +208,7 @@ class WholeProgramStateAccessor {
       return ConstantValue::top();
     }
     for (const DexMethod* callee : UnorderedIterable(callees)) {
-      if (!callee->get_code()) {
+      if (callee->get_code() == nullptr) {
         always_assert(is_abstract(callee) || is_native(callee));
         return ConstantValue::top();
       }
@@ -216,7 +216,7 @@ class WholeProgramStateAccessor {
     ConstantValue ret = ConstantValue::bottom();
     for (const DexMethod* callee : UnorderedIterable(callees)) {
       const auto& val = m_wps.get_method_partition().get(callee);
-      if (m_record) {
+      if (m_record != nullptr) {
         m_record->method_dependencies.emplace(callee, val);
       }
       ret.join_with(val);
@@ -229,7 +229,7 @@ class WholeProgramStateAccessor {
 
   ConstantValue get_return_value(const DexMethod* method) const {
     auto val = m_wps.get_return_value(method);
-    if (m_record) {
+    if (m_record != nullptr) {
       m_record->method_dependencies.emplace(method, val);
     }
     return val;

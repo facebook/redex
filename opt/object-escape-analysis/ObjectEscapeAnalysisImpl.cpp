@@ -26,7 +26,7 @@ bool Callees::operator==(const Callees& other) const {
   }
   UnorderedSet<DexMethod*> set(with_code.begin(), with_code.end());
   for (auto* method : other.with_code) {
-    if (!set.count(method)) {
+    if (set.count(method) == 0u) {
       return false;
     }
   }
@@ -37,8 +37,9 @@ DexMethod* resolve_invoke_method_if_unambiguous(
     const method_override_graph::Graph& method_override_graph,
     const IRInstruction* insn,
     const DexMethod* caller) {
-  auto callee = resolve_invoke_method(insn, caller);
-  if (!callee || callee->is_external() || !callee->get_code()) {
+  auto* callee = resolve_invoke_method(insn, caller);
+  if ((callee == nullptr) || callee->is_external() ||
+      (callee->get_code() == nullptr)) {
     return nullptr;
   }
   if (!callee->is_virtual() || insn->opcode() == OPCODE_INVOKE_SUPER ||
@@ -87,7 +88,7 @@ std::pair<const Callees*, bool> get_or_create_callees(
             auto overriding_methods = mog::get_overriding_methods(
                 method_override_graph, resolved_callee,
                 /* include_interfaces */ false, static_base_type);
-            for (auto* overriding_method :
+            for (const auto* overriding_method :
                  UnorderedIterable(overriding_methods)) {
               visit_callee(overriding_method);
             }
@@ -121,7 +122,7 @@ DexMethod* resolve_invoke_inlinable_callee(
   if (callees->with_code.size() == 1) {
     return callees->with_code.front();
   }
-  auto inlinable_type = inlinable_type_at_src_index_0_getter();
+  auto* inlinable_type = inlinable_type_at_src_index_0_getter();
   if (inlinable_type == nullptr) {
     return nullptr;
   }
@@ -149,8 +150,8 @@ DexMethod* resolve_invoke_inlinable_callee(
 src_index_t get_param_index(const DexMethod* callee,
                             const IRInstruction* load_param_insn) {
   src_index_t idx = 0;
-  auto& cfg = callee->get_code()->cfg();
-  for (auto& mie : InstructionIterable(cfg.get_param_instructions())) {
+  const auto& cfg = callee->get_code()->cfg();
+  for (const auto& mie : InstructionIterable(cfg.get_param_instructions())) {
     if (mie.insn == load_param_insn) {
       return idx;
     }
@@ -204,10 +205,10 @@ void analyze_scope(
       return callees;
     };
     for (auto& mie : InstructionIterable(code.cfg())) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-        auto cls = type_class(insn->get_type());
-        if (cls && !cls->is_external()) {
+        auto* cls = type_class(insn->get_type());
+        if ((cls != nullptr) && !cls->is_external()) {
           new_instances->update(insn->get_type(), [&](auto*, auto& vec, bool) {
             vec.emplace_back(method, insn);
           });
@@ -233,8 +234,9 @@ bool is_benign(const DexMethodRef* method_ref) {
   };
 
   return method_ref->is_def() &&
-         methods.count(
-             method_ref->as_def()->get_deobfuscated_name_or_empty_copy());
+         (methods.count(
+              method_ref->as_def()->get_deobfuscated_name_or_empty_copy()) !=
+          0u);
 }
 
 const MethodSummary* get_or_create_method_summary(
@@ -340,7 +342,7 @@ const IRInstruction* get_singleton_allocation_unordered_iterable(
 
 const IRInstruction* get_singleton_allocation(const Domain& domain) {
   always_assert(domain.kind() == AbstractValueKind::Value);
-  auto& elements = domain.elements();
+  const auto& elements = domain.elements();
   return get_singleton_allocation_unordered_iterable(elements);
 }
 
@@ -351,7 +353,7 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
     auto reg = insn->src(src_idx);
     const auto& domain = current_state->get(reg);
     always_assert(domain.kind() == AbstractValueKind::Value);
-    for (auto allocation_insn : domain.elements()) {
+    for (const auto* allocation_insn : domain.elements()) {
       if (allocation_insn != NO_ALLOCATION && allocation_insn != ZERO) {
         m_escapes[allocation_insn].insert(
             {const_cast<IRInstruction*>(insn), src_idx});
@@ -360,9 +362,10 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
   };
 
   if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-    auto type = insn->get_type();
-    auto cls = type_class(type);
-    if (cls && !cls->is_external() && !m_excluded_classes.count(cls)) {
+    auto* type = insn->get_type();
+    auto* cls = type_class(type);
+    if ((cls != nullptr) && !cls->is_external() &&
+        (m_excluded_classes.count(cls) == 0u)) {
       m_escapes[insn];
       current_state->set(RESULT_REGISTER, Domain(insn));
       return;
@@ -394,18 +397,18 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
     return;
   } else if (insn->opcode() == OPCODE_INSTANCE_OF ||
              opcode::is_an_iget(insn->opcode())) {
-    if (get_singleton_allocation(current_state->get(insn->src(0)))) {
+    if (get_singleton_allocation(current_state->get(insn->src(0))) != nullptr) {
       current_state->set(RESULT_REGISTER, Domain(NO_ALLOCATION));
       return;
     }
   } else if (opcode::is_a_monitor(insn->opcode()) ||
              insn->opcode() == OPCODE_IF_EQZ ||
              insn->opcode() == OPCODE_IF_NEZ) {
-    if (get_singleton_allocation(current_state->get(insn->src(0)))) {
+    if (get_singleton_allocation(current_state->get(insn->src(0))) != nullptr) {
       return;
     }
   } else if (opcode::is_an_iput(insn->opcode())) {
-    if (get_singleton_allocation(current_state->get(insn->src(1)))) {
+    if (get_singleton_allocation(current_state->get(insn->src(1))) != nullptr) {
       escape(0);
       return;
     }
@@ -418,14 +421,15 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
         m_method_override_graph, m_method_summaries, insn, m_method,
         m_callees_cache, m_method_summary_cache);
     for (src_index_t i = 0; i < insn->srcs_size(); i++) {
-      if (!ms->benign_params.count(i) ||
-          !get_singleton_allocation(current_state->get(insn->src(i)))) {
+      if ((ms->benign_params.count(i) == 0u) ||
+          (get_singleton_allocation(current_state->get(insn->src(i))) ==
+           nullptr)) {
         escape(i);
       }
     }
 
     Domain domain(NO_ALLOCATION);
-    if (ms->allocation_insn()) {
+    if (ms->allocation_insn() != nullptr) {
       m_escapes[insn];
       domain = Domain(insn);
     } else if (auto src_index = ms->returned_param_index()) {
@@ -455,12 +459,12 @@ UnorderedSet<IRInstruction*> Analyzer::get_inlinables() const {
   UnorderedSet<IRInstruction*> inlinables;
   for (auto&& [insn, uses] : UnorderedIterable(m_escapes)) {
     if (uses.empty() && insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT &&
-        !m_returns.count(insn)) {
+        (m_returns.count(insn) == 0u)) {
       auto op = insn->opcode();
       always_assert(op == OPCODE_NEW_INSTANCE || opcode::is_an_invoke(op));
       if (op == OPCODE_NEW_INSTANCE ||
-          resolve_invoke_method_if_unambiguous(m_method_override_graph, insn,
-                                               m_method)) {
+          (resolve_invoke_method_if_unambiguous(m_method_override_graph, insn,
+                                                m_method) != nullptr)) {
         inlinables.insert(const_cast<IRInstruction*>(insn));
       }
     }
@@ -502,9 +506,9 @@ MethodSummaries compute_method_summaries(
                             callees_cache, method_summary_cache);
           const auto& escapes = analyzer.get_escapes();
           const auto& returns = analyzer.get_returns();
-          auto returned_insn =
+          const auto* returned_insn =
               get_singleton_allocation_unordered_iterable(returns);
-          if (returned_insn && escapes.at(returned_insn).empty()) {
+          if ((returned_insn != nullptr) && escapes.at(returned_insn).empty()) {
             if (returned_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
               ms.returns = get_param_index(method, returned_insn);
             } else {
@@ -512,18 +516,20 @@ MethodSummaries compute_method_summaries(
               always_assert(op == OPCODE_NEW_INSTANCE ||
                             opcode::is_an_invoke(op));
               if (op == OPCODE_NEW_INSTANCE ||
-                  resolve_invoke_method_if_unambiguous(method_override_graph,
-                                                       returned_insn, method)) {
+                  (resolve_invoke_method_if_unambiguous(method_override_graph,
+                                                        returned_insn,
+                                                        method) != nullptr)) {
                 ms.returns = returned_insn;
               }
             }
           }
           auto& cfg = method->get_code()->cfg();
           src_index_t src_index = 0;
-          for (auto& mie : InstructionIterable(cfg.get_param_instructions())) {
+          for (const auto& mie :
+               InstructionIterable(cfg.get_param_instructions())) {
             if (mie.insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT &&
                 escapes.at(mie.insn).empty() &&
-                (!returns.count(mie.insn) ||
+                ((returns.count(mie.insn) == 0u) ||
                  ms.returned_param_index() == src_index)) {
               ms.benign_params.insert(src_index);
             }
@@ -564,7 +570,7 @@ MethodSummaries compute_method_summaries(
       }
     }
     impacted_methods.clear();
-    for (auto method : UnorderedIterable(changed_methods)) {
+    for (auto* method : UnorderedIterable(changed_methods)) {
       auto it = dependencies.find(method);
       if (it != dependencies.end()) {
         insert_unordered_iterable(impacted_methods, it->second);
@@ -586,7 +592,7 @@ std::pair<DexMethod*, DexType*> resolve_inlinable(
   while (insn->opcode() != OPCODE_NEW_INSTANCE) {
     always_assert(opcode::is_an_invoke(insn->opcode()));
     method = resolve_invoke_method(insn, method);
-    if (!first_callee) {
+    if (first_callee == nullptr) {
       first_callee = method;
     }
     insn = method_summaries.at(method).allocation_insn();

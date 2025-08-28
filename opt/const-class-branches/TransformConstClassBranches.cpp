@@ -72,7 +72,7 @@ struct Stats {
 
 size_t num_const_class_opcodes(const cfg::ControlFlowGraph* cfg) {
   size_t result{0};
-  for (auto& mie : InstructionIterable(*cfg)) {
+  for (const auto& mie : InstructionIterable(*cfg)) {
     if (mie.insn->opcode() == OPCODE_CONST_CLASS) {
       result++;
     }
@@ -97,7 +97,7 @@ bool should_consider_method(const PassState& pass_state, DexMethod* method) {
   if (method->rstate.no_optimizations()) {
     return false;
   }
-  auto code = method->get_code();
+  auto* code = method->get_code();
   if (code == nullptr) {
     return false;
   }
@@ -153,14 +153,14 @@ void order_blocks(const cfg::ControlFlowGraph& cfg,
 // "simple" in this case means it does not exist, or it has an easily
 // identifiable exit block.
 bool has_simple_clinit(DexClass* cls) {
-  auto clinit = cls->get_clinit();
+  auto* clinit = cls->get_clinit();
   if (clinit == nullptr) {
     return true;
   }
   auto& cfg = clinit->get_code()->cfg();
   cfg.calculate_exit_block();
-  auto exit_block = cfg.exit_block();
-  for (auto& edge : exit_block->preds()) {
+  auto* exit_block = cfg.exit_block();
+  for (const auto& edge : exit_block->preds()) {
     if (edge->type() == cfg::EDGE_GHOST) {
       return false;
     }
@@ -203,7 +203,7 @@ void gather_possible_transformations(
         find_determining_reg(*fixpoint, b, &determining_reg)) {
       // Keep going, maybe this block is a useful starting point.
       TRACE(CCB, 2, "determining_reg is %d for B%zu", determining_reg, b->id());
-      auto last_insn = b->get_last_insn()->insn;
+      auto* last_insn = b->get_last_insn()->insn;
       auto root_branch = cfg.find_insn(last_insn);
       auto finder = std::make_unique<SwitchEquivFinder>(
           &cfg, root_branch, determining_reg,
@@ -218,8 +218,8 @@ void gather_possible_transformations(
         size_t relevant_case_count{0};
         for (auto&& [key, leaf] : key_to_case) {
           if (!SwitchEquivFinder::is_default_case(key)) {
-            auto dtype = boost::get<const DexType*>(key);
-            auto case_class = type_class(dtype);
+            const auto* dtype = boost::get<const DexType*>(key);
+            auto* case_class = type_class(dtype);
             if (pass_state.consider_external_classes ||
                 (case_class != nullptr && !case_class->is_external())) {
               relevant_case_count++;
@@ -251,93 +251,93 @@ Stats apply_transform(const PassState& pass_state,
                       MethodTransform& mt,
                       size_t transform_count) {
   Stats result;
-  auto method = mt.method;
-  auto cls = type_class(method->get_class());
+  auto* method = mt.method;
+  auto* cls = type_class(method->get_class());
 
   // Injects code into the <clinit> of the method's class, to set up a new
   // static final field containing the given string, built up from pieces no
   // larger than a certain size.
-  auto void_void_proto =
+  auto* void_void_proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ensure_clinit = [&]() {
-    auto clinit = cls->get_clinit();
+    auto* clinit = cls->get_clinit();
     if (clinit != nullptr && clinit->get_code() != nullptr) {
       return clinit;
     }
     MethodCreator mc{method->get_class(), DexString::make_string("<clinit>"),
                      void_void_proto, ACC_CONSTRUCTOR | ACC_STATIC};
-    auto block = mc.get_main_block();
+    auto* block = mc.get_main_block();
     block->ret_void();
-    auto new_clinit = mc.create();
+    auto* new_clinit = mc.create();
     new_clinit->get_code()->build_cfg();
     cls->add_method(new_clinit);
     return new_clinit;
   };
   auto create_static_field_for_string = [&](const std::string& encoded_str) {
-    auto field_name =
+    const auto* field_name =
         DexString::make_string("$RDX$tree" + std::to_string(transform_count));
-    auto field_def = DexField::make_field(method->get_class(), field_name,
-                                          type::java_lang_String())
-                         ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+    auto* field_def = DexField::make_field(method->get_class(), field_name,
+                                           type::java_lang_String())
+                          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
     field_def->set_deobfuscated_name(show_deobfuscated(field_def));
     cls->add_field(field_def);
 
-    auto clinit = ensure_clinit();
+    auto* clinit = ensure_clinit();
     auto& cfg = clinit->get_code()->cfg();
     TRACE(CCB, 5, "BASELINE CLINIT: %s", SHOW(cfg));
 
     cfg.calculate_exit_block();
-    auto exit_block = cfg.exit_block();
+    auto* exit_block = cfg.exit_block();
     cfg::CFGMutation mutation(cfg);
     std::vector<IRInstruction*> instructions;
     auto sb_reg = cfg.allocate_temp();
     auto extra_reg = cfg.allocate_temp();
-    auto new_instance =
+    auto* new_instance =
         (new IRInstruction(OPCODE_NEW_INSTANCE))
             ->set_type(DexType::get_type("Ljava/lang/StringBuilder;"));
     instructions.push_back(new_instance);
-    auto instance_move_pseudo =
+    auto* instance_move_pseudo =
         (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
             ->set_dest(sb_reg);
     instructions.push_back(instance_move_pseudo);
-    auto invoke_ctor = (new IRInstruction(OPCODE_INVOKE_DIRECT))
-                           ->set_srcs_size(1)
-                           ->set_src(0, sb_reg)
-                           ->set_method(DexMethod::get_method(
-                               "Ljava/lang/StringBuilder;.<init>:()V"));
+    auto* invoke_ctor = (new IRInstruction(OPCODE_INVOKE_DIRECT))
+                            ->set_srcs_size(1)
+                            ->set_src(0, sb_reg)
+                            ->set_method(DexMethod::get_method(
+                                "Ljava/lang/StringBuilder;.<init>:()V"));
     instructions.push_back(invoke_ctor);
     for (size_t idx = 0; idx < encoded_str.size();
          idx += const_string_max_size) {
       auto chunk = encoded_str.substr(idx, const_string_max_size);
-      auto const_string = (new IRInstruction(OPCODE_CONST_STRING))
-                              ->set_string(DexString::make_string(chunk));
+      auto* const_string = (new IRInstruction(OPCODE_CONST_STRING))
+                               ->set_string(DexString::make_string(chunk));
       instructions.push_back(const_string);
-      auto move_result_pseudo =
+      auto* move_result_pseudo =
           (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
               ->set_dest(extra_reg);
       instructions.push_back(move_result_pseudo);
-      auto append = (new IRInstruction(OPCODE_INVOKE_VIRTUAL))
-                        ->set_srcs_size(2)
-                        ->set_src(0, sb_reg)
-                        ->set_src(1, extra_reg)
-                        ->set_method(DexMethod::get_method(
-                            "Ljava/lang/StringBuilder;.append:(Ljava/lang/"
-                            "String;)Ljava/lang/StringBuilder;"));
+      auto* append = (new IRInstruction(OPCODE_INVOKE_VIRTUAL))
+                         ->set_srcs_size(2)
+                         ->set_src(0, sb_reg)
+                         ->set_src(1, extra_reg)
+                         ->set_method(DexMethod::get_method(
+                             "Ljava/lang/StringBuilder;.append:(Ljava/lang/"
+                             "String;)Ljava/lang/StringBuilder;"));
       instructions.push_back(append);
     }
-    auto to_string =
+    auto* to_string =
         (new IRInstruction(OPCODE_INVOKE_VIRTUAL))
             ->set_srcs_size(1)
             ->set_src(0, sb_reg)
             ->set_method(DexMethod::get_method(
                 "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;"));
     instructions.push_back(to_string);
-    auto move_result =
+    auto* move_result =
         (new IRInstruction(OPCODE_MOVE_RESULT_OBJECT))->set_dest(sb_reg);
     instructions.push_back(move_result);
-    auto sput_object = (new IRInstruction(OPCODE_SPUT_OBJECT))
-                           ->set_field(field_def)
-                           ->set_src(0, sb_reg);
+    auto* sput_object = (new IRInstruction(OPCODE_SPUT_OBJECT))
+                            ->set_field(field_def)
+                            ->set_src(0, sb_reg);
     instructions.push_back(sput_object);
 
     auto it = cfg.find_insn(exit_block->get_last_insn()->insn);
@@ -361,7 +361,7 @@ Stats apply_transform(const PassState& pass_state,
     cfg::Block* default_case{nullptr};
     for (auto&& [key, block] : key_to_case) {
       if (!SwitchEquivFinder::is_default_case(key)) {
-        auto dtype = boost::get<const DexType*>(key);
+        const auto* dtype = boost::get<const DexType*>(key);
         ordered_types.emplace(dtype);
       } else {
         TRACE(CCB, 3, "DEFAULT -> B%zu\n%s", block->id(), SHOW(block));
@@ -378,7 +378,7 @@ Stats apply_transform(const PassState& pass_state,
       auto string_name = java_names::internal_to_external(type->str_copy());
       int16_t ordinal = counter++;
       string_tree_items.emplace(string_name, ordinal);
-      auto block = key_to_case.at(type);
+      auto* block = key_to_case.at(type);
       new_edges.emplace_back(ordinal, block);
       TRACE(CCB, 3, "%s (%s) -> B%zu\n%s", SHOW(type), string_name.c_str(),
             block->id(), SHOW(block));
@@ -395,28 +395,28 @@ Stats apply_transform(const PassState& pass_state,
     std::vector<IRInstruction*> replacements;
     auto encoded_str_reg = cfg.allocate_temp();
     if (encoded_str.size() > const_string_max_size && has_simple_clinit(cls)) {
-      auto field_def = create_static_field_for_string(encoded_str);
-      auto sget_object =
+      auto* field_def = create_static_field_for_string(encoded_str);
+      auto* sget_object =
           (new IRInstruction(OPCODE_SGET_OBJECT))->set_field(field_def);
       replacements.push_back(sget_object);
     } else {
-      auto encoded_dex_str = DexString::make_string(encoded_str);
-      auto const_string_insn =
+      const auto* encoded_dex_str = DexString::make_string(encoded_str);
+      auto* const_string_insn =
           (new IRInstruction(OPCODE_CONST_STRING))->set_string(encoded_dex_str);
       replacements.push_back(const_string_insn);
     }
-    auto move_string_insn =
+    auto* move_string_insn =
         (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
             ->set_dest(encoded_str_reg);
     replacements.push_back(move_string_insn);
 
     auto default_value_reg = cfg.allocate_temp();
-    auto default_value_const = new IRInstruction(OPCODE_CONST);
+    auto* default_value_const = new IRInstruction(OPCODE_CONST);
     default_value_const->set_literal(STRING_TREE_NO_ENTRY);
     default_value_const->set_dest(default_value_reg);
     replacements.push_back(default_value_const);
 
-    auto invoke_string_tree = new IRInstruction(OPCODE_INVOKE_STATIC);
+    auto* invoke_string_tree = new IRInstruction(OPCODE_INVOKE_STATIC);
     invoke_string_tree->set_method(pass_state.lookup_method);
     invoke_string_tree->set_srcs_size(3);
     invoke_string_tree->set_src(0, transform.determining_reg);
@@ -426,11 +426,11 @@ Stats apply_transform(const PassState& pass_state,
 
     // Just reuse a reg we don't need anymore
     auto switch_result_reg = default_value_reg;
-    auto move_lookup_result = new IRInstruction(OPCODE_MOVE_RESULT);
+    auto* move_lookup_result = new IRInstruction(OPCODE_MOVE_RESULT);
     move_lookup_result->set_dest(switch_result_reg);
     replacements.push_back(move_lookup_result);
 
-    auto new_switch = new IRInstruction(OPCODE_SWITCH);
+    auto* new_switch = new IRInstruction(OPCODE_SWITCH);
     new_switch->set_src(0, switch_result_reg);
     // Note: it seems instruction "new_switch" gets appended via create_branch;
     // no need to push to replacements
@@ -441,7 +441,7 @@ Stats apply_transform(const PassState& pass_state,
     cfg.create_branch(transform.block, new_switch, nullptr, new_edges);
 
     // Reset successor of last prologue block to implement the default case.
-    for (auto& edge : transform.block->succs()) {
+    for (const auto& edge : transform.block->succs()) {
       if (edge->type() == cfg::EDGE_GOTO) {
         cfg.set_edge_target(edge, default_case);
       }
@@ -512,7 +512,7 @@ void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
     TRACE(CCB, 1, "Pass not configured; returning.");
     return;
   }
-  auto string_tree_lookup_method =
+  auto* string_tree_lookup_method =
       DexMethod::get_method(m_string_tree_lookup_method);
   if (string_tree_lookup_method == nullptr) {
     TRACE(CCB, 1, "Lookup method not found; returning.");
@@ -531,7 +531,7 @@ void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
 
   UnorderedMap<DexClass*, std::vector<MethodTransform*>> per_class_transforms;
   for (auto& transform : method_transforms) {
-    auto cls = type_class(transform.method->get_class());
+    auto* cls = type_class(transform.method->get_class());
     per_class_transforms[cls].emplace_back(&transform);
   }
 
@@ -539,7 +539,7 @@ void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
   // Apply at most N transforms per dex, because of reserved refs.
   auto apply_transforms_dex = [&](DexClasses& dex_file) {
     std::vector<MethodTransform*> per_dex_transforms;
-    for (auto cls : dex_file) {
+    for (auto* cls : dex_file) {
       auto search = per_class_transforms.find(cls);
       if (search != per_class_transforms.end()) {
         per_dex_transforms.insert(per_dex_transforms.end(),

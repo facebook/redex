@@ -29,7 +29,7 @@ void dump_cls(DexClass* cls) {
   }
   for (auto* v : methods) {
     TRACE(KOTLIN_OBJ_INLINE, 5, "Method %s", SHOW(v));
-    if (v->get_code()) {
+    if (v->get_code() != nullptr) {
       TRACE(KOTLIN_OBJ_INLINE, 5, "%s", SHOW(v->get_code()));
     }
   }
@@ -66,9 +66,9 @@ DexClass* get_outer_class(const DexClass* cls) {
 // if strict == false, if his_reg is used just to invoke virtual
 // methods from the same class, this will not be considered a use.
 bool uses_this(const DexMethod* method, bool strict = false) {
-  auto code = method->get_code();
+  const auto* code = method->get_code();
   always_assert(code->editable_cfg_built());
-  auto& cfg = code->cfg();
+  const auto& cfg = code->cfg();
   auto iterable = InstructionIterable(cfg.get_param_instructions());
   if (iterable.empty() && is_static(method)) {
     return false;
@@ -77,7 +77,7 @@ bool uses_this(const DexMethod* method, bool strict = false) {
   live_range::MoveAwareChains chains(cfg);
   live_range::Uses first_load_param_uses;
 
-  auto first_load_param = iterable.begin()->insn;
+  auto* first_load_param = iterable.begin()->insn;
   first_load_param_uses =
       std::move(chains.get_def_use_chains()[first_load_param]);
   if (first_load_param_uses.empty()) {
@@ -133,7 +133,7 @@ bool is_valid_init(DexMethod* meth) {
   auto& init_cfg = meth->get_code()->cfg();
   auto iterable = cfg::InstructionIterable(init_cfg);
   for (auto it = iterable.begin(); it != iterable.end(); it++) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     switch (insn->opcode()) {
     case OPCODE_MOVE_OBJECT:
     case OPCODE_RETURN_VOID:
@@ -171,7 +171,7 @@ DexClass* candidate_for_companion_inlining(DexClass* cls) {
     return nullptr;
   }
   if (!is_final(cls) || !cls->get_ifields().empty() ||
-      !cls->get_interfaces()->empty() || cls->get_clinit() ||
+      !cls->get_interfaces()->empty() || (cls->get_clinit() != nullptr) ||
       !cls->get_sfields().empty() ||
       cls->get_super_class() != type::java_lang_Object()) {
     if (boost::ends_with(cls->get_name()->str(), "$Companion;")) {
@@ -182,7 +182,7 @@ DexClass* candidate_for_companion_inlining(DexClass* cls) {
   DexClass* outer_cls = get_outer_class(cls);
 
   // Currently, we don't support companion class is in an abstract class.
-  if (!outer_cls || is_abstract(outer_cls)) {
+  if ((outer_cls == nullptr) || is_abstract(outer_cls)) {
     return nullptr;
   }
 
@@ -199,15 +199,15 @@ DexClass* candidate_for_companion_inlining(DexClass* cls) {
     }
   }
 
-  for (auto meth : cls->get_vmethods()) {
+  for (auto* meth : cls->get_vmethods()) {
     if (meth->rstate.no_optimizations() || !is_final(meth) ||
-        !meth->get_code() || uses_this(meth)) {
+        (meth->get_code() == nullptr) || uses_this(meth)) {
       TRACE(KOTLIN_OBJ_INLINE, 5, "Failed due to method = %s", SHOW(meth));
       return nullptr;
     }
   }
 
-  for (auto meth : cls->get_dmethods()) {
+  for (auto* meth : cls->get_dmethods()) {
     if (method::is_clinit(meth)) {
       return nullptr;
     }
@@ -216,8 +216,8 @@ DexClass* candidate_for_companion_inlining(DexClass* cls) {
         TRACE(KOTLIN_OBJ_INLINE, 5, "invalid init = %s", SHOW(meth));
         return nullptr;
       }
-    } else if (meth->rstate.no_optimizations() || !meth->get_code() ||
-               uses_this(meth)) {
+    } else if (meth->rstate.no_optimizations() ||
+               (meth->get_code() == nullptr) || uses_this(meth)) {
       TRACE(KOTLIN_OBJ_INLINE, 5, "Failed due to method = %s", SHOW(meth));
       return nullptr;
     }
@@ -249,19 +249,19 @@ void relocate(DexClass* comp_cls,
   dump_cls(outer_cls);
 
   // Remove the <init> in the <clinit>
-  if (outer_cls->get_clinit()) {
+  if (outer_cls->get_clinit() != nullptr) {
     auto* clinit_method = outer_cls->get_clinit();
-    auto code = clinit_method->get_code();
+    auto* code = clinit_method->get_code();
     auto& clinit_cfg = code->cfg();
     cfg::CFGMutation m(clinit_cfg);
     auto iterable = cfg::InstructionIterable(clinit_cfg);
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (opcode::is_new_instance(insn->opcode())) {
         auto* host_typ = insn->get_type();
         if (host_typ == comp_cls->get_type()) {
           auto mov_result_it = clinit_cfg.move_result_of(it);
-          auto init_null = new IRInstruction(OPCODE_CONST);
+          auto* init_null = new IRInstruction(OPCODE_CONST);
           init_null->set_literal(0);
           init_null->set_dest(mov_result_it->insn->dest());
           m.replace(it, {init_null});
@@ -284,7 +284,7 @@ void relocate(DexClass* comp_cls,
     m.flush();
   }
 
-  if (field) {
+  if (field != nullptr) {
     TRACE(KOTLIN_OBJ_INLINE, 5, "Remove field %s", SHOW(field));
     outer_cls->remove_field(field);
   }
@@ -315,13 +315,13 @@ bool is_def_trackable(IRInstruction* insn,
                       const DexClass* from,
                       live_range::MoveAwareChains& move_aware_chains) {
   auto du_chains_move_aware = move_aware_chains.get_def_use_chains();
-  if (!du_chains_move_aware.count(insn)) {
+  if (du_chains_move_aware.count(insn) == 0u) {
     // No use insns.
     return true;
   }
   const auto& use_set = du_chains_move_aware.at(insn);
   for (const auto& p : UnorderedIterable(use_set)) {
-    auto use_insn = p.insn;
+    auto* use_insn = p.insn;
     auto use_index = p.src_index;
     switch (use_insn->opcode()) {
     case OPCODE_MOVE_OBJECT:
@@ -365,7 +365,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
   Stats stats;
   for (auto& p : m_do_not_inline_list) {
     auto* do_not_inline_cls = DexType::get_type(p);
-    if (do_not_inline_cls) {
+    if (do_not_inline_cls != nullptr) {
       TRACE(KOTLIN_OBJ_INLINE,
             2,
             "do_not_inline_cls  : %s",
@@ -376,11 +376,12 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
   // Collect candidates
   walk::parallel::classes(scope, [&](DexClass* cls) {
-    if (do_not_inline_set.count(cls->get_type())) {
+    if (do_not_inline_set.count(cls->get_type()) != 0u) {
       return;
     }
-    auto outer_cls = candidate_for_companion_inlining(cls);
-    if (outer_cls && !do_not_inline_set.count(outer_cls->get_type())) {
+    auto* outer_cls = candidate_for_companion_inlining(cls);
+    if ((outer_cls != nullptr) &&
+        (do_not_inline_set.count(outer_cls->get_type()) == 0u)) {
       // This is a candidate for inlining
       map.insert(std::make_pair(cls, outer_cls));
       TRACE(KOTLIN_OBJ_INLINE, 2, "Candidate cls : %s", SHOW(cls));
@@ -402,14 +403,14 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
   // Filter out any instance whose use is not tracktable
   walk::parallel::methods(scope, [&](DexMethod* method) {
-    auto code = method->get_code();
-    if (!code) {
+    auto* code = method->get_code();
+    if (code == nullptr) {
       return;
     }
 
     // we cannot relocate returning companion obejct.
     auto* rtype = type_class(method->get_proto()->get_rtype());
-    if (rtype && map.count(rtype)) {
+    if ((rtype != nullptr) && (map.count(rtype) != 0u)) {
       bad.insert(rtype);
       TRACE(KOTLIN_OBJ_INLINE,
             2,
@@ -427,11 +428,12 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
     auto& type_environments = type_inference.get_type_environments();
 
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       switch (insn->opcode()) {
       case OPCODE_SPUT_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if (!from || !map.count(from) || bad.count(from)) {
+        if ((from == nullptr) || (map.count(from) == 0u) ||
+            (bad.count(from) != 0u)) {
           break;
         }
         // Should only be set from parent's <clinit>
@@ -448,7 +450,8 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
       case OPCODE_IPUT_OBJECT:
       case OPCODE_IGET_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if (!from || !map.count(from) || bad.count(from)) {
+        if ((from == nullptr) || (map.count(from) == 0u) ||
+            (bad.count(from) != 0u)) {
           break;
         }
         bad.insert(from);
@@ -457,7 +460,8 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
       case OPCODE_SGET_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if (!from || !map.count(from) || bad.count(from)) {
+        if ((from == nullptr) || (map.count(from) == 0u) ||
+            (bad.count(from) != 0u)) {
           break;
         }
         // Check we can track the uses of the Companion object instance.
@@ -471,7 +475,8 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
       case OPCODE_INSTANCE_OF:
       case OPCODE_NEW_INSTANCE: {
         auto* from = type_class(insn->get_type());
-        if (!from || !map.count(from) || bad.count(from)) {
+        if ((from == nullptr) || (map.count(from) == 0u) ||
+            (bad.count(from) != 0u)) {
           break;
         }
         if (method::is_clinit(method) &&
@@ -484,8 +489,8 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
       case OPCODE_INVOKE_DIRECT: {
         auto* from = type_class(insn->get_method()->get_class());
-        if (!method::is_init(insn->get_method()) || !from || !map.count(from) ||
-            bad.count(from)) {
+        if (!method::is_init(insn->get_method()) || (from == nullptr) ||
+            (map.count(from) == 0u) || (bad.count(from) != 0u)) {
           break;
         }
         if ((type_class(method->get_class()) == from &&
@@ -516,7 +521,8 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
         }
         // Currently, we don't supporting tracking companion object usage in
         // aget/aput_object. Instead, simply insert it into bad list.
-        if (!from || !map.count(from) || bad.count(from)) {
+        if ((from == nullptr) || (map.count(from) == 0u) ||
+            (bad.count(from) != 0u)) {
           break;
         }
         bad.insert(from);
@@ -530,7 +536,8 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
       default:
         if (insn->has_type()) {
           auto* from = type_class(insn->get_type());
-          if (!from || !map.count(from) || bad.count(from)) {
+          if ((from == nullptr) || (map.count(from) == 0u) ||
+              (bad.count(from) != 0u)) {
             break;
           }
           bad.insert(from);
@@ -552,7 +559,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
   for (auto& p : UnorderedIterable(map)) {
     auto* comp_cls = p.first;
     auto* outer_cls = p.second;
-    if (bad.count(comp_cls)) {
+    if (bad.count(comp_cls) != 0u) {
       continue;
     }
     TRACE(KOTLIN_OBJ_INLINE,
@@ -566,7 +573,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
   // Fix virtual call arguments
   walk::parallel::methods(scope, [&](DexMethod* method) {
-    auto code = method->get_code();
+    auto* code = method->get_code();
     if (code == nullptr) {
       return;
     }
@@ -577,10 +584,10 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
     auto iterable = cfg::InstructionIterable(cfg);
 
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
           insn->opcode() == OPCODE_INVOKE_DIRECT) {
-        if (!relocated_methods.count(insn->get_method())) {
+        if (relocated_methods.count(insn->get_method()) == 0u) {
           continue;
         }
         // When the method in Companion object is relocated to outer class,

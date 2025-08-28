@@ -61,18 +61,18 @@ void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
   for (auto root = spec->roots.begin(); root != spec->roots.end();) {
     if (is_interface(type_class(*root))) {
       const auto& implementors = type_system.get_implementors(*root);
-      for (auto impl_type : implementors) {
-        auto impl_cls = type_class(impl_type);
+      for (const auto* impl_type : implementors) {
+        auto* impl_cls = type_class(impl_type);
         // Note: Below is to simply make the logic unchange after the
         // refactoring.
         // Find the first internal class at the top of the type
         // hierarchy of the impl_cls. if it extends java.lang.Object and
         // implements only the *root interface, add the `impl_cls` to the
         // merging target.
-        auto top_super_cls = impl_cls;
+        auto* top_super_cls = impl_cls;
         while (top_super_cls->get_super_class() != type::java_lang_Object()) {
-          auto super_cls = type_class(top_super_cls->get_super_class());
-          if (!super_cls || super_cls->is_external()) {
+          auto* super_cls = type_class(top_super_cls->get_super_class());
+          if ((super_cls == nullptr) || super_cls->is_external()) {
             break;
           }
           top_super_cls = super_cls;

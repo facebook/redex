@@ -29,12 +29,12 @@ constexpr const char* METRIC_CASTS_INSERTED = "check_casts_inserted";
 
 // Check assumptions about the wrapper class's hierarchy.
 void validate_wrapper_type(DexType* type) {
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   always_assert(cls != nullptr);
   always_assert_log(cls->get_interfaces()->empty(),
                     "Wrapper type %s should not implement interfaces",
                     SHOW(type));
-  auto super_cls = cls->get_super_class();
+  auto* super_cls = cls->get_super_class();
   always_assert_log(super_cls == type::java_lang_Object(),
                     "Wrapper type %s should inherit from Object; got %s",
                     SHOW(type), SHOW(super_cls));
@@ -43,7 +43,7 @@ void validate_wrapper_type(DexType* type) {
 // A wrapped primitive is assumed to be represented by the only final primitive
 // field in the wrapper class.
 DexType* get_wrapped_final_field_type(DexType* type) {
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   always_assert_log(cls != nullptr, "Spec class %s not found", SHOW(type));
   std::vector<DexField*> candidates;
   for (auto& f : cls->get_ifields()) {
@@ -124,7 +124,7 @@ void WrappedPrimitivesPass::bind_config() {
           "of method ref string to method ref string.");
       auto api = members.at(0);
       TRACE(WP, 2, "Checking for API '%s'", api.c_str());
-      auto wrapped_api = DexMethod::get_method(api);
+      auto* wrapped_api = DexMethod::get_method(api);
       if (wrapped_api == nullptr) {
         continue;
       }
@@ -138,7 +138,7 @@ void WrappedPrimitivesPass::bind_config() {
       always_assert_log(!unwrapped_api_desc.empty(), "empty!");
       TRACE(WP, 2, "Checking for unwrapped API '%s'",
             unwrapped_api_desc.c_str());
-      auto unwrapped_api = DexMethod::get_method(unwrapped_api_desc);
+      auto* unwrapped_api = DexMethod::get_method(unwrapped_api_desc);
       always_assert_log(unwrapped_api != nullptr, "Method %s does not exist",
                         unwrapped_api_desc.c_str());
       spec.allowed_invokes.emplace(wrapped_api, unwrapped_api);
@@ -165,7 +165,7 @@ void WrappedPrimitivesPass::eval_pass(DexStoresVector& stores,
 void WrappedPrimitivesPass::run_pass(DexStoresVector& /*stores*/,
                                      ConfigFiles& /* unused */,
                                      PassManager& mgr) {
-  auto wp_instance = wp::get_instance();
+  auto* wp_instance = wp::get_instance();
   wp_instance->unmark_roots();
 
   auto consts = wp_instance->consts_inserted();
@@ -186,7 +186,7 @@ using PreceedingSourceBlockMap = UnorderedMap<IRInstruction*, SourceBlock*>;
 PreceedingSourceBlockMap build_preceeding_source_block_map(
     cfg::ControlFlowGraph& cfg) {
   PreceedingSourceBlockMap result;
-  for (auto b : cfg.blocks()) {
+  for (auto* b : cfg.blocks()) {
     SourceBlock* preceeding_source_block{nullptr};
     for (const auto& mie : *b) {
       if (mie.type == MFLOW_SOURCE_BLOCK) {
@@ -204,7 +204,7 @@ void trace_field_usage(const std::string& field_name,
                        IRInstruction* insn,
                        SourceBlock* source_block) {
   if (source_block != nullptr && method_name != source_block->src->c_str()) {
-    auto src = source_block->src->c_str();
+    const auto* src = source_block->src->c_str();
     TRACE(WP, 2,
           "Note: unoptimized field %s use near "
           "%s or %s",
@@ -220,7 +220,7 @@ void trace_field_usage(const std::string& field_name,
 void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
                                              ConfigFiles& /* unused */,
                                              PassManager& mgr) {
-  auto wrapped_primitives_pass = static_cast<WrappedPrimitivesPass*>(
+  auto* wrapped_primitives_pass = static_cast<WrappedPrimitivesPass*>(
       mgr.find_pass("WrappedPrimitivesPass"));
   if (wrapped_primitives_pass == nullptr) {
     return;
@@ -270,7 +270,7 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
     field_gets[def->get_type()][def]++;
   };
   walk::parallel::methods(scope, [&](DexMethod* m) {
-    auto code = m->get_code();
+    auto* code = m->get_code();
     if (code == nullptr) {
       return;
     }
@@ -284,10 +284,10 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
       if (mie.type != MFLOW_OPCODE) {
         continue;
       }
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       auto opcode = insn->opcode();
       if (opcode == OPCODE_SGET_OBJECT || opcode == OPCODE_SPUT_OBJECT) {
-        auto def = insn->get_field()->as_def();
+        auto* def = insn->get_field()->as_def();
         if (def != nullptr &&
             wrapper_types_post_inverse.count(def->get_type()) > 0) {
           if (opcode == OPCODE_SGET_OBJECT) {
@@ -299,7 +299,7 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
                 // effort to give some information that could point the reader
                 // to the original location of the usage before optimizations.
                 auto field_name = show_deobfuscated(def);
-                for (auto& use : UnorderedIterable(search->second)) {
+                for (const auto& use : UnorderedIterable(search->second)) {
                   SourceBlock* preceeding_source_block{nullptr};
                   auto sb = sb_lookup->find(use.insn);
                   if (sb != sb_lookup->end() && sb->second != nullptr) {

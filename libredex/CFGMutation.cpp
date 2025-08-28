@@ -32,7 +32,7 @@ CFGMutation::ChangeSet* CFGMutation::primary_change_of_move_result(
   auto it = block->to_cfg_instruction_iterator(raw_it);
   auto primary_it = m_cfg.primary_instruction_of_move_result(it);
   always_assert(!primary_it.is_end());
-  auto primary_insn = primary_it->insn;
+  auto* primary_insn = primary_it->insn;
   auto primary_block_changes_it = m_changes.find(primary_it.block());
   if (primary_block_changes_it == m_changes.end()) {
     return nullptr;
@@ -42,7 +42,7 @@ CFGMutation::ChangeSet* CFGMutation::primary_change_of_move_result(
   if (primary_changes_it == primary_block_changes.end()) {
     return nullptr;
   }
-  auto primary_change = primary_changes_it->second.get();
+  auto* primary_change = primary_changes_it->second.get();
   always_assert(primary_change->get_iterator()->insn == primary_insn);
   return primary_change;
 }
@@ -176,7 +176,7 @@ void CFGMutation::flush() {
   for (; !remaining_changes.empty() &&
          next_block_id <= m_cfg.get_last_block()->id();
        next_block_id++) {
-    auto block = m_cfg.get_block(next_block_id);
+    auto* block = m_cfg.get_block(next_block_id);
     process_block_changes_slow(block, remaining_changes);
   }
 
@@ -291,7 +291,7 @@ void CFGMutation::ChangeSet::scan(bool* throws_or_returns, bool* may_throw) {
   };
 
   auto scan_insns = [&](const std::vector<IRInstruction*>& insns) {
-    for (auto insn : insns) {
+    for (auto* insn : insns) {
       scan_insn(insn);
     }
   };
@@ -299,7 +299,7 @@ void CFGMutation::ChangeSet::scan(bool* throws_or_returns, bool* may_throw) {
   auto scan_variants =
       [&](const std::vector<cfg::ControlFlowGraph::InsertVariant>&
               insert_variants) {
-        for (auto& insert_variant : insert_variants) {
+        for (const auto& insert_variant : insert_variants) {
           if (std::holds_alternative<IRInstruction*>(insert_variant)) {
             scan_insn(std::get<IRInstruction*>(insert_variant));
           }

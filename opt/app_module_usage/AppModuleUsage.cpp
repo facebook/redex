@@ -115,7 +115,7 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
 
-  if (!m_uses_app_module_annotation) {
+  if (m_uses_app_module_annotation == nullptr) {
     fprintf(
         stderr,
         "WARNING: Annotation class not found. Skipping AppModuleUsagePass.");
@@ -254,7 +254,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
       if (it == m_type_store_map.end()) {
         return nullptr;
       }
-      auto store = it->second;
+      auto* store = it->second;
       if (!store->is_root_store() && store != method_store) {
         return store;
       }
@@ -265,19 +265,19 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
     auto& cfg = code.cfg();
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;
-      auto maybe_type_ref = get_type_ref_for_insn(insn);
-      if (maybe_type_ref) {
-        auto maybe_store = get_store_if_access_is_xstore(maybe_type_ref);
-        if (maybe_store) {
+      auto* maybe_type_ref = get_type_ref_for_insn(insn);
+      if (maybe_type_ref != nullptr) {
+        auto* maybe_store = get_store_if_access_is_xstore(maybe_type_ref);
+        if (maybe_store != nullptr) {
           // Creates the value if it doesn't exist.
           stores_referenced[maybe_store] = false /* used_only_reflectively */;
         }
       }
-      auto maybe_refl_type_ref = get_reflective_type_ref_for_insn(insn);
-      if (maybe_refl_type_ref) {
-        auto maybe_store = get_store_if_access_is_xstore(maybe_refl_type_ref);
-        if (maybe_store) {
-          if (!stores_referenced.count(maybe_store)) {
+      auto* maybe_refl_type_ref = get_reflective_type_ref_for_insn(insn);
+      if (maybe_refl_type_ref != nullptr) {
+        auto* maybe_store = get_store_if_access_is_xstore(maybe_refl_type_ref);
+        if (maybe_store != nullptr) {
+          if (stores_referenced.count(maybe_store) == 0u) {
             stores_referenced.emplace(maybe_store, true);
           }
           // If the entry already exists, doesn't matter if we add it because
@@ -298,15 +298,15 @@ InsertOnlyConcurrentMap<DexField*, DexStore*>
 AppModuleUsagePass::analyze_field_xstore_references(const Scope& scope) {
   InsertOnlyConcurrentMap<DexField*, DexStore*> ret;
   walk::parallel::fields(scope, [&](DexField* field) {
-    auto field_store = m_type_store_map.at(field->get_class());
+    auto* field_store = m_type_store_map.at(field->get_class());
 
-    auto field_type = field->get_type();
+    auto* field_type = field->get_type();
     auto it = m_type_store_map.find(field_type);
     if (it == m_type_store_map.end()) {
       // Type may be external.
       return;
     }
-    auto store = it->second;
+    auto* store = it->second;
     if (!store->is_root_store() && store != field_store) {
       ret.emplace(field, store);
     }
@@ -409,7 +409,7 @@ bool AppModuleUsagePass::access_excused_due_to_preexisting(
     const std::string& entrypoint_name, DexStore* store_used) const {
   auto it = m_preexisting_violations.find(entrypoint_name);
   if (it != m_preexisting_violations.end()) {
-    return it->second.count(store_used);
+    return it->second.count(store_used) != 0u;
   }
   return false;
 }
@@ -417,7 +417,7 @@ bool AppModuleUsagePass::access_excused_due_to_preexisting(
 bool AppModuleUsagePass::access_granted_by_annotation(DexMethod* method,
                                                       DexStore* target) const {
   if (get_modules_used(method, m_uses_app_module_annotation)
-          .count(target->get_name())) {
+          .count(target->get_name()) != 0u) {
     return true;
   }
   return access_granted_by_annotation(type_class(method->get_class()), target);
@@ -426,7 +426,7 @@ bool AppModuleUsagePass::access_granted_by_annotation(DexMethod* method,
 bool AppModuleUsagePass::access_granted_by_annotation(DexField* field,
                                                       DexStore* target) const {
   if (get_modules_used(field, m_uses_app_module_annotation)
-          .count(target->get_name())) {
+          .count(target->get_name()) != 0u) {
     return true;
   }
   return access_granted_by_annotation(type_class(field->get_class()), target);
@@ -434,11 +434,11 @@ bool AppModuleUsagePass::access_granted_by_annotation(DexField* field,
 
 bool AppModuleUsagePass::access_granted_by_annotation(DexClass* cls,
                                                       DexStore* target) const {
-  if (!cls) {
+  if (cls == nullptr) {
     return false;
   }
   if (get_modules_used(cls, m_uses_app_module_annotation)
-          .count(target->get_name())) {
+          .count(target->get_name()) != 0u) {
     return true;
   }
 
@@ -449,8 +449,8 @@ bool AppModuleUsagePass::access_granted_by_annotation(DexClass* cls,
     cls_name.remove_suffix(cls_name.size() - dollar_sign_idx);
     std::string new_class_name = std::string(cls_name) + ";";
     auto* ty = DexType::get_type(new_class_name);
-    DexClass* outer_class = ty ? type_class(ty) : nullptr;
-    if (outer_class) {
+    DexClass* outer_class = ty != nullptr ? type_class(ty) : nullptr;
+    if (outer_class != nullptr) {
       return access_granted_by_annotation(outer_class, target);
     }
     dollar_sign_idx = cls_name.rfind('$');

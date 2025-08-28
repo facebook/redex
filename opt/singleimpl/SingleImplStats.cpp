@@ -85,15 +85,15 @@ void breakup_by_package(SingleImpls& single_impls) {
   std::vector<PackageBreakUp> by_package;
   uint32_t no_package_types = 0;
   for (auto const& intf_it : UnorderedIterable(single_impls)) {
-    const auto intf_name = intf_it.first->get_name()->c_str();
-    auto ptr = const_cast<char*>(intf_name);
+    const auto* const intf_name = intf_it.first->get_name()->c_str();
+    auto* ptr = const_cast<char*>(intf_name);
     if (*ptr != 'L') {
       fprintf(stderr, "bad type name %s\n", intf_name);
       continue;
     }
-    auto start = ++ptr;
+    auto* start = ++ptr;
     int package_num = 0;
-    while (*++ptr) {
+    while (*++ptr != 0) {
       if (*ptr == '/') {
         package_num++;
         std::string package = std::string(start, ptr - start);
@@ -153,7 +153,7 @@ void class_type_stats(SingleImpls& single_impls) {
   std::ostringstream top_level_no_parent;
 
   for (auto const& intf_it : UnorderedIterable(single_impls)) {
-    auto name = intf_it.second.cls->get_name()->c_str();
+    const auto* name = intf_it.second.cls->get_name()->c_str();
     auto anon = is_anonymous(name);
     auto nested_cls = false;
     if (!anon) {

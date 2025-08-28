@@ -269,7 +269,7 @@ bool is_barrier_relevant(const Barrier& barrier,
                          const CseUnorderedLocationSet& read_locations) {
   auto location = get_written_location(barrier);
   return location == CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER) ||
-         read_locations.count(location);
+         (read_locations.count(location) != 0u);
 }
 
 const CseUnorderedLocationSet no_locations = CseUnorderedLocationSet();
@@ -289,7 +289,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     // Collect all read locations
     UnorderedMap<CseLocation, size_t, CseLocationHasher> read_location_counts;
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       auto location = get_read_location(insn);
       if (location !=
           CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
@@ -335,8 +335,8 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
       auto locations = shared_state->get_relevant_written_locations(
           mie.insn, nullptr /* exact_virtual_scope */, m_read_locations);
-      if (!locations.count(
-              CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER))) {
+      if (locations.count(
+              CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) == 0u) {
         for (const auto& location : UnorderedIterable(locations)) {
           written_location_counts[location]++;
         }
@@ -348,7 +348,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     for (const auto& p : UnorderedIterable(written_location_counts)) {
       always_assert(p.first !=
                     CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER));
-      if (read_location_counts.count(p.first)) {
+      if (read_location_counts.count(p.first) != 0u) {
         read_and_written_locations.push_back(p.first);
       } else {
         always_assert(!m_tracked_locations.count(p.first));
@@ -358,7 +358,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
 
     // Also keep track of locations that get read but not written
     for (const auto& p : UnorderedIterable(read_location_counts)) {
-      if (!written_location_counts.count(p.first)) {
+      if (written_location_counts.count(p.first) == 0u) {
         always_assert(!m_tracked_locations.count(p.first));
         m_tracked_locations.emplace(
             p.first, ValueIdFlags::IS_ONLY_READ_NOT_WRITTEN_LOCATION);
@@ -505,7 +505,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
           auto c = domain.get_constant();
           always_assert(c);
           auto value_id = *c;
-          if (value_id & mask) {
+          if ((value_id & mask) != 0u) {
             return ValueIdDomain::top();
           }
           return domain;
@@ -624,7 +624,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
   }
 
   bool is_pre_state_src(value_id_t value_id) const {
-    return !!m_pre_state_value_ids.count(value_id);
+    return !(m_pre_state_value_ids.count(value_id) == 0u);
   }
 
   size_t get_value_ids_size() { return m_value_ids.size(); }
@@ -692,9 +692,9 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
       }
     }
 
-    auto value_method = opcode::is_an_invoke(value.opcode)
-                            ? value.method
-                            : value.positional_insn->get_method();
+    const auto* value_method = opcode::is_an_invoke(value.opcode)
+                                   ? value.method
+                                   : value.positional_insn->get_method();
     bool has_unwrap_method = is_unboxed ? (value_method == unwrap_method ||
                                            value_method == abs_method)
                                         : value_method == unwrap_method;
@@ -774,7 +774,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
           if (value.opcode == IOPCODE_POSITIONAL_UNBOXING) {
             // Since value is in boxing-unboxing pattern, we record it in
             // m_unboxing_insns.
-            auto insn = const_cast<IRInstruction*>(value.positional_insn);
+            auto* insn = const_cast<IRInstruction*>(value.positional_insn);
             if (m_unboxing_insns_set.insert(insn).second) {
               m_unboxing_insns.emplace_back(insn);
             }
@@ -1006,7 +1006,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     if (it == m_positional_insns.end()) {
       return nullptr;
     }
-    auto insn = it->second;
+    const auto* insn = it->second;
     switch (insn->opcode()) {
     case OPCODE_NEW_ARRAY:
     case OPCODE_NEW_INSTANCE:
@@ -1153,7 +1153,7 @@ SharedState::SharedState(
   };
 
   for (auto const safe_method_name : safe_method_names) {
-    auto method_ref = DexMethod::get_method(safe_method_name);
+    auto* method_ref = DexMethod::get_method(safe_method_name);
     if (method_ref == nullptr) {
       TRACE(CSE, 1, "[CSE]: Could not find safe method %s",
             str_copy(safe_method_name).c_str());
@@ -1202,7 +1202,7 @@ void SharedState::init_method_barriers(const Scope& scope) {
         if (action == MethodOverrideAction::EXCLUDE) {
           return lads;
         }
-        auto code = method->get_code();
+        auto* code = method->get_code();
         for (const auto& mie : cfg::InstructionIterable(code->cfg())) {
           auto* insn = mie.insn;
           if (may_be_barrier(insn, nullptr /* exact_virtual_scope */)) {
@@ -1244,8 +1244,8 @@ void SharedState::init_method_barriers(const Scope& scope) {
   m_stats.method_barriers = m_method_written_locations.size();
 
   for (const auto& p : UnorderedIterable(m_method_written_locations)) {
-    auto method = p.first;
-    auto& written_locations = p.second;
+    const auto* method = p.first;
+    const auto& written_locations = p.second;
     TRACE(CSE, 4, "[CSE] inferred barrier for %s: %s", SHOW(method),
           SHOW(&written_locations));
   }
@@ -1284,9 +1284,9 @@ void SharedState::init_scope(
     m_pure_methods.insert(const_cast<DexMethod*>(p.first));
   }
 
-  for (auto method_ref : UnorderedIterable(m_safe_methods)) {
-    auto method = method_ref->as_def();
-    if (method) {
+  for (auto* method_ref : UnorderedIterable(m_safe_methods)) {
+    auto* method = method_ref->as_def();
+    if (method != nullptr) {
       m_safe_method_defs.insert(method);
     }
   }
@@ -1342,27 +1342,27 @@ bool SharedState::may_be_barrier(const IRInstruction* insn,
 bool SharedState::is_invoke_safe(const IRInstruction* insn,
                                  DexType* exact_virtual_scope) {
   always_assert(opcode::is_an_invoke(insn->opcode()));
-  auto method_ref = insn->get_method();
+  auto* method_ref = insn->get_method();
   auto opcode = insn->opcode();
 
   if ((opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT) &&
-      m_safe_methods.count(method_ref)) {
+      (m_safe_methods.count(method_ref) != 0u)) {
     return true;
   }
 
-  auto method = resolve_method(method_ref, opcode_to_search(insn));
-  if (!method) {
+  auto* method = resolve_method(method_ref, opcode_to_search(insn));
+  if (method == nullptr) {
     return false;
   }
 
   if ((opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT) &&
-      m_safe_methods.count(method)) {
+      (m_safe_methods.count(method) != 0u)) {
     return true;
   }
 
-  if (opcode == OPCODE_INVOKE_VIRTUAL && m_safe_methods.count(method)) {
-    auto type = method->get_class();
-    auto cls = type_class(type);
+  if (opcode == OPCODE_INVOKE_VIRTUAL && (m_safe_methods.count(method) != 0u)) {
+    auto* type = method->get_class();
+    auto* cls = type_class(type);
     always_assert(cls);
     if (is_final(cls) || is_final(method)) {
       return true;
@@ -1372,7 +1372,8 @@ bool SharedState::is_invoke_safe(const IRInstruction* insn,
     }
   }
 
-  if (opcode == OPCODE_INVOKE_INTERFACE && m_safe_methods.count(method)) {
+  if (opcode == OPCODE_INVOKE_INTERFACE &&
+      (m_safe_methods.count(method) != 0u)) {
     return true;
   }
 
@@ -1389,7 +1390,7 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
     return general_memory_barrier_locations;
   }
 
-  auto method_ref = insn->get_method();
+  auto* method_ref = insn->get_method();
   DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
   CseUnorderedLocationSet written_locations;
   if (!process_base_and_overriding_methods(
@@ -1423,8 +1424,8 @@ void SharedState::log_barrier(const Barrier& barrier) {
 const CseUnorderedLocationSet&
 SharedState::get_read_locations_of_conditionally_pure_method(
     const DexMethodRef* method_ref, IROpcode opcode) const {
-  auto method = resolve_method(const_cast<DexMethodRef*>(method_ref),
-                               opcode_to_search(opcode));
+  auto* method = resolve_method(const_cast<DexMethodRef*>(method_ref),
+                                opcode_to_search(opcode));
   if (method == nullptr) {
     return no_locations;
   }
@@ -1438,7 +1439,7 @@ SharedState::get_read_locations_of_conditionally_pure_method(
 
 bool SharedState::has_potential_unboxing_method(
     const IRInstruction* insn) const {
-  auto method_ref = insn->get_method();
+  auto* method_ref = insn->get_method();
   for (const auto& abs_pair : UnorderedIterable(get_abstract_map())) {
     const auto* abs_method = abs_pair.second;
     if (method_ref == abs_method) {
@@ -1449,7 +1450,7 @@ bool SharedState::has_potential_unboxing_method(
 }
 
 bool SharedState::has_pure_method(const IRInstruction* insn) const {
-  auto method_ref = insn->get_method();
+  auto* method_ref = insn->get_method();
   if (m_pure_methods.find(method_ref) != m_pure_methods.end()) {
     TRACE(CSE, 4, "[CSE] unresolved %spure for %s",
           (method_ref->is_def() &&
@@ -1460,7 +1461,7 @@ bool SharedState::has_pure_method(const IRInstruction* insn) const {
     return true;
   }
 
-  auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
   if (method != nullptr &&
       m_pure_methods.find(method) != m_pure_methods.end()) {
     TRACE(CSE, 4, "[CSE] resolved %spure for %s",
@@ -1473,9 +1474,9 @@ bool SharedState::has_pure_method(const IRInstruction* insn) const {
 }
 
 bool SharedState::is_finalish(const DexField* field) const {
-  return is_final(field) || !!m_finalizable_fields.count(field) ||
-         !!m_finalish_fields.count(field) ||
-         !!m_finalish_field_names.count(field->get_name());
+  return is_final(field) || !(m_finalizable_fields.count(field) == 0u) ||
+         !(m_finalish_fields.count(field) == 0u) ||
+         !(m_finalish_field_names.count(field->get_name()) == 0u);
 }
 
 void SharedState::cleanup() {
@@ -1495,7 +1496,7 @@ void SharedState::cleanup() {
 
   TRACE(CSE, 2, "most common barriers:");
   for (const auto& p : ordered_barriers) {
-    auto& b = p.first;
+    const auto& b = p.first;
     auto c = p.second;
     if (opcode::is_an_invoke(b.opcode)) {
       TRACE(CSE, 2, "%s %s x %zu", SHOW(b.opcode), SHOW(b.method), c);
@@ -1533,7 +1534,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
   auto get_earlier_insns_index =
       [&](const PatriciaTreeSet<const IRInstruction*>& insns) {
         std::vector<size_t> ordered_ids;
-        for (auto insn : insns) {
+        for (const auto* insn : insns) {
           ordered_ids.push_back(get_earlier_insn_id(insn));
         }
         std::sort(ordered_ids.begin(), ordered_ids.end());
@@ -1581,7 +1582,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
         continue;
       }
       bool skip{false};
-      for (auto earlier_insn : earlier_insns) {
+      for (const auto* earlier_insn : earlier_insns) {
         auto earlier_opcode = earlier_insn->opcode();
         if (opcode::is_a_load_param(earlier_opcode)) {
           skip = true;
@@ -1656,7 +1657,7 @@ static std::pair<IROpcode, std::optional<int64_t>> get_move_or_const_literal(
     const sparta::PatriciaTreeSet<const IRInstruction*>& insns) {
   std::optional<IROpcode> opcode;
   std::optional<int64_t> literal;
-  for (auto insn : insns) {
+  for (const auto* insn : insns) {
     if (opcode::is_a_literal_const(insn->opcode())) {
       if (literal) {
         always_assert(*literal == insn->get_literal());
@@ -1704,7 +1705,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   UnorderedSet<const IRInstruction*> combined_earlier_insns;
   for (const auto& f : m_forward) {
     iterator_insns.insert(f.insn);
-    if (temps.count(f.earlier_insns_index)) {
+    if (temps.count(f.earlier_insns_index) != 0u) {
       continue;
     }
     auto& earlier_insns = m_earlier_insns.at(f.earlier_insns_index);
@@ -1718,7 +1719,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
                                                 : m_cfg.allocate_temp();
     temps.emplace(f.earlier_insns_index, std::make_pair(opcode, temp_reg));
   }
-  for (auto earlier_insn : UnorderedIterable(combined_earlier_insns)) {
+  for (const auto* earlier_insn : UnorderedIterable(combined_earlier_insns)) {
     iterator_insns.insert(earlier_insn);
     if (earlier_insn->has_dest()) {
       m_stats.results_captured++;
@@ -1732,7 +1733,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     }
   }
 
-  for (auto unboxing_insn : m_unboxing) {
+  for (auto* unboxing_insn : m_unboxing) {
     iterator_insns.insert(unboxing_insn);
   }
 
@@ -1742,7 +1743,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   auto iterable = cfg::InstructionIterable(m_cfg);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     auto* insn = it->insn;
-    if (iterator_insns.count(insn)) {
+    if (iterator_insns.count(insn) != 0u) {
       iterators.emplace(insn, it);
     }
   }
@@ -1782,7 +1783,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
       auto iterators_invalidated = m_cfg.insert_after(it, const_insn);
       always_assert(!iterators_invalidated);
 
-      for (auto earlier_insn : earlier_insns) {
+      for (const auto* earlier_insn : earlier_insns) {
         TRACE(CSE, 4, "[CSE] forwarding %s to %s as const %" PRId64,
               SHOW(earlier_insn), SHOW(insn), literal);
       }
@@ -1798,7 +1799,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
         to_check.emplace_back(f, move_insn);
       }
 
-      for (auto earlier_insn : earlier_insns) {
+      for (const auto* earlier_insn : earlier_insns) {
         TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
               SHOW(insn), temp_reg);
       }
@@ -1838,7 +1839,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
                 return get_earlier_insn_id(a) < get_earlier_insn_id(b);
               });
 
-    for (auto earlier_insn : earlier_insns_ordered) {
+    for (const auto* earlier_insn : earlier_insns_ordered) {
       auto& it = iterators.at(const_cast<IRInstruction*>(earlier_insn));
       IRInstruction* move_insn = new IRInstruction(move_opcode);
       auto src_reg = earlier_insn->has_dest() ? earlier_insn->dest()
@@ -1875,18 +1876,18 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     // For the abs methods which are part of boxing-unboxing pattern, we refine
     // it to its impl, which will be viewed as "pure" method and can be optmized
     // out later.
-    for (auto unboxing_insn : m_unboxing) {
+    for (auto* unboxing_insn : m_unboxing) {
       auto& it = iterators.at(unboxing_insn);
-      auto method_ref = unboxing_insn->get_method();
+      auto* method_ref = unboxing_insn->get_method();
       auto abs_it = unordered_find_if(
           m_abs_map, [method_ref](auto& p) { return p.second == method_ref; });
       always_assert(abs_it != m_abs_map.end());
-      auto impl = abs_it->first;
+      const auto* impl = abs_it->first;
       auto src_reg = unboxing_insn->src(0);
-      auto check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
-                                 ->set_src(0, src_reg)
-                                 ->set_type(impl->get_class());
-      auto pseudo_move_result_insn =
+      auto* check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
+                                  ->set_src(0, src_reg)
+                                  ->set_type(impl->get_class());
+      auto* pseudo_move_result_insn =
           (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
               ->set_dest(src_reg);
       // Add instructions
@@ -1938,7 +1939,7 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
   // needed. (All this is to appease the Android verifier in the presence of
   // monitor instructions.)
   UnorderedMap<cfg::Block*, std::vector<cfg::Edge*>> outgoing_throws;
-  for (auto b : m_cfg.blocks()) {
+  for (auto* b : m_cfg.blocks()) {
     outgoing_throws.emplace(b, b->get_outgoing_throws_in_order());
   }
 
@@ -1949,11 +1950,11 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
   auto& type_environments = type_inference.get_type_environments();
 
   for (const auto& p : to_check) {
-    auto& f = p.first;
+    const auto& f = p.first;
     auto& earlier_insns = m_earlier_insns.at(f.earlier_insns_index);
-    for (auto earlier_insn : earlier_insns) {
+    for (const auto* earlier_insn : earlier_insns) {
       IRInstruction* insn = f.insn;
-      auto move_insn = p.second;
+      auto* move_insn = p.second;
 
       auto& type_environment = type_environments.at(insn);
       auto temp = move_insn->src(0);
@@ -1979,11 +1980,11 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
       }
 
       auto it = m_cfg.find_insn(insn);
-      auto old_block = it.block();
-      auto new_block = m_cfg.split_block(it);
+      auto* old_block = it.block();
+      auto* new_block = m_cfg.split_block(it);
       outgoing_throws.emplace(new_block, outgoing_throws.at(old_block));
 
-      auto throw_block = m_cfg.create_block();
+      auto* throw_block = m_cfg.create_block();
       auto null_reg = m_cfg.allocate_temp();
       IRInstruction* const_insn = new IRInstruction(OPCODE_CONST);
       const_insn->set_literal(0);
@@ -1993,8 +1994,8 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
       throw_insn->set_src(0, null_reg);
       throw_block->push_back(throw_insn);
 
-      for (auto e : outgoing_throws.at(old_block)) {
-        auto throw_info = e->throw_info();
+      for (auto* e : outgoing_throws.at(old_block)) {
+        auto* throw_info = e->throw_info();
         m_cfg.add_edge(throw_block, e->target(), throw_info->catch_type,
                        throw_info->index);
       }

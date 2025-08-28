@@ -33,9 +33,9 @@ const std::string CM_MAP_FILE_NAME = "redex-class-merging-map.txt";
 
 TypeTags gen_type_tags(const std::vector<const MergerType*>& mergers) {
   TypeTags res;
-  for (auto& merger : mergers) {
+  for (const auto& merger : mergers) {
     uint32_t val = 0;
-    for (const auto type : merger->mergeables) {
+    for (const auto* const type : merger->mergeables) {
       res.set_type_tag(type, val++);
     }
   }
@@ -44,8 +44,8 @@ TypeTags gen_type_tags(const std::vector<const MergerType*>& mergers) {
 
 TypeTags collect_type_tags(const std::vector<const MergerType*>& mergers) {
   TypeTags type_tags;
-  for (auto merger : mergers) {
-    for (const auto type : merger->mergeables) {
+  for (const auto* merger : mergers) {
+    for (const auto* const type : merger->mergeables) {
       auto type_tag = type_tag_utils::parse_model_type_tag(type_class(type));
       always_assert_log(
           type_tag != boost::none, "Type tag is missing from %s\n", SHOW(type));
@@ -59,7 +59,7 @@ DexField* scan_type_tag_field(const char* type_tag_field_name,
                               const DexType* type) {
   DexField* field = nullptr;
   while (field == nullptr && type != type::java_lang_Object()) {
-    auto cls = type_class(type);
+    auto* cls = type_class(type);
     field = cls->find_ifield(type_tag_field_name, type::_int());
     type = cls->get_super_class();
   }
@@ -73,7 +73,7 @@ MergerToField get_type_tag_fields(const std::vector<const MergerType*>& mergers,
                                   bool input_has_type_tag,
                                   bool generate_type_tags) {
   MergerToField merger_to_type_tag_field;
-  for (auto merger : mergers) {
+  for (const auto* merger : mergers) {
     DexField* field = nullptr;
     if (input_has_type_tag) {
       field = scan_type_tag_field(EXTERNAL_TYPE_TAG_FIELD_NAME, merger->type);
@@ -119,18 +119,18 @@ void update_code_type_refs(
     auto& cfg = code.cfg();
     auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
 
       /////////////////////////////////////////////////////
       // Resolve method refs referencing a mergeable to defs
       /////////////////////////////////////////////////////
       if (insn->has_method()) {
-        auto meth_ref = insn->get_method();
+        auto* meth_ref = insn->get_method();
         if (meth_ref == nullptr || meth_ref->is_def() ||
             meth_ref->is_external() || meth_ref->is_concrete()) {
           continue;
         }
-        auto proto = meth_ref->get_proto();
+        auto* proto = meth_ref->get_proto();
         if (!type_reference::proto_has_reference_to(proto, mergeables)) {
           continue;
         }
@@ -147,7 +147,7 @@ void update_code_type_refs(
                           "Found mergeable referencing MethodRef %s\n",
                           SHOW(meth_ref));
         always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL);
-        auto new_proto =
+        auto* new_proto =
             type_reference::get_new_proto(proto, mergeable_to_merger);
         DexMethodSpec spec;
         spec.proto = new_proto;
@@ -160,15 +160,15 @@ void update_code_type_refs(
       if (!is_simple_type_ref(insn)) {
         continue;
       }
-      const auto ref_type = insn->get_type();
-      auto type = type::get_element_type_if_array(ref_type);
+      auto* const ref_type = insn->get_type();
+      const auto* type = type::get_element_type_if_array(ref_type);
       if (mergeable_to_merger.count(type) == 0) {
         continue;
       }
       always_assert(type_class(type));
-      auto merger_type = mergeable_to_merger.at(type);
+      auto* merger_type = mergeable_to_merger.at(type);
       if (type::is_array(ref_type)) {
-        auto array_merger_type =
+        auto* array_merger_type =
             type::make_array_type(merger_type, type::get_array_level(ref_type));
         insn->set_type(array_merger_type);
         TRACE(CLMG,
@@ -195,7 +195,7 @@ void update_refs_to_mergeable_fields(
     MergerFields& merger_fields,
     bool disable_violation_fixes) {
   UnorderedMap<DexField*, DexField*> fields_lookup;
-  for (auto& merger : mergers) {
+  for (const auto& merger : mergers) {
     cook_merger_fields_lookup(
         merger_fields.at(merger->type), merger->field_map, fields_lookup);
   }
@@ -205,14 +205,14 @@ void update_refs_to_mergeable_fields(
     auto ii = cfg::InstructionIterable(cfg);
     UnorderedMap<IRInstruction*, SourceBlock*> sb_before_igets;
 
-    for (auto block : cfg.blocks()) {
+    for (auto* block : cfg.blocks()) {
       SourceBlock* prev_sb = nullptr;
       for (auto& mie : *block) {
         if (mie.type == MFLOW_SOURCE_BLOCK) {
           prev_sb = mie.src_block.get();
         }
         if (mie.type == MFLOW_OPCODE) {
-          auto insn = mie.insn;
+          auto* insn = mie.insn;
           if (opcode::is_an_iget(insn->opcode())) {
             sb_before_igets[insn] = prev_sb;
           }
@@ -221,21 +221,21 @@ void update_refs_to_mergeable_fields(
     }
 
     for (auto it = ii.begin(); it != ii.end(); ++it) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (!insn->has_field()) {
         continue;
       }
-      const auto field = resolve_field(insn->get_field(),
-                                       opcode::is_an_ifield_op(insn->opcode())
-                                           ? FieldSearch::Instance
-                                           : FieldSearch::Static);
+      auto* const field = resolve_field(insn->get_field(),
+                                        opcode::is_an_ifield_op(insn->opcode())
+                                            ? FieldSearch::Instance
+                                            : FieldSearch::Static);
       if (field == nullptr) {
         continue;
       }
       if (fields_lookup.find(field) == fields_lookup.end()) {
         continue;
       }
-      const auto new_field = fields_lookup.at(field);
+      auto* const new_field = fields_lookup.at(field);
       insn->set_field(new_field);
       TRACE(CLMG,
             9,
@@ -247,7 +247,7 @@ void update_refs_to_mergeable_fields(
         continue;
       }
       if (opcode::is_an_iget(insn->opcode())) {
-        auto field_type = field->get_type();
+        auto* field_type = field->get_type();
         field_type = mergeable_to_merger.count(field_type) > 0
                          ? mergeable_to_merger.at(field_type)
                          : field_type;
@@ -264,9 +264,9 @@ void update_refs_to_mergeable_fields(
 
 DexMethod* create_instanceof_method(const DexType* merger_type,
                                     DexField* type_tag_field) {
-  auto arg_list =
+  auto* arg_list =
       DexTypeList::make_type_list({type::java_lang_Object(), type::_int()});
-  auto proto = DexProto::make_proto(type::_boolean(), arg_list);
+  auto* proto = DexProto::make_proto(type::_boolean(), arg_list);
   auto access = ACC_PUBLIC | ACC_STATIC;
   auto mc = MethodCreator(const_cast<DexType*>(merger_type),
                           DexString::make_string(INSTANCE_OF_STUB_NAME),
@@ -276,12 +276,12 @@ DexMethod* create_instanceof_method(const DexType* merger_type,
   auto type_tag_loc = mc.get_local(1);
   // first type check result loc.
   auto check_res_loc = mc.make_local(type::_boolean());
-  auto mb = mc.get_main_block();
+  auto* mb = mc.get_main_block();
   mb->instance_of(obj_loc, check_res_loc, const_cast<DexType*>(merger_type));
   // ret slot.
   auto ret_loc = mc.make_local(type::_boolean());
   // first check and branch off. Zero means fail.
-  auto instance_of_block = mb->if_testz(OPCODE_IF_EQZ, check_res_loc);
+  auto* instance_of_block = mb->if_testz(OPCODE_IF_EQZ, check_res_loc);
 
   // Fall through. Check succeed.
   auto itype_tag_loc = mc.make_local(type::_int());
@@ -289,7 +289,7 @@ DexMethod* create_instanceof_method(const DexType* merger_type,
   instance_of_block->check_cast(obj_loc, const_cast<DexType*>(merger_type));
   instance_of_block->iget(type_tag_field, obj_loc, itype_tag_loc);
   // Second type check
-  auto tag_match_block =
+  auto* tag_match_block =
       instance_of_block->if_test(OPCODE_IF_NE, itype_tag_loc, type_tag_loc);
   // Second check succeed
   tag_match_block->load_const(ret_loc, 1);
@@ -312,11 +312,11 @@ void update_instance_of(
     cfg::CFGMutation mutation(cfg);
     auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (!insn->has_type() || insn->opcode() != OPCODE_INSTANCE_OF) {
         continue;
       }
-      const auto type = insn->get_type();
+      auto* const type = insn->get_type();
       if (mergeable_to_merger.count(type) == 0) {
         continue;
       }
@@ -327,18 +327,18 @@ void update_instance_of(
       // Load type_tag.
       auto type_tag = type_tags.get_type_tag(type);
       auto type_tag_reg = cfg.allocate_temp();
-      auto load_type_tag =
+      auto* load_type_tag =
           method_reference::make_load_const(type_tag_reg, type_tag);
       // Replace INSTANCE_OF with INVOKE_STATIC to instance_of_meth.
-      auto merger_type = mergeable_to_merger.at(type);
-      auto instance_of_meth = merger_to_instance_of_meth.at(merger_type);
+      auto* merger_type = mergeable_to_merger.at(type);
+      auto* instance_of_meth = merger_to_instance_of_meth.at(merger_type);
       std::vector<reg_t> args;
       args.push_back(insn->src(0));
       args.push_back(type_tag_reg);
-      auto invoke = method_reference::make_invoke(
+      auto* invoke = method_reference::make_invoke(
           instance_of_meth, OPCODE_INVOKE_STATIC, args);
       // MOVE_RESULT to dst of INSTANCE_OF.
-      auto move_res = new IRInstruction(OPCODE_MOVE_RESULT);
+      auto* move_res = new IRInstruction(OPCODE_MOVE_RESULT);
       move_res->set_dest(std::next(it)->insn->dest());
       mutation.insert_after(
           it, std::vector<IRInstruction*>{load_type_tag, invoke, move_res});
@@ -359,17 +359,17 @@ void update_instance_of_no_type_tag(
     auto& cfg = code.cfg();
     auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (!insn->has_type() || insn->opcode() != OPCODE_INSTANCE_OF) {
         continue;
       }
-      const auto type = insn->get_type();
+      auto* const type = insn->get_type();
       if (mergeable_to_merger.count(type) == 0) {
         continue;
       }
 
       always_assert(type_class(type));
-      auto merger_type = mergeable_to_merger.at(type);
+      auto* merger_type = mergeable_to_merger.at(type);
       insn->set_type(merger_type);
       TRACE(CLMG, 9, " patched INSTANCE_OF no type tag in \n%s", SHOW(cfg));
     }
@@ -401,10 +401,10 @@ void update_refs_to_mergeable_types(
     return;
   }
   UnorderedMap<const DexType*, DexMethod*> merger_to_instance_of_meth;
-  for (auto merger : mergers) {
-    auto type = merger->type;
-    auto type_tag_field = type_tag_fields.at(merger);
-    auto instance_of_meth = create_instanceof_method(type, type_tag_field);
+  for (const auto* merger : mergers) {
+    const auto* type = merger->type;
+    auto* type_tag_field = type_tag_fields.at(merger);
+    auto* instance_of_meth = create_instanceof_method(type, type_tag_field);
     instance_of_meth->get_code()->build_cfg();
     merger_to_instance_of_meth[type] = instance_of_meth;
     type_class(type)->add_method(instance_of_meth);
@@ -426,7 +426,7 @@ std::string merger_info(const MergerType& merger) {
   for (const auto& fmap : UnorderedIterable(merger.field_map)) {
     ss << "  type " << SHOW(fmap.first) << "\n";
     size_t num_empty_fields = 0;
-    for (const auto field : fmap.second) {
+    for (auto* const field : fmap.second) {
       if (field != nullptr) {
         ss << "    field " << field->c_str() << " " << SHOW(field->get_type())
            << "\n";
@@ -446,7 +446,7 @@ void set_interfaces(DexClass* cls, const TypeSet& intfs) {
     for (const auto& intf : intfs) {
       intf_list.emplace_back(const_cast<DexType*>(intf));
     }
-    auto new_intfs = DexTypeList::make_type_list(std::move(intf_list));
+    auto* new_intfs = DexTypeList::make_type_list(std::move(intf_list));
     cls->set_interfaces(new_intfs);
   }
 };
@@ -497,13 +497,13 @@ void write_out_type_mapping(const ConfigFiles& conf,
   }
 
   std::ostringstream out;
-  for (auto merger : mergers) {
-    for (auto mergeable : merger->mergeables) {
+  for (const auto* merger : mergers) {
+    for (const auto* mergeable : merger->mergeables) {
       out << SHOW(mergeable) << " -> " << SHOW(merger->type) << " "
           << type_tags.get_type_tag(mergeable) << std::endl;
 
-      if (method_dedup_map.count(mergeable)) {
-        for (auto& symbol_map : method_dedup_map.at(mergeable)) {
+      if (method_dedup_map.count(mergeable) != 0u) {
+        for (const auto& symbol_map : method_dedup_map.at(mergeable)) {
           out << "  " << symbol_map.first << " -> " << SHOW(symbol_map.second)
               << std::endl;
         }
@@ -537,7 +537,7 @@ void ModelMerger::update_merger_fields(const MergerType& merger) {
 void ModelMerger::update_stats(const std::string& model_name,
                                const std::vector<const MergerType*>& mergers,
                                ModelMethodMerger& mm) {
-  for (auto merger : mergers) {
+  for (const auto* merger : mergers) {
     m_stats.m_num_classes_merged += merger->mergeables.size();
   }
   // Print method stats
@@ -567,7 +567,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
     // perform on the given type.
 
     DexType* type = const_cast<DexType*>(merger.type);
-    auto cls = type_class(type);
+    auto* cls = type_class(type);
     const auto& intfs = model.get_interfaces(type);
     TRACE(CLMG, 3, "%s", merger_info(merger).c_str());
 
@@ -629,9 +629,9 @@ std::vector<DexClass*> ModelMerger::merge_model(
 
   // Merging transformations.
   UnorderedMap<const DexType*, DexType*> mergeable_to_merger;
-  for (auto merger : to_materialize) {
-    auto type = const_cast<DexType*>(merger->type);
-    for (auto mergeable : merger->mergeables) {
+  for (const auto* merger : to_materialize) {
+    auto* type = const_cast<DexType*>(merger->type);
+    for (const auto* mergeable : merger->mergeables) {
       loosen_access_modifier_except_vmethods(type_class(mergeable));
       mergeable_to_merger[mergeable] = type;
     }
@@ -688,16 +688,17 @@ std::vector<DexClass*> ModelMerger::merge_model(
   }
 
   // Properly update merged classes or even remove them.
-  auto no_interface = DexTypeList::make_type_list({});
+  auto* no_interface = DexTypeList::make_type_list({});
   scope.erase(
       std::remove_if(scope.begin(),
                      scope.end(),
                      [&mergeable_to_merger, &no_interface](DexClass* cls) {
-                       if (mergeable_to_merger.count(cls->get_type())) {
+                       if (mergeable_to_merger.count(cls->get_type()) != 0u) {
                          cls->set_interfaces(no_interface);
                          cls->set_super_class(type::java_lang_Object());
                          redex_assert(CONSTP(cls)->get_vmethods().empty());
-                         if (!cls->get_clinit() && cls->get_sfields().empty()) {
+                         if ((cls->get_clinit() == nullptr) &&
+                             cls->get_sfields().empty()) {
                            // Purge merged cls w/o static fields.
                            return true;
                          } else {

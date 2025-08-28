@@ -66,7 +66,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
       pure_methods, conf.get_finalish_field_names(), finalish_fields);
   method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
       [&](const DexType* type) {
-        return !init_classes_with_side_effects.refine(type);
+        return init_classes_with_side_effects.refine(type) == nullptr;
       };
   shared_state.init_scope(scope, clinit_has_no_side_effects);
 
@@ -79,7 +79,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   const auto stats = walk::parallel::methods<Stats>(
       scope,
       [&](DexMethod* method) {
-        const auto code = method->get_code();
+        auto* const code = method->get_code();
         if (code == nullptr) {
           return Stats();
         }
@@ -130,7 +130,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT,
                   stats.methods_using_other_tracked_location_bit);
   mgr.incr_metric(METRIC_BRANCHES_ELIMINATED, stats.branches_eliminated);
-  auto& shared_state_stats = shared_state.get_stats();
+  const auto& shared_state_stats = shared_state.get_stats();
   mgr.incr_metric(METRIC_METHOD_BARRIERS, shared_state_stats.method_barriers);
   mgr.incr_metric(METRIC_METHOD_BARRIERS_ITERATIONS,
                   shared_state_stats.method_barriers_iterations);
@@ -140,7 +140,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                   shared_state_stats.conditionally_pure_methods);
   mgr.incr_metric(METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS,
                   shared_state_stats.conditionally_pure_methods_iterations);
-  for (auto& p : UnorderedIterable(stats.eliminated_opcodes)) {
+  for (const auto& p : UnorderedIterable(stats.eliminated_opcodes)) {
     std::string name = METRIC_INSTR_PREFIX;
     name += SHOW(static_cast<IROpcode>(p.first));
     mgr.incr_metric(name, p.second);

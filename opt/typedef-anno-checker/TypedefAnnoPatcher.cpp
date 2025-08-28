@@ -54,7 +54,7 @@ namespace {
 
 bool has_typedef_annos(ParamAnnotations* param_annos,
                        const UnorderedSet<TypedefAnnoType*>& typedef_annos) {
-  if (!param_annos) {
+  if (param_annos == nullptr) {
     return false;
   }
   for (auto& anno : *param_annos) {
@@ -69,7 +69,7 @@ bool has_typedef_annos(ParamAnnotations* param_annos,
 }
 
 DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
-  auto def_method =
+  auto* def_method =
       resolve_method(insn->get_method(), opcode_to_search(insn), caller);
   if (def_method == nullptr && insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
     def_method =
@@ -153,16 +153,16 @@ bool is_synthesized_lambda_class(const DexClass* cls) {
 }
 
 DexMethodRef* get_enclosing_method(DexClass* cls) {
-  auto anno_set = cls->get_anno_set();
-  if (!anno_set) {
+  auto* anno_set = cls->get_anno_set();
+  if (anno_set == nullptr) {
     return nullptr;
   }
   DexAnnotation* anno = get_annotation(
       cls, DexType::make_type("Ldalvik/annotation/EnclosingMethod;"));
-  if (anno) {
-    auto& value = anno->anno_elems().begin()->encoded_value;
+  if (anno != nullptr) {
+    const auto& value = anno->anno_elems().begin()->encoded_value;
     if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
-      auto method_value = static_cast<DexEncodedValueMethod*>(value.get());
+      auto* method_value = static_cast<DexEncodedValueMethod*>(value.get());
       auto method_name = method_value->show_deobfuscated();
       return DexMethod::get_method(method_name);
     }
@@ -177,7 +177,7 @@ bool add_annotation_set(DexMember* member,
                         std::mutex& anno_patching_mutex,
                         Stats& class_stats) {
   if (member && member->is_def()) {
-    auto def_member = member->as_def();
+    auto* def_member = member->as_def();
     std::lock_guard<std::mutex> lock(anno_patching_mutex);
     auto existing_annos = def_member->get_anno_set();
     if (existing_annos) {
@@ -221,7 +221,7 @@ bool add_param_annotation_set(DexMethod* m,
                               const int param,
                               Stats& class_stats) {
   bool added = false;
-  if (m->get_param_anno()) {
+  if (m->get_param_anno() != nullptr) {
     if (m->get_param_anno()->count(param) == 1) {
       std::unique_ptr<DexAnnotationSet>& param_anno_set =
           m->get_param_anno()->at(param);
@@ -279,7 +279,7 @@ void find_and_patch_parameter(DexMethod* m,
       continue;
     }
     auto param_index = 0;
-    for (auto& mie :
+    for (const auto& mie :
          InstructionIterable(m->get_code()->cfg().get_param_instructions())) {
       if (mie.insn == def) {
         if (!is_static(m)) {
@@ -302,8 +302,8 @@ void patch_param_from_method_invoke(
     std::vector<ParamCandidate>& missing_param_annos) {
   always_assert(opcode::is_an_invoke(invoke->opcode()));
   auto* def_method = resolve_method(caller, invoke);
-  if (!def_method ||
-      (!def_method->get_param_anno() && !def_method->get_anno_set())) {
+  if ((def_method == nullptr) || ((def_method->get_param_anno() == nullptr) &&
+                                  (def_method->get_anno_set() == nullptr))) {
     // callee cannot be resolved, has no param annotation, or has no return
     // annotation
     return;
@@ -347,7 +347,7 @@ void collect_setter_missing_param_annos(
     std::vector<ParamCandidate>& missing_param_annos) {
   always_assert(opcode::is_an_iput(insn->opcode()) ||
                 opcode::is_an_sput(insn->opcode()));
-  auto field_ref = insn->get_field();
+  auto* field_ref = insn->get_field();
   auto field_anno = type_inference::get_typedef_anno_from_member(
       field_ref, inference.get_annotations());
   if (!field_anno) {
@@ -381,8 +381,8 @@ void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
       continue;
     }
 
-    auto param_annos = ctor->get_param_anno();
-    if (!param_annos) {
+    auto* param_annos = ctor->get_param_anno();
+    if (param_annos == nullptr) {
       continue;
     }
     const DexTypeList* args = ctor->get_proto()->get_args();
@@ -422,7 +422,7 @@ bool TypedefAnnoPatcher::patch_if_overriding_annotated_methods(
 
   auto overriddens = mog::get_overridden_methods(m_method_override_graph, m,
                                                  true /*include_interfaces*/);
-  for (auto overridden : UnorderedIterable(overriddens)) {
+  for (const auto* overridden : UnorderedIterable(overriddens)) {
     auto return_anno = type_inference::get_typedef_anno_from_member(
         overridden, m_typedef_annos);
 
@@ -454,7 +454,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
         if (is_enum(cls) && type::is_kotlin_class(cls)) {
           fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
         }
-        for (auto m : cls->get_all_methods()) {
+        for (auto* m : cls->get_all_methods()) {
           patch_parameters_and_returns(
               m, class_stats.patch_parameters_and_returns);
           patch_if_overriding_annotated_methods(
@@ -478,7 +478,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
         }
 
         std::vector<const DexField*> patched_fields;
-        for (auto m : cls->get_all_methods()) {
+        for (auto* m : cls->get_all_methods()) {
           patch_lambdas(m, &patched_fields, candidates,
                         class_stats.patch_lambdas);
         }
@@ -486,7 +486,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
           auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
           size_t after_first_dollar = cls_name.find('$') + 1;
           size_t class_prefix_end;
-          if (isdigit(cls_name[after_first_dollar])) {
+          if (isdigit(cls_name[after_first_dollar]) != 0) {
             // Patched lambda class is directly under the top most class. No
             // in-between chained lambda exists. We simply drop everything
             // after the 1st dollar. e.g.,
@@ -503,7 +503,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
           const auto trace_update =
               [&patched_fields](const std::string& class_prefix) {
                 std::ostringstream os;
-                for (auto f : patched_fields) {
+                for (const auto* f : patched_fields) {
                   os << f->get_name()->str() << " " << f << "|";
                 }
                 TRACE(TAC, 2, "[patcher] Adding lambda map %s of fields %zu %s",
@@ -515,7 +515,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
           }
           m_lambda_anno_map.update(class_prefix,
                                    [&patched_fields](auto, auto& fields, auto) {
-                                     for (auto f : patched_fields) {
+                                     for (const auto* f : patched_fields) {
                                        fields.push_back(f);
                                      }
                                    });
@@ -528,7 +528,8 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
   m_patcher_stats +=
       walk::parallel::classes<PatcherStats>(scope, [&](DexClass* cls) {
         auto class_stats = PatcherStats();
-        if (klass::maybe_anonymous_class(cls) && get_enclosing_method(cls)) {
+        if (klass::maybe_anonymous_class(cls) &&
+            (get_enclosing_method(cls) != nullptr)) {
           patch_enclosing_lambda_fields(
               cls, class_stats.patch_enclosing_lambda_fields);
           patch_ctor_params_from_synth_cls_fields(
@@ -544,7 +545,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
 void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {
   auto class_name = cls->get_deobfuscated_name_or_empty_copy();
   auto class_name_prefix = class_name.substr(0, class_name.find('$'));
-  if (m_patched_returns.count(class_name_prefix)) {
+  if (m_patched_returns.count(class_name_prefix) != 0u) {
     m_chained_getters.insert(cls);
   }
 }
@@ -553,7 +554,7 @@ void TypedefAnnoPatcher::patch_chained_getters(Stats& class_stats) {
   auto sorted_candidates =
       unordered_to_ordered(m_chained_getters, compare_dexclasses);
   for (auto* cls : sorted_candidates) {
-    for (auto m : cls->get_all_methods()) {
+    for (auto* m : cls->get_all_methods()) {
       patch_parameters_and_returns(m, class_stats);
     }
   }
@@ -562,9 +563,9 @@ void TypedefAnnoPatcher::patch_chained_getters(Stats& class_stats) {
 void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
     DexClass* cls, Stats& class_stats) {
   bool has_annotated_fields = false;
-  for (auto field : cls->get_ifields()) {
+  for (auto* field : cls->get_ifields()) {
     DexAnnotationSet* anno_set = field->get_anno_set();
-    if (anno_set &&
+    if ((anno_set != nullptr) &&
         type_inference::get_typedef_annotation(
             anno_set->get_annotations(), m_typedef_annos) != boost::none) {
       has_annotated_fields = true;
@@ -576,7 +577,7 @@ void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
     return;
   }
 
-  for (auto ctor : cls->get_ctors()) {
+  for (auto* ctor : cls->get_ctors()) {
     IRCode* ctor_code = ctor->get_code();
     auto& ctor_cfg = ctor_code->cfg();
     type_inference::TypeInference ctor_inference(
@@ -611,8 +612,8 @@ void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
           if (!opcode::is_an_iput(use_insn->opcode())) {
             continue;
           }
-          auto field = use_insn->get_field()->as_def();
-          if (!field) {
+          auto* field = use_insn->get_field()->as_def();
+          if (field == nullptr) {
             continue;
           }
           auto field_anno = type_inference::get_typedef_anno_from_member(
@@ -656,7 +657,7 @@ void patch_synthetic_field_from_local_var_lambda(
     } else {
       continue;
     }
-    if (!field) {
+    if (field == nullptr) {
       continue;
     }
 
@@ -669,8 +670,8 @@ void patch_synthetic_field_from_local_var_lambda(
         if (!opcode::is_an_iget(ref_def->opcode())) {
           continue;
         }
-        auto original_field = ref_def->get_field()->as_def();
-        if (!original_field) {
+        auto* original_field = ref_def->get_field()->as_def();
+        if (original_field == nullptr) {
           continue;
         }
         patched_fields->push_back(original_field);
@@ -696,10 +697,10 @@ void annotate_local_var_field_from_callee(
     PatchingCandidates& candidates,
     std::mutex& anno_patching_mutex,
     Stats& class_stats) {
-  if (!callee) {
+  if (callee == nullptr) {
     return;
   }
-  if (!callee->get_param_anno()) {
+  if (callee->get_param_anno() == nullptr) {
     return;
   }
   for (auto const& param_anno : *callee->get_param_anno()) {
@@ -721,7 +722,7 @@ void TypedefAnnoPatcher::patch_lambdas(
     PatchingCandidates& candidates,
     Stats& class_stats) {
   IRCode* code = method->get_code();
-  if (!code) {
+  if (code == nullptr) {
     return;
   }
 
@@ -739,7 +740,7 @@ void TypedefAnnoPatcher::patch_lambdas(
       auto* insn = mie.insn;
       if (opcode::is_invoke_static(insn->opcode())) {
         DexMethod* static_method = insn->get_method()->as_def();
-        if (!static_method) {
+        if (static_method == nullptr) {
           continue;
         }
         // If the static method is synthetic, it might still expect annotated
@@ -757,7 +758,7 @@ void TypedefAnnoPatcher::patch_lambdas(
         }
         // If the static method has parameter annotations, patch the synthetic
         // fields as expected
-        if (static_method->get_param_anno()) {
+        if (static_method->get_param_anno() != nullptr) {
           for (auto const& param_anno : *static_method->get_param_anno()) {
             auto annotation = type_inference::get_typedef_annotation(
                 param_anno.second->get_annotations(), m_typedef_annos);
@@ -773,7 +774,7 @@ void TypedefAnnoPatcher::patch_lambdas(
         auto* callee_def = resolve_method(method, insn);
         auto callees =
             mog::get_overriding_methods(m_method_override_graph, callee_def);
-        for (auto callee : UnorderedIterable(callees)) {
+        for (const auto* callee : UnorderedIterable(callees)) {
           annotate_local_var_field_from_callee(
               callee, insn, ud_chains, inference, patched_fields, candidates,
               m_anno_patching_mutex, class_stats);
@@ -783,7 +784,7 @@ void TypedefAnnoPatcher::patch_lambdas(
         auto callees =
             mog::get_overriding_methods(m_method_override_graph, callee_def);
         callees.insert(callee_def);
-        for (auto callee : UnorderedIterable(callees)) {
+        for (const auto* callee : UnorderedIterable(callees)) {
           annotate_local_var_field_from_callee(
               callee, insn, ud_chains, inference, patched_fields, candidates,
               m_anno_patching_mutex, class_stats);
@@ -799,7 +800,7 @@ void TypedefAnnoPatcher::patch_lambdas(
 void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
     DexMethod* ctor, Stats& class_stats) {
   IRCode* code = ctor->get_code();
-  if (!code) {
+  if (code == nullptr) {
     return;
   }
   always_assert_log(code->editable_cfg_built(), "%s has no cfg built",
@@ -820,7 +821,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
         continue;
       }
       DexField* field = insn->get_field()->as_def();
-      if (!field) {
+      if (field == nullptr) {
         continue;
       }
       auto& env = envs.at(insn);
@@ -838,14 +839,14 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
                 ? "I"
                 : type::java_lang_String()->get_name()->str();
         // add annotations to the Kotlin getter and setter methods
-        auto getter_method = DexMethod::get_method(
+        auto* getter_method = DexMethod::get_method(
             class_name_dot + "get" + field_name + ":()" + int_or_string);
-        if (getter_method) {
+        if (getter_method != nullptr) {
           patch_parameters_and_returns(getter_method->as_def(), class_stats);
         }
-        auto setter_method = DexMethod::get_method(
+        auto* setter_method = DexMethod::get_method(
             class_name_dot + "set" + field_name + ":(" + int_or_string + ")V");
-        if (setter_method) {
+        if (setter_method != nullptr) {
           patch_parameters_and_returns(setter_method->as_def(), class_stats);
         }
       }
@@ -863,7 +864,7 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(const DexClass* anon_cls,
   auto enclosing_cls_name = anon_cls_name.substr(0, first_dollar) + ";";
   DexClass* enclosing_class = type_class(
       DexType::make_type(DexString::make_string(enclosing_cls_name)));
-  if (!enclosing_class) {
+  if (enclosing_class == nullptr) {
     return;
   }
 
@@ -882,13 +883,13 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(const DexClass* anon_cls,
   // Patch synthesized fields of the enclosing anonymous/lambda class. The field
   // being patched is on a class enclosing an inner lambda class with it's field
   // already patched in an earlier step.
-  for (const auto patched_field : patched_fields) {
+  for (const auto* const patched_field : patched_fields) {
     auto enclosing_field_name = anon_cls_name + "." +
                                 patched_field->get_simple_deobfuscated_name() +
                                 ":" + patched_field->get_type()->str_copy();
     DexFieldRef* enclosing_field_ref =
         DexField::get_field(enclosing_field_name);
-    if (enclosing_field_ref &&
+    if ((enclosing_field_ref != nullptr) &&
         patched_field->get_deobfuscated_name() != enclosing_field_name) {
       DexField* enclosing_field = enclosing_field_ref->as_def();
       if (enclosing_field == nullptr) {
@@ -920,7 +921,7 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
     Stats& class_stats,
     std::vector<ParamCandidate>* missing_param_annos) {
   IRCode* code = m->get_code();
-  if (!code) {
+  if (code == nullptr) {
     return;
   }
 
@@ -973,7 +974,7 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
                    m_anno_patching_mutex, class_stats);
     auto class_name = type_class(m->get_class())->str();
     auto class_name_prefix = class_name.substr(0, class_name.size() - 1);
-    if (!m_patched_returns.count(class_name_prefix)) {
+    if (m_patched_returns.count(class_name_prefix) == 0u) {
       m_patched_returns.insert(class_name_prefix);
     }
   }

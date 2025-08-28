@@ -349,13 +349,13 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
 
   auto op = insn->opcode();
   if (opcode::is_an_invoke(op)) {
-    auto method = insn->get_method();
+    auto* method = insn->get_method();
     // If the method is an init and the class is excluded, we label is as
     // escaping to prevent further optimizations.
-    if (method::is_init(method) && m_excluded_classes &&
-        m_excluded_classes->count(type_class(method->get_class()))) {
+    if (method::is_init(method) && (m_excluded_classes != nullptr) &&
+        (m_excluded_classes->count(type_class(method->get_class())) != 0u)) {
       env->set_may_escape(insn->src(0), insn);
-    } else if (m_invoke_to_summary_map.count(insn)) {
+    } else if (m_invoke_to_summary_map.count(insn) != 0u) {
       const auto& summary = m_invoke_to_summary_map.at(insn);
       analyze_invoke_with_summary(summary, insn, env);
     } else {
@@ -385,9 +385,9 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
       if (edge->callee() == call_graph.exit()) {
         continue;
       }
-      auto invoke_insn = edge->invoke_insn();
+      auto* invoke_insn = edge->invoke_insn();
       auto& callee_summary = invoke_to_summary_map[invoke_insn];
-      auto* callee = edge->callee()->method();
+      const auto* callee = edge->callee()->method();
       auto it = summary_map.find(callee);
       if (it != summary_map.end()) {
         callee_summary.join_with(it->second);
@@ -400,8 +400,8 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
     }
   }
 
-  auto* code = method->get_code();
-  auto& cfg = code->cfg();
+  const auto* code = method->get_code();
+  const auto& cfg = code->cfg();
   auto fp_iter =
       std::make_unique<FixpointIterator>(cfg,
                                          std::move(invoke_to_summary_map),
@@ -468,7 +468,7 @@ void collect_exiting_pointers(const FixpointIterator& fp_iter,
                               const IRCode& code,
                               PointerSet* returned_ptrs,
                               PointerSet* thrown_ptrs) {
-  auto& cfg = code.cfg();
+  const auto& cfg = code.cfg();
   PointerSet rv = PointerSet::bottom();
   returned_ptrs->set_to_bottom();
   thrown_ptrs->set_to_bottom();
@@ -477,7 +477,7 @@ void collect_exiting_pointers(const FixpointIterator& fp_iter,
     if (last_insn_it == block->end()) {
       continue;
     }
-    auto insn = last_insn_it->insn;
+    auto* insn = last_insn_it->insn;
     const auto& state =
         fp_iter.get_exit_state_at(const_cast<cfg::Block*>(block));
     if (opcode::is_a_return_value(insn->opcode())) {
@@ -496,7 +496,7 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
   PointerSet thrown_ptrs;
   collect_exiting_pointers(fp_iter, code, &returned_ptrs, &thrown_ptrs);
 
-  auto& cfg = code.cfg();
+  const auto& cfg = code.cfg();
   // FIXME: fix cfg's GraphInterface so this const_cast isn't necessary
   const auto& exit_state =
       fp_iter.get_exit_state_at(const_cast<cfg::Block*>(cfg.exit_block()));
@@ -522,7 +522,7 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
   switch (returned_ptrs.kind()) {
   case sparta::AbstractValueKind::Value: {
     summary.returned_parameters = ParamSet();
-    for (auto insn : returned_ptrs.elements()) {
+    for (const auto* insn : returned_ptrs.elements()) {
       if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
         summary.returned_parameters.add(param_indexes.at(insn));
       } else if (!exit_state.may_have_escaped(insn)) {

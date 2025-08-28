@@ -194,8 +194,8 @@ inline DexMethod* resolve_method(DexMethodRef* method,
                                  MethodSearch search,
                                  const DexMethod* caller = nullptr) {
   if (search == MethodSearch::Super) {
-    if (caller) {
-      auto cls = type_class(method->get_class());
+    if (caller != nullptr) {
+      auto* cls = type_class(method->get_class());
       if (cls == nullptr) {
         return nullptr;
       }
@@ -211,11 +211,11 @@ inline DexMethod* resolve_method(DexMethodRef* method,
     search = MethodSearch::Virtual;
   }
 
-  auto m = method->as_def();
-  if (m) {
+  auto* m = method->as_def();
+  if (m != nullptr) {
     return m;
   }
-  auto cls = type_class(method->get_class());
+  auto* cls = type_class(method->get_class());
   if (cls == nullptr) {
     return nullptr;
   }
@@ -243,15 +243,15 @@ inline DexMethod* resolve_method(DexMethodRef* method,
     // We don't have cache for that since caller might be different.
     return resolve_method(method, search, caller);
   }
-  auto m = method->as_def();
-  if (m) {
+  auto* m = method->as_def();
+  if (m != nullptr) {
     return m;
   }
   auto def = ref_cache.find(MethodRefCacheKey{method, search});
   if (def != ref_cache.end()) {
     return def->second;
   }
-  auto mdef = resolve_method(method, search, caller);
+  auto* mdef = resolve_method(method, search, caller);
   if (mdef != nullptr) {
     ref_cache.emplace(MethodRefCacheKey{method, search}, mdef);
   }
@@ -270,15 +270,15 @@ inline DexMethod* resolve_method(DexMethodRef* method,
     // We don't have cache for that since caller might be different.
     return resolve_method(method, search, caller);
   }
-  auto m = method->as_def();
-  if (m) {
+  auto* m = method->as_def();
+  if (m != nullptr) {
     return m;
   }
-  auto res = concurrent_ref_cache.get(MethodRefCacheKey{method, search});
-  if (res) {
+  const auto* res = concurrent_ref_cache.get(MethodRefCacheKey{method, search});
+  if (res != nullptr) {
     return *res;
   }
-  auto mdef = resolve_method(method, search, caller);
+  auto* mdef = resolve_method(method, search, caller);
   if (mdef != nullptr) {
     concurrent_ref_cache.emplace(MethodRefCacheKey{method, search}, mdef);
   }
@@ -295,15 +295,15 @@ inline DexMethod* resolve_invoke_method(
     const IRInstruction* insn,
     const DexMethod* caller = nullptr,
     bool* resolved_virtual_to_interface = nullptr) {
-  auto callee_ref = insn->get_method();
+  auto* callee_ref = insn->get_method();
   auto search = opcode_to_search(insn);
-  auto callee = resolve_method(callee_ref, search, caller);
-  if (!callee && search == MethodSearch::Virtual) {
+  auto* callee = resolve_method(callee_ref, search, caller);
+  if ((callee == nullptr) && search == MethodSearch::Virtual) {
     callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual, caller);
-    if (resolved_virtual_to_interface) {
+    if (resolved_virtual_to_interface != nullptr) {
       *resolved_virtual_to_interface = callee != nullptr;
     }
-  } else if (resolved_virtual_to_interface) {
+  } else if (resolved_virtual_to_interface != nullptr) {
     *resolved_virtual_to_interface = false;
   }
   return callee;
@@ -314,16 +314,16 @@ inline DexMethod* resolve_invoke_method(
     MethodRefCache& ref_cache,
     const DexMethod* caller = nullptr,
     bool* resolved_virtual_to_interface = nullptr) {
-  auto callee_ref = insn->get_method();
+  auto* callee_ref = insn->get_method();
   auto search = opcode_to_search(insn);
-  auto callee = resolve_method(callee_ref, search, ref_cache, caller);
-  if (!callee && search == MethodSearch::Virtual) {
+  auto* callee = resolve_method(callee_ref, search, ref_cache, caller);
+  if ((callee == nullptr) && search == MethodSearch::Virtual) {
     callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual,
                             ref_cache, caller);
-    if (resolved_virtual_to_interface) {
+    if (resolved_virtual_to_interface != nullptr) {
       *resolved_virtual_to_interface = callee != nullptr;
     }
-  } else if (resolved_virtual_to_interface) {
+  } else if (resolved_virtual_to_interface != nullptr) {
     *resolved_virtual_to_interface = false;
   }
   return callee;

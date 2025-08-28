@@ -38,8 +38,8 @@ void OriginalNamePass::build_hierarchies(
     if (base.c_str()[0] == '#') {
       continue;
     }
-    auto base_type = DexType::get_type(base);
-    auto base_class = base_type != nullptr ? type_class(base_type) : nullptr;
+    auto* base_type = DexType::get_type(base);
+    auto* base_class = base_type != nullptr ? type_class(base_type) : nullptr;
     if (base_class == nullptr) {
       TRACE(ORIGINALNAME, 2,
             "Can't find class for annotate_original_name rule %s",
@@ -68,7 +68,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
   ClassHierarchy ch = build_type_hierarchy(scope);
   UnorderedMap<const DexType*, std::string_view> to_annotate;
   build_hierarchies(mgr, ch, scope, &to_annotate);
-  auto field_name = DexString::make_string(redex_field_name);
+  const auto* field_name = DexString::make_string(redex_field_name);
   DexType* string_type = type::java_lang_String();
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
@@ -85,7 +85,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
       DexClasses overflow_classes;
       for (auto const& cls : dex) {
         DexType* cls_type = cls->get_type();
-        if (!to_annotate.count(cls_type) ||
+        if ((to_annotate.count(cls_type) == 0u) ||
             !cls->rstate.is_renamable_initialized_and_renamable() ||
             cls->rstate.is_generated()) {
           // No need to keep original name.
@@ -110,7 +110,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
         auto simple_name = (lastDot != std::string::npos)
                                ? external_name.substr(lastDot + 1)
                                : external_name;
-        auto simple_name_s = DexString::make_string(simple_name);
+        const auto* simple_name_s = DexString::make_string(simple_name);
         always_assert_log(
             DexField::get_field(cls_type, field_name, string_type) == nullptr,
             "field %s already exists!",

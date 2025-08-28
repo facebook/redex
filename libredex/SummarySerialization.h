@@ -64,7 +64,7 @@ size_t read(std::istream& input,
     // because not every external method has a defined stub (e.g. if it is
     // implicitly defined due to inheriting from another method, like how
     // ArrayList.equals() inherits from Object.equals()).
-    auto cls = type_class(dex_method->get_class());
+    auto* cls = type_class(dex_method->get_class());
     if (cls == nullptr || (no_load_external && !cls->is_external())) {
       TRACE(LIB, 1, "Found a summary for non-external method '%s', ignoring",
             SHOW(dex_method));

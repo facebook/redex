@@ -292,12 +292,12 @@ inline std::string internal_to_external(std::string_view internal_name) {
     external_name.append(component_name.substr(1, component_name_len));
     std::replace(external_name.begin(), external_name.end(), '/', '.');
     return external_name;
-  } else if (array_level) {
+  } else if (array_level != 0) {
     // If the type is an array of primitives, the external format is the same
     // as internal.
     return std::string(internal_name);
   } else {
-    auto maybe_external_name = primitive_desc_to_name(type);
+    const auto* maybe_external_name = primitive_desc_to_name(type);
     always_assert_log(
         maybe_external_name, "%c is not a valid primitive type.", type);
     return *maybe_external_name;
@@ -397,8 +397,8 @@ inline std::string package_name(std::string_view type_name) {
 }
 
 inline bool is_deliminator(char ch) {
-  return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')' ||
-         ch == ',' || ch == ';' || ch == ':' || ch == '#';
+  return (isspace(ch) != 0) || ch == '{' || ch == '}' || ch == '(' ||
+         ch == ')' || ch == ',' || ch == ';' || ch == ':' || ch == '#';
 }
 
 // An identifier can refer to a class name, a field name or a package name.

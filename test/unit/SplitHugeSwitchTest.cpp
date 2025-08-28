@@ -34,7 +34,7 @@ class SplitHugeSwitchTest : public RedexTest {
     ClassCreator cc{DexType::make_type(name)};
     cc.set_super(type::java_lang_Object());
 
-    auto m =
+    auto* m =
         DexMethod::make_method(name + ".bar:" + sig)
             ->make_concrete(ACC_PUBLIC | ACC_STATIC,
                             assembler::ircode_from_string(code_str), false);
@@ -72,7 +72,7 @@ class SplitHugeSwitchTest : public RedexTest {
       const method_profiles::MethodProfiles& method_profiles,
       double hotness_threshold,
       std::initializer_list<std::pair<std::string, std::string>> expected) {
-    auto m = create(sig, code_str);
+    auto* m = create(sig, code_str);
     auto stats = SplitHugeSwitchPass::run(m, m->get_code(),
                                           code_units_threshold, case_threshold,
                                           method_profiles, hotness_threshold);
@@ -108,7 +108,7 @@ class SplitHugeSwitchTest : public RedexTest {
     if (!main_error.empty()) {
       return ::testing::AssertionFailure() << show(m) << ": " << main_error;
     }
-    for (auto out : UnorderedIterable(stats.new_methods)) {
+    for (auto* out : UnorderedIterable(stats.new_methods)) {
       auto out_error = compare(out);
       if (!out_error.empty()) {
         return ::testing::AssertionFailure() << show(out) << ": " << out_error;
@@ -130,7 +130,7 @@ class SplitHugeSwitchTest : public RedexTest {
 std::atomic<size_t> SplitHugeSwitchTest::s_counter{0};
 
 TEST_F(SplitHugeSwitchTest, NoSwitch) {
-  auto src = R"(
+  const auto* src = R"(
     (
       (load-param v0)
       (return-void)
@@ -235,7 +235,7 @@ TEST_F(SplitHugeSwitchTest, NoOp) {
 }
 
 TEST_F(SplitHugeSwitchTest, Split1) {
-  auto main_res = R"(
+  const auto* main_res = R"(
     (
       (load-param v0)
 
@@ -262,7 +262,7 @@ TEST_F(SplitHugeSwitchTest, Split1) {
       (invoke-static (v0) "LFoo;.bar$split_switch_clone:(I)V")
       (return-void)
     ))";
-  auto split_res = R"(
+  const auto* split_res = R"(
     (
       (load-param v0)
 
@@ -296,7 +296,7 @@ TEST_F(SplitHugeSwitchTest, Split1) {
 }
 
 TEST_F(SplitHugeSwitchTest, Split2) {
-  auto main_res = R"(
+  const auto* main_res = R"(
     (
       (load-param v0)
 
@@ -328,7 +328,7 @@ TEST_F(SplitHugeSwitchTest, Split2) {
       (invoke-static (v0) "LFoo;.bar$split_switch_clone:(I)V")
       (return-void)
     ))";
-  auto split1_res = R"(
+  const auto* split1_res = R"(
     (
       (load-param v0)
 
@@ -344,7 +344,7 @@ TEST_F(SplitHugeSwitchTest, Split2) {
       (const v1 2)
       (goto :L0)
     ))";
-  auto split2_res = R"(
+  const auto* split2_res = R"(
     (
       (load-param v0)
 
@@ -375,7 +375,7 @@ TEST_F(SplitHugeSwitchTest, Split2) {
 }
 
 TEST_F(SplitHugeSwitchTest, Split3) {
-  auto main_res = R"(
+  const auto* main_res = R"(
     (
       (load-param v0)
 
@@ -412,7 +412,7 @@ TEST_F(SplitHugeSwitchTest, Split3) {
       (invoke-static (v0) "LFoo;.bar$split_switch_clone:(I)V")
       (return-void)
     ))";
-  auto split1_res = R"(
+  const auto* split1_res = R"(
     (
       (load-param v0)
 
@@ -428,7 +428,7 @@ TEST_F(SplitHugeSwitchTest, Split3) {
       (const v1 1)
       (goto :L0)
     ))";
-  auto split2_res = R"(
+  const auto* split2_res = R"(
     (
       (load-param v0)
 
@@ -440,7 +440,7 @@ TEST_F(SplitHugeSwitchTest, Split3) {
       (const v1 3)
       (goto :L0)
     ))";
-  auto split3_res = R"(
+  const auto* split3_res = R"(
     (
       (load-param v0)
 

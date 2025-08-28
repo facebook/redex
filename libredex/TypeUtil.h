@@ -245,7 +245,7 @@ bool can_access(const DexMethod* accessor, const DexMember* accessee) {
     // is not the intention of this check.
     return true;
   }
-  auto accessor_class = accessor->get_class();
+  auto* accessor_class = accessor->get_class();
   if (is_public(accessee) || accessor_class == accessee->get_class()) {
     return true;
   }
@@ -271,7 +271,7 @@ inline bool can_access(const DexMethod* accessor, const DexClass* accessee) {
     // is not the intention of this check.
     return true;
   }
-  auto accessor_class = accessor->get_class();
+  auto* accessor_class = accessor->get_class();
   if (is_public(accessee) || accessor_class == accessee->get_type()) {
     return true;
   }

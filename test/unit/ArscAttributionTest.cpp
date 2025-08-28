@@ -35,7 +35,7 @@ size_t count_padding(const std::vector<std::string>& items,
   }
   android::Vector<char> pool_data;
   builder.serialize(&pool_data);
-  auto pool_header = (android::ResStringPool_header*)pool_data.array();
+  auto* pool_header = (android::ResStringPool_header*)pool_data.array();
   android::ResStringPool pool;
   pool.setTo(pool_header, pool_data.size(), true);
   return attribution::count_padding(pool_header, pool);
@@ -196,7 +196,7 @@ TEST(Arsc, StringSpanAttribution) {
   // Check some things regarding the pool itself
   android::Vector<char> pool_data;
   global_strings_builder->serialize(&pool_data);
-  auto pool_header = (android::ResStringPool_header*)pool_data.array();
+  auto* pool_header = (android::ResStringPool_header*)pool_data.array();
   android::ResStringPool pool;
   pool.setTo(pool_header, pool_data.size(), true);
   EXPECT_EQ(attribution::count_padding(pool_header, pool), 3);

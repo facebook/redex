@@ -25,7 +25,7 @@ boost::optional<ParamIndex> find_return_param_index(
   }
   // find register that is being returned (if any)
   cfg.calculate_exit_block();
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto it = exit_block->rbegin();
   if (it == exit_block->rend() ||
       !opcode::is_a_return_value(it->insn->opcode())) {
@@ -85,12 +85,12 @@ TEST_F(ResultPropagationTest, useSwitch) {
       num_test_classes++;
       int num_tests_in_class = 0;
       for (const auto& m : cls->get_vmethods()) {
-        const auto method_name = m->get_name()->c_str();
+        const auto* const method_name = m->get_name()->c_str();
         TRACE(RP, 1, " test method %s", method_name);
         EXPECT_EQ(strncmp(method_name, test_method_prefix,
                           strlen(test_method_prefix)),
                   0);
-        const auto suffix = method_name + strlen(test_method_prefix);
+        const auto* const suffix = method_name + strlen(test_method_prefix);
         boost::optional<ParamIndex> expected;
         if (strcmp(suffix, "none") != 0) {
           expected = atoi(suffix);

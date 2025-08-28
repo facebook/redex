@@ -30,7 +30,7 @@ bool is_uninstantiable_class(DexType* type) {
     return false;
   }
 
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   if (cls == nullptr || is_interface(cls) || cls->is_external() ||
       !cls->rstate.can_delete()) {
     return false;
@@ -97,7 +97,7 @@ class OverriddenVirtualScopesAnalysis {
     auto children_it = instantiable_children.find(t);
     if (children_it != instantiable_children.end()) {
       const auto& children = children_it->second;
-      for (auto child : UnorderedIterable(children)) {
+      for (auto* child : UnorderedIterable(children)) {
         const auto& defined_virtual_scopes_of_child =
             defined_virtual_scopes.at_unsafe(child);
         for (const auto& virtual_scope :
@@ -106,9 +106,9 @@ class OverriddenVirtualScopesAnalysis {
         }
         compute_transitively_defined_virtual_scope(
             instantiable_children, defined_virtual_scopes, child);
-        for (auto& virtual_scope : UnorderedIterable(
+        for (const auto& virtual_scope : UnorderedIterable(
                  m_transitively_defined_virtual_scopes.at(child))) {
-          if (!defined_virtual_scopes_of_child.count(virtual_scope)) {
+          if (defined_virtual_scopes_of_child.count(virtual_scope) == 0u) {
             counted[virtual_scope]++;
           }
         }
@@ -129,7 +129,7 @@ class OverriddenVirtualScopesAnalysis {
   void scan_code(const Scope& scope) {
     walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
       editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (insn->opcode() == OPCODE_NEW_INSTANCE ||
             insn->opcode() == OPCODE_CONST_CLASS) {
           // occurrences of "const-class" doesn't actually mean that the class
@@ -138,8 +138,9 @@ class OverriddenVirtualScopesAnalysis {
           m_instantiated_types.insert(insn->get_type());
         }
         if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-          auto callee_ref = insn->get_method();
-          auto callee = resolve_method(callee_ref, MethodSearch::Super, method);
+          auto* callee_ref = insn->get_method();
+          auto* callee =
+              resolve_method(callee_ref, MethodSearch::Super, method);
           if (callee == nullptr) {
             m_unresolved_super_invoked_virtual_scopes.insert(
                 VirtualScopeId::make(callee_ref));
@@ -153,8 +154,9 @@ class OverriddenVirtualScopesAnalysis {
   }
 
   bool is_instantiated(DexType* t) const {
-    auto cls = type_class(t);
-    return root(cls) || !can_rename(cls) || m_instantiated_types.count(t);
+    auto* cls = type_class(t);
+    return root(cls) || !can_rename(cls) ||
+           (m_instantiated_types.count(t) != 0u);
   }
 
  public:
@@ -170,7 +172,7 @@ class OverriddenVirtualScopesAnalysis {
         defined_virtual_scopes;
     walk::parallel::classes(scope, [&](DexClass* cls) {
       VirtualScopeIdSet virtual_scopes;
-      for (auto method : cls->get_vmethods()) {
+      for (auto* method : cls->get_vmethods()) {
         VirtualScopeId virtual_scope = VirtualScopeId::make(method);
         virtual_scopes.emplace(virtual_scope);
       }
@@ -178,7 +180,7 @@ class OverriddenVirtualScopesAnalysis {
                                      std::move(virtual_scopes));
     });
 
-    for (auto cls : scope) {
+    for (auto* cls : scope) {
       compute_transitively_defined_virtual_scope(
           instantiable_children, defined_virtual_scopes, cls->get_type());
     }
@@ -188,23 +190,23 @@ class OverriddenVirtualScopesAnalysis {
     if (is_static(method)) {
       return true;
     }
-    if (m_scoped_uninstantiable_types.count(method->get_class())) {
+    if (m_scoped_uninstantiable_types.count(method->get_class()) != 0u) {
       return false;
     }
     if (!method->is_virtual()) {
       return true;
     }
-    if (m_resolved_super_invoked_methods.count(method) ||
-        m_unresolved_super_invoked_virtual_scopes.count(
-            VirtualScopeId::make(method))) {
+    if ((m_resolved_super_invoked_methods.count(method) != 0u) ||
+        (m_unresolved_super_invoked_virtual_scopes.count(
+             VirtualScopeId::make(method)) != 0u)) {
       return true;
     }
     if (is_instantiated(method->get_class())) {
       return true;
     }
     VirtualScopeId virtual_scope = VirtualScopeId::make(method);
-    return !m_transitively_defined_virtual_scopes.at(method->get_class())
-                .count(virtual_scope);
+    return m_transitively_defined_virtual_scopes.at(method->get_class())
+               .count(virtual_scope) == 0u;
   }
 };
 
@@ -228,7 +230,7 @@ UnorderedSet<DexType*> compute_scoped_uninstantiable_types(
         root(interface) || !can_rename(interface)) {
       return true;
     }
-    for (auto method : interface->get_vmethods()) {
+    for (auto* method : interface->get_vmethods()) {
       if (root(method) || !can_rename(method)) {
         return true;
       }
@@ -251,16 +253,16 @@ UnorderedSet<DexType*> compute_scoped_uninstantiable_types(
     if (cls == nullptr || !visited.insert(cls).second) {
       return false;
     }
-    if (instantiable_children) {
+    if (instantiable_children != nullptr) {
       (*instantiable_children)[cls->get_super_class()].insert(cls->get_type());
     }
     uninstantiable_types.erase(cls->get_type());
-    for (auto interface : *cls->get_interfaces()) {
+    for (auto* interface : *cls->get_interfaces()) {
       visit(type_class(interface));
     }
     return true;
   };
-  for (auto cls : UnorderedIterable(instantiable_classes)) {
+  for (const auto* cls : UnorderedIterable(instantiable_classes)) {
     while (visit(cls)) {
       cls = type_class(cls->get_super_class());
     }
@@ -285,7 +287,7 @@ remove_uninstantiables_impl::Stats run_remove_uninstantiables(
       scope,
       [&scoped_uninstantiable_types, &overridden_virtual_scopes_analysis,
        &uncallable_instance_methods](DexMethod* method) {
-        auto code = method->get_code();
+        auto* code = method->get_code();
         if (code == nullptr) {
           return remove_uninstantiables_impl::Stats();
         }
@@ -498,7 +500,7 @@ TEST_F(RemoveUninstantiablesTest, InstanceOf) {
 }
 
 TEST_F(RemoveUninstantiablesTest, InstanceOfUnimplementedInterface) {
-  auto cls = def_class("LFoo;");
+  auto* cls = def_class("LFoo;");
   cls->set_access(cls->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
 
   remove_uninstantiables_impl::Stats stats;
@@ -928,7 +930,7 @@ TEST_F(RemoveUninstantiablesTest, VoidIsUninstantiable) {
 }
 
 TEST_F(RemoveUninstantiablesTest, UnimplementedInterfaceIsUninstantiable) {
-  auto foo = def_class("LFoo;");
+  auto* foo = def_class("LFoo;");
   foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
   auto uninstantiable_types = compute_uninstantiable_types();
   EXPECT_TRUE(uninstantiable_types.count(foo->get_type()));
@@ -936,9 +938,9 @@ TEST_F(RemoveUninstantiablesTest, UnimplementedInterfaceIsUninstantiable) {
 
 TEST_F(RemoveUninstantiablesTest,
        UnimplementedInterfaceWithRootMethodIsNotUninstantiable) {
-  auto foo = def_class("LFoo;");
+  auto* foo = def_class("LFoo;");
   foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
-  auto method =
+  auto* method =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.root:()Z"));
   method->make_concrete(ACC_PUBLIC | ACC_ABSTRACT, /* is_virtual */ true);
   method->rstate.set_root();
@@ -949,7 +951,7 @@ TEST_F(RemoveUninstantiablesTest,
 
 TEST_F(RemoveUninstantiablesTest,
        UnimplementedAnnotationInterfaceIsNotUninstantiable) {
-  auto foo = def_class("LFoo;");
+  auto* foo = def_class("LFoo;");
   foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT |
                   ACC_ANNOTATION);
   auto uninstantiable_types = compute_uninstantiable_types();
@@ -957,9 +959,9 @@ TEST_F(RemoveUninstantiablesTest,
 }
 
 TEST_F(RemoveUninstantiablesTest, ImplementedInterfaceIsNotUninstantiable) {
-  auto foo = def_class("LFoo;");
+  auto* foo = def_class("LFoo;");
   foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
-  auto bar = def_class("LBar;", Bar_init, Bar_baz);
+  auto* bar = def_class("LBar;", Bar_init, Bar_baz);
   bar->set_interfaces(DexTypeList::make_type_list({foo->get_type()}));
   auto uninstantiable_types = compute_uninstantiable_types();
   EXPECT_FALSE(uninstantiable_types.count(foo->get_type()));
@@ -967,16 +969,16 @@ TEST_F(RemoveUninstantiablesTest, ImplementedInterfaceIsNotUninstantiable) {
 }
 
 TEST_F(RemoveUninstantiablesTest, AbstractClassIsUninstantiable) {
-  auto foo = def_class("LFoo;");
+  auto* foo = def_class("LFoo;");
   foo->set_access(foo->get_access() | ACC_ABSTRACT);
   auto uninstantiable_types = compute_uninstantiable_types();
   EXPECT_TRUE(uninstantiable_types.count(foo->get_type()));
 }
 
 TEST_F(RemoveUninstantiablesTest, ExtendedAbstractClassIsNotUninstantiable) {
-  auto foo = def_class("LFoo;");
+  auto* foo = def_class("LFoo;");
   foo->set_access(foo->get_access() | ACC_ABSTRACT);
-  auto bar = def_class("LBar;", Bar_init);
+  auto* bar = def_class("LBar;", Bar_init);
   bar->set_super_class(foo->get_type());
   auto uninstantiable_types = compute_uninstantiable_types();
   EXPECT_FALSE(uninstantiable_types.count(foo->get_type()));
@@ -984,11 +986,11 @@ TEST_F(RemoveUninstantiablesTest, ExtendedAbstractClassIsNotUninstantiable) {
 }
 
 TEST_F(RemoveUninstantiablesTest, InvokeInterfaceOnUninstantiable) {
-  auto foo = def_class("LFoo;");
+  auto* foo = def_class("LFoo;");
   foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
 
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   create_abstract_method(foo, "abs", void_void);
 
@@ -1013,13 +1015,13 @@ TEST_F(RemoveUninstantiablesTest, InvokeInterfaceOnUninstantiable) {
 }
 
 TEST_F(RemoveUninstantiablesTest, InvokeSuperOnUninstantiable) {
-  auto foo = def_class("LFoo;");
-  auto void_t = type::_void();
-  auto void_void =
+  auto* foo = def_class("LFoo;");
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   create_abstract_method(foo, "abs", void_void);
 
-  auto bar = def_class("LBar;");
+  auto* bar = def_class("LBar;");
   bar->set_super_class(foo->get_type());
 
   remove_uninstantiables_impl::Stats stats;

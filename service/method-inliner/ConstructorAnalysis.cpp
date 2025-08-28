@@ -93,8 +93,8 @@ class ConstructorAnalysisEnvironment final
 
 const IRInstruction* get_first_load_param(const cfg::ControlFlowGraph& cfg) {
   const auto param_insns = InstructionIterable(cfg.get_param_instructions());
-  auto& mie = *param_insns.begin();
-  const auto insn = mie.insn;
+  const auto& mie = *param_insns.begin();
+  auto* const insn = mie.insn;
   always_assert(insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   return insn;
 }
@@ -111,11 +111,12 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
     // We need to check superclass chain because dex spec allows calling
     // constructor on superclass of superclass
     // https://cs.android.com/android/platform/superproject/main/+/main:art/runtime/verifier/method_verifier.cc;l=2940
-    auto super_cls_type = type_class(declaring_type)->get_super_class();
-    while (super_cls_type && m_super_types.count(super_cls_type) == 0) {
+    auto* super_cls_type = type_class(declaring_type)->get_super_class();
+    while ((super_cls_type != nullptr) &&
+           m_super_types.count(super_cls_type) == 0) {
       m_super_types.emplace(super_cls_type);
-      auto super_cls = type_class(super_cls_type);
-      if (!super_cls) {
+      auto* super_cls = type_class(super_cls_type);
+      if (super_cls == nullptr) {
         break;
       }
       super_cls_type = super_cls->get_super_class();
@@ -154,7 +155,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
       set_current_state_at(insn->dest(), insn->dest_is_wide(), value);
       return;
     } else if (opcode::is_an_iput(opcode)) {
-      auto field_ref = insn->get_field();
+      auto* field_ref = insn->get_field();
       DexField* field = resolve_field(field_ref, FieldSearch::Instance);
       if (field == nullptr || field->get_class() == m_declaring_type) {
         auto object_value = current_state->get_params().get(insn->src(1));
@@ -176,22 +177,22 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
       }
       // otherwise, fall through
     } else if (opcode == OPCODE_INVOKE_DIRECT) {
-      auto method_ref = insn->get_method();
+      auto* method_ref = insn->get_method();
       if (method::is_init(method_ref)) {
         DexMethod* method = resolve_method(method_ref, MethodSearch::Direct);
         if (method == nullptr) {
           current_state->set_uninlinable(BoolDomain(true));
           return;
         }
-        auto method_class = method->get_class();
+        auto* method_class = method->get_class();
 
         if (method_class == m_declaring_type ||
-            m_super_types.count(method_class)) {
+            (m_super_types.count(method_class) != 0u)) {
           auto first_param = current_state->get_params().get(insn->src(0));
           if (!first_param.get_constant() || *first_param.get_constant()) {
             // We've encountered a call to another constructor on a value
             // that might be `this`
-            if ((!m_relaxed && m_super_types.count(method_class)) ||
+            if ((!m_relaxed && (m_super_types.count(method_class) != 0u)) ||
                 !first_param.get_constant()) {
               current_state->set_uninlinable(BoolDomain(true));
             } else {
@@ -228,15 +229,15 @@ bool can_inline_init(const DexMethod* init_method,
                      bool relaxed,
                      UnorderedSet<DexField*>* written_final_fields) {
   always_assert(method::is_init(init_method));
-  auto code = init_method->get_code();
-  if (!code) {
+  const auto* code = init_method->get_code();
+  if (code == nullptr) {
     return false;
   }
   always_assert(code->editable_cfg_built());
-  auto& cfg = code->cfg();
+  const auto& cfg = code->cfg();
   DexType* declaring_type = init_method->get_class();
   Analyzer analyzer(cfg, declaring_type, relaxed);
-  for (const auto block : cfg.blocks()) {
+  for (auto* const block : cfg.blocks()) {
     const auto& env = analyzer.get_exit_state_at(block);
     if (env.is_bottom()) {
       continue;
@@ -264,15 +265,15 @@ bool can_inline_init(const DexMethod* init_method,
   }
   bool res = true;
   for (const auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_iput(insn->opcode())) {
-      auto field_ref = insn->get_field();
+      auto* field_ref = insn->get_field();
       DexField* field = resolve_field(field_ref, FieldSearch::Instance);
       if (field == nullptr ||
           (field->get_class() == declaring_type &&
-           (is_final(field) ||
-            (finalizable_fields && finalizable_fields->count(field))))) {
-        if (written_final_fields) {
+           (is_final(field) || ((finalizable_fields != nullptr) &&
+                                (finalizable_fields->count(field) != 0u))))) {
+        if (written_final_fields != nullptr) {
           written_final_fields->emplace(field);
         }
         res = false;
@@ -287,13 +288,13 @@ bool can_inline_inits_in_same_class(DexMethod* caller_method,
                                     IRInstruction* callsite_insn) {
   always_assert(method::is_init(caller_method));
   always_assert(caller_method->get_class() == callee_method->get_class());
-  auto code = caller_method->get_code();
+  auto* code = caller_method->get_code();
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   reaching_defs::MoveAwareFixpointIterator reaching_definitions(cfg);
   reaching_definitions.run(reaching_defs::Environment());
 
-  auto first_load_param = cfg.get_param_instructions().begin()->insn;
+  auto* first_load_param = cfg.get_param_instructions().begin()->insn;
   always_assert(first_load_param->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto in_block = [&](cfg::Block* block) {
     auto env = reaching_definitions.get_entry_state_at(block);
@@ -311,7 +312,7 @@ bool can_inline_inits_in_same_class(DexMethod* caller_method,
         if (defs.is_top() || defs.is_bottom()) {
           return false;
         } else {
-          for (auto def : defs.elements()) {
+          for (auto* def : defs.elements()) {
             if (def != first_load_param) {
               return false;
             }
@@ -327,7 +328,7 @@ bool can_inline_inits_in_same_class(DexMethod* caller_method,
     always_assert(callsite_insn->get_method() == callee_method);
     auto it = cfg.find_insn(callsite_insn);
     always_assert(it != InstructionIterable(cfg).end());
-    auto block = it.block();
+    auto* block = it.block();
     return in_block(block);
   } else {
     for (cfg::Block* block : cfg.blocks()) {
@@ -343,9 +344,9 @@ UnorderedSet<const DexType*> find_complex_init_inlined_types(
     const std::vector<DexClass*>& scope) {
   InsertOnlyConcurrentSet<const DexType*> items;
   // Calling this on an unknown type is apparently OK for verification.
-  auto object_init = DexMethod::get_method("Ljava/lang/Object;.<init>:()V");
+  auto* object_init = DexMethod::get_method("Ljava/lang/Object;.<init>:()V");
   walk::parallel::methods(scope, [&](DexMethod* method) {
-    auto code = method->get_code();
+    auto* code = method->get_code();
     if (code == nullptr) {
       return;
     }
@@ -355,14 +356,14 @@ UnorderedSet<const DexType*> find_complex_init_inlined_types(
         [&]() { return std::make_unique<live_range::LazyLiveRanges>(cfg); });
     for (auto* block : cfg.blocks()) {
       for (auto& mie : InstructionIterable(block)) {
-        auto insn = mie.insn;
+        auto* insn = mie.insn;
         if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-          auto new_instance_type = insn->get_type();
+          auto* new_instance_type = insn->get_type();
           auto search = live_ranges->def_use_chains->find(insn);
           if (search != live_ranges->def_use_chains->end()) {
-            for (auto& use : UnorderedIterable(search->second)) {
+            for (const auto& use : UnorderedIterable(search->second)) {
               if (use.insn->has_method()) {
-                auto use_method = use.insn->get_method();
+                auto* use_method = use.insn->get_method();
                 if (use.src_index == 0 && method::is_init(use_method) &&
                     use_method != object_init &&
                     use_method->get_class() != new_instance_type) {

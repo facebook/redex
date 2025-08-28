@@ -54,7 +54,7 @@ TEST_F(IRListTest, method_item_entry_equality) {
 }
 
 TEST_F(IRListTest, remove_prologue) {
-  const auto s_insns = R"(
+  const auto* const s_insns = R"(
     (
       (load-param v0)
       (.dbg DBG_SET_PROLOGUE_END)
@@ -62,7 +62,7 @@ TEST_F(IRListTest, remove_prologue) {
       (return-void)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (load-param v0)
       (const v1 1)
@@ -80,7 +80,7 @@ TEST_F(IRListTest, remove_prologue) {
 }
 
 TEST_F(IRListTest, remove_when_register_not_used) {
-  const auto s_insns = R"(
+  const auto* const s_insns = R"(
     (
       (load-param v0)
       (const v1 1)
@@ -91,7 +91,7 @@ TEST_F(IRListTest, remove_when_register_not_used) {
   )";
   auto code = assembler::ircode_from_string(s_insns);
 
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (load-param v0)
       (const v1 1)
@@ -107,7 +107,7 @@ TEST_F(IRListTest, remove_when_register_not_used) {
 }
 
 TEST_F(IRListTest, keep_valid_regs) {
-  const auto s_insns = R"(
+  const auto* const s_insns = R"(
     (
       (load-param v0)
       (.dbg DBG_START_LOCAL_EXTENDED 4 "will_not_be_removed" "Ljava/lang/Objects;" "sig")
@@ -118,7 +118,7 @@ TEST_F(IRListTest, keep_valid_regs) {
   )";
   auto code = assembler::ircode_from_string(s_insns);
 
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (load-param v0)
       (.dbg DBG_START_LOCAL_EXTENDED 4 "will_not_be_removed" "Ljava/lang/Objects;" "sig")

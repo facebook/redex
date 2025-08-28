@@ -40,9 +40,9 @@ DexClass* get_r_class(const DexClasses& classes, const char* name) {
     }
   }
   always_assert_log(r_class != nullptr, "Did not find class %s!", name);
-  auto clinit = r_class->get_clinit();
+  auto* clinit = r_class->get_clinit();
   always_assert_log(clinit != nullptr, "%s should have a <clinit>", name);
-  auto code = clinit->get_code();
+  auto* code = clinit->get_code();
   always_assert_log(code != nullptr, "%s should have <clinit> code", name);
   return r_class;
 }
@@ -69,7 +69,7 @@ IRInstruction* find_new_array_size_insn(live_range::UseDefChains* use_defs,
   auto& const_defs = use_defs->at(live_range::Use{new_array_insn, 0});
   always_assert_log(const_defs.size() == 1, "Should be 1 def for insn %s",
                     SHOW(new_array_insn));
-  auto const_def = *const_defs.begin();
+  auto* const_def = *const_defs.begin();
   always_assert_log(const_def->opcode() == OPCODE_CONST,
                     "Array size expected to be a const instruction. Got %s",
                     SHOW(const_def));
@@ -91,9 +91,9 @@ IRInstruction* find_fill_array_data_use(
 
 // Build editable cfg, set rstate as we expect to simulate outlined methods
 void prepare_methods_for_test(DexClasses& classes) {
-  for (auto cls : classes) {
-    for (auto m : cls->get_all_methods()) {
-      auto code = m->get_code();
+  for (auto* cls : classes) {
+    for (auto* m : cls->get_all_methods()) {
+      auto* code = m->get_code();
       if (code != nullptr) {
         code->build_cfg();
       }
@@ -247,16 +247,16 @@ TEST_F(RClassTest, analyzeStaticInitializers) {
 
 TEST_F(RClassTest, remapResourceClassArrays) {
   std::cout << "BASELINE R <clinit>:" << std::endl;
-  auto clinit = base_r_class->get_clinit();
-  auto code = clinit->get_code();
+  auto* clinit = base_r_class->get_clinit();
+  auto* code = clinit->get_code();
   dump_code_verbose(code);
 
   // A typical styleable inner class, which has different conventions and is
   // indexed directly into. Deletion should instead insert zeros.
   DexClass* styleable_class = get_r_class(*classes, styleable_r_class_name);
   std::cout << std::endl << "BASELINE R$styleable <clinit>:" << std::endl;
-  auto styleable_clinit = styleable_class->get_clinit();
-  auto styleable_code = styleable_clinit->get_code();
+  auto* styleable_clinit = styleable_class->get_clinit();
+  auto* styleable_code = styleable_clinit->get_code();
   dump_code_verbose(styleable_code);
 
   // Just another class with arrays, so tests can be written against other valid
@@ -264,8 +264,8 @@ TEST_F(RClassTest, remapResourceClassArrays) {
   DexClass* another_styleable_r_class =
       get_r_class(*classes, another_styleable_r_class_name);
   std::cout << std::endl << "BASELINE R$styleable2 <clinit>:" << std::endl;
-  auto another_clinit = another_styleable_r_class->get_clinit();
-  auto another_code = another_clinit->get_code();
+  auto* another_clinit = another_styleable_r_class->get_clinit();
+  auto* another_code = another_clinit->get_code();
   dump_code_verbose(another_code);
 
   std::map<uint32_t, uint32_t> old_to_remapped_ids;
@@ -307,21 +307,21 @@ TEST_F(RClassTest, remapResourceClassArrays) {
         auto use_defs = move_aware_chains.get_use_def_chains();
         auto def_uses = move_aware_chains.get_def_use_chains();
         for (const auto& mie : cfg::InstructionIterable(cfg)) {
-          auto insn = mie.insn;
+          auto* insn = mie.insn;
           if (insn->opcode() == OPCODE_SPUT_OBJECT) {
             auto field_name = show(insn->get_field());
             auto expected_size = expected_sizes.at(field_name);
             auto& array_defs = use_defs.at(live_range::Use{insn, 0});
             EXPECT_EQ(array_defs.size(), 1);
             // Make sure the array was created with the proper constant size.
-            auto array_def = *array_defs.begin();
-            auto const_def = find_new_array_size_insn(&use_defs, array_def);
+            auto* array_def = *array_defs.begin();
+            auto* const_def = find_new_array_size_insn(&use_defs, array_def);
             EXPECT_EQ(const_def->get_literal(), expected_size);
             // Make sure the payload that fills the array is the proper size too
             // and optionall dispatch a callback for further asserts
             auto array_uses = def_uses.at(array_def);
-            auto fill_array_data_insn = find_fill_array_data_use(array_uses);
-            auto op_data = fill_array_data_insn->get_data();
+            auto* fill_array_data_insn = find_fill_array_data_use(array_uses);
+            auto* op_data = fill_array_data_insn->get_data();
             auto payload = get_fill_array_data_payload<uint32_t>(op_data);
             EXPECT_EQ(payload.size(), expected_size);
             payload_callback(field_name, payload);
@@ -371,15 +371,15 @@ TEST_F(RClassTest, noDoubleRemappingArrays) {
   r_class_writer.remap_resource_class_arrays(stores, old_to_remapped_ids);
 
   DexClass* sget_r_class = get_r_class(*classes, styleable_sgets_r_class_name);
-  auto clinit = sget_r_class->get_clinit();
-  auto code = clinit->get_code();
+  auto* clinit = sget_r_class->get_clinit();
+  auto* code = clinit->get_code();
   dump_code_verbose(code);
   bool found_array{false};
   for (const auto& mie : cfg::InstructionIterable(code->cfg())) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
       found_array = true;
-      auto op_data = insn->get_data();
+      auto* op_data = insn->get_data();
       auto payload = get_fill_array_data_payload<uint32_t>(op_data);
       EXPECT_EQ(payload.size(), 2) << "Should have two elements!";
       EXPECT_EQ(payload[0], TARGET_ID) << "Remapping was incorrect!";
@@ -390,7 +390,7 @@ TEST_F(RClassTest, noDoubleRemappingArrays) {
 }
 
 TEST_F(RClassTest, bePermissiveWhenInInstrumentationMode) {
-  auto instrumented_r_cls = assembler::class_from_string(R"(
+  auto* instrumented_r_cls = assembler::class_from_string(R"(
     (class (public) "Lcom/redextest/R$styleable_instr;"
       (field (public static final) "Lcom/redextest/R$styleable_instr;.eight:[I")
       (method (static constructor) "Lcom/redextest/R$styleable_instr;.<clinit>:()V"
@@ -429,7 +429,7 @@ TEST_F(RClassTest, bePermissiveWhenInInstrumentationMode) {
   temp_store.add_classes(test_scope);
   std::vector<DexStore> temp_stores{temp_store};
 
-  auto code = instrumented_r_cls->get_clinit()->get_code();
+  auto* code = instrumented_r_cls->get_clinit()->get_code();
   std::cout << "Instrumented R clinit:" << std::endl;
   dump_code_verbose(code);
 
@@ -443,11 +443,11 @@ TEST_F(RClassTest, bePermissiveWhenInInstrumentationMode) {
   dump_code_verbose(code);
   size_t found_count{0};
   for (const auto& mie : cfg::InstructionIterable(code->cfg())) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
       found_count++;
       if (found_count == 2) {
-        auto op_data = insn->get_data();
+        auto* op_data = insn->get_data();
         auto payload = get_fill_array_data_payload<uint32_t>(op_data);
         EXPECT_EQ(payload.size(), 2) << "Should have two elements!";
         EXPECT_EQ(payload[0], 0x7f090000) << "Remapping was incorrect!";

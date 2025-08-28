@@ -16,7 +16,7 @@ class SingleImplTest : public RedexIntegrationTest {
   void SetUp() override {
     DexType* m_helper = DexType::get_type("Lcom/facebook/redextest/Helper;");
 
-    auto create_intf = assembler::method_from_string(R"(
+    auto* create_intf = assembler::method_from_string(R"(
       (method (public static) "Lcom/facebook/redextest/Helper;.createIntf:()Ljava/lang/Object;"
        (
         (new-instance "Lcom/facebook/redextest/Impl;")
@@ -27,7 +27,7 @@ class SingleImplTest : public RedexIntegrationTest {
       )
     )");
 
-    auto ret_intf = assembler::method_from_string(R"(
+    auto* ret_intf = assembler::method_from_string(R"(
       (method (public static) "Lcom/facebook/redextest/Helper;.retIntf:()Lcom/facebook/redextest/Intf;"
        (
         (invoke-static () "Lcom/facebook/redextest/Helper;.createIntf:()Ljava/lang/Object;")
@@ -65,7 +65,7 @@ TEST_F(SingleImplTest, RemoveReturnTypeInterfaceTest) {
     )
   )");
 
-  auto ret_impl = DexMethod::get_method(
+  auto* ret_impl = DexMethod::get_method(
       "Lcom/facebook/redextest/Helper;.retIntf:()Lcom/"
       "facebook/redextest/Impl;");
   EXPECT_CODE_EQ(ret_impl->as_def()->get_code(), expected_code.get());

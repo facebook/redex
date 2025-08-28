@@ -41,11 +41,11 @@ struct ScoredClosure {
   bool destroys_large_packed_switch{false};
   std::vector<ClosureArgument> args{};
 
-  int is_switch() const { return switch_block ? 1 : 0; }
+  int is_switch() const { return switch_block != nullptr ? 1 : 0; }
 
   // id is unique among all splittable closures where is_switch() is the same.
   size_t id() const {
-    if (switch_block) {
+    if (switch_block != nullptr) {
       return switch_block->id();
     }
     always_assert(closures.size() == 1);
@@ -61,16 +61,16 @@ UnorderedSet<const ReducedEdge*> get_except_preds(
     const UnorderedSet<const ReducedBlock*>& reduced_components,
     UnorderedSet<int32_t>* except_case_keys) {
   UnorderedSet<const ReducedEdge*> except_preds;
-  for (auto* c : closures) {
+  for (const auto* c : closures) {
     insert_unordered_iterable(except_preds, c->reduced_block->preds);
   }
-  if (switch_block) {
-    for (auto* c : closures) {
-      for (auto* pred : UnorderedIterable(c->reduced_block->preds)) {
-        if (reduced_components.count(pred->src)) {
+  if (switch_block != nullptr) {
+    for (const auto* c : closures) {
+      for (const auto* pred : UnorderedIterable(c->reduced_block->preds)) {
+        if (reduced_components.count(pred->src) != 0u) {
           continue;
         }
-        for (auto* e : UnorderedIterable(pred->edges)) {
+        for (const auto* e : UnorderedIterable(pred->edges)) {
           if (e->src() != switch_block) {
             except_preds.erase(pred);
             break;
@@ -89,7 +89,7 @@ bool is_large(const Config& config,
               const UnorderedSet<int32_t>* except_case_keys = nullptr) {
   // ">" and not ">=" because the succs include the default edge.
   return switch_block->succs().size() -
-             (except_case_keys ? except_case_keys->size() : 0) >
+             (except_case_keys != nullptr ? except_case_keys->size() : 0) >
          config.min_large_switch_size;
 }
 
@@ -101,7 +101,8 @@ bool is_packed(cfg::Block* switch_block,
       continue;
     }
     auto case_key = *e->case_key();
-    if (except_case_keys && except_case_keys->count(case_key)) {
+    if ((except_case_keys != nullptr) &&
+        (except_case_keys->count(case_key) != 0u)) {
       continue;
     }
     ckeb.insert(case_key);
@@ -117,7 +118,7 @@ std::optional<ScoredClosure> score(
     bool is_large_packed_switch,
     const std::vector<const Closure*>& closures) {
   ScoredClosure sc{switch_block, closures};
-  for (auto* c : closures) {
+  for (const auto* c : closures) {
     insert_unordered_iterable(sc.reduced_components, c->reduced_components);
   }
   auto reduced_components_code_size = code_size(sc.reduced_components);
@@ -128,8 +129,8 @@ std::optional<ScoredClosure> score(
   }
   bool any_src_hot{false};
   bool any_target_hot{false};
-  for (auto* c : closures) {
-    for (auto* pred : UnorderedIterable(c->reduced_block->preds)) {
+  for (const auto* c : closures) {
+    for (const auto* pred : UnorderedIterable(c->reduced_block->preds)) {
       any_src_hot |= pred->src->is_hot;
     }
     any_target_hot |= c->reduced_block->is_hot;
@@ -197,7 +198,7 @@ std::optional<ScoredClosure> score(
     }
   }
 
-  auto& rcfg = *mcs.rcfg;
+  const auto& rcfg = *mcs.rcfg;
   auto remaining_blocks = rcfg.reachable(rcfg.entry_block(), except_preds);
   sc.remaining_size = code_size(remaining_blocks);
   sc.remaining_size = sc.remaining_size < remaining_size_reduction
@@ -216,7 +217,7 @@ UnorderedSet<const ReducedBlock*> get_critical_components(
     const Closure* fallthrough) {
   UnorderedMap<const ReducedBlock*, size_t> counts;
   auto add_to_counts = [&counts](const Closure* c) {
-    for (auto* component : UnorderedIterable(c->reduced_components)) {
+    for (const auto* component : UnorderedIterable(c->reduced_components)) {
       counts[component]++;
     }
   };
@@ -225,7 +226,8 @@ UnorderedSet<const ReducedBlock*> get_critical_components(
   }
   UnorderedSet<const ReducedBlock*> critical_components;
   for (auto [c, count] : UnorderedIterable(counts)) {
-    if (count < keyed.size() && !fallthrough->reduced_components.count(c)) {
+    if (count < keyed.size() &&
+        (fallthrough->reduced_components.count(c) == 0u)) {
       critical_components.insert(c);
     }
   }
@@ -274,13 +276,13 @@ std::vector<const Closure*> aggregate_half_sparse(
   std::vector<const Closure*> aggregated{fallthrough};
   // Select the seed case, which will influence all following cases.
   // We start with the largest key, preferring aggregating a suffix.
-  auto seed = keyed.front().second;
+  const auto* seed = keyed.front().second;
   aggregator.erase(seed);
   aggregated.push_back(seed);
 
   // Add up to half of all cases
   while (!aggregator.empty() && aggregated.size() * 2 <= switched_size) {
-    auto c = aggregator.front();
+    const auto* c = aggregator.front();
     aggregator.erase(c);
     aggregated.push_back(c);
   }
@@ -304,10 +306,10 @@ std::optional<ScoredClosure> aggregate(
                                                          // min-case-key
                                                          // except fallthrough
   const Closure* fallthrough = nullptr; // may include case-keys
-  for (auto* c : switched) {
+  for (const auto* c : switched) {
     auto expanded_preds = c->reduced_block->expand_preds(switch_block);
     always_assert(!expanded_preds.empty());
-    auto* min_edge = *std::min_element(
+    const auto* min_edge = *std::min_element(
         expanded_preds.begin(), expanded_preds.end(),
         [](auto* e, auto* f) { return e->case_key() < f->case_key(); });
     if (min_edge->case_key()) {
@@ -318,7 +320,7 @@ std::optional<ScoredClosure> aggregate(
       fallthrough = c;
     }
   }
-  if (keyed.empty() || !fallthrough) {
+  if (keyed.empty() || (fallthrough == nullptr)) {
     return std::nullopt;
   }
   // Sort to have smallest case keys last, to prefer aggregating a suffix
@@ -366,7 +368,7 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
   std::vector<ScoredClosure> scored_closures;
   UnorderedMap<cfg::Block*, std::vector<const Closure*>>
       remaining_switch_case_closures;
-  for (auto& c : mcs.closures) {
+  for (const auto& c : mcs.closures) {
     auto opt_sc = score(config, mcs, max_overhead_ratio,
                         /* switch_block */ nullptr,
                         /* is_large_packed_switch */ false, {&c});
@@ -425,10 +427,10 @@ std::vector<SplittableClosure> to_splittable_closures(
       });
 
   // Now we do the expensive analysis of the remaining scored closures.
-  auto method = mcs->method;
+  auto* method = mcs->method;
   Lazy<OutlinerTypeAnalysis> ota(
       [method] { return std::make_unique<OutlinerTypeAnalysis>(method); });
-  auto& rcfg = *mcs->rcfg;
+  const auto& rcfg = *mcs->rcfg;
   auto& cfg = method->get_code()->cfg();
   Lazy<LivenessFixpointIterator> liveness_fp_iter([&cfg] {
     auto res = std::make_unique<LivenessFixpointIterator>(cfg);
@@ -442,9 +444,9 @@ std::vector<SplittableClosure> to_splittable_closures(
   Lazy<UnorderedMap<IRInstruction*, const ReducedBlock*>> insns([&rcfg] {
     auto res =
         std::make_unique<UnorderedMap<IRInstruction*, const ReducedBlock*>>();
-    for (auto* reduced_block : rcfg.blocks()) {
-      for (auto block : UnorderedIterable(reduced_block->blocks)) {
-        for (auto& mie : InstructionIterable(block)) {
+    for (const auto* reduced_block : rcfg.blocks()) {
+      for (const auto* block : UnorderedIterable(reduced_block->blocks)) {
+        for (const auto& mie : InstructionIterable(block)) {
           res->emplace(mie.insn, reduced_block);
         }
       }
@@ -500,7 +502,7 @@ std::vector<SplittableClosure> to_splittable_closures(
         sc.args.push_back((ClosureArgument){reg, nullptr, *defs.begin()});
         continue;
       }
-      auto type = ota->get_type_demand(rcfgca, reg);
+      const auto* type = ota->get_type_demand(rcfgca, reg);
       if (!type) {
         return true;
       }
@@ -533,7 +535,7 @@ std::vector<SplittableClosure> to_splittable_closures(
       oss << "   - ";
       std::vector<const cfg::Block*> blocks;
       UnorderedSet<const ReducedBlock*> reachable;
-      for (auto* c : sc.closures) {
+      for (const auto* c : sc.closures) {
         insert_unordered_iterable(blocks, blocks.end(),
                                   c->reduced_block->blocks);
         oss << "R" << c->reduced_block->id << ",";
@@ -543,11 +545,11 @@ std::vector<SplittableClosure> to_splittable_closures(
       oss << ": ";
       std::sort(blocks.begin(), blocks.end(),
                 [](auto* b, auto* c) { return b->id() < c->id(); });
-      for (auto* b : blocks) {
+      for (const auto* b : blocks) {
         oss << "B" << b->id() << ", ";
       }
       oss << "reaches ";
-      for (auto* other : UnorderedIterable(reachable)) {
+      for (const auto* other : UnorderedIterable(reachable)) {
         oss << "R" << other->id << ", ";
       }
       oss << "\n";
@@ -571,7 +573,7 @@ namespace method_splitting_impl {
 std::vector<DexType*> SplittableClosure::get_arg_types() const {
   std::vector<DexType*> arg_types;
   for (auto arg : args) {
-    if (arg.type) {
+    if (arg.type != nullptr) {
       arg_types.push_back(const_cast<DexType*>(arg.type));
     }
   }
@@ -594,7 +596,8 @@ select_splittable_closures_based_on_costs(
       if (rcfg->code_size() >= config.min_original_size) {
         return true;
       }
-      if (concurrent_hot_methods && concurrent_hot_methods->count(method) &&
+      if ((concurrent_hot_methods != nullptr) &&
+          (concurrent_hot_methods->count(method) != 0u) &&
           rcfg->code_size() >= config.min_original_size_hot_method) {
         return true;
       }
@@ -618,8 +621,8 @@ select_splittable_closures_based_on_costs(
     std::vector<ScoredClosure> scored_closures;
     auto adjustment = cfg.get_size_adjustment(
         /* assume_no_unreachable_blocks */ true);
-    bool is_hot = concurrent_hot_methods &&
-                  concurrent_hot_methods->count(method) &&
+    bool is_hot = (concurrent_hot_methods != nullptr) &&
+                  (concurrent_hot_methods->count(method) != 0u) &&
                   mcs->original_size >= config.min_original_size_hot_method;
     bool is_huge =
         mcs->original_size + adjustment > config.huge_threshold ||
@@ -636,7 +639,7 @@ select_splittable_closures_based_on_costs(
       return;
     }
     if (method->rstate.no_optimizations()) {
-      if (concurrent_splittable_no_optimizations_methods) {
+      if (concurrent_splittable_no_optimizations_methods != nullptr) {
         concurrent_splittable_no_optimizations_methods->emplace(
             method, mcs->original_size + adjustment);
       }
@@ -682,14 +685,14 @@ select_splittable_closures_from_top_level_switch_cases(
             SHOW(cfg));
       return;
     }
-    auto default_block = entry_block->goes_to();
+    auto* default_block = entry_block->goes_to();
 
     std::vector<ScoredClosure> scored_closures;
     for (auto& c : mcs->closures) {
       if (c.srcs.size() != 1 || *unordered_any(c.srcs) != entry_block) {
         continue;
       }
-      if (c.reduced_block->blocks.count(default_block)) {
+      if (c.reduced_block->blocks.count(default_block) != 0u) {
         // We don't bother with the fall-through case that typically throws an
         // exception.
         continue;

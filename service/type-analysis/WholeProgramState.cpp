@@ -51,7 +51,7 @@ bool is_reference(const DexField* field) {
 }
 
 bool returns_reference(const DexMethod* method) {
-  auto rtype = method->get_proto()->get_rtype();
+  auto* rtype = method->get_proto()->get_rtype();
   return type::is_object(rtype);
 }
 
@@ -61,7 +61,7 @@ void set_encoded_values(const DexClass* cls, DexTypeEnvironment* env) {
       continue;
     }
     redex_assert(!type::is_primitive(sfield->get_type()));
-    auto value = sfield->get_static_value();
+    auto* value = sfield->get_static_value();
     if (value == nullptr || value->evtype() == DEVT_NULL) {
       env->set(sfield, DexTypeDomain::null());
     } else if (sfield->get_type() == type::java_lang_String() &&
@@ -84,7 +84,7 @@ void set_encoded_values(const DexClass* cls, DexTypeEnvironment* env) {
 void set_sfields_in_partition(const DexClass* cls,
                               const DexTypeEnvironment& env,
                               DexTypeFieldPartition* field_partition) {
-  for (auto& field : cls->get_sfields()) {
+  for (const auto& field : cls->get_sfields()) {
     if (!is_reference(field)) {
       continue;
     }
@@ -115,7 +115,7 @@ void set_ifields_in_partition(
     const EligibleIfields& eligible_ifields,
     const bool only_aggregate_safely_inferrable_fields,
     DexTypeFieldPartition* field_partition) {
-  for (auto& field : cls->get_ifields()) {
+  for (const auto& field : cls->get_ifields()) {
     if (!is_reference(field) || (only_aggregate_safely_inferrable_fields &&
                                  eligible_ifields.count(field) == 0)) {
       continue;
@@ -138,7 +138,7 @@ void set_ifields_in_partition(
 bool analyze_gets_helper(const WholeProgramState* whole_program_state,
                          const IRInstruction* insn,
                          DexTypeEnvironment* env) {
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr || !type::is_object(field->get_type())) {
     return false;
   }
@@ -181,12 +181,12 @@ WholeProgramState::WholeProgramState(
   // TODO: revisit this for multiple callee call graph.
   // Put non-root non true virtual methods in known methods.
   for (const auto& non_true_virtual : UnorderedIterable(non_true_virtuals)) {
-    if (!root(non_true_virtual) && non_true_virtual->get_code()) {
+    if (!root(non_true_virtual) && (non_true_virtual->get_code() != nullptr)) {
       m_known_methods.emplace(non_true_virtual);
     }
   }
   walk::code(scope, [&](DexMethod* method, const IRCode&) {
-    if (!method->is_virtual() && method->get_code()) {
+    if (!method->is_virtual() && (method->get_code() != nullptr)) {
       // Put non virtual methods in known methods.
       m_known_methods.emplace(method);
     }
@@ -219,7 +219,7 @@ std::string WholeProgramState::show_method(const DexMethod* m) {
 }
 void WholeProgramState::setup_known_method_returns() {
   for (auto& p : STATIC_METHOD_TO_TYPE_MAP) {
-    auto method = DexMethod::make_method(p.first);
+    auto* method = DexMethod::make_method(p.first);
     auto type = DexTypeDomain::create_not_null(
         DexType::make_type(DexString::make_string(p.second)));
     m_known_method_returns.insert(std::make_pair(method, type));
@@ -336,8 +336,8 @@ void WholeProgramState::collect_field_types(
       !opcode::is_an_iput(insn->opcode())) {
     return;
   }
-  auto field = resolve_field(insn->get_field());
-  if (!field || !type::is_object(field->get_type())) {
+  auto* field = resolve_field(insn->get_field());
+  if ((field == nullptr) || !type::is_object(field->get_type())) {
     return;
   }
   if (opcode::is_an_iput(insn->opcode()) &&
@@ -403,7 +403,7 @@ void WholeProgramState::collect_return_types(
 
 bool WholeProgramState::is_reachable(const global::GlobalTypeAnalyzer& gta,
                                      const DexMethod* method) const {
-  return !m_known_methods.count(method) || gta.is_reachable(method);
+  return (m_known_methods.count(method) == 0u) || gta.is_reachable(method);
 }
 
 std::string WholeProgramState::print_field_partition_diff(
@@ -419,9 +419,9 @@ std::string WholeProgramState::print_field_partition_diff(
   }
   const auto& this_field_bindings = m_field_partition.bindings();
   const auto& other_field_bindings = other.m_field_partition.bindings();
-  for (auto& pair : this_field_bindings) {
-    auto field = pair.first;
-    if (!other_field_bindings.count(field)) {
+  for (const auto& pair : this_field_bindings) {
+    const auto* field = pair.first;
+    if (other_field_bindings.count(field) == 0u) {
       ss << "[wps] diff " << field << " < " << pair.second << std::endl;
     } else {
       const auto& this_type = pair.second;
@@ -432,9 +432,9 @@ std::string WholeProgramState::print_field_partition_diff(
       }
     }
   }
-  for (auto& pair : other_field_bindings) {
-    auto field = pair.first;
-    if (!this_field_bindings.count(field)) {
+  for (const auto& pair : other_field_bindings) {
+    const auto* field = pair.first;
+    if (this_field_bindings.count(field) == 0u) {
       ss << "[wps] diff " << field << " > " << pair.second << std::endl;
     }
   }
@@ -455,9 +455,9 @@ std::string WholeProgramState::print_method_partition_diff(
   }
   const auto& this_method_bindings = m_method_partition.bindings();
   const auto& other_method_bindings = other.m_method_partition.bindings();
-  for (auto& pair : this_method_bindings) {
-    auto method = pair.first;
-    if (!other_method_bindings.count(method)) {
+  for (const auto& pair : this_method_bindings) {
+    const auto* method = pair.first;
+    if (other_method_bindings.count(method) == 0u) {
       ss << "[wps] diff " << method << " < " << pair.second << std::endl;
     } else {
       const auto& this_type = pair.second;
@@ -468,9 +468,9 @@ std::string WholeProgramState::print_method_partition_diff(
       }
     }
   }
-  for (auto& pair : other_method_bindings) {
-    auto method = pair.first;
-    if (!this_method_bindings.count(method)) {
+  for (const auto& pair : other_method_bindings) {
+    const auto* method = pair.first;
+    if (this_method_bindings.count(method) == 0u) {
       ss << "[wps] diff " << method << " > " << pair.second << std::endl;
     }
   }
@@ -516,7 +516,7 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
     return true;
   }
 
-  auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr || !returns_reference(method)) {
     // Reset RESULT_REGISTER
     env->set(RESULT_REGISTER, DexTypeDomain::top());

@@ -53,7 +53,7 @@ dex_data_map_t create_data(
         dex_limits.update_refs_by_always_adding_class(cls);
       }
 
-      auto& dex_struct = dex_limits.get_dex();
+      const auto& dex_struct = dex_limits.get_dex();
 
       dexes_data.emplace_back(DexLimitsChecker::DexData{
           extract(dex_struct.get_frefs()),
@@ -82,8 +82,8 @@ std::string print_new_entries(const dex_data_map_t& old_map,
                               const std::vector<IssueIndex>& issues) {
   std::ostringstream oss;
 
-  for (auto& i : issues) {
-    auto& store_name = i.store->get_name();
+  for (const auto& i : issues) {
+    const auto& store_name = i.store->get_name();
     auto st_it = old_map.find(store_name);
     if (st_it == old_map.end()) {
       // Totally new store, log that.
@@ -93,7 +93,7 @@ std::string print_new_entries(const dex_data_map_t& old_map,
 
     // See whether we have the dex before. This may not match when dexes are
     // deleted, best effort really.
-    auto& old_dexes = st_it->second;
+    const auto& old_dexes = st_it->second;
     if (old_dexes.size() <= i.dex_id) {
       oss << "\nStore " << store_name << " dex " << i.dex_id
           << " seems newly created.\n";
@@ -103,7 +103,7 @@ std::string print_new_entries(const dex_data_map_t& old_map,
     auto new_st_it = new_map.find(store_name);
     redex_assert(new_st_it != new_map.end());
 
-    auto& new_dexes = new_st_it->second;
+    const auto& new_dexes = new_st_it->second;
     redex_assert(new_dexes.size() > i.dex_id);
 
     auto print_differences =
@@ -203,7 +203,7 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
   }
   Timer t("ref_validation");
   std::string pass_name = "initial state";
-  auto info = mgr.get_current_pass_info();
+  const auto* info = mgr.get_current_pass_info();
   if (info != nullptr) {
     pass_name = info->name;
   }

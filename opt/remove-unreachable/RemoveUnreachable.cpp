@@ -161,7 +161,7 @@ void write_out_removed_symbols_references(
     }
   }
 
-  for (auto s_ptr : sorted) {
+  for (const auto* s_ptr : sorted) {
     if (referenced_to_references.count(*s_ptr) == 0) {
       continue;
     }
@@ -380,7 +380,7 @@ void RemoveUnreachablePassBase::write_out_removed_symbols(
   unordered_transform(removed_symbols,
                       std::inserter(sorted, sorted.end()),
                       [](const std::string& s) { return &s; });
-  for (auto s_ptr : sorted) {
+  for (const auto* s_ptr : sorted) {
     out << *s_ptr << std::endl;
   }
 }

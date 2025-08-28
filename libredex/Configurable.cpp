@@ -47,7 +47,7 @@ optional<DexType*> parse_type(const Json::Value& str,
   if (!str.isString()) {
     throw std::runtime_error("Expected string, got:" + str.asString());
   }
-  auto type = DexType::get_type(str.asString());
+  auto* type = DexType::get_type(str.asString());
   if (type == nullptr) {
     error_or_warn(
         bindflags & Configurable::bindflags::types::error_if_unresolvable,
@@ -61,7 +61,7 @@ optional<DexType*> parse_type(const Json::Value& str,
 optional<DexClass*> parse_class(const Json::Value& value,
                                 Configurable::bindflags_t bindflags) {
   auto type_res = parse_type(value, bindflags);
-  auto cls = type_class(type_res ? *type_res : nullptr);
+  auto* cls = type_class(type_res ? *type_res : nullptr);
   if (cls == nullptr) {
     error_or_warn(
         bindflags & Configurable::bindflags::classes::error_if_unresolvable,
@@ -81,7 +81,7 @@ optional<DexMethodRef*> parse_method_ref(const Json::Value& str,
   if (!str.isString()) {
     throw std::runtime_error("Expected string, got:" + str.asString());
   }
-  auto meth = DexMethod::get_method(str.asString());
+  auto* meth = DexMethod::get_method(str.asString());
   if (meth == nullptr) {
     error_or_warn(
         bindflags & Configurable::bindflags::methods::error_if_unresolvable,
@@ -99,7 +99,7 @@ optional<DexMethod*> parse_method(const Json::Value& str,
   if (!meth_ref_opt) {
     return std::nullopt;
   }
-  auto meth_ref = *meth_ref_opt;
+  auto* meth_ref = *meth_ref_opt;
   if (!meth_ref->is_def()) {
     error_or_warn(
         bindflags & Configurable::bindflags::methods::error_if_not_def,
@@ -126,7 +126,7 @@ optional<std::vector<parse_result<ParseFn>>> parse_vec(
     ParseFn parse_fn,
     Configurable::bindflags_t bindflags) {
   std::vector<parse_result<ParseFn>> result;
-  for (auto& v : value) {
+  for (const auto& v : value) {
     if (auto parsed = parse_fn(v, bindflags)) {
       result.emplace_back(std::move(*parsed));
     }
@@ -140,7 +140,7 @@ optional<UnorderedSet<parse_result<ParseFn>>> parse_set(
     ParseFn parse_fn,
     Configurable::bindflags_t bindflags) {
   UnorderedSet<parse_result<ParseFn>> result;
-  for (auto& v : value) {
+  for (const auto& v : value) {
     if (auto parsed = parse_fn(v, bindflags)) {
       result.emplace(std::move(*parsed));
     }
@@ -358,7 +358,8 @@ std::optional<std::string> Configurable::as<std::optional<std::string>>(
       "std::optional<std::string>");
   std::string str = value.asString();
   if (str.empty() &&
-      (bindflags & Configurable::bindflags::optionals::skip_empty_string)) {
+      ((bindflags & Configurable::bindflags::optionals::skip_empty_string) !=
+       0u)) {
     return std::nullopt;
   } else {
     return str;
@@ -370,7 +371,7 @@ std::vector<Json::Value> Configurable::as<std::vector<Json::Value>>(
     const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(std::vector<Json::Value>);
   std::vector<Json::Value> result;
-  for (auto& str : value) {
+  for (const auto& str : value) {
     result.emplace_back(str);
   }
   return result;

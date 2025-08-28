@@ -327,7 +327,7 @@ class ResourceTableFile {
 
   // Return the resource ids based on the given resource name.
   std::vector<uint32_t> get_res_ids_by_name(const std::string& name) const {
-    if (name_to_ids.count(name)) {
+    if (name_to_ids.count(name) != 0u) {
       return name_to_ids.at(name);
     }
     return std::vector<uint32_t>{};

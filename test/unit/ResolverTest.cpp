@@ -22,7 +22,7 @@ DexField* make_field_def(DexType* cls,
                          DexType* type,
                          DexAccessFlags access = ACC_PUBLIC,
                          bool external = false) {
-  auto field = static_cast<DexField*>(
+  auto* field = static_cast<DexField*>(
       DexField::make_field(cls, DexString::make_string(name), type));
   if (external) {
     field->set_access(access);
@@ -47,7 +47,7 @@ DexClass* create_class(DexType* type,
   if (super != nullptr) {
     creator.set_super(super);
   }
-  for (const auto intf : intfs) {
+  for (auto* const intf : intfs) {
     creator.add_interface(intf);
   }
   for (const auto& field : fields) {
@@ -98,33 +98,33 @@ DexMethodRef* create_method(DexClass* cls,
  * class E extends U
  */
 void create_field_scope() {
-  auto obj_t = DexType::make_type("Ljava/lang/Object;");
-  auto int_t = DexType::make_type("I");
-  auto string_t = DexType::make_type("Ljava/lang/String;");
-  auto intf = DexType::make_type("Intf");
-  auto a = DexType::make_type("A");
-  auto b = DexType::make_type("B");
-  auto c = DexType::make_type("C");
-  auto d = DexType::make_type("D");
-  [[maybe_unused]] auto u = DexType::make_type("U");
-  auto e = DexType::make_type("E");
+  auto* obj_t = DexType::make_type("Ljava/lang/Object;");
+  auto* int_t = DexType::make_type("I");
+  auto* string_t = DexType::make_type("Ljava/lang/String;");
+  auto* intf = DexType::make_type("Intf");
+  auto* a = DexType::make_type("A");
+  auto* b = DexType::make_type("B");
+  auto* c = DexType::make_type("C");
+  auto* d = DexType::make_type("D");
+  [[maybe_unused]] auto* u = DexType::make_type("U");
+  auto* e = DexType::make_type("E");
   std::vector<DexField*> intf_fields{make_field_def(
       intf, "fin_f", int_t, ACC_PUBLIC | ACC_STATIC | ACC_FINAL, true)};
-  [[maybe_unused]] auto class_Intf =
+  [[maybe_unused]] auto* class_Intf =
       create_class(intf, obj_t, intf_fields, ACC_PUBLIC | ACC_INTERFACE);
   std::vector<DexField*> a_fields{
       make_field_def(a, "f1", int_t, ACC_PUBLIC, true)};
-  [[maybe_unused]] auto cls_A =
+  [[maybe_unused]] auto* cls_A =
       create_class(a, obj_t, a_fields, ACC_PUBLIC, true);
   std::vector<DexField*> b_fields{
       make_field_def(b, "f2", string_t, ACC_PUBLIC | ACC_STATIC)};
   std::vector<DexType*> intfs{intf};
-  [[maybe_unused]] auto cls_B = create_class(b, a, intfs, b_fields);
+  [[maybe_unused]] auto* cls_B = create_class(b, a, intfs, b_fields);
   std::vector<DexField*> no_fields{};
-  [[maybe_unused]] auto cls_C = create_class(c, b, no_fields);
+  [[maybe_unused]] auto* cls_C = create_class(c, b, no_fields);
   std::vector<DexField*> d_fields{make_field_def(d, "f", a)};
-  [[maybe_unused]] auto cls_D = create_class(d, obj_t, d_fields);
-  [[maybe_unused]] auto cls_E = create_class(e, obj_t, no_fields);
+  [[maybe_unused]] auto* cls_D = create_class(d, obj_t, d_fields);
+  [[maybe_unused]] auto* cls_E = create_class(e, obj_t, no_fields);
 }
 
 /**
@@ -149,42 +149,42 @@ void create_field_scope() {
  *   void method()
  */
 void create_method_scope() {
-  auto obj_t = DexType::make_type("Ljava/lang/Object;");
-  auto a = DexType::make_type("A");
-  auto b = DexType::make_type("B");
-  auto c = DexType::make_type("C");
-  auto d = DexType::make_type("D");
-  auto e = DexType::make_type("E");
-  auto f = DexType::make_type("F");
-  auto g = DexType::make_type("G");
-  auto h = DexType::make_type("H");
+  auto* obj_t = DexType::make_type("Ljava/lang/Object;");
+  auto* a = DexType::make_type("A");
+  auto* b = DexType::make_type("B");
+  auto* c = DexType::make_type("C");
+  auto* d = DexType::make_type("D");
+  auto* e = DexType::make_type("E");
+  auto* f = DexType::make_type("F");
+  auto* g = DexType::make_type("G");
+  auto* h = DexType::make_type("H");
   std::vector<DexField*> no_fields{};
   std::vector<DexType*> interfaces_a{a};
   std::vector<DexType*> no_interfaces{};
   std::vector<DexType*> interfaces_e{e};
-  auto interface_a =
+  auto* interface_a =
       create_class(a, obj_t, no_fields, ACC_PUBLIC | ACC_INTERFACE);
   create_method(interface_a, "method", ACC_PUBLIC | ACC_INTERFACE);
-  auto cls_b = create_class(b, obj_t, interfaces_a, no_fields, ACC_PUBLIC);
+  auto* cls_b = create_class(b, obj_t, interfaces_a, no_fields, ACC_PUBLIC);
   create_method(cls_b, "method", ACC_PUBLIC);
   create_method(cls_b, "surprise", ACC_PUBLIC | ACC_STATIC, /* concrete */ true,
                 /* is_virtual */ false);
-  auto cls_c = create_class(c, b, interfaces_a, no_fields, ACC_PUBLIC);
+  auto* cls_c = create_class(c, b, interfaces_a, no_fields, ACC_PUBLIC);
   create_method(cls_c, "method", ACC_PUBLIC, /* concrete */ false);
   create_method(cls_c, "surprise", ACC_PUBLIC);
-  auto cls_d = create_class(d, c, interfaces_a, no_fields, ACC_PUBLIC);
+  auto* cls_d = create_class(d, c, interfaces_a, no_fields, ACC_PUBLIC);
   create_method(cls_d, "method", ACC_PUBLIC);
 
-  auto interface_e =
+  auto* interface_e =
       create_class(e, obj_t, no_fields, ACC_PUBLIC | ACC_INTERFACE);
   create_method(interface_e, "method", ACC_PUBLIC | ACC_INTERFACE);
-  auto cls_f = create_class(f, obj_t, interfaces_e, no_fields,
-                            ACC_PUBLIC | ACC_ABSTRACT);
+  auto* cls_f = create_class(f, obj_t, interfaces_e, no_fields,
+                             ACC_PUBLIC | ACC_ABSTRACT);
   create_method(cls_f, "method", ACC_PUBLIC, /* concrete */ false);
-  auto cls_g =
+  auto* cls_g =
       create_class(g, f, no_interfaces, no_fields, ACC_PUBLIC | ACC_ABSTRACT);
   create_method(cls_g, "method", ACC_PUBLIC, /* concrete */ false);
-  auto cls_h = create_class(h, g, no_interfaces, no_fields, ACC_PUBLIC);
+  auto* cls_h = create_class(h, g, no_interfaces, no_fields, ACC_PUBLIC);
   create_method(cls_h, "method", ACC_PUBLIC);
 }
 
@@ -311,26 +311,26 @@ TEST_F(ResolverTest, ResolveField) {
 TEST_F(ResolverTest, ResolveMethod) {
   create_method_scope();
 
-  auto a_method = DexMethod::get_method("A.method:()V");
+  auto* a_method = DexMethod::get_method("A.method:()V");
   EXPECT_TRUE(a_method != nullptr && a_method->is_def());
 
-  auto b_method = DexMethod::get_method("B.method:()V");
+  auto* b_method = DexMethod::get_method("B.method:()V");
   EXPECT_TRUE(b_method != nullptr && b_method->is_def());
-  auto b_surprise = DexMethod::get_method("B.surprise:()V");
+  auto* b_surprise = DexMethod::get_method("B.surprise:()V");
   EXPECT_TRUE(b_surprise != nullptr && b_surprise->is_def());
 
-  auto c_method = DexMethod::get_method("C.method:()V");
+  auto* c_method = DexMethod::get_method("C.method:()V");
   EXPECT_TRUE(c_method != nullptr && !c_method->is_def());
-  auto c_surprise = DexMethod::get_method("C.surprise:()V");
+  auto* c_surprise = DexMethod::get_method("C.surprise:()V");
   EXPECT_TRUE(c_surprise != nullptr && c_surprise->is_def());
 
-  auto d_method = DexMethod::get_method("D.method:()V");
+  auto* d_method = DexMethod::get_method("D.method:()V");
   EXPECT_TRUE(d_method != nullptr && d_method->is_def());
 
-  auto a_method_def = a_method->as_def();
-  auto b_method_def = b_method->as_def();
-  auto c_surprise_def = c_surprise->as_def();
-  auto d_method_def = d_method->as_def();
+  auto* a_method_def = a_method->as_def();
+  auto* b_method_def = b_method->as_def();
+  auto* c_surprise_def = c_surprise->as_def();
+  auto* d_method_def = d_method->as_def();
 
   EXPECT_TRUE(resolve_method(a_method, MethodSearch::Direct) == a_method);
   EXPECT_TRUE(resolve_method(a_method, MethodSearch::Static) == a_method);
@@ -400,16 +400,16 @@ TEST_F(ResolverTest, ResolveMethod) {
   EXPECT_TRUE(resolve_method(c_method, MethodSearch::Interface, ref_cache) ==
               a_method);
 
-  auto e_method = DexMethod::get_method("E.method:()V");
+  auto* e_method = DexMethod::get_method("E.method:()V");
   EXPECT_TRUE(e_method != nullptr && e_method->is_def());
 
-  auto f_method = DexMethod::get_method("F.method:()V");
+  auto* f_method = DexMethod::get_method("F.method:()V");
   EXPECT_TRUE(f_method != nullptr && !f_method->is_def());
 
-  auto g_method = DexMethod::get_method("G.method:()V");
+  auto* g_method = DexMethod::get_method("G.method:()V");
   EXPECT_TRUE(g_method != nullptr && !g_method->is_def());
 
-  auto h_method = DexMethod::get_method("H.method:()V");
+  auto* h_method = DexMethod::get_method("H.method:()V");
   EXPECT_TRUE(h_method != nullptr && h_method->is_def());
 
   EXPECT_TRUE(resolve_method(e_method, MethodSearch::Direct) == e_method);

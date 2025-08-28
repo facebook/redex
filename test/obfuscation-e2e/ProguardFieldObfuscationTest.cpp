@@ -27,7 +27,7 @@ void testClass(ProguardObfuscationTest* tester,
                const std::string& class_name,
                const std::vector<std::string>& fields,
                bool expects_found = false) {
-  auto clazz = tester->find_class_named(class_name);
+  auto* clazz = tester->find_class_named(class_name);
   ASSERT_NE(nullptr, clazz) << class_name << " not found.";
 
   for (const std::string& fieldName : fields) {
@@ -63,7 +63,7 @@ TEST_F(ProguardFieldObfuscationTest, obfuscation) {
   std::vector<std::string> alphaNames = {
       ".wombat:I", ".numbat:I", ".reflected6:I", ".omega:Ljava/lang/String;",
       ".theta:Ljava/util/List;"};
-  if (!strcmp(refl_strategy, "rename")) {
+  if (strcmp(refl_strategy, "rename") == 0) {
     alphaNames.insert(
         alphaNames.end(), reflectedNames.begin(), reflectedNames.end());
   } else {
@@ -88,7 +88,7 @@ TEST_F(ProguardFieldObfuscationTest, obfuscation) {
       << "Refs to " << worldNames[0] << " not properly modified";
 
   // Make sure the fields in the class Beta are not renamed.
-  auto beta =
+  auto* beta =
       tester.find_class_named("Lcom/facebook/redex/test/proguard/Beta;");
   ASSERT_NE(nullptr, beta);
   ASSERT_TRUE(tester.field_found(

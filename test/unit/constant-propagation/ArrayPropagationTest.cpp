@@ -53,7 +53,7 @@ TEST_F(ConstantPropagationTest, ConstantArrayOperations) {
     }
     // Check that iterating over the bindings works too
     size_t count = 0;
-    for (auto& pair : arr.bindings()) {
+    for (const auto& pair : arr.bindings()) {
       EXPECT_EQ(pair.second, SignedConstantDomain(0));
       ++count;
     }
@@ -214,7 +214,7 @@ TEST_F(ConstantPropagationTest, PrimitiveFillArrayData) {
 }
 
 TEST_F(ConstantPropagationTest, PrimitiveFillArrayDataUnknownLen) {
-  auto code_unknown_len = R"(
+  const auto* code_unknown_len = R"(
     (
      (const v0 0)
 
@@ -239,7 +239,7 @@ TEST_F(ConstantPropagationTest, PrimitiveFillArrayDataUnknownLen) {
 )";
   VERIFY_NO_CHANGE(code_unknown_len);
 
-  auto code_bad_len = R"(
+  const auto* code_bad_len = R"(
     (
      (const v0 0)
      (const v1 1)
@@ -261,7 +261,7 @@ TEST_F(ConstantPropagationTest, PrimitiveFillArrayDataUnknownLen) {
 )";
   VERIFY_NO_CHANGE(code_bad_len);
 
-  auto code_no_idea = R"(
+  const auto* code_no_idea = R"(
     (
      (const v0 0)
 
@@ -283,7 +283,7 @@ TEST_F(ConstantPropagationTest, PrimitiveFillArrayDataUnknownLen) {
 )";
   VERIFY_NO_CHANGE(code_no_idea);
 
-  auto code_unknown_idx = R"(
+  const auto* code_unknown_idx = R"(
     (
      (const v0 0)
      (const v1 1)
@@ -346,7 +346,7 @@ TEST_F(ConstantPropagationTest, PrimitiveFilledNewArray) {
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 
-  auto code_unknown_val = R"(
+  const auto* code_unknown_val = R"(
     (
      (const v0 0)
      (invoke-static () "LFoo;.bar:()I")
@@ -374,7 +374,7 @@ TEST_F(ConstantPropagationTest, UnknownPrimitiveArray) {
   // size is unknown. Analyzer should not crash and demonstrate that it knows
   // approximately nothing about the array. Knowing that length is nonnegative
   // is fine but that is not necessarily implemented right now.
-  auto code_size_unknown = R"(
+  const auto* code_size_unknown = R"(
     (
      (const v0 1)
      (const v1 99)
@@ -402,7 +402,7 @@ TEST_F(ConstantPropagationTest, UnknownPrimitiveArray) {
 TEST_F(ConstantPropagationTest, UnknownReturnValuesClearedOut) {
   // Makes sure handling of RESULT_REGISTER is not forgotten when it needs to be
   // reset.
-  auto code = R"(
+  const auto* code = R"(
     (
      (const v0 0)
      (const v1 1)
@@ -430,7 +430,7 @@ TEST_F(ConstantPropagationTest, UnknownReturnValuesClearedOut) {
 TEST_F(ConstantPropagationTest, ObjectArrayReturnValueClearedOut) {
   // Makes sure handling of RESULT_REGISTER is not forgotten when it needs to be
   // reset for creation of object arrays (which are not being modeled here).
-  auto code = R"(
+  const auto* code = R"(
     (
      (const v0 0)
      (const v1 1)

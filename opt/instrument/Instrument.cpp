@@ -61,13 +61,13 @@ bool match_class_name(std::string cls_name,
                       const UnorderedSet<std::string>& set) {
   always_assert(cls_name.back() == ';');
   // We also support exact class name (e.g., "Lcom/facebook/Debug;")
-  if (set.count(cls_name)) {
+  if (set.count(cls_name) != 0u) {
     return true;
   }
   cls_name.back() = '/';
   size_t pos = cls_name.find('/', 0);
   while (pos != std::string::npos) {
-    if (set.count(cls_name.substr(0, pos + 1))) {
+    if (set.count(cls_name.substr(0, pos + 1)) != 0u) {
       return true;
     }
     pos = cls_name.find('/', pos + 1);
@@ -95,7 +95,7 @@ void instrument_onMethodBegin(DexMethod* method,
 
   // Try to find a right insertion point: the entry point of the method.
   // We skip any fall throughs and IOPCODE_LOAD_PARRM*.
-  auto entry_block = cfg.entry_block();
+  auto* entry_block = cfg.entry_block();
   auto insert_point = entry_block->get_first_non_param_loading_insn();
   auto cfg_insert_point =
       entry_block->to_cfg_instruction_iterator(insert_point);
@@ -176,7 +176,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     total_size += sum_opcode_sizes;
 
     // Excluding analysis methods myselves.
-    if (analysis_method_names.count(method->get_name()->str_copy()) ||
+    if ((analysis_method_names.count(method->get_name()->str_copy()) != 0u) ||
         method == analysis_cls->get_clinit()) {
       ++excluded;
       TRACE(INSTRUMENT, 2, "Excluding analysis method: %s", SHOW(method));
@@ -252,10 +252,10 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
     int instrumented = 0;
     size_t total_size = 0;
-    for (auto dmethod : cls->get_dmethods()) {
+    for (auto* dmethod : cls->get_dmethods()) {
       instrumented += worker(dmethod, total_size);
     }
-    for (auto vmethod : cls->get_vmethods()) {
+    for (auto* vmethod : cls->get_vmethods()) {
       instrumented += worker(vmethod, total_size);
     }
 
@@ -316,7 +316,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
   // Patch method count constant.
   always_assert(method_id == kTotalSize);
-  auto field = analysis_cls->find_field_from_simple_deobfuscated_name(
+  auto* field = analysis_cls->find_field_from_simple_deobfuscated_name(
       "sNumStaticallyInstrumented");
   always_assert(field != nullptr);
   InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
@@ -465,7 +465,7 @@ void InstrumentPass::patch_static_field(DexClass* analysis_cls,
   always_assert(clinit != nullptr);
 
   // Find the sput with the given field name.
-  auto code = clinit->get_code();
+  auto* code = clinit->get_code();
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
@@ -489,7 +489,7 @@ void InstrumentPass::patch_static_field(DexClass* analysis_cls,
   // SPUT can be null if the original field value was encoded in the
   // static_values_off array. And consider simplifying using make_concrete.
   TRACE(INSTRUMENT, 2, "sput %s was deleted; creating it", SHOW(field_name));
-  auto sput_inst = new IRInstruction(OPCODE_SPUT);
+  auto* sput_inst = new IRInstruction(OPCODE_SPUT);
   sput_inst->set_field(
       DexField::make_field(DexType::make_type(analysis_cls->get_name()),
                            DexString::make_string(field_name),
@@ -499,7 +499,7 @@ void InstrumentPass::patch_static_field(DexClass* analysis_cls,
   const auto reg_dest = cfg.allocate_temp();
   const_inst->set_dest(reg_dest);
   sput_inst->set_src(0, reg_dest);
-  auto entry_block = cfg.entry_block();
+  auto* entry_block = cfg.entry_block();
   auto last_param = entry_block->get_last_param_loading_insn();
   // always_assert(last_param != entry_block->end());
   if (last_param != entry_block->end()) {
@@ -581,18 +581,18 @@ void maybe_unset_dynamic_analysis(
   };
 
   [&]() {
-    auto analysis_type = DexType::get_type(analysis_class_name);
+    auto* analysis_type = DexType::get_type(analysis_class_name);
     if (analysis_type == nullptr) {
       return;
     }
-    auto analysis_cls = type_class(analysis_type);
+    auto* analysis_cls = type_class(analysis_type);
     if (analysis_cls == nullptr) {
       return;
     }
 
     undo_rename_delete(analysis_cls);
 
-    auto field = analysis_cls->find_field_from_simple_deobfuscated_name(
+    auto* field = analysis_cls->find_field_from_simple_deobfuscated_name(
         "sNumStaticallyInstrumented");
     if (field != nullptr) {
       // Make it final. The default value should be 0, and may lead to other
@@ -647,12 +647,12 @@ void set_no_opt_flag_on_analysis_methods(
   // Set the 'no_optimizations' flag for analysis methods (onMethodBeginGated,
   // onMethodExit). Primarily so we do not outline from them.
 
-  auto analysis_type = DexType::get_type(analysis_class_name);
+  auto* analysis_type = DexType::get_type(analysis_class_name);
   if (analysis_type == nullptr) {
     return;
   }
 
-  auto analysis_cls = type_class(analysis_type);
+  auto* analysis_cls = type_class(analysis_type);
   if (analysis_cls == nullptr) {
     return;
   }
@@ -692,13 +692,13 @@ size_t check_integrity(DexStoresVector& stores, const std::string& prefix) {
     }
   });
   walk::parallel::methods(scope, [&](DexMethod* m) {
-    auto code = m->get_code();
+    auto* code = m->get_code();
     if (code == nullptr) {
       return;
     }
     cfg::ScopedCFG cfg{code};
     for (auto& mie : cfg::InstructionIterable(*cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       always_assert_log(!insn->has_type() || check_type(insn->get_type()), "%s",
                         SHOW(insn));
 
@@ -783,7 +783,7 @@ bool InstrumentPass::is_included(const DexMethod* method,
 
   // Try to check for method by its full name.
   std::string full_method_name = method->get_deobfuscated_name_or_empty_copy();
-  if (set.count(full_method_name)) {
+  if (set.count(full_method_name) != 0u) {
     return true;
   }
 
@@ -917,7 +917,7 @@ InstrumentPass::patch_sharded_arrays(
         // human-readable names here.
         for (size_t i = 1; i <= num_shards; i++) {
           const auto new_name =
-              suggested_names.count(i)
+              suggested_names.count(i) != 0u
                   ? suggested_names.at(i)
                   : InstrumentPass::STATS_FIELD_NAME + std::to_string(i);
           auto deobfuscated_name = template_field->get_deobfuscated_name();
@@ -979,7 +979,7 @@ InstrumentPass::patch_sharded_arrays(
   // Add => OPCODE: APUT_OBJECT vY, vX, vN
   //        ...
   // Add => OPCODE: APUT_OBJECT vY, vX, vN
-  auto field =
+  auto* field =
       cls->find_field_from_simple_deobfuscated_name("sMethodStatsArray");
   always_assert(field != nullptr);
   InstrumentPass::patch_array_size(cls, field->get_name()->str(), num_shards);

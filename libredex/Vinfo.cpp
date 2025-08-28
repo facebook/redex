@@ -20,13 +20,13 @@ using vinfos_t = Vinfo::vinfos_t;
 
 void build_vinfos_for_meth(vinfos_t& vinfos, const DexMethod* meth) {
   // Get super method
-  auto cls = type_class(meth->get_class());
+  auto* cls = type_class(meth->get_class());
   const DexMethod* super_meth =
       cls == nullptr ? nullptr
                      : resolve_virtual(type_class(cls->get_super_class()),
                                        meth->get_name(), meth->get_proto());
   // If we have a super method, we're an override, and it's overriden
-  if (super_meth) {
+  if (super_meth != nullptr) {
     vinfos[meth].override_of = super_meth;
     vinfos[super_meth].overriden_by.insert(meth);
     vinfos[super_meth].is_overriden = true;
@@ -62,7 +62,7 @@ const DexMethod* Vinfo::get_decl(const DexMethod* meth) {
 
 bool Vinfo::is_override(const DexMethod* meth) {
   redex_assert(std::as_const(m_vinfos).find(meth) != m_vinfos.cend());
-  return m_vinfos[meth].override_of;
+  return m_vinfos[meth].override_of != nullptr;
 }
 
 const DexMethod* Vinfo::get_overriden_method(const DexMethod* meth) {

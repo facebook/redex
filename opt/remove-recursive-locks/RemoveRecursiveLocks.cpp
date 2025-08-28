@@ -150,7 +150,7 @@ struct LocksIterator : public ir_analyzer::BaseIRAnalyzer<LockEnvironment> {
     // to undo the modification then.
     const IRInstruction* monitor_insn;
     {
-      auto src = e->src();
+      auto* src = e->src();
       auto last_it = src->get_last_insn();
       if (last_it == src->end()) {
         return exit_state_at_source;
@@ -168,7 +168,7 @@ struct LocksIterator : public ir_analyzer::BaseIRAnalyzer<LockEnvironment> {
       return LockEnvironment(sparta::AbstractValueKind::Top);
     }
 
-    auto def = it->second;
+    const auto* def = it->second;
     const auto& def_state = exit_state_at_source.get(def);
     if (def_state.is_top() || def_state.is_bottom()) {
       // Uh-oh. Something is wrong.
@@ -216,7 +216,7 @@ struct LocksIterator : public ir_analyzer::BaseIRAnalyzer<LockEnvironment> {
       current_state->set_to_top();
       return;
     }
-    auto def = it->second;
+    const auto* def = it->second;
     auto def_state = current_state->get(def);
     size_t max_d = get_max_depth(*current_state);
 
@@ -313,7 +313,7 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
     }
     std::ostringstream oss;
     oss << "{";
-    for (auto i : defs0.elements()) {
+    for (auto* i : defs0.elements()) {
       oss << ", " << show(i);
     }
     oss << "}";
@@ -347,7 +347,7 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
   {
     std::unordered_set<Block*> seen_blocks;
     for (auto* monitor_insn : monitor_insns) {
-      auto b = block_map.at(monitor_insn);
+      auto* b = block_map.at(monitor_insn);
       if (seen_blocks.count(b) > 0) {
         ret.failure = true;
         return ret;
@@ -385,7 +385,7 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
       }
     };
 
-    auto root_rdef = find_root_def(monitor_insn);
+    auto* root_rdef = find_root_def(monitor_insn);
     if (root_rdef == nullptr) {
       ret.failure = true;
       return ret;
@@ -592,9 +592,9 @@ size_t remove(ControlFlowGraph& cfg, AnalysisResult& analysis) {
       if (opcode::is_a_monitor(insn_it.insn->opcode())) {
         auto it = analysis.rdefs.find(insn_it.insn);
         redex_assert(it != analysis.rdefs.cend());
-        auto def = it->second;
+        const auto* def = it->second;
 
-        auto& bindings = state.bindings();
+        const auto& bindings = state.bindings();
         const auto& def_state = bindings.at(def);
         if (def_state.is_value()) {
           size_t times = analysis::get_per(*def_state.get_constant());
@@ -760,7 +760,7 @@ void run_impl(DexStoresVector& stores,
 
   Stats stats =
       walk::parallel::methods<Stats>(scope, [](DexMethod* method) -> Stats {
-        auto code = method->get_code();
+        auto* code = method->get_code();
         if (code != nullptr && !method->rstate.no_optimizations()) {
           return run_locks_removal(method, code);
         }
@@ -807,13 +807,13 @@ void run_impl(DexStoresVector& stores,
   print("methods_with_issues", stats.methods_with_issues.size());
   if (!stats.methods_with_issues.empty()) {
     std::cerr << "Lock analysis failed for:" << std::endl;
-    for (auto m : sorted(stats.methods_with_issues)) {
+    for (auto* m : sorted(stats.methods_with_issues)) {
       std::cerr << " * " << show(m) << std::endl;
     }
   }
   print("non_singleton_rdefs", stats.non_singleton_rdefs.size());
   if (kDebugPass || traceEnabled(LOCKS, 2)) {
-    for (auto m : sorted(stats.non_singleton_rdefs)) {
+    for (auto* m : sorted(stats.non_singleton_rdefs)) {
       std::cerr << " * " << show(m) << std::endl;
     }
   }
@@ -837,7 +837,7 @@ void run_impl(DexStoresVector& stores,
     for (size_t i = 3; i < stats.counts_per.size(); ++i) {
       if (!stats.counts_per[i].empty()) {
         std::cerr << "=== " << i << " ===" << std::endl;
-        for (auto m : sorted(stats.counts_per[i])) {
+        for (auto* m : sorted(stats.counts_per[i])) {
           std::cerr << " * " << show(m);
           auto prof_stats =
               prof.get_method_stat(method_profiles::COLD_START, m);

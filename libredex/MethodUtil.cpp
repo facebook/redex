@@ -36,10 +36,11 @@ class ClInitSideEffectsAnalysis {
   const DexClass* run(const DexClass* cls) {
     std::stack<const DexClass*> stack;
     const DexClass* first_cls_with_clinit{nullptr};
-    for (; cls && !cls->is_external();
+    for (; (cls != nullptr) && !cls->is_external();
          cls = type_class(cls->get_super_class())) {
       stack.push(cls);
-      if (!first_cls_with_clinit && cls->get_clinit()) {
+      if ((first_cls_with_clinit == nullptr) &&
+          (cls->get_clinit() != nullptr)) {
         first_cls_with_clinit = cls;
       }
     }
@@ -52,8 +53,8 @@ class ClInitSideEffectsAnalysis {
         continue;
       }
 
-      auto clinit = cls->get_clinit();
-      if (clinit && method_may_have_side_effects(clinit, clinit)) {
+      auto* clinit = cls->get_clinit();
+      if ((clinit != nullptr) && method_may_have_side_effects(clinit, clinit)) {
         return first_cls_with_clinit;
       }
     }
@@ -63,18 +64,19 @@ class ClInitSideEffectsAnalysis {
 
  private:
   bool clinit_has_no_side_effects(DexType* type) {
-    return m_clinit_has_no_side_effects &&
+    return (m_clinit_has_no_side_effects != nullptr) &&
            (*m_clinit_has_no_side_effects)(type);
   }
 
   bool init_class_or_new_instance_may_have_side_effects(DexType* type) {
     return !clinit_has_no_side_effects(type) &&
-           type != type::java_lang_Object() && !m_initialized.count(type);
+           type != type::java_lang_Object() &&
+           (m_initialized.count(type) == 0u);
   }
 
   bool field_op_may_have_side_effects(DexMethod* effective_caller,
                                       IRInstruction* insn) {
-    auto field = insn->get_field();
+    auto* field = insn->get_field();
     if (opcode::is_an_iget(insn->opcode())) {
       return false;
     } else if (opcode::is_an_iput(insn->opcode())) {
@@ -93,7 +95,7 @@ class ClInitSideEffectsAnalysis {
 
   bool invoke_may_have_side_effects(DexMethod* effective_caller,
                                     IRInstruction* insn) {
-    auto method_ref = insn->get_method();
+    auto* method_ref = insn->get_method();
     if (m_allow_benign_method_invocations &&
         method::is_clinit_invoked_method_benign(method_ref)) {
       return false;
@@ -105,12 +107,13 @@ class ClInitSideEffectsAnalysis {
     always_assert(opcode::is_invoke_direct(insn->opcode()) ||
                   opcode::is_invoke_virtual(insn->opcode()) ||
                   opcode::is_invoke_static(insn->opcode()));
-    auto method = resolve_method(method_ref, opcode_to_search(insn));
-    if (!method) {
+    auto* method = resolve_method(method_ref, opcode_to_search(insn));
+    if (method == nullptr) {
       return true;
     }
     if (opcode::is_invoke_virtual(insn->opcode()) &&
-        (!m_non_true_virtuals || !m_non_true_virtuals->count_unsafe(method))) {
+        ((m_non_true_virtuals == nullptr) ||
+         (m_non_true_virtuals->count_unsafe(method) == 0u))) {
       return true;
     }
     if (opcode::is_invoke_static(insn->opcode()) &&
@@ -127,7 +130,7 @@ class ClInitSideEffectsAnalysis {
                                     DexMethod* method) {
     always_assert(method::is_init(effective_caller) ||
                   method::is_clinit(effective_caller));
-    if (method->is_external() || !method->get_code()) {
+    if (method->is_external() || (method->get_code() == nullptr)) {
       return true;
     }
     if (!m_active.insert(method).second) {
@@ -137,7 +140,7 @@ class ClInitSideEffectsAnalysis {
     bool non_trivial = false;
     editable_cfg_adapter::iterate_with_iterator(
         method->get_code(), [&](const IRList::iterator& it) {
-          auto insn = it->insn;
+          auto* insn = it->insn;
           if (opcode::is_an_invoke(insn->opcode())) {
             if (invoke_may_have_side_effects(effective_caller, insn)) {
               non_trivial = true;
@@ -187,7 +190,7 @@ bool is_trivial_clinit(const IRCode& code) {
       return mie.insn->opcode() != OPCODE_RETURN_VOID;
     });
   } else {
-    auto& cfg = code.cfg();
+    const auto& cfg = code.cfg();
     auto ii = cfg::ConstInstructionIterable(cfg);
     return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
       return mie.insn->opcode() != OPCODE_RETURN_VOID;
@@ -492,7 +495,8 @@ bool is_clinit_invoked_method_benign(const DexMethodRef* method_ref) {
   };
 
   return method_ref->is_def() &&
-         methods.count(method_ref->as_def()->get_deobfuscated_name_or_empty());
+         (methods.count(
+              method_ref->as_def()->get_deobfuscated_name_or_empty()) != 0u);
 }
 
 const DexClass* clinit_may_have_side_effects(
@@ -509,7 +513,7 @@ const DexClass* clinit_may_have_side_effects(
 bool no_invoke_super(const IRCode& code) {
   bool has_invoke_super{false};
   editable_cfg_adapter::iterate(&code, [&](const MethodItemEntry& mie) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (insn->opcode() == OPCODE_INVOKE_SUPER) {
       has_invoke_super = true;
       return editable_cfg_adapter::LOOP_BREAK;
@@ -578,20 +582,20 @@ DexMethod* java_lang_invoke_MethodHandle_invokeExact() {
 }
 
 std::optional<std::string_view> get_param_name(const DexMethod* m, size_t idx) {
-  auto anno_type = DexType::get_type("Ldalvik/annotation/MethodParameters;");
+  auto* anno_type = DexType::get_type("Ldalvik/annotation/MethodParameters;");
   if (anno_type == nullptr) {
     return std::nullopt;
   }
 
   // We are looking for MethodParameters, which is on the method, not the
   // param.
-  auto* method_annos = m->get_anno_set();
+  const auto* method_annos = m->get_anno_set();
   if (method_annos == nullptr) {
     return std::nullopt;
   }
 
-  auto* anno = [&]() -> const DexAnnotation* {
-    for (auto& method_anno : method_annos->get_annotations()) {
+  const auto* anno = [&]() -> const DexAnnotation* {
+    for (const auto& method_anno : method_annos->get_annotations()) {
       if (method_anno->type() == anno_type) {
         return method_anno.get();
       }
@@ -602,8 +606,8 @@ std::optional<std::string_view> get_param_name(const DexMethod* m, size_t idx) {
     return std::nullopt;
   }
 
-  auto* names = [&]() -> const DexEncodedValueArray* {
-    for (auto& elem : anno->anno_elems()) {
+  const auto* names = [&]() -> const DexEncodedValueArray* {
+    for (const auto& elem : anno->anno_elems()) {
       if (elem.string->str() != "names") {
         continue;
       }

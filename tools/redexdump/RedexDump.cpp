@@ -168,38 +168,38 @@ int main(int argc, char* argv[]) {
     const char* dexfile = argv[optind++];
     ddump_data rd;
     open_dex_file(dexfile, &rd);
-    if (!no_headers) {
+    if (no_headers == 0) {
       redump(format_map(&rd).c_str());
     }
     if (string || all) {
-      dump_strings(&rd, !no_headers);
+      dump_strings(&rd, no_headers == 0);
     }
     if (stringdata || all) {
-      dump_stringdata(&rd, !no_headers);
+      dump_stringdata(&rd, no_headers == 0);
     }
     if (type || all) {
       dump_types(&rd);
     }
     if (proto || all) {
-      dump_protos(&rd, !no_headers);
+      dump_protos(&rd, no_headers == 0);
     }
     if (field || all) {
-      dump_fields(&rd, !no_headers);
+      dump_fields(&rd, no_headers == 0);
     }
     if (meth || all) {
-      dump_methods(&rd, !no_headers);
+      dump_methods(&rd, no_headers == 0);
     }
     if (methodhandle || all) {
-      dump_methodhandles(&rd, !no_headers);
+      dump_methodhandles(&rd, no_headers == 0);
     }
     if (callsite || all) {
-      dump_callsites(&rd, !no_headers);
+      dump_callsites(&rd, no_headers == 0);
     }
     if (clsdef || all) {
-      dump_clsdefs(&rd, !no_headers);
+      dump_clsdefs(&rd, no_headers == 0);
     }
     if (clsdata || all) {
-      dump_clsdata(&rd, !no_headers);
+      dump_clsdata(&rd, no_headers == 0);
     }
     if (code || all) {
       dump_code(&rd);

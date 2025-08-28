@@ -51,7 +51,8 @@ void MergeabilityChecker::exclude_unsupported_cls_property(
         has_ctor = true;
         // keep going
       }
-      if (method->rstate.no_optimizations() || !method->get_code()) {
+      if (method->rstate.no_optimizations() ||
+          (method->get_code() == nullptr)) {
         non_mergeables.insert(type);
         TRACE(CLMG, 5, "Cannot optimize dmethod on %s", SHOW(type));
         break;
@@ -72,8 +73,8 @@ void MergeabilityChecker::exclude_unsupported_cls_property(
 TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
     DexMethod* method) {
   TypeSet non_mergeables;
-  auto code = method->get_code();
-  if (!code || m_generated.count(method->get_class())) {
+  auto* code = method->get_code();
+  if ((code == nullptr) || (m_generated.count(method->get_class()) != 0u)) {
     return non_mergeables;
   }
 
@@ -85,10 +86,10 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   UnorderedSet<const IRInstruction*> new_instances_to_verify_set;
   auto& cfg = code->cfg();
   for (const auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
 
     if (opcode::is_new_instance(insn->opcode()) &&
-        m_spec.merging_targets.count(insn->get_type())) {
+        (m_spec.merging_targets.count(insn->get_type()) != 0u)) {
       new_instances_to_verify.push_back(insn);
       new_instances_to_verify_set.insert(insn);
       continue;
@@ -102,8 +103,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
     // method refs to external cannot be done. In this case, it's safer not to
     // merge types with existing pure method refs on the type.
     if (insn->has_method() && !insn->get_method()->is_def()) {
-      auto meth_ref = insn->get_method();
-      auto type = meth_ref->get_class();
+      auto* meth_ref = insn->get_method();
+      auto* type = meth_ref->get_class();
       if (m_spec.merging_targets.count(type) > 0) {
         TRACE(CLMG, 5, "[non mergeable] referenced by pure ref %s in %s",
               SHOW(meth_ref), SHOW(method));
@@ -119,7 +120,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       const DexString* str = insn->get_string();
       std::string class_name = java_names::external_to_internal(str->str());
       DexType* maybe_type = DexType::get_type(class_name);
-      if (maybe_type && m_spec.merging_targets.count(maybe_type) > 0) {
+      if ((maybe_type != nullptr) &&
+          m_spec.merging_targets.count(maybe_type) > 0) {
         non_mergeables.insert(maybe_type);
         TRACE(CLMG, 5,
               "[non mergeable] type like const string unsafe: %s in %s",
@@ -196,11 +198,11 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   live_range::DefUseChains du_chains = chains.get_def_use_chains();
 
   for (const auto& pair : const_classes_to_verify) {
-    auto const_class_insn = pair.first;
-    auto referenced_type = pair.second;
+    auto* const_class_insn = pair.first;
+    const auto* referenced_type = pair.second;
     const auto& use_set = du_chains[const_class_insn];
     for (const auto& use : UnorderedIterable(use_set)) {
-      auto use_insn = use.insn;
+      auto* use_insn = use.insn;
       if (opcode::is_a_move(use_insn->opcode())) {
         // Ignore moves
         continue;
@@ -211,9 +213,9 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
         non_mergeables.insert(referenced_type);
         break;
       }
-      auto callee = use_insn->get_method();
-      auto callee_type = callee->get_class();
-      if (!m_const_class_safe_types.count(callee_type)) {
+      auto* callee = use_insn->get_method();
+      auto* callee_type = callee->get_class();
+      if (m_const_class_safe_types.count(callee_type) == 0u) {
         TRACE(CLMG, 5, "[non mergeable] const class unsafe callee %s in %s",
               SHOW(callee), SHOW(method));
         non_mergeables.insert(referenced_type);
@@ -234,7 +236,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       if (use.src_index != 0) {
         continue;
       }
-      auto use_insn = use.insn;
+      auto* use_insn = use.insn;
       if (opcode::is_a_move(use_insn->opcode())) {
         // Ignore moves
         continue;
@@ -242,13 +244,14 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       if (!use_insn->has_method()) {
         continue;
       }
-      auto callee = use_insn->get_method();
+      auto* callee = use_insn->get_method();
       if (!method::is_init(callee)) {
         continue;
       }
       const auto* resolved_callee =
           resolve_method(callee, opcode_to_search(use_insn), method);
-      if (!resolved_callee || resolved_callee->get_class() != type) {
+      if ((resolved_callee == nullptr) ||
+          resolved_callee->get_class() != type) {
         TRACE(CLMG, 5,
               "[non mergeable] new-instance %s associated with invoke init %s "
               "defined in other type in %s",
@@ -282,9 +285,9 @@ void MergeabilityChecker::exclude_static_fields(TypeSet& non_mergeables) {
   }
 
   walk::fields(m_scope, [&non_mergeables, this](DexField* field) {
-    if (m_spec.merging_targets.count(field->get_class())) {
+    if (m_spec.merging_targets.count(field->get_class()) != 0u) {
       if (is_static(field)) {
-        auto rtype = type::get_element_type_if_array(field->get_type());
+        const auto* rtype = type::get_element_type_if_array(field->get_type());
         if (!type::is_primitive(rtype) && rtype != string_type) {
           // If the type is either non-primitive or a list of
           // non-primitive types (excluding Strings), then exclude it as
@@ -304,11 +307,11 @@ void MergeabilityChecker::exclude_static_fields(TypeSet& non_mergeables) {
 void MergeabilityChecker::exclude_unsafe_sdk_and_store_refs(
     TypeSet& non_mergeables) {
   const auto mog = method_override_graph::build_graph(m_scope);
-  for (auto type : UnorderedIterable(m_spec.merging_targets)) {
-    if (non_mergeables.count(type)) {
+  for (const auto* type : UnorderedIterable(m_spec.merging_targets)) {
+    if (non_mergeables.count(type) != 0u) {
       continue;
     }
-    auto cls = type_class(type);
+    auto* cls = type_class(type);
     if (!m_ref_checker.check_class(cls, mog)) {
       non_mergeables.insert(type);
     }

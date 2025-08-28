@@ -23,7 +23,7 @@ static void mark_member_reachable_by_native(DexMember* member) {
 }
 
 static void mark_class_reachable_by_native(const DexType* dtype) {
-  auto dclass = type_class_internal(dtype);
+  auto* dclass = type_class_internal(dtype);
   always_assert_log(dclass != nullptr, "Could not resolve type %s",
                     show(dtype).c_str());
 
@@ -33,7 +33,7 @@ static void mark_class_reachable_by_native(const DexType* dtype) {
 DexType* FbjniMarker::process_class_path(const std::string& class_path) {
   std::string class_name = java_names::external_to_internal(class_path);
 
-  auto type = DexType::get_type(class_name);
+  auto* type = DexType::get_type(class_name);
   always_assert_log(type != nullptr, "Could not resolve type %s",
                     class_path.c_str());
 
@@ -55,11 +55,11 @@ DexField* FbjniMarker::process_field(DexType* type,
   std::string internal_type = to_internal_type(field_tokens.type);
   field_tokens_internal.type = internal_type;
 
-  auto field_ref = DexField::get_field(field_tokens_internal);
+  auto* field_ref = DexField::get_field(field_tokens_internal);
   always_assert_log(field_ref != nullptr, "Could not resolve field %s",
                     field_str.c_str());
 
-  auto field = field_ref->as_def();
+  auto* field = field_ref->as_def();
   always_assert_log(field != nullptr, "Field %s is not a definition",
                     field_str.c_str());
 
@@ -91,11 +91,11 @@ DexMethod* FbjniMarker::process_method(DexType* type,
     method_tokens_internal.args.push_back(internal_type_string_store.back());
   }
 
-  auto method_ref = DexMethod::get_method(method_tokens_internal);
+  auto* method_ref = DexMethod::get_method(method_tokens_internal);
   always_assert_log(method_ref != nullptr, "Could not resolve method: %s",
                     method_str.c_str());
 
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   always_assert_log(method != nullptr, "Method %s is not a definition",
                     method_str.c_str());
 
@@ -115,7 +115,7 @@ std::string FbjniMarker::to_internal_type(std::string_view str) {
   } else {
     // not primitive, try fully-qualify name first
     auto inter_str = java_names::external_to_internal(type_str);
-    for (auto dtype : types) {
+    for (auto* dtype : types) {
       if (dtype->str() == type_str) {
         array_name += type_str;
         return array_name;
@@ -123,7 +123,7 @@ std::string FbjniMarker::to_internal_type(std::string_view str) {
     }
 
     // try to match simple name (more common)
-    for (auto dtype : types) {
+    for (auto* dtype : types) {
       if (type::get_simple_name(dtype) == type_str) {
         return array_name + dtype->str();
       }
@@ -148,7 +148,7 @@ void mark_native_classes_from_fbjni_configs(
     Json::Value json;
     config_stream >> json;
     for (Json::Value::ArrayIndex i = 0; i < json.size(); i++) {
-      auto type = marker.process_class_path(json[i]["class_path"].asString());
+      auto* type = marker.process_class_path(json[i]["class_path"].asString());
 
       Json::Value& fields = json[i]["fields"];
       for (Json::Value::ArrayIndex j = 0; j < fields.size(); j++) {

@@ -85,7 +85,7 @@ void CrossDexRefMinimizer::ClassDiffSet::erase(DexClass* value) {
     // expected complexity.
     auto new_base = std::make_shared<Repr>(size());
     for (auto* cls : *m_base) {
-      if (!m_diff.count(cls)) {
+      if (m_diff.count(cls) == 0u) {
         new_base->insert(cls);
       }
     }
@@ -144,23 +144,23 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
       max_ref_count = count;
     }
   };
-  for (auto ref : cls_refs.method_refs) {
+  for (auto* ref : cls_refs.method_refs) {
     increment(ref);
   }
-  for (auto ref : cls_refs.field_refs) {
+  for (auto* ref : cls_refs.field_refs) {
     increment(ref);
   }
-  for (auto ref : cls_refs.types) {
+  for (auto* ref : cls_refs.types) {
     increment(ref);
   }
-  for (auto ref : cls_refs.strings) {
+  for (const auto* ref : cls_refs.strings) {
     increment(ref);
   }
 
   if (m_json_classes) {
     Json::Value json_interface = Json::arrayValue;
-    auto intfs = cls->get_interfaces();
-    for (auto intf : *intfs) {
+    auto* intfs = cls->get_interfaces();
+    for (auto* intf : *intfs) {
       json_interface.append(show(intf));
     }
     Json::Value json_class;
@@ -222,13 +222,13 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   // different values and observing the effect on APK size.
   // We discount references that occur in many classes.
   // TODO: Try some other variations.
-  for (auto mref : cls_refs.method_refs) {
+  for (auto* mref : cls_refs.method_refs) {
     add_weight(mref, m_config.method_ref_weight, m_config.method_seed_weight);
   }
-  for (auto type : cls_refs.types) {
+  for (auto* type : cls_refs.types) {
     add_weight(type, m_config.type_ref_weight, m_config.type_seed_weight);
   }
-  for (auto string : cls_refs.strings) {
+  for (const auto* string : cls_refs.strings) {
     if (string->length() > m_config.min_large_string_size) {
       add_weight(string, m_config.small_string_ref_weight,
                  m_config.large_string_seed_weight);
@@ -237,14 +237,14 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
                  m_config.small_string_seed_weight);
     }
   }
-  for (auto fref : cls_refs.field_refs) {
+  for (auto* fref : cls_refs.field_refs) {
     add_weight(fref, m_config.field_ref_weight, m_config.field_seed_weight);
   }
 
   UnorderedMap<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>
       affected_classes;
   for (const auto& p : refs) {
-    auto ref = p.first;
+    const auto* ref = p.first;
     uint32_t weight = p.second;
     auto& classes = m_ref_classes[ref];
     size_t frequency = classes.size();
@@ -374,7 +374,7 @@ DexClass* CrossDexRefMinimizer::worst() {
 
 size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
   auto class_info_it = m_class_infos.end();
-  if (cls) {
+  if (cls != nullptr) {
     m_prioritized_classes.erase(cls);
     class_info_it = m_class_infos.find(cls);
     always_assert(class_info_it != m_class_infos.end());
@@ -412,7 +412,7 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
     const auto& class_info = class_info_it->second;
     const auto& refs = *class_info.refs;
     for (const auto& p : refs) {
-      auto ref = p.first;
+      const auto* ref = p.first;
       uint32_t weight = p.second;
       auto classes_it = m_ref_classes.find(ref);
       always_assert(classes_it != m_ref_classes.end());
@@ -481,8 +481,8 @@ size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) const {
   }
   size_t unapplied_refs{0};
   const auto& refs = *it->second.refs;
-  for (auto& p : refs) {
-    if (!m_applied_refs.count(p.first)) {
+  for (const auto& p : refs) {
+    if (m_applied_refs.count(p.first) == 0u) {
       unapplied_refs++;
     }
   }
@@ -502,7 +502,7 @@ double CrossDexRefMinimizer::get_remaining_difficulty() const {
   // this computation in a way that results in a high precision and is
   // deterministic using floating-point values.
   UnorderedMap<size_t, size_t> counts;
-  for (auto& p : UnorderedIterable(m_ref_classes)) {
+  for (const auto& p : UnorderedIterable(m_ref_classes)) {
     counts[p.second.size()]++;
   }
   std::vector<double> summands;

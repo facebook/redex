@@ -329,7 +329,7 @@ TEST_F(BlamingEscapeTest, filteredAllocators) {
 }
 
 TEST_F(BlamingEscapeTest, safeMethods) {
-  auto* const init = DexString::make_string("<init>");
+  const auto* const init = DexString::make_string("<init>");
   auto* const Bar_safe = DexMethod::make_method("LBar;.safe:(LBar;)LBar;");
 
   auto code = assembler::ircode_from_string(R"((

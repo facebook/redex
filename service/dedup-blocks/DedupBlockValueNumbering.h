@@ -81,7 +81,7 @@ struct BlockValue {
 struct BlockValueHasher {
   size_t operator()(const BlockValue& o) const {
     size_t hash = o.ordered_operations.size();
-    for (auto& operation : o.ordered_operations) {
+    for (const auto& operation : o.ordered_operations) {
       boost::hash_combine(hash, IROperationHasher()(operation));
     }
     boost::hash_combine(hash, o.out_regs);

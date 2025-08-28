@@ -203,7 +203,7 @@ int32_t read_sleb128_checked(std::string_view& ptr) {
  * pointer to the next location for encoding.
  */
 inline uint8_t* write_uleb128(uint8_t* ptr, uint32_t val) {
-  while (1) {
+  while (true) {
     uint8_t v = val & 0x7f;
     if (v != val) {
       *ptr++ = v | 0x80;
@@ -220,11 +220,11 @@ inline uint8_t* write_uleb128p1(uint8_t* ptr, uint32_t val) {
 }
 
 inline uint8_t* write_sleb128(uint8_t* ptr, int32_t val) {
-  while (1) {
+  while (true) {
     uint8_t v = val & 0x7f;
     if (v == val) {
       /* Positive sleb termination */
-      if (v & 0x40) {
+      if ((v & 0x40) != 0) {
         /* Can't let it sign extend... */
         *ptr++ = v | 0x80;
         *ptr++ = 0;
@@ -246,7 +246,7 @@ inline uint8_t* write_sleb128(uint8_t* ptr, int32_t val) {
 inline uint32_t mutf8_next_code_point(const char*& s) {
   uint8_t v = *s++;
   /* Simple common case first, a utf8 char... */
-  if (!(v & 0x80)) {
+  if ((v & 0x80) == 0) {
     return v;
   }
   uint8_t v2 = *s++;

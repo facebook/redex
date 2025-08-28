@@ -39,15 +39,15 @@ void gather_cg_information(
     }
   };
   while (!node_queue.empty()) {
-    auto cur_node = node_queue.front();
+    const auto* cur_node = node_queue.front();
     node_queue.pop();
-    if (nodes_to_succs->count(cur_node)) {
+    if (nodes_to_succs->count(cur_node) != 0u) {
       continue;
     }
     (*nodes_to_succs)[cur_node] = std::set<uint32_t>{};
     add_node(cur_node);
     for (const auto& edge : cur_node->callees()) {
-      auto callee_node = edge->callee();
+      const auto* callee_node = edge->callee();
       node_queue.push(callee_node);
       add_node(callee_node);
       auto callee_id = nodes_to_ids->at(callee_node);
@@ -67,7 +67,7 @@ void gather_method_positions(const Scope& scope,
         auto& cfg = code.cfg();
         for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
           if (mie.type == MFLOW_POSITION) {
-            auto pos = mie.pos.get();
+            auto* pos = mie.pos.get();
             std::ostringstream o;
             o << "{";
             if (pos->file == nullptr) {
@@ -125,10 +125,10 @@ void write_out_callgraph(const Scope& scope,
         node_name += "{EXTERNAL}";
       } else if (is_native(method)) {
         node_name += "{NATIVE}";
-      } else if (!method->get_code()) {
+      } else if (method->get_code() == nullptr) {
         node_name += "{NOCODE}";
       } else {
-        node_name += (method_to_first_position.count(method)
+        node_name += (method_to_first_position.count(method) != 0u
                           ? method_to_first_position.at(method)
                           : "{NOPOSITION}");
       }

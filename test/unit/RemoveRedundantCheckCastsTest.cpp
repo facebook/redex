@@ -138,7 +138,7 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("simplestCase");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (new-instance "LC;")
       (move-result-pseudo-object v0)
@@ -153,7 +153,7 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (new-instance "LC;")
       (move-result-pseudo-object v0)
@@ -168,7 +168,7 @@ TEST_F(RemoveRedundantCheckCastsTest, weaken_remove) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("weaken_remove");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (new-instance "LC;")
       (move-result-pseudo-object v0)
@@ -183,7 +183,7 @@ TEST_F(RemoveRedundantCheckCastsTest, weaken_remove) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (new-instance "LC;")
       (move-result-pseudo-object v0)
@@ -195,9 +195,9 @@ TEST_F(RemoveRedundantCheckCastsTest, weaken_remove) {
 }
 
 TEST_F(RemoveRedundantCheckCastsTest, weaken) {
-  auto a_type = DexType::make_type("LAA;");
-  auto b_type = DexType::make_type("LBB;");
-  auto c_type = DexType::make_type("LCC;");
+  auto* a_type = DexType::make_type("LAA;");
+  auto* b_type = DexType::make_type("LBB;");
+  auto* c_type = DexType::make_type("LCC;");
   ClassCreator a_creator(a_type);
   a_creator.set_super(type::java_lang_Object());
   ClassCreator b_creator(b_type);
@@ -211,7 +211,7 @@ TEST_F(RemoveRedundantCheckCastsTest, weaken) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("weaken_remove");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (sget-object "LDummy;.fooA:LAA;")
       (move-result-pseudo-object v0)
@@ -226,7 +226,7 @@ TEST_F(RemoveRedundantCheckCastsTest, weaken) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (sget-object "LDummy;.fooA:LAA;")
       (move-result-pseudo-object v0)
@@ -243,7 +243,7 @@ TEST_F(RemoveRedundantCheckCastsTest, castingZero) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("castingZero");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (const v0 0)
       (check-cast v0 "LC;")
@@ -256,7 +256,7 @@ TEST_F(RemoveRedundantCheckCastsTest, castingZero) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v0 0)
     )
@@ -269,7 +269,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("parentCheckCast");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (new-instance "LA;")
       (move-result-pseudo-object v0)
@@ -284,7 +284,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (new-instance "LA;")
       (move-result-pseudo-object v0)
@@ -299,7 +299,7 @@ TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("skipParentCheckCast");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (new-instance "LA;")
       (move-result-pseudo-object v0)
@@ -314,7 +314,7 @@ TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (new-instance "LA;")
       (move-result-pseudo-object v0)
@@ -329,7 +329,7 @@ TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("subclassCheckCast");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (new-instance "LC;")
       (move-result-pseudo-object v0)
@@ -345,7 +345,7 @@ TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (new-instance "LC;")
       (move-result-pseudo-object v0)
@@ -363,7 +363,7 @@ TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("directInterfaceCheckCast_WithMove");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (new-instance "LB;")
       (move-result-pseudo-object v0)
@@ -378,7 +378,7 @@ TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (new-instance "LB;")
       (move-result-pseudo-object v0)
@@ -394,7 +394,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("parentInterfaceCheckCast_WithMove");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (new-instance "LB;")
       (move-result-pseudo-object v0)
@@ -409,7 +409,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (new-instance "LB;")
       (move-result-pseudo-object v0)
@@ -425,7 +425,7 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("sameTypeInterfaceCheckCast");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (const v1 0)
       (const v0 0)
@@ -453,7 +453,7 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v1 0)
       (const v0 0)
@@ -479,7 +479,7 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("differentTypeInterfaceCheckCast");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (const v1 0)
       (const v0 0)
@@ -508,7 +508,7 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
 
   run_remove_redundant_check_casts();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (const v1 0)
       (const v0 0)

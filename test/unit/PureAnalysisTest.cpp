@@ -23,14 +23,14 @@ class PureAnalysisTest : public RedexTest {
 
 void test(const char* signature, const std::string& code_str, bool is_pure) {
 
-  auto field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
-  auto field_b = DexField::make_field("LBar;.a:I")->make_concrete(ACC_PUBLIC);
+  auto* field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
+  auto* field_b = DexField::make_field("LBar;.a:I")->make_concrete(ACC_PUBLIC);
   ClassCreator creator1(DexType::make_type("LFoo;"));
   ClassCreator creator2(DexType::make_type("LBar;"));
 
   creator1.set_super(type::java_lang_Object());
   creator2.set_super(type::java_lang_Object());
-  auto method1 = static_cast<DexMethod*>(DexMethod::make_method(signature));
+  auto* method1 = static_cast<DexMethod*>(DexMethod::make_method(signature));
   method1->set_access(ACC_PUBLIC);
   method1->set_external();
   method1->set_code(assembler::ircode_from_string(code_str));
@@ -39,7 +39,7 @@ void test(const char* signature, const std::string& code_str, bool is_pure) {
   creator1.add_field(field_a);
   creator2.add_field(field_b);
 
-  auto method2 =
+  auto* method2 =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.add:()V"));
   method2->set_access(ACC_PUBLIC);
   method2->set_virtual(true);
@@ -63,7 +63,7 @@ void test(const char* signature, const std::string& code_str, bool is_pure) {
 
 // Pure function
 TEST_F(PureAnalysisTest, simple1) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (add-int v1 v1 v2)
       (return v1)
@@ -75,7 +75,7 @@ TEST_F(PureAnalysisTest, simple1) {
 
 // Not pure function; accesses field
 TEST_F(PureAnalysisTest, simple2) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (iget v0 "LFoo;.a:I")
       (move-result-pseudo v1)
@@ -89,7 +89,7 @@ TEST_F(PureAnalysisTest, simple2) {
 
 // Not pure function; May escape through method call
 TEST_F(PureAnalysisTest, simple3) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (add-int v1 v1 v2)
       (invoke-virtual (v0) "LFoo;.add:()V")
@@ -102,7 +102,7 @@ TEST_F(PureAnalysisTest, simple3) {
 
 // Pure function; returns the object as it is
 TEST_F(PureAnalysisTest, simple4) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (return-object v1)
     )
@@ -113,7 +113,7 @@ TEST_F(PureAnalysisTest, simple4) {
 
 // Pure function; returns this
 TEST_F(PureAnalysisTest, simple5) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (return-object v0)
     )
@@ -124,7 +124,7 @@ TEST_F(PureAnalysisTest, simple5) {
 
 // Pure function; Reads param object
 TEST_F(PureAnalysisTest, simple6) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param-object v1)
       (iget v1 "LBar;.a:I")
@@ -139,7 +139,7 @@ TEST_F(PureAnalysisTest, simple6) {
 
 // Not pure function; Reads param object and field
 TEST_F(PureAnalysisTest, simple7) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param-object v1)
       (iget v1 "LBar;.a:I")
@@ -156,7 +156,7 @@ TEST_F(PureAnalysisTest, simple7) {
 
 // Not pure function; modifies param object and returns
 TEST_F(PureAnalysisTest, simple8) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param-object v1)
       (const v2 0)
@@ -170,7 +170,7 @@ TEST_F(PureAnalysisTest, simple8) {
 
 // Not pure function; modifies param object
 TEST_F(PureAnalysisTest, simple9) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param-object v1)
       (const v2 0)

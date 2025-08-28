@@ -20,11 +20,11 @@ struct StringTest : public ConstantPropagationTest {
     creator.set_super(type::java_lang_Object());
     creator.set_external();
 
-    auto equals = DexMethod::make_method(
-                      "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
-                      ->make_concrete(ACC_PUBLIC, true);
-    auto hashCode = DexMethod::make_method("Ljava/lang/String;.hashCode:()I")
-                        ->make_concrete(ACC_PUBLIC, true);
+    auto* equals = DexMethod::make_method(
+                       "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+                       ->make_concrete(ACC_PUBLIC, true);
+    auto* hashCode = DexMethod::make_method("Ljava/lang/String;.hashCode:()I")
+                         ->make_concrete(ACC_PUBLIC, true);
     creator.add_method(equals);
     creator.add_method(hashCode);
 

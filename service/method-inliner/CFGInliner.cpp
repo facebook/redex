@@ -48,7 +48,7 @@ namespace {
 
 void normalize_source_blocks(const InstructionIterator& inline_site,
                              ControlFlowGraph& callee_cfg) {
-  auto caller_block = inline_site.block();
+  auto* caller_block = inline_site.block();
   auto* caller_sb = source_blocks::get_last_source_block_before(
       caller_block, inline_site.unwrap());
   source_blocks::normalize::normalize(
@@ -73,35 +73,35 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
   remove_ghost_exit_block(&callee);
-  if (rewrite_invoke_super_callee) {
+  if (rewrite_invoke_super_callee != nullptr) {
     rewrite_invoke_supers(&callee, rewrite_invoke_super_callee);
   }
 
   normalize_source_blocks(inline_site, callee);
 
   cleanup_callee_debug(&callee);
-  if (needs_receiver_cast || needs_init_class) {
+  if ((needs_receiver_cast != nullptr) || (needs_init_class != nullptr)) {
     std::vector<IRInstruction*> new_insns;
-    if (needs_receiver_cast) {
+    if (needs_receiver_cast != nullptr) {
       always_assert(!needs_init_class);
       auto param_insns = callee.get_param_instructions();
-      auto first_load_param_insn = param_insns.front().insn;
+      auto* first_load_param_insn = param_insns.front().insn;
       auto first_param_reg = first_load_param_insn->dest();
-      auto check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
-                                 ->set_type(needs_receiver_cast)
-                                 ->set_src(0, first_param_reg);
-      auto move_result_insn =
+      auto* check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
+                                  ->set_type(needs_receiver_cast)
+                                  ->set_src(0, first_param_reg);
+      auto* move_result_insn =
           (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
               ->set_dest(first_param_reg);
       new_insns.push_back(check_cast_insn);
       new_insns.push_back(move_result_insn);
     } else {
       always_assert(needs_init_class);
-      auto init_class_insn =
+      auto* init_class_insn =
           (new IRInstruction(IOPCODE_INIT_CLASS))->set_type(needs_init_class);
       new_insns.push_back(init_class_insn);
     }
-    auto entry_block = callee.entry_block();
+    auto* entry_block = callee.entry_block();
     auto last_param_insn_it = entry_block->get_last_param_loading_insn();
     if (last_param_insn_it == entry_block->end()) {
       entry_block->push_front(new_insns);
@@ -147,7 +147,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             ? inline_site.cfg().get_dbg_pos(inline_site)
                             : inline_site_dbg_pos;
 
-  if (inline_site_dbg_pos) {
+  if (inline_site_dbg_pos != nullptr) {
     set_dbg_pos_parents(&callee, inline_site_dbg_pos);
     // ensure that the caller's code after the inlined method retain their
     // original position
@@ -228,8 +228,9 @@ void CFGInliner::cleanup_callee_debug(ControlFlowGraph* cfg) {
 }
 
 void CFGInliner::remove_ghost_exit_block(ControlFlowGraph* cfg) {
-  auto exit_block = cfg->exit_block();
-  if (exit_block && cfg->get_pred_edge_of_type(exit_block, EDGE_GHOST)) {
+  auto* exit_block = cfg->exit_block();
+  if ((exit_block != nullptr) &&
+      (cfg->get_pred_edge_of_type(exit_block, EDGE_GHOST) != nullptr)) {
     cfg->remove_block(exit_block);
     cfg->set_exit_block(nullptr);
   }
@@ -238,9 +239,9 @@ void CFGInliner::remove_ghost_exit_block(ControlFlowGraph* cfg) {
 void CFGInliner::rewrite_invoke_supers(ControlFlowGraph* cfg,
                                        DexMethod* method) {
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_invoke_super(insn->opcode())) {
-      auto callee = resolve_invoke_method(insn, method);
+      auto* callee = resolve_invoke_method(insn, method);
       always_assert(callee);
       // Illegal combination; someone needs to clean this up.
       insn->set_opcode(OPCODE_INVOKE_DIRECT);
@@ -292,9 +293,9 @@ std::pair<Block*, Block*> CFGInliner::maybe_split_block_before(
   }
 
   // Inject an instruction and then split so 'it' is first of block
-  auto dummy_end_instruction = new IRInstruction(OPCODE_NOP);
+  auto* dummy_end_instruction = new IRInstruction(OPCODE_NOP);
   caller->insert_before(it, dummy_end_instruction);
-  auto new_blk = caller->split_block(
+  auto* new_blk = caller->split_block(
       old_block, caller->find_insn(dummy_end_instruction).unwrap());
   return std::make_pair(old_block, new_blk);
 }
@@ -305,7 +306,7 @@ std::pair<Block*, Block*> CFGInliner::maybe_split_block_before(
 void CFGInliner::remap_registers(cfg::ControlFlowGraph* callee,
                                  reg_t next_caller_reg) {
   for (auto& mie : cfg::InstructionIterable(*callee)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     for (reg_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, insn->src(i) + next_caller_reg);
     }
@@ -387,8 +388,8 @@ void CFGInliner::connect_cfgs(bool inline_after,
     c->push_back((new IRInstruction(IOPCODE_WRITE_BARRIER)));
     // Get this block its own source block and debug position
     // if this method has any.
-    auto template_sb = source_blocks::get_first_source_block(b);
-    if (template_sb) {
+    auto* template_sb = source_blocks::get_first_source_block(b);
+    if (template_sb != nullptr) {
       auto new_sb = std::make_unique<SourceBlock>(*template_sb);
       new_sb->id = SourceBlock::kSyntheticId;
       new_sb->next = nullptr;
@@ -398,8 +399,8 @@ void CFGInliner::connect_cfgs(bool inline_after,
 
     auto last_insn = b->get_last_insn();
     auto b_it = b->to_cfg_instruction_iterator(last_insn);
-    auto pos = cfg->get_dbg_pos(b_it);
-    if (pos) {
+    auto* pos = cfg->get_dbg_pos(b_it);
+    if (pos != nullptr) {
       cfg->insert_before(c, c->begin(), std::make_unique<DexPosition>(*pos));
     }
     cfg->add_edge(c, b, EDGE_GOTO);
@@ -485,7 +486,7 @@ void CFGInliner::split_on_callee_throws(ControlFlowGraph* callee) {
     const auto& iterable = ir_list::InstructionIterable(*b);
     for (auto it = iterable.begin(); it != iterable.end(); ++it) {
       const auto& mie = *it;
-      const auto insn = mie.insn;
+      auto* const insn = mie.insn;
       const auto op = insn->opcode();
       if (opcode::can_throw(op) && it.unwrap() != last) {
         const auto& cfg_it = b->to_cfg_instruction_iterator(it);
@@ -558,7 +559,7 @@ void CFGInliner::add_callee_throws_to_caller(
 
 void CFGInliner::set_dbg_pos_parents(ControlFlowGraph* callee,
                                      DexPosition* callsite_dbg_pos) {
-  auto* partial_inline_source = get_partial_inline_source();
+  const auto* partial_inline_source = get_partial_inline_source();
 
   for (auto& entry : callee->m_blocks) {
     Block* b = entry.second;

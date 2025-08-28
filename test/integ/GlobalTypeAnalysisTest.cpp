@@ -26,18 +26,18 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto meth_get_subone = get_method("TestA;.getSubOne", "Base");
+  auto* meth_get_subone = get_method("TestA;.getSubOne", "Base");
   EXPECT_EQ(wps.get_return_type(meth_get_subone), get_type_domain("SubOne"));
-  auto meth_get_subtwo = get_method("TestA;.getSubTwo", "Base");
+  auto* meth_get_subtwo = get_method("TestA;.getSubTwo", "Base");
   EXPECT_EQ(wps.get_return_type(meth_get_subtwo), get_type_domain("SubTwo"));
-  auto meth_passthrough = get_method("TestA;.passThrough",
-                                     "Lcom/facebook/redextest/Base;",
-                                     "Lcom/facebook/redextest/Base;");
+  auto* meth_passthrough = get_method("TestA;.passThrough",
+                                      "Lcom/facebook/redextest/Base;",
+                                      "Lcom/facebook/redextest/Base;");
   EXPECT_EQ(wps.get_return_type(meth_passthrough), get_type_domain("SubTwo"));
 
-  auto meth_foo = get_method("TestA;.foo:()I");
+  auto* meth_foo = get_method("TestA;.foo:()I");
   auto lta = gta->get_replayable_local_analysis(meth_foo);
-  auto code = meth_foo->get_code();
+  auto* code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
   EXPECT_EQ(foo_exit_env.get_reg_environment().get(0),
             get_type_domain("SubOne"));
@@ -53,29 +53,29 @@ TEST_F(GlobalTypeAnalysisTest, ConstsAndAGETTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto meth_pass_null =
+  auto* meth_pass_null =
       get_method("TestB;.passNull", "Ljava/lang/String;", "Ljava/lang/String;");
   EXPECT_TRUE(wps.get_return_type(meth_pass_null).is_null());
 
-  auto meth_pass_string = get_method("TestB;.passString", "Ljava/lang/String;",
-                                     "Ljava/lang/String;");
+  auto* meth_pass_string = get_method("TestB;.passString", "Ljava/lang/String;",
+                                      "Ljava/lang/String;");
   EXPECT_EQ(
       wps.get_return_type(meth_pass_string),
       get_type_domain_simple("Ljava/lang/String;", /* is_not_null */ true));
 
-  auto meth_pass_class =
+  auto* meth_pass_class =
       get_method("TestB;.passClass", "Ljava/lang/Class;", "Ljava/lang/Class;");
   EXPECT_EQ(
       wps.get_return_type(meth_pass_class),
       get_type_domain_simple("Ljava/lang/Class;", /* is_not_null */ true));
 
-  auto meth_array_comp = get_method("TestB;.getStringArrayComponent",
-                                    "[Ljava/lang/String;",
-                                    "Ljava/lang/String;");
+  auto* meth_array_comp = get_method("TestB;.getStringArrayComponent",
+                                     "[Ljava/lang/String;",
+                                     "Ljava/lang/String;");
   EXPECT_EQ(wps.get_return_type(meth_array_comp),
             get_type_domain_simple("Ljava/lang/String;"));
 
-  auto meth_nested_array_comp =
+  auto* meth_nested_array_comp =
       get_method("TestB;.getNestedStringArrayComponent",
                  "[[Ljava/lang/String;",
                  "[Ljava/lang/String;");
@@ -92,13 +92,13 @@ TEST_F(GlobalTypeAnalysisTest, NullableFieldTypeTest) {
   auto wps = gta->get_whole_program_state();
 
   // Field holding the reference to the nullalbe anonymous class
-  auto field_monitor =
+  auto* field_monitor =
       get_field("TestC;.mMonitor:Lcom/facebook/redextest/Receiver;");
   EXPECT_TRUE(wps.get_field_type(field_monitor).is_top());
   EXPECT_TRUE(wps.get_field_type(field_monitor).is_nullable());
 
   // Field on the anonymous class referencing the outer class
-  auto field_anony =
+  auto* field_anony =
       get_field("TestC$1;.this$0:Lcom/facebook/redextest/TestC;");
   EXPECT_EQ(wps.get_field_type(field_anony),
             get_type_domain("TestC").join(DexTypeDomain::null()));
@@ -113,7 +113,7 @@ TEST_F(GlobalTypeAnalysisTest, TrueVirtualFieldTypeTest) {
   auto wps = gta->get_whole_program_state();
 
   // The field written by true virtuals is conservatively joined to top.
-  auto field_val =
+  auto* field_val =
       get_field("TestD$State;.mVal:Lcom/facebook/redextest/TestD$Base;");
   EXPECT_TRUE(wps.get_field_type(field_val).is_top());
 
@@ -134,8 +134,8 @@ TEST_F(GlobalTypeAnalysisTest, SmallSetDexTypeDomainTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto meth_ret_subs = get_method("TestE;.returnSubTypes", "I",
-                                  "Lcom/facebook/redextest/TestE$Base;");
+  auto* meth_ret_subs = get_method("TestE;.returnSubTypes", "I",
+                                   "Lcom/facebook/redextest/TestE$Base;");
   auto rtype = wps.get_return_type(meth_ret_subs);
   EXPECT_TRUE(rtype.is_nullable());
   const auto& single_domain = rtype.get_single_domain();
@@ -153,9 +153,9 @@ TEST_F(GlobalTypeAnalysisTest, ConstNullnessDomainTest) {
   GlobalTypeAnalysis analysis;
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
-  auto meth_foo = get_method("TestF;.foo", "", "I");
+  auto* meth_foo = get_method("TestF;.foo", "", "I");
   auto lta = gta->get_replayable_local_analysis(meth_foo);
-  auto code = meth_foo->get_code();
+  auto* code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
   EXPECT_TRUE(foo_exit_env.get_reg_environment().get(0).is_top());
 }
@@ -167,13 +167,13 @@ TEST_F(GlobalTypeAnalysisTest, ArrayConstNullnessDomainTest) {
   GlobalTypeAnalysis analysis;
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
-  auto meth_foo =
+  auto* meth_foo =
       get_method("TestG;.foo", "", "Lcom/facebook/redextest/TestG$Base;");
   auto rtype = wps.get_return_type(meth_foo);
   EXPECT_FALSE(rtype.is_top());
   EXPECT_TRUE(rtype.is_nullable());
 
-  auto meth_bar =
+  auto* meth_bar =
       get_method("TestG;.bar", "", "Lcom/facebook/redextest/TestG$Base;");
   rtype = wps.get_return_type(meth_bar);
   EXPECT_FALSE(rtype.is_top());
@@ -187,31 +187,31 @@ TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto field_sbase =
+  auto* field_sbase =
       get_field("TestH;.BASE:Lcom/facebook/redextest/TestH$Base;");
   auto ftype = wps.get_field_type(field_sbase);
   EXPECT_TRUE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
 
-  auto field_mbase =
+  auto* field_mbase =
       get_field("TestH;.mBase:Lcom/facebook/redextest/TestH$Base;");
   ftype = wps.get_field_type(field_mbase);
   EXPECT_TRUE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
 
-  auto meth_foo =
+  auto* meth_foo =
       get_method("TestH;.foo", "", "Lcom/facebook/redextest/TestH$Base;");
   auto rtype = wps.get_return_type(meth_foo);
   EXPECT_TRUE(rtype.is_top());
   EXPECT_TRUE(rtype.is_nullable());
 
-  auto meth_bar =
+  auto* meth_bar =
       get_method("TestH;.bar", "", "Lcom/facebook/redextest/TestH$Base;");
   rtype = wps.get_return_type(meth_bar);
   EXPECT_TRUE(rtype.is_top());
   EXPECT_TRUE(rtype.is_nullable());
 
-  auto meth_baz =
+  auto* meth_baz =
       get_method("TestH;.baz", "", "Lcom/facebook/redextest/TestH$Base;");
   rtype = wps.get_return_type(meth_baz);
   EXPECT_TRUE(rtype.is_top());
@@ -225,25 +225,25 @@ TEST_F(GlobalTypeAnalysisTest, IFieldsNullnessTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto one_m1 = get_field("TestI$One;.m1:Lcom/facebook/redextest/TestI$Foo;");
+  auto* one_m1 = get_field("TestI$One;.m1:Lcom/facebook/redextest/TestI$Foo;");
   auto ftype = wps.get_field_type(one_m1);
   EXPECT_FALSE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestI$Foo")));
-  auto one_m2 = get_field("TestI$One;.m2:Lcom/facebook/redextest/TestI$Foo;");
+  auto* one_m2 = get_field("TestI$One;.m2:Lcom/facebook/redextest/TestI$Foo;");
   ftype = wps.get_field_type(one_m2);
   EXPECT_TRUE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
 
-  auto two_m1 = get_field("TestI$Two;.m1:Lcom/facebook/redextest/TestI$Foo;");
+  auto* two_m1 = get_field("TestI$Two;.m1:Lcom/facebook/redextest/TestI$Foo;");
   ftype = wps.get_field_type(two_m1);
   EXPECT_FALSE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestI$Foo")));
 
-  auto two_m2 = get_field("TestI$Two;.m2:Lcom/facebook/redextest/TestI$Foo;");
+  auto* two_m2 = get_field("TestI$Two;.m2:Lcom/facebook/redextest/TestI$Foo;");
   ftype = wps.get_field_type(two_m2);
   EXPECT_TRUE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
@@ -256,7 +256,7 @@ TEST_F(GlobalTypeAnalysisTest, PrimitiveArrayTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto create_byte_array = get_method("TestJ;.createByteArray", "", "[B");
+  auto* create_byte_array = get_method("TestJ;.createByteArray", "", "[B");
   auto rtype = wps.get_return_type(create_byte_array);
   EXPECT_FALSE(rtype.is_top());
   EXPECT_TRUE(rtype.is_not_null());
@@ -271,7 +271,7 @@ TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto field_f = get_field("TestK$Foo;.f:Lcom/facebook/redextest/TestK$A;");
+  auto* field_f = get_field("TestK$Foo;.f:Lcom/facebook/redextest/TestK$A;");
   auto ftype = wps.get_field_type(field_f);
   EXPECT_TRUE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
@@ -284,7 +284,7 @@ TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorNullnessTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto field_f = get_field("TestL$Foo;.f:Lcom/facebook/redextest/TestL$A;");
+  auto* field_f = get_field("TestL$Foo;.f:Lcom/facebook/redextest/TestL$A;");
   auto ftype = wps.get_field_type(field_f);
   EXPECT_TRUE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
@@ -297,7 +297,7 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscapeTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto call_native =
+  auto* call_native =
       get_method("TestM;.callNative", "", "Lcom/facebook/redextest/TestM$A;");
   auto rtype = wps.get_return_type(call_native);
   EXPECT_FALSE(rtype.is_top());
@@ -316,8 +316,8 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto dance1 = get_method("TestN;.danceWithArray1", "",
-                           "Lcom/facebook/redextest/TestN$A;");
+  auto* dance1 = get_method("TestN;.danceWithArray1", "",
+                            "Lcom/facebook/redextest/TestN$A;");
   auto rtype = wps.get_return_type(dance1);
   EXPECT_FALSE(rtype.is_top());
   EXPECT_FALSE(rtype.is_not_null());
@@ -326,8 +326,8 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestN$A;")));
 
-  auto dance2 = get_method("TestN;.danceWithArray2", "",
-                           "Lcom/facebook/redextest/TestN$A;");
+  auto* dance2 = get_method("TestN;.danceWithArray2", "",
+                            "Lcom/facebook/redextest/TestN$A;");
   rtype = wps.get_return_type(dance2);
   EXPECT_FALSE(rtype.is_top());
   EXPECT_FALSE(rtype.is_not_null());
@@ -345,7 +345,7 @@ TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto base_same =
+  auto* base_same =
       get_method("TestO$Base;.same", "", "Lcom/facebook/redextest/TestO$I;");
   EXPECT_TRUE(base_same != nullptr);
   auto rtype = wps.get_return_type(base_same);
@@ -354,7 +354,7 @@ TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestO$B;")));
 
-  auto sub_same =
+  auto* sub_same =
       get_method("TestO$Sub;.same", "", "Lcom/facebook/redextest/TestO$I;");
   EXPECT_TRUE(sub_same != nullptr);
   rtype = wps.get_return_type(sub_same);
@@ -363,7 +363,7 @@ TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestO$B;")));
 
-  auto call_same =
+  auto* call_same =
       get_method("TestO;.callSame", "I", "Lcom/facebook/redextest/TestO$I;");
   EXPECT_TRUE(call_same != nullptr);
   rtype = wps.get_return_type(call_same);
@@ -372,7 +372,7 @@ TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestO$B;")));
 
-  auto base_diff =
+  auto* base_diff =
       get_method("TestO$Base;.diff", "", "Lcom/facebook/redextest/TestO$I;");
   EXPECT_TRUE(base_diff != nullptr);
   rtype = wps.get_return_type(base_diff);
@@ -381,7 +381,7 @@ TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestO$A;")));
 
-  auto sub_diff =
+  auto* sub_diff =
       get_method("TestO$Sub;.diff", "", "Lcom/facebook/redextest/TestO$I;");
   EXPECT_TRUE(sub_diff != nullptr);
   rtype = wps.get_return_type(sub_diff);
@@ -390,7 +390,7 @@ TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestO$B;")));
 
-  auto call_diff =
+  auto* call_diff =
       get_method("TestO;.callDiff", "I", "Lcom/facebook/redextest/TestO$I;");
   EXPECT_TRUE(call_diff != nullptr);
   rtype = wps.get_return_type(call_diff);
@@ -408,7 +408,7 @@ TEST_F(GlobalTypeAnalysisTest, InvokeInInitRegressionTest) {
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
 
-  auto meth = get_method("TestP;.bar", "TestP$C");
+  auto* meth = get_method("TestP;.bar", "TestP$C");
   auto rtype = wps.get_return_type(meth);
   EXPECT_TRUE(rtype.is_nullable());
   const auto& single_domain = rtype.get_single_domain();

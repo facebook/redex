@@ -170,7 +170,7 @@ std::string StringTreeStringMap::encode_string_tree_map(
   };
 
   auto compute_utf16_length = [](const std::string& str) {
-    auto s = str.data();
+    const auto* s = str.data();
     int32_t result{0};
     while (*s != '\0') {
       auto code_point = mutf8_next_code_point(s);

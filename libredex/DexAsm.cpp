@@ -68,7 +68,7 @@ void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
 
 IRInstruction* dasm(IROpcode opcode, std::initializer_list<Operand> args) {
   assert_log(!unsupported(opcode), "%s is unsupported", SHOW(opcode));
-  auto insn = new IRInstruction(opcode);
+  auto* insn = new IRInstruction(opcode);
   assemble(insn, args);
   return insn;
 }
@@ -76,7 +76,7 @@ IRInstruction* dasm(IROpcode opcode, std::initializer_list<Operand> args) {
 IRInstruction* dasm(IROpcode opcode,
                     const DexString* string,
                     std::initializer_list<Operand> args) {
-  auto insn = new IRInstruction(opcode);
+  auto* insn = new IRInstruction(opcode);
   insn->set_string(string);
   assemble(insn, args);
   return insn;
@@ -85,7 +85,7 @@ IRInstruction* dasm(IROpcode opcode,
 IRInstruction* dasm(IROpcode opcode,
                     DexType* type,
                     std::initializer_list<Operand> args) {
-  auto insn = new IRInstruction(opcode);
+  auto* insn = new IRInstruction(opcode);
   insn->set_type(type);
   assemble(insn, args);
   return insn;
@@ -94,7 +94,7 @@ IRInstruction* dasm(IROpcode opcode,
 IRInstruction* dasm(IROpcode opcode,
                     DexFieldRef* field,
                     std::initializer_list<Operand> args) {
-  auto insn = new IRInstruction(opcode);
+  auto* insn = new IRInstruction(opcode);
   insn->set_field(field);
   assemble(insn, args);
   return insn;

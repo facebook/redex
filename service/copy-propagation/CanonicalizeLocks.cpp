@@ -129,22 +129,22 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
       }
     };
 
-    auto immediate_rdef = get_rdef(monitor_insn, monitor_insn->src(0));
+    auto* immediate_rdef = get_rdef(monitor_insn, monitor_insn->src(0));
     if (immediate_rdef == nullptr) {
       return boost::none;
     }
 
-    auto root_rdef = find_root_def(monitor_insn);
+    auto* root_rdef = find_root_def(monitor_insn);
     if (root_rdef == nullptr) {
       return boost::none;
     }
 
     ret.data.emplace(monitor_insn,
                      MonitorData{monitor_insn, root_rdef, immediate_rdef});
-    if (!ret.ordering.count(monitor_insn)) {
+    if (ret.ordering.count(monitor_insn) == 0u) {
       ret.ordering[monitor_insn] = idx++;
     }
-    if (!ret.ordering.count(root_rdef)) {
+    if (ret.ordering.count(root_rdef) == 0u) {
       ret.ordering[root_rdef] = idx++;
     }
   }
@@ -201,20 +201,20 @@ Result run(cfg::ControlFlowGraph& cfg) {
   // 3) Process groups.
   CFGMutation mutation(cfg);
   for (const auto& p : groups) {
-    auto& group = p.second;
+    const auto& group = p.second;
     UnorderedSet<IRInstruction*> immediate_srcs;
-    for (auto monitor_data : group) {
+    for (auto* monitor_data : group) {
       immediate_srcs.insert(monitor_data->immediate_in);
     }
     if (immediate_srcs.size() == 1) {
       // This group is OK.
       continue;
     }
-    auto source = (*group.begin())->source;
+    auto* source = (*group.begin())->source;
 
     // Make a copy.
     reg_t temp = cfg.allocate_temp();
-    auto new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
+    auto* new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
     new_move->set_src(0, source->dest());
     new_move->set_dest(temp);
 
@@ -222,7 +222,7 @@ Result run(cfg::ControlFlowGraph& cfg) {
     // it must be at the end of all those.
     if (source->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
       auto it = cfg.find_insn(source);
-      auto source_block = it.block();
+      auto* source_block = it.block();
       auto first_non_loading = source_block->get_first_non_param_loading_insn();
       if (first_non_loading != source_block->end()) {
         mutation.insert_before(
@@ -238,7 +238,7 @@ Result run(cfg::ControlFlowGraph& cfg) {
     }
 
     // Fix up the elements.
-    for (auto monitor_data : group) {
+    for (auto* monitor_data : group) {
       monitor_data->insn->set_src(0, temp);
     }
     ++res.fixups;

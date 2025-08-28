@@ -134,7 +134,7 @@ class MethodProfiles {
 
   size_t size() const {
     size_t sum{0};
-    for (auto& p : m_method_stats) {
+    for (const auto& p : m_method_stats) {
       sum += p.second.size();
     }
     return sum;

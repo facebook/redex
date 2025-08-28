@@ -20,19 +20,19 @@ struct BoxedBooleanTest : public ConstantPropagationTest {
     creator.set_super(type::java_lang_Object());
     creator.set_external();
 
-    auto boolean_true =
+    auto* boolean_true =
         DexField::make_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean")
             ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
-    auto boolean_false =
+    auto* boolean_false =
         DexField::make_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean")
             ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
     creator.add_field(boolean_true);
     creator.add_field(boolean_false);
 
-    auto valueof = DexMethod::make_method(
-                       "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
-                       ->make_concrete(ACC_PUBLIC, true);
-    [[maybe_unused]] auto booleanvalue =
+    auto* valueof = DexMethod::make_method(
+                        "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
+                        ->make_concrete(ACC_PUBLIC, true);
+    [[maybe_unused]] auto* booleanvalue =
         DexMethod::make_method("Ljava/lang/Boolean;.booleanValue:()Z")
             ->make_concrete(ACC_PUBLIC, true);
     creator.add_method(valueof);

@@ -72,7 +72,7 @@ class EvaluateTypeChecksTest : public RedexTest {
                       min_sdk);
 
     auto method_str = std::string("(") + method_line + " " + in + " )";
-    auto method = assembler::class_with_method(type, method_str);
+    auto* method = assembler::class_with_method(type, method_str);
     method->get_code()->build_cfg();
     check_casts::EvaluateTypeChecksPass::optimize(method, shrinker);
     method->get_code()->clear_cfg();
@@ -99,10 +99,10 @@ class EvaluateTypeChecksTest : public RedexTest {
 };
 
 TEST_F(EvaluateTypeChecksTest, same_type) {
-  auto obj = java_lang_Object();
+  auto* obj = java_lang_Object();
   EXPECT_EQ(1, evaluate(obj, obj));
 
-  auto str = java_lang_String();
+  auto* str = java_lang_String();
   EXPECT_EQ(1, evaluate(str, str));
 
   EXPECT_EQ(1, evaluate(m_foo, m_foo));
@@ -111,9 +111,9 @@ TEST_F(EvaluateTypeChecksTest, same_type) {
 }
 
 TEST_F(EvaluateTypeChecksTest, external_external) {
-  auto obj = java_lang_Object();
-  auto str = java_lang_String();
-  auto cls = java_lang_Class();
+  auto* obj = java_lang_Object();
+  auto* str = java_lang_String();
+  auto* cls = java_lang_Class();
 
   // Object is special.
   EXPECT_EQ(1, evaluate(str, obj));
@@ -125,8 +125,8 @@ TEST_F(EvaluateTypeChecksTest, external_external) {
 }
 
 TEST_F(EvaluateTypeChecksTest, external_internal) {
-  auto obj = java_lang_Object();
-  auto str = java_lang_String();
+  auto* obj = java_lang_Object();
+  auto* str = java_lang_String();
 
   // Object is special.
   EXPECT_EQ(1, evaluate(m_foo, obj));
@@ -159,7 +159,7 @@ TEST_F(EvaluateTypeChecksTest, internal_not_static) {
 // Full optimization tests.
 
 TEST_F(EvaluateTypeChecksTest, instance_of_no_optimize) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (instance-of v0 "LBar;")
@@ -174,13 +174,13 @@ TEST_F(EvaluateTypeChecksTest, instance_of_no_optimize) {
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LFoo;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LFoo;)I\"";
 
   EXPECT_TRUE(run("LTest;", method_str, code, code));
 }
 
 TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_fail) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (instance-of v0 "LBar;")
@@ -189,14 +189,14 @@ TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_fail) {
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
-  auto expected = "((load-param-object v0) (const v0 0) (return v0))";
+  const auto* expected = "((load-param-object v0) (const v0 0) (return v0))";
   EXPECT_TRUE(run("LTest;", method_str, code, expected));
 }
 
 TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_nez) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (instance-of v0 "LFoo;")
@@ -211,9 +211,9 @@ TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_nez) {
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
-  auto expected = R"(
+  const auto* expected = R"(
       (
        (load-param-object v0)
        (move-object v1 v0)
@@ -229,7 +229,7 @@ TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_nez) {
 }
 
 TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_eqz) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (instance-of v0 "LFoo;")
@@ -244,9 +244,9 @@ TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_eqz) {
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
-  auto expected = R"(
+  const auto* expected = R"(
       (
        (load-param-object v0)
        (move-object v1 v0)
@@ -262,7 +262,7 @@ TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_eqz) {
 }
 
 TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_nez_chain) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (instance-of v0 "LFoo;")
@@ -279,9 +279,9 @@ TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_nez_chain) {
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
-  auto expected = R"(
+  const auto* expected = R"(
       (
        (load-param-object v0)
        (if-nez v0 :L0)
@@ -297,7 +297,7 @@ TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_nez_chain) {
 
 TEST_F(EvaluateTypeChecksTest,
        instance_of_no_optimize_always_succeed_nez_multi_use) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (instance-of v0 "LFoo;")
@@ -315,14 +315,14 @@ TEST_F(EvaluateTypeChecksTest,
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
   EXPECT_TRUE(run("LTest;", method_str, code, code));
 }
 
 TEST_F(EvaluateTypeChecksTest,
        instance_of_optimize_always_succeed_nez_multi_use_yes) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (load-param-object v1)
@@ -351,9 +351,9 @@ TEST_F(EvaluateTypeChecksTest,
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LBaz;I)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LBaz;I)I\"";
 
-  auto expected = R"(
+  const auto* expected = R"(
       (
        (load-param-object v0)
        (load-param-object v1)
@@ -383,7 +383,7 @@ TEST_F(EvaluateTypeChecksTest,
 
 TEST_F(EvaluateTypeChecksTest,
        instance_of_no_optimize_always_succeed_nez_no_branch) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (instance-of v0 "LFoo;")
@@ -391,13 +391,13 @@ TEST_F(EvaluateTypeChecksTest,
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
   EXPECT_TRUE(run("LTest;", method_str, code, code));
 }
 
 TEST_F(EvaluateTypeChecksTest, instance_of_multi_def) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param v0)
         (load-param v1)
@@ -418,13 +418,13 @@ TEST_F(EvaluateTypeChecksTest, instance_of_multi_def) {
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(ZILBar;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(ZILBar;)I\"";
 
   EXPECT_TRUE(run("LTest;", method_str, code, code));
 }
 
 TEST_F(EvaluateTypeChecksTest, check_cast_no_optimize) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (check-cast v0 "LBar;")
@@ -439,13 +439,13 @@ TEST_F(EvaluateTypeChecksTest, check_cast_no_optimize) {
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LFoo;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LFoo;)I\"";
 
   EXPECT_TRUE(run("LTest;", method_str, code, code));
 }
 
 TEST_F(EvaluateTypeChecksTest, check_cast_optimize_always_fail) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (check-cast v0 "LBar;")
@@ -460,14 +460,14 @@ TEST_F(EvaluateTypeChecksTest, check_cast_optimize_always_fail) {
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
-  auto expected = "((load-param-object v0) (const v0 0) (return v0))";
+  const auto* expected = "((load-param-object v0) (const v0 0) (return v0))";
   EXPECT_TRUE(run("LTest;", method_str, code, expected));
 }
 
 TEST_F(EvaluateTypeChecksTest, check_cast_optimize_always_succeed) {
-  auto code = R"(
+  const auto* code = R"(
        (
         (load-param-object v0)
         (check-cast v0 "LFoo;")
@@ -482,9 +482,9 @@ TEST_F(EvaluateTypeChecksTest, check_cast_optimize_always_succeed) {
         (return v0)
        )
       )";
-  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+  const auto* method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
-  auto expected = R"(
+  const auto* expected = R"(
       (
        (load-param-object v0)
        (if-nez v0 :L0)

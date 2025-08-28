@@ -108,7 +108,7 @@ class EnumOrdinalAnalyzer
   static bool analyze_new_instance(const EnumOrdinalAnalyzerState& /*state*/,
                                    const IRInstruction* insn,
                                    ConstantEnvironment* env) {
-    auto cls = type_class(insn->get_type());
+    auto* cls = type_class(insn->get_type());
     if (cls == nullptr) {
       return false;
     }
@@ -122,11 +122,11 @@ class EnumOrdinalAnalyzer
   static bool analyze_iput(const EnumOrdinalAnalyzerState& state,
                            const IRInstruction* insn,
                            ConstantEnvironment* env) {
-    auto field = resolve_field(insn->get_field());
+    auto* field = resolve_field(insn->get_field());
     if (field == nullptr) {
       return false;
     }
-    if (state.enum_instance_fields.count(field)) {
+    if (state.enum_instance_fields.count(field) != 0u) {
       env->set_object_field(insn->src(1), field, env->get(insn->src(0)));
       return true;
     }
@@ -136,7 +136,7 @@ class EnumOrdinalAnalyzer
   static bool analyze_sput(const EnumOrdinalAnalyzerState& state,
                            const IRInstruction* insn,
                            ConstantEnvironment* env) {
-    auto field = resolve_field(insn->get_field());
+    auto* field = resolve_field(insn->get_field());
     if (field == nullptr) {
       return false;
     }
@@ -161,7 +161,7 @@ class EnumOrdinalAnalyzer
   static bool analyze_invoke(const EnumOrdinalAnalyzerState& state,
                              const IRInstruction* insn,
                              ConstantEnvironment* env) {
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
     if (method == nullptr) {
       return false;
     }
@@ -202,7 +202,7 @@ bool validate_result(const DexClass* cls,
   auto enum_field_access = optimize_enums::enum_field_access();
   auto values_access = optimize_enums::synth_access();
 
-  for (auto enum_sfield : cls->get_sfields()) {
+  for (auto* enum_sfield : cls->get_sfields()) {
     auto access = enum_sfield->get_access();
     auto it = constants.find(enum_sfield);
     if (it != constants.end()) {
@@ -289,11 +289,11 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls,
   if (!return_env.get_field_environment().is_value()) {
     return EnumAttributes();
   }
-  auto ordinal_field = get_ordinal_field();
-  auto enum_name_field = get_enum_name_field();
+  auto* ordinal_field = get_ordinal_field();
+  auto* enum_name_field = get_enum_name_field();
   EnumAttributes attributes;
-  for (auto& pair : return_env.get_field_environment().bindings()) {
-    auto* enum_sfield = pair.first;
+  for (const auto& pair : return_env.get_field_environment().bindings()) {
+    const auto* enum_sfield = pair.first;
     if (enum_sfield->get_class() != cls->get_type() ||
         !check_required_access_flags(optimize_enums::enum_field_access(),
                                      enum_sfield->get_access())) {

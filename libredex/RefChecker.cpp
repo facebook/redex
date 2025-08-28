@@ -16,34 +16,35 @@
 
 CodeRefs::CodeRefs(const DexMethod* method,
                    const cfg::ControlFlowGraph* reduced_cfg) {
-  if (!method->get_code()) {
+  if (method->get_code() == nullptr) {
     return;
   }
   always_assert(method->get_code()->editable_cfg_built());
-  auto& cfg = reduced_cfg ? *reduced_cfg : method->get_code()->cfg();
+  const auto& cfg =
+      reduced_cfg != nullptr ? *reduced_cfg : method->get_code()->cfg();
   UnorderedSet<const DexType*> types_set;
   UnorderedSet<const DexMethod*> methods_set;
   UnorderedSet<const DexField*> fields_set;
-  for (auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+  for (const auto& mie : InstructionIterable(cfg)) {
+    auto* insn = mie.insn;
     if (insn->has_type()) {
       always_assert(insn->get_type());
       types_set.insert(insn->get_type());
     } else if (insn->has_method()) {
-      auto callee = resolve_invoke_method(insn, method);
-      if (!callee) {
+      auto* callee = resolve_invoke_method(insn, method);
+      if (callee == nullptr) {
         invalid_refs = true;
         break;
       }
-      auto callee_ref = insn->get_method();
+      auto* callee_ref = insn->get_method();
       if (callee != callee_ref) {
         types_set.insert(callee_ref->get_class());
       }
       methods_set.insert(callee);
     } else if (insn->has_field()) {
-      auto field_ref = insn->get_field();
-      auto field = resolve_field(field_ref);
-      if (!field) {
+      auto* field_ref = insn->get_field();
+      auto* field = resolve_field(field_ref);
+      if (field == nullptr) {
         invalid_refs = true;
         break;
       }
@@ -59,8 +60,8 @@ CodeRefs::CodeRefs(const DexMethod* method,
 
   std::vector<DexType*> catch_types;
   cfg.gather_catch_types(catch_types);
-  for (auto type : catch_types) {
-    if (type) {
+  for (auto* type : catch_types) {
+    if (type != nullptr) {
       types_set.insert(type);
     }
   }
@@ -142,17 +143,17 @@ bool RefChecker::check_code_refs(const CodeRefs& code_refs) const {
   if (code_refs.invalid_refs) {
     return false;
   }
-  for (auto type : code_refs.types) {
+  for (const auto* type : code_refs.types) {
     if (!check_type(type)) {
       return false;
     }
   }
-  for (auto method : code_refs.methods) {
+  for (const auto* method : code_refs.methods) {
     if (!check_method(method)) {
       return false;
     }
   }
-  for (auto field : code_refs.fields) {
+  for (const auto* field : code_refs.fields) {
     if (!check_field(field)) {
       return false;
     }
@@ -166,7 +167,7 @@ bool RefChecker::check_type_internal(const DexType* type) const {
     return true;
   }
   while (true) {
-    auto cls = type_class(type);
+    auto* cls = type_class(type);
     if (cls == nullptr) {
       if (type == type::java_lang_String() || type == type::java_lang_Class() ||
           type == type::java_lang_Enum() || type == type::java_lang_Object() ||
@@ -185,13 +186,13 @@ bool RefChecker::check_type_internal(const DexType* type) const {
       return false;
     }
     if (cls->is_external()) {
-      return m_min_sdk_api && m_min_sdk_api->has_type(type);
+      return (m_min_sdk_api != nullptr) && m_min_sdk_api->has_type(type);
     }
-    if (m_xstores && m_xstores->illegal_ref(m_store_idx, type)) {
+    if ((m_xstores != nullptr) && m_xstores->illegal_ref(m_store_idx, type)) {
       return false;
     }
-    auto interfaces = cls->get_interfaces();
-    for (auto t : *interfaces) {
+    auto* interfaces = cls->get_interfaces();
+    for (auto* t : *interfaces) {
       if (!check_type(t)) {
         return false;
       }
@@ -201,15 +202,15 @@ bool RefChecker::check_type_internal(const DexType* type) const {
 }
 
 bool RefChecker::check_method_internal(const DexMethod* method) const {
-  auto cls = type_class(method->get_class());
+  auto* cls = type_class(method->get_class());
   if (cls->is_external()) {
-    return m_min_sdk_api && m_min_sdk_api->has_method(method);
+    return (m_min_sdk_api != nullptr) && m_min_sdk_api->has_method(method);
   }
   if (!check_type(method->get_class())) {
     return false;
   }
-  auto args = method->get_proto()->get_args();
-  for (auto t : *args) {
+  auto* args = method->get_proto()->get_args();
+  for (auto* t : *args) {
     if (!check_type(t)) {
       return false;
     }
@@ -218,13 +219,13 @@ bool RefChecker::check_method_internal(const DexMethod* method) const {
 }
 
 bool RefChecker::check_field_internal(const DexField* field) const {
-  auto cls = type_class(field->get_class());
+  auto* cls = type_class(field->get_class());
   if (cls->is_external()) {
-    return m_min_sdk_api && m_min_sdk_api->has_field(field);
+    return (m_min_sdk_api != nullptr) && m_min_sdk_api->has_field(field);
   }
   return check_type(field->get_class()) && check_type(field->get_type());
 }
 
 bool RefChecker::is_in_primary_dex(const DexType* type) const {
-  return m_xstores && m_xstores->is_in_primary_dex(type);
+  return (m_xstores != nullptr) && m_xstores->is_in_primary_dex(type);
 }

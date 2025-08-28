@@ -76,12 +76,12 @@ const DexString* lookup_signature_annotation(
   // Lcom/baz/Foo;
 
   // Use get_string because if it's in the map, then it must also already exist
-  auto* transformed_anno = DexString::get_string(anno_str);
+  const auto* transformed_anno = DexString::get_string(anno_str);
   if (transformed_anno == nullptr) {
     return nullptr;
   }
-  auto obfu = mapping.get_new_type_name(transformed_anno);
-  if (!obfu) {
+  const auto* obfu = mapping.get_new_type_name(transformed_anno);
+  if (obfu == nullptr) {
     return nullptr;
   }
   if (!added_semicolon && !has_bracket) {
@@ -102,7 +102,7 @@ const DexString* lookup_signature_annotation(
 
 uint32_t get_array_level(const DexString* name) {
   uint32_t level = 0;
-  auto str = name->c_str();
+  const auto* str = name->c_str();
   while (*str++ == '[') {
   }
   return level;
@@ -171,21 +171,21 @@ void rewrite_dalvik_annotation_signature(const Scope& scope,
     if (anno->type() != dalviksig) {
       return;
     }
-    auto& elems = anno->anno_elems();
-    for (auto& elem : elems) {
-      auto& ev = elem.encoded_value;
+    const auto& elems = anno->anno_elems();
+    for (const auto& elem : elems) {
+      const auto& ev = elem.encoded_value;
       if (ev->evtype() != DEVT_ARRAY) {
         continue;
       }
-      auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
+      auto* arrayev = static_cast<DexEncodedValueArray*>(ev.get());
       auto const& evs = arrayev->evalues();
       for (auto& strev : *evs) {
         if (strev->evtype() != DEVT_STRING) {
           continue;
         }
-        auto stringev = static_cast<DexEncodedValueString*>(strev.get());
-        auto* old_str = stringev->string();
-        auto* new_str = lookup_signature_annotation(mapping, old_str);
+        auto* stringev = static_cast<DexEncodedValueString*>(strev.get());
+        const auto* old_str = stringev->string();
+        const auto* new_str = lookup_signature_annotation(mapping, old_str);
         if (new_str != nullptr) {
           TRACE(RENAME, 5, "Rewriting Signature from '%s' to '%s'",
                 old_str->c_str(), new_str->c_str());
@@ -203,21 +203,22 @@ uint32_t rewrite_string_literal_instructions(const Scope& scope,
     always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
     for (const auto& mie : InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() != OPCODE_CONST_STRING) {
         continue;
       }
-      auto* old_str = insn->get_string();
-      auto* internal_str = DexString::get_string(
+      const auto* old_str = insn->get_string();
+      const auto* internal_str = DexString::get_string(
           java_names::external_to_internal(old_str->str()));
-      if (!internal_str || !DexType::get_type(internal_str)) {
+      if ((internal_str == nullptr) ||
+          (DexType::get_type(internal_str) == nullptr)) {
         continue;
       }
-      auto new_type_name = mapping.get_new_type_name(internal_str);
-      if (!new_type_name) {
+      const auto* new_type_name = mapping.get_new_type_name(internal_str);
+      if (new_type_name == nullptr) {
         continue;
       }
-      auto new_str = DexString::make_string(
+      const auto* new_str = DexString::make_string(
           java_names::internal_to_external(new_type_name->str()));
       insn->set_string(new_str);
       total_updates++;

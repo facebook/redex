@@ -29,7 +29,7 @@ namespace {
 std::string get_simple_deobfuscated_name(const DexType* type) {
   auto* cls = type_class(type);
   std::string_view full_name;
-  if (cls) {
+  if (cls != nullptr) {
     full_name = cls->get_deobfuscated_name_or_empty();
   }
   if (full_name.empty()) {
@@ -206,12 +206,12 @@ bool check_if_present(
     const UnorderedMap<const DexType*, DexType*>& release_to_framework) {
   for (const DexType* type : types) {
     DexClass* cls = type_class(type);
-    if (!cls || cls->is_external()) {
+    if ((cls == nullptr) || cls->is_external()) {
       // TODO(emmasevastian): When it isn't safe to continue here?
       continue;
     }
 
-    if (!release_to_framework.count(type)) {
+    if (release_to_framework.count(type) == 0u) {
       return false;
     }
   }
@@ -351,7 +351,7 @@ void ApiLevelsUtils::gather_non_private_members(const Scope& scope) {
 
     cls->gather_methods(current_methods);
     for (DexMethodRef* mref : current_methods) {
-      if (m_types_to_framework_api.count(mref->get_class())) {
+      if (m_types_to_framework_api.count(mref->get_class()) != 0u) {
         if (mref->get_class() != cls->get_type()) {
           m_methods_non_private.emplace(mref);
         } else {
@@ -359,7 +359,7 @@ void ApiLevelsUtils::gather_non_private_members(const Scope& scope) {
 
           // Being extra conservative here ...
           // NOTE: Whatever we add to the list we will need to replace.
-          if (!mdef ||
+          if ((mdef == nullptr) ||
               method_override_graph::is_true_virtual(*override_graph, mdef)) {
             m_methods_non_private.emplace(mref);
           }
@@ -369,7 +369,7 @@ void ApiLevelsUtils::gather_non_private_members(const Scope& scope) {
 
     cls->gather_fields(current_fields);
     for (DexFieldRef* fref : current_fields) {
-      if (m_types_to_framework_api.count(fref->get_class()) &&
+      if ((m_types_to_framework_api.count(fref->get_class()) != 0u) &&
           fref->get_class() != cls->get_type()) {
         m_fields_non_private.emplace(fref);
       }

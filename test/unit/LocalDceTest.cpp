@@ -29,8 +29,8 @@ struct LocalDceTryTest : public RedexTest {
     // we need in the tests to create a proper scope
     virt_scope::get_vmethods(type::java_lang_Object());
 
-    auto args = DexTypeList::make_type_list({});
-    auto proto = DexProto::make_proto(type::_void(), args);
+    auto* args = DexTypeList::make_type_list({});
+    auto* proto = DexProto::make_proto(type::_void(), args);
     m_method =
         DexMethod::make_method(type::java_lang_Object(),
                                DexString::make_string("testMethod"), proto)
@@ -58,12 +58,12 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   // setup
   using namespace dex_asm;
 
-  auto code = m_method->get_code();
-  auto exception_type = DexType::make_type("Ljava/lang/Exception;");
-  auto catch_start = new MethodItemEntry(exception_type);
+  auto* code = m_method->get_code();
+  auto* exception_type = DexType::make_type("Ljava/lang/Exception;");
+  auto* catch_start = new MethodItemEntry(exception_type);
 
-  auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO));
-  auto target = new BranchTarget(goto_mie);
+  auto* goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO));
+  auto* target = new BranchTarget(goto_mie);
 
   code->push_back(target);
   // this TRY_START is in a block that is live
@@ -94,12 +94,12 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   // setup
   using namespace dex_asm;
 
-  auto code = m_method->get_code();
-  auto exception_type = DexType::make_type("Ljava/lang/Exception;");
-  auto catch_start = new MethodItemEntry(exception_type);
+  auto* code = m_method->get_code();
+  auto* exception_type = DexType::make_type("Ljava/lang/Exception;");
+  auto* catch_start = new MethodItemEntry(exception_type);
 
-  auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO));
-  auto target = new BranchTarget(goto_mie);
+  auto* goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO));
+  auto* target = new BranchTarget(goto_mie);
 
   code->push_back(target);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
@@ -133,9 +133,9 @@ TEST_F(LocalDceTryTest, deadCatch) {
   // setup
   using namespace dex_asm;
 
-  auto code = m_method->get_code();
-  auto exception_type = DexType::make_type("Ljava/lang/Exception;");
-  auto catch_start = new MethodItemEntry(exception_type);
+  auto* code = m_method->get_code();
+  auto* exception_type = DexType::make_type("Ljava/lang/Exception;");
+  auto* catch_start = new MethodItemEntry(exception_type);
 
   code->push_back(TRY_START, catch_start);
   code->push_back(dasm(OPCODE_RETURN_VOID));
@@ -160,9 +160,9 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
   // setup
   using namespace dex_asm;
 
-  auto code = m_method->get_code();
-  auto exception_type = DexType::make_type("Ljava/lang/Exception;");
-  auto catch_start = new MethodItemEntry(exception_type);
+  auto* code = m_method->get_code();
+  auto* exception_type = DexType::make_type("Ljava/lang/Exception;");
+  auto* catch_start = new MethodItemEntry(exception_type);
 
   // this try wraps an opcode which may throw, should not be removed
   code->push_back(TRY_START, catch_start);
@@ -189,8 +189,8 @@ TEST_F(LocalDceTryTest, deadIf) {
   // setup
   using namespace dex_asm;
 
-  auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {0_v}));
-  auto target1 = new BranchTarget(if_mie);
+  auto* if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {0_v}));
+  auto* target1 = new BranchTarget(if_mie);
   IRCode* code = m_method->get_code();
   code->push_back(*if_mie); // branch to target1
   code->push_back(target1);
@@ -212,7 +212,7 @@ TEST_F(LocalDceTryTest, deadCast) {
   // setup
   using namespace dex_asm;
 
-  auto check_cast_mie = new MethodItemEntry(
+  auto* check_cast_mie = new MethodItemEntry(
       dasm(OPCODE_CHECK_CAST, DexType::make_type("Ljava/lang/Void;"), {0_v}));
   IRCode* code = m_method->get_code();
   code->push_back(dasm(OPCODE_CONST, {0_v, 0_L}));
@@ -243,12 +243,12 @@ struct LocalDceEnhanceTest : public RedexTest {
     UnorderedSet<const DexMethod*> computed_no_side_effects_methods;
     method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
         [&](const DexType* type) {
-          return !init_classes_with_side_effects.refine(type);
+          return init_classes_with_side_effects.refine(type) == nullptr;
         };
     compute_no_side_effects_methods(scope, override_graph.get(),
                                     clinit_has_no_side_effects, pure_methods,
                                     &computed_no_side_effects_methods);
-    for (auto m : UnorderedIterable(computed_no_side_effects_methods)) {
+    for (const auto* m : UnorderedIterable(computed_no_side_effects_methods)) {
       pure_methods.insert(const_cast<DexMethod*>(m));
     }
     return pure_methods;
@@ -266,15 +266,15 @@ struct LocalDceEnhanceTest : public RedexTest {
   }
 
   void add_clinit(DexType* type) {
-    auto clinit_name = DexString::make_string("<clinit>");
-    auto void_args = DexTypeList::make_type_list({});
-    auto void_void = DexProto::make_proto(type::_void(), void_args);
-    auto clinit = static_cast<DexMethod*>(
+    const auto* clinit_name = DexString::make_string("<clinit>");
+    auto* void_args = DexTypeList::make_type_list({});
+    auto* void_void = DexProto::make_proto(type::_void(), void_args);
+    auto* clinit = static_cast<DexMethod*>(
         DexMethod::make_method(type, clinit_name, void_void));
     clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
     clinit->set_code(std::make_unique<IRCode>());
-    auto code = clinit->get_code();
-    auto method = DexMethod::make_method("Lunknown;.unknown:()V");
+    auto* code = clinit->get_code();
+    auto* method = DexMethod::make_method("Lunknown;.unknown:()V");
     code->push_back(dex_asm::dasm(OPCODE_INVOKE_STATIC, method, {}));
     code->push_back(dex_asm::dasm(OPCODE_RETURN_VOID));
     type_class(type)->add_method(clinit);
@@ -283,8 +283,8 @@ struct LocalDceEnhanceTest : public RedexTest {
 
 TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
@@ -313,8 +313,8 @@ TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorWithoutSideEffectsTest) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
@@ -352,8 +352,8 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorWithoutSideEffectsTest) {
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorWithSideEffectsTest) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
@@ -392,8 +392,8 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorWithSideEffectsTest) {
 
 TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   DexType* a_type = DexType::make_type("LA;");
   DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
@@ -425,8 +425,8 @@ TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorIntfWithSideEffectsTest) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   DexType* a_type = DexType::make_type("LA;");
   DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
@@ -461,8 +461,8 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorIntfWithSideEffectsTest) {
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorIntfWithoutSideEffectsTest) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   DexType* a_type = DexType::make_type("LA;");
   DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
@@ -495,8 +495,8 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorIntfWithoutSideEffectsTest) {
 
 TEST_F(LocalDceEnhanceTest, NoImplementorMayAllocateRegistersTest) {
   Scope scope = create_empty_scope();
-  auto void_t = type::_void();
-  auto void_void =
+  auto* void_t = type::_void();
+  auto* void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   DexType* a_type = DexType::make_type("LA;");
   DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
@@ -536,12 +536,12 @@ TEST_F(LocalDceTryTest, invoked_static_method_with_pure_external_barrier) {
   ClassCreator creator(DexType::make_type("LNativeTest;"));
   creator.set_super(type::java_lang_Object());
 
-  auto native_method =
+  auto* native_method =
       DexMethod::make_method("LNativeTest;.native:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_NATIVE, false);
 
-  auto method = DexMethod::make_method("LNativeTest;.test:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LNativeTest;.test:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
                     (
                       (invoke-static () "LNativeTest;.native:()V")
@@ -572,12 +572,12 @@ TEST_F(LocalDceTryTest, invoked_static_method_with_pure_external_barrier) {
   UnorderedSet<const DexMethod*> computed_no_side_effects_methods;
   method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
       [&](const DexType* type) {
-        return !init_classes_with_side_effects.refine(type);
+        return init_classes_with_side_effects.refine(type) == nullptr;
       };
   compute_no_side_effects_methods(scope, override_graph.get(),
                                   clinit_has_no_side_effects, pure_methods,
                                   &computed_no_side_effects_methods);
-  for (auto m : UnorderedIterable(computed_no_side_effects_methods)) {
+  for (const auto* m : UnorderedIterable(computed_no_side_effects_methods)) {
     pure_methods.insert(const_cast<DexMethod*>(m));
   }
   LocalDce ldce(&init_classes_with_side_effects, pure_methods);
@@ -771,7 +771,7 @@ TEST_F(LocalDceEnhanceTest, ReplaceSgetWithInitClass) {
   DexClass* a_cls =
       create_internal_class(a_type, type::java_lang_Object(), {}, ACC_PUBLIC);
   add_clinit(a_type);
-  auto field =
+  auto* field =
       DexField::make_field("LA;.f:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
   a_cls->add_field(field);
   scope.push_back(a_cls);
@@ -802,8 +802,8 @@ TEST_F(LocalDceEnhanceTest, ReplaceInvokeStaticWithInitClass) {
   DexClass* a_cls =
       create_internal_class(a_type, type::java_lang_Object(), {}, ACC_PUBLIC);
   add_clinit(a_type);
-  auto method = DexMethod::make_method("LA;.pure:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LA;.pure:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
                     (
                       (return-void)
@@ -837,11 +837,11 @@ TEST_F(LocalDceEnhanceTest, ReplaceAllThreeWithInitClass) {
   DexClass* a_cls =
       create_internal_class(a_type, type::java_lang_Object(), {}, ACC_PUBLIC);
   add_clinit(a_type);
-  auto field =
+  auto* field =
       DexField::make_field("LA;.f:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
   a_cls->add_field(field);
-  auto method = DexMethod::make_method("LA;.pure:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LA;.pure:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
                     (
                       (return-void)
@@ -881,11 +881,11 @@ TEST_F(LocalDceEnhanceTest, ReplaceAllThreeWithInitClassAndPrune) {
   DexClass* a_cls =
       create_internal_class(a_type, type::java_lang_Object(), {}, ACC_PUBLIC);
   add_clinit(a_type);
-  auto field =
+  auto* field =
       DexField::make_field("LA;.f:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
   a_cls->add_field(field);
-  auto method = DexMethod::make_method("LA;.pure:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("LA;.pure:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
                     (
                       (return-void)

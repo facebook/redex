@@ -77,7 +77,7 @@ void LinearScanAllocator::allocate() {
   }
   for (auto& interval : m_live_intervals) {
     auto& [defs, uses] = m_vreg_defs_uses.at(interval.vreg);
-    for (auto def : defs) {
+    for (auto* def : defs) {
       def->set_dest(interval.reg.value());
     }
     for (auto use : uses) {
@@ -90,7 +90,7 @@ void LinearScanAllocator::allocate() {
 
 void LinearScanAllocator::init_vreg_occurences() {
   for (auto& mie : InstructionIterable(*m_cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!insn->has_dest()) {
       continue;
     }
@@ -105,7 +105,7 @@ void LinearScanAllocator::init_vreg_occurences() {
     }
   }
   for (auto& mie : InstructionIterable(*m_cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
       vreg_t src_reg = insn->src(i);
       always_assert(insn->src_is_wide(i) == m_wide_vregs.count(src_reg));
@@ -116,7 +116,7 @@ void LinearScanAllocator::init_vreg_occurences() {
 
 reg_t LinearScanAllocator::allocate_register(reg_t for_vreg,
                                              uint32_t end_point) {
-  bool wide = m_wide_vregs.count(for_vreg);
+  bool wide = m_wide_vregs.count(for_vreg) != 0u;
   if (!m_this_vreg || *m_this_vreg != for_vreg) {
     auto shape = IRInstructionShape::get(m_live_interval_points.at(end_point));
     auto& free_regs = m_free_regs[shape];
@@ -157,7 +157,7 @@ void LinearScanAllocator::expire_old_intervals(uint32_t end_point) {
     auto& free_regs = m_free_regs[shape];
     bool success = free_regs.insert(freed_reg).second;
     always_assert(success);
-    if (m_wide_vregs.count(interval_to_free.vreg)) {
+    if (m_wide_vregs.count(interval_to_free.vreg) != 0u) {
       success = free_regs.insert(freed_reg + 1).second;
       always_assert(success);
     }

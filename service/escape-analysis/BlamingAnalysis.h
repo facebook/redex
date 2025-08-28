@@ -272,12 +272,13 @@ BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
                          std::initializer_list<SafeMethod> safe_methods = {});
 
 inline bool FixpointIterator::is_allocator(const IRInstruction* insn) const {
-  return m_allocators.count(insn);
+  return m_allocators.count(insn) != 0u;
 }
 
 inline bool FixpointIterator::is_safe_method(DexMethodRef* method) const {
-  return method != nullptr && (m_safe_method_refs.count(method) ||
-                               m_safe_method_names.count(method->get_name()));
+  return method != nullptr &&
+         ((m_safe_method_refs.count(method) != 0u) ||
+          (m_safe_method_names.count(method->get_name()) != 0u));
 }
 
 } // namespace blaming

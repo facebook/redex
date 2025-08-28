@@ -167,7 +167,8 @@ class OptimizeEnumsUnmapCfg {
     // The source index the switchmap lookup flows into.
     //
     // Src 0 for switch and if_src0, and src 1 for if_scr1.
-    const src_index_t aget_src = cmp_location == m_flow.cmp_if_src1;
+    const src_index_t aget_src =
+        static_cast<src_index_t>(cmp_location == m_flow.cmp_if_src1);
 
     // For each matching comparison...
     for (auto* insn_cmp : res.order(res.matching(cmp_location))) {
@@ -183,7 +184,7 @@ class OptimizeEnumsUnmapCfg {
       const auto [lookup_field, insn_ordinal_list] =
           get_lookup_and_ordinals(res, insn_aget_or_m1_range);
 
-      if (!lookup_field) {
+      if (lookup_field == nullptr) {
         // No clear switchmap to undo. Unactionable in general.
         continue;
       }
@@ -283,7 +284,7 @@ class OptimizeEnumsUnmapCfg {
 
     const auto reg_ordinal = ordi_move_result_it->insn->dest();
 
-    const auto move_ordinal_result = new IRInstruction(OPCODE_MOVE);
+    auto* const move_ordinal_result = new IRInstruction(OPCODE_MOVE);
     move_ordinal_result->set_src(0, reg_ordinal);
     move_ordinal_result->set_dest(ordinal_reg);
 
@@ -298,7 +299,7 @@ class OptimizeEnumsUnmapCfg {
       // We don't actually have a full inverse mapping.
       return boost::none;
     }
-    const auto case_enum = case_enum_it->second;
+    auto* const case_enum = case_enum_it->second;
 
     const auto enum_ordinal_it = m_enum_field_to_ordinal.find(case_enum);
     if (enum_ordinal_it == m_enum_field_to_ordinal.end()) {
@@ -369,9 +370,9 @@ class OptimizeEnumsUnmapCfg {
       succ->set_case_key(enum_ordinal);
     }
 
-    if (obsolete_zero_edge) {
+    if (obsolete_zero_edge != nullptr) {
       // This edge is now overwritten with ordinal 0, and not needed.
-      if (default_edge &&
+      if ((default_edge != nullptr) &&
           obsolete_zero_edge->target() == default_edge->target()) {
         m_cfg.delete_edge(obsolete_zero_edge);
       } else {

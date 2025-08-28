@@ -178,7 +178,7 @@ struct TestValueType {
   // test ir
   code->push_back(ir_to_test);
   // MOVE_RESULT_PSEUDO
-  if (extra_insn) {
+  if (extra_insn != nullptr) {
     code->push_back(extra_insn);
   }
   // return
@@ -304,7 +304,7 @@ void field_compatible_success_helper(const TestValueType& a_type,
   // test ir
   code->push_back(ir_to_test);
   // MOVE_RESULT_PSEUDO
-  if (extra_insn) {
+  if (extra_insn != nullptr) {
     code->push_back(extra_insn);
   }
   // return
@@ -320,7 +320,7 @@ class IRTypeCheckerTest : public RedexTest {
   ~IRTypeCheckerTest() {}
 
   IRTypeCheckerTest() {
-    auto args = DexTypeList::make_type_list({
+    auto* args = DexTypeList::make_type_list({
         DexType::make_type("I"), // v5
         DexType::make_type("B"), // v6
         DexType::make_type("J"), // v7/v8
@@ -333,9 +333,9 @@ class IRTypeCheckerTest : public RedexTest {
     ClassCreator cc(type::java_lang_Object());
     cc.set_access(ACC_PUBLIC);
     cc.set_external();
-    [[maybe_unused]] auto object_class = cc.create();
+    [[maybe_unused]] auto* object_class = cc.create();
 
-    auto proto = DexProto::make_proto(type::_boolean(), args);
+    auto* proto = DexProto::make_proto(type::_boolean(), args);
     m_method =
         DexMethod::make_method(DexType::make_type("Lbar;"),
                                DexString::make_string("testMethod"),
@@ -441,9 +441,9 @@ TEST_F(IRTypeCheckerTest, move_result_at_start) {
   using namespace dex_asm;
   // Construct a new method because we don't want any load-param opcodes in
   // this one
-  auto args = DexTypeList::make_type_list({});
-  auto proto = DexProto::make_proto(type::_boolean(), args);
-  auto method =
+  auto* args = DexTypeList::make_type_list({});
+  auto* proto = DexProto::make_proto(type::_boolean(), args);
+  auto* method =
       DexMethod::make_method(DexType::make_type("Lbar;"),
                              DexString::make_string("testMethod2"),
                              proto)
@@ -627,10 +627,10 @@ TEST_F(IRTypeCheckerTest, uninitializedRegister) {
 
 TEST_F(IRTypeCheckerTest, undefinedRegister) {
   using namespace dex_asm;
-  auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {9_v}));
-  auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
-  auto target1 = new BranchTarget(if_mie);
-  auto target2 = new BranchTarget(goto_mie);
+  auto* if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {9_v}));
+  auto* goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
+  auto* target1 = new BranchTarget(if_mie);
+  auto* target2 = new BranchTarget(goto_mie);
   IRCode* code = m_method->get_code();
   code->push_back(*if_mie); // branch to target1
   code->push_back(dasm(OPCODE_MOVE_OBJECT, {0_v, 14_v}));
@@ -771,8 +771,8 @@ TEST_F(IRTypeCheckerTest, verifyMoves) {
 
 TEST_F(IRTypeCheckerTest, exceptionHandler) {
   using namespace dex_asm;
-  auto exception_type = DexType::make_type("Ljava/lang/Exception;");
-  auto catch_start = new MethodItemEntry(exception_type);
+  auto* exception_type = DexType::make_type("Ljava/lang/Exception;");
+  auto* catch_start = new MethodItemEntry(exception_type);
   IRCode* code = m_method->get_code();
   IRInstruction* noexc_return = dasm(OPCODE_RETURN, {1_v});
   IRInstruction* exc_return = dasm(OPCODE_RETURN, {0_v});
@@ -895,43 +895,43 @@ TEST_F(IRTypeCheckerTest, zeroOrReference) {
  */
 TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
   // Construct type hierarchy.
-  const auto type_base = DexType::make_type("LBase;");
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
+  auto* const type_base = DexType::make_type("LBase;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
 
   ClassCreator cls_base_creator(type_base);
   cls_base_creator.set_super(type::java_lang_Object());
-  auto base_foo =
+  auto* base_foo =
       DexMethod::make_method("LBase;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_base_creator.add_method(base_foo);
   cls_base_creator.create();
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type_base);
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_foo =
+  auto* a_foo =
       DexMethod::make_method("LA;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_a_creator.add_method(a_foo);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type_base);
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
-  auto b_foo =
+  auto* b_foo =
       DexMethod::make_method("LB;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_b_creator.add_method(b_foo);
   cls_b_creator.create();
 
   // Construct code that references the above hierarchy.
   using namespace dex_asm;
-  auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
-  auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
-  auto target1 = new BranchTarget(if_mie);
-  auto target2 = new BranchTarget(goto_mie);
+  auto* if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
+  auto* goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
+  auto* target1 = new BranchTarget(if_mie);
+  auto* target2 = new BranchTarget(goto_mie);
 
   std::vector<IRInstruction*> insns = {
       // B0
@@ -1002,24 +1002,24 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
  */
 TEST_F(IRTypeCheckerTest, joinCommonBaseWithConflictingInterface) {
   // Construct type hierarchy.
-  const auto type_base = DexType::make_type("LBase;");
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
-  const auto type_i = DexType::make_type("LI;");
+  auto* const type_base = DexType::make_type("LBase;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
+  auto* const type_i = DexType::make_type("LI;");
 
   ClassCreator cls_base_creator(type_base);
   cls_base_creator.set_super(type::java_lang_Object());
-  auto base_foo =
+  auto* base_foo =
       DexMethod::make_method("LBase;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_base_creator.add_method(base_foo);
   cls_base_creator.create();
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type_base);
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_foo =
+  auto* a_foo =
       DexMethod::make_method("LA;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_a_creator.add_method(a_foo);
   cls_a_creator.create();
@@ -1028,20 +1028,20 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithConflictingInterface) {
   cls_b_creator.set_super(type_base);
   cls_b_creator.add_interface(type_i);
 
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
-  auto b_foo =
+  auto* b_foo =
       DexMethod::make_method("LB;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_b_creator.add_method(b_foo);
   cls_b_creator.create();
 
   // Construct code that references the above hierarchy.
   using namespace dex_asm;
-  auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
-  auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
-  auto target1 = new BranchTarget(if_mie);
-  auto target2 = new BranchTarget(goto_mie);
+  auto* if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
+  auto* goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
+  auto* target1 = new BranchTarget(if_mie);
+  auto* target2 = new BranchTarget(goto_mie);
 
   std::vector<IRInstruction*> insns = {
       // B0
@@ -1112,25 +1112,25 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithConflictingInterface) {
  */
 TEST_F(IRTypeCheckerTest, joinCommonBaseWithMergableInterface) {
   // Construct type hierarchy.
-  const auto type_base = DexType::make_type("LBase;");
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
-  const auto type_i = DexType::make_type("LI;");
+  auto* const type_base = DexType::make_type("LBase;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
+  auto* const type_i = DexType::make_type("LI;");
 
   ClassCreator cls_base_creator(type_base);
   cls_base_creator.set_super(type::java_lang_Object());
   cls_base_creator.add_interface(type_i);
-  auto base_foo =
+  auto* base_foo =
       DexMethod::make_method("LBase;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_base_creator.add_method(base_foo);
   cls_base_creator.create();
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type_base);
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_foo =
+  auto* a_foo =
       DexMethod::make_method("LA;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_a_creator.add_method(a_foo);
   cls_a_creator.create();
@@ -1139,20 +1139,20 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithMergableInterface) {
   cls_b_creator.set_super(type_base);
   cls_b_creator.add_interface(type_i);
 
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
-  auto b_foo =
+  auto* b_foo =
       DexMethod::make_method("LB;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_b_creator.add_method(b_foo);
   cls_b_creator.create();
 
   // Construct code that references the above hierarchy.
   using namespace dex_asm;
-  auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
-  auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
-  auto target1 = new BranchTarget(if_mie);
-  auto target2 = new BranchTarget(goto_mie);
+  auto* if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
+  auto* goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
+  auto* target1 = new BranchTarget(if_mie);
+  auto* target2 = new BranchTarget(goto_mie);
 
   std::vector<IRInstruction*> insns = {
       // B0
@@ -1220,24 +1220,24 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithMergableInterface) {
  */
 TEST_F(IRTypeCheckerTest, invokeInvalidObjectType) {
   // Construct type hierarchy.
-  const auto type_base = DexType::make_type("LBase;");
+  auto* const type_base = DexType::make_type("LBase;");
 
   ClassCreator cls_base_creator(type_base);
   cls_base_creator.set_super(type::java_lang_Object());
-  auto base_foobar = DexMethod::make_method("LBase;.foobar:()I")
-                         ->make_concrete(ACC_PUBLIC, true);
+  auto* base_foobar = DexMethod::make_method("LBase;.foobar:()I")
+                          ->make_concrete(ACC_PUBLIC, true);
   cls_base_creator.add_method(base_foobar);
   cls_base_creator.create();
 
-  auto object_ctor = DexMethod::make_method("Ljava/lang/Object;.<init>:()V");
+  auto* object_ctor = DexMethod::make_method("Ljava/lang/Object;.<init>:()V");
   EXPECT_TRUE(object_ctor != nullptr);
 
   // Construct code that references the above hierarchy.
   using namespace dex_asm;
-  auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
-  auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
-  auto target1 = new BranchTarget(if_mie);
-  auto target2 = new BranchTarget(goto_mie);
+  auto* if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
+  auto* goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
+  auto* target1 = new BranchTarget(if_mie);
+  auto* target2 = new BranchTarget(goto_mie);
 
   std::vector<IRInstruction*> insns = {
       // B0
@@ -1281,8 +1281,8 @@ TEST_F(IRTypeCheckerTest, invokeInvalidObjectType) {
 
 TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -1297,8 +1297,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
     EXPECT_TRUE(checker.good()) << checker.what();
   }
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -1313,8 +1313,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -1333,8 +1333,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -1352,8 +1352,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -1372,8 +1372,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -1394,13 +1394,13 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
 }
 
 TEST_F(IRTypeCheckerTest, invokeInitOfSuperTypeAfterNewInstanceDefault) {
-  const auto type_super = DexType::make_type("LSuper;");
-  const auto type_sub = DexType::make_type("LSub;");
+  auto* const type_super = DexType::make_type("LSuper;");
+  auto* const type_sub = DexType::make_type("LSub;");
 
   ClassCreator cls_super_creator(type_super);
   cls_super_creator.set_super(type::java_lang_Object());
-  auto super_ctor = DexMethod::make_method("LSuper;.<init>:()V")
-                        ->make_concrete(ACC_PUBLIC, false);
+  auto* super_ctor = DexMethod::make_method("LSuper;.<init>:()V")
+                         ->make_concrete(ACC_PUBLIC, false);
   cls_super_creator.add_method(super_ctor);
   cls_super_creator.create();
 
@@ -1408,7 +1408,7 @@ TEST_F(IRTypeCheckerTest, invokeInitOfSuperTypeAfterNewInstanceDefault) {
   cls_sub_creator.set_super(type_super);
   cls_sub_creator.create();
 
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()LSub;")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   method->set_code(assembler::ircode_from_string(R"(
@@ -1425,13 +1425,13 @@ TEST_F(IRTypeCheckerTest, invokeInitOfSuperTypeAfterNewInstanceDefault) {
 }
 
 TEST_F(IRTypeCheckerTest, invokeInitOfSuperTypeAfterNewInstanceRelaxed) {
-  const auto type_super = DexType::make_type("LSuper;");
-  const auto type_sub = DexType::make_type("LSub;");
+  auto* const type_super = DexType::make_type("LSuper;");
+  auto* const type_sub = DexType::make_type("LSub;");
 
   ClassCreator cls_super_creator(type_super);
   cls_super_creator.set_super(type::java_lang_Object());
-  auto super_ctor = DexMethod::make_method("LSuper;.<init>:()V")
-                        ->make_concrete(ACC_PUBLIC, false);
+  auto* super_ctor = DexMethod::make_method("LSuper;.<init>:()V")
+                         ->make_concrete(ACC_PUBLIC, false);
   cls_super_creator.add_method(super_ctor);
   cls_super_creator.create();
 
@@ -1439,7 +1439,7 @@ TEST_F(IRTypeCheckerTest, invokeInitOfSuperTypeAfterNewInstanceRelaxed) {
   cls_sub_creator.set_super(type_super);
   cls_sub_creator.create();
 
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()LSub;")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   method->set_code(assembler::ircode_from_string(R"(
@@ -1459,8 +1459,8 @@ TEST_F(IRTypeCheckerTest, invokeInitOfSuperTypeAfterNewInstanceRelaxed) {
 TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   // Good
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -1475,8 +1475,8 @@ TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   }
   // Bad: virtual method
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -1494,8 +1494,8 @@ TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   }
   // Bad: non-static (private) direct method
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                       ->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -1656,30 +1656,30 @@ TEST_F(IRTypeCheckerTest, loadParamStaticCountMoreFail) {
  *
  */
 TEST_F(IRTypeCheckerTest, putObjectFieldIncompatibleTypeFail) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
-  const auto type_c = DexType::make_type("LC;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
+  auto* const type_c = DexType::make_type("LC;");
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
   cls_b_creator.create();
 
   ClassCreator cls_c_creator(type_c);
   cls_c_creator.set_super(type::java_lang_Object());
-  auto c_ctor = DexMethod::make_method("LC;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* c_ctor = DexMethod::make_method("LC;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_c_creator.add_method(c_ctor);
   cls_c_creator.create();
 
@@ -1724,31 +1724,31 @@ TEST_F(IRTypeCheckerTest, putObjectFieldIncompatibleTypeFail) {
  *
  */
 TEST_F(IRTypeCheckerTest, putObjectFieldIncompatibleClassFail) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
-  const auto type_c = DexType::make_type("LC;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
+  auto* const type_c = DexType::make_type("LC;");
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
   cls_b_creator.create();
 
   ClassCreator cls_c_creator(type_c);
   cls_c_creator.set_super(type::java_lang_Object());
-  auto c_ctor = DexMethod::make_method("LC;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
-  auto c_f = DexField::make_field("LC;.f:LB;")->make_concrete(ACC_PUBLIC);
+  auto* c_ctor = DexMethod::make_method("LC;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
+  auto* c_f = DexField::make_field("LC;.f:LB;")->make_concrete(ACC_PUBLIC);
   cls_c_creator.add_field(c_f);
   cls_c_creator.add_method(c_ctor);
   cls_c_creator.create();
@@ -1793,22 +1793,22 @@ TEST_F(IRTypeCheckerTest, putObjectFieldIncompatibleClassFail) {
  *
  */
 TEST_F(IRTypeCheckerTest, putObjectSuccess) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
   cls_b_creator.create();
 
@@ -1844,31 +1844,31 @@ TEST_F(IRTypeCheckerTest, putObjectSuccess) {
  *
  */
 TEST_F(IRTypeCheckerTest, getObjectFieldIncompatibleClassFail) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
-  const auto type_c = DexType::make_type("LC;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
+  auto* const type_c = DexType::make_type("LC;");
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
   cls_b_creator.create();
 
   ClassCreator cls_c_creator(type_c);
   cls_c_creator.set_super(type::java_lang_Object());
-  auto c_ctor = DexMethod::make_method("LC;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
-  auto c_f = DexField::make_field("LC;.f:LB;")->make_concrete(ACC_PUBLIC);
+  auto* c_ctor = DexMethod::make_method("LC;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
+  auto* c_f = DexField::make_field("LC;.f:LB;")->make_concrete(ACC_PUBLIC);
   cls_c_creator.add_field(c_f);
   cls_c_creator.add_method(c_ctor);
   cls_c_creator.create();
@@ -1915,22 +1915,22 @@ TEST_F(IRTypeCheckerTest, getObjectFieldIncompatibleClassFail) {
  *
  */
 TEST_F(IRTypeCheckerTest, getObjectSuccess) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:LB;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
   cls_b_creator.create();
 
@@ -1968,24 +1968,24 @@ TEST_F(IRTypeCheckerTest, getObjectSuccess) {
  *
  */
 TEST_F(IRTypeCheckerTest, putInstanceFieldIncompatibleClassFail) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
-  auto b_f = DexField::make_field("LB;.f:I;")->make_concrete(ACC_PUBLIC);
+  auto* b_f = DexField::make_field("LB;.f:I;")->make_concrete(ACC_PUBLIC);
   cls_b_creator.add_field(b_f);
   cls_b_creator.create();
 
@@ -2028,14 +2028,14 @@ TEST_F(IRTypeCheckerTest, putInstanceFieldIncompatibleClassFail) {
  *
  */
 TEST_F(IRTypeCheckerTest, putInstanceSuccess) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
@@ -2070,24 +2070,24 @@ TEST_F(IRTypeCheckerTest, putInstanceSuccess) {
  *
  */
 TEST_F(IRTypeCheckerTest, getInstanceFieldIncompatibleClassFail) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:(I)V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:(I)V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
-  auto b_f = DexField::make_field("LB;.f:I;")->make_concrete(ACC_PUBLIC);
+  auto* b_f = DexField::make_field("LB;.f:I;")->make_concrete(ACC_PUBLIC);
   cls_b_creator.add_field(b_f);
   cls_b_creator.create();
 
@@ -2126,8 +2126,8 @@ TEST_F(IRTypeCheckerTest, getInstanceFieldIncompatibleClassFail) {
  *
  */
 TEST_F(IRTypeCheckerTest, deepClassFailPrinting) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
+  auto* const type_a = DexType::make_type("LA;");
+  auto* const type_b = DexType::make_type("LB;");
 
   constexpr size_t kClasses = 5;
 
@@ -2141,36 +2141,36 @@ TEST_F(IRTypeCheckerTest, deepClassFailPrinting) {
   for (size_t i = 0; i != kClasses; ++i) {
     intfs.push_back(DexType::make_type("LI" + std::to_string(i) + ";"));
   }
-  const auto type_y = DexType::make_type("LY;"); // Type without class.
+  auto* const type_y = DexType::make_type("LY;"); // Type without class.
 
   for (size_t i = 0; i != kClasses; ++i) {
     ClassCreator cls_x_creator(types[i]);
     cls_x_creator.set_super(i == 0 ? type_y : types[i - 1]);
     cls_x_creator.add_interface(intfs[i]);
-    auto x_ctor = DexMethod::make_method(show(types[i]) + ".<init>:(I)V")
-                      ->make_concrete(ACC_PUBLIC, false);
+    auto* x_ctor = DexMethod::make_method(show(types[i]) + ".<init>:(I)V")
+                       ->make_concrete(ACC_PUBLIC, false);
     cls_x_creator.add_method(x_ctor);
-    auto x_f = DexField::make_field(show(types[i]) + ".f:I;")
-                   ->make_concrete(ACC_PUBLIC);
+    auto* x_f = DexField::make_field(show(types[i]) + ".f:I;")
+                    ->make_concrete(ACC_PUBLIC);
     cls_x_creator.add_field(x_f);
     cls_x_creator.create();
   }
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(types[kClasses - 1]);
-  auto a_ctor = DexMethod::make_method("LA;.<init>:(I)V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:(I)V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
-  auto b_f = DexField::make_field("LB;.f:I;")->make_concrete(ACC_PUBLIC);
+  auto* b_f = DexField::make_field("LB;.f:I;")->make_concrete(ACC_PUBLIC);
   cls_b_creator.add_field(b_f);
   cls_b_creator.create();
 
@@ -2225,14 +2225,14 @@ TEST_F(IRTypeCheckerTest, deepClassFailPrinting) {
  *
  */
 TEST_F(IRTypeCheckerTest, getInstanceSuccess) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:(I)V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto* a_ctor = DexMethod::make_method("LA;.<init>:(I)V")
+                     ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
+  auto* a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
   cls_a_creator.add_field(a_f);
   cls_a_creator.create();
 
@@ -2276,8 +2276,8 @@ TEST_F(IRTypeCheckerTest, putShortFieldIncompatibleClassFail) {
       "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_SHORT;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:S;");
@@ -2300,8 +2300,8 @@ TEST_F(IRTypeCheckerTest, putShortFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, putShortSuccess) {
 
   IROpcode op = OPCODE_IPUT_SHORT;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:S;");
@@ -2329,8 +2329,8 @@ TEST_F(IRTypeCheckerTest, getShortFieldIncompatibleClassFail) {
       "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
       "java.lang.Object\n";
   IROpcode op = OPCODE_IGET_SHORT;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(S)V",
                        "LA;.f:S;");
@@ -2352,8 +2352,8 @@ TEST_F(IRTypeCheckerTest, getShortFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, getShortSuccess) {
 
   IROpcode op = OPCODE_IGET_SHORT;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(S)V",
                        "LA;.f:S;");
@@ -2382,8 +2382,8 @@ TEST_F(IRTypeCheckerTest, putBoolFieldIncompatibleClassFail) {
       "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_BOOLEAN;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:Z;");
@@ -2407,8 +2407,8 @@ TEST_F(IRTypeCheckerTest, putBoolFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, putBoolSuccess) {
 
   IROpcode op = OPCODE_IPUT_BOOLEAN;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:Z;");
@@ -2437,8 +2437,8 @@ TEST_F(IRTypeCheckerTest, getBoolFieldIncompatibleClassFail) {
       "java.lang.Object\n";
 
   IROpcode op = OPCODE_IGET_BOOLEAN;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(Z)V",
                        "LA;.f:Z;");
@@ -2462,8 +2462,8 @@ TEST_F(IRTypeCheckerTest, getBoolFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, getBoolSuccess) {
 
   IROpcode op = OPCODE_IGET_BOOLEAN;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(Z)V",
                        "LA;.f:Z;");
@@ -2492,8 +2492,8 @@ TEST_F(IRTypeCheckerTest, putWideFieldIncompatibleClassFail) {
       "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_WIDE;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:J;");
@@ -2517,8 +2517,8 @@ TEST_F(IRTypeCheckerTest, putWideFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, putWideSuccess) {
 
   IROpcode op = OPCODE_IPUT_WIDE;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:J;");
@@ -2547,8 +2547,8 @@ TEST_F(IRTypeCheckerTest, getWideFieldIncompatibleClassFail) {
       "java.lang.Object\n";
 
   IROpcode op = OPCODE_IGET_WIDE;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(J)V",
                        "LA;.f:J;");
@@ -2571,8 +2571,8 @@ TEST_F(IRTypeCheckerTest, getWideFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, getWideSuccess) {
 
   IROpcode op = OPCODE_IGET_WIDE;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(J)V",
                        "LA;.f:J;");
@@ -2600,8 +2600,8 @@ TEST_F(IRTypeCheckerTest, putByteFieldIncompatibleClassFail) {
       "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_BYTE;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:B;");
@@ -2625,8 +2625,8 @@ TEST_F(IRTypeCheckerTest, putByteFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, putByteSuccess) {
 
   IROpcode op = OPCODE_IPUT_BYTE;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:B;");
@@ -2655,8 +2655,8 @@ TEST_F(IRTypeCheckerTest, getByteFieldIncompatibleClassFail) {
       "java.lang.Object\n";
 
   IROpcode op = OPCODE_IGET_BYTE;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(B)V",
                        "LA;.f:B;");
@@ -2680,8 +2680,8 @@ TEST_F(IRTypeCheckerTest, getByteFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, getByteSuccess) {
 
   IROpcode op = OPCODE_IGET_BYTE;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(B)V",
                        "LA;.f:B;");
@@ -2710,8 +2710,8 @@ TEST_F(IRTypeCheckerTest, putCharFieldIncompatibleClassFail) {
       "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_CHAR;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:C;");
@@ -2735,8 +2735,8 @@ TEST_F(IRTypeCheckerTest, putCharFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, putCharSuccess) {
 
   IROpcode op = OPCODE_IPUT_CHAR;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
                        "LA;.f:C;");
@@ -2765,8 +2765,8 @@ TEST_F(IRTypeCheckerTest, getCharFieldIncompatibleClassFail) {
       "java.lang.Object\n";
 
   IROpcode op = OPCODE_IGET_CHAR;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_b = DexType::make_type("LB;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_b = DexType::make_type("LB;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(C)V",
                        "LA;.f:C;");
@@ -2790,8 +2790,8 @@ TEST_F(IRTypeCheckerTest, getCharFieldIncompatibleClassFail) {
 TEST_F(IRTypeCheckerTest, getCharSuccess) {
 
   IROpcode op = OPCODE_IGET_CHAR;
-  const auto dex_type_a = DexType::make_type("LA;");
-  const auto dex_type_asub = DexType::make_type("LAsub;");
+  auto* const dex_type_a = DexType::make_type("LA;");
+  auto* const dex_type_asub = DexType::make_type("LAsub;");
 
   TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(C)V",
                        "LA;.f:C;");
@@ -2847,11 +2847,11 @@ TEST_F(LoadParamMutationVirtualTest, mutate) { run(); }
 
 TEST_F(IRTypeCheckerTest, invokeSuperInterfaceMethod) {
   // Construct type hierarchy.
-  const auto interface_type = DexType::make_type("LI;");
+  auto* const interface_type = DexType::make_type("LI;");
   ClassCreator interface_type_creator(interface_type);
   interface_type_creator.set_super(type::java_lang_Object());
   interface_type_creator.set_access(ACC_INTERFACE);
-  auto foo_method =
+  auto* foo_method =
       DexMethod::make_method("LI;.foo:()V")->make_concrete(ACC_PUBLIC, true);
   interface_type_creator.add_method(foo_method);
   interface_type_creator.create();
@@ -2872,8 +2872,8 @@ TEST_F(IRTypeCheckerTest, invokeSuperInterfaceMethod) {
 }
 
 TEST_F(IRTypeCheckerTest, synchronizedThrowOutsideCatchAllInTry) {
-  auto method = DexMethod::make_method("LFoo;.bar:()V;")
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  auto* method = DexMethod::make_method("LFoo;.bar:()V;")
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -2897,22 +2897,23 @@ TEST_F(IRTypeCheckerTest, synchronizedThrowOutsideCatchAllInTry) {
 
 TEST_F(IRTypeCheckerTest, invokePolymorphic) {
   // Mimic java.lang.invoke.MethodHandle as closely as possible.
-  const auto type_method_handle =
+  auto* const type_method_handle =
       DexType::make_type("Ljava/lang/invoke/MethodHandle;");
   ClassCreator method_handle_creator(type_method_handle);
-  auto invoke_method = DexMethod::make_method(
-                           "Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/"
-                           "lang/Object;)Ljava/lang/Object;")
-                           ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_VARARGS,
-                                           /* is_virtual */ false);
+  auto* invoke_method =
+      DexMethod::make_method(
+          "Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/"
+          "lang/Object;)Ljava/lang/Object;")
+          ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_VARARGS,
+                          /* is_virtual */ false);
   method_handle_creator.add_method(invoke_method);
   method_handle_creator.set_super(type::java_lang_Object());
   method_handle_creator.set_access(ACC_PUBLIC | ACC_ABSTRACT);
   method_handle_creator.create();
 
-  const auto type_foo = DexType::make_type("LFoo;");
+  auto* const type_foo = DexType::make_type("LFoo;");
   ClassCreator cls_foo_creator(type_foo);
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:(Ljava/lang/invoke/MethodHandle;)V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   method->set_code(assembler::ircode_from_string(R"(
@@ -2941,10 +2942,10 @@ TEST_F(IRTypeCheckerTest, invokePolymorphic) {
 TEST_F(IRTypeCheckerTest, invokePolymorphicOnUnexpectedExternalMethod) {
   // Mimic java.lang.invoke.MethodHandle.invoke as closely as possible except
   // name.
-  const auto type_method_handle =
+  auto* const type_method_handle =
       DexType::make_type("Ljava/lang/invoke/MethodHandle;");
   ClassCreator method_handle_creator(type_method_handle);
-  auto not_invoke_method =
+  auto* not_invoke_method =
       DexMethod::make_method(
           "Ljava/lang/invoke/MethodHandle;.notInvoke:([Ljava/"
           "lang/Object;)Ljava/lang/Object;")
@@ -2955,9 +2956,9 @@ TEST_F(IRTypeCheckerTest, invokePolymorphicOnUnexpectedExternalMethod) {
   method_handle_creator.set_access(ACC_PUBLIC | ACC_ABSTRACT);
   method_handle_creator.create();
 
-  const auto type_foo = DexType::make_type("LFoo;");
+  auto* const type_foo = DexType::make_type("LFoo;");
   ClassCreator cls_foo_creator(type_foo);
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:(Ljava/lang/invoke/MethodHandle;)V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   method->set_code(assembler::ircode_from_string(R"(
@@ -2985,10 +2986,10 @@ TEST_F(IRTypeCheckerTest, invokePolymorphicOnUnexpectedExternalMethod) {
 }
 
 TEST_F(IRTypeCheckerTest, invokePolymorphicOnWrongArgMethod) {
-  const auto type_foo = DexType::make_type("LFoo;");
+  auto* const type_foo = DexType::make_type("LFoo;");
   ClassCreator cls_foo_creator(type_foo);
-  auto method = DexMethod::make_method("LFoo;.bar:()V;")
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  auto* method = DexMethod::make_method("LFoo;.bar:()V;")
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
   cls_foo_creator.add_method(method);
   cls_foo_creator.set_super(type::java_lang_Object());
   // Set to public to eliminate potential failure due to access check.
@@ -3009,10 +3010,10 @@ TEST_F(IRTypeCheckerTest, invokePolymorphicOnWrongArgMethod) {
 }
 
 TEST_F(IRTypeCheckerTest, invokePolymorphicOnFixedArgMethod) {
-  const auto type_foo = DexType::make_type("LFoo;");
+  auto* const type_foo = DexType::make_type("LFoo;");
   ClassCreator cls_foo_creator(type_foo);
-  auto method = DexMethod::make_method("LFoo;.bar:(Ljava/lang/Object;)V;")
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  auto* method = DexMethod::make_method("LFoo;.bar:(Ljava/lang/Object;)V;")
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
   cls_foo_creator.add_method(method);
   cls_foo_creator.set_super(type::java_lang_Object());
   // Set to public to eliminate potential failure due to access check.
@@ -3033,9 +3034,9 @@ TEST_F(IRTypeCheckerTest, invokePolymorphicOnFixedArgMethod) {
 }
 
 TEST_F(IRTypeCheckerTest, invokeOnClassInitializer) {
-  const auto type_foo = DexType::make_type("LFoo;");
+  auto* const type_foo = DexType::make_type("LFoo;");
   ClassCreator cls_foo_creator(type_foo);
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   method->set_code(assembler::ircode_from_string(R"(
@@ -3055,9 +3056,9 @@ TEST_F(IRTypeCheckerTest, invokeOnClassInitializer) {
 }
 
 TEST_F(IRTypeCheckerTest, invokeDirectOnConstructor) {
-  const auto type_foo = DexType::make_type("LFoo;");
+  auto* const type_foo = DexType::make_type("LFoo;");
   ClassCreator cls_foo_creator(type_foo);
-  auto method =
+  auto* method =
       DexMethod::make_method("LFoo;.bar:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   method->set_code(assembler::ircode_from_string(R"(
@@ -3078,10 +3079,10 @@ TEST_F(IRTypeCheckerTest, invokeDirectOnConstructor) {
 }
 
 TEST_F(IRTypeCheckerTest, checkVirtualPrivateMethod) {
-  const auto type_foo = DexType::make_type("LFoo;");
+  auto* const type_foo = DexType::make_type("LFoo;");
   ClassCreator cls_foo_creator(type_foo);
-  auto method = DexMethod::make_method("LFoo;.bar:()V")
-                    ->make_concrete(ACC_PRIVATE, /* is_virtual */ true);
+  auto* method = DexMethod::make_method("LFoo;.bar:()V")
+                     ->make_concrete(ACC_PRIVATE, /* is_virtual */ true);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3098,18 +3099,18 @@ TEST_F(IRTypeCheckerTest, checkVirtualPrivateMethod) {
 }
 
 TEST_F(IRTypeCheckerTest, invokeVirtualOnInterfaceMethod) {
-  const auto interface_type = DexType::make_type("LI;");
+  auto* const interface_type = DexType::make_type("LI;");
   ClassCreator interface_type_creator(interface_type);
   interface_type_creator.set_super(type::java_lang_Object());
   interface_type_creator.set_access(ACC_INTERFACE);
-  auto foo_method =
+  auto* foo_method =
       DexMethod::make_method("LI;.foo:()V")->make_concrete(ACC_PUBLIC, true);
   interface_type_creator.add_method(foo_method);
   interface_type_creator.create();
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LI;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LI;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3124,8 +3125,8 @@ TEST_F(IRTypeCheckerTest, invokeVirtualOnInterfaceMethod) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LI;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LI;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3141,7 +3142,7 @@ TEST_F(IRTypeCheckerTest, invokeVirtualOnInterfaceMethod) {
 }
 
 TEST_F(IRTypeCheckerTest, sputObjectPass) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
   {
     ClassCreator cls_a_creator(type_a);
     cls_a_creator.set_super(type::java_lang_Object());
@@ -3150,7 +3151,7 @@ TEST_F(IRTypeCheckerTest, sputObjectPass) {
     cls_a_creator.create();
   }
 
-  const auto type_b = DexType::make_type("LB;");
+  auto* const type_b = DexType::make_type("LB;");
   {
     ClassCreator cls_b_creator(type_b);
     cls_b_creator.set_super(type_a);
@@ -3158,8 +3159,8 @@ TEST_F(IRTypeCheckerTest, sputObjectPass) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LA;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LA;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3174,8 +3175,8 @@ TEST_F(IRTypeCheckerTest, sputObjectPass) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LB;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:(LB;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3191,7 +3192,7 @@ TEST_F(IRTypeCheckerTest, sputObjectPass) {
 }
 
 TEST_F(IRTypeCheckerTest, sputObjectFail) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
   {
     ClassCreator cls_a_creator(type_a);
     cls_a_creator.set_super(type::java_lang_Object());
@@ -3200,15 +3201,15 @@ TEST_F(IRTypeCheckerTest, sputObjectFail) {
     cls_a_creator.create();
   }
 
-  const auto type_b = DexType::make_type("LB;");
+  auto* const type_b = DexType::make_type("LB;");
   {
     ClassCreator cls_b_creator(type_b);
     cls_b_creator.set_super(type::java_lang_Object());
     cls_b_creator.create();
   }
 
-  auto method = DexMethod::make_method("LFoo;.bar:(LB;)V;")
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto* method = DexMethod::make_method("LFoo;.bar:(LB;)V;")
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3223,8 +3224,8 @@ TEST_F(IRTypeCheckerTest, sputObjectFail) {
 }
 
 TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
-  const auto type_a = DexType::make_type("LA;");
-  [[maybe_unused]] const auto type_a_arr = type::make_array_type(type_a);
+  auto* const type_a = DexType::make_type("LA;");
+  [[maybe_unused]] auto* const type_a_arr = type::make_array_type(type_a);
 
   {
     ClassCreator cls_a_creator(type_a);
@@ -3234,7 +3235,7 @@ TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
     cls_a_creator.create();
   }
 
-  const auto type_b = DexType::make_type("LB;");
+  auto* const type_b = DexType::make_type("LB;");
   {
     ClassCreator cls_b_creator(type_b);
     cls_b_creator.set_super(type::java_lang_Object());
@@ -3242,8 +3243,8 @@ TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:([LA;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:([LA;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3258,8 +3259,8 @@ TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:([[LA;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:([[LA;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3274,8 +3275,8 @@ TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:([LB;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:([LB;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3291,7 +3292,7 @@ TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
 }
 
 TEST_F(IRTypeCheckerTest, agetArrayTypePass) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
   {
     ClassCreator cls_a_creator(type_a);
     cls_a_creator.set_super(type::java_lang_Object());
@@ -3299,8 +3300,8 @@ TEST_F(IRTypeCheckerTest, agetArrayTypePass) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(I[LA;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:(I[LA;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3342,7 +3343,8 @@ std::string format_param(const AgetPairType& data) {
   name.append("_");
   name.append(data.second.second);
   std::replace_if(
-      name.begin(), name.end(), [](char c) { return !std::isalnum(c); }, '_');
+      name.begin(), name.end(), [](char c) { return std::isalnum(c) == 0; },
+      '_');
   return name;
 }
 
@@ -3353,20 +3355,20 @@ class IRTypeCheckerAgetPassTest
       public ::testing::WithParamInterface<AgetPairType> {};
 
 TEST_P(IRTypeCheckerAgetPassTest, test) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
   {
     ClassCreator cls_a_creator(type_a);
     cls_a_creator.set_super(type::java_lang_Object());
     cls_a_creator.create();
   }
 
-  auto& [opcode, type_and_pseudo] = GetParam();
-  auto& [type, pseudo] = type_and_pseudo;
+  const auto& [opcode, type_and_pseudo] = GetParam();
+  const auto& [type, pseudo] = type_and_pseudo;
   std::string method_descr =
       std::regex_replace("LFoo;.bar:(I[TYPE)V;", std::regex("TYPE"), type);
-  auto method = DexMethod::make_method(method_descr)
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
-  auto body_template = R"(
+  auto* method = DexMethod::make_method(method_descr)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  const auto* body_template = R"(
     (
       (load-param-object v0)
       (load-param v1)
@@ -3391,7 +3393,7 @@ INSTANTIATE_TEST_CASE_P(
            info) { return format_param(info.param); });
 
 TEST_F(IRTypeCheckerTest, agetArrayTypeFail) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
   {
     ClassCreator cls_a_creator(type_a);
     cls_a_creator.set_super(type::java_lang_Object());
@@ -3399,8 +3401,8 @@ TEST_F(IRTypeCheckerTest, agetArrayTypeFail) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(ILA;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:(ILA;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3441,25 +3443,25 @@ class IRTypeCheckerAgetFailTest
       public ::testing::WithParamInterface<AgetFailType> {};
 
 TEST_P(IRTypeCheckerAgetFailTest, failArrayType) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
   {
     ClassCreator cls_a_creator(type_a);
     cls_a_creator.set_super(type::java_lang_Object());
     cls_a_creator.create();
   }
 
-  auto& [lhs, rhs] = GetParam();
+  const auto& [lhs, rhs] = GetParam();
 
-  auto& [opcode1, type_and_pseudo1] = lhs;
-  auto& [type1, pseudo1] = type_and_pseudo1;
-  auto& [opcode2, type_and_pseudo2] = rhs;
-  auto& [type2, pseudo2] = type_and_pseudo2;
+  const auto& [opcode1, type_and_pseudo1] = lhs;
+  const auto& [type1, pseudo1] = type_and_pseudo1;
+  const auto& [opcode2, type_and_pseudo2] = rhs;
+  const auto& [type2, pseudo2] = type_and_pseudo2;
 
   std::string method_descr =
       std::regex_replace("LFoo;.bar:(I[TYPE1)V;", std::regex("TYPE1"), type1);
-  auto method = DexMethod::make_method(method_descr)
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
-  auto body_template = R"(
+  auto* method = DexMethod::make_method(method_descr)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  const auto* body_template = R"(
     (
       (load-param-object v0)
       (load-param v1)
@@ -3488,7 +3490,7 @@ INSTANTIATE_TEST_CASE_P(AGetNotMatching,
                         });
 
 TEST_F(IRTypeCheckerTest, aputArrayTypePass) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
   {
     ClassCreator cls_a_creator(type_a);
     cls_a_creator.set_super(type::java_lang_Object());
@@ -3496,8 +3498,8 @@ TEST_F(IRTypeCheckerTest, aputArrayTypePass) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(ILA;[LA;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:(ILA;[LA;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3539,14 +3541,14 @@ class IRTypeCheckerAputPassTest
       public ::testing::WithParamInterface<AputPairType> {};
 
 TEST_P(IRTypeCheckerAputPassTest, test) {
-  auto& [opcode, type_and_loadp] = GetParam();
-  auto& [type, loadp] = type_and_loadp;
+  const auto& [opcode, type_and_loadp] = GetParam();
+  const auto& [type, loadp] = type_and_loadp;
   std::string method_descr =
       std::regex_replace("LFoo;.bar:(ITYPE[TYPE)V;", std::regex("TYPE"), type);
-  auto method = DexMethod::make_method(method_descr)
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto* method = DexMethod::make_method(method_descr)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
 
-  auto body_template = R"(
+  const auto* body_template = R"(
     (
       (load-param-object v0)
       (load-param v1)
@@ -3571,7 +3573,7 @@ INSTANTIATE_TEST_CASE_P(
            info) { return format_param(info.param); });
 
 TEST_F(IRTypeCheckerTest, aputArrayTypeFail) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
   {
     ClassCreator cls_a_creator(type_a);
     cls_a_creator.set_super(type::java_lang_Object());
@@ -3579,8 +3581,8 @@ TEST_F(IRTypeCheckerTest, aputArrayTypeFail) {
   }
 
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(ILA;)V;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    auto* method = DexMethod::make_method("LFoo;.bar:(ILA;)V;")
+                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -3620,27 +3622,27 @@ class IRTypeCheckerAputFailTest
       public ::testing::WithParamInterface<AputFailType> {};
 
 TEST_P(IRTypeCheckerAputFailTest, failArrayType) {
-  const auto type_a = DexType::make_type("LA;");
+  auto* const type_a = DexType::make_type("LA;");
   {
     ClassCreator cls_a_creator(type_a);
     cls_a_creator.set_super(type::java_lang_Object());
     cls_a_creator.create();
   }
 
-  auto& [lhs, rhs] = GetParam();
+  const auto& [lhs, rhs] = GetParam();
 
-  auto& [opcode1, type_and_loadp1] = lhs;
-  auto& [type1, loadp1] = type_and_loadp1;
-  auto& [opcode2, type_and_loadp2] = rhs;
-  auto& [type2, loadp2] = type_and_loadp2;
+  const auto& [opcode1, type_and_loadp1] = lhs;
+  const auto& [type1, loadp1] = type_and_loadp1;
+  const auto& [opcode2, type_and_loadp2] = rhs;
+  const auto& [type2, loadp2] = type_and_loadp2;
 
   std::string method_descr =
       std::regex_replace(std::regex_replace("LFoo;.bar:(I[TYPE1TYPE2)V;",
                                             std::regex("TYPE1"), type1),
                          std::regex("TYPE2"), type2);
-  auto method = DexMethod::make_method(method_descr)
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
-  auto body_template = R"(
+  auto* method = DexMethod::make_method(method_descr)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  const auto* body_template = R"(
     (
       (load-param-object v0)
       (load-param v1)
@@ -3691,16 +3693,16 @@ class IRTypeCheckerAputIntFloatPassTest
       public ::testing::WithParamInterface<AputIntFloatPairType> {};
 
 TEST_P(IRTypeCheckerAputIntFloatPassTest, test) {
-  auto& [name, array_type_val_type] = GetParam();
-  auto& [array_type, val_type] = array_type_val_type;
+  const auto& [name, array_type_val_type] = GetParam();
+  const auto& [array_type, val_type] = array_type_val_type;
   std::string method_descr =
       std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
                                             std::regex("ATYPE"), array_type),
                          std::regex("VTYPE"), val_type);
-  auto method = DexMethod::make_method(method_descr)
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto* method = DexMethod::make_method(method_descr)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
 
-  auto body_template = R"(
+  const auto* body_template = R"(
     (
       (load-param-object v0)
       (load-param-object v1)
@@ -3745,16 +3747,16 @@ class IRTypeCheckerAputIntFloatMismatchTest
       public ::testing::WithParamInterface<AputIntFloatMissPairType> {};
 
 TEST_P(IRTypeCheckerAputIntFloatMismatchTest, test) {
-  auto& [name, array_type_val_type] = GetParam();
-  auto& [array_type, val_type] = array_type_val_type;
+  const auto& [name, array_type_val_type] = GetParam();
+  const auto& [array_type, val_type] = array_type_val_type;
   std::string method_descr =
       std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
                                             std::regex("ATYPE"), array_type),
                          std::regex("VTYPE"), val_type);
-  auto method = DexMethod::make_method(method_descr)
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto* method = DexMethod::make_method(method_descr)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
 
-  auto body_template = R"(
+  const auto* body_template = R"(
     (
       (load-param-object v0)
       (load-param-object v1)
@@ -3798,16 +3800,16 @@ class IRTypeCheckerAputWidePassTest
       public ::testing::WithParamInterface<AputWidePairType> {};
 
 TEST_P(IRTypeCheckerAputWidePassTest, test) {
-  auto& [name, array_type_val_type] = GetParam();
-  auto& [array_type, val_type] = array_type_val_type;
+  const auto& [name, array_type_val_type] = GetParam();
+  const auto& [array_type, val_type] = array_type_val_type;
   std::string method_descr =
       std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
                                             std::regex("ATYPE"), array_type),
                          std::regex("VTYPE"), val_type);
-  auto method = DexMethod::make_method(method_descr)
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto* method = DexMethod::make_method(method_descr)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
 
-  auto body_template = R"(
+  const auto* body_template = R"(
     (
       (load-param-object v0)
       (load-param-object v1)
@@ -3849,16 +3851,16 @@ class IRTypeCheckerAputWideMismatchTest
       public ::testing::WithParamInterface<AputWideMissPairType> {};
 
 TEST_P(IRTypeCheckerAputWideMismatchTest, test) {
-  auto& [name, array_type_val_type] = GetParam();
-  auto& [array_type, val_type] = array_type_val_type;
+  const auto& [name, array_type_val_type] = GetParam();
+  const auto& [array_type, val_type] = array_type_val_type;
   std::string method_descr =
       std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
                                             std::regex("ATYPE"), array_type),
                          std::regex("VTYPE"), val_type);
-  auto method = DexMethod::make_method(method_descr)
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto* method = DexMethod::make_method(method_descr)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
 
-  auto body_template = R"(
+  const auto* body_template = R"(
     (
       (load-param-object v0)
       (load-param-object v1)

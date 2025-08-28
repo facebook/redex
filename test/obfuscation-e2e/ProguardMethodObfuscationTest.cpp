@@ -42,7 +42,7 @@ TEST_F(ProguardMethodObfuscationTest, obfuscation) {
 
   // Make sure the fields class Alpha are renamed.
   const std::string alphaName = "Lcom/facebook/redex/test/proguard/Alpha;";
-  auto alpha = tester.find_class_named(alphaName);
+  auto* alpha = tester.find_class_named(alphaName);
   ASSERT_NE(nullptr, alpha);
 
   // Uncomment to test vmethods
@@ -57,7 +57,7 @@ TEST_F(ProguardMethodObfuscationTest, obfuscation) {
       ".reflectedI1:()V", ".reflectedI2:()V", ".reflectedI3:()V",
       ".reflected1:()V",  ".reflected2:()V",  ".reflected3:()V",
       ".reflected4:()V",  ".reflected5:()V",  ".reflected6:()V"};
-  if (!strcmp("rename", refl_strategy)) {
+  if (strcmp("rename", refl_strategy) == 0) {
     renamed.insert(renamed.end(), reflected.begin(), reflected.end());
   } else {
     for (const std::string& methodName : reflected) {
@@ -76,7 +76,7 @@ TEST_F(ProguardMethodObfuscationTest, obfuscation) {
 
   // Make sure the fields in the class Beta are not renamed.
   const std::string betaName = "Lcom/facebook/redex/test/proguard/Beta;";
-  auto beta = tester.find_class_named(betaName);
+  auto* beta = tester.find_class_named(betaName);
   ASSERT_NE(nullptr, beta);
   ASSERT_FALSE(
       tester.method_is_renamed(beta, betaName + ".doubleWombatBeta:()I"));

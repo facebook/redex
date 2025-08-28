@@ -31,14 +31,15 @@ std::vector<DexType*> ExpandableMethodParams::get_expanded_args_vector(
     DexMethod* method,
     param_index_t param_index,
     const std::vector<DexField*>& fields) {
-  auto args = method->get_proto()->get_args();
+  auto* args = method->get_proto()->get_args();
   auto is_static_method = is_static(method);
-  param_index_t param_count = args->size() + !is_static_method;
+  param_index_t param_count =
+      args->size() + static_cast<unsigned long>(!is_static_method);
   std::vector<DexType*> args_vector;
   args_vector.reserve(param_count - 1 + fields.size());
   for (param_index_t i = 0; i < param_count; i++) {
     if (i == param_index) {
-      for (auto f : fields) {
+      for (auto* f : fields) {
         args_vector.push_back(f->get_type());
       }
       continue;
@@ -50,7 +51,7 @@ std::vector<DexType*> ExpandableMethodParams::get_expanded_args_vector(
       }
       arg_type = method->get_class();
     } else {
-      arg_type = args->at(i - !is_static_method);
+      arg_type = args->at(i - static_cast<int>(!is_static_method));
     }
     args_vector.push_back(arg_type);
   }
@@ -60,8 +61,8 @@ std::vector<DexType*> ExpandableMethodParams::get_expanded_args_vector(
 ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
     const MethodKey& key) const {
   MethodInfo res;
-  auto cls = type_class(key.type);
-  if (!cls) {
+  auto* cls = type_class(key.type);
+  if (cls == nullptr) {
     return res;
   }
   std::set<std::vector<DexType*>> args_vectors;
@@ -73,7 +74,7 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
           method->get_proto()->get_rtype() != key.rtype) {
         continue;
       }
-      auto args = method->get_proto()->get_args();
+      auto* args = method->get_proto()->get_args();
       std::vector<DexType*> args_vector(args->begin(), args->end());
       auto inserted = args_vectors.insert(std::move(args_vector)).second;
       always_assert(inserted);
@@ -87,8 +88,8 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
         method->get_proto()->get_rtype() != key.rtype) {
       continue;
     }
-    auto code = method->get_code();
-    if (!code || method->rstate.no_optimizations()) {
+    auto* code = method->get_code();
+    if ((code == nullptr) || method->rstate.no_optimizations()) {
       continue;
     }
     live_range::MoveAwareChains chains(
@@ -104,17 +105,17 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
       param_index++;
     }
     for (auto it = begin; it != ii.end(); it++, param_index++) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
         continue;
       }
       bool expandable{true};
       std::vector<DexField*> fields;
-      for (auto& use : UnorderedIterable(du_chains[it->insn])) {
+      for (const auto& use : UnorderedIterable(du_chains[it->insn])) {
         if (opcode::is_an_iget(use.insn->opcode())) {
           auto* field =
               resolve_field(use.insn->get_field(), FieldSearch::Instance);
-          if (field) {
+          if (field != nullptr) {
             fields.push_back(field);
             continue;
           }
@@ -136,7 +137,7 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
       if (method::is_init(method)) {
         range_size++;
       }
-      for (auto arg_type : expanded_args_vector) {
+      for (auto* arg_type : expanded_args_vector) {
         range_size += type::is_wide_type(arg_type) ? 2 : 1;
       }
       if (range_size <= 0xff) {
@@ -175,7 +176,7 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
   // load-params for the field values used by the method; initialize the
   // (newly created) object register with a const-0, so that any remaining
   // move-object instructions are still valid.
-  auto block = cfg.entry_block();
+  auto* block = cfg.entry_block();
   auto load_param_it =
       block->to_cfg_instruction_iterator(block->get_first_insn());
   always_assert(!load_param_it.is_end());
@@ -185,9 +186,9 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
   }
   auto last_load_params_it =
       block->to_cfg_instruction_iterator(block->get_last_param_loading_insn());
-  auto null_insn = (new IRInstruction(OPCODE_CONST))
-                       ->set_dest(load_param_it->insn->dest())
-                       ->set_literal(0);
+  auto* null_insn = (new IRInstruction(OPCODE_CONST))
+                        ->set_dest(load_param_it->insn->dest())
+                        ->set_literal(0);
   mutation.insert_after(last_load_params_it, {null_insn});
 
   std::vector<IRInstruction*> new_load_param_insns;
@@ -195,12 +196,12 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
   auto& fields = m_method_infos.at_unsafe(MethodKey::from_method(method))
                      .at(method)
                      .at(param_index);
-  for (auto field : fields) {
+  for (auto* field : fields) {
     auto reg = type::is_wide_type(field->get_type()) ? cfg.allocate_wide_temp()
                                                      : cfg.allocate_temp();
     auto inserted = field_regs.emplace(field, reg).second;
     always_assert(inserted);
-    auto load_param_insn =
+    auto* load_param_insn =
         (new IRInstruction(opcode::load_opcode(field->get_type())))
             ->set_dest(reg);
     new_load_param_insns.push_back(load_param_insn);
@@ -215,15 +216,15 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
       [](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
   auto du_chains = chains.get_def_use_chains();
   UnorderedSet<IRInstruction*> use_insns;
-  for (auto& use : UnorderedIterable(du_chains[load_param_it->insn])) {
+  for (const auto& use : UnorderedIterable(du_chains[load_param_it->insn])) {
     use_insns.insert(use.insn);
   }
   auto ii = InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); it++) {
-    if (!use_insns.count(it->insn)) {
+    if (use_insns.count(it->insn) == 0u) {
       continue;
     }
-    auto insn = it->insn;
+    auto* insn = it->insn;
     always_assert(opcode::is_an_iget(insn->opcode()));
     auto* field = resolve_field(insn->get_field(), FieldSearch::Instance);
     always_assert(field);
@@ -231,9 +232,10 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
     always_assert(!move_result_pseudo_it.is_end());
     auto reg = field_regs.at(field);
     auto dest = move_result_pseudo_it->insn->dest();
-    auto move_insn = (new IRInstruction(opcode::move_opcode(field->get_type())))
-                         ->set_src(0, reg)
-                         ->set_dest(dest);
+    auto* move_insn =
+        (new IRInstruction(opcode::move_opcode(field->get_type())))
+            ->set_src(0, reg)
+            ->set_dest(dest);
     mutation.replace(it, {move_insn});
   }
 
@@ -243,7 +245,7 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
       method::is_init(method) ? method->get_access()
                               : (ACC_PUBLIC | ACC_STATIC),
       std::move(cloned_code), /* is_virtual */ false);
-  auto expanded_method = expanded_method_ref->as_def();
+  auto* expanded_method = expanded_method_ref->as_def();
   always_assert(expanded_method);
   expanded_method->rstate.set_generated();
   int api_level = api::LevelChecker::get_method_level(method);
@@ -254,9 +256,9 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
 
 ExpandableMethodParams::ExpandableMethodParams(const Scope& scope) {
   walk::classes(scope, [&](DexClass* cls) {
-    for (auto method : cls->get_all_methods()) {
-      auto deob = method->get_deobfuscated_name_or_null();
-      if (deob) {
+    for (auto* method : cls->get_all_methods()) {
+      const auto* deob = method->get_deobfuscated_name_or_null();
+      if (deob != nullptr) {
         m_deobfuscated_method_names.insert(deob);
       }
     }
@@ -270,7 +272,7 @@ DexMethodRef* ExpandableMethodParams::get_expanded_method_ref(
     DexMethod* method,
     param_index_t param_index,
     std::vector<DexField*> const** fields) const {
-  auto method_info = get_method_info(MethodKey::from_method(method));
+  const auto* method_info = get_method_info(MethodKey::from_method(method));
   auto it = method_info->find(method);
   if (it == method_info->end()) {
     return nullptr;
@@ -280,28 +282,28 @@ DexMethodRef* ExpandableMethodParams::get_expanded_method_ref(
     return nullptr;
   }
 
-  auto name = method->get_name();
+  const auto* name = method->get_name();
   auto args_vector = get_expanded_args_vector(method, param_index, it2->second);
-  auto type_list = DexTypeList::make_type_list(std::move(args_vector));
-  auto proto =
+  auto* type_list = DexTypeList::make_type_list(std::move(args_vector));
+  auto* proto =
       DexProto::make_proto(method->get_proto()->get_rtype(), type_list);
 
   if (!method::is_init(method)) {
     name = DexString::make_string(name->str() + "$oea$" +
                                   std::to_string(param_index));
   }
-  auto type = method->get_class();
+  auto* type = method->get_class();
   auto deob = show_deobfuscated(type, name, proto);
-  if (m_deobfuscated_method_names.count(DexString::make_string(deob))) {
+  if (m_deobfuscated_method_names.count(DexString::make_string(deob)) != 0u) {
     // Some other method ref already has the synthetic deobfuscated name that
     // we'd later want to give to the new generated method.
     return nullptr;
   }
 
   std::lock_guard<std::mutex> lock_guard(m_candidates_mutex);
-  auto expanded_method_ref = DexMethod::get_method(type, name, proto);
-  if (expanded_method_ref) {
-    if (!m_candidates.count(expanded_method_ref)) {
+  auto* expanded_method_ref = DexMethod::get_method(type, name, proto);
+  if (expanded_method_ref != nullptr) {
+    if (m_candidates.count(expanded_method_ref) == 0u) {
       // There's already a pre-existing method registered, maybe a method that
       // became unreachable. As other Redex optimizations might have persisted
       // this method-ref, we don't want to interact with it.
@@ -316,7 +318,7 @@ DexMethodRef* ExpandableMethodParams::get_expanded_method_ref(
             .second;
     always_assert(emplaced);
   }
-  if (fields) {
+  if (fields != nullptr) {
     *fields = &it2->second;
   }
   return expanded_method_ref;
@@ -330,7 +332,7 @@ size_t ExpandableMethodParams::flush(
   ConcurrentSet<DexMethodRef*> used_expanded_method_refs;
   walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
     if (opcode::is_an_invoke(insn->opcode()) &&
-        m_candidates.count(insn->get_method())) {
+        (m_candidates.count(insn->get_method()) != 0u)) {
       used_expanded_method_refs.insert(insn->get_method());
     }
   });
@@ -346,14 +348,14 @@ size_t ExpandableMethodParams::flush(
 
   // Add the newly concretized methods to their classes.
   auto ordered = unordered_to_ordered(expanded_methods, compare_dexmethods);
-  for (auto expanded_method : ordered) {
+  for (auto* expanded_method : ordered) {
     type_class(expanded_method->get_class())->add_method(expanded_method);
   }
 
   // Finally, derived method-profiles for used candidates, and erase the unused
   // method refs.
   for (auto&& [method, p] : UnorderedIterable(m_candidates)) {
-    if (used_expanded_method_refs.count(method)) {
+    if (used_expanded_method_refs.count(method) != 0u) {
       method_profiles->derive_stats(method->as_def(), {p.first});
     } else {
       DexMethod::delete_method_DO_NOT_USE(static_cast<DexMethod*>(method));

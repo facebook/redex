@@ -78,7 +78,7 @@ const StatsMap& MethodProfiles::method_stats_for_baseline_config(
   // Try to find the interaction id first in the manual profile map
   if (baseline_config_name !=
       baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
-    if (m_baseline_manual_interactions.count(baseline_config_name)) {
+    if (m_baseline_manual_interactions.count(baseline_config_name) != 0u) {
       const auto& method_stats =
           *(m_baseline_manual_interactions.at(baseline_config_name));
       const auto& [stats, found] =
@@ -583,7 +583,7 @@ size_t MethodProfiles::derive_stats(DexMethod* target,
                                     const std::vector<DexMethod*>& sources) {
   size_t res = 0;
   for (auto& [interaction_id, method_stats] : m_method_stats) {
-    if (method_stats.count(target)) {
+    if (method_stats.count(target) != 0u) {
       // No need to derive anything, we have a match.
       continue;
     }
@@ -746,8 +746,8 @@ void MethodProfiles::process_unresolved_lines(bool baseline_profile_variant) {
   auto unresolved_lines = unresolved_lines_ref.size();
   // Note that resolved is ordered by the (addresses of the) unresolved lines,
   // to ensure determinism
-  for (auto& parsed_main_ptr : resolved) {
-    auto interaction_id_ptr = &*parsed_main_ptr->line_interaction_id;
+  for (const auto& parsed_main_ptr : resolved) {
+    auto* interaction_id_ptr = &*parsed_main_ptr->line_interaction_id;
     always_assert(parsed_main_ptr->ref != nullptr);
     bool success = apply_main_internal_result(std::move(*parsed_main_ptr),
                                               interaction_id_ptr,
@@ -774,11 +774,11 @@ void MethodProfiles::process_unresolved_lines(bool baseline_profile_variant) {
 UnorderedSet<dex_member_refs::MethodDescriptorTokens>
 MethodProfiles::get_unresolved_method_descriptor_tokens() const {
   UnorderedSet<dex_member_refs::MethodDescriptorTokens> result;
-  for (auto& parsed_main : m_unresolved_lines) {
+  for (const auto& parsed_main : m_unresolved_lines) {
     always_assert(parsed_main.mdt);
     result.insert(*parsed_main.mdt);
   }
-  for (auto& parsed_main : m_baseline_profile_unresolved_lines) {
+  for (const auto& parsed_main : m_baseline_profile_unresolved_lines) {
     always_assert(parsed_main.mdt);
     result.insert(*parsed_main.mdt);
   }
@@ -812,12 +812,12 @@ void MethodProfiles::resolve_method_descriptor_tokens(
     }
     to_remove.insert(parsed_main.ref_str.get());
     removed++;
-    for (auto method_ref : it->second) {
+    for (auto* method_ref : it->second) {
       ParsedMain resolved_parsed_main{
           std::make_unique<std::string>(*parsed_main.line_interaction_id),
           /* ref_str */ nullptr,
           /* mdt */ std::nullopt, method_ref, parsed_main.stats};
-      auto interaction_id_ptr = &*resolved_parsed_main.line_interaction_id;
+      auto* interaction_id_ptr = &*resolved_parsed_main.line_interaction_id;
       always_assert(resolved_parsed_main.ref != nullptr);
       bool success = apply_main_internal_result(std::move(resolved_parsed_main),
                                                 interaction_id_ptr,
@@ -953,7 +953,7 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
               return a < b;
             });
 
-  for (auto method : initial_order) {
+  for (auto* method : initial_order) {
     m_initial_order.emplace(method, m_initial_order.size());
   }
 }

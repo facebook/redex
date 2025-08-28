@@ -9,8 +9,8 @@
 #include <gtest/gtest.h>
 
 TEST_F(PostVerify, EnumShouldStillExist) {
-  auto enum_name = "Lredex/D;";
-  auto d = find_class_named(classes, enum_name);
+  const auto* enum_name = "Lredex/D;";
+  auto* d = find_class_named(classes, enum_name);
   EXPECT_NE(d, nullptr) << enum_name << " should still exist!";
   // OptimizeEnumsPass seems to clear the flag on the class, and hangs various
   // helper methods on it. Verify that it looks untouched.

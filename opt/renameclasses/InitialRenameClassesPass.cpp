@@ -17,9 +17,9 @@
 
 void InitialRenameClassesPass::initial_rename_classes(Scope& scope,
                                                       PassManager& mgr) {
-  for (auto clazz : scope) {
-    auto dtype = clazz->get_type();
-    auto oldname = dtype->get_name();
+  for (auto* clazz : scope) {
+    auto* dtype = clazz->get_type();
+    const auto* oldname = dtype->get_name();
 
     if (clazz->rstate.is_force_rename()) {
       TRACE(RENAME, 2, "ComputeRename:Forced renamed: '%s'", oldname->c_str());
@@ -35,9 +35,9 @@ void InitialRenameClassesPass::initial_rename_classes(Scope& scope,
 void InitialRenameClassesPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles&,
                                         PassManager& mgr) {
-  auto rename_classes_pass =
+  auto* rename_classes_pass =
       static_cast<RenameClassesPassV2*>(mgr.find_pass("RenameClassesPassV2"));
-  if (!rename_classes_pass) {
+  if (rename_classes_pass == nullptr) {
     // No need to run InitialRenameClassesPass.
     return;
   }

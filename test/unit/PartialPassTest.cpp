@@ -58,13 +58,13 @@ class PartialPassTest : public RedexTest {
     // Effectively clear the root store
     root_store = DexStore("classes");
 
-    auto class_out_of_package_type = DexType::make_type("LTopLevelClass;");
+    auto* class_out_of_package_type = DexType::make_type("LTopLevelClass;");
     ClassCreator class_out_of_package_creator(class_out_of_package_type);
     class_out_of_package_creator.set_access(ACC_PUBLIC | ACC_FINAL);
     class_out_of_package_creator.set_super(type::java_lang_Object());
     class_out_of_package = class_out_of_package_creator.create();
 
-    auto class_in_package_type = DexType::make_type("Lcom/facebook/PkgClass;");
+    auto* class_in_package_type = DexType::make_type("Lcom/facebook/PkgClass;");
     ClassCreator class_in_package_creator(class_in_package_type);
     class_in_package_creator.set_access(ACC_PUBLIC | ACC_FINAL);
     class_in_package_creator.set_super(type::java_lang_Object());

@@ -81,8 +81,8 @@ std::ostream& operator<<(std::ostream& out,
 
     if (x.dex_type_array) {
       out << "(";
-      for (auto type : *x.dex_type_array) {
-        out << (type ? type->str() : "?");
+      for (auto* type : *x.dex_type_array) {
+        out << (type != nullptr ? type->str() : "?");
       }
       out << ")";
     }
@@ -225,13 +225,13 @@ bool AbstractObject::leq(const AbstractObject& other) const {
     }
     case AbstractObjectKind::CLASS:
     case AbstractObjectKind::OBJECT:
-      if (dex_type && other.dex_type == nullptr) {
+      if ((dex_type != nullptr) && other.dex_type == nullptr) {
         return true;
       }
       if (dex_type_array && other.dex_type_array == boost::none) {
         return true;
       }
-      if (heap_address && other.heap_address == 0) {
+      if ((heap_address != 0u) && other.heap_address == 0) {
         return true;
       }
       break;
@@ -426,7 +426,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       return std::nullopt;
     }
     // This is a regular parameter of the method.
-    auto& param_abstract_obj = context->get(param_position);
+    const auto& param_abstract_obj = context->get(param_position);
     if (param_abstract_obj.is_value()) {
       return param_abstract_obj;
     }
@@ -506,7 +506,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         current_state->set_calling_context(insn, cc);
       }
 
-      if (m_summary_query_fn) {
+      if (m_summary_query_fn != nullptr) {
         callee_return = (*m_summary_query_fn)(insn);
       }
     }
@@ -568,8 +568,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       // Doing this increases the type information we have at the reflection
       // site. It's up to the user of the analysis  how to interpret this
       // information.
-      if (obj && (obj->is_object()) && obj->dex_type) {
-        auto dex_type = insn->get_type();
+      if (obj && (obj->is_object()) && (obj->dex_type != nullptr)) {
+        auto* dex_type = insn->get_type();
         if (obj->dex_type != dex_type) {
           obj->potential_dex_types.insert(dex_type);
           current_state->set_abstract_obj(
@@ -585,9 +585,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       const auto array_object =
           current_state->get_abstract_obj(insn->src(0)).get_object();
       if (array_object) {
-        auto type = array_object->dex_type;
-        if (type && type::is_array(type)) {
-          const auto etype = type::get_array_component_type(type);
+        auto* type = array_object->dex_type;
+        if ((type != nullptr) && type::is_array(type)) {
+          auto* const etype = type::get_array_component_type(type);
           update_non_string_input(current_state, insn, etype);
           break;
         }
@@ -608,7 +608,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           array_object->is_known_class_array() && offset_object &&
           offset_object->is_int()) {
 
-        auto type = source_object->dex_type;
+        auto* type = source_object->dex_type;
         boost::optional<int64_t> offset = offset_object->dex_int;
         boost::optional<std::vector<DexType*>> class_array =
             current_state->get_heap_class_array(array_object->heap_address)
@@ -640,9 +640,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case OPCODE_IGET_OBJECT:
     case OPCODE_SGET_OBJECT: {
       always_assert(insn->has_field());
-      const auto field = insn->get_field();
+      auto* const field = insn->get_field();
       DexType* primitive_type = check_primitive_type_class(field);
-      if (primitive_type) {
+      if (primitive_type != nullptr) {
         // The field being accessed is a Class object to a primitive type
         // likely being used for reflection
         set_abstract_obj(RESULT_REGISTER, AbstractObjectKind::CLASS,
@@ -659,9 +659,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_NEW_ARRAY: {
-      auto array_type = insn->get_type();
+      auto* array_type = insn->get_type();
       always_assert(type::is_array(array_type));
-      auto component_type = type::get_array_component_type(array_type);
+      auto* component_type = type::get_array_component_type(array_type);
       if (component_type == type::java_lang_Class()) {
         const auto aobj =
             current_state->get_abstract_obj(insn->src(0)).get_object();
@@ -684,9 +684,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_FILLED_NEW_ARRAY: {
-      auto array_type = insn->get_type();
+      auto* array_type = insn->get_type();
       always_assert(type::is_array(array_type));
-      auto component_type = type::get_array_component_type(array_type);
+      auto* component_type = type::get_array_component_type(array_type);
       AbstractObject aobj(AbstractObjectKind::OBJECT, insn->get_type());
       if (component_type == type::java_lang_Class()) {
         auto arg_count = insn->srcs_size();
@@ -696,7 +696,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         // collect known types from the filled new array
         for (auto src_reg : insn->srcs()) {
           auto reg_obj = current_state->get_abstract_obj(src_reg).get_object();
-          if (reg_obj && reg_obj->is_class() && reg_obj->dex_type) {
+          if (reg_obj && reg_obj->is_class() &&
+              (reg_obj->dex_type != nullptr)) {
             known_types.push_back(reg_obj->dex_type);
           }
         }
@@ -730,7 +731,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
             current_state->get_abstract_obj(insn->src(0)).get_object();
         if (class_name && class_name->is_string()) {
           if (class_name->dex_string != nullptr) {
-            auto internal_name =
+            const auto* internal_name =
                 DexString::make_string(java_names::external_to_internal(
                     class_name->dex_string->str()));
             set_abstract_obj(RESULT_REGISTER, AbstractObjectKind::CLASS,
@@ -936,7 +937,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         m_cache->get_method,
         m_cache->get_declared_method,
     };
-    return known_methods.count(method);
+    return known_methods.count(method) != 0u;
   }
 
   void invalidate_argument_heap_objects(
@@ -954,7 +955,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         continue;
       }
       auto addr = aobj->heap_address;
-      if (!addr) {
+      if (addr == 0u) {
         continue;
       }
       current_state->set_heap_addr_to_top(addr);
@@ -1095,7 +1096,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 } // namespace impl
 
 ReflectionAnalysis::~ReflectionAnalysis() {
-  if (m_fallback_cache) {
+  if (m_fallback_cache != nullptr) {
     delete m_fallback_cache;
     m_fallback_cache = nullptr;
   }
@@ -1114,7 +1115,7 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method,
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  if (!cache) {
+  if (cache == nullptr) {
     m_fallback_cache = new MetadataCache;
     cache = m_fallback_cache;
   }
@@ -1160,7 +1161,7 @@ void ReflectionAnalysis::gather_reflection_sites(
 
 ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   ReflectionSites reflection_sites;
-  auto code = const_cast<DexMethod*>(m_dex_method)->get_code();
+  auto* code = const_cast<DexMethod*>(m_dex_method)->get_code();
   if (code == nullptr) {
     return reflection_sites;
   }
@@ -1188,7 +1189,7 @@ AbstractObjectDomain ReflectionAnalysis::get_return_value() const {
 
 boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
     IRInstruction* invoke_insn) const {
-  auto code = const_cast<DexMethod*>(m_dex_method)->get_code();
+  auto* code = const_cast<DexMethod*>(m_dex_method)->get_code();
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   IRInstruction* move_result_insn = nullptr;
@@ -1203,7 +1204,7 @@ boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
       break;
     }
   }
-  if (!move_result_insn ||
+  if ((move_result_insn == nullptr) ||
       !opcode::is_a_move_result(move_result_insn->opcode())) {
     return boost::none;
   }

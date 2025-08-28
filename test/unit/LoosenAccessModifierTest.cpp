@@ -31,7 +31,7 @@ class LoosenAccessModifierTest : public RedexTest {};
  */
 TEST_F(LoosenAccessModifierTest, virtual_methods) {
   Scope scope;
-  auto object = type::java_lang_Object();
+  auto* object = type::java_lang_Object();
   create_virtual_method(parent, scope, object, "", "La/A;.bar:()V");
   create_virtual_method(child, scope, parent->get_class(), "final",
                         "La/A1;.bar:()V");

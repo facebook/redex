@@ -57,8 +57,8 @@ void ReachableNativesPass::bind_config() {
 
 bool ReachableNativesPass::gather_load_library(
     DexMethod* caller, InsertOnlyConcurrentSet<const DexString*>* names) {
-  if (m_load_library_methods.count(caller) ||
-      m_load_library_unsafe_methods.count(caller)) {
+  if ((m_load_library_methods.count(caller) != 0u) ||
+      (m_load_library_unsafe_methods.count(caller) != 0u)) {
     return true;
   }
   cfg::ScopedCFG cfg(caller->get_code());
@@ -70,11 +70,11 @@ bool ReachableNativesPass::gather_load_library(
     if (!opcode::is_invoke_static(insn->opcode())) {
       continue;
     }
-    auto callee = resolve_invoke_method(insn, caller);
-    if (!callee) {
+    auto* callee = resolve_invoke_method(insn, caller);
+    if (callee == nullptr) {
       continue;
     }
-    if (!m_load_library_methods.count(callee)) {
+    if (m_load_library_methods.count(callee) == 0u) {
       continue;
     }
     for (auto* def : (*udchain)[live_range::Use{insn, 0}]) {
@@ -197,7 +197,7 @@ void ReachableNativesPass::analyze_final_load_library(
   TRACE(NATIVE, 1, "Reachable Library Names: %zu => %zu",
         g_redex->library_names.size(), final_library_names.size());
 
-  for (auto* library_name : UnorderedIterable(final_library_names)) {
+  for (const auto* library_name : UnorderedIterable(final_library_names)) {
     always_assert(g_redex->library_names.count(library_name));
   }
   auto ordered =
@@ -207,8 +207,8 @@ void ReachableNativesPass::analyze_final_load_library(
                          std::ofstream::out | std::ofstream::trunc);
   std::ofstream dead_ofs(cfg.metafile(m_dead_load_library_file_name),
                          std::ofstream::out | std::ofstream::trunc);
-  for (auto* library_name : ordered) {
-    if (final_library_names.count(library_name)) {
+  for (const auto* library_name : ordered) {
+    if (final_library_names.count(library_name) != 0u) {
       live_ofs << library_name->str() << "\n";
       TRACE(NATIVE, 2, "live library: %s", library_name->c_str());
     } else {

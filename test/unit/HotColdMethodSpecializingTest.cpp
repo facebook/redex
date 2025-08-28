@@ -31,7 +31,7 @@ class HotColdMethodSpecializingTest : public RedexTest {
     ClassCreator cc{DexType::make_type(name)};
     cc.set_super(type::java_lang_Object());
 
-    auto m =
+    auto* m =
         DexMethod::make_method(name + ".bar:" + sig)
             ->make_concrete(ACC_PUBLIC | ACC_STATIC,
                             assembler::ircode_from_string(code_str), false);
@@ -80,13 +80,13 @@ class HotColdMethodSpecializingTest : public RedexTest {
     stats = HotColdMethodSpecializingPass::analyze_and_specialize(
         config, /* iteration */ 42, method, &cold_copy);
     if (expected.empty()) {
-      if (cold_copy) {
+      if (cold_copy != nullptr) {
         return ::testing::AssertionFailure() << "Unexpected cold copy";
       }
       return ::testing::AssertionSuccess();
     }
 
-    if (!cold_copy) {
+    if (cold_copy == nullptr) {
       return ::testing::AssertionFailure() << "Missing cold copy";
     }
     method->get_code()->cfg().simplify();
@@ -121,7 +121,7 @@ std::atomic<size_t> HotColdMethodSpecializingTest::s_counter{0};
 
 TEST_F(HotColdMethodSpecializingTest, NoBasicHotColdSpecialization) {
   // Size of cold code in relation to hot code is not big enough,
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (.src_block "LFoo;.bar:(I)I" 1 (0.5 0.5))
@@ -135,7 +135,7 @@ TEST_F(HotColdMethodSpecializingTest, NoBasicHotColdSpecialization) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto after = "";
+  const auto* after = "";
   auto config = defaultConfig();
   auto res = test("(I)I", before, config, after);
   ASSERT_TRUE(res);
@@ -144,7 +144,7 @@ TEST_F(HotColdMethodSpecializingTest, NoBasicHotColdSpecialization) {
 TEST_F(HotColdMethodSpecializingTest, NoImpurePathHotColdSpecialization) {
   // An impure path to the cold code disqualifies this example from hot-cold
   // specialization.
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (.src_block "LFoo;.bar:(I)I" 1 (0.5 0.5))
@@ -165,14 +165,14 @@ TEST_F(HotColdMethodSpecializingTest, NoImpurePathHotColdSpecialization) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto after = "";
+  const auto* after = "";
   auto config = defaultConfig();
   auto res = test("(I)I", before, config, after);
   ASSERT_TRUE(res);
 }
 
 TEST_F(HotColdMethodSpecializingTest, BasicHotColdSpecialization) {
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (.src_block "LFoo;.bar:(I)I" 1 (0.5 0.5))
@@ -195,7 +195,7 @@ TEST_F(HotColdMethodSpecializingTest, BasicHotColdSpecialization) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto after = R"(
+  const auto* after = R"(
       (
         (load-param v0)
         (.src_block "LFoo;.bar:(I)I" 1 (0.5 0.5))
@@ -210,7 +210,7 @@ TEST_F(HotColdMethodSpecializingTest, BasicHotColdSpecialization) {
         (move-result v2)
         (return v2)
     ))";
-  auto cold_after = R"(
+  const auto* cold_after = R"(
       (
         (load-param v0)
         (.src_block "LFoo;.bar:(I)I" 1 (0.000000 0.000000))
@@ -242,7 +242,7 @@ TEST_F(HotColdMethodSpecializingTest, BasicHotColdSpecialization) {
 TEST_F(HotColdMethodSpecializingTest, MutableHeapReadingHotColdSpecialization) {
   // When the "pure" hot prefix involves reading mutable heap memory, we must
   // not insert "unreachable" instructions in the cold method.
-  auto before = R"(
+  const auto* before = R"(
     (
       (load-param v0)
       (.src_block "LFoo;.bar:(I)I" 1 (0.5 0.5))
@@ -267,7 +267,7 @@ TEST_F(HotColdMethodSpecializingTest, MutableHeapReadingHotColdSpecialization) {
       (add-int v0 v0 v0)
       (return v0)
     ))";
-  auto after = R"(
+  const auto* after = R"(
       (
         (load-param v0)
         (.src_block "LFoo;.bar:(I)I" 1 (0.5 0.5))
@@ -284,7 +284,7 @@ TEST_F(HotColdMethodSpecializingTest, MutableHeapReadingHotColdSpecialization) {
         (move-result v2)
         (return v2)
     ))";
-  auto cold_after = R"(
+  const auto* cold_after = R"(
       (
         (load-param v0)
         (.src_block "LFoo;.bar:(I)I" 1 (0.000000 0.000000))

@@ -291,8 +291,8 @@ size_t XmlFileEditor::remap(const std::map<uint32_t, uint32_t>& old_to_new) {
 #define CHUNK_SIZE(chunk) (dtohl((chunk)->header.size))
 
 TableSnapshot::TableSnapshot(RedexMappedFile& mapped_file, size_t len) {
-  auto data = mapped_file.read_only ? (void*)mapped_file.const_data()
-                                    : mapped_file.data();
+  auto* data = mapped_file.read_only ? (void*)mapped_file.const_data()
+                                     : mapped_file.data();
   always_assert_log(m_table_parser.visit(data, len),
                     "Failed to parse .arsc file");
   always_assert_log(
@@ -337,9 +337,9 @@ std::string TableSnapshot::get_resource_name(uint32_t id) {
   auto& entries = search->second;
   ssize_t result = -1;
   for (const auto& pair : entries) {
-    auto entry_data = pair.second.getKey();
+    auto* entry_data = pair.second.getKey();
     if (entry_data != nullptr) {
-      auto entry = (android::ResTable_entry*)entry_data;
+      auto* entry = (android::ResTable_entry*)entry_data;
       auto index = dtohl(entry->key.index);
       always_assert_log(result < 0 || result == index,
                         "Malformed entry data for ID 0x%x", id);
@@ -540,7 +540,7 @@ void TableSnapshot::collect_resource_values(
   for (auto& pair : config_entries) {
     if (should_include_config(pair.first)) {
       auto ev = pair.second;
-      auto entry = (android::ResTable_entry*)ev.getKey();
+      auto* entry = (android::ResTable_entry*)ev.getKey();
       EntryFlattener flattener;
       flattener.begin_visit_entry(nullptr, nullptr, nullptr, entry);
       for (auto& v : flattener.m_values) {
@@ -578,7 +578,7 @@ namespace {
 size_t write_serialized_data_with_expansion(const android::Vector<char>& vector,
                                             RedexMappedFile f) {
   size_t vec_size = vector.size();
-  auto filename = f.filename.c_str();
+  const auto* filename = f.filename.c_str();
   // Close current opened file.
   f.file.reset();
   // Write to arsc through ofstream
@@ -614,7 +614,7 @@ size_t write_serialized_data(const android::Vector<char>& vector,
  */
 void skip_nested_tags(android::ResXMLTree* parser) {
   size_t depth{1};
-  while (depth) {
+  while (depth != 0u) {
     auto type = parser->next();
     switch (type) {
     case android::ResXMLParser::START_TAG: {
@@ -642,7 +642,7 @@ void skip_nested_tags(android::ResXMLTree* parser) {
 bool find_nested_tag(const android::String16& search_tag,
                      android::ResXMLTree* parser) {
   size_t depth{1};
-  while (depth) {
+  while (depth != 0u) {
     auto type = parser->next();
     switch (type) {
     case android::ResXMLParser::START_TAG: {
@@ -744,7 +744,7 @@ ManifestClassInfo extract_classes_from_manifest(const std::string& package_name,
         // queries break the logic to find providers below because they don't
         // declare a name
         skip_nested_tags(&parser);
-      } else if (string_to_tag.count(tag)) {
+      } else if (string_to_tag.count(tag) != 0u) {
         std::string classname = get_string_attribute_value(
             parser, tag != activity_alias ? name : target_activity);
         always_assert(!classname.empty());
@@ -915,11 +915,11 @@ namespace {
 std::string read_attribute_name_at_idx(const android::ResXMLTree& parser,
                                        size_t idx) {
   size_t len;
-  auto name_chars = parser.getAttributeName8(idx, &len);
+  const auto* name_chars = parser.getAttributeName8(idx, &len);
   if (name_chars != nullptr) {
     return std::string(name_chars);
   } else {
-    auto wide_chars = parser.getAttributeName(idx, &len);
+    const auto* wide_chars = parser.getAttributeName(idx, &len);
     android::String16 s16(wide_chars, len);
     auto converted = convert_from_string16(s16);
     return converted;
@@ -998,7 +998,7 @@ void extract_classes_from_layout(
     } else if (type == android::ResXMLParser::START_NAMESPACE) {
       auto id = parser.getNamespaceUriID();
       size_t len;
-      auto prefix = parser.getNamespacePrefix(&len);
+      const auto* prefix = parser.getNamespacePrefix(&len);
       namespace_prefix_map.emplace(
           id, convert_from_string16(android::String16(prefix, len)));
     }
@@ -1138,8 +1138,8 @@ class NodeAttributeTransformer : public XmlElementCollector {
           m_file_manipulator->replace_at(extension, new_extension);
 
           // Note the place where the new attribute should be inserted.
-          auto offset = (char*)arsc::get_attribute_pointer(extension) +
-                        ordinal * sizeof(android::ResXMLTree_attribute);
+          auto* offset = (char*)arsc::get_attribute_pointer(extension) +
+                         ordinal * sizeof(android::ResXMLTree_attribute);
           m_file_manipulator->add_at(offset, new_attr);
 
           // Finally, fix up the node's size to reflect the growing data.
@@ -1241,7 +1241,7 @@ void ApkResources::fully_qualify_layout(
   auto class_idx = string_to_idx.at("class");
   auto view_idx = string_to_idx.at("view");
 
-  auto file_data = (char*)file_vec.array();
+  auto* file_data = (char*)file_vec.array();
   NodeAttributeTransformer transformer(element_to_class_name, string_to_idx,
                                        class_idx, view_idx);
   auto successful_visit = transformer.visit(file_data, file_vec.size());
@@ -1350,7 +1350,7 @@ boost::optional<std::string> ApkResources::get_manifest_package_name() {
       m_manifest, "manifest", android::Res_value::TYPE_STRING, "package",
       [](android::ResXMLTree& parser, size_t idx) {
         size_t len;
-        auto chars = parser.getAttributeStringValue(idx, &len);
+        const auto* chars = parser.getAttributeStringValue(idx, &len);
         if (chars == nullptr) {
           return boost::optional<std::string>{};
         }
@@ -1388,7 +1388,7 @@ int ApkResources::replace_in_xml_string_pool(
   }
 
   const auto chunk_size = sizeof(android::ResChunk_header);
-  auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
+  auto* pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
   size_t num_replaced = 0;
   android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
   auto flags = pool.isUTF8()
@@ -1463,7 +1463,7 @@ size_t ApkResources::remap_xml_reference_attributes(
   apk::XmlFileEditor editor;
   always_assert_log(editor.visit((void*)file.data(), file.size()),
                     "Failed to parse resource xml file %s", filename.c_str());
-  return editor.remap(kept_to_remapped_ids) > 0;
+  return static_cast<size_t>(editor.remap(kept_to_remapped_ids) > 0);
 }
 
 namespace {
@@ -1595,7 +1595,7 @@ void ResourcesArscFile::remap_reorder_and_serialize(
   apk::TableEntryParser table_parser = get_table_snapshot().get_parsed_table();
   arsc::ResTableBuilder table_builder;
   table_builder.set_global_strings(table_parser.m_global_pool_header);
-  for (auto& package : table_parser.m_packages) {
+  for (const auto& package : table_parser.m_packages) {
     auto package_id = dtohl(package->id);
     auto package_builder = std::make_shared<arsc::ResPackageBuilder>(package);
     package_builder->set_key_strings(
@@ -1809,7 +1809,7 @@ void ResourcesArscFile::remap_file_paths_and_serialize(
   GlobalStringPoolReader string_reader;
   string_reader.visit(m_f.data(), m_arsc_len);
   UnorderedMap<uint32_t, uint32_t> old_to_new_idx;
-  for (auto& pair : UnorderedIterable(old_to_new)) {
+  for (const auto& pair : UnorderedIterable(old_to_new)) {
     old_to_new_idx.emplace(
         string_reader.get_index_of_utf8s_string(pair.first),
         string_reader.get_index_of_utf8s_string(pair.second));
@@ -1871,11 +1871,11 @@ void rebuild_string_pool(
   for (const auto& idx : output_order) {
     size_t length;
     if (is_utf8) {
-      auto s = string_pool.string8At(idx, &length);
+      const auto* s = string_pool.string8At(idx, &length);
       add_string_idx_to_builder<char>(string_pool, idx, s, length,
                                       span_remapper, builder);
     } else {
-      auto s = string_pool.stringAt(idx, &length);
+      const auto* s = string_pool.stringAt(idx, &length);
       add_string_idx_to_builder<char16_t>(string_pool, idx, s, length,
                                           span_remapper, builder);
     }
@@ -1916,7 +1916,7 @@ void project_string_mapping(const UnorderedSet<uint32_t>& used_strings,
     pool_items.reserve(size);
     for (size_t i = 0; i < size; i++) {
       size_t len;
-      auto chars = string_pool.stringAt(i, &len);
+      const auto* chars = string_pool.stringAt(i, &len);
       pool_items.emplace_back(chars, len);
     }
     std::sort(used_indices.begin(), used_indices.end(),
@@ -1952,7 +1952,7 @@ void rebuild_type_strings(
   for (size_t idx = 0; idx < original_string_count; idx++) {
     builder->add_string(string_pool, idx);
   }
-  for (auto& type_def : added_types) {
+  for (const auto& type_def : added_types) {
     if (type_def.package_id != package_id) {
       continue;
     }
@@ -2022,7 +2022,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
   table_builder.set_global_strings(global_strings_builder);
   for (auto& package_entries : collector.m_package_entries) {
     // 5) Do a similar remapping as above, but for key strings.
-    auto& package = package_entries.first;
+    const auto& package = package_entries.first;
     std::shared_ptr<arsc::ResPackageBuilder> package_builder =
         std::make_shared<arsc::ResPackageBuilder>(package);
 
@@ -2034,7 +2034,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     }
     auto key_string_pool = collector.m_package_key_strings.at(package);
     UnorderedSet<uint32_t> used_key_strings;
-    for (auto& ref : refs) {
+    for (const auto& ref : refs) {
       used_key_strings.emplace(dtohl(ref->index));
     }
     UnorderedMap<uint32_t, uint32_t> key_old_to_new;
@@ -2052,7 +2052,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     int last_kept_type_name = 0;
 
     // Remap the entries.
-    for (auto& ref : refs) {
+    for (const auto& ref : refs) {
       auto old = dtohl(ref->index);
       TRACE(RES, 9, "REMAP OLD KEY %u", old);
       ref->index = htodl(key_old_to_new.at(old));
@@ -2204,7 +2204,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
       auto old_id = string_reader.get_index_of_utf8s_string(pair.first);
       always_assert_log(old_id >= string_pool->styleCount(),
                         "Don't support remapping of style.");
-      if (!global_new_strings_to_id.count(cur_new_string)) {
+      if (global_new_strings_to_id.count(cur_new_string) == 0u) {
         global_new_strings_to_id[cur_new_string] = total_num_strings;
         global_id_to_new_strings[total_num_strings] = cur_new_string;
         ++total_num_strings;
@@ -2218,7 +2218,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
       always_assert_log(value->dataType == android::Res_value::TYPE_STRING,
                         "Wrong data type for string remapping");
       auto old = dtohl(value->data);
-      if (!global_old_to_new_id.count(old)) {
+      if (global_old_to_new_id.count(old) == 0u) {
         return;
       }
       TRACE(RES, 9, "REMAP OLD %u", old);
@@ -2242,7 +2242,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
   auto start_package_id = PACKAGE_RESID_START >> PACKAGE_INDEX_BIT_SHIFT;
   size_t changed_resource_name = 0;
   for (auto& package_entries : collector.m_package_entries) {
-    auto& package = package_entries.first;
+    const auto& package = package_entries.first;
     // Copy standard fields which will be unchanged in the output.
     std::shared_ptr<arsc::ResPackageBuilder> package_builder =
         std::make_shared<arsc::ResPackageBuilder>(package);
@@ -2258,14 +2258,14 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
       std::set<android::ResStringPool_ref*> refs;
       for (const auto& package_entry_pairs : package_entries.second) {
         // Only collect entries in allowed_types.
-        if (!allowed_types.count(package_entry_pairs.first->id)) {
+        if (allowed_types.count(package_entry_pairs.first->id) == 0u) {
           continue;
         }
         const auto& package_type_entries = package_entry_pairs.second;
         refs.insert(package_type_entries.begin(), package_type_entries.end());
       }
 
-      for (auto& ref : refs) {
+      for (const auto& ref : refs) {
         auto old = dtohl(ref->index);
         // keep_resource_specific values are given as standard UTF-8; compare
         // against string pool also as standard UTF-8.
@@ -2496,13 +2496,13 @@ size_t ResourcesArscFile::serialize() {
   // Re-assemble
   arsc::ResTableBuilder table_builder;
   table_builder.set_global_strings(table_parser.m_global_pool_header);
-  for (auto& package : table_parser.m_packages) {
+  for (const auto& package : table_parser.m_packages) {
     auto package_id = dtohl(package->id);
     auto package_builder = std::make_shared<arsc::ResPackageBuilder>(package);
     package_builder->set_key_strings(
         table_parser.m_package_key_string_headers.at(package));
     // Append names of any new types
-    auto type_strings_header =
+    auto* type_strings_header =
         table_parser.m_package_type_string_headers.at(package);
     android::ResStringPool type_strings(
         type_strings_header, dtohl(type_strings_header->header.size));
@@ -2535,7 +2535,7 @@ size_t ResourcesArscFile::serialize() {
       for (auto& id : type_def.source_res_ids) {
         auto& config_entries = table_parser.m_res_id_to_entries.at(id);
         for (auto& config : type_def.configs) {
-          auto key = find_equivalent_config_key(config, config_entries);
+          auto* key = find_equivalent_config_key(config, config_entries);
           always_assert_log(key != nullptr,
                             "TypeDefinition %d is misconfigured; no equivalent "
                             "config found in table",
@@ -2794,7 +2794,7 @@ bool is_inlinable_resource_value(
   }
 
   bool is_one_entry = true;
-  for (auto& pair : config_to_entry_map) {
+  for (const auto& pair : config_to_entry_map) {
     if (!arsc::is_default_config(pair.first)) {
       if (!arsc::is_empty(pair.second)) {
         is_one_entry = false;
@@ -2852,7 +2852,8 @@ ResourcesArscFile::get_inlinable_resource_values() {
       val.type = res_value->dataType;
       if (res_value->dataType == android::Res_value::TYPE_STRING) {
         size_t length;
-        auto chars = global_string_pool.string8At(res_value->data, &length);
+        const auto* chars =
+            global_string_pool.string8At(res_value->data, &length);
         if (chars == nullptr ||
             global_string_pool.styleAt(res_value->data) != nullptr) {
           continue;
@@ -2862,7 +2863,7 @@ ResourcesArscFile::get_inlinable_resource_values() {
         past_refs.insert({id, res_value->data});
         continue;
       } else if (res_value->dataType == android::Res_value::TYPE_INT_BOOLEAN) {
-        val.bool_value = res_value->data;
+        val.bool_value = (res_value->data != 0u);
       } else if (res_value->dataType >= android::Res_value::TYPE_FIRST_INT &&
                  res_value->dataType <= android::Res_value::TYPE_LAST_INT) {
         val.uint_value = res_value->data;

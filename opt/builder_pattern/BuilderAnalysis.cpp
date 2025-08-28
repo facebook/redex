@@ -159,13 +159,13 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_STATIC: {
-      auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-      if (!method) {
+      auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+      if (method == nullptr) {
         default_case();
         break;
       }
 
-      auto rtype = method->get_proto()->get_rtype();
+      auto* rtype = method->get_proto()->get_rtype();
       if (insn->opcode() != OPCODE_INVOKE_STATIC &&
           method->get_class() == rtype) {
         // NOTE: We expect that the method actually operates on the same
@@ -195,7 +195,7 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
   bool is_builder(const DexType* type) const {
     const bool is_not_excluded =
         m_accept_excluded || m_excluded_builder_types.count(type) == 0;
-    return m_builder_types.count(type) && is_not_excluded;
+    return (m_builder_types.count(type) != 0u) && is_not_excluded;
   }
 };
 
@@ -214,7 +214,7 @@ BuilderAnalysis::BuilderAnalysis(const ConstTypeHashSet& builder_types,
 
 void BuilderAnalysis::run_analysis() {
   auto* code = m_method->get_code();
-  if (!code) {
+  if (code == nullptr) {
     return;
   }
 
@@ -230,7 +230,7 @@ void BuilderAnalysis::run_analysis() {
 }
 
 void BuilderAnalysis::print_usage() {
-  if (!m_method || !m_method->get_code()) {
+  if ((m_method == nullptr) || (m_method->get_code() == nullptr)) {
     return;
   }
 
@@ -277,7 +277,7 @@ DexType* get_instantiated_type(const IRInstruction* insn) {
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_DIRECT: {
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
     current_instance = method->get_proto()->get_rtype();
     break;
   }
@@ -302,11 +302,11 @@ void BuilderAnalysis::populate_usage() {
   // Otherwise, update the excluded instantiation list.
   auto update_usages = [&](const IRInstruction* val,
                            const cfg::InstructionIterator& use) {
-    if (auto referenced_type = get_instantiated_type(val)) {
+    if (auto* referenced_type = get_instantiated_type(val)) {
       if (m_excluded_builder_types.count(referenced_type) == 0) {
         m_usage[val].push_back(use);
 
-        auto insn = use->insn;
+        auto* insn = use->insn;
         if (opcode::is_an_invoke(insn->opcode())) {
           m_invoke_to_builder_instance[insn] = referenced_type;
         }
@@ -351,18 +351,18 @@ BuilderAnalysis::get_vinvokes_to_this_infered_type() {
     if (opcode::is_invoke_virtual(pair.first->opcode())) {
       always_assert(!result.count(const_cast<IRInstruction*>(pair.first)));
 
-      auto current_instance = get_instantiated_type(pair.first);
+      auto* current_instance = get_instantiated_type(pair.first);
       result[const_cast<IRInstruction*>(pair.first)] = current_instance;
     }
 
-    for (auto& it : pair.second) {
+    for (const auto& it : pair.second) {
       auto* insn = it->insn;
       if (opcode::is_invoke_virtual(insn->opcode())) {
         auto this_reg = insn->src(0);
         auto val = m_insn_to_env->at(insn).get(this_reg).get_constant();
 
         if (val) {
-          auto infered_type = get_instantiated_type(*val);
+          auto* infered_type = get_instantiated_type(*val);
           always_assert(!result.count(const_cast<IRInstruction*>(insn)) ||
                         result[const_cast<IRInstruction*>(insn)] ==
                             infered_type);
@@ -419,7 +419,7 @@ ConstTypeHashSet BuilderAnalysis::get_escaped_types_from_invokes(
   ConstTypeHashSet result;
 
   for (const auto* invoke : UnorderedIterable(invoke_insns)) {
-    if (m_invoke_to_builder_instance.count(invoke)) {
+    if (m_invoke_to_builder_instance.count(invoke) != 0u) {
       result.emplace(m_invoke_to_builder_instance.at(invoke));
     }
   }
@@ -430,7 +430,7 @@ ConstTypeHashSet BuilderAnalysis::get_instantiated_types() {
   ConstTypeHashSet result;
 
   for (const auto& pair : UnorderedIterable(m_usage)) {
-    auto type = get_instantiated_type(pair.first);
+    auto* type = get_instantiated_type(pair.first);
     result.emplace(type);
   }
 
@@ -440,9 +440,9 @@ ConstTypeHashSet BuilderAnalysis::get_instantiated_types() {
 namespace {
 
 DexMethodRef* get_obj_default_ctor() {
-  auto obj_type = type::java_lang_Object();
-  auto ctor_name = DexString::get_string("<init>");
-  auto default_ctor = DexMethod::get_method(
+  auto* obj_type = type::java_lang_Object();
+  const auto* ctor_name = DexString::get_string("<init>");
+  auto* default_ctor = DexMethod::get_method(
       obj_type,
       ctor_name,
       DexProto::get_proto(type::_void(), DexTypeList::make_type_list({})));
@@ -457,19 +457,19 @@ ConstTypeHashSet BuilderAnalysis::non_removable_types() {
 
   // Consider other non-removable usages (for example synchronization usage).
   for (const auto& pair : UnorderedIterable(m_usage)) {
-    auto instantiation = pair.first;
-    auto current_instance = get_instantiated_type(instantiation);
+    const auto* instantiation = pair.first;
+    auto* current_instance = get_instantiated_type(instantiation);
 
-    if (non_removable_types.count(current_instance)) {
+    if (non_removable_types.count(current_instance) != 0u) {
       // Already decided it isn't removable.
       continue;
     }
 
     // Check if the instantiation is an invoke and non-inlinable.
     if (opcode::is_an_invoke(instantiation->opcode())) {
-      auto method = resolve_method(instantiation->get_method(),
-                                   opcode_to_search(instantiation));
-      if (!method || !method->get_code()) {
+      auto* method = resolve_method(instantiation->get_method(),
+                                    opcode_to_search(instantiation));
+      if ((method == nullptr) || (method->get_code() == nullptr)) {
         non_removable_types.emplace(current_instance);
         TRACE(BLD_PATTERN, 3, "non removal instantiation %s",
               SHOW(instantiation));
@@ -492,12 +492,12 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
   auto& cfg = code->cfg();
 
   // Don't treat as escaping a builder passed to Object.<init>().
-  auto acceptable_method = get_obj_default_ctor();
+  auto* acceptable_method = get_obj_default_ctor();
 
   ConstTypeHashSet escape_types;
   for (const auto& pair : UnorderedIterable(m_usage)) {
-    auto instantiation_insn = pair.first;
-    auto current_instance = get_instantiated_type(instantiation_insn);
+    const auto* instantiation_insn = pair.first;
+    auto* current_instance = get_instantiated_type(instantiation_insn);
 
     for (const auto& it : pair.second) {
       auto* insn = it->insn;
@@ -508,7 +508,7 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
           continue;
         }
 
-        auto method = resolve_method(insn->get_method(), MethodSearch::Any);
+        auto* method = resolve_method(insn->get_method(), MethodSearch::Any);
 
         TRACE(BLD_PATTERN, 2, "Excluding type %s since we couldn't inline %s",
               SHOW(current_instance), SHOW(method));
@@ -540,7 +540,7 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
   for (cfg::Block* block : cfg.blocks()) {
     const auto& current_env = m_analyzer->get_exit_state_at(block);
 
-    for (auto& succ : block->succs()) {
+    for (const auto& succ : block->succs()) {
       cfg::Block* block_succ = succ->target();
       const auto& entry_env_at_succ =
           m_analyzer->get_entry_state_at(block_succ);
@@ -565,10 +565,10 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
             TRACE(BLD_PATTERN, 5, "Register value in SUCC: NONE");
           }
 
-          auto init_insn = *current_env.get(live_reg).get_constant();
+          const auto* init_insn = *current_env.get(live_reg).get_constant();
           if (init_insn->opcode() != OPCODE_CONST) {
             // NULL const cannot escape only builder can escape.
-            auto current_instance = get_instantiated_type(init_insn);
+            auto* current_instance = get_instantiated_type(init_insn);
             TRACE(BLD_PATTERN, 2,
                   "Excluding type %s since it escapes method %s",
                   SHOW(current_instance), SHOW(m_method));

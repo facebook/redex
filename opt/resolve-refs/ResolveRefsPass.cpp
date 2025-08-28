@@ -162,19 +162,19 @@ void try_desuperify(const DexMethod* caller,
   if (!opcode::is_invoke_super(insn->opcode())) {
     return;
   }
-  auto cls = type_class(caller->get_class());
+  auto* cls = type_class(caller->get_class());
   if (cls == nullptr) {
     return;
   }
   // Skip if the callee is an interface default method (037).
-  auto callee_cls = type_class(insn->get_method()->get_class());
-  if (!callee_cls || is_interface(callee_cls)) {
+  auto* callee_cls = type_class(insn->get_method()->get_class());
+  if ((callee_cls == nullptr) || is_interface(callee_cls)) {
     return;
   }
   // resolve_method_ref will start its search in the superclass of :cls.
-  auto callee = resolve_method_ref(cls, insn->get_method()->get_name(),
-                                   insn->get_method()->get_proto(),
-                                   MethodSearch::Virtual);
+  auto* callee = resolve_method_ref(cls, insn->get_method()->get_name(),
+                                    insn->get_method()->get_proto(),
+                                    MethodSearch::Virtual);
   // External methods may not always be final across runtime versions
   if (callee == nullptr || callee->is_external() || !is_final(callee)) {
     return;
@@ -188,7 +188,7 @@ void try_desuperify(const DexMethod* caller,
 
 bool is_excluded_external(const std::vector<std::string>& excluded_externals,
                           const std::string& name) {
-  for (auto& excluded : excluded_externals) {
+  for (const auto& excluded : excluded_externals) {
     if (boost::starts_with(name, excluded)) {
       return true;
     }
@@ -211,14 +211,14 @@ boost::optional<DexMethod*> get_inferred_method_def(
       resolve_method(inferred_cls, callee->get_name(), callee->get_proto(),
                      opcode_to_search(invoke_op));
   // 1. If we cannot resolve the callee based on the inferred_cls, we bail.
-  if (!resolved || !resolved->is_def()) {
+  if ((resolved == nullptr) || !resolved->is_def()) {
     TRACE(RESO, 4, "Bailed resolved upon inferred_cls %s for %s",
           SHOW(inferred_cls), SHOW(callee));
     stats.num_failed_infer_resolver_fail++;
     return boost::none;
   }
   auto* resolved_cls = type_class(resolved->get_class());
-  bool is_external = resolved_cls && resolved_cls->is_external();
+  bool is_external = (resolved_cls != nullptr) && resolved_cls->is_external();
   // 2. If the resolved target is an excluded external, we bail.
   if (is_external && is_excluded_external(excluded_externals, show(resolved))) {
     TRACE(RESO, 4, "Bailed on excluded external%s", SHOW(resolved));
@@ -259,11 +259,11 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
                                           IRInstruction* insn,
                                           RefStats& stats) {
   always_assert(insn->has_method());
-  auto mref = insn->get_method();
+  auto* mref = insn->get_method();
   bool resolved_virtual_to_interface;
-  auto mdef =
+  auto* mdef =
       resolve_invoke_method(insn, caller, &resolved_virtual_to_interface);
-  if (!mdef && is_array_clone(insn)) {
+  if ((mdef == nullptr) && is_array_clone(insn)) {
     auto* object_array_clone = method::java_lang_Objects_clone();
     TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref),
           SHOW(object_array_clone));
@@ -272,7 +272,7 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
     stats.num_array_clone_ref_resolved++;
     return;
   }
-  if (!mdef || mdef == mref) {
+  if ((mdef == nullptr) || mdef == mref) {
     return;
   }
   // Handle external refs.
@@ -284,9 +284,9 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
     return;
   }
 
-  auto cls = type_class(mdef->get_class());
+  auto* cls = type_class(mdef->get_class());
   // Bail out if the def is non public external
-  if (cls && cls->is_external() && !is_public(cls)) {
+  if ((cls != nullptr) && cls->is_external() && !is_public(cls)) {
     return;
   }
   redex_assert(cls != nullptr || !cls->is_external());
@@ -296,7 +296,7 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
   TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
   insn->set_method(mdef);
   stats.num_mref_simple_resolved++;
-  if (resolved_virtual_to_interface && cls && is_interface(cls)) {
+  if (resolved_virtual_to_interface && (cls != nullptr) && is_interface(cls)) {
     TRACE(RESO, 4, "InterfaceVirtual resolve to %s in %s", SHOW(mdef),
           SHOW(insn));
     insn->set_opcode(OPCODE_INVOKE_INTERFACE);
@@ -307,9 +307,9 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
 void ResolveRefsPass::resolve_field_refs(IRInstruction* insn,
                                          const FieldSearch field_search,
                                          RefStats& stats) {
-  const auto fref = insn->get_field();
-  const auto fdef = resolve_field(fref, field_search);
-  if (!fdef || fdef == fref) {
+  auto* const fref = insn->get_field();
+  auto* const fdef = resolve_field(fref, field_search);
+  if ((fdef == nullptr) || fdef == fref) {
     return;
   }
   // Handle external refs.
@@ -322,9 +322,9 @@ void ResolveRefsPass::resolve_field_refs(IRInstruction* insn,
     return;
   }
 
-  auto cls = type_class(fdef->get_class());
+  auto* cls = type_class(fdef->get_class());
   // Bail out if the def is non public external
-  if (cls && cls->is_external() && !is_public(cls)) {
+  if ((cls != nullptr) && cls->is_external() && !is_public(cls)) {
     return;
   }
   redex_assert(cls != nullptr || !cls->is_external());
@@ -339,13 +339,13 @@ void ResolveRefsPass::resolve_field_refs(IRInstruction* insn,
 
 RefStats ResolveRefsPass::resolve_refs(DexMethod* method) {
   RefStats stats;
-  if (!method || !method->get_code()) {
+  if ((method == nullptr) || (method->get_code() == nullptr)) {
     return stats;
   }
 
   auto& cfg = method->get_code()->cfg();
   for (auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     switch (insn->opcode()) {
     case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_SUPER:
@@ -398,7 +398,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
                                                    bool desuperify,
                                                    bool specialize_rtype) {
   RefStats stats;
-  if (!method || !method->get_code()) {
+  if ((method == nullptr) || (method->get_code() == nullptr)) {
     return stats;
   }
 
@@ -430,9 +430,9 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
       continue;
     }
 
-    auto mref = insn->get_method();
-    auto callee = resolve_method(mref, opcode_to_search(insn), method);
-    if (!callee) {
+    auto* mref = insn->get_method();
+    auto* callee = resolve_method(mref, opcode_to_search(insn), method);
+    if (callee == nullptr) {
       if (mref != method::java_lang_Objects_clone()) {
         stats.num_unresolvable_mrefs++;
       }
@@ -461,9 +461,9 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
       stats.num_failed_infer_callee_def++;
       continue;
     }
-    auto def_meth = *m_def;
-    auto def_cls = type_class((def_meth)->get_class());
-    if (!def_cls || mref == def_meth) {
+    auto* def_meth = *m_def;
+    auto* def_cls = type_class((def_meth)->get_class());
+    if ((def_cls == nullptr) || mref == def_meth) {
       // The ref resolution is a nop.
       continue;
     }

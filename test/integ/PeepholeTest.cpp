@@ -109,9 +109,9 @@ class PeepholeTest : public ::testing::Test {
   // add a void->void static method to our dex_class
   DexMethod* make_void_method(const char* method_name,
                               const IRInstructionList& insns) const {
-    auto ret = type::_void();
-    auto args = DexTypeList::make_type_list({});
-    auto proto = DexProto::make_proto(ret, args); // I()
+    auto* ret = type::_void();
+    auto* args = DexTypeList::make_type_list({});
+    auto* proto = DexProto::make_proto(ret, args); // I()
     DexMethod* method =
         DexMethod::make_method(
             dex_class->get_type(), DexString::make_string(method_name), proto)
@@ -121,7 +121,7 @@ class PeepholeTest : public ::testing::Test {
     method->set_code(std::make_unique<IRCode>(method, 0));
 
     // import our instructions
-    auto mt = method->get_code();
+    auto* mt = method->get_code();
     for (const auto& insn_ptr : insns.instructions) {
       mt->push_back(new IRInstruction(*insn_ptr));
     }
@@ -183,7 +183,7 @@ class PeepholeTest : public ::testing::Test {
                              DexString::make_string("field_name"),
                              type::_int());
 
-    auto ctor =
+    auto* ctor =
         DexMethod::make_method(dex_class->get_type()->str() + ".<init>:()V")
             ->make_concrete(ACC_PUBLIC, false);
     return IRInstructionList{
@@ -204,7 +204,7 @@ class PeepholeTest : public ::testing::Test {
         DexField::make_field(dex_class->get_type(),
                              DexString::make_string("field_name"),
                              type::_int());
-    auto ctor =
+    auto* ctor =
         DexMethod::make_method(dex_class->get_type()->str() + ".<init>:()V")
             ->make_concrete(ACC_PUBLIC, false);
     return IRInstructionList{
@@ -232,7 +232,7 @@ class PeepholeTest : public ::testing::Test {
             ->make_concrete(make_field_volatile ? DexAccessFlags::ACC_VOLATILE
                                                 : DexAccessFlags::ACC_PUBLIC);
     dex_class->add_field(field);
-    auto ctor =
+    auto* ctor =
         DexMethod::make_method(dex_class->get_type()->str() + ".<init>:()V")
             ->make_concrete(ACC_PUBLIC, false);
     return IRInstructionList{
@@ -426,14 +426,14 @@ static void sputget_peep_hole_test(const std::string& field_desc,
   ClassCreator creator(DexType::make_type("LFoo;"));
   creator.set_super(type::java_lang_Object());
 
-  auto field = static_cast<DexField*>(DexField::make_field(field_desc));
+  auto* field = static_cast<DexField*>(DexField::make_field(field_desc));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC);
   if (volatile_field) {
     field->set_access(field->get_access() | ACC_VOLATILE);
   }
   creator.add_field(field);
 
-  auto method = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
+  auto* method = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(code_str));
   creator.add_method(method);
@@ -798,7 +798,7 @@ static void aputget_peep_hole_test(const std::string& code_str,
   ClassCreator creator(DexType::make_type("LFoo;"));
   creator.set_super(type::java_lang_Object());
 
-  auto method = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
+  auto* method = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(code_str));
   creator.add_method(method);

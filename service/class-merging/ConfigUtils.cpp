@@ -15,7 +15,7 @@ namespace class_merging {
 namespace utils {
 
 DexType* get_type(const std::string& type_s) {
-  auto type = DexType::get_type(type_s);
+  auto* type = DexType::get_type(type_s);
   if (type == nullptr) {
     TRACE(CLMG, 2, "[ClassMerging] Warning: No type found for target type %s",
           type_s.c_str());
@@ -26,7 +26,7 @@ DexType* get_type(const std::string& type_s) {
 std::vector<DexType*> get_types(const std::vector<std::string>& target_types) {
   std::vector<DexType*> types;
   for (const auto& type_s : target_types) {
-    auto target_type = get_type(type_s);
+    auto* target_type = get_type(type_s);
     if (target_type == nullptr) {
       continue;
     }
@@ -38,7 +38,7 @@ std::vector<DexType*> get_types(const std::vector<std::string>& target_types) {
 void load_types(const std::vector<std::string>& type_names,
                 UnorderedSet<const DexType*>& types) {
   for (const auto& type_s : type_names) {
-    auto target_type = get_type(type_s);
+    auto* target_type = get_type(type_s);
     if (target_type == nullptr) {
       TRACE(CLMG, 2, "[ClassMerging] Warning: No type found for target type %s",
             type_s.c_str());
@@ -53,7 +53,7 @@ void load_types_and_prefixes(const std::vector<std::string>& type_names,
                              UnorderedSet<const DexType*>& types,
                              UnorderedSet<std::string>& prefixes) {
   for (const auto& type_s : type_names) {
-    auto target_type = get_type(type_s);
+    auto* target_type = get_type(type_s);
     if (target_type == nullptr) {
       prefixes.insert(type_s);
     } else {

@@ -18,7 +18,7 @@ namespace {
 class KotlinLambdaOptRewriterTest : public RedexIntegrationTest {
  protected:
   void set_root_method(const std::string& full_name) {
-    auto method = DexMethod::get_method(full_name)->as_def();
+    auto* method = DexMethod::get_method(full_name)->as_def();
     ASSERT_NE(nullptr, method);
     method->rstate.set_root();
   }
@@ -29,7 +29,7 @@ class KotlinLambdaOptRewriterTest : public RedexIntegrationTest {
     fprintf(stderr, "%s\n", SHOW(code));
     bool found = false;
     for (auto it = ii.begin(); it != end; ++it) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       if (insn->opcode() == OPCODE_SGET_OBJECT) {
         found = true;
       }
@@ -41,7 +41,7 @@ class KotlinLambdaOptRewriterTest : public RedexIntegrationTest {
     auto ii = InstructionIterable(code);
     auto end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
-      auto insn = it->insn;
+      auto* insn = it->insn;
       EXPECT_NE(insn->opcode(), OPCODE_SGET_OBJECT);
     }
   }
@@ -50,44 +50,44 @@ class KotlinLambdaOptRewriterTest : public RedexIntegrationTest {
 TEST_F(KotlinLambdaOptRewriterTest, MethodHasNoEqDefined) {
   auto scope = build_class_scope(stores);
   set_root_method("LKotlinLambdaInline;.foo:()V");
-  auto x_method =
+  auto* x_method =
       DexMethod::get_method("LKotlinLambdaInline;.foo:()V")->as_def();
-  auto codex = x_method->get_code();
+  auto* codex = x_method->get_code();
   ASSERT_NE(nullptr, codex);
   check_sget_available(codex);
 
   set_root_method("LKotlinInstanceRemovalEquiv;.bar:()V");
-  auto y_method =
+  auto* y_method =
       DexMethod::get_method("LKotlinInstanceRemovalEquiv;.bar:()V")->as_def();
-  auto codey = y_method->get_code();
+  auto* codey = y_method->get_code();
   ASSERT_NE(nullptr, codey);
   check_sget_available(codey);
 
   set_root_method("LKotlinInstanceRemovalEquivNegative;.bar:()V");
-  auto z_method =
+  auto* z_method =
       DexMethod::get_method("LKotlinInstanceRemovalEquivNegative;.bar:()V")
           ->as_def();
-  auto codez = z_method->get_code();
+  auto* codez = z_method->get_code();
   ASSERT_NE(nullptr, codez);
   check_sget_available(codez);
 
   set_root_method("LKotlinInstanceRemovalEquivNegative2;.bar:()V");
-  auto l_method =
+  auto* l_method =
       DexMethod::get_method("LKotlinInstanceRemovalEquivNegative2;.bar:()V")
           ->as_def();
-  auto codel = l_method->get_code();
+  auto* codel = l_method->get_code();
   ASSERT_NE(nullptr, codel);
   check_sget_available(codel);
 
   set_root_method("LKotlinInstanceRemovalEquivNegative3;.bar:()V");
-  auto m_method =
+  auto* m_method =
       DexMethod::get_method("LKotlinInstanceRemovalEquivNegative3;.bar:()V")
           ->as_def();
-  auto codem = m_method->get_code();
+  auto* codem = m_method->get_code();
   ASSERT_NE(nullptr, codem);
   check_sget_available(codem);
 
-  auto klr = new RewriteKotlinSingletonInstance();
+  auto* klr = new RewriteKotlinSingletonInstance();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
 

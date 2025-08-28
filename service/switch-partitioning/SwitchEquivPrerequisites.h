@@ -42,12 +42,12 @@ inline bool gather_linear_prologue_blocks(
   if (prologue_blocks->empty()) {
     return false;
   }
-  auto last_prologue_block = prologue_blocks->back();
+  auto* last_prologue_block = prologue_blocks->back();
   auto last_prologue_insn_it = last_prologue_block->get_last_insn();
   if (last_prologue_insn_it == last_prologue_block->end()) {
     return false;
   }
-  auto last_prologue_insn = last_prologue_insn_it->insn;
+  auto* last_prologue_insn = last_prologue_insn_it->insn;
   auto op = last_prologue_insn->opcode();
   return opcode::is_branch(op);
 }
@@ -90,7 +90,7 @@ inline bool find_determining_reg(
     reg_t* determining_reg) {
   auto last_it = b->get_last_insn();
   always_assert_log(last_it != b->end(), "non-leaf nodes should not be empty");
-  auto last = last_it->insn;
+  auto* last = last_it->insn;
   always_assert_log(opcode::is_branch(last->opcode()),
                     "%s is not a branch instruction", SHOW(last));
   boost::optional<reg_t> candidate_reg;

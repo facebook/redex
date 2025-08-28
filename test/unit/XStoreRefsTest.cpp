@@ -116,9 +116,9 @@ TEST_F(XStoreRefsTest, illegal_ref) {
   EXPECT_TRUE(xstores.illegal_ref(m_quuz->get_type(), m_iquux->get_type()));
   EXPECT_FALSE(xstores.illegal_ref(m_quuz->get_type(), m_quuz->get_type()));
 
-  auto store0_type = m_store0_cls->get_type();
-  auto store1_type = m_store1_cls->get_type();
-  auto store2_type = m_store2_cls->get_type();
+  auto* store0_type = m_store0_cls->get_type();
+  auto* store1_type = m_store1_cls->get_type();
+  auto* store2_type = m_store2_cls->get_type();
   EXPECT_FALSE(xstores.illegal_ref(store0_type, store0_type));
   EXPECT_TRUE(xstores.illegal_ref(store0_type, store1_type));
   EXPECT_TRUE(xstores.illegal_ref(store0_type, store2_type));
@@ -178,18 +178,18 @@ TEST_F(XStoreRefsTest, illegal_ref_load_types) {
 
 TEST_F(XStoreRefsTest, transitive_resolved_dependencies) {
   XStoreRefs xstores(stores);
-  auto store0 = &stores.at(0);
+  auto* store0 = &stores.at(0);
   const auto& store0_deps =
       xstores.get_transitive_resolved_dependencies(store0);
   EXPECT_EQ(store0_deps.size(), 0);
 
-  auto store1 = &stores.at(1);
+  auto* store1 = &stores.at(1);
   const auto& store1_deps =
       xstores.get_transitive_resolved_dependencies(store1);
   EXPECT_EQ(store1_deps.size(), 1);
   EXPECT_TRUE(store1_deps.count(store0));
 
-  auto store2 = &stores.at(2);
+  auto* store2 = &stores.at(2);
   const auto& store2_deps =
       xstores.get_transitive_resolved_dependencies(store2);
   EXPECT_EQ(store2_deps.size(), 2);

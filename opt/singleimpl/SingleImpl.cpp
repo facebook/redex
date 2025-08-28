@@ -55,15 +55,15 @@ constexpr const char* METRIC_DELETED_REMOVED_INSTRUCTIONS =
 void map_interfaces(const DexTypeList* intf_list,
                     DexClass* cls,
                     TypeToTypes& intfs_to_classes) {
-  for (auto& intf : *intf_list) {
-    const auto intf_cls = type_class(intf);
+  for (const auto& intf : *intf_list) {
+    auto* const intf_cls = type_class(intf);
     if (intf_cls == nullptr || intf_cls->is_external()) {
       continue;
     }
     if (std::find(intfs_to_classes[intf].begin(), intfs_to_classes[intf].end(),
                   cls->get_type()) == intfs_to_classes[intf].end()) {
       intfs_to_classes[intf].push_back(cls->get_type());
-      auto intfs = intf_cls->get_interfaces();
+      auto* intfs = intf_cls->get_interfaces();
       map_interfaces(intfs, cls, intfs_to_classes);
     }
   }
@@ -80,7 +80,7 @@ void build_type_maps(const Scope& scope,
       interfs.insert(cls->get_type());
       continue;
     }
-    auto intfs = cls->get_interfaces();
+    auto* intfs = cls->get_interfaces();
     map_interfaces(intfs, cls, intfs_to_classes);
   }
 }
@@ -91,7 +91,7 @@ bool implements_all_intf_methods(const DexClass* impl_cls,
   for (auto* intf_meth : intf_cls->get_vmethods()) {
     auto* resolved = resolve_virtual(impl_cls, intf_meth->get_name(),
                                      intf_meth->get_proto());
-    if (!resolved) {
+    if (resolved == nullptr) {
       // method not found (probably optimized away)
       // => exclude pair from possible merging
       return false;
@@ -106,17 +106,17 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
     if (intf_it.second.size() != 1) {
       continue;
     }
-    auto intf = intf_it.first;
-    auto intf_cls = type_class(intf);
+    auto* intf = intf_it.first;
+    auto* intf_cls = type_class(intf);
     always_assert(intf_cls && !intf_cls->is_external());
-    if (intf_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) {
+    if ((intf_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) != 0u) {
       continue;
     }
-    auto impl = intf_it.second[0];
-    auto impl_cls = type_class(impl);
+    auto* impl = intf_it.second[0];
+    auto* impl_cls = type_class(impl);
     always_assert(impl_cls && !impl_cls->is_external());
     // I don't know if it's possible but it's cheap enough to check
-    if (impl_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) {
+    if ((impl_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) != 0u) {
       continue;
     }
     if (!is_abstract(impl_cls) &&

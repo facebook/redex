@@ -47,7 +47,7 @@ class ClassMergingInterDexGroupingTest : public RedexIntegrationTest {
 
     ConstTypeHashSet type_set;
     for (const auto& cls_name : merging_targets) {
-      auto type = DexType::get_type(cls_name);
+      auto* type = DexType::get_type(cls_name);
       if (type != nullptr) {
         type_set.insert(DexType::get_type(cls_name));
       }

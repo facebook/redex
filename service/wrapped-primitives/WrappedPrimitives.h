@@ -60,7 +60,7 @@ struct Spec {
   std::map<DexMethodRef*, DexMethodRef*, dexmethods_comparator> allowed_invokes;
 
   std::vector<DexMethod*> wrapper_type_constructors() {
-    auto cls = type_class(wrapper);
+    auto* cls = type_class(wrapper);
     return cls->get_ctors();
   }
 };
@@ -77,12 +77,12 @@ class WrappedPrimitives {
  public:
   explicit WrappedPrimitives(const std::vector<Spec>& wrapper_specs)
       : m_wrapper_specs(wrapper_specs) {
-    for (auto& spec : wrapper_specs) {
+    for (const auto& spec : wrapper_specs) {
       TRACE(WP,
             1,
             "Will check for wrapper type %s with supported methods:",
             SHOW(spec.wrapper));
-      auto wrapper_cls = type_class(spec.wrapper);
+      auto* wrapper_cls = type_class(spec.wrapper);
       always_assert(wrapper_cls != nullptr);
       m_type_to_spec.emplace(spec.wrapper, spec);
       for (auto&& [from, to] : spec.allowed_invokes) {

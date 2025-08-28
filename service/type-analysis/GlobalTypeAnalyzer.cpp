@@ -53,14 +53,15 @@ void scan_any_init_reachables(
     const DexMethod* method,
     bool trace_callbacks,
     ConcurrentSet<const DexMethod*>& reachables) {
-  if (!method || method::is_clinit(method) || reachables.count(method)) {
+  if ((method == nullptr) || method::is_clinit(method) ||
+      (reachables.count(method) != 0u)) {
     return;
   }
   if (!trace_callbacks && method::is_init(method)) {
     return;
   }
-  auto code = (const_cast<DexMethod*>(method))->get_code();
-  if (!code) {
+  auto* code = (const_cast<DexMethod*>(method))->get_code();
+  if (code == nullptr) {
     return;
   }
   always_assert(code->editable_cfg_built());
@@ -70,13 +71,13 @@ void scan_any_init_reachables(
   reachables.insert(method);
   TRACE(TYPE, 5, "[any init reachables] insert %s", SHOW(method));
   for (auto& mie : cfg::InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }
-    auto callee_method_def =
+    auto* callee_method_def =
         resolve_method(insn->get_method(), opcode_to_search(insn), method);
-    if (!callee_method_def || callee_method_def->is_external() ||
+    if ((callee_method_def == nullptr) || callee_method_def->is_external() ||
         !callee_method_def->is_concrete()) {
       continue;
     }
@@ -94,8 +95,8 @@ void scan_any_init_reachables(
   if (!trace_callbacks) {
     return;
   }
-  const auto owning_cls = type_class(method->get_class());
-  if (!owning_cls) {
+  auto* const owning_cls = type_class(method->get_class());
+  if (owning_cls == nullptr) {
     return;
   }
   // If trace_callbacks, include external overrides (potential call backs)
@@ -103,7 +104,7 @@ void scan_any_init_reachables(
     bool overrides_external = false;
     const auto& overridens =
         mog::get_overridden_methods(method_override_graph, vmethod);
-    for (auto overriden : UnorderedIterable(overridens)) {
+    for (const auto* overriden : UnorderedIterable(overridens)) {
       if (overriden->is_external()) {
         overrides_external = true;
       }
@@ -147,11 +148,11 @@ void GlobalTypeAnalyzer::analyze_node(
   if (method == nullptr) {
     return;
   }
-  auto code = method->get_code();
+  const auto* code = method->get_code();
   if (code == nullptr) {
     return;
   }
-  auto& cfg = code->cfg();
+  const auto& cfg = code->cfg();
   auto intra_ta = get_internal_local_analysis(method);
   const auto outgoing_edges =
       call_graph::GraphInterface::successors(*m_call_graph, node);
@@ -166,7 +167,7 @@ void GlobalTypeAnalyzer::analyze_node(
     auto state = intra_ta->get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
-      if (insn->has_method() && outgoing_insns.count(insn)) {
+      if (insn->has_method() && (outgoing_insns.count(insn) != 0u)) {
         ArgumentTypeEnvironment out_args;
 
         auto handle_receiver_domain = [](DexTypeDomain&& receiver_domain) {
@@ -204,7 +205,7 @@ ArgumentTypePartition GlobalTypeAnalyzer::analyze_edge(
     const call_graph::EdgeId& edge,
     const ArgumentTypePartition& exit_state_at_source) const {
   ArgumentTypePartition entry_state_at_dest;
-  auto insn = edge->invoke_insn();
+  auto* insn = edge->invoke_insn();
   if (insn == nullptr) {
     entry_state_at_dest.set(CURRENT_PARTITION_LABEL,
                             ArgumentTypeEnvironment::top());
@@ -264,7 +265,7 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
     const bool is_replayable) const {
   TRACE(TYPE, 5, "[global] analyzing %s", SHOW(method));
   always_assert(method->get_code() != nullptr);
-  auto& code = *method->get_code();
+  const auto& code = *method->get_code();
   // Currently, our callgraph does not include calls to non-devirtualizable
   // virtual methods. So those methods may appear unreachable despite being
   // reachable.
@@ -293,7 +294,7 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
 
 bool args_have_type(const DexProto* proto, const DexType* type) {
   always_assert(type);
-  for (const auto arg_type : *proto->get_args()) {
+  for (auto* const arg_type : *proto->get_args()) {
     if (arg_type == type) {
       return true;
     }
@@ -307,12 +308,12 @@ bool args_have_type(const DexProto* proto, const DexType* type) {
  * method on a subclass from its own ctor.
  */
 bool extends_android_sdk(const DexClass* cls) {
-  if (!cls) {
+  if (cls == nullptr) {
     return false;
   }
   auto* super_type = cls->get_super_class();
   auto* super_cls = type_class(cls->get_super_class());
-  while (super_cls && super_type != type::java_lang_Object()) {
+  while ((super_cls != nullptr) && super_type != type::java_lang_Object()) {
     if (boost::starts_with(show(super_type), "Landroid/")) {
       return true;
     }
@@ -332,7 +333,7 @@ bool extends_android_sdk(const DexClass* cls) {
  */
 bool is_likely_anonymous_class(const DexType* type) {
   const auto* cls = type_class(type);
-  if (!cls) {
+  if (cls == nullptr) {
     return false;
   }
   const auto* super_type = cls->get_super_class();
@@ -341,7 +342,7 @@ bool is_likely_anonymous_class(const DexType* type) {
     return intfs->size() == 1;
   }
   const auto* super_cls = type_class(super_type);
-  if (super_cls && is_abstract(super_cls)) {
+  if ((super_cls != nullptr) && is_abstract(super_cls)) {
     return true;
   }
   return false;
@@ -388,19 +389,19 @@ void GlobalTypeAnalysis::find_any_init_reachables(
     if (!method::is_any_init(method)) {
       return;
     }
-    if (!method || !method->get_code()) {
+    if ((method == nullptr) || (method->get_code() == nullptr)) {
       return;
     }
-    auto code = method->get_code();
+    auto* code = method->get_code();
     auto& cfg = code->cfg();
     for (auto& mie : InstructionIterable(cfg)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
-      auto callee_method_def =
+      auto* callee_method_def =
           resolve_method(insn->get_method(), opcode_to_search(insn), method);
-      if (!callee_method_def || callee_method_def->is_external() ||
+      if ((callee_method_def == nullptr) || callee_method_def->is_external() ||
           !callee_method_def->is_concrete()) {
         continue;
       }
@@ -433,7 +434,7 @@ void GlobalTypeAnalysis::find_any_init_reachables(
       bool overrides_external = false;
       const auto& overridens =
           mog::get_overridden_methods(method_override_graph, vmethod);
-      for (auto overriden : UnorderedIterable(overridens)) {
+      for (const auto* overriden : UnorderedIterable(overridens)) {
         if (overriden->is_external()) {
           overrides_external = true;
         }

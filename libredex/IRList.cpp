@@ -341,12 +341,12 @@ MethodItemEntryCloner::MethodItemEntryCloner() {
 MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mie) {
 
   const auto& pair = m_entry_map.emplace(mie, nullptr);
-  auto& it = pair.first;
+  const auto& it = pair.first;
   bool was_already_there = !pair.second;
   if (was_already_there) {
     return it->second;
   }
-  auto cloned_mie = new MethodItemEntry(*mie);
+  auto* cloned_mie = new MethodItemEntry(*mie);
   it->second = cloned_mie;
 
   switch (cloned_mie->type) {
@@ -503,7 +503,7 @@ void IRList::replace_opcode(IRInstruction* to_delete,
 void IRList::replace_opcode(const IRList::iterator& it,
                             const std::vector<IRInstruction*>& replacements) {
   always_assert(it->type == MFLOW_OPCODE);
-  for (auto insn : replacements) {
+  for (auto* insn : replacements) {
     insert_before(it, insn);
   }
   remove_opcode(it);
@@ -533,7 +533,7 @@ void IRList::replace_opcode_with_infinite_loop(IRInstruction* from) {
                     "No match found while replacing '%s' with '%s'",
                     SHOW(from),
                     SHOW(to));
-  auto target = new BranchTarget(&*miter);
+  auto* target = new BranchTarget(&*miter);
   m_list.insert(miter, *(new MethodItemEntry(target)));
 }
 
@@ -592,7 +592,7 @@ IRList::iterator IRList::insert_after(const IRList::iterator& position,
 
 void IRList::remove_opcode(const IRList::iterator& it) {
   always_assert(it->type == MFLOW_OPCODE);
-  auto insn = it->insn;
+  auto* insn = it->insn;
   always_assert(!opcode::is_a_move_result_pseudo(insn->opcode()));
   if (insn->has_move_result_pseudo()) {
     auto move_it = std::next(it);
@@ -683,7 +683,7 @@ void IRList::remove_branch_targets(IRInstruction* branch_inst) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_TARGET) {
       BranchTarget* bt = mentry->target;
-      auto btmei = bt->src;
+      auto* btmei = bt->src;
       if (btmei->insn == branch_inst) {
         mentry->type = MFLOW_FALLTHROUGH;
         delete mentry->target;
@@ -748,8 +748,8 @@ bool IRList::structural_equals(
         return false;
       }
     } else if (it1->type == MFLOW_TARGET) {
-      auto target1 = it1->target;
-      auto target2 = it2->target;
+      auto* target1 = it1->target;
+      auto* target2 = it2->target;
 
       if (target1->type != target2->type) {
         return false;
@@ -766,8 +766,8 @@ bool IRList::structural_equals(
       }
 
     } else if (it1->type == MFLOW_TRY) {
-      auto try1 = it1->tentry;
-      auto try2 = it2->tentry;
+      auto* try1 = it1->tentry;
+      auto* try2 = it2->tentry;
 
       if (try1->type != try2->type) {
         return false;
@@ -778,8 +778,8 @@ bool IRList::structural_equals(
         return false;
       }
     } else if (it1->type == MFLOW_CATCH) {
-      auto catch1 = it1->centry;
-      auto catch2 = it2->centry;
+      auto* catch1 = it1->centry;
+      auto* catch2 = it2->centry;
 
       if (catch1->catch_type != catch2->catch_type) {
         return false;
@@ -817,7 +817,7 @@ boost::sub_range<IRList> IRList::get_param_instructions() {
 }
 
 void IRList::gather_catch_types(std::vector<DexType*>& ltype) const {
-  for (auto& mie : m_list) {
+  for (const auto& mie : m_list) {
     if (mie.type != MFLOW_CATCH) {
       continue;
     }
@@ -828,44 +828,44 @@ void IRList::gather_catch_types(std::vector<DexType*>& ltype) const {
 }
 
 void IRList::gather_types(std::vector<DexType*>& ltype) const {
-  for (auto& mie : m_list) {
+  for (const auto& mie : m_list) {
     mie.gather_types(ltype);
   }
 }
 
 void IRList::gather_init_classes(std::vector<DexType*>& ltype) const {
-  for (auto& mie : m_list) {
+  for (const auto& mie : m_list) {
     mie.gather_init_classes(ltype);
   }
 }
 
 void IRList::gather_strings(std::vector<const DexString*>& lstring) const {
-  for (auto& mie : m_list) {
+  for (const auto& mie : m_list) {
     mie.gather_strings(lstring);
   }
 }
 
 void IRList::gather_fields(std::vector<DexFieldRef*>& lfield) const {
-  for (auto& mie : m_list) {
+  for (const auto& mie : m_list) {
     mie.gather_fields(lfield);
   }
 }
 
 void IRList::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
-  for (auto& mie : m_list) {
+  for (const auto& mie : m_list) {
     mie.gather_methods(lmethod);
   }
 }
 
 void IRList::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
-  for (auto& mie : m_list) {
+  for (const auto& mie : m_list) {
     mie.gather_callsites(lcallsite);
   }
 }
 
 void IRList::gather_methodhandles(
     std::vector<DexMethodHandle*>& lmethodhandle) const {
-  for (auto& mie : m_list) {
+  for (const auto& mie : m_list) {
     mie.gather_methodhandles(lmethodhandle);
   }
 }
@@ -877,10 +877,10 @@ IRList::iterator IRList::main_block() {
 IRList::iterator IRList::make_if_block(const IRList::iterator& cur,
                                        IRInstruction* insn,
                                        IRList::iterator* false_block) {
-  auto if_entry = new MethodItemEntry(insn);
+  auto* if_entry = new MethodItemEntry(insn);
   *false_block = m_list.insert(cur, *if_entry);
-  auto bt = new BranchTarget(if_entry);
-  auto bentry = new MethodItemEntry(bt);
+  auto* bt = new BranchTarget(if_entry);
+  auto* bentry = new MethodItemEntry(bt);
   return m_list.insert(m_list.end(), *bentry);
 }
 
@@ -889,21 +889,21 @@ IRList::iterator IRList::make_if_else_block(const IRList::iterator& cur,
                                             IRList::iterator* false_block,
                                             IRList::iterator* true_block) {
   // if block
-  auto if_entry = new MethodItemEntry(insn);
+  auto* if_entry = new MethodItemEntry(insn);
   *false_block = m_list.insert(cur, *if_entry);
 
   // end of else goto
-  auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
+  auto* goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
   auto goto_it = m_list.insert(m_list.end(), *goto_entry);
 
   // main block
-  auto main_bt = new BranchTarget(goto_entry);
-  auto mb_entry = new MethodItemEntry(main_bt);
+  auto* main_bt = new BranchTarget(goto_entry);
+  auto* mb_entry = new MethodItemEntry(main_bt);
   auto main_block = m_list.insert(goto_it, *mb_entry);
 
   // else block
-  auto else_bt = new BranchTarget(if_entry);
-  auto eb_entry = new MethodItemEntry(else_bt);
+  auto* else_bt = new BranchTarget(if_entry);
+  auto* eb_entry = new MethodItemEntry(else_bt);
   *true_block = m_list.insert(goto_it, *eb_entry);
 
   return main_block;
@@ -914,23 +914,23 @@ IRList::iterator IRList::make_switch_block(
     IRInstruction* insn,
     IRList::iterator* default_block,
     std::map<SwitchIndices, IRList::iterator>& cases) {
-  auto switch_entry = new MethodItemEntry(insn);
+  auto* switch_entry = new MethodItemEntry(insn);
   *default_block = m_list.insert(cur, *switch_entry);
   IRList::iterator main_block = *default_block;
   for (auto case_it = cases.begin(); case_it != cases.end(); ++case_it) {
-    auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
+    auto* goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
     auto goto_it = m_list.insert(m_list.end(), *goto_entry);
 
-    auto main_bt = new BranchTarget(goto_entry);
-    auto mb_entry = new MethodItemEntry(main_bt);
+    auto* main_bt = new BranchTarget(goto_entry);
+    auto* mb_entry = new MethodItemEntry(main_bt);
     main_block = m_list.insert(++main_block, *mb_entry);
 
     // Insert all the branch targets jumping from the switch entry.
     // Keep updating the iterator of the case block to point right before the
     // GOTO going back to the end of the switch.
     for (auto idx : case_it->first) {
-      auto case_bt = new BranchTarget(switch_entry, idx);
-      auto eb_entry = new MethodItemEntry(case_bt);
+      auto* case_bt = new BranchTarget(switch_entry, idx);
+      auto* eb_entry = new MethodItemEntry(case_bt);
       case_it->second = m_list.insert(goto_it, *eb_entry);
     }
   }
@@ -986,7 +986,7 @@ void IRList::insn_clear_and_dispose() {
 
 size_t SourceBlock::hash_ids() const {
   std::size_t hash = id;
-  auto cur = this->next.get();
+  auto* cur = this->next.get();
   while (true) {
     if (cur == nullptr) {
       break;

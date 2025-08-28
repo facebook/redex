@@ -130,7 +130,7 @@ std::map<uint32_t, uint32_t> find_duplicate_resources(
   for (size_t i = 0; i < sorted_res_ids.size(); ++i) {
     uint32_t id = sorted_res_ids[i];
     uint32_t type_id = id & TYPE_IDENTIFIER_MASK;
-    if (disallowed_types.count(type_id)) {
+    if (disallowed_types.count(type_id) != 0u) {
       continue;
     }
 
@@ -200,7 +200,7 @@ std::map<uint32_t, uint32_t> build_remapping(
       current_type = type_id;
     }
 
-    if (dupe_to_canon.count(id)) {
+    if (dupe_to_canon.count(id) != 0u) {
       subtrahend_for_current_type++;
     } else {
       old_to_new_ids[id] = id - subtrahend_for_current_type;

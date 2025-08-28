@@ -24,7 +24,7 @@ namespace {
 void patch_iget_for_int_like_types(cfg::ControlFlowGraph& cfg,
                                    const cfg::InstructionIterator& it,
                                    IRInstruction* convert) {
-  auto insn = it->insn;
+  auto* insn = it->insn;
   auto move_result_it = cfg.move_result_of(it);
   auto src_dest = move_result_it->insn->dest();
   convert->set_src(0, src_dest)->set_dest(src_dest);
@@ -39,8 +39,8 @@ std::string_view get_merger_package_name(const DexType* root_type) {
   if (boost::starts_with(pkg_name, "Landroid/") ||
       boost::starts_with(pkg_name, "Ldalvik/") ||
       boost::starts_with(pkg_name, "Ljava/")) {
-    auto cls = type_class(root_type);
-    if (cls && cls->is_external()) {
+    auto* cls = type_class(root_type);
+    if ((cls != nullptr) && cls->is_external()) {
       return "Lcom/facebook/redex/";
     }
   }
@@ -75,14 +75,14 @@ DexClass* create_class(const DexType* type,
     creator.add_field(field);
     field->set_deobfuscated_name(show_deobfuscated(field));
   }
-  auto cls = creator.create();
+  auto* cls = creator.create();
 
   if (!with_default_ctor) {
     return cls;
   }
   // Create ctor.
   auto super_ctors = type_class(super_type)->get_ctors();
-  for (auto super_ctor : super_ctors) {
+  for (auto* super_ctor : super_ctors) {
     auto mc = MethodCreator(t,
                             DexString::make_string("<init>"),
                             super_ctor->get_proto(),
@@ -93,10 +93,10 @@ DexClass* create_class(const DexType* type,
     for (size_t arg_loc = 0; arg_loc < args_size + 1; ++arg_loc) {
       args.push_back(mc.get_local(arg_loc));
     }
-    auto mb = mc.get_main_block();
+    auto* mb = mc.get_main_block();
     mb->invoke(OPCODE_INVOKE_DIRECT, super_ctor, args);
     mb->ret_void();
-    auto ctor = mc.create();
+    auto* ctor = mc.create();
     ctor->get_code()->build_cfg();
     TRACE(CLMG, 4, " default ctor created %s", SHOW(ctor));
     cls->add_method(ctor);
@@ -111,7 +111,7 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
       unordered_any(fields_map)->second;
   size_t cnt = 0;
   for (const DexField* f : mergeable_fields) {
-    auto type = f->get_type();
+    auto* type = f->get_type();
     std::string name;
     if (type == type::_byte() || type == type::_char() ||
         type == type::_short() || type == type::_int()) {
@@ -143,8 +143,9 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
     }
 
     name += std::to_string(cnt);
-    auto field = DexField::make_field(owner, DexString::make_string(name), type)
-                     ->make_concrete(ACC_PUBLIC);
+    auto* field =
+        DexField::make_field(owner, DexString::make_string(name), type)
+            ->make_concrete(ACC_PUBLIC);
     res.push_back(field);
     cnt++;
   }
@@ -197,7 +198,7 @@ DexClass* create_merger_class(const DexType* type,
   std::vector<DexField*> fields;
 
   if (add_type_tag_field) {
-    auto type_tag_field =
+    auto* type_tag_field =
         DexField::make_field(
             type, DexString::make_string(INTERNAL_TYPE_TAG_FIELD_NAME),
             type::_int())
@@ -206,19 +207,19 @@ DexClass* create_merger_class(const DexType* type,
     fields.push_back(type_tag_field);
   }
 
-  for (auto f : merger_fields) {
+  for (auto* f : merger_fields) {
     fields.push_back(f);
   }
   // Put merger class in the same package as super_type.
   auto pkg_name = get_merger_package_name(super_type);
-  auto cls = create_class(type, super_type, pkg_name, fields, interfaces,
-                          with_default_ctor);
+  auto* cls = create_class(type, super_type, pkg_name, fields, interfaces,
+                           with_default_ctor);
   TRACE(CLMG, 3, "  created merger class w/ fields %s ", SHOW(cls));
   return cls;
 }
 
 void patch_iput(const cfg::InstructionIterator& it) {
-  auto insn = it->insn;
+  auto* insn = it->insn;
   const auto op = insn->opcode();
   always_assert(opcode::is_an_iput(op));
   switch (op) {
@@ -237,7 +238,7 @@ void patch_iget(cfg::ControlFlowGraph& cfg,
                 DexType* original_field_type,
                 SourceBlock* prev_sb,
                 bool disable_violation_fixes) {
-  auto insn = it->insn;
+  auto* insn = it->insn;
   const auto op = insn->opcode();
   always_assert(opcode::is_an_iget(op));
   switch (op) {
@@ -246,7 +247,7 @@ void patch_iget(cfg::ControlFlowGraph& cfg,
     auto dest = move_insn_it->insn->dest();
     auto cast = ModelMethodMerger::make_check_cast(original_field_type, dest);
     cfg.insert_after(move_insn_it, cast);
-    if (prev_sb && !disable_violation_fixes) {
+    if ((prev_sb != nullptr) && !disable_violation_fixes) {
       // Duplicate the last seen source block and place it after the iterator
       // so the block with the CHECK_CAST has a source block
       auto new_sb = source_blocks::clone_as_synthetic(prev_sb, nullptr);
@@ -256,19 +257,19 @@ void patch_iget(cfg::ControlFlowGraph& cfg,
   }
   case OPCODE_IGET_BYTE: {
     always_assert(original_field_type == type::_byte());
-    auto int_to_byte = new IRInstruction(OPCODE_INT_TO_BYTE);
+    auto* int_to_byte = new IRInstruction(OPCODE_INT_TO_BYTE);
     patch_iget_for_int_like_types(cfg, it, int_to_byte);
     break;
   }
   case OPCODE_IGET_CHAR: {
     always_assert(original_field_type == type::_char());
-    auto int_to_char = new IRInstruction(OPCODE_INT_TO_CHAR);
+    auto* int_to_char = new IRInstruction(OPCODE_INT_TO_CHAR);
     patch_iget_for_int_like_types(cfg, it, int_to_char);
     break;
   }
   case OPCODE_IGET_SHORT: {
     always_assert(original_field_type == type::_short());
-    auto int_to_short = new IRInstruction(OPCODE_INT_TO_SHORT);
+    auto* int_to_short = new IRInstruction(OPCODE_INT_TO_SHORT);
     patch_iget_for_int_like_types(cfg, it, int_to_short);
     break;
   }

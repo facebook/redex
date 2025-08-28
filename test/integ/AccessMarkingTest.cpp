@@ -21,7 +21,7 @@ TEST_F(AccessMarkingTest, test_all) {
       new AccessMarkingPass(),
   };
 
-  auto config_file_env = std::getenv("config_file");
+  auto* config_file_env = std::getenv("config_file");
   always_assert_log(config_file_env,
                     "Config file must be specified to AccessMarkingTest.\n");
 

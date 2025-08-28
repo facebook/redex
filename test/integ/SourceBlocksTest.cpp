@@ -135,9 +135,9 @@ class SourceBlocksTest : public RedexIntegrationTest {
 };
 
 TEST_F(SourceBlocksTest, source_blocks) {
-  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -202,11 +202,11 @@ TEST_F(SourceBlocksTest, source_blocks) {
 
     ConcurrentMethodResolver concurrent_method_resolver;
 
-    auto baz_ref = DexMethod::get_method(
+    auto* baz_ref = DexMethod::get_method(
         "Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
         "String;)V");
     ASSERT_NE(baz_ref, nullptr);
-    auto baz = baz_ref->as_def();
+    auto* baz = baz_ref->as_def();
     ASSERT_NE(baz, nullptr);
     UnorderedSet<DexMethod*> def_inlinables{baz};
 
@@ -220,10 +220,10 @@ TEST_F(SourceBlocksTest, source_blocks) {
 
     ASSERT_EQ(inliner.get_inlined().size(), 1u);
 
-    auto bar_ref = DexMethod::get_method(
+    auto* bar_ref = DexMethod::get_method(
         "Lcom/facebook/redextest/SourceBlocksTest;.bar:()V");
     ASSERT_NE(bar_ref, nullptr);
-    auto bar = bar_ref->as_def();
+    auto* bar = bar_ref->as_def();
     ASSERT_NE(bar, nullptr);
 
     UnorderedSet<DexMethodRef*> seen_methods;
@@ -269,9 +269,9 @@ TEST_F(SourceBlocksTest, source_blocks) {
 }
 
 TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
-  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -350,10 +350,10 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
 TEST_F(SourceBlocksTest, scaling) {
   g_redex->set_sb_interaction_index({{"Fake", 0}});
 
-  auto type =
+  auto* type =
       DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest$Scaling;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -370,40 +370,40 @@ TEST_F(SourceBlocksTest, scaling) {
 
   // The incoming profile doesn't actually matter, we tweak here what matters:
 
-  auto no_source_blocks_method_ref = DexMethod::get_method(
+  auto* no_source_blocks_method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/SourceBlocksTest$Scaling;.no_source_blocks:()V");
   ASSERT_NE(no_source_blocks_method_ref, nullptr);
-  auto no_source_blocks_method = no_source_blocks_method_ref->as_def();
+  auto* no_source_blocks_method = no_source_blocks_method_ref->as_def();
   ASSERT_NE(no_source_blocks_method, nullptr);
   ASSERT_FALSE(has_any_source_block_positive_val(no_source_blocks_method));
 
-  auto nan_source_blocks_method_ref = DexMethod::get_method(
+  auto* nan_source_blocks_method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "SourceBlocksTest$Scaling;.nan_source_blocks:()V");
   ASSERT_NE(nan_source_blocks_method_ref, nullptr);
-  auto nan_source_blocks_method = nan_source_blocks_method_ref->as_def();
+  auto* nan_source_blocks_method = nan_source_blocks_method_ref->as_def();
   ASSERT_NE(nan_source_blocks_method, nullptr);
   insert_source_block_vals(
       nan_source_blocks_method,
       SourceBlock::Val(/* value */ NAN, /* appear100 */ 0.0f));
   ASSERT_FALSE(has_any_source_block_positive_val(nan_source_blocks_method));
 
-  auto zero_source_blocks_method_ref = DexMethod::get_method(
+  auto* zero_source_blocks_method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "SourceBlocksTest$Scaling;.zero_source_blocks:()V");
   ASSERT_NE(zero_source_blocks_method_ref, nullptr);
-  auto zero_source_blocks_method = zero_source_blocks_method_ref->as_def();
+  auto* zero_source_blocks_method = zero_source_blocks_method_ref->as_def();
   ASSERT_NE(zero_source_blocks_method, nullptr);
   insert_source_block_vals(
       zero_source_blocks_method,
       SourceBlock::Val(/* value */ 0.0f, /* appear100 */ 0.0f));
   ASSERT_FALSE(has_any_source_block_positive_val(zero_source_blocks_method));
 
-  auto hot_source_blocks_method_ref = DexMethod::get_method(
+  auto* hot_source_blocks_method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "SourceBlocksTest$Scaling;.hot_source_blocks:()V");
   ASSERT_NE(hot_source_blocks_method_ref, nullptr);
-  auto hot_source_blocks_method = hot_source_blocks_method_ref->as_def();
+  auto* hot_source_blocks_method = hot_source_blocks_method_ref->as_def();
   ASSERT_NE(hot_source_blocks_method, nullptr);
   insert_source_block_vals(
       hot_source_blocks_method,
@@ -411,11 +411,11 @@ TEST_F(SourceBlocksTest, scaling) {
   ASSERT_TRUE(has_any_source_block_positive_val(hot_source_blocks_method));
   ASSERT_TRUE(have_all_source_block_positive_val(hot_source_blocks_method));
 
-  auto hot_source_blocks_inlined_method_ref = DexMethod::get_method(
+  auto* hot_source_blocks_inlined_method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "SourceBlocksTest$Scaling;.hot_source_blocks_inlined:(Z)V");
   ASSERT_NE(hot_source_blocks_inlined_method_ref, nullptr);
-  auto hot_source_blocks_inlined_method =
+  auto* hot_source_blocks_inlined_method =
       hot_source_blocks_inlined_method_ref->as_def();
   ASSERT_NE(hot_source_blocks_inlined_method, nullptr);
   insert_source_block_vals(
@@ -460,12 +460,12 @@ TEST_F(SourceBlocksTest, scaling) {
 }
 
 TEST_F(SourceBlocksTest, source_blocks_profile) {
-  auto profile_path = std::getenv("profile");
+  auto* profile_path = std::getenv("profile");
   ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
 
-  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -521,12 +521,12 @@ TEST_F(SourceBlocksTest, source_blocks_profile) {
 }
 
 TEST_F(SourceBlocksTest, source_blocks_profile_no_always_inject) {
-  auto profile_path = std::getenv("profile");
+  auto* profile_path = std::getenv("profile");
   ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
 
-  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -581,12 +581,12 @@ TEST_F(SourceBlocksTest, source_blocks_profile_no_always_inject) {
 }
 
 TEST_F(SourceBlocksTest, source_blocks_profile_exc) {
-  auto profile_path = std::getenv("profile2");
+  auto* profile_path = std::getenv("profile2");
   ASSERT_NE(profile_path, nullptr) << "Missing profile2 path.";
 
-  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -646,12 +646,12 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc) {
 }
 
 TEST_F(SourceBlocksTest, source_blocks_profile_exc_no_always_inject) {
-  auto profile_path = std::getenv("profile2");
+  auto* profile_path = std::getenv("profile2");
   ASSERT_NE(profile_path, nullptr) << "Missing profile2 path.";
 
-  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -708,15 +708,15 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc_no_always_inject) {
 }
 
 TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
-  auto profile_path = std::getenv("profile3");
+  auto* profile_path = std::getenv("profile3");
   ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
 
-  auto method_profile_path = std::getenv("method-profile");
+  auto* method_profile_path = std::getenv("method-profile");
   ASSERT_NE(method_profile_path, nullptr) << "Missing method-profile path.";
 
-  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -781,9 +781,9 @@ TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
 }
 
 TEST_F(SourceBlocksTest, source_blocks_access_methods) {
-  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.
@@ -854,13 +854,13 @@ class SourceBlocksAccessMethodsTest
       public testing::WithParamInterface<access_methods::Data> {};
 
 TEST_P(SourceBlocksAccessMethodsTest, profile) {
-  auto& param = GetParam();
-  auto profile_path = std::getenv(param.profile);
+  const auto& param = GetParam();
+  auto* profile_path = std::getenv(param.profile);
   ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
 
-  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
   ASSERT_NE(type, nullptr);
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   ASSERT_NE(cls, nullptr);
 
   // Check that no code has source blocks so far.

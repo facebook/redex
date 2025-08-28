@@ -181,7 +181,7 @@ IRInstruction* IRInstruction::set_srcs_size(size_t count) {
   } else {
     if (count <= MAX_NUM_INLINE_SRCS) {
       // array -> inline regs
-      auto old_srcs = m_srcs;
+      auto* old_srcs = m_srcs;
       for (src_index_t i = 0; i < count; ++i) {
         m_inline_srcs[i] = old_srcs[i];
       }
@@ -396,7 +396,7 @@ void IRInstruction::denormalize_registers() {
 
 bit_width_t required_bit_width(uint16_t v) {
   bit_width_t result{1};
-  while (v >>= 1) {
+  while (v >>= 1 != 0u) {
     ++result;
   }
   return result;
@@ -460,8 +460,8 @@ uint64_t IRInstruction::hash() const {
 }
 
 void IRInstruction::gather_init_classes(std::vector<DexType*>& ltype) const {
-  auto type = get_init_class_type_demand(this);
-  if (type) {
+  const auto* type = get_init_class_type_demand(this);
+  if (type != nullptr) {
     ltype.push_back(const_cast<DexType*>(type));
   }
 }

@@ -245,7 +245,7 @@ struct ObjectWithImmutAttr {
       return false;
     }
     for (size_t idx = 0; idx < attributes.size(); idx++) {
-      auto& attr1 = attributes[idx];
+      const auto& attr1 = attributes[idx];
       const auto& attr2 = other.attributes[idx];
       if (attr1.attr != attr2.attr) {
         return false;
@@ -263,7 +263,7 @@ struct ObjectWithImmutAttr {
       return false;
     }
     for (size_t idx = 0; idx < attributes.size(); idx++) {
-      auto& attr1 = attributes[idx];
+      const auto& attr1 = attributes[idx];
       const auto& attr2 = other.attributes[idx];
       if (attr1.attr != attr2.attr) {
         return false;
@@ -357,7 +357,7 @@ struct ObjectWithImmutAttr {
                                   const ObjectWithImmutAttr& x) {
     out << (x.jvm_cached_singleton ? "[c]" : "")
         << type::get_simple_name(x.type) << "{";
-    for (auto& attr : x.attributes) {
+    for (const auto& attr : x.attributes) {
       out << attr << ",";
     }
     out << "}";

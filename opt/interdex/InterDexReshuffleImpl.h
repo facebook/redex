@@ -125,7 +125,7 @@ class MoveGains {
           // m_dynamically_dead_dexes should not be involved during reshuffle.
           continue;
         }
-        if (!m_moved_classes.empty() && m_moved_classes.count(cls)) {
+        if (!m_moved_classes.empty() && (m_moved_classes.count(cls) != 0u)) {
           // In DexRemovalPass, if a class is already moved from the dex which
           // is going to be eliminated, we won't move it again.
           continue;
@@ -200,7 +200,8 @@ class MoveGains {
     class_epoch = m_epoch;
 
     m_moves_this_epoch += 1;
-    m_also_moved_in_last_epoch += was_moved_last_epoch;
+    m_also_moved_in_last_epoch +=
+        static_cast<unsigned long>(was_moved_last_epoch);
     m_moved_classes.emplace(move.cls);
   }
 
@@ -228,8 +229,8 @@ class MoveGains {
     if (source_index != target_index) {
       always_assert(m_class_refs.count(cls));
       const auto& refs = m_class_refs.at(cls);
-      auto& source = m_dexen.at(source_index);
-      auto& target = m_dexen.at(target_index);
+      const auto& source = m_dexen.at(source_index);
+      const auto& target = m_dexen.at(target_index);
       for (auto* fref : UnorderedIterable(refs.frefs)) {
         auto source_occurrences = source.get_fref_occurrences(fref);
         auto target_occurrences = target.get_fref_occurrences(fref);
@@ -248,9 +249,9 @@ class MoveGains {
         gain +=
             compute_gain(source_occurrences, target_occurrences, for_removal);
       }
-      auto& source_strings = m_dexen_strings.at(source_index);
-      auto& target_strings = m_dexen_strings.at(target_index);
-      for (auto* sref : UnorderedIterable(refs.srefs)) {
+      const auto& source_strings = m_dexen_strings.at(source_index);
+      const auto& target_strings = m_dexen_strings.at(target_index);
+      for (const auto* sref : UnorderedIterable(refs.srefs)) {
         auto it = source_strings.find(sref);
         auto source_occurrences = it == source_strings.end() ? 0 : it->second;
         it = target_strings.find(sref);
@@ -267,7 +268,7 @@ class MoveGains {
                                          size_t target_index,
                                          bool for_removal = false) {
     MergerIndex merging_type;
-    if (m_class_to_merging_info.count(cls)) {
+    if (m_class_to_merging_info.count(cls) != 0u) {
       merging_type = m_class_to_merging_info.at(cls).merging_type;
     } else {
       // If cls does not belong to any merging type, then use the original
@@ -281,8 +282,8 @@ class MoveGains {
     if (source_index != target_index) {
       always_assert(m_class_refs.count(cls));
       const auto& refs = m_class_refs.at(cls);
-      auto& source = m_dexen.at(source_index);
-      auto& target = m_dexen.at(target_index);
+      const auto& source = m_dexen.at(source_index);
+      const auto& target = m_dexen.at(target_index);
       int source_merging_type_usage =
           source.get_merging_type_usage(merging_type);
       int target_merging_type_usage =
@@ -290,7 +291,7 @@ class MoveGains {
       for (auto* fref : UnorderedIterable(refs.frefs)) {
         // If fref is not defined in cls, then we compute its corresponding gain
         // using the original formula.
-        const auto ref_cls = type_class(fref->get_class());
+        auto* const ref_cls = type_class(fref->get_class());
         if (ref_cls != cls) {
           auto source_occurrences = source.get_fref_occurrences(fref);
           auto target_occurrences = target.get_fref_occurrences(fref);
@@ -314,7 +315,7 @@ class MoveGains {
         // method usage in source and target to approximate the
         // source_occurrences and target_occurrences after merging.
         const DexMethod* meth = mref->as_def();
-        if (dedupable_mrefs.count(meth)) {
+        if (dedupable_mrefs.count(meth) != 0u) {
           MethodGroup group = dedupable_mrefs.at(meth);
           source_occurrences =
               source.get_merging_type_method_usage(merging_type, group);
@@ -332,7 +333,7 @@ class MoveGains {
       for (auto* tref : UnorderedIterable(refs.trefs)) {
         auto source_occurrences = source.get_tref_occurrences(tref);
         auto target_occurrences = target.get_tref_occurrences(tref);
-        const auto ref_cls = type_class(tref);
+        auto* const ref_cls = type_class(tref);
         if (ref_cls == cls) {
           source_occurrences = source_merging_type_usage;
           target_occurrences = target_merging_type_usage;
@@ -340,9 +341,9 @@ class MoveGains {
         gain += m_other_weight * compute_gain(source_occurrences,
                                               target_occurrences, for_removal);
       }
-      auto& source_strings = m_dexen_strings.at(source_index);
-      auto& target_strings = m_dexen_strings.at(target_index);
-      for (auto* sref : UnorderedIterable(refs.srefs)) {
+      const auto& source_strings = m_dexen_strings.at(source_index);
+      const auto& target_strings = m_dexen_strings.at(target_index);
+      for (const auto* sref : UnorderedIterable(refs.srefs)) {
         auto it = source_strings.find(sref);
         auto source_occurrences = it == source_strings.end() ? 0 : it->second;
         it = target_strings.find(sref);

@@ -55,18 +55,18 @@ AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
 
   Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
     Stats stats;
-    if (!method->get_code() || method->rstate.no_optimizations() ||
+    if ((method->get_code() == nullptr) || method->rstate.no_optimizations() ||
         method->rstate.immutable_getter()) {
       return stats;
     }
-    auto code = method->get_code();
+    auto* code = method->get_code();
     bool is_method_pure = false;
     if (method->is_virtual()) {
       is_method_pure = process_base_and_overriding_methods(
           method_override_graph.get(), method, nullptr,
           /* ignore_methods_with_assumenosideeffects */ true,
           [&](DexMethod* overriding_method) {
-            auto method_code = overriding_method->get_code();
+            auto* method_code = overriding_method->get_code();
             return analyze_and_check_pure_method_helper(
                 init_classes_with_side_effects, method_code);
           });

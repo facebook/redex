@@ -74,7 +74,7 @@ class WholeProgramState {
    * It will never return Bottom.
    */
   DexTypeDomain get_field_type(const DexField* field) const {
-    if (!m_known_fields.count(field)) {
+    if (m_known_fields.count(field) == 0u) {
       return DexTypeDomain::top();
     }
     auto domain = m_field_partition.get(field);
@@ -97,7 +97,7 @@ class WholeProgramState {
     // way to bypass the known_methods check and go straight to the partition.
     // When call graph is not present, this is the fallback path for the
     // analysis to look up the return type only for the known_methods.
-    if (!has_call_graph() && !m_known_methods.count(method)) {
+    if (!has_call_graph() && (m_known_methods.count(method) == 0u)) {
       return DexTypeDomain::top();
     }
     auto domain = m_method_partition.get(method);
@@ -110,7 +110,7 @@ class WholeProgramState {
 
   size_t get_num_resolved_fields() {
     size_t cnt = 0;
-    for (auto& pair : m_field_partition.bindings()) {
+    for (const auto& pair : m_field_partition.bindings()) {
       if (!pair.second.is_top()) {
         ++cnt;
       }
@@ -120,7 +120,7 @@ class WholeProgramState {
 
   size_t get_num_resolved_methods() {
     size_t cnt = 0;
-    for (auto& pair : m_method_partition.bindings()) {
+    for (const auto& pair : m_method_partition.bindings()) {
       if (!pair.second.is_top()) {
         ++cnt;
       }
@@ -129,7 +129,8 @@ class WholeProgramState {
   }
 
   bool is_any_init_reachable(const DexMethod* method) const {
-    return m_any_init_reachables && m_any_init_reachables->count(method);
+    return (m_any_init_reachables != nullptr) &&
+           (m_any_init_reachables->count(method) != 0u);
   }
 
   /*
@@ -153,7 +154,7 @@ class WholeProgramState {
     }
     DexTypeDomain ret = DexTypeDomain::bottom();
     for (const DexMethod* callee : UnorderedIterable(callees)) {
-      if (!callee->get_code()) {
+      if (callee->get_code() == nullptr) {
         always_assert(is_abstract(callee) || is_native(callee));
         return DexTypeDomain::top();
       }

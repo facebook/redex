@@ -260,24 +260,24 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
 // This function is conservative and returns false if type_class is missing.
 // A type is "interfacy" if it's an interface, or an array of an interface.
 static bool is_not_interfacy(DexType* type) {
-  auto cls = type_class(type::get_element_type_if_array(type));
-  return cls && !is_interface(cls);
+  auto* cls = type_class(type::get_element_type_if_array(type));
+  return (cls != nullptr) && !is_interface(cls);
 }
 
 // Weakens the given type in a way that's aware of the check-cast relationship
 // of arrays. (However, it does not consider interfaces in a special way.)
 static DexType* weaken_type(DexType* type) {
   if (type::is_array(type)) {
-    auto element_type = type::get_array_element_type(type);
+    auto* element_type = type::get_array_element_type(type);
     if (!type::is_primitive(element_type)) {
-      auto weakened_element_type = weaken_type(element_type);
-      if (weakened_element_type) {
+      auto* weakened_element_type = weaken_type(element_type);
+      if (weakened_element_type != nullptr) {
         return type::make_array_type(weakened_element_type);
       }
     }
   }
-  auto cls = type_class(type);
-  if (!cls) {
+  auto* cls = type_class(type);
+  if (cls == nullptr) {
     return nullptr;
   }
   return cls->get_super_class();
@@ -296,7 +296,7 @@ DexType* CheckCastAnalysis::weaken_to_demand(
   auto& demands = it->second;
   always_assert(!demands.empty());
   if (demands.size() == 1) {
-    auto weakened_type = *unordered_any(demands);
+    auto* weakened_type = *unordered_any(demands);
     // Nullptr indicates that the type demand could not be computed exactly, and
     // no weakening should take place.
     if (weakened_type == nullptr) {
@@ -314,7 +314,7 @@ DexType* CheckCastAnalysis::weaken_to_demand(
   }
   always_assert(!demands.count(nullptr));
   auto meets_demands = [&](DexType* t) {
-    for (auto d : UnorderedIterable(demands)) {
+    for (auto* d : UnorderedIterable(demands)) {
       if (!type::check_cast(t, d)) {
         return false;
       }
@@ -326,12 +326,13 @@ DexType* CheckCastAnalysis::weaken_to_demand(
   // explicitly mentioned (in the demand set), as they might refer to a type
   // that's only available on a particular Android platform.
   auto is_safe = [&](DexType* t) {
-    auto u = type::is_array(t) ? type::get_array_element_type(t) : t;
-    auto cls = type_class(u);
-    return cls && (!cls->is_external() || demands.count(t));
+    auto* u = type::is_array(t) ? type::get_array_element_type(t) : t;
+    auto* cls = type_class(u);
+    return (cls != nullptr) &&
+           (!cls->is_external() || (demands.count(t) != 0u));
   };
   while (true) {
-    auto weakened_type = weaken_type(type);
+    auto* weakened_type = weaken_type(type);
     if (weakened_type == nullptr || !meets_demands(weakened_type) ||
         !is_safe(weakened_type)) {
       return type;
@@ -392,15 +393,15 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
         auto src = insn->src(src_index);
         const auto& defs = env.get(src);
         always_assert(!defs.is_bottom() && !defs.is_top());
-        for (auto def : defs.elements()) {
+        for (auto* def : defs.elements()) {
           auto def_opcode = def->opcode();
           if (def_opcode == OPCODE_CHECK_CAST) {
             // When two check-casts interact, we prevent weakening of the
             // first to avoid situations where both get removed as they may
             // make each other redundant.
-            auto t = insn->opcode() == OPCODE_CHECK_CAST
-                         ? nullptr
-                         : get_type_demand(insn, src_index);
+            auto* t = insn->opcode() == OPCODE_CHECK_CAST
+                          ? nullptr
+                          : get_type_demand(insn, src_index);
             always_assert(t == nullptr || type::is_object(t));
             if (t != type::java_lang_Object()) {
               (*m_insn_demands)[def].insert(t);
@@ -415,7 +416,7 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
   // Simplify demands
   for (auto& p : UnorderedIterable(*m_insn_demands)) {
     auto& demands = p.second;
-    if (demands.count(nullptr)) {
+    if (demands.count(nullptr) != 0u) {
       // no need to keep around anything else
       unordered_erase_if(demands, [](auto* t) { return t; });
       always_assert(demands.count(nullptr));
@@ -426,30 +427,30 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
     UnorderedSet<DexType*> weakened_types;
     std::queue<DexType*> queue;
     auto enqueue_weakened_types = [&queue](DexType* type) {
-      auto weakened_type = weaken_type(type);
-      if (weakened_type) {
+      auto* weakened_type = weaken_type(type);
+      if (weakened_type != nullptr) {
         queue.push(weakened_type);
       }
       // We also handle interface hierarchies here.
-      auto cls = type_class(type);
-      if (cls) {
-        for (auto interface : *cls->get_interfaces()) {
+      auto* cls = type_class(type);
+      if (cls != nullptr) {
+        for (auto* interface : *cls->get_interfaces()) {
           queue.push(interface);
         }
       }
     };
-    for (auto demand : UnorderedIterable(demands)) {
+    for (auto* demand : UnorderedIterable(demands)) {
       enqueue_weakened_types(demand);
     }
     while (!queue.empty()) {
-      auto weakened_type = queue.front();
+      auto* weakened_type = queue.front();
       queue.pop();
       if (weakened_types.insert(weakened_type).second) {
         enqueue_weakened_types(weakened_type);
       }
     }
-    for (auto weakened_type : UnorderedIterable(weakened_types)) {
-      if (demands.erase(weakened_type)) {
+    for (auto* weakened_type : UnorderedIterable(weakened_types)) {
+      if (demands.erase(weakened_type) != 0u) {
         // Double check that the just erased demand was indeed redundant
         always_assert(unordered_any_of(demands, [&](DexType* demand) {
           return !weakened_types.count(demand) &&
@@ -476,7 +477,7 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
     cfg::Block* block = it.block();
     IRInstruction* insn = it->insn;
     always_assert(insn->opcode() == OPCODE_CHECK_CAST);
-    auto check_type = insn->get_type();
+    auto* check_type = insn->get_type();
     if (!can_catch_class_cast_exception(block)) {
       check_type = weaken_to_demand(insn, check_type,
                                     /* weaken_to_not_interfacy */ false);
@@ -493,7 +494,7 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
         redundant_check_casts.emplace_back(block, insn, boost::none,
                                            boost::none);
       } else {
-        auto new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
+        auto* new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
         new_move->set_src(0, src);
         new_move->set_dest(dst);
         redundant_check_casts.emplace_back(
@@ -527,7 +528,7 @@ bool CheckCastAnalysis::is_check_cast_redundant(IRInstruction* insn,
   }
 
   auto reg = insn->src(0);
-  auto type_inference = get_type_inference();
+  auto* type_inference = get_type_inference();
   auto& envs = type_inference->get_type_environments();
   auto& env = envs.at(insn);
 
@@ -559,12 +560,12 @@ type_inference::TypeInference* CheckCastAnalysis::get_type_inference() const {
 
 bool CheckCastAnalysis::can_catch_class_cast_exception(
     cfg::Block* block) const {
-  for (auto edge : block->succs()) {
+  for (auto* edge : block->succs()) {
     if (edge->type() != cfg::EDGE_THROW) {
       continue;
     }
-    auto catch_type = edge->throw_info()->catch_type;
-    if (!catch_type ||
+    auto* catch_type = edge->throw_info()->catch_type;
+    if ((catch_type == nullptr) ||
         type::is_subclass(catch_type, m_class_cast_exception_type)) {
       return true;
     }

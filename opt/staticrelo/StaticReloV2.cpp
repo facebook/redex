@@ -103,7 +103,7 @@ void build_call_graph(const std::vector<DexClass*>& candidate_classes,
   for (auto& meth_id : UnorderedIterable(graph.method_id_map)) {
     DexMethod* caller = meth_id.first;
     int caller_id = meth_id.second;
-    if (!caller->get_code()) {
+    if (caller->get_code() == nullptr) {
       continue;
     }
     always_assert(caller->get_code()->editable_cfg_built());
@@ -216,7 +216,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
       }
     } else if (vertex.color >= 0) {
       // only one color
-      auto to_class = type_class(scope[vertex.color]->get_type());
+      auto* to_class = type_class(scope[vertex.color]->get_type());
       // We can relocate method to a class only if the api level of the class is
       // higher or equal to the api level of the method.
       if (to_class->rstate.get_api_level() >=
@@ -257,7 +257,7 @@ std::vector<DexClass*> StaticReloPassV2::gen_candidates(const Scope& scope) {
         }
       }
       if (method::clinit_may_have_side_effects(
-              cls, /* allow_benign_method_invocations */ false)) {
+              cls, /* allow_benign_method_invocations */ false) != nullptr) {
         TRACE(STATIC_RELO, 9, "%s class initializer may have side effects",
               SHOW(cls));
         return;

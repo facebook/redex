@@ -59,14 +59,14 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
   }
 
   auto normal_blocks = get_normal_blocks(cfg);
-  if (!normal_blocks.count(cfg.entry_block())) {
+  if (normal_blocks.count(cfg.entry_block()) == 0u) {
     // We are not interested in methods that always throw. Those certainly
     // exist.
     return PartialCode();
   }
   auto can_inline_block = [&](cfg::Block* block) {
     for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       auto op = insn->opcode();
       if (opcode::is_an_aput(op) || opcode::is_an_sput(op) ||
           opcode::is_an_iput(op) || opcode::is_fill_array_data(op) ||
@@ -107,7 +107,8 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
     if (!visited.emplace(block).second) {
       continue;
     }
-    if (!normal_blocks.count(block) || !source_blocks::maybe_hot(block)) {
+    if ((normal_blocks.count(block) == 0u) ||
+        !source_blocks::maybe_hot(block)) {
       // We ignore blocks that are cold or will eventually throw exception.
       continue;
     }
@@ -142,7 +143,7 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
   // Any non-inlinable blocks?
   auto blocks = cfg.blocks();
   if (std::none_of(blocks.begin(), blocks.end(), [&](cfg::Block* block) {
-        return !inline_blocks.count(block) && !can_inline_block(block);
+        return (inline_blocks.count(block) == 0u) && !can_inline_block(block);
       })) {
     // We didn't find any non-inlinable blocks that we wouldn't inline. So
     // "partial" inlining here would amount to either fully inlining the callee,
@@ -162,7 +163,8 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
 
   std::vector<IRInstruction*> arg_copy_insns;
   std::vector<reg_t> arg_copies;
-  for (auto& mie : InstructionIterable(partial_cfg.get_param_instructions())) {
+  for (const auto& mie :
+       InstructionIterable(partial_cfg.get_param_instructions())) {
     auto* insn = mie.insn;
     auto op = insn->opcode();
     switch (op) {
@@ -184,7 +186,7 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
         (new IRInstruction(op))->set_src(0, insn->dest())->set_dest(tmp_reg));
     arg_copies.push_back(tmp_reg);
   }
-  auto entry_block = partial_cfg.entry_block();
+  auto* entry_block = partial_cfg.entry_block();
   auto insert_it = entry_block->get_first_non_param_loading_insn();
   partial_cfg.insert_before(entry_block->to_cfg_instruction_iterator(insert_it),
                             arg_copy_insns);
@@ -219,7 +221,7 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
   }
   auto* fallback_block = partial_cfg.create_block();
   // Insert magic position that the cfg-inliner recognizes
-  auto method_str = DexString::make_string(show_deobfuscated(method));
+  const auto* method_str = DexString::make_string(show_deobfuscated(method));
   auto new_pos = std::make_unique<DexPosition>(
       method_str, cfg::get_partial_inline_source(), 0);
   partial_cfg.insert_before(fallback_block, fallback_block->begin(),
@@ -238,7 +240,7 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
     retained_block_ids.insert(block->id());
   }
   for (auto* block : partial_cfg.blocks()) {
-    if (retained_block_ids.count(block->id())) {
+    if (retained_block_ids.count(block->id()) != 0u) {
       continue;
     }
     auto first_insn_it = block->get_first_insn();

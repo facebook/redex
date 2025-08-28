@@ -229,9 +229,9 @@ void run_restable_field_validation(
     }
 
     auto r_cls_name = "Lcom/facebook/R$" + type + ";";
-    auto r_cls = find_class_named(classes, r_cls_name.c_str());
+    auto* r_cls = find_class_named(classes, r_cls_name.c_str());
     boost::replace_all(name, ".", "_");
-    auto field = find_sfield_named(*r_cls, name.c_str());
+    auto* field = find_sfield_named(*r_cls, name.c_str());
     EXPECT_NE(nullptr, field)
         << "Could not find static R field for " << resource;
     EXPECT_EQ(ids[0], field->get_static_value()->value())

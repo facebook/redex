@@ -112,7 +112,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
       analysis_resolved_callee =
           resolve_method(*analysis_cls, callee_ref->get_name(),
                          callee_ref->get_proto(), method_search);
-      if (analysis_resolved_callee) {
+      if (analysis_resolved_callee != nullptr) {
         resolved_callee = analysis_resolved_callee;
       } else {
         // If the analysis type is too generic and we cannot resolve a concrete
@@ -130,7 +130,8 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
     always_assert(!opcode::is_invoke_super(insn->opcode()));
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, resolved_callee);
-    for (auto overriding_method : UnorderedIterable(overriding_methods)) {
+    for (const auto* overriding_method :
+         UnorderedIterable(overriding_methods)) {
       callsites.emplace_back(overriding_method, insn);
     }
   }
@@ -143,7 +144,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
 void TypeAnalysisCallGraphGenerationPass::run_pass(DexStoresVector& stores,
                                                    ConfigFiles& /*config*/,
                                                    PassManager& mgr) {
-  auto analysis = mgr.get_preserved_analysis<GlobalTypeAnalysisPass>();
+  auto* analysis = mgr.get_preserved_analysis<GlobalTypeAnalysisPass>();
   always_assert(analysis);
   auto gta = analysis->get_result();
   always_assert(gta);

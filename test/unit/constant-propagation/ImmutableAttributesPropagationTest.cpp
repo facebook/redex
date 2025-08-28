@@ -31,9 +31,9 @@ struct ImmutableTest : public ConstantPropagationTest {
     std::array<DexType*, 2> boxed_types = {type::java_lang_Integer(),
                                            type::java_lang_Character()};
     for (auto& type : boxed_types) {
-      auto valueOf =
+      auto* valueOf =
           static_cast<DexMethod*>(type::get_value_of_method_for_type(type));
-      auto getter_method =
+      auto* getter_method =
           static_cast<DexMethod*>(type::get_unboxing_method_for_type(type));
       // The intValue of integer is initialized through the static invocation.
       m_immut_analyzer_state.add_initializer(valueOf, getter_method)
@@ -87,7 +87,7 @@ struct ImmutableTest : public ConstantPropagationTest {
     s_expr fields_expr;
     s_patn({s_patn(&class_name), s_patn(fields_expr)})
         .must_match(expr, "Need a class name");
-    auto type = DexType::make_type(DexString::make_string(class_name));
+    auto* type = DexType::make_type(DexString::make_string(class_name));
     ObjectWithImmutAttr obj(type, fields_expr.size());
     obj.jvm_cached_singleton = cached;
 
@@ -103,11 +103,11 @@ struct ImmutableTest : public ConstantPropagationTest {
       auto it = member_name.find(":(");
       auto attr = [&]() {
         if (it == std::string::npos) {
-          auto field = static_cast<DexField*>(
+          auto* field = static_cast<DexField*>(
               DexField::make_field(class_name + "." + member_name));
           return ImmutableAttr::Attr(field);
         } else {
-          auto method = static_cast<DexMethod*>(
+          auto* method = static_cast<DexMethod*>(
               DexMethod::make_method(class_name + "." + member_name));
           return ImmutableAttr::Attr(method);
         }
@@ -246,7 +246,7 @@ TEST_F(ImmutableTest, abstract_domain) {
     EXPECT_TRUE(integer_200.is_value());
     auto constant = integer_200.get_constant();
     EXPECT_FALSE(constant->jvm_cached_singleton);
-    auto& field_value =
+    const auto& field_value =
         constant->attributes[0].value.maybe_get<SignedConstantDomain>();
     EXPECT_TRUE(field_value->get_constant() == boost::none);
   }
@@ -442,17 +442,17 @@ TEST_F(ImmutableTest, object) {
   cp::ImmutableAttributeAnalyzerState analyzer_state;
   {
     // Add initializer for Data
-    auto constructor = static_cast<DexMethod*>(
+    auto* constructor = static_cast<DexMethod*>(
         DexMethod::make_method("LData;.<init>:(Ljava/lang/String;I)V"));
-    auto int_field =
+    auto* int_field =
         static_cast<DexField*>(DexField::make_field("LData;.id:I"));
     // Assume we do not know the implementation of this method but we know that
     // the method always returns a hidden immutable field.
-    auto method_ref =
+    auto* method_ref =
         DexMethod::make_method("LData;.toString:()Ljava/lang/String;");
     always_assert(!method_ref->is_def() &&
                   !resolve_method(method_ref, MethodSearch::Virtual));
-    auto string_getter = static_cast<DexMethod*>(method_ref);
+    auto* string_getter = static_cast<DexMethod*>(method_ref);
     analyzer_state.add_initializer(constructor, int_field)
         .set_src_id_of_attr(2)
         .set_src_id_of_obj(0);
@@ -483,7 +483,7 @@ TEST_F(ImmutableTest, object) {
 }
 
 TEST_F(ImmutableTest, enum_constructor) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (private constructor) "LFoo;.<init>:(Ljava/lang/String;I)V"
     (
       (load-param-object v0)
@@ -499,7 +499,7 @@ TEST_F(ImmutableTest, enum_constructor) {
   creator.set_super(type::java_lang_Enum());
   creator.set_access(ACC_PUBLIC | ACC_ENUM);
   creator.add_method(method);
-  auto foo_cls = creator.create();
+  auto* foo_cls = creator.create();
   cp::ImmutableAttributeAnalyzerState analyzer_state;
   cp::immutable_state::analyze_constructors({foo_cls}, &analyzer_state);
   EXPECT_EQ(analyzer_state.method_initializers.count(method), 1);

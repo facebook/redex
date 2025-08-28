@@ -48,7 +48,7 @@ void open_dex_file(const char* filename, ddump_data* rd) {
     fprintf(stderr, "Cannot open dump file %s, bailing\n", filename);
     exit(1);
   }
-  if (fstat(fd, &stat)) {
+  if (fstat(fd, &stat) != 0) {
     fprintf(stderr, "Cannot fstat file %s, bailing\n", filename);
     exit(1);
   }

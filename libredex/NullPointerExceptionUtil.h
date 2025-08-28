@@ -57,7 +57,7 @@ class NullPointerExceptionCreator {
     // null-pointer-exception.
     std::string str;
     if (implicitly_throwing_npe_insn->has_field()) {
-      auto resolved_field = resolve_field(
+      auto* resolved_field = resolve_field(
           implicitly_throwing_npe_insn->get_field(), FieldSearch::Instance);
       if (resolved_field != nullptr) {
         str = resolved_field->get_simple_deobfuscated_name();
@@ -65,7 +65,7 @@ class NullPointerExceptionCreator {
         str = implicitly_throwing_npe_insn->get_field()->get_name()->str_copy();
       }
     } else if (implicitly_throwing_npe_insn->has_method()) {
-      auto resolved_method =
+      auto* resolved_method =
           resolve_method(implicitly_throwing_npe_insn->get_method(),
                          opcode_to_search(implicitly_throwing_npe_insn));
       if (resolved_method != nullptr) {
@@ -86,25 +86,25 @@ class NullPointerExceptionCreator {
       });
     }
 
-    auto const_inst = (new IRInstruction(OPCODE_CONST_STRING))
-                          ->set_string(DexString::make_string(str));
+    auto* const_inst = (new IRInstruction(OPCODE_CONST_STRING))
+                           ->set_string(DexString::make_string(str));
 
-    auto const_move_result_pseudo_object_insn =
+    auto* const_move_result_pseudo_object_insn =
         (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
             ->set_dest(m_state->string_reg);
 
-    auto new_inst =
+    auto* new_inst =
         (new IRInstruction(OPCODE_NEW_INSTANCE))->set_type(m_state->npe_type);
 
-    auto new_move_result_pseudo_object_insn =
+    auto* new_move_result_pseudo_object_insn =
         (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
             ->set_dest(m_state->exception_reg);
 
-    auto invoke_insn = (new IRInstruction(OPCODE_INVOKE_DIRECT))
-                           ->set_method(m_state->npe_init_method)
-                           ->set_srcs_size(2)
-                           ->set_src(0, m_state->exception_reg)
-                           ->set_src(1, m_state->string_reg);
+    auto* invoke_insn = (new IRInstruction(OPCODE_INVOKE_DIRECT))
+                            ->set_method(m_state->npe_init_method)
+                            ->set_srcs_size(2)
+                            ->set_src(0, m_state->exception_reg)
+                            ->set_src(1, m_state->string_reg);
     IRInstruction* throw_inst =
         (new IRInstruction(OPCODE_THROW))->set_src(0, m_state->exception_reg);
 

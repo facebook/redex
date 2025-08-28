@@ -26,9 +26,10 @@ const DexType* get_init_class_type_demand(const IRInstruction* insn) {
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     // It's the resolved method that counts
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-    return (method && !assumenosideeffects(method)) ? method->get_class()
-                                                    : nullptr;
+    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    return ((method != nullptr) && !assumenosideeffects(method))
+               ? method->get_class()
+               : nullptr;
   }
   case OPCODE_SGET:
   case OPCODE_SGET_WIDE:
@@ -45,8 +46,8 @@ const DexType* get_init_class_type_demand(const IRInstruction* insn) {
   case OPCODE_SPUT_CHAR:
   case OPCODE_SPUT_SHORT: {
     // It's the resolved field that counts
-    auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-    return field ? field->get_class() : nullptr;
+    auto* field = resolve_field(insn->get_field(), FieldSearch::Static);
+    return field != nullptr ? field->get_class() : nullptr;
   }
   case IOPCODE_INIT_CLASS:
   case OPCODE_NEW_INSTANCE: {
@@ -60,13 +61,13 @@ const DexType* get_init_class_type_demand(const IRInstruction* insn) {
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
   vis1 &= VISIBILITY_MASK;
   vis2 &= VISIBILITY_MASK;
-  if ((vis1 & ACC_PUBLIC) || (vis2 & ACC_PUBLIC)) {
+  if (((vis1 & ACC_PUBLIC) != 0u) || ((vis2 & ACC_PUBLIC) != 0u)) {
     return ACC_PUBLIC;
   }
   if (vis1 == 0 || vis2 == 0) {
     return static_cast<DexAccessFlags>(0);
   }
-  if ((vis1 & ACC_PROTECTED) || (vis2 & ACC_PROTECTED)) {
+  if (((vis1 & ACC_PROTECTED) != 0u) || ((vis2 & ACC_PROTECTED) != 0u)) {
     return ACC_PROTECTED;
   }
   return ACC_PRIVATE;
@@ -80,19 +81,19 @@ void create_runtime_exception_block(const DexString* except_str,
   // invoke-direct {v0, v1}, Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V
   // throw v0
   // clang-format on
-  auto new_inst = (new IRInstruction(OPCODE_NEW_INSTANCE))
-                      ->set_type(type::java_lang_RuntimeException());
+  auto* new_inst = (new IRInstruction(OPCODE_NEW_INSTANCE))
+                       ->set_type(type::java_lang_RuntimeException());
   new_inst->set_dest(0);
   IRInstruction* const_inst =
       (new IRInstruction(OPCODE_CONST_STRING))->set_string(except_str);
   const_inst->set_dest(1);
-  auto ret = DexType::make_type("V");
-  auto arg = DexType::make_type("Ljava/lang/String;");
-  auto args = DexTypeList::make_type_list({arg});
-  auto proto = DexProto::make_proto(ret, args);
-  auto meth = DexMethod::make_method(type::java_lang_RuntimeException(),
-                                     DexString::make_string("<init>"), proto);
-  auto invk = new IRInstruction(OPCODE_INVOKE_DIRECT);
+  auto* ret = DexType::make_type("V");
+  auto* arg = DexType::make_type("Ljava/lang/String;");
+  auto* args = DexTypeList::make_type_list({arg});
+  auto* proto = DexProto::make_proto(ret, args);
+  auto* meth = DexMethod::make_method(type::java_lang_RuntimeException(),
+                                      DexString::make_string("<init>"), proto);
+  auto* invk = new IRInstruction(OPCODE_INVOKE_DIRECT);
   invk->set_method(meth);
   invk->set_srcs_size(2);
   invk->set_src(0, 0);
@@ -111,7 +112,7 @@ bool passes_args_through(IRInstruction* insn,
   size_t src_idx{0};
   size_t param_count{0};
   for (const auto& mie : InstructionIterable(code.get_param_instructions())) {
-    auto load_param = mie.insn;
+    auto* load_param = mie.insn;
     ++param_count;
     if (src_idx >= insn->srcs_size()) {
       continue;
@@ -149,8 +150,8 @@ Scope build_class_scope_for_packages(
     const UnorderedSet<std::string>& package_names) {
   Scope v;
   for (auto const& store : stores) {
-    for (auto& dex : store.get_dexen()) {
-      for (auto& clazz : dex) {
+    for (const auto& dex : store.get_dexen()) {
+      for (const auto& clazz : dex) {
         if (starts_with_any_prefix(clazz->get_deobfuscated_name_or_null(),
                                    package_names)) {
           v.push_back(clazz);
@@ -183,7 +184,7 @@ void load_root_dexen(DexStore& store,
   for (fs::directory_iterator it(dexen_dir_path); it != end; ++it) {
     auto file = it->path();
     if (fs::is_regular_file(file) &&
-        !file.extension().compare(std::string(".dex"))) {
+        (file.extension().compare(std::string(".dex")) == 0)) {
       dexen.emplace_back(file);
     }
   }
@@ -250,8 +251,8 @@ void create_store(const std::string& store_name,
 }
 
 void relocate_field(DexField* field, DexType* to_type) {
-  auto from_cls = type_class(field->get_class());
-  auto to_cls = type_class(to_type);
+  auto* from_cls = type_class(field->get_class());
+  auto* to_cls = type_class(to_type);
   from_cls->remove_field(field);
   DexFieldSpec spec;
   spec.cls = to_type;
@@ -260,8 +261,8 @@ void relocate_field(DexField* field, DexType* to_type) {
 }
 
 void relocate_method(DexMethod* method, DexType* to_type) {
-  auto from_cls = type_class(method->get_class());
-  auto to_cls = type_class(to_type);
+  auto* from_cls = type_class(method->get_class());
+  auto* to_cls = type_class(to_type);
   from_cls->remove_method(method);
   DexMethodSpec spec;
   spec.cls = to_type;
@@ -287,13 +288,13 @@ void VisibilityChanges::clear() {
 }
 
 void VisibilityChanges::apply() const {
-  for (auto cls : UnorderedIterable(classes)) {
+  for (auto* cls : UnorderedIterable(classes)) {
     set_public(cls);
   }
-  for (auto field : UnorderedIterable(fields)) {
+  for (auto* field : UnorderedIterable(fields)) {
     set_public(field);
   }
-  for (auto method : UnorderedIterable(methods)) {
+  for (auto* method : UnorderedIterable(methods)) {
     set_public(method);
   }
 }
@@ -310,14 +311,14 @@ struct VisibilityChangeGetter {
   const DexMethod* effective_caller_resolved_from;
   void process_insn(IRInstruction* insn) {
     if (insn->has_field()) {
-      auto cls = type_class(insn->get_field()->get_class());
+      auto* cls = type_class(insn->get_field()->get_class());
       if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
         changes.classes.insert(cls);
       }
-      auto field = resolve_field(insn->get_field(),
-                                 opcode::is_an_sfield_op(insn->opcode())
-                                     ? FieldSearch::Static
-                                     : FieldSearch::Instance);
+      auto* field = resolve_field(insn->get_field(),
+                                  opcode::is_an_sfield_op(insn->opcode())
+                                      ? FieldSearch::Static
+                                      : FieldSearch::Instance);
       if (field != nullptr && field->is_concrete()) {
         if (!is_public(field)) {
           changes.fields.insert(field);
@@ -328,11 +329,11 @@ struct VisibilityChangeGetter {
         }
       }
     } else if (insn->has_method()) {
-      auto cls = type_class(insn->get_method()->get_class());
+      auto* cls = type_class(insn->get_method()->get_class());
       if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
         changes.classes.insert(cls);
       }
-      auto current_method =
+      auto* current_method =
           resolve_method(insn->get_method(), opcode_to_search(insn),
                          effective_caller_resolved_from);
       if (current_method != nullptr && current_method->is_concrete() &&
@@ -346,8 +347,8 @@ struct VisibilityChangeGetter {
         }
       }
     } else if (insn->has_type()) {
-      auto type = insn->get_type();
-      auto cls = type_class(type);
+      auto* type = insn->get_type();
+      auto* cls = type_class(type);
       if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
         changes.classes.insert(cls);
       }
@@ -355,8 +356,8 @@ struct VisibilityChangeGetter {
   }
 
   void process_catch_types(const std::vector<DexType*>& types) {
-    for (auto type : types) {
-      auto cls = type_class(type);
+    for (auto* type : types) {
+      auto* cls = type_class(type);
       if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
         changes.classes.insert(cls);
       }
@@ -406,22 +407,22 @@ VisibilityChanges get_visibility_changes(
 bool gather_invoked_methods_that_prevent_relocation(
     const DexMethod* method,
     UnorderedSet<DexMethodRef*>* methods_preventing_relocation) {
-  auto code = method->get_code();
+  const auto* code = method->get_code();
   always_assert(code);
   always_assert(code->editable_cfg_built());
-  auto& cfg = code->cfg();
+  const auto& cfg = code->cfg();
   bool can_relocate = true;
-  for (auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+  for (const auto& mie : InstructionIterable(cfg)) {
+    auto* insn = mie.insn;
     auto opcode = insn->opcode();
     if (opcode::is_an_invoke(opcode)) {
-      auto meth =
+      auto* meth =
           resolve_method(insn->get_method(), opcode_to_search(insn), method);
-      if (!meth && opcode == OPCODE_INVOKE_VIRTUAL &&
+      if ((meth == nullptr) && opcode == OPCODE_INVOKE_VIRTUAL &&
           unknown_virtuals::is_method_known_to_be_public(insn->get_method())) {
         continue;
       }
-      if (meth) {
+      if (meth != nullptr) {
         always_assert(meth->is_def());
         if (meth->is_external() && !is_public(meth)) {
           meth = nullptr;
@@ -429,9 +430,9 @@ bool gather_invoked_methods_that_prevent_relocation(
           meth = nullptr;
         }
       }
-      if (!meth) {
+      if (meth == nullptr) {
         can_relocate = false;
-        if (!methods_preventing_relocation) {
+        if (methods_preventing_relocation == nullptr) {
           break;
         }
         methods_preventing_relocation->emplace(insn->get_method());

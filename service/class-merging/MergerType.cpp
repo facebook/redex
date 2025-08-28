@@ -30,7 +30,7 @@ std::string get_type_name_tag(const DexType* root_type) {
   // E.g., "Lcom/facebook/TypedEventBase;" -> "esaB".
   for (; rit != root_type_name.rend(); ++rit) {
     auto c = *rit;
-    if (isupper(c)) {
+    if (isupper(c) != 0) {
       root_name_tag << c;
       break;
     } else {
@@ -46,7 +46,7 @@ std::string get_type_name_tag(const DexType* root_type) {
   // E.g., "Lcom/facebook/TypedEventBase;" -> "esaBE".
   for (; rit != root_type_name.rend(); ++rit) {
     auto c = *rit;
-    if (isupper(c)) {
+    if (isupper(c) != 0) {
       root_name_tag << c;
       break;
     }
@@ -87,7 +87,7 @@ std::string MergerType::Shape::build_type_name(
     const boost::optional<size_t>& opt_dex_id,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     UnorderedSet<size_t>& hash_cache) const {
-  auto parent = root_type;
+  const auto* parent = root_type;
   if (root_type == type::java_lang_Object() && intf_set.size() == 1) {
     parent = *intf_set.begin();
   }
@@ -129,7 +129,7 @@ std::string MergerType::Shape::build_type_name_legacy(
     size_t count,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const InterdexSubgroupIdx subgroup_idx) const {
-  auto parent = root_type;
+  const auto* parent = root_type;
   if (root_type == type::java_lang_Object() && intf_set.size() == 1) {
     parent = *intf_set.begin();
   }
@@ -164,7 +164,7 @@ std::string MergerType::Shape::to_string() const {
 
 MergerType::Shape::Shape(const std::vector<DexField*>& fields) {
   for (const auto& field : fields) {
-    const auto field_type = field->get_type();
+    auto* const field_type = field->get_type();
     if (field_type == type::java_lang_String()) {
       string_fields++;
       continue;

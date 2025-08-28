@@ -78,7 +78,7 @@ void populate_string_usages(apk::TableEntryParser& parser,
       if (arsc::is_empty(pair.second)) {
         continue;
       }
-      auto entry = (android::ResTable_entry*)pair.second.getKey();
+      auto* entry = (android::ResTable_entry*)pair.second.getKey();
       auto value = arsc::get_value_data(pair.second);
 
       auto key_idx = dtohl(entry->key.index);
@@ -89,14 +89,14 @@ void populate_string_usages(apk::TableEntryParser& parser,
       type_usages->at(type_id - 1).emplace(id);
 
       if ((flags & android::ResTable_entry::FLAG_COMPLEX) != 0) {
-        auto complex_entry = (android::ResTable_map_entry*)entry;
+        auto* complex_entry = (android::ResTable_map_entry*)entry;
         auto count = dtohl(complex_entry->count);
-        auto complex_item = (android::ResTable_map*)value.getKey();
+        auto* complex_item = (android::ResTable_map*)value.getKey();
         for (size_t i = 0; i < count; i++, complex_item++) {
           handle_value(id, &complex_item->value);
         }
       } else {
-        auto value_ptr = (android::Res_value*)value.getKey();
+        auto* value_ptr = (android::Res_value*)value.getKey();
         handle_value(id, value_ptr);
       }
     }
@@ -129,11 +129,11 @@ size_t compute_string_size_impl(const android::ResStringPool& pool,
                       "Got style index %u while computing size of style", idx);
     // for the span start
     result += OFFSET_SIZE;
-    auto span_ptr = pool.styleAt(idx);
+    const auto* span_ptr = pool.styleAt(idx);
     std::vector<android::ResStringPool_span*> vec;
     arsc::collect_spans((android::ResStringPool_span*)span_ptr, &vec);
     result += vec.size() * sizeof(android::ResStringPool_span);
-    for (const auto span : vec) {
+    for (auto* const span : vec) {
       result += compute_string_size_impl(pool, dtohl(span->name.index), false);
     }
     result += sizeof(android::ResStringPool_span::END);
@@ -277,7 +277,7 @@ std::set<uint32_t> tally_type_and_entries(
       if (!arsc::is_empty(ev)) {
         non_empty_res_ids.emplace(res_id);
         type_to_non_empty_ids[type].emplace(res_id);
-        auto entry = (android::ResTable_entry*)ev.getKey();
+        auto* entry = (android::ResTable_entry*)ev.getKey();
         // Store name of entry and name of its configs.
         if (resource_names->count(res_id) == 0) {
           auto entry_name =
@@ -337,7 +337,7 @@ std::set<uint32_t> tally_type_and_entries(
                  resource_sizes);
         add_size("ResTable_type overhead", res_id, type_overhead,
                  this_non_empty_set.size(), resource_sizes);
-        auto entry = (android::ResTable_entry*)ev.getKey();
+        auto* entry = (android::ResTable_entry*)ev.getKey();
         auto entry_value_size = ev.getValue();
 
         auto& shared_set = data_to_ids.at(entry);
@@ -387,7 +387,7 @@ size_t compute_string_character_size(const android::ResStringPool& pool,
                                      uint32_t idx) {
   size_t len;
   if (pool.isUTF8()) {
-    auto ptr = pool.string8At(idx, &len);
+    const auto* ptr = pool.string8At(idx, &len);
     if (ptr != nullptr) {
       // UTF-8 length of this string will be either 1 or two bytes preceeding
       // the string.
@@ -399,7 +399,7 @@ size_t compute_string_character_size(const android::ResStringPool& pool,
       return utf16_units + utf8_units + len + 1;
     }
   } else {
-    auto ptr = pool.stringAt(idx, &len);
+    const auto* ptr = pool.stringAt(idx, &len);
     if (ptr != nullptr) {
       // length, char data, plus null zero.
       return (length_units<char16_t>(len) + len + 1) * sizeof(uint16_t);
@@ -442,18 +442,18 @@ size_t compute_string_size(const android::ResStringPool& pool, uint32_t idx) {
 
 std::vector<Result> ArscStats::compute() {
   apk::TableEntryParser parser;
-  auto chunk_header = (android::ResChunk_header*)m_data;
+  auto* chunk_header = (android::ResChunk_header*)m_data;
   auto success = parser.visit(chunk_header, m_file_len);
   always_assert_log(success, "Could not parse arsc file!");
   // Maybe some day lift the following restriction, but we have no test data to
   // exercise >1 package so assert for now.
   always_assert_log(parser.m_packages.size() == 1, "Expected only 1 package.");
-  auto package_header = *parser.m_packages.begin();
+  auto* package_header = *parser.m_packages.begin();
 
   // Step 1: parse the string pools and build up a vector of idx -> vector of
   // resource ids that use it.
   android::ResStringPool global_strings;
-  auto global_strings_header = parser.m_global_pool_header;
+  auto* global_strings_header = parser.m_global_pool_header;
   auto global_strings_size = dtohl(global_strings_header->header.size);
   {
     auto status =
@@ -463,7 +463,8 @@ std::vector<Result> ArscStats::compute() {
   }
 
   android::ResStringPool key_strings;
-  auto key_strings_header = parser.m_package_key_string_headers.begin()->second;
+  auto* key_strings_header =
+      parser.m_package_key_string_headers.begin()->second;
   auto key_strings_size = dtohl(key_strings_header->header.size);
   {
     auto status = key_strings.setTo(key_strings_header, key_strings_size, true);
@@ -472,7 +473,7 @@ std::vector<Result> ArscStats::compute() {
   }
 
   android::ResStringPool type_strings;
-  auto type_strings_header =
+  auto* type_strings_header =
       parser.m_package_type_string_headers.begin()->second;
   auto type_strings_size = dtohl(type_strings_header->header.size);
   {

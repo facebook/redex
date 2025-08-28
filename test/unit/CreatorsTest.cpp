@@ -34,7 +34,7 @@ TEST_F(CreatorsTest, Alloc) {
   auto mc = make_method_creator();
   auto loc = mc.make_local(DexType::make_type("I"));
   mc.get_main_block()->load_const(loc, 123);
-  auto method = mc.create();
+  auto* method = mc.create();
   auto it = InstructionIterable(method->get_code()).begin();
 
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM_OBJECT, {1_v}));
@@ -50,7 +50,7 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
   auto mc = make_method_creator();
   auto idx_loc = mc.make_local(type::_int());
   auto param_loc = mc.get_local(1);
-  auto mb = mc.get_main_block();
+  auto* mb = mc.get_main_block();
   mb->load_const(idx_loc, 1);
 
   // build switch
@@ -62,18 +62,18 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
   SwitchIndices indices3 = {3};
   cases[indices3] = nullptr;
 
-  auto def_block = mb->switch_op(idx_loc, cases);
+  auto* def_block = mb->switch_op(idx_loc, cases);
   def_block->init_loc(param_loc);
 
   for (const auto& it : cases) {
     auto idx = it.first;
-    auto case_block = cases[idx];
+    auto* case_block = cases[idx];
     ASSERT_TRUE(idx.size());
     case_block->binop_lit(
         OPCODE_ADD_INT_LIT, param_loc, param_loc, *idx.begin());
   }
 
-  auto method = mc.create();
+  auto* method = mc.create();
   printf(" code: \n%s\n", SHOW(method->get_code()));
 
   auto it = InstructionIterable(method->get_code()).begin();
@@ -95,10 +95,10 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_GOTO, {}));
 
   method->sync();
-  auto dex_code = method->get_dex_code();
+  auto* dex_code = method->get_dex_code();
   printf(" dex_code: \n%s\n", SHOW(dex_code));
 
-  for (auto insn : dex_code->get_instructions()) {
+  for (auto* insn : dex_code->get_instructions()) {
     printf(" dex insn: %s; OP: %s\n", SHOW(insn), SHOW(insn->opcode()));
     if (insn->opcode() != FOPCODE_PACKED_SWITCH) {
       continue;
@@ -122,12 +122,12 @@ TEST_F(CreatorsTest, ClassCreator) {
   std::string foo("Lfoo;");
   ClassCreator cc(DexType::make_type(foo));
   cc.set_super(type::java_lang_Object());
-  auto cls = cc.create();
+  auto* cls = cc.create();
   std::string bar("Lbar;");
   cls->set_deobfuscated_name(bar);
 
-  auto foo_type = DexType::get_type(foo);
-  auto bar_type = DexType::get_type(bar);
+  auto* foo_type = DexType::get_type(foo);
+  auto* bar_type = DexType::get_type(bar);
   EXPECT_EQ(foo_type, cls->get_type());
   if (kInsertDeobfuscatedNameLinks) {
     EXPECT_EQ(bar_type, cls->get_type());

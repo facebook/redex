@@ -275,7 +275,7 @@ void load_classes_from_dexes_and_metadata(
   for (const auto& filename : dex_files) {
     if (filename.size() >= 5 &&
         filename.compare(filename.size() - 4, 4, ".dex") == 0) {
-      auto location = DexLocation::make_location("dex", filename);
+      const auto* location = DexLocation::make_location("dex", filename);
       assert_dex_magic_consistency(stores[0].get_dex_magic(),
                                    load_dex_magic_from_dex(location));
       dex_stats_t dex_stats;
@@ -296,7 +296,8 @@ void load_classes_from_dexes_and_metadata(
       store_metadata.parse(filename);
       DexStore store(store_metadata);
       for (const auto& file_path : store_metadata.get_files()) {
-        auto location = DexLocation::make_location(store.get_name(), file_path);
+        const auto* location =
+            DexLocation::make_location(store.get_name(), file_path);
         assert_dex_magic_consistency(stores[0].get_dex_magic(),
                                      load_dex_magic_from_dex(location));
         dex_stats_t dex_stats;

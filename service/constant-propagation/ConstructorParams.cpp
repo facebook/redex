@@ -110,8 +110,8 @@ class InitFixpointIterator final
       // Is writing to `this` pointer.
       const auto& obj_domain = env->get(insn->src(1));
       if (obj_domain.is_value() && *obj_domain.get_constant() == 0) {
-        auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
-        if (!field) {
+        auto* field = resolve_field(insn->get_field(), FieldSearch::Instance);
+        if (field == nullptr) {
           field = static_cast<DexField*>(insn->get_field());
         } else if (field->get_class() != m_current_cls &&
                    !field->is_external()) {
@@ -125,8 +125,8 @@ class InitFixpointIterator final
       // Another construction invocation on `this` pointer.
       const auto& obj_domain = env->get(insn->src(0));
       if (obj_domain.is_value() && *obj_domain.get_constant() == 0) {
-        auto method = resolve_method(insn->get_method(), MethodSearch::Direct);
-        if (!method) {
+        auto* method = resolve_method(insn->get_method(), MethodSearch::Direct);
+        if (method == nullptr) {
           method = static_cast<DexMethod*>(insn->get_method());
         } else if (method->get_class() != m_current_cls &&
                    !method->is_external()) {
@@ -196,9 +196,9 @@ std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
   const auto& field_env = return_env.get_field_environment();
   if (field_env.is_value()) {
     for (const auto& pair : field_env.bindings()) {
-      auto field = pair.first;
+      auto* field = pair.first;
       auto value = pair.second.get_constant();
-      if (!final_fields.count(field)) {
+      if (final_fields.count(field) == 0u) {
         continue;
       }
       if (value) {
@@ -211,7 +211,7 @@ std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
       return_env.get_invisible_field_environment();
   if (invisible_field_env.is_value()) {
     for (const auto& pair : invisible_field_env.bindings()) {
-      auto method_attr = pair.first;
+      auto* method_attr = pair.first;
       auto value = pair.second.get_constant();
       ImmutableAttr::Attr attr(method_attr);
       if (value) {
@@ -242,10 +242,10 @@ void analyze_constructors(const Scope& scope,
                         method::java_lang_Enum_ordinal())
       .set_src_id_of_obj(0)
       .set_src_id_of_attr(2);
-  auto java_lang_String = type::java_lang_String();
+  auto* java_lang_String = type::java_lang_String();
   walk::parallel::classes(scope, [state, java_lang_String](DexClass* cls) {
     UnorderedSet<DexField*> fields;
-    for (auto ifield : cls->get_ifields()) {
+    for (auto* ifield : cls->get_ifields()) {
       if (is_final(ifield) && !root(ifield) &&
           (type::is_primitive(ifield->get_type()) ||
            ifield->get_type() == java_lang_String)) {
@@ -256,9 +256,9 @@ void analyze_constructors(const Scope& scope,
       return;
     }
     auto ctors = cls->get_ctors();
-    for (auto ctor : ctors) {
+    for (auto* ctor : ctors) {
       for (const auto& pair : analyze_initializer(ctor, *state, fields)) {
-        auto& attr = pair.first;
+        const auto& attr = pair.first;
         auto attr_param_idx = pair.second;
         state->add_initializer(ctor, attr)
             .set_src_id_of_obj(0)

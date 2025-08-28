@@ -17,16 +17,16 @@
 #include "VerifyUtil.h"
 
 bool class_clinit_exist(const DexClasses& classes, const char* name) {
-  auto cls = find_class_named(classes, name);
+  auto* cls = find_class_named(classes, name);
   EXPECT_NE(nullptr, cls);
-  auto clinit = cls->get_clinit();
+  auto* clinit = cls->get_clinit();
   return clinit != nullptr;
 }
 
 bool has_sget(const DexClasses& classes,
               const char* class_name,
               const char* method_name) {
-  auto cls = find_class_named(classes, class_name);
+  auto* cls = find_class_named(classes, class_name);
   EXPECT_NE(nullptr, cls);
   DexMethod* m = find_vmethod_named(*cls, method_name);
   EXPECT_NE(nullptr, m);
@@ -52,7 +52,7 @@ bool has_sget(const DexClasses& classes,
 DexEncodedValue* get_encoded_value(const DexClasses& classes,
                                    const char* class_name,
                                    const char* field_name) {
-  auto cls = find_class_named(classes, class_name);
+  auto* cls = find_class_named(classes, class_name);
   EXPECT_NE(nullptr, cls);
   DexField* f = find_field_named(*cls, field_name);
   EXPECT_NE(nullptr, f);

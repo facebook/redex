@@ -38,9 +38,9 @@ void update_call_refs(
     const UnorderedMap<DexMethod*, DexMethod*>& old_to_new_callee,
     bool with_type_tag = false) {
   for (const auto& callsite : call_sites) {
-    auto callee = callsite.callee;
+    auto* callee = callsite.callee;
     always_assert(callee != nullptr && type_tags.count(callee) > 0);
-    auto new_callee_method = old_to_new_callee.at(callee);
+    auto* new_callee_method = old_to_new_callee.at(callee);
     auto type_tag_arg = with_type_tag
                             ? boost::optional<uint32_t>(type_tags.at(callee))
                             : boost::none;
@@ -55,10 +55,10 @@ void update_call_refs(
 void staticize_with_new_arg_head(DexMethod* meth, DexType* new_head) {
   mutators::make_static(meth, mutators::KeepThis::Yes);
   DexMethodSpec spec;
-  auto args = meth->get_proto()->get_args();
+  auto* args = meth->get_proto()->get_args();
   always_assert(!args->empty());
-  auto new_type_list = args->replace_head(new_head);
-  auto new_proto =
+  auto* new_type_list = args->replace_head(new_head);
+  auto* new_proto =
       DexProto::make_proto(meth->get_proto()->get_rtype(), new_type_list);
   spec.proto = new_proto;
   if (method::is_init(meth)) {
@@ -73,18 +73,18 @@ void fix_visibility_helper(DexMethod* method, T& vmethods_created) {
   // Fix non-static non-ctor private callees
   auto& cfg = method->get_code()->cfg();
   for (auto& mie : cfg::InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     auto opcode = insn->opcode();
     if (!opcode::is_invoke_direct(opcode)) {
       continue;
     }
-    auto callee = resolve_method(insn->get_method(), MethodSearch::Direct);
+    auto* callee = resolve_method(insn->get_method(), MethodSearch::Direct);
     if (callee == nullptr || !callee->is_concrete() ||
         method::is_any_init(callee) || is_public(callee)) {
       continue;
     }
     always_assert(is_private(callee));
-    auto cls = type_class(callee->get_class());
+    auto* cls = type_class(callee->get_class());
     cls->remove_method(callee);
     callee->set_virtual(true);
     set_public(callee);
@@ -103,7 +103,7 @@ boost::optional<size_t> get_ctor_type_tag_param_idx(
   }
 
   size_t idx = 0;
-  for (auto type : *ctor_proto->get_args()) {
+  for (auto* type : *ctor_proto->get_args()) {
     if (type == type::_int()) {
       always_assert_log(!type_tag_param_idx,
                         "More than one potential type tag param found!");
@@ -123,7 +123,7 @@ cfg::Block* find_single_switch(const cfg::ControlFlowGraph& cfg) {
   for (const auto& block : cfg.blocks()) {
     for (auto& mei : InstructionIterable(block)) {
       if (opcode::is_switch(mei.insn->opcode())) {
-        if (!switch_block) {
+        if (switch_block == nullptr) {
           switch_block = block;
         } else {
           // must only contain a single switch
@@ -146,14 +146,14 @@ static void find_common_ctor_invocations(
     UnorderedBag<cfg::InstructionIterator>& invocations) {
   // edges could point to the same target, but we only care unique targets.
   UnorderedSet<cfg::Block*> targets;
-  for (auto& s : switch_block->succs()) {
+  for (const auto& s : switch_block->succs()) {
     targets.insert(s->target());
   }
   if (targets.size() <= 1) {
     return;
   }
 
-  for (auto& target : UnorderedIterable(targets)) {
+  for (const auto& target : UnorderedIterable(targets)) {
     if (return_block != target->goes_to_only_edge()) {
       // not all switch statements goto return block
       invocations.clear();
@@ -168,11 +168,11 @@ static void find_common_ctor_invocations(
       return;
     }
 
-    auto meth = resolve_method(last_non_goto_insn->insn->get_method(),
-                               MethodSearch::Direct);
+    auto* meth = resolve_method(last_non_goto_insn->insn->get_method(),
+                                MethodSearch::Direct);
     // Make sure we found the same init method
-    if (!meth || !method::is_init(meth) ||
-        (common_ctor && common_ctor != meth)) {
+    if ((meth == nullptr) || !method::is_init(meth) ||
+        ((common_ctor != nullptr) && common_ctor != meth)) {
       invocations.clear();
       return;
     }
@@ -187,7 +187,7 @@ namespace class_merging {
 void MethodStats::add(const MethodOrderedSet& methods) {
   UnorderedMap<std::string, size_t> method_counts;
   UnorderedMap<std::string, std::vector<std::string>> samples;
-  for (auto& m : methods) {
+  for (const auto& m : methods) {
     auto simple_name = m->get_simple_deobfuscated_name();
     if (simple_name.find("get") == 0 || simple_name.find("set") == 0) {
       simple_name = simple_name.substr(0, 3);
@@ -248,7 +248,7 @@ ModelMethodMerger::ModelMethodMerger(
       m_max_num_dispatch_target(max_num_dispatch_target),
       m_method_profiles(method_profiles) {
   for (const auto& mtf : type_tag_fields) {
-    auto type_tag_field = mtf.second;
+    auto* type_tag_field = mtf.second;
     if (model_spec.generate_type_tag()) {
       always_assert(type_tag_field && type_tag_field->is_concrete());
     }
@@ -257,7 +257,7 @@ ModelMethodMerger::ModelMethodMerger(
   for (const MergerType* merger : mergers) {
     std::vector<DexMethod*> ctors;
     std::vector<DexMethod*> non_ctors;
-    for (const auto m : merger->dmethods) {
+    for (auto* const m : merger->dmethods) {
       if (method::is_init(m)) {
         ctors.push_back(m);
       } else if (!method::is_clinit(m)) {
@@ -282,24 +282,24 @@ void ModelMethodMerger::fix_visibility() {
   }
   for (const auto& pair : m_merger_non_ctors) {
     const std::vector<DexMethod*>& non_ctors = pair.second;
-    for (auto m : non_ctors) {
+    for (auto* m : non_ctors) {
       fix_visibility_helper(m, vmethods_created);
     }
   }
   for (const auto& pair : m_merger_non_vmethods) {
     auto non_vmethods = pair.second;
-    for (auto m : non_vmethods) {
+    for (auto* m : non_vmethods) {
       fix_visibility_helper(m, vmethods_created);
     }
   }
-  for (auto merger : m_mergers) {
-    for (auto& vm_lst : merger->vmethods) {
-      for (auto m : vm_lst.overrides) {
+  for (const auto* merger : m_mergers) {
+    for (const auto& vm_lst : merger->vmethods) {
+      for (auto* m : vm_lst.overrides) {
         fix_visibility_helper(m, vmethods_created);
       }
     }
     for (const auto& im : merger->intfs_methods) {
-      for (auto m : im.methods) {
+      for (auto* m : im.methods) {
         fix_visibility_helper(m, vmethods_created);
       }
     }
@@ -307,9 +307,9 @@ void ModelMethodMerger::fix_visibility() {
   // Promote privatized non-static non-ctor methods back to be public virtual.
   for (const auto& pair : m_merger_non_ctors) {
     auto non_ctors = pair.second;
-    for (const auto m : non_ctors) {
+    for (auto* const m : non_ctors) {
       if (is_private(m) && !is_static(m)) {
-        auto cls = type_class(m->get_class());
+        auto* cls = type_class(m->get_class());
         cls->remove_method(m);
         m->set_virtual(true);
         set_public(m);
@@ -343,9 +343,9 @@ std::vector<IRInstruction*> ModelMethodMerger::make_string_const(
 
 std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(DexType* type,
                                                                reg_t src_dest) {
-  auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
+  auto* check_cast = new IRInstruction(OPCODE_CHECK_CAST);
   check_cast->set_type(type)->set_src(0, src_dest);
-  auto move_result_pseudo =
+  auto* move_result_pseudo =
       new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
   move_result_pseudo->set_dest(src_dest);
   return {check_cast, move_result_pseudo};
@@ -379,7 +379,7 @@ std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
           targets, m_model_spec.dedup_fill_in_stack_trace);
   for (const auto& duplicate : UnorderedIterable(duplicates)) {
     SwitchIndices switch_indices;
-    for (auto& meth : duplicate) {
+    for (const auto& meth : duplicate) {
       switch_indices.emplace(m_type_tags->get_type_tag(meth->get_class()));
     }
     indices_to_callee[switch_indices] = *duplicate.begin();
@@ -388,14 +388,14 @@ std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
   TRACE(CLMG, 9, "---- SwitchIndices map ---");
   for (auto& it : indices_to_callee) {
     auto indices = it.first;
-    auto callee = it.second;
+    auto* callee = it.second;
     TRACE(CLMG, 9, "indices %s callee %s", SHOW(indices), SHOW(callee));
   }
   return indices_to_callee;
 }
 
 DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
-  auto merger_ctor = m_mergeable_to_merger_ctor.at(mergeable);
+  const auto* merger_ctor = m_mergeable_to_merger_ctor.at(mergeable);
   return merger_ctor->get_class();
 }
 
@@ -416,16 +416,16 @@ DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
  * }
  */
 void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
-  auto dispatch_code = dispatch->get_code();
+  auto* dispatch_code = dispatch->get_code();
   always_assert(dispatch_code->editable_cfg_built());
   auto& cfg = dispatch_code->cfg();
   if (cfg.return_blocks().size() != 1) {
     return;
   }
-  auto return_block = cfg.return_blocks()[0];
+  auto* return_block = cfg.return_blocks()[0];
 
-  auto switch_block = find_single_switch(cfg);
-  if (!switch_block) {
+  auto* switch_block = find_single_switch(cfg);
+  if (switch_block == nullptr) {
     return;
   }
 
@@ -458,12 +458,12 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   //
   // Redundent moves should be cleaned up by opt passes like copy propagation.
   std::vector<reg_t> new_srcs;
-  auto common_ctor_args = common_ctor->get_proto()->get_args();
+  auto* common_ctor_args = common_ctor->get_proto()->get_args();
   new_srcs.reserve(1 + common_ctor_args->size());
   // For "this" pointer which should be an object reference and is not a wide
   // register.
   new_srcs.push_back(cfg.allocate_temp());
-  for (auto arg_type : *common_ctor_args) {
+  for (auto* arg_type : *common_ctor_args) {
     new_srcs.push_back(type::is_wide_type(arg_type) ? cfg.allocate_wide_temp()
                                                     : cfg.allocate_temp());
   }
@@ -478,17 +478,17 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
     auto arg_it = common_ctor_args->begin();
     for (size_t i = 1; i < invocation->insn->srcs_size(); ++i, ++arg_it) {
       redex_assert(arg_it != common_ctor_args->end());
-      auto mov = (new IRInstruction(opcode::move_opcode(*arg_it)))
-                     ->set_src(0, invocation->insn->src(i))
-                     ->set_dest(new_srcs[i]);
+      auto* mov = (new IRInstruction(opcode::move_opcode(*arg_it)))
+                      ->set_src(0, invocation->insn->src(i))
+                      ->set_dest(new_srcs[i]);
       mutation.insert_before(invocation, {mov});
     }
     mutation.remove(invocation);
   }
 
-  auto invoke = (new IRInstruction(OPCODE_INVOKE_DIRECT))
-                    ->set_method(common_ctor)
-                    ->set_srcs_size(new_srcs.size());
+  auto* invoke = (new IRInstruction(OPCODE_INVOKE_DIRECT))
+                     ->set_method(common_ctor)
+                     ->set_srcs_size(new_srcs.size());
   for (size_t i = 0; i < new_srcs.size(); ++i) {
     invoke->set_src(i, new_srcs[i]);
   }
@@ -513,7 +513,7 @@ void ModelMethodMerger::inline_dispatch_entries(
   std::vector<std::pair<DexMethod*, IRInstruction*>> callsites;
   auto insns = InstructionIterable(dispatch_cfg);
   for (auto it = insns.begin(); it != insns.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       continue;
     }
@@ -556,20 +556,20 @@ void ModelMethodMerger::merge_virtual_methods(
     std::vector<std::pair<DexClass*, DexMethod*>>& dispatch_methods,
     UnorderedMap<DexMethod*, DexMethod*>& old_to_new_callee) {
   DexClass* target_cls = type_class(target_type);
-  for (auto& virt_meth : virt_methods) {
-    auto& meth_lst = virt_meth.overrides;
+  for (const auto& virt_meth : virt_methods) {
+    const auto& meth_lst = virt_meth.overrides;
     always_assert(!meth_lst.empty());
-    auto overridden_meth = virt_meth.base;
-    auto front_meth = meth_lst.front();
+    auto* overridden_meth = virt_meth.base;
+    auto* front_meth = meth_lst.front();
     auto access = front_meth->get_access();
-    auto dispatch_proto =
+    auto* dispatch_proto =
         DexProto::make_proto(front_meth->get_proto()->get_rtype(),
                              front_meth->get_proto()->get_args());
 
     // Make static
     MethodTypeTags type_tags;
     UnorderedMap<const DexType*, std::string> meth_signatures;
-    for (auto m : meth_lst) {
+    for (auto* m : meth_lst) {
       meth_signatures[m->get_class()] = get_method_signature_string(m);
       staticize_with_new_arg_head(m, target_type);
       type_tags[m] = m_type_tags->get_type_tag(m->get_class());
@@ -583,7 +583,7 @@ void ModelMethodMerger::merge_virtual_methods(
                         overridden_meth, m_max_num_dispatch_target,
                         boost::none,     m_model_spec.keep_debug_info};
     dispatch::DispatchMethod dispatch = create_dispatch_method(spec, meth_lst);
-    for (const auto sub_dispatch : dispatch.sub_dispatches) {
+    for (auto* const sub_dispatch : dispatch.sub_dispatches) {
       sub_dispatch->get_code()->build_cfg();
       dispatch_methods.emplace_back(target_cls, sub_dispatch);
     }
@@ -601,7 +601,7 @@ void ModelMethodMerger::merge_virtual_methods(
     }
     // Populating method dedup map
     for (auto& type_to_sig : UnorderedIterable(meth_signatures)) {
-      auto type = type_to_sig.first;
+      const auto* type = type_to_sig.first;
       auto map = std::make_pair(type_to_sig.second, dispatch.main_dispatch);
       m_method_dedup_map[type].push_back(map);
       TRACE(CLMG,
@@ -621,12 +621,12 @@ void ModelMethodMerger::merge_ctors() {
   MethodTypeTags type_tags;
   MethodOrderedSet ctor_set;
   for (const auto& pair : m_merger_ctors) {
-    auto target_type = const_cast<DexType*>(pair.first->type);
-    auto target_cls = type_class(target_type);
+    auto* target_type = const_cast<DexType*>(pair.first->type);
+    auto* target_cls = type_class(target_type);
     always_assert(target_cls);
 
-    auto& ctors = pair.second;
-    for (const auto m : ctors) {
+    const auto& ctors = pair.second;
+    for (auto* const m : ctors) {
       type_tags[m] = m_type_tags->get_type_tag(m->get_class());
     }
     ctor_set.insert(ctors.begin(), ctors.end());
@@ -639,15 +639,15 @@ void ModelMethodMerger::merge_ctors() {
   //////////////////////////////////////////
   UnorderedMap<DexMethod*, DexMethod*> old_to_new_callee;
   for (const auto& pair : m_merger_ctors) {
-    auto merger = pair.first;
-    auto target_type = const_cast<DexType*>(merger->type);
-    auto target_cls = type_class(target_type);
-    auto type_tag_field = m_type_tag_fields.count(merger) > 0
-                              ? m_type_tag_fields.at(merger)
-                              : nullptr;
+    const auto* merger = pair.first;
+    auto* target_type = const_cast<DexType*>(merger->type);
+    auto* target_cls = type_class(target_type);
+    auto* type_tag_field = m_type_tag_fields.count(merger) > 0
+                               ? m_type_tag_fields.at(merger)
+                               : nullptr;
     // Group by proto.
     UnorderedMap<DexProto*, std::vector<DexMethod*>> proto_to_ctors;
-    for (const auto m : pair.second) {
+    for (auto* const m : pair.second) {
       proto_to_ctors[m->get_proto()].push_back(m);
     }
     always_assert(!proto_to_ctors.empty());
@@ -658,10 +658,10 @@ void ModelMethodMerger::merge_ctors() {
           proto_to_ctors.size());
     UnorderedSet<DexMethod*> dispatches;
     for (const auto& ctors_pair : UnorderedIterable(proto_to_ctors)) {
-      auto& ctors = ctors_pair.second;
-      auto ctor_proto = ctors_pair.first;
+      const auto& ctors = ctors_pair.second;
+      auto* ctor_proto = ctors_pair.first;
       UnorderedMap<const DexType*, std::string> ctor_signatures;
-      for (const auto ctor : ctors) {
+      for (auto* const ctor : ctors) {
         ctor_signatures[ctor->get_class()] =
             type_reference::get_method_signature(ctor);
         TRACE(CLMG, 9, "  converting ctor %s", SHOW(ctor));
@@ -669,8 +669,8 @@ void ModelMethodMerger::merge_ctors() {
       }
 
       // Create dispatch.
-      auto dispatch_arg_list = ctor_proto->get_args()->push_back(type::_int());
-      auto dispatch_proto =
+      auto* dispatch_arg_list = ctor_proto->get_args()->push_back(type::_int());
+      auto* dispatch_proto =
           pass_type_tag_param
               ? DexProto::make_proto(ctor_proto->get_rtype(), dispatch_arg_list)
               : ctor_proto;
@@ -693,7 +693,7 @@ void ModelMethodMerger::merge_ctors() {
             "No type tag config cannot handle multiple dispatch targets!");
       }
       m_stats.m_num_ctor_dedupped += ctors.size() - indices_to_callee.size();
-      auto dispatch =
+      auto* dispatch =
           dispatch::create_ctor_or_static_dispatch(spec, indices_to_callee);
       dispatch->get_code()->build_cfg();
       for (const auto& m : ctors) {
@@ -708,7 +708,7 @@ void ModelMethodMerger::merge_ctors() {
       // Inline entries
       inline_dispatch_entries(target_type, dispatch, not_inlined_ctors);
       sink_common_ctor_to_return_block(dispatch);
-      auto mergeable_cls = type_class(ctors.front()->get_class());
+      auto* mergeable_cls = type_class(ctors.front()->get_class());
       always_assert(mergeable_cls->get_super_class() ==
                     target_cls->get_super_class());
 
@@ -716,14 +716,14 @@ void ModelMethodMerger::merge_ctors() {
       // The original mergeable ctors have been converted to static and won't
       // pass VFY.
       redex_assert(not_inlined_ctors.empty());
-      for (const auto ctor : ctors) {
-        auto cls = type_class(ctor->get_class());
+      for (auto* const ctor : ctors) {
+        auto* cls = type_class(ctor->get_class());
         cls->remove_method(ctor);
       }
 
       // Populating method dedup map
       for (auto& type_to_sig : UnorderedIterable(ctor_signatures)) {
-        auto type = type_to_sig.first;
+        const auto* type = type_to_sig.first;
         auto map = std::make_pair(type_to_sig.second, dispatch);
         m_method_dedup_map[type].push_back(map);
         TRACE(CLMG,
@@ -737,8 +737,8 @@ void ModelMethodMerger::merge_ctors() {
       dispatches.emplace(dispatch);
     }
     // Update mergeable ctor map
-    for (auto type : pair.first->mergeables) {
-      for (auto dispatch : UnorderedIterable(dispatches)) {
+    for (const auto* type : pair.first->mergeables) {
+      for (auto* dispatch : UnorderedIterable(dispatches)) {
         m_mergeable_to_merger_ctor[type] = dispatch;
       }
     }
@@ -752,8 +752,8 @@ void ModelMethodMerger::merge_ctors() {
 }
 
 void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
-  for (auto merger : m_mergers) {
-    auto merger_type = const_cast<DexType*>(merger->type);
+  for (const auto* merger : m_mergers) {
+    auto* merger_type = const_cast<DexType*>(merger->type);
     std::vector<DexMethod*> to_dedup;
     // Add non_ctors and non_vmethods
     auto& non_ctors = m_merger_non_ctors.at(merger);
@@ -765,7 +765,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     if (m_model_spec.process_method_meta) {
       ConstantLifting const_lift;
       std::vector<DexMethod*> annotated;
-      for (const auto m : to_dedup) {
+      for (auto* const m : to_dedup) {
         if (const_lift.is_applicable_to_constant_lifting(m)) {
           annotated.push_back(m);
         }
@@ -776,7 +776,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
       to_dedup.insert(to_dedup.end(), stub_methods.begin(), stub_methods.end());
       m_stats.m_num_const_lifted_methods +=
           const_lift.get_num_const_lifted_methods();
-      for (auto stub : stub_methods) {
+      for (auto* stub : stub_methods) {
         if (stub->is_virtual()) {
           non_vmethods.push_back(stub);
         } else {
@@ -800,7 +800,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     if (traceEnabled(CLMG, 8)) {
       m_method_stats.add(to_relocate);
     }
-    for (auto m : to_relocate) {
+    for (auto* m : to_relocate) {
       auto sig = get_method_signature_string(m);
       auto map = std::make_pair(sig, m);
       m_method_dedup_map[m->get_class()].push_back(map);
@@ -824,8 +824,8 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
         m_stats.m_updated_profile_method +=
             m_method_profiles.get()->substitute_stats(pair.first, old_list_vec);
       }
-      for (auto old_meth : old_list) {
-        auto type = old_meth->get_class();
+      for (auto* old_meth : old_list) {
+        auto* type = old_meth->get_class();
         if (m_mergeable_to_merger_ctor.count(type) == 0) {
           continue;
         }
@@ -843,13 +843,13 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
 
     // Clean up remainders, update the non_ctors and non_vmethods.
     auto should_erase = [&merger_type, this](DexMethod* m) {
-      auto owner = m->get_class();
+      auto* owner = m->get_class();
       if (owner == merger_type) {
         return false;
       }
       TRACE(CLMG, 9, "dedup: removing %s", SHOW(m));
       always_assert(m_mergeable_to_merger_ctor.count(owner));
-      auto cls = type_class(owner);
+      auto* cls = type_class(owner);
       cls->remove_method(m);
       DexMethod::delete_method(m);
       return true;
@@ -872,22 +872,22 @@ void ModelMethodMerger::merge_virt_itf_methods() {
   std::vector<std::pair<DexClass*, DexMethod*>> dispatch_methods;
   UnorderedMap<DexMethod*, DexMethod*> old_to_new_callee;
 
-  for (auto merger : m_mergers) {
-    auto merger_type = const_cast<DexType*>(merger->type);
-    auto merger_cls = type_class(merger_type);
+  for (const auto* merger : m_mergers) {
+    auto* merger_type = const_cast<DexType*>(merger->type);
+    auto* merger_cls = type_class(merger_type);
     always_assert(merger_cls);
-    auto super_type = merger_cls->get_super_class();
-    auto type_tag_field = m_type_tag_fields.count(merger) > 0
-                              ? m_type_tag_fields.at(merger)
-                              : nullptr;
+    auto* super_type = merger_cls->get_super_class();
+    auto* type_tag_field = m_type_tag_fields.count(merger) > 0
+                               ? m_type_tag_fields.at(merger)
+                               : nullptr;
     std::vector<MergerType::VirtualMethod> virt_methods;
     virt_methods.reserve(merger->vmethods.size() +
                          merger->intfs_methods.size());
 
-    for (auto& vm_lst : merger->vmethods) {
+    for (const auto& vm_lst : merger->vmethods) {
       virt_methods.emplace_back(vm_lst);
     }
-    for (auto& im : merger->intfs_methods) {
+    for (const auto& im : merger->intfs_methods) {
       virt_methods.emplace_back(im.overridden_meth, im.methods);
     }
 
@@ -905,8 +905,8 @@ void ModelMethodMerger::merge_virt_itf_methods() {
   // the dispatch switch itself.
   std::vector<std::pair<DexType*, DexMethod*>> not_inlined_dispatch_entries;
   for (auto& pair : dispatch_methods) {
-    auto merger_cls = pair.first;
-    auto dispatch = pair.second;
+    auto* merger_cls = pair.first;
+    auto* dispatch = pair.second;
     merger_cls->add_method(dispatch);
     inline_dispatch_entries(merger_cls->get_type(), dispatch,
                             not_inlined_dispatch_entries);
@@ -915,8 +915,8 @@ void ModelMethodMerger::merge_virt_itf_methods() {
   // inlined. They are however still referenced by the dispatch. What's left on
   // the merged classes will be purged later.
   for (const auto& pair : not_inlined_dispatch_entries) {
-    auto merger_type = pair.first;
-    auto not_inlined = pair.second;
+    auto* merger_type = pair.first;
+    auto* not_inlined = pair.second;
     change_visibility(not_inlined, merger_type);
     relocate_method(not_inlined, merger_type);
   }

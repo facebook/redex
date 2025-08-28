@@ -113,8 +113,8 @@ bool StripDebugInfo::should_drop_for_synth(const DexMethod* method) const {
 
 Stats StripDebugInfo::run(const Scope& scope) {
   return walk::parallel::methods<Stats>(scope, [&](DexMethod* meth) {
-    auto code = meth->get_code();
-    if (!code) {
+    auto* code = meth->get_code();
+    if (code == nullptr) {
       return Stats();
     }
     return run(*code, should_drop_for_synth(meth));

@@ -105,8 +105,8 @@ static void insert_branch_target(IRList* ir,
 
 // Returns true if the offset could be encoded without modifying ir.
 bool encode_offset(IRList* ir, MethodItemEntry* target_mie, int32_t offset) {
-  auto branch_op_mie = target_mie->target->src;
-  auto insn = branch_op_mie->dex_insn;
+  auto* branch_op_mie = target_mie->target->src;
+  auto* insn = branch_op_mie->dex_insn;
   // A branch to the very next instruction does nothing. Replace with
   // fallthrough. The offset is measured in 16 bit code units, not
   // MethodItemEntries
@@ -116,7 +116,7 @@ bool encode_offset(IRList* ir, MethodItemEntry* target_mie, int32_t offset) {
     target_mie->type = MFLOW_FALLTHROUGH;
     return false;
   } else if (offset == 0) {
-    auto nop = new DexInstruction(DOPCODE_NOP);
+    auto* nop = new DexInstruction(DOPCODE_NOP);
     ir->insert_before(ir->iterator_to(*branch_op_mie), nop);
     offset = -static_cast<int32_t>(nop->size());
     return false;
@@ -227,7 +227,7 @@ static void generate_branch_targets(
   for (auto miter = ir->begin(); miter != ir->end(); ++miter) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_DEX_OPCODE) {
-      auto insn = mentry->dex_insn;
+      auto* insn = mentry->dex_insn;
       if (dex_opcode::is_branch(insn->opcode())) {
         if (dex_opcode::is_switch(insn->opcode())) {
           auto* fopcode_entry = get_target(mentry, bm);
@@ -237,7 +237,7 @@ static void generate_branch_targets(
           shard_multi_target(ir, data_it->second.get(), mentry, bm);
           entry_to_data.erase(data_it);
         } else {
-          auto target = get_target(mentry, bm);
+          auto* target = get_target(mentry, bm);
           insert_branch_target(ir, target, mentry);
         }
       }
@@ -287,9 +287,9 @@ static void associate_try_items(IRList* ir,
     MethodItemEntry* catch_start = nullptr;
     CatchEntry* last_catch = nullptr;
     for (const auto& catz : tri->m_catches) {
-      auto catzop = get_bm_target_checked(bm, catz.second);
+      auto* catzop = get_bm_target_checked(bm, catz.second);
       TRACE(MTRANS, 3, "try_catch %08x mei %p", catz.second, catzop);
-      auto catch_mie = new MethodItemEntry(catz.first);
+      auto* catch_mie = new MethodItemEntry(catz.first);
       catch_start = catch_start == nullptr ? catch_mie : catch_start;
       if (last_catch != nullptr) {
         last_catch->next = catch_mie;
@@ -299,14 +299,14 @@ static void associate_try_items(IRList* ir,
       catches_to_insert.emplace_back(catzop, catch_mie);
     }
 
-    auto begin = get_bm_target_checked(bm, tri->m_start_addr);
+    auto* begin = get_bm_target_checked(bm, tri->m_start_addr);
     TRACE(MTRANS, 3, "try_start %08x mei %p", tri->m_start_addr, begin);
-    auto try_start = new MethodItemEntry(TRY_START, catch_start);
+    auto* try_start = new MethodItemEntry(TRY_START, catch_start);
     ir->insert_before(ir->iterator_to(*begin), *try_start);
     uint32_t lastaddr = tri->m_start_addr + tri->m_insn_count;
-    auto end = get_bm_target_checked(bm, lastaddr);
+    auto* end = get_bm_target_checked(bm, lastaddr);
     TRACE(MTRANS, 3, "try_end %08x mei %p", lastaddr, end);
-    auto try_end = new MethodItemEntry(TRY_END, catch_start);
+    auto* try_end = new MethodItemEntry(TRY_END, catch_start);
     ir->insert_before(ir->iterator_to(*end), *try_end);
   }
 
@@ -330,7 +330,7 @@ void generate_load_params(const DexMethod* method,
   auto* args = method->get_proto()->get_args();
   auto param_reg = temp_regs;
   if (!is_static(method)) {
-    auto insn = new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
+    auto* insn = new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
     insn->set_dest(param_reg++);
     code->push_back(insn);
   }
@@ -345,7 +345,7 @@ void generate_load_params(const DexMethod* method,
       op = type::is_primitive(arg) ? IOPCODE_LOAD_PARAM
                                    : IOPCODE_LOAD_PARAM_OBJECT;
     }
-    auto insn = new IRInstruction(op);
+    auto* insn = new IRInstruction(op);
     insn->set_dest(prev_reg);
     code->push_back(insn);
   }
@@ -420,7 +420,7 @@ void translate_dex_to_ir(
     } else if (dex_opcode::has_literal(dex_op)) {
       insn->set_literal(dex_insn->get_literal());
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
-      auto target = get_target(&*it, bm);
+      auto* target = get_target(&*it, bm);
       auto data_it = entry_to_data.find(target);
       always_assert_type_log(data_it != entry_to_data.end(), INVALID_DEX,
                              "Incorrect reference");
@@ -445,7 +445,7 @@ void translate_dex_to_ir(
 }
 
 void balloon(DexMethod* method, IRList* ir_list) {
-  auto dex_code = method->get_dex_code();
+  auto* dex_code = method->get_dex_code();
   auto instructions = dex_code->release_instructions();
   // This is a 1-to-1 map between MethodItemEntries of type MFLOW_OPCODE and
   // address offsets.
@@ -455,7 +455,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
 
   uint32_t addr = 0;
   std::vector<std::unique_ptr<DexInstruction>> to_delete;
-  for (auto insn : instructions) {
+  for (auto* insn : instructions) {
     MethodItemEntry* mei;
     if (insn->opcode() == DOPCODE_NOP ||
         dex_opcode::is_fopcode(insn->opcode())) {
@@ -464,7 +464,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
       // address.
       mei = new MethodItemEntry();
       if (dex_opcode::is_fopcode(insn->opcode())) {
-        auto data = static_cast<DexOpcodeData*>(insn);
+        auto* data = static_cast<DexOpcodeData*>(insn);
         auto inserted = data_set.insert(data).second;
         always_assert(inserted);
         entry_to_data.emplace(mei, std::unique_ptr<DexOpcodeData>(data));
@@ -484,8 +484,8 @@ void balloon(DexMethod* method, IRList* ir_list) {
   generate_branch_targets(ir_list, bm, entry_to_data);
   associate_try_items(ir_list, *dex_code, bm);
   translate_dex_to_ir(ir_list, bm, entry_to_data);
-  auto debugitem = dex_code->get_debug_item();
-  if (debugitem) {
+  auto* debugitem = dex_code->get_debug_item();
+  if (debugitem != nullptr) {
     associate_debug_entries(ir_list, *debugitem, bm);
   }
 }
@@ -506,7 +506,7 @@ get_old_to_new_position_copies(IRList* ir_list) {
 
   for (auto& old_to_new : UnorderedIterable(old_position_to_new)) {
     DexPosition* old_pos = old_to_new.first;
-    auto new_pos = old_to_new.second.get();
+    auto* new_pos = old_to_new.second.get();
 
     // There may be dangling pointers to parent positions that have been deleted
     // So, we can't use the [] operator here because it would add
@@ -543,18 +543,20 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
   // now fill the fields of the `copy_mie`s
   for (auto& mie : *old_ir_list) {
 
-    auto copy_mie = old_mentry_to_new.at(&mie);
+    auto* copy_mie = old_mentry_to_new.at(&mie);
     switch (mie.type) {
     case MFLOW_TRY:
-      copy_mie->tentry = new TryEntry(
-          mie.tentry->type,
-          mie.tentry->catch_start ? old_mentry_to_new[mie.tentry->catch_start]
-                                  : nullptr);
+      copy_mie->tentry =
+          new TryEntry(mie.tentry->type,
+                       mie.tentry->catch_start != nullptr
+                           ? old_mentry_to_new[mie.tentry->catch_start]
+                           : nullptr);
       break;
     case MFLOW_CATCH:
       copy_mie->centry = new CatchEntry(mie.centry->catch_type);
-      copy_mie->centry->next =
-          mie.centry->next ? old_mentry_to_new[mie.centry->next] : nullptr;
+      copy_mie->centry->next = mie.centry->next != nullptr
+                                   ? old_mentry_to_new[mie.centry->next]
+                                   : nullptr;
       break;
     case MFLOW_TARGET:
       copy_mie->target = new BranchTarget();
@@ -728,11 +730,11 @@ const char* DEBUG_ONLY show_reg_map(RegMap& map) {
 
 uint16_t calc_outs_size(const IRCode* code) {
   uint16_t size{0};
-  for (auto& mie : *code) {
+  for (const auto& mie : *code) {
     if (mie.type != MFLOW_DEX_OPCODE) {
       continue;
     }
-    auto insn = mie.dex_insn;
+    auto* insn = mie.dex_insn;
     if (dex_opcode::is_invoke_range(insn->opcode())) {
       size = std::max(size, boost::numeric_cast<uint16_t>(insn->range_size()));
     } else if (dex_opcode::is_invoke(insn->opcode())) {
@@ -748,7 +750,7 @@ void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
   if (!is_static(method)) {
     ++ins_size;
   }
-  for (auto arg : *args_list) {
+  for (auto* arg : *args_list) {
     if (type::is_wide_type(arg)) {
       ins_size += 2;
     } else {
@@ -970,7 +972,7 @@ bool IRCode::try_sync(DexCode* code) {
         mie.target->src->dex_insn->opcode() == DOPCODE_FILL_ARRAY_DATA) {
       // This MFLOW_TARGET is right before a fill-array-data-payload opcode,
       // so we should make sure its address is aligned
-      if (entry_to_addr.at(&mie) & 1) {
+      if ((entry_to_addr.at(&mie) & 1) != 0u) {
         opout.push_back(new DexInstruction(DOPCODE_NOP));
         ++entry_to_addr.at(&mie);
         ++num_align_nops;
@@ -989,15 +991,15 @@ bool IRCode::try_sync(DexCode* code) {
 
   TRACE(MTRANS, 5, "Emitting multi-branches");
   // Step 3, generate multi-branch fopcodes
-  for (auto multiopcode : multi_branches) {
+  for (auto* multiopcode : multi_branches) {
     auto& targets = multis[multiopcode];
-    auto multi_insn = multiopcode->dex_insn;
+    auto* multi_insn = multiopcode->dex_insn;
     std::sort(targets.begin(), targets.end(), multi_target_compare_case_key);
     always_assert_log(!targets.empty(), "need to have targets for %s",
                       SHOW(*multiopcode));
     if (multiopcode->dex_insn->opcode() == DOPCODE_SPARSE_SWITCH) {
       // Emit align nop
-      if (addr & 1) {
+      if ((addr & 1) != 0u) {
         DexInstruction* nop = new DexInstruction(DOPCODE_NOP);
         opout.push_back(nop);
         addr++;
@@ -1067,7 +1069,7 @@ bool IRCode::try_sync(DexCode* code) {
         update_next();
       }
       // Emit align nop
-      if (addr & 1) {
+      if ((addr & 1) != 0u) {
         DexInstruction* nop = new DexInstruction(DOPCODE_NOP);
         opout.push_back(nop);
         addr++;
@@ -1129,8 +1131,8 @@ bool IRCode::try_sync(DexCode* code) {
     m_ir_list->erase_and_dispose(miter);
   }
 
-  auto debugitem = code->get_debug_item();
-  if (debugitem) {
+  auto* debugitem = code->get_debug_item();
+  if (debugitem != nullptr) {
     gather_debug_entries(m_ir_list, entry_to_addr, &debugitem->get_entries());
   }
   // Step 5, try/catch blocks
@@ -1149,8 +1151,8 @@ bool IRCode::try_sync(DexCode* code) {
       continue;
     }
     redex_assert(tentry->type == TRY_END);
-    auto try_end = &mentry;
-    auto try_start = active_try;
+    auto* try_end = &mentry;
+    auto* try_start = active_try;
     active_try = nullptr;
 
     always_assert_log(try_start != nullptr, "unopened try_end found: %s",
@@ -1167,7 +1169,7 @@ bool IRCode::try_sync(DexCode* code) {
     }
 
     DexCatches catches;
-    for (auto mei = try_end->tentry->catch_start; mei != nullptr;
+    for (auto* mei = try_end->tentry->catch_start; mei != nullptr;
          mei = mei->centry->next) {
       if (mei->centry->next != nullptr) {
         always_assert(mei->centry->catch_type != nullptr);

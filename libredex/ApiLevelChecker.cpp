@@ -162,10 +162,10 @@ void propagate_levels(const ClassHierarchy& ch,
   min_level = std::max(min_level, current_min_level);
 
   auto* intfs = cls->get_interfaces();
-  if (intfs) {
+  if (intfs != nullptr) {
     for (auto* intf : *intfs) {
       auto* intf_cls = type_class(intf);
-      if (intf_cls) {
+      if (intf_cls != nullptr) {
         min_level =
             std::max(min_level, (int32_t)intf_cls->rstate.get_api_level());
       }

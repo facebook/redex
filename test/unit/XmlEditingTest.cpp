@@ -121,7 +121,7 @@ TEST(Visitor, AppendXmlId) {
               // ResXMLTree_attribute stores redundant indices to the string
               // pool, from rawValue and typedValue. Thoroughly check both.
               {
-                auto chars = xml_tree.getAttributeStringValue(a, &len);
+                const auto* chars = xml_tree.getAttributeStringValue(a, &len);
                 EXPECT_NE(chars, nullptr) << "Attribute value was null";
                 android::String16 attr_value(chars, len);
                 EXPECT_EQ(attr_value, expected_package_value)
@@ -131,7 +131,7 @@ TEST(Visitor, AppendXmlId) {
                 // Now make sure typedValue is correct.
                 auto data = xml_tree.getAttributeData(a);
                 EXPECT_GE(data, 0);
-                auto chars = pool.stringAt((size_t)data, &len);
+                const auto* chars = pool.stringAt((size_t)data, &len);
                 EXPECT_NE(chars, nullptr) << "Attribute value was null";
                 android::String16 attr_value(chars, len);
                 EXPECT_EQ(attr_value, expected_package_value)
@@ -176,10 +176,10 @@ TEST(Visitor, AppendXmlIdUtf8Pool) {
   EXPECT_EQ(arsc::get_string_from_pool(string_pool, idx), new_attr);
   for (size_t i = 1; i < string_pool.size(); i++) {
     size_t a_len;
-    auto a = string_pool.string8At(i, &a_len);
+    const auto* a = string_pool.string8At(i, &a_len);
 
     size_t b_len;
-    auto b = original_strings.string8At(i - 1, &b_len);
+    const auto* b = original_strings.string8At(i - 1, &b_len);
 
     EXPECT_EQ(a_len, b_len) << "Wrong string length at idx: " << i;
     EXPECT_EQ(strncmp(a, b, a_len), 0) << "Incorrect string data at idx: " << i;

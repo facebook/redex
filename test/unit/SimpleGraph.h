@@ -32,7 +32,7 @@ class GraphInterface {
 
   static std::vector<EdgeId> predecessors(const Graph& graph,
                                           const NodeId& node) {
-    if (graph.preds.count(node)) {
+    if (graph.preds.count(node) != 0u) {
       return graph.preds.at(node);
     }
     return {};
@@ -40,7 +40,7 @@ class GraphInterface {
 
   static std::vector<EdgeId> successors(const Graph& graph,
                                         const NodeId& node) {
-    if (graph.succs.count(node)) {
+    if (graph.succs.count(node) != 0u) {
       return graph.succs.at(node);
     }
     return {};
@@ -62,7 +62,7 @@ class GraphInterfaceWithExit {
 
   static std::vector<EdgeId> predecessors(const Graph& graph,
                                           const NodeId& node) {
-    if (graph.preds.count(node)) {
+    if (graph.preds.count(node) != 0u) {
       return graph.preds.at(node);
     }
     return {};
@@ -70,7 +70,7 @@ class GraphInterfaceWithExit {
 
   static std::vector<EdgeId> successors(const Graph& graph,
                                         const NodeId& node) {
-    if (graph.succs.count(node)) {
+    if (graph.succs.count(node) != 0u) {
       return graph.succs.at(node);
     }
     return {};

@@ -25,7 +25,7 @@ namespace {
 /// \return a new \c IRInstruction representing a `const` operation writing
 /// literal \p lit into register \p dest.
 IRInstruction* ir_const(uint32_t dest, int64_t lit) {
-  auto insn = new IRInstruction(OPCODE_CONST);
+  auto* insn = new IRInstruction(OPCODE_CONST);
   insn->set_dest(dest);
   insn->set_literal(lit);
   return insn;
@@ -34,7 +34,7 @@ IRInstruction* ir_const(uint32_t dest, int64_t lit) {
 /// \return a new \c IRInstruction representing a `unreachable` operation
 /// writing the impossible value into register \p dest.
 IRInstruction* ir_unreachable(uint32_t dest) {
-  auto insn = new IRInstruction(IOPCODE_UNREACHABLE);
+  auto* insn = new IRInstruction(IOPCODE_UNREACHABLE);
   insn->set_dest(dest);
   return insn;
 }
@@ -42,7 +42,7 @@ IRInstruction* ir_unreachable(uint32_t dest) {
 /// \return a new \c IRInstruction representing a `throw` operation, throwing
 /// the contents of register \p src.
 IRInstruction* ir_throw(uint32_t src) {
-  auto insn = new IRInstruction(OPCODE_THROW);
+  auto* insn = new IRInstruction(OPCODE_THROW);
   insn->set_src(0, src);
   return insn;
 }
@@ -50,7 +50,7 @@ IRInstruction* ir_throw(uint32_t src) {
 /// \return a new \c IRInstruction representing a `check-cast` operation,
 /// verifying that \p src is compatible with \p type.
 IRInstruction* ir_check_cast(uint32_t src, DexType* type) {
-  auto insn = new IRInstruction(OPCODE_CHECK_CAST);
+  auto* insn = new IRInstruction(OPCODE_CHECK_CAST);
   insn->set_src(0, src);
   insn->set_type(type);
   return insn;
@@ -59,7 +59,7 @@ IRInstruction* ir_check_cast(uint32_t src, DexType* type) {
 /// \return a new \c IRInstruction representing a `move-result-pseudo-object`
 /// operation.
 IRInstruction* ir_move_result_pseudo_object(uint32_t dest) {
-  auto insn = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+  auto* insn = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
   insn->set_dest(dest);
   return insn;
 }
@@ -122,11 +122,11 @@ Stats replace_uninstantiable_refs(
   auto ii = InstructionIterable(cfg);
   npe::NullPointerExceptionCreator npe_creator(&cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     auto op = insn->opcode();
     switch (op) {
     case OPCODE_INSTANCE_OF:
-      if (scoped_uninstantiable_types.count(insn->get_type())) {
+      if (scoped_uninstantiable_types.count(insn->get_type()) != 0u) {
         auto dest = cfg.move_result_of(it)->insn->dest();
         m.replace(it, {ir_const(dest, 0)});
         stats.instance_ofs++;
@@ -140,14 +140,15 @@ Stats replace_uninstantiable_refs(
       // Note that we don't want to call resolve_method here: The most precise
       // class information is already present in the supplied method reference,
       // which gives us the best change of finding an uninstantiable type.
-      if (scoped_uninstantiable_types.count(insn->get_method()->get_class())) {
+      if (scoped_uninstantiable_types.count(insn->get_method()->get_class()) !=
+          0u) {
         m.replace(it, npe_creator.get_insns(insn));
         stats.invokes++;
       }
       continue;
 
     case OPCODE_CHECK_CAST:
-      if (scoped_uninstantiable_types.count(insn->get_type())) {
+      if (scoped_uninstantiable_types.count(insn->get_type()) != 0u) {
         auto src = insn->src(0);
         auto dest = cfg.move_result_of(it)->insn->dest();
         m.replace(it,
@@ -162,22 +163,23 @@ Stats replace_uninstantiable_refs(
       break;
     }
 
-    if (opcode::is_an_iget(op) &&
-        scoped_uninstantiable_types.count(insn->get_field()->get_class())) {
+    if (opcode::is_an_iget(op) && (scoped_uninstantiable_types.count(
+                                       insn->get_field()->get_class()) != 0u)) {
       m.replace(it, npe_creator.get_insns(insn));
       stats.field_accesses_on_uninstantiable++;
       continue;
     }
 
-    if (opcode::is_an_iput(op) &&
-        scoped_uninstantiable_types.count(insn->get_field()->get_class())) {
+    if (opcode::is_an_iput(op) && (scoped_uninstantiable_types.count(
+                                       insn->get_field()->get_class()) != 0u)) {
       m.replace(it, npe_creator.get_insns(insn));
       stats.field_accesses_on_uninstantiable++;
       continue;
     }
 
     if ((opcode::is_an_iget(op) || opcode::is_an_sget(op)) &&
-        scoped_uninstantiable_types.count(insn->get_field()->get_type())) {
+        (scoped_uninstantiable_types.count(insn->get_field()->get_type()) !=
+         0u)) {
       auto dest = cfg.move_result_of(it)->insn->dest();
       m.replace(it, {ir_const(dest, 0)});
       stats.get_uninstantiables++;
@@ -185,8 +187,8 @@ Stats replace_uninstantiable_refs(
     }
 
     if (opcode::is_an_invoke(op) &&
-        scoped_uninstantiable_types.count(
-            insn->get_method()->get_proto()->get_rtype())) {
+        (scoped_uninstantiable_types.count(
+             insn->get_method()->get_proto()->get_rtype()) != 0u)) {
       auto move_result_it = cfg.move_result_of(it);
       if (!move_result_it.is_end()) {
         auto dest = move_result_it->insn->dest();
@@ -232,7 +234,7 @@ Stats reduce_uncallable_instance_methods(
   Stats stats;
   workqueue_run<DexMethod*>(
       [&](DexMethod* method) {
-        auto overridden_method =
+        auto* overridden_method =
             method->is_virtual()
                 ? resolve_method(method, MethodSearch::Super, method)
                 : nullptr;
@@ -279,14 +281,14 @@ Stats reduce_uncallable_instance_methods(
   std::vector<DexClass*> classes_with_removed_vmethods;
   UnorderedMap<DexMethodRef*, DexMethodRef*> removed_vmethods;
   for (auto& p : UnorderedIterable(class_post_processing)) {
-    auto cls = p.first;
+    auto* cls = p.first;
     auto& cpp = p.second;
     if (!cpp.abstract_vmethods.empty()) {
       if (!is_abstract(cls)) {
         stats.abstracted_classes++;
         cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
       }
-      for (auto method : UnorderedIterable(cpp.abstract_vmethods)) {
+      for (auto* method : UnorderedIterable(cpp.abstract_vmethods)) {
         method->set_access(
             (DexAccessFlags)((method->get_access() & ~ACC_FINAL) |
                              ACC_ABSTRACT));

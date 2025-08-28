@@ -72,7 +72,7 @@ class FixpointIterator final
     auto it = m_switch_succs.find(block);
     if (it == m_switch_succs.end()) {
       std::vector<int32_t> keys;
-      for (auto succ : block->succs()) {
+      for (auto* succ : block->succs()) {
         if (succ->type() == cfg::EDGE_BRANCH) {
           keys.push_back(*succ->case_key());
         }

@@ -15,7 +15,7 @@ using namespace native_names;
 struct NativeNamesTest : public RedexTest {};
 
 TEST_F(NativeNamesTest, testBasicMethodNames) {
-  auto m = DexMethod::make_method(
+  auto* m = DexMethod::make_method(
       "Lcom/facebook/redex/SomeClass;.someMethod:(ILjava/lang/String;)Ljava/"
       "lang/Object;");
   EXPECT_EQ("Java_com_facebook_redex_SomeClass_someMethod",
@@ -26,7 +26,7 @@ TEST_F(NativeNamesTest, testBasicMethodNames) {
 }
 
 TEST_F(NativeNamesTest, testEscaping) {
-  auto m = DexMethod::make_method(
+  auto* m = DexMethod::make_method(
       "Lcom/facebook/redex/Some$Interesting_Class;.$ome_Method:(ILjava/lang/"
       "Str_ing;)Ljava/lang/Ob$ect;");
   EXPECT_EQ(

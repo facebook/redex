@@ -22,11 +22,11 @@ constexpr const char* ROOT_STORE_NAME = "classes";
 UnorderedMap<std::string, const DexStore*> get_named_stores(
     const DexStoresVector& stores) {
   UnorderedMap<std::string, const DexStore*> named_stores;
-  auto& root_store = stores.front();
+  const auto& root_store = stores.front();
   // For some reason, the root store is referenced by the name "dex" via
   // dependencies
   named_stores.emplace("dex", &root_store);
-  for (auto& store : stores) {
+  for (const auto& store : stores) {
     if (&store == &root_store) {
       continue;
     }
@@ -42,14 +42,14 @@ DexStoresDependencies build_transitive_resolved_dependencies(
   DexStoresDependencies transitive_resolved_dependencies;
   if (stores.size() == 1) {
     // special case to accomodate tests with non-standard store names
-    auto& store = stores.front();
+    const auto& store = stores.front();
     transitive_resolved_dependencies.emplace(&store, DexStoreDependencies());
     return transitive_resolved_dependencies;
   }
 
   // We handle the root store separately, as it may appear twist in the list
   // of stores (a quick to handle the primary dex).
-  auto& root_store = stores.front();
+  const auto& root_store = stores.front();
   always_assert_log(
       root_store.get_name() == ROOT_STORE_NAME,
       "Root store has name {%s}, but should be {%s}, out of %zu stores",
@@ -72,7 +72,7 @@ DexStoresDependencies build_transitive_resolved_dependencies(
           // This routinely happens for some reason
           continue;
         }
-        auto dependency_store = it2->second;
+        const auto* dependency_store = it2->second;
         deps.insert(dependency_store);
         const auto& deps_deps = build(dependency_store);
         insert_unordered_iterable(deps, deps_deps);
@@ -82,7 +82,7 @@ DexStoresDependencies build_transitive_resolved_dependencies(
     }
     return it->second;
   };
-  for (auto& store : stores) {
+  for (const auto& store : stores) {
     build(&store);
   }
   return transitive_resolved_dependencies;
@@ -93,20 +93,20 @@ DexStoresDependencies build_reverse_dependencies(
   DexStoresDependencies reverse_dependencies;
   if (stores.size() == 1) {
     // special case to accomodate tests with non-standard store names
-    auto& store = stores.front();
+    const auto& store = stores.front();
     reverse_dependencies.emplace(&store, DexStoreDependencies());
     return reverse_dependencies;
   }
 
   auto named_stores = get_named_stores(stores);
-  for (auto& store : stores) {
+  for (const auto& store : stores) {
     for (auto& dependency_name : store.get_dependencies()) {
       auto dep_it = named_stores.find(dependency_name);
       if (dep_it == named_stores.end()) {
         // This routinely happens for some reason
         continue;
       }
-      auto dependency_store = dep_it->second;
+      const auto* dependency_store = dep_it->second;
 
       auto reverse_dep_it = reverse_dependencies.find(dependency_store);
       if (reverse_dep_it == reverse_dependencies.end()) {
@@ -221,7 +221,7 @@ UnorderedSet<const DexType*> get_root_store_types(const DexStoresVector& stores,
   const auto& root_dexen = stores[0].get_dexen();
   size_t index = include_primary_dex ? 0 : 1;
   for (; index < root_dexen.size(); index++) {
-    for (const auto cls : root_dexen[index]) {
+    for (auto* const cls : root_dexen[index]) {
       types.insert(cls->get_type());
     }
   }
@@ -282,9 +282,9 @@ std::string XStoreRefs::show_type(const DexType* type) { return show(type); }
 
 XDexRefs::XDexRefs(const DexStoresVector& stores) {
   size_t dex_nr = 0;
-  for (auto& store : stores) {
-    for (auto& dexen : store.get_dexen()) {
-      for (const auto cls : dexen) {
+  for (const auto& store : stores) {
+    for (const auto& dexen : store.get_dexen()) {
+      for (auto* const cls : dexen) {
         m_dexes.emplace(cls->get_type(), dex_nr);
       }
       dex_nr++;
@@ -302,7 +302,7 @@ size_t XDexRefs::get_dex_idx(const DexType* type) const {
 
 bool XDexRefs::cross_dex_ref_override(const DexMethod* overridden,
                                       const DexMethod* overriding) const {
-  auto type = overriding->get_class();
+  auto* type = overriding->get_class();
   auto idx = get_dex_idx(type);
   do {
     type = type_class(type)->get_super_class();
@@ -327,8 +327,8 @@ bool XDexRefs::cross_dex_ref(const DexMethod* caller,
 XDexMethodRefs::XDexMethodRefs(const DexStoresVector& stores)
     : XDexRefs(stores) {
   size_t dex_nr = 0;
-  for (auto& store : stores) {
-    for (auto& dexen : store.get_dexen()) {
+  for (const auto& store : stores) {
+    for (const auto& dexen : store.get_dexen()) {
       m_dex_to_classes.emplace_back(dex_nr, &dexen);
       dex_nr++;
     }
@@ -364,13 +364,13 @@ XDexMethodRefs::Refs XDexMethodRefs::get_for_callee(
 
 bool XDexMethodRefs::has_cross_dex_refs(const Refs& callee_refs,
                                         DexType* caller_class) const {
-  auto& caller_refs = m_dex_refs.at(get_dex_idx(caller_class));
+  const auto& caller_refs = m_dex_refs.at(get_dex_idx(caller_class));
 
   // Check if there's init-class instructions in the callee that might
   // result in an sget instruction to a field unreferenced in the caller dex.
   // This init-class logic mimics (the second part of) what
   // DexStructure::resolve_init_classes does.
-  for (auto refined_type :
+  for (auto* refined_type :
        UnorderedIterable(callee_refs.refined_init_class_types)) {
     if (caller_refs.types.count(refined_type) == 0) {
       return true;

@@ -41,7 +41,7 @@ struct BlockAccessor {
          opcode::is_a_move_result(it->insn->opcode()))) {
       ++it;
     }
-    auto mie = new MethodItemEntry(std::move(src_block));
+    auto* mie = new MethodItemEntry(std::move(src_block));
     if (it == b->end()) {
       b->m_entries.push_back(*mie);
     } else {
@@ -53,7 +53,7 @@ struct BlockAccessor {
       Block* b,
       const IRList::iterator& it,
       std::unique_ptr<SourceBlock> src_block) {
-    auto mie = new MethodItemEntry(std::move(src_block));
+    auto* mie = new MethodItemEntry(std::move(src_block));
     return b->m_entries.insert_after(it, *mie);
   }
 };
@@ -80,12 +80,12 @@ inline std::vector<Edge*> get_sorted_edges(Block* b) {
       return *lhs_case < *rhs_case;
     }
     case EDGE_THROW: {
-      auto lhs_info = lhs->throw_info();
-      auto rhs_info = rhs->throw_info();
+      auto* lhs_info = lhs->throw_info();
+      auto* rhs_info = rhs->throw_info();
       redex_assert(lhs_info != nullptr);
       redex_assert(rhs_info != nullptr);
-      auto lhs_catch = lhs_info->catch_type;
-      auto rhs_catch = rhs_info->catch_type;
+      auto* lhs_catch = lhs_info->catch_type;
+      auto* rhs_catch = rhs_info->catch_type;
       if (lhs_catch == nullptr) {
         if (rhs_catch == nullptr) {
           redex_assert(lhs == rhs);
@@ -396,7 +396,7 @@ inline const SourceBlock* get_first_source_block_after(
 
 inline SourceBlock* get_first_source_block(cfg::ControlFlowGraph* cfg) {
   for (auto* b : cfg->blocks()) {
-    auto sb = get_first_source_block(b);
+    auto* sb = get_first_source_block(b);
     if (sb != nullptr) {
       return sb;
     }

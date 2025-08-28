@@ -19,7 +19,7 @@ TEST_F(PreVerify, InstrumentVerify) {
   ASSERT_NE(
       find_class_named(classes, "Lcom/facebook/redextest/InstrumentAnalysis;"),
       nullptr);
-  auto cls =
+  auto* cls =
       find_class_named(classes, "Lcom/facebook/redextest/InstrumentTarget;");
   ASSERT_NE(cls, nullptr);
 

@@ -14,9 +14,9 @@ bool is_assignable_to_interface(const DexType* type, const DexType* iface) {
   if (type == iface) {
     return true;
   }
-  auto cls = type_class(type);
-  if (cls) {
-    for (auto extends : *cls->get_interfaces()) {
+  auto* cls = type_class(type);
+  if (cls != nullptr) {
+    for (auto* extends : *cls->get_interfaces()) {
       if (is_assignable_to_interface(extends, iface)) {
         return true;
       }
@@ -27,12 +27,12 @@ bool is_assignable_to_interface(const DexType* type, const DexType* iface) {
 
 bool is_assignable_to(const DexType* child, const DexType* parent) {
   // Check class hierarchy
-  auto super = child;
+  const auto* super = child;
   while (super != nullptr) {
     if (parent == super) {
       return true;
     }
-    const auto cls = type_class(super);
+    auto* const cls = type_class(super);
     if (cls == nullptr) {
       break;
     }
@@ -40,7 +40,7 @@ bool is_assignable_to(const DexType* child, const DexType* parent) {
   }
   // Check interface hierarchy
   DexClass* parent_cls = type_class(parent);
-  return parent_cls && is_interface(parent_cls) &&
+  return (parent_cls != nullptr) && is_interface(parent_cls) &&
          is_assignable_to_interface(child, parent);
 }
 

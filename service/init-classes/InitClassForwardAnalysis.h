@@ -41,7 +41,7 @@ class InitClassForwardFixpointIterator final
 
   void analyze_instruction(const IRInstruction* insn,
                            InitClassDomain* current_state) const {
-    auto init_class = ::get_init_class_type_demand(insn);
+    const auto* init_class = ::get_init_class_type_demand(insn);
     current_state->insert(m_init_classes_with_side_effects, init_class);
   }
 
@@ -49,14 +49,14 @@ class InitClassForwardFixpointIterator final
                                     InitClassDomain* current_state) const {
     auto op = insn->opcode();
     if (opcode::is_an_ifield_op(op)) {
-      auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
-      if (field) {
+      auto* field = resolve_field(insn->get_field(), FieldSearch::Instance);
+      if (field != nullptr) {
         current_state->insert(m_init_classes_with_side_effects,
                               field->get_class());
       }
     } else if (opcode::is_invoke_virtual(op)) {
-      auto method = resolve_method(insn->get_method(), MethodSearch::Virtual);
-      if (method) {
+      auto* method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+      if (method != nullptr) {
         current_state->insert(m_init_classes_with_side_effects,
                               method->get_class());
       }
@@ -76,7 +76,7 @@ class InitClassForwardFixpointIterator final
                     InitClassDomain* state_at_entry) const override {
     auto last_insn = block->get_last_insn();
     for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       analyze_instruction(insn, state_at_entry, insn == last_insn->insn);
     }
   }

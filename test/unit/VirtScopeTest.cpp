@@ -58,7 +58,7 @@ void for_every_method(const SignatureMap& sig_map, VirtMethFn fn) {
 // Common signature map top level checks
 //
 void check_protos_1(SignatureMap& sm) {
-  auto wait = DexString::get_string("wait");
+  const auto* wait = DexString::get_string("wait");
   for_every_sig(sm, [&](const DexString* name, const ProtoMap& protos) {
     if (name == wait) {
       EXPECT_EQ(protos.size(), 3);
@@ -69,9 +69,9 @@ void check_protos_1(SignatureMap& sm) {
 }
 
 void check_protos_2(SignatureMap& sm) {
-  auto wait = DexString::get_string("wait");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
+  const auto* wait = DexString::get_string("wait");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
   for (const auto& sig_map_it : sm) {
     if (sig_map_it.first == wait) {
       EXPECT_EQ(sig_map_it.second.size(), 3);
@@ -235,8 +235,8 @@ TEST_F(VirtScopeTest, NoOverload) {
   size_t count = 0;
   size_t a_count = 0;
   size_t b_count = 0;
-  const auto a_t = DexType::get_type("LA;");
-  const auto b_t = DexType::get_type("LB;");
+  auto* const a_t = DexType::get_type("LA;");
+  auto* const b_t = DexType::get_type("LB;");
   cs.walk_virtual_scopes([&](const DexType* type, const VirtualScope* scope) {
     count++;
     if (type == a_t) {
@@ -276,13 +276,13 @@ TEST_F(VirtScopeTest, Override) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 2);
   check_protos_1(sm);
 
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto e_t = DexType::get_type("LE;");
-  auto d_t = DexType::get_type("LD;");
-  auto void_void =
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
 
   // check expected scopes
@@ -379,22 +379,22 @@ TEST_F(VirtScopeTest, OverrideOverload) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 2);
   check_protos_2(sm);
 
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
-  auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
-  auto void_void =
+  const auto* eq = DexString::get_string("equals");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  auto* obj_t = type::java_lang_Object();
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* c_t = DexType::get_type("LC;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* f_t = DexType::get_type("LF;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto void_int = DexProto::make_proto(
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
+  auto* bool_obj = DexProto::make_proto(type::_boolean(),
+                                        DexTypeList::make_type_list({obj_t}));
 
   // check expected scopes
   ExpectedSig expected_sig;
@@ -521,23 +521,23 @@ TEST_F(VirtScopeTest, Interface) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 2);
   check_protos_2(sm);
 
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
-  auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
-  auto intf1_t = DexType::get_type("LIntf1;");
-  auto void_void =
+  const auto* eq = DexString::get_string("equals");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  auto* obj_t = type::java_lang_Object();
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* c_t = DexType::get_type("LC;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* f_t = DexType::get_type("LF;");
+  auto* intf1_t = DexType::get_type("LIntf1;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto void_int = DexProto::make_proto(
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
+  auto* bool_obj = DexProto::make_proto(type::_boolean(),
+                                        DexTypeList::make_type_list({obj_t}));
 
   // check expected scopes
   ExpectedSig expected_sig;
@@ -618,29 +618,29 @@ TEST_F(VirtScopeTest, Interface1) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 2);
   check_protos_2(sm);
 
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
-  auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
-  auto g_t = DexType::get_type("LG;");
-  auto h_t = DexType::get_type("LH;");
-  auto k_t = DexType::get_type("LK;");
-  auto i_t = DexType::get_type("LI;");
-  auto l_t = DexType::get_type("LL;");
-  auto intf1_t = DexType::get_type("LIntf1;");
-  auto intf2_t = DexType::get_type("LIntf2;");
-  auto void_void =
+  const auto* eq = DexString::get_string("equals");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  auto* obj_t = type::java_lang_Object();
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* c_t = DexType::get_type("LC;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* f_t = DexType::get_type("LF;");
+  auto* g_t = DexType::get_type("LG;");
+  auto* h_t = DexType::get_type("LH;");
+  auto* k_t = DexType::get_type("LK;");
+  auto* i_t = DexType::get_type("LI;");
+  auto* l_t = DexType::get_type("LL;");
+  auto* intf1_t = DexType::get_type("LIntf1;");
+  auto* intf2_t = DexType::get_type("LIntf2;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto void_int = DexProto::make_proto(
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
+  auto* bool_obj = DexProto::make_proto(type::_boolean(),
+                                        DexTypeList::make_type_list({obj_t}));
 
   // check expected scopes
   ExpectedSig expected_sig;
@@ -746,30 +746,30 @@ TEST_F(VirtScopeTest, Interface2) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 2);
   check_protos_2(sm);
 
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
-  auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
-  auto g_t = DexType::get_type("LG;");
-  auto h_t = DexType::get_type("LH;");
-  auto k_t = DexType::get_type("LK;");
-  auto i_t = DexType::get_type("LI;");
-  auto l_t = DexType::get_type("LL;");
+  const auto* eq = DexString::get_string("equals");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  auto* obj_t = type::java_lang_Object();
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* c_t = DexType::get_type("LC;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* f_t = DexType::get_type("LF;");
+  auto* g_t = DexType::get_type("LG;");
+  auto* h_t = DexType::get_type("LH;");
+  auto* k_t = DexType::get_type("LK;");
+  auto* i_t = DexType::get_type("LI;");
+  auto* l_t = DexType::get_type("LL;");
 
-  auto intf1_t = DexType::get_type("LIntf1;");
-  auto intf2_t = DexType::get_type("LIntf2;");
-  auto void_void =
+  auto* intf1_t = DexType::get_type("LIntf1;");
+  auto* intf2_t = DexType::get_type("LIntf2;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto void_int = DexProto::make_proto(
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
+  auto* bool_obj = DexProto::make_proto(type::_boolean(),
+                                        DexTypeList::make_type_list({obj_t}));
 
   // check expected scopes
   ExpectedSig expected_sig;
@@ -876,29 +876,29 @@ TEST_F(VirtScopeTest, Interface3) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 2);
   check_protos_2(sm);
 
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
-  auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
-  auto g_t = DexType::get_type("LG;");
-  auto h_t = DexType::get_type("LH;");
-  auto k_t = DexType::get_type("LK;");
-  auto i_t = DexType::get_type("LI;");
-  auto l_t = DexType::get_type("LL;");
-  auto intf1_t = DexType::get_type("LIntf1;");
-  auto intf2_t = DexType::get_type("LIntf2;");
-  auto void_void =
+  const auto* eq = DexString::get_string("equals");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  auto* obj_t = type::java_lang_Object();
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* c_t = DexType::get_type("LC;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* f_t = DexType::get_type("LF;");
+  auto* g_t = DexType::get_type("LG;");
+  auto* h_t = DexType::get_type("LH;");
+  auto* k_t = DexType::get_type("LK;");
+  auto* i_t = DexType::get_type("LI;");
+  auto* l_t = DexType::get_type("LL;");
+  auto* intf1_t = DexType::get_type("LIntf1;");
+  auto* intf2_t = DexType::get_type("LIntf2;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto void_int = DexProto::make_proto(
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
+  auto* bool_obj = DexProto::make_proto(type::_boolean(),
+                                        DexTypeList::make_type_list({obj_t}));
 
   // check expected scopes
   ExpectedSig expected_sig;
@@ -984,29 +984,29 @@ TEST_F(VirtScopeTest, Interface3Miranda) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 2);
   check_protos_2(sm);
 
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
-  auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
-  auto g_t = DexType::get_type("LG;");
-  auto h_t = DexType::get_type("LH;");
-  auto k_t = DexType::get_type("LK;");
-  auto i_t = DexType::get_type("LI;");
-  auto l_t = DexType::get_type("LL;");
-  auto intf1_t = DexType::get_type("LIntf1;");
-  auto intf2_t = DexType::get_type("LIntf2;");
-  auto void_void =
+  const auto* eq = DexString::get_string("equals");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  auto* obj_t = type::java_lang_Object();
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* c_t = DexType::get_type("LC;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* f_t = DexType::get_type("LF;");
+  auto* g_t = DexType::get_type("LG;");
+  auto* h_t = DexType::get_type("LH;");
+  auto* k_t = DexType::get_type("LK;");
+  auto* i_t = DexType::get_type("LI;");
+  auto* l_t = DexType::get_type("LL;");
+  auto* intf1_t = DexType::get_type("LIntf1;");
+  auto* intf2_t = DexType::get_type("LIntf2;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto void_int = DexProto::make_proto(
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
+  auto* bool_obj = DexProto::make_proto(type::_boolean(),
+                                        DexTypeList::make_type_list({obj_t}));
 
   // check expected scopes
   ExpectedSig expected_sig;
@@ -1092,30 +1092,30 @@ TEST_F(VirtScopeTest, Interface3MirandaMultiIntf) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 2);
   check_protos_2(sm);
 
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
-  auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
-  auto g_t = DexType::get_type("LG;");
-  auto h_t = DexType::get_type("LH;");
-  auto k_t = DexType::get_type("LK;");
-  auto i_t = DexType::get_type("LI;");
-  auto l_t = DexType::get_type("LL;");
-  auto intf1_t = DexType::get_type("LIntf1;");
-  auto intf2_t = DexType::get_type("LIntf2;");
-  auto intf3_t = DexType::get_type("LIntf3;");
-  auto void_void =
+  const auto* eq = DexString::get_string("equals");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  auto* obj_t = type::java_lang_Object();
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* c_t = DexType::get_type("LC;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* f_t = DexType::get_type("LF;");
+  auto* g_t = DexType::get_type("LG;");
+  auto* h_t = DexType::get_type("LH;");
+  auto* k_t = DexType::get_type("LK;");
+  auto* i_t = DexType::get_type("LI;");
+  auto* l_t = DexType::get_type("LL;");
+  auto* intf1_t = DexType::get_type("LIntf1;");
+  auto* intf2_t = DexType::get_type("LIntf2;");
+  auto* intf3_t = DexType::get_type("LIntf3;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto void_int = DexProto::make_proto(
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
+  auto* bool_obj = DexProto::make_proto(type::_boolean(),
+                                        DexTypeList::make_type_list({obj_t}));
 
   // check expected scopes
   ExpectedSig expected_sig;
@@ -1202,31 +1202,31 @@ TEST_F(VirtScopeTest, Interface3IntfOverride) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 2);
   check_protos_2(sm);
 
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
-  auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
-  auto g_t = DexType::get_type("LG;");
-  auto h_t = DexType::get_type("LH;");
-  auto k_t = DexType::get_type("LK;");
-  auto i_t = DexType::get_type("LI;");
-  auto l_t = DexType::get_type("LL;");
-  auto intf1_t = DexType::get_type("LIntf1;");
-  auto intf2_t = DexType::get_type("LIntf2;");
-  auto intf3_t = DexType::get_type("LIntf3;");
-  auto intf4_t = DexType::get_type("LIntf4;");
-  auto void_void =
+  const auto* eq = DexString::get_string("equals");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  auto* obj_t = type::java_lang_Object();
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* c_t = DexType::get_type("LC;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* f_t = DexType::get_type("LF;");
+  auto* g_t = DexType::get_type("LG;");
+  auto* h_t = DexType::get_type("LH;");
+  auto* k_t = DexType::get_type("LK;");
+  auto* i_t = DexType::get_type("LI;");
+  auto* l_t = DexType::get_type("LL;");
+  auto* intf1_t = DexType::get_type("LIntf1;");
+  auto* intf2_t = DexType::get_type("LIntf2;");
+  auto* intf3_t = DexType::get_type("LIntf3;");
+  auto* intf4_t = DexType::get_type("LIntf4;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto void_int = DexProto::make_proto(
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
+  auto* bool_obj = DexProto::make_proto(type::_boolean(),
+                                        DexTypeList::make_type_list({obj_t}));
 
   // check expected scopes
   ExpectedSig expected_sig;
@@ -1316,34 +1316,34 @@ TEST_F(VirtScopeTest, Interface3IntfOverEscape) {
   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 3);
   check_protos_2(sm);
 
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
-  auto g = DexString::get_string("g");
-  auto h = DexString::get_string("h");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
-  auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
-  auto g_t = DexType::get_type("LG;");
-  auto h_t = DexType::get_type("LH;");
-  auto k_t = DexType::get_type("LK;");
-  auto i_t = DexType::get_type("LI;");
-  auto l_t = DexType::get_type("LL;");
-  auto m_t = DexType::get_type("LM;");
-  auto n_t = DexType::get_type("LN;");
-  auto intf1_t = DexType::get_type("LIntf1;");
-  auto intf2_t = DexType::get_type("LIntf2;");
-  auto intf3_t = DexType::get_type("LIntf3;");
-  auto intf4_t = DexType::get_type("LIntf4;");
-  auto void_void =
+  const auto* eq = DexString::get_string("equals");
+  const auto* f = DexString::get_string("f");
+  const auto* g = DexString::get_string("g");
+  const auto* h = DexString::get_string("h");
+  auto* obj_t = type::java_lang_Object();
+  auto* a_t = DexType::get_type("LA;");
+  auto* b_t = DexType::get_type("LB;");
+  auto* c_t = DexType::get_type("LC;");
+  auto* d_t = DexType::get_type("LD;");
+  auto* e_t = DexType::get_type("LE;");
+  auto* f_t = DexType::get_type("LF;");
+  auto* g_t = DexType::get_type("LG;");
+  auto* h_t = DexType::get_type("LH;");
+  auto* k_t = DexType::get_type("LK;");
+  auto* i_t = DexType::get_type("LI;");
+  auto* l_t = DexType::get_type("LL;");
+  auto* m_t = DexType::get_type("LM;");
+  auto* n_t = DexType::get_type("LN;");
+  auto* intf1_t = DexType::get_type("LIntf1;");
+  auto* intf2_t = DexType::get_type("LIntf2;");
+  auto* intf3_t = DexType::get_type("LIntf3;");
+  auto* intf4_t = DexType::get_type("LIntf4;");
+  auto* void_void =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto void_int = DexProto::make_proto(
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
+  auto* bool_obj = DexProto::make_proto(type::_boolean(),
+                                        DexTypeList::make_type_list({obj_t}));
 
   // check expected scopes
   ExpectedSig expected_sig;
@@ -1487,21 +1487,21 @@ TEST_F(VirtScopeTest, Interface3IntfOverEscape) {
 TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
   std::vector<DexClass*> scope = create_scope_10();
   TypeSystem type_system(scope);
-  auto g = DexString::get_string("g");
-  auto e_t = DexType::get_type("LE;");
-  auto g_t = DexType::get_type("LG;");
-  auto h_t = DexType::get_type("LH;");
-  auto k_t = DexType::get_type("LK;");
-  auto i_t = DexType::get_type("LI;");
-  auto j_t = DexType::get_type("LJ;");
-  auto intf2_t = DexType::get_type("LIntf2;");
-  auto void_int = DexProto::make_proto(
+  const auto* g = DexString::get_string("g");
+  auto* e_t = DexType::get_type("LE;");
+  auto* g_t = DexType::get_type("LG;");
+  auto* h_t = DexType::get_type("LH;");
+  auto* k_t = DexType::get_type("LK;");
+  auto* i_t = DexType::get_type("LI;");
+  auto* j_t = DexType::get_type("LJ;");
+  auto* intf2_t = DexType::get_type("LIntf2;");
+  auto* void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
 
   // invoke_virtual I.g(int)
   // Resolve the above call and obtain G.g(int) virtual scope
   // that is where the method is introduced
-  auto i_g_void_int =
+  auto* i_g_void_int =
       static_cast<DexMethod*>(DexMethod::get_method(i_t, g, void_int));
   const auto& g_g_virt_scope = type_system.find_virtual_scope(i_g_void_int);
   EXPECT_TRUE(g_g_virt_scope != nullptr);
@@ -1532,7 +1532,7 @@ TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
 
   // invoke_interface Intf2.g(int)
   // Resolve the above call and obtain Intf2.g(int) interface scope
-  auto intf2_g_void_int =
+  auto* intf2_g_void_int =
       static_cast<DexMethod*>(DexMethod::get_method(intf2_t, g, void_int));
   const auto& intf2_g_intf_scope =
       type_system.find_interface_scope(intf2_g_void_int);

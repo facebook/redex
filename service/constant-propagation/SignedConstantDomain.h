@@ -70,7 +70,8 @@ class SignedConstantDomain final
     }
     bool operator<=(const Bounds& other) const {
       return this->is_bottom() ||
-             (other.l <= l && u <= other.u && other.is_nez <= is_nez);
+             (other.l <= l && u <= other.u &&
+              static_cast<int>(other.is_nez) <= static_cast<int>(is_nez));
     }
     // Partial order only. Use <= instead.
     bool operator>(const Bounds&) = delete;

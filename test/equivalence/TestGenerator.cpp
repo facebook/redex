@@ -31,16 +31,16 @@ namespace fs = boost::filesystem;
 
 void EquivalenceTest::generate(DexClass* cls) {
   setup(cls);
-  auto ret = DexType::make_type("I");
-  auto args = DexTypeList::make_type_list({});
-  auto proto = DexProto::make_proto(ret, args); // I()
+  auto* ret = DexType::make_type("I");
+  auto* args = DexTypeList::make_type_list({});
+  auto* proto = DexProto::make_proto(ret, args); // I()
   DexMethod* before = static_cast<DexMethod*>(DexMethod::make_method(
       cls->get_type(), DexString::make_string("before_" + test_name()), proto));
   before->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   before->set_code(std::make_unique<IRCode>(before, 0));
   build_method(before);
   cls->add_method(before);
-  auto after = DexMethod::make_method_from(
+  auto* after = DexMethod::make_method_from(
       before, cls->get_type(), DexString::make_string("after_" + test_name()));
   cls->add_method(after);
   transform_method(after);
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
   if (argc < 2) {
     std::cerr << "Usage: ./TestGenerator classes.dex" << std::endl;
   }
-  auto dex = argv[1];
+  auto* dex = argv[1];
 
   g_redex = new RedexContext();
   auto classes = load_classes_from_dex(DexLocation::make_location("", dex));

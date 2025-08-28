@@ -67,7 +67,7 @@ class AndroidSDK {
   }
 
   bool has_method(const DexMethod* meth) const {
-    auto type = meth->get_class();
+    auto* type = meth->get_class();
     const auto& it = m_framework_classes.find(type);
     if (it == m_framework_classes.end()) {
       return false;
@@ -80,7 +80,7 @@ class AndroidSDK {
   }
 
   bool has_field(const DexField* field) const {
-    auto type = field->get_class();
+    auto* type = field->get_class();
     const auto& it = m_framework_classes.find(type);
     if (it == m_framework_classes.end()) {
       return false;
@@ -93,7 +93,7 @@ class AndroidSDK {
   }
 
   bool has_type(const DexType* type) const {
-    return m_framework_classes.count(type);
+    return m_framework_classes.count(type) != 0u;
   }
 
  private:

@@ -22,7 +22,7 @@ int32_t get_unique_store_id(const char* store_name) {
 }
 
 std::string get_canary_name(int dexnum, const char* store_name) {
-  if (store_name) {
+  if (store_name != nullptr) {
     char buf[STORE_CANARY_CLASS_BUFSIZE];
     int store_id = get_unique_store_id(store_name);
     snprintf(buf, sizeof(buf), STORE_CANARY_CLASS_FORMAT, store_id, dexnum + 1);
@@ -37,12 +37,12 @@ std::string get_canary_name(int dexnum, const char* store_name) {
 DexClass* create_canary(int dexnum, const std::string& store_name) {
   std::string canary_name = get_canary_name(
       dexnum, store_name.empty() ? nullptr : store_name.c_str());
-  auto canary_type = DexType::get_type(canary_name);
-  if (!canary_type) {
+  auto* canary_type = DexType::get_type(canary_name);
+  if (canary_type == nullptr) {
     canary_type = DexType::make_type(canary_name);
   }
-  auto canary_cls = type_class(canary_type);
-  if (!canary_cls) {
+  auto* canary_cls = type_class(canary_type);
+  if (canary_cls == nullptr) {
     ClassCreator cc(canary_type);
     cc.set_access(ACC_PUBLIC | ACC_ABSTRACT);
     cc.set_super(type::java_lang_Object());

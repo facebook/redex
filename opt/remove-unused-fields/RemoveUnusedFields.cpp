@@ -35,7 +35,7 @@ bool can_remove(DexField* field) {
 }
 
 bool has_non_zero_static_value(DexField* field) {
-  auto ev = field->get_static_value();
+  auto* ev = field->get_static_value();
   return ev != nullptr && !ev->is_zero();
 }
 
@@ -89,10 +89,10 @@ class RemoveUnusedFields final {
   }
 
   bool can_remove_unread_field_put(DexField* field) const {
-    auto t = field->get_type();
+    auto* t = field->get_type();
     // When no non-null value is ever written to a field, then it can never hold
     // a non-null reference
-    if (m_zero_written_fields.count(field)) {
+    if (m_zero_written_fields.count(field) != 0u) {
       return true;
     }
 
@@ -102,12 +102,12 @@ class RemoveUnusedFields final {
       return true;
     }
 
-    if (m_config.allowlist_types.count(t)) {
+    if (m_config.allowlist_types.count(t) != 0u) {
       return true;
     }
 
     // We don't have to worry about lifetimes of harmless objects
-    if (m_vestigial_objects_written_fields.count(field)) {
+    if (m_vestigial_objects_written_fields.count(field) != 0u) {
       return true;
     }
 
@@ -143,15 +143,16 @@ class RemoveUnusedFields final {
         if (m_config.remove_unread_fields && stats.reads == 0) {
           m_unread_fields.emplace(field);
           if (m_config.remove_vestigial_objects_written_fields &&
-              !field_writes->non_vestigial_objects_written_fields.count_unsafe(
-                  field)) {
+              (field_writes->non_vestigial_objects_written_fields.count_unsafe(
+                   field) == 0u)) {
             m_vestigial_objects_written_fields.emplace(field);
           }
         } else if (m_config.remove_unwritten_fields && stats.writes == 0 &&
                    !has_non_zero_static_value(field)) {
           m_unwritten_fields.emplace(field);
         } else if (m_config.remove_zero_written_fields &&
-                   !field_writes->non_zero_written_fields.count_unsafe(field) &&
+                   (field_writes->non_zero_written_fields.count_unsafe(field) ==
+                    0u) &&
                    !has_non_zero_static_value(field)) {
           m_zero_written_fields.emplace(field);
         }
@@ -184,10 +185,10 @@ class RemoveUnusedFields final {
         if (!insn->has_field()) {
           continue;
         }
-        auto field = resolve_field(insn->get_field());
+        auto* field = resolve_field(insn->get_field());
         bool replace_insn = false;
         bool remove_insn = false;
-        if (m_unread_fields.count(field)) {
+        if (m_unread_fields.count(field) != 0u) {
           if (can_remove_unread_field_put(field)) {
             always_assert(opcode::is_an_iput(insn->opcode()) ||
                           opcode::is_an_sput(insn->opcode()));
@@ -196,12 +197,12 @@ class RemoveUnusedFields final {
           } else {
             m_unremovable_unread_field_puts++;
           }
-        } else if (m_unwritten_fields.count(field)) {
+        } else if (m_unwritten_fields.count(field) != 0u) {
           always_assert(opcode::is_an_iget(insn->opcode()) ||
                         opcode::is_an_sget(insn->opcode()));
           TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
           replace_insn = true;
-        } else if (m_zero_written_fields.count(field)) {
+        } else if (m_zero_written_fields.count(field) != 0u) {
           if (opcode::is_an_iput(insn->opcode()) ||
               opcode::is_an_sput(insn->opcode())) {
             TRACE(RMUF, 5, "Removing %s", SHOW(insn));
@@ -217,11 +218,11 @@ class RemoveUnusedFields final {
           continue;
         }
         std::vector<IRInstruction*> new_insns;
-        if (field && is_static(field)) {
-          auto init_class_insn =
+        if ((field != nullptr) && is_static(field)) {
+          auto* init_class_insn =
               m_init_classes_with_side_effects.create_init_class_insn(
                   field->get_class());
-          if (init_class_insn) {
+          if (init_class_insn != nullptr) {
             new_insns.push_back(init_class_insn);
             m_init_classes++;
           }
@@ -231,7 +232,7 @@ class RemoveUnusedFields final {
           if (move_result.is_end()) {
             continue;
           }
-          auto write_insn = move_result->insn;
+          auto* write_insn = move_result->insn;
           IRInstruction* const0 = new IRInstruction(
               write_insn->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
           const0->set_dest(write_insn->dest())->set_literal(0);
@@ -305,7 +306,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
     sort_unique(removed_fields, compare_dexfields);
     auto path = conf.metafile(REMOVED_FIELDS_FILENAME);
     std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
-    for (auto* field : removed_fields) {
+    for (const auto* field : removed_fields) {
       ofs << show_deobfuscated(field) << "\n";
     }
   }

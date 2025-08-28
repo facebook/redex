@@ -30,7 +30,7 @@ void RecursionPruner::run() {
     ordered_callers.push_back(const_cast<DexMethod*>(p.first));
   }
   std::sort(ordered_callers.begin(), ordered_callers.end(), compare_dexmethods);
-  for (const auto caller : ordered_callers) {
+  for (auto* const caller : ordered_callers) {
     TraceContext context(caller);
     auto stack_depth = recurse(caller, &visited);
     m_max_call_stack_depth = std::max(m_max_call_stack_depth, stack_depth);
@@ -59,7 +59,7 @@ size_t RecursionPruner::recurse(DexMethod* caller,
   // recurse into the callees in case they have something to inline on
   // their own. We want to inline bottom up so that a callee is
   // completely resolved by the time it is inlined.
-  for (auto callee : ordered_callees) {
+  for (auto* callee : ordered_callees) {
     size_t callee_stack_depth = recurse(callee, visited);
     if (callee_stack_depth == std::numeric_limits<size_t>::max()) {
       // we've found recursion in the current call stack

@@ -14,7 +14,7 @@ namespace {
 size_t count_empty_const_str(DexMethod* method) {
   size_t count = 0;
   method->balloon();
-  auto code = method->get_code();
+  auto* code = method->get_code();
   for (auto& mie : InstructionIterable(code)) {
     if (mie.insn->opcode() == OPCODE_CONST_STRING &&
         mie.insn->get_string()->str().empty()) {
@@ -26,68 +26,68 @@ size_t count_empty_const_str(DexMethod* method) {
 } // namespace
 
 TEST_F(PreVerify, ValueOfOptHasEmptyStr) {
-  auto anno_cls =
+  auto* anno_cls =
       find_class_named(classes, "Lcom/facebook/redex/TestStringDef;");
   ASSERT_NE(anno_cls, nullptr);
-  auto util_cls =
+  auto* util_cls =
       find_class_named(classes, "Lcom/facebook/redex/TestStringDef$Util;");
   ASSERT_NE(util_cls, nullptr);
 
-  auto value_of = find_dmethod_named(*util_cls, "valueOf");
+  auto* value_of = find_dmethod_named(*util_cls, "valueOf");
   ASSERT_NE(value_of, nullptr);
 
-  auto value_of_opt = find_dmethod_named(*util_cls, "valueOfOpt");
+  auto* value_of_opt = find_dmethod_named(*util_cls, "valueOfOpt");
   ASSERT_NE(value_of_opt, nullptr);
   EXPECT_EQ(count_empty_const_str(value_of_opt), 1);
 }
 
 TEST_F(PostVerify, ValueOfOptHasNoEmptyStr) {
-  auto anno_cls =
+  auto* anno_cls =
       find_class_named(classes, "Lcom/facebook/redex/TestStringDef;");
   ASSERT_NE(anno_cls, nullptr);
-  auto util_cls =
+  auto* util_cls =
       find_class_named(classes, "Lcom/facebook/redex/TestStringDef$Util;");
   ASSERT_NE(util_cls, nullptr);
 
-  auto value_of = find_dmethod_named(*util_cls, "valueOf");
+  auto* value_of = find_dmethod_named(*util_cls, "valueOf");
   ASSERT_NE(value_of, nullptr);
 
-  auto value_of_opt = find_dmethod_named(*util_cls, "valueOfOpt");
+  auto* value_of_opt = find_dmethod_named(*util_cls, "valueOfOpt");
   ASSERT_NE(value_of_opt, nullptr);
   EXPECT_EQ(count_empty_const_str(value_of_opt), 0);
 }
 
 TEST_F(PreVerify, TestValueOfString) {
-  auto cls =
+  auto* cls =
       find_class_named(classes, "Lcom/facebook/redex/TypedefAnnoOptTest;");
   ASSERT_NE(cls, nullptr);
 
-  auto m = find_dmethod_named(*cls, "testValueOfString");
+  auto* m = find_dmethod_named(*cls, "testValueOfString");
   ASSERT_NE(m, nullptr);
 
   m->balloon();
   for (const auto& mie : InstructionIterable(m->get_code())) {
     auto* insn = mie.insn;
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-      auto invoked_method = insn->get_method();
+      auto* invoked_method = insn->get_method();
       EXPECT_EQ(invoked_method->get_name()->str(), "valueOf");
     }
   }
 }
 
 TEST_F(PostVerify, TestValueOfStringOpt) {
-  auto cls =
+  auto* cls =
       find_class_named(classes, "Lcom/facebook/redex/TypedefAnnoOptTest;");
   ASSERT_NE(cls, nullptr);
 
-  auto m = find_dmethod_named(*cls, "testValueOfString");
+  auto* m = find_dmethod_named(*cls, "testValueOfString");
   ASSERT_NE(m, nullptr);
 
   m->balloon();
   for (const auto& mie : InstructionIterable(m->get_code())) {
     auto* insn = mie.insn;
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-      auto invoked_method = insn->get_method();
+      auto* invoked_method = insn->get_method();
       EXPECT_EQ(invoked_method->get_name()->str(), "valueOfOpt");
     }
   }

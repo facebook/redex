@@ -107,8 +107,9 @@ class encoding_visitor
       // See above: There's a limitation in older DalvikVMs
       return nullptr;
     }
-    auto type = const_cast<DexType*>(*cst);
-    if (!m_xstores || m_xstores->illegal_ref(m_declaring_type, type)) {
+    auto* type = const_cast<DexType*>(*cst);
+    if ((m_xstores == nullptr) ||
+        m_xstores->illegal_ref(m_declaring_type, type)) {
       return nullptr;
     }
     return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(type));
@@ -186,7 +187,7 @@ StaticFieldReadAnalysis::StaticFieldReadAnalysis(
   // from the callees so the analysis gives up less often.
   for (const auto& name : UnorderedIterable(allowed_opaque_callee_names)) {
     DexMethodRef* callee = DexMethod::get_method(name);
-    if (callee) {
+    if (callee != nullptr) {
       m_allowed_opaque_callees.emplace(callee);
     }
   }
@@ -226,23 +227,23 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
 StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
     const DexMethod* method, UnorderedSet<const DexMethod*>& pending_methods) {
 
-  if (!method) {
+  if (method == nullptr) {
     return {};
   }
 
-  if (m_finalized.count(method)) {
+  if (m_finalized.count(method) != 0u) {
     return m_summaries.at(method);
   }
 
-  auto code = const_cast<IRCode*>(method->get_code());
-  if (!code) {
+  auto* code = const_cast<IRCode*>(method->get_code());
+  if (code == nullptr) {
     return {};
   }
 
   Result ret{};
   editable_cfg_adapter::iterate_with_iterator(
       code, [&](const IRList::iterator& it) {
-        auto insn = it->insn;
+        auto* insn = it->insn;
         if (opcode::is_an_sget(insn->opcode())) {
           ret.add(insn->get_field());
         }
@@ -256,13 +257,14 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
 
   editable_cfg_adapter::iterate_with_iterator(
       code, [&](const IRList::iterator& it) {
-        auto insn = it->insn;
+        auto* insn = it->insn;
         if (opcode::is_an_invoke(insn->opcode())) {
-          auto callee_method_def = resolve_method(
+          auto* callee_method_def = resolve_method(
               insn->get_method(), opcode_to_search(insn), method);
-          if (!callee_method_def || callee_method_def->is_external() ||
+          if ((callee_method_def == nullptr) ||
+              callee_method_def->is_external() ||
               !callee_method_def->is_concrete() ||
-              m_allowed_opaque_callees.count(callee_method_def)) {
+              (m_allowed_opaque_callees.count(callee_method_def) != 0u)) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
           const auto& callees = resolve_callees_in_graph(m_graph, insn);
@@ -276,7 +278,7 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
 
           for (const DexMethod* callee : UnorderedIterable(callees)) {
             Result callee_result;
-            if (pending_methods.count(callee)) {
+            if (pending_methods.count(callee) != 0u) {
               callee_pending = true;
               callee_result = m_summaries.at(callee);
             } else {
@@ -287,7 +289,7 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
               callee_pending = false;
               return editable_cfg_adapter::LOOP_BREAK;
             }
-            if (pending_methods.count(callee)) {
+            if (pending_methods.count(callee) != 0u) {
               callee_pending = true;
             }
           }
@@ -326,7 +328,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
   StaticFieldReadAnalysis analysis(graph, allowed_opaque_callee_names);
 
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope, init_cycles)) {
-    auto clinit = cls->get_clinit();
+    auto* clinit = cls->get_clinit();
     if (clinit != nullptr && clinit->get_code() == nullptr) {
       continue;
     }
@@ -414,8 +416,8 @@ cp::WholeProgramState analyze_and_simplify_inits(
     }
     if (ctors.size() == 1) {
       bool has_same_type_arg = false;
-      auto cls_type = cls->get_type();
-      for (auto arg_type : *(ctors[0]->get_proto()->get_args())) {
+      auto* cls_type = cls->get_type();
+      for (auto* arg_type : *(ctors[0]->get_proto()->get_args())) {
         if (arg_type == cls_type) {
           has_same_type_arg = true;
         }
@@ -428,7 +430,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
     cp::set_ifield_values(cls, eligible_ifields, &env);
     always_assert(ctors.size() <= 1);
     if (ctors.size() == 1) {
-      auto ctor = ctors[0];
+      auto* ctor = ctors[0];
       if (ctor->get_code() == nullptr) {
         continue;
       }
@@ -503,14 +505,15 @@ FinalInlinePassV2::Stats inline_final_gets(
     }
     cfg::CFGMutation mutation(code.cfg());
     size_t replacements = 0;
-    for (auto block : code.cfg().blocks()) {
+    for (auto* block : code.cfg().blocks()) {
       auto ii = InstructionIterable(block);
       for (auto it = ii.begin(); it != ii.end(); it++) {
-        auto insn = it->insn;
+        auto* insn = it->insn;
         auto op = insn->opcode();
         if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
-          auto field = resolve_field(insn->get_field());
-          if (field == nullptr || blocklist_types.count(field->get_class())) {
+          auto* field = resolve_field(insn->get_field());
+          if (field == nullptr ||
+              (blocklist_types.count(field->get_class()) != 0u)) {
             continue;
           }
           if (field_type == cp::FieldType::INSTANCE &&
@@ -530,12 +533,12 @@ FinalInlinePassV2::Stats inline_final_gets(
           if (replacement.empty()) {
             continue;
           }
-          auto init_class_insn =
+          auto* init_class_insn =
               opcode::is_an_sget(op)
                   ? init_classes_with_side_effects.create_init_class_insn(
                         field->get_class())
                   : nullptr;
-          if (init_class_insn) {
+          if (init_class_insn != nullptr) {
             replacement.insert(replacement.begin(), init_class_insn);
             init_classes++;
           }

@@ -81,7 +81,7 @@ bool match_with_cache(const DexString* s, const RegexWithCache& rx_with_cache) {
 }
 
 const DexString* get_deobfuscated_name(const DexType* type) {
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   if (cls == nullptr) {
     return type->get_name();
   }
@@ -90,7 +90,7 @@ const DexString* get_deobfuscated_name(const DexType* type) {
 
 bool match_annotation_rx(const DexClass* cls, const RegexWithCache& annorx) {
   const auto* annos = cls->get_anno_set();
-  if (!annos) {
+  if (annos == nullptr) {
     return false;
   }
   for (const auto& anno : annos->get_annotations()) {
@@ -190,12 +190,12 @@ struct ClassMatcher {
 
   bool search_interfaces(const DexClass* cls) {
     const auto* interfaces = cls->get_interfaces();
-    if (!interfaces) {
+    if (interfaces == nullptr) {
       return false;
     }
     for (const auto& impl : *interfaces) {
-      auto impl_class = type_class(impl);
-      if (impl_class) {
+      auto* impl_class = type_class(impl);
+      if (impl_class != nullptr) {
         if (type_and_annotation_match(impl_class) ||
             search_extends_and_interfaces(impl_class)) {
           return true;
@@ -218,10 +218,10 @@ struct ClassMatcher {
   bool search_extends_and_interfaces_nocache(const DexClass* cls) {
     always_assert(cls != nullptr);
     // Do any of the classes and interfaces above match?
-    auto super_type = cls->get_super_class();
-    if (super_type && super_type != type::java_lang_Object()) {
-      auto super_class = type_class(super_type);
-      if (super_class) {
+    auto* super_type = cls->get_super_class();
+    if ((super_type != nullptr) && super_type != type::java_lang_Object()) {
+      auto* super_class = type_class(super_type);
+      if (super_class != nullptr) {
         if (type_and_annotation_match(super_class) ||
             search_extends_and_interfaces(super_class)) {
           return true;
@@ -570,7 +570,7 @@ bool KeepRuleMatcher::field_level_match(
     return false;
   }
   // Match field name against regex.
-  auto dequalified_name_cstr =
+  const auto* dequalified_name_cstr =
       extract_field_name_cstr(field->get_deobfuscated_name());
   return boost::regex_match(dequalified_name_cstr, fieldname_regex);
 }
@@ -626,7 +626,7 @@ bool KeepRuleMatcher::method_level_match(
                       method->get_access())) {
     return false;
   }
-  auto dequalified_name_cstr =
+  const auto* dequalified_name_cstr =
       extract_method_name_and_type_cstr(method->get_deobfuscated_name());
   return boost::regex_match(dequalified_name_cstr, method_regex);
 }
@@ -802,7 +802,7 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
     // Mark unconditionally.
     apply_field_keeps(class_to_mark);
     apply_method_keeps(class_to_mark);
-    auto typ = class_to_mark->get_super_class();
+    auto* typ = class_to_mark->get_super_class();
     if (typ == nullptr) {
       break;
     }
@@ -1064,7 +1064,7 @@ void ProguardMatcher::process_proguard_rules(
 }
 
 void ProguardMatcher::mark_all_annotation_classes_as_keep() {
-  for (auto cls : m_classes) {
+  for (auto* cls : m_classes) {
     if (is_annotation(cls)) {
       impl::KeepState::set_has_keep(cls, keep_reason::ANNO);
       if (cls->rstate.report_whyareyoukeeping()) {
@@ -1097,7 +1097,7 @@ void ProguardRuleRecorder::record_accessed_rules(
              {&used_assumenosideeffect_rules, "-assumenosideeffects"},
              {&used_assumevalues_rules, "-assumevalues"},
          }}) {
-      for (auto* keep_rule : UnorderedIterable(*keep_rules)) {
+      for (const auto* keep_rule : UnorderedIterable(*keep_rules)) {
         used_out.push_back(
             keep_rules::show_simple_keep_rule(*keep_rule, command));
       }
@@ -1120,7 +1120,7 @@ void ProguardRuleRecorder::record_accessed_rules(
              {&unused_assumenosideeffect_rules, "-assumenosideeffects"},
              {&unused_assumevalues_rules, "-assumevalues"},
          }}) {
-      for (auto* keep_rule : UnorderedIterable(*keep_rules)) {
+      for (const auto* keep_rule : UnorderedIterable(*keep_rules)) {
         unused_out.push_back(
             keep_rules::show_simple_keep_rule(*keep_rule, command));
       }

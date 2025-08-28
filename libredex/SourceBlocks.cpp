@@ -117,7 +117,7 @@ struct InsertHelper {
                             s_expr_input.what().c_str());
           bool root_expr_is_nil = root_expr.is_nil();
           std::vector<s_expr> expr_stack{s_expr({std::move(root_expr)})};
-          auto* error_val = error_val_opt ? &*error_val_opt : nullptr;
+          const auto* error_val = error_val_opt ? &*error_val_opt : nullptr;
           parser_state.emplace_back(std::move(expr_stack), root_expr_is_nil,
                                     /* default_val */ nullptr, error_val);
           break;
@@ -125,7 +125,7 @@ struct InsertHelper {
 
       case 2: {
         // A default Val.
-        auto* default_val = &std::get<2>(p);
+        const auto* default_val = &std::get<2>(p);
         parser_state.emplace_back(std::vector<s_expr>(),
                                   /* root_expr_is_nil */ true, default_val,
                                   /* error_val */ nullptr);
@@ -243,7 +243,7 @@ struct InsertHelper {
       return kFailVal;
     }
     if (p_state.root_expr_is_nil) {
-      if (p_state.default_val) {
+      if (p_state.default_val != nullptr) {
         return *p_state.default_val;
       }
       return kFailVal;
@@ -403,8 +403,8 @@ struct InsertHelper {
         TRACE(MMINL, 3, "For %s, expected profile of the form %s", SHOW(method),
               oss.str().c_str());
       }
-      auto val =
-          p_state.error_val ? *p_state.error_val : SourceBlock::Val::none();
+      auto val = p_state.error_val != nullptr ? *p_state.error_val
+                                              : SourceBlock::Val::none();
       for (auto* b : cfg.blocks()) {
         auto vec = gather_source_blocks(b);
         for (auto* sb : vec) {
@@ -448,20 +448,20 @@ static std::string get_serialized_idom_map(ControlFlowGraph* cfg) {
 
   for (cfg::Block* block : cfg->blocks()) {
     if (block == cfg->exit_block() &&
-        cfg->get_pred_edge_of_type(block, EDGE_GHOST)) {
+        (cfg->get_pred_edge_of_type(block, EDGE_GHOST) != nullptr)) {
       continue;
     }
 
-    auto first_sb_in_block = source_blocks::get_first_source_block(block);
-    if (!first_sb_in_block) {
+    auto* first_sb_in_block = source_blocks::get_first_source_block(block);
+    if (first_sb_in_block == nullptr) {
       continue;
     }
 
-    auto curr_idom = doms.get_idom(block);
-    if (curr_idom && curr_idom != block) {
+    auto* curr_idom = doms.get_idom(block);
+    if ((curr_idom != nullptr) && curr_idom != block) {
       if (curr_idom != cfg->exit_block() ||
-          !cfg->get_pred_edge_of_type(curr_idom, EDGE_GHOST)) {
-        auto sb_in_idom = source_blocks::get_last_source_block(curr_idom);
+          (cfg->get_pred_edge_of_type(curr_idom, EDGE_GHOST) == nullptr)) {
+        auto* sb_in_idom = source_blocks::get_last_source_block(curr_idom);
         always_assert(sb_in_idom);
         write_idom_map_elem(first_sb_in_block->id, sb_in_idom->id);
       }
@@ -582,7 +582,7 @@ void fix_idom_violation(
           SourceBlock::Val(1, sb->get_appear100(vals_index).value_or(1));
     }
   });
-  auto idom = dom.get_idom(cur);
+  auto* idom = dom.get_idom(cur);
   if (first_source_block_changed && idom != cur) {
     fix_idom_violation(idom, vals_index, dom);
   }
@@ -593,8 +593,8 @@ void fix_idom_violations(ControlFlowGraph* cfg) {
   impl::visit_in_order(
       cfg,
       [&](Block* cur) {
-        auto first_sb = source_blocks::get_first_source_block(cur);
-        auto idom = dom.get_idom(cur);
+        auto* first_sb = source_blocks::get_first_source_block(cur);
+        auto* idom = dom.get_idom(cur);
         if (idom != cur) {
           uint32_t vals_size = first_sb->vals_size;
           for (uint32_t i = 0; i < vals_size; i++) {
@@ -690,7 +690,7 @@ size_t count_block_has_sbs(
 }
 size_t count_block_has_incomplete_sbs(
     Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  auto sb = get_first_source_block(b);
+  auto* sb = get_first_source_block(b);
   if (sb == nullptr) {
     return 0;
   }
@@ -719,8 +719,8 @@ size_t hot_immediate_dom_not_hot(
     return 0;
   }
 
-  auto immediate_dominator = dominators.get_idom(block);
-  if (!immediate_dominator) {
+  auto* immediate_dominator = dominators.get_idom(block);
+  if (immediate_dominator == nullptr) {
     return 0;
   }
   auto* first_sb_immediate_dominator =
@@ -739,7 +739,7 @@ size_t hot_no_hot_pred(
     return 0;
   }
 
-  for (auto predecessor : block->preds()) {
+  for (auto* predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
     if (has_source_block_positive_val(first_sb_pred)) {
@@ -758,7 +758,7 @@ size_t hot_all_pred_cold(
     return 0;
   }
 
-  for (auto predecessor : block->preds()) {
+  for (auto* predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
     if (has_source_block_positive_val(first_sb_pred)) {
@@ -1072,8 +1072,8 @@ void track_source_block_coverage(ScopedMetrics& sm,
   auto stats = walk::parallel::methods<SourceBlocksStats>(
       build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
         SourceBlocksStats ret;
-        auto code = m->get_code();
-        if (!code) {
+        auto* code = m->get_code();
+        if (code == nullptr) {
           return ret;
         }
         code->build_cfg(/* editable */ true);
@@ -1081,7 +1081,7 @@ void track_source_block_coverage(ScopedMetrics& sm,
         auto dominators =
             dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
 
-        for (auto block : cfg.blocks()) {
+        for (auto* block : cfg.blocks()) {
           for (size_t i = 0; i != gCounters.size(); ++i) {
             ret.global[i].count += (*gCounters[i].second)(block, dominators);
           }
@@ -1388,8 +1388,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
             return;
           }
 
-          auto immediate_dominator = dom.get_idom(cur);
-          if (!immediate_dominator) {
+          auto* immediate_dominator = dom.get_idom(cur);
+          if (immediate_dominator == nullptr) {
             os << " NO DOMINATOR\n";
             return;
           }
@@ -1402,7 +1402,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
           auto* first_sb_immediate_dominator =
               source_blocks::get_first_source_block(immediate_dominator);
-          if (!first_sb_immediate_dominator) {
+          if (first_sb_immediate_dominator == nullptr) {
             os << " NO DOMINATOR SOURCE BLOCK B" << immediate_dominator->id()
                << "\n";
             return;
@@ -1416,7 +1416,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           }
 
           os << " !!! B" << immediate_dominator->id() << ": ";
-          auto sb = first_sb_immediate_dominator;
+          auto* sb = first_sb_immediate_dominator;
           os << " \"" << show(sb->src) << "\"@" << sb->id;
           for (size_t i = 0; i < sb->vals_size; i++) {
             auto& val = sb->vals[i];
@@ -1606,11 +1606,11 @@ ViolationsHelper& ViolationsHelper::operator=(ViolationsHelper&& rhs) noexcept {
 }
 
 SourceBlock* get_first_source_block_of_method(const DexMethod* m) {
-  auto code = m->get_code();
+  const auto* code = m->get_code();
   if (code->cfg_built()) {
     return get_first_source_block(code->cfg().entry_block());
   } else {
-    for (auto& mie : *code) {
+    for (const auto& mie : *code) {
       if (mie.type == MFLOW_SOURCE_BLOCK) {
         return mie.src_block.get();
       }
@@ -1621,7 +1621,7 @@ SourceBlock* get_first_source_block_of_method(const DexMethod* m) {
 
 SourceBlock* get_any_first_source_block_of_methods(
     const std::vector<const DexMethod*>& methods) {
-  for (auto* m : methods) {
+  for (const auto* m : methods) {
     auto* sb = get_first_source_block_of_method(m);
     if (sb != nullptr) {
       return sb;
@@ -1662,7 +1662,7 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
   std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
   new_sb->next.reset();
   new_sb->id = SourceBlock::kSyntheticId;
-  if (ref) {
+  if (ref != nullptr) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
   for (size_t i = 0; i < new_sb->vals_size; i++) {
@@ -1678,7 +1678,7 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
   std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
   new_sb->next.reset();
   new_sb->id = SourceBlock::kSyntheticId;
-  if (ref) {
+  if (ref != nullptr) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
   if (opt_val) {
@@ -1696,13 +1696,13 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
   std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
   new_sb->next.reset();
   new_sb->id = SourceBlock::kSyntheticId;
-  if (ref) {
+  if (ref != nullptr) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
   for (size_t i = 0; i < new_sb->vals_size; i++) {
     new_sb->vals[i] = SourceBlock::Val::none();
   }
-  for (auto& other : many) {
+  for (const auto& other : many) {
     new_sb->max(*other);
   }
   return new_sb;

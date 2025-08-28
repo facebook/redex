@@ -148,17 +148,17 @@ TEST_F(ReachabilityTest, NotDireclyInstantiatedClassesBecomeAbstract) {
   EXPECT_TRUE(is_instantiable("LInstantiated;"));
   EXPECT_FALSE(is_instantiable("LUninstantiated;"));
 
-  auto instantiated_cls = find_class(scope, "LInstantiated;");
+  auto* instantiated_cls = find_class(scope, "LInstantiated;");
   EXPECT_TRUE(instantiated_cls);
   EXPECT_FALSE(is_abstract(instantiated_cls));
-  auto instantiated_implement_me =
+  auto* instantiated_implement_me =
       find_vmethod(*classes, "LInstantiated;", "V", "implementMe", {});
   ASSERT_TRUE(instantiated_implement_me);
 
-  auto uninstantiated_cls = find_class(scope, "LUninstantiated;");
+  auto* uninstantiated_cls = find_class(scope, "LUninstantiated;");
   EXPECT_TRUE(uninstantiated_cls);
   EXPECT_TRUE(is_abstract(uninstantiated_cls));
-  auto uninstantiated_implement_me =
+  auto* uninstantiated_implement_me =
       find_vmethod(*classes, "LUninstantiated;", "V", "implementMe", {});
   ASSERT_FALSE(uninstantiated_implement_me);
 }

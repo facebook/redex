@@ -253,7 +253,7 @@ bool RuntimeAssertTransform::insert_return_value_assert(
     return false;
   }
 
-  auto ret_type = callee->get_proto()->get_rtype();
+  auto* ret_type = callee->get_proto()->get_rtype();
   if (!(type::is_integral(ret_type) || type::is_object(ret_type))) {
     return false;
   }
@@ -282,7 +282,7 @@ void RuntimeAssertTransform::insert_param_asserts(
   if (!args.is_value()) {
     return;
   }
-  auto code = method->get_code();
+  auto* code = method->get_code();
   auto& cfg = code->cfg();
   const auto* arg_types = method->get_proto()->get_args();
   auto param_insns = cfg.get_param_instructions();

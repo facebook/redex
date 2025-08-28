@@ -16,7 +16,7 @@ PartialCandidateAdapter::PartialCandidateAdapter(OutlinerTypeAnalysis& ota,
         std::function<void(const PartialCandidateNode&)> gather_insns;
         gather_insns = [&](const PartialCandidateNode& pcn) {
           res->insert(pcn.insns.begin(), pcn.insns.end());
-          for (auto& p : pcn.succs) {
+          for (const auto& p : pcn.succs) {
             gather_insns(*p.second);
           }
         };
@@ -32,13 +32,13 @@ void PartialCandidateAdapter::set_result(std::optional<reg_t> out_reg,
 
 const type_inference::TypeEnvironment& PartialCandidateAdapter::get_type_env()
     const {
-  auto insn = m_pc.root.insns.front();
+  auto* insn = m_pc.root.insns.front();
   return m_ota.m_type_environments->at(insn);
 }
 
 const reaching_defs::Environment& PartialCandidateAdapter::get_rdef_env()
     const {
-  auto insn = m_pc.root.insns.front();
+  auto* insn = m_pc.root.insns.front();
   return m_ota.m_reaching_defs_environments->at(insn);
 }
 
@@ -51,9 +51,9 @@ void PartialCandidateAdapter::gather_type_demands(
        insn_idx < pcn.insns.size() && !regs_to_track.empty();
        insn_idx++) {
     bool track_dest{false};
-    auto insn = pcn.insns.at(insn_idx);
+    auto* insn = pcn.insns.at(insn_idx);
     for (size_t i = 0; i < insn->srcs_size(); i++) {
-      if (!regs_to_track.count(insn->src(i))) {
+      if (regs_to_track.count(insn->src(i)) == 0u) {
         continue;
       }
       if (opcode::is_a_move(insn->opcode())) {
@@ -77,16 +77,17 @@ void PartialCandidateAdapter::gather_type_demands(
       }
     }
   }
-  if (pcn.succs.empty() && m_out_reg && regs_to_track.count(*m_out_reg)) {
+  if (pcn.succs.empty() && m_out_reg &&
+      (regs_to_track.count(*m_out_reg) != 0u)) {
     type_demands->insert(m_res_type);
   }
-  for (auto& p : pcn.succs) {
+  for (const auto& p : pcn.succs) {
     gather_type_demands(*p.second, regs_to_track, follow, type_demands);
   }
 }
 
 bool PartialCandidateAdapter::contains(IRInstruction* insn) const {
-  return m_insns->count(insn);
+  return m_insns->count(insn) != 0u;
 }
 
 } // namespace outliner_impl

@@ -62,7 +62,7 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
   // Allocate registers for all the fields sets that are not field swap.
   // These fields will be removed and the new rgisters will take their place.
   for (auto* field : ordered_fields) {
-    if (m_field_swaps.count(field)) {
+    if (m_field_swaps.count(field) != 0u) {
       continue;
     }
     auto final_field = m_set_field_sets.find(field);
@@ -82,7 +82,7 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
         set_default->set_literal(0);
         set_default->set_dest(assign_reg);
       }
-      auto st = caller->entry_block();
+      auto* st = caller->entry_block();
       auto field_set_data = m_initial_field_sets.find(field)->second;
       if (st->get_first_non_param_loading_insn() != st->end()) {
         m.insert_before(
@@ -103,7 +103,7 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
 
     if (opcode::is_an_iput(opcode)) {
       auto current_reg = insn->srcs()[0];
-      auto field = insn->get_field();
+      auto* field = insn->get_field();
       auto field_set_to_move = m_initial_field_sets.find(field);
       auto final_field = m_set_field_sets.find(field);
       if (field_set_to_move == m_initial_field_sets.end()) {
@@ -119,7 +119,7 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
         // can't be the instruction we want to replace
         continue;
       }
-      auto move = new IRInstruction(opcode::iput_to_move(opcode));
+      auto* move = new IRInstruction(opcode::iput_to_move(opcode));
       move->set_src(0, current_reg);
       assert(final_field != m_set_field_sets.end());
       // There will be only one, so the loop is just to pull out the first
@@ -156,10 +156,10 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
     IRInstruction* insn = insn_it->insn;
     auto opcode = insn->opcode();
     if (opcode == OPCODE_INVOKE_DIRECT && method::is_init(insn->get_method()) &&
-        this_refs.count(insn->src(0))) {
+        (this_refs.count(insn->src(0)) != 0u)) {
       m.remove(insn_it);
     } else if (opcode::is_an_iput(opcode)) {
-      auto field = insn->get_field();
+      auto* field = insn->get_field();
       bool is_self_call = this_refs.count(insn->src(1)) != 0;
       if (is_self_call) {
         auto no_field_needed = m_set_field_sets.find(field);
@@ -174,7 +174,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
 
         assert(no_field_needed != m_set_field_sets.end());
         no_field_needed = m_set_field_sets.find(field);
-        auto move = new IRInstruction(opcode::iput_to_move(opcode));
+        auto* move = new IRInstruction(opcode::iput_to_move(opcode));
         assert(no_field_needed->second.size() == 1);
         // Extract the solo reg, and set as src.
         move->set_dest(unordered_any(no_field_needed->second)->first);
@@ -183,7 +183,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
         m.replace(insn_it, {move});
       }
     } else if (opcode::is_an_iget(opcode)) {
-      auto field = insn->get_field();
+      auto* field = insn->get_field();
       bool is_self_call = this_refs.count(insn->src(0)) != 0;
       if (is_self_call) {
         auto no_field_needed = m_set_field_sets.find(field);
@@ -214,7 +214,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
           m.remove(move_result);
           m.replace(insn_it, {set_default});
         } else {
-          auto move = new IRInstruction(opcode::iget_to_move(opcode));
+          auto* move = new IRInstruction(opcode::iget_to_move(opcode));
           assert(no_field_needed->second.size() == 1);
           // Extract the solo reg, and set as src.
           auto move_result = callee->move_result_of(callee->find_insn(insn));
@@ -227,7 +227,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
       }
     }
     if (insn != original_load_this && insn->has_dest()) {
-      if (opcode::is_a_move(opcode) && this_refs.count(insn->src(0))) {
+      if (opcode::is_a_move(opcode) && (this_refs.count(insn->src(0)) != 0u)) {
         this_refs.insert(insn->dest());
       } else {
         this_refs.erase(insn->dest());

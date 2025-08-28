@@ -121,26 +121,28 @@ class ReachableObjects {
 
   bool mark(const DexFieldRef* field) { return m_marked_fields.insert(field); }
 
-  bool marked(const DexClass* cls) const { return m_marked_classes.count(cls); }
+  bool marked(const DexClass* cls) const {
+    return m_marked_classes.count(cls) != 0u;
+  }
 
   bool marked(const DexMethodRef* method) const {
-    return m_marked_methods.count(method);
+    return m_marked_methods.count(method) != 0u;
   }
 
   bool marked(const DexFieldRef* field) const {
-    return m_marked_fields.count(field);
+    return m_marked_fields.count(field) != 0u;
   }
 
   bool marked_unsafe(const DexClass* cls) const {
-    return m_marked_classes.count_unsafe(cls);
+    return m_marked_classes.count_unsafe(cls) != 0u;
   }
 
   bool marked_unsafe(const DexMethodRef* method) const {
-    return m_marked_methods.count_unsafe(method);
+    return m_marked_methods.count_unsafe(method) != 0u;
   }
 
   bool marked_unsafe(const DexFieldRef* field) const {
-    return m_marked_fields.count_unsafe(field);
+    return m_marked_fields.count_unsafe(field) != 0u;
   }
 
   size_t num_marked_classes() const { return m_marked_classes.size(); }
@@ -636,7 +638,7 @@ class TransitiveClosureMarkerWorker {
 
   void instance_callable(const DexMethod* method);
   void instance_callable(const UnorderedSet<const DexMethod*>& methods) {
-    for (auto* m : UnorderedIterable(methods)) {
+    for (const auto* m : UnorderedIterable(methods)) {
       instance_callable(m);
     }
   }
@@ -651,7 +653,7 @@ class TransitiveClosureMarkerWorker {
   void exact_invoke_virtual_target(const DexMethod* method);
   void exact_invoke_virtual_target(
       const UnorderedSet<const DexMethod*>& methods) {
-    for (auto* m : UnorderedIterable(methods)) {
+    for (const auto* m : UnorderedIterable(methods)) {
       exact_invoke_virtual_target(m);
     }
   }
@@ -663,7 +665,7 @@ class TransitiveClosureMarkerWorker {
           base_invoke_virtual_targets) {
     for (auto&& [method, base_types] :
          UnorderedIterable(base_invoke_virtual_targets)) {
-      for (auto* base_type : UnorderedIterable(base_types)) {
+      for (const auto* base_type : UnorderedIterable(base_types)) {
         base_invoke_virtual_target(method, base_type);
       }
     }
@@ -671,7 +673,7 @@ class TransitiveClosureMarkerWorker {
 
   void dynamically_referenced(const DexClass* cls);
   void dynamically_referenced(const UnorderedSet<const DexClass*>& classes) {
-    for (auto* cls : UnorderedIterable(classes)) {
+    for (const auto* cls : UnorderedIterable(classes)) {
       dynamically_referenced(cls);
     }
   }

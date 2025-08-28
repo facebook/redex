@@ -27,7 +27,7 @@ namespace {
 
 const DexStore& find_store(const std::string& name,
                            const DexStoresVector& stores) {
-  for (auto& store : stores) {
+  for (const auto& store : stores) {
     if (name == store.get_name()) {
       return store;
     }
@@ -82,15 +82,15 @@ void build_refs(const Scope& scope, refs_t& class_refs) {
       [](const DexMethod*) { return true; },
       [&](const DexMethod* meth, IRInstruction* insn) {
         if (insn->has_type()) {
-          const auto tref = type_class(insn->get_type());
-          if (tref) {
+          auto* const tref = type_class(insn->get_type());
+          if (tref != nullptr) {
             class_refs[tref].emplace(type_class(meth->get_class()));
           }
           return;
         }
         if (insn->has_field()) {
-          const auto tref = type_class(insn->get_field()->get_class());
-          if (tref) {
+          auto* const tref = type_class(insn->get_field()->get_class());
+          if (tref != nullptr) {
             class_refs[tref].emplace(type_class(meth->get_class()));
           }
           return;
@@ -99,8 +99,8 @@ void build_refs(const Scope& scope, refs_t& class_refs) {
           // log methods class type, for virtual methods, this may not actually
           // exist and true verification would require that the binding refers
           // to a class that is valid.
-          const auto mref = type_class(insn->get_method()->get_class());
-          if (mref) {
+          auto* const mref = type_class(insn->get_method()->get_class());
+          if (mref != nullptr) {
             class_refs[mref].emplace(type_class(meth->get_class()));
           }
 
@@ -140,7 +140,7 @@ void verify(DexStoresVector& stores) {
   for (const auto& store : stores) {
     // Validate that it's legal for each referer to see each reference.
     for (auto& ref : UnorderedIterable(class_refs)) {
-      const auto reference = ref.first;
+      const auto* const reference = ref.first;
       for (const auto& referer : ref.second) {
         auto reference_store_it = cls_store_map.find(reference);
         auto referer_store_it = cls_store_map.find(referer);

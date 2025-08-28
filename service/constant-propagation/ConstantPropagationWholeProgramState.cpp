@@ -30,7 +30,7 @@ void set_fields_in_partition(const DexClass* cls,
   // bindings to Bottom).
   const auto& fields =
       field_type == FieldType::STATIC ? cls->get_sfields() : cls->get_ifields();
-  for (auto& field : fields) {
+  for (const auto& field : fields) {
     auto value = field_env.get(field);
     if (!value.is_top()) {
       TRACE(ICONSTP, 2, "%s has value %s after <clinit> or <init>", SHOW(field),
@@ -86,7 +86,7 @@ bool analyze_gets_helper(const WholeProgramStateAccessor* whole_program_state,
   if (whole_program_state == nullptr) {
     return false;
   }
-  auto field = resolve_field(insn->get_field());
+  auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
   }
@@ -116,7 +116,7 @@ void initialize_ifields(
     }
     // For instance fields that are always written to before they are read, the
     // initial 0 value is not observable, so we don't even have to include it.
-    auto value = definitely_assigned_ifields.count(field)
+    auto value = definitely_assigned_ifields.count(field) != 0u
                      ? SignedConstantDomain::bottom()
                      : SignedConstantDomain(0);
     field_partition->set(field, std::move(value));
@@ -148,7 +148,7 @@ WholeProgramState::WholeProgramState(
     // We exclude those marked by keep rules: keep-marked fields may be
     // written to by non-Dex bytecode.
     // All fields not in m_known_fields will be bound to Top.
-    if (field_blocklist.count(field->get_class())) {
+    if (field_blocklist.count(field->get_class()) != 0u) {
       return;
     }
     if (is_static(field) && !root(field)) {
@@ -161,12 +161,12 @@ WholeProgramState::WholeProgramState(
   });
   // Put non-root non true virtual methods in known methods.
   for (const auto& non_true_virtual : UnorderedIterable(non_true_virtuals)) {
-    if (!root(non_true_virtual) && non_true_virtual->get_code()) {
+    if (!root(non_true_virtual) && (non_true_virtual->get_code() != nullptr)) {
       m_known_methods.emplace(non_true_virtual);
     }
   }
   walk::code(scope, [&](DexMethod* method, const IRCode&) {
-    if (!method->is_virtual() && method->get_code()) {
+    if (!method->is_virtual() && (method->get_code() != nullptr)) {
       // Put non virtual methods in known methods.
       m_known_methods.emplace(method);
     }
@@ -238,8 +238,8 @@ void WholeProgramState::collect_field_values(
       !opcode::is_an_iput(insn->opcode())) {
     return;
   }
-  auto field = resolve_field(insn->get_field());
-  if (field != nullptr && m_known_fields.count(field)) {
+  auto* field = resolve_field(insn->get_field());
+  if (field != nullptr && (m_known_fields.count(field) != 0u)) {
     if (opcode::is_an_sput(insn->opcode()) &&
         field->get_class() == clinit_cls) {
       return;
@@ -324,7 +324,7 @@ void WholeProgramState::collect_instance_finals(
     }
   } else {
     for (auto* field : cls->get_ifields()) {
-      if (eligible_ifields.count(field) &&
+      if ((eligible_ifields.count(field) != 0u) &&
           m_field_blocklist.count(field->get_class()) == 0) {
         m_known_fields.emplace(field);
       } else {
@@ -373,7 +373,7 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
       op != OPCODE_INVOKE_VIRTUAL) {
     return false;
   }
-  auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr) {
     return false;
   }

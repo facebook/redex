@@ -225,7 +225,7 @@ void assert_fail(const char* expr,
   auto context_str = []() {
     std::string res;
 #if !IS_WINDOWS
-    auto* trace_context = TraceContextAccess::get_s_context();
+    const auto* trace_context = TraceContextAccess::get_s_context();
     if (trace_context != nullptr) {
       res += " (Context: ";
       res += trace_context->get_string_value();
@@ -304,7 +304,7 @@ void assert_fail(const char* expr,
 
 void print_stack_trace(std::ostream& os, const std::exception& e) {
   const StType* st = boost::get_error_info<traced>(e);
-  if (st) {
+  if (st != nullptr) {
     print_stack_trace_impl(os, st);
   }
 }
@@ -324,12 +324,12 @@ VmStats get_mem_stats() {
   std::string line;
   std::regex re("[^:]*:\\s*([0-9]*)\\s*(.)B");
   while (std::getline(ifs, line)) {
-    auto it_relevant_stat = std::find_if(
+    const auto* it_relevant_stat = std::find_if(
         relevant_stats.begin(), relevant_stats.end(),
         [&line](const auto& rs) { return boost::starts_with(line, rs.first); });
 
     if (it_relevant_stat != relevant_stats.end()) {
-      auto& [stat_name, stat_field_ptr] = *it_relevant_stat;
+      const auto& [stat_name, stat_field_ptr] = *it_relevant_stat;
 
       std::smatch match;
       bool matched = std::regex_match(line, match, re);

@@ -32,13 +32,13 @@ constexpr const char* CONST_VALUE_ANNO_ATTR_NAME = "constantValues";
 bool overlaps_with_an_existing_virtual_scope(DexType* type,
                                              const DexString* name,
                                              DexProto* proto) {
-  if (DexMethod::get_method(type, name, proto)) {
+  if (DexMethod::get_method(type, name, proto) != nullptr) {
     return true;
   }
   DexClass* cls = type_class(type);
-  while (cls->get_super_class()) {
+  while (cls->get_super_class() != nullptr) {
     type = cls->get_super_class();
-    if (DexMethod::get_method(type, name, proto)) {
+    if (DexMethod::get_method(type, name, proto) != nullptr) {
       return true;
     }
     cls = type_class(type);
@@ -56,7 +56,7 @@ void patch_invoke(cfg::ControlFlowGraph& meth_cfg,
   auto move_res_old = meth_cfg.move_result_of(cfg_it);
   if (!move_res_old.is_end()) {
     auto dest = move_res_old->insn->dest();
-    auto move_res_new = dasm(move_res_old->insn->opcode(), {{VREG, dest}});
+    auto* move_res_new = dasm(move_res_old->insn->opcode(), {{VREG, dest}});
     mutation.insert_before(cfg_it, {move_res_new});
   }
 
@@ -89,7 +89,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     const size_t stud_method_threshold) {
   UnorderedSet<DexMethod*> lifted;
   UnorderedMap<DexMethod*, ConstantValues> lifted_constants;
-  for (auto method : methods) {
+  for (auto* method : methods) {
     always_assert(has_anno(method, s_method_meta_anno));
     auto kinds_str = parse_str_anno_value(method, s_method_meta_anno,
                                           CONST_TYPE_ANNO_ATTR_NAME);
@@ -120,13 +120,13 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     TRACE(METH_DEDUP, 9, "%s", SHOW(cfg));
 
     // Add constant to arg list.
-    auto old_proto = method->get_proto();
+    auto* old_proto = method->get_proto();
     auto const_types = const_vals.get_constant_types();
-    auto arg_list = old_proto->get_args()->push_back(const_types);
-    auto new_proto = DexProto::make_proto(old_proto->get_rtype(), arg_list);
+    auto* arg_list = old_proto->get_args()->push_back(const_types);
+    auto* new_proto = DexProto::make_proto(old_proto->get_rtype(), arg_list);
 
     // Find a non-conflicting name
-    auto name = method->get_name();
+    const auto* name = method->get_name();
     std::string suffix = "$r";
     while (overlaps_with_an_existing_virtual_scope(method->get_class(), name,
                                                    new_proto)) {
@@ -144,7 +144,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     method->change(spec, true /* rename on collision */);
 
     // Insert param load.
-    auto block = cfg.entry_block();
+    auto* block = cfg.entry_block();
     auto last_loading = block->get_last_param_loading_insn();
     for (const auto& const_val : const_vals.get_constant_values()) {
       if (const_val.is_invalid()) {
@@ -152,7 +152,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       }
       auto opcode = const_val.is_int_value() ? IOPCODE_LOAD_PARAM
                                              : IOPCODE_LOAD_PARAM_OBJECT;
-      auto load_type_tag_param =
+      auto* load_type_tag_param =
           dasm(opcode, {{VREG, const_val.get_param_reg()}});
       if (last_loading != block->end()) {
         cfg.insert_after(block->to_cfg_instruction_iterator(last_loading),
@@ -171,7 +171,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       auto insn_it = load.second.first;
       auto dest = load.second.second;
       auto opcode = const_val.is_int_value() ? OPCODE_MOVE : OPCODE_MOVE_OBJECT;
-      auto move_const_arg =
+      auto* move_const_arg =
           dasm(opcode, {{VREG, dest}, {VREG, const_val.get_param_reg()}});
       cfg.insert_before(insn_it, move_const_arg);
       cfg.remove_insn(insn_it);
@@ -192,9 +192,9 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
   std::vector<DexMethod*> stub_methods;
   auto call_sites = method_reference::collect_call_refs(scope, lifted);
   for (const auto& callsite : call_sites) {
-    auto meth = callsite.caller;
+    auto* meth = callsite.caller;
     auto* insn = callsite.insn;
-    const auto callee =
+    auto* const callee =
         resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(callee != nullptr);
     auto const_vals = lifted_constants.at(callee);
@@ -207,9 +207,9 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         args.push_back(insn->src(i));
       }
-      auto stub = const_vals.create_stub_method(callee);
+      auto* stub = const_vals.create_stub_method(callee);
       stub->get_code()->build_cfg();
-      auto invoke = method_reference::make_invoke(stub, insn->opcode(), args);
+      auto* invoke = method_reference::make_invoke(stub, insn->opcode(), args);
       patch_invoke(meth_cfg, mutation, cfg_it, invoke);
 
       stub_methods.push_back(stub);
@@ -227,7 +227,8 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       }
       args.insert(args.end(), const_regs.begin(), const_regs.end());
       mutation.insert_before(cfg_it, const_loads);
-      auto invoke = method_reference::make_invoke(callee, insn->opcode(), args);
+      auto* invoke =
+          method_reference::make_invoke(callee, insn->opcode(), args);
       patch_invoke(meth_cfg, mutation, cfg_it, invoke);
     }
 

@@ -20,7 +20,7 @@ using ::testing::Not;
 class KotlinDefaultArgsTest : public RedexIntegrationTest {
  protected:
   void set_root_method(const std::string& full_name) {
-    auto method = DexMethod::get_method(full_name)->as_def();
+    auto* method = DexMethod::get_method(full_name)->as_def();
     ASSERT_NE(nullptr, method);
     method->rstate.set_root();
   }
@@ -31,24 +31,24 @@ TEST_F(KotlinDefaultArgsTest, GreetDoesNotHaveBlock) {
   auto scope = build_class_scope(stores);
 
   set_root_method("LKotlinDefaultArgs;.main:()V");
-  const auto main_method =
+  auto* const main_method =
       DexMethod::get_method("LKotlinDefaultArgs;.main:()V")->as_def();
-  auto code_main = main_method->get_code();
+  auto* code_main = main_method->get_code();
   ASSERT_NE(nullptr, code_main);
 
-  const auto default_arg_method = DexMethod::get_method(
+  auto* const default_arg_method = DexMethod::get_method(
       "LKotlinDefaultArgs;.greet:(Ljava/lang/String;Ljava/lang/String;)V");
-  auto code_default_arg = default_arg_method->as_def()->get_code();
+  auto* code_default_arg = default_arg_method->as_def()->get_code();
   ASSERT_NE(nullptr, code_default_arg);
 
   Pass* constp = new constant_propagation::interprocedural::PassImpl();
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
-  const auto syn_default_arg_method = DexMethod::get_method(
+  auto* const syn_default_arg_method = DexMethod::get_method(
       "LKotlinDefaultArgs;.greet$default:(LKotlinDefaultArgs;Ljava/lang/"
       "String;Ljava/lang/String;ILjava/lang/Object;)V");
-  auto code_syn_default_arg = syn_default_arg_method->as_def()->get_code();
+  auto* code_syn_default_arg = syn_default_arg_method->as_def()->get_code();
   ASSERT_NE(nullptr, code_syn_default_arg);
   EXPECT_THAT(assembler::to_string(code_syn_default_arg), HasSubstr("Guest"))
       << "Default arg \"name\" is used, but the synthetic default method has "

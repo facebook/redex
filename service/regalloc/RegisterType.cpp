@@ -57,7 +57,7 @@ static IROpcode move_op_for_type(RegisterType type) {
 }
 
 IRInstruction* gen_move(RegisterType type, vreg_t dest, vreg_t src) {
-  auto insn = new IRInstruction(move_op_for_type(type));
+  auto* insn = new IRInstruction(move_op_for_type(type));
   insn->set_dest(dest);
   insn->set_src(0, src);
   return insn;

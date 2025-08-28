@@ -77,7 +77,7 @@ void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
   if (insn_it == block->end()) {
     return;
   }
-  auto last_insn = insn_it->insn;
+  auto* last_insn = insn_it->insn;
   if (!opcode::is_a_testz_branch(last_insn->opcode())) {
     return;
   }
@@ -106,7 +106,7 @@ void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
                                              cfg::ControlFlowGraph& cfg,
                                              Stats& stats) {
 
-  auto insn = it->insn;
+  auto* insn = it->insn;
   auto move_res = cfg.move_result_of(it);
   always_assert(insn->opcode() == OPCODE_INSTANCE_OF);
   always_assert(opcode::is_move_result_any(move_res->insn->opcode()));
@@ -117,7 +117,7 @@ void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
   auto val_type = val.get_dex_type();
   if (val.is_null()) {
     // always 0
-    auto eval_val = new IRInstruction(OPCODE_CONST);
+    auto* eval_val = new IRInstruction(OPCODE_CONST);
     eval_val->set_literal(0)->set_dest(move_res->insn->dest());
     m_replacements.push_back({it, eval_val});
     stats.type_check_removed++;
@@ -128,7 +128,7 @@ void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
     if (!eval_res) {
       return;
     }
-    auto eval_val = new IRInstruction(OPCODE_CONST);
+    auto* eval_val = new IRInstruction(OPCODE_CONST);
     eval_val->set_literal(*eval_res)->set_dest(move_res->insn->dest());
     m_replacements.push_back({it, eval_val});
     stats.type_check_removed++;
@@ -147,10 +147,10 @@ Transform::Stats Transform::apply(
     const WholeProgramState& /*wps*/,
     DexMethod* method,
     const NullAssertionSet& null_assertion_set) {
-  auto code = method->get_code();
+  auto* code = method->get_code();
   TRACE(TYPE_TRANSFORM, 4, "Processing %s", SHOW(method));
   Transform::Stats stats{};
-  if (!code || method->rstate.no_optimizations()) {
+  if ((code == nullptr) || method->rstate.no_optimizations()) {
     return stats;
   }
   for (const auto& block : code->cfg().blocks()) {
@@ -165,7 +165,7 @@ Transform::Stats Transform::apply(
 
       if (m_config.remove_kotlin_null_check_assertions &&
           insn->opcode() == OPCODE_INVOKE_STATIC &&
-          null_assertion_set.count(insn->get_method())) {
+          (null_assertion_set.count(insn->get_method()) != 0u)) {
         auto parm = env.get(insn->src(0));
         if (parm.is_top() || parm.is_bottom()) {
           continue;
@@ -195,7 +195,7 @@ void Transform::apply_changes(DexMethod* method) {
   auto& cfg = code->cfg();
   for (auto const& p : m_replacements) {
     const cfg::InstructionIterator& it = p.first;
-    auto old_op = it->insn;
+    auto* old_op = it->insn;
     if (opcode::is_a_testz_branch(old_op->opcode())) {
       always_assert(p.second->opcode() == OPCODE_GOTO);
       cfg::Edge* branch_edge =
@@ -220,7 +220,7 @@ void Transform::apply_changes(DexMethod* method) {
           SHOW(method));
   }
   for (const auto& it : m_deletes) {
-    auto old_op = it->insn;
+    auto* old_op = it->insn;
     if (opcode::is_a_testz_branch(old_op->opcode())) {
       // If current insn is a IF insn, also need to delete edge between blocks.
       cfg::Edge* branch_edge =

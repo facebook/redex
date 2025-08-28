@@ -44,7 +44,7 @@ result_t::insn_range result_t::matching(location_t l) const {
     return insn_range::empty();
   }
 
-  auto& insns = m_results[l.m_ix];
+  const auto& insns = m_results[l.m_ix];
   if (!insns) {
     return insn_range::empty();
   }
@@ -69,7 +69,7 @@ result_t::src_range result_t::matching(location_t l,
     return src_range::empty();
   }
 
-  auto& insns = m_results[l.m_ix];
+  const auto& insns = m_results[l.m_ix];
   if (!insns) {
     return src_range::empty();
   }
@@ -110,7 +110,7 @@ std::ostream& operator<<(std::ostream& os, const result_t& res) {
       os << "  I" << insn_id(insn) << ": " << show(insn) << "\n";
 
       for (size_t six = 0; six < srcs.size(); ++six) {
-        auto& src = srcs[six];
+        const auto& src = srcs[six];
         if (src.empty()) {
           continue;
         }

@@ -32,7 +32,7 @@ class UnreachableLoweringPassTest : public RedexTest {
     ClassCreator creator(DexType::make_type(class_name));
     creator.set_super(type::java_lang_Object());
     auto signature = class_name + ".foo:()V";
-    auto method = DexMethod::make_method(signature)->make_concrete(
+    auto* method = DexMethod::make_method(signature)->make_concrete(
         ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(assembler::ircode_from_string(code));
     creator.add_method(method);
@@ -69,13 +69,13 @@ class UnreachableLoweringPassTest : public RedexTest {
 };
 
 TEST_F(UnreachableLoweringPassTest, simple) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (unreachable v0)
       (throw v0)
      )
     )";
-  auto expected_code = R"(
+  const auto* expected_code = R"(
      (
       (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
       (move-result-object v0)
@@ -86,14 +86,14 @@ TEST_F(UnreachableLoweringPassTest, simple) {
 }
 
 TEST_F(UnreachableLoweringPassTest, move_objects_are_tolerated) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (unreachable v0)
       (move-object v1 v0)
       (throw v1)
      )
     )";
-  auto expected_code = R"(
+  const auto* expected_code = R"(
      (
       (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
       (move-result-object v0)
@@ -105,7 +105,7 @@ TEST_F(UnreachableLoweringPassTest, move_objects_are_tolerated) {
 }
 
 TEST_F(UnreachableLoweringPassTest, invokes_are_tolerated) {
-  auto original_code = R"(
+  const auto* original_code = R"(
      (
       (unreachable v0)
       (move-object v1 v0)
@@ -113,7 +113,7 @@ TEST_F(UnreachableLoweringPassTest, invokes_are_tolerated) {
       (throw v1)
      )
     )";
-  auto expected_code = R"(
+  const auto* expected_code = R"(
      (
       (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
       (move-result-object v0)

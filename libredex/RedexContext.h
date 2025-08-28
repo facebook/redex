@@ -455,7 +455,7 @@ struct RedexContext {
   struct DexTypeListContainerTypePtrEquals {
     size_t operator()(const DexTypeListContainerType* lhs,
                       const DexTypeListContainerType* rhs) const {
-      return lhs == rhs || *lhs == *rhs;
+      return static_cast<size_t>(lhs == rhs || *lhs == *rhs);
     }
   };
   AtomicMap<const DexTypeListContainerType*,

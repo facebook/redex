@@ -28,7 +28,7 @@ void DedupBlocksPass::run_pass(DexStoresVector& stores,
   const auto stats = walk::parallel::methods<dedup_blocks_impl::Stats>(
       scope,
       [&](DexMethod* method) {
-        const auto code = method->get_code();
+        auto* const code = method->get_code();
         if (code == nullptr || m_config.method_blocklist.count(method) != 0 ||
             method->rstate.no_optimizations()) {
           return dedup_blocks_impl::Stats();

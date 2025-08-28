@@ -109,7 +109,7 @@ void rename_files(const std::string& zip_dir,
       auto parent_folder_new =
           boost::filesystem::path(full_path_after).parent_path();
       auto parent_folder_new_str = parent_folder_new.string();
-      if (!created_file_directory.count(parent_folder_new_str)) {
+      if (created_file_directory.count(parent_folder_new_str) == 0u) {
         created_file_directory.emplace(parent_folder_new_str);
         boost::filesystem::create_directory(parent_folder_new);
       }
@@ -178,7 +178,7 @@ void collect_string_values_from_code(
     }
     for (const auto& m : cls->get_all_methods()) {
       if (should_check_for_strings(code_to_skip, m)) {
-        auto code = m->get_code();
+        auto* code = m->get_code();
         // Checking things like proto / type names is probably unnecessary. Just
         // look at instructions.
         if (code != nullptr) {
@@ -236,7 +236,7 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
     }
     UnorderedSet<uint32_t> allow_type_ids =
         res_table->get_types_by_name_prefixes(m_name_obfuscation_allowed_types);
-    for (auto& type_id : UnorderedIterable(allow_type_ids)) {
+    for (const auto& type_id : UnorderedIterable(allow_type_ids)) {
       shifted_allow_type_ids.emplace(type_id >> TYPE_INDEX_BIT_SHIFT);
     }
   }
@@ -331,7 +331,7 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
   // relevant values in BundleConfig.pb to take advantage of that (if
   // configured).
   const auto& global_config = conf.get_global_config();
-  auto global_resources_config =
+  auto* global_resources_config =
       global_config.get_config_by_name<ResourceConfig>("resources");
   resources->finalize_bundle_config(*global_resources_config);
 }

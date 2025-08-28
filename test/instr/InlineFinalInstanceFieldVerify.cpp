@@ -31,7 +31,7 @@ int count_igets(cfg::ControlFlowGraph& cfg) {
 void expect_class_have_num_init(DexClasses& classes,
                                 const char* name,
                                 int num_of_init) {
-  auto cls = find_class_named(classes, name);
+  auto* cls = find_class_named(classes, name);
   ASSERT_NE(nullptr, cls);
   auto ctors = cls->get_ctors();
   EXPECT_EQ(ctors.size(), num_of_init);
@@ -49,7 +49,7 @@ std::unordered_set<std::string> get_fields_name_accessed(DexMethod* method) {
 }
 
 int get_class_num_ifields(DexClasses& classes, const char* name) {
-  auto cls = find_class_named(classes, name);
+  auto* cls = find_class_named(classes, name);
   if (cls == nullptr) {
     return -1;
   }
@@ -92,8 +92,8 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   EXPECT_EQ(get_class_num_ifields(classes, "Lredex/AccessedString;"), 2);
   EXPECT_EQ(get_class_num_ifields(classes, "Lredex/NotAccessedString;"), 2);
 
-  auto cls = find_class_named(classes, "Lredex/MultipleLayerAccessed;");
-  auto method = find_vmethod_named(*cls, "change0");
+  auto* cls = find_class_named(classes, "Lredex/MultipleLayerAccessed;");
+  auto* method = find_vmethod_named(*cls, "change0");
   ASSERT_NE(nullptr, method);
   ASSERT_NE(nullptr, method->get_dex_code());
   auto field_names = get_fields_name_accessed(method);
@@ -163,9 +163,9 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   EXPECT_THAT(field_names,
               ::testing::UnorderedElementsAre("m_non_final_inlineable"));
 
-  [[maybe_unused]] auto read_ctors_cls1 =
+  [[maybe_unused]] auto* read_ctors_cls1 =
       find_class_named(classes, "Lredex/ReadInCtors1;");
-  auto read_ctors_cls2 = find_class_named(classes, "Lredex/ReadInCtors2;");
+  auto* read_ctors_cls2 = find_class_named(classes, "Lredex/ReadInCtors2;");
 
   for (auto& meth : read_ctors_cls2->get_dmethods()) {
     IRCode* code = new IRCode(meth);
@@ -175,7 +175,7 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   }
 
   // 3 igets in test methods.
-  auto test_cls =
+  auto* test_cls =
       find_class_named(classes, "Lredex/InlineFinalInstanceFieldTest;");
   size_t count = 0;
   for (auto& meth : test_cls->get_vmethods()) {
@@ -231,9 +231,9 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
   EXPECT_EQ(get_class_num_ifields(classes, "Lredex/AccessedString;"), 2);
   EXPECT_EQ(get_class_num_ifields(classes, "Lredex/NotAccessedString;"), 2);
 
-  auto cls = find_class_named(classes, "Lredex/MultipleLayerAccessed;");
+  auto* cls = find_class_named(classes, "Lredex/MultipleLayerAccessed;");
 
-  auto method = find_vmethod_named(*cls, "change0");
+  auto* method = find_vmethod_named(*cls, "change0");
   ASSERT_NE(nullptr, method);
   ASSERT_NE(nullptr, method->get_dex_code());
   auto field_names = get_fields_name_accessed(method);
@@ -312,8 +312,8 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
   field_names = get_fields_name_accessed(method);
   EXPECT_EQ(field_names.size(), 0);
 
-  auto read_ctors_cls1 = find_class_named(classes, "Lredex/ReadInCtors1;");
-  auto read_ctors_cls2 = find_class_named(classes, "Lredex/ReadInCtors2;");
+  auto* read_ctors_cls1 = find_class_named(classes, "Lredex/ReadInCtors1;");
+  auto* read_ctors_cls2 = find_class_named(classes, "Lredex/ReadInCtors2;");
 
   // Ctors of both read ctors class have one iget.
   for (auto& meth : read_ctors_cls1->get_dmethods()) {
@@ -330,7 +330,7 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
   }
 
   // 3 igets in test methods.
-  auto test_cls =
+  auto* test_cls =
       find_class_named(classes, "Lredex/InlineFinalInstanceFieldTest;");
   size_t count = 0;
   for (auto& meth : test_cls->get_vmethods()) {

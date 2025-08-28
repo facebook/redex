@@ -159,7 +159,7 @@ also reject some legal cases.
                             TypeRefs* pending_init_class_fields,
                             TypeRefs* pending_init_class_types);
 
-  bool has_tref(DexType* type) const { return m_trefs.count(type); }
+  bool has_tref(DexType* type) const { return m_trefs.count(type) != 0u; }
 
   void check_refs_count();
 
@@ -394,7 +394,7 @@ class DexesStructure {
    */
   DexClasses end_dex(DexInfo dex_info);
 
-  bool has_class(DexClass* clazz) const { return m_classes.count(clazz); }
+  bool has_class(DexClass* clazz) const { return m_classes.count(clazz) != 0u; }
 
   const std::vector<DexInfo>& get_dex_info() const { return m_dex_info; }
 

@@ -31,7 +31,8 @@ class ObjectSensitiveDceTest : public RedexIntegrationTest {
     // we need in the tests to create a proper scope
     virt_scope::get_vmethods(type::java_lang_Object());
 
-    auto object_ctor = static_cast<DexMethod*>(method::java_lang_Object_ctor());
+    auto* object_ctor =
+        static_cast<DexMethod*>(method::java_lang_Object_ctor());
     object_ctor->set_access(ACC_PUBLIC | ACC_CONSTRUCTOR);
     object_ctor->set_external();
     type_class(type::java_lang_Object())->add_method(object_ctor);
@@ -42,10 +43,10 @@ class ObjectSensitiveDceTest : public RedexIntegrationTest {
 };
 
 TEST_F(ObjectSensitiveDceTest, basic) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/ObjectSensitiveDceTest;.basic:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -61,10 +62,10 @@ TEST_F(ObjectSensitiveDceTest, basic) {
 }
 
 TEST_F(ObjectSensitiveDceTest, invoke_super) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/ObjectSensitiveDceTest;.invoke_super:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -80,11 +81,11 @@ TEST_F(ObjectSensitiveDceTest, invoke_super) {
 }
 
 TEST_F(ObjectSensitiveDceTest, invoke_virtual_with_overrides) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.invoke_virtual_with_overrides:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -100,12 +101,12 @@ TEST_F(ObjectSensitiveDceTest, invoke_virtual_with_overrides) {
 }
 
 TEST_F(ObjectSensitiveDceTest, invoke_virtual_with_overrides_with_side_effect) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.invoke_virtual_with_overrides_with_side_effect:("
       ")V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -117,18 +118,18 @@ TEST_F(ObjectSensitiveDceTest, invoke_virtual_with_overrides_with_side_effect) {
   // Nothing could get optimized away, because the invoke-virtual to bar
   // has an override with side-effects, so it couldn't get removed, and thus
   // the object creation itself is required.
-  auto code = method->get_code();
+  auto* code = method->get_code();
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
 }
 
 TEST_F(ObjectSensitiveDceTest, invoke_virtual_with_too_many_overrides) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.invoke_virtual_with_too_many_overrides:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -140,17 +141,17 @@ TEST_F(ObjectSensitiveDceTest, invoke_virtual_with_too_many_overrides) {
   // Nothing could get optimized away, because the invoke-virtual to bar
   // has an override with side-effects, so it couldn't get removed, and thus
   // the object creation itself is required.
-  auto code = method->get_code();
+  auto* code = method->get_code();
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
 }
 
 TEST_F(ObjectSensitiveDceTest, non_termination) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/ObjectSensitiveDceTest;.non_termination:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -166,10 +167,10 @@ TEST_F(ObjectSensitiveDceTest, non_termination) {
 }
 
 TEST_F(ObjectSensitiveDceTest, recursive) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/ObjectSensitiveDceTest;.recursive:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -185,10 +186,10 @@ TEST_F(ObjectSensitiveDceTest, recursive) {
 }
 
 TEST_F(ObjectSensitiveDceTest, mutually_recursive) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/ObjectSensitiveDceTest;.mutually_recursive:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -204,11 +205,11 @@ TEST_F(ObjectSensitiveDceTest, mutually_recursive) {
 }
 
 TEST_F(ObjectSensitiveDceTest, clinit_with_side_effects) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.clinit_with_side_effects:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -229,11 +230,11 @@ TEST_F(ObjectSensitiveDceTest, clinit_with_side_effects) {
 }
 
 TEST_F(ObjectSensitiveDceTest, method_needing_init_class) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.method_needing_init_class:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -245,18 +246,18 @@ TEST_F(ObjectSensitiveDceTest, method_needing_init_class) {
   // Nothing could get optimized away, because the invoke-virtual to foo
   // triggers a clinit with side-effects, so it couldn't get removed, and thus
   // the object creation itself is required.
-  auto code = method->get_code();
+  auto* code = method->get_code();
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
 }
 
 TEST_F(ObjectSensitiveDceTest, pure_method_object) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.pure_method_object:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -275,11 +276,11 @@ TEST_F(ObjectSensitiveDceTest, pure_method_object) {
 }
 
 TEST_F(ObjectSensitiveDceTest, array_clone) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.array_clone:()V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -295,12 +296,12 @@ TEST_F(ObjectSensitiveDceTest, array_clone) {
 }
 
 TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.do_not_reduce_finalize:("
       ")V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -309,7 +310,7 @@ TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize) {
 
   run_passes(passes);
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
@@ -318,12 +319,12 @@ TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize) {
 }
 
 TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize_field) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.do_not_reduce_finalize_field:("
       ")V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -332,7 +333,7 @@ TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize_field) {
 
   run_passes(passes);
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
@@ -341,12 +342,12 @@ TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize_field) {
 }
 
 TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize_derived) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "ObjectSensitiveDceTest;.do_not_reduce_finalize_derived:("
       ")V");
   EXPECT_NE(method_ref, nullptr);
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
 
   std::vector<Pass*> passes = {
@@ -355,7 +356,7 @@ TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize_derived) {
 
   run_passes(passes);
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
 
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);

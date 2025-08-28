@@ -37,7 +37,7 @@ TEST_F(DefaultAnnotationTest, defaultAnnotation) {
       std::string bool_anno_name = "booleanVal";
       std::string no_such_anno_name = "noSuchVal";
 
-      if (set) {
+      if (set != nullptr) {
         for (auto const& anno : set->get_annotations()) {
           // annotation with default value
           if ("foo" == dex_method->str()) {

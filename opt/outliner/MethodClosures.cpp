@@ -32,10 +32,10 @@ UnorderedSet<const ReducedBlock*> get_blocks_with_final_field_puts(
     return {};
   }
   bool is_clinit = method::is_clinit(method);
-  auto type = method->get_class();
+  auto* type = method->get_class();
   auto has_unsplittable_insn = [&](const cfg::Block* block) {
-    for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+    for (const auto& mie : InstructionIterable(block)) {
+      auto* insn = mie.insn;
       if (is_clinit && opcode::is_an_sput(insn->opcode())) {
         auto* f = resolve_field(insn->get_field(), FieldSearch::Static);
         if (f != nullptr && f->get_class() == type && is_final(f)) {
@@ -52,7 +52,7 @@ UnorderedSet<const ReducedBlock*> get_blocks_with_final_field_puts(
     return false;
   };
   UnorderedSet<const ReducedBlock*> res;
-  for (auto* reduced_block : rcfg->blocks()) {
+  for (const auto* reduced_block : rcfg->blocks()) {
     if (unordered_any_of(reduced_block->blocks, has_unsplittable_insn)) {
       res.insert(reduced_block);
     }
@@ -87,7 +87,7 @@ void split_blocks(DexMethod* method,
   // TODO: Instead of "blindly" going by opcode count, instead nudge the split
   // points towards points with least live registers.
   for (auto* block : cfg.blocks()) {
-    if (cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW)) {
+    if (cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW) != nullptr) {
       // don't bother
       continue;
     }
@@ -110,15 +110,17 @@ void split_blocks(DexMethod* method,
           !cfg.move_result_of(cfg_it).is_end()) {
         continue;
       }
-      auto pos = cfg.get_dbg_pos(cfg_it);
-      auto split_block = cfg.split_block(cfg_it);
-      if (pos && needs_pos(split_block->begin(), split_block->end())) {
+      auto* pos = cfg.get_dbg_pos(cfg_it);
+      auto* split_block = cfg.split_block(cfg_it);
+      if ((pos != nullptr) &&
+          needs_pos(split_block->begin(), split_block->end())) {
         // Make sure new block gets proper position
         cfg.insert_before(split_block, split_block->begin(),
                           std::make_unique<DexPosition>(*pos));
       }
-      auto template_sb = source_blocks::get_first_source_block(block);
-      if (template_sb && !source_blocks::get_first_source_block(split_block)) {
+      auto* template_sb = source_blocks::get_first_source_block(block);
+      if ((template_sb != nullptr) &&
+          (source_blocks::get_first_source_block(split_block) == nullptr)) {
         auto new_sb = source_blocks::clone_as_synthetic(template_sb, method);
         auto split_it = split_block->get_first_insn();
         split_block->insert_before(split_it, std::move(new_sb));
@@ -134,7 +136,7 @@ namespace method_splitting_impl {
 
 std::shared_ptr<const ReducedControlFlowGraph> reduce_cfg(
     DexMethod* method, std::optional<uint64_t> split_block_size) {
-  auto code = method->get_code();
+  auto* code = method->get_code();
   auto& cfg = code->cfg();
   for (auto* block : cfg.blocks()) {
     auto* goes_to_block = block->goes_to_only_edge();
@@ -146,7 +148,7 @@ std::shared_ptr<const ReducedControlFlowGraph> reduce_cfg(
       continue;
     }
     if (opcode::is_a_return(first_insn_it->insn->opcode())) {
-      auto last_existing_sb = source_blocks::get_last_source_block(block);
+      auto* last_existing_sb = source_blocks::get_last_source_block(block);
       auto it = goes_to_block->begin();
       while (true) {
         switch (it->type) {
@@ -193,7 +195,7 @@ std::shared_ptr<MethodClosures> discover_closures(
     return std::make_unique<monitor_count::Analyzer>(method->get_code()->cfg());
   });
   auto excluded_blocks = get_blocks_with_final_field_puts(method, rcfg.get());
-  for (auto* reduced_block : rcfg->blocks()) {
+  for (const auto* reduced_block : rcfg->blocks()) {
     if (reduced_block == rcfg->entry_block()) {
       continue;
     }
@@ -202,7 +204,7 @@ std::shared_ptr<MethodClosures> discover_closures(
     bool too_many_targets{false};
     UnorderedSet<cfg::Block*> srcs;
     cfg::Block* target{nullptr};
-    for (auto* e : reduced_block->expand_preds()) {
+    for (const auto* e : reduced_block->expand_preds()) {
       if (e->type() == cfg::EDGE_THROW) {
         any_throw = true;
         break;

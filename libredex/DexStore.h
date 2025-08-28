@@ -243,8 +243,8 @@ class XStoreRefs {
    * api.
    */
   size_t get_store_idx(const DexType* type) const {
-    auto* res = m_xstores.get(type);
-    if (res) {
+    const auto* res = m_xstores.get(type);
+    if (res != nullptr) {
       return *res;
     }
     not_reached_log("type %s not in the current APK", show_type(type).c_str());
@@ -257,13 +257,13 @@ class XStoreRefs {
    * the current scope.
    */
   bool is_in_root_store(const DexType* type) const {
-    auto* res = m_xstores.get(type);
-    return res && *res < m_root_stores;
+    const auto* res = m_xstores.get(type);
+    return (res != nullptr) && *res < m_root_stores;
   }
 
   bool is_in_primary_dex(const DexType* type) const {
-    auto* res = m_xstores.get(type);
-    return res && *res == 0;
+    const auto* res = m_xstores.get(type);
+    return (res != nullptr) && *res == 0;
   }
 
   const DexStore* get_store(size_t idx) const { return m_stores[idx]; }
@@ -304,8 +304,8 @@ class XStoreRefs {
     if (store_idx >= m_xstores.size()) {
       return false;
     }
-    auto* res = m_xstores.get(type);
-    if (!res) {
+    const auto* res = m_xstores.get(type);
+    if (res == nullptr) {
       return true;
     }
     return illegal_ref_between_stores(store_idx, *res);
@@ -330,7 +330,7 @@ class XStoreRefs {
       const auto& caller_store = get_store(caller_store_idx);
       const auto& caller_dependencies =
           get_transitive_resolved_dependencies(caller_store);
-      if (caller_dependencies.count(callee_store)) {
+      if (caller_dependencies.count(callee_store) != 0u) {
         return false;
       }
       // Check to support impartial dependencies for Buck's shared modules.
@@ -338,11 +338,11 @@ class XStoreRefs {
       // depend on it, and verify that all transitively depend on the callee
       // store.
       if (is_store_shared_module(caller_store)) {
-        auto& inbound_deps = m_reverse_dependencies.at(caller_store);
+        const auto& inbound_deps = m_reverse_dependencies.at(caller_store);
         bool all_stores_depend_on_callee = true;
-        for (auto& dep_store : UnorderedIterable(inbound_deps)) {
-          if (!get_transitive_resolved_dependencies(dep_store).count(
-                  callee_store)) {
+        for (const auto& dep_store : UnorderedIterable(inbound_deps)) {
+          if (get_transitive_resolved_dependencies(dep_store).count(
+                  callee_store) == 0u) {
             all_stores_depend_on_callee = false;
           }
         }

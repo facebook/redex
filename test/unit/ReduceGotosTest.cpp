@@ -50,7 +50,7 @@ void test(const std::string& code_str,
 }
 
 TEST_F(ReduceGotosTest, packed_switch_useless) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (switch v0 (:b :a))
       (:a)
@@ -67,7 +67,7 @@ TEST_F(ReduceGotosTest, packed_switch_useless) {
 }
 
 TEST_F(ReduceGotosTest, sparse_switch_useless) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (switch v0 (:b :a))
       (:a 0)
@@ -84,7 +84,7 @@ TEST_F(ReduceGotosTest, sparse_switch_useless) {
 }
 
 TEST_F(ReduceGotosTest, sparse_switch_reducible) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (switch v0 (:a :b :c))
       (:b 1)
@@ -109,7 +109,7 @@ TEST_F(ReduceGotosTest, sparse_switch_reducible) {
 }
 
 TEST_F(ReduceGotosTest, packed_switch_reducible) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (switch v0 (:a :b :c))
       (:a 0)
@@ -134,7 +134,7 @@ TEST_F(ReduceGotosTest, packed_switch_reducible) {
 }
 
 TEST_F(ReduceGotosTest, trivial_irreducible_remaining_switch) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (load-param v1)
@@ -190,7 +190,7 @@ TEST_F(ReduceGotosTest, trivial_irreducible_remaining_switch) {
 }
 
 TEST_F(ReduceGotosTest, trivial_replaced_switch_nop) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (switch v0 (:a :b :c))
       (:a 1)
@@ -214,7 +214,7 @@ TEST_F(ReduceGotosTest, trivial_replaced_switch_nop) {
 }
 
 TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub_lit8) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (switch v0 (:a :b :c))
@@ -241,7 +241,7 @@ TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub_lit8) {
 }
 
 TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (switch v0 (:a :b :c))
@@ -268,7 +268,7 @@ TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub) {
 }
 
 TEST_F(ReduceGotosTest, trivial_replaced_switch_const) {
-  auto code_str = R"(
+  const auto* code_str = R"(
     (
       (load-param v0)
       (switch v0 (:a :b :c))

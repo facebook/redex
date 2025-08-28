@@ -44,11 +44,11 @@ void print_failed_external_check(
         failed_classes_external_check,
     std::ostringstream* oss) {
   size_t counter = 0;
-  for (auto& pair : UnorderedIterable(failed_classes_external_check)) {
+  for (const auto& pair : UnorderedIterable(failed_classes_external_check)) {
     *oss << "Internal class " << show(pair.first) << " (deobfuscated: "
          << pair.first->get_deobfuscated_name_or_empty_copy() << ")\n"
          << "  has external children:\n";
-    for (auto type : UnorderedIterable(pair.second)) {
+    for (const auto* type : UnorderedIterable(pair.second)) {
       *oss << INDENTATION << show(type) << std::endl;
     }
     counter++;
@@ -67,11 +67,11 @@ void print_failed_definition_check(
         failed_classes_definition_check,
     std::ostringstream* oss) {
   size_t counter = 0;
-  for (auto& pair : UnorderedIterable(failed_classes_definition_check)) {
+  for (const auto& pair : UnorderedIterable(failed_classes_definition_check)) {
     *oss << "Internal class " << show(pair.first) << " (deobfuscated: "
          << pair.first->get_deobfuscated_name_or_empty_copy() << ")\n"
          << "  references type not defined internally or externally:\n";
-    for (auto type : UnorderedIterable(pair.second)) {
+    for (const auto* type : UnorderedIterable(pair.second)) {
       *oss << INDENTATION << show(type) << std::endl;
     }
 
@@ -110,13 +110,13 @@ bool has_colliding_methods(const DexClass* cls,
                            const DexClass* child_cls,
                            Collection* failures) {
   bool result{false};
-  for (auto& v : child_cls->get_vmethods()) {
+  for (const auto& v : child_cls->get_vmethods()) {
     NameAndProto np(v);
     auto search = final_methods.find(np);
     if (search != final_methods.end()) {
       // Check package visibility rules per
       // https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-5.html#jvms-5.4.5
-      auto super_method = search->second;
+      const auto* super_method = search->second;
       if (is_public(super_method) || is_protected(super_method) ||
           type::same_package(cls->get_type(), child_cls->get_type())) {
         result = true;
@@ -142,14 +142,14 @@ void ClassChecker::init_setting(
   m_definition_check = definition_check;
   m_definition_check_allowlist_prefixes = definition_check_allowlist_prefixes;
   for (const auto& cls_string : UnorderedIterable(definition_check_allowlist)) {
-    auto type = DexType::get_type(cls_string);
-    if (type) {
+    auto* type = DexType::get_type(cls_string);
+    if (type != nullptr) {
       m_definition_check_allowlist.emplace(type);
     }
   }
   for (const auto& cls_string : UnorderedIterable(external_check_allowlist)) {
-    auto type = DexType::get_type(cls_string);
-    if (type) {
+    auto* type = DexType::get_type(cls_string);
+    if (type != nullptr) {
       m_external_check_allowlist.emplace(type);
     }
   }
@@ -174,7 +174,7 @@ void ClassChecker::run(const Scope& scope) {
 
   auto check_class_defined = [&](DexType* type) -> bool {
     if (internal_types.count(type) == 0) {
-      auto cls = type_class(type);
+      auto* cls = type_class(type);
       if ((cls == nullptr || !cls->is_external()) &&
           m_definition_check_allowlist.find(type) ==
               m_definition_check_allowlist.end() &&
@@ -224,13 +224,13 @@ void ClassChecker::run(const Scope& scope) {
       }
 
       if (m_definition_check) {
-        auto super_type = cls->get_super_class();
+        auto* super_type = cls->get_super_class();
         if (!check_class_defined(super_type)) {
           m_good = false;
           m_failed_classes_definition_check.update(
               cls, [&](auto*, auto& set, bool) { set.insert(super_type); });
         }
-        for (auto& intf : *cls->get_interfaces()) {
+        for (const auto& intf : *cls->get_interfaces()) {
           if (!check_class_defined(intf)) {
             m_good = false;
             m_failed_classes_definition_check.update(
@@ -245,7 +245,7 @@ void ClassChecker::run(const Scope& scope) {
     for (auto&& [cls, final_methods] : class_to_final_methods) {
       auto child_types = get_all_children(hierarchy, cls->get_type());
       for (const auto& child_type : child_types) {
-        auto child_cls = type_class(child_type);
+        auto* child_cls = type_class(child_type);
         always_assert(child_cls != nullptr);
         if (has_colliding_methods(
                 cls, final_methods, child_cls, &m_failed_methods)) {

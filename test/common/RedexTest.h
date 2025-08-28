@@ -97,7 +97,7 @@ struct RedexIntegrationTest : public RedexTest {
     DexStore root_store(dex_metadata);
     root_store.add_classes(
         load_classes_from_dex(DexLocation::make_location("dex", dex_file)));
-    if (secondary_dex_file) {
+    if (secondary_dex_file != nullptr) {
       root_store.add_classes(load_classes_from_dex(
           DexLocation::make_location("dex", secondary_dex_file)));
     }

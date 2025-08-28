@@ -25,22 +25,22 @@ TEST_F(TypeAnalysisTransformTest, MethodHasNoEqDefined) {
   auto scope = build_class_scope(stores);
   set_root_method("LTypeAnalysisRemoveRedundantNullCheck;.main:()V");
 
-  auto gta = new GlobalTypeAnalysisPass();
-  auto dce = new LocalDcePass();
+  auto* gta = new GlobalTypeAnalysisPass();
+  auto* dce = new LocalDcePass();
   gta->get_config().transform.remove_redundant_null_checks = true;
   std::vector<Pass*> passes{gta, dce};
   run_passes(passes);
 
-  auto x_method =
+  auto* x_method =
       DexMethod::get_method(
           "LTypeAnalysisRemoveRedundantNullCheck;.foo:(Ljava/lang/String;)V")
           ->as_def();
-  auto codex = x_method->get_code();
+  auto* codex = x_method->get_code();
   ASSERT_NE(nullptr, codex);
   auto ii = InstructionIterable(x_method->get_code());
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     EXPECT_NE(insn->opcode(), OPCODE_INVOKE_STATIC);
   }
 }

@@ -44,7 +44,7 @@ class RearrangeEnumClinitTest : public RedexTest {
       cc.set_super(type::java_lang_Object()); // Should be Enum but does not
                                               // matter.
 
-      for (auto& s : {"ALPHA", "BETA", "GAMMA"}) {
+      for (const auto& s : {"ALPHA", "BETA", "GAMMA"}) {
         cc.add_field(DexField::make_field(self, DexString::make_string(s), self)
                          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL));
       }
@@ -61,12 +61,12 @@ class RearrangeEnumClinitTest : public RedexTest {
           DexMethod::make_method(class_name + ".<init>:(" + value_type + "I)V")
               ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false));
 
-      auto clinit_method =
+      auto* clinit_method =
           DexMethod::make_method(class_name + ".<clinit>:()V")
               ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
       cc.add_method(clinit_method);
 
-      auto values_method =
+      auto* values_method =
           DexMethod::make_method(class_name + ".values:()[" + class_name)
               ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
       cc.add_method(values_method);
@@ -99,7 +99,7 @@ class RearrangeEnumClinitTest : public RedexTest {
 };
 
 TEST_F(RearrangeEnumClinitTest, Sgets) {
-  auto src = R"(
+  const auto* src = R"(
   (
     (const v4 2)
     (const v3 1)
@@ -147,7 +147,7 @@ TEST_F(RearrangeEnumClinitTest, Sgets) {
 }
 
 TEST_F(RearrangeEnumClinitTest, Regs) {
-  auto src = R"(
+  const auto* src = R"(
   (
     (const v4 2)
     (const v3 1)
@@ -192,7 +192,7 @@ TEST_F(RearrangeEnumClinitTest, Regs) {
 
   ASSERT_EQ(res, MethodResult::kChanged);
 
-  auto dst = R"(
+  const auto* dst = R"(
   (
     (const v19 3)
     (new-array v19 "[LTest;")
@@ -242,7 +242,7 @@ TEST_F(RearrangeEnumClinitTest, Regs) {
 // The array size may be reused, e.g., if it's the same as a value
 // for the enum.
 TEST_F(RearrangeEnumClinitTest, SizeReused) {
-  auto src = R"(
+  const auto* src = R"(
   (
     (const v4 2)
     (const v3 1)
@@ -283,7 +283,7 @@ TEST_F(RearrangeEnumClinitTest, SizeReused) {
 
   ASSERT_EQ(res, MethodResult::kChanged);
 
-  auto dst = R"(
+  const auto* dst = R"(
   (
     (const v19 3)
     (new-array v19 "[LTestInt;")
@@ -333,7 +333,7 @@ class RearrangeEnumClinitFieldTest : public RearrangeEnumClinitTest {
     auto values_code = assembler::ircode_from_string(values_src);
     values->set_code(std::move(values_code));
 
-    auto src = R"(
+    const auto* src = R"(
     (
       (const v4 2)
       (const v3 1)
@@ -381,7 +381,7 @@ class RearrangeEnumClinitFieldTest : public RearrangeEnumClinitTest {
              << "Optimization not applied: " << static_cast<int>(res);
     }
 
-    auto dst = R"(
+    const auto* dst = R"(
     (
       (const v19 3)
       (new-array v19 "[LTest;")
@@ -437,7 +437,7 @@ class RearrangeEnumClinitFieldTest : public RearrangeEnumClinitTest {
 };
 
 TEST_F(RearrangeEnumClinitFieldTest, OtherDirect) {
-  auto values_src = R"(
+  const auto* values_src = R"(
     (
       (sget-object "LTest;.OTHER:[LTest;")
       (move-result-pseudo-object v0)
@@ -448,7 +448,7 @@ TEST_F(RearrangeEnumClinitFieldTest, OtherDirect) {
 }
 
 TEST_F(RearrangeEnumClinitFieldTest, OtherClone) {
-  auto values_src = R"(
+  const auto* values_src = R"(
     (
       (sget-object "LTest;.OTHER:[LTest;")
       (move-result-pseudo-object v0)

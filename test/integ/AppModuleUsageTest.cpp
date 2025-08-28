@@ -21,9 +21,9 @@ void split_two_stores(std::vector<DexStore>& stores) {
   auto& root_dex_classes = root_store.get_dexen().at(0);
   // add second store with OtherClass & ThirdClass
   DexStore second_store(second_dex_metadata);
-  auto other_class =
+  auto* other_class =
       type_class(DexType::get_type("LAppModuleUsageOtherClass;"));
-  auto third_class =
+  auto* third_class =
       type_class(DexType::get_type("LAppModuleUsageThirdClass;"));
   second_store.add_classes(std::vector<DexClass*>{other_class});
   second_store.add_classes(std::vector<DexClass*>{third_class});
@@ -43,15 +43,15 @@ void split_three_stores(std::vector<DexStore>& stores) {
   auto& root_dex_classes = root_store.get_dexen().at(0);
   // add second store with OtherClass
   DexStore second_store(second_dex_metadata);
-  auto other_class =
+  auto* other_class =
       type_class(DexType::get_type("LAppModuleUsageOtherClass;"));
   second_store.add_classes(std::vector<DexClass*>{other_class});
   stores.emplace_back(second_store);
   // add third store with ThirdClass
   DexStore third_store(third_dex_metadata);
-  auto third_class =
+  auto* third_class =
       type_class(DexType::get_type("LAppModuleUsageThirdClass;"));
-  auto third_class_inner_class = type_class(
+  auto* third_class_inner_class = type_class(
       DexType::get_type("LAppModuleUsageThirdClass$InnerClass$123;"));
   third_store.add_classes(
       std::vector<DexClass*>{third_class, third_class_inner_class});
@@ -71,11 +71,11 @@ struct AppModuleUsageTest : public RedexIntegrationTest {};
 
 TEST_F(AppModuleUsageTest, testOneStore) {
   // AppModuleUsageClass and AppModuleUsageOtherClass are in the root store
-  auto config_file_env = std::getenv("default_config_file");
+  auto* config_file_env = std::getenv("default_config_file");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
   Json::Value cfg;
   config_file >> cfg;
-  auto preexisting_violation_env =
+  auto* preexisting_violation_env =
       std::getenv("app_module_violation_allowlist");
   cfg["AppModuleUsagePass"]["preexisting_violations_filepath"] =
       preexisting_violation_env;
@@ -90,11 +90,11 @@ TEST_F(AppModuleUsageTest, testTwoStores) {
   split_two_stores(stores);
   // root_store holds AppModuleUsageClass
   // second_store holds AppModuleUsageOtherClass & AppModuleUsageThirdClass
-  auto config_file_env = std::getenv("default_config_file");
+  auto* config_file_env = std::getenv("default_config_file");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
   Json::Value cfg;
   config_file >> cfg;
-  auto preexisting_violation_env =
+  auto* preexisting_violation_env =
       std::getenv("app_module_violation_allowlist");
   cfg["AppModuleUsagePass"]["preexisting_violations_filepath"] =
       preexisting_violation_env;
@@ -109,7 +109,7 @@ TEST_F(AppModuleUsageTest, testTwoStores) {
 TEST_F(AppModuleUsageTest, testTwoStoresCrash) {
   split_two_stores(stores);
   // configure to crash on violations
-  auto config_file_env = std::getenv("config_file");
+  auto* config_file_env = std::getenv("config_file");
   always_assert_log(config_file_env,
                     "Config file must be specified to AppModuleUsageTest.\n");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
@@ -127,11 +127,11 @@ TEST_F(AppModuleUsageTest, testThreeStores) {
   // root_store holds AppModuleUsageClass
   // second_store holds AppModuleUsageOtherClass
   // third_store holds AppModuleUsageThirdClass
-  auto config_file_env = std::getenv("default_config_file");
+  auto* config_file_env = std::getenv("default_config_file");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
   Json::Value cfg;
   config_file >> cfg;
-  auto preexisting_violation_env =
+  auto* preexisting_violation_env =
       std::getenv("app_module_violation_allowlist");
   cfg["AppModuleUsagePass"]["preexisting_violations_filepath"] =
       preexisting_violation_env;
@@ -149,7 +149,7 @@ TEST_F(AppModuleUsageTest, testThreeStores) {
 TEST_F(AppModuleUsageTest, testThreeStoresCrash) {
   split_three_stores(stores);
   // configure to crash on violations
-  auto config_file_env = std::getenv("config_file");
+  auto* config_file_env = std::getenv("config_file");
   always_assert_log(config_file_env,
                     "Config file must be specified to AppModuleUsageTest.\n");
   std::ifstream config_file(config_file_env, std::ifstream::binary);

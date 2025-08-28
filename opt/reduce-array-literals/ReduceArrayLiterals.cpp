@@ -208,7 +208,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
     const auto get_singleton =
         [](const TrackedDomain& domain) -> boost::optional<TrackedValue> {
       always_assert(domain.kind() == AbstractValueKind::Value);
-      auto& elements = domain.elements();
+      const auto& elements = domain.elements();
       if (elements.size() != 1) {
         return boost::none;
       }
@@ -218,7 +218,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
     const auto escape_new_arrays = [&](uint32_t reg) {
       const auto& domain = current_state->get(reg);
       always_assert(domain.kind() == AbstractValueKind::Value);
-      for (auto& value : domain.elements()) {
+      for (const auto& value : domain.elements()) {
         if (is_new_array(value)) {
           if (is_array_literal(value)) {
             auto escaped_array = EscapedArrayDomain(get_aput_insns(value));
@@ -396,8 +396,8 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    auto type = new_array_insn->get_type();
-    auto element_type = type::get_array_component_type(type);
+    auto* type = new_array_insn->get_type();
+    auto* element_type = type::get_array_component_type(type);
 
     if (m_min_sdk < 24) {
       // See T45708995.
@@ -473,7 +473,7 @@ void ReduceArrayLiterals::patch() {
 void ReduceArrayLiterals::patch_new_array(
     const IRInstruction* new_array_insn,
     const std::vector<const IRInstruction*>& aput_insns) {
-  auto type = new_array_insn->get_type();
+  auto* type = new_array_insn->get_type();
 
   // prepare for chunking, if needed
 
@@ -577,7 +577,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
     const_insn->set_literal(chunk_size)->set_dest(m_local_temp_regs[2]);
     new_insns.push_back(const_insn);
     IRInstruction* invoke_static_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
-    auto arraycopy_method = DexMethod::get_method(
+    auto* arraycopy_method = DexMethod::get_method(
         "Ljava/lang/System;.arraycopy:"
         "(Ljava/lang/Object;ILjava/lang/Object;II)V");
     always_assert(arraycopy_method != nullptr);
@@ -600,7 +600,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   auto iterable = cfg::InstructionIterable(m_cfg);
   for (auto insn_it = iterable.begin(); insn_it != iterable.end(); ++insn_it) {
     auto* insn = insn_it->insn;
-    if (aput_insns_set.count(insn)) {
+    if (aput_insns_set.count(insn) != 0u) {
       aput_insns_iterators.emplace(insn, insn_it);
     }
   }
@@ -611,7 +611,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   // most check-cast instructions will get eliminated again by the
   // remove-reundant-check-casts pass
 
-  auto component_type = type::get_array_component_type(type);
+  auto* component_type = type::get_array_component_type(type);
   bool is_component_type_primitive = type::is_primitive(component_type);
   for (size_t index = chunk_start; index < chunk_end; index++) {
     const IRInstruction* aput_insn = aput_insns[index];
@@ -685,7 +685,7 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
   const auto stats = walk::parallel::methods<ReduceArrayLiterals::Stats>(
       scope,
       [&](DexMethod* m) {
-        const auto code = m->get_code();
+        auto* const code = m->get_code();
         if (code == nullptr || m->rstate.no_optimizations()) {
           return ReduceArrayLiterals::Stats();
         }

@@ -112,7 +112,7 @@ void resource_inlining_PreVerify(ResourceTableFile* res_table) {
 }
 
 void resource_inlining_PostVerify(DexClass* cls) {
-  auto method = find_method_named(*cls, "logValues");
+  auto* method = find_method_named(*cls, "logValues");
   IRCode* code = new IRCode(method);
   code->build_cfg();
   auto& cfg = code->cfg();
@@ -120,7 +120,7 @@ void resource_inlining_PostVerify(DexClass* cls) {
     int line_num = 0;
     for (auto& mie : InstructionIterable(block)) {
       line_num++;
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (block->id() == 0) {
         if (line_num == 6) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
@@ -146,7 +146,7 @@ void resource_inlining_PostVerify(DexClass* cls) {
           ASSERT_EQ(uint32_t(insn->get_literal()), 3);
         } else if (line_num == 56) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
-          auto string_char_star = insn->get_string()->c_str();
+          const auto* string_char_star = insn->get_string()->c_str();
           auto string = (std::string)string_char_star;
           ASSERT_EQ(string.substr(0, 6), "Hello,");
         } else if (line_num == 57) {
@@ -158,28 +158,28 @@ void resource_inlining_PostVerify(DexClass* cls) {
           ASSERT_EQ(uint32_t(insn->get_literal()), 0xFFFFFFFF);
         } else if (line_num == 46) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
-          auto string_char_star = insn->get_string()->c_str();
+          const auto* string_char_star = insn->get_string()->c_str();
           auto string = (std::string)string_char_star;
           ASSERT_EQ(string, "#ff673ab7");
         } else if (line_num == 47) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         } else if (line_num == 60) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
-          auto string_char_star = insn->get_string()->c_str();
+          const auto* string_char_star = insn->get_string()->c_str();
           auto string = (std::string)string_char_star;
           ASSERT_EQ(string, "3");
         } else if (line_num == 61) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         } else if (line_num == 74) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
-          auto string_char_star = insn->get_string()->c_str();
+          const auto* string_char_star = insn->get_string()->c_str();
           auto string = (std::string)string_char_star;
           ASSERT_EQ(string, "com.fb.resources:integer/loop_count");
         } else if (line_num == 75) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         } else if (line_num == 88) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
-          auto string_char_star = insn->get_string()->c_str();
+          const auto* string_char_star = insn->get_string()->c_str();
           auto string = (std::string)string_char_star;
           ASSERT_EQ(string, "loop_count");
         } else if (line_num == 89) {

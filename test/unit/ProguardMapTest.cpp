@@ -229,14 +229,14 @@ TEST_F(ProguardMapTest, LinesKey) {
 TEST_F(ProguardMapTest, FileNameFromMethodString) {
 
   {
-    auto method_string = DexString::make_string(
+    const auto* method_string = DexString::make_string(
         "Landroid/support/v4/app/Fragment;.stuff:(Lcom/foo/bar;Lcom/foo/"
         "bar;)Lcom/foo/bar;");
     EXPECT_EQ(pg_impl::file_name_from_method_string(method_string),
               DexString::make_string("Fragment.java"));
   }
   {
-    auto method_string =
+    const auto* method_string =
         DexString::make_string("Lcom/foo/Bar$Inner;.stuff:()V");
     EXPECT_EQ(pg_impl::file_name_from_method_string(method_string),
               DexString::make_string("Bar.java"));

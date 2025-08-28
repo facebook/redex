@@ -77,12 +77,12 @@ BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
     }
   }
 
-  if (!cfg.exit_block()) {
+  if (cfg.exit_block() == nullptr) {
     cfg.calculate_exit_block();
   }
 
   BlameStore::Domain store;
-  for (auto* alloc : allocators) {
+  for (const auto* alloc : allocators) {
     store.set(alloc, BlameStore::unallocated());
   }
 

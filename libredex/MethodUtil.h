@@ -96,7 +96,7 @@ bool no_invoke_super(const IRCode& code);
  */
 
 inline bool is_constructor(const DexMethod* meth) {
-  return meth->get_access() & ACC_CONSTRUCTOR;
+  return (meth->get_access() & ACC_CONSTRUCTOR) != 0u;
 }
 
 inline bool is_constructor(const DexMethodRef* meth) {
@@ -158,7 +158,7 @@ inline unsigned count_opcode_of_types(const cfg::ControlFlowGraph& cfg,
   unsigned ret = 0;
   for (auto&& mie : cfg::ConstInstructionIterable(cfg)) {
     auto op = mie.insn->opcode();
-    if (opcodes.count(op)) {
+    if (opcodes.count(op) != 0u) {
       ret++;
     }
   }

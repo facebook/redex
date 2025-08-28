@@ -37,12 +37,13 @@ void UnreachableLoweringPass::eval_pass(DexStoresVector& stores,
   always_assert(!stores.empty());
   auto& root_store = stores.front();
   auto& primary_dex = root_store.get_dexen().at(0);
-  auto cls_name = DexString::make_string(UNREACHABLE_EXCEPTION_CLASS_NAME);
-  auto type = DexType::make_type(cls_name);
+  const auto* cls_name =
+      DexString::make_string(UNREACHABLE_EXCEPTION_CLASS_NAME);
+  auto* type = DexType::make_type(cls_name);
   ClassCreator cls_creator(type);
   cls_creator.set_access(ACC_PUBLIC | ACC_FINAL);
   cls_creator.set_super(type::java_lang_RuntimeException());
-  auto cls = cls_creator.create();
+  auto* cls = cls_creator.create();
   cls->rstate.set_generated();
   cls->rstate.set_root();
   cls->set_perf_sensitive(PerfSensitiveGroup::UNREACHABLE);
@@ -59,7 +60,7 @@ void UnreachableLoweringPass::eval_pass(DexStoresVector& stores,
     auto this_arg = method_creator.get_local(0);
     auto string_var = method_creator.make_local(type::java_lang_String());
     method_creator.make_local(type::java_lang_RuntimeException());
-    auto main_block = method_creator.get_main_block();
+    auto* main_block = method_creator.get_main_block();
 
     main_block->load_const(
         string_var,
@@ -90,7 +91,7 @@ void UnreachableLoweringPass::eval_pass(DexStoresVector& stores,
         DexProto::make_proto(type, DexTypeList::make_type_list({})),
         ACC_STATIC | ACC_PUBLIC);
     auto var = method_creator.make_local(type);
-    auto main_block = method_creator.get_main_block();
+    auto* main_block = method_creator.get_main_block();
     main_block->new_instance(type, var);
     main_block->invoke(init_method, {var});
     main_block->throwex(var);
@@ -149,7 +150,7 @@ void UnreachableLoweringPass::run_pass(DexStoresVector& stores,
       // "unreachable" instruction and the "throw". This should be avoided, and
       // then we can assert even stricter code patterns here.
       const auto& uses = (*duchains)[mie.insn];
-      for (auto& use : UnorderedIterable(uses)) {
+      for (const auto& use : UnorderedIterable(uses)) {
         auto* insn = use.insn;
         if (opcode::is_move_object(insn->opcode())) {
           continue;

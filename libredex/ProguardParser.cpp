@@ -370,7 +370,7 @@ std::string parse_annotation_type(TokenIndex& idx) {
 
 bool is_access_flag_set(const DexAccessFlags accessFlags,
                         const DexAccessFlags checkingFlag) {
-  return accessFlags & checkingFlag;
+  return (accessFlags & checkingFlag) != 0u;
 }
 
 void set_access_flag(DexAccessFlags& accessFlags,
@@ -1303,7 +1303,7 @@ Stats parse_file(const std::string& filename,
 
 size_t remove_default_blocklisted_rules(ProguardConfiguration* pg_config) {
   // TODO: Make the set of excluded rules configurable.
-  auto blocklisted_rules = R"(
+  const auto* blocklisted_rules = R"(
   # The proguard-android-optimize.txt file that is bundled with the Android SDK
   # has a keep rule to prevent removal of all resource ID fields. This is likely
   # because ProGuard runs before aapt which can change the values of those
@@ -1348,7 +1348,7 @@ size_t identify_blanket_native_rules(ProguardConfiguration* pg_config) {
   // *Physically, we move their pointers to the end of the
   // KeepSpecSet's ordered vector and store the iterator pointing at the
   // beginning.
-  auto blanket_native_rules = R"(
+  const auto* blanket_native_rules = R"(
   -keep class * { native <methods>; }
   -keepclassmembers class * { native <methods>; }
   -keepclasseswithmembers class * { native <methods>; }

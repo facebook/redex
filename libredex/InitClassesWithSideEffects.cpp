@@ -31,9 +31,9 @@ const InitClasses* InitClassesWithSideEffects::compute(
                              non_true_virtuals);
         } else {
           classes.push_back(cls);
-          auto super_cls = type_class(cls->get_super_class());
+          auto* super_cls = type_class(cls->get_super_class());
           if (super_cls) {
-            const auto super_classes = compute(
+            const auto* const super_classes = compute(
                 super_cls, clinit_has_no_side_effects, non_true_virtuals);
             classes.insert(classes.end(), super_classes->begin(),
                            super_classes->end());
@@ -54,7 +54,7 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
     : m_create_init_class_insns(create_init_class_insns) {
   Timer t("InitClassesWithSideEffects");
   std::unique_ptr<InsertOnlyConcurrentSet<DexMethod*>> non_true_virtuals;
-  if (method_override_graph) {
+  if (method_override_graph != nullptr) {
     non_true_virtuals = std::make_unique<InsertOnlyConcurrentSet<DexMethod*>>(
         method_override_graph::get_non_true_virtuals(*method_override_graph,
                                                      scope));
@@ -69,9 +69,9 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
           if (it != prev_init_classes.end()) {
             return it->second.empty();
           }
-          auto cls = type_class(type);
-          return cls && (cls->is_external() ||
-                         cls->rstate.clinit_has_no_side_effects());
+          auto* cls = type_class(type);
+          return (cls != nullptr) && (cls->is_external() ||
+                                      cls->rstate.clinit_has_no_side_effects());
         };
     ConcurrentSet<DexClass*> added_clinit_has_no_side_effects;
     walk::parallel::classes(scope, [&](DexClass* cls) {
@@ -81,7 +81,7 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
         added_clinit_has_no_side_effects.insert(cls);
       }
     });
-    for (auto cls : UnorderedIterable(added_clinit_has_no_side_effects)) {
+    for (auto* cls : UnorderedIterable(added_clinit_has_no_side_effects)) {
       cls->rstate.set_clinit_has_no_side_effects();
     }
     TRACE(ICL, 2,
@@ -98,7 +98,7 @@ const InitClasses* InitClassesWithSideEffects::get(const DexType* type) const {
 }
 
 const DexType* InitClassesWithSideEffects::refine(const DexType* type) const {
-  auto init_classes = get(type);
+  const auto* init_classes = get(type);
   return init_classes->empty() ? nullptr : init_classes->front()->get_type();
 }
 
@@ -108,7 +108,7 @@ IRInstruction* InitClassesWithSideEffects::create_init_class_insn(
     return nullptr;
   }
   type = refine(type);
-  if (!type) {
+  if (type == nullptr) {
     return nullptr;
   }
   return (new IRInstruction(IOPCODE_INIT_CLASS))

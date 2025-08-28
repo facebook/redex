@@ -43,7 +43,7 @@ bool ThrowPropagator::will_throw_or_not_terminate_or_unreachable(
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
       break;
     case OPCODE_INVOKE_DIRECT: {
-      auto method = it->insn->get_method();
+      auto* method = it->insn->get_method();
       if (!method::is_init(method) ||
           method->get_class() != type::java_lang_RuntimeException()) {
         return false;
@@ -65,9 +65,9 @@ bool ThrowPropagator::will_throw_or_not_terminate_or_unreachable(
 // and it performs block splitting if needed (see comment inline for details).
 bool ThrowPropagator::check_if_dead_code_present_and_prepare_block(
     const cfg::InstructionIterator& cfg_it) {
-  const auto block = cfg_it.block();
+  auto* const block = cfg_it.block();
   const auto it = cfg_it.unwrap();
-  auto insn = it->insn;
+  auto* insn = it->insn;
   TRACE(TP, 4, "no return: %s", SHOW(insn));
   if (insn == block->get_last_insn()->insn) {
     if (will_throw_or_not_terminate_or_unreachable(cfg_it)) {
@@ -98,7 +98,7 @@ bool ThrowPropagator::check_if_dead_code_present_and_prepare_block(
 
 void ThrowPropagator::insert_unreachable(
     const cfg::InstructionIterator& cfg_it) {
-  const auto block = cfg_it.block();
+  auto* const block = cfg_it.block();
 
   if (!m_reg) {
     m_reg = m_cfg.allocate_temp();
@@ -109,7 +109,7 @@ void ThrowPropagator::insert_unreachable(
       (new IRInstruction(OPCODE_THROW))->set_src(0, *m_reg),
   };
   new_block->push_back(insns);
-  auto template_source_block = source_blocks::get_first_source_block(block);
+  auto* template_source_block = source_blocks::get_first_source_block(block);
   if (template_source_block != nullptr) {
     auto new_source_block = source_blocks::clone_as_synthetic(
         template_source_block, m_method, SourceBlock::Val(0, 0));
@@ -117,7 +117,7 @@ void ThrowPropagator::insert_unreachable(
     new_block->insert_before(new_block_it, std::move(new_source_block));
   }
   m_cfg.copy_succ_edges_of_type(block, new_block, cfg::EDGE_THROW);
-  auto existing_goto_edge = m_cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
+  auto* existing_goto_edge = m_cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
   always_assert(existing_goto_edge != nullptr);
   m_cfg.set_edge_target(existing_goto_edge, new_block);
 }

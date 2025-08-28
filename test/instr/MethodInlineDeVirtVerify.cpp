@@ -15,12 +15,12 @@
 #include "VerifyUtil.h"
 
 TEST_F(PostVerify, DoNotInlineAnnotated) {
-  auto cls =
+  auto* cls =
       find_class_named(classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   ASSERT_NE(nullptr, cls);
 
-  auto m1 = find_vmethod_named(*cls, "getHello");
+  auto* m1 = find_vmethod_named(*cls, "getHello");
   ASSERT_EQ(nullptr, m1);
-  auto m2 = find_vmethod_named(*cls, "addWorld");
+  auto* m2 = find_vmethod_named(*cls, "addWorld");
   ASSERT_NE(nullptr, m2);
 }

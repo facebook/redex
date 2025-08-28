@@ -143,7 +143,7 @@ std::vector<DexCallSite*> GatheredTypes::get_dexcallsite_emitlist() {
 
 std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
   std::vector<DexMethod*> methlist;
-  for (auto cls : UnorderedIterable(*m_classes)) {
+  for (auto* cls : UnorderedIterable(*m_classes)) {
     TRACE(OPUT, 3, "[dexmethod_emitlist][class] %s", cls->c_str());
     auto const& dmethods = cls->get_dmethods();
     auto const& vmethods = cls->get_vmethods();
@@ -182,7 +182,7 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
   redex_assert(m_config != nullptr);
   UnorderedSet<DexType*> perf_sensitive_classes;
 
-  auto& global_config = m_config->get_global_config();
+  const auto& global_config = m_config->get_global_config();
   MethodProfileOrderingConfig* profiles_config{nullptr};
   if (global_config.has_config_by_name("method_profile_order")) {
     profiles_config =
@@ -200,7 +200,7 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
           /*method_profiles=*/&method_profiles,
           profiles_config);
 
-      for (auto meth : lmeth) {
+      for (auto* meth : lmeth) {
         auto method_sort_num = comparator.get_overall_method_sort_num(meth);
         if (method_sort_num <
             method_profiles::dexmethods_profiled_comparator::VERY_END) {
@@ -222,8 +222,8 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
 
   if (similarity_config != nullptr &&
       similarity_config->use_class_level_perf_sensitivity) {
-    for (auto meth : lmeth) {
-      auto cls = type_class(meth->get_class());
+    for (auto* meth : lmeth) {
+      auto* cls = type_class(meth->get_class());
       if (!cls->is_perf_sensitive()) {
         continue;
       }
@@ -233,8 +233,8 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
 
   std::vector<DexMethod*> perf_sensitive_methods;
   std::vector<DexMethod*> remaining_methods;
-  for (auto meth : lmeth) {
-    if (perf_sensitive_classes.count(meth->get_class())) {
+  for (auto* meth : lmeth) {
+    if (perf_sensitive_classes.count(meth->get_class()) != 0u) {
       perf_sensitive_methods.push_back(meth);
     } else {
       remaining_methods.push_back(meth);
@@ -281,7 +281,7 @@ void GatheredTypes::sort_dexmethod_emitlist_coldstart_order(
   }
 
   UnorderedMap<const DexMethod*, unsigned int> coldstart_method_ordering;
-  for (auto& method : coldstart_methods) {
+  for (const auto& method : coldstart_methods) {
     DexMethodRef* method_ref = DexMethod::get_method(method);
     if (method_ref == nullptr || !method_ref->is_def()) {
       continue;
@@ -417,7 +417,7 @@ dexproto_to_idx GatheredTypes::get_proto_index(cmp_dproto cmp) {
   }
   for (auto const& c : m_lcallsite) {
     protos.push_back(c->method_type());
-    for (auto& arg : c->args()) {
+    for (const auto& arg : c->args()) {
       // n.b. how deep could this recursion go? what if there was a method
       // handle here?
       if (arg->evtype() == DEVT_METHOD_TYPE) {
@@ -437,7 +437,7 @@ std::vector<DexTypeList*> GatheredTypes::get_typelist_list(
   typel.reserve(protos->size() + class_defs_size);
 
   for (auto& it : UnorderedIterable(*protos)) {
-    auto proto = it.first;
+    auto* proto = it.first;
     typel.push_back(proto->get_args());
   }
   for (uint32_t i = 0; i < class_defs_size; i++) {
@@ -469,7 +469,7 @@ void GatheredTypes::build_cls_load_map() {
     cls->gather_types(cls_types);
     std::sort(cls_types.begin(), cls_types.end(), compare_dextypes);
     for (const auto& t : cls_types) {
-      if (!m_cls_load_strings.count(t->get_name())) {
+      if (m_cls_load_strings.count(t->get_name()) == 0u) {
         m_cls_load_strings[t->get_name()] = index;
         index++;
         type_strings++;
@@ -482,7 +482,7 @@ void GatheredTypes::build_cls_load_map() {
         std::vector<const DexString*> method_strings;
         m->gather_strings(method_strings);
         for (const auto& s : method_strings) {
-          if (!m_cls_load_strings.count(s)) {
+          if (m_cls_load_strings.count(s) == 0u) {
             m_cls_load_strings[s] = index;
             index++;
             init_strings++;
@@ -502,7 +502,7 @@ void GatheredTypes::build_cls_load_map() {
       std::vector<const DexString*> method_strings;
       m->gather_strings(method_strings);
       for (const auto& s : method_strings) {
-        if (!m_cls_load_strings.count(s)) {
+        if (m_cls_load_strings.count(s) == 0u) {
           m_cls_load_strings[s] = index;
           index++;
           total_strings++;
@@ -520,7 +520,7 @@ void GatheredTypes::build_cls_load_map() {
 void GatheredTypes::build_cls_map() {
   int index = 0;
   for (const auto& cls : *m_classes) {
-    if (!m_cls_strings.count(cls->get_name())) {
+    if (m_cls_strings.count(cls->get_name()) == 0u) {
       m_cls_strings[cls->get_name()] = index++;
     }
   }
@@ -530,12 +530,12 @@ void GatheredTypes::build_method_map() {
   unsigned int index = 0;
   for (const auto& cls : *m_classes) {
     for (const auto& m : cls->get_dmethods()) {
-      if (!m_methods_in_cls_order.count(m)) {
+      if (m_methods_in_cls_order.count(m) == 0u) {
         m_methods_in_cls_order[m] = index;
       }
     }
     for (const auto& m : cls->get_vmethods()) {
-      if (!m_methods_in_cls_order.count(m)) {
+      if (m_methods_in_cls_order.count(m) == 0u) {
         m_methods_in_cls_order[m] = index;
       }
     }
@@ -763,7 +763,7 @@ void DexOutput::generate_string_data(SortMode mode) {
   size_t nrstr = string_order.size();
   const uint32_t str_data_start = m_offset;
 
-  for (auto* str : string_order) {
+  for (const auto* str : string_order) {
     uint32_t idx = m_dodx.stringidx(str);
     TRACE(CUSTOMSORT, 3, "str emit %s", SHOW(str));
     stringids[idx].offset = m_offset;
@@ -788,8 +788,8 @@ void DexOutput::generate_type_data() {
       m_dodx.type_to_idx().size() - get_max_type_refs(m_min_sdk));
 
   dex_type_id* typeids = (dex_type_id*)(m_output.get() + hdr.type_ids_off);
-  for (auto& p : UnorderedIterable(m_dodx.type_to_idx())) {
-    auto t = p.first;
+  for (const auto& p : UnorderedIterable(m_dodx.type_to_idx())) {
+    auto* t = p.first;
     auto idx = p.second;
     typeids[idx].string_idx = m_dodx.stringidx(t->get_name());
     m_stats.num_types++;
@@ -818,9 +818,9 @@ void DexOutput::generate_typelist_data() {
 }
 
 void DexOutput::generate_proto_data() {
-  auto protoids = (dex_proto_id*)(m_output.get() + hdr.proto_ids_off);
-  for (auto& it : UnorderedIterable(m_dodx.proto_to_idx())) {
-    auto proto = it.first;
+  auto* protoids = (dex_proto_id*)(m_output.get() + hdr.proto_ids_off);
+  for (const auto& it : UnorderedIterable(m_dodx.proto_to_idx())) {
+    auto* proto = it.first;
     auto idx = it.second;
     protoids[idx].shortyidx = m_dodx.stringidx(proto->get_shorty());
     protoids[idx].rtypeidx = m_dodx.typeidx(proto->get_rtype());
@@ -830,9 +830,9 @@ void DexOutput::generate_proto_data() {
 }
 
 void DexOutput::generate_field_data() {
-  auto fieldids = (dex_field_id*)(m_output.get() + hdr.field_ids_off);
-  for (auto& it : UnorderedIterable(m_dodx.field_to_idx())) {
-    auto field = it.first;
+  auto* fieldids = (dex_field_id*)(m_output.get() + hdr.field_ids_off);
+  for (const auto& it : UnorderedIterable(m_dodx.field_to_idx())) {
+    auto* field = it.first;
     auto idx = it.second;
     fieldids[idx].classidx = m_dodx.typeidx(field->get_class());
     fieldids[idx].typeidx = m_dodx.typeidx(field->get_type());
@@ -842,9 +842,9 @@ void DexOutput::generate_field_data() {
 }
 
 void DexOutput::generate_method_data() {
-  auto methodids = (dex_method_id*)(m_output.get() + hdr.method_ids_off);
-  for (auto& it : UnorderedIterable(m_dodx.method_to_idx())) {
-    auto method = it.first;
+  auto* methodids = (dex_method_id*)(m_output.get() + hdr.method_ids_off);
+  for (const auto& it : UnorderedIterable(m_dodx.method_to_idx())) {
+    auto* method = it.first;
     auto idx = it.second;
     methodids[idx].classidx = m_dodx.typeidx(method->get_class());
     methodids[idx].protoidx = m_dodx.protoidx(method->get_proto());
@@ -864,13 +864,13 @@ void DexOutput::generate_class_data() {
     cdefs[i].interfaces_off = 0;
     cdefs[i].annotations_off = 0;
     cdefs[i].interfaces_off = m_tl_emit_offsets[clz->get_interfaces()];
-    auto source_file = m_pos_mapper->get_source_file(clz);
+    const auto* source_file = m_pos_mapper->get_source_file(clz);
     if (source_file != nullptr) {
       cdefs[i].source_file_idx = m_dodx.stringidx(source_file);
     } else {
       cdefs[i].source_file_idx = DEX_NO_INDEX;
     }
-    if (m_static_values.count(clz)) {
+    if (m_static_values.count(clz) != 0u) {
       cdefs[i].static_values_off = m_static_values[clz];
     } else {
       cdefs[i].static_values_off = 0;
@@ -975,7 +975,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     }
   }
   for (DexMethod* meth : lmeth) {
-    if (meth->get_access() & (ACC_ABSTRACT | ACC_NATIVE)) {
+    if ((meth->get_access() & (ACC_ABSTRACT | ACC_NATIVE)) != 0u) {
       // There is no code item for ABSTRACT or NATIVE methods.
       continue;
     }
@@ -1050,7 +1050,7 @@ void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
   uint32_t instruction_size_bitwidth_limit =
       conf.get_instruction_size_bitwidth_limit();
 
-  if (instruction_size_bitwidth_limit) {
+  if (instruction_size_bitwidth_limit != 0u) {
     uint64_t hard_instruction_size_limit = 1L
                                            << instruction_size_bitwidth_limit;
     always_assert_log(((uint64_t)size) <= hard_instruction_size_limit,
@@ -1077,7 +1077,7 @@ void DexOutput::generate_static_values() {
     if (!deva) {
       continue;
     }
-    if (enc_arrays.count(*deva)) {
+    if (enc_arrays.count(*deva) != 0u) {
       m_static_values[clz] = enc_arrays.at(*deva);
     } else {
       std::vector<uint8_t> encdata;
@@ -1097,9 +1097,9 @@ void DexOutput::generate_static_values() {
   {
     auto callsites = m_gtypes->get_dexcallsite_emitlist();
     for (uint32_t i = 0; i < callsites.size(); i++) {
-      auto callsite = callsites[i];
+      auto* callsite = callsites[i];
       auto eva = callsite->as_encoded_value_array();
-      if (enc_arrays.count(eva)) {
+      if (enc_arrays.count(eva) != 0u) {
         m_call_site_items[callsite] = enc_arrays.at(eva);
       } else {
         std::vector<uint8_t> encdata;
@@ -1132,13 +1132,13 @@ void DexOutput::unique_annotations(annomap_t& annomap,
   int annocnt = 0;
   uint32_t mentry_offset = m_offset;
   std::map<std::vector<uint8_t>, uint32_t> annotation_byte_offsets;
-  for (auto anno : annolist) {
-    if (annomap.count(anno)) {
+  for (auto* anno : annolist) {
+    if (annomap.count(anno) != 0u) {
       continue;
     }
     std::vector<uint8_t> annotation_bytes;
     anno->vencode(&m_dodx, annotation_bytes);
-    if (annotation_byte_offsets.count(annotation_bytes)) {
+    if (annotation_byte_offsets.count(annotation_bytes) != 0u) {
       annomap[anno] = annotation_byte_offsets[annotation_bytes];
       continue;
     }
@@ -1151,7 +1151,7 @@ void DexOutput::unique_annotations(annomap_t& annomap,
     inc_offset(annotation_bytes.size());
     annocnt++;
   }
-  if (annocnt) {
+  if (annocnt != 0) {
     insert_map_item(TYPE_ANNOTATION_ITEM, annocnt, mentry_offset,
                     m_offset - mentry_offset);
   }
@@ -1164,13 +1164,13 @@ void DexOutput::unique_asets(annomap_t& annomap,
   int asetcnt = 0;
   uint32_t mentry_offset = align(m_offset);
   std::map<std::vector<uint32_t>, uint32_t> aset_offsets;
-  for (auto aset : asetlist) {
-    if (asetmap.count(aset)) {
+  for (auto* aset : asetlist) {
+    if (asetmap.count(aset) != 0u) {
       continue;
     }
     std::vector<uint32_t> aset_bytes;
     aset->vencode(&m_dodx, aset_bytes, annomap);
-    if (aset_offsets.count(aset_bytes)) {
+    if (aset_offsets.count(aset_bytes) != 0u) {
       asetmap[aset] = aset_offsets[aset_bytes];
       continue;
     }
@@ -1184,7 +1184,7 @@ void DexOutput::unique_asets(annomap_t& annomap,
     inc_offset(aset_bytes.size() * sizeof(uint32_t));
     asetcnt++;
   }
-  if (asetcnt) {
+  if (asetcnt != 0) {
     insert_map_item(TYPE_ANNOTATION_SET_ITEM, asetcnt, mentry_offset,
                     m_offset - mentry_offset);
   }
@@ -1196,8 +1196,8 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
   int xrefcnt = 0;
   uint32_t mentry_offset = align(m_offset);
   std::map<std::vector<uint32_t>, uint32_t> xref_offsets;
-  for (auto xref : xreflist) {
-    if (xrefmap.count(xref)) {
+  for (auto* xref : xreflist) {
+    if (xrefmap.count(xref) != 0u) {
       continue;
     }
     std::vector<uint32_t> xref_bytes;
@@ -1208,7 +1208,7 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
                         "Uninitialized aset %p '%s'", das.get(), SHOW(das));
       xref_bytes.push_back(asetmap[das.get()]);
     }
-    if (xref_offsets.count(xref_bytes)) {
+    if (xref_offsets.count(xref_bytes) != 0u) {
       xrefmap[xref] = xref_offsets[xref_bytes];
       continue;
     }
@@ -1222,7 +1222,7 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
     inc_offset(xref_bytes.size() * sizeof(uint32_t));
     xrefcnt++;
   }
-  if (xrefcnt) {
+  if (xrefcnt != 0) {
     insert_map_item(TYPE_ANNOTATION_SET_REF_LIST, xrefcnt, mentry_offset,
                     m_offset - mentry_offset);
   }
@@ -1235,13 +1235,13 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
   int adircnt = 0;
   uint32_t mentry_offset = align(m_offset);
   std::map<std::vector<uint32_t>, uint32_t> adir_offsets;
-  for (auto adir : adirlist) {
-    if (adirmap.count(adir)) {
+  for (auto* adir : adirlist) {
+    if (adirmap.count(adir) != 0u) {
       continue;
     }
     std::vector<uint32_t> adir_bytes;
     adir->vencode(&m_dodx, adir_bytes, xrefmap, asetmap);
-    if (adir_offsets.count(adir_bytes)) {
+    if (adir_offsets.count(adir_bytes) != 0u) {
       adirmap[adir] = adir_offsets[adir_bytes];
       continue;
     }
@@ -1255,7 +1255,7 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
     inc_offset(adir_bytes.size() * sizeof(uint32_t));
     adircnt++;
   }
-  if (adircnt) {
+  if (adircnt != 0) {
     insert_map_item(TYPE_ANNOTATIONS_DIR_ITEM, adircnt, mentry_offset,
                     m_offset - mentry_offset);
   }
@@ -1280,7 +1280,7 @@ void DexOutput::generate_annotations() {
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->at(i);
     DexAnnotationDirectory* ad = clz->get_annotation_directory();
-    if (ad) {
+    if (ad != nullptr) {
       lad.push_back(ad);
       ad_to_classnum[ad] = i;
     }
@@ -1289,7 +1289,7 @@ void DexOutput::generate_annotations() {
   std::vector<DexAnnotation*> annolist;
   std::vector<DexAnnotationSet*> asetlist;
   std::vector<ParamAnnotations*> xreflist;
-  for (auto ad : lad) {
+  for (auto* ad : lad) {
     ad->gather_asets(asetlist);
     ad->gather_annotations(annolist);
     ad->gather_xrefs(xreflist);
@@ -1298,7 +1298,7 @@ void DexOutput::generate_annotations() {
   unique_asets(annomap, asetmap, asetlist);
   unique_xrefs(asetmap, xrefmap, xreflist);
   unique_adirs(asetmap, xrefmap, adirmap, lad);
-  for (auto ad : lad) {
+  for (auto* ad : lad) {
     int class_num = ad_to_classnum[ad];
     dex_class_def* cdefs =
         (dex_class_def*)(m_output.get() + hdr.class_defs_off);
@@ -1422,7 +1422,7 @@ struct ParamSizeOrder {
       return method_data.at(m).num_params;
     };
     while (method_cur != method_end) {
-      auto* m = *method_cur;
+      const auto* m = *method_cur;
       ++method_cur;
 
       if (skip_methods.count(m) != 0) {
@@ -1491,7 +1491,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
 
   for (auto& it : code_items) {
     DexCode* dc = it->code;
-    const auto dbg_item = dc->get_debug_item();
+    auto* const dbg_item = dc->get_debug_item();
     redex_assert(dbg_item);
     DexMethod* method = it->method;
     redex_assert(!iodi_metadata.is_huge(method));
@@ -2063,12 +2063,12 @@ uint32_t emit_instruction_offset_debug_info_helper(
   auto size_offset_end = param_size_to_oset.end();
   UnorderedSet<const DexMethod*> to_remove;
   for (auto& it : code_items) {
-    if (pso.skip_methods.count(it->method)) {
+    if (pso.skip_methods.count(it->method) != 0u) {
       continue;
     }
 
     DexCode* dc = it->code;
-    const auto dbg = dc->get_debug_item();
+    auto* const dbg = dc->get_debug_item();
     redex_assert(dbg != nullptr);
     auto code_size = dc->size();
     redex_assert(code_size != 0);
@@ -2215,7 +2215,7 @@ uint32_t emit_instruction_offset_debug_info(
   for (auto* cie : unsupported_code_items) {
     DexCode* dc = cie->code;
     redex_assert(dc->size() != 0);
-    const auto dbg_item = dc->get_debug_item();
+    auto* const dbg_item = dc->get_debug_item();
     redex_assert(dbg_item);
     DexMethod* method = cie->method;
     uint32_t param_size = method->get_proto()->get_args()->size();
@@ -2239,7 +2239,7 @@ void DexOutput::generate_debug_items() {
   int dbgcount = 0;
   bool emit_positions = m_debug_info_kind != DebugInfoKind::NoPositions;
   bool use_iodi = is_iodi(m_debug_info_kind);
-  if (use_iodi && m_iodi_metadata) {
+  if (use_iodi && (m_iodi_metadata != nullptr)) {
     inc_offset(emit_instruction_offset_debug_info(
         &m_dodx,
         m_pos_mapper,
@@ -2261,7 +2261,7 @@ void DexOutput::generate_debug_items() {
     for (auto& it : m_code_item_emits) {
       DexCode* dc = it.code;
       dex_code_item* dci = it.code_item;
-      auto dbg = dc->get_debug_item();
+      auto* dbg = dc->get_debug_item();
       if (dbg == nullptr) {
         continue;
       }
@@ -2301,8 +2301,8 @@ void DexOutput::generate_map() {
  * with the jumbo-ness of their stridx.
  */
 static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
-  auto code = method->get_code();
-  if (!code) {
+  auto* code = method->get_code();
+  if (code == nullptr) {
     return; // nothing to do for native methods
   }
 
@@ -2310,13 +2310,13 @@ static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
     if (mie.type != MFLOW_DEX_OPCODE) {
       continue;
     }
-    auto insn = mie.dex_insn;
+    auto* insn = mie.dex_insn;
     auto op = insn->opcode();
     if (op != DOPCODE_CONST_STRING && op != DOPCODE_CONST_STRING_JUMBO) {
       continue;
     }
 
-    auto str = static_cast<DexOpcodeString*>(insn)->get_string();
+    const auto* str = static_cast<DexOpcodeString*>(insn)->get_string();
     uint32_t stridx = dodx->stringidx(str);
     bool jumbo = ((stridx >> 16) != 0);
 
@@ -2344,42 +2344,42 @@ void DexOutput::init_header_offsets(const std::string& dex_magic) {
   /* Link section was never used */
   hdr.link_size = hdr.link_off = 0;
   hdr.string_ids_size = (uint32_t)m_dodx.stringsize();
-  hdr.string_ids_off = hdr.string_ids_size ? m_offset : 0;
+  hdr.string_ids_off = hdr.string_ids_size != 0u ? m_offset : 0;
   uint32_t total_string_size = m_dodx.stringsize() * sizeof(dex_string_id);
   insert_map_item(TYPE_STRING_ID_ITEM, (uint32_t)m_dodx.stringsize(), m_offset,
                   total_string_size);
 
   inc_offset(total_string_size);
   hdr.type_ids_size = (uint32_t)m_dodx.typesize();
-  hdr.type_ids_off = hdr.type_ids_size ? m_offset : 0;
+  hdr.type_ids_off = hdr.type_ids_size != 0u ? m_offset : 0;
   uint32_t total_type_size = m_dodx.typesize() * sizeof(dex_type_id);
   insert_map_item(TYPE_TYPE_ID_ITEM, (uint32_t)m_dodx.typesize(), m_offset,
                   total_type_size);
 
   inc_offset(total_type_size);
   hdr.proto_ids_size = (uint32_t)m_dodx.protosize();
-  hdr.proto_ids_off = hdr.proto_ids_size ? m_offset : 0;
+  hdr.proto_ids_off = hdr.proto_ids_size != 0u ? m_offset : 0;
   uint32_t total_proto_size = m_dodx.protosize() * sizeof(dex_proto_id);
   insert_map_item(TYPE_PROTO_ID_ITEM, (uint32_t)m_dodx.protosize(), m_offset,
                   total_proto_size);
 
   inc_offset(total_proto_size);
   hdr.field_ids_size = (uint32_t)m_dodx.fieldsize();
-  hdr.field_ids_off = hdr.field_ids_size ? m_offset : 0;
+  hdr.field_ids_off = hdr.field_ids_size != 0u ? m_offset : 0;
   uint32_t total_field_size = m_dodx.fieldsize() * sizeof(dex_field_id);
   insert_map_item(TYPE_FIELD_ID_ITEM, (uint32_t)m_dodx.fieldsize(), m_offset,
                   total_field_size);
 
   inc_offset(total_field_size);
   hdr.method_ids_size = (uint32_t)m_dodx.methodsize();
-  hdr.method_ids_off = hdr.method_ids_size ? m_offset : 0;
+  hdr.method_ids_off = hdr.method_ids_size != 0u ? m_offset : 0;
   uint32_t total_method_size = m_dodx.methodsize() * sizeof(dex_method_id);
   insert_map_item(TYPE_METHOD_ID_ITEM, (uint32_t)m_dodx.methodsize(), m_offset,
                   total_method_size);
 
   inc_offset(total_method_size);
   hdr.class_defs_size = (uint32_t)m_classes->size();
-  hdr.class_defs_off = hdr.class_defs_size ? m_offset : 0;
+  hdr.class_defs_off = hdr.class_defs_size != 0u ? m_offset : 0;
   uint32_t total_class_size = m_classes->size() * sizeof(dex_class_def);
   insert_map_item(TYPE_CLASS_DEF_ITEM, (uint32_t)m_classes->size(), m_offset,
                   total_class_size);
@@ -2431,13 +2431,13 @@ void compute_method_to_id_map(
     const DexClasses* classes,
     uint8_t* dex_signature,
     UnorderedMap<DexMethod*, uint64_t>* method_to_id) {
-  if (!method_to_id) {
+  if (method_to_id == nullptr) {
     return;
   }
 
   UnorderedSet<DexClass*> dex_classes(classes->begin(), classes->end());
-  for (auto& it : UnorderedIterable(dodx->method_to_idx())) {
-    auto method = it.first;
+  for (const auto& it : UnorderedIterable(dodx->method_to_idx())) {
+    auto* method = it.first;
     auto idx = it.second;
 
     auto const& typecls = method->get_class();
@@ -2446,12 +2446,12 @@ void compute_method_to_id_map(
       continue;
     }
 
-    auto resolved_method = [&]() -> DexMethodRef* {
-      if (cls) {
-        auto resm = resolve_method(method,
-                                   is_interface(cls) ? MethodSearch::Interface
-                                                     : MethodSearch::Any);
-        if (resm) {
+    auto* resolved_method = [&]() -> DexMethodRef* {
+      if (cls != nullptr) {
+        auto* resm = resolve_method(method,
+                                    is_interface(cls) ? MethodSearch::Interface
+                                                      : MethodSearch::Any);
+        if (resm != nullptr) {
           return resm;
         }
       }
@@ -2466,7 +2466,7 @@ void compute_method_to_id_map(
     if (resolved_method == method) {
       // Not recording it if method reference is not referring to
       // concrete method, otherwise will have key overlapped.
-      auto dexmethod = static_cast<DexMethod*>(resolved_method);
+      auto* dexmethod = static_cast<DexMethod*>(resolved_method);
       (*method_to_id)[dexmethod] = ((uint64_t)idx << 32) | (uint64_t)signature;
     }
   }
@@ -2481,8 +2481,8 @@ void write_method_mapping(const std::string& filename,
   assert_log(fd, "Can't open method mapping file %s: %s\n", filename.c_str(),
              strerror(errno));
   UnorderedSet<DexClass*> classes_in_dex(classes->begin(), classes->end());
-  for (auto& it : UnorderedIterable(dodx->method_to_idx())) {
-    auto method = it.first;
+  for (const auto& it : UnorderedIterable(dodx->method_to_idx())) {
+    auto* method = it.first;
     auto idx = it.second;
 
     // Types (and methods) internal to our app have a cached deobfuscated name
@@ -2496,7 +2496,7 @@ void write_method_mapping(const std::string& filename,
       continue;
     }
     auto deobf_class = [&] {
-      if (cls) {
+      if (cls != nullptr) {
         auto deobname = cls->get_deobfuscated_name_or_empty();
         if (!deobname.empty()) {
           return str_copy(deobname);
@@ -2508,12 +2508,12 @@ void write_method_mapping(const std::string& filename,
     // Some method refs aren't "concrete" (e.g., referring to a method defined
     // by a superclass via a subclass).  We only know how to deobfuscate
     // concrete names, so resolve this ref to an actual definition.
-    auto resolved_method = [&]() -> DexMethodRef* {
-      if (cls) {
-        auto resm = resolve_method(method,
-                                   is_interface(cls) ? MethodSearch::Interface
-                                                     : MethodSearch::Any);
-        if (resm) {
+    auto* resolved_method = [&]() -> DexMethodRef* {
+      if (cls != nullptr) {
+        auto* resm = resolve_method(method,
+                                    is_interface(cls) ? MethodSearch::Interface
+                                                      : MethodSearch::Any);
+        if (resm != nullptr) {
           return resm;
         }
       }
@@ -2560,7 +2560,7 @@ void write_class_mapping(const std::string& filename,
 
     DexClass* cls = classes->at(idx);
     auto deobf_class = [&] {
-      if (cls) {
+      if (cls != nullptr) {
         auto deobname = cls->get_deobfuscated_name_or_empty();
         if (!deobname.empty()) {
           return str_copy(deobname);
@@ -2612,17 +2612,17 @@ void write_invoke_mapping(const std::string& filename, DexClasses* classes) {
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
   Json::FastWriter writer; // minimal formatting and no intermittent new-lines
 
-  auto position_manager = g_redex->get_position_pattern_switch_manager();
+  auto* position_manager = g_redex->get_position_pattern_switch_manager();
   auto is_outlined_position = [&](DexPosition* pos) {
     return position_manager->is_pattern_position(pos) ||
            position_manager->is_switch_position(pos);
   };
   auto position_to_json = [&](DexPosition* pos) {
     Json::Value position_entry;
-    if (pos->file) {
+    if (pos->file != nullptr) {
       position_entry["file"] = show(pos->file);
     }
-    if (pos->method) {
+    if (pos->method != nullptr) {
       position_entry["method"] = show(pos->method);
     }
     position_entry["line"] = show(pos->line);
@@ -2636,8 +2636,8 @@ void write_invoke_mapping(const std::string& filename, DexClasses* classes) {
   };
 
   walk::methods(*classes, [&](DexMethod* m) {
-    auto dex_code = m->get_dex_code();
-    if (!dex_code) {
+    auto* dex_code = m->get_dex_code();
+    if (dex_code == nullptr) {
       return;
     }
     auto& invoke_ids = dex_code->get_invoke_ids();
@@ -2680,7 +2680,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
   }
 
   auto deobf_class = [&](DexClass* cls) {
-    if (cls) {
+    if (cls != nullptr) {
       auto deobname = cls->get_deobfuscated_name_or_empty();
       if (!deobname.empty()) {
         return str_copy(deobname);
@@ -2690,19 +2690,20 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
   };
 
   auto deobf_type = [&](DexType* type) {
-    if (type) {
+    if (type != nullptr) {
       if (type::is_array(type)) {
-        auto* type_str = type->c_str();
+        const auto* type_str = type->c_str();
         int dim = 0;
         while (type_str[dim] == '[') {
           dim++;
         }
         DexType* inner_type = DexType::get_type(&type_str[dim]);
-        DexClass* inner_cls = inner_type ? type_class(inner_type) : nullptr;
+        DexClass* inner_cls =
+            inner_type != nullptr ? type_class(inner_type) : nullptr;
         std::string result;
-        if (inner_cls) {
+        if (inner_cls != nullptr) {
           result = java_names::internal_to_external(deobf_class(inner_cls));
-        } else if (inner_type && type::is_primitive(inner_type)) {
+        } else if ((inner_type != nullptr) && type::is_primitive(inner_type)) {
           result = deobf_primitive(type_str[dim]);
         } else {
           result = java_names::internal_to_external(&type_str[dim]);
@@ -2714,7 +2715,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
         return result;
       } else {
         DexClass* cls = type_class(type);
-        if (cls) {
+        if (cls != nullptr) {
           return java_names::internal_to_external(deobf_class(cls));
         } else if (type::is_primitive(type)) {
           return std::string(deobf_primitive(type->c_str()[0]));
@@ -2727,15 +2728,15 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
   };
 
   auto deobf_meth = [&](DexMethod* method) {
-    if (method) {
+    if (method != nullptr) {
       /* clang-format off */
       // Example: 672:672:boolean customShouldDelayInitMessage(android.os.Handler,android.os.Message)
       /* clang-format on */
       auto* proto = method->get_proto();
       std::ostringstream ss;
       auto* code = method->get_dex_code();
-      auto* dbg = code ? code->get_debug_item() : nullptr;
-      if (dbg) {
+      auto* dbg = code != nullptr ? code->get_debug_item() : nullptr;
+      if (dbg != nullptr) {
         uint32_t line_start = code->get_debug_item()->get_line_start();
         uint32_t line_end = line_start;
         for (auto& entry : dbg->get_entries()) {
@@ -2776,7 +2777,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
   };
 
   auto deobf_field = [&](DexField* field) {
-    if (field) {
+    if (field != nullptr) {
       std::ostringstream ss;
       ss << deobf_type(field->get_type()) << " "
          << field->get_simple_deobfuscated_name();
@@ -2787,24 +2788,24 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
 
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
 
-  for (auto cls : *classes) {
+  for (auto* cls : *classes) {
     auto deobf_cls = deobf_class(cls);
     ofs << java_names::internal_to_external(deobf_cls) << " -> "
         << java_names::internal_to_external(cls->get_type()->str()) << ":"
         << "\n";
-    for (auto field : cls->get_ifields()) {
+    for (auto* field : cls->get_ifields()) {
       auto deobf = deobf_field(field);
       ofs << "    " << deobf << " -> " << field->c_str() << "\n";
     }
-    for (auto field : cls->get_sfields()) {
+    for (auto* field : cls->get_sfields()) {
       auto deobf = deobf_field(field);
       ofs << "    " << deobf << " -> " << field->c_str() << "\n";
     }
-    for (auto meth : cls->get_dmethods()) {
+    for (auto* meth : cls->get_dmethods()) {
       auto deobf = deobf_meth(meth);
       ofs << "    " << deobf << " -> " << meth->c_str() << "\n";
     }
-    for (auto meth : cls->get_vmethods()) {
+    for (auto* meth : cls->get_vmethods()) {
       auto deobf = deobf_meth(meth);
       ofs << "    " << deobf << " -> " << meth->c_str() << "\n";
     }
@@ -2819,27 +2820,27 @@ void write_full_mapping(const std::string& filename,
   }
 
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
-  for (auto cls : *classes) {
+  for (auto* cls : *classes) {
     ofs << "type " << cls->get_deobfuscated_name_or_empty() << " -> "
         << show(cls) << "\n";
-    if (store_name) {
+    if (store_name != nullptr) {
       const auto& original_store_name = cls->get_location()->get_store_name();
       ofs << "store " << std::quoted(original_store_name) << " -> "
           << std::quoted(*store_name) << "\n";
     }
-    for (auto field : cls->get_ifields()) {
+    for (auto* field : cls->get_ifields()) {
       ofs << "ifield " << field->get_deobfuscated_name_or_empty() << " -> "
           << show(field) << "\n";
     }
-    for (auto field : cls->get_sfields()) {
+    for (auto* field : cls->get_sfields()) {
       ofs << "sfield " << field->get_deobfuscated_name_or_empty() << " -> "
           << show(field) << "\n";
     }
-    for (auto method : cls->get_dmethods()) {
+    for (auto* method : cls->get_dmethods()) {
       ofs << "dmethod " << method->get_deobfuscated_name_or_empty() << " -> "
           << show(method) << "\n";
     }
-    for (auto method : cls->get_vmethods()) {
+    for (auto* method : cls->get_vmethods()) {
       ofs << "vmethod " << method->get_deobfuscated_name_or_empty() << " -> "
           << show(method) << "\n";
     }
@@ -2853,7 +2854,7 @@ void write_bytecode_offset_mapping(
     return;
   }
 
-  auto fd = fopen(filename.c_str(), "a");
+  auto* fd = fopen(filename.c_str(), "a");
   assert_log(fd, "Can't open bytecode offset file %s: %s\n", filename.c_str(),
              strerror(errno));
 
@@ -2884,11 +2885,11 @@ int check_class_order(DexClasses* dex) {
     dexes_class_order[dex->at(index)->get_type()] = index;
   }
   for (uint32_t index = 0; index < dex->size(); ++index) {
-    auto cur_cls = dex->at(index);
+    auto* cur_cls = dex->at(index);
     if (!valid_ordering(dexes_class_order, cur_cls->get_super_class(), index)) {
       violation_count++;
     }
-    for (auto intf : *cur_cls->get_interfaces()) {
+    for (auto* intf : *cur_cls->get_interfaces()) {
       if (!valid_ordering(dexes_class_order, intf, index)) {
         violation_count++;
       }
@@ -2991,35 +2992,35 @@ void DexOutput::metrics() {
   }
   memcpy(m_stats.signature, hdr.signature, 20);
 
-  for (auto& p : UnorderedIterable(m_dodx.string_to_idx())) {
+  for (const auto& p : UnorderedIterable(m_dodx.string_to_idx())) {
     s_unique_references.strings.insert(p.first);
   }
   m_stats.num_unique_strings = s_unique_references.strings.size();
   s_unique_references.total_strings_size += m_dodx.string_to_idx().size();
   m_stats.strings_total_size = s_unique_references.total_strings_size;
 
-  for (auto& p : UnorderedIterable(m_dodx.type_to_idx())) {
+  for (const auto& p : UnorderedIterable(m_dodx.type_to_idx())) {
     s_unique_references.types.insert(p.first);
   }
   m_stats.num_unique_types = s_unique_references.types.size();
   s_unique_references.total_types_size += m_dodx.type_to_idx().size();
   m_stats.types_total_size = s_unique_references.total_types_size;
 
-  for (auto& p : UnorderedIterable(m_dodx.proto_to_idx())) {
+  for (const auto& p : UnorderedIterable(m_dodx.proto_to_idx())) {
     s_unique_references.protos.insert(p.first);
   }
   m_stats.num_unique_protos = s_unique_references.protos.size();
   s_unique_references.total_protos_size += m_dodx.proto_to_idx().size();
   m_stats.protos_total_size = s_unique_references.total_protos_size;
 
-  for (auto& p : UnorderedIterable(m_dodx.field_to_idx())) {
+  for (const auto& p : UnorderedIterable(m_dodx.field_to_idx())) {
     s_unique_references.fields.insert(p.first);
   }
   m_stats.num_unique_field_refs = s_unique_references.fields.size();
   s_unique_references.total_fields_size += m_dodx.field_to_idx().size();
   m_stats.field_refs_total_size = s_unique_references.total_fields_size;
 
-  for (auto& p : UnorderedIterable(m_dodx.method_to_idx())) {
+  for (const auto& p : UnorderedIterable(m_dodx.method_to_idx())) {
     s_unique_references.methods.insert(p.first);
   }
   m_stats.num_unique_method_refs = s_unique_references.methods.size();
@@ -3058,7 +3059,7 @@ std::vector<SortMode> get_code_sort_mode(ConfigFiles& conf,
   }
 
   MethodSimilarityOrderingConfig* similarity_config{nullptr};
-  auto& global_config = conf.get_global_config();
+  const auto& global_config = conf.get_global_config();
   if (global_config.has_config_by_name("method_similarity_order")) {
     similarity_config =
         global_config.get_config_by_name<MethodSimilarityOrderingConfig>(

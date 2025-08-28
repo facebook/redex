@@ -115,7 +115,7 @@ class Analyzer {
       case OPCODE_INVOKE_STATIC:
       case OPCODE_INVOKE_DIRECT:
       case OPCODE_INVOKE_VIRTUAL: {
-        auto rtype = def->get_method()->get_proto()->get_rtype();
+        auto* rtype = def->get_method()->get_proto()->get_rtype();
         result = result | analyze(rtype);
         break;
       }
@@ -148,7 +148,7 @@ class Analyzer {
       if (defs.size() > 1) {
         break;
       }
-      auto xor_1_insn = *defs.elements().begin();
+      auto* xor_1_insn = *defs.elements().begin();
       if (xor_1_insn->opcode() != OPCODE_XOR_INT_LIT ||
           xor_1_insn->get_literal() != 1) {
         break;
@@ -212,13 +212,13 @@ bool ReduceBooleanBranches::reduce_diamonds() {
     cfg::Block* new_goto_target;
   };
   std::vector<Reduction> reductions;
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     if (block->branchingness() != opcode::BRANCH_IF) {
       continue;
     }
     auto last_insn_it = block->get_last_insn();
     always_assert(last_insn_it != block->end());
-    auto last_insn = last_insn_it->insn;
+    auto* last_insn = last_insn_it->insn;
     auto last_insn_opcode = last_insn->opcode();
     always_assert(opcode::is_branch(last_insn_opcode));
     if (last_insn_opcode != OPCODE_IF_EQZ &&
@@ -226,24 +226,24 @@ bool ReduceBooleanBranches::reduce_diamonds() {
       continue;
     }
 
-    auto goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
+    auto* goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
     always_assert(goto_edge != nullptr);
-    auto branch_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_BRANCH);
+    auto* branch_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_BRANCH);
     always_assert(branch_edge != nullptr);
 
-    auto goto_target = goto_edge->target();
-    auto branch_target = branch_edge->target();
-    auto goto_target_goto_edge =
+    auto* goto_target = goto_edge->target();
+    auto* branch_target = branch_edge->target();
+    auto* goto_target_goto_edge =
         cfg.get_succ_edge_of_type(goto_target, cfg::EDGE_GOTO);
-    auto branch_target_goto_edge =
+    auto* branch_target_goto_edge =
         cfg.get_succ_edge_of_type(branch_target, cfg::EDGE_GOTO);
     if (goto_target_goto_edge == nullptr ||
         branch_target_goto_edge == nullptr) {
       continue;
     }
 
-    auto goto_target_goto_edge_target = goto_target_goto_edge->target();
-    auto branch_target_goto_edge_target = branch_target_goto_edge->target();
+    auto* goto_target_goto_edge_target = goto_target_goto_edge->target();
+    auto* branch_target_goto_edge_target = branch_target_goto_edge->target();
     if (goto_target_goto_edge_target != branch_target_goto_edge_target) {
       continue;
     }
@@ -261,8 +261,8 @@ bool ReduceBooleanBranches::reduce_diamonds() {
       }
       return insn;
     };
-    auto goto_const_insn = find_singleton_const_insn(goto_target);
-    auto branch_const_insn = find_singleton_const_insn(branch_target);
+    const auto* goto_const_insn = find_singleton_const_insn(goto_target);
+    const auto* branch_const_insn = find_singleton_const_insn(branch_target);
     if (goto_const_insn == nullptr || branch_const_insn == nullptr) {
       continue;
     }
@@ -298,16 +298,16 @@ bool ReduceBooleanBranches::reduce_diamonds() {
       replacement_insns.push_back(replacement_insn);
       m_stats.boolean_branches_removed++;
     } else if (src_kind == AnalysisResult::Object && full_removal) {
-      auto instance_of_insn = new IRInstruction(OPCODE_INSTANCE_OF);
+      auto* instance_of_insn = new IRInstruction(OPCODE_INSTANCE_OF);
       instance_of_insn->set_type(type::java_lang_Object());
       instance_of_insn->set_src(0, src);
       replacement_insns.push_back(instance_of_insn);
-      auto move_result_pseudo_insn =
+      auto* move_result_pseudo_insn =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
       move_result_pseudo_insn->set_dest(dest);
       replacement_insns.push_back(move_result_pseudo_insn);
       if ((last_insn_opcode == OPCODE_IF_EQZ) != (branch_literal == 0)) {
-        auto xor_insn = new IRInstruction(OPCODE_XOR_INT_LIT);
+        auto* xor_insn = new IRInstruction(OPCODE_XOR_INT_LIT);
         xor_insn->set_literal(1)->set_dest(dest)->set_src(0, dest);
         replacement_insns.push_back(xor_insn);
       }
@@ -341,9 +341,9 @@ bool ReduceBooleanBranches::reduce_xors() {
   Analyzer analyzer(m_is_static, m_args, cfg);
   std::vector<Reduction> reductions;
   cfg::CFGMutation mutation(cfg);
-  for (auto block : cfg.blocks()) {
+  for (auto* block : cfg.blocks()) {
     for (const auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() != OPCODE_IF_EQZ && insn->opcode() != OPCODE_IF_NEZ &&
           (insn->opcode() != OPCODE_XOR_INT_LIT || insn->get_literal() != 1)) {
         // TOOD: Support more scenarios, e.g. reducing a double-xored value
@@ -358,7 +358,7 @@ bool ReduceBooleanBranches::reduce_xors() {
       }
 
       auto temp_reg = cfg.allocate_temp();
-      auto move_insn = new IRInstruction(OPCODE_MOVE);
+      auto* move_insn = new IRInstruction(OPCODE_MOVE);
       move_insn->set_dest(temp_reg)->set_src(0, root->insn->src(0));
       mutation.insert_before(root, {move_insn});
       IROpcode new_op = (negations & 1) == 0 ? insn->opcode()

@@ -32,13 +32,13 @@ void test_init_class(const std::string& original_str,
 class InitClassTest : public RedexTest {};
 
 TEST_F(InitClassTest, simple) {
-  const auto original_str = R"(
+  const auto* const original_str = R"(
     (
       (init-class "LCls;")
       (return-void)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (init-class "LCls;")
       (return-void)

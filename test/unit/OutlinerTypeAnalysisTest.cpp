@@ -38,7 +38,7 @@ static IRInstruction* find_insn(DexMethod* method,
 }
 
 TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
-  auto foo_method = assembler::method_from_string(R"(
+  auto* foo_method = assembler::method_from_string(R"(
       (method (public static) "LFoo;.foo:(IZ)V" (
         (load-param v1)
         (load-param v2)
@@ -53,66 +53,67 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
 
   {
     // result type of 'add-int' is int
-    auto insn = find_insn(foo_method, OPCODE_ADD_INT);
-    auto result_type =
+    auto* insn = find_insn(foo_method, OPCODE_ADD_INT);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
   {
     // result type of 'move' of 'add-int' is int
-    auto insn = find_insn(foo_method, OPCODE_MOVE);
-    auto result_type =
+    auto* insn = find_insn(foo_method, OPCODE_MOVE);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
   {
     // result type of 'or-int' of 'move' of 'add-int' is int
-    auto insn = find_insn(foo_method, OPCODE_OR_INT);
-    auto result_type =
+    auto* insn = find_insn(foo_method, OPCODE_OR_INT);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
   {
     // result type of first 'load-param' is int due to method signature
-    auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM);
-    auto result_type =
+    auto* insn = find_insn(foo_method, IOPCODE_LOAD_PARAM);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
   {
     // result type of second 'load-param' is boolean due to method signature
-    auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM, 2);
-    auto result_type =
+    auto* insn = find_insn(foo_method, IOPCODE_LOAD_PARAM, 2);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_boolean());
   }
 
   {
     // result type of 'xor-int' of boolean 'load-param' is boolean
-    auto insn = find_insn(foo_method, OPCODE_XOR_INT);
-    auto result_type =
+    auto* insn = find_insn(foo_method, OPCODE_XOR_INT);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_boolean());
   }
 
   {
     // the combined result type of int and boolean is int
-    auto insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM);
-    auto insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM, 2);
-    auto result_type = ota.get_result_type(nullptr, {insn1, insn2},
-                                           /* optional_extra_type */ nullptr);
+    auto* insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM);
+    auto* insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM, 2);
+    const auto* result_type =
+        ota.get_result_type(nullptr, {insn1, insn2},
+                            /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
   {
     // the combined result type of boolean and the optional_extra_type int is
     // int
-    auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM);
-    auto result_type = ota.get_result_type(
+    auto* insn = find_insn(foo_method, IOPCODE_LOAD_PARAM);
+    const auto* result_type = ota.get_result_type(
         nullptr, {insn}, /* optional_extra_type */ type::_int());
     EXPECT_EQ(result_type, type::_int());
   }
@@ -125,7 +126,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object) {
   ClassCreator bar_creator(DexType::make_type("LBar;"));
   bar_creator.set_super(type::java_lang_Object());
 
-  auto foo_method = assembler::method_from_string(R"(
+  auto* foo_method = assembler::method_from_string(R"(
       (method (public) "LFoo;.foo:(Ljava/lang/Object;LBar;)V" (
         (load-param-object v1)
         (load-param-object v2)
@@ -134,50 +135,53 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object) {
   foo_method->get_code()->build_cfg();
   foo_creator.add_method(foo_method);
   object_creator.create();
-  auto foo_type = foo_creator.create()->get_type();
-  auto bar_type = bar_creator.create()->get_type();
+  auto* foo_type = foo_creator.create()->get_type();
+  auto* bar_type = bar_creator.create()->get_type();
 
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
     // result type of first 'load-param-object' is Foo
-    auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT);
-    auto result_type = ota.get_result_type(nullptr, {insn},
-                                           /* optional_extra_type */ nullptr);
+    auto* insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT);
+    const auto* result_type =
+        ota.get_result_type(nullptr, {insn},
+                            /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, foo_type);
   }
 
   {
     // result type of second 'load-param-object' is Object
-    auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
-    auto result_type =
+    auto* insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::java_lang_Object());
   }
 
   {
     // result type of third 'load-param-object' is Bar
-    auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 3);
-    auto result_type =
+    auto* insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 3);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, bar_type);
   }
 
   {
     // the combined result type of Foo and Object is Object
-    auto insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT);
-    auto insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
-    auto result_type = ota.get_result_type(nullptr, {insn1, insn2},
-                                           /* optional_extra_type */ nullptr);
+    auto* insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT);
+    auto* insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
+    const auto* result_type =
+        ota.get_result_type(nullptr, {insn1, insn2},
+                            /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::java_lang_Object());
   }
 
   {
     // the combined result type of Foo and Bar is Object
-    auto insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 1);
-    auto insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 3);
-    auto result_type = ota.get_result_type(nullptr, {insn1, insn2},
-                                           /* optional_extra_type */ nullptr);
+    auto* insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 1);
+    auto* insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 3);
+    const auto* result_type =
+        ota.get_result_type(nullptr, {insn1, insn2},
+                            /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::java_lang_Object());
   }
 }
@@ -186,11 +190,11 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object_with_interfaces) {
   ClassCreator i_creator(DexType::make_type("LI;"));
   i_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
   i_creator.set_super(type::java_lang_Object());
-  auto i_type = i_creator.create()->get_type();
+  auto* i_type = i_creator.create()->get_type();
   ClassCreator j_creator(DexType::make_type("LJ;"));
   j_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
   j_creator.set_super(type::java_lang_Object());
-  auto j_type = j_creator.create()->get_type();
+  auto* j_type = j_creator.create()->get_type();
   ClassCreator object_creator(type::java_lang_Object());
   ClassCreator foo_creator(DexType::make_type("LFoo;"));
   foo_creator.set_super(type::java_lang_Object());
@@ -201,7 +205,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object_with_interfaces) {
   bar_creator.add_interface(i_type);
   bar_creator.add_interface(j_type);
 
-  auto foo_method = assembler::method_from_string(R"(
+  auto* foo_method = assembler::method_from_string(R"(
       (method (public) "LFoo;.foo:(LBar;)V" (
         (load-param-object v1)
         (load-param-object v2)
@@ -210,23 +214,23 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object_with_interfaces) {
   foo_method->get_code()->build_cfg();
   foo_creator.add_method(foo_method);
   object_creator.create();
-  auto foo_type = foo_creator.create()->get_type();
-  auto bar_type = bar_creator.create()->get_type();
+  auto* foo_type = foo_creator.create()->get_type();
+  auto* bar_type = bar_creator.create()->get_type();
 
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
     // result type of first 'load-param-object' is Foo
-    auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 1);
-    auto result_type =
+    auto* insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 1);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, foo_type);
   }
 
   {
     // result type of second 'load-param-object' is Bar
-    auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
-    auto result_type =
+    auto* insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
+    const auto* result_type =
         ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, bar_type);
   }
@@ -234,10 +238,11 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object_with_interfaces) {
   {
     // the combined result type of Foo and Bar is nullptr, as the common base
     // type Object does not implement the common interfaces I and J
-    auto insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 1);
-    auto insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
-    auto result_type = ota.get_result_type(nullptr, {insn1, insn2},
-                                           /* optional_extra_type */ nullptr);
+    auto* insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 1);
+    auto* insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
+    const auto* result_type =
+        ota.get_result_type(nullptr, {insn1, insn2},
+                            /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, nullptr);
   }
 }
@@ -260,7 +265,7 @@ static outliner_impl::PartialCandidateAdapter create_candidate(
 }
 
 TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive) {
-  auto foo_method = assembler::method_from_string(R"(
+  auto* foo_method = assembler::method_from_string(R"(
       (method (public) "LFoo;.foo:(IZ)Z" (
         (load-param v1)
         (load-param v2)
@@ -276,45 +281,45 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive) {
 
   {
     // type demand of src(0) of 'add-int' is int
-    auto insn = find_insn(foo_method, OPCODE_ADD_INT);
+    auto* insn = find_insn(foo_method, OPCODE_ADD_INT);
     auto root = create_node({insn});
     auto candidate = create_candidate(ota, root);
-    auto result_type = ota.get_type_demand(candidate, insn->src(0));
+    const auto* result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, type::_int());
   }
 
   {
     // type demand of src(0) of 'return' of foo is boolean
-    auto insn = find_insn(foo_method, OPCODE_RETURN);
+    auto* insn = find_insn(foo_method, OPCODE_RETURN);
     auto root = create_node({insn});
     auto candidate = create_candidate(ota, root);
-    auto result_type = ota.get_type_demand(candidate, insn->src(0));
+    const auto* result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, type::_boolean());
   }
 
   {
     // type demand of src(0) of 'xor' with boolean out is boolean
-    auto insn = find_insn(foo_method, OPCODE_XOR_INT);
+    auto* insn = find_insn(foo_method, OPCODE_XOR_INT);
     auto root = create_node({insn});
     auto candidate = create_candidate(ota, root);
     candidate.set_result(insn->dest(), type::_boolean());
-    auto result_type = ota.get_type_demand(candidate, insn->src(0));
+    const auto* result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, type::_boolean());
   }
 
   {
     // type demand of src(0) of 'or' follows by 'sub' is int
-    auto insn1 = find_insn(foo_method, OPCODE_OR_INT);
-    auto insn2 = find_insn(foo_method, OPCODE_SUB_INT);
+    auto* insn1 = find_insn(foo_method, OPCODE_OR_INT);
+    auto* insn2 = find_insn(foo_method, OPCODE_SUB_INT);
     auto root = create_node({insn1, insn2});
     auto candidate = create_candidate(ota, root);
-    auto result_type = ota.get_type_demand(candidate, insn1->src(0));
+    const auto* result_type = ota.get_type_demand(candidate, insn1->src(0));
     EXPECT_EQ(result_type, type::_int());
   }
 }
 
 TEST_F(OutlinerTypeAnalysisTest, get_type_demand_sputs_of_zero) {
-  auto foo_method = assembler::method_from_string(R"(
+  auto* foo_method = assembler::method_from_string(R"(
       (method (public static) "LFoo;.foo:()V" (
         (const v0 0)
         (sput-object v0 "LFoo;.s1:LBar1;")
@@ -326,11 +331,11 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_sputs_of_zero) {
 
   {
     // there's no type that would fit untyped zero (null)
-    auto insn1 = find_insn(foo_method, OPCODE_SPUT_OBJECT, 1);
-    auto insn2 = find_insn(foo_method, OPCODE_SPUT_OBJECT, 2);
+    auto* insn1 = find_insn(foo_method, OPCODE_SPUT_OBJECT, 1);
+    auto* insn2 = find_insn(foo_method, OPCODE_SPUT_OBJECT, 2);
     auto root = create_node({insn1, insn2});
     auto candidate = create_candidate(ota, root);
-    auto result_type = ota.get_type_demand(candidate, insn1->src(0));
+    const auto* result_type = ota.get_type_demand(candidate, insn1->src(0));
     EXPECT_EQ(result_type, nullptr);
   }
 }
@@ -346,7 +351,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_zero) {
       ))";
   auto code = assembler::ircode_from_string(src);
   code->build_cfg();
-  auto foo_method =
+  auto* foo_method =
       DexMethod::make_method("LFoo;.foo:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code),
                           /*is_virtual=*/false);
@@ -355,10 +360,10 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_zero) {
   {
     // type demand of if-eq src(0) is not something we can determine
     // with zero (could be object or int)
-    auto insn = find_insn(foo_method, OPCODE_IF_EQ);
+    auto* insn = find_insn(foo_method, OPCODE_IF_EQ);
     auto root = create_node({insn});
     auto candidate = create_candidate(ota, root);
-    auto result_type = ota.get_type_demand(candidate, insn->src(0));
+    const auto* result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, nullptr);
   }
 }
@@ -374,17 +379,17 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_nonzero) {
       ))";
   auto code = assembler::ircode_from_string(src);
   code->build_cfg();
-  auto foo_method =
+  auto* foo_method =
       DexMethod::make_method("LFoo;.foo:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code),
                           /*is_virtual=*/false);
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
-    auto insn = find_insn(foo_method, OPCODE_IF_EQ);
+    auto* insn = find_insn(foo_method, OPCODE_IF_EQ);
     auto root = create_node({insn});
     auto candidate = create_candidate(ota, root);
-    auto result_type = ota.get_type_demand(candidate, insn->src(0));
+    const auto* result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, type::_int());
   }
 }
@@ -400,7 +405,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_large_constants) {
       ))";
   auto code = assembler::ircode_from_string(src);
   code->build_cfg();
-  auto foo_method =
+  auto* foo_method =
       DexMethod::make_method("LFoo;.foo:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code),
                           /*is_virtual=*/false);
@@ -409,12 +414,12 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_large_constants) {
   {
     // the non-zero constants flowing into the if must be some kind of integer
     // type. The particular values here allow us to pick specific types.
-    auto insn = find_insn(foo_method, OPCODE_IF_EQ);
+    auto* insn = find_insn(foo_method, OPCODE_IF_EQ);
     auto root = create_node({insn});
     auto candidate = create_candidate(ota, root);
-    auto result_type0 = ota.get_type_demand(candidate, insn->src(0));
+    const auto* result_type0 = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type0, type::_short());
-    auto result_type1 = ota.get_type_demand(candidate, insn->src(1));
+    const auto* result_type1 = ota.get_type_demand(candidate, insn->src(1));
     EXPECT_EQ(result_type1, type::_char());
   }
 }
@@ -431,19 +436,19 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive_narrow) {
       ))";
   auto code = assembler::ircode_from_string(src);
   code->build_cfg();
-  auto foo_method = DexMethod::make_method("LFoo;.foo:()V")
-                        ->make_concrete(ACC_PUBLIC, std::move(code),
-                                        /*is_virtual=*/false);
+  auto* foo_method = DexMethod::make_method("LFoo;.foo:()V")
+                         ->make_concrete(ACC_PUBLIC, std::move(code),
+                                         /*is_virtual=*/false);
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
     // the narrowed type demand on the value across all the iputs is byte
-    auto insn1 = find_insn(foo_method, OPCODE_IPUT_SHORT);
-    auto insn2 = find_insn(foo_method, OPCODE_IPUT_BYTE);
-    auto insn3 = find_insn(foo_method, OPCODE_IPUT);
+    auto* insn1 = find_insn(foo_method, OPCODE_IPUT_SHORT);
+    auto* insn2 = find_insn(foo_method, OPCODE_IPUT_BYTE);
+    auto* insn3 = find_insn(foo_method, OPCODE_IPUT);
     auto root = create_node({insn1, insn2, insn3});
     auto candidate = create_candidate(ota, root);
-    auto result_type = ota.get_type_demand(candidate, insn1->src(0));
+    const auto* result_type = ota.get_type_demand(candidate, insn1->src(0));
     EXPECT_EQ(result_type, type::_byte());
   }
 }
@@ -459,18 +464,18 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_aput_object) {
       ))";
   auto code = assembler::ircode_from_string(src);
   code->build_cfg();
-  auto foo_method = DexMethod::make_method(
-                        "LFoo;.foo:(Ljava/lang/String;[Ljava/lang/String;)V")
-                        ->make_concrete(ACC_PUBLIC, std::move(code),
-                                        /*is_virtual=*/false);
+  auto* foo_method = DexMethod::make_method(
+                         "LFoo;.foo:(Ljava/lang/String;[Ljava/lang/String;)V")
+                         ->make_concrete(ACC_PUBLIC, std::move(code),
+                                         /*is_virtual=*/false);
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
-    auto insn = find_insn(foo_method, OPCODE_APUT_OBJECT);
+    auto* insn = find_insn(foo_method, OPCODE_APUT_OBJECT);
     auto root = create_node({insn});
     auto candidate = create_candidate(ota, root);
-    auto type0 = ota.get_type_demand(candidate, insn->src(0));
-    auto type1 = ota.get_type_demand(candidate, insn->src(1));
+    const auto* type0 = ota.get_type_demand(candidate, insn->src(0));
+    const auto* type1 = ota.get_type_demand(candidate, insn->src(1));
     EXPECT_EQ(type0, type::java_lang_Object());
     EXPECT_EQ(type1, DexType::make_type("[Ljava/lang/Object;"));
   }
@@ -480,17 +485,17 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_inference) {
   ClassCreator i_creator(DexType::make_type("LI;"));
   i_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
   i_creator.set_super(type::java_lang_Object());
-  auto i_type = i_creator.create()->get_type();
+  auto* i_type = i_creator.create()->get_type();
   ClassCreator j_creator(DexType::make_type("LJ;"));
   j_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
   j_creator.set_super(type::java_lang_Object());
-  auto j_type = j_creator.create()->get_type();
+  auto* j_type = j_creator.create()->get_type();
   ClassCreator object_creator(type::java_lang_Object());
   ClassCreator bar_creator(DexType::make_type("LBar;"));
   bar_creator.set_super(type::java_lang_Object());
   bar_creator.add_interface(i_type);
   bar_creator.add_interface(j_type);
-  auto bar_type = bar_creator.create()->get_type();
+  auto* bar_type = bar_creator.create()->get_type();
 
   std::string src = R"(
       (
@@ -502,20 +507,20 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_inference) {
       ))";
   auto code = assembler::ircode_from_string(src);
   code->build_cfg();
-  auto foo_method = DexMethod::make_method("LFoo;.foo:(LBar;)V")
-                        ->make_concrete(ACC_PUBLIC, std::move(code),
-                                        /*is_virtual=*/false);
+  auto* foo_method = DexMethod::make_method("LFoo;.foo:(LBar;)V")
+                         ->make_concrete(ACC_PUBLIC, std::move(code),
+                                         /*is_virtual=*/false);
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
     // it's not clear what the narrowed type of {I, J} is; then type inference
     // will be used, which will determine that the incoming value is if type Bar
     // (which happens to implement the two interfaces)
-    auto insn1 = find_insn(foo_method, OPCODE_IPUT_OBJECT, 1);
-    auto insn2 = find_insn(foo_method, OPCODE_IPUT_OBJECT, 2);
+    auto* insn1 = find_insn(foo_method, OPCODE_IPUT_OBJECT, 1);
+    auto* insn2 = find_insn(foo_method, OPCODE_IPUT_OBJECT, 2);
     auto root = create_node({insn1, insn2});
     auto candidate = create_candidate(ota, root);
-    auto result_type = ota.get_type_demand(candidate, insn1->src(0));
+    const auto* result_type = ota.get_type_demand(candidate, insn1->src(0));
     EXPECT_EQ(result_type, bar_type);
   }
 }

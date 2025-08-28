@@ -51,20 +51,20 @@ DexMethod* create_an_init_method(
     bool before_init_call = false,
     bool spurious_init_call = false) {
   DexTypeList::ContainerType param_types;
-  auto java_lang_Object = DexType::make_type("Ljava/lang/Object;");
+  auto* java_lang_Object = DexType::make_type("Ljava/lang/Object;");
   for (size_t i = 0; i < num_param_types; i++) {
     param_types.push_back(java_lang_Object);
   }
-  auto proto = DexProto::make_proto(
+  auto* proto = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list(std::move(param_types)));
-  auto ref = DexMethod::make_method(cls->get_type(),
-                                    DexString::make_string("<init>"), proto);
+  auto* ref = DexMethod::make_method(cls->get_type(),
+                                     DexString::make_string("<init>"), proto);
   MethodCreator mc(ref, ACC_PUBLIC | ACC_CONSTRUCTOR);
   auto args = mc.get_reg_args();
   auto first_arg = *args.begin();
-  auto main_block = mc.get_main_block();
+  auto* main_block = mc.get_main_block();
   if (before_init_call) {
-    for (auto f : fields_to_assign_null) {
+    for (auto* f : fields_to_assign_null) {
       auto f_null_loc = mc.make_local(f->get_type());
       main_block->load_null(f_null_loc);
       main_block->iput(f, first_arg, f_null_loc);
@@ -77,7 +77,7 @@ DexMethod* create_an_init_method(
     init_args.push_back(p_null_loc);
   }
   main_block->invoke(OPCODE_INVOKE_DIRECT, init_to_call, init_args);
-  for (auto f : fields_to_assign_null) {
+  for (auto* f : fields_to_assign_null) {
     auto f_null_loc = mc.make_local(f->get_type());
     main_block->load_null(f_null_loc);
     main_block->iput(f, first_arg, f_null_loc);
@@ -88,17 +88,17 @@ DexMethod* create_an_init_method(
     main_block->invoke(OPCODE_INVOKE_DIRECT, init_to_call, init_args);
   }
   main_block->ret_void();
-  auto method = mc.create();
+  auto* method = mc.create();
   cls->add_method(method);
   method->get_code()->build_cfg();
   return method;
 }
 
 TEST_F(ConstructorAnalysisTest, can_inline_init_simple) {
-  auto foo_cls = create_a_class("Lfoo;");
-  auto foo_init1 = create_an_init_method(
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* foo_init1 = create_an_init_method(
       foo_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
-  auto foo_init2 = create_an_init_method(foo_cls, foo_init1, 1, {});
+  auto* foo_init2 = create_an_init_method(foo_cls, foo_init1, 1, {});
 
   EXPECT_FALSE(constructor_analysis::can_inline_init(foo_init1));
   EXPECT_TRUE(constructor_analysis::can_inline_init(foo_init2));
@@ -107,36 +107,36 @@ TEST_F(ConstructorAnalysisTest, can_inline_init_simple) {
 }
 
 TEST_F(ConstructorAnalysisTest, can_inline_init_iput_before_init_call) {
-  auto foo_cls = create_a_class("Lfoo;");
-  auto f = DexField::make_field("Lfoo;.f:Ljava/lang/Object;")
-               ->make_concrete(ACC_PUBLIC);
-  auto foo_init1 = create_an_init_method(
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* f = DexField::make_field("Lfoo;.f:Ljava/lang/Object;")
+                ->make_concrete(ACC_PUBLIC);
+  auto* foo_init1 = create_an_init_method(
       foo_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
-  auto foo_init2 = create_an_init_method(foo_cls, foo_init1, 1, {f},
-                                         /* before_init_call */ true);
+  auto* foo_init2 = create_an_init_method(foo_cls, foo_init1, 1, {f},
+                                          /* before_init_call */ true);
 
   EXPECT_FALSE(constructor_analysis::can_inline_init(foo_init2));
 }
 
 TEST_F(ConstructorAnalysisTest, can_inline_init_iput_after_init_call) {
-  auto foo_cls = create_a_class("Lfoo;");
-  auto f = DexField::make_field("Lsfoo;.f:Ljava/lang/Object;")
-               ->make_concrete(ACC_PUBLIC);
-  auto foo_init1 = create_an_init_method(
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* f = DexField::make_field("Lsfoo;.f:Ljava/lang/Object;")
+                ->make_concrete(ACC_PUBLIC);
+  auto* foo_init1 = create_an_init_method(
       foo_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
-  auto foo_init2 = create_an_init_method(foo_cls, foo_init1, 1, {f},
-                                         /* before_init_call */ false);
+  auto* foo_init2 = create_an_init_method(foo_cls, foo_init1, 1, {f},
+                                          /* before_init_call */ false);
 
   EXPECT_TRUE(constructor_analysis::can_inline_init(foo_init2));
 }
 
 TEST_F(ConstructorAnalysisTest,
        can_inline_inits_in_same_class_unsupported_init_call) {
-  auto foo_cls = create_a_class("Lfoo;");
-  auto foo_init1 = create_an_init_method(
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* foo_init1 = create_an_init_method(
       foo_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
-  auto foo_init2 = create_an_init_method(foo_cls, foo_init1, 1, {}, false,
-                                         /* spurious_init_call */ true);
+  auto* foo_init2 = create_an_init_method(foo_cls, foo_init1, 1, {}, false,
+                                          /* spurious_init_call */ true);
 
   std::vector<IRInstruction*> callsite_insns;
   for (auto& mie : InstructionIterable(foo_init2->get_code()->cfg())) {
@@ -157,8 +157,8 @@ TEST_F(ConstructorAnalysisTest,
 }
 
 TEST_F(ConstructorAnalysisTest, can_inline_init_supertype_relaxed) {
-  auto foo_cls = create_a_class("Lfoo;");
-  auto foo_init1 = create_an_init_method(
+  auto* foo_cls = create_a_class("Lfoo;");
+  auto* foo_init1 = create_an_init_method(
       foo_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
 
   EXPECT_FALSE(constructor_analysis::can_inline_init(
@@ -168,18 +168,18 @@ TEST_F(ConstructorAnalysisTest, can_inline_init_supertype_relaxed) {
 TEST_F(ConstructorAnalysisTest, can_detect_relaxed_inlined_init) {
   // Set up a couple of classes, and usages of them (some of which will look
   // like its constructor was inlined).
-  auto foo_cls = create_a_class("Lfoo;");
+  auto* foo_cls = create_a_class("Lfoo;");
   create_an_init_method(
       foo_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
 
-  auto bar_cls = create_a_class("Lbar;");
-  auto bar_init = create_an_init_method(
+  auto* bar_cls = create_a_class("Lbar;");
+  auto* bar_init = create_an_init_method(
       bar_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
 
-  auto baz_cls = create_a_class("Lbaz;", bar_cls->get_type());
+  auto* baz_cls = create_a_class("Lbaz;", bar_cls->get_type());
   create_an_init_method(baz_cls, bar_init, 0, {});
 
-  auto use_cls = assembler::class_from_string(R"(
+  auto* use_cls = assembler::class_from_string(R"(
     (class (public) "Luse;"
       (method (public static) "Luse;.a:(I)V"
         (
@@ -204,9 +204,9 @@ TEST_F(ConstructorAnalysisTest, can_detect_relaxed_inlined_init) {
   )");
 
   Scope scope{foo_cls, bar_cls, baz_cls, use_cls};
-  for (auto cls : scope) {
-    for (auto m : cls->get_all_methods()) {
-      auto code = m->get_code();
+  for (auto* cls : scope) {
+    for (auto* m : cls->get_all_methods()) {
+      auto* code = m->get_code();
       if (code != nullptr) {
         code->build_cfg();
       }

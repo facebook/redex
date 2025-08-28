@@ -23,7 +23,7 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
     return Transform::Stats();
   }
   TRACE(CONSTP, 2, "Method: %s", SHOW(method));
-  auto code = method->get_code();
+  auto* code = method->get_code();
   cfg::ScopedCFG cfg(code);
 
   TRACE(CONSTP, 5, "CFG: %s", SHOW(*cfg));

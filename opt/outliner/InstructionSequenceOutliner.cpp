@@ -233,7 +233,7 @@ static size_t hash_value(const CandidateNode& cn) {
   }
   boost::hash_combine(hash,
                       boost::hash_range(cn.insns.begin(), cn.insns.end()));
-  for (auto& p : cn.succs) {
+  for (const auto& p : cn.succs) {
     boost::hash_combine(hash, *p.second);
   }
   return hash;
@@ -246,7 +246,7 @@ static StableHash stable_hash_value(const CandidateNode& cn) {
   if (cn.res_reg) {
     stable_hash = stable_hash * 79 + *cn.res_reg;
   }
-  for (auto& p : cn.succs) {
+  for (const auto& p : cn.succs) {
     stable_hash = stable_hash * 199 + stable_hash_value(*p.second);
   }
   return stable_hash;
@@ -260,8 +260,8 @@ bool operator==(const CandidateNode& a, const CandidateNode& b) {
     return false;
   }
   for (size_t i = 0; i < a.succs.size(); i++) {
-    auto& p = a.succs.at(i);
-    auto& q = b.succs.at(i);
+    const auto& p = a.succs.at(i);
+    const auto& q = b.succs.at(i);
     if (p.first != q.first || *p.second != *q.second) {
       return false;
     }
@@ -282,7 +282,7 @@ struct Candidate {
 static size_t hash_value(const Candidate& c) {
   size_t hash = c.size;
   boost::hash_combine(hash, c.root);
-  for (auto arg_type : c.arg_types) {
+  for (const auto* arg_type : c.arg_types) {
     boost::hash_combine(hash, (size_t)arg_type);
   }
   boost::hash_combine(hash, (size_t)c.res_type);
@@ -290,10 +290,10 @@ static size_t hash_value(const Candidate& c) {
 }
 static StableHash stable_hash_value(const Candidate& c) {
   StableHash stable_hash{c.arg_types.size()};
-  for (auto t : c.arg_types) {
+  for (const auto* t : c.arg_types) {
     stable_hash = stable_hash * 71 + stable_hash_value(show(t));
   }
-  if (c.res_type) {
+  if (c.res_type != nullptr) {
     stable_hash = stable_hash * 73 + stable_hash_value(show(c.res_type));
   }
   stable_hash = stable_hash * 79 + stable_hash_value(c.root);
@@ -428,7 +428,7 @@ static Candidate normalize(
   using UndoMap = UnorderedMap<reg_t, boost::optional<reg_t>>;
   auto normalize_def = [&map, &next_temp](reg_t reg, bool wide,
                                           UndoMap* undo_map) {
-    if (!undo_map->count(reg)) {
+    if (undo_map->count(reg) == 0u) {
       auto it = map.find(reg);
       undo_map->emplace(reg, it == map.end()
                                  ? boost::none
@@ -448,7 +448,7 @@ static Candidate normalize(
           &walk](const PartialCandidateNode& pcn, CandidateNode* cn,
                  IRInstruction* last_out_reg_assignment_insn) {
     UndoMap undo_map;
-    for (auto insn : pcn.insns) {
+    for (auto* insn : pcn.insns) {
       CandidateInstruction ci;
       ci.core = to_core(insn);
 
@@ -467,7 +467,7 @@ static Candidate normalize(
       out_reg_assignment_insns.insert(last_out_reg_assignment_insn);
       cn->res_reg = normalize_use(out_reg->first, out_reg->second);
     }
-    for (auto& p : pcn.succs) {
+    for (const auto& p : pcn.succs) {
       auto succ_cn = std::make_shared<CandidateNode>();
       cn->succs.emplace_back(normalize(p.first), succ_cn);
       walk(*p.second, succ_cn.get(), last_out_reg_assignment_insn);
@@ -485,7 +485,7 @@ static Candidate normalize(
   PartialCandidateAdapter pca(type_analysis, pc);
   if (out_reg) {
     always_assert(!out_reg_assignment_insns.empty());
-    if (out_reg_assignment_insns.count(nullptr)) {
+    if (out_reg_assignment_insns.count(nullptr) != 0u) {
       // There is a control-flow path where the out-reg is not assigned;
       // fall-back to type inference at the beginning of the partial candidate.
       c.res_type = type_analysis.get_inferred_type(pca, out_reg->first);
@@ -499,7 +499,7 @@ static Candidate normalize(
   pca.set_result(out_reg ? std::optional<reg_t>(out_reg->first) : std::nullopt,
                  c.res_type);
   for (auto reg : arg_regs) {
-    auto type = type_analysis.get_type_demand(pca, reg);
+    const auto* type = type_analysis.get_type_demand(pca, reg);
     c.arg_types.push_back(type);
   }
   return c;
@@ -597,7 +597,7 @@ static bool append_to_partial_candidate(
   }
   for (size_t i = 0; i < insn->srcs_size(); i++) {
     auto src = insn->src(i);
-    if (!pcn->defined_regs.count(src)) {
+    if (pcn->defined_regs.count(src) == 0u) {
       pc->in_regs.insert(src);
       if (insn->src_is_wide(i)) {
         pc->in_regs.insert(src + 1);
@@ -652,7 +652,7 @@ static bool can_outline_insn(const RefChecker& ref_checker,
     return false;
   }
   if (insn->has_method()) {
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
     if (method == nullptr || method != insn->get_method()) {
       return false;
     }
@@ -672,7 +672,7 @@ static bool can_outline_insn(const RefChecker& ref_checker,
       return false;
     }
   } else if (insn->has_field()) {
-    auto field = resolve_field(insn->get_field());
+    auto* field = resolve_field(insn->get_field());
     if (field == nullptr || field != insn->get_field()) {
       return false;
     }
@@ -687,7 +687,7 @@ static bool can_outline_insn(const RefChecker& ref_checker,
       return false;
     }
   } else if (insn->has_type()) {
-    auto cls = type_class(insn->get_type());
+    auto* cls = type_class(insn->get_type());
     if (cls != nullptr) {
       if (!is_public(cls) && cls->is_external()) {
         return false;
@@ -700,7 +700,7 @@ static bool can_outline_insn(const RefChecker& ref_checker,
   if (reaching_initialized_init_first_param) {
     // In a constructor, we cannot outline instructions that access the first
     // parameter before the base constructor was called on it.
-    auto& env = reaching_initialized_init_first_param->at(insn);
+    const auto& env = reaching_initialized_init_first_param->at(insn);
     for (size_t i = 0; i < insn->srcs_size(); i++) {
       auto reg = insn->src(i);
       const auto& initialized = env.get(reg);
@@ -713,7 +713,7 @@ static bool can_outline_insn(const RefChecker& ref_checker,
 }
 
 static bool is_uniquely_reached_via_pred(cfg::Block* block) {
-  auto& pred_edges = block->preds();
+  const auto& pred_edges = block->preds();
   return pred_edges.size() == 1 && block != block->cfg().entry_block();
 }
 
@@ -733,7 +733,7 @@ static UnorderedSet<cfg::Block*> get_eventual_targets_after_outlining(
     if (is_uniquely_reached_via_pred(start_block)) {
       auto big_block = big_blocks::get_big_block(start_block);
       if (big_block && big_block->same_try(first_block)) {
-        auto last_block = big_block->get_last_block();
+        auto* last_block = big_block->get_last_block();
         auto last_insn_it = last_block->get_last_insn();
         if (last_insn_it != last_block->end() &&
             (opcode::is_a_conditional_branch(last_insn_it->insn->opcode()) ||
@@ -744,8 +744,8 @@ static UnorderedSet<cfg::Block*> get_eventual_targets_after_outlining(
               start_block, last_insn_cfg_it);
           insert_unordered_iterable(targets, more_targets);
         } else {
-          auto goes_to = last_block->goes_to();
-          if (goes_to) {
+          auto* goes_to = last_block->goes_to();
+          if (goes_to != nullptr) {
             targets.insert(goes_to);
           }
         }
@@ -753,7 +753,7 @@ static UnorderedSet<cfg::Block*> get_eventual_targets_after_outlining(
     }
     return targets;
   };
-  auto block = it.block();
+  auto* block = it.block();
   auto succs = get_ordered_goto_and_branch_succs(block);
   if (succs.empty()) {
     return UnorderedSet<cfg::Block*>();
@@ -804,13 +804,13 @@ static bool explore_candidates_from(
     const ExploredCallback* explored_callback = nullptr) {
   boost::optional<IROpcode> prev_opcode;
   CandidateInstructionCoresBuilder cores_builder;
-  auto first_block = it.block();
+  auto* first_block = it.block();
   auto& cfg = first_block->cfg();
   for (; it != end; prev_opcode = it->insn->opcode(), it++) {
     if (pc->insns_size >= config.max_insns_size) {
       return false;
     }
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (pcn->insns.size() + 1 < MIN_INSNS_SIZE &&
         !can_outline_insn(ref_checker, reaching_initialized_init_first_param,
                           insn, config.outline_control_flow)) {
@@ -818,7 +818,7 @@ static bool explore_candidates_from(
     }
     cores_builder.push_back(insn);
     if (cores_builder.has_value() &&
-        !recurring_cores.count(cores_builder.get_value())) {
+        (recurring_cores.count(cores_builder.get_value()) == 0u)) {
       return false;
     }
     if (!append_to_partial_candidate(reaching_initialized_new_instances, insn,
@@ -840,12 +840,12 @@ static bool explore_candidates_from(
       if (targets.size() != 1) {
         return false;
       }
-      auto block = it.block();
+      auto* block = it.block();
       auto succs = get_ordered_goto_and_branch_succs(block);
       auto defined_regs_copy = pcn->defined_regs;
       pcn->defined_regs.clear();
-      auto next_block = *unordered_any(targets);
-      for (auto succ_edge : succs) {
+      auto* next_block = *unordered_any(targets);
+      for (auto* succ_edge : succs) {
         auto succ_pcn = std::make_shared<PartialCandidateNode>();
         pcn->succs.emplace_back(succ_edge, succ_pcn);
         succ_pcn->defined_regs = defined_regs_copy;
@@ -875,7 +875,7 @@ static bool explore_candidates_from(
           }
         }
       }
-      if (explored_callback) {
+      if (explored_callback != nullptr) {
         (*explored_callback)(*pc, first_block, end, next_block);
       }
       return true;
@@ -894,7 +894,7 @@ static bool explore_candidates_from(
          opcode::is_a_const(*prev_opcode))) {
       continue;
     }
-    if (explored_callback) {
+    if (explored_callback != nullptr) {
       (*explored_callback)(*pc, first_block, it, /* next_block */ nullptr);
     }
   }
@@ -961,7 +961,7 @@ static MethodCandidates find_method_candidates(
   LazyUnorderedMap<cfg::Block*, LivenessDomain> throw_live_out(
       [&cfg, &liveness_fp_iter](cfg::Block* block) {
         auto res = LivenessDomain::bottom();
-        for (auto e : cfg.get_succ_edges_of_type(block, cfg::EDGE_THROW)) {
+        for (auto* e : cfg.get_succ_edges_of_type(block, cfg::EDGE_THROW)) {
           res.join_with(liveness_fp_iter->get_live_in_vars_at(e->target()));
         }
         return res;
@@ -1026,8 +1026,9 @@ static MethodCandidates find_method_candidates(
           boost::optional<std::pair<reg_t, bool>> out_reg;
           if (!pc.root.defined_regs.empty()) {
             const auto& live_out =
-                next_block ? liveness_fp_iter->get_live_in_vars_at(next_block)
-                           : live_outs[it.block()].at(it->insn);
+                next_block != nullptr
+                    ? liveness_fp_iter->get_live_in_vars_at(next_block)
+                    : live_outs[it.block()].at(it->insn);
             auto first_block_throw_live_out = throw_live_out[first_block];
             for (auto& p : UnorderedIterable(pc.root.defined_regs)) {
               if (first_block_throw_live_out.contains(p.first)) {
@@ -1141,7 +1142,7 @@ static MethodCandidates find_method_candidates(
               auto size = pcn.insns.size();
               ranges.emplace(start, size);
             }
-            for (auto& p : pcn.succs) {
+            for (const auto& p : pcn.succs) {
               insert_ranges(*p.second);
             }
           };
@@ -1222,9 +1223,9 @@ static void get_recurring_cores(
         code.cfg().calculate_exit_block();
         CanOutlineBlockDecider block_decider(
             config.profile_guidance, throughput_interaction_indices,
-            throughput_methods.count(method),
-            sufficiently_warm_methods.count(method),
-            sufficiently_hot_methods.count(method));
+            throughput_methods.count(method) != 0u,
+            sufficiently_warm_methods.count(method) != 0u,
+            sufficiently_hot_methods.count(method) != 0u);
         auto& cfg = code.cfg();
         OptionalReachingInitializedsEnvironments
             reaching_initialized_init_first_param;
@@ -1240,7 +1241,7 @@ static void get_recurring_cores(
           }
           CandidateInstructionCoresBuilder cores_builder;
           for (auto& mie : big_blocks::InstructionIterable(big_block)) {
-            auto insn = mie.insn;
+            auto* insn = mie.insn;
             if (!can_outline_insn(ref_checker,
                                   reaching_initialized_init_first_param, insn,
                                   config.outline_control_flow)) {
@@ -1297,7 +1298,7 @@ struct ReusableOutlinedMethods {
 
 UnorderedSet<const DexType*> get_declaring_types(const CandidateInfo& ci) {
   UnorderedSet<const DexType*> types;
-  for (auto& p : UnorderedIterable(ci.methods)) {
+  for (const auto& p : UnorderedIterable(ci.methods)) {
     types.insert(p.first->get_class());
   }
   return types;
@@ -1312,13 +1313,13 @@ UnorderedSet<const DexType*> get_common_super_classes(
     const UnorderedSet<const DexType*>& types) {
   UnorderedMap<const DexType*, size_t> counted_super_classes;
   UnorderedSet<const DexType*> common_super_classes;
-  for (auto t : UnorderedIterable(types)) {
+  for (const auto* t : UnorderedIterable(types)) {
     do {
       if (++counted_super_classes[t] == types.size()) {
         common_super_classes.insert(t);
       }
-      auto cls = type_class(t);
-      if (!cls) {
+      auto* cls = type_class(t);
+      if (cls == nullptr) {
         break;
       }
       t = cls->get_super_class();
@@ -1330,13 +1331,13 @@ UnorderedSet<const DexType*> get_common_super_classes(
 UnorderedSet<const DexType*> get_super_classes(
     const UnorderedSet<const DexType*>& types) {
   UnorderedSet<const DexType*> super_classes;
-  for (auto t : UnorderedIterable(types)) {
+  for (const auto* t : UnorderedIterable(types)) {
     do {
       if (!super_classes.insert(t).second) {
         break;
       }
-      auto cls = type_class(t);
-      if (!cls) {
+      auto* cls = type_class(t);
+      if (cls == nullptr) {
         break;
       }
       t = cls->get_super_class();
@@ -1355,14 +1356,14 @@ UnorderedSet<const DexType*> get_referenced_types(const Candidate& c) {
   gather_types = [&gather_types](const CandidateNode& cn) {
     UnorderedSet<const DexType*> types;
     auto insert_internal_type = [&types](const DexType* t) {
-      auto cls = type_class(t);
-      if (cls && !cls->is_external()) {
+      auto* cls = type_class(t);
+      if ((cls != nullptr) && !cls->is_external()) {
         types.insert(t);
       }
     };
 
-    for (auto& csi : cn.insns) {
-      auto& cic = csi.core;
+    for (const auto& csi : cn.insns) {
+      const auto& cic = csi.core;
       switch (opcode::ref(cic.opcode)) {
       case opcode::Ref::Method:
         insert_internal_type(cic.method->get_class());
@@ -1383,9 +1384,9 @@ UnorderedSet<const DexType*> get_referenced_types(const Candidate& c) {
     }
     if (!cn.succs.empty()) {
       UnorderedMap<const DexType*, size_t> successor_types;
-      for (auto& p : cn.succs) {
+      for (const auto& p : cn.succs) {
         auto super_classes = get_super_classes(gather_types(*p.second));
-        for (auto type : UnorderedIterable(super_classes)) {
+        for (const auto* type : UnorderedIterable(super_classes)) {
           if (++successor_types[type] == cn.succs.size()) {
             types.insert(type);
           }
@@ -1416,22 +1417,22 @@ static DexMethod* find_reusable_method(
   }
   DexMethod* helper_class_method{nullptr};
   for (auto&& [other_store, method, _] : it->second) {
-    if (store != other_store && !store_dependencies.count(other_store)) {
+    if (store != other_store && (store_dependencies.count(other_store) == 0u)) {
       continue;
     }
-    auto cls = type_class(method->get_class());
+    auto* cls = type_class(method->get_class());
     if (cls->rstate.outlined()) {
       helper_class_method = method;
       continue;
     }
     auto declaring_types = get_declaring_types(ci);
     auto common_super_classes = get_common_super_classes(declaring_types);
-    if (common_super_classes.count(method->get_class())) {
+    if (common_super_classes.count(method->get_class()) != 0u) {
       return method;
     }
     auto referenced_types = get_referenced_types(c);
     auto super_classes = get_super_classes(referenced_types);
-    if (super_classes.count(method->get_class())) {
+    if (super_classes.count(method->get_class()) != 0u) {
       return method;
     }
   }
@@ -1445,10 +1446,11 @@ static size_t get_savings(const Config& config,
                           const CandidateInfo& ci,
                           const ReusableOutlinedMethods& outlined_methods) {
   size_t cost = c.size * ci.count;
-  size_t outlined_cost = config.cost_method_metadata +
-                         (c.res_type ? config.cost_invoke_with_result
-                                     : config.cost_invoke_without_result) *
-                             ci.count;
+  size_t outlined_cost =
+      config.cost_method_metadata + (c.res_type != nullptr
+                                         ? config.cost_invoke_with_result
+                                         : config.cost_invoke_without_result) *
+                                        ci.count;
   if (find_reusable_method(store, store_dependencies, c, ci, outlined_methods,
                            config.reuse_outlined_methods_across_dexes) ==
       nullptr) {
@@ -1552,14 +1554,14 @@ static void get_beneficial_candidates(
     std::vector<std::pair<CandidateMethodLocation, CandidateSetIterator>>
         ordered;
     for (auto it = ui.begin(); it != ui.end(); it++) {
-      auto& c = *it;
+      const auto& c = *it;
       auto id_it = candidate_ids.find(c);
       if (id_it != candidate_ids.end()) {
         method_candidate_ids.insert(id_it->second);
         continue;
       }
       const auto& ci = concurrent_candidates.at_unsafe(c);
-      for (auto& cml : ci.methods.at(p.first)) {
+      for (const auto& cml : ci.methods.at(p.first)) {
         ordered.emplace_back(cml, it);
       }
     }
@@ -1567,8 +1569,8 @@ static void get_beneficial_candidates(
         ordered.begin(), ordered.end(),
         [](const std::pair<CandidateMethodLocation, CandidateSetIterator>& a,
            const std::pair<CandidateMethodLocation, CandidateSetIterator>& b) {
-          auto& a_ranges = a.first.ranges;
-          auto& b_ranges = b.first.ranges;
+          const auto& a_ranges = a.first.ranges;
+          const auto& b_ranges = b.first.ranges;
           if (a_ranges.size() != b_ranges.size()) {
             return a_ranges.size() < b_ranges.size();
           }
@@ -1587,8 +1589,8 @@ static void get_beneficial_candidates(
           return false;
         });
     for (auto& q : ordered) {
-      auto& c = *q.second;
-      if (!candidate_ids.count(c)) {
+      const auto& c = *q.second;
+      if (candidate_ids.count(c) == 0u) {
         always_assert(candidate_ids.size() < (1ULL << 32));
         CandidateId candidate_id = candidate_ids.size();
         method_candidate_ids.insert(candidate_id);
@@ -1611,7 +1613,7 @@ static bool has_non_init_invoke_directs(const CandidateNode& cn) {
       return true;
     }
   }
-  for (auto& p : cn.succs) {
+  for (const auto& p : cn.succs) {
     if (has_non_init_invoke_directs(*p.second)) {
       return true;
     }
@@ -1677,7 +1679,7 @@ class MethodNameGenerator {
 // This mimics what generate_debug_instructions(DexClass.cpp) does eventually:
 // ignoring positions that don't have a file.
 static DexPosition* skip_fileless(DexPosition* pos) {
-  for (; pos && !pos->file; pos = pos->parent) {
+  for (; (pos != nullptr) && (pos->file == nullptr); pos = pos->parent) {
   }
   return pos;
 }
@@ -1706,11 +1708,11 @@ class OutlinedMethodCreator {
       // positions
       uint32_t best_pattern_id = *pattern_ids.begin();
       size_t best_unique_positions{0};
-      auto manager = g_redex->get_position_pattern_switch_manager();
+      auto* manager = g_redex->get_position_pattern_switch_manager();
       const auto& all_managed_patterns = manager->get_patterns();
       for (auto pattern_id : pattern_ids) {
         UnorderedSet<DexPosition*> unique_positions;
-        for (auto pos : all_managed_patterns.at(pattern_id)) {
+        for (auto* pos : all_managed_patterns.at(pattern_id)) {
           unique_positions.insert(pos);
         }
         if (unique_positions.size() > best_unique_positions) {
@@ -1738,13 +1740,13 @@ class OutlinedMethodCreator {
   void add_outlined_dbg_position_patterns(const Candidate& c,
                                           const CandidateInfo& ci,
                                           std::set<uint32_t>* pattern_ids) {
-    auto manager = g_redex->get_position_pattern_switch_manager();
+    auto* manager = g_redex->get_position_pattern_switch_manager();
     // Order methods to make sure we get deterministic pattern-ids.
     auto ordered_methods =
         unordered_to_ordered_keys(ci.methods, compare_dexmethods);
-    for (auto method : ordered_methods) {
-      auto& cmls = ci.methods.at(method);
-      for (auto& cml : cmls) {
+    for (auto* method : ordered_methods) {
+      const auto& cmls = ci.methods.at(method);
+      for (const auto& cml : cmls) {
         // if the current method is reused then the call site
         // didn't have the pattern id. Need to create and add pattern_id
         auto positions = get_outlined_dbg_positions(c, cml, method);
@@ -1762,16 +1764,16 @@ class OutlinedMethodCreator {
                                     const CandidateInfo& ci,
                                     const DexType* host_class,
                                     std::set<uint32_t>* pattern_ids) {
-    auto name =
+    const auto* name =
         m_method_name_generator.get_name(c, m_config.obfuscate_method_names);
     DexTypeList::ContainerType arg_types;
-    for (auto t : c.arg_types) {
+    for (const auto* t : c.arg_types) {
       arg_types.push_back(const_cast<DexType*>(t));
     }
-    auto rtype = c.res_type ? c.res_type : type::_void();
-    auto type_list = DexTypeList::make_type_list(std::move(arg_types));
-    auto proto = DexProto::make_proto(rtype, type_list);
-    auto outlined_method =
+    const auto* rtype = c.res_type != nullptr ? c.res_type : type::_void();
+    auto* type_list = DexTypeList::make_type_list(std::move(arg_types));
+    auto* proto = DexProto::make_proto(rtype, type_list);
+    auto* outlined_method =
         DexMethod::make_method(const_cast<DexType*>(host_class), name, proto)
             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     // get pattern ids
@@ -1811,8 +1813,8 @@ class OutlinedMethodCreator {
       not_reached();
     }
     PositionPattern positions;
-    auto root_dbg_pos = skip_fileless(cfg.get_dbg_pos(root_insn_it));
-    if (!root_dbg_pos) {
+    auto* root_dbg_pos = skip_fileless(cfg.get_dbg_pos(root_insn_it));
+    if (root_dbg_pos == nullptr) {
       if (!m_config.full_dbg_positions) {
         return positions;
       }
@@ -1840,11 +1842,11 @@ class OutlinedMethodCreator {
                                const CandidateNode& cn,
                                big_blocks::Iterator it) {
       cfg::Block* last_block{nullptr};
-      for (auto& csi : cn.insns) {
+      for (const auto& csi : cn.insns) {
         for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
                it->type == MFLOW_SOURCE_BLOCK;
              it++) {
-          if (it->type == MFLOW_POSITION && it->pos->file) {
+          if (it->type == MFLOW_POSITION && (it->pos->file != nullptr)) {
             dbg_pos = it->pos.get();
           }
         }
@@ -1861,7 +1863,7 @@ class OutlinedMethodCreator {
         for (size_t i = 0; i < succs.size(); i++) {
           always_assert(normalize(succs.at(i)) == cn.succs.at(i).first);
           auto& succ_cn = *cn.succs.at(i).second;
-          auto succ_block = succs.at(i)->target();
+          auto* succ_block = succs.at(i)->target();
           auto succ_it = big_blocks::Iterator(succ_block, succ_block->begin());
           walk(dbg_pos, succ_cn, succ_it);
         }
@@ -1899,7 +1901,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
     not_reached();
   }
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   if (code->get_debug_item() == nullptr) {
     // Create an empty item so that debug info of method we are outlining from
     // does not get lost.
@@ -1914,7 +1916,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
           SHOW(method));
   }
 
-  auto last_dbg_pos = skip_fileless(cfg.get_dbg_pos(first_insn_it));
+  auto* last_dbg_pos = skip_fileless(cfg.get_dbg_pos(first_insn_it));
   cfg::CFGMutation cfg_mutation(cfg);
   const auto first_arg_reg = c.temp_regs;
   boost::optional<reg_t> last_arg_reg;
@@ -1937,7 +1939,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
     for (size_t insn_idx = 0; insn_idx < cn.insns.size();
          last_block = it.block(), last_insn_it = it.unwrap(), insn_idx++,
                 it++) {
-      auto& ci = cn.insns.at(insn_idx);
+      const auto& ci = cn.insns.at(insn_idx);
       always_assert(it->insn->opcode() == ci.core.opcode);
       for (size_t i = 0; i < ci.srcs.size(); i++) {
         gather_arg_regs(ci.srcs.at(i), it->insn->src(i));
@@ -1951,8 +1953,8 @@ static void rewrite_at_location(DexMethod* outlined_method,
         gather_arg_regs(*cn.res_reg, *cml.out_reg);
       }
       if (last_insn_it) {
-        auto dbg_pos = skip_fileless(cfg.get_dbg_pos(*last_insn_it));
-        if (dbg_pos) {
+        auto* dbg_pos = skip_fileless(cfg.get_dbg_pos(*last_insn_it));
+        if (dbg_pos != nullptr) {
           last_dbg_pos = dbg_pos;
         }
       }
@@ -1963,7 +1965,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
       for (size_t i = 0; i < succs.size(); i++) {
         always_assert(normalize(succs.at(i)) == cn.succs.at(i).first);
         auto succ_cn = *cn.succs.at(i).second;
-        auto succ_block = succs.at(i)->target();
+        auto* succ_block = succs.at(i)->target();
         auto succ_ii = InstructionIterable(succ_block);
         auto succ_it = big_blocks::InstructionIterator(
             succ_block->to_cfg_instruction_iterator(succ_ii.begin()));
@@ -1981,7 +1983,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
   invoke_insn->set_srcs(arg_regs);
   outlined_method_invocation.push_back(invoke_insn);
   IRInstruction* move_result_insn = nullptr;
-  if (c.res_type) {
+  if (c.res_type != nullptr) {
     move_result_insn =
         new IRInstruction(opcode::move_result_for_invoke(outlined_method));
     move_result_insn->set_dest(*cml.out_reg);
@@ -1990,8 +1992,8 @@ static void rewrite_at_location(DexMethod* outlined_method,
   cfg_mutation.insert_before(first_insn_it, outlined_method_invocation);
 
   std::unique_ptr<DexPosition> new_dbg_pos;
-  if (call_site_pattern_ids) {
-    auto manager = g_redex->get_position_pattern_switch_manager();
+  if (call_site_pattern_ids != nullptr) {
+    auto* manager = g_redex->get_position_pattern_switch_manager();
     auto pattern_id = call_site_pattern_ids->at(cml.first_insn);
     new_dbg_pos = manager->make_pattern_position(pattern_id);
   } else {
@@ -2001,7 +2003,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
   }
 
   cfg_mutation.insert_before(first_insn_it, std::move(new_dbg_pos));
-  if (last_dbg_pos) {
+  if (last_dbg_pos != nullptr) {
     new_dbg_pos = std::make_unique<DexPosition>(*last_dbg_pos);
   } else {
     new_dbg_pos = DexPosition::make_synthetic_entry_position(method);
@@ -2041,7 +2043,7 @@ class DexState {
       : m_mgr(mgr), m_dex(dex), m_dex_id(dex_id) {
     UnorderedSet<DexMethodRef*> method_refs;
     std::vector<DexType*> init_classes;
-    for (auto cls : dex) {
+    for (auto* cls : dex) {
       cls->gather_methods(method_refs);
       cls->gather_types(m_type_refs);
       cls->gather_init_classes(init_classes);
@@ -2053,9 +2055,9 @@ class DexState {
     });
 
     UnorderedSet<DexType*> refined_types;
-    for (auto type : init_classes) {
-      auto refined_type = init_classes_with_side_effects.refine(type);
-      if (refined_type) {
+    for (auto* type : init_classes) {
+      const auto* refined_type = init_classes_with_side_effects.refine(type);
+      if (refined_type != nullptr) {
         m_type_refs.insert(const_cast<DexType*>(refined_type));
       }
     }
@@ -2067,8 +2069,8 @@ class DexState {
 
   bool can_insert_type_refs(const UnorderedSet<const DexType*>& types) {
     size_t inserted_count{0};
-    for (auto t : UnorderedIterable(types)) {
-      if (!m_type_refs.count(t)) {
+    for (const auto* t : UnorderedIterable(types)) {
+      if (m_type_refs.count(t) == 0u) {
         inserted_count++;
       }
     }
@@ -2173,8 +2175,9 @@ class HostClassSelector {
   // Return current outlined helper class, if exists and we can add one more
   // method to it
   DexType* reuse_last_outlined_class() {
-    if (!m_outlined_cls || m_outlined_cls->get_dmethods().size() >=
-                               m_config.max_outlined_methods_per_class) {
+    if ((m_outlined_cls == nullptr) ||
+        m_outlined_cls->get_dmethods().size() >=
+            m_config.max_outlined_methods_per_class) {
       return nullptr;
     }
     return m_outlined_cls->get_type();
@@ -2182,7 +2185,7 @@ class HostClassSelector {
 
   // Create type that will represent next outlined helper class
   DexType* peek_at_next_outlined_class() {
-    auto name = DexString::make_string(
+    const auto* name = DexString::make_string(
         std::string(OUTLINED_CLASS_NAME_PREFIX) + std::to_string(m_iteration) +
         "$" + std::to_string(m_dex_state.get_dex_id()) + "$" +
         std::to_string(m_outlined_classes) + ";");
@@ -2192,7 +2195,7 @@ class HostClassSelector {
   // Create a new helper class into which we can place outlined methods.
   void create_next_outlined_class() {
     always_assert(reuse_last_outlined_class() == nullptr);
-    auto outlined_type = peek_at_next_outlined_class();
+    auto* outlined_type = peek_at_next_outlined_class();
     m_outlined_classes++;
     ClassCreator cc(outlined_type);
     cc.set_access(ACC_PUBLIC | ACC_FINAL);
@@ -2212,9 +2215,9 @@ class HostClassSelector {
           [](const DexType*) { return true; }) {
     // When there's only one type, try to use that
     if (types.size() == 1) {
-      auto direct_type = *unordered_any(types);
+      const auto* direct_type = *unordered_any(types);
       if (m_dex_state.get_class_id(direct_type) && predicate(direct_type)) {
-        auto direct_cls = type_class(direct_type);
+        auto* direct_cls = type_class(direct_type);
         always_assert(direct_cls);
         if (can_rename(direct_cls) && can_delete(direct_cls)) {
           return direct_type;
@@ -2226,13 +2229,13 @@ class HostClassSelector {
     const DexType* host_class{nullptr};
     boost::optional<size_t> host_class_id;
     auto super_classes = get_super_classes(types);
-    for (auto type : UnorderedIterable(super_classes)) {
+    for (const auto* type : UnorderedIterable(super_classes)) {
       auto class_id = m_dex_state.get_class_id(type);
       if (!class_id || !predicate(type)) {
         continue;
       }
-      auto cls = type_class(type);
-      if (!cls || !can_rename(cls) || !can_delete(cls)) {
+      auto* cls = type_class(type);
+      if ((cls == nullptr) || !can_rename(cls) || !can_delete(cls)) {
         continue;
       }
       // In particular, use the base type that appears first in this dex.
@@ -2258,28 +2261,28 @@ class HostClassSelector {
       // Before Android 7, invoking static methods defined in interfaces was
       // not supported. See rule A24 in
       // https://source.android.com/devices/tech/dalvik/constraints
-      return min_sdk >= 24 || (cls && !is_interface(cls));
+      return min_sdk >= 24 || ((cls != nullptr) && !is_interface(cls));
     };
 
     // Whether this type will not trigger a clinit
     auto no_clinit = [](const DexType* type) {
       while (true) {
-        auto cls = type_class(type);
-        if (!cls || cls->is_external()) {
+        auto* cls = type_class(type);
+        if ((cls == nullptr) || cls->is_external()) {
           // We stop at external classes
           return true;
         }
-        if (cls->get_clinit()) {
+        if (cls->get_clinit() != nullptr) {
           return false;
         }
         type = cls->get_super_class();
       }
     };
 
-    auto host_class =
+    const auto* host_class =
         get_direct_or_base_class(declaring_types, get_common_super_classes);
     if (declaring_types.size() == 1) {
-      auto direct_type = *unordered_any(declaring_types);
+      const auto* direct_type = *unordered_any(declaring_types);
       if (host_class == direct_type && can_be_host_class(host_class)) {
         m_hosted_direct_count++;
         return host_class;
@@ -2293,7 +2296,7 @@ class HostClassSelector {
     }
     always_assert(!has_non_init_invoke_directs(c));
 
-    if (host_class && can_be_host_class(host_class)) {
+    if ((host_class != nullptr) && can_be_host_class(host_class)) {
       m_hosted_base_count++;
       return host_class;
     }
@@ -2305,7 +2308,7 @@ class HostClassSelector {
     // Let's see if we can reduce the set to a most specific sub-type
     if (referenced_types.size() > 1) {
       auto common_super_classes = get_common_super_classes(referenced_types);
-      for (auto t : UnorderedIterable(common_super_classes)) {
+      for (const auto* t : UnorderedIterable(common_super_classes)) {
         referenced_types.erase(t);
       }
     }
@@ -2314,7 +2317,7 @@ class HostClassSelector {
         [&can_be_host_class, no_clinit](const DexType* type) {
           return can_be_host_class(type) && no_clinit(type);
         });
-    if (host_class) {
+    if (host_class != nullptr) {
       m_hosted_at_refs_count++;
       return host_class;
     }
@@ -2344,16 +2347,16 @@ bool outline_candidate(const Config& config,
   // referenced in this dex before, we'll make sure that all the involved
   // type refs can be added to the dex. We collect those type refs.
   UnorderedSet<const DexType*> type_refs_to_insert;
-  for (auto t : c.arg_types) {
+  for (const auto* t : c.arg_types) {
     type_refs_to_insert.insert(const_cast<DexType*>(t));
   }
-  auto rtype = c.res_type ? c.res_type : type::_void();
+  const auto* rtype = c.res_type != nullptr ? c.res_type : type::_void();
   type_refs_to_insert.insert(const_cast<DexType*>(rtype));
 
   DexMethod* outlined_method{
       find_reusable_method(store, store_dependencies, c, ci, *outlined_methods,
                            reuse_outlined_methods_across_dexes)};
-  if (outlined_method) {
+  if (outlined_method != nullptr) {
     type_refs_to_insert.insert(outlined_method->get_class());
     if (!dex_state->can_insert_type_refs(type_refs_to_insert)) {
       return false;
@@ -2375,7 +2378,7 @@ bool outline_candidate(const Config& config,
           SHOW(outlined_method));
   } else {
     bool not_outlinable;
-    auto host_class =
+    const auto* host_class =
         host_class_selector->get_direct_or_base_class(c, ci, &not_outlinable);
     if (not_outlinable) {
       return false;
@@ -2402,17 +2405,17 @@ bool outline_candidate(const Config& config,
     outlined_methods->map[c].push_back(
         {store, outlined_method, position_pattern_ids});
     auto& methods = (*newly_outlined_methods)[outlined_method];
-    for (auto& p : UnorderedIterable(ci.methods)) {
+    for (const auto& p : UnorderedIterable(ci.methods)) {
       methods.push_back(p.first);
     }
   }
 
   DexClass* outlined_method_host_cls = type_class(outlined_method->get_class());
   dex_state->insert_type_refs(type_refs_to_insert);
-  auto call_site_pattern_ids =
+  auto* call_site_pattern_ids =
       outlined_method_creator->get_call_site_pattern_ids();
-  for (auto& p : UnorderedIterable(ci.methods)) {
-    auto method = p.first;
+  for (const auto& p : UnorderedIterable(ci.methods)) {
+    auto* method = p.first;
     // If any outlined method comes from BETAMAP class, its host class should
     // also marked as BETAMAP_ORDERED.
     if (outlined_method_host_cls->get_perf_sensitive() !=
@@ -2428,7 +2431,7 @@ bool outline_candidate(const Config& config,
 
     TRACE(ISO, 7, "[invoke sequence outliner] before outlined %s from %s\n%s",
           SHOW(outlined_method), SHOW(method), SHOW(cfg));
-    for (auto& cml : p.second) {
+    for (const auto& cml : p.second) {
       rewrite_at_location(outlined_method, call_site_pattern_ids, method, cfg,
                           c, cml);
     }
@@ -2531,7 +2534,7 @@ static NewlyOutlinedMethods outline(
     // Remove overlapping occurrences
     UnorderedSet<CandidateId> other_candidate_ids_with_changes;
     for (auto& p : UnorderedIterable(cwi.info.methods)) {
-      auto method = p.first;
+      auto* method = p.first;
       auto& cmls = p.second;
       for (auto other_id :
            UnorderedIterable(candidate_ids_by_methods->at(method))) {
@@ -2586,7 +2589,7 @@ static NewlyOutlinedMethods outline(
 size_t count_affected_methods(
     const NewlyOutlinedMethods& newly_outlined_methods) {
   UnorderedSet<DexMethod*> methods;
-  for (auto& p : UnorderedIterable(newly_outlined_methods)) {
+  for (const auto& p : UnorderedIterable(newly_outlined_methods)) {
     methods.insert(p.second.begin(), p.second.end());
   }
   return methods.size();
@@ -2615,14 +2618,14 @@ UnorderedMap<const DexMethodRef*, double> get_methods_global_order(
   // Make sure that the "ColdStart" interaction comes before everything else
   register_interaction("ColdStart");
   UnorderedMap<const DexMethodRef*, double> methods_global_order;
-  for (auto& p : method_profiles.all_interactions()) {
-    auto& interaction_id = p.first;
-    auto& method_stats = p.second;
+  for (const auto& p : method_profiles.all_interactions()) {
+    const auto& interaction_id = p.first;
+    const auto& method_stats = p.second;
     auto index = register_interaction(interaction_id);
     TRACE(ISO, 3,
           "[instruction sequence outliner] Interaction [%s] gets index %zu",
           interaction_id.c_str(), index);
-    for (auto& q : UnorderedIterable(method_stats)) {
+    for (const auto& q : UnorderedIterable(method_stats)) {
       auto& global_order = methods_global_order[q.first];
       global_order =
           std::min(global_order, index * 100 + q.second.order_percent);
@@ -2639,7 +2642,7 @@ UnorderedMap<const DexMethodRef*, double> get_methods_global_order(
       });
   TRACE(ISO, 4, "[instruction sequence outliner] %zu globally ordered methods",
         ordered_methods.size());
-  for (auto method : ordered_methods) {
+  for (const auto* method : ordered_methods) {
     TRACE(ISO, 5, "[instruction sequence outliner] [%f] %s",
           methods_global_order.at(method), SHOW(method));
   }
@@ -2659,14 +2662,14 @@ void reorder_with_method_profiles(
   UnorderedMap<const DexMethod*, double> outlined_methods_global_order;
   std::vector<DexMethod*> ordered_outlined_methods;
   UnorderedSet<DexClass*> outlined_classes;
-  for (auto& p : UnorderedIterable(newly_outlined_methods)) {
-    auto cls = type_class(p.first->get_class());
+  for (const auto& p : UnorderedIterable(newly_outlined_methods)) {
+    auto* cls = type_class(p.first->get_class());
     if (!cls->rstate.outlined()) {
       continue;
     }
     outlined_classes.insert(cls);
     auto min_order = std::numeric_limits<double>::infinity();
-    for (auto method : p.second) {
+    for (auto* method : p.second) {
       auto it = methods_global_order.find(method);
       if (it != methods_global_order.end()) {
         min_order = std::min(min_order, it->second);
@@ -2676,8 +2679,8 @@ void reorder_with_method_profiles(
     ordered_outlined_methods.push_back(p.first);
   }
   std::vector<DexClass*> ordered_outlined_classes;
-  for (auto cls : dex) {
-    if (outlined_classes.count(cls)) {
+  for (auto* cls : dex) {
+    if (outlined_classes.count(cls) != 0u) {
       ordered_outlined_classes.push_back(cls);
       TRACE(ISO, 5,
             "[instruction sequence outliner] Found outlined class %s with %zu "
@@ -2711,7 +2714,7 @@ void reorder_with_method_profiles(
   TRACE(ISO, 4,
         "[instruction sequence outliner] %zu globally ordered outlined methods",
         ordered_outlined_methods.size());
-  for (auto method : ordered_outlined_methods) {
+  for (auto* method : ordered_outlined_methods) {
     TRACE(ISO, 5, "[instruction sequence outliner] [%f] %s",
           outlined_methods_global_order.at(method), SHOW(method));
   }
@@ -2722,7 +2725,7 @@ void reorder_with_method_profiles(
     if (methods_count == 0) {
       return;
     }
-    auto cls = ordered_outlined_classes.at(class_index);
+    auto* cls = ordered_outlined_classes.at(class_index);
     TRACE(ISO, 4,
           "[instruction sequence outliner] Finished outlined class %s with "
           "%zu methods",
@@ -2730,8 +2733,8 @@ void reorder_with_method_profiles(
     class_index++;
     methods_count = 0;
   };
-  for (auto method : ordered_outlined_methods) {
-    auto target_class = ordered_outlined_classes.at(class_index);
+  for (auto* method : ordered_outlined_methods) {
+    auto* target_class = ordered_outlined_classes.at(class_index);
     if (method->get_class() != target_class->get_type()) {
       TRACE(ISO, 4,
             "[instruction sequence outliner] Relocating outlined method %s "
@@ -2780,9 +2783,9 @@ void reorder_all_methods(
     PassManager& mgr,
     const UnorderedMap<const DexMethodRef*, double>& methods_global_order,
     const OutlinedMethodsToReorder& outlined_methods_to_reorder) {
-  for (auto& dex_methods_pair : outlined_methods_to_reorder) {
-    auto& dex = dex_methods_pair.first;
-    auto& outlined_methods = dex_methods_pair.second;
+  for (const auto& dex_methods_pair : outlined_methods_to_reorder) {
+    const auto& dex = dex_methods_pair.first;
+    const auto& outlined_methods = dex_methods_pair.second;
     reorder_with_method_profiles(config, mgr, *dex, methods_global_order,
                                  outlined_methods);
   }
@@ -2796,8 +2799,8 @@ size_t derive_method_profiles_stats(
     const OutlinedMethodsToReorder& outlined_methods_by_dex) {
   auto& method_profiles = config.get_method_profiles();
   size_t res = 0;
-  for (auto& [dex, outlined_methods] : outlined_methods_by_dex) {
-    for (auto& [target, sources] : UnorderedIterable(outlined_methods)) {
+  for (const auto& [dex, outlined_methods] : outlined_methods_by_dex) {
+    for (const auto& [target, sources] : UnorderedIterable(outlined_methods)) {
       res += method_profiles.derive_stats(target, sources);
     }
   }
@@ -2841,12 +2844,12 @@ class OutlinedMethodBodySetter {
       DexMethod* outlined_method,
       const Candidate& c,
       const std::set<uint32_t>& current_pattern_ids) {
-    auto manager = g_redex->get_position_pattern_switch_manager();
+    auto* manager = g_redex->get_position_pattern_switch_manager();
     std::map<uint32_t, const PositionPattern*> current_patterns;
     bool any_positions = false;
     const auto& all_managed_patterns = manager->get_patterns();
     for (auto pattern_id : current_pattern_ids) {
-      auto pattern = &all_managed_patterns.at(pattern_id);
+      const auto* pattern = &all_managed_patterns.at(pattern_id);
       current_patterns.emplace(pattern_id, pattern);
       if (!pattern->empty()) {
         any_positions = true;
@@ -2868,11 +2871,11 @@ class OutlinedMethodBodySetter {
         return it->second;
       }
       auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
-      if (dbg_pos->parent) {
+      if (dbg_pos->parent != nullptr) {
         cloned_dbg_pos->parent =
             get_or_add_cloned_dbg_position(dbg_pos->parent);
       }
-      auto cloned_dbg_pos_ptr = cloned_dbg_pos.get();
+      auto* cloned_dbg_pos_ptr = cloned_dbg_pos.get();
       code->push_back(std::move(cloned_dbg_pos));
       m_outlined_method_positions++;
       cloned_dbg_positions.emplace(dbg_pos, cloned_dbg_pos_ptr);
@@ -2887,7 +2890,7 @@ class OutlinedMethodBodySetter {
       for (auto& p : current_patterns) {
         last_dbg_poses.emplace(p.first, nullptr);
       }
-      for (auto& ci : cn.insns) {
+      for (const auto& ci : cn.insns) {
         if (!opcode::is_a_move_result_pseudo(ci.core.opcode) && any_positions) {
           PositionSwitch position_switch;
           bool any_changed = false;
@@ -2917,12 +2920,12 @@ class OutlinedMethodBodySetter {
         dbg_positions_idx++;
         if (m_config.debug_make_crashing &&
             opcode::is_an_iget(ci.core.opcode)) {
-          auto const_insn = new IRInstruction(OPCODE_CONST);
+          auto* const_insn = new IRInstruction(OPCODE_CONST);
           const_insn->set_literal(0);
           const_insn->set_dest(ci.srcs.at(0));
           code->push_back(const_insn);
         }
-        auto insn = new IRInstruction(ci.core.opcode);
+        auto* insn = new IRInstruction(ci.core.opcode);
         insn->set_srcs(ci.srcs);
         if (ci.dest) {
           insn->set_dest(*ci.dest);
@@ -2949,17 +2952,17 @@ class OutlinedMethodBodySetter {
               type::is_object(c.res_type)      ? OPCODE_RETURN_OBJECT
               : type::is_wide_type(c.res_type) ? OPCODE_RETURN_WIDE
                                                : OPCODE_RETURN;
-          auto ret_insn = new IRInstruction(ret_opcode);
+          auto* ret_insn = new IRInstruction(ret_opcode);
           ret_insn->set_src(0, *cn.res_reg);
           code->push_back(ret_insn);
         } else {
-          auto ret_insn = new IRInstruction(OPCODE_RETURN_VOID);
+          auto* ret_insn = new IRInstruction(OPCODE_RETURN_VOID);
           code->push_back(ret_insn);
         }
       } else {
         auto& last_mie = *code->rbegin();
-        for (auto& p : cn.succs) {
-          auto& e = p.first;
+        for (const auto& p : cn.succs) {
+          const auto& e = p.first;
           if (e.type == cfg::EDGE_GOTO) {
             always_assert(e == cn.succs.front().first);
             code->push_back(); // MFLOW_FALLTHROUGH
@@ -3027,17 +3030,17 @@ size_t update_method_profiles(
                std::vector<dex_member_refs::MethodDescriptorTokens>>
       unresolved_names;
   auto mdts = method_profiles.get_unresolved_method_descriptor_tokens();
-  for (auto& mdt : UnorderedIterable(mdts)) {
+  for (const auto& mdt : UnorderedIterable(mdts)) {
     unresolved_names[mdt.name].push_back(mdt);
   }
   UnorderedMap<dex_member_refs::MethodDescriptorTokens,
                std::vector<DexMethodRef*>>
       map;
   size_t count{0};
-  for (auto& [dex, outlined_methods] : outlined_methods_to_reorder) {
+  for (const auto& [dex, outlined_methods] : outlined_methods_to_reorder) {
     for (auto&& [outlined_method, methods] :
          UnorderedIterable(outlined_methods)) {
-      auto name = outlined_method->get_name();
+      const auto* name = outlined_method->get_name();
       auto it = unresolved_names.find(name->str());
       if (it == unresolved_names.end()) {
         continue;
@@ -3062,10 +3065,10 @@ std::vector<DexStore*> get_stores(DexStoresVector& stores,
     res.emplace_back(&store);
   }
   std::sort(res.begin(), res.end(), [&xstores](DexStore* s, DexStore* t) {
-    if (xstores.get_transitive_resolved_dependencies(t).count(s)) {
+    if (xstores.get_transitive_resolved_dependencies(t).count(s) != 0u) {
       return true;
     }
-    if (xstores.get_transitive_resolved_dependencies(s).count(t)) {
+    if (xstores.get_transitive_resolved_dependencies(s).count(t) != 0u) {
       return false;
     }
     return s->get_name() < t->get_name();

@@ -64,9 +64,9 @@ class ProguardMatcherTest : public RedexTest {
   static DexClass* create_class(
       const std::string& name,
       std::optional<std::string> super_klass = std::nullopt) {
-    auto existing_type = DexType::get_type(name);
+    auto* existing_type = DexType::get_type(name);
     if (existing_type != nullptr) {
-      auto existing_class = type_class(existing_type);
+      auto* existing_class = type_class(existing_type);
       if (existing_class != nullptr) {
         return existing_class;
       }

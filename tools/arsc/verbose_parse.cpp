@@ -34,7 +34,7 @@ void run(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  if (vm.count("help")) {
+  if (vm.count("help") != 0u) {
     std::cout << desc << "\n";
     exit(EXIT_SUCCESS);
   }
@@ -47,7 +47,7 @@ void run(int argc, char** argv) {
 
   bool success{false};
   auto mode = (std::ios_base::openmode)(std::ios_base::in);
-  if (arsc_count) {
+  if (arsc_count != 0u) {
     auto arsc_path = vm["arsc"].as<std::string>();
     auto map = std::make_unique<boost::iostreams::mapped_file>();
     map->open(arsc_path, mode);

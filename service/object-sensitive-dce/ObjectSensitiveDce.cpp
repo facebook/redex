@@ -60,15 +60,15 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
 
   bool is_pure(IRInstruction* insn) const {
     // This is what LocalDce does.
-    auto ref = insn->get_method();
-    const auto meth = resolve_method(ref, opcode_to_search(insn));
+    auto* ref = insn->get_method();
+    auto* const meth = resolve_method(ref, opcode_to_search(insn));
     if (meth == nullptr) {
       return false;
     }
     if (::assumenosideeffects(meth)) {
       return true;
     }
-    return m_pure_methods.count(ref);
+    return m_pure_methods.count(ref) != 0u;
   }
 
   call_graph::CallSites get_callsites(const DexMethod* method) const override {
@@ -79,11 +79,11 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
     }
     always_assert(code->editable_cfg_built());
     for (auto& mie : InstructionIterable(code->cfg())) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
-      auto callee = resolve_invoke_method(insn, method);
+      auto* callee = resolve_invoke_method(insn, method);
       if (callee == nullptr) {
         if (ptrs::is_array_clone(insn->get_method())) {
           // We'll synthesize appropriate summaries for array clone methods on
@@ -110,13 +110,13 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
 
       if (is_definitely_virtual(callee) &&
           insn->opcode() != OPCODE_INVOKE_SUPER) {
-        if (m_root_and_dynamic.dynamic_methods.count(callee)) {
+        if (m_root_and_dynamic.dynamic_methods.count(callee) != 0u) {
           continue;
         }
 
         // For true virtual callees, add the callee itself and all of its
         // overrides if they are not in big virtuals.
-        if (m_big_virtuals.count_unsafe(callee)) {
+        if (m_big_virtuals.count_unsafe(callee) != 0u) {
           continue;
         }
         const auto& overriding_methods =
@@ -126,10 +126,10 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
                         [](auto* method) { return is_native(method); })) {
           continue;
         }
-        if (callee->get_code()) {
+        if (callee->get_code() != nullptr) {
           callsites.emplace_back(callee, insn);
         }
-        for (auto overriding_method : overriding_methods) {
+        for (const auto* overriding_method : overriding_methods) {
           callsites.emplace_back(overriding_method, insn);
         }
       } else if (callee->is_concrete() && !is_native(callee)) {
@@ -151,7 +151,8 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
 
  private:
   bool has_summaries(DexMethod* method) const {
-    if (m_escape_summaries.count(method) && m_effect_summaries.count(method)) {
+    if ((m_escape_summaries.count(method) != 0u) &&
+        (m_effect_summaries.count(method) != 0u)) {
       return true;
     }
     return method == method::java_lang_Object_ctor();
@@ -203,7 +204,7 @@ void ObjectSensitiveDce::dce() {
         build_summary_map(*m_effect_summaries, call_graph, method);
     UnorderedMap<uint32_t, size_t> local_invokes_with_summaries;
     for (auto&& [insn, summary] : UnorderedIterable(summary_map)) {
-      if (!summary.effects) {
+      if (summary.effects == 0u) {
         local_invokes_with_summaries[insn->opcode()]++;
       }
     }
@@ -223,10 +224,10 @@ void ObjectSensitiveDce::dce() {
       // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log |
       // grep " L.*$" -Po | sort | uniq -c
       TRACE(OSDCE, 3, "DEAD: %s", SHOW(dead->insn));
-      auto init_class_insn =
+      auto* init_class_insn =
           m_init_classes_with_side_effects->create_init_class_insn(
               get_init_class_type_demand(dead->insn));
-      if (init_class_insn) {
+      if (init_class_insn != nullptr) {
         mutator.replace(dead, {init_class_insn});
         local_init_class_instructions_added++;
       } else {
@@ -261,7 +262,7 @@ void ObjectSensitiveDce::dce() {
   m_stats.init_class_instructions_added = init_class_instructions_added;
   m_stats.init_class_stats = init_class_stats;
   for (auto&& [_, summary] : UnorderedIterable(*m_effect_summaries)) {
-    if (!summary.effects) {
+    if (summary.effects == 0u) {
       m_stats.methods_with_summaries++;
     }
     m_stats.modified_params += summary.modified_params.size();

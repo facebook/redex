@@ -62,9 +62,9 @@ bool FixpointIterator::is_eligible_init(const DexMethodRef* method) const {
  * Check if it is a method of the form StringBuilder.append(<immutable>).
  */
 bool FixpointIterator::is_eligible_append(const DexMethodRef* method) const {
-  auto type_list = method->get_proto()->get_args();
+  auto* type_list = method->get_proto()->get_args();
   return method->get_name() == m_append_str && type_list->size() == 1 &&
-         m_immutable_types.count(type_list->at(0));
+         (m_immutable_types.count(type_list->at(0)) != 0u);
 }
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
@@ -76,7 +76,7 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   auto op = insn->opcode();
   if (opcode::is_an_invoke(op) &&
       insn->get_method()->get_class() == m_stringbuilder) {
-    auto method = insn->get_method();
+    auto* method = insn->get_method();
     if (method == m_stringbuilder_init_with_string ||
         is_eligible_append(method)) {
       env->update_store(
@@ -148,7 +148,7 @@ BuilderStateMap Outliner::gather_builder_states(
     auto env = fp_iter.get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
-      if (tostring_instructions.count(insn)) {
+      if (tostring_instructions.count(insn) != 0u) {
         const auto& pointers = env.get_pointers(insn->src(0));
         if (!pointers.is_value() || pointers.elements().size() != 1) {
           TRACE(STRBUILD, 5, "Did not get single pointer for %s", SHOW(insn));
@@ -176,8 +176,8 @@ BuilderStateMap Outliner::gather_builder_states(
 const DexTypeList* Outliner::typelist_from_state(
     const BuilderState& state) const {
   DexTypeList::ContainerType args;
-  for (auto* insn : state) {
-    auto method = insn->get_method();
+  for (const auto* insn : state) {
+    auto* method = insn->get_method();
     args.emplace_back(method->get_proto()->get_args()->at(0));
   }
   return DexTypeList::make_type_list(std::move(args));
@@ -187,7 +187,7 @@ void Outliner::gather_outline_candidate_typelists(
     const BuilderStateMap& tostring_instruction_to_state) {
   for (const auto& p : tostring_instruction_to_state) {
     const auto& state = p.second;
-    auto typelist = typelist_from_state(state);
+    const auto* typelist = typelist_from_state(state);
     m_outline_typelists.fetch_add(typelist, 1);
   }
 }
@@ -221,10 +221,10 @@ void Outliner::analyze(IRCode& code) {
  * significantly increase register pressure in the caller.
  */
 void Outliner::create_outline_helpers(DexStoresVector* stores) {
-  auto outline_helper_cls =
+  auto* outline_helper_cls =
       DexType::make_type("Lcom/redex/OutlinedStringBuilders;");
-  auto concat_str = DexString::make_string("concat");
-  auto string_ty = DexType::make_type("Ljava/lang/String;");
+  const auto* concat_str = DexString::make_string("concat");
+  auto* string_ty = DexType::make_type("Ljava/lang/String;");
 
   ClassCreator cc(outline_helper_cls);
   cc.set_super(type::java_lang_Object());
@@ -249,7 +249,7 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
     }
     m_stats.helper_methods_created += 1;
 
-    auto helper =
+    auto* helper =
         DexMethod::make_method(outline_helper_cls, concat_str,
                                DexProto::make_proto(string_ty, typelist))
             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -282,7 +282,7 @@ std::unique_ptr<IRCode> Outliner::create_outline_helper_code(
     DexMethod* method) const {
   using namespace dex_asm;
 
-  auto typelist = method->get_proto()->get_args();
+  auto* typelist = method->get_proto()->get_args();
   auto code = std::make_unique<IRCode>(method, 1);
   code->push_back(dasm(OPCODE_NEW_INSTANCE, m_stringbuilder));
   code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
@@ -291,9 +291,9 @@ std::unique_ptr<IRCode> Outliner::create_outline_helper_code(
   auto param_insns_it =
       InstructionIterable(code->get_param_instructions()).begin();
   for (size_t i = 0; i < typelist->size(); ++i, ++param_insns_it) {
-    auto ty = typelist->at(i);
+    auto* ty = typelist->at(i);
     auto reg = param_insns_it->insn->dest();
-    auto append_method = DexMethod::get_method(
+    auto* append_method = DexMethod::get_method(
         m_stringbuilder, m_append_str,
         DexProto::make_proto(m_stringbuilder,
                              DexTypeList::make_type_list({ty})));
@@ -373,25 +373,26 @@ void Outliner::transform(IRCode* code) {
       continue;
     }
     auto* outline_helper = m_outline_helpers.at(typelist);
-    auto invoke_outlined = new IRInstruction(invoke_for_method(outline_helper));
+    auto* invoke_outlined =
+        new IRInstruction(invoke_for_method(outline_helper));
     invoke_outlined->set_method(outline_helper);
     invoke_outlined->set_srcs_size(typelist->size());
 
     size_t idx{0};
-    for (auto* insn : state) {
+    for (const auto* insn : state) {
       reg_t reg;
-      if (insns_to_insert.count(insn)) {
+      if (insns_to_insert.count(insn) != 0u) {
         // An instruction can occur in more than one BuilderState if the
         // corresponding StringBuilder instance is used in both sides of a
         // conditional branch.
         reg = insns_to_insert.at(insn)->dest();
       } else {
-        auto ty = insn->get_method()->get_proto()->get_args()->at(0);
+        auto* ty = insn->get_method()->get_proto()->get_args()->at(0);
         reg = type::is_wide_type(ty) ? cfg.allocate_wide_temp()
                                      : cfg.allocate_temp();
-        auto move = (new IRInstruction(move_for_type(ty)))
-                        ->set_src(0, insn->src(1))
-                        ->set_dest(reg);
+        auto* move = (new IRInstruction(move_for_type(ty)))
+                         ->set_src(0, insn->src(1))
+                         ->set_dest(reg);
         insns_to_insert.emplace(insn, move);
       }
 
@@ -422,10 +423,10 @@ void Outliner::apply_changes(
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
       auto it = block->to_cfg_instruction_iterator(mie);
-      if (insns_to_insert.count(mie.insn)) {
+      if (insns_to_insert.count(mie.insn) != 0u) {
         to_insert.emplace_back(it, insns_to_insert.at(insn));
       }
-      if (insns_to_replace.count(insn)) {
+      if (insns_to_replace.count(insn) != 0u) {
         to_replace.emplace_back(it, insns_to_replace.at(insn));
       }
     }

@@ -1094,13 +1094,13 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
   /* StringRef: */
   case DOPCODE_CONST_STRING: {
     uint16_t sidx = *insns++;
-    auto str = idx->get_stringidx(sidx);
+    const auto* str = idx->get_stringidx(sidx);
     return new DexOpcodeString(fopcode, str);
   }
   case DOPCODE_CONST_STRING_JUMBO: {
     uint32_t sidx = *insns++;
     sidx |= (*insns++) << 16;
-    auto str = idx->get_stringidx(sidx);
+    const auto* str = idx->get_stringidx(sidx);
     return new DexOpcodeString(fopcode, str);
   }
   case DOPCODE_CONST_CLASS:
@@ -1218,38 +1218,38 @@ bool DexInstruction::operator==(const DexInstruction& that) const {
   case REF_NONE:
     return true;
   case REF_STRING: {
-    auto this_ = static_cast<const DexOpcodeString*>(this);
-    auto that_ = static_cast<const DexOpcodeString*>(&that);
+    const auto* this_ = static_cast<const DexOpcodeString*>(this);
+    const auto* that_ = static_cast<const DexOpcodeString*>(&that);
     return this_->get_string() == that_->get_string();
   }
   case REF_TYPE: {
-    auto this_ = static_cast<const DexOpcodeType*>(this);
-    auto that_ = static_cast<const DexOpcodeType*>(&that);
+    const auto* this_ = static_cast<const DexOpcodeType*>(this);
+    const auto* that_ = static_cast<const DexOpcodeType*>(&that);
     return this_->get_type() == that_->get_type();
   }
   case REF_FIELD: {
-    auto this_ = static_cast<const DexOpcodeField*>(this);
-    auto that_ = static_cast<const DexOpcodeField*>(&that);
+    const auto* this_ = static_cast<const DexOpcodeField*>(this);
+    const auto* that_ = static_cast<const DexOpcodeField*>(&that);
     return this_->get_field() == that_->get_field();
   }
   case REF_METHOD: {
-    auto this_ = static_cast<const DexOpcodeMethod*>(this);
-    auto that_ = static_cast<const DexOpcodeMethod*>(&that);
+    const auto* this_ = static_cast<const DexOpcodeMethod*>(this);
+    const auto* that_ = static_cast<const DexOpcodeMethod*>(&that);
     return this_->get_method() == that_->get_method();
   }
   case REF_CALLSITE: {
-    auto this_ = static_cast<const DexOpcodeCallSite*>(this);
-    auto that_ = static_cast<const DexOpcodeCallSite*>(&that);
+    const auto* this_ = static_cast<const DexOpcodeCallSite*>(this);
+    const auto* that_ = static_cast<const DexOpcodeCallSite*>(&that);
     return this_->get_callsite() == that_->get_callsite();
   }
   case REF_METHODHANDLE: {
-    auto this_ = static_cast<const DexOpcodeMethodHandle*>(this);
-    auto that_ = static_cast<const DexOpcodeMethodHandle*>(&that);
+    const auto* this_ = static_cast<const DexOpcodeMethodHandle*>(this);
+    const auto* that_ = static_cast<const DexOpcodeMethodHandle*>(&that);
     return this_->get_methodhandle() == that_->get_methodhandle();
   }
   case REF_PROTO: {
-    auto this_ = static_cast<const DexOpcodeProto*>(this);
-    auto that_ = static_cast<const DexOpcodeProto*>(&that);
+    const auto* this_ = static_cast<const DexOpcodeProto*>(this);
+    const auto* that_ = static_cast<const DexOpcodeProto*>(&that);
     return this_->get_proto() == that_->get_proto();
   }
   }

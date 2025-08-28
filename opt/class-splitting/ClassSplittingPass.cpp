@@ -73,8 +73,8 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
   UnorderedSet<DexMethod*> insufficiently_popular_methods;
 
   Scope scope = build_class_scope(stores);
-  for (auto& p : method_profiles.all_interactions()) {
-    auto& method_stats = p.second;
+  for (const auto& p : method_profiles.all_interactions()) {
+    const auto& method_stats = p.second;
     walk::methods(scope, [&](DexMethod* method) {
       auto it = method_stats.find(method);
       if (it == method_stats.end()) {
@@ -96,7 +96,7 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
   std::vector<std::string> previously_relocated_types;
   for (const auto& str : conf.get_coldstart_classes()) {
     DexType* type = DexType::get_type(str);
-    if (type) {
+    if (type != nullptr) {
       coldstart_types.insert(type);
     } else if (boost::algorithm::ends_with(
                    str, CLASS_SPLITTING_RELOCATED_SUFFIX_SEMI)) {
@@ -142,8 +142,8 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
   // classes in there anyway.
   for (size_t dex_nr = 1; dex_nr < dexen.size(); dex_nr++) {
     auto& dex = dexen.at(dex_nr);
-    for (auto cls : dex) {
-      if (!coldstart_types.count(cls->get_type()) &&
+    for (auto* cls : dex) {
+      if ((coldstart_types.count(cls->get_type()) == 0u) &&
           !cls->rstate.has_interdex_subgroup()) {
         continue;
       }

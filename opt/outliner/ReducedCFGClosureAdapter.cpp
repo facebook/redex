@@ -59,9 +59,9 @@ void ReducedCFGClosureAdapter::gather_type_demands(
     if (!visited.insert(def).second) {
       continue;
     }
-    for (auto& use : UnorderedIterable((*m_def_uses)[def])) {
+    for (const auto& use : UnorderedIterable((*m_def_uses)[def])) {
       const auto* reduced_component = m_insns->at(use.insn);
-      if (!m_reduced_components.count(reduced_component)) {
+      if (m_reduced_components.count(reduced_component) == 0u) {
         continue;
       }
       if (opcode::is_a_move(use.insn->opcode())) {
@@ -81,7 +81,8 @@ void ReducedCFGClosureAdapter::gather_type_demands(
 }
 
 bool ReducedCFGClosureAdapter::contains(IRInstruction* insn) const {
-  return m_first_insn == insn || m_reduced_components.count(m_insns->at(insn));
+  return m_first_insn == insn ||
+         (m_reduced_components.count(m_insns->at(insn)) != 0u);
 }
 
 } // namespace outliner_impl

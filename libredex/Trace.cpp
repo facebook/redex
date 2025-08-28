@@ -42,7 +42,7 @@ struct Tracer {
     const char* show_timestamps = getenv("SHOW_TIMESTAMPS");
     const char* show_tracemodule = getenv("SHOW_TRACEMODULE");
     m_method_filter = getenv("TRACE_METHOD_FILTER");
-    if (!traceenv) {
+    if (traceenv == nullptr) {
       init_trace_file(nullptr);
       return;
     }
@@ -63,10 +63,10 @@ struct Tracer {
     init_trace_modules(traceenv);
     init_trace_file(envfile);
 
-    if (show_timestamps) {
+    if (show_timestamps != nullptr) {
       m_show_timestamps = true;
     }
-    if (show_tracemodule) {
+    if (show_tracemodule != nullptr) {
       m_show_tracemodule = true;
     }
 
@@ -152,8 +152,8 @@ struct Tracer {
     for (const char* tok = strtok(tracespec, sep); tok != nullptr;
          tok = strtok(nullptr, sep)) {
       auto level = strtol(tok, nullptr, 10);
-      if (level) {
-        if (module) {
+      if (level != 0) {
+        if (module != nullptr) {
           if (module_id_map.count(module) == 0) {
             if (strcmp(module, "REDEX") == 0) {
               continue; // Ignore REDEX.
@@ -174,7 +174,7 @@ struct Tracer {
   }
 
   void init_trace_file(const char* envfile) {
-    if (!envfile) {
+    if (envfile == nullptr) {
       m_file = stderr;
       return;
     }
@@ -188,7 +188,7 @@ struct Tracer {
       // Not an integer file descriptor; real file name.
       m_file = fopen(envfile, "w");
     }
-    if (!m_file) {
+    if (m_file == nullptr) {
       fprintf(stderr, "Unable to open TRACEFILE, falling back to stderr\n");
       m_file = stderr;
     }

@@ -56,9 +56,9 @@ AnnoKill::AnnoKill(Scope& scope,
   // Load annotations that should not be deleted.
   TRACE(ANNO, 2, "Keep annotations count %zu", keep.size());
   for (const auto& anno_name : keep) {
-    auto anno_type = DexType::get_type(anno_name);
+    auto* anno_type = DexType::get_type(anno_name);
     TRACE(ANNO, 2, "Keep annotation type string %s", anno_name.c_str());
-    if (anno_type) {
+    if (anno_type != nullptr) {
       TRACE(ANNO, 2, "Keep annotation type %s", SHOW(anno_type));
       m_keep.insert(anno_type);
     } else {
@@ -70,7 +70,7 @@ AnnoKill::AnnoKill(Scope& scope,
   for (auto const& anno_name : kill) {
     DexType* anno = DexType::get_type(anno_name);
     TRACE(ANNO, 2, "Kill annotation type string %s", anno_name.c_str());
-    if (anno) {
+    if (anno != nullptr) {
       TRACE(ANNO, 2, "Kill anno: %s", SHOW(anno));
       m_kill.insert(anno);
     } else {
@@ -82,7 +82,7 @@ AnnoKill::AnnoKill(Scope& scope,
   for (auto const& anno_name : force_kill) {
     DexType* anno = DexType::get_type(anno_name);
     TRACE(ANNO, 2, "Force kill annotation type string %s", anno_name.c_str());
-    if (anno) {
+    if (anno != nullptr) {
       TRACE(ANNO, 2, "Force kill anno: %s", SHOW(anno));
       m_force_kill.insert(anno);
     } else {
@@ -94,7 +94,7 @@ AnnoKill::AnnoKill(Scope& scope,
   auto ch = build_type_hierarchy(m_scope);
   for (const auto& it : UnorderedIterable(class_hierarchy_keep_annos)) {
     auto* type = DexType::get_type(it.first);
-    auto* type_cls = type ? type_class(type) : nullptr;
+    auto* type_cls = type != nullptr ? type_class(type) : nullptr;
     if (type_cls == nullptr) {
       continue;
     }
@@ -102,15 +102,15 @@ AnnoKill::AnnoKill(Scope& scope,
     TypeSet type_refs;
     get_all_children_or_implementors(ch, m_scope, type_cls, type_refs);
     type_refs.insert(type_cls->get_type());
-    for (auto& anno : it.second) {
+    for (const auto& anno : it.second) {
       auto* anno_type = DexType::get_type(anno);
-      for (auto type_ref : type_refs) {
+      for (const auto* type_ref : type_refs) {
         m_anno_class_hierarchy_keep[type_ref].insert(anno_type);
       }
     }
   }
   for (const auto& it : UnorderedIterable(m_anno_class_hierarchy_keep)) {
-    for (auto type : UnorderedIterable(it.second)) {
+    for (const auto* type : UnorderedIterable(it.second)) {
       TRACE(ANNO,
             4,
             "anno_class_hier_keep: %s -> %s",
@@ -121,7 +121,7 @@ AnnoKill::AnnoKill(Scope& scope,
   // Populate anno keep map
   for (const auto& it : UnorderedIterable(annotated_keep_annos)) {
     auto* type = DexType::get_type(it.first);
-    for (auto& anno : it.second) {
+    for (const auto& anno : it.second) {
       auto* anno_type = DexType::get_type(anno);
       m_annotated_keep_annos[type].insert(anno_type);
     }
@@ -133,7 +133,7 @@ void gather_complete_referenced_annos(
     const AnnoKill::AnnoSet& initial_referenced_annos,
     DexType* type,
     AnnoKill::AnnoSet* result) {
-  auto cls = type_class(type);
+  auto* cls = type_class(type);
   if (cls == nullptr || !is_annotation(cls) || cls->is_external()) {
     return;
   }
@@ -148,7 +148,7 @@ void gather_complete_referenced_annos(
           SHOW(type));
   }
   auto process = [&](DexType* t) {
-    auto effective_type =
+    auto* effective_type =
         const_cast<DexType*>(type::get_element_type_if_array(t));
     gather_complete_referenced_annos(initial_referenced_annos, effective_type,
                                      result);
@@ -156,10 +156,10 @@ void gather_complete_referenced_annos(
   // gather_types too broad here (that will keep too much). Just check return
   // type of members of the annotation (arguments should be disallowed) and
   // static field types.
-  for (auto m : cls->get_all_methods()) {
+  for (auto* m : cls->get_all_methods()) {
     process(m->get_proto()->get_rtype());
   }
-  for (auto f : cls->get_sfields()) {
+  for (auto* f : cls->get_sfields()) {
     process(f->get_type());
   }
 }
@@ -172,7 +172,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
 
   // all used annotations
   auto annos_in_aset = [&](DexAnnotationSet* aset) {
-    if (!aset) {
+    if (aset == nullptr) {
       return;
     }
     for (const auto& anno : aset->get_annotations()) {
@@ -193,8 +193,8 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
   // all annotations in methods
   walk::methods(m_scope, [&](DexMethod* method) {
     annos_in_aset(method->get_anno_set());
-    auto param_annos = method->get_param_anno();
-    if (!param_annos) {
+    auto* param_annos = method->get_param_anno();
+    if (param_annos == nullptr) {
       return;
     }
     for (auto& pa : *param_annos) {
@@ -211,17 +211,17 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
   // annotation
   walk::fields(m_scope, [&](DexField* field) {
     // don't look at fields defined on the annotation itself
-    const auto field_cls_type = field->get_class();
+    auto* const field_cls_type = field->get_class();
     if (all_annos.count(field_cls_type) > 0) {
       return;
     }
 
-    const auto field_cls = type_class(field_cls_type);
+    auto* const field_cls = type_class(field_cls_type);
     if (field_cls != nullptr && is_annotation(field_cls)) {
       return;
     }
 
-    auto ftype = field->get_type();
+    auto* ftype = field->get_type();
     if (all_annos.count(ftype) > 0) {
       TRACE(ANNO,
             3,
@@ -237,12 +237,12 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
   // with that annotation
   walk::methods(m_scope, [&](DexMethod* meth) {
     // don't look at methods defined on the annotation itself
-    const auto meth_cls_type = meth->get_class();
+    auto* const meth_cls_type = meth->get_class();
     if (all_annos.count(meth_cls_type) > 0) {
       return;
     }
 
-    const auto meth_cls = type_class(meth_cls_type);
+    auto* const meth_cls = type_class(meth_cls_type);
     if (meth_cls != nullptr && is_annotation(meth_cls)) {
       return;
     }
@@ -259,7 +259,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
       }
     };
 
-    const auto proto = meth->get_proto();
+    auto* const proto = meth->get_proto();
     has_anno(proto->get_rtype());
     for (const auto& arg : *proto->get_args()) {
       has_anno(arg);
@@ -268,7 +268,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
 
   ConcurrentSet<DexType*> concurrent_referenced_annos;
   auto add_concurrent_referenced_anno = [&](DexType* t) {
-    if (!referenced_annos.count(t)) {
+    if (referenced_annos.count(t) == 0u) {
       concurrent_referenced_annos.insert(t);
     }
   };
@@ -280,17 +280,17 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
       [&add_concurrent_referenced_anno, &all_annos](DexMethod* meth,
                                                     IRInstruction* insn) {
         // don't look at methods defined on the annotation itself
-        const auto meth_cls_type = meth->get_class();
+        auto* const meth_cls_type = meth->get_class();
         if (all_annos.count(meth_cls_type) > 0) {
           return;
         }
-        const auto meth_cls = type_class(meth_cls_type);
+        auto* const meth_cls = type_class(meth_cls_type);
         if (meth_cls != nullptr && is_annotation(meth_cls)) {
           return;
         }
 
         if (insn->has_type()) {
-          auto type = insn->get_type();
+          auto* type = insn->get_type();
           if (all_annos.count(type) > 0) {
             add_concurrent_referenced_anno(type);
             TRACE(ANNO,
@@ -302,22 +302,22 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
                   SHOW(insn));
           }
         } else if (insn->has_field()) {
-          auto field = insn->get_field();
-          auto fdef = resolve_field(field,
-                                    opcode::is_an_sfield_op(insn->opcode())
-                                        ? FieldSearch::Static
-                                        : FieldSearch::Instance);
+          auto* field = insn->get_field();
+          auto* fdef = resolve_field(field,
+                                     opcode::is_an_sfield_op(insn->opcode())
+                                         ? FieldSearch::Static
+                                         : FieldSearch::Instance);
           if (fdef != nullptr) {
             field = fdef;
           }
 
           bool referenced = false;
-          auto owner = field->get_class();
+          auto* owner = field->get_class();
           if (all_annos.count(owner) > 0) {
             referenced = true;
             add_concurrent_referenced_anno(owner);
           }
-          auto type = field->get_type();
+          auto* type = field->get_type();
           if (all_annos.count(type) > 0) {
             referenced = true;
             add_concurrent_referenced_anno(type);
@@ -332,7 +332,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
                   SHOW(insn));
           }
         } else if (insn->has_method()) {
-          auto method = insn->get_method();
+          auto* method = insn->get_method();
           DexMethod* methdef =
               resolve_method(method, opcode_to_search(insn), meth);
           if (methdef != nullptr) {
@@ -340,18 +340,18 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           }
 
           bool referenced = false;
-          auto owner = method->get_class();
+          auto* owner = method->get_class();
           if (all_annos.count(owner) > 0) {
             referenced = true;
             add_concurrent_referenced_anno(owner);
           }
-          auto proto = method->get_proto();
-          auto rtype = proto->get_rtype();
+          auto* proto = method->get_proto();
+          auto* rtype = proto->get_rtype();
           if (all_annos.count(rtype) > 0) {
             referenced = true;
             add_concurrent_referenced_anno(rtype);
           }
-          auto arg_list = proto->get_args();
+          auto* arg_list = proto->get_args();
           for (const auto& arg : *arg_list) {
             if (all_annos.count(arg) > 0) {
               referenced = true;
@@ -373,7 +373,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
   // For each referenced annotation, make sure any annotations it references are
   // also tracked as referenced, so we don't end up with a dangling ref.
   AnnoKill::AnnoSet gathered;
-  for (auto referenced : UnorderedIterable(referenced_annos)) {
+  for (auto* referenced : UnorderedIterable(referenced_annos)) {
     gather_complete_referenced_annos(referenced_annos, referenced, &gathered);
   }
   insert_unordered_iterable(referenced_annos, gathered);
@@ -383,19 +383,19 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
 AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
   // Determine which annotation classes are removable.
   UnorderedSet<DexType*> bannotations;
-  for (auto clazz : m_scope) {
-    if (!(clazz->get_access() & DexAccessFlags::ACC_ANNOTATION)) {
+  for (auto* clazz : m_scope) {
+    if ((clazz->get_access() & DexAccessFlags::ACC_ANNOTATION) == 0u) {
       continue;
     }
 
     auto* aset = clazz->get_anno_set();
-    if (!aset) {
+    if (aset == nullptr) {
       continue;
     }
 
     auto& annos = aset->get_annotations();
     for (auto& anno : annos) {
-      if (m_kill.count(anno->type())) {
+      if (m_kill.count(anno->type()) != 0u) {
         bannotations.insert(clazz->get_type());
         TRACE(ANNO, 3, "removable annotation class %s",
               SHOW(clazz->get_type()));
@@ -578,8 +578,8 @@ bool AnnoKill::kill_annotations() {
       // Method annotations
       AnnoKillStats local_stats{};
 
-      auto method_aset = method->get_anno_set();
-      if (method_aset) {
+      auto* method_aset = method->get_anno_set();
+      if (method_aset != nullptr) {
         local_stats.method_asets++;
         auto keep_list = build_anno_keep(method_aset);
         cleanup_aset(method_aset, referenced_annos, local_stats, keep_list);
@@ -596,8 +596,8 @@ bool AnnoKill::kill_annotations() {
       }
 
       // Parameter annotations.
-      auto param_annos = method->get_param_anno();
-      if (param_annos) {
+      auto* param_annos = method->get_param_anno();
+      if (param_annos != nullptr) {
         local_stats.method_param_asets += param_annos->size();
         bool clear_pas = true;
         for (auto& pa : *param_annos) {
@@ -636,7 +636,7 @@ bool AnnoKill::kill_annotations() {
           AnnoKillStats local_stats{};
 
           DexAnnotationSet* aset = field->get_anno_set();
-          if (!aset) {
+          if (aset == nullptr) {
             return local_stats;
           }
           local_stats.field_asets++;
@@ -666,11 +666,11 @@ bool AnnoKill::kill_annotations() {
                                  if (!is_annotation(cls)) {
                                    return false;
                                  }
-                                 auto type = cls->get_type();
-                                 if (referenced_annos.count(type)) {
+                                 auto* type = cls->get_type();
+                                 if (referenced_annos.count(type) != 0u) {
                                    return false;
                                  }
-                                 if (m_keep.count(type)) {
+                                 if (m_keep.count(type) != 0u) {
                                    return false;
                                  }
                                  TRACE(ANNO, 3, "Removing annotation type: %s",

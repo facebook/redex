@@ -310,7 +310,7 @@ TEST(BundleResources, ReadResource) {
     std::unordered_set<std::string> drawable_res_names;
     for (const auto& pair : id_to_name) {
       auto id = pair.first;
-      if (drawable_type_id.count(id & TYPE_MASK_BIT)) {
+      if (drawable_type_id.count(id & TYPE_MASK_BIT) != 0u) {
         drawable_res_names.emplace(pair.second);
       }
     }
@@ -536,7 +536,7 @@ TEST(BundleResources, ObfuscateResourcesName) {
     UnorderedSet<std::string> types = {"color"};
     auto type_ids = res_table->get_types_by_name(types);
     UnorderedSet<uint32_t> shifted_allow_type_ids;
-    for (auto& type_id : UnorderedIterable(type_ids)) {
+    for (const auto& type_id : UnorderedIterable(type_ids)) {
       shifted_allow_type_ids.emplace(type_id >> TYPE_INDEX_BIT_SHIFT);
     }
     std::map<std::string, std::string> filepath_old_to_new;

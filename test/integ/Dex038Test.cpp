@@ -29,7 +29,7 @@
 using CallSitePredicate = const std::function<bool(DexCallSite*)>&;
 int ensureCallSite(DexIdx* idx, CallSitePredicate predicate) {
   for (int i = 0; i < idx->get_callsite_ids_size(); ++i) {
-    auto cs = idx->get_callsiteidx(i);
+    auto* cs = idx->get_callsiteidx(i);
     if (predicate(cs)) {
       return i;
     }
@@ -40,7 +40,7 @@ int ensureCallSite(DexIdx* idx, CallSitePredicate predicate) {
 using MethodHandlePredicate = const std::function<bool(DexMethodHandle*)>&;
 int ensureMethodHandle(DexIdx* idx, MethodHandlePredicate predicate) {
   for (int i = 0; i < idx->get_methodhandle_ids_size(); ++i) {
-    auto mh = idx->get_methodhandleidx(i);
+    auto* mh = idx->get_methodhandleidx(i);
     if (predicate(mh)) {
       return i;
     }
@@ -57,7 +57,7 @@ static const char* VOID_RETURN_STRING_PROTO = "()Ljava/lang/String;";
 void testReadDex(const char* dexfile) {
   auto dl = DexLoader::create(
       DexLocation::make_location("", dexfile), 38, DexLoader::Parallel::kYes);
-  auto idx = dl.get_idx();
+  auto* idx = dl.get_idx();
 
   EXPECT_EQ(idx->get_callsite_ids_size(), 7);
   EXPECT_EQ(idx->get_methodhandle_ids_size(), 8);
@@ -75,9 +75,9 @@ void testReadDex(const char* dexfile) {
   int metafactoryMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
-      !strcmp(mh->methodref()->get_name()->c_str(), "metafactory") &&
-      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), "Ljava/lang/invoke/LambdaMetafactory;") &&
-      !strcmp(SHOW(mh->methodref()->get_proto()), "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;");
+      (strcmp(mh->methodref()->get_name()->c_str(), "metafactory") == 0) &&
+      (strcmp(mh->methodref()->get_class()->get_name()->c_str(), "Ljava/lang/invoke/LambdaMetafactory;") == 0) &&
+      (strcmp(SHOW(mh->methodref()->get_proto()), "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;") == 0);
   });
   EXPECT_NE(metafactoryMethodHandleIdx, -1);
   DexMethodHandle* metafactoryMethodHandle = idx->get_methodhandleidx(metafactoryMethodHandleIdx);
@@ -90,9 +90,9 @@ void testReadDex(const char* dexfile) {
   int lambdaRun0MethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
-      !strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$0") &&
-      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
-      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+      (strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$0") == 0) &&
+      (strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) == 0) &&
+      (strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO) == 0);
   });
   EXPECT_NE(lambdaRun0MethodHandleIdx, -1);
   DexMethodHandle* lambdaRun0MethodHandle = idx->get_methodhandleidx(lambdaRun0MethodHandleIdx);
@@ -103,9 +103,9 @@ void testReadDex(const char* dexfile) {
   int lambdaRun1MethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
-      !strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$1") &&
-      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
-      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+      (strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$1") == 0) &&
+      (strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) == 0) &&
+      (strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO) == 0);
   });
   EXPECT_NE(lambdaRun1MethodHandleIdx, -1);
   DexMethodHandle* lambdaRun1MethodHandle = idx->get_methodhandleidx(lambdaRun1MethodHandleIdx);
@@ -116,9 +116,9 @@ void testReadDex(const char* dexfile) {
   int lambdaRun2MethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
-      !strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$2") &&
-      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
-      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+      (strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$2") == 0) &&
+      (strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) == 0) &&
+      (strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO) == 0);
   });
   EXPECT_NE(lambdaRun2MethodHandleIdx, -1);
   DexMethodHandle* lambdaRun2MethodHandle = idx->get_methodhandleidx(lambdaRun2MethodHandleIdx);
@@ -129,9 +129,9 @@ void testReadDex(const char* dexfile) {
   int staticStringSupplierMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
-      !strcmp(mh->methodref()->get_name()->c_str(), "staticStringSupplier") &&
-      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
-      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+      (strcmp(mh->methodref()->get_name()->c_str(), "staticStringSupplier") == 0) &&
+      (strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) == 0) &&
+      (strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO) == 0);
   });
   EXPECT_NE(staticStringSupplierMethodHandleIdx, -1);
   DexMethodHandle* staticStringSupplierMethodHandle = idx->get_methodhandleidx(staticStringSupplierMethodHandleIdx);
@@ -142,9 +142,9 @@ void testReadDex(const char* dexfile) {
   int instanceStringSupplierMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_INSTANCE &&
-      !strcmp(mh->methodref()->get_name()->c_str(), "instanceStringSupplier") &&
-      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
-      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+      (strcmp(mh->methodref()->get_name()->c_str(), "instanceStringSupplier") == 0) &&
+      (strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) == 0) &&
+      (strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO) == 0);
   });
   EXPECT_NE(instanceStringSupplierMethodHandleIdx, -1);
   DexMethodHandle* instanceStringSupplierMethodHandle = idx->get_methodhandleidx(instanceStringSupplierMethodHandleIdx);
@@ -155,9 +155,9 @@ void testReadDex(const char* dexfile) {
   int constructorMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_CONSTRUCTOR &&
-      !strcmp(mh->methodref()->get_name()->c_str(), "<init>") &&
-      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), STRING_CLASS_NAME) &&
-      !strcmp(SHOW(mh->methodref()->get_proto()), "()V");
+      (strcmp(mh->methodref()->get_name()->c_str(), "<init>") == 0) &&
+      (strcmp(mh->methodref()->get_class()->get_name()->c_str(), STRING_CLASS_NAME) == 0) &&
+      (strcmp(SHOW(mh->methodref()->get_proto()), "()V") == 0);
   });
   EXPECT_NE(constructorMethodHandleIdx, -1);
   DexMethodHandle* constructorMethodHandle = idx->get_methodhandleidx(constructorMethodHandleIdx);
@@ -168,9 +168,9 @@ void testReadDex(const char* dexfile) {
   int directMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_DIRECT &&
-      !strcmp(mh->methodref()->get_name()->c_str(), "privateInstanceStringSupplier") &&
-      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
-      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+      (strcmp(mh->methodref()->get_name()->c_str(), "privateInstanceStringSupplier") == 0) &&
+      (strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) == 0) &&
+      (strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO) == 0);
   });
   EXPECT_NE(directMethodHandleIdx, -1);
   DexMethodHandle* directMethodHandle = idx->get_methodhandleidx(directMethodHandleIdx);
@@ -351,7 +351,7 @@ TEST(Dex038Test, ReadWriteDex038) {
 
   std::string metafiles = tmpdir.path + "/meta";
   int status = mkdir(metafiles.c_str(), 0755);
-  if (status) {
+  if (status != 0) {
     EXPECT_EQ(EEXIST, errno);
   }
 

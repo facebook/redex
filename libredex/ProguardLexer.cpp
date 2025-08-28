@@ -36,7 +36,7 @@ void skip_whitespace(std::string_view& data, unsigned int* line) {
     if (ch == '\n') {
       (*line)++;
     }
-    if (!isspace(ch)) {
+    if (isspace(ch) == 0) {
       break;
     }
   }
@@ -61,7 +61,7 @@ std::string_view read_path(std::string_view& data, unsigned int* line) {
   size_t end = start;
   for (; end != data.size(); ++end) {
     char c = data[end];
-    if (c == kPathDelim || (!has_quotes && isspace(c))) {
+    if (c == kPathDelim || (!has_quotes && (isspace(c) != 0))) {
       break;
     }
     if (c == '"' && has_quotes) {
@@ -115,7 +115,9 @@ std::string_view parse_part_fn(std::string_view& data,
 
 std::string_view read_target_version(std::string_view& data,
                                      unsigned int* line) {
-  auto is_version_character = [](char ch) { return ch == '.' || isdigit(ch); };
+  auto is_version_character = [](char ch) {
+    return ch == '.' || (isdigit(ch) != 0);
+  };
   return parse_part_fn</*kSkipWs=*/true>(
       data, line, [&](char c) { return !is_version_character(c); });
 }
@@ -123,7 +125,8 @@ std::string_view read_target_version(std::string_view& data,
 std::string_view parse_package_name(std::string_view& data,
                                     unsigned int* line) {
   auto pkg_name_char = [](char ch) {
-    return isalnum(ch) || ch == '.' || ch == '\'' || ch == '_' || ch == '$';
+    return (isalnum(ch) != 0) || ch == '.' || ch == '\'' || ch == '_' ||
+           ch == '$';
   };
   return parse_part_fn</*kSkipWs=*/true>(
       data, line, [&](char c) { return !pkg_name_char(c); });
@@ -139,7 +142,7 @@ bool lex_filter(std::string_view& data,
     return false;
   }
   *filter = parse_part_fn</*kSkipWs=*/false>(
-      data, line, [](char c) { return c == ',' || isspace(c); });
+      data, line, [](char c) { return c == ',' || (isspace(c) != 0); });
   return true;
 }
 
@@ -616,7 +619,7 @@ std::vector<Token> lex(const std::string_view& in) {
           line++;
           continue;
         }
-        if (!isspace(c)) {
+        if (isspace(c) == 0) {
           break;
         }
       }
@@ -624,7 +627,7 @@ std::vector<Token> lex(const std::string_view& in) {
     };
 
     // Skip whitespaces.
-    if (isspace(ch)) {
+    if (isspace(ch) != 0) {
       consume_ws();
       continue;
     }

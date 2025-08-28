@@ -133,10 +133,10 @@ inline std::string_view trim_whitespaces(std::string_view str) {
   if (str.empty()) {
     return str;
   }
-  while (isspace(str.front())) {
+  while (isspace(str.front()) != 0) {
     str.remove_prefix(1);
   }
-  while (isspace(str.back())) {
+  while (isspace(str.back()) != 0) {
     str.remove_suffix(1);
   }
   return str;

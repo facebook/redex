@@ -27,22 +27,22 @@ auto matcher = [](const DexMethod* method) {
 } // namespace
 
 TEST_F(PreVerify, InstrumentBBVerify) {
-  auto cls = find_class_named(classes, kTargetClassName);
+  auto* cls = find_class_named(classes, kTargetClassName);
   dump_cfgs(true, cls, matcher);
 }
 
 TEST_F(PostVerify, InstrumentBBVerify) {
-  auto cls = find_class_named(classes, kTargetClassName);
+  auto* cls = find_class_named(classes, kTargetClassName);
   dump_cfgs(false, cls, matcher);
 }
 
 TEST_F(PostVerify, EnsureNewInstanceOrder) {
-  auto method_ref = DexMethod::get_method(
+  auto* method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
       "InstrumentBasicBlockTarget;.testFuncNewInstanceOrder:()V");
   ASSERT_NE(method_ref, nullptr);
   ASSERT_TRUE(method_ref->is_def());
-  auto method = method_ref->as_def();
+  auto* method = method_ref->as_def();
   method->balloon();
 
   const IRInstruction* last = nullptr;

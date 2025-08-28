@@ -22,12 +22,12 @@ void dump_method(DexMethod* method) {
 } // namespace
 
 TEST_F(PostVerify, VerifyTransform) {
-  auto usage_cls =
+  auto* usage_cls =
       find_class_named(classes, "Lcom/facebook/redex/WrappedPrimitives;");
 
   // Simple unboxing.
   {
-    auto simple = find_method_named(*usage_cls, "simple");
+    auto* simple = find_method_named(*usage_cls, "simple");
     auto simple_str = stringify_for_comparision(simple);
     auto expected = assembler::ircode_from_string(R"((
       (load-param-object v2)
@@ -43,7 +43,7 @@ TEST_F(PostVerify, VerifyTransform) {
 
   // Insertion of a cast to the underlying unwrapped API.
   {
-    auto simple_cast = find_method_named(*usage_cls, "simpleCast");
+    auto* simple_cast = find_method_named(*usage_cls, "simpleCast");
     auto simple_cast_str = stringify_for_comparision(simple_cast);
     auto expected = assembler::ircode_from_string(R"((
       (load-param-object v2)
@@ -60,7 +60,7 @@ TEST_F(PostVerify, VerifyTransform) {
   }
 
   {
-    auto multiple_defs = find_method_named(*usage_cls, "multipleDefs");
+    auto* multiple_defs = find_method_named(*usage_cls, "multipleDefs");
     auto multiple_defs_str = stringify_for_comparision(multiple_defs);
     auto expected = assembler::ircode_from_string(R"((
       (load-param-object v5)

@@ -75,10 +75,10 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
                            bool force_type_inference)
     : ConstantUses(
           cfg,
-          method ? is_static(method) : true,
-          method ? method->get_class() : nullptr,
-          method ? method->get_proto()->get_rtype() : nullptr,
-          method ? method->get_proto()->get_args() : nullptr,
+          method != nullptr ? is_static(method) : true,
+          method != nullptr ? method->get_class() : nullptr,
+          method != nullptr ? method->get_proto()->get_rtype() : nullptr,
+          method != nullptr ? method->get_proto()->get_args() : nullptr,
           [method]() { return show(method); },
           force_type_inference) {}
 
@@ -110,7 +110,7 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
         auto src = insn->src(src_index);
         const auto& defs = env.get(src);
         if (!defs.is_top() && !defs.is_bottom()) {
-          for (auto def : defs.elements()) {
+          for (auto* def : defs.elements()) {
             always_assert(is_const(def));
             m_constant_uses[def].emplace_back(insn, src_index);
             // So there's an instruction that uses a const value.
@@ -144,7 +144,7 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
 
   TRACE(CU, 2, "[CU] ConstantUses(%s) need_type_inference:%u",
         method_describer().c_str(), need_type_inference);
-  if ((need_type_inference && args) || force_type_inference) {
+  if ((need_type_inference && (args != nullptr)) || force_type_inference) {
     m_type_inference.reset(new type_inference::TypeInference(cfg));
     m_type_inference->run(is_static, declaring_type, args);
   }
@@ -162,7 +162,7 @@ TypeDemand ConstantUses::get_constant_type_demand(IRInstruction* insn) const {
   always_assert(insn->opcode() == OPCODE_CONST ||
                 insn->opcode() == OPCODE_CONST_WIDE);
   TypeDemand type_demand = TypeDemand::None;
-  for (auto& p : get_constant_uses(insn)) {
+  for (const auto& p : get_constant_uses(insn)) {
     type_demand =
         (TypeDemand)(type_demand & get_type_demand(p.first, p.second));
     if (type_demand == TypeDemand::Error) {
@@ -247,7 +247,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
 
   case OPCODE_RETURN:
   case OPCODE_RETURN_WIDE:
-    return m_rtype ? get_type_demand(m_rtype) : TypeDemand::Error;
+    return m_rtype != nullptr ? get_type_demand(m_rtype) : TypeDemand::Error;
 
   case OPCODE_MOVE:
     return TypeDemand::IntOrFloat;

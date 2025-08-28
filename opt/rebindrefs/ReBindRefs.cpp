@@ -100,7 +100,7 @@ struct Rebinder {
   RebinderRefs rewrite_refs() {
     return walk::parallel::methods<RebinderRefs>(
         m_scope, [&](DexMethod* method) {
-          if (!method || !method->get_code()) {
+          if ((method == nullptr) || (method->get_code() == nullptr)) {
             return RebinderRefs();
           }
           bool is_support_lib = api::is_support_lib_type(method->get_class());
@@ -108,7 +108,7 @@ struct Rebinder {
           always_assert(method->get_code()->editable_cfg_built());
           auto& cfg = method->get_code()->cfg();
           for (auto& mie : cfg::InstructionIterable(cfg)) {
-            auto insn = mie.insn;
+            auto* insn = mie.insn;
             switch (insn->opcode()) {
             case OPCODE_INVOKE_VIRTUAL: {
               rebind_invoke_virtual(is_support_lib, insn, rebinder_refs);
@@ -138,8 +138,8 @@ struct Rebinder {
   DexMethod* bind_to_visible_ancestor(const DexClass* cls,
                                       const DexString* name,
                                       const DexProto* proto) {
-    auto leaf_impl = resolve_virtual(cls, name, proto);
-    if (!leaf_impl) {
+    auto* leaf_impl = resolve_virtual(cls, name, proto);
+    if (leaf_impl == nullptr) {
       return nullptr;
     }
     auto leaf_vis = get_visibility(leaf_impl);
@@ -148,7 +148,7 @@ struct Rebinder {
     }
     DexMethod* top_impl = leaf_impl;
     // The resolved leaf impl can only be PUBLIC at this point.
-    while (cls) {
+    while (cls != nullptr) {
       for (const auto& cls_meth : cls->get_vmethods()) {
         if (match(name, proto, cls_meth)) {
           auto curr_vis = get_visibility(cls_meth);
@@ -177,15 +177,15 @@ struct Rebinder {
   void rebind_invoke_virtual(bool is_support_lib,
                              IRInstruction* mop,
                              RebinderRefs& rebinder_refs) {
-    const auto mref = mop->get_method();
-    auto mtype = mref->get_class();
+    auto* const mref = mop->get_method();
+    auto* mtype = mref->get_class();
     // leave java.lang.String alone not to interfere with OP_EXECUTE_INLINE
     // and possibly any smart handling of String
     if (mtype == type::java_lang_String()) {
       return;
     }
-    auto cls = type_class(mtype);
-    auto real_ref =
+    auto* cls = type_class(mtype);
+    auto* real_ref =
         bind_to_visible_ancestor(cls, mref->get_name(), mref->get_proto());
     rebind_method_opcode(is_support_lib, mop, mref, real_ref, rebinder_refs);
   }
@@ -205,11 +205,11 @@ struct Rebinder {
                             DexMethodRef* mref,
                             DexMethodRef* real_ref,
                             RebinderRefs& rebinder_refs) {
-    if (!real_ref || real_ref == mref) {
+    if ((real_ref == nullptr) || real_ref == mref) {
       return;
     }
-    auto cls = type_class(real_ref->get_class());
-    bool is_external = cls && cls->is_external();
+    auto* cls = type_class(real_ref->get_class());
+    bool is_external = (cls != nullptr) && cls->is_external();
     if (is_external && !m_rebind_to_external) {
       TRACE(BIND, 4, "external %s", SHOW(real_ref));
       return;
@@ -228,7 +228,7 @@ struct Rebinder {
       return;
     }
     if (is_external && real_ref->is_def()) {
-      auto target_def = real_ref->as_def();
+      auto* target_def = real_ref->as_def();
       if (!m_min_sdk_sdk.has_method(target_def)) {
         TRACE(BIND, 4, "Bailed on mismatch with min_sdk %s", SHOW(target_def));
         return;

@@ -189,7 +189,7 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
   case 0x1b: {
     ss << "[" << value_to_string(value) << check_size(value, upperbits) << " "
        << std::hex << std::setfill('0') << std::setw(2) << uint32_t(*aitem++);
-    while (upperbits--) {
+    while ((upperbits--) != 0u) {
       ss << " " << std::hex << std::setfill('0') << std::setw(2)
          << uint32_t(*aitem++);
     }
@@ -200,11 +200,11 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
     char* rtype = nullptr;
     uint32_t protoidx = uint32_t(*aitem++);
     dex_proto_id* proto = rd->dex_proto_ids + protoidx;
-    if (proto->rtypeidx) {
+    if (proto->rtypeidx != 0u) {
       rtype = dex_string_by_type_idx(rd, proto->rtypeidx);
     }
     ss << "[METHOD_TYPE " << rtype << "(";
-    if (proto->param_off) {
+    if (proto->param_off != 0u) {
       uint32_t* tl = (uint32_t*)(rd->dexmmap + proto->param_off);
       int count = (int)*tl++;
       uint16_t* types = (uint16_t*)tl;
@@ -225,7 +225,7 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
     uint32_t typeidx;
     uint32_t shift = 8;
     typeidx = *aitem++;
-    while (upperbits--) {
+    while ((upperbits--) != 0u) {
       typeidx |= *aitem++ << shift;
       shift += 8;
     }
@@ -236,7 +236,7 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
     uint32_t stridx;
     uint32_t shift = 8;
     stridx = *aitem++;
-    while (upperbits--) {
+    while ((upperbits--) != 0u) {
       stridx |= *aitem++ << shift;
       shift += 8;
     }
@@ -246,7 +246,7 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
   case 0x1c: {
     uint32_t size = read_uleb128(&aitem);
     ss << "[ARRAY ";
-    while (size--) {
+    while ((size--) != 0u) {
       ss << format_encoded_value(rd, &aitem);
     }
     ss << "]";
@@ -259,7 +259,7 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
     ss << "[NULL]";
     break;
   case 0x1f:
-    ss << "[BOOL " << (upperbits ? "TRUE" : "FALSE") << "]";
+    ss << "[BOOL " << (upperbits != 0u ? "TRUE" : "FALSE") << "]";
     break;
   default:
     ss << "[UNKNOWN_VALUE]";
@@ -286,7 +286,7 @@ std::string format_annotation(ddump_data* rd, const uint8_t** _aitem) {
   uint32_t size = read_uleb128(&aitem);
   char* tstring = dex_string_by_type_idx(rd, type_idx);
   ss << tstring << "\n";
-  while (size--) {
+  while ((size--) != 0u) {
     uint32_t name_idx = read_uleb128(&aitem);
     char* key = dex_string_by_idx(rd, name_idx);
     ss << "            " << key << ":" << format_encoded_value(rd, &aitem)
@@ -311,18 +311,18 @@ std::string format_method(ddump_data* rd, int idx) {
   dex_method_id* method = rd->dex_method_ids + idx;
   char* type = nullptr;
   char* name = nullptr;
-  if (method->classidx) {
+  if (method->classidx != 0u) {
     type = dex_string_by_type_idx(rd, method->classidx);
   }
   ss << "type: " << type << " ";
   char* rtype = nullptr;
-  if (method->protoidx) {
+  if (method->protoidx != 0u) {
     dex_proto_id* proto = rd->dex_proto_ids + method->protoidx;
-    if (proto->rtypeidx) {
+    if (proto->rtypeidx != 0u) {
       rtype = dex_string_by_type_idx(rd, proto->rtypeidx);
     }
     ss << "proto: rtype " << rtype << " args(";
-    if (proto->param_off) {
+    if (proto->param_off != 0u) {
       uint32_t* tl = (uint32_t*)(rd->dexmmap + proto->param_off);
       int count = (int)*tl++;
       uint16_t* types = (uint16_t*)tl;
@@ -337,7 +337,7 @@ std::string format_method(ddump_data* rd, int idx) {
     }
     ss << ") ";
   }
-  if (method->nameidx) {
+  if (method->nameidx != 0u) {
     name = dex_string_by_idx(rd, method->nameidx);
   }
   ss << "name: " << name << "\n";

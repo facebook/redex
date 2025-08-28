@@ -17,8 +17,8 @@ namespace {
  * Build a DexClass for java.lang.Object
  */
 DexClass* create_java_lang_object() {
-  auto obj_t = type::java_lang_Object();
-  auto obj_cls = type_class(obj_t);
+  auto* obj_t = type::java_lang_Object();
+  auto* obj_cls = type_class(obj_t);
   if (obj_cls != nullptr) {
     return obj_cls;
   }
@@ -43,34 +43,34 @@ DexClass* create_java_lang_object() {
   // public final native java.lang.Object.wait(JI)V
 
   // required sigs
-  auto void_args = DexTypeList::make_type_list({});
-  auto void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
-  auto object_bool = DexProto::make_proto(
+  auto* void_args = DexTypeList::make_type_list({});
+  auto* void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
+  auto* object_bool = DexProto::make_proto(
       type::_boolean(),
       DexTypeList::make_type_list({type::java_lang_Object()}));
-  auto void_void = DexProto::make_proto(type::_void(), void_args);
-  auto void_class = DexProto::make_proto(type::java_lang_Class(), void_args);
-  auto void_int = DexProto::make_proto(type::_int(), void_args);
-  auto void_string = DexProto::make_proto(type::java_lang_String(), void_args);
-  auto long_void = DexProto::make_proto(
+  auto* void_void = DexProto::make_proto(type::_void(), void_args);
+  auto* void_class = DexProto::make_proto(type::java_lang_Class(), void_args);
+  auto* void_int = DexProto::make_proto(type::_int(), void_args);
+  auto* void_string = DexProto::make_proto(type::java_lang_String(), void_args);
+  auto* long_void = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto long_int_void = DexProto::make_proto(
+  auto* long_int_void = DexProto::make_proto(
       type::_void(),
       DexTypeList::make_type_list({type::_long(), type::_int()}));
 
   // required names
-  auto clone = DexString::make_string("clone");
-  auto equals = DexString::make_string("equals");
-  auto finalize = DexString::make_string("finalize");
-  auto getClass = DexString::make_string("getClass");
-  auto hashCode = DexString::make_string("hashCode");
-  auto notify = DexString::make_string("notify");
-  auto notifyAll = DexString::make_string("notifyAll");
-  auto toString = DexString::make_string("toString");
-  auto wait = DexString::make_string("wait");
+  const auto* clone = DexString::make_string("clone");
+  const auto* equals = DexString::make_string("equals");
+  const auto* finalize = DexString::make_string("finalize");
+  const auto* getClass = DexString::make_string("getClass");
+  const auto* hashCode = DexString::make_string("hashCode");
+  const auto* notify = DexString::make_string("notify");
+  const auto* notifyAll = DexString::make_string("notifyAll");
+  const auto* toString = DexString::make_string("toString");
+  const auto* wait = DexString::make_string("wait");
 
   // protected java.lang.Object.clone()Ljava/lang/Object;
-  auto method = static_cast<DexMethod*>(
+  auto* method = static_cast<DexMethod*>(
       DexMethod::make_method(obj_t, clone, void_object));
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
@@ -239,7 +239,7 @@ DexMethod* create_abstract_method(DexClass* cls,
                                   DexProto* proto,
                                   DexAccessFlags access /*= ACC_PUBLIC*/) {
   access = access | ACC_ABSTRACT;
-  auto method = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method = static_cast<DexMethod*>(DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto));
   method->make_concrete(access, std::unique_ptr<IRCode>(nullptr), true);
   cls->add_method(method);
@@ -252,8 +252,8 @@ DexMethod* create_empty_method(DexClass* cls,
                                DexAccessFlags access /*= ACC_PUBLIC*/) {
   MethodCreator mcreator(cls->get_type(), DexString::make_string(name), proto,
                          access);
-  auto main_block = mcreator.get_main_block();
-  auto rtype = proto->get_rtype();
+  auto* main_block = mcreator.get_main_block();
+  auto* rtype = proto->get_rtype();
   if (rtype == type::_void()) {
     main_block->ret_void();
   } else {
@@ -261,7 +261,7 @@ DexMethod* create_empty_method(DexClass* cls,
     main_block->load_null(null_loc);
     main_block->ret(null_loc);
   }
-  auto method = mcreator.create();
+  auto* method = mcreator.create();
   cls->add_method(method);
   return method;
 }
@@ -272,11 +272,11 @@ DexMethod* create_throwing_method(DexClass* cls,
                                   DexAccessFlags access /*= ACC_PUBLIC*/) {
   MethodCreator mcreator(cls->get_type(), DexString::make_string(name), proto,
                          access);
-  auto main_block = mcreator.get_main_block();
+  auto* main_block = mcreator.get_main_block();
   auto null_loc = mcreator.make_local(type::java_lang_Object());
   main_block->load_null(null_loc);
   main_block->throwex(null_loc);
-  auto method = mcreator.create();
+  auto* method = mcreator.create();
   cls->add_method(method);
   return method;
 }

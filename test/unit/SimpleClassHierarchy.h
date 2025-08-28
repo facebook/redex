@@ -25,7 +25,7 @@ struct SimpleClassHierarchy {
            boost::optional<std::vector<const char*>> method = boost::none,
            boost::optional<DexType*> intf = boost::none,
            boost::optional<DexAccessFlags> access = boost::none) {
-          auto this_type = DexType::make_type(name.c_str());
+          auto* this_type = DexType::make_type(name.c_str());
           ClassCreator cc(this_type);
           cc.set_super(const_cast<DexType*>(super_type));
           if (intf) {

@@ -102,7 +102,7 @@ class DelSuper {
     size_t src_idx{0};
     for (const auto& mie : InstructionIterable(
              meth->get_code()->cfg().get_param_instructions())) {
-      auto load_param = mie.insn;
+      auto* load_param = mie.insn;
       if (load_param->dest() != insn->src(src_idx++)) {
         return false;
       }
@@ -147,7 +147,7 @@ class DelSuper {
     auto* code = (const_cast<DexMethod*>(meth))->get_code();
 
     // Must have code
-    if (!code) {
+    if (code == nullptr) {
       return nullptr;
     }
 
@@ -207,7 +207,7 @@ class DelSuper {
     }
 
     // Method return src register must match move-result dest register
-    if (move_res_opc && return_opc &&
+    if ((move_res_opc != nullptr) && (return_opc != nullptr) &&
         move_res_opc->dest() != return_opc->src(0)) {
       m_num_culled_return_move_result_differs++;
       return nullptr;
@@ -221,8 +221,8 @@ class DelSuper {
 
     // If the invoked method does not have access flags, we can't operate
     // on it at all.
-    auto meth_def = invoked_meth->as_def();
-    if (!meth_def) {
+    auto* meth_def = invoked_meth->as_def();
+    if (meth_def == nullptr) {
       m_num_culled_super_not_def++;
       return nullptr;
     }
@@ -236,7 +236,7 @@ class DelSuper {
       m_num_relaxed_vis++;
     }
 
-    auto cls = type_class(meth_def->get_class());
+    auto* cls = type_class(meth_def->get_class());
     if (!is_public(cls)) {
       if (cls->is_external()) {
         m_num_culled_super_cls_non_public++;
@@ -272,8 +272,8 @@ class DelSuper {
       if (root(meth)) {
         return;
       }
-      auto invoked_meth = get_trivial_return_invoke_super(meth);
-      if (invoked_meth) {
+      auto* invoked_meth = get_trivial_return_invoke_super(meth);
+      if (invoked_meth != nullptr) {
         TRACE(SUPER, 5, "Found trivial return invoke-super: %s", SHOW(meth));
         m_delmeths.update(meth->get_class(), [&](auto*, auto& map, bool) {
           map.emplace(meth, invoked_meth);
@@ -297,8 +297,8 @@ class DelSuper {
       walk::parallel::opcodes(m_scope,
                               [&](DexMethod* /*meth*/, IRInstruction* insn) {
                                 if (opcode::is_an_invoke(insn->opcode())) {
-                                  auto method = insn->get_method()->as_def();
-                                  if (!method) {
+                                  auto* method = insn->get_method()->as_def();
+                                  if (method == nullptr) {
                                     return;
                                   }
                                   while (auto* m = get_delmeth(method)) {
@@ -309,9 +309,9 @@ class DelSuper {
                               });
       auto wq = workqueue_foreach<DexType*>([&](DexType* type) {
         auto& map = m_delmeths.at_unsafe(type);
-        auto clazz = type_class(type);
+        auto* clazz = type_class(type);
         for (const auto& pair : UnorderedIterable(map)) {
-          auto meth = pair.first;
+          auto* meth = pair.first;
           always_assert(meth->is_virtual());
           clazz->remove_method(meth);
           DexMethod::delete_method(meth);

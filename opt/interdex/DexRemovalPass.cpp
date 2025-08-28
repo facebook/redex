@@ -97,18 +97,18 @@ void DexRemovalPass::sanity_check(Scope& original_scope,
   UnorderedSet<DexClass*> new_scope_set(new_scope.begin(), new_scope.end());
   always_assert(original_scope_set.size() ==
                 new_scope_set.size() + removed_num_dexes);
-  for (auto cls : UnorderedIterable(new_scope_set)) {
+  for (auto* cls : UnorderedIterable(new_scope_set)) {
     always_assert(original_scope_set.count(cls));
   }
 
   // Check canaries being contiguous.
   for (size_t i = 0; i < root_dexen_new.size(); i++) {
     auto& dex = root_dexen_new.at(i);
-    for (auto cls : dex) {
+    for (auto* cls : dex) {
       if (is_canary(cls)) {
         std::string expected_name = get_canary_name(i);
-        auto dtype = cls->get_type();
-        auto oldname = dtype->get_name();
+        auto* dtype = cls->get_type();
+        const auto* oldname = dtype->get_name();
         always_assert(oldname->str() == expected_name);
         break;
       }

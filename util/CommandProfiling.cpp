@@ -139,7 +139,7 @@ boost::optional<ScopedCommandProfiling::ProfilerInfo>
 ScopedCommandProfiling::maybe_info_from_env(const std::string& prefix) {
   auto get_env_str =
       [](const std::string& key) -> boost::optional<std::string> {
-    auto val = getenv(key.c_str());
+    auto* val = getenv(key.c_str());
     if (val == nullptr) {
       return boost::none;
     }

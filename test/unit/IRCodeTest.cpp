@@ -22,8 +22,8 @@ struct IRCodeTest : public RedexTest {};
 TEST_F(IRCodeTest, LoadParamInstructionsDirect) {
   using namespace dex_asm;
 
-  auto method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"})
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"})
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   auto code = std::make_unique<IRCode>(method, 3);
   auto it = code->begin();
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM, {3_v}));
@@ -34,8 +34,8 @@ TEST_F(IRCodeTest, LoadParamInstructionsDirect) {
 TEST_F(IRCodeTest, LoadParamInstructionsVirtual) {
   using namespace dex_asm;
 
-  auto method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"})
-                    ->make_concrete(ACC_PUBLIC, true);
+  auto* method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"})
+                     ->make_concrete(ACC_PUBLIC, true);
   auto code = std::make_unique<IRCode>(method, 3);
   auto it = code->begin();
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM_OBJECT, {3_v}));
@@ -46,7 +46,7 @@ TEST_F(IRCodeTest, LoadParamInstructionsVirtual) {
 }
 
 TEST_F(IRCodeTest, infinite_loop) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LBaz;.bar:()V"
       (
         (:lbl)
@@ -55,7 +55,7 @@ TEST_F(IRCodeTest, infinite_loop) {
     )
   )");
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   std::cout << show(code) << std::endl;
 
   instruction_lowering::lower(method);
@@ -70,7 +70,7 @@ TEST_F(IRCodeTest, infinite_loop) {
 }
 
 TEST_F(IRCodeTest, useless_goto) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LBaz;.bar:()V"
       (
         (const v0 0)
@@ -81,7 +81,7 @@ TEST_F(IRCodeTest, useless_goto) {
     )
   )");
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   std::cout << show(code) << std::endl;
 
   instruction_lowering::lower(method);
@@ -96,7 +96,7 @@ TEST_F(IRCodeTest, useless_goto) {
 }
 
 TEST_F(IRCodeTest, useless_if) {
-  auto method = assembler::method_from_string(R"(
+  auto* method = assembler::method_from_string(R"(
     (method (public) "LBaz;.bar:()V"
       (
         (const v0 0)
@@ -107,7 +107,7 @@ TEST_F(IRCodeTest, useless_if) {
     )
   )");
 
-  auto code = method->get_code();
+  auto* code = method->get_code();
   std::cout << show(code) << std::endl;
 
   instruction_lowering::lower(method);
@@ -122,13 +122,13 @@ TEST_F(IRCodeTest, useless_if) {
 }
 
 TEST_F(IRCodeTest, try_region) {
-  auto method = DexMethod::make_method("Lfoo;", "tryRegionTest", "V", {})
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("Lfoo;", "tryRegionTest", "V", {})
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto opcode = DOPCODE_CONST_WIDE_16;
   auto code = std::make_unique<IRCode>(method, 1);
-  auto catz = new MethodItemEntry(DexType::make_type("Ljava/lang/Exception;"));
-  auto op = new DexInstruction(opcode);
+  auto* catz = new MethodItemEntry(DexType::make_type("Ljava/lang/Exception;"));
+  auto* op = new DexInstruction(opcode);
   code->push_back(*new MethodItemEntry(TRY_START, catz));
   uint32_t max = std::numeric_limits<uint16_t>::max();
   uint32_t num = max / op->size() + 17;
@@ -161,25 +161,25 @@ namespace {
 DexMethod* construct_switch_payload(const char* method_name,
                                     size_t target_count,
                                     int32_t target_multiplier) {
-  auto method = DexMethod::make_method("Lfoo;", method_name, "V", {"I"})
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto* method = DexMethod::make_method("Lfoo;", method_name, "V", {"I"})
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = std::make_unique<IRCode>(method, 1);
   code->build_cfg();
   auto& cfg = code->cfg();
 
-  auto entry = cfg.entry_block();
+  auto* entry = cfg.entry_block();
 
-  auto ret_block = cfg.create_block();
+  auto* ret_block = cfg.create_block();
   ret_block->push_back(new IRInstruction(IROpcode::OPCODE_RETURN_VOID));
 
   std::vector<std::pair<int32_t, cfg::Block*>> targets;
 
   targets.reserve(target_count);
   for (size_t i = 0; i < target_count; ++i) {
-    auto target_block = cfg.create_block();
+    auto* target_block = cfg.create_block();
     // Need an instruction so it does not get removed.
-    auto dummy_insn = new IRInstruction(IROpcode::OPCODE_CONST);
+    auto* dummy_insn = new IRInstruction(IROpcode::OPCODE_CONST);
     dummy_insn->set_dest(0);
     dummy_insn->set_literal(i); // Not really necessary, could use `0`.
     target_block->push_back(dummy_insn);
@@ -209,10 +209,10 @@ TEST_F(IRCodeTest, encode_large_sparse_switch) {
   constexpr size_t kTargetCount = 40000;
   constexpr int32_t kTargetMultiplier = 10; // Large enough gaps...
 
-  auto method = construct_switch_payload(
+  auto* method = construct_switch_payload(
       "largeSparseSwitch", kTargetCount, kTargetMultiplier);
 
-  auto dex_code = method->get_dex_code();
+  auto* dex_code = method->get_dex_code();
   ASSERT_NE(dex_code, nullptr);
 
   auto& dex_insns = dex_code->get_instructions();
@@ -233,10 +233,10 @@ TEST_F(IRCodeTest, encode_large_packed_switch) {
   constexpr size_t kTargetCount = 40000;
   constexpr int32_t kTargetMultiplier = 1; // No gaps...
 
-  auto method = construct_switch_payload(
+  auto* method = construct_switch_payload(
       "largePackedSwitch", kTargetCount, kTargetMultiplier);
 
-  auto dex_code = method->get_dex_code();
+  auto* dex_code = method->get_dex_code();
   ASSERT_NE(dex_code, nullptr);
 
   auto& dex_insns = dex_code->get_instructions();

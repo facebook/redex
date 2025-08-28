@@ -9,9 +9,9 @@
 #include "verify/VerifyUtil.h"
 
 TEST_F(PostVerify, SinkCommonCtorInvocation) {
-  auto cls_coroutine_1 = find_class_named(
+  auto* cls_coroutine_1 = find_class_named(
       classes, "Lkotlin/sequences/SequencesKt__SequencesKt$flatMapIndexed$1;");
-  auto cls_coroutine_2 = find_class_named(
+  auto* cls_coroutine_2 = find_class_named(
       classes,
       "Lkotlin/sequences/SequencesKt___SequencesKt$runningReduceIndexed$1;");
 

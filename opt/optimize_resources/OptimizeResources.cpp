@@ -66,7 +66,7 @@ UnorderedSet<uint32_t> delete_unvisited_resources(
   }
   UnorderedSet<uint32_t> deleted_resources;
   UnorderedSet<std::string> files_to_keep;
-  for (auto& p : id_to_name) {
+  for (const auto& p : id_to_name) {
     if (nodes_visited.find(p.first) == nodes_visited.end()) {
       // Collect any res/ files we can now delete. This will influence
       // reachability of Java classes. When handling an .aab input, resolve the
@@ -158,7 +158,7 @@ void OptimizeResourcesPass::eval_pass(DexStoresVector& stores,
   resources::prepare_r_classes(stores, conf.get_global_config());
   auto& plugin_registery = opt_res::ReachableResourcesPluginRegistry::get();
   plugin_registery.sort();
-  for (auto& p : plugin_registery.get_plugins()) {
+  for (const auto& p : plugin_registery.get_plugins()) {
     p->configure(conf);
   }
 }
@@ -173,8 +173,8 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   // 1. Load the resource table
   resources::ReachableResources reachable_resources(
       zip_dir, conf.get_global_config(), m_options);
-  auto resources = reachable_resources.get_android_resources();
-  auto res_table = reachable_resources.get_res_table();
+  auto* resources = reachable_resources.get_android_resources();
+  auto* res_table = reachable_resources.get_res_table();
 
   // 2. Read entry points from the app code and manifest to resource ids.
   auto initial_reachable_ids = reachable_resources.get_resource_roots(stores);

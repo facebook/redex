@@ -33,7 +33,7 @@ boost::optional<std::string> get_name_string(
     android::ResStringPool& pool) {
   auto idx = dtohl(name_ref.index);
   size_t len;
-  auto chars = pool.stringAt(idx, &len);
+  const auto* chars = pool.stringAt(idx, &len);
   if (chars != nullptr) {
     android::String16 s16(chars, len);
     android::String8 s8(s16);
@@ -228,7 +228,7 @@ class XmlBuilder {
       end_node_ext.ns = node_ref;
       block.write(end_node_ext);
 
-      auto insert_pos = (char*)data + m_new_data_offset;
+      auto* insert_pos = (char*)data + m_new_data_offset;
       file_manipulator.add_at(insert_pos, std::move(block));
     } else {
       android::ResXMLTree_node* node =

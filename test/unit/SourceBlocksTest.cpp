@@ -40,9 +40,9 @@ class SourceBlocksTest : public RedexTest {
     cc.set_super(type::java_lang_Object());
 
     // Empty code isn't really legal. But it does not matter for us.
-    auto m = DexMethod::make_method(name + ".bar:()V")
-                 ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                 assembler::ircode_from_string(code), false);
+    auto* m = DexMethod::make_method(name + ".bar:()V")
+                  ->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                                  assembler::ircode_from_string(code), false);
     m->set_deobfuscated_name(show(m));
     cc.add_method(m);
 
@@ -141,7 +141,7 @@ class SourceBlocksTest : public RedexTest {
 std::atomic<size_t> SourceBlocksTest::s_counter{0};
 
 TEST_F(SourceBlocksTest, minimal_serialize) {
-  auto method = create_method();
+  auto* method = create_method();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
@@ -155,18 +155,18 @@ TEST_F(SourceBlocksTest, minimal_serialize) {
 }
 
 TEST_F(SourceBlocksTest, visit_in_order_rec_vs_iter) {
-  auto method = create_method();
+  auto* method = create_method();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
   ASSERT_EQ(cfg.num_blocks(), 1u);
-  auto b = cfg.blocks()[0];
+  auto* b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
-  auto b1 = cfg.create_block();
-  auto b2 = cfg.create_block();
-  auto b3 = cfg.create_block();
-  auto b4 = cfg.create_block();
+  auto* b1 = cfg.create_block();
+  auto* b2 = cfg.create_block();
+  auto* b3 = cfg.create_block();
+  auto* b4 = cfg.create_block();
 
   cfg.add_edge(b, b1, EDGE_GOTO);
   cfg.add_edge(b, b2, EDGE_BRANCH);
@@ -229,7 +229,7 @@ TEST_F(SourceBlocksTest, visit_in_order_rec_vs_iter) {
     std::string to_string() const {
       return "[" + [&]() {
         std::string tmp;
-        for (auto& e : events) {
+        for (const auto& e : events) {
           tmp += e.to_string() + ",";
         }
         return tmp;
@@ -255,18 +255,18 @@ TEST_F(SourceBlocksTest, visit_in_order_rec_vs_iter) {
 }
 
 TEST_F(SourceBlocksTest, complex_serialize) {
-  auto method = create_method();
+  auto* method = create_method();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
   ASSERT_EQ(cfg.num_blocks(), 1u);
-  auto b = cfg.blocks()[0];
+  auto* b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
-  auto b1 = cfg.create_block();
-  auto b2 = cfg.create_block();
-  auto b3 = cfg.create_block();
-  auto b4 = cfg.create_block();
+  auto* b1 = cfg.create_block();
+  auto* b2 = cfg.create_block();
+  auto* b3 = cfg.create_block();
+  auto* b4 = cfg.create_block();
 
   cfg.add_edge(b, b1, EDGE_GOTO);
   cfg.add_edge(b, b2, EDGE_BRANCH);
@@ -288,18 +288,18 @@ B4: LFoo;.bar:()V@3)");
 }
 
 TEST_F(SourceBlocksTest, complex_deserialize) {
-  auto method = create_method();
+  auto* method = create_method();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
   ASSERT_EQ(cfg.num_blocks(), 1u);
-  auto b = cfg.blocks()[0];
+  auto* b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
-  auto b1 = cfg.create_block();
-  auto b2 = cfg.create_block();
-  auto b3 = cfg.create_block();
-  auto b4 = cfg.create_block();
+  auto* b1 = cfg.create_block();
+  auto* b2 = cfg.create_block();
+  auto* b3 = cfg.create_block();
+  auto* b4 = cfg.create_block();
 
   cfg.add_edge(b, b1, EDGE_GOTO);
   cfg.add_edge(b, b2, EDGE_BRANCH);
@@ -326,18 +326,18 @@ B4: LFoo;.bar:()V@3(0.4:0.2))");
 }
 
 TEST_F(SourceBlocksTest, complex_deserialize_global_default) {
-  auto method = create_method();
+  auto* method = create_method();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
   ASSERT_EQ(cfg.num_blocks(), 1u);
-  auto b = cfg.blocks()[0];
+  auto* b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
-  auto b1 = cfg.create_block();
-  auto b2 = cfg.create_block();
-  auto b3 = cfg.create_block();
-  auto b4 = cfg.create_block();
+  auto* b1 = cfg.create_block();
+  auto* b2 = cfg.create_block();
+  auto* b3 = cfg.create_block();
+  auto* b4 = cfg.create_block();
 
   cfg.add_edge(b, b1, EDGE_GOTO);
   cfg.add_edge(b, b2, EDGE_BRANCH);
@@ -364,18 +364,18 @@ B4: LFoo;.bar:()V@3(1:1))");
 }
 
 TEST_F(SourceBlocksTest, complex_deserialize_default) {
-  auto method = create_method();
+  auto* method = create_method();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
   ASSERT_EQ(cfg.num_blocks(), 1u);
-  auto b = cfg.blocks()[0];
+  auto* b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
-  auto b1 = cfg.create_block();
-  auto b2 = cfg.create_block();
-  auto b3 = cfg.create_block();
-  auto b4 = cfg.create_block();
+  auto* b1 = cfg.create_block();
+  auto* b2 = cfg.create_block();
+  auto* b3 = cfg.create_block();
+  auto* b4 = cfg.create_block();
 
   cfg.add_edge(b, b1, EDGE_GOTO);
   cfg.add_edge(b, b2, EDGE_BRANCH);
@@ -401,18 +401,18 @@ B4: LFoo;.bar:()V@3(123:456))");
 }
 
 TEST_F(SourceBlocksTest, complex_deserialize_failure) {
-  auto method = create_method();
+  auto* method = create_method();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
   ASSERT_EQ(cfg.num_blocks(), 1u);
-  auto b = cfg.blocks()[0];
+  auto* b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
-  auto b1 = cfg.create_block();
-  auto b2 = cfg.create_block();
-  auto b3 = cfg.create_block();
-  auto b4 = cfg.create_block();
+  auto* b1 = cfg.create_block();
+  auto* b2 = cfg.create_block();
+  auto* b3 = cfg.create_block();
+  auto* b4 = cfg.create_block();
 
   cfg.add_edge(b, b1, EDGE_GOTO);
   cfg.add_edge(b, b2, EDGE_BRANCH);
@@ -534,18 +534,18 @@ B4: LFoo;.bar:()V@3(x))";
 }
 
 TEST_F(SourceBlocksTest, complex_deserialize_failure_error_val) {
-  auto method = create_method();
+  auto* method = create_method();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
   ASSERT_EQ(cfg.num_blocks(), 1u);
-  auto b = cfg.blocks()[0];
+  auto* b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
-  auto b1 = cfg.create_block();
-  auto b2 = cfg.create_block();
-  auto b3 = cfg.create_block();
-  auto b4 = cfg.create_block();
+  auto* b1 = cfg.create_block();
+  auto* b2 = cfg.create_block();
+  auto* b3 = cfg.create_block();
+  auto* b4 = cfg.create_block();
 
   cfg.add_edge(b, b1, EDGE_GOTO);
   cfg.add_edge(b, b2, EDGE_BRANCH);
@@ -570,8 +570,8 @@ B4: LFoo;.bar:()V@3(123:456))";
 }
 
 TEST_F(SourceBlocksTest, inline_normalization) {
-  auto foo_method = create_method("LFoo");
-  auto bar_method = create_method("LBar");
+  auto* foo_method = create_method("LFoo");
+  auto* bar_method = create_method("LBar");
 
   constexpr const char* kCode = R"(
     (
@@ -630,7 +630,7 @@ B6: LBar;.bar:()V@1(0.2:0.2))");
 }
 
 TEST_F(SourceBlocksTest, serialize_exc_injected) {
-  auto foo_method = create_method("LFoo");
+  auto* foo_method = create_method("LFoo");
 
   constexpr const char* kCode = R"(
     (
@@ -669,7 +669,7 @@ B3: LFoo;.bar:()V@4)");
 }
 
 TEST_F(SourceBlocksTest, deserialize_exc_injected) {
-  auto foo_method = create_method("LFoo");
+  auto* foo_method = create_method("LFoo");
 
   constexpr const char* kCode = R"(
     (
@@ -710,18 +710,18 @@ B3: LFoo;.bar:()V@4(5:0))");
 }
 
 TEST_F(SourceBlocksTest, deserialize_x) {
-  auto method = create_method();
+  auto* method = create_method();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
   ASSERT_EQ(cfg.num_blocks(), 1u);
-  auto b = cfg.blocks()[0];
+  auto* b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
-  auto b1 = cfg.create_block();
-  auto b2 = cfg.create_block();
-  auto b3 = cfg.create_block();
-  auto b4 = cfg.create_block();
+  auto* b1 = cfg.create_block();
+  auto* b2 = cfg.create_block();
+  auto* b3 = cfg.create_block();
+  auto* b4 = cfg.create_block();
 
   cfg.add_edge(b, b1, EDGE_GOTO);
   cfg.add_edge(b, b2, EDGE_BRANCH);
@@ -749,7 +749,7 @@ B4: LFoo;.bar:()V@3(0.4:0.2))");
 TEST_F(SourceBlocksTest, coalesce) {
   IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
 
-  auto foo_method = create_method("LFoo");
+  auto* foo_method = create_method("LFoo");
 
   constexpr const char* kCode = R"(
     (
@@ -846,7 +846,7 @@ B3: LFoo;.bar:()V@4(5:0))");
 }
 
 TEST_F(SourceBlocksTest, get_last_source_block_before) {
-  auto foo_method = create_method("LFoo");
+  auto* foo_method = create_method("LFoo");
 
   constexpr const char* kCode = R"(
     (
@@ -877,7 +877,7 @@ TEST_F(SourceBlocksTest, get_last_source_block_before) {
     }
     if (it->insn->opcode() == OPCODE_CONST) {
       auto num = static_cast<uint32_t>(it->insn->get_literal());
-      auto sb = source_blocks::get_last_source_block_before(b, it);
+      auto* sb = source_blocks::get_last_source_block_before(b, it);
       EXPECT_NE(sb, nullptr);
       if (sb != nullptr) {
         EXPECT_EQ(sb->id, num);
@@ -887,7 +887,7 @@ TEST_F(SourceBlocksTest, get_last_source_block_before) {
 }
 
 TEST_F(SourceBlocksTest, get_last_source_block_before_non_entry) {
-  auto foo_method = create_method("LFoo");
+  auto* foo_method = create_method("LFoo");
 
   constexpr const char* kCode = R"(
     (
@@ -917,7 +917,7 @@ TEST_F(SourceBlocksTest, get_last_source_block_before_non_entry) {
     }
     if (it->insn->opcode() == OPCODE_CONST) {
       auto num = static_cast<uint32_t>(it->insn->get_literal());
-      auto sb = source_blocks::get_last_source_block_before(b, it);
+      auto* sb = source_blocks::get_last_source_block_before(b, it);
       if (num == 0) {
         EXPECT_EQ(sb, nullptr);
       } else {
@@ -936,7 +936,7 @@ TEST_F(SourceBlocksTest, dedup_diamond_with_interactions) {
   IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
   DexMethod* method = create_method("diamond");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (.src_block "LFoo;.bar:()V" 1 (1.0 1.0) (1.0 1.0) (1.0 1.0))
       (const v0 0)
@@ -967,7 +967,7 @@ TEST_F(SourceBlocksTest, dedup_diamond_with_interactions) {
   db.run();
   method->get_code()->clear_cfg();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (.src_block "LFoo;.bar:()V" 1 (1.0 1.0) (1.0 1.0) (1.0 1.0))
       (const v0 0)
@@ -995,7 +995,7 @@ TEST_F(SourceBlocksTest, dedup_multiple_interactions_in_same_block) {
   IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
   DexMethod* method = create_method("multiple_interactions");
 
-  auto str = R"(
+  const auto* str = R"(
     (
       (.src_block "LFoo;.bar:()V" 1 (5.0 1.0) (5.0 1.0) (5.0 1.0))
       (const v0 0)
@@ -1032,7 +1032,7 @@ TEST_F(SourceBlocksTest, dedup_multiple_interactions_in_same_block) {
   db.run();
   method->get_code()->clear_cfg();
 
-  auto expected_str = R"(
+  const auto* expected_str = R"(
     (
       (.src_block "LFoo;.bar:()V" 1 (5.0 1.0) (5.0 1.0) (5.0 1.0))
       (const v0 0)
@@ -1063,7 +1063,7 @@ TEST_F(SourceBlocksTest, dedup_multiple_interactions_in_same_block) {
 TEST_F(SourceBlocksTest, create_synth_sb_from_val) {
   g_redex->instrument_mode = true;
   IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
-  auto foo_method = create_method("LFoo");
+  auto* foo_method = create_method("LFoo");
 
   constexpr const char* kFoo = R"(
     (
@@ -1082,7 +1082,7 @@ TEST_F(SourceBlocksTest, create_synth_sb_from_val) {
   foo_method->set_code(assembler::ircode_from_string(kFoo));
   foo_method->get_code()->build_cfg();
 
-  auto bar_method = create_method("LBar");
+  auto* bar_method = create_method("LBar");
 
   constexpr const char* kBar = R"(
     (
@@ -1108,7 +1108,7 @@ TEST_F(SourceBlocksTest, create_synth_sb_from_val) {
 TEST_F(SourceBlocksTest, create_synth_sb_from_opt_val) {
   g_redex->instrument_mode = true;
   IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
-  auto foo_method = create_method("LFoo");
+  auto* foo_method = create_method("LFoo");
 
   constexpr const char* kFoo = R"(
     (
@@ -1127,7 +1127,7 @@ TEST_F(SourceBlocksTest, create_synth_sb_from_opt_val) {
   foo_method->set_code(assembler::ircode_from_string(kFoo));
   foo_method->get_code()->build_cfg();
 
-  auto bar_method = create_method("LBar");
+  auto* bar_method = create_method("LBar");
 
   constexpr const char* kBar = R"(
     (
@@ -1153,7 +1153,7 @@ TEST_F(SourceBlocksTest, create_synth_sb_from_opt_val) {
 TEST_F(SourceBlocksTest, create_synth_sb_from_val_list) {
   g_redex->instrument_mode = true;
   IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
-  auto foo_method = create_method("LFoo");
+  auto* foo_method = create_method("LFoo");
 
   constexpr const char* kFoo = R"(
     (
@@ -1172,7 +1172,7 @@ TEST_F(SourceBlocksTest, create_synth_sb_from_val_list) {
   foo_method->set_code(assembler::ircode_from_string(kFoo));
   foo_method->get_code()->build_cfg();
 
-  auto bar_method = create_method("LBar");
+  auto* bar_method = create_method("LBar");
 
   constexpr const char* kBar = R"(
     (
@@ -1186,8 +1186,9 @@ TEST_F(SourceBlocksTest, create_synth_sb_from_val_list) {
   bar_method->get_code()->build_cfg();
 
   source_blocks::insert_synthetic_source_blocks_in_method(bar_method, [&]() {
-    auto first_sb = source_blocks::get_first_source_block_of_method(foo_method);
-    auto last_sb = source_blocks::get_last_source_block(
+    auto* first_sb =
+        source_blocks::get_first_source_block_of_method(foo_method);
+    auto* last_sb = source_blocks::get_last_source_block(
         foo_method->get_code()->cfg().entry_block());
     std::vector<SourceBlock*> vec = {first_sb, last_sb};
     return clone_as_synthetic(first_sb, foo_method, vec);
@@ -1226,9 +1227,9 @@ TEST_F(SourceBlocksTest,
 
   g_redex->instrument_mode = true;
 
-  auto foo_method = create_method("LFoo");
+  auto* foo_method = create_method("LFoo");
 
-  auto kCode = R"(
+  const auto* kCode = R"(
     (
       ; A
       (const v0 0)
@@ -1271,8 +1272,8 @@ TEST_F(SourceBlocksTest,
   auto block2_sbs = source_blocks::gather_source_blocks(blocks[2]);
   ASSERT_EQ(block1_sbs.size(), 2);
   ASSERT_EQ(block2_sbs.size(), 2);
-  auto sb1 = block1_sbs[1];
-  auto sb2 = block2_sbs[1];
+  auto* sb1 = block1_sbs[1];
+  auto* sb2 = block2_sbs[1];
   sb2->id = 2;
 
   // Add a chained source block
@@ -1293,9 +1294,9 @@ TEST_F(SourceBlocksTest,
   auto post_dedup_blocks = foo_method->get_code()->cfg().blocks();
   ASSERT_EQ(post_dedup_blocks.size(), 4);
   std::unordered_set<uint32_t> seen_ids;
-  for (auto block : post_dedup_blocks) {
+  for (auto* block : post_dedup_blocks) {
     auto source_blocks = source_blocks::gather_source_blocks(block);
-    for (auto source_block : source_blocks) {
+    for (auto* source_block : source_blocks) {
       seen_ids.emplace(source_block->id);
     }
   }

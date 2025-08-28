@@ -138,7 +138,7 @@ TEST(ApkResources, TestRemappingOverlays) {
     // Verify the remapping took effect, which should rewrite the last 4 bytes
     // of the file.
     auto mapped_file = RedexMappedFile::open(arsc_path);
-    auto id_ptr =
+    auto* id_ptr =
         (uint32_t*)(mapped_file.const_data() + arsc_size - sizeof(uint32_t));
     EXPECT_EQ(*id_ptr, expected_value) << "Last ID was not remapped!";
   });
@@ -232,18 +232,18 @@ TEST(ApkResources, TestDeleteOverlayableIds) {
                        size_t overlayable_count,
                        size_t policy_count,
                        const std::vector<uint32_t>& expected_ids) {
-    auto arsc_table = (ResourcesArscFile*)res_table;
+    auto* arsc_table = (ResourcesArscFile*)res_table;
     auto& parsed_table = arsc_table->get_table_snapshot().get_parsed_table();
     auto& parsed_overlays_map =
         parsed_table.m_package_overlayables.begin()->second;
     EXPECT_EQ(parsed_overlays_map.size(), overlayable_count)
         << "Incorrect size of overlayable headers";
     if (overlayable_count > 0) {
-      auto header = parsed_overlays_map.begin()->first;
+      auto* header = parsed_overlays_map.begin()->first;
       auto& parsed_info = parsed_overlays_map.begin()->second;
       EXPECT_EQ(parsed_info.policies.size(), policy_count)
           << "Incorrect size of policy headers";
-      auto policy_header = parsed_info.policies.begin()->first;
+      auto* policy_header = parsed_info.policies.begin()->first;
       EXPECT_EQ(policy_header->entry_count, expected_ids.size())
           << "Incorrect number of overlayable ids!";
       EXPECT_EQ(policy_header->header.size,
@@ -254,7 +254,7 @@ TEST(ApkResources, TestDeleteOverlayableIds) {
                 sizeof(android::ResTable_overlayable_header) +
                     policy_header->header.size)
           << "Overlayable header size is incorrect.";
-      auto parsed_ids = parsed_info.policies.begin()->second;
+      auto* parsed_ids = parsed_info.policies.begin()->second;
       for (size_t i = 0; i < expected_ids.size(); i++) {
         EXPECT_EQ(parsed_ids[i], expected_ids[i])
             << "Incorrect ID at index " << i;

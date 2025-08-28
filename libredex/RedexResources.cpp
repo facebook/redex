@@ -555,7 +555,7 @@ std::string convert_utf8_to_mutf8(std::u8string_view input) {
 void resources_inlining_find_refs(
     const UnorderedMap<uint32_t, uint32_t>& past_refs,
     UnorderedMap<uint32_t, resources::InlinableValue>* inlinable_resources) {
-  for (auto& ref : UnorderedIterable(past_refs)) {
+  for (const auto& ref : UnorderedIterable(past_refs)) {
     uint32_t id = ref.first;
     uint32_t ref_id = ref.second;
     uint32_t current_ref_id = ref_id;

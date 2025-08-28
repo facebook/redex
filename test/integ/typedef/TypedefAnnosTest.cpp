@@ -14,7 +14,7 @@
 
 struct TypedefAnnosTest : public RedexIntegrationTest {
   cfg::ControlFlowGraph& get_cfg(DexMethod* method) {
-    auto code = method->get_code();
+    auto* code = method->get_code();
     code->build_cfg(/* editable */ false);
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
@@ -31,17 +31,18 @@ struct TypedefAnnosTest : public RedexIntegrationTest {
 };
 
 TEST_F(TypedefAnnosTest, test_anno_load_param_object) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testAnnoObject:(Lcom/facebook/redextest/"
-                    "I;)Lcom/facebook/redextest/I;")
-                    ->as_def();
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnosTest;.testAnnoObject:(Lcom/facebook/redextest/"
+          "I;)Lcom/facebook/redextest/I;")
+          ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(*(exit_env.get_annotation(insn->src(0))),
@@ -50,16 +51,16 @@ TEST_F(TypedefAnnosTest, test_anno_load_param_object) {
 }
 
 TEST_F(TypedefAnnosTest, test_int_anno_load_param) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testIntAnnoParam:(I)I")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnosTest;.testIntAnnoParam:(I)I")
+                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(*(exit_env.get_annotation(insn->src(0))),
@@ -68,18 +69,18 @@ TEST_F(TypedefAnnosTest, test_int_anno_load_param) {
 }
 
 TEST_F(TypedefAnnosTest, test_anno_invoke_static) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testAnnoInvokeStatic:(Lcom/facebook/"
-                    "redextest/"
-                    "I;)Lcom/facebook/redextest/I;")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnosTest;.testAnnoInvokeStatic:(Lcom/facebook/"
+                     "redextest/"
+                     "I;)Lcom/facebook/redextest/I;")
+                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(*(exit_env.get_annotation(insn->src(0))),
@@ -88,16 +89,16 @@ TEST_F(TypedefAnnosTest, test_anno_invoke_static) {
 }
 
 TEST_F(TypedefAnnosTest, test_int_anno_invoke_static) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testIntAnnoInvokeStatic:(I)I")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnosTest;.testIntAnnoInvokeStatic:(I)I")
+                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(*(exit_env.get_annotation(insn->src(0))),
@@ -106,17 +107,17 @@ TEST_F(TypedefAnnosTest, test_int_anno_invoke_static) {
 }
 
 TEST_F(TypedefAnnosTest, test_string_anno_load_parm) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testStringAnnoParam:(Ljava/lang/"
-                    "String;)Ljava/lang/String;")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnosTest;.testStringAnnoParam:(Ljava/lang/"
+                     "String;)Ljava/lang/String;")
+                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(*(exit_env.get_annotation(insn->src(0))),
@@ -125,17 +126,17 @@ TEST_F(TypedefAnnosTest, test_string_anno_load_parm) {
 }
 
 TEST_F(TypedefAnnosTest, test_string_anno_invoke_static) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testStringAnnoInvokeStatic:(Ljava/lang/"
-                    "String;)Ljava/lang/String;")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnosTest;.testStringAnnoInvokeStatic:(Ljava/lang/"
+                     "String;)Ljava/lang/String;")
+                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(*(exit_env.get_annotation(insn->src(0))),
@@ -144,17 +145,18 @@ TEST_F(TypedefAnnosTest, test_string_anno_invoke_static) {
 }
 
 TEST_F(TypedefAnnosTest, test_no_anno_inference) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testAnnoObject:(Lcom/facebook/redextest/"
-                    "I;)Lcom/facebook/redextest/I;")
-                    ->as_def();
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnosTest;.testAnnoObject:(Lcom/facebook/redextest/"
+          "I;)Lcom/facebook/redextest/I;")
+          ->as_def();
   auto& cfg = get_cfg(method);
 
   type_inference::TypeInference inference(cfg, false);
   inference.run(method);
 
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_FALSE(exit_env.get_annotation(insn->src(0)));
@@ -162,24 +164,24 @@ TEST_F(TypedefAnnosTest, test_no_anno_inference) {
 }
 
 TEST_F(TypedefAnnosTest, test_int_field) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testIntField:(I)V")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnosTest;.testIntField:(I)V")
+                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto env = inference.get_entry_state_at(exit_block);
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     inference.analyze_instruction(insn, &env);
     if (insn->opcode() == OPCODE_IPUT) {
       EXPECT_EQ(env.get_annotation(insn->src(1)), boost::none);
       auto domain = env.get_type_domain(insn->src(1));
-      auto dex_type =
+      auto* dex_type =
           DexType::make_type("Lcom/facebook/redextest/TypedefAnnosTest;");
       EXPECT_TRUE(domain.is_nullable());
       EXPECT_EQ(domain.get<1>(), SingletonDexTypeDomain(dex_type));
@@ -189,24 +191,24 @@ TEST_F(TypedefAnnosTest, test_int_field) {
 }
 
 TEST_F(TypedefAnnosTest, test_str_field) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testStringField:(Ljava/lang/"
-                    "String;)V")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnosTest;.testStringField:(Ljava/lang/"
+                     "String;)V")
+                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto env = inference.get_entry_state_at(exit_block);
   for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     inference.analyze_instruction(insn, &env);
     if (insn->opcode() == OPCODE_IPUT_OBJECT) {
       auto domain = env.get_type_domain(insn->src(1));
-      auto dex_type =
+      auto* dex_type =
           DexType::make_type("Lcom/facebook/redextest/TypedefAnnosTest;");
       EXPECT_EQ(env.get_annotation(insn->src(1)), boost::none);
       EXPECT_TRUE(domain.is_nullable());
@@ -217,18 +219,18 @@ TEST_F(TypedefAnnosTest, test_str_field) {
 }
 
 TEST_F(TypedefAnnosTest, test_read_int_field) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testReadIntField:()I")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnosTest;.testReadIntField:()I")
+                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto env = inference.get_entry_state_at(exit_block);
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(*(exit_env.get_annotation(insn->src(0))),
@@ -237,19 +239,19 @@ TEST_F(TypedefAnnosTest, test_read_int_field) {
 }
 
 TEST_F(TypedefAnnosTest, test_read_str_field) {
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnosTest;.testReadStringField:()Ljava/lang/"
-                    "String;")
-                    ->as_def();
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnosTest;.testReadStringField:()Ljava/lang/"
+                     "String;")
+                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
   type_inference::TypeInference inference(cfg, false, val);
   inference.run(method);
 
-  auto exit_block = cfg.exit_block();
+  auto* exit_block = cfg.exit_block();
   auto env = inference.get_entry_state_at(exit_block);
-  for (auto block : cfg.real_exit_blocks()) {
+  for (auto* block : cfg.real_exit_blocks()) {
     IRInstruction* insn = block->get_last_insn()->insn;
     const auto& exit_env = inference.get_exit_state_at(block);
     EXPECT_EQ(*(exit_env.get_annotation(insn->src(0))),

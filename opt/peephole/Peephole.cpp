@@ -344,7 +344,8 @@ struct Matcher {
       if (dex_pattern.opcodes.find(insn->opcode()) ==
               end(dex_pattern.opcodes) ||
           dex_pattern.srcs.size() != insn->srcs_size() ||
-          dex_pattern.dests.size() != insn->has_dest()) {
+          dex_pattern.dests.size() !=
+              static_cast<unsigned long>(insn->has_dest())) {
         return false;
       }
 
@@ -525,7 +526,7 @@ struct Matcher {
             new IRInstruction(*matched_instructions[replace_info.copy_index]));
         continue;
       }
-      auto replace = generate_dex_instruction(replace_info);
+      auto* replace = generate_dex_instruction(replace_info);
       replacements.push_back(replace);
 
       // Fill the arguments appropriately.
@@ -545,22 +546,22 @@ struct Matcher {
       if (replace_info.kind == DexPattern::Kind::string) {
         switch (replace_info.string) {
         case String::A: {
-          auto a = matched_strings.at(String::A);
+          const auto* a = matched_strings.at(String::A);
           replace->set_string(a);
           break;
         }
         case String::B: {
-          auto b = matched_strings.at(String::B);
+          const auto* b = matched_strings.at(String::B);
           replace->set_string(b);
           break;
         }
         case String::empty: {
-          auto empty = DexString::make_string("");
+          const auto* empty = DexString::make_string("");
           replace->set_string(empty);
           break;
         }
         case String::boolean_A_to_string: {
-          bool a = matched_literals.at(Literal::A);
+          bool a = matched_literals.at(Literal::A) != 0;
           replace->set_string(
               DexString::make_string(a == true ? "true" : "false"));
           break;
@@ -600,35 +601,35 @@ struct Matcher {
           break;
         }
         case String::concat_A_B_strings: {
-          auto a = matched_strings.at(String::A)->c_str();
-          auto b = matched_strings.at(String::B)->c_str();
+          const auto* a = matched_strings.at(String::A)->c_str();
+          const auto* b = matched_strings.at(String::B)->c_str();
           replace->set_string(
               DexString::make_string(std::string(a) + std::string(b)));
           break;
         }
         case String::concat_string_A_int_A: {
-          auto a = matched_strings.at(String::A)->c_str();
+          const auto* a = matched_strings.at(String::A)->c_str();
           int b = matched_literals.at(Literal::A);
           replace->set_string(
               DexString::make_string(std::string(a) + std::to_string(b)));
           break;
         }
         case String::concat_string_A_boolean_A: {
-          auto a = matched_strings.at(String::A)->c_str();
-          bool b = matched_literals.at(Literal::A);
+          const auto* a = matched_strings.at(String::A)->c_str();
+          bool b = matched_literals.at(Literal::A) != 0;
           replace->set_string(DexString::make_string(
               std::string(a) + (b == true ? "true" : "false")));
           break;
         }
         case String::concat_string_A_long_int_A: {
-          auto a = matched_strings.at(String::A)->c_str();
+          const auto* a = matched_strings.at(String::A)->c_str();
           int64_t b = matched_literals.at(Literal::A);
           replace->set_string(
               DexString::make_string(std::string(a) + std::to_string(b)));
           break;
         }
         case String::concat_string_A_char_A: {
-          auto a = matched_strings.at(String::A)->c_str();
+          const auto* a = matched_strings.at(String::A)->c_str();
           int b = matched_literals.at(Literal::A);
           auto bchar = encode_utf8_char_to_mutf8_string(b);
           replace->set_string(DexString::make_string(std::string(a) + bchar));
@@ -647,19 +648,19 @@ struct Matcher {
       } else if (replace_info.kind == DexPattern::Kind::literal) {
         switch (replace_info.literal) {
         case Literal::Compare_Strings_A_B: {
-          auto a = matched_strings.at(String::A);
-          auto b = matched_strings.at(String::B);
+          const auto* a = matched_strings.at(String::A);
+          const auto* b = matched_strings.at(String::B);
           // Just DexString* pointer comparison! DexString has uniqueness.
           replace->set_literal((a == b) ? 1L : 0L);
           break;
         }
         case Literal::Length_String_A: {
-          auto a = matched_strings.at(String::A);
+          const auto* a = matched_strings.at(String::A);
           replace->set_literal(a->length());
           break;
         }
         case Literal::HashCode_String_A: {
-          auto a = matched_strings.at(String::A);
+          const auto* a = matched_strings.at(String::A);
           replace->set_literal(static_cast<int64_t>(a->java_hashcode()));
           break;
         }
@@ -1251,7 +1252,7 @@ bool second_get_non_volatile(const Matcher& m) {
   }
 
   DexField* field = static_cast<DexField*>(field_ref);
-  return !(field->get_access() & ACC_VOLATILE);
+  return (field->get_access() & ACC_VOLATILE) == 0u;
 }
 
 DexPattern put_x_op(IROpcode opcode,
@@ -1731,7 +1732,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
   PeepholeOptimizer& operator=(const PeepholeOptimizer&) = delete;
 
   void peephole(DexMethod* method) {
-    auto code = method->get_code();
+    auto* code = method->get_code();
     always_assert(code->editable_cfg_built());
     auto& cfg = code->cfg();
 
@@ -1761,7 +1762,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
                 matcher.pattern.name.c_str());
 
           // Check that the anchor has not been removed by a previous match.
-          if (removed_insns.count(matcher.matched_instructions[0])) {
+          if (removed_insns.count(matcher.matched_instructions[0]) != 0u) {
             std::cerr << "WARNING: Overlapping peephole match!";
             matcher.reset();
             continue;
@@ -1781,7 +1782,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           }
 
           // Then remove all the matched instructions.
-          for (auto insn : matcher.matched_instructions) {
+          for (auto* insn : matcher.matched_instructions) {
             auto it = cfg.find_insn(insn, block);
             redex_assert(!it.is_end());
             mutator.remove(it);
@@ -1823,7 +1824,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
   }
 
   void run_method(DexMethod* m) {
-    if (m->get_code()) {
+    if (m->get_code() != nullptr) {
       peephole(m);
     }
   }

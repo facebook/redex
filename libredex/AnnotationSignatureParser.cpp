@@ -21,7 +21,7 @@ void parse(
     if (ev->evtype() != DEVT_ARRAY) {
       continue;
     }
-    auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
+    auto* arrayev = static_cast<DexEncodedValueArray*>(ev.get());
     auto const& evs = arrayev->evalues();
     for (auto& strev : *evs) {
       if (strev->evtype() != DEVT_STRING) {
@@ -47,13 +47,14 @@ void parse(
       //
       // [1] androidxref.com/8.0.0_r4/xref/libcore/luni/src/main/java/libcore/
       //     reflect/GenericSignatureParser.java
-      if (sigstr[0] == 'L' && strchr(sigcstr, '/') && !strchr(sigcstr, ':')) {
+      if (sigstr[0] == 'L' && (strchr(sigcstr, '/') != nullptr) &&
+          (strchr(sigcstr, ':') == nullptr)) {
         auto* sigtype = DexType::get_type(sigstr);
-        if (!sigtype) {
+        if (sigtype == nullptr) {
           // Try with semicolon.
           sigtype = DexType::get_type(sigstr + ';');
         }
-        if (!sigtype && sigstr.back() == '<') {
+        if ((sigtype == nullptr) && sigstr.back() == '<') {
           // Try replacing angle bracket with semicolon
           // d8 often encodes signature annotations this way
           std::string copy = str_copy(sigstr);

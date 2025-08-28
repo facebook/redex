@@ -117,7 +117,7 @@ UnorderedSet<const DexType*> get_excluded_classes(DexStoresVector& stores) {
     if (store.is_root_store()) {
       auto& dexen = store.get_dexen();
       always_assert(!dexen.empty());
-      for (auto cls : dexen.front()) {
+      for (auto* cls : dexen.front()) {
         excluded_classes.insert(cls->get_type());
       }
       if (dexen.size() > 1) {
@@ -166,9 +166,9 @@ DexField* try_get_enum_utils_f_field(EnumUtilsCache& cache,
               .get_or_create_and_assert_equal(
                   *c,
                   [&](int32_t key) -> DexField* {
-                    auto cls =
+                    auto* cls =
                         type_class(DexType::make_type("Lredex/$EnumUtils;"));
-                    if (!cls) {
+                    if (cls == nullptr) {
                       return nullptr;
                     }
                     std::string field_name = "f" + std::to_string(key);
@@ -188,8 +188,9 @@ std::pair<param_index_t, bool> analyze_args(const DexMethod* callee) {
   if (!is_static(callee)) {
     src_regs++;
   }
-  param_index_t expanded_src_regs{!is_static(callee)};
-  for (auto t : *args) {
+  param_index_t expanded_src_regs{
+      static_cast<param_index_t>(!is_static(callee))};
+  for (auto* t : *args) {
     expanded_src_regs += type::is_wide_type(t) ? 2 : 1;
   }
   auto needs_range = expanded_src_regs > 5;
@@ -222,7 +223,7 @@ ArgExclusivityVector get_arg_exclusivity(const UseDefChains& use_def_chains,
     if (defs.size() != 1) {
       continue;
     }
-    const auto def = *defs.begin();
+    auto* const def = *defs.begin();
     bool other_use = false;
     param_index_t count = 0;
     for (const auto& use : UnorderedIterable(def_use_chains.at(def))) {
@@ -274,9 +275,9 @@ void gather_caller_callees(
     always_assert(code.editable_cfg_built());
     CanOutlineBlockDecider block_decider(
         profile_guidance_config, throughput_interaction_indices,
-        throughput_methods.count(caller),
-        sufficiently_warm_methods.count(caller),
-        sufficiently_hot_methods.count(caller));
+        throughput_methods.count(caller) != 0u,
+        sufficiently_warm_methods.count(caller) != 0u,
+        sufficiently_hot_methods.count(caller) != 0u);
     MoveAwareChains move_aware_chains(code.cfg());
     const auto use_def_chains = move_aware_chains.get_use_def_chains();
     const auto def_use_chains = move_aware_chains.get_def_use_chains();
@@ -284,9 +285,9 @@ void gather_caller_callees(
       auto can_outline = block_decider.can_outline_from_big_block(big_block) ==
                          CanOutlineBlockDecider::Result::CanOutline;
       for (auto& mie : big_blocks::InstructionIterable(big_block)) {
-        auto insn = mie.insn;
-        auto callee = get_callee_fn(caller, insn);
-        if (!callee) {
+        auto* insn = mie.insn;
+        auto* callee = get_callee_fn(caller, insn);
+        if (callee == nullptr) {
           continue;
         }
         if (!can_outline) {
@@ -333,7 +334,7 @@ bool filter(const RefChecker& ref_checker,
     return !!signed_value->get_constant();
   } else if (const auto& singleton_value =
                  value.maybe_get<SingletonObjectDomain>()) {
-    auto field = *singleton_value->get_constant();
+    const auto* field = *singleton_value->get_constant();
     return ref_checker.check_field(field);
   } else if (const auto& obj_or_none =
                  value.maybe_get<ObjectWithImmutAttrDomain>()) {
@@ -460,7 +461,7 @@ class CalleeInvocationSelector {
                    value.maybe_get<ObjectWithImmutAttrDomain>()) {
       auto object = obj_or_none->get_constant();
       always_assert(object);
-      if (try_get_enum_utils_f_field(m_enum_utils_cache, *object)) {
+      if (try_get_enum_utils_f_field(m_enum_utils_cache, *object) != nullptr) {
         return m_cost_config.const_obj_or_none_cost_1;
       } else {
         always_assert(object->jvm_cached_singleton);
@@ -481,8 +482,8 @@ class CalleeInvocationSelector {
     const auto& bindings = css->arguments.bindings();
     boost::optional<int32_t> least_cost;
     param_index_t least_cost_src_idx = 0;
-    for (auto& p : bindings) {
-      auto& arguments_cost = m_total_argument_costs.at(p.first);
+    for (const auto& p : bindings) {
+      const auto& arguments_cost = m_total_argument_costs.at(p.first);
       auto it = arguments_cost.find(get_key(p.second));
       auto cost = it == arguments_cost.end() ? 0 : it->second;
       if (!least_cost || *least_cost > cost ||
@@ -507,10 +508,10 @@ class CalleeInvocationSelector {
     // - some extra potetnail move overhead if we need the range form
     int32_t pa_cross_dex_penalty =
         2 * std::ceil(std::sqrt(m_callee_caller_classes));
-    int32_t pa_method_cost =
-        m_cost_config.cost_method + pa_cross_dex_penalty + css->result_used;
+    int32_t pa_method_cost = m_cost_config.cost_method + pa_cross_dex_penalty +
+                             static_cast<unsigned long>(css->result_used);
     const auto& bindings = css->arguments.bindings();
-    for (auto& r : bindings) {
+    for (const auto& r : bindings) {
       pa_method_cost += const_value_cost(r.second);
     }
     if (m_needs_range) {
@@ -530,9 +531,9 @@ class CalleeInvocationSelector {
     // - (31 bits) if not, (clipped) least argument costs (smaller is better)
     // - (32 bits) running index to make the priority unique
     auto net_savings = get_net_savings(css);
-    uint64_t positive = net_savings > 0;
+    uint64_t positive = static_cast<uint64_t>(net_savings > 0);
     uint64_t a = 0;
-    if (!positive) {
+    if (positive == 0u) {
       auto least_cost = find_argument_with_least_cost(css).second;
       a = std::min<uint32_t>(least_cost, (1U << 31) - 1);
     }
@@ -559,9 +560,9 @@ class CalleeInvocationSelector {
         m_callee_caller_classes(callee_caller_classes),
         m_css_sets((RankPMap(m_rank)), (ParentPMap(m_parent))),
         m_cost_config(cost_config) {
-    auto callee_call_site_invokes =
+    const auto* callee_call_site_invokes =
         call_site_summarizer.get_callee_call_site_invokes(callee);
-    if (!callee_call_site_invokes) {
+    if (callee_call_site_invokes == nullptr) {
       return;
     }
 
@@ -576,8 +577,8 @@ class CalleeInvocationSelector {
     m_dependencies = std::vector<KeyedCsses>(m_src_regs, KeyedCsses());
 
     // Aggregate arg exclusivity across call-sites with the same summary.
-    for (auto invoke_insn : *callee_call_site_invokes) {
-      auto css =
+    for (const auto* invoke_insn : *callee_call_site_invokes) {
+      const auto* css =
           call_site_summarizer.get_instruction_call_site_summary(invoke_insn);
       if (css->arguments.is_top()) {
         continue;
@@ -592,12 +593,12 @@ class CalleeInvocationSelector {
         continue;
       }
       m_call_site_invoke_summaries.emplace_back(invoke_insn, css);
-      auto& aev = arg_exclusivity.at_unsafe(invoke_insn);
+      const auto& aev = arg_exclusivity.at_unsafe(invoke_insn);
       auto& aaem = m_aggregated_arg_exclusivity[css];
-      for (auto& p : aev) {
+      for (const auto& p : aev) {
         auto& aae = aaem[p.first];
         aae.ownership += p.second.ownership;
-        aae.needs_move += p.second.needs_move;
+        aae.needs_move += static_cast<unsigned int>(p.second.needs_move);
       }
     }
 
@@ -609,13 +610,13 @@ class CalleeInvocationSelector {
     // that call-site summary, which we'll need later when re-prioritizing
     // call-site summaries in the priority queue.
     for (auto& p : UnorderedIterable(m_aggregated_arg_exclusivity)) {
-      auto css = p.first;
+      const auto* css = p.first;
       auto& aaem = p.second;
       m_call_site_summaries.insert(css);
       m_css_sets.make_set(css);
       auto& ac = m_call_site_summary_argument_costs[css];
       const auto& bindings = css->arguments.bindings();
-      for (auto& q : bindings) {
+      for (const auto& q : bindings) {
         const auto src_idx = q.first;
         const auto& value = q.second;
         auto& aae = aaem[src_idx];
@@ -632,7 +633,7 @@ class CalleeInvocationSelector {
   // Fill priority queue with raw data.
   void fill_pq() {
     // Populate priority queue
-    for (auto css : order_csses(m_call_site_summaries)) {
+    for (const auto* css : order_csses(m_call_site_summaries)) {
       auto priority = make_priority(css);
       TRACE(PA, 4,
             "[PartialApplication] Considering %s(%s): net savings %d, priority "
@@ -648,14 +649,14 @@ class CalleeInvocationSelector {
   // possibly already existing item.
   void reduce_pq() {
     while (!m_pq.empty() && get_net_savings(m_pq.back()) <= 0) {
-      auto css = m_pq.back();
+      const auto* css = m_pq.back();
       m_pq.erase(css);
       auto ac_it = m_call_site_summary_argument_costs.find(css);
       auto ac = std::move(ac_it->second);
       m_call_site_summary_argument_costs.erase(ac_it);
-      for (auto& p : css->arguments.bindings()) {
+      for (const auto& p : css->arguments.bindings()) {
         bool erased =
-            m_dependencies.at(p.first).at(get_key(p.second)).erase(css);
+            m_dependencies.at(p.first).at(get_key(p.second)).erase(css) != 0u;
         always_assert(erased);
       }
       auto [src_idx, least_cost] = find_argument_with_least_cost(css);
@@ -670,14 +671,15 @@ class CalleeInvocationSelector {
               "[PartialApplication] Removing %s(%s) with least cost %u@%u",
               SHOW(m_callee), css->get_key().c_str(), least_cost, src_idx);
       } else {
-        auto reduced_css = m_call_site_summarizer.internalize_call_site_summary(
-            reduced_css_val);
+        const auto* reduced_css =
+            m_call_site_summarizer.internalize_call_site_summary(
+                reduced_css_val);
         ac_it = m_call_site_summary_argument_costs.find(reduced_css);
         if (ac_it == m_call_site_summary_argument_costs.end()) {
           ac_it = m_call_site_summary_argument_costs
                       .emplace(reduced_css, ArgumentCosts())
                       .first;
-          for (auto& p : reduced_css->arguments.bindings()) {
+          for (const auto& p : reduced_css->arguments.bindings()) {
             bool inserted = m_dependencies.at(p.first)
                                 .at(get_key(p.second))
                                 .insert(reduced_css)
@@ -704,7 +706,7 @@ class CalleeInvocationSelector {
               get_net_savings(reduced_css));
       }
       const auto& csses = m_dependencies.at(src_idx).at(key);
-      for (auto dependent_css : order_csses(csses)) {
+      for (const auto* dependent_css : order_csses(csses)) {
         TRACE(PA, 4, "[PartialApplication] Reprioritizing %s(%s)",
               SHOW(m_callee), dependent_css->get_key().c_str());
         m_pq.update_priority(dependent_css, make_priority(dependent_css));
@@ -721,7 +723,7 @@ class CalleeInvocationSelector {
         selected_css_sets;
     uint32_t callee_estimated_savings = 0;
     while (!m_pq.empty()) {
-      auto css = m_pq.front();
+      const auto* css = m_pq.front();
       auto net_savings = get_net_savings(css);
       m_pq.erase(css);
       selected_css_sets.emplace(m_css_sets.find_set(css), css);
@@ -733,21 +735,21 @@ class CalleeInvocationSelector {
     }
 
     for (auto& p : m_call_site_invoke_summaries) {
-      auto invoke_insn = p.first;
-      auto css = p.second;
-      if (!m_call_site_summaries.count(css)) {
+      const auto* invoke_insn = p.first;
+      const auto* css = p.second;
+      if (m_call_site_summaries.count(css) == 0u) {
         continue;
       }
       auto it = selected_css_sets.find(m_css_sets.find_set(css));
       if (it == selected_css_sets.end()) {
         continue;
       }
-      auto reduced_css = it->second;
+      const auto* reduced_css = it->second;
       // This invoke got selected because including it together with all
       // other invokes with the same css was beneficial on average. Check
       // (and filter out) if it's not actually beneficial for this particular
       // invoke.
-      auto& aev = m_arg_exclusivity.at_unsafe(invoke_insn);
+      const auto& aev = m_arg_exclusivity.at_unsafe(invoke_insn);
       const auto& bindings = reduced_css->arguments.bindings();
       if (std::find_if(aev.begin(), aev.end(), [&bindings](auto& q) {
             return !bindings.at(q.first).is_top();
@@ -821,8 +823,8 @@ void select_invokes_and_callers(
       callees_by_classes;
   UnorderedMap<const DexMethod*, InvokeCallSiteSummaries>
       selected_invokes_by_callees;
-  for (auto& p : UnorderedIterable(callee_caller)) {
-    auto callee = p.first;
+  for (const auto& p : UnorderedIterable(callee_caller)) {
+    const auto* callee = p.first;
     callees.push_back(callee);
     callees_by_classes[callee->get_class()].push_back(callee);
     selected_invokes_by_callees[callee];
@@ -852,7 +854,7 @@ void select_invokes_and_callers(
         std::sort(class_callees.begin(), class_callees.end(),
                   compare_dexmethods);
         UnorderedMap<uint64_t, uint32_t> stable_hash_indices;
-        for (auto callee : class_callees) {
+        for (const auto* callee : class_callees) {
           auto& callee_selected_invokes =
               selected_invokes_by_callees.at(callee);
           if (callee_selected_invokes.empty()) {
@@ -863,19 +865,19 @@ void select_invokes_and_callers(
                    dextypelists_comparator>
               ordered_pa_args_csses;
           auto callee_is_static = is_static(callee);
-          auto callee_proto = callee->get_proto();
+          auto* callee_proto = callee->get_proto();
           for (auto& p : UnorderedIterable(callee_selected_invokes)) {
-            auto css = p.second;
-            auto pa_args = get_partial_application_args(callee_is_static,
-                                                        callee_proto, css);
+            const auto* css = p.second;
+            auto* pa_args = get_partial_application_args(callee_is_static,
+                                                         callee_proto, css);
             [[maybe_unused]] auto inserted =
                 ordered_pa_args_csses[pa_args].insert(css).second;
             always_assert(true);
           }
           for (auto& p : ordered_pa_args_csses) {
-            auto pa_args = p.first;
+            const auto* pa_args = p.first;
             auto& csses = p.second;
-            for (auto css : order_csses(csses)) {
+            for (const auto* css : order_csses(csses)) {
               auto css_stable_hash = get_stable_hash(css->get_key());
               auto stable_hash =
                   get_stable_hash(callee_stable_hash, css_stable_hash);
@@ -885,12 +887,12 @@ void select_invokes_and_callers(
                   << (is_static(callee) ? "$spa$" : "$ipa$") << iteration << "$"
                   << ((boost::format("%08x") % stable_hash).str()) << "$"
                   << stable_hash_index;
-              auto pa_name = DexString::make_string(oss.str());
-              auto pa_rtype =
+              const auto* pa_name = DexString::make_string(oss.str());
+              auto* pa_rtype =
                   css->result_used ? callee_proto->get_rtype() : type::_void();
-              auto pa_proto = DexProto::make_proto(pa_rtype, pa_args);
-              auto pa_type = callee->get_class();
-              auto pa_method_ref =
+              auto* pa_proto = DexProto::make_proto(pa_rtype, pa_args);
+              auto* pa_type = callee->get_class();
+              auto* pa_method_ref =
                   DexMethod::make_method(pa_type, pa_name, pa_proto);
               CalleeCallSiteSummary ccss{callee, css};
               pa_method_refs->emplace(ccss, pa_method_ref);
@@ -898,7 +900,8 @@ void select_invokes_and_callers(
           }
           std::lock_guard<std::mutex> lock_guard(mutex);
           insert_unordered_iterable(*selected_invokes, callee_selected_invokes);
-          for (auto& p : UnorderedIterable(callee_caller.at_unsafe(callee))) {
+          for (const auto& p :
+               UnorderedIterable(callee_caller.at_unsafe(callee))) {
             selected_callers->insert(p.first);
           }
         }
@@ -937,13 +940,13 @@ void rewrite_callers(
     if (it == selected_invokes.end()) {
       return nullptr;
     }
-    auto callee = get_callee_fn(caller, insn);
+    auto* callee = get_callee_fn(caller, insn);
     always_assert(callee != nullptr);
-    auto css = it->second;
+    const auto* css = it->second;
     CalleeCallSiteSummary ccss{callee, css};
     DexMethodRef* pa_method_ref = pa_method_refs.at_unsafe(ccss);
-    auto new_insn = (new IRInstruction(get_invoke_opcode(callee)))
-                        ->set_method(pa_method_ref);
+    auto* new_insn = (new IRInstruction(get_invoke_opcode(callee)))
+                         ->set_method(pa_method_ref);
     new_insn->set_srcs_size(insn->srcs_size() - css->arguments.size());
     param_index_t idx = 0;
     for (param_index_t i = 0; i < insn->srcs_size(); i++) {
@@ -956,7 +959,7 @@ void rewrite_callers(
   };
 
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    if (!selected_callers.count(caller)) {
+    if (selected_callers.count(caller) == 0u) {
       return;
     }
     always_assert(!caller->rstate.no_optimizations());
@@ -967,9 +970,9 @@ void rewrite_callers(
     size_t removed_srcs{0};
     UnorderedSet<DexMethodRef*> pas;
     for (auto it = ii.begin(); it != ii.end(); it++) {
-      auto new_invoke_insn =
+      auto* new_invoke_insn =
           make_partial_application_invoke_insn(caller, it->insn);
-      if (!new_invoke_insn) {
+      if (new_invoke_insn == nullptr) {
         continue;
       }
       removed_srcs += it->insn->srcs_size() - new_invoke_insn->srcs_size();
@@ -979,7 +982,7 @@ void rewrite_callers(
         new_insns.push_back(new IRInstruction(*move_result_it->insn));
       }
       mutation.replace(it, new_insns);
-      auto pa = new_invoke_insn->get_method();
+      auto* pa = new_invoke_insn->get_method();
       if (pas.insert(pa).second) {
         pa_callers->update(
             pa, [caller](auto*, auto& vec, bool) { vec.push_back(caller); });
@@ -1013,7 +1016,7 @@ void push_callee_arg(EnumUtilsCache& enum_utils_cache,
                  value.maybe_get<SingletonObjectDomain>()) {
     auto c = singleton_value->get_constant();
     always_assert(c);
-    auto field = *c;
+    const auto* field = *c;
     always_assert(is_static(field));
     auto tmp = method_creator->make_local(type);
     main_block->sfield_op(opcode::sget_opcode_for_field(field),
@@ -1031,8 +1034,8 @@ void push_callee_arg(EnumUtilsCache& enum_utils_cache,
     } else {
       always_assert(object->jvm_cached_singleton);
       always_assert(object->attributes.size() == 1);
-      auto valueOf = type::get_value_of_method_for_type(object->type);
-      auto valueOf_arg_type = valueOf->get_proto()->get_args()->at(0);
+      auto* valueOf = type::get_value_of_method_for_type(object->type);
+      auto* valueOf_arg_type = valueOf->get_proto()->get_args()->at(0);
       auto tmp = method_creator->make_local(valueOf_arg_type);
       const auto& signed_value2 =
           object->attributes.front().value.maybe_get<SignedConstantDomain>();
@@ -1062,17 +1065,17 @@ void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
     always_assert(success);
   }
   for (auto& p : inverse_ordered_pa_method_refs) {
-    auto pa_method_ref = p.first;
-    auto callee = p.second->method;
-    auto cls = type_class(callee->get_class());
+    auto* pa_method_ref = p.first;
+    const auto* callee = p.second->method;
+    auto* cls = type_class(callee->get_class());
     always_assert(cls);
-    auto css = p.second->call_site_summary;
+    const auto* css = p.second->call_site_summary;
     auto access = callee->get_access() & ~(ACC_ABSTRACT | ACC_NATIVE);
     if (callee->is_virtual()) {
       access |= ACC_FINAL;
     }
     MethodCreator method_creator(pa_method_ref, access);
-    auto main_block = method_creator.get_main_block();
+    auto* main_block = method_creator.get_main_block();
     std::vector<Location> callee_args;
     param_index_t offset = 0;
     param_index_t next_arg_idx = 0;
@@ -1081,7 +1084,7 @@ void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
       offset++;
       callee_args.push_back(method_creator.get_local(next_arg_idx++));
     }
-    auto proto = callee->get_proto();
+    auto* proto = callee->get_proto();
     const auto* args = proto->get_args();
     for (param_index_t i = 0; i < args->size(); i++) {
       const auto& value = css->arguments.get(offset + i);
@@ -1101,7 +1104,7 @@ void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
     } else {
       main_block->ret_void();
     }
-    auto pa_method = method_creator.create();
+    auto* pa_method = method_creator.create();
     pa_method->rstate.set_generated();
     pa_method->rstate.set_dont_inline();
     if (!is_static(callee) && is_public(callee)) {
@@ -1120,8 +1123,8 @@ size_t derive_method_profiles_stats(ConfigFiles& config,
                                     const PaCallers& pa_callers) {
   auto& method_profiles = config.get_method_profiles();
   size_t res = 0;
-  for (auto& [pa_method_ref, callers] : UnorderedIterable(pa_callers)) {
-    auto pa_method = pa_method_ref->as_def();
+  for (const auto& [pa_method_ref, callers] : UnorderedIterable(pa_callers)) {
+    auto* pa_method = pa_method_ref->as_def();
     always_assert(pa_method);
     res += method_profiles.derive_stats(pa_method, callers);
   }
@@ -1203,7 +1206,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   auto excluded_classes = get_excluded_classes(stores);
 
   int min_sdk = mgr.get_redex_options().min_sdk;
-  auto min_sdk_api = get_min_sdk_api(conf, mgr);
+  const auto* min_sdk_api = get_min_sdk_api(conf, mgr);
   XStoreRefs xstores(stores);
   // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
   // it rejects all the references from stores with id larger than the largest
@@ -1246,18 +1249,19 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
     if (!opcode::is_an_invoke(insn->opcode()) ||
         insn->opcode() == OPCODE_INVOKE_SUPER ||
         method::is_init(insn->get_method()) ||
-        excluded_invoke_insns.count(insn) ||
+        (excluded_invoke_insns.count(insn) != 0u) ||
         caller->rstate.no_optimizations() ||
-        excluded_classes.count(caller->get_class())) {
+        (excluded_classes.count(caller->get_class()) != 0u)) {
       return nullptr;
     }
-    auto callee =
+    auto* callee =
         resolve_method(insn->get_method(), opcode_to_search(insn), caller);
-    if (!callee || callee->is_external()) {
+    if ((callee == nullptr) || callee->is_external()) {
       return nullptr;
     }
-    auto cls = type_class(callee->get_class());
-    if (!cls || cls->is_external() || excluded_classes.count(cls->get_type())) {
+    auto* cls = type_class(callee->get_class());
+    if ((cls == nullptr) || cls->is_external() ||
+        (excluded_classes.count(cls->get_type()) != 0u)) {
       return nullptr;
     }
     // We'd add helper methods to the class, so we also want to avoid that it's

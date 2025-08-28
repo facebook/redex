@@ -67,7 +67,7 @@ bool is_styleable(const DexClass* cls) {
 }
 
 bool is_zero_arg_constructor(const DexMethodRef* ref) {
-  auto proto = ref->get_proto();
+  auto* proto = ref->get_proto();
   return method::is_init(ref) && proto->is_void() && proto->get_args()->empty();
 }
 
@@ -92,7 +92,7 @@ bool is_tolerable_instrumentation_invoke(
 // other classes (which should be fine).
 bool valid_r_class_clinit(const DexMethod* clinit,
                           const ResourceConfig& global_resources_config) {
-  const auto code = clinit->get_code();
+  const auto* const code = clinit->get_code();
   if (code == nullptr) {
     return true;
   }
@@ -117,7 +117,7 @@ bool valid_r_class_init(const DexMethod* init,
   if (!is_zero_arg_constructor(init)) {
     return false;
   }
-  const auto code = init->get_code();
+  const auto* const code = init->get_code();
   if (code == nullptr) {
     return true;
   }
@@ -169,7 +169,7 @@ bool is_customized_resource_class(
 }
 
 bool is_external_ref(const DexFieldRef* field_ref) {
-  auto field_cls = type_class(field_ref->get_class());
+  auto* field_cls = type_class(field_ref->get_class());
   if (field_cls == nullptr) {
     return false;
   }
@@ -192,9 +192,9 @@ void prepare_r_classes(DexStoresVector& stores,
                        const GlobalConfig& global_config) {
   auto scope = build_class_scope(stores);
   RClassReader r_class_reader(global_config);
-  for (auto cls : scope) {
+  for (auto* cls : scope) {
     if (r_class_reader.is_r_class(cls)) {
-      auto clinit = cls->get_clinit();
+      auto* clinit = cls->get_clinit();
       if (clinit != nullptr && !clinit->rstate.should_not_outline()) {
         TRACE(OPTRES, 1, "Disabling outlining for %s", SHOW(clinit));
         clinit->rstate.set_no_outlining();
@@ -214,7 +214,7 @@ bool RClassReader::valid_r_class_structure(const DexClass* cls) const {
   if (methods.size() > 2) {
     return false;
   }
-  for (auto m : methods) {
+  for (auto* m : methods) {
     if (m == cls->get_clinit()) {
       if (!valid_r_class_clinit(m, m_global_resources_config)) {
         return false;
@@ -234,7 +234,7 @@ bool RClassReader::is_r_class(const DexClass* cls) const {
   if (is_customized_resource_class(cls, m_global_resources_config)) {
     // Customized classes will have fewer validation checks; they may have some
     // extra/inconsequential getters.
-    auto clinit = cls->get_clinit();
+    auto* clinit = cls->get_clinit();
     if (clinit != nullptr) {
       always_assert_log(valid_r_class_clinit(clinit, m_global_resources_config),
                         "<clinit> unsupported of custom R class %s", SHOW(cls));
@@ -252,7 +252,7 @@ bool RClassReader::is_r_class(const DexClass* cls) const {
 }
 
 bool RClassReader::is_r_class(const DexFieldRef* field_ref) const {
-  auto field_cls = type_class(field_ref->get_class());
+  auto* field_cls = type_class(field_ref->get_class());
   if (field_cls == nullptr) {
     return false;
   }
@@ -268,7 +268,7 @@ using ArrayAnalyzer = InstructionAnalyzerCombiner<cp::ClinitFieldAnalyzer,
 FieldArrayValues RClassReader::analyze_clinit(
     DexClass* cls, const FieldArrayValues& known_field_values) const {
   FieldArrayValues values;
-  auto clinit = cls->get_clinit();
+  auto* clinit = cls->get_clinit();
   if (clinit == nullptr || clinit->get_code() == nullptr) {
     return values;
   }
@@ -289,13 +289,13 @@ FieldArrayValues RClassReader::analyze_clinit(
     auto env = intra_cp.get_entry_state_at(block);
     auto last_insn = block->get_last_insn();
     for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+      auto* insn = mie.insn;
       if (insn->opcode() == OPCODE_SPUT_OBJECT &&
           insn->get_field()->get_class() == clinit->get_class()) {
         // NOTE: this entire job may be best performed as interprocedural.
         // Some day.
-        auto field_type = insn->get_field()->get_type();
-        auto field_def = insn->get_field()->as_def();
+        auto* field_type = insn->get_field()->get_type();
+        auto* field_def = insn->get_field()->as_def();
         always_assert(type::is_array(field_type));
         const DexType* element_type =
             type::get_array_component_type(field_type);
@@ -322,7 +322,7 @@ FieldArrayValues RClassReader::analyze_clinit(
           always_assert_log(def->opcode() == OPCODE_SGET_OBJECT,
                             "Unsupported array definition at %s in %s",
                             SHOW(def), SHOW(cfg));
-          auto source_field = def->get_field();
+          auto* source_field = def->get_field();
           if (!is_external_ref(source_field)) {
             always_assert_log(known_field_values.count(source_field) > 0,
                               "Field %s was not analyzed",
@@ -341,7 +341,7 @@ FieldArrayValues RClassReader::analyze_clinit(
   }
 
   auto env = intra_cp.get_exit_state_at(cfg.exit_block());
-  for (auto f : UnorderedIterable(locally_built_fields)) {
+  for (auto* f : UnorderedIterable(locally_built_fields)) {
     auto field_value = env.get(f);
     auto heap_ptr = field_value.maybe_get<AbstractHeapPointer>();
     always_assert_log(heap_ptr && heap_ptr->is_value(),
@@ -368,7 +368,7 @@ FieldArrayValues RClassReader::analyze_clinit(
 void RClassReader::ordered_r_class_iteration(
     const Scope& scope, const std::function<void(DexClass*)>& callback) const {
   Scope apply_scope;
-  for (auto cls : scope) {
+  for (auto* cls : scope) {
     if (is_r_class(cls)) {
       apply_scope.emplace_back(cls);
     }
@@ -379,7 +379,7 @@ void RClassReader::ordered_r_class_iteration(
   always_assert_log(clinit_cycles == 0, "Found %zu clinit cycles",
                     clinit_cycles);
 
-  for (auto cls : ordered_scope) {
+  for (auto* cls : ordered_scope) {
     callback(cls);
   }
 }
@@ -395,7 +395,7 @@ void RClassReader::extract_resource_ids_from_static_arrays(
     field_values.insert(class_state.begin(), class_state.end());
   });
   for (auto&& [f, vec] : field_values) {
-    auto field_def = f->as_def();
+    auto* field_def = f->as_def();
     if (field_def != nullptr && array_fields.count(field_def) > 0) {
       out_values->insert(vec.begin(), vec.end());
     }
@@ -407,10 +407,10 @@ void RClassWriter::remap_resource_class_scalars(
     const std::map<uint32_t, uint32_t>& old_to_remapped_ids) const {
   auto scope = build_class_scope(stores);
   RClassReader r_class_reader(m_global_resources_config);
-  for (auto clazz : scope) {
+  for (auto* clazz : scope) {
     if (r_class_reader.is_r_class(clazz)) {
       const std::vector<DexField*>& fields = clazz->get_sfields();
-      for (auto& field : fields) {
+      for (const auto& field : fields) {
         if (!type::is_int(field->get_type())) {
           continue;
         }
@@ -418,7 +418,7 @@ void RClassWriter::remap_resource_class_scalars(
         always_assert(encoded_val <= std::numeric_limits<int32_t>::max());
         auto encoded_int = (uint32_t)encoded_val;
         if (encoded_int > PACKAGE_RESID_START &&
-            old_to_remapped_ids.count(encoded_int)) {
+            (old_to_remapped_ids.count(encoded_int) != 0u)) {
           field->get_static_value()->value(old_to_remapped_ids.at(encoded_int));
         }
       }
@@ -436,7 +436,7 @@ bool remap_array(const std::vector<uint32_t>& original_values,
   bool changed{false};
   for (auto payload : original_values) {
     if (payload > PACKAGE_RESID_START) {
-      bool keep = old_to_remapped_ids.count(payload);
+      bool keep = old_to_remapped_ids.count(payload) != 0u;
       if (keep) {
         auto remapped = old_to_remapped_ids.at(payload);
         new_values->emplace_back(remapped);
@@ -474,7 +474,7 @@ void perform_dce(Scope& scope) {
                           &escape_summaries,
                           &effect_summaries);
   impl.dce();
-  auto& stats = impl.get_stats();
+  const auto& stats = impl.get_stats();
   TRACE(OPTRES, 2, "Pruned %zu instruction(s); R class scope size = %zu",
         stats.removed_instructions, scope.size());
 }
@@ -518,7 +518,7 @@ size_t RClassWriter::remap_resource_class_clinit(
   };
   auto iterable = cfg::InstructionIterable(cfg);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
-    auto insn = it->insn;
+    auto* insn = it->insn;
     if (insn->opcode() == OPCODE_SPUT_OBJECT &&
         pending_new_values.count(insn->get_field()) > 0) {
       auto new_values = pending_new_values.at(insn->get_field());
@@ -534,14 +534,14 @@ size_t RClassWriter::remap_resource_class_clinit(
       auto size_reg = get_register_for_value(new_values.size());
       auto array_reg = cfg.allocate_temp();
 
-      auto new_array = new IRInstruction(OPCODE_NEW_ARRAY);
+      auto* new_array = new IRInstruction(OPCODE_NEW_ARRAY);
       new_array->set_src(0, size_reg);
       new_array->set_type(insn->get_field()->get_type());
-      auto move_result_pseudo =
+      auto* move_result_pseudo =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       move_result_pseudo->set_dest(array_reg);
       if (!new_values.empty()) {
-        auto fill_array_data = new IRInstruction(OPCODE_FILL_ARRAY_DATA);
+        auto* fill_array_data = new IRInstruction(OPCODE_FILL_ARRAY_DATA);
         fill_array_data->set_src(0, array_reg);
         auto op_data = encode_fill_array_data_payload(new_values);
         fill_array_data->set_data(std::move(op_data));
@@ -560,7 +560,7 @@ size_t RClassWriter::remap_resource_class_clinit(
   // Ensure all constants are at beginning of entry block and available to succs
   std::vector<IRInstruction*> consts;
   for (auto&& [lit, reg] : values_to_reg) {
-    auto insn = new IRInstruction(OPCODE_CONST);
+    auto* insn = new IRInstruction(OPCODE_CONST);
     insn->set_dest(reg);
     insn->set_literal(lit);
     consts.emplace_back(insn);

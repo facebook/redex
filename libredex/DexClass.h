@@ -182,7 +182,7 @@ inline bool compare_dexstrings(const DexString* a, const DexString* b) {
   if (strlen(sb) == 0) {
     return false;
   }
-  while (1) {
+  while (true) {
     uint32_t cpa = mutf8_next_code_point(sa);
     uint32_t cpb = mutf8_next_code_point(sb);
     if (cpa == cpb) {
@@ -230,8 +230,8 @@ class DexType {
 
   // Always makes a new type that is unique.
   static DexType* make_unique_type(const std::string_view type_name) {
-    auto ret = DexString::make_string(type_name);
-    for (uint32_t i = 0; get_type(ret); i++) {
+    const auto* ret = DexString::make_string(type_name);
+    for (uint32_t i = 0; get_type(ret) != nullptr; i++) {
       ret = DexString::make_string(type_name.substr(0, type_name.size() - 1) +
                                    "r$" + std::to_string(i) + ";");
     }
@@ -398,8 +398,8 @@ class DexField : public DexFieldRef {
   static const DexString* get_unique_name(DexType* container,
                                           const DexString* name,
                                           DexType* type) {
-    auto ret = name;
-    for (uint32_t i = 0; get_field(container, ret, type); i++) {
+    const auto* ret = name;
+    for (uint32_t i = 0; get_field(container, ret, type) != nullptr; i++) {
       ret = DexString::make_string(name->str() + "r$" + std::to_string(i));
     }
     return ret;
@@ -511,7 +511,7 @@ class DexTypeList {
   friend bool operator<(const DexTypeList& a, const DexTypeList& b) {
     auto ita = a.m_list.begin();
     auto itb = b.m_list.begin();
-    while (1) {
+    while (true) {
       if (itb == b.m_list.end()) {
         return false;
       }
@@ -984,10 +984,10 @@ class DexMethod : public DexMethodRef {
                                    const char* rtype_str,
                                    const std::vector<const char*>& arg_strs) {
     DexType* cls = DexType::make_type(cls_name);
-    auto* name = DexString::make_string(meth_name);
+    const auto* name = DexString::make_string(meth_name);
     DexType* rtype = DexType::make_type(rtype_str);
     DexTypeList::ContainerType args;
-    for (auto const arg_str : arg_strs) {
+    for (const auto* const arg_str : arg_strs) {
       DexType* arg = DexType::make_type(arg_str);
       args.push_back(arg);
     }
@@ -1031,8 +1031,8 @@ class DexMethod : public DexMethodRef {
   static const DexString* get_unique_name(DexType* type,
                                           const DexString* name,
                                           DexProto* proto) {
-    auto ret = name;
-    for (uint32_t i = 0; get_method(type, ret, proto); i++) {
+    const auto* ret = name;
+    for (uint32_t i = 0; get_method(type, ret, proto) != nullptr; i++) {
       ret = DexString::make_string(name->str() + "r$" + std::to_string(i));
     }
     return ret;
@@ -1249,7 +1249,7 @@ class DexClass {
    * It takes no arguments and returns void.
    */
   DexMethod* get_clinit() const {
-    for (auto meth : get_dmethods()) {
+    for (auto* meth : get_dmethods()) {
       if (strcmp(meth->get_name()->c_str(), "<clinit>") == 0) {
         return meth;
       }
@@ -1259,7 +1259,7 @@ class DexClass {
 
   std::vector<DexMethod*> get_ctors() const {
     std::vector<DexMethod*> ctors;
-    for (auto meth : get_dmethods()) {
+    for (auto* meth : get_dmethods()) {
       if (strcmp(meth->get_name()->c_str(), "<init>") == 0) {
         ctors.push_back(meth);
       }
@@ -1473,7 +1473,7 @@ DexClass* type_class(const DexType* t);
  * no such DexClass exists.
  */
 inline DexClass* type_class_internal(const DexType* t) {
-  auto dc = type_class(t);
+  auto* dc = type_class(t);
   if (dc == nullptr || dc->is_external()) {
     return nullptr;
   }

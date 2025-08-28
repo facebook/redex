@@ -101,7 +101,7 @@ cfg::InstructionIterator find_large_switch(cfg::ControlFlowGraph& cfg,
     if (!opcode::is_switch(it->insn->opcode())) {
       continue;
     }
-    auto block = it.block();
+    auto* block = it.block();
     redex_assert(it->insn == CONSTP(block)->get_last_insn()->insn);
     if (block->succs().size() >= case_threshold) {
       break;
@@ -176,7 +176,7 @@ ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
     if (!src) {
       return boost::none;
     }
-    auto src_insn = *src;
+    auto* src_insn = *src;
 
     val.push_back(src_insn);
     if (seen.count(src_insn) != 0) {
@@ -231,20 +231,20 @@ SwitchRange get_switch_range(const cfg::ControlFlowGraph& cfg,
 }
 
 DexMethod* create_dex_method(DexMethod* m, std::unique_ptr<IRCode>&& code) {
-  auto* clone_name = DexMethod::get_unique_name(
+  const auto* clone_name = DexMethod::get_unique_name(
       m->get_class(),
       DexString::make_string(m->str() + "$split_switch_clone"),
       m->get_proto());
 
-  auto method_ref =
+  auto* method_ref =
       DexMethod::make_method(m->get_class(), clone_name, m->get_proto());
 
   DexAccessFlags access_flags = DexAccessFlags::ACC_PRIVATE;
   if (is_static(m)) {
     access_flags |= DexAccessFlags::ACC_STATIC;
   }
-  auto cloned_method = method_ref->make_concrete(access_flags, std::move(code),
-                                                 /* is_virtual */ false);
+  auto* cloned_method = method_ref->make_concrete(access_flags, std::move(code),
+                                                  /* is_virtual */ false);
   cloned_method->set_deobfuscated_name(show_deobfuscated(cloned_method));
 
   cloned_method->rstate.set_dont_inline(); // Don't undo our work.
@@ -346,7 +346,7 @@ void insert_dispatches(
     last_block = cfg.entry_block();
   }
   redex_assert(last_block->succs().size() == 1);
-  auto fallthrough = last_block->succs()[0]->target();
+  auto* fallthrough = last_block->succs()[0]->target();
 
   // Create templates for the dispatch code, so it's easy to create a block.
   auto invoke_template = std::make_unique<IRInstruction>(
@@ -393,20 +393,20 @@ void insert_dispatches(
   reg_t lit_reg = cfg.allocate_temp();
   for (const auto& p : splits) {
     // Create condition head block.
-    auto condition_block = cfg.create_block();
+    auto* condition_block = cfg.create_block();
 
-    auto literal_insn = new IRInstruction(OPCODE_CONST);
+    auto* literal_insn = new IRInstruction(OPCODE_CONST);
     literal_insn->set_literal(p.first);
     literal_insn->set_dest(lit_reg);
     condition_block->push_back(literal_insn);
 
-    auto ifgt_insn = new IRInstruction(OPCODE_IF_GT);
+    auto* ifgt_insn = new IRInstruction(OPCODE_IF_GT);
     ifgt_insn->set_src(0, value_reg);
     ifgt_insn->set_src(1, lit_reg);
 
     // Create invoke and return.
-    auto dispatch_block = cfg.create_block();
-    auto invoke = new IRInstruction(*invoke_template);
+    auto* dispatch_block = cfg.create_block();
+    auto* invoke = new IRInstruction(*invoke_template);
     invoke->set_method(p.second);
     dispatch_block->push_back(invoke);
     if (move_result_template) {
@@ -418,12 +418,12 @@ void insert_dispatches(
   }
 
   // Now assemble.
-  auto last_fallthrough = fallthrough;
+  auto* last_fallthrough = fallthrough;
   for (size_t i = 0; i != dispatch_blocks.size(); ++i) {
     const auto& b = dispatch_blocks[i];
-    auto next_block = i < dispatch_blocks.size() - 1
-                          ? dispatch_blocks[i + 1].condition_head
-                          : b.dispatch_block;
+    auto* next_block = i < dispatch_blocks.size() - 1
+                           ? dispatch_blocks[i + 1].condition_head
+                           : b.dispatch_block;
     cfg.create_branch(b.condition_head, b.branch_insn, last_fallthrough,
                       next_block);
     last_fallthrough = b.dispatch_block;
@@ -639,7 +639,7 @@ std::vector<DexMethod*> run_split(AnalysisData& analysis_data,
   for (size_t i = 0; i < mid_cases.size() - 1; ++i) {
     int32_t above = mid_cases[i];
     int32_t to = mid_cases[i + 1];
-    auto cloned_method = create_split(m, code, case_threshold, above, to);
+    auto* cloned_method = create_split(m, code, case_threshold, above, to);
     new_methods.emplace_back(above, cloned_method);
   }
 
@@ -675,7 +675,7 @@ Stats run_split_dexes(DexStoresVector& stores,
   UnorderedSet<DexType*> cset;
   UnorderedMap<DexType*, std::vector<AnalysisData>> mmap;
   for (auto& data : methods) {
-    auto t = data.m->get_class();
+    auto* t = data.m->get_class();
     cset.insert(t);
     mmap[t].emplace_back(std::move(data));
   }
@@ -701,7 +701,7 @@ Stats run_split_dexes(DexStoresVector& stores,
           return;
         }
         UnorderedSet<DexMethodRef*> method_refs;
-        for (auto cls : *dex) {
+        for (auto* cls : *dex) {
           cls->gather_methods(method_refs);
         }
 
@@ -949,12 +949,12 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
   auto replace_chars = [](std::string& s) {
     for (size_t i = 0; i < s.length(); ++i) {
       char& c = s.at(i);
-      if (!isalnum(c)) {
+      if (isalnum(c) == 0) {
         c = '_';
       }
     }
   };
-  for (auto m : UnorderedIterable(result_stats.new_methods)) {
+  for (auto* m : UnorderedIterable(result_stats.new_methods)) {
     std::string name = show(m);
     replace_chars(name);
     mgr.set_metric("method_created_" + name, 1);

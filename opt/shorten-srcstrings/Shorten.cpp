@@ -54,13 +54,13 @@ const DexString* get_suitable_string(
     UnorderedSet<const DexString*>& set,
     std::vector<const DexString*>& dex_strings) {
   while (!dex_strings.empty()) {
-    auto val = dex_strings.back();
+    const auto* val = dex_strings.back();
     dex_strings.pop_back();
-    auto valstr = val->c_str();
+    const auto* valstr = val->c_str();
     auto vallen = strlen(valstr);
     auto not_file_name = !maybe_file_name(valstr, vallen);
     auto no_bad_char = is_reasonable_string(valstr, vallen);
-    auto not_seen_yet = !set.count(val);
+    auto not_seen_yet = set.count(val) == 0u;
     if (not_seen_yet && not_file_name && no_bad_char) {
       return val;
     }
@@ -78,8 +78,8 @@ static void strip_src_strings(DexStoresVector& stores,
   UnorderedSet<const DexString*> shortened_used;
   for (auto& classes : DexStoreClassesIterator(stores)) {
     for (auto const& clazz : classes) {
-      auto src_string = clazz->get_source_file();
-      if (src_string) {
+      const auto* src_string = clazz->get_source_file();
+      if (src_string != nullptr) {
         // inserting actual source files into this set will cause them to not
         // get used --- as the whole point of this analysis is to substitute
         // source file strings
@@ -101,15 +101,15 @@ static void strip_src_strings(DexStoresVector& stores,
                  std::end(current_dex_strings));
 
     for (auto const& clazz : classes) {
-      auto src_string = clazz->get_source_file();
-      if (!src_string) {
+      const auto* src_string = clazz->get_source_file();
+      if (src_string == nullptr) {
         continue;
       }
       const DexString* shortened_src_string = nullptr;
       if (src_to_shortened.count(src_string) == 0) {
         shortened_src_string =
             get_suitable_string(shortened_used, current_dex_strings);
-        if (!shortened_src_string) {
+        if (shortened_src_string == nullptr) {
           opt_warn(UNSHORTENED_SRC_STRING, "%s\n", SHOW(src_string));
           shortened_src_string = src_string;
         } else {
@@ -143,7 +143,7 @@ static void strip_src_strings(DexStoresVector& stores,
     auto desc_vector = it.second;
     sort_unique(desc_vector);
     fprintf(fd, "%s ->", it.first->c_str());
-    for (auto str : desc_vector) {
+    for (const auto* str : desc_vector) {
       fprintf(fd, " %s,", str->c_str());
     }
     fprintf(fd, "\n");

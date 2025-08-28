@@ -21,9 +21,9 @@ void make_instanceof_table(InstanceOfTable& instance_of_table,
                            const DexType* type,
                            size_t depth = 1) {
   auto& parent_chain = instance_of_table[type];
-  const auto cls = type_class(type);
+  auto* const cls = type_class(type);
   if (cls != nullptr) {
-    const auto super = cls->get_super_class();
+    auto* const super = cls->get_super_class();
     if (super != nullptr) {
       const auto& super_chain = instance_of_table.find(super);
       always_assert(super_chain != instance_of_table.end());
@@ -47,7 +47,7 @@ void make_instanceof_table(InstanceOfTable& instance_of_table,
 void load_interface_children(ClassHierarchy& children, const DexClass* intf) {
   for (const auto& super_intf : *intf->get_interfaces()) {
     children[super_intf].insert(intf->get_type());
-    const auto super_intf_cls = type_class(super_intf);
+    auto* const super_intf_cls = type_class(super_intf);
     if (super_intf_cls != nullptr) {
       load_interface_children(children, super_intf_cls);
     }
@@ -85,7 +85,7 @@ TypeSystem::TypeSystem(const Scope& scope) : m_class_scopes(scope) {
 
 void TypeSystem::get_all_super_interfaces(const DexType* intf,
                                           TypeSet& supers) const {
-  const auto cls = type_class(intf);
+  auto* const cls = type_class(intf);
   if (cls == nullptr) {
     return;
   }
@@ -111,7 +111,7 @@ TypeSet TypeSystem::get_local_interfaces(const TypeSet& classes) {
 
     const auto& implementors = get_implementors(*it);
     for (const auto& cls : implementors) {
-      if (!classes.count(cls)) {
+      if (classes.count(cls) == 0u) {
         keep = false;
         break;
       }
@@ -135,7 +135,7 @@ const VirtualScope* TypeSystem::find_virtual_scope(
            meth1->get_proto() == meth2->get_proto();
   };
 
-  auto type = meth->get_class();
+  auto* type = meth->get_class();
   while (type != nullptr) {
     TRACE(VIRT, 5, "check... %s", SHOW(type));
     for (const auto& scope : m_class_scopes.get(type)) {
@@ -145,7 +145,7 @@ const VirtualScope* TypeSystem::find_virtual_scope(
         return scope;
       }
     }
-    const auto cls = type_class(type);
+    auto* const cls = type_class(type);
     if (cls == nullptr) {
       break;
     }
@@ -187,8 +187,8 @@ void TypeSystem::make_instanceof_interfaces_table() {
   TypeVector no_parents;
   const auto& hierarchy = m_class_scopes.get_class_hierarchy();
   for (const auto& children_it : UnorderedIterable(hierarchy)) {
-    const auto parent = children_it.first;
-    const auto parent_cls = type_class(parent);
+    const auto* const parent = children_it.first;
+    auto* const parent_cls = type_class(parent);
     if (parent_cls != nullptr) {
       continue;
     }
@@ -204,9 +204,9 @@ void TypeSystem::make_instanceof_interfaces_table() {
 }
 
 void TypeSystem::make_interfaces_table(const DexType* type) {
-  const auto cls = type_class(type);
+  auto* const cls = type_class(type);
   if (cls != nullptr) {
-    const auto super = cls->get_super_class();
+    auto* const super = cls->get_super_class();
     if (super != nullptr) {
       const auto& parent_intfs = m_interfaces.find(super);
       if (parent_intfs != m_interfaces.end()) {
@@ -240,7 +240,7 @@ void TypeSystem::select_methods(const VirtualScope& scope,
   TRACE(VIRT, 1, "select_methods make type_method map");
   UnorderedMap<const DexType*, DexMethod*> type_method;
   for (const auto& vmeth : scope.methods) {
-    const auto meth = vmeth.first;
+    auto* const meth = vmeth.first;
     if (!meth->is_def()) {
       continue;
     }
@@ -250,7 +250,7 @@ void TypeSystem::select_methods(const VirtualScope& scope,
   TRACE(VIRT, 1, "select_methods walk hierarchy");
   while (!filter.empty()) {
     auto it = unordered_any(filter);
-    const auto type = *it;
+    auto* const type = *it;
     filter.erase(it);
     TRACE(VIRT, 1, "check... %s", SHOW(type));
     if (!is_subtype(scope.type, type)) {
@@ -261,7 +261,7 @@ void TypeSystem::select_methods(const VirtualScope& scope,
       methods.insert(meth->second);
       continue;
     }
-    const auto super = type_class(type)->get_super_class();
+    auto* const super = type_class(type)->get_super_class();
     if (super == nullptr) {
       continue;
     }

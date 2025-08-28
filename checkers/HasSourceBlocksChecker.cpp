@@ -35,10 +35,10 @@ void HasSourceBlocksChecker::run_checker(DexStoresVector& stores,
 #ifdef WEAK_HAS_SOURCE_BLOCKS_CHECKER
   std::atomic<bool> any_source_block_exists = false;
   walk::parallel::methods(scope, [&](DexMethod* method) {
-    if (!method->get_code()) {
+    if (method->get_code() == nullptr) {
       return;
     }
-    if (source_blocks::get_first_source_block_of_method(method)) {
+    if (source_blocks::get_first_source_block_of_method(method) != nullptr) {
       any_source_block_exists = true;
     }
   });

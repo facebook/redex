@@ -21,7 +21,7 @@ TEST(ProguardRegexTest, members) {
   }
 
   { // A ProGuard * should get translatd to a .*
-    auto proguard_regex = "*";
+    const auto* proguard_regex = "*";
     auto r = proguard_parser::form_member_regex(proguard_regex);
     EXPECT_EQ(".*", r);
     boost::regex matcher(r);
@@ -31,7 +31,7 @@ TEST(ProguardRegexTest, members) {
   }
 
   { // A ProGuard *alpha should get translated to .*pha
-    auto proguard_regex = "*pha";
+    const auto* proguard_regex = "*pha";
     auto r = proguard_parser::form_member_regex(proguard_regex);
     EXPECT_EQ(".*pha", r);
     boost::regex matcher(r);
@@ -44,7 +44,7 @@ TEST(ProguardRegexTest, members) {
   }
 
   { // Translate *pha* to .*pha.*
-    auto proguard_regex = "*pha*";
+    const auto* proguard_regex = "*pha*";
     auto r = proguard_parser::form_member_regex(proguard_regex);
     EXPECT_EQ(".*pha.*", r);
     boost::regex matcher(r);
@@ -57,7 +57,7 @@ TEST(ProguardRegexTest, members) {
   }
 
   { // Translate wombat?numbat to wombat.numbat
-    auto proguard_regex = "wombat?numbat";
+    const auto* proguard_regex = "wombat?numbat";
     auto r = proguard_parser::form_member_regex(proguard_regex);
     EXPECT_EQ("wombat.numbat", r);
     boost::regex matcher(r);
@@ -69,7 +69,7 @@ TEST(ProguardRegexTest, members) {
   }
 
   { // Translate Wombat??Numbat to Wombat..Numbat
-    auto proguard_regex = "Wombat??Numbat";
+    const auto* proguard_regex = "Wombat??Numbat";
     auto r = proguard_parser::form_member_regex(proguard_regex);
     EXPECT_EQ("Wombat..Numbat", r);
     boost::regex matcher(r);
@@ -81,7 +81,7 @@ TEST(ProguardRegexTest, members) {
 
 TEST(ProguardRegexTest, types) {
   { // Translate % to (?:B|S|I|J|Z|F|D|C)
-    auto proguard_regex = "%";
+    const auto* proguard_regex = "%";
     auto r = proguard_parser::form_type_regex(proguard_regex);
     EXPECT_EQ("(?:B|S|I|J|Z|F|D|C|V)", r);
     boost::regex matcher(r);

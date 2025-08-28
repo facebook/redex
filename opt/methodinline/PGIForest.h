@@ -102,7 +102,7 @@ class MethodContextContext {
 
     using namespace cfg;
 
-    auto code = const_cast<DexMethod*>(m)->get_code();
+    auto* code = const_cast<DexMethod*>(m)->get_code();
 
     // Do this early. If no CFG is built, this is a better estimate.
     res.m_opcodes = code->sum_opcode_sizes();

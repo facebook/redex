@@ -130,7 +130,7 @@ UnorderedSet<std::string>
 RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   using namespace boost::algorithm;
   UnorderedSet<const DexString*> all_strings;
-  for (auto clazz : scope) {
+  for (auto* clazz : scope) {
     clazz->gather_strings(all_strings);
   }
   UnorderedSet<std::string> result;
@@ -138,12 +138,12 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
       "((org)|(com)|(android(x|\\.support)))\\."
       "([a-zA-Z][a-zA-Z\\d_$]*\\.)*"
       "[a-zA-Z][a-zA-Z\\d_$]*"};
-  for (auto dex_str : UnorderedIterable(all_strings)) {
+  for (const auto* dex_str : UnorderedIterable(all_strings)) {
     const std::string_view s = dex_str->str();
     if (!ends_with(s, ".java") &&
         boost::regex_match(dex_str->c_str(), external_name_regex)) {
       std::string internal_name = java_names::external_to_internal(s);
-      auto cls = type_class(DexType::get_type(internal_name));
+      auto* cls = type_class(DexType::get_type(internal_name));
       if (cls != nullptr && !cls->is_external()) {
         result.insert(std::move(internal_name));
         TRACE(RENAME, 4, "Found %s in string pool before renaming",
@@ -181,11 +181,11 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
       [](DexMethod*) { return true; },
       [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_method()) {
-          auto callee = insn->get_method();
+          auto* callee = insn->get_method();
           if (callee == nullptr || !callee->is_concrete()) {
             return;
           }
-          auto callee_method_cls = callee->get_class();
+          auto* callee_method_cls = callee->get_class();
           if (refl_map.count(callee_method_cls) == 0) {
             return;
           }
@@ -203,8 +203,8 @@ UnorderedSet<const DexString*> RenameClassesPassV2::build_dont_rename_canaries(
     Scope& scope) {
   UnorderedSet<const DexString*> dont_rename_canaries;
   // Gather canaries
-  for (auto clazz : scope) {
-    if (strstr(clazz->get_name()->c_str(), "/Canary")) {
+  for (auto* clazz : scope) {
+    if (strstr(clazz->get_name()->c_str(), "/Canary") != nullptr) {
       dont_rename_canaries.insert(clazz->get_name());
     }
   }
@@ -221,10 +221,10 @@ RenameClassesPassV2::build_force_rename_hierarchies(
     if (base.c_str()[0] == '#') {
       continue;
     }
-    auto base_type = DexType::get_type(base);
+    auto* base_type = DexType::get_type(base);
     if (base_type != nullptr) {
       DexClass* base_class = type_class(base_type);
-      if (!base_class) {
+      if (base_class == nullptr) {
         TRACE(RENAME, 2, "Can't find class for force_rename_hierachy rule %s",
               base.c_str());
         mgr.incr_metric(METRIC_MISSING_HIERARCHY_CLASSES, 1);
@@ -259,10 +259,10 @@ RenameClassesPassV2::build_dont_rename_hierarchies(
     if (base.c_str()[0] == '#') {
       continue;
     }
-    auto base_type = DexType::get_type(base);
+    auto* base_type = DexType::get_type(base);
     if (base_type != nullptr) {
       DexClass* base_class = type_class(base_type);
-      if (!base_class) {
+      if (base_class == nullptr) {
         TRACE(RENAME, 2, "Can't find class for dont_rename_hierachy rule %s",
               base.c_str());
         mgr.incr_metric(METRIC_MISSING_HIERARCHY_CLASSES, 1);
@@ -301,9 +301,10 @@ RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
     DexType* flatbuf_deser = cls_serdes.get_flatbuf_deser();
     bool has_deser_finder = false;
 
-    if (deser || flatbuf_deser) {
+    if ((deser != nullptr) || (flatbuf_deser != nullptr)) {
       for (const auto& method : cls->get_dmethods()) {
-        if (!strcmp("$$getDeserializerClass", method->get_name()->c_str())) {
+        if (strcmp("$$getDeserializerClass", method->get_name()->c_str()) ==
+            0) {
           has_deser_finder = true;
           break;
         }
@@ -315,30 +316,32 @@ RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
     DexType* flatbuf_ser = cls_serdes.get_flatbuf_ser();
     bool has_ser_finder = false;
 
-    if (ser || flatbuf_ser) {
+    if ((ser != nullptr) || (flatbuf_ser != nullptr)) {
       for (const auto& method : cls->get_dmethods()) {
-        if (!strcmp("$$getSerializerClass", method->get_name()->c_str())) {
+        if (strcmp("$$getSerializerClass", method->get_name()->c_str()) == 0) {
           has_ser_finder = true;
           break;
         }
       }
     }
 
-    bool dont_rename = ((deser || flatbuf_deser) && !has_deser_finder) ||
-                       ((ser || flatbuf_ser) && !has_ser_finder);
+    bool dont_rename =
+        (((deser != nullptr) || (flatbuf_deser != nullptr)) &&
+         !has_deser_finder) ||
+        (((ser != nullptr) || (flatbuf_ser != nullptr)) && !has_ser_finder);
 
     if (dont_rename) {
       dont_rename_serde_relationships.insert(cls->get_type());
-      if (deser) {
+      if (deser != nullptr) {
         dont_rename_serde_relationships.insert(deser);
       }
-      if (flatbuf_deser) {
+      if (flatbuf_deser != nullptr) {
         dont_rename_serde_relationships.insert(flatbuf_deser);
       }
-      if (ser) {
+      if (ser != nullptr) {
         dont_rename_serde_relationships.insert(ser);
       }
-      if (flatbuf_ser) {
+      if (flatbuf_ser != nullptr) {
         dont_rename_serde_relationships.insert(flatbuf_ser);
       }
     }
@@ -352,26 +355,26 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
   UnorderedSet<const DexType*> dont_rename_native_bindings;
   // find all classes with native methods, and all types mentioned
   // in protos of native methods
-  for (auto clazz : scope) {
-    for (auto meth : clazz->get_dmethods()) {
+  for (auto* clazz : scope) {
+    for (auto* meth : clazz->get_dmethods()) {
       if (is_native(meth)) {
         dont_rename_native_bindings.insert(clazz->get_type());
-        auto proto = meth->get_proto();
-        auto rtype = proto->get_rtype();
+        auto* proto = meth->get_proto();
+        auto* rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
-        for (auto ptype : *proto->get_args()) {
+        for (auto* ptype : *proto->get_args()) {
           dont_rename_native_bindings.insert(
               type::get_element_type_if_array(ptype));
         }
       }
     }
-    for (auto meth : clazz->get_vmethods()) {
+    for (auto* meth : clazz->get_vmethods()) {
       if (is_native(meth)) {
         dont_rename_native_bindings.insert(clazz->get_type());
-        auto proto = meth->get_proto();
-        auto rtype = proto->get_rtype();
+        auto* proto = meth->get_proto();
+        auto* rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
-        for (auto ptype : *proto->get_args()) {
+        for (auto* ptype : *proto->get_args()) {
           dont_rename_native_bindings.insert(
               type::get_element_type_if_array(ptype));
         }
@@ -386,7 +389,7 @@ RenameClassesPassV2::build_dont_rename_annotated() {
   UnorderedSet<const DexType*> dont_rename_annotated;
   for (const auto& annotation : m_dont_rename_annotated) {
     DexType* anno = DexType::get_type(annotation);
-    if (anno) {
+    if (anno != nullptr) {
       dont_rename_annotated.insert(anno);
     }
   }
@@ -408,13 +411,13 @@ static void sanity_check(const Scope& scope,
     external_names.insert(s);
   }
   UnorderedSet<const DexString*> all_strings;
-  for (auto clazz : scope) {
+  for (auto* clazz : scope) {
     clazz->gather_strings(all_strings);
   }
   int sketchy_strings = 0;
-  for (auto s : UnorderedIterable(all_strings)) {
+  for (const auto* s : UnorderedIterable(all_strings)) {
     if (external_names.find(s->str()) != external_names.end() ||
-        name_mapping.get_new_type_name(s)) {
+        (name_mapping.get_new_type_name(s) != nullptr)) {
       TRACE(RENAME, 2, "Found %s in string pool after renaming", s->c_str());
       sketchy_strings++;
     }
@@ -492,9 +495,9 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     }
   };
 
-  for (auto clazz : scope) {
+  for (auto* clazz : scope) {
     // Short circuit force renames
-    if (force_rename_hierarchies.count(clazz->get_type())) {
+    if (force_rename_hierarchies.count(clazz->get_type()) != 0u) {
       clazz->rstate.set_force_rename();
       on_class_renamable(clazz);
       continue;
@@ -536,7 +539,7 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     std::string strname = clazz->get_name()->str_copy();
 
     // Don't rename anythings in the direct name blocklist (hierarchy ignored)
-    if (m_dont_rename_specific.count(strname)) {
+    if (m_dont_rename_specific.count(strname) != 0u) {
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific,
                                       std::move(strname)};
@@ -559,34 +562,35 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       continue;
     }
 
-    if (dont_rename_class_name_literals.count(strname)) {
+    if (dont_rename_class_name_literals.count(strname) != 0u) {
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ClassNameLiterals,
                                       norule};
       continue;
     }
 
-    if (dont_rename_class_for_types_with_reflection.count(clazz->get_name())) {
+    if (dont_rename_class_for_types_with_reflection.count(clazz->get_name()) !=
+        0u) {
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {
           DontRenameReasonCode::ClassForTypesWithReflection, norule};
       continue;
     }
 
-    if (dont_rename_canaries.count(clazz->get_name())) {
+    if (dont_rename_canaries.count(clazz->get_name()) != 0u) {
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Canaries, norule};
       continue;
     }
 
-    if (dont_rename_native_bindings.count(clazz->get_type())) {
+    if (dont_rename_native_bindings.count(clazz->get_type()) != 0u) {
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::NativeBindings,
                                       norule};
       continue;
     }
 
-    if (dont_rename_hierarchies.count(clazz->get_type())) {
+    if (dont_rename_hierarchies.count(clazz->get_type()) != 0u) {
       const auto* rule = dont_rename_hierarchies[clazz->get_type()];
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy,
@@ -594,7 +598,7 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       continue;
     }
 
-    if (dont_rename_serde_relationships.count(clazz->get_type())) {
+    if (dont_rename_serde_relationships.count(clazz->get_type()) != 0u) {
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::SerdeRelationships,
                                       norule};
@@ -627,7 +631,7 @@ void RenameClassesPassV2::eval_classes_post(
   Timer t("eval_classes_post");
   auto dont_rename_hierarchies =
       build_dont_rename_hierarchies(mgr, scope, class_hierarchy);
-  for (auto clazz : scope) {
+  for (auto* clazz : scope) {
     if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
       continue;
     }
@@ -635,7 +639,7 @@ void RenameClassesPassV2::eval_classes_post(
     std::string strname = clazz->get_name()->str_copy();
 
     // Don't rename anythings in the direct name blocklist (hierarchy ignored)
-    if (m_dont_rename_specific.count(strname)) {
+    if (m_dont_rename_specific.count(strname) != 0u) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific,
                                       std::move(strname)};
       continue;
@@ -656,7 +660,7 @@ void RenameClassesPassV2::eval_classes_post(
       continue;
     }
 
-    if (dont_rename_hierarchies.count(clazz->get_type())) {
+    if (dont_rename_hierarchies.count(clazz->get_type()) != 0u) {
       const auto* rule = dont_rename_hierarchies[clazz->get_type()];
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy,
                                       rule->str_copy()};
@@ -686,9 +690,9 @@ void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
 UnorderedSet<DexClass*> RenameClassesPassV2::get_renamable_classes(
     Scope& scope) {
   UnorderedSet<DexClass*> renamable_classes;
-  for (auto clazz : scope) {
+  for (auto* clazz : scope) {
     if (clazz->rstate.is_force_rename() ||
-        !m_dont_rename_reasons.count(clazz)) {
+        (m_dont_rename_reasons.count(clazz) == 0u)) {
       renamable_classes.insert(clazz);
     }
   }
@@ -703,11 +707,11 @@ void RenameClassesPassV2::evolve_name_mapping(
     uint32_t* nextGlobalClassIndex) {
   for (size_t i = 0; i < dex.size(); i++) {
     auto* clazz = dex.at(i);
-    if (unrenamable_classes.count(clazz)) {
+    if (unrenamable_classes.count(clazz) != 0u) {
       continue;
     }
-    auto dtype = clazz->get_type();
-    auto oldname = dtype->get_name();
+    auto* dtype = clazz->get_type();
+    const auto* oldname = dtype->get_name();
 
     uint32_t globalClassIndex = *nextGlobalClassIndex + i;
     std::array<char, Locator::encoded_global_class_index_max> array;
@@ -726,7 +730,7 @@ void RenameClassesPassV2::evolve_name_mapping(
     TRACE(RENAME, 3, "'%s' ->  %s (%u)'", oldname->c_str(),
           prefixed_descriptor.c_str(), globalClassIndex);
 
-    auto dstring = DexString::make_string(prefixed_descriptor);
+    const auto* dstring = DexString::make_string(prefixed_descriptor);
     name_mapping->add_type_name(oldname, dstring);
   }
   *nextGlobalClassIndex += dex.size();
@@ -738,8 +742,8 @@ UnorderedSet<DexClass*> RenameClassesPassV2::get_unrenamable_classes(
     PassManager& mgr) {
   UnorderedSet<DexClass*> unrenamable_classes;
   for (auto* clazz : scope) {
-    auto dtype = clazz->get_type();
-    auto oldname = dtype->get_name();
+    auto* dtype = clazz->get_type();
+    const auto* oldname = dtype->get_name();
 
     if (clazz->rstate.is_force_rename()) {
       TRACE(RENAME, 2, "Forced renamed: '%s'", oldname->c_str());
@@ -777,8 +781,8 @@ rewriter::TypeStringMap RenameClassesPassV2::get_name_mapping(
     const UnorderedSet<DexClass*>& unrenamable_classes) {
   rewriter::TypeStringMap name_mapping;
   uint32_t nextGlobalClassIndex = 0;
-  for (auto& store : stores) {
-    for (auto& dex : store.get_dexen()) {
+  for (const auto& store : stores) {
+    for (const auto& dex : store.get_dexen()) {
       evolve_name_mapping(digits, dex, unrenamable_classes, &name_mapping,
                           &nextGlobalClassIndex);
     }
@@ -850,7 +854,7 @@ bool RenameClassesPassV2::evolve_name_mapping_avoiding_collisions(
   // assignment of the unrenamable classes class names.
   std::vector<uint32_t> initial_hashes;
   for (auto* clazz : dex) {
-    if (unrenamable_classes.count(clazz)) {
+    if (unrenamable_classes.count(clazz) != 0u) {
       int32_t java_hash = clazz->get_name()->java_hashcode();
       initial_hashes.push_back(*(uint32_t*)&java_hash);
     }
@@ -860,17 +864,17 @@ bool RenameClassesPassV2::evolve_name_mapping_avoiding_collisions(
   std::set<uint32_t> collision_indices;
   auto skipped_indices_it = skipped_indices->begin();
   for (auto* clazz : dex) {
-    if (unrenamable_classes.count(clazz)) {
+    if (unrenamable_classes.count(clazz) != 0u) {
       continue;
     }
 
-    auto dtype = clazz->get_type();
-    auto oldname = dtype->get_name();
+    auto* dtype = clazz->get_type();
+    const auto* oldname = dtype->get_name();
 
     std::array<char, Locator::encoded_global_class_index_max> array;
     char* descriptor = array.data();
     std::string prefixed_descriptor;
-    while (1) {
+    while (true) {
       uint32_t index;
       if (skipped_indices_it != skipped_indices->end()) {
         index = *skipped_indices_it;
@@ -908,7 +912,7 @@ bool RenameClassesPassV2::evolve_name_mapping_avoiding_collisions(
     TRACE(RENAME, 3, "'%s' ->  %s (%u)'", oldname->c_str(),
           prefixed_descriptor.c_str(), *next_index);
 
-    auto dstring = DexString::make_string(prefixed_descriptor);
+    const auto* dstring = DexString::make_string(prefixed_descriptor);
     name_mapping->add_type_name(oldname, dstring);
   }
 
@@ -927,7 +931,7 @@ RenameClassesPassV2::get_name_mapping_avoiding_collisions(
     size_t* digits,
     size_t* avoided_collisions,
     size_t* skipped_indices_count) {
-  while (1) {
+  while (true) {
     always_assert_log(
         (*digits) <= Locator::global_class_index_digits_max,
         "exceeded maximum number of digits for global class index: %zu",
@@ -942,8 +946,8 @@ RenameClassesPassV2::get_name_mapping_avoiding_collisions(
     auto try_evolve_all_dexes = [&]() {
       uint32_t next_index = 0;
       std::set<uint32_t> skipped_indices;
-      for (auto& store : stores) {
-        for (auto& dex : store.get_dexen()) {
+      for (const auto& store : stores) {
+        for (const auto& dex : store.get_dexen()) {
           if (!store.is_root_store()) {
             // VoltronModuleMetadataHelper has certain assumptions about the
             // consecutiveness of the global class indices for non-root stores,
@@ -989,14 +993,14 @@ void RenameClassesPassV2::rename_classes(
     m_base_strings_size += oldname->size();
     m_ren_strings_size += dstring->size();
 
-    while (1) {
+    while (true) {
       std::string arrayop("[");
       arrayop += oldname->str();
       oldname = DexString::get_string(arrayop);
       if (oldname == nullptr) {
         break;
       }
-      auto arraytype = DexType::get_type(oldname);
+      auto* arraytype = DexType::get_type(oldname);
       if (arraytype == nullptr) {
         break;
       }
@@ -1009,12 +1013,12 @@ void RenameClassesPassV2::rename_classes(
   /* Now rewrite all const-string strings for force renamed classes. */
   rewriter::TypeStringMap force_rename_map;
   for (const auto& pair : UnorderedIterable(name_mapping.get_class_map())) {
-    auto type = DexType::get_type(pair.first);
-    if (!type) {
+    auto* type = DexType::get_type(pair.first);
+    if (type == nullptr) {
       continue;
     }
-    auto clazz = type_class(type);
-    if (clazz && clazz->rstate.is_force_rename()) {
+    auto* clazz = type_class(type);
+    if ((clazz != nullptr) && clazz->rstate.is_force_rename()) {
       force_rename_map.add_type_name(pair.first, pair.second);
     }
   }

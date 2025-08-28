@@ -77,7 +77,7 @@ TEST_F(UsedVarsTest, simple) {
   side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         insn->get_method() == DexMethod::get_method("LFoo;.<init>:()V")) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
@@ -130,7 +130,7 @@ TEST_F(UsedVarsTest, join) {
   code->build_cfg();
   auto& cfg = code->cfg();
   for (auto& mie : InstructionIterable(cfg)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
@@ -185,7 +185,7 @@ TEST_F(UsedVarsTest, noDeleteInit) {
   side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
@@ -221,7 +221,7 @@ TEST_F(UsedVarsTest, noDeleteAliasedInit) {
   side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
@@ -239,9 +239,9 @@ TEST_F(UsedVarsTest, noDeleteAliasedInit) {
 }
 
 TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
-  auto foo_cls = create_simple_class("LFoo;");
+  auto* foo_cls = create_simple_class("LFoo;");
   // This method will only modify the `this` argument.
-  auto no_side_effects_method =
+  auto* no_side_effects_method =
       DexMethod::make_method("LFoo;.nosideeffects:()V")
           ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   foo_cls->get_dmethods().push_back(no_side_effects_method);
@@ -267,9 +267,9 @@ TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
   side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
-      auto method = insn->get_method();
+      auto* method = insn->get_method();
       if (method::is_init(method)) {
         invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
         invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
@@ -314,9 +314,9 @@ TEST_F(UsedVarsTest, noReturn) {
   side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
-      auto callee = insn->get_method();
+      auto* callee = insn->get_method();
       if (callee == DexMethod::get_method("LFoo;.<init>:()V")) {
         invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
         invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});

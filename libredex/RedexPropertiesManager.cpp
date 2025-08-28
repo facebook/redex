@@ -94,7 +94,7 @@ void Manager::check(DexStoresVector& stores, PassManager& mgr) {
   for (auto* checker : m_checkers) {
     TRACE(PM, 3, "Checking for %s...", get_name(checker->get_property()));
     checker->run_checker(stores, m_conf, mgr,
-                         m_established.count(checker->get_property()));
+                         m_established.count(checker->get_property()) != 0u);
   }
 }
 
@@ -137,7 +137,7 @@ std::optional<std::string> Manager::verify_pass_interactions(
 
   auto log_established_properties = [&](const std::string& title) {
     oss << "  " << title << ": ";
-    for (auto& property : m.m_established) {
+    for (const auto& property : m.m_established) {
       oss << property << ", ";
     }
     oss << "\n";
@@ -156,7 +156,7 @@ std::optional<std::string> Manager::verify_pass_interactions(
 
   auto final_properties = m.get_final();
 
-  for (auto& [pass_name, interactions] : pass_interactions) {
+  for (const auto& [pass_name, interactions] : pass_interactions) {
     auto required_properties = m.get_required(interactions);
     log_established_properties("requires");
     check(required_properties);
@@ -176,7 +176,7 @@ std::optional<std::string> Manager::verify_pass_interactions(
     if (!is_negative(property)) {
       continue;
     }
-    if (m.m_established.count(property)) {
+    if (m.m_established.count(property) != 0u) {
       oss << "    *** MUST-NOT PROPERTY IS ESTABLISHED IN FINAL STATE ***: "
           << property << "\n";
       failed = true;

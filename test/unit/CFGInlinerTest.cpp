@@ -56,18 +56,18 @@ void test_inliner(const std::string& caller_str,
 class CFGInlinerTest : public RedexTest {};
 
 TEST_F(CFGInlinerTest, simple) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (invoke-static () "LCls;.foo:()V")
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (return-void)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (return-void)
     )
@@ -76,20 +76,20 @@ TEST_F(CFGInlinerTest, simple) {
 }
 
 TEST_F(CFGInlinerTest, with_regs) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (const v0 0)
       (invoke-static () "LCls;.foo:()V")
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (const v0 1)
       (return-void)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (const v0 0)
       (const v1 1)
@@ -100,21 +100,21 @@ TEST_F(CFGInlinerTest, with_regs) {
 }
 
 TEST_F(CFGInlinerTest, with_args) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (const v0 0)
       (invoke-static (v0) "LCls;.foo:(I)V")
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (load-param v0)
       (const v1 1)
       (return-void)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (const v0 0)
       (move v1 v0)
@@ -126,7 +126,7 @@ TEST_F(CFGInlinerTest, with_args) {
 }
 
 TEST_F(CFGInlinerTest, with_returns) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (const v0 0)
       (invoke-static () "LCls;.foo:()I")
@@ -134,13 +134,13 @@ TEST_F(CFGInlinerTest, with_returns) {
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (const v0 1)
       (return v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (const v0 0)
       (const v2 1)
@@ -152,7 +152,7 @@ TEST_F(CFGInlinerTest, with_returns) {
 }
 
 TEST_F(CFGInlinerTest, with_args_and_returns) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (const v0 0)
       (invoke-static (v0) "LCls;.foo:(I)I")
@@ -160,7 +160,7 @@ TEST_F(CFGInlinerTest, with_args_and_returns) {
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (load-param v0)
       (const v1 1)
@@ -168,7 +168,7 @@ TEST_F(CFGInlinerTest, with_args_and_returns) {
       (return v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (const v0 0)
       (move v1 v0)
@@ -182,7 +182,7 @@ TEST_F(CFGInlinerTest, with_args_and_returns) {
 }
 
 TEST_F(CFGInlinerTest, multi_return) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (const v0 0)
       (const v1 10)
@@ -191,7 +191,7 @@ TEST_F(CFGInlinerTest, multi_return) {
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       ; max
       (load-param v0)
@@ -204,7 +204,7 @@ TEST_F(CFGInlinerTest, multi_return) {
       (return v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (const v0 0)
       (const v1 10)
@@ -226,7 +226,7 @@ TEST_F(CFGInlinerTest, multi_return) {
 }
 
 TEST_F(CFGInlinerTest, multi_return_wide) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (const-wide v0 0)
       (const-wide v2 10)
@@ -235,7 +235,7 @@ TEST_F(CFGInlinerTest, multi_return_wide) {
       (return-wide v0)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       ; max
       (load-param-wide v0)
@@ -249,7 +249,7 @@ TEST_F(CFGInlinerTest, multi_return_wide) {
       (return-wide v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (const-wide v0 0)
       (const-wide v2 10)
@@ -273,14 +273,14 @@ TEST_F(CFGInlinerTest, multi_return_wide) {
 }
 
 TEST_F(CFGInlinerTest, multi_return_object) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (invoke-static () "LCls;.randObj:()Ljava/lang/Object;")
       (move-result v0)
       (return-object v0)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (new-instance "Ljava/util/Random;")
       (move-result-pseudo v0)
@@ -298,7 +298,7 @@ TEST_F(CFGInlinerTest, multi_return_object) {
       (return-object v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (new-instance "Ljava/util/Random;")
       (move-result-pseudo v1)
@@ -324,7 +324,7 @@ TEST_F(CFGInlinerTest, multi_return_object) {
 }
 
 TEST_F(CFGInlinerTest, both_multi_block) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (const v0 0)
       (const v1 10)
@@ -337,7 +337,7 @@ TEST_F(CFGInlinerTest, both_multi_block) {
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       ; max
       (load-param v0)
@@ -350,7 +350,7 @@ TEST_F(CFGInlinerTest, both_multi_block) {
       (return v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (const v0 0)
       (const v1 10)
@@ -376,7 +376,7 @@ TEST_F(CFGInlinerTest, both_multi_block) {
 }
 
 TEST_F(CFGInlinerTest, callee_diamond_caller_loop) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (const v0 10)
 
@@ -391,7 +391,7 @@ TEST_F(CFGInlinerTest, callee_diamond_caller_loop) {
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (load-param v0)
       (if-nez v0 :true)
@@ -405,7 +405,7 @@ TEST_F(CFGInlinerTest, callee_diamond_caller_loop) {
       (return v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (const v0 10)
 
@@ -434,7 +434,7 @@ TEST_F(CFGInlinerTest, callee_diamond_caller_loop) {
 }
 
 TEST_F(CFGInlinerTest, try_catch_simple) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (.try_start a)
       (iget v0 "LCls;.bar:I")
@@ -447,13 +447,13 @@ TEST_F(CFGInlinerTest, try_catch_simple) {
       (return v1)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (const v0 0)
       (throw v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (.try_start a)
       (iget v0 "LCls;.bar:I")
@@ -470,7 +470,7 @@ TEST_F(CFGInlinerTest, try_catch_simple) {
 }
 
 TEST_F(CFGInlinerTest, try_catch_with_return_reg) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (.try_start a)
       (iget v0 "LCls;.bar:I")
@@ -484,13 +484,13 @@ TEST_F(CFGInlinerTest, try_catch_with_return_reg) {
       (return v1)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (const v0 0)
       (throw v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (.try_start a)
       (iget v0 "LCls;.bar:I")
@@ -507,7 +507,7 @@ TEST_F(CFGInlinerTest, try_catch_with_return_reg) {
 }
 
 TEST_F(CFGInlinerTest, try_catch_with_arg_and_return_regs) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (.try_start a)
       (invoke-static (v0) "LCls;.foo:(I)I")
@@ -520,7 +520,7 @@ TEST_F(CFGInlinerTest, try_catch_with_arg_and_return_regs) {
       (return v1)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (load-param v0)
       (if-eqz v0 :thr)
@@ -530,7 +530,7 @@ TEST_F(CFGInlinerTest, try_catch_with_arg_and_return_regs) {
       (throw v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (move v2 v0)
       (if-eqz v2 :thr)
@@ -552,7 +552,7 @@ TEST_F(CFGInlinerTest, try_catch_with_arg_and_return_regs) {
 }
 
 TEST_F(CFGInlinerTest, try_catch_caller_catch_chain) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (.try_start a)
       (invoke-static (v0) "LCls;.foo:(I)I")
@@ -568,7 +568,7 @@ TEST_F(CFGInlinerTest, try_catch_caller_catch_chain) {
       (return v1)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (load-param v0)
       (if-eqz v0 :thr)
@@ -578,7 +578,7 @@ TEST_F(CFGInlinerTest, try_catch_caller_catch_chain) {
       (throw v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (move v2 v0)
       (if-eqz v2 :thr)
@@ -603,7 +603,7 @@ TEST_F(CFGInlinerTest, try_catch_caller_catch_chain) {
 }
 
 TEST_F(CFGInlinerTest, try_catch_with_may_throws) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (.try_start outer)
       (invoke-static () "LCls;.foo:()I")
@@ -619,7 +619,7 @@ TEST_F(CFGInlinerTest, try_catch_with_may_throws) {
       (return v1)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (.try_start inner)
 
@@ -637,7 +637,7 @@ TEST_F(CFGInlinerTest, try_catch_with_may_throws) {
       (return v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (.try_start inner)
       (sget-object "LCls;.field:Ljava/lang/Object;")
@@ -670,7 +670,7 @@ TEST_F(CFGInlinerTest, try_catch_with_may_throws) {
 }
 
 TEST_F(CFGInlinerTest, try_catch_with_only_may_throws) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (.try_start outer)
       (invoke-static () "LCls;.foo:()I")
@@ -686,14 +686,14 @@ TEST_F(CFGInlinerTest, try_catch_with_only_may_throws) {
       (return v1)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (sget-object "LCls;.field:Ljava/lang/Object;")
       (move-result-pseudo-object v0)
       (return v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (.try_start outer)
 
@@ -716,7 +716,7 @@ TEST_F(CFGInlinerTest, try_catch_with_only_may_throws) {
 }
 
 TEST_F(CFGInlinerTest, try_catch_callee_has_chain) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (.try_start outer)
       (invoke-static () "LCls;.foo:()I")
@@ -729,7 +729,7 @@ TEST_F(CFGInlinerTest, try_catch_callee_has_chain) {
       (return v1)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (.try_start inner1)
       (sget-object "LCls;.field:Ljava/lang/Object;")
@@ -746,7 +746,7 @@ TEST_F(CFGInlinerTest, try_catch_callee_has_chain) {
       (return v0)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (.try_start inner1)
       (sget-object "LCls;.field:Ljava/lang/Object;")
@@ -776,19 +776,19 @@ TEST_F(CFGInlinerTest, try_catch_callee_has_chain) {
 }
 
 TEST_F(CFGInlinerTest, inf_loop) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (:lbl)
       (invoke-static () "LCls;.foo:()I")
       (goto :lbl)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (return-void)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (:lbl)
       (goto :lbl)
@@ -798,14 +798,14 @@ TEST_F(CFGInlinerTest, inf_loop) {
 }
 
 TEST_F(CFGInlinerTest, cleanup_debug) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (const v0 0)
       (invoke-static (v0) "LCls;.foo:(I)V")
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (load-param v0)
       (.dbg DBG_SET_PROLOGUE_END)
@@ -818,7 +818,7 @@ TEST_F(CFGInlinerTest, cleanup_debug) {
       (return-void)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (const v0 0)
       (move v1 v0)
@@ -833,19 +833,19 @@ TEST_F(CFGInlinerTest, cleanup_debug) {
 }
 
 TEST_F(CFGInlinerTest, needs_receiver_cast) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (invoke-static (v0) "LCls;.foo:(LCls;)V")
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (load-param-object v0)
       (return-void)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (move-object v0 v0)
       (check-cast v0 "LCls;")
@@ -858,18 +858,18 @@ TEST_F(CFGInlinerTest, needs_receiver_cast) {
 }
 
 TEST_F(CFGInlinerTest, needs_init_class) {
-  const auto caller_str = R"(
+  const auto* const caller_str = R"(
     (
       (invoke-static () "LCls;.foo:()V")
       (return-void)
     )
   )";
-  const auto callee_str = R"(
+  const auto* const callee_str = R"(
     (
       (return-void)
     )
   )";
-  const auto expected_str = R"(
+  const auto* const expected_str = R"(
     (
       (init-class "LCls;")
       (return-void)
