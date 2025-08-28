@@ -431,7 +431,7 @@ dexproto_to_idx GatheredTypes::get_proto_index(cmp_dproto cmp) {
 }
 
 std::vector<DexTypeList*> GatheredTypes::get_typelist_list(
-    dexproto_to_idx* protos, cmp_dtypelist cmp) {
+    dexproto_to_idx* protos, cmp_dtypelist /*cmp*/) {
   std::vector<DexTypeList*> typel{};
   auto class_defs_size = (uint32_t)m_classes->size();
   typel.reserve(protos->size() + class_defs_size);

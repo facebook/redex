@@ -252,7 +252,7 @@ class Configurable {
    * will have specializations provided in Configurable.cpp
    */
   template <typename T>
-  static T as(const Json::Value& value, bindflags_t bindflags) {
+  static T as(const Json::Value& value, bindflags_t /*bindflags*/) {
     static_assert(
         std::is_base_of<Configurable, T>::value,
         "T must be a supported primitive or derive from Configurable");
@@ -295,7 +295,7 @@ class Configurable {
                const bool param_is_required,
                const bindflags_t param_bindflags,
                T& param,
-               typename DefaultValueType<T>::type default_val) {
+               typename DefaultValueType<T>::type /*default_val*/) {
     static_assert(
         std::is_base_of<Configurable, T>::value,
         "T must be a supported primitive or derive from Configurable");

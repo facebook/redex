@@ -10,11 +10,11 @@
 
 namespace facebook::jni::redexsimplejniexample {
 
-int implementedRegisteredDeclaredUsed(JNIEnv* env) { return 1; }
+int implementedRegisteredDeclaredUsed(JNIEnv* /*env*/) { return 1; }
 
-int implementedRegisteredDeclared(JNIEnv* env) { return 1; }
+int implementedRegisteredDeclared(JNIEnv* /*env*/) { return 1; }
 
-int implementedRegistered(JNIEnv* env) { return 1; }
+int implementedRegistered(JNIEnv* /*env*/) { return 1; }
 
 static JNINativeMethod methods[] = {
     {"implementedRegisteredDeclaredUsed", "()I",
@@ -37,7 +37,7 @@ void JNI_registerAll(JNIEnv* env) {
 
 } // namespace facebook::jni::redexsimplejniexample
 
-JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
   JNIEnv* env;
   jint result = ::facebook::simplejni::ensureInitialized(&env, vm);
 

@@ -469,7 +469,7 @@ UnorderedSet<IRInstruction*> Analyzer::get_inlinables() const {
 }
 
 MethodSummaries compute_method_summaries(
-    const Scope& scope,
+    const Scope& /*scope*/,
     const ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>& dependencies,
     const mog::Graph& method_override_graph,
     const UnorderedSet<DexClass*>& excluded_classes,

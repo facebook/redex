@@ -470,7 +470,7 @@ bool RemoveInterfacePass::is_leaf(const TypeSystem& type_system,
   return num_removed == intf_children.size();
 }
 
-void RemoveInterfacePass::remove_inheritance(const Scope& scope,
+void RemoveInterfacePass::remove_inheritance(const Scope& /*scope*/,
                                              const TypeSystem& type_system,
                                              const TypeSet& interfaces) {
   for (const auto intf : interfaces) {

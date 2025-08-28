@@ -319,7 +319,7 @@ void CFGInliner::remap_registers(cfg::ControlFlowGraph* callee,
  * Move ownership of blocks and edges from callee to caller
  */
 void CFGInliner::steal_contents(ControlFlowGraph* caller,
-                                Block* callsite,
+                                Block* /*callsite*/,
                                 ControlFlowGraph* callee) {
   always_assert(!caller->m_blocks.empty());
   for (auto& entry : callee->m_blocks) {

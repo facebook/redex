@@ -25,7 +25,7 @@ ObjectInlinePlugin::ObjectInlinePlugin(
     const std::vector<reg_t>& srcs,
     boost::optional<reg_t> value_register,
     boost::optional<reg_t> caller_this,
-    DexType* callee_type)
+    DexType* /*callee_type*/)
     : m_initial_field_sets(field_sets),
       m_field_swaps(field_swaps),
       m_srcs(srcs),
@@ -51,7 +51,7 @@ bool ObjectInlinePlugin::remove_inline_site() { return false; }
  * Does not use callee.
  */
 bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
-                                                 ControlFlowGraph* callee) {
+                                                 ControlFlowGraph* /*callee*/) {
   // Assumes only updating for one object being inlined.
   bool allocated = false;
   cfg::CFGMutation m(*caller);

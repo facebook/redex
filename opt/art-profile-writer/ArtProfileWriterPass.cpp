@@ -720,8 +720,8 @@ void ArtProfileWriterPass::bind_config() {
   });
 }
 
-void ArtProfileWriterPass::eval_pass(DexStoresVector& stores,
-                                     ConfigFiles& conf,
+void ArtProfileWriterPass::eval_pass(DexStoresVector& /*stores*/,
+                                     ConfigFiles& /*conf*/,
                                      PassManager& mgr) {
   if (m_never_inline_attach_annotations) {
     m_reserved_refs_handle = mgr.reserve_refs(name(),

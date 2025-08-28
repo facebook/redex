@@ -34,7 +34,8 @@ class InterDexPassPlugin {
                            std::vector<DexType*>&) {}
 
   // Return any new codegened classes that should be added to the current dex.
-  virtual DexClasses additional_classes(size_t dex_count, const DexClasses&) {
+  virtual DexClasses additional_classes(size_t /*dex_count*/,
+                                        const DexClasses&) {
     DexClasses empty;
     return empty;
   }

@@ -20,7 +20,7 @@ void FastRegAllocPass::eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) {
 
 void FastRegAllocPass::run_pass(DexStoresVector& stores,
                                 ConfigFiles&,
-                                PassManager& mgr) {
+                                PassManager& /*mgr*/) {
   TRACE(FREG, 1, "FastRegAllocPass reached!");
   auto scope = build_class_scope(stores);
   walk::parallel::methods(scope, [&](DexMethod* m) {

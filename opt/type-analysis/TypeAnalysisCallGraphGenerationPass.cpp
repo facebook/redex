@@ -89,7 +89,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
             callsites.emplace_back(resolved_callee, insn);
           }
         } else {
-          get_callsites_for_true_virtual_call(code, resolved_callee, env, mie,
+          get_callsites_for_true_virtual_call(resolved_callee, env, mie,
                                               callsites);
         }
       }
@@ -98,8 +98,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
   }
 
  protected:
-  void get_callsites_for_true_virtual_call(IRCode* code,
-                                           DexMethod* resolved_callee,
+  void get_callsites_for_true_virtual_call(DexMethod* resolved_callee,
                                            const DexTypeEnvironment& env,
                                            MethodItemEntry& invoke,
                                            CallSites& callsites) const {
@@ -142,7 +141,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
 } // namespace
 
 void TypeAnalysisCallGraphGenerationPass::run_pass(DexStoresVector& stores,
-                                                   ConfigFiles& config,
+                                                   ConfigFiles& /*config*/,
                                                    PassManager& mgr) {
   auto analysis = mgr.get_preserved_analysis<GlobalTypeAnalysisPass>();
   always_assert(analysis);

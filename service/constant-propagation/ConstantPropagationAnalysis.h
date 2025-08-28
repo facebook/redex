@@ -422,7 +422,7 @@ class StringAnalyzer : public InstructionAnalyzerBase<StringAnalyzer,
                                                       ConstantEnvironment,
                                                       StringAnalyzerState*> {
  public:
-  static bool analyze_const_string(const StringAnalyzerState* state,
+  static bool analyze_const_string(const StringAnalyzerState* /*state*/,
                                    const IRInstruction* insn,
                                    ConstantEnvironment* env) {
     env->set(RESULT_REGISTER, StringDomain(insn->get_string()));
@@ -559,7 +559,7 @@ class runtime_equals_visitor : public boost::static_visitor<bool> {
   }
 
   template <typename Domain, typename OtherDomain>
-  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+  bool operator()(const Domain& /*d1*/, const OtherDomain& /*d2*/) const {
     return false;
   }
 };
@@ -572,7 +572,7 @@ class runtime_leq_visitor : public boost::static_visitor<bool> {
   }
 
   template <typename Domain, typename OtherDomain>
-  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+  bool operator()(const Domain& /*d1*/, const OtherDomain& /*d2*/) const {
     return false;
   }
 };
@@ -593,7 +593,7 @@ class runtime_lt_visitor : public boost::static_visitor<bool> {
   }
 
   template <typename Domain, typename OtherDomain>
-  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+  bool operator()(const Domain& /*d1*/, const OtherDomain& /*d2*/) const {
     return false;
   }
 };

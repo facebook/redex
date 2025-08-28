@@ -58,7 +58,7 @@ void setup_resources_and_run(
 
 TEST(ApkResources, TestReadManifest) {
   setup_resources_and_run(
-      [&](const std::string& extract_dir, ApkResources* resources) {
+      [&](const std::string& /*extract_dir*/, ApkResources* resources) {
         auto result = resources->get_min_sdk();
         EXPECT_EQ(*result, 21);
 

@@ -2358,7 +2358,7 @@ uint64_t ResourcesArscFile::resource_value_count(uint32_t res_id) {
 
 void ResourcesArscFile::walk_references_for_resource(
     uint32_t resID,
-    ResourcePathType path_type,
+    ResourcePathType /*path_type*/,
     UnorderedSet<uint32_t>* nodes_visited,
     UnorderedSet<std::string>* potential_file_paths) {
   if (nodes_visited->find(resID) != nodes_visited->end()) {

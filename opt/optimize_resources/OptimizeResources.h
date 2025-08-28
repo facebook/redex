@@ -30,8 +30,9 @@ class ReachableResourcesPlugin {
   // names to their corresponding ids, return a list of resource IDs that should
   // be considered reachable.
   virtual UnorderedSet<uint32_t> get_reachable_resources(
-      const std::string& unpack_dir,
-      const std::map<std::string, std::vector<uint32_t>>& name_to_ids) const {
+      const std::string& /*unpack_dir*/,
+      const std::map<std::string, std::vector<uint32_t>>& /*name_to_ids*/)
+      const {
     return {};
   }
   virtual ~ReachableResourcesPlugin() {}

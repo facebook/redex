@@ -352,7 +352,7 @@ TEST_F(RClassTest, remapResourceClassArrays) {
 
   std::cout << std::endl << "MODIFIED R$styleable2 <clinit>:" << std::endl;
   dump_code_verbose(another_code);
-  auto callback = [](const std::string& field_name,
+  auto callback = [](const std::string& /*field_name*/,
                      const std::vector<uint32_t>& payload) {
     EXPECT_EQ(payload[0], 0) << "First element should be zeroed out";
     EXPECT_EQ(payload[1], 0x7f050001) << "Second element should remain intact";

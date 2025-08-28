@@ -381,7 +381,8 @@ AbstractValueKind AliasedRegisters::widen_with(const AliasedRegisters& other) {
 }
 
 // alias group union
-AbstractValueKind AliasedRegisters::meet_with(const AliasedRegisters& other) {
+AbstractValueKind AliasedRegisters::meet_with(
+    const AliasedRegisters& /*other*/) {
   not_reached_log("UNUSED");
 }
 

@@ -548,8 +548,8 @@ std::string ModelMethodMerger::get_method_signature_string(DexMethod* meth) {
 }
 
 void ModelMethodMerger::merge_virtual_methods(
-    const Scope& scope,
-    DexType* super_type,
+    const Scope& /*scope*/,
+    DexType* /*super_type*/,
     DexType* target_type,
     DexField* type_tag_field,
     const std::vector<MergerType::VirtualMethod>& virt_methods,

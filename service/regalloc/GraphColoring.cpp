@@ -536,7 +536,7 @@ void Allocator::simplify(interference::Graph* ig,
  *
  * Range- and param-related symregs are not handled here.
  */
-void Allocator::select(const cfg::ControlFlowGraph& cfg,
+void Allocator::select(const cfg::ControlFlowGraph& /*cfg*/,
                        const interference::Graph& ig,
                        std::stack<reg_t>* select_stack,
                        RegisterTransform* reg_transform,
@@ -567,7 +567,7 @@ void Allocator::select(const cfg::ControlFlowGraph& cfg,
  * allocating non-range-related nodes, so that the non-range ones have priority
  * in consuming the low vregs.
  */
-void Allocator::select_ranges(const cfg::ControlFlowGraph& cfg,
+void Allocator::select_ranges(const cfg::ControlFlowGraph& /*cfg*/,
                               const interference::Graph& ig,
                               const RangeSet& range_set,
                               RegisterTransform* reg_transform,

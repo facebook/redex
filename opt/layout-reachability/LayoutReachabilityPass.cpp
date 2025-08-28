@@ -14,7 +14,7 @@
 
 void LayoutReachabilityPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
-                                      PassManager& mgr) {
+                                      PassManager& /*mgr*/) {
   TRACE(PGR, 1, "Recomputing layout classes");
   std::string apk_dir;
   conf.get_json_config().get("apk_dir", "", apk_dir);

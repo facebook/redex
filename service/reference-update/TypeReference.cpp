@@ -220,7 +220,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   // Update all the method refs and field refs.
   ConcurrentSet<DexMethodRef*> methods;
   ConcurrentSet<DexFieldRef*> fields;
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+  walk::parallel::code(scope, [&](DexMethod* /*method*/, IRCode& code) {
     if (code.editable_cfg_built()) {
       for (auto& mie : InstructionIterable(code.cfg())) {
         auto insn = mie.insn;

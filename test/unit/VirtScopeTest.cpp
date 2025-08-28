@@ -215,8 +215,8 @@ TEST_F(VirtScopeTest, NoOverload) {
 
   // check expected scopes
   for_every_scope(sm,
-                  [&](const DexString* name,
-                      const DexProto* proto,
+                  [&](const DexString* /*name*/,
+                      const DexProto* /*proto*/,
                       const VirtualScopes& scopes) {
                     EXPECT_EQ(scopes.size(), 1);
                     EXPECT_EQ(scopes[0].methods.size(), 1);

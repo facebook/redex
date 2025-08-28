@@ -471,7 +471,7 @@ class AliasFixpointIterator final
   }
 
   AliasDomain analyze_edge(
-      const EdgeId& edge,
+      const EdgeId& /*edge*/,
       const AliasDomain& exit_state_at_source) const override {
     return exit_state_at_source;
   }

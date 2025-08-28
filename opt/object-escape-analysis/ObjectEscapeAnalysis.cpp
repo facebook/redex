@@ -108,7 +108,7 @@ ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
     MethodSummaryCache* method_summary_cache) {
   Timer t("compute_inline_anchors");
   ConcurrentMap<DexType*, InlineAnchorsOfType> inline_anchors;
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& /*code*/) {
     Analyzer analyzer(method_override_graph, excluded_classes, method_summaries,
                       /* incomplete_marker_method */ nullptr, method,
                       callees_cache, method_summary_cache);
@@ -876,7 +876,7 @@ class RootMethodReducer {
     }
   }
 
-  std::optional<ReducedMethod> reduce(size_t initial_code_size) {
+  std::optional<ReducedMethod> reduce() {
     if (!inline_anchors() || !expand_or_inline_invokes()) {
       return std::nullopt;
     }
@@ -1603,8 +1603,7 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
                                               types,
                                               callees_cache,
                                               method_summary_cache};
-        auto reduced_method =
-            root_method_reducer.reduce(code_size_cache[method]);
+        auto reduced_method = root_method_reducer.reduce();
         if (reduced_method) {
           concurrent_reduced_methods.update(
               method, [&](auto*, auto& reduced_methods_variants, bool) {

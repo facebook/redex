@@ -344,7 +344,7 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentMapTest) {
       auto [ptr1, emplaced] = map.get_or_emplace_and_assert_equal(s, sample[i]);
       EXPECT_FALSE(emplaced);
       auto [ptr2, created] = map.get_or_create_and_assert_equal(
-          s, [](const auto& t) -> uint32_t { not_reached(); });
+          s, [](const auto& /*t*/) -> uint32_t { not_reached(); });
       EXPECT_FALSE(created);
       EXPECT_EQ(ptrs.at(s), ptr1);
       EXPECT_EQ(ptr1, ptr2);

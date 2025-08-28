@@ -293,7 +293,7 @@ void PassImpl::run(const DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
 
-  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
+  walk::parallel::code(scope, [&](const DexMethod* /*method*/, IRCode& code) {
     always_assert(code.editable_cfg_built());
     code.cfg().calculate_exit_block();
   });
@@ -315,8 +315,8 @@ void PassImpl::run(const DexStoresVector& stores,
            cp_state);
 }
 
-void PassImpl::eval_pass(DexStoresVector& stores,
-                         ConfigFiles& conf,
+void PassImpl::eval_pass(DexStoresVector& /*stores*/,
+                         ConfigFiles& /*conf*/,
                          PassManager&) {
   auto string_analyzer_state = StringAnalyzerState::get();
   string_analyzer_state.set_methods_as_root();

@@ -372,10 +372,7 @@ void DexDebugEntry::gather_types(std::vector<DexType*>& ltype) const {
  * numbers.
  */
 static std::vector<DexDebugEntry> eval_debug_instructions(
-    DexDebugItem* dbg,
-    DexIdx* idx,
-    std::string_view& encdata_ptr,
-    uint32_t absolute_line) {
+    DexIdx* idx, std::string_view& encdata_ptr, uint32_t absolute_line) {
   std::vector<DexDebugEntry> entries;
   // Likely overallocate and then shrink down in an effort to avoid the
   // resize overhead.
@@ -443,7 +440,7 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
     // We emit matching number of nulls as method arguments at the end.
     decode_noindexable_string(idx, encdata);
   }
-  m_dbg_entries = eval_debug_instructions(this, idx, encdata, line_start);
+  m_dbg_entries = eval_debug_instructions(idx, encdata, line_start);
   m_on_disk_size = orig_size - encdata.size();
 }
 

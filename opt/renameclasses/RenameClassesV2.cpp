@@ -1034,7 +1034,7 @@ void RenameClassesPassV2::rename_classes(
 }
 
 void RenameClassesPassV2::rename_classes_in_layouts(
-    const rewriter::TypeStringMap& name_mapping, PassManager& mgr) {
+    const rewriter::TypeStringMap& name_mapping, PassManager& /*mgr*/) {
   // Sync up ResStringPool entries in XML layouts. Class names should appear
   // in their "external" name, i.e. java.lang.String instead of
   // Ljava/lang/String;
@@ -1068,7 +1068,7 @@ std::string RenameClassesPassV2::prepend_package_prefix(
 }
 
 UnorderedSet<DexClass*> RenameClassesPassV2::get_renamable_classes(
-    Scope& scope, ConfigFiles& conf, PassManager& mgr) {
+    Scope& scope, ConfigFiles& /*conf*/, PassManager& mgr) {
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes_post(scope, class_hierarchy, mgr);
 

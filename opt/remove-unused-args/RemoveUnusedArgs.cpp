@@ -525,7 +525,7 @@ void run_cleanup(DexMethod* method,
  */
 void RemoveArgs::populate_representative_ids(
     const mog::Graph& override_graph,
-    const UnorderedSet<DexType*>& no_devirtualize_annos) {
+    const UnorderedSet<DexType*>& /*no_devirtualize_annos*/) {
   // Group methods that are related (somehow connect in override graph)
   // For each related group, assign a single representative method.
   walk::parallel::methods(m_scope, [&](DexMethod* method) {

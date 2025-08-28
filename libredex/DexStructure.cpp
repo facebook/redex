@@ -439,8 +439,8 @@ void DexStructure::remove_class(const init_classes::InitClassesWithSideEffects*
                                 const MethodRefs& clazz_mrefs,
                                 const FieldRefs& clazz_frefs,
                                 const TypeRefs& clazz_trefs,
-                                const TypeRefs& pending_init_class_fields,
-                                const TypeRefs& pending_init_class_types,
+                                const TypeRefs& /*pending_init_class_fields*/,
+                                const TypeRefs& /*pending_init_class_types*/,
                                 unsigned laclazz,
                                 DexClass* clazz) {
   for (auto mref : UnorderedIterable(clazz_mrefs)) {

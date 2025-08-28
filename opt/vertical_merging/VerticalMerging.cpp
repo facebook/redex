@@ -349,7 +349,7 @@ void record_code_reference(
       };
   walk::parallel::opcodes(
       scope,
-      [&deferred_record_dont_merge_state](DexMethod* method,
+      [&deferred_record_dont_merge_state](DexMethod* /*method*/,
                                           IRInstruction* insn) {
         if (insn->has_type()) {
           auto type = type::get_element_type_if_array(insn->get_type());
@@ -937,7 +937,7 @@ void VerticalMergingPass::merge_classes(const Scope& scope,
 }
 
 void VerticalMergingPass::run_pass(DexStoresVector& stores,
-                                   ConfigFiles& conf,
+                                   ConfigFiles& /*conf*/,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
 

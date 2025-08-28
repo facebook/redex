@@ -439,11 +439,12 @@ void AnalysisImpl::analyze_opcodes() {
   };
 
   InsertOnlyConcurrentSet<DexType*> const_class_types;
-  walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
-    if (insn->opcode() == OPCODE_CONST_CLASS) {
-      const_class_types.insert(insn->get_type());
-    }
-  });
+  walk::parallel::opcodes(scope,
+                          [&](DexMethod* /*method*/, IRInstruction* insn) {
+                            if (insn->opcode() == OPCODE_CONST_CLASS) {
+                              const_class_types.insert(insn->get_type());
+                            }
+                          });
   // A coarse safety check: if intf is a single impl, and both it and its
   // implementor are involved in const-class instructions, this should be
   // considered unsafe (equality checks could be disrupted).

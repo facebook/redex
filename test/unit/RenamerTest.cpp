@@ -30,7 +30,7 @@ bool has_method(DexType* type, const DexString* name) {
   return false;
 }
 
-void check_intf_common(Scope& scope) {
+void check_intf_common() {
   // there is an untouched F.equals()
   EXPECT_TRUE(
       has_method(DexType::get_type("LF;"), DexString::get_string("equals")));
@@ -335,7 +335,7 @@ TEST_F(RenamerTest, Interface1) {
     ASSERT_NE(meth->get_name(), DexString::make_string("f"));
     ASSERT_NE(meth->get_name(), DexString::make_string("g"));
   });
-  check_intf_common(scope);
+  check_intf_common();
   // Intf2 method name must also be in H
   EXPECT_TRUE(
       type_class(DexType::get_type("LH;"))->get_vmethods()[0]->get_name() ==
@@ -371,7 +371,7 @@ TEST_F(RenamerTest, Interface2) {
     ASSERT_NE(meth->get_name(), DexString::make_string("f"));
     ASSERT_NE(meth->get_name(), DexString::make_string("g"));
   });
-  check_intf_common(scope);
+  check_intf_common();
   // Intf2 method name must also be in H
   EXPECT_TRUE(
       type_class(DexType::get_type("LH;"))->get_vmethods()[0]->get_name() ==
@@ -408,7 +408,7 @@ TEST_F(RenamerTest, Interface3) {
     ASSERT_NE(meth->get_name(), DexString::make_string("f"));
     ASSERT_NE(meth->get_name(), DexString::make_string("g"));
   });
-  check_intf_common(scope);
+  check_intf_common();
   // Intf2 method name must also be in H and F
   auto name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();
@@ -446,7 +446,7 @@ TEST_F(RenamerTest, Interface3Miranda) {
     ASSERT_NE(meth->get_name(), DexString::make_string("f"));
     ASSERT_NE(meth->get_name(), DexString::make_string("g"));
   });
-  check_intf_common(scope);
+  check_intf_common();
   // Intf2 method name must also be in F, G, I, K
   auto name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();
@@ -486,7 +486,7 @@ TEST_F(RenamerTest, Interface3MirandaMultiIntf) {
     ASSERT_NE(meth->get_name(), DexString::make_string("f"));
     ASSERT_NE(meth->get_name(), DexString::make_string("g"));
   });
-  check_intf_common(scope);
+  check_intf_common();
   // Intf2 method name must also be in F, G, I, K
   auto name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();
@@ -531,7 +531,7 @@ TEST_F(RenamerTest, Interface3IntfOverride) {
     ASSERT_NE(meth->get_name(), DexString::make_string("f"));
     ASSERT_NE(meth->get_name(), DexString::make_string("g"));
   });
-  check_intf_common(scope);
+  check_intf_common();
   // Intf2 method name must also be in F, G, I, K
   auto name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();
@@ -590,7 +590,7 @@ TEST_F(RenamerTest, Interface3IntfOverEscape) {
     ASSERT_NE(meth->get_name(), DexString::make_string("f"));
     ASSERT_NE(meth->get_name(), DexString::make_string("g"));
   });
-  check_intf_common(scope);
+  check_intf_common();
   // Intf2 method name must also be in F, G, I, K
   auto name =
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name();

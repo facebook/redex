@@ -679,8 +679,8 @@ DexMethod* create_ctor_or_static_dispatch(
 // methods, will do some refactor in near future.
 DexMethod* create_simple_dispatch(
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee,
-    DexAnnotationSet* anno,
-    bool with_debug_item) {
+    DexAnnotationSet* /*anno*/,
+    bool /*with_debug_item*/) {
   auto dispatch_ref = create_dispatch_method_ref(indices_to_callee);
   if (!dispatch_ref) {
     return nullptr;

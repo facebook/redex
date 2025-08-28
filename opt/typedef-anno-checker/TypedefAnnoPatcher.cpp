@@ -299,9 +299,7 @@ void patch_param_from_method_invoke(
     DexMethod* caller,
     IRInstruction* invoke,
     live_range::UseDefChains* ud_chains,
-    Stats& class_stats,
-    std::vector<ParamCandidate>& missing_param_annos,
-    bool patch_accessor = true) {
+    std::vector<ParamCandidate>& missing_param_annos) {
   always_assert(opcode::is_an_invoke(invoke->opcode()));
   auto* def_method = resolve_method(caller, invoke);
   if (!def_method ||
@@ -346,7 +344,6 @@ void collect_setter_missing_param_annos(
     DexMethod* setter,
     IRInstruction* insn,
     live_range::UseDefChains* ud_chains,
-    Stats& class_stats,
     std::vector<ParamCandidate>& missing_param_annos) {
   always_assert(opcode::is_an_iput(insn->opcode()) ||
                 opcode::is_an_sput(insn->opcode()));
@@ -637,8 +634,8 @@ void patch_synthetic_field_from_local_var_lambda(
     const TypedefAnnoType* anno,
     std::vector<const DexField*>* patched_fields,
     PatchingCandidates& candidates,
-    std::mutex& anno_patching_mutex,
-    Stats& class_stats) {
+    std::mutex& /*anno_patching_mutex*/,
+    Stats& /*class_stats*/) {
   live_range::Use use_of_id{insn, src};
   auto udchains_it = ud_chains.find(use_of_id);
   auto defs_set = udchains_it->second;
@@ -946,10 +943,10 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
       IROpcode opcode = insn->opcode();
       if (opcode::is_an_invoke(opcode)) {
         patch_param_from_method_invoke(envs, inference, m, insn, &ud_chains,
-                                       class_stats, param_candidates_local);
+                                       param_candidates_local);
       } else if (opcode::is_an_iput(opcode) || opcode::is_an_sput(opcode)) {
         collect_setter_missing_param_annos(inference, m, insn, &ud_chains,
-                                           class_stats, param_candidates_local);
+                                           param_candidates_local);
       } else if ((opcode == OPCODE_RETURN_OBJECT || opcode == OPCODE_RETURN) &&
                  patch_return) {
         auto return_anno = envs.at(insn).get_annotation(insn->src(0));

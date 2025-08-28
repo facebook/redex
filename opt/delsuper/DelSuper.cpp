@@ -295,7 +295,7 @@ class DelSuper {
         return it2 == it->second.end() ? nullptr : it2->second;
       };
       walk::parallel::opcodes(m_scope,
-                              [&](DexMethod* meth, IRInstruction* insn) {
+                              [&](DexMethod* /*meth*/, IRInstruction* insn) {
                                 if (opcode::is_an_invoke(insn->opcode())) {
                                   auto method = insn->get_method()->as_def();
                                   if (!method) {

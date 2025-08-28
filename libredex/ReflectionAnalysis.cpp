@@ -869,7 +869,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
   }
 
-  void set_reflect_cls_source(const reg_t dest,
+  void set_reflect_cls_source(const reg_t /*dest*/,
                               AbstractObjectEnvironment* current_state) const {
     current_state->set_class_source(
         RESULT_REGISTER,

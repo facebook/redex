@@ -152,7 +152,7 @@ void WrappedPrimitivesPass::bind_config() {
 }
 
 void WrappedPrimitivesPass::eval_pass(DexStoresVector& stores,
-                                      ConfigFiles& conf,
+                                      ConfigFiles& /*conf*/,
                                       PassManager& mgr) {
   auto scope = build_class_scope(stores);
   for (const auto& name : m_wrapper_type_names) {
@@ -162,7 +162,7 @@ void WrappedPrimitivesPass::eval_pass(DexStoresVector& stores,
   wp::get_instance()->mark_roots();
 }
 
-void WrappedPrimitivesPass::run_pass(DexStoresVector& stores,
+void WrappedPrimitivesPass::run_pass(DexStoresVector& /*stores*/,
                                      ConfigFiles& /* unused */,
                                      PassManager& mgr) {
   auto wp_instance = wp::get_instance();

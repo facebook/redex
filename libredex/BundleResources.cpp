@@ -277,7 +277,7 @@ void read_single_manifest(const std::string& manifest,
   TRACE(RES, 1, "Reading proto manifest at %s", manifest.c_str());
   read_protobuf_file_contents(
       manifest,
-      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+      [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         UnorderedMap<std::string, ComponentTag> string_to_tag{
             {"activity", ComponentTag::Activity},
             {"activity-alias", ComponentTag::ActivityAlias},
@@ -728,7 +728,7 @@ boost::optional<int32_t> BundleResources::get_min_sdk() {
   TRACE(RES, 1, "Reading proto xml at %s", base_manifest.c_str());
   read_protobuf_file_contents(
       base_manifest,
-      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+      [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
         always_assert_log(read_finish, "BundleResoource failed to read %s",
@@ -779,7 +779,7 @@ boost::optional<std::string> BundleResources::get_manifest_package_name() {
   TRACE(RES, 1, "Reading proto xml at %s", base_manifest.c_str());
   read_protobuf_file_contents(
       base_manifest,
-      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+      [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
         always_assert_log(read_finish, "BundleResoource failed to read %s",
@@ -884,7 +884,7 @@ bool BundleResources::rename_classes_in_layout(
   bool write_failed = false;
   read_protobuf_file_contents(
       file_path,
-      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+      [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
         always_assert_log(read_finish, "BundleResoource failed to read %s",
@@ -909,7 +909,7 @@ void BundleResources::fully_qualify_layout(
     size_t* changes) {
   read_protobuf_file_contents(
       file_path,
-      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+      [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         always_assert_log(pb_node.ParseFromCodedStream(&input),
                           "BundleResoource failed to read %s",
@@ -1256,7 +1256,7 @@ void BundleResources::collect_layout_classes_and_attributes_for_file(
         file_path.c_str());
   read_protobuf_file_contents(
       file_path,
-      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+      [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
         always_assert_log(read_finish, "BundleResoource failed to read %s",
@@ -1291,7 +1291,7 @@ void BundleResources::collect_xml_attribute_string_values_for_file(
         file_path.c_str());
   read_protobuf_file_contents(
       file_path,
-      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+      [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         always_assert_log(pb_node.ParseFromCodedStream(&input),
                           "BundleResoource failed to read %s",
@@ -1388,7 +1388,7 @@ UnorderedSet<uint32_t> BundleResources::get_xml_reference_attributes(
 
   read_protobuf_file_contents(
       filename,
-      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+      [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
         always_assert_log(read_finish, "BundleResource failed to read %s",
@@ -2324,7 +2324,7 @@ void BundleResources::finalize_bundle_config(const ResourceConfig& config) {
         (boost::filesystem::path(m_directory) / "BundleConfig.pb").string();
     read_protobuf_file_contents(
         bundle_config_path,
-        [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+        [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
           android::bundle::BundleConfig bundle_config;
           always_assert_log(bundle_config.ParseFromCodedStream(&input),
                             "BundleResource failed to read %s",

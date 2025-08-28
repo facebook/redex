@@ -64,7 +64,7 @@ void build_class_hierarchy(ClassHierarchy& hierarchy, const DexClass* cls) {
 }
 
 void build_external_hierarchy(ClassHierarchy& hierarchy) {
-  g_redex->walk_type_class([&](const DexType* type, const DexClass* cls) {
+  g_redex->walk_type_class([&](const DexType* /*type*/, const DexClass* cls) {
     if (!cls->is_external() || is_interface(cls)) {
       return;
     }

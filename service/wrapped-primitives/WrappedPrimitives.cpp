@@ -239,7 +239,7 @@ WrappedPrimitives::build_known_definitions(
 void WrappedPrimitives::optimize_method(
     const TypeSystem& type_system,
     const cp::intraprocedural::FixpointIterator& intra_cp,
-    const cp::WholeProgramState& wps,
+    const cp::WholeProgramState& /*wps*/,
     DexMethod* method,
     cfg::ControlFlowGraph& cfg) {
   if (method->get_code() == nullptr || method->rstate.no_optimizations()) {
