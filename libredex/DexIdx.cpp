@@ -77,11 +77,13 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
                          "Unexpected evtype callsite item arg 2: %d",
                          ev_linker_method_type->evtype());
   DexMethodHandle* linker_method_handle =
-      ((DexEncodedValueMethodHandle*)ev_linker_method_handle)->methodhandle();
+      (dynamic_cast<DexEncodedValueMethodHandle*>(ev_linker_method_handle))
+          ->methodhandle();
   const auto* linker_method_name =
-      ((DexEncodedValueString*)ev_linker_method_name)->string();
+      (dynamic_cast<DexEncodedValueString*>(ev_linker_method_name))->string();
   DexProto* linker_method_proto =
-      ((DexEncodedValueMethodType*)ev_linker_method_type)->proto();
+      (dynamic_cast<DexEncodedValueMethodType*>(ev_linker_method_type))
+          ->proto();
   std::vector<std::unique_ptr<DexEncodedValue>> linker_args;
   for (unsigned long i = 3; i < evalues->size(); ++i) {
     auto& ev = evalues->at(i);
