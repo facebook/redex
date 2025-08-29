@@ -415,7 +415,8 @@ dexproto_to_idx GatheredTypes::get_proto_index(cmp_dproto cmp) {
       // n.b. how deep could this recursion go? what if there was a method
       // handle here?
       if (arg->evtype() == DEVT_METHOD_TYPE) {
-        protos.push_back(((DexEncodedValueMethodType*)arg.get())->proto());
+        protos.push_back(
+            (dynamic_cast<DexEncodedValueMethodType*>(arg.get()))->proto());
       }
     }
   }

@@ -254,7 +254,7 @@ TEST(ApkResources, TestDeleteOverlayableIds) {
                        size_t overlayable_count,
                        size_t policy_count,
                        const std::vector<uint32_t>& expected_ids) {
-    auto* arsc_table = (ResourcesArscFile*)res_table;
+    auto* arsc_table = dynamic_cast<ResourcesArscFile*>(res_table);
     auto& parsed_table = arsc_table->get_table_snapshot().get_parsed_table();
     auto& parsed_overlays_map =
         parsed_table.m_package_overlayables.begin()->second;

@@ -385,8 +385,9 @@ UnorderedSet<std::string_view> AppModuleUsagePass::get_modules_used(
               anno_elem.encoded_value.get());
           for (const auto& value : *(array->evalues())) {
             always_assert(value->evtype() == DEVT_STRING);
-            modules.emplace(
-                ((DexEncodedValueString*)value.get())->string()->str());
+            modules.emplace((dynamic_cast<DexEncodedValueString*>(value.get()))
+                                ->string()
+                                ->str());
           }
         }
         break;

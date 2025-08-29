@@ -60,7 +60,7 @@ void MethodSimilarityGreedyOrderer::gather_code_hash_ids(
       code_hash = code_hash * 17 + insn->src(j);
     }
     if (insn->has_method()) {
-      auto* callee = ((DexOpcodeMethod*)insn)->get_method();
+      auto* callee = (dynamic_cast<DexOpcodeMethod*>(insn))->get_method();
       stable_hashes.insert(std::hash<std::string>{}(show(callee)));
     }
     stable_hashes.insert(code_hash);

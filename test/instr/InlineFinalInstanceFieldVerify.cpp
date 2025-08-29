@@ -40,8 +40,10 @@ std::unordered_set<std::string> get_fields_name_accessed(DexMethod* method) {
   std::unordered_set<std::string> return_names;
   for (auto& insn : method->get_dex_code()->get_instructions()) {
     if (insn->has_field()) {
-      return_names.emplace(
-          ((DexOpcodeField*)insn)->get_field()->get_name()->c_str());
+      return_names.emplace((dynamic_cast<DexOpcodeField*>(insn))
+                               ->get_field()
+                               ->get_name()
+                               ->c_str());
     }
   }
   return return_names;
