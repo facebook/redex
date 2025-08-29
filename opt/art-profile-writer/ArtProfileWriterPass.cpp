@@ -916,10 +916,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   auto gather_metrics = [&](const auto& bp_name, const auto& bp_config_name,
                             const auto& profile) {
+    static const size_t APPEAR100_BUCKETS = 10;
     std::atomic<size_t> code_units{0};
     std::atomic<size_t> compiled_methods{0};
     std::atomic<size_t> compiled_code_units_cold{0};
-    std::atomic<size_t> compiled_code_units_hot{0};
+    std::array<std::atomic<size_t>, APPEAR100_BUCKETS + 1>
+        compiled_code_units_hot_by_appear100{};
+    std::atomic<size_t> compiled_code_units_hot_super{0};
     std::atomic<size_t> compiled_code_units_unknown{0};
     walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
       auto it = profile.methods.find(method);
@@ -931,7 +934,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       if (is_compiled(method, it->second)) {
         compiled_methods++;
         size_t cold = 0;
-        size_t hot = 0;
+        std::array<size_t, APPEAR100_BUCKETS + 1> hot_by_appear100{0};
+        size_t hot_super = 0;
         size_t unknown = 0;
         for (auto* block : code.cfg().blocks()) {
           ecu = block->estimate_code_units();
@@ -943,7 +947,18 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
           } else if (sb != nullptr && sb->foreach_val_early([](const auto& v) {
                        return v && v->val > 0;
                      })) {
-            hot += ecu;
+            float max_appear100 = 0;
+            sb->foreach_val([&](const auto& v) {
+              if (v) {
+                max_appear100 = std::max(max_appear100, v->appear100);
+              }
+            });
+            if (max_appear100 > 100) {
+              hot_super += ecu;
+            } else {
+              size_t bucket = (size_t)(max_appear100 * APPEAR100_BUCKETS / 100);
+              hot_by_appear100[bucket] += ecu;
+            }
           } else {
             unknown += ecu;
           }
@@ -951,8 +966,14 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         if (cold) {
           compiled_code_units_cold += cold;
         }
-        if (hot) {
-          compiled_code_units_hot += hot;
+        for (size_t bucket = 0; bucket <= APPEAR100_BUCKETS; ++bucket) {
+          if (hot_by_appear100[bucket]) {
+            compiled_code_units_hot_by_appear100[bucket] +=
+                hot_by_appear100[bucket];
+          }
+        }
+        if (hot_super) {
+          compiled_code_units_hot_super += hot_super;
         }
         if (unknown) {
           compiled_code_units_unknown += unknown;
@@ -968,6 +989,16 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     mgr.incr_metric(prefix + "methods", profile.methods.size());
     mgr.incr_metric(prefix + "code_units", (size_t)code_units);
     mgr.incr_metric(prefix + "compiled", (size_t)compiled_methods);
+    size_t compiled_code_units_hot = compiled_code_units_hot_super;
+    for (size_t bucket = 0; bucket <= APPEAR100_BUCKETS; ++bucket) {
+      auto appear100 = (size_t)compiled_code_units_hot_by_appear100[bucket];
+      compiled_code_units_hot += appear100;
+      std::stringstream ss;
+      ss << std::setw(3) << std::setfill('0')
+         << (bucket * (100 / APPEAR100_BUCKETS));
+      mgr.incr_metric(prefix + "compiled_code_units_hot_appear" + ss.str(),
+                      appear100);
+    }
     mgr.incr_metric(prefix + "compiled_code_units",
                     (size_t)compiled_code_units_cold +
                         (size_t)compiled_code_units_hot +
@@ -976,6 +1007,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                     (size_t)compiled_code_units_cold);
     mgr.incr_metric(prefix + "compiled_code_units_hot",
                     (size_t)compiled_code_units_hot);
+    mgr.incr_metric(prefix + "compiled_code_units_hot_super",
+                    (size_t)compiled_code_units_hot_super);
     mgr.incr_metric(prefix + "compiled_code_units_unknown",
                     (size_t)compiled_code_units_unknown);
 
