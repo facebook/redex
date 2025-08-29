@@ -19,6 +19,7 @@
 #include "Macros.h"
 #if IS_WINDOWS
 #include "CompatWindows.h"
+#include <fcntl.h>
 #include <io.h>
 #include <share.h>
 #endif
