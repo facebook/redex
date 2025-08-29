@@ -1128,7 +1128,7 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
   }()};
 
   inliner::run_inliner(stores, mgr, conf, DEFAULT_COST_CONFIG,
-                       /* consider_hot_cold */ false,
+                       HotColdInliningBehavior::None,
                        /* partial_hot_hot */ false,
                        /* intra_dex */ true,
                        /* baseline_profile_guided */ false,

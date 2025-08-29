@@ -840,7 +840,7 @@ void run_inliner(
     PassManager& mgr,
     ConfigFiles& conf,
     InlinerCostConfig inliner_cost_config /* DEFAULT_COST_CONFIG */,
-    bool consider_hot_cold /* false */,
+    HotColdInliningBehavior hot_cold_inlining_behavior /* None */,
     bool partial_hot_hot /* false */,
     bool intra_dex /* false */,
     bool baseline_profile_guided /* false */,
@@ -995,10 +995,10 @@ void run_inliner(
       intra_dex ? IntraDex : InterDex, true_virtual_callers, inline_for_speed,
       analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,
       cross_dex_penalty,
-      /* configured_finalish_field_names */ {}, local_only, consider_hot_cold,
-      std::move(baseline_profile), inliner_cost_config,
-      &unfinalized_init_methods, &methods_with_write_barrier,
-      method_override_graph.get());
+      /* configured_finalish_field_names */ {}, local_only,
+      hot_cold_inlining_behavior, std::move(baseline_profile),
+      inliner_cost_config, &unfinalized_init_methods,
+      &methods_with_write_barrier, method_override_graph.get());
   inliner.inline_methods();
 
   // refinalize where possible
@@ -1233,6 +1233,7 @@ void run_inliner(
                   shrinker.get_local_dce_stats()
                       .init_classes.init_class_instructions_refined);
   mgr.incr_metric("not_cold_methods", inliner.get_not_cold_methods());
+  mgr.incr_metric("maybe_hot_methods", inliner.get_maybe_hot_methods());
 
   // Expose the shrinking timers as Timers.
   Timer::add_timer("Inliner.Shrinking.ConstantPropagation",
@@ -1262,5 +1263,20 @@ void run_inliner(
                    inliner.get_call_site_inlined_cost_seconds());
   Timer::add_timer("Inliner.Inlining.cannot_inline_sketchy_code",
                    inliner.get_cannot_inline_sketchy_code_timer_seconds());
+}
+
+HotColdInliningBehavior parse_hot_cold_inlining_behavior(
+    const std::string& str) {
+  if (str == "none") {
+    return HotColdInliningBehavior::None;
+  }
+  if (str == "respect-not-cold") {
+    return HotColdInliningBehavior::RespectNotCold;
+  }
+  if (str == "respect-maybe-hot") {
+    return HotColdInliningBehavior::RespectMaybeHot;
+  }
+  always_assert_log(false, "Unknown hot-cold inlining behavior: %s",
+                    str.c_str());
 }
 } // namespace inliner

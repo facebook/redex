@@ -102,15 +102,22 @@ void MethodInlinePass::bind_config() {
   bind("unused_arg_not_top_multiplier",
        DEFAULT_COST_CONFIG.unused_arg_not_top_multiplier,
        m_inliner_cost_config.unused_arg_not_top_multiplier);
-  bind("consider_hot_cold", false, m_consider_hot_cold);
+  std::string hot_cold_inlining_behavior_str;
+  bind("hot_cold_inlining_behavior", "none", hot_cold_inlining_behavior_str);
   bind("partial_hot_hot", false, m_partial_hot_hot);
+  after_configuration([this, hot_cold_inlining_behavior_str =
+                                 std::move(hot_cold_inlining_behavior_str)]() {
+    always_assert(!hot_cold_inlining_behavior_str.empty());
+    m_hot_cold_inlining_behavior = inliner::parse_hot_cold_inlining_behavior(
+        hot_cold_inlining_behavior_str);
+  });
 }
 
 void MethodInlinePass::run_pass(DexStoresVector& stores,
                                 ConfigFiles& conf,
                                 PassManager& mgr) {
   inliner::run_inliner(stores, mgr, conf, m_inliner_cost_config,
-                       m_consider_hot_cold, m_partial_hot_hot);
+                       m_hot_cold_inlining_behavior, m_partial_hot_hot);
   // For partial inlining, we only consider the first time the pass runs, to
   // avoid repeated partial inlining. (This shouldn't be necessary as the
   // partial inlining fallback invocation is marked as cold, but just in case

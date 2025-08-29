@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include "Inliner.h"
 #include "InlinerConfig.h"
 #include "PassManager.h"
@@ -12,6 +14,7 @@
 class InlineForSpeed;
 
 namespace inliner {
+
 /**
  * Before InterDexPass, we can run inliner with "intra_dex=false" to do global
  * inlining. But after InterDexPass, we can only run inliner within each dex by
@@ -21,11 +24,14 @@ void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
                  ConfigFiles& conf,
                  InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG,
-                 bool consider_hot_cold = false,
+                 HotColdInliningBehavior = HotColdInliningBehavior::None,
                  bool partial_hot_hot = false,
                  bool intra_dex = false,
                  bool baseline_profile_guided = false,
                  InlineForSpeed* inline_for_speed = nullptr,
                  bool inline_bridge_synth_only = false,
                  bool local_only = false);
+
+HotColdInliningBehavior parse_hot_cold_inlining_behavior(const std::string&);
+
 } // namespace inliner

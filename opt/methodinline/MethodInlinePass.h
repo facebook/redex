@@ -34,6 +34,6 @@ class MethodInlinePass : public Pass {
 
  private:
   InlinerCostConfig m_inliner_cost_config;
-  bool m_consider_hot_cold;
+  HotColdInliningBehavior m_hot_cold_inlining_behavior;
   bool m_partial_hot_hot;
 };

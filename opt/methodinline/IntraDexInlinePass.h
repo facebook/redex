@@ -8,6 +8,7 @@
 #pragma once
 
 #include "DexClass.h"
+#include "Inliner.h"
 #include "Pass.h"
 
 class IntraDexInlinePass : public Pass {
@@ -39,6 +40,6 @@ class IntraDexInlinePass : public Pass {
   float m_baseline_profile_heat_discount;
   float m_baseline_profile_shrink_bias;
 
-  bool m_consider_hot_cold;
+  HotColdInliningBehavior m_hot_cold_inlining_behavior;
   bool m_partial_hot_hot;
 };
