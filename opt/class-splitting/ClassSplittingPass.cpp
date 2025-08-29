@@ -111,7 +111,7 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
   // side in order to check if we should skip a class for some obscure
   // reason.
   interdex::InterDexRegistry* registry =
-      static_cast<interdex::InterDexRegistry*>(
+      dynamic_cast<interdex::InterDexRegistry*>(
           PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
   auto plugins = registry->create_plugins();
 

@@ -516,7 +516,7 @@ void record_field_reference(
       auto* value = field->get_static_value();
       if (value != nullptr && value->evtype() == DEVT_TYPE) {
         record_dont_merge_state(
-            static_cast<DexEncodedValueType*>(value)->type(), kStrict,
+            dynamic_cast<DexEncodedValueType*>(value)->type(), kStrict,
             dont_merge_status);
       }
     }

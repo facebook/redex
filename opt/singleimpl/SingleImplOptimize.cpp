@@ -574,7 +574,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
   auto rewrite_enclosing_method = [&](const DexClass* cls, DexAnnotation* anno,
                                       DexEncodedValue* value) {
     if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
-      auto* method_value = static_cast<DexEncodedValueMethod*>(value);
+      auto* method_value = dynamic_cast<DexEncodedValueMethod*>(value);
       const auto& meth_it =
           m_intf_meth_to_impl_meth.find(method_value->method());
       if (meth_it == m_intf_meth_to_impl_meth.end()) {
@@ -598,7 +598,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
   auto rewrite_enclosing_class = [&](const DexClass*, DexAnnotation* anno,
                                      DexEncodedValue* value) {
     if (value->evtype() == DexEncodedValueTypes::DEVT_TYPE) {
-      auto* type_value = static_cast<DexEncodedValueType*>(value);
+      auto* type_value = dynamic_cast<DexEncodedValueType*>(value);
       auto* iface = type_value->type();
       auto search = optimized.find(iface);
       if (search != optimized.end()) {

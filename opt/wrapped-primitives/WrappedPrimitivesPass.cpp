@@ -218,7 +218,7 @@ void trace_field_usage(const std::string& field_name,
 void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
                                              ConfigFiles& /* unused */,
                                              PassManager& mgr) {
-  auto* wrapped_primitives_pass = static_cast<WrappedPrimitivesPass*>(
+  auto* wrapped_primitives_pass = dynamic_cast<WrappedPrimitivesPass*>(
       mgr.find_pass("WrappedPrimitivesPass"));
   if (wrapped_primitives_pass == nullptr) {
     return;

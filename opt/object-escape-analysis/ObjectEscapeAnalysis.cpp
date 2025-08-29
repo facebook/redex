@@ -2002,7 +2002,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
 
-  auto* registry = static_cast<ObjectEscapeAnalysisRegistry*>(
+  auto* registry = dynamic_cast<ObjectEscapeAnalysisRegistry*>(
       PluginRegistry::get().pass_registry(OBJECTESCAPEANALYSIS_PASS_NAME));
   std::vector<std::unique_ptr<ObjectEscapeAnalysisPlugin>> shrinking_plugins;
   if (registry != nullptr) {

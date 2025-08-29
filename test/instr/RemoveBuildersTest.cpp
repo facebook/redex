@@ -24,11 +24,11 @@ void check_no_builder(DexMethod* method, DexType* builder_type) {
     auto opcode = insn->opcode();
 
     if (opcode == DOPCODE_NEW_INSTANCE) {
-      DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
+      DexType* cls_type = dynamic_cast<DexOpcodeType*>(insn)->get_type();
       EXPECT_NE(builder_type, cls_type);
     } else if (dex_opcode::is_iget(opcode) || dex_opcode::is_iput(opcode)) {
       DexFieldRef* field =
-          static_cast<const DexOpcodeField*>(insn)->get_field();
+          dynamic_cast<const DexOpcodeField*>(insn)->get_field();
       EXPECT_NE(builder_type, field->get_class());
     } else if (dex_opcode::is_invoke(insn->opcode())) {
       auto* invoked = dynamic_cast<DexOpcodeMethod*>(insn)->get_method();
@@ -46,14 +46,14 @@ void check_has_builder(DexMethod* method, DexType* builder_type) {
 
     if (opcode == DOPCODE_NEW_INSTANCE ||
         dex_opcode::is_invoke(insn->opcode())) {
-      DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
+      DexType* cls_type = dynamic_cast<DexOpcodeType*>(insn)->get_type();
       if (builder_type == cls_type) {
         has_builder = true;
         break;
       }
     } else if (dex_opcode::is_iget(opcode) || dex_opcode::is_iput(opcode)) {
       DexFieldRef* field =
-          static_cast<const DexOpcodeField*>(insn)->get_field();
+          dynamic_cast<const DexOpcodeField*>(insn)->get_field();
       if (builder_type == field->get_class()) {
         has_builder = true;
         break;
@@ -196,7 +196,7 @@ TEST_F(PostVerify, RemoveBarBuilder_differentRegs) {
       constant_reg = insn->dest();
       values.push_back(insn->get_literal());
     } else if (dex_opcode::is_invoke(opcode)) {
-      auto* invoked = static_cast<DexOpcodeMethod*>(insn)->get_method();
+      auto* invoked = dynamic_cast<DexOpcodeMethod*>(insn)->get_method();
       if (invoked->get_class() == bar->get_type()) {
         EXPECT_EQ(constant_reg, insn->src(1));
       }
@@ -281,7 +281,7 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModel) {
     auto opcode = insn->opcode();
     if (dex_opcode::is_iput(opcode)) {
       DexFieldRef* field =
-          static_cast<const DexOpcodeField*>(insn)->get_field();
+          dynamic_cast<const DexOpcodeField*>(insn)->get_field();
       if (field->get_class() == car->get_type()) {
         EXPECT_EQ(null_reg, insn->src(0));
       }

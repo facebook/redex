@@ -343,7 +343,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   XStoreRefs xstore_refs(stores);
 
   // Setup all external plugins.
-  InterDexRegistry* registry = static_cast<InterDexRegistry*>(
+  InterDexRegistry* registry = dynamic_cast<InterDexRegistry*>(
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
   auto plugins = registry->create_plugins();
 

@@ -127,7 +127,7 @@ const DexEncodedValue* parse_default_anno_value(
         continue;
       }
       DexEncodedValueAnnotation* default_values =
-          static_cast<DexEncodedValueAnnotation*>(
+          dynamic_cast<DexEncodedValueAnnotation*>(
               target_elem.encoded_value.get());
       TRACE(ANNO, 9, "default values: %s type %d\n", SHOW(default_values),
             target_elem.encoded_value->evtype());

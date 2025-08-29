@@ -118,7 +118,7 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
   m_merging_spec.dedup_fill_in_stack_trace = false;
 
   const auto* interdex_pass =
-      static_cast<interdex::InterDexPass*>(mgr.find_pass("InterDexPass"));
+      dynamic_cast<interdex::InterDexPass*>(mgr.find_pass("InterDexPass"));
   always_assert_log(interdex_pass, "InterDexPass missing");
   // If dynamically-dead-classes are reordered in InterDexPass, should not merge
   // those classes.

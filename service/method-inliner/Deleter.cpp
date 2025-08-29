@@ -42,7 +42,7 @@ std::vector<DexMethod*> delete_methods(
       const auto& ev = anno_element.encoded_value;
       if (ev->evtype() == DEVT_METHOD) {
         DexEncodedValueMethod* evm =
-            static_cast<DexEncodedValueMethod*>(ev.get());
+            dynamic_cast<DexEncodedValueMethod*>(ev.get());
         if (evm->method()->is_def()) {
           removable.erase(evm->method()->as_def());
         }

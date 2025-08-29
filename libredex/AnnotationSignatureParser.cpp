@@ -21,13 +21,13 @@ void parse(
     if (ev->evtype() != DEVT_ARRAY) {
       continue;
     }
-    auto* arrayev = static_cast<DexEncodedValueArray*>(ev.get());
+    auto* arrayev = dynamic_cast<DexEncodedValueArray*>(ev.get());
     auto const& evs = arrayev->evalues();
     for (auto& strev : *evs) {
       if (strev->evtype() != DEVT_STRING) {
         continue;
       }
-      auto* devs = static_cast<DexEncodedValueString*>(strev.get());
+      auto* devs = dynamic_cast<DexEncodedValueString*>(strev.get());
       const std::string sigstr = devs->string()->str_copy();
       always_assert(sigstr.length() > 0);
       const auto* sigcstr = sigstr.c_str();

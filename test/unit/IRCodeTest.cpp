@@ -223,7 +223,7 @@ TEST_F(IRCodeTest, encode_large_sparse_switch) {
   });
   ASSERT_TRUE(it != dex_insns.end());
 
-  DexOpcodeData* dod = static_cast<DexOpcodeData*>(*it);
+  DexOpcodeData* dod = dynamic_cast<DexOpcodeData*>(*it);
 
   EXPECT_EQ(dod->data_size(), 1 + 4 * kTargetCount);
   EXPECT_EQ(dod->data()[0], kTargetCount);
@@ -247,7 +247,7 @@ TEST_F(IRCodeTest, encode_large_packed_switch) {
   });
   ASSERT_TRUE(it != dex_insns.end());
 
-  DexOpcodeData* dod = static_cast<DexOpcodeData*>(*it);
+  DexOpcodeData* dod = dynamic_cast<DexOpcodeData*>(*it);
 
   EXPECT_EQ(dod->data_size(), 1 + 2 + 2 * kTargetCount);
   EXPECT_EQ(dod->data()[0], kTargetCount);

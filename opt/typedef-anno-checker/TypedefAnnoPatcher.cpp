@@ -159,7 +159,7 @@ DexMethodRef* get_enclosing_method(DexClass* cls) {
   if (anno != nullptr) {
     const auto& value = anno->anno_elems().begin()->encoded_value;
     if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
-      auto* method_value = static_cast<DexEncodedValueMethod*>(value.get());
+      auto* method_value = dynamic_cast<DexEncodedValueMethod*>(value.get());
       auto method_name = method_value->show_deobfuscated();
       return DexMethod::get_method(method_name);
     }

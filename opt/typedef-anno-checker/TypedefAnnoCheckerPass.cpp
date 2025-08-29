@@ -92,7 +92,7 @@ bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
   if (anno != nullptr) {
     const auto& value = anno->anno_elems().begin()->encoded_value;
     if (value->evtype() == DexEncodedValueTypes::DEVT_TYPE) {
-      auto* type_value = static_cast<DexEncodedValueType*>(value.get());
+      auto* type_value = dynamic_cast<DexEncodedValueType*>(value.get());
       auto type_name = type_value->show_deobfuscated();
       typedef_cls = type_class(DexType::make_type(type_name));
     }
@@ -743,7 +743,7 @@ void TypedefAnnoCheckerPass::gather_typedef_values(
     UnorderedSet<const DexString*> str_values;
     for (auto* field : fields) {
       str_values.emplace(
-          static_cast<DexEncodedValueString*>(field->get_static_value())
+          dynamic_cast<DexEncodedValueString*>(field->get_static_value())
               ->string());
     }
     strdef_constants.emplace(cls, std::move(str_values));

@@ -377,41 +377,41 @@ struct static_value_biased_dexfields_comparator {
       switch (eva->evtype()) {
       case DEVT_STRING: {
         const auto* evastring =
-            static_cast<DexEncodedValueString*>(eva)->string();
+            dynamic_cast<DexEncodedValueString*>(eva)->string();
         const auto* evbstring =
-            static_cast<DexEncodedValueString*>(evb)->string();
+            dynamic_cast<DexEncodedValueString*>(evb)->string();
         if (evastring != evbstring) {
           return compare_dexstrings(evastring, evbstring);
         }
         break;
       }
       case DEVT_TYPE: {
-        auto* evatype = static_cast<DexEncodedValueType*>(eva)->type();
-        auto* evbtype = static_cast<DexEncodedValueType*>(evb)->type();
+        auto* evatype = dynamic_cast<DexEncodedValueType*>(eva)->type();
+        auto* evbtype = dynamic_cast<DexEncodedValueType*>(evb)->type();
         if (evatype != evbtype) {
           return compare_dextypes(evatype, evbtype);
         }
         break;
       }
       case DEVT_FIELD: {
-        auto* evafield = static_cast<DexEncodedValueField*>(eva)->field();
-        auto* evbfield = static_cast<DexEncodedValueField*>(evb)->field();
+        auto* evafield = dynamic_cast<DexEncodedValueField*>(eva)->field();
+        auto* evbfield = dynamic_cast<DexEncodedValueField*>(evb)->field();
         if (evafield != evbfield) {
           return compare_dexfields(evafield, evbfield);
         }
         break;
       }
       case DEVT_METHOD: {
-        auto* evamethod = static_cast<DexEncodedValueMethod*>(eva)->method();
-        auto* evbmethod = static_cast<DexEncodedValueMethod*>(evb)->method();
+        auto* evamethod = dynamic_cast<DexEncodedValueMethod*>(eva)->method();
+        auto* evbmethod = dynamic_cast<DexEncodedValueMethod*>(evb)->method();
         if (evamethod != evbmethod) {
           return compare_dexmethods(evamethod, evbmethod);
         }
         break;
       }
       case DEVT_ARRAY: {
-        auto* evaarray = static_cast<DexEncodedValueArray*>(eva);
-        auto* evbarray = static_cast<DexEncodedValueArray*>(evb);
+        auto* evaarray = dynamic_cast<DexEncodedValueArray*>(eva);
+        auto* evbarray = dynamic_cast<DexEncodedValueArray*>(evb);
         if (evaarray->is_static_val() != evbarray->is_static_val()) {
           return static_cast<int>(evaarray->is_static_val()) <
                  static_cast<int>(evbarray->is_static_val());

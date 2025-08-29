@@ -407,21 +407,22 @@ void translate_dex_to_ir(
     }
     if (dex_insn->has_string()) {
       insn->set_string(
-          static_cast<const DexOpcodeString*>(dex_insn)->get_string());
+          dynamic_cast<const DexOpcodeString*>(dex_insn)->get_string());
     } else if (dex_insn->has_type()) {
-      insn->set_type(static_cast<const DexOpcodeType*>(dex_insn)->get_type());
+      insn->set_type(dynamic_cast<const DexOpcodeType*>(dex_insn)->get_type());
     } else if (dex_insn->has_field()) {
       insn->set_field(
-          static_cast<const DexOpcodeField*>(dex_insn)->get_field());
+          dynamic_cast<const DexOpcodeField*>(dex_insn)->get_field());
     } else if (dex_insn->has_method()) {
       insn->set_method(
-          static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
+          dynamic_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
     } else if (dex_insn->has_callsite()) {
       insn->set_callsite(
-          static_cast<const DexOpcodeCallSite*>(dex_insn)->get_callsite());
+          dynamic_cast<const DexOpcodeCallSite*>(dex_insn)->get_callsite());
     } else if (dex_insn->has_methodhandle()) {
-      insn->set_methodhandle(static_cast<const DexOpcodeMethodHandle*>(dex_insn)
-                                 ->get_methodhandle());
+      insn->set_methodhandle(
+          dynamic_cast<const DexOpcodeMethodHandle*>(dex_insn)
+              ->get_methodhandle());
     } else if (dex_opcode::has_literal(dex_op)) {
       insn->set_literal(dex_insn->get_literal());
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
@@ -469,7 +470,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
       // address.
       mei = new MethodItemEntry();
       if (dex_opcode::is_fopcode(insn->opcode())) {
-        auto* data = static_cast<DexOpcodeData*>(insn);
+        auto* data = dynamic_cast<DexOpcodeData*>(insn);
         auto inserted = data_set.insert(data).second;
         always_assert(inserted);
         entry_to_data.emplace(mei, std::unique_ptr<DexOpcodeData>(data));
@@ -1133,7 +1134,7 @@ bool IRCode::try_sync(DexCode* code) {
     addr = entry_to_addr.at(mentry);
     bool invoke_interface = opcode == DOPCODE_INVOKE_INTERFACE ||
                             opcode == DOPCODE_INVOKE_INTERFACE_RANGE;
-    auto* method = static_cast<const DexOpcodeMethod*>(dex_insn)->get_method();
+    auto* method = dynamic_cast<const DexOpcodeMethod*>(dex_insn)->get_method();
     invoke_ids.emplace_back(addr, DexInvokeId(invoke_interface, method,
                                               last_position, last_src_block));
   }
