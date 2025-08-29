@@ -24,7 +24,6 @@
 #include "RegisterType.h"
 #include "Show.h"
 #include "Transform.h"
-#include "Util.h"
 #include "VirtualRegistersFile.h"
 
 using namespace regalloc;

@@ -9,12 +9,10 @@
 
 #include "Creators.h"
 #include "DexAsm.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InitClassPruner.h"
 #include "RedexTest.h"
-#include "Show.h"
 #include "VirtualScope.h"
 
 struct InitClassPrunerTest : public RedexTest {

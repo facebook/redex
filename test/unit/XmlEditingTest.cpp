@@ -11,7 +11,6 @@
 
 #include "Debug.h"
 #include "androidfw/ResourceTypes.h"
-#include "utils/ByteOrder.h"
 #include "utils/Serialize.h"
 #include "utils/Visitor.h"
 

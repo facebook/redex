@@ -12,7 +12,6 @@
 #include "IRInstruction.h"
 #include "Match.h"
 #include "RedexTest.h"
-#include "Show.h"
 
 class MatchTest : public RedexTest {};
 

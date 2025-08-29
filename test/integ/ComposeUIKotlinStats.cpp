@@ -14,7 +14,6 @@
 #include "PrintKotlinStats.h"
 #include "RedexTest.h"
 #include "Resolver.h"
-#include "Show.h"
 
 class ComposeUIKotlinStatsTest : public RedexIntegrationTest {};
 

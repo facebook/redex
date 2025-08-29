@@ -97,7 +97,6 @@
 #include "RefChecker.h"
 #include "Shrinker.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Walkers.h"
 
 using namespace inliner;

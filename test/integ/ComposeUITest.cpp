@@ -14,7 +14,6 @@
 #include "IPConstantPropagation.h"
 #include "IRList.h"
 #include "RedexTest.h"
-#include "Resolver.h"
 
 namespace {
 

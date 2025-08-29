@@ -12,7 +12,6 @@
 #include "IRCode.h"
 #include "LegacyInliner.h"
 #include "TestGenerator.h"
-#include "Util.h"
 
 class InlinerTestAliasedInputs : public EquivalenceTest {
   DexMethod* m_callee;

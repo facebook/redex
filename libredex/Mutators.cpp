@@ -8,7 +8,6 @@
 #include "Mutators.h"
 
 #include "DexUtil.h"
-#include "IRCode.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 

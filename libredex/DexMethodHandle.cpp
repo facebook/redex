@@ -9,8 +9,6 @@
 #include "DexAnnotation.h"
 #include "DexIdx.h"
 
-#include <sstream>
-
 DexMethodHandle::DexMethodHandle(MethodHandleType type,
                                  DexMethodRef* methodref) {
   always_assert_log(isInvokeType(type),

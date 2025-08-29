@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
-#include "Debug.h"
 #include "DexClass.h"
 #include "RedexContext.h"
 #include "RedexTest.h"

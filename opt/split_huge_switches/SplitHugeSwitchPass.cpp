@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <iostream>
 
-#include <boost/optional.hpp>
 #include <boost/regex.hpp>
 
 #include "ControlFlow.h"
@@ -24,7 +23,6 @@
 #include "MethodProfiles.h"
 #include "MethodUtil.h"
 #include "PassManager.h"
-#include "PluginRegistry.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
 #include "Show.h"

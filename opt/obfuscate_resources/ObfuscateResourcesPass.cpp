@@ -22,7 +22,6 @@
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
-#include "IRInstruction.h"
 #include "PassManager.h"
 #include "RedexResources.h"
 #include "Show.h"

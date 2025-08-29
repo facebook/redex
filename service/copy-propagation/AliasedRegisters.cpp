@@ -11,10 +11,7 @@
 #include <algorithm>
 #include <boost/functional/hash.hpp>
 #include <boost/graph/adjacency_list.hpp>
-#include <boost/optional.hpp>
 #include <boost/range/algorithm.hpp>
-#include <boost/range/iterator_range.hpp>
-#include <limits>
 #include <numeric>
 
 using namespace sparta;

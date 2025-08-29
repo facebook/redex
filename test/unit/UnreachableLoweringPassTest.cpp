@@ -7,17 +7,14 @@
 
 #include <gtest/gtest.h>
 
-#include <atomic>
 #include <sstream>
 
 #include "Creators.h"
 #include "DexAsm.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
-#include "Show.h"
 #include "UnreachableLoweringPass.h"
 #include "VirtualScope.h"
 

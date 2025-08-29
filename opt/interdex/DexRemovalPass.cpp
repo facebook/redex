@@ -13,9 +13,7 @@
 #include "InterDexReshuffleImpl.h"
 #include "PassManager.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
-#include "WorkQueue.h"
 
 namespace {
 const interdex::InterDexPass* get_interdex_pass(const PassManager& mgr) {

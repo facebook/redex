@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <fstream>
 #include <iosfwd>
-#include <sstream>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>

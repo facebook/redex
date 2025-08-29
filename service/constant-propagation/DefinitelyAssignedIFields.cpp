@@ -19,7 +19,6 @@
 #include "ConstantPropagationAnalysis.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "Lazy.h"
 #include "LiveRange.h"
 #include "Resolver.h"
 #include "Timer.h"

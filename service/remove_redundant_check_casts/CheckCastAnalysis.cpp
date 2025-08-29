@@ -9,9 +9,7 @@
 
 #include <sstream>
 
-#include "DexUtil.h"
 #include "FrameworkApi.h"
-#include "Lazy.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
 #include "Trace.h"

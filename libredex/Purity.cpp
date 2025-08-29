@@ -21,7 +21,6 @@
 #include "IRInstruction.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"

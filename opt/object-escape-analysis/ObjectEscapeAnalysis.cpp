@@ -58,7 +58,6 @@
 #include "ObjectEscapeAnalysisPlugin.h"
 #include "PassManager.h"
 #include "RedexContext.h"
-#include "StringBuilder.h"
 #include "Walkers.h"
 
 using namespace sparta;

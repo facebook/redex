@@ -11,7 +11,6 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
-#include "DexUtil.h"
 #include "RedexTest.h"
 
 using namespace hierarchy_util;

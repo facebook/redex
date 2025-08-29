@@ -17,7 +17,6 @@
 #include <functional>
 #include <inttypes.h>
 #include <json/json.h>
-#include <list>
 #include <memory>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -51,7 +50,6 @@
 #include "MethodProfiles.h"
 #include "MethodSimilarityCompressionConsciousOrderer.h"
 #include "MethodSimilarityGreedyOrderer.h"
-#include "Pass.h"
 #include "RedexOptions.h" // For DebugInfoKind
 #include "Resolver.h"
 #include "Sha1.h"

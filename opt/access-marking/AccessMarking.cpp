@@ -12,12 +12,10 @@
 #include "FieldOpTracker.h"
 #include "IRCode.h"
 #include "MethodOverrideGraph.h"
-#include "Mutators.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 

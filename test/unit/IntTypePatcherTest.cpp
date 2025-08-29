@@ -8,8 +8,6 @@
 #include "IntTypePatcher.h"
 #include "DexClass.h"
 #include "RedexTest.h"
-#include "ScopeHelper.h"
-#include "TypeInference.h"
 
 class IntTypePatcherTest : public RedexTest {};
 

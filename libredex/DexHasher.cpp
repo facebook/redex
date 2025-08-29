@@ -20,8 +20,6 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "IROpcode.h"
-#include "Sha1.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"

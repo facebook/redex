@@ -11,7 +11,6 @@
 #include <cinttypes>
 #include <cmath>
 #include <iostream>
-#include <numeric>
 #include <utility>
 #include <vector>
 

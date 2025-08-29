@@ -11,7 +11,6 @@
 
 #include "AbstractDomainPropertyTest.h"
 #include "ConstantPropagationTestUtil.h"
-#include "IRAssembler.h"
 #include "RedexTest.h"
 #include "SignedConstantDomain.h"
 

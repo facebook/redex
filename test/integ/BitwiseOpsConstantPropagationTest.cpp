@@ -13,8 +13,6 @@
 #include "ConstantPropagationPass.h"
 #include "DexUtil.h"
 #include "RedexTest.h"
-#include "Resolver.h"
-#include "Show.h"
 
 using ::testing::AllOf;
 using ::testing::HasSubstr;

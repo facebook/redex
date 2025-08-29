@@ -13,7 +13,6 @@
 #include "JavaParserUtil.h"
 #include "Show.h"
 
-#include <deque>
 #include <fstream>
 #include <json/json.h>
 

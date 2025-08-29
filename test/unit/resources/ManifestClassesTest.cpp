@@ -12,8 +12,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <boost/filesystem.hpp>
-
 // Setup a "normal" looking unpacked apk directory; creates a reader for the
 // callback.
 void run_with_manifest(const std::string& env_var,

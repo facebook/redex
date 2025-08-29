@@ -13,7 +13,6 @@
 #include "BundleResources.h"
 #include "ObfuscateXmlVerifyHelper.h"
 #include "ReadMaybeMapped.h"
-#include "RedexMappedFile.h"
 #include "protores/Resources.pb.h"
 #include "verify/VerifyUtil.h"
 

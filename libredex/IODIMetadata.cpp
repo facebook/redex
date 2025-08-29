@@ -12,7 +12,6 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 
 namespace {

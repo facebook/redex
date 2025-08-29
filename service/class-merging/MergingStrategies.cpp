@@ -9,7 +9,6 @@
 
 #include "CrossDexRefMinimizer.h"
 #include "IRCode.h"
-#include "NormalizeConstructor.h"
 #include "Show.h"
 #include "Trace.h"
 

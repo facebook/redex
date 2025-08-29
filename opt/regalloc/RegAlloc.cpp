@@ -7,7 +7,6 @@
 
 #include "RegAlloc.h"
 
-#include "Debug.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"
 #include "PassManager.h"

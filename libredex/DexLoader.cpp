@@ -16,7 +16,6 @@
 #include "DexCallSite.h"
 #include "DexDefs.h"
 #include "DexMethodHandle.h"
-#include "IRCode.h"
 #include "Macros.h"
 #include "Show.h"
 #include "Trace.h"
@@ -24,7 +23,6 @@
 #include "WorkQueue.h"
 
 #include <exception>
-#include <stdexcept>
 #include <vector>
 
 namespace {

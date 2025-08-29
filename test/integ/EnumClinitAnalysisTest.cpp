@@ -11,7 +11,6 @@
 
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "DexStore.h"
 #include "JarLoader.h"
 #include "RedexTest.h"
 

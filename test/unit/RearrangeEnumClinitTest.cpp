@@ -6,29 +6,19 @@
  */
 
 #include "gtest/gtest.h"
-#include <atomic>
 #include <memory>
-#include <system_error>
-#include <unordered_map>
 #include <unordered_set>
-
-#include <gtest/gtest.h>
 
 #include "RearrangeEnumClinit.h"
 
 #include "Creators.h"
-#include "Debug.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "MethodProfiles.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
-#include "Show.h"
-#include "Trace.h"
 #include "TypeUtil.h"
 #include "VirtScopeHelper.h"
-#include "VirtualRenamer.h"
 #include "Walkers.h"
 
 namespace rearrange_enum_clinit {

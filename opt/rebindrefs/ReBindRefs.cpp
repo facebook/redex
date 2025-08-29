@@ -23,7 +23,6 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
-#include "Util.h"
 #include "Walkers.h"
 
 namespace {

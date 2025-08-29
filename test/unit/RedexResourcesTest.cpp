@@ -14,7 +14,6 @@
 #include <unordered_set>
 
 #include "ApkResources.h"
-#include "Debug.h"
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "ResourcesTestDefs.h"

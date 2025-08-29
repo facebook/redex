@@ -9,7 +9,6 @@
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "Formatters.h"
 #include "PrintUtil.h"

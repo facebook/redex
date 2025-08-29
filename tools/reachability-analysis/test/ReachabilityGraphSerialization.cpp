@@ -14,7 +14,6 @@
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "RedexContext.h"
-#include "SanitizersConfig.h"
 
 using namespace reachability;
 

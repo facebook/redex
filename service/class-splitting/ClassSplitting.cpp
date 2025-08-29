@@ -18,7 +18,6 @@
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "Mutators.h"
-#include "PluginRegistry.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"

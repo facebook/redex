@@ -7,7 +7,6 @@
 
 #include "ToolsCommon.h"
 
-#include <boost/filesystem.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <fstream>
 #include <iostream>

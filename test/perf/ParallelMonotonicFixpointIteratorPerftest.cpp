@@ -17,7 +17,6 @@
 #include <sparta/HashedSetAbstractDomain.h>
 #include <sparta/MonotonicFixpointIterator.h>
 
-#include "Thread.h"
 #include "WorkQueue.h"
 
 using namespace sparta;

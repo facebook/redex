@@ -12,7 +12,6 @@
 #include "ApkResources.h"
 #include "OptimizeResources.h"
 #include "RedexResources.h"
-#include "androidfw/ResourceTypes.h"
 #include "verify/VerifyUtil.h"
 
 namespace {

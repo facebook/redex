@@ -8,8 +8,6 @@
 #include "gtest/gtest.h"
 #include <algorithm>
 #include <gmock/gmock.h>
-#include <gtest/gtest.h>
-#include <limits>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -19,7 +17,6 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IROpcode.h"

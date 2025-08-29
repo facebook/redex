@@ -7,7 +7,6 @@
 
 #include "CopyPropagation.h"
 
-#include <boost/optional.hpp>
 #include <mutex>
 
 #include <sparta/MonotonicFixpointIterator.h>
@@ -20,12 +19,10 @@
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexOpcode.h"
-#include "DexUtil.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "IRTypeChecker.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Walkers.h"
 

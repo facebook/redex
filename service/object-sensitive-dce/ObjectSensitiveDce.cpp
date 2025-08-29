@@ -20,9 +20,7 @@
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
 #include "PassManager.h"
-#include "Purity.h"
 #include "ScopedCFG.h"
-#include "SummarySerialization.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"
 

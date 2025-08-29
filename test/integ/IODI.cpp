@@ -8,13 +8,11 @@
 #include <gtest/gtest.h>
 
 #include <bitset>
-#include <fcntl.h>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
 
 #include "DexDefs.h"
-#include "DexEncoding.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexPosition.h"
@@ -22,9 +20,7 @@
 #include "InstructionLowering.h"
 #include "RedexContext.h"
 #include "RedexOptions.h"
-#include "SanitizersConfig.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Walkers.h"
 
 struct DexOutputTestHelper {

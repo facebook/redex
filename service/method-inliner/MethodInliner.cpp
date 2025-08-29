@@ -33,7 +33,6 @@
 #include "ScopedMetrics.h"
 #include "Shrinker.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Timer.h"
 #include "Walkers.h"
 #include "WorkQueue.h"

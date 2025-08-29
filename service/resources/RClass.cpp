@@ -26,7 +26,6 @@
 #include "ObjectSensitiveDce.h"
 #include "RedexResources.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "SideEffectSummary.h"
 #include "Timer.h"

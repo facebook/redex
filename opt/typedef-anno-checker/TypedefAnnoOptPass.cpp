@@ -14,8 +14,6 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "StringTreeSet.h"
-#include "Trace.h"
-#include "TypeUtil.h"
 #include "Walkers.h"
 
 constexpr const char* VALUE_OF = "valueOf";

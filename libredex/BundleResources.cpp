@@ -12,11 +12,7 @@
 #ifdef HAS_PROTOBUF
 #include "BundleResources.h"
 
-#include <boost/filesystem.hpp>
-#include <boost/optional.hpp>
-#include <boost/range/iterator_range.hpp>
 #include <fstream>
-#include <iomanip>
 #include <istream>
 #include <map>
 #include <queue>
@@ -30,9 +26,7 @@
 
 #include "Debug.h"
 #include "DetectBundle.h"
-#include "DexUtil.h"
 #include "ReadMaybeMapped.h"
-#include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "Trace.h"
 #include "androidfw/LocaleValue.h"

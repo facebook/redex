@@ -16,10 +16,8 @@
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "CppUtil.h"
-#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "GraphUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IRList.h"
@@ -35,7 +33,6 @@
 #include "Show.h"
 #include "Timer.h"
 #include "Trace.h"
-#include "Util.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 

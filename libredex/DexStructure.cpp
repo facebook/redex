@@ -14,7 +14,6 @@
 #include "DexLimits.h"
 #include "Show.h"
 #include "Trace.h"
-#include "Util.h"
 
 namespace {
 struct PenaltyPattern {

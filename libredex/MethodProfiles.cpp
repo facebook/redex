@@ -15,7 +15,6 @@
 #include <boost/algorithm/string/regex.hpp>
 #include <fstream>
 #include <iostream>
-#include <stdio.h>
 #include <stdlib.h>
 
 #include "CppUtil.h"

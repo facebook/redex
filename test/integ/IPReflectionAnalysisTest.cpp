@@ -10,7 +10,6 @@
 
 #include "DexClass.h"
 #include "IPReflectionAnalysis.h"
-#include "IROpcode.h"
 #include "Pass.h"
 #include "RedexTest.h"
 #include "Show.h"

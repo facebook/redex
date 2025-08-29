@@ -12,7 +12,6 @@
 #include <sstream>
 
 #include "RedexTest.h"
-#include "RedexTestUtils.h"
 #include "Verifier.h"
 
 namespace fs = boost::filesystem;

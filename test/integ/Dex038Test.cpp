@@ -11,12 +11,9 @@
 
 #include "DexCallSite.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexPosition.h"
-#include "DexUtil.h"
-#include "IRCode.h"
 #include "InstructionLowering.h"
 #include "PassManager.h"
 #include "RedexContext.h"

@@ -13,7 +13,6 @@
 #include "Creators.h"
 #include "DedupBlocks.h"
 #include "DexAsm.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"

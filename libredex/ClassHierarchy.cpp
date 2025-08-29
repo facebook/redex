@@ -11,7 +11,6 @@
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "Timer.h"
 
 namespace {
 

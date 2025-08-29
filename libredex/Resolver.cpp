@@ -6,7 +6,6 @@
  */
 
 #include "Resolver.h"
-#include "DexUtil.h"
 
 namespace {
 

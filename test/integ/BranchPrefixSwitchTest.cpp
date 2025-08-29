@@ -8,7 +8,6 @@
 #include "BranchPrefixHoisting.h"
 #include "ConstantUses.h"
 #include "RedexTest.h"
-#include "Show.h"
 
 class BranchPrefixWhenTest : public RedexIntegrationTest {};
 

@@ -12,10 +12,8 @@
 
 #include "Creators.h"
 #include "DexAccess.h"
-#include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "Show.h"
-#include "Timer.h"
 #include "Trace.h"
 
 namespace {

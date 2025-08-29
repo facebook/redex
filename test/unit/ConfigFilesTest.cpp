@@ -12,8 +12,6 @@
 
 #include "ConfigFiles.h"
 #include "RedexTest.h"
-#include "RedexTestUtils.h"
-#include "Show.h"
 
 class ConfigFilesTest : public RedexTest {
  public:

@@ -8,7 +8,6 @@
 #include "SplitResourceTables.h"
 
 #include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
 #include <cinttypes>
@@ -18,9 +17,7 @@
 #include "ApkResources.h"
 #include "ConfigFiles.h"
 #include "Creators.h"
-#include "DetectBundle.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IOUtil.h"
 #include "MethodReference.h"
 #include "OptimizeResources.h"
@@ -32,7 +29,6 @@
 #include "Trace.h"
 #include "Walkers.h"
 #include "androidfw/ResourceTypes.h"
-#include "utils/Vector.h"
 
 #define RES_GET_IDENTIFIER_SIGNATURE \
   "Landroid/content/res/Resources;"  \

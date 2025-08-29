@@ -8,7 +8,6 @@
 #include "TypedefAnnoCheckerPass.h"
 
 #include "AnnoUtils.h"
-#include "ClassUtil.h"
 #include "KotlinNullCheckMethods.h"
 #include "PassManager.h"
 #include "Resolver.h"

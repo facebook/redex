@@ -30,12 +30,8 @@
 
 #include "ApiLevelChecker.h"
 #include "ClassSplitting.h"
-#include "ControlFlow.h"
 #include "Creators.h"
-#include "IRCode.h"
-#include "IRInstruction.h"
 #include "InterDexPass.h"
-#include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "PluginRegistry.h"
 #include "Resolver.h"

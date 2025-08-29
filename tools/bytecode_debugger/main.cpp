@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include <stdio.h>
 #include <sys/stat.h> // mkdir
 
 #include <boost/program_options.hpp> // arg parsing

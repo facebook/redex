@@ -10,8 +10,6 @@
 #include <sstream>
 #include <type_traits>
 
-#include <boost/optional.hpp>
-
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "CppUtil.h"

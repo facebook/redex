@@ -11,8 +11,6 @@
 #include <iomanip>
 #include <ostream>
 
-#include <boost/optional.hpp>
-
 #include <sparta/FiniteAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 #include <sparta/ReducedProductAbstractDomain.h>

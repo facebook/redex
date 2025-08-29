@@ -7,18 +7,14 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <limits>
 #include <sstream>
 #include <string>
 #include <unordered_set>
 
 #include "Creators.h"
-#include "DexAsm.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "IROpcode.h"
 #include "LocalDce.h"
 #include "RedexTest.h"
 #include "ReflectionAnalysis.h"

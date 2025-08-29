@@ -19,10 +19,8 @@
 #include "androidfw/ResourceTypes.h"
 #include "utils/ByteOrder.h"
 #include "utils/Errors.h"
-#include "utils/Log.h"
 #include "utils/Serialize.h"
 #include "utils/Unicode.h"
-#include "utils/Vector.h"
 #include "utils/Visitor.h"
 
 using namespace attribution;

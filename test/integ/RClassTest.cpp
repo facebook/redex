@@ -12,7 +12,6 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
-#include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "IRAssembler.h"
 #include "IRCode.h"

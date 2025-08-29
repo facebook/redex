@@ -8,10 +8,8 @@
 #include "RemoveRecursiveLocks.h"
 
 #include <bitset>
-#include <boost/optional.hpp>
 #include <boost/variant.hpp>
 #include <iostream>
-#include <limits>
 
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>

@@ -12,7 +12,6 @@
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"

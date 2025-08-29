@@ -10,7 +10,6 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
-#include <deque>
 #include <string_view>
 
 #include "Debug.h"

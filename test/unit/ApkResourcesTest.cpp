@@ -9,7 +9,6 @@
 #include <gtest/gtest.h>
 
 #include "ApkResources.h"
-#include "Debug.h"
 #include "GlobalConfig.h"
 #include "ReachableResources.h"
 #include "RedexMappedFile.h"
@@ -19,7 +18,6 @@
 #include "ResourcesTestDefs.h"
 #include "ResourcesValidationHelper.h"
 #include "Styles.h"
-#include "Trace.h"
 #include "androidfw/ResourceTypes.h"
 #include "arsc/TestStructures.h"
 #include "utils/Serialize.h"

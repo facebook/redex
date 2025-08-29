@@ -15,7 +15,6 @@
 #include "IRCode.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
-#include "LegacyInliner.h"
 #include "RedexTest.h"
 #include "Shrinker.h"
 #include "TailDuplicationPass.h"

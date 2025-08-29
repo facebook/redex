@@ -10,8 +10,6 @@
 
 #include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexLoader.h"
-#include "Show.h"
 #include "VerifyUtil.h"
 
 /*

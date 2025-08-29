@@ -7,9 +7,7 @@
 
 #include "CheckCastTransform.h"
 
-#include "DexUtil.h"
 #include "ReachingDefinitions.h"
-#include "TypeInference.h"
 
 namespace check_casts {
 

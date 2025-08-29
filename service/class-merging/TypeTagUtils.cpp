@@ -7,8 +7,6 @@
 
 #include "TypeTagUtils.h"
 
-#include <boost/optional.hpp>
-
 #include "AnnoUtils.h"
 
 namespace class_merging {

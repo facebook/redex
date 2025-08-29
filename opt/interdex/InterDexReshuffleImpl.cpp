@@ -10,10 +10,8 @@
 #include "InterDexPass.h"
 #include "Show.h"
 #include "Trace.h"
-#include <boost/algorithm/string/predicate.hpp>
 
 #include <algorithm>
-#include <cinttypes>
 #include <string>
 
 /// populate_reshufflable_classes_types collects all classes that appear

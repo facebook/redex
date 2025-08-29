@@ -13,7 +13,6 @@
 #include "ConfigFiles.h"
 #include "DedupBlocks.h"
 #include "DexAssessments.h"
-#include "GraphUtil.h"
 #include "PassManager.h"
 #include "ScopedMetrics.h"
 #include "Shrinker.h"

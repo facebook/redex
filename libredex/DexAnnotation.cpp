@@ -14,7 +14,6 @@
 #include "DexClass.h"
 #include "DexIdx.h"
 #include "DexOutput.h"
-#include "DexUtil.h"
 #include "Show.h"
 
 void DexEncodedValueMethodType::gather_strings(

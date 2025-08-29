@@ -8,7 +8,6 @@
 #include "PerfMethodInlinePass.h"
 
 #include <boost/algorithm/string.hpp>
-#include <boost/optional.hpp>
 #include <boost/range/adaptor/filtered.hpp>
 #include <boost/range/algorithm/transform.hpp>
 #include <fstream>

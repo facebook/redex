@@ -13,8 +13,6 @@
 #include "DexInstruction.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
-#include "IODIMetadata.h"
-#include "IRCode.h"
 #include "InstructionLowering.h"
 #include "RedexTest.h"
 #include "Show.h"

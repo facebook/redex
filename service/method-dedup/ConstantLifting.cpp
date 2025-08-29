@@ -17,7 +17,6 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
-#include "TypeReference.h"
 #include "TypeTags.h"
 
 using namespace dex_asm;

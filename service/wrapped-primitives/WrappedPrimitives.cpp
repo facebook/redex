@@ -8,27 +8,20 @@
 #include "WrappedPrimitives.h"
 
 #include <inttypes.h>
-#include <mutex>
 
 #include "CFGMutation.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
-#include "ConstantPropagationState.h"
 #include "ConstantPropagationWholeProgramState.h"
-#include "ConstructorParams.h"
-#include "DexUtil.h"
 #include "IPConstantPropagationAnalysis.h"
-#include "InitDeps.h"
 #include "Lazy.h"
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
-#include "PassManager.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
-#include "WorkQueue.h"
 
 namespace wrapped_primitives {
 static std::unique_ptr<WrappedPrimitives> s_instance{nullptr};

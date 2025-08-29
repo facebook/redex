@@ -14,7 +14,6 @@
 #include "ProguardConfiguration.h"
 #include "ProguardMap.h"
 #include "ProguardReporting.h"
-#include "ReachableClasses.h"
 #include "ReferencedState.h"
 
 using namespace keep_rules;

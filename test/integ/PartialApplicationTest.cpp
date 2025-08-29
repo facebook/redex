@@ -9,15 +9,9 @@
 
 #include "ControlFlow.h"
 #include "Creators.h"
-#include "DexInstruction.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "LocalDce.h"
 #include "RedexTest.h"
-#include "Show.h"
-#include "Trace.h"
-#include "Transform.h"
 #include "Walkers.h"
 
 #include "PartialApplication.h"

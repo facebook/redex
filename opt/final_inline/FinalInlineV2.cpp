@@ -7,7 +7,6 @@
 
 #include "FinalInlineV2.h"
 
-#include <boost/variant.hpp>
 #include <iostream>
 #include <sstream>
 #include <vector>

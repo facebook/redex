@@ -12,14 +12,10 @@
 #include <string>
 
 #include "DexClass.h"
-#include "DexLoader.h"
 #include "Match.h"
 #include "ProguardConfiguration.h"
 #include "ProguardMap.h"
-#include "ProguardMatcher.h"
 #include "ProguardObfuscationTest.h"
-#include "ProguardParser.h"
-#include "ReachableClasses.h"
 #include "RedexTest.h"
 
 class ProguardMethodObfuscationTest : public RedexTest {};

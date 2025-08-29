@@ -56,7 +56,6 @@
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 

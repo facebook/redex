@@ -8,7 +8,6 @@
 #include "ResourceValueMergingPassVerifyImpl.h"
 #include "ResourceValueMergingPass.h"
 #include "ResourcesTestDefs.h"
-#include "verify/VerifyUtil.h"
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <string>

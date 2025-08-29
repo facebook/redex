@@ -7,8 +7,6 @@
 
 #include "DexClass.h"
 
-#include <boost/optional.hpp>
-
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "SimpleClassHierarchy.h"

@@ -11,7 +11,6 @@
 
 #include <sparta/PatriciaTreeSet.h>
 
-#include "DexUtil.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Walkers.h"
