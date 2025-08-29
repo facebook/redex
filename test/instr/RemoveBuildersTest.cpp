@@ -23,14 +23,16 @@ void check_no_builder(DexMethod* method, DexType* builder_type) {
   for (const auto& insn : insns) {
     auto opcode = insn->opcode();
 
-    if (opcode == DOPCODE_NEW_INSTANCE ||
-        dex_opcode::is_invoke(insn->opcode())) {
+    if (opcode == DOPCODE_NEW_INSTANCE) {
       DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
       EXPECT_NE(builder_type, cls_type);
     } else if (dex_opcode::is_iget(opcode) || dex_opcode::is_iput(opcode)) {
       DexFieldRef* field =
           static_cast<const DexOpcodeField*>(insn)->get_field();
       EXPECT_NE(builder_type, field->get_class());
+    } else if (dex_opcode::is_invoke(insn->opcode())) {
+      auto* invoked = dynamic_cast<DexOpcodeMethod*>(insn)->get_method();
+      EXPECT_NE(builder_type, invoked->get_class());
     }
   }
 }
