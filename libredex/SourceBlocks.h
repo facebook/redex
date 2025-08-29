@@ -667,4 +667,7 @@ void insert_synthetic_source_blocks_in_method(
     DexMethod* method,
     const std::function<std::unique_ptr<SourceBlock>()>& source_block_creator);
 
+void adjust_block_hits_with_appear100_threshold(
+    ControlFlowGraph* cfg, int32_t block_appear100_threshold);
+
 } // namespace source_blocks

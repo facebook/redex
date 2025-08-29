@@ -715,6 +715,7 @@ struct Injector {
       std::mutex& failed_methods_mutex,
       bool serialize,
       bool exc_inject,
+      int32_t block_appear100_threshold,
       bool must_be_cold = false) {
     auto* code = method->get_code();
     if (code != nullptr) {
@@ -773,6 +774,12 @@ struct Injector {
         source_blocks::fix_hot_method_cold_entry_violations(&cfg);
         source_blocks::fix_chain_violations(&cfg);
         source_blocks::fix_idom_violations(&cfg);
+      }
+
+      if (block_appear100_threshold > 0) {
+        always_assert(block_appear100_threshold <= 100);
+        source_blocks::adjust_block_hits_with_appear100_threshold(
+            &cfg, block_appear100_threshold);
       }
 
       smi.add({sb_name, std::move(res.serialized),
@@ -859,7 +866,7 @@ struct Injector {
           auto* method = const_cast<DexMethod*>(node->method());
           res += insert_source_blocks_into_method(
               method, failed_methods, smi, failed_methods_mutex, serialize,
-              exc_inject, must_be_cold);
+              exc_inject, 0, must_be_cold);
           seen_methods.insert(method);
 
           // Update the caller_hit_lookup map with the hit status of the
@@ -896,7 +903,7 @@ struct Injector {
       if (seen_methods.count(method) == 0) {
         return insert_source_blocks_into_method(method, failed_methods, smi,
                                                 failed_methods_mutex, serialize,
-                                                exc_inject);
+                                                exc_inject, 0);
       } else {
         return InsertResult();
       }
@@ -907,7 +914,8 @@ struct Injector {
   void run_source_blocks(DexStoresVector& stores,
                          PassManager& mgr,
                          bool serialize,
-                         bool exc_inject) {
+                         bool exc_inject,
+                         int32_t block_appear100_threshold) {
     auto scope = build_class_scope(stores);
 
     SimpleSMIStore smi{};
@@ -925,9 +933,9 @@ struct Injector {
     } else {
       res =
           walk::parallel::methods<InsertResult>(scope, [&](DexMethod* method) {
-            return insert_source_blocks_into_method(method, failed_methods, smi,
-                                                    failed_methods_mutex,
-                                                    serialize, exc_inject);
+            return insert_source_blocks_into_method(
+                method, failed_methods, smi, failed_methods_mutex, serialize,
+                exc_inject, block_appear100_threshold);
           });
     }
 
@@ -1153,6 +1161,14 @@ void InsertSourceBlocksPass::bind_config() {
   bind("enable_source_block_fuzzing", m_enable_source_block_fuzzing,
        m_enable_source_block_fuzzing,
        "When enabled, applies fuzzing to inserted source block");
+  bind("block_appear100_threshold", m_block_appear100_threshold,
+       m_block_appear100_threshold,
+       "Block appear100 threshold configuration (0-100)");
+
+  if (m_block_appear100_threshold > 100) {
+    always_assert_log(false, "block_appear100_threshold must be <= 100, got %d",
+                      m_block_appear100_threshold);
+  }
 }
 
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
@@ -1171,7 +1187,7 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
 
   inj.run_source_blocks(stores, mgr,
                         /* serialize= */ m_force_serialize || is_instr_mode,
-                        m_insert_after_excs);
+                        m_insert_after_excs, m_block_appear100_threshold);
 
   for (auto&& [interaction_id, index] :
        UnorderedIterable(g_redex->get_sb_interaction_indices())) {
