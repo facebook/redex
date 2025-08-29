@@ -775,6 +775,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
   }
 
   // Sort out large methods already.
+  UnorderedMap<const DexMethod*, size_t> method_to_size;
   for (auto& p : ordering) {
     auto* overridden_method = const_cast<DexMethod*>(p.first);
     for (auto& q : p.second) {
@@ -783,8 +784,11 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
               q.second.begin(),
               q.second.end(),
               [&](const auto* m) {
-                size_t estimated_callee_size =
-                    m->get_code()->estimate_code_units();
+                if (method_to_size.count(m) == 0) {
+                  method_to_size.emplace(m,
+                                         m->get_code()->estimate_code_units());
+                }
+                size_t estimated_callee_size = method_to_size.at(m);
                 if (estimated_callee_size >
                     max_overriding_method_instructions) {
                   TRACE(VM,
@@ -795,12 +799,18 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
                   stats.huge_methods++;
                   return true;
                 }
-
+                if (method_to_size.count(overridden_method) == 0) {
+                  method_to_size.emplace(overridden_method,
+                                         is_abstract(overridden_method)
+                                             ? 64 // we'll need some extra
+                                                  // instruction; 64 is
+                                                  // conservative
+                                             : overridden_method->get_code()
+                                                   ->estimate_code_units());
+                }
                 size_t estimated_caller_size =
-                    is_abstract(overridden_method)
-                        ? 64 // we'll need some extra instruction; 64
-                             // is conservative
-                        : overridden_method->get_code()->estimate_code_units();
+                    method_to_size.at(overridden_method);
+
                 if (!inliner.is_inlinable(
                         overridden_method, m, nullptr /* reduced_cfg */,
                         nullptr /* invoke_virtual_insn */,
@@ -813,7 +823,8 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
                   stats.uninlinable_methods++;
                   return true;
                 }
-
+                method_to_size[overridden_method] =
+                    estimated_caller_size + estimated_callee_size;
                 return false;
               }),
           q.second.end());
