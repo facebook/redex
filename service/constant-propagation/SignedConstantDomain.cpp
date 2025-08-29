@@ -192,11 +192,10 @@ std::ostream& operator<<(std::ostream& o, const SignedConstantDomain& scd) {
       return o;
     }
 
-    std::ios old_io_state(nullptr);
-    old_io_state.copyfmt(o);
-    o << "{" << std::hex << std::showbase << scd.get_zero_bit_states() << "/"
-      << scd.get_one_bit_states() << "}";
-    o.copyfmt(old_io_state);
+    std::ostringstream oss;
+    oss << "{" << std::hex << std::showbase << scd.get_zero_bit_states() << "/"
+        << scd.get_one_bit_states() << "}";
+    o << std::move(oss).str();
     return o;
   };
 
