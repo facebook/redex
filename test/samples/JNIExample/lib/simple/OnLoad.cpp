@@ -6,7 +6,6 @@
  */
 
 #include <SimpleJni/common.h>
-#include <SimpleJni/javaclasses.h>
 
 namespace facebook::jni::redexsimplejniexample {
 

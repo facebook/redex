@@ -8,7 +8,6 @@
 #include "Pass.h"
 
 #include "AnalysisUsage.h"
-#include "Debug.h"
 #include "DexUtil.h"
 #include "PassRegistry.h"
 

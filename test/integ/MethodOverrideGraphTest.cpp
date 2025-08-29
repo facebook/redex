@@ -7,7 +7,6 @@
 
 #include "MethodOverrideGraph.h"
 
-#include <boost/algorithm/string/join.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 

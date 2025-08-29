@@ -15,9 +15,7 @@
 #include "InterDexPass.h"
 #include "PassManager.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
-#include "Walkers.h"
 
 namespace {
 const interdex::InterDexPass* get_interdex_pass(const PassManager& mgr) {

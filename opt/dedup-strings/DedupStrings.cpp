@@ -16,7 +16,6 @@
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "InstructionSequenceOutliner.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "RedexContext.h"

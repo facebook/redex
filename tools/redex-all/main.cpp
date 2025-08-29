@@ -18,16 +18,13 @@
 #include <memory>
 #include <regex>
 #include <set>
-#include <streambuf>
 #include <string>
 #include <vector>
 
 #include <fcntl.h>
 #include <signal.h>
 #include <sstream>
-#include <stdio.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 
 #ifdef _MSC_VER
 #include <io.h>
@@ -41,7 +38,6 @@
 
 #include "AggregateException.h"
 #include "CommandProfiling.h"
-#include "CommentFilter.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h" // To set s_DEBUG.
 #include "Debug.h"

@@ -15,14 +15,10 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "RedexTest.h"
-#include "ScopedCFG.h"
 
 #include "ObjectSensitiveDcePass.h"
-#include "RedexContext.h"
 #include "Show.h"
-#include "Trace.h"
 #include "VirtualScope.h"
-#include "Walkers.h"
 
 class ObjectSensitiveDceTest : public RedexIntegrationTest {
  public:

@@ -7,7 +7,6 @@
 
 #include "StringConcatenator.h"
 
-#include <boost/optional.hpp>
 #include <map>
 #include <mutex>
 #include <utility>

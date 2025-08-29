@@ -10,7 +10,6 @@
 
 #include "Creators.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 #include "Show.h"

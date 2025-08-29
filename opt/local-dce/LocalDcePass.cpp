@@ -7,18 +7,11 @@
 
 #include "LocalDcePass.h"
 
-#include <array>
 #include <vector>
 
-#include <boost/dynamic_bitset.hpp>
-
 #include "ConfigFiles.h"
-#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "GraphUtil.h"
-#include "IRCode.h"
-#include "IRInstruction.h"
 #include "InitClassesWithSideEffects.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
@@ -26,7 +19,6 @@
 #include "Resolver.h"
 #include "Trace.h"
 #include "Transform.h"
-#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {

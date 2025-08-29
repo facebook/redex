@@ -9,7 +9,6 @@
 
 #include "Creators.h"
 #include "IRAssembler.h"
-#include "MethodOverrideGraph.h"
 #include "RedexTest.h"
 
 class LoosenAccessModifierTest : public RedexTest {};

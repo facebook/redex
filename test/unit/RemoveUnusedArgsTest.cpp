@@ -12,7 +12,6 @@
 #include "ControlFlow.h"
 #include "Creators.h"
 #include "DexAsm.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"

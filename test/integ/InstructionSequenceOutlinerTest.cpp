@@ -20,7 +20,6 @@
 
 #include "InstructionSequenceOutliner.h"
 #include "RedexContext.h"
-#include "Trace.h"
 
 std::unordered_set<DexMethodRef*> find_invoked_methods(
     const cfg::ControlFlowGraph& cfg, const std::string& name) {

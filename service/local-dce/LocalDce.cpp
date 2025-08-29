@@ -17,7 +17,6 @@
 #include "GraphUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "MethodOverrideGraph.h"
 #include "NullPointerExceptionUtil.h"
 #include "Purity.h"
 #include "ReachingDefinitions.h"
@@ -27,7 +26,6 @@
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
-#include "Transform.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 

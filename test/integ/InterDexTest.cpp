@@ -10,16 +10,12 @@
 #include <json/json.h>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "DexLimits.h"
 #include "DexLoader.h"
-#include "DexUtil.h"
-#include "IRCode.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
 
 #include "InterDexPass.h"
-#include <boost/filesystem.hpp>
 
 class InterDexTest : public RedexIntegrationTest {
  public:

@@ -9,7 +9,6 @@
 #include <gtest/gtest.h>
 
 #include "ApkResources.h"
-#include "Debug.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "RedexTest.h"

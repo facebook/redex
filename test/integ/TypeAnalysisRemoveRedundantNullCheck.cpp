@@ -10,7 +10,6 @@
 #include "GlobalTypeAnalysisPass.h"
 #include "GlobalTypeAnalyzer.h"
 #include "LocalDcePass.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "TypeAnalysisTestBase.h"
 #include "TypeAnalysisTransform.h"

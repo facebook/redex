@@ -6,7 +6,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <set>
 
 #include "ApkResources.h"
 #include "FullyQualifyLayoutsVerifyHelper.h"

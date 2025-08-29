@@ -11,8 +11,6 @@
 #include "DexUtil.h"
 #include "IPConstantPropagation.h"
 #include "RedexTest.h"
-#include "Resolver.h"
-#include "Show.h"
 
 using ::testing::HasSubstr;
 using ::testing::Not;

@@ -19,7 +19,6 @@
 #include "Purity.h"
 #include "RedexResources.h"
 #include "ScopedMetrics.h"
-#include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WrappedPrimitives.h"

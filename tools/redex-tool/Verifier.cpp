@@ -14,7 +14,6 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
-#include "ReachableClasses.h"
 #include "Tool.h"
 #include "Walkers.h"
 

@@ -10,7 +10,6 @@
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
-#include "Show.h"
 #include "Walkers.h"
 
 #include <locator.h>

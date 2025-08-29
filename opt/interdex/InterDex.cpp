@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "CppUtil.h"
-#include "Creators.h"
 #include "Debug.h"
 #include "DexAsm.h"
 #include "DexClass.h"
@@ -29,7 +28,6 @@
 #include "ReachableClasses.h"
 #include "Show.h"
 #include "StlUtil.h"
-#include "StringUtil.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 #include "file-utils.h"

@@ -12,7 +12,6 @@
 #include "FieldOpTracker.h"
 #include "IRCode.h"
 #include "MethodOverrideGraph.h"
-#include "Mutators.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"

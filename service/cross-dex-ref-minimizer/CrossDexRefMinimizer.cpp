@@ -13,7 +13,6 @@
 #include "DexUtil.h"
 #include "Show.h"
 #include "Trace.h"
-#include "WorkQueue.h"
 
 namespace cross_dex_ref_minimizer {
 

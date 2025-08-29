@@ -11,7 +11,6 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "IRCode.h"
-#include "InteractiveDebugging.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"

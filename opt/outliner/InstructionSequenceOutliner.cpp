@@ -65,7 +65,6 @@
 #include "InstructionSequenceOutliner.h"
 
 #include <algorithm>
-#include <list>
 #include <map>
 #include <memory>
 #include <string>
@@ -90,7 +89,6 @@
 #include "InterDexPass.h"
 #include "Lazy.h"
 #include "Liveness.h"
-#include "Macros.h"
 #include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
 #include "ObfuscateUtils.h"

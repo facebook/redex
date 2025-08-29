@@ -14,12 +14,10 @@
 #include <unordered_set>
 #include <vector>
 
-#include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "IRCode.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Walkers.h"

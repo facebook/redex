@@ -7,7 +7,6 @@
 
 #include "Native.h"
 
-#include <boost/optional.hpp>
 #include <fstream>
 #include <json/json.h>
 #include <json/value.h>

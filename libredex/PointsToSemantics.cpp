@@ -13,7 +13,6 @@
 #include <fstream>
 #include <iomanip>
 #include <iterator>
-#include <limits>
 #include <memory>
 #include <ostream>
 #include <sstream>
@@ -22,8 +21,6 @@
 
 #include <boost/container/flat_set.hpp>
 #include <boost/functional/hash.hpp>
-#include <boost/functional/hash_fwd.hpp>
-#include <boost/optional.hpp>
 
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
@@ -33,7 +30,6 @@
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"

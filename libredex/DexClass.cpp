@@ -19,7 +19,6 @@
 #include "DexOutput.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
-#include "DuplicateClasses.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "RedexContext.h"
@@ -31,9 +30,7 @@
 
 #include <algorithm>
 #include <boost/functional/hash.hpp>
-#include <boost/optional.hpp>
 #include <memory>
-#include <mutex>
 #include <unordered_set>
 
 #define INSTANTIATE(METHOD, TYPE)                              \

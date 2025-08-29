@@ -10,7 +10,6 @@
 #include "BundleResources.h"
 #include "RedexResources.h"
 #include "SplitResourceTablesVerifyImpl.h"
-#include "androidfw/ResourceTypes.h"
 #include "verify/VerifyUtil.h"
 
 TEST_F(PostVerify, VerifyNewTypeCreated) {

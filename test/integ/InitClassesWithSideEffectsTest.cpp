@@ -7,7 +7,6 @@
 
 #include "InitClassesWithSideEffects.h"
 #include "AnnoUtils.h"
-#include "MethodUtil.h"
 #include "RedexTest.h"
 #include "Show.h"
 

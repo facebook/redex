@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <fstream>
 #include <iosfwd>
-#include <sstream>
 #include <unordered_set>
 
 #include <boost/algorithm/string/join.hpp>

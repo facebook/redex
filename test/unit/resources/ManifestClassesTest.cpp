@@ -12,7 +12,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <boost/filesystem.hpp>
 
 TEST(ManifestClassesTest, exported) {
   // Setup a normal looking apk directory

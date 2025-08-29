@@ -6,12 +6,9 @@
  */
 
 #include "HasSourceBlocksChecker.h"
-#include "RedexProperties.h"
 
 #include "ConfigFiles.h"
-#include "Debug.h"
 #include "DexClass.h"
-#include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
 

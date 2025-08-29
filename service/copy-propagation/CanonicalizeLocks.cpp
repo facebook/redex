@@ -12,7 +12,6 @@
 #include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
-#include "DexClass.h"
 #include "IRInstruction.h"
 #include "ReachingDefinitions.h"
 

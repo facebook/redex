@@ -15,7 +15,6 @@
 #include "InstructionLowering.h"
 #include "OpcodeList.h"
 #include "RedexTest.h"
-#include "RegAlloc.h"
 #include "Show.h"
 
 class IRInstructionTest : public RedexTest {};

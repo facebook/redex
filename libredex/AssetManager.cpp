@@ -7,7 +7,6 @@
 
 #include "AssetManager.h"
 
-#include <boost/filesystem.hpp>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>

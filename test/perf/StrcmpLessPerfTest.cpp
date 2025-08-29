@@ -9,8 +9,6 @@
 #include <gtest/gtest.h>
 
 #include <cstring>
-#include <ctime>
-#include <stdlib.h>
 #include <string>
 #include <sys/time.h>
 

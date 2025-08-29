@@ -9,10 +9,8 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
-#include <boost/optional.hpp>
 #include <boost/regex/pending/unicode_iterator.hpp>
 #include <map>
 #include <mutex>
@@ -27,9 +25,7 @@
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "IOUtil.h"
-#include "Macros.h"
 #include "ReadMaybeMapped.h"
-#include "StringUtil.h"
 #include "Trace.h"
 #include "WorkQueue.h"
 #include "utils/Unicode.h"

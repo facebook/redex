@@ -11,7 +11,6 @@
 #include "ApiLevelChecker.h"
 #include "Creators.h"
 #include "DexAsm.h"
-#include "IRAssembler.h"
 #include "RedexTest.h"
 #include "StaticReloV2.h"
 #include "Walkers.h"

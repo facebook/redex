@@ -9,15 +9,12 @@
 
 #include <boost/format.hpp>
 #include <boost/functional/hash.hpp>
-#include <boost/optional.hpp>
 #include <fstream>
 #include <map>
 
 #include "ApkResources.h"
 #include "ConfigFiles.h"
 #include "DetectBundle.h"
-#include "DexClass.h"
-#include "DexUtil.h"
 #include "IOUtil.h"
 #include "OptimizeResources.h"
 #include "RClass.h"
@@ -26,9 +23,7 @@
 #include "Timer.h"
 #include "Trace.h"
 #include "WorkQueue.h"
-#include "androidfw/ResourceTypes.h"
 #include "murmur_hash.h"
-#include "utils/Vector.h"
 
 namespace {
 

@@ -21,7 +21,6 @@
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
-#include "Walkers.h"
 
 namespace regalloc {
 namespace graph_coloring {

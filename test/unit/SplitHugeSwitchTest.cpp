@@ -14,14 +14,11 @@
 
 #include "Creators.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "MethodProfiles.h"
 #include "RedexTest.h"
 #include "Show.h"
-#include "Trace.h"
 #include "VirtScopeHelper.h"
-#include "VirtualRenamer.h"
 #include "Walkers.h"
 
 class SplitHugeSwitchTest : public RedexTest {

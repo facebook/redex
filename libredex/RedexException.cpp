@@ -7,7 +7,6 @@
 
 #include "RedexException.h"
 #include "Debug.h"
-#include <stdarg.h>
 
 RedexException::RedexException(
     RedexError type_of_error,

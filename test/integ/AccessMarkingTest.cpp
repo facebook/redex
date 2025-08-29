@@ -12,7 +12,6 @@
 
 #include "AccessMarking.h"
 #include "RedexTest.h"
-#include "Show.h"
 
 class AccessMarkingTest : public RedexIntegrationTest {};
 

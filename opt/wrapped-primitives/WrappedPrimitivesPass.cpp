@@ -7,8 +7,6 @@
 
 #include "WrappedPrimitivesPass.h"
 
-#include <inttypes.h>
-
 #include "DexUtil.h"
 #include "Lazy.h"
 #include "LiveRange.h"

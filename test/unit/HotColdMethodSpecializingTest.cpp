@@ -14,11 +14,9 @@
 
 #include "Creators.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "Show.h"
-#include "Trace.h"
 #include "Walkers.h"
 
 class HotColdMethodSpecializingTest : public RedexTest {

@@ -9,10 +9,7 @@
 
 #include "DexAnnotation.h"
 #include "DexClass.h"
-#include "DexIdx.h"
 #include "DexMethodHandle.h"
-
-#include <sstream>
 
 void DexCallSite::gather_strings(std::vector<const DexString*>& lstring) const {
   lstring.emplace_back(m_linker_method_name);

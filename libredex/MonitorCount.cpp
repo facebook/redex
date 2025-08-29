@@ -10,7 +10,6 @@
 #include <algorithm>
 
 #include "DexClass.h"
-#include "IRCode.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"

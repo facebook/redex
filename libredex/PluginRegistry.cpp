@@ -7,7 +7,6 @@
 
 #include "PluginRegistry.h"
 #include "Debug.h"
-#include "Util.h"
 
 PluginRegistry& PluginRegistry::get() {
   // TODO t19478845

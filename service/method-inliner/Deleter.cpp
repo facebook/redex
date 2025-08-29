@@ -7,7 +7,6 @@
 
 #include "Deleter.h"
 
-#include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "Show.h"
 #include "Trace.h"

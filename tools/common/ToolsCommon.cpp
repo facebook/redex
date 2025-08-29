@@ -7,7 +7,6 @@
 
 #include "ToolsCommon.h"
 
-#include <boost/filesystem.hpp>
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"

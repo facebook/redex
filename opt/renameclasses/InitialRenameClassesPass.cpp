@@ -11,7 +11,6 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
-#include "ReachableClasses.h"
 #include "RenameClassesV2.h"
 #include "Trace.h"
 

@@ -5,14 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <json/json.h>
 #include <memory>
 #include <string>
-#include <unistd.h>
 
 #include "BranchPrefixHoistingPass.h"
 #include "ControlFlow.h"
@@ -20,13 +18,11 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRList.h"
 #include "ObjectEscapeAnalysis.h"
 #include "RedexTest.h"
-#include "Show.h"
 #include "VirtualScope.h"
 
 class ObjectEscapeAnalysisTest : public RedexIntegrationTest {

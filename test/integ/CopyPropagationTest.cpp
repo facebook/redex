@@ -10,8 +10,6 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexLoader.h"
-#include "DexUtil.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "Show.h"

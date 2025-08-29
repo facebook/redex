@@ -14,16 +14,9 @@
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
-#include "DexPosition.h"
-#include "DexUtil.h"
-#include "IRCode.h"
-#include "InstructionLowering.h"
 #include "PassManager.h"
 #include "RedexContext.h"
-#include "RedexTestUtils.h"
-#include "SanitizersConfig.h"
 #include "Show.h"
-#include "Walkers.h"
 
 TEST(Dex039Test, ReadDex039) {
   // const-method-handle.dex is sourced from https://fburl.com/prikp912

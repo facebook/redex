@@ -8,8 +8,6 @@
 #include "PassManager.h"
 #include "DexAssessments.h"
 
-#include <boost/filesystem.hpp>
-#include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -25,7 +23,6 @@
 #include <unordered_set>
 
 #ifdef __linux__
-#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif

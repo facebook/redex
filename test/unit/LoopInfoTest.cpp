@@ -10,8 +10,6 @@
 #include <sparta/WeakTopologicalOrdering.h>
 
 #include "ControlFlow.h"
-#include "IRAssembler.h"
-#include "IRCode.h"
 #include "LoopInfo.h"
 #include "RedexTest.h"
 

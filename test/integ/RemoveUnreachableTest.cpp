@@ -9,7 +9,6 @@
 #include <istream>
 #include <memory>
 #include <string>
-#include <unistd.h>
 
 #include <json/value.h>
 

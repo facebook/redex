@@ -11,7 +11,6 @@
 #include "RedexTest.h"
 #include "VirtualScope.h"
 #include <gtest/gtest.h>
-#include <stdint.h>
 
 class DexStructureTest : public RedexTest {};
 

@@ -7,7 +7,6 @@
 
 #include "ControlFlow.h"
 
-#include <boost/dynamic_bitset.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 #include <iterator>
 #include <queue>
@@ -18,14 +17,12 @@
 #include "DexInstruction.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
-#include "GraphUtil.h"
 #include "IRList.h"
 #include "InstructionLowering.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
-#include "Transform.h"
 
 std::atomic<size_t> build_cfg_counter{0};
 namespace {

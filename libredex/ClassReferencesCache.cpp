@@ -7,9 +7,7 @@
 
 #include "ClassReferencesCache.h"
 
-#include <cinttypes>
 #include <cmath>
-#include <numeric>
 
 #include "DexUtil.h"
 #include "WorkQueue.h"

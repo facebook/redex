@@ -8,9 +8,7 @@
 #include "OptData.h"
 
 #include <cstdarg>
-#include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
 #include <json/value.h>
 #include <mutex>
@@ -25,7 +23,6 @@
 #include "OptDataDefs.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "Trace.h"
 
 namespace {
 

@@ -7,12 +7,10 @@
 
 #include "RemoveBuildersHelper.h"
 
-#include <boost/dynamic_bitset.hpp>
 #include <boost/regex.hpp>
 
 #include "ControlFlow.h"
 #include "Dataflow.h"
-#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 

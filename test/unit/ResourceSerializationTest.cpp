@@ -19,7 +19,6 @@
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
-#include "SanitizersConfig.h"
 #include "Util.h"
 #include "androidfw/ResourceTypes.h"
 #include "arsc/TestStructures.h"

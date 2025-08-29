@@ -17,7 +17,6 @@
 #include "Match.h"
 #include "RedexResources.h"
 #include "VerifyUtil.h"
-#include "androidfw/ResourceTypes.h"
 
 void verify_layout(const std::string& filename) {
   resources::StringOrReferenceSet classes;

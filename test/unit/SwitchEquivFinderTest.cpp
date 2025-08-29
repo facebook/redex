@@ -14,7 +14,6 @@
 #include "RedexTest.h"
 #include "SourceBlocks.h"
 #include "SwitchEquivFinder.h"
-#include "SwitchEquivPrerequisites.h"
 
 using namespace testing;
 

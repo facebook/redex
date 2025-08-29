@@ -11,7 +11,6 @@
 #include "DexAsm.h"
 #include "DexLoader.h"
 #include "DexStore.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRInstruction.h"

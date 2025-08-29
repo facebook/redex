@@ -27,7 +27,6 @@
 #include "Show.h"
 #include "TypeStringRewriter.h"
 #include "Walkers.h"
-#include "Warning.h"
 
 #include "Trace.h"
 #include <locator.h>

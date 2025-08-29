@@ -41,8 +41,6 @@
 
 #ifdef __linux__
 #include <sys/syscall.h>
-#include <sys/types.h>
-#include <unistd.h>
 #endif
 
 #include <boost/algorithm/string.hpp>

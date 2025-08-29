@@ -8,12 +8,10 @@
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/message.h>
 #include <gtest/gtest.h>
-#include <set>
 
 #include "BundleResources.h"
 #include "FullyQualifyLayoutsVerifyHelper.h"
 #include "ReadMaybeMapped.h"
-#include "RedexMappedFile.h"
 #include "protores/Resources.pb.h"
 #include "verify/VerifyUtil.h"
 

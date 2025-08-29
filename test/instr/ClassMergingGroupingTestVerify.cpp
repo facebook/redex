@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/regex.hpp>
-
 #include "Show.h"
 #include "verify/VerifyUtil.h"
 

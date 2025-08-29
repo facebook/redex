@@ -12,7 +12,6 @@
 #include <memory>
 #include <string>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <unordered_set>
 
 #include <json/value.h>

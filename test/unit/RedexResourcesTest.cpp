@@ -6,18 +6,15 @@
  */
 
 #include <gtest/gtest.h>
-#include <map>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "ApkResources.h"
-#include "Debug.h"
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "ResourcesTestDefs.h"
-#include "androidfw/ResourceTypes.h"
 
 using std::operator""sv;
 

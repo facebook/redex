@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
-#include "DexMemberRefs.h"
 #include "FbjniMarker.h"
 #include "RedexTest.h"
 

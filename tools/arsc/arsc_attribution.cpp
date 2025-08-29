@@ -15,7 +15,6 @@
 #include <json/json.h>
 #include <memory>
 #include <secure_lib/secure_string.h>
-#include <sstream>
 
 #include "ArscStats.h"
 #include "Debug.h"

@@ -11,13 +11,10 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
-#include "DexAnnotation.h"
 #include "DexInstruction.h"
-#include "DexPosition.h"
 #include "IRAssembler.h"
 #include "JarLoader.h"
 #include "RedexTest.h"
-#include "Show.h"
 #include "Walkers.h"
 
 class ResourcesInliningPassTest : public RedexTest {

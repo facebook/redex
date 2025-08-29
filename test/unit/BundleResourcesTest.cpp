@@ -10,13 +10,10 @@
 #include <unordered_set>
 
 #include "BundleResources.h"
-#include "Debug.h"
-#include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
 #include "ResourcesTestDefs.h"
-#include "Trace.h"
 #include "androidfw/ResourceTypes.h"
 
 using namespace boost::filesystem;

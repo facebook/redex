@@ -11,9 +11,6 @@
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexLoader.h"
-#include "Resolver.h"
-#include "Show.h"
 #include "VerifyUtil.h"
 
 bool class_clinit_exist(const DexClasses& classes, const char* name) {

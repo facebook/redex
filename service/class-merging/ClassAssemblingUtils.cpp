@@ -11,8 +11,6 @@
 
 #include "Creators.h"
 #include "DexStore.h"
-#include "DexUtil.h"
-#include "Model.h"
 #include "ReachableClasses.h"
 #include "Show.h"
 #include "Trace.h"
