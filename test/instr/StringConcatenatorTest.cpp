@@ -48,6 +48,6 @@ TEST_F(PostVerify, StringConcatenatorTest) {
   DexEncodedValue* enc = field->get_static_value();
   ASSERT_NE(nullptr, enc);
   EXPECT_EQ(DEVT_STRING, enc->evtype());
-  DexEncodedValueString* enc_str = static_cast<DexEncodedValueString*>(enc);
+  DexEncodedValueString* enc_str = dynamic_cast<DexEncodedValueString*>(enc);
   EXPECT_EQ("prestuff", enc_str->show());
 }

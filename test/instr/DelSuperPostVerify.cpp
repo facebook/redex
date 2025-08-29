@@ -56,7 +56,7 @@ TEST_F(PostVerify, DelSuper) {
   int optimized1_count = 0;
   for (auto& insn : test_opt_1->get_dex_code()->get_instructions()) {
     if (dex_opcode::is_invoke(insn->opcode())) {
-      auto* mop = static_cast<DexOpcodeMethod*>(insn);
+      auto* mop = dynamic_cast<DexOpcodeMethod*>(insn);
       auto* m = mop->get_method();
       if (strcmp(m->get_name()->c_str(), "optimized1") == 0) {
         ASSERT_STREQ(m->get_class()->get_name()->c_str(),

@@ -132,15 +132,15 @@ DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
         if (insn->opcode() != opcode) {
           return false;
         }
-        auto* meth = static_cast<DexOpcodeMethod*>(insn)->get_method();
+        auto* meth = dynamic_cast<DexOpcodeMethod*>(insn)->get_method();
         if ((receiver != nullptr) && meth->get_class() != receiver) {
           return false;
         }
         const auto* mname =
-            static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
+            dynamic_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
         return mname == DexString::get_string(target_mname);
       });
-  return it == end ? nullptr : static_cast<DexOpcodeMethod*>(*it);
+  return it == end ? nullptr : dynamic_cast<DexOpcodeMethod*>(*it);
 }
 
 size_t find_num_invoke(const DexMethod* m,
@@ -152,12 +152,12 @@ size_t find_num_invoke(const DexMethod* m,
     if (insn->opcode() != opcode) {
       continue;
     }
-    auto* meth = static_cast<DexOpcodeMethod*>(insn)->get_method();
+    auto* meth = dynamic_cast<DexOpcodeMethod*>(insn)->get_method();
     if ((receiver != nullptr) && meth->get_class() != receiver) {
       continue;
     }
     const auto* mname =
-        static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
+        dynamic_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
     if (mname == DexString::get_string(target_mname)) {
       num++;
     }

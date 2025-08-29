@@ -2311,7 +2311,7 @@ static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
       continue;
     }
 
-    const auto* str = static_cast<DexOpcodeString*>(insn)->get_string();
+    const auto* str = dynamic_cast<DexOpcodeString*>(insn)->get_string();
     uint32_t stridx = dodx->stringidx(str);
     bool jumbo = ((stridx >> 16) != 0);
 

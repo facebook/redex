@@ -20,7 +20,7 @@
 namespace {
 const interdex::InterDexPass* get_interdex_pass(const PassManager& mgr) {
   const auto* pass =
-      static_cast<interdex::InterDexPass*>(mgr.find_pass("InterDexPass"));
+      dynamic_cast<interdex::InterDexPass*>(mgr.find_pass("InterDexPass"));
   always_assert_log(pass, "InterDexPass missing");
   return pass;
 }

@@ -160,7 +160,7 @@ class DexEncodedValueString : public DexEncodedValue {
       return false;
     }
     return m_val.m_value_ptr_const ==
-           static_cast<const DexEncodedValueString*>(&that)
+           dynamic_cast<const DexEncodedValueString*>(&that)
                ->m_val.m_value_ptr_const;
   }
   size_t hash_value() const override {
@@ -185,7 +185,7 @@ class DexEncodedValuePtr : public DexEncodedValue {
       return false;
     }
     return m_val.m_value_ptr_const ==
-           static_cast<const DexEncodedValuePtr*>(&that)->m_val.m_value_ptr;
+           dynamic_cast<const DexEncodedValuePtr*>(&that)->m_val.m_value_ptr;
   }
   size_t hash_value() const override {
     size_t seed = boost::hash<uint8_t>()(m_evtype);

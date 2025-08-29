@@ -104,7 +104,7 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
       continue;
     }
 
-    DexOpcodeData* dex_data = static_cast<DexOpcodeData*>(insn);
+    DexOpcodeData* dex_data = dynamic_cast<DexOpcodeData*>(insn);
     const uint16_t* data = dex_data->data();
     printf(" data size: %zu\n", dex_data->size());
     EXPECT_EQ(dex_data->size(), 12); // (4 cases * 2) + 4

@@ -359,7 +359,7 @@ TEST(BundleResources, ReadResource) {
     EXPECT_EQ(res_table->resource_value_identical(baz_ids[0], boo_ids[0]),
               false);
 
-    const auto& res_table_pb = static_cast<ResourcesPbFile*>(res_table.get());
+    const auto& res_table_pb = dynamic_cast<ResourcesPbFile*>(res_table.get());
     const auto& id_to_configvalue = res_table_pb->get_res_id_to_configvalue();
     EXPECT_EQ(res_table_pb->get_hash_from_values(
                   id_to_configvalue.at(padding_left_ids[0])),

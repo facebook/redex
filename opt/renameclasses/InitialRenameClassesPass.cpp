@@ -35,7 +35,7 @@ void InitialRenameClassesPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles&,
                                         PassManager& mgr) {
   auto* rename_classes_pass =
-      static_cast<RenameClassesPassV2*>(mgr.find_pass("RenameClassesPassV2"));
+      dynamic_cast<RenameClassesPassV2*>(mgr.find_pass("RenameClassesPassV2"));
   if (rename_classes_pass == nullptr) {
     // No need to run InitialRenameClassesPass.
     return;

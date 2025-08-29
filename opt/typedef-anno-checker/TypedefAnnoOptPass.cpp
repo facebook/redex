@@ -70,7 +70,7 @@ void TypedefAnnoOptPass::populate_value_of_opt_str(DexClass* cls) {
     std::map<std::string, std::string> string_tree_items;
     for (auto* field : fields) {
       const auto* field_value =
-          static_cast<DexEncodedValueString*>(field->get_static_value())
+          dynamic_cast<DexEncodedValueString*>(field->get_static_value())
               ->string();
       string_tree_items.emplace(field->get_simple_deobfuscated_name(),
                                 field_value->str_copy());

@@ -79,11 +79,11 @@ TEST_F(IRInstructionTest, RoundTrip) {
       insn->set_arg_word_count(5);
     }
     if (insn->has_string()) {
-      static_cast<DexOpcodeString*>(insn)->set_string(str);
+      dynamic_cast<DexOpcodeString*>(insn)->set_string(str);
     } else if (insn->has_type()) {
-      static_cast<DexOpcodeType*>(insn)->set_type(ty);
+      dynamic_cast<DexOpcodeType*>(insn)->set_type(ty);
     } else if (insn->has_field()) {
-      static_cast<DexOpcodeField*>(insn)->set_field(field);
+      dynamic_cast<DexOpcodeField*>(insn)->set_field(field);
     } else if (insn->has_method()) {
       // TODO: We can / should test method-bearing instructions -- just need to
       // generate a method with a proto that matches the number of registers we

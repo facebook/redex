@@ -237,12 +237,12 @@ void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
                value->evtype() == DEVT_STRING) {
       env->set(
           sfield,
-          StringDomain(static_cast<DexEncodedValueString*>(value)->string()));
+          StringDomain(dynamic_cast<DexEncodedValueString*>(value)->string()));
     } else if (sfield->get_type() == type::java_lang_Class() &&
                value->evtype() == DEVT_TYPE) {
       env->set(sfield,
                ConstantClassObjectDomain(
-                   static_cast<DexEncodedValueType*>(value)->type()));
+                   dynamic_cast<DexEncodedValueType*>(value)->type()));
     } else {
       env->set(sfield, ConstantValue::top());
     }

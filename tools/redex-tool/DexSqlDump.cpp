@@ -51,7 +51,8 @@ void dump_field_refs(FILE* fdout,
   if ((static_value == nullptr) || (static_value->evtype() != DEVT_STRING)) {
     return;
   }
-  auto* static_string_value = static_cast<DexEncodedValueString*>(static_value);
+  auto* static_string_value =
+      dynamic_cast<DexEncodedValueString*>(static_value);
   auto string_id = string_ids[static_string_value->string()];
   fprintf(fdout,
           "INSERT INTO %sfield_string_refs VALUES (%d, %d, %d);\n",

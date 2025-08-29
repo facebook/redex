@@ -381,7 +381,7 @@ UnorderedSet<std::string_view> AppModuleUsagePass::get_modules_used(
         for (const DexAnnotationElement& anno_elem : annotation->anno_elems()) {
           always_assert(anno_elem.string->str() == "value");
           always_assert(anno_elem.encoded_value->evtype() == DEVT_ARRAY);
-          const auto* array = static_cast<const DexEncodedValueArray*>(
+          const auto* array = dynamic_cast<const DexEncodedValueArray*>(
               anno_elem.encoded_value.get());
           for (const auto& value : *(array->evalues())) {
             always_assert(value->evtype() == DEVT_STRING);

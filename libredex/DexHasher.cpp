@@ -461,33 +461,33 @@ void Impl::hash(const DexEncodedValue* v) {
   hash((uint8_t)evtype);
   switch (evtype) {
   case DEVT_STRING: {
-    const auto* s = static_cast<const DexEncodedValueString*>(v);
+    const auto* s = dynamic_cast<const DexEncodedValueString*>(v);
     hash(s->string());
     break;
   }
   case DEVT_TYPE: {
-    const auto* t = static_cast<const DexEncodedValueType*>(v);
+    const auto* t = dynamic_cast<const DexEncodedValueType*>(v);
     hash(t->type());
     break;
   }
   case DEVT_FIELD:
   case DEVT_ENUM: {
-    const auto* f = static_cast<const DexEncodedValueField*>(v);
+    const auto* f = dynamic_cast<const DexEncodedValueField*>(v);
     hash(f->field());
     break;
   }
   case DEVT_METHOD: {
-    const auto* f = static_cast<const DexEncodedValueMethod*>(v);
+    const auto* f = dynamic_cast<const DexEncodedValueMethod*>(v);
     hash(f->method());
     break;
   }
   case DEVT_ARRAY: {
-    const auto* a = static_cast<const DexEncodedValueArray*>(v);
+    const auto* a = dynamic_cast<const DexEncodedValueArray*>(v);
     hash(*a->evalues());
     break;
   }
   case DEVT_ANNOTATION: {
-    const auto* a = static_cast<const DexEncodedValueAnnotation*>(v);
+    const auto* a = dynamic_cast<const DexEncodedValueAnnotation*>(v);
     hash(a->type());
     hash(a->annotations()); // const EncodedAnnotations*
     break;
