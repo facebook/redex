@@ -1704,4 +1704,22 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
   return new_sb;
 }
 
+void adjust_block_hits_with_appear100_threshold(
+    ControlFlowGraph* cfg, int32_t block_appear100_threshold) {
+  for (auto* block : cfg->blocks()) {
+    for (auto& mie : *block) {
+      if (mie.type == MFLOW_SOURCE_BLOCK) {
+        for (auto* sb = mie.src_block.get(); sb != nullptr;
+             sb = sb->next.get()) {
+          sb->foreach_val([&](auto& val) {
+            if (val && val->appear100 < block_appear100_threshold) {
+              val->val = 0;
+            }
+          });
+        }
+      }
+    }
+  }
+}
+
 } // namespace source_blocks

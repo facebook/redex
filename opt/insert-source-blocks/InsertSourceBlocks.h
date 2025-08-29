@@ -50,6 +50,7 @@ create unnecessary bloat.
   bool m_always_inject{true};
   bool m_use_default_value{false};
   bool m_fix_violations{false};
+  int32_t m_block_appear100_threshold{0};
   std::vector<std::string> m_ordered_interactions;
 
   friend class SourceBlocksTest;

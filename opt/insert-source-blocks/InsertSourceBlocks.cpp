@@ -189,8 +189,8 @@ std::string hashed_name(uint64_t hash_value,
   // numerical suffix. Unfortunately we may also see older implementations (or
   // maybe written by hand or bytecode frameworks).
   // In that case, hope that it is single- or double-digit. Do not cross-check
-  // a class, that adds complexity and is not worth it (just detect at most 0-99).
-  // Then just use `00` for flags, relying solely on the body hash.
+  // a class, that adds complexity and is not worth it (just detect at most
+  // 0-99). Then just use `00` for flags, relying solely on the body hash.
 
   return std::string("redex") + (boost::format("%016x") % hash_value).str() +
          "$" +
@@ -569,7 +569,8 @@ struct Injector {
   void run_source_blocks(DexStoresVector& stores,
                          PassManager& mgr,
                          bool serialize,
-                         bool exc_inject) {
+                         bool exc_inject,
+                         int32_t block_appear100_threshold) {
     auto scope = build_class_scope(stores);
 
     // operator+= does not work well, too much copying around.
@@ -672,6 +673,12 @@ struct Injector {
               source_blocks::fix_hot_method_cold_entry_violations(&cfg);
               source_blocks::fix_chain_violations(&cfg);
               source_blocks::fix_idom_violations(&cfg);
+            }
+
+            if (block_appear100_threshold > 0) {
+              always_assert(block_appear100_threshold <= 100);
+              source_blocks::adjust_block_hits_with_appear100_threshold(
+                  &cfg, block_appear100_threshold);
             }
 
             smi.add({sb_name, std::move(res.serialized),
@@ -902,6 +909,15 @@ void InsertSourceBlocksPass::bind_config() {
        m_fix_violations,
        m_fix_violations,
        "Applies best effort fix to all source block violations.");
+
+  bind("block_appear100_threshold", m_block_appear100_threshold,
+       m_block_appear100_threshold,
+       "Block appear100 threshold configuration (0-100)");
+
+  if (m_block_appear100_threshold > 100) {
+    always_assert_log(false, "block_appear100_threshold must be <= 100, got %d",
+                      m_block_appear100_threshold);
+  }
 }
 
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
@@ -917,10 +933,9 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   inj.write_unresolved_methods(
       conf.metafile("redex-isb-unresolved-methods.txt"));
 
-  inj.run_source_blocks(stores,
-                        mgr,
+  inj.run_source_blocks(stores, mgr,
                         /* serialize= */ m_force_serialize || is_instr_mode,
-                        m_insert_after_excs);
+                        m_insert_after_excs, m_block_appear100_threshold);
 
   for (auto&& [interaction_id, index] :
        UnorderedIterable(g_redex->get_sb_interaction_indices())) {
