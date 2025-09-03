@@ -24,13 +24,17 @@
     }                                                                        \
   } while (0)
 
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define UNCOPYABLE(klass)       \
   klass(const klass&) = delete; \
   klass& operator=(const klass&) = delete;
+// NOLINTEND(bugprone-macro-parentheses)
 
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define MOVABLE(klass)      \
   klass(klass&&) = default; \
   klass& operator=(klass&&) = default;
+// NOLINTEND(bugprone-macro-parentheses)
 
 #ifdef __GNUC__
 #define UNUSED __attribute__((unused))

@@ -13,14 +13,14 @@
 
 class LoosenAccessModifierTest : public RedexTest {};
 
-#define create_virtual_method(ident, scope, parent_type, access, name)      \
-  auto ident = assembler::method_from_string("(method (" access ") \"" name \
-                                             "\"((return-void)))");         \
-  {                                                                         \
-    ClassCreator cc(ident->get_class());                                    \
-    cc.set_super(parent_type);                                              \
-    cc.add_method(ident);                                                   \
-    scope.push_back(cc.create());                                           \
+#define create_virtual_method(ident, scope, parent_type, access, name)       \
+  auto(ident) = assembler::method_from_string("(method (" access ") \"" name \
+                                              "\"((return-void)))");         \
+  {                                                                          \
+    ClassCreator cc((ident)->get_class());                                   \
+    cc.set_super(parent_type);                                               \
+    cc.add_method(ident);                                                    \
+    (scope).push_back(cc.create());                                          \
   }
 
 /**

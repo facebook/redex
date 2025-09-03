@@ -70,6 +70,7 @@ class EquivalenceTest {
  * test name and the static initializer; all that's left is to implement
  * build_method.
  */
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define EQUIVALENCE_TEST(BaseClass, TestName)                        \
   class TestName : public BaseClass {                                \
     virtual std::string test_name() { return #BaseClass #TestName; } \
@@ -77,3 +78,4 @@ class EquivalenceTest {
   };                                                                 \
   REGISTER_TEST(TestName);                                           \
   void TestName::build_method
+// NOLINTEND(bugprone-macro-parentheses)
