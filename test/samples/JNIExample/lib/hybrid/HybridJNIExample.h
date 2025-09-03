@@ -20,7 +20,9 @@ class HybridJNIExample final : public jni::HybridClass<HybridJNIExample> {
   ~HybridJNIExample();
 
   static facebook::jni::local_ref<jhybriddata> initHybrid(
-      jni::alias_ref<jclass>, const int i);
+      // NOLINTNEXTLINE
+      jni::alias_ref<jclass>,
+      const int i);
 
   int implementedRegisteredDeclaredUsed();
   int implementedRegisteredDeclared();

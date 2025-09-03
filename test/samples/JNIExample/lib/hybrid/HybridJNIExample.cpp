@@ -29,7 +29,9 @@ void HybridJNIExample::registerNatives() {
 }
 
 local_ref<HybridJNIExample::jhybriddata> HybridJNIExample::initHybrid(
-    jni::alias_ref<jclass>, const int i) {
+    // NOLINTNEXTLINE
+    jni::alias_ref<jclass>,
+    const int i) {
   return makeCxxInstance(i);
 }
 
@@ -39,6 +41,7 @@ int HybridJNIExample::implementedRegistered() { return 1; }
 
 } // namespace facebook
 
+// NOLINTNEXTLINE
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   return facebook::xplat::initialize(
       vm, [] { facebook::HybridJNIExample::registerNatives(); });
