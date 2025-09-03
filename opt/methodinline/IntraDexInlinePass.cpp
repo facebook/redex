@@ -16,6 +16,8 @@ void IntraDexInlinePass::bind_config() {
   bind("profile_guided_heat_threshold", 0.5f, m_profile_guided_heat_threshold);
   bind("profile_guided_heat_discount", 1.0f, m_profile_guided_heat_discount);
   bind("profile_guided_shrink_bias", 0.0f, m_profile_guided_shrink_bias);
+  bind("profile_guided_block_appear_threshold", 0.0f,
+       m_profile_guided_block_appear_threshold);
 }
 
 void IntraDexInlinePass::run_pass(DexStoresVector& stores,
