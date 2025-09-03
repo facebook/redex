@@ -109,6 +109,7 @@ struct InlinerCostConfig {
   float profile_guided_heat_threshold;
   float profile_guided_heat_discount;
   float profile_guided_shrink_bias;
+  float profile_guided_block_appear_threshold;
 };
 
 inline const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
@@ -145,6 +146,7 @@ inline const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
     0.5f, // profile_guided_heat_threshold
     1.0f, // profile_guided_heat_discount
     0.0f, // profile_guided_shrink_bias
+    0.0f, // profile_guided_block_appear_threshold
 };
 
 // All call-sites of a callee.

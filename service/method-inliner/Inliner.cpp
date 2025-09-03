@@ -2635,8 +2635,12 @@ float MultiMethodInliner::compute_profile_guided_discount(
     return 1.0f;
   }
 
-  // Discounts only given to calls found to be hot and in the baseline profile
-  if (!caller_block || !source_blocks::is_hot(caller_block) ||
+  // Discounts only given to calls found to be hot with a high enough appear
+  // percentage and in the baseline profile
+  if (!caller_block ||
+      !source_blocks::is_hot(
+          caller_block,
+          m_inliner_cost_config.profile_guided_block_appear_threshold) ||
       m_baseline_profile->methods.count(caller) == 0 ||
       !m_baseline_profile->methods.at(caller).hot) {
     return 1.0;

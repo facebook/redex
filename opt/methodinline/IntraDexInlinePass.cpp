@@ -29,6 +29,8 @@ void IntraDexInlinePass::run_pass(DexStoresVector& stores,
         m_profile_guided_heat_discount;
     inliner_cost_config.profile_guided_shrink_bias =
         m_profile_guided_shrink_bias;
+    inliner_cost_config.profile_guided_block_appear_threshold =
+        m_profile_guided_block_appear_threshold;
   }
 
   inliner::run_inliner(stores, mgr, conf, inliner_cost_config,

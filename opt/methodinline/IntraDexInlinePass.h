@@ -38,6 +38,7 @@ class IntraDexInlinePass : public Pass {
   float m_profile_guided_heat_threshold;
   float m_profile_guided_heat_discount;
   float m_profile_guided_shrink_bias;
+  float m_profile_guided_block_appear_threshold;
 
   bool m_consider_hot_cold;
   bool m_partial_hot_hot;
