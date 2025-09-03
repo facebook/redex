@@ -35,10 +35,10 @@ class IntraDexInlinePass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  bool m_baseline_profile_guided;
-  float m_baseline_profile_heat_threshold;
-  float m_baseline_profile_heat_discount;
-  float m_baseline_profile_shrink_bias;
+  bool m_profile_guided;
+  float m_profile_guided_heat_threshold;
+  float m_profile_guided_heat_discount;
+  float m_profile_guided_shrink_bias;
 
   HotColdInliningBehavior m_hot_cold_inlining_behavior;
   bool m_partial_hot_hot;
