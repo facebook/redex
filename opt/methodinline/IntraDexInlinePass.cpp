@@ -17,6 +17,8 @@ void IntraDexInlinePass::bind_config() {
   bind("profile_guided_heat_threshold", 0.5f, m_profile_guided_heat_threshold);
   bind("profile_guided_heat_discount", 1.0f, m_profile_guided_heat_discount);
   bind("profile_guided_shrink_bias", 0.0f, m_profile_guided_shrink_bias);
+  bind("profile_guided_block_appear_threshold", 0.0f,
+       m_profile_guided_block_appear_threshold);
   after_configuration([this, hot_cold_inlining_behavior_str =
                                  std::move(hot_cold_inlining_behavior_str)]() {
     always_assert(!hot_cold_inlining_behavior_str.empty());
@@ -36,6 +38,8 @@ void IntraDexInlinePass::run_pass(DexStoresVector& stores,
         m_profile_guided_heat_discount;
     inliner_cost_config.profile_guided_shrink_bias =
         m_profile_guided_shrink_bias;
+    inliner_cost_config.profile_guided_block_appear_threshold =
+        m_profile_guided_block_appear_threshold;
   }
 
   inliner::run_inliner(stores, mgr, conf, inliner_cost_config,

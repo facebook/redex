@@ -402,13 +402,15 @@ inline bool maybe_hot(cfg::Block* b) {
   return sb->foreach_val_early([](const auto& v) { return !v || v->val > 0; });
 }
 
-inline bool is_hot(cfg::Block* b) {
+inline bool is_hot(cfg::Block* b, float threshold = 0.0f) {
   auto* sb = get_first_source_block(b);
   if (sb == nullptr) {
     // Conservatively assume that missing SBs mean no profiling data.
     return false;
   }
-  return sb->foreach_val_early([](const auto& v) { return v && v->val > 0; });
+  return sb->foreach_val_early([threshold](const auto& v) {
+    return v && v->val > 0 && v->appear100 >= threshold;
+  });
 }
 
 // If a method's entry block is hot, consider this method is hot.
