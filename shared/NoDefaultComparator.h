@@ -15,6 +15,7 @@
 template <typename T>
 struct fake_dependency : public std::false_type {};
 
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define DISALLOW_DEFAULT_COMPARATOR(klass)                                   \
   namespace std {                                                            \
   template <typename T, typename A>                                          \
@@ -67,3 +68,4 @@ struct fake_dependency : public std::false_type {};
         #klass " must not use default pointer comparison in std::multiset"); \
   };                                                                         \
   }
+// NOLINTEND(bugprone-macro-parentheses)
