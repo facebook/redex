@@ -1094,8 +1094,8 @@ def _get_baseline_profile_interactions(
         return {
             interaction_id
             for _, config in json_config.items()
-            for interaction_id in config["deep_data_interaction_config"]
-        }, set(json_config["default"]["deep_data_interaction_config"].keys())
+            for interaction_id in config.get("deep_data_interaction_config", {})
+        }, set(json_config["default"].get("deep_data_interaction_config", {}).keys())
 
 
 def _handle_profiles(
