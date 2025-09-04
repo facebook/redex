@@ -2620,3 +2620,67 @@ TEST_F(ConstantPropagationTest, NeAtBoundaryOfNez) {
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
+
+TEST_F(ConstantPropagationTest, DeterminableLow6BitsJoinedFromConstants) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (if-eqz v0 :if-true-label)
+     (const v1 1)
+     (goto :end-if)
+     (:if-true-label)
+     (const v1 14)
+     (:end-if)
+     ;; Joining the two branches, the lowest 4 bits of v1 don't equal, but bitset can't infer
+     (const v2 2)
+     (if-ne v1 v2 :end)
+     (const v0 10)
+     (:end)
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (if-eqz v0 :end-if)
+     (const v1 1)
+     (:if-true-label)
+     (const v2 2)
+     (return-void)
+     (:end-if)
+     (const v1 14)
+     (goto :if-true-label)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantPropagationTest, UndeterminableLow6BitsJoinedFromConstants) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (if-eqz v0 :if-true-label)
+     (const v1 64)
+     (goto :end-if)
+     (:if-true-label)
+     (const v1 191)
+     (:end-if)
+     ; Joining the two branches, the lowest 6 bits of v1 can't be inferred to be
+     ; unequal to 128. Nor could it be inferered via bitset or bounds.
+     (const v2 128)
+     (if-ne v1 v2 :end)
+     (const v0 10)
+     (:end)
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-ne v1 v2 :.*\\)\\s*\\(const v0 10\\)"));
+}

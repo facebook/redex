@@ -48,9 +48,11 @@ inline NumericIntervalDomain numeric_interval_domain_from_int(int64_t min,
 class SignedConstantDomain;
 std::ostream& operator<<(std::ostream& o, const SignedConstantDomain& scd);
 
-// TODO(TT222824773): Remove this.
 namespace signed_constant_domain {
+// TODO(T222824773): Remove this.
 extern bool enable_bitset;
+// TODO(T236830337): Remove this.
+extern bool enable_low6bits;
 } // namespace signed_constant_domain
 
 // This class effectively implements a
@@ -182,6 +184,184 @@ class SignedConstantDomain final
     }
   };
   Bounds m_bounds;
+
+  /** Encodes the combination the lowest 6 bits of an integer.
+   *
+   * This class contains a 64-bit integer, low6bits_state, that tracks possible
+   * states of the lowest 6 bits. There are 64 bits in low6bits_state, each
+   * represents a value of the lowest 6 bits of the integer represented by the
+   * domain. The n'th bit in low6bits_state being 1 implies that the lowest 6
+   * bits of the integer (or %64 in arithmetic terms) may still be possibly n
+   * conservatively, i.e., redex can't prove that the lowest 64 bits unequals n.
+   * On the other hand, the n'th bit being 0 implies the lowest 6 bits of the
+   * integer can be proven to unequal n.
+   *
+   * For example, if low6bits_state is 0b101, it means that the lowest 6 bits of
+   * the represented integer can be either decimal 0 or 2.
+   *
+   * This class costs 8 bytes of RAM.
+   */
+  class Low6Bits final {
+   private:
+    uint64_t low6bits_state{std::numeric_limits<uint64_t>::max()};
+
+   public:
+    Low6Bits() = default;
+    Low6Bits(const Low6Bits&) = default;
+    Low6Bits& operator=(const Low6Bits&) = default;
+    Low6Bits(Low6Bits&&) = default;
+    Low6Bits& operator=(Low6Bits&&) = default;
+    explicit Low6Bits(int64_t value)
+        : low6bits_state(static_cast<uint64_t>(1u) << (value & 63)) {}
+
+    bool operator==(const Low6Bits& that) const {
+      return low6bits_state == that.low6bits_state;
+    }
+
+    bool operator<=(const Low6Bits& that) const {
+      return (low6bits_state & ~that.low6bits_state) == 0;
+    }
+
+    bool is_bottom() const { return low6bits_state == 0u; }
+    bool is_top() const { return *this == top(); }
+
+    void set_to_bottom() { low6bits_state = 0u; }
+    void set_to_top() { *this = top(); }
+
+    Low6Bits& join_with(const Low6Bits& that) {
+      low6bits_state |= that.low6bits_state;
+      return *this;
+    }
+
+    Low6Bits& meet_with(const Low6Bits& that) {
+      low6bits_state &= that.low6bits_state;
+      return *this;
+    }
+
+    bool unequals_constant(int64_t integer) const {
+      return (low6bits_state & (static_cast<uint64_t>(1u) << (integer & 63))) ==
+             0u;
+    }
+
+    uint64_t get_low6bits_state() const { return low6bits_state; }
+
+    static Low6Bits top() { return Low6Bits(); }
+
+    static Low6Bits bottom() {
+      Low6Bits res;
+      res.set_to_bottom();
+      return res;
+    }
+  };
+
+  // TODO(T236830337): Remove OptionalLow6Bits.
+  // Not using the abstract class/inheritence pattern to avoid heap allocation.
+  class OptionalLow6Bits final {
+    // This class is a delegate to Bitset when bitset is enabled.
+    //
+    // When bitset is disabled, this is always top.
+    using Low6BitsType = std::optional<Low6Bits>;
+    Low6BitsType low6bits;
+
+   public:
+    OptionalLow6Bits(const OptionalLow6Bits&) = default;
+    OptionalLow6Bits(OptionalLow6Bits&&) = default;
+    OptionalLow6Bits& operator=(const OptionalLow6Bits&) = default;
+    OptionalLow6Bits& operator=(OptionalLow6Bits&&) = default;
+
+    explicit OptionalLow6Bits(const Low6Bits& l6b = Low6Bits::top())
+        : low6bits(signed_constant_domain::enable_low6bits ? Low6BitsType(l6b)
+                                                           : std::nullopt) {}
+
+    explicit OptionalLow6Bits(int64_t value)
+        : low6bits(signed_constant_domain::enable_low6bits ? Low6BitsType(value)
+                                                           : std::nullopt) {}
+
+    OptionalLow6Bits& operator=(const Low6Bits& bs) {
+      if (signed_constant_domain::enable_low6bits) {
+        low6bits = bs;
+      }
+      return *this;
+    }
+
+    bool is_bottom() const {
+      if (low6bits) {
+        return low6bits->is_bottom();
+      } else {
+        return false;
+      }
+    }
+
+    bool is_top() const {
+      if (low6bits) {
+        return low6bits->is_top();
+      } else {
+        return true;
+      }
+    }
+
+    OptionalLow6Bits& set_to_bottom() {
+      if (low6bits) {
+        low6bits->set_to_bottom();
+      }
+      return *this;
+    }
+
+    OptionalLow6Bits& set_to_top() {
+      if (low6bits) {
+        low6bits->set_to_top();
+      }
+      return *this;
+    }
+
+    OptionalLow6Bits& join_with(const OptionalLow6Bits& that) {
+      if (low6bits) {
+        always_assert(that.low6bits);
+        low6bits->join_with(*that.low6bits);
+      }
+      return *this;
+    }
+
+    OptionalLow6Bits& meet_with(const OptionalLow6Bits& that) {
+      if (low6bits) {
+        always_assert(that.low6bits);
+        low6bits->meet_with(*that.low6bits);
+      }
+      return *this;
+    }
+
+    bool operator==(const OptionalLow6Bits& that) const {
+      if (low6bits) {
+        always_assert(that.low6bits);
+        return *low6bits == *that.low6bits;
+      }
+      return true;
+    }
+
+    bool operator<=(const OptionalLow6Bits& that) const {
+      if (low6bits) {
+        always_assert(that.low6bits);
+        return *low6bits <= *that.low6bits;
+      }
+      return true;
+    }
+
+    bool unequals_constant(int64_t integer) const {
+      if (low6bits) {
+        return low6bits->unequals_constant(integer);
+      }
+      return false;
+    }
+
+    uint64_t get_low6bits_state() const {
+      if (low6bits) {
+        return low6bits->get_low6bits_state();
+      }
+      return std::numeric_limits<uint64_t>::max();
+    }
+  };
+
+  OptionalLow6Bits m_low6bits;
 
   class Bitset final {
     // Albeit unusual, make sure the compiler uses 2's complement to represent
@@ -489,23 +669,25 @@ class SignedConstantDomain final
 
   OptionalBitset m_bitset;
 
-  SignedConstantDomain(Bounds bounds, Bitset bitset)
-      : m_bounds(bounds), m_bitset(bitset) {}
+  SignedConstantDomain(Bounds bounds, Low6Bits low6bits, Bitset bitset)
+      : m_bounds(bounds), m_low6bits(low6bits), m_bitset(bitset) {}
 
   // When either bounds or bitset meets (become narrower), we can possibly
   // infer the other one with some info.
   void cross_infer_meet_from_bounds() {
-    if (m_bitset.is_bottom()) {
+    if (m_bitset.is_bottom() || m_low6bits.is_bottom()) {
       always_assert(m_bounds.is_bottom());
       return;
     }
 
     // Constant inference
     if (m_bounds.is_constant()) {
-      if (m_bitset.unequals_constant(m_bounds.l)) {
+      if (m_bitset.unequals_constant(m_bounds.l) ||
+          m_low6bits.unequals_constant(m_bounds.l)) {
         set_to_bottom();
         return;
       }
+      m_low6bits = Low6Bits(m_bounds.l);
       m_bitset = Bitset(m_bounds.l);
       return;
     }
@@ -520,7 +702,7 @@ class SignedConstantDomain final
   }
 
   void cross_infer_meet_from_bitset() {
-    if (m_bounds.is_bottom()) {
+    if (m_bounds.is_bottom() || m_low6bits.is_bottom()) {
       always_assert(!signed_constant_domain::enable_bitset ||
                     m_bitset.is_bottom());
       return;
@@ -529,11 +711,13 @@ class SignedConstantDomain final
     const auto bitset_constant = m_bitset.get_constant();
 
     if (bitset_constant.has_value()) {
-      if (m_bounds.unequals_constant(bitset_constant.value())) {
+      if (m_bounds.unequals_constant(*bitset_constant) ||
+          m_low6bits.unequals_constant(*bitset_constant)) {
         set_to_bottom();
         return;
       }
       m_bounds = Bounds::from_integer(bitset_constant.value());
+      m_low6bits = Low6Bits(bitset_constant.value());
       return;
     }
 
@@ -546,19 +730,40 @@ class SignedConstantDomain final
     // More cross inference can be added here...
   }
 
+  void cross_infer_meet_from_low6bits() {
+    if (m_bounds.is_bottom() || m_bitset.is_bottom()) {
+      always_assert(!signed_constant_domain::enable_low6bits ||
+                    m_low6bits.is_bottom());
+      return;
+    }
+
+    // One is bottom, then all is bottom.
+    if (m_low6bits.is_bottom()) {
+      set_to_bottom();
+      return;
+    }
+  }
+
  public:
-  SignedConstantDomain() : m_bounds(Bounds::top()), m_bitset(Bitset::top()) {}
+  SignedConstantDomain()
+      : m_bounds(Bounds::top()),
+        m_low6bits(Low6Bits::top()),
+        m_bitset(Bitset::top()) {}
 
   explicit SignedConstantDomain(int64_t v)
-      : m_bounds{Bounds::from_integer(v)}, m_bitset(v) {}
+      : m_bounds{Bounds::from_integer(v)}, m_low6bits(v), m_bitset(v) {}
 
   explicit SignedConstantDomain(sign_domain::Interval interval)
-      : m_bounds(Bounds::from_interval(interval)), m_bitset(Bitset::top()) {
+      : m_bounds(Bounds::from_interval(interval)),
+        m_low6bits(Low6Bits::top()),
+        m_bitset(Bitset::top()) {
     cross_infer_meet_from_bounds();
   }
 
   SignedConstantDomain(int64_t min, int64_t max)
-      : m_bounds({min > 0 || max < 0, min, max}), m_bitset(Bitset::top()) {
+      : m_bounds({min > 0 || max < 0, min, max}),
+        m_low6bits(Low6Bits::top()),
+        m_bitset(Bitset::top()) {
     always_assert(min <= max);
     cross_infer_meet_from_bounds();
   }
@@ -574,19 +779,32 @@ class SignedConstantDomain final
   }
 
   static SignedConstantDomain bottom() {
-    return SignedConstantDomain(Bounds::bottom(), Bitset::bottom());
+    return SignedConstantDomain(
+        Bounds::bottom(), Low6Bits::bottom(), Bitset::bottom());
   }
   static SignedConstantDomain top() {
-    return SignedConstantDomain(Bounds::top(), Bitset::top());
+    return SignedConstantDomain(Bounds::top(), Low6Bits::top(), Bitset::top());
   }
   static SignedConstantDomain nez() {
-    return SignedConstantDomain(Bounds::nez(), Bitset::top());
+    return SignedConstantDomain(Bounds::nez(), Low6Bits::top(), Bitset::top());
   }
   bool is_bottom() const {
-    return m_bounds.is_bottom() &&
-           (!signed_constant_domain::enable_bitset || m_bitset.is_bottom());
+    const bool res =
+        m_bounds.is_bottom() ||
+        (!signed_constant_domain::enable_low6bits && m_low6bits.is_bottom()) ||
+        (!signed_constant_domain::enable_bitset && m_bitset.is_bottom());
+    if (res) {
+      always_assert(m_bounds.is_bottom());
+      always_assert(!signed_constant_domain::enable_low6bits ||
+                    m_low6bits.is_bottom());
+      always_assert(!signed_constant_domain::enable_bitset ||
+                    m_bitset.is_bottom());
+    }
+    return res;
   }
-  bool is_top() const { return m_bounds.is_top() && m_bitset.is_top(); }
+  bool is_top() const {
+    return m_bounds.is_top() && m_low6bits.is_top() && m_bitset.is_top();
+  }
   bool is_nez() const { return m_bounds.is_nez; }
   // Is this SignedConstantDomain nez only and nothing more?
   bool is_nez_only() const {
@@ -594,26 +812,31 @@ class SignedConstantDomain final
   }
 
   bool leq(const SignedConstantDomain& that) const {
-    return m_bounds <= that.m_bounds && m_bitset <= that.m_bitset;
+    return m_bounds <= that.m_bounds && m_low6bits <= that.m_low6bits &&
+           m_bitset <= that.m_bitset;
   }
 
   bool equals(const SignedConstantDomain& that) const {
-    return m_bounds == that.m_bounds && m_bitset == that.m_bitset;
+    return m_bounds == that.m_bounds && m_low6bits == that.m_low6bits &&
+           m_bitset == that.m_bitset;
   }
 
   void set_to_bottom() {
     m_bounds.set_to_bottom();
+    m_low6bits.set_to_bottom();
     m_bitset.set_to_bottom();
   }
 
   void set_to_top() {
     m_bounds.set_to_top();
+    m_low6bits.set_to_top();
     m_bitset.set_to_top();
   }
 
   void join_with(const SignedConstantDomain& that) {
     m_bounds.join_with(that.m_bounds);
     m_bitset.join_with(that.m_bitset);
+    m_low6bits.join_with(that.m_low6bits);
   }
 
   void widen_with(const SignedConstantDomain&) {
@@ -625,6 +848,8 @@ class SignedConstantDomain final
     cross_infer_meet_from_bounds();
     m_bitset.meet_with(that.m_bitset);
     cross_infer_meet_from_bitset();
+    m_low6bits.meet_with(that.m_low6bits);
+    cross_infer_meet_from_low6bits();
   }
 
   void narrow_with(const SignedConstantDomain&) {
@@ -763,6 +988,7 @@ class SignedConstantDomain final
     }
 
     m_bounds.set_to_top();
+    m_low6bits.set_to_top();
     cross_infer_meet_from_bitset();
     return *this;
   }
@@ -770,6 +996,10 @@ class SignedConstantDomain final
   uint64_t get_one_bit_states() const { return m_bitset.get_one_bit_states(); }
   uint64_t get_zero_bit_states() const {
     return m_bitset.get_zero_bit_states();
+  }
+
+  uint64_t get_low6bits_state() const {
+    return m_low6bits.get_low6bits_state();
   }
 
   SignedConstantDomain& left_shift_bits_int(int32_t shift);
