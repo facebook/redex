@@ -80,7 +80,7 @@ class SignedConstantDomain final
     bool operator<(const Bounds&) = delete;
     bool operator>=(const Bounds&) = delete;
 
-    inline bool is_constant() const { return l == u; }
+    bool is_constant() const { return l == u; }
     bool is_top() const { return *this == top(); }
     bool is_bottom() const { return *this == bottom(); }
     void normalize() {
@@ -143,7 +143,7 @@ class SignedConstantDomain final
       return *this;
     }
 
-    static inline Bounds from_interval(sign_domain::Interval interval) {
+    static Bounds from_interval(sign_domain::Interval interval) {
       switch (interval) {
       case sign_domain::Interval::EMPTY:
         return bottom();
@@ -1020,9 +1020,9 @@ class SignedConstantDomain final
                                                 BitShiftMask mask);
 
   static int32_t clamp_int(int64_t value) {
-    return std::max(
+    return static_cast<int32_t>(std::max(
         std::min(value,
                  static_cast<int64_t>(std::numeric_limits<int32_t>::max())),
-        static_cast<int64_t>(std::numeric_limits<int32_t>::min()));
+        static_cast<int64_t>(std::numeric_limits<int32_t>::min())));
   }
 };
