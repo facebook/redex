@@ -1951,6 +1951,13 @@ int main(int argc, char* argv[]) {
 
     signed_constant_domain::enable_bitset =
         args.config.get("enable_bitset_constant_propagation", false).asBool();
+    signed_constant_domain::enable_low6bits =
+        args.config.get("enable_low6bits_constant_propagation", false).asBool();
+
+    always_assert_log(!signed_constant_domain::enable_low6bits ||
+                          signed_constant_domain::enable_bitset,
+                      "enable_bitset_constant_propagation must be turned on if "
+                      "enable_low6bits_constant_propagation is turned on.");
 
     // For convenience.
     g_redex->instrument_mode = args.redex_options.instrument_pass_enabled;

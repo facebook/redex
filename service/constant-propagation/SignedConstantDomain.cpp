@@ -10,6 +10,8 @@
 // frequently called, or takes a long time to run so that function call overhead
 // is negligible. Otherwise, put them in the header.
 
+#include <sstream>
+
 #include "SignedConstantDomain.h"
 
 #include "StlUtil.h"
@@ -19,9 +21,11 @@ enum class SignedConstantDomain::BitShiftMask : int32_t {
   Long = 0x3f,
 };
 
-// TODO(TT222824773): Remove this.
 namespace signed_constant_domain {
+// TODO(T222824773): Remove this.
 bool enable_bitset = false;
+// TODO(T236830337): Remove this.
+bool enable_low6bits = false;
 } // namespace signed_constant_domain
 
 SignedConstantDomain& SignedConstantDomain::left_shift_bits_int(int32_t shift) {
@@ -181,6 +185,10 @@ std::ostream& operator<<(std::ostream& o, const SignedConstantDomain& scd) {
   };
 
   print_bounds(o, scd);
+
+  std::ostringstream oss;
+  oss << std::hex << '{' << scd.get_low6bits_state() << '}';
+  o << std::move(oss).str();
 
   const auto print_bitset =
       [](std::ostream& o, const SignedConstantDomain& scd) -> std::ostream& {
