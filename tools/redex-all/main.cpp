@@ -315,7 +315,6 @@ Json::Value reflect_property_definitions() {
 #pragma GCC diagnostic push
 // Necessary for unknown errors in older versions.
 #pragma GCC diagnostic ignored "-Wpragmas"
-#pragma GCC diagnostic ignored "-Wdangling-pointer"
 #pragma GCC diagnostic ignored "-Winfinite-recursion"
 void __attribute__((noinline, optnone)) assert_abort(const std::string& message,
                                                      size_t depth) {
