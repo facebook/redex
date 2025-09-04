@@ -981,4 +981,55 @@ public class ConstantPropagationTest {
     assertThat(z).isNotEqualTo(y);
     // CHECK: return-void
   }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.low6bits_int
+  @Test
+  public void low6bits_int() {
+    int x = 3;  // 0b11
+    if (getRandomInt() > 0) {
+      x = 76;  // 0b1001100
+    }
+
+    // x is known to be in the range of 3 to 76, and x's individual bits of the
+    // lowest 4 bits are unknown.  But low6bits can tell x's lowest 4 bits are
+    // either 0b0011 or 0b1100.
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (x == 4) {
+      System.out.println("Unreachable x == 4");
+    }
+    assertThat(x).isNotEqualTo(4);
+
+    // CHECK: if-ne {{.*}}
+    if (x == 67) {  // 0b1000011
+      System.out.println("Reachable x == 67");
+    }
+    assertThat(x).isNotEqualTo(4);
+    // CHECK: return-void
+  }
+  // CHECK: method: virtual redex.ConstantPropagationTest.low6bits_long
+  @Test
+  public void low6bits_long() {
+    long x = 3;  // 0b11
+    if (getRandomInt() > 0) {
+      x = 76;  // 0b1001100
+    }
+
+    // x is known to be in the range of 3 to 76, and x's individual bits of the
+    // lowest 4 bits are unknown.  But low6bits can tell x's lowest 4 bits are
+    // either 0b0011 or 0b1100.
+    // PRECHECK: if-nez {{.*}}
+    // POSTCHECK-NOT: if-nez {{.*}}
+    if (x == 4) {
+      System.out.println("Unreachable x == 4");
+    }
+    assertThat(x).isNotEqualTo(4);
+
+    // CHECK: if-nez {{.*}}
+    if (x == 67) {  // 0b1000011
+      System.out.println("Reachable x == 67");
+    }
+    assertThat(x).isNotEqualTo(4);
+    // CHECK: return-void
+  }
 }
