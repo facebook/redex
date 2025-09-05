@@ -10,6 +10,7 @@
 #include <boost/program_options.hpp>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "DexStore.h"
@@ -25,8 +26,8 @@ using DexStoresVector = std::vector<DexStore>;
 
 class Tool {
  public:
-  Tool(const std::string& name, const std::string& desc, bool verbose = true)
-      : m_name(name), m_desc(desc), m_verbose(verbose) {
+  Tool(std::string name, std::string desc, bool verbose = true)
+      : m_name(std::move(name)), m_desc(std::move(desc)), m_verbose(verbose) {
     ToolRegistry::get().register_tool(this);
   }
 

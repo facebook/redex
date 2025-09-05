@@ -481,14 +481,14 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
       code_points.push_back(cp);
     }
     ssize_t nr_utf8_bytes =
-        utf32_to_utf8_length(&code_points[0], code_points.size());
+        utf32_to_utf8_length(code_points.data(), code_points.size());
     if (nr_utf8_bytes < 0 && utf8_length == 0) {
       cleansed_data = "";
     } else if (nr_utf8_bytes < 0) {
       cleansed_data = "{invalid encoding?}";
     } else {
       cleansed_data.resize(nr_utf8_bytes + 1);
-      utf32_to_utf8(&code_points[0], code_points.size(), &cleansed_data[0],
+      utf32_to_utf8(code_points.data(), code_points.size(), &cleansed_data[0],
                     nr_utf8_bytes + 1);
     }
     string_to_print = cleansed_data.c_str();

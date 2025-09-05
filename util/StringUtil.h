@@ -59,7 +59,7 @@ class StringStorage {
       auto* data_ptr = data.get();
       memcpy(data_ptr, str.data(), str.size());
       m_storage.push_back(std::move(data));
-      it = m_set.emplace(std::string_view(data_ptr, str.size())).first;
+      it = m_set.emplace(data_ptr, str.size()).first;
     }
     return *it;
   }

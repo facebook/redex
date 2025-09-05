@@ -526,7 +526,7 @@ Arguments parse_args(int argc, char* argv[]) {
     }
     assert_abort(vm["assert-abort"].as<std::string>(), 0);
   }
-  if (vm.count("assert-abort-thread")) {
+  if (vm.count("assert-abort-thread") != 0u) {
     CrashFile crash_file;
     if (args.crash_file) {
       set_crash_fd(crash_file.open(*args.crash_file));
@@ -1633,8 +1633,8 @@ void redex_backend(ConfigFiles& conf,
         this_dex_stats.class_size.clear();
         signatures.insert(
             *reinterpret_cast<uint32_t*>(this_dex_stats.signature));
-        output_dexes_stats.push_back(
-            std::make_pair(store.get_name(), std::move(this_dex_stats)));
+        output_dexes_stats.emplace_back(store.get_name(),
+                                        std::move(this_dex_stats));
       }
       {
         auto timer_scope = json_timer.scope();

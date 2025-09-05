@@ -8,6 +8,7 @@
 #include <boost/optional.hpp>
 #include <string>
 #include <unistd.h>
+#include <utility>
 
 class ScopedCommandProfiling final {
  public:
@@ -15,10 +16,12 @@ class ScopedCommandProfiling final {
     std::string command;
     boost::optional<std::string> shutdown_cmd;
     boost::optional<std::string> post_cmd;
-    ProfilerInfo(const std::string& command,
-                 const boost::optional<std::string>& shutdown_cmd,
-                 const boost::optional<std::string>& post_cmd)
-        : command(command), shutdown_cmd(shutdown_cmd), post_cmd(post_cmd) {}
+    ProfilerInfo(std::string command,
+                 boost::optional<std::string> shutdown_cmd,
+                 boost::optional<std::string> post_cmd)
+        : command(std::move(command)),
+          shutdown_cmd(std::move(shutdown_cmd)),
+          post_cmd(std::move(post_cmd)) {}
   };
 
   explicit ScopedCommandProfiling(

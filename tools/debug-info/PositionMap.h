@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct __attribute__((packed)) PositionItem {
@@ -22,11 +23,14 @@ struct Position {
   std::string method;
   std::string filename;
   uint32_t line;
-  Position(const std::string& cls,
-           const std::string& method,
-           const std::string& filename,
+  Position(std::string cls,
+           std::string method,
+           std::string filename,
            uint32_t line)
-      : cls(cls), method(method), filename(filename), line(line) {}
+      : cls(std::move(cls)),
+        method(std::move(method)),
+        filename(std::move(filename)),
+        line(line) {}
 };
 
 struct PositionMap {
