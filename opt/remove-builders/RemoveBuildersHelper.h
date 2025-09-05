@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/dynamic_bitset.hpp>
+#include <utility>
 
 #include "ControlFlow.h"
 #include "DexClass.h"
@@ -95,11 +96,11 @@ class BuilderTransform {
  public:
   BuilderTransform(const init_classes::InitClassesWithSideEffects&
                        init_classes_with_side_effects,
-                   const inliner::InlinerConfig& inliner_config,
+                   inliner::InlinerConfig inliner_config,
                    const Scope& scope,
                    DexStoresVector& stores,
                    bool throws_inline)
-      : m_inliner_config(inliner_config) {
+      : m_inliner_config(std::move(inliner_config)) {
     // Note: We copy global inline config in the class since it seems that it
     // may be configured differently from global inliner_config.throws_inline.
     // Maybe we can refactor this part.

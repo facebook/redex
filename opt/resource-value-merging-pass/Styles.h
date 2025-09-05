@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "DeterministicContainers.h"
 #include "GlobalConfig.h"
 #include "ReachableResources.h"
@@ -28,10 +30,10 @@ class StyleAnalysis {
             additional_roots) {}
   StyleAnalysis(const std::string& zip_dir,
                 const ResourceConfig& global_resources_config,
-                const resources::ReachabilityOptions& options,
+                resources::ReachabilityOptions options,
                 DexStoresVector& stores,
                 const UnorderedSet<uint32_t>& additional_roots)
-      : m_options(options), m_roots(additional_roots) {
+      : m_options(std::move(options)), m_roots(additional_roots) {
     m_options.granular_style_reachability = true;
     m_reachable_resources = std::make_unique<resources::ReachableResources>(
         zip_dir, global_resources_config, m_options);

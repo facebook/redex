@@ -13,7 +13,9 @@
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
+
 #include "TypeInference.h"
+#include <utility>
 
 using TypeEnvironments =
     UnorderedMap<const IRInstruction*, type_inference::TypeEnvironment>;
@@ -108,9 +110,9 @@ class TypedefAnnoChecker {
   explicit TypedefAnnoChecker(
       const StrDefConstants& strdef_constants,
       const IntDefConstants& intdef_constants,
-      const TypedefAnnoCheckerPass::Config& config,
+      TypedefAnnoCheckerPass::Config config,
       const method_override_graph::Graph& method_override_graph)
-      : m_config(config),
+      : m_config(std::move(config)),
         m_strdef_constants(strdef_constants),
         m_intdef_constants(intdef_constants),
         m_method_override_graph(method_override_graph) {}

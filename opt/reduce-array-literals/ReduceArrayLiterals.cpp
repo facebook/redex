@@ -380,7 +380,7 @@ ReduceArrayLiterals::ReduceArrayLiterals(cfg::ControlFlowGraph& cfg,
   for (IRInstruction* new_array_insn : new_array_insns) {
     auto it = array_literals.find(new_array_insn);
     if (it != array_literals.end()) {
-      m_array_literals.push_back(*it);
+      m_array_literals.emplace_back(*it);
     }
   }
   always_assert(array_literals.size() == m_array_literals.size());

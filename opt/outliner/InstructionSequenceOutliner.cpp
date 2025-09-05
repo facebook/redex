@@ -566,9 +566,8 @@ static bool can_outline_opcode(IROpcode opcode, bool outline_control_flow) {
     return false;
 
   default:
-    return !(
-        !outline_control_flow &&
-        (opcode::is_a_conditional_branch(opcode) || opcode::is_switch(opcode)));
+    return outline_control_flow || (!opcode::is_a_conditional_branch(opcode) &&
+                                    !opcode::is_switch(opcode));
   }
 }
 

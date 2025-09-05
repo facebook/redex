@@ -573,14 +573,14 @@ void handle_new_resource(
     uint32_t resource_id,
     const StyleResource& resource,
     std::vector<StyleModificationSpec::Modification>& modifications) {
-  modifications.push_back(StyleModificationSpec::Modification(resource_id));
+  modifications.emplace_back(resource_id);
 
   UnorderedMap<uint32_t, StyleResource::Value> parent_attrs;
   for (const auto& [attr_id, value] : UnorderedIterable(resource.attributes)) {
     parent_attrs.insert({attr_id, value});
   }
-  modifications.push_back(StyleModificationSpec::Modification(
-      resource_id, resource.parent, std::move(parent_attrs)));
+  modifications.emplace_back(resource_id, resource.parent,
+                             std::move(parent_attrs));
 }
 
 void handle_modified_resource(
@@ -592,15 +592,13 @@ void handle_modified_resource(
   const auto removal_attrs =
       find_attribute_differences(initial_resource, optimized_resource);
   for (const auto& [attr_id, _] : UnorderedIterable(removal_attrs)) {
-    modifications.push_back(
-        StyleModificationSpec::Modification(resource_id, attr_id));
+    modifications.emplace_back(resource_id, attr_id);
   }
 
   const auto addition_attrs =
       find_attribute_differences(optimized_resource, initial_resource);
   for (const auto& [attr_id, value] : UnorderedIterable(addition_attrs)) {
-    modifications.push_back(
-        StyleModificationSpec::Modification(resource_id, attr_id, value));
+    modifications.emplace_back(resource_id, attr_id, value);
   }
 
   // Values that exist in initial and optimized but have different values.
@@ -615,18 +613,15 @@ void handle_modified_resource(
 
     const auto& optimized_value = optimized_attr_it->second;
     if (!(initial_value == optimized_value)) {
-      modifications.push_back(
-          StyleModificationSpec::Modification(resource_id, attr_id));
-      modifications.push_back(StyleModificationSpec::Modification(
-          resource_id, attr_id, optimized_value));
+      modifications.emplace_back(resource_id, attr_id);
+      modifications.emplace_back(resource_id, attr_id, optimized_value);
     }
   }
 
   // Add parent modification
   if (initial_resource.parent != optimized_resource.parent) {
-    modifications.push_back(StyleModificationSpec::Modification(
-        resource_id, optimized_resource.parent,
-        UnorderedMap<uint32_t, StyleResource::Value>()));
+    modifications.emplace_back(resource_id, optimized_resource.parent,
+                               UnorderedMap<uint32_t, StyleResource::Value>());
   }
 }
 

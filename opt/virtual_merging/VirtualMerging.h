@@ -119,7 +119,7 @@ class VirtualMerging {
   };
 
   VirtualMerging(DexStoresVector&,
-                 const inliner::InlinerConfig&,
+                 inliner::InlinerConfig,
                  size_t,
                  const api::AndroidSDK* min_sdk_api = nullptr,
                  PerfConfig perf_config = PerfConfig());

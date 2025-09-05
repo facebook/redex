@@ -505,7 +505,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
               } else {
                 // Initializes the register since the field might be
                 // uninitialized.
-                extra_null_regs.push_back(std::make_pair(new_reg, move_opcode));
+                extra_null_regs.emplace_back(new_reg, move_opcode);
               }
             }
 
@@ -611,7 +611,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
 bool has_only_argument(DexMethod* method, DexType* type) {
   DexProto* proto = method->get_proto();
   const auto& args = *proto->get_args();
-  return !(args.size() != 1 || args.at(0) != type);
+  return args.size() == 1 && args.at(0) == type;
 }
 
 /**
