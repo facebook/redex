@@ -2061,7 +2061,7 @@ bool MultiMethodInliner::should_inline_at_call_site(
   if (insn_size != nullptr) {
     *insn_size = inlined_cost->insn_size;
   }
-  if (for_speed) {
+  if (for_speed != nullptr) {
     *for_speed = size_increased;
   }
   return true;
@@ -2637,7 +2637,7 @@ float MultiMethodInliner::compute_profile_guided_discount(
 
   // Discounts only given to calls found to be hot with a high enough appear
   // percentage and in the baseline profile
-  if (!caller_block ||
+  if ((caller_block == nullptr) ||
       !source_blocks::is_hot(
           caller_block,
           m_inliner_cost_config.profile_guided_block_appear_threshold) ||
@@ -2646,7 +2646,7 @@ float MultiMethodInliner::compute_profile_guided_discount(
     return 1.0;
   }
 
-  auto full_cost = get_fully_inlined_cost(callee);
+  const auto* full_cost = get_fully_inlined_cost(callee);
   // Methods smaller than a particular threshold will automatically already be
   // inlined by the ART compiler, so we do not try to bias Redex into inlining.
   constexpr size_t size_threshold = 32;
@@ -2663,7 +2663,7 @@ float MultiMethodInliner::compute_profile_guided_discount(
   uint32_t cold_units = 0;
   // Try to get the best estimate of hotness of inlined callee. If available, we
   // check the reduced code, otherwise we will have to check the full callee.
-  if (reduced_callee) {
+  if (reduced_callee != nullptr) {
     source_blocks::get_hot_cold_units(reduced_callee->code().cfg(), hot_units,
                                       cold_units);
   } else {
@@ -2673,7 +2673,7 @@ float MultiMethodInliner::compute_profile_guided_discount(
 
   // Bias toward inlining if the inlined code is mainly made of hot code.
   float heat_discount = 1.0f;
-  if (hot_units || cold_units) {
+  if ((hot_units != 0u) || (cold_units != 0u)) {
     // Heat threshold is the point at which percentage hotness yields a
     // neutral bias (1.0).
     // Heat discount is the discount given to a method that is 100% made of hot

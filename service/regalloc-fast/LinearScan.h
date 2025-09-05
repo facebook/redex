@@ -279,7 +279,7 @@ class LinearScanAllocator final {
    * interval. If completed (last use < cur def), put the corresponding reg into
    * free queue; otherwise, do nothing.
    */
-  void expire_old_intervals(uint32_t cur_def_idx);
+  void expire_old_intervals(uint32_t end_point);
 
   /*
    * Allocate a register for a vreg for a live-interval with the given

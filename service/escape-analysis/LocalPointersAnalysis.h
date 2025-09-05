@@ -202,8 +202,8 @@ struct EscapeSummary {
 
   // TODO: Tidy complains about an unnecessary copy when using a value type.
   //       This indicates that a move constructor may be missing for ParamSet.
-  EscapeSummary(const ParamSet& ps, std::initializer_list<uint16_t> l)
-      : escaping_parameters(l), returned_parameters(ps) {}
+  EscapeSummary(ParamSet ps, std::initializer_list<uint16_t> l)
+      : escaping_parameters(l), returned_parameters(std::move(ps)) {}
 
   static EscapeSummary from_s_expr(const sparta::s_expr&);
 

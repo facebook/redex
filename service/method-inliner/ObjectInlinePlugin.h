@@ -24,9 +24,9 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
 
  public:
   ObjectInlinePlugin(
-      const FieldSetMap& field_sets,
+      FieldSetMap field_sets,
       const UnorderedMap<DexFieldRef*, DexFieldRef*>& field_swaps,
-      const std::vector<reg_t>& srcs,
+      std::vector<reg_t> srcs,
       boost::optional<reg_t> value_register,
       boost::optional<reg_t> caller_this,
       DexType* callee_type);

@@ -7,6 +7,8 @@
 
 #include "ObjectInlinePlugin.h"
 
+#include <utility>
+
 #include "CFGInliner.h"
 #include "CFGMutation.h"
 #include "IROpcode.h"
@@ -20,15 +22,15 @@ using namespace cfg;
 using namespace object_inliner_plugin;
 
 ObjectInlinePlugin::ObjectInlinePlugin(
-    const FieldSetMap& field_sets,
+    FieldSetMap field_sets,
     const UnorderedMap<DexFieldRef*, DexFieldRef*>& field_swaps,
-    const std::vector<reg_t>& srcs,
+    std::vector<reg_t> srcs,
     boost::optional<reg_t> value_register,
     boost::optional<reg_t> caller_this,
     DexType* /*callee_type*/)
-    : m_initial_field_sets(field_sets),
+    : m_initial_field_sets(std::move(field_sets)),
       m_field_swaps(field_swaps),
-      m_srcs(srcs),
+      m_srcs(std::move(srcs)),
       m_value_reg(value_register),
       m_caller_this_reg(caller_this) {}
 
