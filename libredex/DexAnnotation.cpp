@@ -996,9 +996,9 @@ std::string DexEncodedValueString::show() const {
 }
 
 std::string DexEncodedValueString::show_deobfuscated() const {
-  auto dex_string = string();
+  const auto* dex_string = string();
   auto starts_with_type_name = [](const std::string_view& s) {
-    auto i = s.begin();
+    const auto* i = s.begin();
     while (i != s.end() && *i == '[') {
       i++;
     }
@@ -1016,7 +1016,7 @@ std::string DexEncodedValueString::show_deobfuscated() const {
         maybe_type_name.pop_back();
         maybe_type_name.push_back(';');
       }
-      auto maybe_type = DexType::get_type(maybe_type_name);
+      auto* maybe_type = DexType::get_type(maybe_type_name);
       if (maybe_type != nullptr) {
         auto result = ::show_deobfuscated(maybe_type);
         always_assert(!result.empty());

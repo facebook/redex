@@ -34,7 +34,7 @@ size_t get_prime_number_greater_or_equal_to(size_t value) {
   };
   value >>= 3;
   size_t idx = 0;
-  while (value >>= 1 != 0u) {
+  while ((value >>= 1) != 0) {
     idx++;
   }
   if (idx >= primes.size()) {

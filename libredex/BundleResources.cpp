@@ -2546,8 +2546,7 @@ std::vector<StyleResource::Value::Span> create_styled_string(
     const ::aapt::pb::Item& item) {
   std::vector<StyleResource::Value::Span> spans;
   for (const auto& span : item.styled_str().span()) {
-    spans.push_back(StyleResource::Value::Span{span.tag(), span.first_char(),
-                                               span.last_char()});
+    spans.emplace_back(span.tag(), span.first_char(), span.last_char());
   }
   return spans;
 }

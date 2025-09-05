@@ -162,7 +162,7 @@ void BaselineProfile::load_classes(const Scope& scope,
   // ahead of time. We cannot rely on debofuscated name lookup to be enabled.
   UnorderedMap<std::string_view, DexClass*> unobf_to_type;
   walk::classes(scope, [&](DexClass* cls) {
-    auto* deobf = cls->get_deobfuscated_name_or_null();
+    const auto* deobf = cls->get_deobfuscated_name_or_null();
     if (deobf != nullptr) {
       unobf_to_type.emplace(deobf->str(), cls);
     } else {

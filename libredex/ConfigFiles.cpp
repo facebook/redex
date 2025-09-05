@@ -12,6 +12,7 @@
 #include <fstream>
 #include <json/json.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "BaselineProfileConfig.h"
@@ -72,9 +73,9 @@ void from_chars(std::string_view s, int64_t* res) {
 }
 } // namespace
 
-ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
+ConfigFiles::ConfigFiles(const Json::Value& config, std::string outdir)
     : m_json(config),
-      outdir(outdir),
+      outdir(std::move(outdir)),
       m_global_config(
           std::make_unique<GlobalConfig>(GlobalConfig::default_registry())),
       m_proguard_map(

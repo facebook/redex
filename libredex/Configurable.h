@@ -191,7 +191,7 @@ class Configurable {
   virtual std::string get_config_name() = 0;
 
   /** Returns help text explaining this Configurable's purpose. */
-  virtual std::string get_config_doc() { return default_doc(); };
+  virtual std::string get_config_doc() { return default_doc(); }
   static std::string trim(std::string s);
 
   /**
@@ -270,10 +270,10 @@ class Configurable {
       const bindflags_t,
       const Configurable::ReflectionParam::Type,
       const std::tuple<std::string, Configurable::Reflection>&,
-      const Json::Value)>;
+      const Json::Value&)>;
 
   using ReflectorTraitFunc =
-      std::function<void(const std::string&, const Json::Value)>;
+      std::function<void(const std::string&, const Json::Value&)>;
 
   template <typename T>
   struct DefaultValueType {

@@ -3267,7 +3267,7 @@ class IteratorMapper {
   using reference = IROpcode&;
   using iterator_category = std::random_access_iterator_tag;
 
-  explicit IteratorMapper(const InternalIterator& it) : m_internal_it(it) {}
+  explicit IteratorMapper(InternalIterator it) : m_internal_it(std::move(it)) {}
   IteratorMapper(const IteratorMapper<InternalIterator>& other)
       : m_internal_it(other.m_internal_it) {}
   ~IteratorMapper() {}
