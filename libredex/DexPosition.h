@@ -147,7 +147,7 @@ class PositionPatternSwitchManager {
 
 class PositionMapper {
  public:
-  virtual ~PositionMapper(){};
+  virtual ~PositionMapper() {}
   virtual const DexString* get_source_file(const DexClass*) = 0;
   virtual uint32_t position_to_line(DexPosition*) = 0;
   virtual void register_position(DexPosition* pos) = 0;
@@ -178,8 +178,8 @@ class RealPositionMapper : public PositionMapper {
   void write_map_v2();
 
  public:
-  explicit RealPositionMapper(const std::string& filename_v2)
-      : m_filename_v2(filename_v2) {}
+  explicit RealPositionMapper(std::string filename_v2)
+      : m_filename_v2(std::move(filename_v2)) {}
   const DexString* get_source_file(const DexClass*) override;
   uint32_t position_to_line(DexPosition*) override;
   void register_position(DexPosition* pos) override;

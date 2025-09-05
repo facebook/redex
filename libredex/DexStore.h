@@ -56,7 +56,7 @@ class DexStore {
   bool m_generated = false;
 
  public:
-  explicit DexStore(const DexMetadata& metadata) : m_metadata(metadata){};
+  explicit DexStore(DexMetadata metadata) : m_metadata(std::move(metadata)) {}
   explicit DexStore(std::string name, std::vector<std::string> deps = {});
 
   const std::string& get_name() const;
@@ -127,11 +127,11 @@ class DexStoreClassesIterator {
 
   DexStoreClassesIterator begin() const {
     return DexStoreClassesIterator(m_stores);
-  };
+  }
   DexStoreClassesIterator end() const {
     return DexStoreClassesIterator(m_stores, m_stores.end(),
                                    m_stores.back().get_dexen().end());
-  };
+  }
 
   bool operator==(const DexStoreClassesIterator& rhs) const {
     return m_current_classes == rhs.m_current_classes;
@@ -220,8 +220,7 @@ class XStoreRefs {
 
  public:
   explicit XStoreRefs(const DexStoresVector& stores);
-  XStoreRefs(const DexStoresVector& stores,
-             const std::string& shared_module_prefix);
+  XStoreRefs(const DexStoresVector& stores, std::string shared_module_prefix);
 
   /**
    * Gets transitive dependencies. Includes dependencies on root store, but

@@ -50,7 +50,7 @@ struct DexFieldSpec {
 
   bool operator==(const DexFieldSpec& r) const {
     return cls == r.cls && name == r.name && type == r.type;
-  };
+  }
 };
 
 namespace dex_member_refs {

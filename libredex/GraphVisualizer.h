@@ -10,6 +10,7 @@
 #include <functional>
 #include <iosfwd>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 #include <boost/optional/optional.hpp>
@@ -91,8 +92,8 @@ class ClassCFGStream {
 
 class Classes {
  public:
-  explicit Classes(const std::string& file_name, bool write_after_arch_pass)
-      : m_file_name(file_name),
+  explicit Classes(std::string file_name, bool write_after_arch_pass)
+      : m_file_name(std::move(file_name)),
         m_write_after_each_pass(write_after_arch_pass) {}
 
   bool add(const std::string& class_name, bool add_initial_pass = true);

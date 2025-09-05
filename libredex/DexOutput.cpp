@@ -20,6 +20,7 @@
 #include <memory>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <utility>
 
 #ifdef _MSC_VER
 // TODO: Rewrite open/write/close with C/C++ standards. But it works for now.
@@ -581,7 +582,7 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     UnorderedMap<DexMethod*, uint64_t>* method_to_id,
     UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    const DexOutputConfig& dex_output_config,
+    DexOutputConfig dex_output_config,
     int min_sdk)
     : m_classes(classes),
       m_output_size((debug_info_kind == DebugInfoKind::BytecodeDebugger
@@ -597,7 +598,7 @@ DexOutput::DexOutput(
       m_iodi_metadata(iodi_metadata),
       m_config_files(config_files),
       m_min_sdk(min_sdk),
-      m_dex_output_config(dex_output_config) {
+      m_dex_output_config(std::move(dex_output_config)) {
   // Ensure a clean slate.
   memset(m_output.get(), 0, m_output_size);
 
@@ -1142,7 +1143,7 @@ void DexOutput::unique_annotations(annomap_t& annomap,
     annomap[anno] = m_offset;
     /* Not a dupe, encode... */
     uint8_t* annoout = (uint8_t*)(m_output.get() + m_offset);
-    memcpy(annoout, &annotation_bytes[0], annotation_bytes.size());
+    memcpy(annoout, annotation_bytes.data(), annotation_bytes.size());
     inc_offset(annotation_bytes.size());
     annocnt++;
   }
@@ -1175,7 +1176,7 @@ void DexOutput::unique_asets(annomap_t& annomap,
     asetmap[aset] = m_offset;
     /* Not a dupe, encode... */
     uint8_t* asetout = (uint8_t*)(m_output.get() + m_offset);
-    memcpy(asetout, &aset_bytes[0], aset_bytes.size() * sizeof(uint32_t));
+    memcpy(asetout, aset_bytes.data(), aset_bytes.size() * sizeof(uint32_t));
     inc_offset(aset_bytes.size() * sizeof(uint32_t));
     asetcnt++;
   }
@@ -1213,7 +1214,7 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
     xrefmap[xref] = m_offset;
     /* Not a dupe, encode... */
     uint8_t* xrefout = (uint8_t*)(m_output.get() + m_offset);
-    memcpy(xrefout, &xref_bytes[0], xref_bytes.size() * sizeof(uint32_t));
+    memcpy(xrefout, xref_bytes.data(), xref_bytes.size() * sizeof(uint32_t));
     inc_offset(xref_bytes.size() * sizeof(uint32_t));
     xrefcnt++;
   }
@@ -1246,7 +1247,7 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
     adirmap[adir] = m_offset;
     /* Not a dupe, encode... */
     uint8_t* adirout = (uint8_t*)(m_output.get() + m_offset);
-    memcpy(adirout, &adir_bytes[0], adir_bytes.size() * sizeof(uint32_t));
+    memcpy(adirout, adir_bytes.data(), adir_bytes.size() * sizeof(uint32_t));
     inc_offset(adir_bytes.size() * sizeof(uint32_t));
     adircnt++;
   }

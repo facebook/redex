@@ -7,6 +7,8 @@
 
 #include "GlobalConfig.h"
 
+#include <utility>
+
 void InlinerConfig::bind_config() {
   bind("delete_non_virtuals", delete_non_virtuals, delete_non_virtuals);
   bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
@@ -266,8 +268,8 @@ void GlobalConfig::bind_config() {
 }
 
 GlobalConfigRegistryEntry::GlobalConfigRegistryEntry(
-    const std::string& name, BindOperationFn bind_operation)
-    : name(name), bind_operation(std::move(bind_operation)) {}
+    std::string name, BindOperationFn bind_operation)
+    : name(std::move(name)), bind_operation(std::move(bind_operation)) {}
 
 GlobalConfigRegistry& GlobalConfig::default_registry() {
   static GlobalConfigRegistry registry{
