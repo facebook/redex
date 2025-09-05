@@ -395,7 +395,7 @@ void IRInstruction::denormalize_registers() {
 
 bit_width_t required_bit_width(uint16_t v) {
   bit_width_t result{1};
-  while (v >>= 1 != 0u) {
+  while ((v >>= 1) != 0) {
     ++result;
   }
   return result;

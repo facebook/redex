@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <memory>
+#include <utility>
 
 #include "Debug.h"
 #include "DeterministicContainers.h"
@@ -23,8 +24,8 @@ class Lazy {
   Lazy& operator=(const Lazy&) = delete;
   explicit Lazy(const std::function<T()>& creator)
       : m_creator([creator] { return std::make_unique<T>(creator()); }) {}
-  explicit Lazy(const std::function<std::unique_ptr<T>()>& creator)
-      : m_creator(creator) {}
+  explicit Lazy(std::function<std::unique_ptr<T>()> creator)
+      : m_creator(std::move(creator)) {}
   // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
   operator bool() const { return !!m_value; }
   T& operator*() {
@@ -64,7 +65,7 @@ class LazyUnorderedMap {
   LazyUnorderedMap& operator=(const LazyUnorderedMap&) = delete;
   explicit LazyUnorderedMap(std::function<T(const Key& key)> creator)
       : m_creator(std::move(creator)) {}
-  T& operator[](const Key key) {
+  T& operator[](const Key& key) {
     auto it = m_map.find(key);
     if (it == m_map.end()) {
       it = m_map.emplace(key, m_creator(key)).first;

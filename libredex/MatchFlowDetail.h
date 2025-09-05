@@ -14,6 +14,7 @@
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <sparta/HashedSetAbstractDomain.h>
@@ -207,7 +208,8 @@ struct DataFlowGraph {
   //
   // to simplify referencing source nodes from edges.
   struct Edge {
-    Edge(Node from, src_index_t src, Node to) : from{from}, src{src}, to{to} {}
+    Edge(Node from, src_index_t src, Node to)
+        : from{std::move(from)}, src{src}, to{std::move(to)} {}
 
     Node from;
     src_index_t src;

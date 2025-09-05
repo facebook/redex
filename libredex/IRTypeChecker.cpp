@@ -8,6 +8,7 @@
 #include "IRTypeChecker.h"
 
 #include <boost/optional/optional.hpp>
+#include <utility>
 
 #include "BigBlocks.h"
 #include "Debug.h"
@@ -348,7 +349,8 @@ class Result final {
  private:
   bool is_ok{true};
   std::string m_error_message;
-  explicit Result(const std::string& s) : is_ok(false), m_error_message(s) {}
+  explicit Result(std::string s)
+      : is_ok(false), m_error_message(std::move(s)) {}
   Result() = default;
 };
 

@@ -143,7 +143,7 @@ class OptDataMapper {
   /**
    * Enable logging for the rest of this build.
    */
-  void enable_logs() { m_logs_enabled = true; };
+  void enable_logs() { m_logs_enabled = true; }
 
   /**
    * Records the given opt and attributes it to the given class/method/insn.

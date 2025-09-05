@@ -21,6 +21,7 @@
 #include <thread>
 #include <typeinfo>
 #include <unordered_set>
+#include <utility>
 
 #ifdef __linux__
 #include <sys/wait.h>
@@ -665,8 +666,8 @@ class AfterPassSizes {
     PassManager::PassInfo* pass_info;
     std::string tmp_dir;
     pid_t pid;
-    Job(PassManager::PassInfo* pass_info, const std::string& tmp_dir, pid_t pid)
-        : pass_info(pass_info), tmp_dir(tmp_dir), pid(pid) {}
+    Job(PassManager::PassInfo* pass_info, std::string tmp_dir, pid_t pid)
+        : pass_info(pass_info), tmp_dir(std::move(tmp_dir)), pid(pid) {}
   };
   std::list<Job> m_open_jobs;
 
@@ -1188,16 +1189,16 @@ PassManager::PassManager(
                   ConfigFiles(Json::Value(Json::objectValue)),
                   RedexOptions{}) {}
 PassManager::PassManager(
-    const std::vector<Pass*>& passes,
+    std::vector<Pass*> passes,
     std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
     const ConfigFiles& config,
-    const RedexOptions& options,
+    RedexOptions options,
     redex_properties::Manager* properties_manager)
     : m_asset_mgr(get_apk_dir(config)),
-      m_registered_passes(passes),
+      m_registered_passes(std::move(passes)),
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),
-      m_redex_options(options),
+      m_redex_options(std::move(options)),
       m_testing_mode(false),
       m_internal_fields(new InternalFields()),
       m_properties_manager(properties_manager) {

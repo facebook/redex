@@ -7,11 +7,14 @@
 
 #include "Pass.h"
 
+#include <utility>
+
 #include "AnalysisUsage.h"
 #include "DexUtil.h"
 #include "PassRegistry.h"
 
-Pass::Pass(const std::string& name, Kind kind) : m_name(name), m_kind(kind) {
+Pass::Pass(std::string name, Kind kind)
+    : m_name(std::move(name)), m_kind(kind) {
   PassRegistry::get().register_pass(this);
 }
 

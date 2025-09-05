@@ -49,7 +49,7 @@ std::vector<SoLibrary> get_so_libraries(const fs::path& path) {
     if (item.path().extension().string() == expected_extension) {
       auto lib_name = item.path().filename().stem().string();
       TRACE(NATIVE, 3, "Found lib name %s", lib_name.c_str());
-      ret.emplace_back(SoLibrary{lib_name, file_name});
+      ret.emplace_back(lib_name, file_name);
     }
   }
 

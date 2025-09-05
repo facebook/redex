@@ -704,7 +704,7 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
   result.emplace_back(".src_block");
   const SourceBlock* src = mie->src_block.get();
 
-  result.emplace_back(s_expr(show(src->src)));
+  result.emplace_back(show(src->src));
   result.emplace_back(std::to_string(src->id));
 
   std::vector<s_expr> vals;
@@ -715,7 +715,7 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
           std::vector<s_expr>{s_expr(std::to_string(val->val)),
                               s_expr(std::to_string(val->appear100))});
     } else {
-      vals.emplace_back(s_expr());
+      vals.emplace_back();
     }
   }
   result.emplace_back(std::move(vals));
