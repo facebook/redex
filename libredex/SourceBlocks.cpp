@@ -481,7 +481,7 @@ struct CustomValueInsertHelper {
     for (size_t i = 0; i < interaction_size; ++i) {
       float hit = -1;
       float appear100 = -1;
-      interaction_pairs.emplace_back(SourceBlock::Val{hit, appear100});
+      interaction_pairs.emplace_back(hit, appear100);
     }
 
     return interaction_pairs;
@@ -1229,7 +1229,7 @@ void scale_source_blocks(cfg::Block* block) {
     }
 
     auto* pred_sb = source_blocks::get_last_source_block(pred->src());
-    if (!pred_sb) {
+    if (pred_sb == nullptr) {
       // Missing information; give up
       return;
     }

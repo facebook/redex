@@ -137,7 +137,7 @@ RedexContext::~RedexContext() {
         std::vector<std::function<void()>> fns;
         fns.reserve(method_buckets_count);
         for (size_t bucket = 0; bucket < method_buckets_count; bucket++) {
-          fns.push_back([bucket, this]() {
+          fns.emplace_back([bucket, this]() {
             // Delete DexMethods. Use set to prevent double freeing aliases
             UnorderedSet<DexMethod*> delete_methods;
             for (auto&& [_, loc] : UnorderedIterable(s_method_map)) {
@@ -161,7 +161,7 @@ RedexContext::~RedexContext() {
         std::vector<std::function<void()>> fns;
         fns.reserve(field_buckets_count);
         for (size_t bucket = 0; bucket < field_buckets_count; bucket++) {
-          fns.push_back([bucket, this]() {
+          fns.emplace_back([bucket, this]() {
             // Delete DexFields. Use set to prevent double freeing aliases
             UnorderedSet<DexField*> delete_fields;
             for (auto&& [_, loc] : UnorderedIterable(s_field_map)) {
@@ -186,14 +186,14 @@ RedexContext::~RedexContext() {
         for (size_t i = 0; i < s_small_string_set.size(); ++i) {
           auto* small_string_set = s_small_string_set[i];
           small_strings_size += small_string_set->size();
-          fns.push_back([small_string_set]() {
+          fns.emplace_back([small_string_set]() {
             small_string_set->clear();
             delete small_string_set;
           });
         }
         for (auto& segment : s_large_string_set) {
           large_strings_size += segment.size();
-          fns.push_back([&segment]() { segment.release(); });
+          fns.emplace_back([&segment]() { segment.release(); });
         }
         return fns;
       }(),

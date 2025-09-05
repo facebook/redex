@@ -8,6 +8,7 @@
 #include "Timer.h"
 
 #include <list>
+#include <utility>
 
 #include "Trace.h"
 
@@ -17,8 +18,8 @@ Timer::times_t Timer::s_times;
 std::mutex AccumulatingTimer::s_lock;
 AccumulatingTimer::times_impl_t* AccumulatingTimer::s_times{nullptr};
 
-Timer::Timer(const std::string& msg, bool indent)
-    : m_msg(msg),
+Timer::Timer(std::string msg, bool indent)
+    : m_msg(std::move(msg)),
       m_start(std::chrono::high_resolution_clock::now()),
       m_indent(indent) {
   if (indent) {

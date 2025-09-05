@@ -154,7 +154,7 @@ s_expr dex_method_to_s_expr(DexMethodRef* dex_method) {
   DexProto* proto = dex_method->get_proto();
   std::vector<s_expr> signature;
   for (DexType* arg : *proto->get_args()) {
-    signature.push_back(s_expr(arg->get_name()->str()));
+    signature.emplace_back(arg->get_name()->str());
   }
   return s_expr({s_expr(dex_method->get_class()->get_name()->str()),
                  s_expr(dex_method->get_name()->str()),
@@ -374,7 +374,7 @@ std::vector<std::pair<size_t, PointsToVariable>> PointsToAction::get_arguments()
     if (binding.first >= 0) {
       // We filter out special arguments (like the destination variable), which
       // all have a negative index.
-      args.push_back(binding);
+      args.emplace_back(binding);
     }
   }
   return args;
@@ -436,10 +436,10 @@ PointsToAction PointsToAction::invoke_operation(
   std::vector<std::pair<int32_t, PointsToVariable>> bindings;
   bindings.reserve(args.size() + 2);
   if (dest) {
-    bindings.push_back({dest_key(), *dest});
+    bindings.emplace_back(dest_key(), *dest);
   }
   if (instance) {
-    bindings.push_back({instance_key(), *instance});
+    bindings.emplace_back(instance_key(), *instance);
   }
   bindings.insert(bindings.end(), args.begin(), args.end());
   return PointsToAction(operation, bindings);
@@ -457,9 +457,9 @@ PointsToAction PointsToAction::disjunction(PointsToVariable dest,
   std::vector<std::pair<int32_t, PointsToVariable>> args;
   int32_t arg = 0;
   for (const auto& var : vars) {
-    args.push_back({arg++, var});
+    args.emplace_back(arg++, var);
   }
-  args.push_back({dest_key(), dest});
+  args.emplace_back(dest_key(), dest);
   return PointsToAction(PointsToOperation(PTS_DISJUNCTION), args);
 }
 
@@ -510,7 +510,7 @@ boost::optional<PointsToAction> PointsToAction::from_s_expr(const s_expr& e) {
     if (!var_opt) {
       return {};
     }
-    arguments.push_back({arg, *var_opt});
+    arguments.emplace_back(arg, *var_opt);
   }
   return {PointsToAction(*operation_opt, arguments)};
 }
@@ -1162,8 +1162,9 @@ class PointsToActionGenerator final {
     int32_t arg_pos = 0;
     for (DexType* dex_type : *signature) {
       if (type::is_object(dex_type)) {
-        args.push_back({arg_pos, get_variable_from_anchor_set(
-                                     state.get(insn->src(src_idx++)))});
+        args.emplace_back(
+            arg_pos,
+            get_variable_from_anchor_set(state.get(insn->src(src_idx++))));
       } else {
         // We skip this argument.
         ++src_idx;

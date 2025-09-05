@@ -17,7 +17,7 @@
 #include <vector>
 
 struct Timer {
-  explicit Timer(const std::string& msg, bool indent = true);
+  explicit Timer(std::string msg, bool indent = true);
   ~Timer();
 
   using times_t = std::vector<std::pair<std::string, double>>;

@@ -98,7 +98,8 @@ struct StringOrReference {
   const std::string str;
   const uint32_t ref;
 
-  explicit StringOrReference(const std::string& value) : str(value), ref(0) {}
+  explicit StringOrReference(std::string value)
+      : str(std::move(value)), ref(0) {}
   explicit StringOrReference(const uint32_t& value) : ref(value) {}
 
   bool is_reference() const { return ref != 0; }
@@ -370,12 +371,12 @@ struct ComponentTagInfo {
   UnorderedSet<std::string> authority_classes;
 
   ComponentTagInfo(ComponentTag tag,
-                   const std::string& classname,
+                   std::string classname,
                    BooleanXMLAttribute is_exported,
                    std::string permission,
                    std::string protection_level)
       : tag(tag),
-        classname(classname),
+        classname(std::move(classname)),
         is_exported(is_exported),
         permission(std::move(permission)),
         protection_level(std::move(protection_level)) {}
