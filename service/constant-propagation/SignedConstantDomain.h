@@ -170,16 +170,16 @@ class SignedConstantDomain final
       return Bounds{integer != 0, integer, integer};
     }
 
-    static const Bounds& top() {
-      static const Bounds res{false, MIN, MAX};
+    static constexpr Bounds top() {
+      constexpr Bounds res{false, MIN, MAX};
       return res;
     }
-    static const Bounds& bottom() {
-      static const Bounds res{true, MAX, MIN};
+    static constexpr Bounds bottom() {
+      constexpr Bounds res{true, MAX, MIN};
       return res;
     }
-    static const Bounds& nez() {
-      static const Bounds res{true, MIN, MAX};
+    static constexpr Bounds nez() {
+      constexpr Bounds res{true, MIN, MAX};
       return res;
     }
   };
@@ -225,7 +225,7 @@ class SignedConstantDomain final
     bool is_bottom() const { return low6bits_state == 0u; }
     bool is_top() const { return *this == top(); }
 
-    void set_to_bottom() { low6bits_state = 0u; }
+    constexpr void set_to_bottom() { low6bits_state = 0u; }
     void set_to_top() { *this = top(); }
 
     Low6Bits& join_with(const Low6Bits& that) {
@@ -245,9 +245,9 @@ class SignedConstantDomain final
 
     uint64_t get_low6bits_state() const { return low6bits_state; }
 
-    static Low6Bits top() { return Low6Bits(); }
+    static constexpr Low6Bits top() { return Low6Bits(); }
 
-    static Low6Bits bottom() {
+    static constexpr Low6Bits bottom() {
       Low6Bits res;
       res.set_to_bottom();
       return res;
@@ -387,13 +387,13 @@ class SignedConstantDomain final
     uint64_t one_bit_states{std::numeric_limits<uint64_t>::max()};
     uint64_t zero_bit_states{std::numeric_limits<uint64_t>::max()};
 
-    void set_all_to(bool zero, bool one) {
+    constexpr void set_all_to(bool zero, bool one) {
       zero_bit_states = zero ? std::numeric_limits<uint64_t>::max() : 0u;
       one_bit_states = one ? std::numeric_limits<uint64_t>::max() : 0u;
     }
 
     // Construct with all bits set to a given bit state.
-    Bitset(bool zero, bool one) { set_all_to(zero, one); }
+    constexpr Bitset(bool zero, bool one) { set_all_to(zero, one); }
 
    public:
     Bitset() = default;
@@ -496,12 +496,12 @@ class SignedConstantDomain final
       return (determinable_zero_bits & ~integer) != determinable_zero_bits;
     }
 
-    static const Bitset& bottom() {
-      static const Bitset res(false, false);
+    static constexpr Bitset bottom() {
+      constexpr Bitset res(false, false);
       return res;
     }
-    static const Bitset& top() {
-      static const Bitset res(true, true);
+    static constexpr Bitset top() {
+      constexpr Bitset res(true, true);
       return res;
     }
   };
