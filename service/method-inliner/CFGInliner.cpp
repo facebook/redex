@@ -398,10 +398,12 @@ void CFGInliner::connect_cfgs(bool inline_after,
     }
 
     auto last_insn = b->get_last_insn();
-    auto b_it = b->to_cfg_instruction_iterator(last_insn);
-    auto* pos = cfg->get_dbg_pos(b_it);
-    if (pos != nullptr) {
-      cfg->insert_before(c, c->begin(), std::make_unique<DexPosition>(*pos));
+    if (last_insn != b->end()) {
+      auto b_it = b->to_cfg_instruction_iterator(last_insn);
+      auto* pos = cfg->get_dbg_pos(b_it);
+      if (pos != nullptr) {
+        cfg->insert_before(c, c->begin(), std::make_unique<DexPosition>(*pos));
+      }
     }
     cfg->add_edge(c, b, EDGE_GOTO);
     return c;
