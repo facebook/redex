@@ -44,6 +44,6 @@ const char* kAsanDefaultOptions =
 
 extern "C" NO_SANITIZE VISIBLE __attribute__((__weak__)) const char*
 // NOLINTNEXTLINE(misc-definitions-in-headers)
-__asan_default_options() {
+_asan_default_options() {
   return kAsanDefaultOptions;
 }

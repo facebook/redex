@@ -87,11 +87,11 @@ std::string_view read_path(std::string_view& data, unsigned int* line) {
 std::vector<std::pair<std::string_view, unsigned int>> read_paths(
     std::string_view& data, unsigned int* line) {
   std::vector<std::pair<std::string_view, unsigned int>> paths;
-  paths.push_back({read_path(data, line), *line});
+  paths.emplace_back(read_path(data, line), *line);
   skip_whitespace(data, line);
   while (!data.empty() && data[0] == kPathDelim) {
     data = data.substr(1);
-    paths.push_back({read_path(data, line), *line});
+    paths.emplace_back(read_path(data, line), *line);
     skip_whitespace(data, line);
   }
   return paths;

@@ -234,7 +234,7 @@ class TypeEnvironment final
   TypeDomain get_type(reg_t reg) const { return get<0>().get(reg); }
   IntTypeDomain get_int_type(reg_t reg) const { return get<2>().get(reg); }
 
-  void set_type(reg_t reg, const TypeDomain type) {
+  void set_type(reg_t reg, const TypeDomain& type) {
     apply<0>([=](auto env) { env->set(reg, type); }, true);
   }
 

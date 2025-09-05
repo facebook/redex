@@ -953,7 +953,7 @@ void parse(const std::vector<Token>& vec,
       ++stats.parse_errors;
     }
   };
-  auto check_keep = [&stats](const auto opt_val) {
+  auto check_keep = [&stats](const auto& opt_val) {
     if (!opt_val) {
       ++stats.parse_errors;
     }
