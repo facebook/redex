@@ -1264,6 +1264,139 @@ TEST_F(SourceBlocksTest, source_block_appear_100_inequality) {
   ASSERT_NE(sb1, sb2);
 }
 
+TEST_F(SourceBlocksTest, dedup_block_with_source_blocks_in_instrumentation) {
+
+  g_redex->instrument_mode = true;
+
+  auto* foo_method = create_method("LFoo");
+
+  const auto* const kCode = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      (:C)
+      (mul-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (invoke-static () "LFooX;.bar:()V")
+      (move-result v1)
+      (goto :E)
+
+      (:D)
+      (mul-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (invoke-static () "LFooX;.bar:()V")
+      (move-result v1)
+      (goto :E)
+
+      (:E)
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LFooX;", show(foo_method->get_class()))));
+
+  foo_method->get_code()->build_cfg();
+
+  auto res = source_blocks::insert_source_blocks(
+      foo_method, &foo_method->get_code()->cfg(), {},
+      /*serialize=*/true, true);
+
+  // Set the source block ids so that two are the same
+  auto blocks = foo_method->get_code()->cfg().blocks();
+  ASSERT_EQ(blocks.size(), 4);
+  auto block1_sbs = source_blocks::gather_source_blocks(blocks[1]);
+  auto block2_sbs = source_blocks::gather_source_blocks(blocks[2]);
+  ASSERT_EQ(block1_sbs.size(), 2);
+  ASSERT_EQ(block2_sbs.size(), 2);
+  auto* sb1 = block2_sbs[0];
+  auto* sb2 = block2_sbs[1];
+  sb1->id = 1;
+  sb2->id = 2;
+
+  dedup_blocks_impl::Config empty_config;
+  dedup_blocks_impl::DedupBlocks db(&empty_config, foo_method);
+  db.run();
+  foo_method->get_code()->clear_cfg();
+
+  foo_method->get_code()->build_cfg();
+
+  auto post_dedup_blocks = foo_method->get_code()->cfg().blocks();
+  ASSERT_EQ(post_dedup_blocks.size(), 2);
+}
+
+TEST_F(SourceBlocksTest,
+       do_not_dedup_block_named_source_blocks_in_instrumentation) {
+
+  g_redex->instrument_mode = true;
+
+  auto* foo_method = create_method("LFoo");
+
+  const auto* const kCode = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      (:C)
+      (mul-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (invoke-static () "LFooX;.bar:()V")
+      (move-result v1)
+      (goto :E)
+
+      (:D)
+      (mul-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (invoke-static () "LFooX;.bar:()V")
+      (move-result v1)
+      (goto :E)
+
+      (:E)
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LFooX;", show(foo_method->get_class()))));
+
+  foo_method->get_code()->build_cfg();
+
+  auto res = source_blocks::insert_source_blocks(
+      foo_method, &foo_method->get_code()->cfg(), {},
+      /*serialize=*/true, true);
+
+  // Set the source block ids so that two are the same
+  auto blocks = foo_method->get_code()->cfg().blocks();
+  ASSERT_EQ(blocks.size(), 4);
+  auto block1_sbs = source_blocks::gather_source_blocks(blocks[1]);
+  auto block2_sbs = source_blocks::gather_source_blocks(blocks[2]);
+  ASSERT_EQ(block1_sbs.size(), 2);
+  ASSERT_EQ(block2_sbs.size(), 2);
+  // auto sb1 = block1_sbs[1];
+  auto* sb1 = block2_sbs[0];
+  auto* sb2 = block2_sbs[1];
+  sb1->id = 1;
+  sb2->id = 2;
+
+  // Set the source block src so the origin method is different
+  sb1->src = DexString::make_string("LFoo0;.baz:()V");
+  sb2->src = DexString::make_string("LFoo0;.baz:()V");
+
+  dedup_blocks_impl::Config empty_config;
+  dedup_blocks_impl::DedupBlocks db(&empty_config, foo_method);
+  db.run();
+  foo_method->get_code()->clear_cfg();
+  foo_method->get_code()->build_cfg();
+
+  auto post_dedup_blocks = foo_method->get_code()->cfg().blocks();
+  ASSERT_EQ(post_dedup_blocks.size(), 4);
+}
+
 TEST_F(SourceBlocksTest,
        do_not_dedup_block_chained_source_blocks_in_instrumentation) {
 
@@ -1272,6 +1405,76 @@ TEST_F(SourceBlocksTest,
   auto* foo_method = create_method("LFoo");
 
   const auto* kCode = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      (:C)
+      (mul-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (invoke-static () "LFooX;.bar:()V")
+      (move-result v1)
+      (goto :E)
+
+      (:D)
+      (mul-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (invoke-static () "LFooX;.bar:()V")
+      (move-result v1)
+      (goto :E)
+
+      (:E)
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LFooX;", show(foo_method->get_class()))));
+
+  foo_method->get_code()->build_cfg();
+
+  auto res = source_blocks::insert_source_blocks(
+      foo_method, &foo_method->get_code()->cfg(), {},
+      /*serialize=*/true, true);
+
+  // Set the source block ids so that two are the same
+  auto blocks = foo_method->get_code()->cfg().blocks();
+  ASSERT_EQ(blocks.size(), 4);
+  auto block1_sbs = source_blocks::gather_source_blocks(blocks[1]);
+  auto block2_sbs = source_blocks::gather_source_blocks(blocks[2]);
+  ASSERT_EQ(block1_sbs.size(), 2);
+  ASSERT_EQ(block2_sbs.size(), 2);
+  auto* sb1 = block2_sbs[0];
+  auto* sb2 = block2_sbs[1];
+  sb1->id = 1;
+  sb2->id = 2;
+
+  // Add chained source blocks
+  sb1->next = std::make_unique<SourceBlock>(
+      SourceBlock(foo_method->get_name(), 10, {}));
+  sb2->next = std::make_unique<SourceBlock>(
+      SourceBlock(foo_method->get_name(), 11, {}));
+
+  dedup_blocks_impl::Config empty_config;
+  dedup_blocks_impl::DedupBlocks db(&empty_config, foo_method);
+  db.run();
+  foo_method->get_code()->clear_cfg();
+  foo_method->get_code()->build_cfg();
+
+  auto post_dedup_blocks = foo_method->get_code()->cfg().blocks();
+  ASSERT_EQ(post_dedup_blocks.size(), 4);
+}
+
+TEST_F(SourceBlocksTest,
+       do_not_dedup_tail_chained_source_blocks_in_instrumentation) {
+
+  g_redex->instrument_mode = true;
+
+  auto* foo_method = create_method("LFoo");
+
+  const auto* const kCode = R"(
     (
       ; A
       (const v0 0)
@@ -1328,10 +1531,7 @@ TEST_F(SourceBlocksTest,
   dedup_blocks_impl::DedupBlocks db(&empty_config, foo_method);
   db.run();
   foo_method->get_code()->clear_cfg();
-
   foo_method->get_code()->build_cfg();
-
-  std::cout << SHOW(foo_method->get_code()->cfg()) << std::endl;
 
   auto post_dedup_blocks = foo_method->get_code()->cfg().blocks();
   ASSERT_EQ(post_dedup_blocks.size(), 4);

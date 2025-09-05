@@ -40,13 +40,30 @@ const IROpcode IOPCODE_OPERATION_RESULT = IROpcode(0xFFFE);
 // CommonSubexpressionElimination that can be consolidated into single reusable
 // implementation.
 
+struct IROperationSourceBlock {
+  uint32_t src_blk_id;
+  const DexString* src_blk_name;
+};
+
+inline std::size_t hash_value(IROperationSourceBlock const& sb) {
+  size_t hash = sb.src_blk_id;
+  boost::hash_combine(hash, sb.src_blk_name);
+  return hash;
+}
+
+inline bool operator==(const IROperationSourceBlock& a,
+                       const IROperationSourceBlock& b) {
+  return a.src_blk_id == b.src_blk_id && a.src_blk_name == b.src_blk_name;
+}
+
 struct IROperation {
   IROpcode opcode{0};
   std::vector<value_id_t> srcs;
   union {
-    // Zero-initialize this union with the uint64_t member instead of a
-    // pointer-type member so that it works properly even on 32-bit machines
-    uint64_t literal{0};
+    // Zero-initialize this union with the struct member instead of a
+    // any other member since it will always be the largest
+    IROperationSourceBlock src_blk;
+    uint64_t literal;
     const DexString* string;
     const DexType* type;
     const DexFieldRef* field;
@@ -54,8 +71,8 @@ struct IROperation {
     const DexOpcodeData* data;
     reg_t in_reg;
     size_t operation_index;
-    uint32_t src_blk_id;
   };
+  IROperation() { memset(&src_blk, 0, sizeof(src_blk)); }
 };
 
 struct IROperationHasher {
@@ -63,14 +80,14 @@ struct IROperationHasher {
     size_t hash = tv.opcode;
     boost::hash_combine(hash, tv.srcs);
     boost::hash_combine(hash, (size_t)tv.literal);
-    boost::hash_combine(hash, tv.src_blk_id);
+    boost::hash_combine(hash, tv.src_blk);
     return hash;
   }
 };
 
 inline bool operator==(const IROperation& a, const IROperation& b) {
   return a.opcode == b.opcode && a.srcs == b.srcs && a.literal == b.literal &&
-         a.src_blk_id == b.src_blk_id;
+         a.src_blk == b.src_blk;
 }
 
 struct BlockValue {
