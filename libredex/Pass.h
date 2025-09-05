@@ -28,11 +28,11 @@ class Pass : public Configurable {
     ANALYSIS,
   };
 
-  explicit Pass(const std::string& name, Kind kind = TRANSFORMATION);
+  explicit Pass(std::string name, Kind kind = TRANSFORMATION);
 
   const std::string& name() const { return m_name; }
 
-  std::string get_config_name() override { return name(); };
+  std::string get_config_name() override { return name(); }
 
   bool is_analysis_pass() const { return m_kind == ANALYSIS; }
 

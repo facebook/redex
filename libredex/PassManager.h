@@ -57,10 +57,10 @@ class PassManager {
 
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config);
-  PassManager(const std::vector<Pass*>& passes,
+  PassManager(std::vector<Pass*> passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
               const ConfigFiles& config,
-              const RedexOptions& options = RedexOptions{},
+              RedexOptions options = RedexOptions{},
               redex_properties::Manager* properties_manager = nullptr);
 
   ~PassManager();
