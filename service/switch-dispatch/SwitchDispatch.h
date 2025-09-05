@@ -49,7 +49,7 @@ struct Spec {
 
   Spec(DexType* owner_type,
        Type type,
-       const std::string& name,
+       std::string name,
        DexProto* proto,
        DexAccessFlags access_flags,
        DexField* type_tag_field,
@@ -57,7 +57,7 @@ struct Spec {
        bool keep_debug_info)
       : owner_type(owner_type),
         type(type),
-        name(name),
+        name(std::move(name)),
         proto(proto),
         access_flags(access_flags),
         type_tag_field(type_tag_field),
@@ -69,7 +69,7 @@ struct Spec {
 
   Spec(DexType* owner_type,
        Type type,
-       const std::string& name,
+       std::string name,
        DexProto* proto,
        DexAccessFlags access_flags,
        DexField* type_tag_field,
@@ -78,7 +78,7 @@ struct Spec {
        bool keep_debug_info)
       : owner_type(owner_type),
         type(type),
-        name(name),
+        name(std::move(name)),
         proto(proto),
         access_flags(access_flags),
         type_tag_field(type_tag_field),
@@ -90,7 +90,7 @@ struct Spec {
 
   Spec(DexType* owner_type,
        Type type,
-       const std::string& name,
+       std::string name,
        DexProto* proto,
        DexAccessFlags access_flags,
        DexField* type_tag_field,
@@ -100,7 +100,7 @@ struct Spec {
        bool keep_debug_info)
       : owner_type(owner_type),
         type(type),
-        name(name),
+        name(std::move(name)),
         proto(proto),
         access_flags(access_flags),
         type_tag_field(type_tag_field),

@@ -45,8 +45,8 @@ TEST_F(ConstantPropagationTest, SourceBlockTargetMutating) {
 
   code->build_cfg();
 
-  for (auto block : code->cfg().blocks()) {
-    for (auto sb : source_blocks::gather_source_blocks(block)) {
+  for (auto* block : code->cfg().blocks()) {
+    for (auto* sb : source_blocks::gather_source_blocks(block)) {
       if (sb->id == 2) {
         auto value = sb->get_at(0);
         ASSERT_TRUE(value);

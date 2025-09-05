@@ -121,7 +121,7 @@ void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
     // always 0
     auto* eval_val = new IRInstruction(OPCODE_CONST);
     eval_val->set_literal(0)->set_dest(move_res->insn->dest());
-    m_replacements.push_back({it, eval_val});
+    m_replacements.emplace_back(it, eval_val);
     stats.type_check_removed++;
   } else if (val.is_not_null() && val_type) {
     // can be evaluated
@@ -132,7 +132,7 @@ void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
     }
     auto* eval_val = new IRInstruction(OPCODE_CONST);
     eval_val->set_literal(*eval_res)->set_dest(move_res->insn->dest());
-    m_replacements.push_back({it, eval_val});
+    m_replacements.emplace_back(it, eval_val);
     stats.type_check_removed++;
   } else if (val.is_nullable() && val_type) {
     // check can be converted to null checks

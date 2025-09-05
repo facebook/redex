@@ -51,7 +51,7 @@ TEST_F(DeterministicContainersTest, UnorderedIterable_map) {
   UnorderedMap<int, int> map{map_values[0], map_values[1]};
   std::vector<std::pair<int, int>> vec;
   for (auto& p : UnorderedIterable(map)) {
-    vec.push_back(p);
+    vec.emplace_back(p);
   }
   EXPECT_THAT(vec, UnorderedElementsAreArray(map_values));
 }
@@ -62,7 +62,7 @@ TEST_F(DeterministicContainersTest, UnorderedIterable_multimap) {
   UnorderedMultiMap<int, int> map{map_values[0], map_values[1], map_values[2]};
   std::vector<std::pair<int, int>> vec;
   for (auto& p : UnorderedIterable(map)) {
-    vec.push_back(p);
+    vec.emplace_back(p);
   }
   EXPECT_THAT(vec, UnorderedElementsAreArray(map_values));
 }

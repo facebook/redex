@@ -13,6 +13,7 @@
 
 #include <memory>
 #include <sstream>
+#include <utility>
 
 MappedFile* MappedFile::mmap_file(size_t byte_count,
                                   int prot,
@@ -55,8 +56,8 @@ MappedFile::~MappedFile() {
   }
 }
 
-MappedFile::MappedFile(const std::string& _name, uint8_t* _begin, size_t _size)
-    : name_(_name), begin_(_begin), size_(_size) {
+MappedFile::MappedFile(std::string _name, uint8_t* _begin, size_t _size)
+    : name_(std::move(_name)), begin_(_begin), size_(_size) {
   if (size_ == 0) {
     CHECK(begin_ == nullptr);
   } else {

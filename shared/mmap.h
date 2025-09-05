@@ -40,7 +40,7 @@ class MappedFile {
   }
 
  private:
-  MappedFile(const std::string& name, uint8_t* begin, size_t size);
+  MappedFile(std::string name, uint8_t* begin, size_t size);
 
   const std::string name_;
   uint8_t* begin_; // Start of data.

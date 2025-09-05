@@ -69,7 +69,7 @@ TEST(CppUtilTest, testStrEqDelim) {
 }
 
 TEST(CppUtilTest, testStrEmpty) {
-  std::string str = "";
+  std::string str;
   std::vector<std::string_view> expected{""};
   test_iterators(split_string(str, "test"), expected);
 }

@@ -9,6 +9,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <unordered_set>
+#include <utility>
 
 #include "BundleResources.h"
 #include "RedexResources.h"
@@ -693,8 +694,7 @@ TEST(BundleResources, TestRemoveStyleAttribute) {
           << "No attributes found in the style " << theme_name;
 
       style_id_to_remove_attr[style_id] = attr_id;
-      modifications.push_back(
-          resources::StyleModificationSpec::Modification(style_id, attr_id));
+      modifications.emplace_back(style_id, attr_id);
     }
 
     res_table->apply_attribute_removals_and_additions(modifications, paths);
@@ -750,8 +750,10 @@ TEST(BundleResources, TestAddStyleAttribute) {
       uint32_t attr_id;
       Value attr_value;
 
-      StyleModData(const std::string& name, uint32_t id, Value&& value)
-          : theme_name(name), attr_id(id), attr_value(std::move(value)) {}
+      StyleModData(std::string name, uint32_t id, Value&& value)
+          : theme_name(std::move(name)),
+            attr_id(id),
+            attr_value(std::move(value)) {}
     };
 
     const std::vector<StyleModData> style_modifications = {
@@ -778,8 +780,7 @@ TEST(BundleResources, TestAddStyleAttribute) {
       EXPECT_THAT(style_ids, SizeIs(1));
       uint32_t style_id = style_ids[0];
 
-      modifications.push_back(resources::StyleModificationSpec::Modification(
-          style_id, mod.attr_id, mod.attr_value));
+      modifications.emplace_back(style_id, mod.attr_id, mod.attr_value);
     }
 
     res_table->apply_attribute_removals_and_additions(modifications, paths);
@@ -904,10 +905,8 @@ TEST(BundleResources, TestRemoveAndAddStyleAttributes) {
 
     for (const auto& data : test_data) {
       uint32_t style_id = get_style_id(data.style_name);
-      modifications.push_back(resources::StyleModificationSpec::Modification(
-          style_id, data.remove_attr_id));
-      modifications.push_back(resources::StyleModificationSpec::Modification(
-          style_id, data.add_attr_id, data.add_value));
+      modifications.emplace_back(style_id, data.remove_attr_id);
+      modifications.emplace_back(style_id, data.add_attr_id, data.add_value);
     }
 
     res_table->apply_attribute_removals_and_additions(modifications, paths);

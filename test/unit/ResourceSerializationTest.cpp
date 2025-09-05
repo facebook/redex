@@ -500,11 +500,11 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
       << "Error parsing layout after rename";
 
   std::vector<std::string> expected_xml_tags;
-  expected_xml_tags.push_back("Z.a");
-  expected_xml_tags.push_back("TextView");
-  expected_xml_tags.push_back("Z.b");
-  expected_xml_tags.push_back("Z.c");
-  expected_xml_tags.push_back("Button");
+  expected_xml_tags.emplace_back("Z.a");
+  expected_xml_tags.emplace_back("TextView");
+  expected_xml_tags.emplace_back("Z.b");
+  expected_xml_tags.emplace_back("Z.c");
+  expected_xml_tags.emplace_back("Button");
 
   size_t tag_count = 0;
   android::ResXMLParser::event_code_t type;
@@ -2371,8 +2371,8 @@ TEST(ResourcesArscFile, ApplyStyleMerges) {
                android::Res_value::TYPE_INT_COLOR_RGB8, kColorTeal)});
 
       std::vector<resources::StyleModificationSpec::Modification> modifications;
-      modifications.push_back(resources::StyleModificationSpec::Modification(
-          resource_id, new_parent_id, std::move(attributes)));
+      modifications.emplace_back(resource_id, new_parent_id,
+                                 std::move(attributes));
 
       arsc_file.apply_style_merges(modifications, {});
     }
@@ -2401,8 +2401,8 @@ TEST(ResourcesArscFile, ApplyStyleMerges) {
                android::Res_value::TYPE_INT_COLOR_RGB8, kColorBlue)});
 
       std::vector<resources::StyleModificationSpec::Modification> modifications;
-      modifications.push_back(resources::StyleModificationSpec::Modification(
-          nonexistent_resource_id, alternate_parent_id, std::move(attributes)));
+      modifications.emplace_back(nonexistent_resource_id, alternate_parent_id,
+                                 std::move(attributes));
 
       arsc_file.apply_style_merges(modifications, {});
     }

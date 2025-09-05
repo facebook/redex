@@ -216,11 +216,11 @@ TEST_P(KotlinLambdaSingletonNoopTest, main) {
   EXPECT_THAT(singleton_field, IsNull())
       << "Sanity check: Singleton is unexpectedly found";
 
-  const auto root_method = DexMethod::get_method(root_method_name)->as_def();
+  auto* const root_method = DexMethod::get_method(root_method_name)->as_def();
   ASSERT_THAT(root_method->get_code(), NotNull());
   const auto code_root_pre{*root_method->get_code()};
 
-  auto klr = new KotlinStatelessLambdaSingletonRemovalPass();
+  auto* klr = new KotlinStatelessLambdaSingletonRemovalPass();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
 

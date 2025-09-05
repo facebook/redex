@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "GlobalConfig.h"
@@ -19,16 +21,16 @@ class ReachableResources {
  public:
   ReachableResources(const std::string& zip_dir,
                      const GlobalConfig& global_config,
-                     const ReachabilityOptions& options)
-      : m_zip_dir(zip_dir), m_options(options) {
+                     ReachabilityOptions options)
+      : m_zip_dir(zip_dir), m_options(std::move(options)) {
     m_resources = create_resource_reader(zip_dir);
     m_res_table = m_resources->load_res_table();
     m_r_class_reader = std::make_unique<RClassReader>(global_config);
   }
   ReachableResources(const std::string& zip_dir,
                      const ResourceConfig& global_resources_config,
-                     const ReachabilityOptions& options)
-      : m_zip_dir(zip_dir), m_options(options) {
+                     ReachabilityOptions options)
+      : m_zip_dir(zip_dir), m_options(std::move(options)) {
     m_resources = create_resource_reader(zip_dir);
     m_res_table = m_resources->load_res_table();
     m_r_class_reader = std::make_unique<RClassReader>(global_resources_config);
