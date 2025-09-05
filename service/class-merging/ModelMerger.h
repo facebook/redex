@@ -31,7 +31,7 @@ class ModelMerger {
  public:
   explicit ModelMerger(const bool is_intra_dex_merging)
       : m_is_intra_dex_merging(is_intra_dex_merging) {}
-  virtual ~ModelMerger(){};
+  virtual ~ModelMerger() {}
 
   std::vector<DexClass*> merge_model(Scope& scope,
                                      DexStoresVector& stores,

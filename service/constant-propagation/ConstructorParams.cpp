@@ -203,7 +203,7 @@ std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
       }
       if (value) {
         ImmutableAttr::Attr attr(field);
-        usage.emplace_back(std::make_pair(attr, *value));
+        usage.emplace_back(attr, *value);
       }
     }
   }
@@ -215,7 +215,7 @@ std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
       auto value = pair.second.get_constant();
       ImmutableAttr::Attr attr(method_attr);
       if (value) {
-        usage.emplace_back(std::make_pair(attr, *value));
+        usage.emplace_back(attr, *value);
       }
     }
   }

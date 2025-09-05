@@ -186,7 +186,8 @@ void try_simplify(const ConstantEnvironment& env,
 
   auto reg_is_exact = [&env](reg_t reg, int64_t val) {
     auto value = env.get(reg).maybe_get<SignedConstantDomain>();
-    return !(!value || !value->get_constant() || *value->get_constant() != val);
+    return (value != boost::none) && (value->get_constant() != boost::none) &&
+           (*value->get_constant() == val);
   };
 
   auto reg_fits_lit = [&](reg_t reg) -> std::optional<int16_t> {
@@ -1058,7 +1059,7 @@ void Transform::forward_targets(
 
     // This is an optimization, if block wasn't hit, we don't need to fix up
     // source blocks
-    auto last_source_sb = source_blocks::get_last_source_block(block);
+    auto* last_source_sb = source_blocks::get_last_source_block(block);
     bool block_was_hit = false;
     if (last_source_sb != nullptr) {
       block_was_hit = last_source_sb->foreach_val_early(

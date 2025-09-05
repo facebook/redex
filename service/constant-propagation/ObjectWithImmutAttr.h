@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include <utility>
 #include <vector>
 
 #include <sparta/DisjointUnionAbstractDomain.h>
@@ -130,8 +131,8 @@ struct ImmutableAttr {
   } attr;
   AttrDomain value;
 
-  ImmutableAttr(const Attr& attr, const AttrDomain& value)
-      : attr(attr), value(value) {}
+  ImmutableAttr(const Attr& attr, AttrDomain value)
+      : attr(attr), value(std::move(value)) {}
   ImmutableAttr(const Attr& attr, const SignedConstantDomain& value)
       : attr(attr), value(value) {}
 
