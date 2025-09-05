@@ -8,6 +8,7 @@
 #pragma once
 
 #include <atomic>
+#include <utility>
 
 #include "ApiLevelsUtils.h"
 #include "DexClass.h"
@@ -63,9 +64,9 @@ class RtypeCandidates final {
 
 class RtypeSpecialization final {
  public:
-  explicit RtypeSpecialization(const MethodToInferredReturnType& candidates,
-                               const XStoreRefs& xstores)
-      : m_candidates(candidates), m_xstores(xstores) {}
+  explicit RtypeSpecialization(MethodToInferredReturnType candidates,
+                               XStoreRefs xstores)
+      : m_candidates(std::move(candidates)), m_xstores(std::move(xstores)) {}
 
   void specialize_rtypes(const Scope& scope);
   void print_stats(PassManager* mgr) const { m_stats.print(mgr); }

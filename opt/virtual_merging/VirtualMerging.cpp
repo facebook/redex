@@ -97,7 +97,7 @@ constexpr size_t kAppear100Buckets = 10;
 } // namespace
 
 VirtualMerging::VirtualMerging(DexStoresVector& stores,
-                               const inliner::InlinerConfig& inliner_config,
+                               inliner::InlinerConfig inliner_config,
                                size_t max_overriding_method_instructions,
                                const api::AndroidSDK* min_sdk_api,
                                PerfConfig perf_config)
@@ -106,7 +106,7 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       m_xdexes(stores),
       m_type_system(m_scope),
       m_max_overriding_method_instructions(max_overriding_method_instructions),
-      m_inliner_config(inliner_config),
+      m_inliner_config(std::move(inliner_config)),
       m_init_classes_with_side_effects(m_scope,
                                        /* create_init_class_insns */ false),
       m_perf_config(std::move(perf_config)) {
