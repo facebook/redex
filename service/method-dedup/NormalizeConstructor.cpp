@@ -208,10 +208,10 @@ bool is_simple_super_invoke(
         return false;
       }
       used_args.insert(arg_idx);
-      ctor_params_to_origin.push_back(FieldOrigin(arg_idx));
+      ctor_params_to_origin.emplace_back(arg_idx);
 
     } else if (opcode::is_a_literal_const(def->opcode())) {
-      ctor_params_to_origin.push_back(FieldOrigin(def->get_literal()));
+      ctor_params_to_origin.emplace_back(def->get_literal());
     } else {
       return false;
     }
@@ -306,7 +306,7 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
   }
   for (auto* field : ifields) {
     if (field_to_origin.count(field) == 0) {
-      summary.field_id_to_origin.push_back(FieldOrigin());
+      summary.field_id_to_origin.emplace_back();
       continue;
     }
     auto& f_orig = field_to_origin[field];

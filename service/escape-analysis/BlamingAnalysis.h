@@ -13,6 +13,8 @@
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
 #include <sparta/ReducedProductAbstractDomain.h>
 
+#include <utility>
+
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "LocalPointersAnalysis.h"
@@ -221,7 +223,7 @@ class BlameMap {
 
   // TODO: Tidy complains about an unnecessary copy when using a value type.
   //       This indicates that a move constructor may be missing for Domain.
-  explicit BlameMap(const BlameStore::Domain& domain) : m_domain(domain) {}
+  explicit BlameMap(BlameStore::Domain domain) : m_domain(std::move(domain)) {}
 
   size_t size() const { return m_domain.size(); }
 

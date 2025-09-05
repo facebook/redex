@@ -262,7 +262,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
       method->change(spec, false /* rename on collision */);
       TRACE(REFU, 9, "Update ctor %s ", SHOW(method));
     } else {
-      colliding_inits.emplace_back(std::make_pair(method->as_def(), new_proto));
+      colliding_inits.emplace_back(method->as_def(), new_proto);
     }
   }
   fix_colliding_dmethods(scope, colliding_inits);
@@ -479,7 +479,7 @@ void update_method_signature_type_references(
         spec.proto = new_proto;
         method->change(spec, true /* rename on collision */);
       } else {
-        colliding_directs.emplace_back(std::make_pair(method, new_proto));
+        colliding_directs.emplace_back(method, new_proto);
       }
       return;
     }

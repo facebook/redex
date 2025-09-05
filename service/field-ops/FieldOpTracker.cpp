@@ -150,7 +150,7 @@ class WritesAnalyzer {
               const auto& type_env =
                   type_inference->get_type_environments().at(insn);
               const auto& inferred_type = type_env.get_dex_type(reg);
-              return !(inferred_type && !this->has_lifetime(*inferred_type));
+              return !inferred_type || this->has_lifetime(*inferred_type);
             };
         auto op = insn->opcode();
         if (opcode::is_an_iput(op) || opcode::is_an_sput(op)) {
