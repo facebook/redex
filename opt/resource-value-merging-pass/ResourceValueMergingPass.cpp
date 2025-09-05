@@ -813,9 +813,10 @@ bool ResourceValueMergingPass::should_create_synthetic_resources(
     uint32_t num_attributes) {
   // If creating a synthetic style is more cost-effective than having multiple
   // copies of each attribute, then proceed with creating the synthetic style
-  return synthetic_style_cost < num_resources_with_all_attributes *
-                                    num_attributes *
-                                    sizeof(android::ResTable_map);
+  return synthetic_style_cost <
+         static_cast<uint32_t>(
+             num_resources_with_all_attributes * num_attributes *
+             static_cast<uint32_t>(sizeof(android::ResTable_map)));
 }
 
 uint32_t ResourceValueMergingPass::get_config_count(

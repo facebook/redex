@@ -1079,7 +1079,9 @@ void write_debug_line_mapping(
     auto debug_lines = code_debug_lines.at(dex_code);
     uint32_t num_line_info = debug_lines.size();
     offset = offset + 1 + num_line_info;
-    uint32_t info_section_size = bit_64_size + num_line_info * 2 * bit_32_size;
+    uint32_t info_section_size =
+        bit_64_size + static_cast<uint32_t>(num_line_info * 2 *
+                                            static_cast<uint32_t>(bit_32_size));
     ofs.write((const char*)&info_section_size, bit_32_size);
     binary_offset = binary_offset + info_section_size;
 

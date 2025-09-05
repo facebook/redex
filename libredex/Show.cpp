@@ -1296,7 +1296,7 @@ std::string show(const DexOpcodeData* insn) {
     // See format at
     // https://source.android.com/devices/tech/dalvik/dalvik-bytecode#sparse-switch
     const uint16_t entries = *data++;
-    const uint16_t* tdata = data + 2 * entries;
+    const uint16_t* tdata = data + static_cast<ptrdiff_t>(2 * entries);
 
     const uint8_t* data_ptr = (uint8_t*)data;
     const uint8_t* tdata_ptr = (uint8_t*)tdata;

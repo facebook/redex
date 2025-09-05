@@ -50,7 +50,9 @@ void InterDexPass::bind_config() {
   always_assert_log(m_keep_primary_order || m_normal_primary_dex,
                     "We always need to respect primary dex order if we treat "
                     "the primary dex as a special dex.");
-  bind("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
+  bind("linear_alloc_limit",
+       static_cast<int64_t>(11600 * 1024),
+       m_linear_alloc_limit);
 
   bind("reserved_frefs", 0, m_reserve_refs.frefs,
        "A relief valve for field refs within each dex in case a legacy "

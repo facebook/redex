@@ -470,7 +470,7 @@ UnorderedSet<std::string> AndroidResources::get_native_classes() {
                 insert_unordered_iterable(all_classes, classes_from_native);
               }
             },
-            64 * 1024);
+            static_cast<size_t>(64 * 1024));
       },
       std::vector<std::string>{""},
       std::min(redex_parallel::default_num_threads(), kReadNativeThreads),

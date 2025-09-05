@@ -695,7 +695,7 @@ size_t MultiMethodInliner::inline_inlinables(
           return static_cast<int>(a.for_speed) < static_cast<int>(b.for_speed);
         }
         // Third, if appropriate, prefer inlining not-cold / maybe-hot callees
-        if (preferred_methods) {
+        if (preferred_methods != nullptr) {
           auto a_not_cold = preferred_methods->count_unsafe(a.callee);
           auto b_not_cold = preferred_methods->count_unsafe(b.callee);
           if (a_not_cold != b_not_cold) {
@@ -2558,7 +2558,7 @@ bool MultiMethodInliner::cross_hot_cold(const DexMethod* caller,
                                         const DexMethod* callee,
                                         uint64_t estimated_callee_size) {
   const auto* preferred_methods = get_preferred_methods();
-  if (!preferred_methods) {
+  if (preferred_methods == nullptr) {
     return false;
   }
 

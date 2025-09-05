@@ -243,9 +243,10 @@ class MallocDebug {
 
     auto round_up = [](size_t n, size_t r) { return (n + r - 1) & ~(r - 1); };
 
-    auto next_size = size <= 1024        ? round_up(size, 4)
-                     : size <= 64 * 1024 ? round_up(size, 1024)
-                                         : next_power_of_two(size);
+    auto next_size = size <= 1024 ? round_up(size, 4)
+                     : size <= static_cast<size_t>(64 * 1024)
+                         ? round_up(size, 1024)
+                         : next_power_of_two(size);
 
     // For sizes >= 1M, reduce the block count.
     if (next_size >= 1024 * 1024) {

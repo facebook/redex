@@ -189,7 +189,8 @@ struct IRInstructionShape {
 
 struct IRInstructionShapeHasher {
   size_t operator()(const IRInstructionShape& shape) const {
-    return shape.opcode * 27 + (size_t)shape.literal;
+    return static_cast<size_t>(static_cast<size_t>(shape.opcode) * 27) +
+           static_cast<size_t>(shape.literal);
   }
 };
 

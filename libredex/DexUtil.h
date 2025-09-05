@@ -378,7 +378,7 @@ inline std::string internal_to_simple(std::string_view internal_name) {
   }
   // append a pair of [] for each array level.
   std::string array_suffix;
-  array_suffix.reserve(2 * array_level);
+  array_suffix.reserve(static_cast<size_t>(2 * array_level));
   for (int i = 0; i < array_level; i++) {
     array_suffix += "[]";
   }

@@ -12,7 +12,6 @@
 #include <utility>
 
 #include "ConfigFiles.h"
-#include "DexClass.h"
 #include "GlobalConfig.h"
 #include "IOUtil.h"
 #include "PassManager.h"

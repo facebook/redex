@@ -18,6 +18,6 @@ inline size_t get_max_type_refs(int min_sdk) {
 }
 
 // Methods and fields have the full 16-bit space available
-constexpr size_t kMaxMethodRefs = 64 * 1024;
-constexpr size_t kMaxFieldRefs = 64 * 1024;
-constexpr size_t kMaxLinearAlloc = 11600 * 1024;
+constexpr size_t kMaxMethodRefs = static_cast<size_t>(64 * 1024);
+constexpr size_t kMaxFieldRefs = static_cast<size_t>(64 * 1024);
+constexpr size_t kMaxLinearAlloc = static_cast<size_t>(11600 * 1024);

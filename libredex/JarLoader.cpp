@@ -189,7 +189,7 @@ void skip_attributes(uint8_t*& buffer, uint8_t* buffer_end) {
   }
 }
 
-constexpr size_t MAX_CLASS_NAMELEN = 8 * 1024;
+constexpr size_t MAX_CLASS_NAMELEN = static_cast<size_t>(8 * 1024);
 
 DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
   char nbuffer[MAX_CLASS_NAMELEN];
@@ -868,8 +868,8 @@ void decompress_class(jar_entry& file,
                          "mis-match on uncompressed size");
 }
 
-constexpr size_t kStartBufferSize = 128 * 1024;
-constexpr size_t kMaxBufferSize = 8 * 1024 * 1024;
+constexpr size_t kStartBufferSize = static_cast<size_t>(128 * 1024);
+constexpr size_t kMaxBufferSize = static_cast<size_t>(8 * 1024 * 1024);
 
 template <typename Fn, typename InitFn>
 void process_jar_entries(std::vector<jar_entry>& files,

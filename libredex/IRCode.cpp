@@ -209,7 +209,8 @@ static void shard_multi_target(IRList* ir,
   }
 
   if (ftype == FOPCODE_SPARSE_SWITCH) {
-    const uint16_t* tdata = data + 2 * entries; // entries are 32b
+    const uint16_t* tdata =
+        data + static_cast<ptrdiff_t>(2 * entries); // entries are 32b
     for (int i = 0; i < entries; i++) {
       int32_t case_key = read_int32(data);
       uint32_t targetaddr = base + read_int32(tdata);

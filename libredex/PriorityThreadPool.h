@@ -94,7 +94,7 @@ class PriorityThreadPool {
     }
 
     boost::thread::attributes attrs;
-    attrs.set_stack_size(8 * 1024 * 1024); // 8MB stack.
+    attrs.set_stack_size(static_cast<size_t>(8 * 1024 * 1024)); // 8MB stack.
 
     for (int i = 0; i < num_threads; ++i) {
       m_pool.emplace_back(attrs, [this]() { this->run(); });
