@@ -23,8 +23,7 @@
 
 class InjectDebug {
  public:
-  InjectDebug(const std::string& outdir,
-              const std::vector<std::string>& dex_files);
+  InjectDebug(const std::string& outdir, std::vector<std::string> dex_files);
   ~InjectDebug();
   void run();
 

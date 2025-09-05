@@ -320,24 +320,24 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
  public:
   ~XmlAttributeSetter() override {}
 
-  XmlAttributeSetter(const std::string& tag_name,
+  XmlAttributeSetter(std::string tag_name,
                      bool is_using_attr_id,
                      const char* attribute_input,
                      uint32_t attribute_id,
                      uint32_t data_input)
-      : m_tag_name(tag_name),
+      : m_tag_name(std::move(tag_name)),
         m_is_using_attr_id(is_using_attr_id),
         m_attribute(attribute_input),
         m_attribute_id(attribute_id),
         m_data(data_input) {}
 
-  XmlAttributeSetter(const std::string& tag_name,
+  XmlAttributeSetter(std::string tag_name,
                      bool is_using_attr_id,
                      const char* attribute_input,
                      uint32_t attribute_id,
                      uint32_t data_input,
                      XmlBuilder* xml_builder)
-      : m_tag_name(tag_name),
+      : m_tag_name(std::move(tag_name)),
         m_is_using_attr_id(is_using_attr_id),
         m_attribute(attribute_input),
         m_attribute_id(attribute_id),

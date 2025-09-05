@@ -7,6 +7,8 @@
 
 #include "InjectDebug.h"
 
+#include <utility>
+
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
@@ -19,8 +21,8 @@
 #include "TypeInference.h"
 
 InjectDebug::InjectDebug(const std::string& outdir,
-                         const std::vector<std::string>& dex_files)
-    : m_conf(Json::Value(), outdir), m_dex_files(dex_files) {
+                         std::vector<std::string> dex_files)
+    : m_conf(Json::Value(), outdir), m_dex_files(std::move(dex_files)) {
   if (g_redex == nullptr) {
     g_redex = new RedexContext();
   }
