@@ -80,10 +80,10 @@ TEST(AccumulatingTimer, multipleThreadsOneScope) {
     auto global_scope = timer_global.scope();
     std::vector<std::thread> threads;
     for (size_t idx = 0; idx < NUM_THREADS; ++idx) {
-      threads.emplace_back(std::thread([&timer]() {
+      threads.emplace_back([&timer]() {
         auto scope = timer.scope();
         std::this_thread::sleep_for(std::chrono::seconds(1));
-      }));
+      });
     }
     for (auto& thread : threads) {
       thread.join();
@@ -103,12 +103,12 @@ TEST(AccumulatingTimer, multipleThreadsMultipleScopes) {
     auto global_scope = timer_global.scope();
     std::vector<std::thread> threads;
     for (size_t idx = 0; idx < NUM_THREADS; ++idx) {
-      threads.emplace_back(std::thread([&timer]() {
+      threads.emplace_back([&timer]() {
         for (int j = 0; j < NUM_ITERS; ++j) {
           auto scope = timer.scope();
           std::this_thread::sleep_for(std::chrono::seconds(1));
         }
-      }));
+      });
     }
     for (auto& thread : threads) {
       thread.join();

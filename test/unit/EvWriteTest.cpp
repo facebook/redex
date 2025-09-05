@@ -14,6 +14,7 @@
 
 void testcase(uint64_t value, std::initializer_list<uint8_t> t) {
   uint8_t buf[16] = {0};
+  // NOLINTNEXTLINE
   int size = (t.end() - t.begin()) - 1;
   std::vector<uint8_t> vbuf;
   type_encoder_signext(vbuf, DEVT_INT, value);
@@ -33,6 +34,7 @@ TEST(EvWriteTest, empty) {
   testcase(0xffffffffffffff37, {0x37, 0xff});
   testcase(0x37, {0x37});
   testcase(0x0, {0x00});
+  // NOLINTNEXTLINE
   testcase(-1, {0xff});
   testcase(0xffffffffffffffff, {0xff});
   testcase(0xdead, {0xad, 0xde, 0x00});

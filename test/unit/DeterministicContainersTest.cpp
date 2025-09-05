@@ -36,7 +36,7 @@ TEST_F(DeterministicContainersTest, UnorderedIterable_map) {
   UnorderedMap<int, int> map{{1, 42}, {2, 23}};
   std::vector<std::pair<int, int>> vec;
   for (auto& p : UnorderedIterable(map)) {
-    vec.push_back(p);
+    vec.emplace_back(p);
   }
   std::sort(vec.begin(), vec.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
