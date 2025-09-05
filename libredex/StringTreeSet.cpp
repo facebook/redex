@@ -112,11 +112,11 @@ void StringTreeMap<ValueType>::encode(std::ostringstream& oss) const {
       first = false;
     } else {
       auto pos = oss.tellp();
-      always_assert(pos < 127 * 127 * 127);
+      always_assert(pos < static_cast<long>(127 * 127 * 127));
       oss.seekp(offsets.at(c));
       oss.put((pos % 127) + 1);
       oss.put(((pos / 127) % 127) + 1);
-      oss.put((pos / (127 * 127)) + 1);
+      oss.put((pos / (static_cast<long>(127 * 127))) + 1);
       oss.seekp(pos);
     }
     rest.encode(oss);

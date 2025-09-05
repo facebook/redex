@@ -67,7 +67,7 @@ void scope_info(const ClassScopes& class_scopes) {
   const auto method_count = [](const std::map<int, int>& map) {
     size_t c = 0;
     for (const auto& it : map) {
-      c += (it.first * it.second);
+      c += static_cast<size_t>(it.first * it.second);
     }
     return c;
   };

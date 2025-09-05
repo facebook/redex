@@ -20,10 +20,10 @@ namespace {
 constexpr size_t NUM_THREADS = 10;
 constexpr size_t NUM_ITERS = 3;
 
-constexpr uint64_t kOneSecInMus = 1000 * 1000;
+constexpr uint64_t kOneSecInMus = static_cast<uint64_t>(1000 * 1000);
 
 // Allow 250ms delta.
-constexpr uint64_t kAllowedDelta = 250 * 1000;
+constexpr uint64_t kAllowedDelta = static_cast<uint64_t>(250 * 1000);
 
 ::testing::AssertionResult is_close(uint64_t expected,
                                     uint64_t actual,

@@ -1057,7 +1057,7 @@ void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
 }
 
 void DexOutput::generate_static_values() {
-  constexpr size_t initial_buffer_reserve = 32 * 1024;
+  constexpr size_t initial_buffer_reserve = static_cast<size_t>(32 * 1024);
   uint32_t sv_start = m_offset;
   UnorderedMap<DexEncodedValueArray, uint32_t,
                boost::hash<DexEncodedValueArray>>
@@ -1619,7 +1619,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
     // Max inflated count is 2^21 = 2M. Any bigger and the vector will grow to
     // 2^22 entries, any smaller and the vector will grow but not necessarily
     // be used. For now this has been arbitrarily been chosen.
-    static constexpr size_t MAX_INFLATED_SIZE = 2 * 1024 * 1024;
+    static constexpr size_t MAX_INFLATED_SIZE =
+        static_cast<size_t>(2 * 1024 * 1024);
     using Iter = DebugMethodMap::const_iterator;
 
     // Bucket the set of methods specified by begin, end into appropriately
@@ -1689,7 +1690,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
       //
       // No logic here, just picking 2^{some power} so that vectors don't
       // unnecessarily expand when inflating debug info for the current bucket.
-      static constexpr size_t MAX_BUCKET_INFLATED_SIZE = 2 * 2 * 2 * 1024;
+      static constexpr size_t MAX_BUCKET_INFLATED_SIZE =
+          static_cast<size_t>(2 * 2 * 2 * 1024);
       std::vector<std::pair<uint32_t, uint32_t>> result;
       size_t total_inflated_footprint = 0;
       if (begin == end) {
@@ -1698,7 +1700,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       uint32_t bucket_size = 0;
       uint32_t bucket_count = 0;
       auto append_bucket = [&](uint32_t size, uint32_t count) {
-        total_inflated_footprint += size * count;
+        total_inflated_footprint += static_cast<size_t>(size * count);
         if (!dry_run) {
           result.emplace_back(size, count);
         }
@@ -1713,7 +1715,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       for (auto iter = begin; iter != end; iter++) {
         uint32_t next_size = std::max(bucket_size, iter->first.size);
         uint32_t next_count = bucket_count + 1;
-        size_t inflated_footprint = next_size * next_count;
+        size_t inflated_footprint = static_cast<size_t>(next_size * next_count);
         if (inflated_footprint > MAX_BUCKET_INFLATED_SIZE) {
           always_assert(bucket_size != 0 && bucket_count != 0);
           append_bucket(bucket_size, bucket_count);
@@ -2704,7 +2706,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
         } else {
           result = java_names::internal_to_external(&type_str[dim]);
         }
-        result.reserve(result.size() + 2 * dim);
+        result.reserve(result.size() + static_cast<size_t>(2 * dim));
         for (int i = 0; i < dim; ++i) {
           result += "[]";
         }

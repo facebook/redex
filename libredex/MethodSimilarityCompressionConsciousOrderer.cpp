@@ -15,7 +15,7 @@
 #include "Show.h"
 
 namespace {
-constexpr size_t METHOD_MAX_OUTPUT_SIZE = 512 * 1024;
+constexpr size_t METHOD_MAX_OUTPUT_SIZE = static_cast<size_t>(512 * 1024);
 
 /// Murmur-inspired hashing.
 constexpr uint64_t hash_128_to_64(const uint64_t upper,
@@ -84,7 +84,7 @@ void init_bipartite_graph(std::vector<BinaryFunction>& functions,
     if (freq <= 1) {
       continue;
     }
-    if (freq * 2 >= functions.size()) {
+    if (static_cast<size_t>(freq * 2) >= functions.size()) {
       continue;
     }
 

@@ -350,9 +350,9 @@ VmStats get_mem_stats() {
       if (size_prefix_str == "k" or size_prefix_str == "K") {
         val *= 1024;
       } else if (size_prefix_str == "M") {
-        val *= 1024 * 1024;
+        val *= static_cast<uint64_t>(1024 * 1024);
       } else if (size_prefix_str == "G") {
-        val *= 1024 * 1024 * 1024;
+        val *= static_cast<uint64_t>(1024 * 1024 * 1024);
       } else {
         std::cerr << "Unknown size modifier in " << line << std::endl;
         continue;

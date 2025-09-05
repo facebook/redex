@@ -14,6 +14,6 @@ namespace redex {
 
 void read_file_with_contents(const std::string& file,
                              const std::function<void(const char*, size_t)>& fn,
-                             size_t threshold = 64 * 1024);
+                             size_t threshold = static_cast<size_t>(64 * 1024));
 
 } // namespace redex

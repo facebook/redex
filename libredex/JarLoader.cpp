@@ -185,7 +185,7 @@ void skip_attributes(uint8_t*& buffer, uint8_t* buffer_end) {
   }
 }
 
-constexpr size_t MAX_CLASS_NAMELEN = 8 * 1024;
+constexpr size_t MAX_CLASS_NAMELEN = static_cast<size_t>(8 * 1024);
 
 DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
   char nbuffer[MAX_CLASS_NAMELEN];
