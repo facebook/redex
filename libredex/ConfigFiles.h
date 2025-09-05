@@ -55,7 +55,7 @@ class MethodProfiles;
  */
 struct ConfigFiles {
   explicit ConfigFiles(const Json::Value& config);
-  ConfigFiles(const Json::Value& config, const std::string& outdir);
+  ConfigFiles(const Json::Value& config, std::string outdir);
   ~ConfigFiles();
 
   const UnorderedMap<const DexString*, std::vector<uint8_t>>&

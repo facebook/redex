@@ -72,6 +72,6 @@ std::shared_ptr<FILE*> AssetManager::new_asset_file(const char* filename,
     m_files.emplace_back(std::make_shared<FILE*>(fd));
     return m_files.back();
   } else {
-    throw new std::runtime_error("Error creating new asset file");
+    throw std::runtime_error("Error creating new asset file");
   }
 }
