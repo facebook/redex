@@ -410,7 +410,7 @@ class DexOutput {
       PositionMapper* pos_mapper,
       UnorderedMap<DexMethod*, uint64_t>* method_to_id,
       UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-      const DexOutputConfig& dex_output_config = DexOutputConfig{},
+      DexOutputConfig dex_output_config = DexOutputConfig{},
       int min_sdk = 0);
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,

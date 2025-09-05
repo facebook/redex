@@ -220,8 +220,7 @@ using BindOperationFn = std::function<std::unique_ptr<Configurable>(
     GlobalConfig*, const std::string&)>;
 
 struct GlobalConfigRegistryEntry {
-  GlobalConfigRegistryEntry(const std::string& name,
-                            BindOperationFn bind_operation);
+  GlobalConfigRegistryEntry(std::string name, BindOperationFn bind_operation);
   std::string name;
   BindOperationFn bind_operation;
 };

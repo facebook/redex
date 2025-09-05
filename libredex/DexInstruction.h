@@ -320,7 +320,7 @@ class DexOpcodeData : public DexInstruction {
   }
 
   explicit DexOpcodeData(const std::vector<uint16_t>& opcodes)
-      : DexInstruction(&opcodes[0], 0),
+      : DexInstruction(opcodes.data(), 0),
         m_data(std::make_unique<uint16_t[]>(opcodes.size() - 1)),
         m_data_count(opcodes.size() - 1) {
     const uint16_t* data = opcodes.data() + 1;

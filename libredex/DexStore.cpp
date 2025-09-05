@@ -7,6 +7,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <utility>
 
 #include <json/json.h>
 
@@ -232,20 +233,20 @@ XStoreRefs::XStoreRefs(const DexStoresVector& stores)
     : XStoreRefs(stores, "") {}
 
 XStoreRefs::XStoreRefs(const DexStoresVector& stores,
-                       const std::string& shared_module_prefix)
+                       std::string shared_module_prefix)
     : m_transitive_resolved_dependencies(
           build_transitive_resolved_dependencies(stores)),
       m_reverse_dependencies(build_reverse_dependencies(stores)),
-      m_shared_module_prefix(shared_module_prefix) {
+      m_shared_module_prefix(std::move(shared_module_prefix)) {
 
   std::vector<std::pair<const DexClasses*, size_t>> dexes;
 
-  m_stores.push_back(&stores[0]);
-  dexes.emplace_back(&stores[0].get_dexen()[0], 0);
+  m_stores.push_back(stores.data());
+  dexes.emplace_back(stores[0].get_dexen().data(), 0);
   m_root_stores = 1;
   if (stores[0].get_dexen().size() > 1) {
     m_root_stores++;
-    m_stores.push_back(&stores[0]);
+    m_stores.push_back(stores.data());
     for (size_t i = 1; i < stores[0].get_dexen().size(); i++) {
       dexes.emplace_back(&stores[0].get_dexen()[i], 1);
     }
