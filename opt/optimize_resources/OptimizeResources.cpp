@@ -9,6 +9,7 @@
 
 #include <boost/format.hpp>
 #include <json/value.h>
+#include <utility>
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
@@ -19,8 +20,8 @@
 #include "Show.h"
 
 namespace opt_res {
-ReachableResourcesPlugin::ReachableResourcesPlugin(const std::string& name)
-    : m_name(name) {
+ReachableResourcesPlugin::ReachableResourcesPlugin(std::string name)
+    : m_name(std::move(name)) {
   ReachableResourcesPluginRegistry::get().register_plugin(this);
 }
 

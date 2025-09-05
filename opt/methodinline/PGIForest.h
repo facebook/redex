@@ -88,8 +88,8 @@ class MethodContextContext {
         hits.emplace_back(maybe_stat->call_count);
         appear.emplace_back(maybe_stat->appear_percent);
       } else {
-        hits.push_back(boost::none);
-        appear.push_back(boost::none);
+        hits.emplace_back(boost::none);
+        appear.emplace_back(boost::none);
       }
     }
     if (has_data) {

@@ -14,6 +14,7 @@
 #include <iostream>
 #include <limits>
 #include <queue>
+#include <utility>
 
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
@@ -273,10 +274,10 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
 
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
                               PGIForest&& forest,
-                              const DecisionTreesConfig& config)
+                              DecisionTreesConfig config)
       : m_method_context_context(method_profiles),
         m_forest(std::move(forest)),
-        m_config(config) {
+        m_config(std::move(config)) {
     if (m_config.exp_force_top_x_entries) {
       fetch_top_entries(method_profiles);
     }
@@ -928,7 +929,7 @@ void PerfMethodInlinePass::bind_config() {
        "Comparison is accept-value >= threshold when true and accept-value <= "
        "threshold otherwise");
   float min_hits;
-  bind("min_hits", std::numeric_limits<float>::min(), min_hits,
+  bind("min_hits", std::numeric_limits<float>::lowest(), min_hits,
        "Threshold for caller and callee method call-count to consider "
        "inlining. A negative value elides the check.");
   float min_appear;

@@ -1504,8 +1504,8 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
         clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, canary_cls);
     always_assert(canary_added);
 
-    emitting_state.dex_infos.emplace_back(
-        std::make_tuple(canary_cls->get_name()->str_copy(), dex_info));
+    emitting_state.dex_infos.emplace_back(canary_cls->get_name()->str_copy(),
+                                          dex_info);
   }
 
   FlushOutDexResult fodr{emitting_state.outdex.size(),

@@ -19,6 +19,7 @@
 
 #include <list>
 #include <type_traits>
+#include <utility>
 
 namespace obfuscate_utils {
 void compute_identifier(int value, std::string* res);
@@ -517,7 +518,9 @@ class DexElemManager {
 
  public:
   DexElemManager(ElemCtrFn elem_ctr, SigGetFn get_sig, RefCtrFn ref_ctr)
-      : sig_getter_fn(get_sig), ref_getter_fn(ref_ctr), elemCtr(elem_ctr) {}
+      : sig_getter_fn(std::move(get_sig)),
+        ref_getter_fn(std::move(ref_ctr)),
+        elemCtr(std::move(elem_ctr)) {}
   // NOLINTNEXTLINE(performance-noexcept-move-constructor)
   DexElemManager(DexElemManager&& other) = default;
   virtual ~DexElemManager() {}
