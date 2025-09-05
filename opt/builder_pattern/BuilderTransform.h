@@ -22,7 +22,7 @@ class BuilderTransform {
                    const DexType* root,
                    const init_classes::InitClassesWithSideEffects&
                        init_classes_with_side_effects,
-                   const inliner::InlinerConfig& inliner_config,
+                   inliner::InlinerConfig inliner_config,
                    DexStoresVector& stores);
   void flush();
 

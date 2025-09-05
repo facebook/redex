@@ -762,7 +762,7 @@ class CodeTransformer final {
     if (ordinal < m_enum_util->m_config.max_enum_size) {
       auto* new_field = m_enum_util->m_fields.at(constants.at(field).ordinal);
       auto* new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
-      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+      m_replacements.emplace_back(cfg, block, mie, new_insn);
     } else {
       always_assert(
           m_enum_util->m_config.breaking_reference_equality_allowlist.count(
@@ -774,7 +774,7 @@ class CodeTransformer final {
       new_insns.push_back(dasm(OPCODE_INVOKE_STATIC,
                                m_enum_util->INTEGER_VALUEOF_METHOD,
                                {{VREG, ordinal_reg}}));
-      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insns));
+      m_replacements.emplace_back(cfg, block, mie, new_insns);
     }
   }
 
@@ -800,9 +800,9 @@ class CodeTransformer final {
     auto vObj = insn->src(0);
     auto* get_ifield_method =
         m_enum_util->add_get_ifield_method(enum_type, ifield);
-    m_replacements.push_back(InsnReplacement(
+    m_replacements.emplace_back(
         cfg, block, mie,
-        dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}})));
+        dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}}));
   }
 
   /**
@@ -830,7 +830,7 @@ class CodeTransformer final {
       new_insns.push_back(dasm(OPCODE_INVOKE_STATIC,
                                m_enum_util->m_values_method_ref,
                                {{VREG, reg}}));
-      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insns));
+      m_replacements.emplace_back(cfg, block, mie, new_insns);
     }
   }
 
@@ -852,9 +852,9 @@ class CodeTransformer final {
     auto* valueof_method =
         m_enum_util->add_substitute_of_valueof(container, prev_sb);
     auto reg = insn->src(0);
-    m_replacements.push_back(InsnReplacement(
+    m_replacements.emplace_back(
         cfg, block, mie,
-        dasm(OPCODE_INVOKE_STATIC, valueof_method, {{VREG, reg}})));
+        dasm(OPCODE_INVOKE_STATIC, valueof_method, {{VREG, reg}}));
   }
 
   /**
@@ -877,9 +877,9 @@ class CodeTransformer final {
     }
     auto* helper_method =
         m_enum_util->add_substitute_of_name(candidate_type, prev_sb);
-    m_replacements.push_back(InsnReplacement(
+    m_replacements.emplace_back(
         cfg, block, mie,
-        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
+        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}}));
   }
 
   /**
@@ -901,9 +901,9 @@ class CodeTransformer final {
     }
     auto* helper_method =
         m_enum_util->add_substitute_of_hashcode(candidate_type, prev_sb);
-    m_replacements.push_back(InsnReplacement(
+    m_replacements.emplace_back(
         cfg, block, mie,
-        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, src_reg}})));
+        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, src_reg}}));
   }
 
   /**
@@ -926,10 +926,9 @@ class CodeTransformer final {
     }
     DexMethodRef* string_valueof_meth =
         m_enum_util->add_substitute_of_stringvalueof(candidate_type, prev_sb);
-    m_replacements.push_back(
-        InsnReplacement(cfg, block, mie,
-                        dasm(OPCODE_INVOKE_STATIC, string_valueof_meth,
-                             {{VREG, insn->src(0)}})));
+    m_replacements.emplace_back(cfg, block, mie,
+                                dasm(OPCODE_INVOKE_STATIC, string_valueof_meth,
+                                     {{VREG, insn->src(0)}}));
   }
 
   /**
@@ -963,7 +962,7 @@ class CodeTransformer final {
         dasm(OPCODE_INVOKE_VIRTUAL,
              m_enum_util->STRINGBUILDER_APPEND_STR_METHOD,
              {{VREG, reg0}, {VREG, str_reg}})};
-    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insns));
+    m_replacements.emplace_back(cfg, block, mie, new_insns);
   }
 
   /**
@@ -991,7 +990,7 @@ class CodeTransformer final {
     }
     auto* new_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
     new_insn->set_method(integer_meth)->set_srcs(insn->srcs());
-    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+    m_replacements.emplace_back(cfg, block, mie, new_insn);
   }
 
   /**
@@ -1037,7 +1036,7 @@ class CodeTransformer final {
     auto* new_insn = (new IRInstruction(*insn))
                          ->set_opcode(OPCODE_INVOKE_STATIC)
                          ->set_method(method);
-    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+    m_replacements.emplace_back(cfg, block, mie, new_insn);
   }
 
   /**

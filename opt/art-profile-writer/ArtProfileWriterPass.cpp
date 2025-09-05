@@ -636,8 +636,7 @@ void never_compile(
   }
 }
 
-void write_classes(const Scope& scope,
-                   const baseline_profiles::BaselineProfile& bp,
+void write_classes(const baseline_profiles::BaselineProfile& bp,
                    std::ostream& os) {
   std::vector<std::string_view> class_names;
   size_t deob_issues{0};
@@ -904,13 +903,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
     std::ofstream ofs{output_name.c_str()};
     if (!strip_classes) {
-      write_classes(scope, bp, ofs);
+      write_classes(bp, ofs);
     }
     write_methods(scope, bp, ofs);
   }
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
   if (!resolve_strip_classes(conf.get_default_baseline_profile_config())) {
-    write_classes(scope, manual_profile, ofs);
+    write_classes(manual_profile, ofs);
   }
   write_methods(scope, manual_profile, ofs);
 

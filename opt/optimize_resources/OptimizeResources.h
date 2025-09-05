@@ -24,7 +24,7 @@ namespace opt_res {
 // OptimizeResourcesPass).
 class ReachableResourcesPlugin {
  public:
-  explicit ReachableResourcesPlugin(const std::string& name);
+  explicit ReachableResourcesPlugin(std::string name);
   virtual void configure(ConfigFiles& conf) {}
   // Given the directory holding the unpacked input zip, and a list of resource
   // names to their corresponding ids, return a list of resource IDs that should

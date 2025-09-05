@@ -353,7 +353,6 @@ const UnorderedSet<std::string> SIMPLE_REFERENCE_TYPES = {"bool", "color",
                                                           "dimen", "integer"};
 
 void deduplicate_resource_file_references(
-    PassManager& mgr,
     const std::string& zip_dir,
     const UnorderedSet<std::string>& disallowed_type_names,
     const UnorderedSet<uint32_t>& disallowed_ids) {
@@ -430,7 +429,7 @@ void DedupResourcesPass::run_pass(DexStoresVector& stores,
   // 2. Compute duplicates/canonical resource identifiers for some types which
   //    can be references in .xml files. This step is meant to increase the
   //    liklihood of finding identical files in the next step.
-  deduplicate_resource_file_references(mgr, apk_dir, m_disallowed_types,
+  deduplicate_resource_file_references(apk_dir, m_disallowed_types,
                                        disallowed_ids);
 
   // 3. Perform a deduplication of individual files, which may increase the

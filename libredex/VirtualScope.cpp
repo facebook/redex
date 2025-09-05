@@ -697,7 +697,7 @@ bool build_signature_map(const ClassHierarchy& hierarchy,
   }
 
   TRACE(VIRT, 3, "* Visited %s(%d, %d)", SHOW(type), escape_up, escape_down);
-  return static_cast<int>(escape_up) | static_cast<int>(escape_down);
+  return escape_up || escape_down;
 }
 
 const VirtualScope* find_rooted_scope(const SignatureMap& sig_map,
@@ -908,7 +908,7 @@ void ClassScopes::build_interface_scopes() {
       // at least the method itself
       always_assert_log(!scopes.empty(), "Scope empty for %s", SHOW(meth));
       auto& intf_scope = m_interface_scopes[intf_it.first];
-      intf_scope.push_back({});
+      intf_scope.emplace_back();
       for (const auto& scope : scopes) {
         if (scope.interfaces.count(intf_it.first) == 0) {
           continue;
