@@ -9,6 +9,8 @@
 
 #include <sparta/HashedAbstractPartition.h>
 
+#include <utility>
+
 #include "CallGraph.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
@@ -87,10 +89,10 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
   };
   FixpointIterator(
       std::shared_ptr<const call_graph::Graph> call_graph,
-      const IntraproceduralAnalysisFactory& proc_analysis_factory,
+      IntraproceduralAnalysisFactory proc_analysis_factory,
       std::shared_ptr<const call_graph::Graph> call_graph_for_wps = nullptr)
       : ParallelMonotonicFixpointIterator(*call_graph),
-        m_proc_analysis_factory(proc_analysis_factory),
+        m_proc_analysis_factory(std::move(proc_analysis_factory)),
         m_call_graph(std::move(call_graph)) {
     auto* wps = new WholeProgramState(std::move(call_graph_for_wps));
     wps->set_to_top();

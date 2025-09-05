@@ -207,19 +207,20 @@ class ConstantEnvironment final
   }
 
   ConstantEnvironment& mutate_register_environment(
-      std::function<void(ConstantRegisterEnvironment*)> f) {
-    apply<0>(std::move(f));
+      const std::function<void(ConstantRegisterEnvironment*)>& f) {
+    apply<0>(f);
     return *this;
   }
 
   ConstantEnvironment& mutate_field_environment(
-      std::function<void(FieldEnvironment*)> f) {
-    apply<1>(std::move(f));
+      const std::function<void(FieldEnvironment*)>& f) {
+    apply<1>(f);
     return *this;
   }
 
-  ConstantEnvironment& mutate_heap(std::function<void(ConstantHeap*)> f) {
-    apply<2>(std::move(f));
+  ConstantEnvironment& mutate_heap(
+      const std::function<void(ConstantHeap*)>& f) {
+    apply<2>(f);
     return *this;
   }
 

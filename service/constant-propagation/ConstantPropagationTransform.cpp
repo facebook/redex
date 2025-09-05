@@ -184,7 +184,8 @@ void try_simplify(const ConstantEnvironment& env,
 
   auto reg_is_exact = [&env](reg_t reg, int64_t val) {
     auto value = env.get(reg).maybe_get<SignedConstantDomain>();
-    return !(!value || !value->get_constant() || *value->get_constant() != val);
+    return (value != boost::none) && (value->get_constant() != boost::none) &&
+           (*value->get_constant() == val);
   };
 
   auto reg_fits_lit = [&](reg_t reg) -> std::optional<int16_t> {

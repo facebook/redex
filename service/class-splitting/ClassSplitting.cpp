@@ -6,6 +6,7 @@
  */
 
 #include <string>
+#include <utility>
 
 #include "ApiLevelChecker.h"
 #include "ClassSplitting.h"
@@ -74,11 +75,11 @@ void update_coldstart_classes_order(
 }
 
 ClassSplitter::ClassSplitter(
-    const ClassSplittingConfig& config,
+    ClassSplittingConfig config,
     PassManager& mgr,
     const UnorderedSet<DexMethod*>& sufficiently_popular_methods,
     const UnorderedSet<DexMethod*>& insufficiently_popular_methods)
-    : m_config(config),
+    : m_config(std::move(config)),
       m_mgr(mgr),
       m_sufficiently_popular_methods(sufficiently_popular_methods),
       m_insufficiently_popular_methods(insufficiently_popular_methods) {

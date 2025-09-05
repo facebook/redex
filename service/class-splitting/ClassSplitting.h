@@ -85,7 +85,7 @@ constexpr const char* METRIC_TOO_SMALL_METHODS =
 class ClassSplitter final {
  public:
   explicit ClassSplitter(
-      const ClassSplittingConfig& config,
+      ClassSplittingConfig config,
       PassManager& mgr,
       const UnorderedSet<DexMethod*>& sufficiently_popular_methods,
       const UnorderedSet<DexMethod*>& insufficiently_popular_methods);

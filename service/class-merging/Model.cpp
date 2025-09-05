@@ -965,7 +965,7 @@ void Model::add_interface_scope(MergerType& merger,
   // and insert the current VirtualScope. But we only do so if the VirtualScope
   // has at least one method def.
   if (intf_scope.has_def()) {
-    merger.intfs_methods.push_back(MergerType::InterfaceMethod());
+    merger.intfs_methods.emplace_back();
     insert_to(merger.intfs_methods.back());
   }
 }
@@ -1079,7 +1079,7 @@ void Model::distribute_virtual_methods(
                   virt_meth->get_deobfuscated_name_or_empty_copy().c_str(),
                   SHOW(virt_meth->get_name()),
                   SHOW(overridden_meth));
-            merger.intfs_methods.push_back(MergerType::InterfaceMethod());
+            merger.intfs_methods.emplace_back();
             auto& intf_meth = merger.intfs_methods.back();
             intf_meth.overridden_meth = overridden_meth;
             merger.intfs_methods.back().interfaces.insert(

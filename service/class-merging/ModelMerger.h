@@ -29,7 +29,7 @@ using MergerFields = UnorderedMap<const DexType*, std::vector<DexField*>>;
 class ModelMerger {
 
  public:
-  virtual ~ModelMerger(){};
+  virtual ~ModelMerger() {}
 
   std::vector<DexClass*> merge_model(Scope& scope,
                                      DexStoresVector& stores,

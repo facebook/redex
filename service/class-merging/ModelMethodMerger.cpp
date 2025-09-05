@@ -603,7 +603,7 @@ void ModelMethodMerger::merge_virtual_methods(
     for (auto& type_to_sig : UnorderedIterable(meth_signatures)) {
       const auto* type = type_to_sig.first;
       auto map = std::make_pair(type_to_sig.second, dispatch.main_dispatch);
-      m_method_dedup_map[type].push_back(map);
+      m_method_dedup_map[type].emplace_back(map);
       TRACE(CLMG,
             9,
             " adding dedup map type %s %s -> %s",
@@ -725,7 +725,7 @@ void ModelMethodMerger::merge_ctors() {
       for (auto& type_to_sig : UnorderedIterable(ctor_signatures)) {
         const auto* type = type_to_sig.first;
         auto map = std::make_pair(type_to_sig.second, dispatch);
-        m_method_dedup_map[type].push_back(map);
+        m_method_dedup_map[type].emplace_back(map);
         TRACE(CLMG,
               9,
               " adding dedup map type %s %s -> %s",
@@ -803,7 +803,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     for (auto* m : to_relocate) {
       auto sig = get_method_signature_string(m);
       auto map = std::make_pair(sig, m);
-      m_method_dedup_map[m->get_class()].push_back(map);
+      m_method_dedup_map[m->get_class()].emplace_back(map);
       TRACE(CLMG,
             9,
             "dedup: adding dedup map type %s %s -> %s",
@@ -831,7 +831,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
         }
         auto sig = get_method_signature_string(old_meth);
         auto map = std::make_pair(sig, pair.first);
-        m_method_dedup_map[type].push_back(map);
+        m_method_dedup_map[type].emplace_back(map);
         TRACE(CLMG,
               9,
               "dedup: adding dedup map type %s %s -> %s",
