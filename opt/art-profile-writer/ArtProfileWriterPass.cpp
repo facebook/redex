@@ -907,11 +907,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         compiled_code_units_hot_by_appear100{};
     std::atomic<size_t> compiled_code_units_hot_super{0};
     std::atomic<size_t> compiled_code_units_unknown{0};
+    InsertOnlyConcurrentSet<DexType*> method_classes;
     walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
       auto it = profile.methods.find(method);
       if (it == profile.methods.end()) {
         return;
       }
+      method_classes.insert(method->get_class());
       auto ecu = code.estimate_code_units();
       code_units += ecu;
       if (is_compiled(method, it->second)) {
@@ -963,6 +965,20 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         }
       }
     });
+
+    size_t root_dexes_with_methods = [&]() {
+      size_t cnt = 0;
+      redex_assert(stores[0].is_root_store());
+      for (const auto& dex : stores[0].get_dexen()) {
+        for (auto* cls : dex) {
+          if (method_classes.count_unsafe(cls->get_type())) {
+            ++cnt;
+            break;
+          }
+        }
+      }
+      return cnt;
+    }();
 
     auto prefix = std::string("profile_") + bp_name + "_";
     mgr.incr_metric(prefix + "classes.in", profile.mark);
@@ -1020,6 +1036,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     if (bp_options.use_final_redex_generated_profile) {
       mgr.incr_metric(prefix + "use_final_redex_generated_profile", 1);
     }
+
+    mgr.incr_metric(prefix + "root_dexes_with_profile_methods",
+                    root_dexes_with_methods);
   };
   gather_metrics("manual",
                  baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME,
