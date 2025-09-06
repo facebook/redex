@@ -1065,7 +1065,7 @@ void Transform::forward_targets(
       block_was_hit = last_source_sb->foreach_val_early(
           [](const auto& v) { return v && v->val > 0; });
     }
-    if (block_was_hit) {
+    if (block_was_hit && !g_redex->disable_violation_fixes) {
       // Iterate over the chain of unconditional targets
       for (const auto& [target, _] : unconditional_targets) {
         if (target == new_target) {
