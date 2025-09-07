@@ -6,7 +6,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <json/json.h>
+#include <json/value.h>
+#include <json/writer.h>
 
 #include <fstream>
 #include <functional>
@@ -14,9 +15,9 @@
 
 #include "DexInstruction.h"
 #include "DexLoader.h"
-#include "DexOutput.h"
 #include "DexPosition.h"
 #include "DexStore.h"
+#include "RedexContext.h"
 #include "RedexTestUtils.h"
 // NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
@@ -205,8 +206,9 @@ TEST_F(InjectDebugTest, TestLineDebugInfoCreated) {
           dex_method->get_dex_code()->get_debug_item()->get_entries();
 
       int debug_entry_idx = 0;
-      int line = dex_method->get_dex_code()->get_debug_item()->get_line_start();
-      int pc = 0;
+      uint32_t line =
+          dex_method->get_dex_code()->get_debug_item()->get_line_start();
+      uint32_t pc = 0;
       for (DexInstruction* instr :
            dex_method->get_dex_code()->get_instructions()) {
         // Find next position entry
@@ -218,7 +220,7 @@ TEST_F(InjectDebugTest, TestLineDebugInfoCreated) {
         // Debug information is not emitted for some goto instructions
         if (pc != debug_entries[debug_entry_idx].addr &&
             dex_opcode::is_goto(instr->opcode())) {
-          pc += instr->size();
+          pc += static_cast<uint32_t>(instr->size());
           ++line;
           continue;
         }
@@ -229,7 +231,7 @@ TEST_F(InjectDebugTest, TestLineDebugInfoCreated) {
 
         // Check that debug line numbers increment by exactly 1
         EXPECT_EQ(line, debug_entries[debug_entry_idx].pos->line);
-        pc += instr->size();
+        pc += static_cast<uint32_t>(instr->size());
         ++debug_entry_idx;
         ++line;
       }
