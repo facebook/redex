@@ -5,13 +5,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/program_options/options_description.hpp>
+#include <boost/program_options/parsers.hpp>
+#include <boost/program_options/variables_map.hpp>
 #include <iostream>
-#include <json/json.h>
+#include <json/reader.h>
+#include <json/value.h>
 
 #include "DexClass.h"
 #include "DexLoader.h"
+#include "PassManager.h"
 #include "PassRegistry.h"
 #include "RedexContext.h"
 #include "Timer.h"
@@ -94,7 +99,7 @@ Arguments parse_args(int argc, char* argv[]) {
   std::string meta_dir = args.output_ir_dir + "/meta";
   boost::filesystem::create_directories(meta_dir);
   if (!boost::filesystem::is_directory(meta_dir)) {
-    std::cerr << "Could not create " << meta_dir << std::endl;
+    std::cerr << "Could not create " << meta_dir << '\n';
     exit(EXIT_FAILURE);
   }
 
@@ -174,7 +179,7 @@ Json::Value process_entry_data(const Json::Value& entry_data,
   for (const std::string& pass_name : args.pass_names) {
     passes_list.append(pass_name);
   }
-  int len = config_data["redex"]["passes"].size();
+  int len = static_cast<int>(config_data["redex"]["passes"].size());
   if (len == 0 || passes_list[len - 1].asString() != "RegAllocPass") {
     passes_list.append("RegAllocPass");
   }
@@ -187,12 +192,12 @@ Json::Value process_entry_data(const Json::Value& entry_data,
   // Include -S and -J params.
   for (const auto& key_value : args.s_args) {
     if (!add_value_to_config(config_data, key_value, false)) {
-      std::cerr << "warning: cannot parse -S" << key_value << std::endl;
+      std::cerr << "warning: cannot parse -S" << key_value << '\n';
     }
   }
   for (const auto& key_value : args.j_args) {
     if (!add_value_to_config(config_data, key_value, true)) {
-      std::cerr << "warning: cannot parse -S" << key_value << std::endl;
+      std::cerr << "warning: cannot parse -S" << key_value << '\n';
     }
   }
 

@@ -7,10 +7,14 @@
 
 #include "ToolsCommon.h"
 
+#include <array>
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <fstream>
 #include <iostream>
-#include <json/json.h>
+#include <json/reader.h>
+#include <json/writer.h>
 
 #include "CommentFilter.h"
 #include "DexLoader.h"
@@ -109,7 +113,7 @@ void write_intermediate_dex(const RedexOptions& redex_options,
         continue;
       }
       std::string filename =
-          redex::get_dex_output_name(output_ir_dir, store, i);
+          redex::get_dex_output_name(output_ir_dir, store, static_cast<int>(i));
       auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
       write_classes_to_dex(filename,
                            &store.get_dexen()[i],
@@ -168,10 +172,10 @@ static void assert_dex_magic_consistency(const std::string& source,
 }
 
 bool is_zip(const std::string& filename) {
-  char buffer[2];
+  std::array<char, 2> buffer;
   std::ifstream infile(filename);
   always_assert(infile);
-  infile.read(buffer, 2);
+  infile.read(buffer.data(), 2);
   // the first two bytes of a ZIP file are usually "PK"
   return buffer[0] == 'P' && buffer[1] == 'K';
 }
@@ -193,7 +197,7 @@ bool dir_is_writable(const std::string& dir) {
 Json::Value parse_config(const std::string& config_file) {
   std::ifstream config_stream(config_file);
   if (!config_stream) {
-    std::cerr << "error: cannot find config file: " << config_file << std::endl;
+    std::cerr << "error: cannot find config file: " << config_file << '\n';
     exit(EXIT_FAILURE);
   }
 
@@ -312,7 +316,7 @@ void load_classes_from_dexes_and_metadata(
  */
 std::string get_dex_output_name(const std::string& output_dir,
                                 const DexStore& store,
-                                int index) {
+                                size_t index) {
   return output_dir + "/" + dex_name(store, index);
 }
 } // namespace redex

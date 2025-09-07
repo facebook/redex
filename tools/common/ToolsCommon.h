@@ -8,7 +8,7 @@
 #include "ConfigFiles.h"
 #include "DexStats.h"
 #include "DexStore.h"
-#include "PassManager.h"
+#include "RedexOptions.h"
 
 namespace redex {
 
@@ -34,5 +34,5 @@ void load_classes_from_dexes_and_metadata(
 
 std::string get_dex_output_name(const std::string& output_dir,
                                 const DexStore& store,
-                                int index);
+                                size_t index);
 } // namespace redex
