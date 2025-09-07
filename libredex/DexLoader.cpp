@@ -39,15 +39,16 @@ std::pair<DexLoader::DataUPtr, size_t> mmap_data(const DexLocation* location) {
     exit(EXIT_FAILURE);
   }
   auto* mapped_file_ptr = mapped_file.get();
-  auto data = DexLoader::DataUPtr((const uint8_t*)mapped_file->const_data(),
-                                  [mapped_file_ptr](auto*) {
-                                    // Data is mapped, don't actually destroy
-                                    // that, close the file and delete that.
-                                    mapped_file_ptr->close();
-                                    delete mapped_file_ptr;
-                                  });
+  auto data = DexLoader::DataUPtr(
+      reinterpret_cast<const uint8_t*>(mapped_file->const_data()),
+      [mapped_file_ptr](auto*) {
+        // Data is mapped, don't actually destroy
+        // that, close the file and delete that.
+        mapped_file_ptr->close();
+        delete mapped_file_ptr;
+      });
   // At this point we can release mapped_file.
-  (void)mapped_file.release();
+  (void)mapped_file.release(); // NOLINT(bugprone-unused-return-value)
 
   return std::make_pair(std::move(data), mapped_file_ptr->size());
 }
@@ -56,8 +57,8 @@ std::pair<DexLoader::DataUPtr, size_t> mmap_data(const DexLocation* location) {
 // annoying to implement nicely. Current design uses RAII
 
 struct AssertHelper {
-  std::optional<std::string> message{};
-  std::optional<std::map<std::string, std::string>> extra_info{};
+  std::optional<std::string> message;
+  std::optional<std::map<std::string, std::string>> extra_info;
 
   explicit AssertHelper() {}
 
@@ -79,7 +80,7 @@ struct AssertHelper {
     if (!extra_info) {
       extra_info = std::map<std::string, std::string>();
     }
-    extra_info->emplace(key, std::to_string(value));
+    extra_info->emplace(std::move(key), std::to_string(value));
     return *this;
   }
 };
@@ -91,7 +92,7 @@ AssertHelper& AssertHelper::add_info<std::string>(std::string&& key,
   if (!extra_info) {
     extra_info = std::map<std::string, std::string>();
   }
-  extra_info->emplace(key, std::move(value));
+  extra_info->emplace(std::move(key), std::move(value));
   return *this;
 }
 
@@ -136,9 +137,9 @@ void dex_type_range_assert(uint64_t offset,
                    "invalid " + type_name + " size",
                    type_name + "_off");
 }
-
 void align_ptr(std::string_view& ptr, const size_t alignment) {
-  const size_t alignment_error = ((uintptr_t)ptr.data()) % alignment;
+  const size_t alignment_error =
+      (reinterpret_cast<uintptr_t>(ptr.data())) % alignment;
   if (alignment_error != 0) {
     ptr = ptr.substr(alignment - alignment_error);
   }
@@ -190,12 +191,12 @@ void validate_dex_header(const dex_header* dh,
       .add_info("header_size", dh->file_size);
 
   const auto* map_list = [&]() {
-    auto map_list_off = (uint64_t)dh->map_off;
+    auto map_list_off = static_cast<uint64_t>(dh->map_off);
     dex_range_assert(map_list_off, sizeof(dex_map_list), dexsize,
                      "map_off invalid", "map_list out of range (struct)",
                      "map_list_off");
-    const dex_map_list* map_list_tmp =
-        (dex_map_list*)(((const uint8_t*)dh) + dh->map_off);
+    const dex_map_list* map_list_tmp = reinterpret_cast<const dex_map_list*>(
+        reinterpret_cast<const uint8_t*>(dh) + dh->map_off);
     dex_range_assert(
         map_list_off,
         sizeof(uint32_t) + map_list_tmp->size * sizeof(dex_map_item), dexsize,
@@ -207,19 +208,21 @@ void validate_dex_header(const dex_header* dh,
     const auto& item = map_list->items[i];
     switch (item.type) {
     case TYPE_CALL_SITE_ID_ITEM: {
-      auto callsite_ids_off = (uint64_t)item.offset;
+      auto callsite_ids_off = static_cast<uint64_t>(item.offset);
       dex_type_range_assert<dex_callsite_id>(callsite_ids_off, item.size,
                                              dexsize, "callsite_ids");
       // dex_callsite_id* callsite_ids =
       //     (dex_callsite_id*)((uint8_t*)dh + item.offset);
     } break;
     case TYPE_METHOD_HANDLE_ITEM: {
-      auto methodhandle_ids_off = (uint64_t)item.offset;
+      auto methodhandle_ids_off = static_cast<uint64_t>(item.offset);
       dex_type_range_assert<dex_methodhandle_id>(
           methodhandle_ids_off, item.size, dexsize, "methodhandle_ids");
       // dex_methodhandle_id* methodhandle_ids =
       //     (dex_methodhandle_id*)((uint8_t*)dh + item.offset);
     } break;
+    default:
+      break;
     }
   }
 
@@ -246,9 +249,8 @@ void validate_type_ids_table(DexIdx* idx, const dex_header* dh) {
   // The sizes of type and string table have been checked here. We iterate
   // over the table directly instead of using the DexIdx functions as we
   // do not want to load `DexType`s at this point.
-  const dex_type_id* type_ids_base =
-      (const dex_type_id*)(reinterpret_cast<const uint8_t*>(dh) +
-                           dh->type_ids_off);
+  const dex_type_id* type_ids_base = reinterpret_cast<const dex_type_id*>(
+      reinterpret_cast<const uint8_t*>(dh) + dh->type_ids_off);
   const auto str_size = dh->string_ids_size;
   for (size_t i = 0; i != dh->type_ids_size; ++i) {
     const auto& type_id = type_ids_base[i];
@@ -259,7 +261,8 @@ void validate_type_ids_table(DexIdx* idx, const dex_header* dh) {
     auto dex_str =
         idx->get_string_data(type_id.string_idx, /*utfsize=*/nullptr);
     always_assert_type_log(type::is_valid(dex_str), INVALID_DEX,
-                           "%s is not a valid type descriptor", dex_str.data());
+                           "%s is not a valid type descriptor",
+                           std::string(dex_str).c_str());
   }
 }
 
@@ -270,7 +273,7 @@ const T* get_and_consume(std::string_view& ptr, size_t align) {
   }
   always_assert_type_log(ptr.size() >= sizeof(T), INVALID_DEX,
                          "Dex out of bounds");
-  const T* result = (const T*)ptr.data();
+  const T* result = reinterpret_cast<const T*>(ptr.data());
   ptr = ptr.substr(sizeof(T));
   return result;
 }
@@ -278,13 +281,13 @@ const T* get_and_consume(std::string_view& ptr, size_t align) {
 } // namespace
 
 void DexLoader::gather_input_stats() {
-  m_stats.num_types += m_dh->type_ids_size;
-  m_stats.num_classes += m_dh->class_defs_size;
-  m_stats.num_method_refs += m_dh->method_ids_size;
-  m_stats.num_field_refs += m_dh->field_ids_size;
-  m_stats.num_strings += m_dh->string_ids_size;
-  m_stats.num_protos += m_dh->proto_ids_size;
-  m_stats.num_bytes += m_dh->file_size;
+  m_stats.num_types += static_cast<int>(m_dh->type_ids_size);
+  m_stats.num_classes += static_cast<int>(m_dh->class_defs_size);
+  m_stats.num_method_refs += static_cast<int>(m_dh->method_ids_size);
+  m_stats.num_field_refs += static_cast<int>(m_dh->field_ids_size);
+  m_stats.num_strings += static_cast<int>(m_dh->string_ids_size);
+  m_stats.num_protos += static_cast<int>(m_dh->proto_ids_size);
+  m_stats.num_bytes += static_cast<int>(m_dh->file_size);
   // T58562665: TODO - actually update states for callsites/methodhandles
   m_stats.num_callsites += 0;
   m_stats.num_methodhandles += 0;
@@ -311,13 +314,15 @@ void DexLoader::gather_input_stats() {
         uint32_t count = *anno_data++;
         always_assert_type_log(anno_data <= anno_data + count, INVALID_DEX,
                                "Dex overflow");
-        always_assert_type_log((uint8_t*)(anno_data + count) <= m_idx->end(),
-                               INVALID_DEX, "Dex overflow");
+        always_assert_type_log(
+            reinterpret_cast<const uint8_t*>(anno_data + count) <= m_idx->end(),
+            INVALID_DEX, "Dex overflow");
         for (uint32_t aidx = 0; aidx < count; ++aidx) {
           anno_offsets.insert(anno_data[aidx]);
         }
       }
-      const uint32_t* anno_data = (uint32_t*)(anno_dir + 1);
+      const uint32_t* anno_data =
+          reinterpret_cast<const uint32_t*>(anno_dir + 1);
       for (uint32_t fidx = 0; fidx < anno_dir->fields_size; ++fidx) {
         anno_data++;
         anno_offsets.insert(*anno_data++);
@@ -334,7 +339,8 @@ void DexLoader::gather_input_stats() {
           uint32_t count = *annoxref++;
           always_assert_type_log(annoxref < annoxref + count, INVALID_DEX,
                                  "Dex overflow");
-          always_assert_type_log((uint8_t*)(annoxref + count) <= m_idx->end(),
+          always_assert_type_log(reinterpret_cast<const uint8_t*>(
+                                     annoxref + count) <= m_idx->end(),
                                  INVALID_DEX, "Dex overflow");
           for (uint32_t j = 0; j < count; j++) {
             uint32_t off = annoxref[j];
@@ -352,15 +358,17 @@ void DexLoader::gather_input_stats() {
         m_stats.num_static_values++;
       }
     }
-    m_stats.num_fields += clz->get_ifields().size() + clz->get_sfields().size();
-    m_stats.num_methods +=
-        clz->get_vmethods().size() + clz->get_dmethods().size();
+    m_stats.num_fields +=
+        static_cast<int>(clz->get_ifields().size() + clz->get_sfields().size());
+    m_stats.num_methods += static_cast<int>(clz->get_vmethods().size() +
+                                            clz->get_dmethods().size());
     auto process_methods = [&](const auto& methods) {
       for (auto* meth : methods) {
         DexCode* code = meth->get_dex_code();
         if (code) {
-          m_stats.num_instructions += code->get_instructions().size();
-          m_stats.num_tries += code->get_tries().size();
+          m_stats.num_instructions +=
+              static_cast<int>(code->get_instructions().size());
+          m_stats.num_tries += static_cast<int>(code->get_tries().size());
         }
       }
     };
@@ -372,12 +380,12 @@ void DexLoader::gather_input_stats() {
     DexProto* proto = meth->get_proto();
     type_lists.insert(proto->get_args());
   }
-  m_stats.num_annotations += anno_offsets.size();
-  m_stats.num_type_lists += type_lists.size();
+  m_stats.num_annotations += static_cast<int>(anno_offsets.size());
+  m_stats.num_type_lists += static_cast<int>(type_lists.size());
 
   for (uint32_t sidx = 0; sidx < m_dh->string_ids_size; ++sidx) {
     const auto* str = m_idx->get_stringidx(sidx);
-    m_stats.strings_total_size += str->get_entry_size();
+    m_stats.strings_total_size += static_cast<int>(str->get_entry_size());
   }
 
   const dex_map_list* map_list =
@@ -387,8 +395,9 @@ void DexLoader::gather_input_stats() {
   for (uint32_t i = 0; i < map_list->size; i++) {
     const auto& item = map_list->items[i];
 
-    std::string_view encdata{(const char*)m_idx->get_uleb_data(item.offset),
-                             m_idx->get_file_size() - item.offset};
+    std::string_view encdata{
+        reinterpret_cast<const char*>(m_idx->get_uleb_data(item.offset)),
+        m_idx->get_file_size() - item.offset};
 
     auto consume_encdata = [&](size_t size) {
       always_assert_type_log(encdata.size() >= size, INVALID_DEX,
@@ -408,79 +417,88 @@ void DexLoader::gather_input_stats() {
           .set_message(
               "Expected count of header_items in the map_list to be exactly 1")
           .add_info("size", item.size);
-      m_stats.header_item_count += item.size;
-      m_stats.header_item_bytes += item.size * sizeof(dex_header);
+      m_stats.header_item_count += static_cast<int>(item.size);
+      m_stats.header_item_bytes +=
+          static_cast<int>(item.size * sizeof(dex_header));
       break;
     case TYPE_STRING_ID_ITEM:
-      m_stats.string_id_count += item.size;
-      m_stats.string_id_bytes += item.size * sizeof(dex_string_id);
+      m_stats.string_id_count += static_cast<int>(item.size);
+      m_stats.string_id_bytes +=
+          static_cast<int>(item.size * sizeof(dex_string_id));
       break;
     case TYPE_TYPE_ID_ITEM:
-      m_stats.type_id_count += item.size;
-      m_stats.type_id_bytes += item.size * sizeof(dex_type_id);
+      m_stats.type_id_count += static_cast<int>(item.size);
+      m_stats.type_id_bytes +=
+          static_cast<int>(item.size * sizeof(dex_type_id));
       break;
     case TYPE_PROTO_ID_ITEM:
-      m_stats.proto_id_count += item.size;
-      m_stats.proto_id_bytes += item.size * sizeof(dex_proto_id);
+      m_stats.proto_id_count += static_cast<int>(item.size);
+      m_stats.proto_id_bytes +=
+          static_cast<int>(item.size * sizeof(dex_proto_id));
       break;
     case TYPE_FIELD_ID_ITEM:
-      m_stats.field_id_count += item.size;
-      m_stats.field_id_bytes += item.size * sizeof(dex_field_id);
+      m_stats.field_id_count += static_cast<int>(item.size);
+      m_stats.field_id_bytes +=
+          static_cast<int>(item.size * sizeof(dex_field_id));
       break;
     case TYPE_METHOD_ID_ITEM:
-      m_stats.method_id_count += item.size;
-      m_stats.method_id_bytes += item.size * sizeof(dex_method_id);
+      m_stats.method_id_count += static_cast<int>(item.size);
+      m_stats.method_id_bytes +=
+          static_cast<int>(item.size * sizeof(dex_method_id));
       break;
     case TYPE_CLASS_DEF_ITEM:
-      m_stats.class_def_count += item.size;
-      m_stats.class_def_bytes += item.size * sizeof(dex_class_def);
+      m_stats.class_def_count += static_cast<int>(item.size);
+      m_stats.class_def_bytes +=
+          static_cast<int>(item.size * sizeof(dex_class_def));
       break;
     case TYPE_CALL_SITE_ID_ITEM:
-      m_stats.call_site_id_count += item.size;
-      m_stats.call_site_id_bytes += item.size * sizeof(dex_callsite_id);
+      m_stats.call_site_id_count += static_cast<int>(item.size);
+      m_stats.call_site_id_bytes +=
+          static_cast<int>(item.size * sizeof(dex_callsite_id));
       break;
     case TYPE_METHOD_HANDLE_ITEM:
-      m_stats.method_handle_count += item.size;
-      m_stats.method_handle_bytes += item.size * sizeof(dex_methodhandle_id);
+      m_stats.method_handle_count += static_cast<int>(item.size);
+      m_stats.method_handle_bytes +=
+          static_cast<int>(item.size * sizeof(dex_methodhandle_id));
       break;
     case TYPE_MAP_LIST:
-      m_stats.map_list_count += item.size;
+      m_stats.map_list_count += static_cast<int>(item.size);
       for (uint32_t j = 0; j < item.size; j++) {
         uint32_t map_list_entries = *get_and_consume<uint32_t>(encdata, 4);
-        m_stats.map_list_bytes +=
-            sizeof(uint32_t) + map_list_entries * sizeof(dex_map_item);
+        m_stats.map_list_bytes += static_cast<int>(
+            sizeof(uint32_t) + map_list_entries * sizeof(dex_map_item));
         consume_encdata(map_list_entries * sizeof(dex_map_item));
       }
       break;
     case TYPE_TYPE_LIST:
-      m_stats.type_list_count += item.size;
+      m_stats.type_list_count += static_cast<int>(item.size);
       for (uint32_t j = 0; j < item.size; j++) {
         uint32_t type_list_entries = *get_and_consume<uint32_t>(encdata, 4);
-        m_stats.type_list_bytes +=
-            sizeof(uint32_t) + type_list_entries * sizeof(dex_type_item);
+        m_stats.type_list_bytes += static_cast<int>(
+            sizeof(uint32_t) + type_list_entries * sizeof(dex_type_item));
         consume_encdata(type_list_entries * sizeof(dex_type_item));
       }
       break;
     case TYPE_ANNOTATION_SET_REF_LIST:
-      m_stats.annotation_set_ref_list_count += item.size;
+      m_stats.annotation_set_ref_list_count += static_cast<int>(item.size);
       for (uint32_t j = 0; j < item.size; j++) {
         uint32_t annotation_set_ref_list_entries =
             *get_and_consume<uint32_t>(encdata, 4);
-        m_stats.annotation_set_ref_list_bytes +=
+        m_stats.annotation_set_ref_list_bytes += static_cast<int>(
             sizeof(uint32_t) + annotation_set_ref_list_entries *
-                                   sizeof(dex_annotation_set_ref_item);
+                                   sizeof(dex_annotation_set_ref_item));
         consume_encdata(annotation_set_ref_list_entries *
                         sizeof(dex_annotation_set_ref_item));
       }
       break;
     case TYPE_ANNOTATION_SET_ITEM:
-      m_stats.annotation_set_count += item.size;
+      m_stats.annotation_set_count += static_cast<int>(item.size);
       for (uint32_t j = 0; j < item.size; j++) {
         uint32_t annotation_set_entries =
             *get_and_consume<uint32_t>(encdata, 4);
-        m_stats.annotation_set_bytes +=
+        m_stats.annotation_set_bytes += static_cast<int>(
             sizeof(uint32_t) +
-            annotation_set_entries * sizeof(dex_annotation_off_item);
+            annotation_set_entries * sizeof(dex_annotation_off_item));
         consume_encdata(annotation_set_entries *
                         sizeof(dex_annotation_off_item));
       }
@@ -488,7 +506,7 @@ void DexLoader::gather_input_stats() {
     case TYPE_CLASS_DATA_ITEM: {
       size_t orig_size = encdata.size();
 
-      m_stats.class_data_count += item.size;
+      m_stats.class_data_count += static_cast<int>(item.size);
 
       for (uint32_t j = 0; j < item.size; j++) {
         // Read in field sizes.
@@ -517,13 +535,13 @@ void DexLoader::gather_input_stats() {
         }
       }
 
-      m_stats.class_data_bytes += orig_size - encdata.size();
+      m_stats.class_data_bytes += static_cast<int>(orig_size - encdata.size());
       break;
     }
     case TYPE_CODE_ITEM: {
       size_t orig_size = encdata.size();
 
-      m_stats.code_count += item.size;
+      m_stats.code_count += static_cast<int>(item.size);
 
       for (uint32_t j = 0; j < item.size; j++) {
         const auto* code_item = get_and_consume<dex_code_item>(encdata, 4);
@@ -542,7 +560,8 @@ void DexLoader::gather_input_stats() {
           for (uint32_t k = 0; k < catch_handler_list_size; ++k) {
             int32_t catch_handler_size =
                 read_sleb128_checked<redex::DexAssert>(encdata);
-            uint32_t abs_size = (uint32_t)std::abs(catch_handler_size);
+            uint32_t abs_size =
+                static_cast<uint32_t>(std::abs(catch_handler_size));
             for (uint32_t l = 0; l < abs_size; ++l) {
               // Read encoded_type_addr_pair.
               read_uleb128_checked<redex::DexAssert>(encdata);
@@ -555,13 +574,13 @@ void DexLoader::gather_input_stats() {
           }
         }
       }
-      m_stats.code_bytes += orig_size - encdata.size();
+      m_stats.code_bytes += static_cast<int>(orig_size - encdata.size());
       break;
     }
     case TYPE_STRING_DATA_ITEM: {
       size_t orig_size = encdata.size();
 
-      m_stats.string_data_count += item.size;
+      m_stats.string_data_count += static_cast<int>(item.size);
 
       for (uint32_t j = 0; j < item.size; j++) {
         // Skip data that encodes the number of UTF-16 code units.
@@ -572,13 +591,13 @@ void DexLoader::gather_input_stats() {
         }
       }
 
-      m_stats.string_data_bytes += encdata.size() - orig_size;
+      m_stats.string_data_bytes += static_cast<int>(encdata.size() - orig_size);
       break;
     }
     case TYPE_DEBUG_INFO_ITEM: {
       size_t orig_size = encdata.size();
 
-      m_stats.num_dbg_items += item.size;
+      m_stats.num_dbg_items += static_cast<int>(item.size);
       for (uint32_t j = 0; j < item.size; j++) {
         // line_start
         read_uleb128_checked<redex::DexAssert>(encdata);
@@ -630,6 +649,7 @@ void DexLoader::gather_input_stats() {
             // name_idx
             read_uleb128_checked<redex::DexAssert>(encdata);
             break;
+          // NOLINTNEXTLINE(bugprone-branch-clone)
           case DBG_SET_PROLOGUE_END:
           case DBG_SET_EPILOGUE_BEGIN:
             // These cases have no args
@@ -641,19 +661,21 @@ void DexLoader::gather_input_stats() {
           }
         }
       }
-      m_stats.dbg_total_size += orig_size - encdata.size();
+      m_stats.dbg_total_size += static_cast<int>(orig_size - encdata.size());
       break;
     }
+    // NOLINTNEXTLINE(bugprone-branch-clone)
     case TYPE_ANNOTATION_ITEM:
       // TBD!
       break;
+    // NOLINTNEXTLINE(bugprone-branch-clone)
     case TYPE_ENCODED_ARRAY_ITEM:
       // TBD!
       break;
     case TYPE_ANNOTATIONS_DIR_ITEM: {
       size_t orig_size = encdata.size();
 
-      m_stats.annotations_directory_count += item.size;
+      m_stats.annotations_directory_count += static_cast<int>(item.size);
 
       for (uint32_t j = 0; j < item.size; ++j) {
         const auto* annotations_directory_item =
@@ -668,7 +690,8 @@ void DexLoader::gather_input_stats() {
         consume_encdata(advance);
       }
 
-      m_stats.annotations_directory_bytes += encdata.size() - orig_size;
+      m_stats.annotations_directory_bytes +=
+          static_cast<int>(encdata.size() - orig_size);
       break;
     }
     case TYPE_HIDDENAPI_CLASS_DATA_ITEM:
@@ -732,15 +755,15 @@ void DexLoader::load_dex() {
   if (m_dh->class_defs_size == 0) {
     return;
   }
-  auto off = (uint64_t)m_dh->class_defs_off;
-  m_class_defs =
-      reinterpret_cast<const dex_class_def*>((const uint8_t*)m_dh + off);
+  auto off = static_cast<uint64_t>(m_dh->class_defs_off);
+  m_class_defs = reinterpret_cast<const dex_class_def*>(
+      reinterpret_cast<const uint8_t*>(m_dh) + off);
   m_classes.resize(m_dh->class_defs_size);
 
   switch (m_parallel) {
   case Parallel::kNo: {
-    for (size_t i = 0; i < m_dh->class_defs_size; ++i) {
-      load_dex_class(i);
+    for (uint32_t i = 0; i < m_dh->class_defs_size; ++i) {
+      load_dex_class(static_cast<int>(i));
     }
     break;
   }
@@ -752,7 +775,7 @@ void DexLoader::load_dex() {
         0, m_dh->class_defs_size,
         [&all_exceptions, &all_exceptions_mutex, this](uint32_t num) {
           try {
-            load_dex_class(num);
+            load_dex_class(static_cast<int>(num));
           } catch (const std::exception& exc) {
             TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
             std::lock_guard<std::mutex> lock_guard(all_exceptions_mutex);
@@ -782,7 +805,7 @@ DexLoader::DexLoader(const DexLocation* location,
                      size_t size,
                      int support_dex_version,
                      Parallel parallel)
-    : m_dh((const dex_header*)data.get()),
+    : m_dh(reinterpret_cast<const dex_header*>(data.get())),
       m_idx(nullptr),
       m_data(std::move(data)),
       m_file_size(size),
@@ -848,9 +871,9 @@ static void balloon_all(const Scope& scope,
 
       std::ostringstream oss;
       oss << "Error lifting DexCode to IRCode for the following methods:"
-          << std::endl;
+          << '\n';
       for (const auto& [method, data] : UnorderedIterable(ir_balloon_errors)) {
-        oss << show(method) << ": " << data.first << std::endl;
+        oss << show(method) << ": " << data.first << '\n';
       }
 
       TRACE(MAIN, 1, "%s" /* format string must be a string literal */,
@@ -901,7 +924,8 @@ DexClasses load_classes_from_dex(const dex_header* dh,
                                  bool throw_on_balloon_error,
                                  DexLoader::Parallel p) {
   // We don't actually own things here.
-  auto non_owning = DexLoader::DataUPtr((const uint8_t*)dh, [](auto*) {});
+  auto non_owning =
+      DexLoader::DataUPtr(reinterpret_cast<const uint8_t*>(dh), [](auto*) {});
   // TODO: This is dangerous and we should change the API.
   auto size = dh->file_size;
 
