@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "json/value.h"
-#include "json/writer.h"
-#include <boost/thread/thread.hpp>
-#include <cinttypes>
+#include <json/reader.h>
+#include <json/value.h>
+#include <json/writer.h>
+
 #include <cstring>
 #include <ctime>
 #include <filesystem>
@@ -16,7 +16,6 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <regex>
 #include <set>
 #include <string>
 #include <vector>
@@ -32,9 +31,11 @@
 #include <unistd.h>
 #endif
 
-#include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
-#include <json/json.h>
+#include <boost/program_options/options_description.hpp>
+#include <boost/program_options/parsers.hpp>
+#include <boost/program_options/positional_options.hpp>
+#include <boost/program_options/value_semantic.hpp>
+#include <boost/program_options/variables_map.hpp>
 
 #include "AggregateException.h"
 #include "CommandProfiling.h"
@@ -56,7 +57,6 @@
 #include "KeepReason.h"
 #include "Macros.h"
 #include "MallocDebug.h"
-#include "MonitorCount.h"
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
@@ -96,8 +96,8 @@ constexpr const char* STRING_LOCALE_DUMP = "redex-string-locales.txt";
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
 void print_usage() {
-  std::cout << k_usage_header << std::endl;
-  std::cout << "Try 'redex-all -h' for more information." << std::endl;
+  std::cout << k_usage_header << '\n';
+  std::cout << "Try 'redex-all -h' for more information." << '\n';
 }
 
 struct Arguments {
@@ -113,37 +113,37 @@ struct Arguments {
   RedexOptions redex_options;
   bool properties_check{false};
   bool properties_check_allow_disabled{false};
-  std::optional<std::string> assert_abort{};
-  std::optional<std::string> crash_file{};
+  std::optional<std::string> assert_abort;
+  std::optional<std::string> crash_file;
 };
 
 UNUSED void dump_args(const Arguments& args) {
-  std::cout << "out_dir: " << args.out_dir << std::endl;
+  std::cout << "out_dir: " << args.out_dir << '\n';
   std::cout << "verify_none_mode: " << args.redex_options.verify_none_enabled
-            << std::endl;
-  std::cout << "art_build: " << args.redex_options.is_art_build << std::endl;
+            << '\n';
+  std::cout << "art_build: " << args.redex_options.is_art_build << '\n';
   std::cout << "enable_instrument_pass: "
-            << args.redex_options.instrument_pass_enabled << std::endl;
-  std::cout << "min_sdk: " << args.redex_options.min_sdk << std::endl;
+            << args.redex_options.instrument_pass_enabled << '\n';
+  std::cout << "min_sdk: " << args.redex_options.min_sdk << '\n';
   std::cout << "debug_info_kind: "
             << debug_info_kind_to_string(args.redex_options.debug_info_kind)
-            << std::endl;
-  std::cout << "jar_paths: " << std::endl;
+            << '\n';
+  std::cout << "jar_paths: " << '\n';
   for (const auto& e : args.jar_paths) {
-    std::cout << "  " << e << std::endl;
+    std::cout << "  " << e << '\n';
   }
-  std::cout << "proguard_config_paths: " << std::endl;
+  std::cout << "proguard_config_paths: " << '\n';
   for (const auto& e : args.proguard_config_paths) {
-    std::cout << "  " << e << std::endl;
+    std::cout << "  " << e << '\n';
   }
-  std::cout << "dex_files: " << std::endl;
+  std::cout << "dex_files: " << '\n';
   for (const auto& e : args.dex_files) {
-    std::cout << "  " << e << std::endl;
+    std::cout << "  " << e << '\n';
   }
-  std::cout << "config: " << std::endl;
-  std::cout << args.config << std::endl;
-  std::cout << "arch: " << std::endl;
-  std::cout << args.redex_options.arch << std::endl;
+  std::cout << "config: " << '\n';
+  std::cout << args.config << '\n';
+  std::cout << "arch: " << '\n';
+  std::cout << args.redex_options.arch << '\n';
 }
 
 Json::Value parse_json_value(const std::string& value_string) {
@@ -301,7 +301,7 @@ Json::Value reflect_property_definitions() {
     for (auto& prop : tmp) {
       holder.append(redex_properties::get_name(prop));
     }
-    return holder;
+    return holder; // NOLINT(clang-diagnostic-nrvo)
   };
 
   properties["initial"] =
@@ -315,6 +315,7 @@ Json::Value reflect_property_definitions() {
 #pragma GCC diagnostic push
 // Necessary for unknown errors in older versions.
 #pragma GCC diagnostic ignored "-Wpragmas"
+// NOLINTNEXTLINE
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
 #pragma GCC diagnostic ignored "-Winfinite-recursion"
 void __attribute__((noinline, optnone)) assert_abort(const std::string& message,
@@ -327,7 +328,7 @@ void __attribute__((noinline, optnone)) assert_abort(const std::string& message,
   }
 }
 
-void __attribute__((noinline)) asan_abort() {
+[[noreturn]] void __attribute__((noinline)) asan_abort() {
   // Use a use-after-scope issue for simplicity.
   volatile int* tmp;
   {
@@ -502,7 +503,7 @@ Arguments parse_args(int argc, char* argv[]) {
         vm);
     po::notify(vm);
   } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
+    std::cerr << e.what() << "\n\n";
     print_usage();
     exit(EXIT_FAILURE);
   }
@@ -565,9 +566,9 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("show-passes") != 0u) {
     const auto& passes = PassRegistry::get().get_passes();
-    std::cout << "Registered passes: " << passes.size() << std::endl;
+    std::cout << "Registered passes: " << passes.size() << '\n';
     for (size_t i = 0; i < passes.size(); ++i) {
-      std::cout << i + 1 << ": " << passes[i]->name() << std::endl;
+      std::cout << i + 1 << ": " << passes[i]->name() << '\n';
     }
     exit(EXIT_SUCCESS);
   }
@@ -582,7 +583,7 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("dex-files") != 0u) {
     args.dex_files = vm["dex-files"].as<std::vector<std::string>>();
   } else if (!args.properties_check) {
-    std::cerr << "error: no input dex files" << std::endl << std::endl;
+    std::cerr << "error: no input dex files\n\n";
     print_usage();
     exit(EXIT_SUCCESS);
   }
@@ -592,7 +593,7 @@ Arguments parse_args(int argc, char* argv[]) {
     for (int warn : warns) {
       if (0 > warn || warn > 2) {
         std::cerr << "warning: ignoring invalid warning level option: " << warn
-                  << std::endl;
+                  << '\n';
       }
     }
     g_warning_level = OptWarningLevel(warns.back());
@@ -613,7 +614,7 @@ Arguments parse_args(int argc, char* argv[]) {
     args.out_dir = take_last(vm["outdir"]);
     if (!redex::dir_is_writable(args.out_dir)) {
       std::cerr << "error: outdir is not a writable directory: " << args.out_dir
-                << std::endl;
+                << '\n';
       exit(EXIT_FAILURE);
     }
   }
@@ -661,14 +662,14 @@ Arguments parse_args(int argc, char* argv[]) {
     std::string arch = take_last(vm["arch"]);
     args.redex_options.arch = parse_architecture(arch);
     if (args.redex_options.arch == Architecture::UNKNOWN) {
-      std::cerr << "warning: cannot architecture " << arch << std::endl;
+      std::cerr << "warning: cannot architecture " << arch << '\n';
     }
   }
 
   if (vm.count("-S") != 0u) {
     for (const auto& key_value : vm["-S"].as<std::vector<std::string>>()) {
       if (!add_value_to_config(args.config, key_value, false)) {
-        std::cerr << "warning: cannot parse -S" << key_value << std::endl;
+        std::cerr << "warning: cannot parse -S" << key_value << '\n';
       }
     }
   }
@@ -676,7 +677,7 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("-J") != 0u) {
     for (const auto& key_value : vm["-J"].as<std::vector<std::string>>()) {
       if (!add_value_to_config(args.config, key_value, true)) {
-        std::cerr << "warning: cannot parse -J" << key_value << std::endl;
+        std::cerr << "warning: cannot parse -J" << key_value << '\n';
       }
     }
   }
@@ -715,7 +716,7 @@ Arguments parse_args(int argc, char* argv[]) {
     passes_list.append("MakePublicPass");
     passes_list.append("RegAllocPass");
     if (args.out_dir.empty() || !redex::dir_is_writable(args.out_dir)) {
-      std::cerr << "output-ir is empty or not writable" << std::endl;
+      std::cerr << "output-ir is empty or not writable" << '\n';
       exit(EXIT_FAILURE);
     }
   }
@@ -733,7 +734,7 @@ Arguments parse_args(int argc, char* argv[]) {
     // Saving before printing is a conventional way of using errno.
     int errsv = errno;
     std::cerr << "error: cannot mkdir meta in outdir. errno = " << errsv
-              << std::endl;
+              << '\n';
     exit(EXIT_FAILURE);
   }
 
@@ -967,8 +968,8 @@ Json::Value get_times(double cpu_time_s) {
   }
   if (redex_thread_pool::ThreadPool::get_instance() != nullptr) {
     Json::Value thread_pool_element;
-    thread_pool_element["thread_pool_size"] =
-        redex_thread_pool::ThreadPool::get_instance()->size() * 1.0;
+    thread_pool_element["thread_pool_size"] = static_cast<double>(
+        redex_thread_pool::ThreadPool::get_instance()->size());
     list.append(thread_pool_element);
   }
   return list;
@@ -1042,19 +1043,22 @@ void write_debug_line_mapping(
    */
   size_t bit_32_size = sizeof(uint32_t);
   size_t bit_64_size = sizeof(uint64_t);
-  uint32_t num_method = code_debug_lines.size();
-  int offset = num_method + 2;
+  uint32_t num_method = static_cast<uint32_t>(code_debug_lines.size());
+  uint32_t offset = num_method + 2;
   // Start of debug line info information would be after all of
   // method-id => offset info, so set the start of offset to be after that.
-  int binary_offset =
-      3 * bit_32_size + (bit_64_size + 2 * bit_32_size) * num_method;
+  uint32_t binary_offset = static_cast<uint32_t>(
+      3 * bit_32_size + (bit_64_size + 2 * bit_32_size) * num_method);
   std::ofstream ofs(debug_line_map_filename.c_str(),
                     std::ofstream::out | std::ofstream::trunc);
   uint32_t magic = 0xfaceb000; // serves as endianess check
-  ofs.write((const char*)&magic, bit_32_size);
+  ofs.write(reinterpret_cast<const char*>(&magic),
+            static_cast<std::streamsize>(bit_32_size));
   uint32_t version = 1;
-  ofs.write((const char*)&version, bit_32_size);
-  ofs.write((const char*)&num_method, bit_32_size);
+  ofs.write(reinterpret_cast<const char*>(&version),
+            static_cast<std::streamsize>(bit_32_size));
+  ofs.write(reinterpret_cast<const char*>(&num_method),
+            static_cast<std::streamsize>(bit_32_size));
   std::ostringstream line_out;
 
   auto scope = build_class_scope(stores);
@@ -1073,23 +1077,29 @@ void write_debug_line_mapping(
 
     uint64_t method_id = method_to_id.at(method);
     // write method id => offset info for binary file
-    ofs.write((const char*)&method_id, bit_64_size);
-    ofs.write((const char*)&binary_offset, bit_32_size);
+    ofs.write(reinterpret_cast<const char*>(&method_id),
+              static_cast<std::streamsize>(bit_64_size));
+    ofs.write(reinterpret_cast<const char*>(&binary_offset),
+              static_cast<std::streamsize>(bit_32_size));
 
     auto debug_lines = code_debug_lines.at(dex_code);
-    uint32_t num_line_info = debug_lines.size();
+    uint32_t num_line_info = static_cast<uint32_t>(debug_lines.size());
     offset = offset + 1 + num_line_info;
     uint32_t info_section_size =
-        bit_64_size + static_cast<uint32_t>(num_line_info * 2 *
-                                            static_cast<uint32_t>(bit_32_size));
-    ofs.write((const char*)&info_section_size, bit_32_size);
+        static_cast<uint32_t>(bit_64_size) +
+        (num_line_info * 2 * static_cast<uint32_t>(bit_32_size));
+    ofs.write(reinterpret_cast<const char*>(&info_section_size),
+              static_cast<std::streamsize>(bit_32_size));
     binary_offset = binary_offset + info_section_size;
 
     // Generate debug line info for binary file.
-    line_out.write((const char*)&method_id, bit_64_size);
+    line_out.write(reinterpret_cast<const char*>(&method_id),
+                   static_cast<std::streamsize>(bit_64_size));
     for (auto it = debug_lines.begin(); it != debug_lines.end(); ++it) {
-      line_out.write((const char*)&it->offset, bit_32_size);
-      line_out.write((const char*)&it->line, bit_32_size);
+      line_out.write(reinterpret_cast<const char*>(&it->offset),
+                     static_cast<std::streamsize>(bit_32_size));
+      line_out.write(reinterpret_cast<const char*>(&it->line),
+                     static_cast<std::streamsize>(bit_32_size));
     }
   }
   ofs << line_out.str();
@@ -1230,7 +1240,7 @@ void load_library_jars(Arguments& args,
       }
 
       std::cerr << "error: library jar could not be loaded: " << library_jar
-                << std::endl;
+                << '\n';
       _exit(EXIT_FAILURE);
     }
   };
@@ -1344,7 +1354,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
   if (pg_config.keep_rules.empty() && !ignore_no_keep_rules) {
     std::cerr << "error: No ProGuard keep rules provided. Redex optimizations "
                  "will not preserve semantics without accurate keep rules."
-              << std::endl;
+              << '\n';
     exit(EXIT_FAILURE);
   }
 
@@ -1502,7 +1512,7 @@ void collect_classes_for_full_jsonl(const DexStore& store,
           members_entry[std::string(member->get_deobfuscated_name_or_empty())] =
               show(member);
         }
-        return members_entry;
+        return members_entry; // NOLINT(clang-diagnostic-nrvo)
       };
       class_entry["ifields"] = collect_members(cls->get_ifields());
       class_entry["sfields"] = collect_members(cls->get_sfields());
@@ -1591,7 +1601,7 @@ void redex_backend(ConfigFiles& conf,
   if (should_preserve_input_dexes) {
     TRACE(MAIN, 1, "Skipping writing output dexes as configured");
   } else {
-    redex_assert(!stores.empty());
+    always_assert(!stores.empty());
     const auto& dex_magic = stores[0].get_dex_magic();
     auto min_sdk = manager.get_redex_options().min_sdk;
     ScopedMemStats wod_mem_stats{mem_stats_enabled, reset_hwm};
@@ -1680,8 +1690,6 @@ void redex_backend(ConfigFiles& conf,
 
   {
     Timer t("Writing stats");
-    auto method_move_map =
-        conf.metafile(json_config.get("method_move_map", std::string()));
     if (needs_addresses) {
       Timer t2{"Writing debug line mapping"};
       write_debug_line_mapping(debug_line_map_filename, method_to_id,
@@ -1738,7 +1746,7 @@ void dump_class_method_info_map(const std::string& file_path,
       "# M,<class index>,<obfuscated method name>,<deobfuscated method name>,\n"
       "#   <size>,<virtual>,<external>,<concrete>\n"
       "# I,DEXLOC,<index>,<string>";
-  ofs << header << std::endl;
+  ofs << header << '\n';
 
   auto exclude_class_name = [&](const std::string& full_name) {
     const auto dot_pos = full_name.find('.');
@@ -1753,7 +1761,7 @@ void dump_class_method_info_map(const std::string& file_path,
         << (method->get_dex_code() != nullptr ? method->get_dex_code()->size()
                                               : 0)
         << "," << method->is_virtual() << "," << method->is_external() << ","
-        << method->is_concrete() << std::endl;
+        << method->is_concrete() << '\n';
   };
 
   // Interning
@@ -1763,16 +1771,16 @@ void dump_class_method_info_map(const std::string& file_path,
   walk::classes(build_class_scope(stores), [&](const DexClass* cls) {
     const auto& dexloc = cls->get_location()->get_file_name();
     if (dexloc_map.count(dexloc) == 0u) {
-      dexloc_map[dexloc] = dexloc_map.size();
-      ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << std::endl;
+      dexloc_map[dexloc] = static_cast<int>(dexloc_map.size());
+      ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << '\n';
     }
 
     redex_assert(!class_map.count(cls));
-    const int cls_idx = (class_map[cls] = class_map.size());
+    const int cls_idx = (class_map[cls] = static_cast<int>(class_map.size()));
     ofs << "C," << cls_idx << "," << show(cls) << "," << show_deobfuscated(cls)
         << "," << (cls->get_dmethods().size() + cls->get_vmethods().size())
         << "," << cls->get_vmethods().size() << "," << dexloc_map[dexloc]
-        << std::endl;
+        << '\n';
 
     for (auto* dmethod : cls->get_dmethods()) {
       print(cls_idx, dmethod);
@@ -1846,7 +1854,7 @@ int check_pass_properties(const Arguments& args) {
 
   if (!pmc.check_pass_order_properties &&
       args.properties_check_allow_disabled) {
-    std::cout << "Properties checks are disabled, skipping." << std::endl;
+    std::cout << "Properties checks are disabled, skipping." << '\n';
     return 0;
   }
 
@@ -1875,7 +1883,7 @@ int check_pass_properties(const Arguments& args) {
   }
   auto failure = Manager::verify_pass_interactions(pass_interactions, conf);
   if (failure) {
-    std::cerr << "Illegal pass order:\n" << *failure << std::endl;
+    std::cerr << "Illegal pass order:\n" << *failure << '\n';
     return 1;
   }
   return 0;
@@ -1991,7 +1999,7 @@ int main(int argc, char* argv[]) {
     cfg::ControlFlowGraph::s_DEBUG =
         cfg::ControlFlowGraph::s_DEBUG || slow_invariants_debug;
     if (slow_invariants_debug) {
-      std::cerr << "Slow invariants enabled." << std::endl;
+      std::cerr << "Slow invariants enabled." << '\n';
     }
 
     auto pg_config = std::make_unique<keep_rules::ProguardConfiguration>();
