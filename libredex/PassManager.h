@@ -17,6 +17,7 @@
 
 #include "AnalysisUsage.h"
 #include "AssetManager.h"
+#include "AtomicStatCounter.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexHasher.h"
@@ -79,7 +80,33 @@ class PassManager {
   };
 
   void run_passes(DexStoresVector&, ConfigFiles&);
-  void incr_metric(const std::string& key, int64_t value);
+
+  template <typename T>
+  typename std::enable_if_t<std::is_arithmetic_v<T>, void> incr_metric(
+      const std::string& key, T value) {
+    always_assert_log(m_current_pass_info != nullptr, "No current pass!");
+    std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
+    (m_current_pass_info->metrics)[key] += static_cast<int64_t>(value);
+  }
+
+  // Specialization for atomic types
+  template <typename T>
+  void incr_metric(const std::string& key, const std::atomic<T>& value) {
+    static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
+    always_assert_log(m_current_pass_info != nullptr, "No current pass!");
+    std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
+    (m_current_pass_info->metrics)[key] +=
+        static_cast<int64_t>(value.load(std::memory_order_relaxed));
+  }
+
+  template <typename T>
+  void incr_metric(const std::string& key, const AtomicStatCounter<T>& value) {
+    static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
+    always_assert_log(m_current_pass_info != nullptr, "No current pass!");
+    std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
+    (m_current_pass_info->metrics)[key] += static_cast<int64_t>(value.load());
+  }
+
   template <typename T>
   typename std::enable_if_t<std::is_arithmetic_v<T>, void> set_metric(
       const std::string& key, T value) {

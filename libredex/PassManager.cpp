@@ -1788,12 +1788,6 @@ Pass* PassManager::find_pass(const std::string& pass_name) const {
   return pass_it != m_activated_passes.end() ? *pass_it : nullptr;
 }
 
-void PassManager::incr_metric(const std::string& key, int64_t value) {
-  always_assert_log(m_current_pass_info != nullptr, "No current pass!");
-  std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
-  (m_current_pass_info->metrics)[key] += value;
-}
-
 int64_t PassManager::get_metric(const std::string& key) {
   std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
   return (m_current_pass_info->metrics)[key];
