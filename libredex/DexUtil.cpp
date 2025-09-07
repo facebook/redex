@@ -7,9 +7,10 @@
 
 #include "DexUtil.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/regex.hpp>
+#include <boost/filesystem/directory.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/regex.hpp> // NOLINT
 #include <string_view>
 
 #include "Debug.h"
@@ -423,9 +424,8 @@ bool gather_invoked_methods_that_prevent_relocation(
       }
       if (meth != nullptr) {
         always_assert(meth->is_def());
-        if (meth->is_external() && !is_public(meth)) {
-          meth = nullptr;
-        } else if (opcode == OPCODE_INVOKE_DIRECT && !method::is_init(meth)) {
+        if ((meth->is_external() && !is_public(meth)) ||
+            (opcode == OPCODE_INVOKE_DIRECT && !method::is_init(meth))) {
           meth = nullptr;
         }
       }
