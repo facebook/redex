@@ -13,10 +13,9 @@
 #include <ctime>
 #include <fstream>
 #include <iostream>
-#include <json/json.h>
+#include <json/value.h>
 #include <limits>
 #include <list>
-#include <mutex>
 #include <sstream>
 #include <thread>
 #include <typeinfo>
@@ -33,9 +32,7 @@
 #include "ClassChecker.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
-#include "Debug.h"
 #include "DexClass.h"
-#include "DexLoader.h"
 #include "DexStructure.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
@@ -80,7 +77,7 @@ const Pass* get_profiled_pass(const PassManager& mgr) {
   const auto* pass = mgr.find_pass(profile_pass_name);
   always_assert_log(pass != nullptr, "Could not find pass named %s",
                     profile_pass_name);
-  std::cerr << "Will run profiler for " << pass->name() << std::endl;
+  std::cerr << "Will run profiler for " << pass->name() << '\n';
   return pass;
 }
 
@@ -149,7 +146,7 @@ class CheckerConfig {
       return;
     }
     if (!m_run_type_checker_on_input) {
-      std::cerr << "Note: input type checking is turned off!" << std::endl;
+      std::cerr << "Note: input type checking is turned off!" << '\n';
       return;
     }
 
@@ -174,7 +171,7 @@ class CheckerConfig {
         scope, /* exit_on_fail= */ false);
     if (!res) {
       std::cerr << "Warning: input has accessibility issues. Continuing."
-                << std::endl;
+                << '\n';
       return; // "No" issues.
     }
     std::string msg = *res;
@@ -282,9 +279,9 @@ class CheckerConfig {
 
       std::ostringstream oss;
       oss << "Inconsistency found in Dex code for "
-          << show(res.smallest_error_method) << std::endl
-          << " " << checker.what() << std::endl
-          << "Code:" << std::endl
+          << show(res.smallest_error_method) << '\n'
+          << " " << checker.what() << '\n'
+          << "Code:" << '\n'
           << run_checker_error(res.smallest_error_method);
 
       if (res.errors > 1) {
@@ -317,7 +314,8 @@ class CheckerConfig {
     return boost::none;
   }
 
-  static void fail_error(std::string error_msg, size_t errors = 1) {
+  [[noreturn]] static void fail_error(std::string error_msg,
+                                      size_t errors = 1) {
     if (errors > 1) {
       error_msg.append("\n(");
       error_msg.append(std::to_string(errors - 1));
@@ -545,7 +543,7 @@ class JNINativeContextHelper {
 
     // TODO: For better human readability, change this to CSV of native,java?
     for (const auto& name : output_symbols) {
-      out << name << std::endl;
+      out << name << '\n';
     }
 
     g_native_context.reset();
@@ -726,7 +724,7 @@ class AfterPassSizes {
     pid_t p = fork();
 
     if (p < 0) {
-      std::cerr << "Fork failed!" << strerror(errno) << std::endl;
+      std::cerr << "Fork failed!" << strerror(errno) << '\n';
       return false;
     }
 
@@ -768,13 +766,13 @@ class AfterPassSizes {
         continue;
       }
       if (wait_res == -1) {
-        std::cerr << "Failed " << it->pass_info->name << std::endl;
+        std::cerr << "Failed " << it->pass_info->name << '\n';
       } else {
         if (WIFEXITED(stat) && WEXITSTATUS(stat) == 0) {
           handle_parent(*it);
         } else {
           std::cerr << "AfterPass child failed: " << std::hex << stat
-                    << std::dec << std::endl;
+                    << std::dec << '\n';
         }
       }
       boost::filesystem::remove_all(it->tmp_dir);
@@ -787,7 +785,7 @@ class AfterPassSizes {
     // Discover dex files
     namespace fs = boost::filesystem;
     auto end = fs::directory_iterator();
-    size_t sum{0};
+    uint64_t sum{0};
     for (fs::directory_iterator it{job.tmp_dir}; it != end; ++it) {
       const auto& file = it->path();
       if (fs::is_regular_file(file) &&
@@ -795,9 +793,9 @@ class AfterPassSizes {
         sum += fs::file_size(file);
       }
     }
-    job.pass_info->metrics["after_pass_size"] = sum;
+    job.pass_info->metrics["after_pass_size"] = static_cast<int64_t>(sum);
     if (m_debug) {
-      std::cerr << "Got " << sum << " for " << job.pass_info->name << std::endl;
+      std::cerr << "Got " << sum << " for " << job.pass_info->name << '\n';
     }
   }
 
@@ -806,7 +804,7 @@ class AfterPassSizes {
                     ConfigFiles* conf) {
     // Change output directory.
     if (m_debug) {
-      std::cerr << "After-pass-size to " << tmp_dir << std::endl;
+      std::cerr << "After-pass-size to " << tmp_dir << '\n';
     }
     conf->set_outdir(tmp_dir);
 
@@ -823,7 +821,7 @@ class AfterPassSizes {
       auto* pass = m_mgr->find_pass(pass_name);
       if (pass != nullptr) {
         if (m_debug) {
-          std::cerr << "Running " << pass_name << std::endl;
+          std::cerr << "Running " << pass_name << '\n';
         }
         if (!pass->is_cfg_legacy()) {
           ensure_cfg(*stores);
@@ -899,17 +897,16 @@ class TraceClassAfterEachPass {
 
     auto* trace_class_file = getenv("TRACE_CLASS_FILE");
     std::cerr << "TRACE_CLASS_FILE="
-              << (trace_class_file == nullptr ? "" : trace_class_file)
-              << std::endl;
+              << (trace_class_file == nullptr ? "" : trace_class_file) << '\n';
 
     auto* trace_class_name = getenv("TRACE_CLASS_NAME");
     m_trace_class_env = trace_class_name == nullptr ? "" : trace_class_name;
-    std::cerr << "TRACE_CLASS_NAME=" << m_trace_class_env << std::endl;
+    std::cerr << "TRACE_CLASS_NAME=" << m_trace_class_env << '\n';
     m_trace_class_names = extract_delimited_items(m_trace_class_env, ",");
 
     auto* trace_method_name = getenv("TRACE_METHOD_NAME");
     m_trace_method_env = trace_method_name == nullptr ? "" : trace_method_name;
-    std::cerr << "TRACE_METHOD_NAME=" << m_trace_method_env << std::endl;
+    std::cerr << "TRACE_METHOD_NAME=" << m_trace_method_env << '\n';
     m_trace_method_names = extract_delimited_items(m_trace_method_env, ",");
 
     if (!m_trace_method_names.empty() || !m_trace_class_names.empty()) {
@@ -1098,7 +1095,8 @@ struct JemallocStats {
     full_stats = pmc->jemalloc_full_stats;
   }
 
-  void process_jemalloc_stats_for_pass(const Pass* pass, size_t run) {
+  void process_jemalloc_stats_for_pass([[maybe_unused]] const Pass* pass,
+                                       [[maybe_unused]] size_t run) {
 #ifdef USE_JEMALLOC
     std::string key_base = "~jemalloc.";
     auto cb = [&](const char* key, uint64_t value) {
@@ -1147,7 +1145,7 @@ struct ViolationsTracking {
     Handler& operator=(const Handler&) = delete;
 
     Handler(Handler&& other) noexcept : pm(other.pm), vh(std::move(other.vh)) {}
-    Handler& operator=(Handler&& rhs) noexcept {
+    [[maybe_unused]] Handler& operator=(Handler&& rhs) noexcept {
       if (vh != nullptr) {
         vh->silence();
       }
@@ -1170,10 +1168,6 @@ struct ViolationsTracking {
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
   return std::make_unique<keep_rules::ProguardConfiguration>();
 }
-
-struct PassManager::InternalFields {
-  std::mutex m_metrics_lock;
-};
 
 PassManager::PassManager(const std::vector<Pass*>& passes)
     : PassManager(
@@ -1247,7 +1241,8 @@ void PassManager::init(const ConfigFiles& config) {
     m_pass_info[i].repeat = count;
     m_pass_info[i].total_repeat = pass_repeats.at(pass);
     m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
-    m_pass_info[i].metrics[std::string(PASS_ORDER_KEY)] = i;
+    m_pass_info[i].metrics[std::string(PASS_ORDER_KEY)] =
+        static_cast<int64_t>(i);
     m_pass_info[i].config =
         JsonWrapper(config.get_json_config()[pass->name().c_str()]);
   }
@@ -1741,18 +1736,20 @@ PassManager::ActivatedPasses PassManager::compute_activated_passes(
       // the pass list, which needs to be removed for matching.
       auto activate = [&registered_passes, &result](const std::string& n,
                                                     const std::string* a) {
-        for (auto* pass : registered_passes) {
-          if (n == pass->name()) {
+        for (auto* registered_pass : registered_passes) {
+          if (n == registered_pass->name()) {
+            auto* activated_pass = registered_pass;
             if (a != nullptr) {
-              auto cloned_pass = pass->clone(*a);
+              auto cloned_pass = registered_pass->clone(*a);
               always_assert_log(cloned_pass != nullptr,
                                 "Cannot clone pass %s to make alias %s",
                                 n.c_str(), a->c_str());
-              pass = cloned_pass.get();
+              activated_pass = cloned_pass.get();
               result.cloned_passes.emplace_back(std::move(cloned_pass));
             }
 
-            result.activated_passes.emplace_back(pass, a == nullptr ? n : *a);
+            result.activated_passes.emplace_back(activated_pass,
+                                                 a == nullptr ? n : *a);
 
             return true;
           }
@@ -1797,12 +1794,6 @@ void PassManager::incr_metric(const std::string& key, int64_t value) {
   (m_current_pass_info->metrics)[key] += value;
 }
 
-void PassManager::set_metric(const std::string& key, int64_t value) {
-  always_assert_log(m_current_pass_info != nullptr, "No current pass!");
-  std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
-  (m_current_pass_info->metrics)[key] = value;
-}
-
 int64_t PassManager::get_metric(const std::string& key) {
   std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
   return (m_current_pass_info->metrics)[key];
@@ -1841,7 +1832,8 @@ ReserveRefsInfo PassManager::get_reserved_refs() const {
 }
 
 void PassManager::check_unreleased_reserved_refs() {
-  for (const auto& [name, info] : m_reserved_ref_infos) {
+  if (!m_reserved_ref_infos.empty()) {
+    const auto& [name, info] = m_reserved_ref_infos.front();
     fprintf(stderr, "ABORT! Unreleased reserved refs: %s(%zu, %zu, %zu)\n",
             name.c_str(), info.frefs, info.trefs, info.mrefs);
     exit(EXIT_FAILURE);

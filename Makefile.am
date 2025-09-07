@@ -224,7 +224,6 @@ libredex_la_SOURCES = \
 	libredex/RefChecker.cpp \
 	libredex/RemoveUninstantiablesImpl.cpp \
 	libredex/Resolver.cpp \
-	libredex/ScopedMetrics.cpp \
 	libredex/Show.cpp \
 	libredex/SourceBlockConsistencyCheck.cpp \
 	libredex/SourceBlocks.cpp \

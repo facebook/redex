@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <typeinfo>
 #include <utility>
@@ -17,6 +17,7 @@
 
 #include "AnalysisUsage.h"
 #include "AssetManager.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexHasher.h"
 #include "JsonWrapper.h"
@@ -79,7 +80,24 @@ class PassManager {
 
   void run_passes(DexStoresVector&, ConfigFiles&);
   void incr_metric(const std::string& key, int64_t value);
-  void set_metric(const std::string& key, int64_t value);
+  template <typename T>
+  typename std::enable_if_t<std::is_arithmetic_v<T>, void> set_metric(
+      const std::string& key, T value) {
+    always_assert_log(m_current_pass_info != nullptr, "No current pass!");
+    std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
+    (m_current_pass_info->metrics)[key] = static_cast<int64_t>(value);
+  }
+
+  // Specialization for atomic types
+  template <typename T>
+  void set_metric(const std::string& key, const std::atomic<T>& value) {
+    static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
+    always_assert_log(m_current_pass_info != nullptr, "No current pass!");
+    std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
+    (m_current_pass_info->metrics)[key] =
+        static_cast<int64_t>(value.load(std::memory_order_relaxed));
+  }
+
   int64_t get_metric(const std::string& key);
   const std::vector<PassManager::PassInfo>& get_pass_info() const;
   boost::optional<hashing::DexHash> get_initial_hash() const {
@@ -199,7 +217,10 @@ class PassManager {
   std::vector<std::unique_ptr<Pass>> m_cloned_passes;
 
   // unique_ptr to avoid header include.
-  struct InternalFields;
+  struct InternalFields {
+    std::mutex m_metrics_lock;
+  };
+
   std::unique_ptr<InternalFields> m_internal_fields;
 
   redex_properties::Manager* m_properties_manager{nullptr};
