@@ -237,7 +237,8 @@ void log_debug_to_methods(const std::map<void*, DexMethods>& result) {
     const char* dexfile = std::getenv("dexfile");
     redex_assert(dexfile);
     auto pre_classes = load_classes_from_dex(
-        DexLocation::make_location("", dexfile), /*stats=*/nullptr, false);
+        DexLocation::make_location("", dexfile), /*stats=*/nullptr,
+        /*input_dex_version*/ nullptr, false);
     auto pre_debug_data = debug_to_methods(pre_classes);
     for (auto& data : pre_debug_data) {
       EXPECT_EQ(data.second.size(), 1);

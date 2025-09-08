@@ -63,6 +63,7 @@ struct PrePostVerify : testing::Test {
     DexClasses before_classes(load_classes_from_dex(
         DexLocation::make_location("", std::getenv("dex_pre")),
         /*stats=*/nullptr,
+        /*input_dex_version*/ nullptr,
         /* balloon */ false));
     load_method_sizes(before_classes, before_sizes);
     delete g_redex;
@@ -71,6 +72,7 @@ struct PrePostVerify : testing::Test {
     DexClasses after_classes(load_classes_from_dex(
         DexLocation::make_location("", std::getenv("dex_post")),
         /*stats=*/nullptr,
+        /*input_dex_version*/ nullptr,
         /* balloon */ false));
     load_method_sizes(after_classes, after_sizes);
     delete g_redex;

@@ -52,6 +52,7 @@ class RedexOptions {
   bool disable_dex_hasher{false};
   bool instrument_pass_enabled{false};
   int32_t min_sdk{0};
+  int32_t input_dex_version{35};
   Architecture arch{Architecture::UNKNOWN};
   DebugInfoKind debug_info_kind{DebugInfoKind::NoCustomSymbolication};
   std::string jni_summary_path;

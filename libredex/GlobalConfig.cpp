@@ -261,6 +261,9 @@ void GlobalConfig::bind_config() {
   bind("enforce_class_order", false, bool_param,
        "When true, check class order is obeyed to fulfill dex37 verifier "
        "requirements.");
+  bind("support_dex_version", 35, uint32_param,
+       "Dex Version to support. Officially support 35 for now. Allow "
+       "configuring for experiment. Do not use higher version.");
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,

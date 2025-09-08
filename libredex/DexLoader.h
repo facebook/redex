@@ -30,6 +30,7 @@ class DexLoader {
   const DexLocation* m_location;
   dex_stats_t m_stats{};
   int m_support_dex_version;
+  int m_input_dex_version{0};
   Parallel m_parallel;
 
  public:
@@ -47,6 +48,7 @@ class DexLoader {
   DexClasses& get_classes() { return m_classes; }
   DexIdx* get_idx() { return m_idx.get(); }
   dex_stats_t& get_stats() { return m_stats; }
+  int get_input_dex_version() { return m_input_dex_version; }
 
  private:
   explicit DexLoader(const DexLocation* location,
@@ -65,6 +67,7 @@ class DexLoader {
 DexClasses load_classes_from_dex(
     const DexLocation* location,
     dex_stats_t* stats = nullptr,
+    int* input_dex_version = nullptr,
     bool balloon = true,
     bool throw_on_balloon_error = true,
     int support_dex_version = 35,

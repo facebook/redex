@@ -47,8 +47,10 @@ void InjectDebug::load_dex() {
 
   dex_stats_t input_totals;
   std::vector<dex_stats_t> input_dexes_stats;
+  int input_dex_version = 0;
   redex::load_classes_from_dexes_and_metadata(m_dex_files, m_stores,
-                                              input_totals, input_dexes_stats);
+                                              input_totals, input_dexes_stats,
+                                              input_dex_version);
 }
 
 void InjectDebug::inject_register(

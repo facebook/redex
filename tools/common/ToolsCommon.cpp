@@ -265,7 +265,9 @@ void load_classes_from_dexes_and_metadata(
     const std::vector<std::string>& dex_files,
     DexStoresVector& stores,
     dex_stats_t& input_totals,
-    std::vector<dex_stats_t>& input_dexes_stats) {
+    std::vector<dex_stats_t>& input_dexes_stats,
+    int& input_dex_version,
+    int support_dex_version) {
   always_assert_log(!stores.empty(),
                     "Cannot load classes into empty DexStoresVector");
   for (const auto& filename : dex_files) {
@@ -275,7 +277,12 @@ void load_classes_from_dexes_and_metadata(
       assert_dex_magic_consistency(stores[0].get_dex_magic(),
                                    load_dex_magic_from_dex(location));
       dex_stats_t dex_stats;
-      DexClasses classes = load_classes_from_dex(location, &dex_stats);
+      int this_input_dex_version = 0;
+      DexClasses classes = load_classes_from_dex(
+          location, &dex_stats, &this_input_dex_version,
+          /* balloon */ true, /* throw_on_balloon_error */ true,
+          support_dex_version);
+      input_dex_version = std::max(input_dex_version, this_input_dex_version);
       input_totals += dex_stats;
       input_dexes_stats.push_back(dex_stats);
       stores[0].add_classes(std::move(classes));
@@ -297,8 +304,11 @@ void load_classes_from_dexes_and_metadata(
         assert_dex_magic_consistency(stores[0].get_dex_magic(),
                                      load_dex_magic_from_dex(location));
         dex_stats_t dex_stats;
-        DexClasses classes = load_classes_from_dex(location, &dex_stats);
-
+        int this_input_dex_version = 0;
+        DexClasses classes = load_classes_from_dex(
+            location, &dex_stats, &this_input_dex_version, /* balloon */ true,
+            /* throw_on_balloon_error */ true, support_dex_version);
+        input_dex_version = std::max(input_dex_version, this_input_dex_version);
         input_totals += dex_stats;
         input_dexes_stats.push_back(dex_stats);
         store.add_classes(std::move(classes));

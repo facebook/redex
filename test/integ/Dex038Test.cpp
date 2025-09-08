@@ -326,12 +326,15 @@ TEST(Dex038Test, ReadWriteDex038) {
   DexMetadata dm;
   dm.set_id("classes");
   DexStore root_store(dm);
+  int input_dex_version = 0;
   root_store.add_classes(
       load_classes_from_dex(DexLocation::make_location("dex", dexfile),
                             /*stats=*/nullptr,
+                            &input_dex_version,
                             true,
                             true,
                             38));
+  EXPECT_EQ(input_dex_version, 38);
   DexClasses& classes = root_store.get_dexen().back();
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(root_store));

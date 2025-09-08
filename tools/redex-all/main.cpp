@@ -1397,8 +1397,13 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer t("Load classes from dexes");
     dex_stats_t input_totals;
     std::vector<dex_stats_t> input_dexes_stats;
+    int input_dex_version = 0;
+    int64_t support_dex_version;
+    json_config.get("support_dex_version", 35, support_dex_version);
     redex::load_classes_from_dexes_and_metadata(
-        args.dex_files, stores, input_totals, input_dexes_stats);
+        args.dex_files, stores, input_totals, input_dexes_stats,
+        input_dex_version, static_cast<int>(support_dex_version));
+    args.redex_options.input_dex_version = input_dex_version;
     stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
   });
 

@@ -30,7 +30,9 @@ void load_classes_from_dexes_and_metadata(
     const std::vector<std::string>& dex_files,
     DexStoresVector& stores,
     dex_stats_t& input_totals,
-    std::vector<dex_stats_t>& input_dexes_stats);
+    std::vector<dex_stats_t>& input_dexes_stats,
+    int& input_dex_version,
+    int support_dex_version = 35);
 
 std::string get_dex_output_name(const std::string& output_dir,
                                 const DexStore& store,

@@ -147,6 +147,7 @@ void align_ptr(std::string_view& ptr, const size_t alignment) {
 
 void validate_dex_header(const dex_header* dh,
                          size_t dexsize,
+                         int& input_dex_version,
                          int support_dex_version) {
   DEX_ASSERT(sizeof(dex_header) <= dexsize)
       .set_message("Header size is larger than file size")
@@ -158,24 +159,40 @@ void validate_dex_header(const dex_header* dh,
   DEX_ASSERT(dh->endian_tag == ENDIAN_CONSTANT)
       .set_message("Bad/unsupported endian tag")
       .add_info("tag", dh->endian_tag);
-
   bool supported = false;
+  bool is_this_dex_version = false;
   switch (support_dex_version) {
   case 39:
-    supported = supported || (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V39,
-                                     sizeof(dh->magic)) == 0);
+    is_this_dex_version =
+        memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V39, sizeof(dh->magic)) == 0;
+    supported = supported || is_this_dex_version;
+    if (is_this_dex_version) {
+      input_dex_version = std::max(input_dex_version, 39);
+    }
     FALLTHROUGH_INTENDED; /* intentional fallthrough to also check for v38 */
   case 38:
-    supported = supported || (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V38,
-                                     sizeof(dh->magic)) == 0);
+    is_this_dex_version =
+        memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V38, sizeof(dh->magic)) == 0;
+    supported = supported || is_this_dex_version;
+    if (is_this_dex_version) {
+      input_dex_version = std::max(input_dex_version, 38);
+    }
     FALLTHROUGH_INTENDED; /* intentional fallthrough to also check for v37 */
   case 37:
-    supported = supported || (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37,
-                                     sizeof(dh->magic)) == 0);
+    is_this_dex_version =
+        memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37, sizeof(dh->magic)) == 0;
+    supported = supported || is_this_dex_version;
+    if (is_this_dex_version) {
+      input_dex_version = std::max(input_dex_version, 37);
+    }
     FALLTHROUGH_INTENDED; /* intentional fallthrough to also check for v35 */
   case 35:
-    supported = supported || (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35,
-                                     sizeof(dh->magic)) == 0);
+    is_this_dex_version =
+        memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic)) == 0;
+    supported = supported || is_this_dex_version;
+    if (is_this_dex_version) {
+      input_dex_version = std::max(input_dex_version, 35);
+    }
     break;
   default:
     not_reached_log("Unrecognized support_dex_version %d\n",
@@ -744,7 +761,8 @@ void DexLoader::load_dex_class(int num) {
 }
 
 void DexLoader::load_dex() {
-  validate_dex_header(m_dh, m_file_size, m_support_dex_version);
+  validate_dex_header(m_dh, m_file_size, m_input_dex_version,
+                      m_support_dex_version);
 
   // Populate DexIdx because it has some checking capabilities that will be
   // useful.
@@ -886,6 +904,7 @@ static void balloon_all(const Scope& scope,
 
 DexClasses load_classes_from_dex(const DexLocation* location,
                                  dex_stats_t* stats,
+                                 int* input_dex_version,
                                  bool balloon,
                                  bool throw_on_balloon_error,
                                  int support_dex_version,
@@ -899,6 +918,9 @@ DexClasses load_classes_from_dex(const DexLocation* location,
   }
   if (stats != nullptr) {
     *stats = dl.get_stats();
+  }
+  if (input_dex_version != nullptr) {
+    *input_dex_version = dl.get_input_dex_version();
   }
   return std::move(dl.get_classes());
 }
