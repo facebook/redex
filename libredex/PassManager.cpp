@@ -67,6 +67,7 @@ AccumulatingTimer m_check_unique_deobfuscateds_timer{
 constexpr const char* INCOMING_HASHES = "incoming_hashes.txt";
 constexpr const char* OUTGOING_HASHES = "outgoing_hashes.txt";
 constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
+constexpr const char* CLASS_REORDERING_PASS_NAME = "ClassReorderingPass";
 constexpr std::string_view PASS_ORDER_KEY{"pass_order"};
 
 const Pass* get_profiled_pass(const PassManager& mgr) {
@@ -1358,6 +1359,15 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
 }
 
 void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
+  if (m_redex_options.input_dex_version >= 37) {
+    always_assert_log(
+        std::find_if(m_activated_passes.begin(), m_activated_passes.end(),
+                     [](const Pass* pass) {
+                       return pass->name() == CLASS_REORDERING_PASS_NAME;
+                     }) != m_activated_passes.end(),
+        "Dex version 37+ has stricter class order requirement. Enable "
+        "ClassReorderingPass to fulfill the requirement.");
+  }
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Evaluating %s...", pass->name().c_str());
