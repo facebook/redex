@@ -39,6 +39,14 @@ class Pass : public Configurable {
   // \returns True means this pass is NOT guaranteed to fully use cfg.
   virtual bool is_cfg_legacy() { return false; }
 
+  virtual int pass_support_dex_version() { return 35; }
+
+  bool need_dex_version_support(int input_dex_version,
+                                int check_against_version) {
+    return input_dex_version >= check_against_version &&
+           pass_support_dex_version() < check_against_version;
+  }
+
   virtual void destroy_analysis_result() {
     always_assert_log(m_kind != ANALYSIS,
                       "destroy_analysis_result not implemented for %s",
