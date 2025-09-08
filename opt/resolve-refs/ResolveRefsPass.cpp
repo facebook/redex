@@ -472,7 +472,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
                         "invoke-virtual to interface method %s",
                         SHOW(def_meth));
     }
-    // Stop if the resolve_to_external config is False.
+    // Stop if the refine_to_external config is False.
     if (!m_refine_to_external && def_cls->is_external()) {
       TRACE(RESO, 4, "Bailed on external %s", SHOW(def_meth));
       stats.num_bailed_on_external++;

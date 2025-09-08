@@ -29,9 +29,9 @@ void ExternalRefsManglingPass::eval_pass(DexStoresVector&,
     always_assert_log(
         !m_refine_to_external ||
             min_sdk < m_supported_min_sdk_for_external_refs,
-        "Android SDK API %d file can not be found but resolve_to_external is "
+        "Android SDK API %d file can not be found but refine_to_external is "
         "explicitly enabled for this version. Please pass the api list to "
-        "Redex or turn off `resolve_to_external`.",
+        "Redex or turn off `refine_to_external`.",
         min_sdk);
     m_refine_to_external = false;
   } else {
