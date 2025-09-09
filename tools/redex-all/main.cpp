@@ -2043,6 +2043,8 @@ int main(int argc, char* argv[]) {
       maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_FRONTEND");
     }
 
+    g_redex->disable_violation_fixes = conf.disable_violation_fixes();
+
     if (conf.evaluate_package_name()) {
       args.redex_options.package_name = resources->get_manifest_package_name();
       if (args.redex_options.package_name != boost::none) {
