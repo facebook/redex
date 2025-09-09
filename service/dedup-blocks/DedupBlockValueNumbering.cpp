@@ -64,9 +64,13 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
           }
         }
       } else if (block_it->type == MFLOW_SOURCE_BLOCK) {
-        IROperation operation;
-        operation.src_blk_id = block_it->src_block->id;
-        ordered_operations.push_back(operation);
+        SourceBlock* cur_src_blk = block_it->src_block.get();
+        while (cur_src_blk != nullptr) {
+          IROperation operation;
+          operation.src_blk = {cur_src_blk->id, cur_src_blk->src};
+          ordered_operations.push_back(operation);
+          cur_src_blk = cur_src_blk->next.get();
+        }
       }
       block_it++;
     }
