@@ -57,6 +57,7 @@ class FinalInlinePassV2 : public Pass {
     size_t inlined_count{0};
     size_t init_classes{0};
     size_t possible_cycles{0};
+    size_t deleted_methods{0};
   };
   static Stats run(const Scope&,
                    int min_sdk,
@@ -93,7 +94,8 @@ constant_propagation::WholeProgramState analyze_and_simplify_clinits(
     const UnorderedSet<const DexType*>& blocklist_types,
     const UnorderedSet<std::string>& allowed_opaque_callee_names,
     const constant_propagation::State& cp_state,
-    size_t& clinit_cycles);
+    size_t* clinit_cycles,
+    size_t* deleted_methods);
 
 class StaticFieldReadAnalysis {
  public:
