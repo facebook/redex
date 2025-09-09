@@ -11,6 +11,49 @@
 
 #include "ConstantPropagationTestUtil.h"
 #include "IRAssembler.h"
+#include "SourceBlocks.h"
+
+TEST_F(ConstantPropagationTest, SourceBlockTargetMutating) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (.src_block "LTail;.duplication:(I)V" 0 (1.0 1.0))
+     (if-eqz v0 :nine)
+     (.src_block "LTail;.duplication:(I)V" 1 (0 0))
+     (move-object v0 v1)
+     (:two)
+     (.src_block "LTail;.duplication:(I)V" 2 (1.0 1.0))
+     (if-nez v0 :end2)
+     (:end1)
+     (.src_block "LTail;.duplication:(I)V" 3 (1.0 1.0))
+     (return v0)
+     (:end2)
+     (.src_block "LTail;.duplication:(I)V" 4 (0 0))
+     (add-int v0 v0 v1)
+     (return v0)
+     (:nine)
+     (.src_block "LTail;.duplication:(I)V" 5 (1.0 1.0))
+     (goto :two)
+    )
+  )");
+
+  code->build_cfg();
+
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config(), ConstPropMode::All);
+
+  code->build_cfg();
+
+  for (auto block : code->cfg().blocks()) {
+    for (auto sb : source_blocks::gather_source_blocks(block)) {
+      if (sb->id == 2) {
+        ASSERT_EQ(sb->get_val(0).get(), 0);
+        ASSERT_EQ(sb->get_appear100(0).get(), 0);
+      }
+    }
+  }
+}
 
 TEST_F(ConstantPropagationTest, ArrayLengthNonNegative) {
   auto code = assembler::ircode_from_string(R"(

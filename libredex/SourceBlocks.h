@@ -242,6 +242,8 @@ void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg);
 
 bool has_source_block_positive_val(const SourceBlock* sb);
 
+void scale_source_blocks(cfg::Block* block);
+
 inline bool has_source_blocks(const cfg::Block* b) {
   for (const auto& mie : *b) {
     if (mie.type == MFLOW_SOURCE_BLOCK) {

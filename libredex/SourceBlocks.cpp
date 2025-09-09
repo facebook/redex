@@ -500,6 +500,45 @@ InsertResult insert_source_blocks(const DexString* method,
   return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures};
 }
 
+void scale_source_blocks(cfg::Block* block) {
+  // After duplicating hot successors, some originally hot blocks may no
+  // longer be reachable from hot blocks. We'll mark them as cold here.
+
+  // Note that while the currently implemented "scaling" approach via min/max
+  // works well when we only consider binary hit-count state values (0 = cold,
+  // >0 = hot), and that it doesn't do actual proper scaling yet. A practical
+  // problem for that is that we don't know the hotness of edges, and thus
+  // cannot correctly attribute hit-counts to the original or duplicated blocks
+  // outside of the binary scenario.
+  // TODO: Implement proper numeric scaling. This will be especially important
+  // once we track (non-binary) block hit counts.
+
+  // Note that we don't have to further deal with dependencies as we are
+  // iterating from the front, and have filtered out back-edges.
+  auto* template_sb = source_blocks::get_first_source_block(block);
+  always_assert(template_sb);
+  SourceBlock limit_sb(*template_sb);
+  limit_sb.fill(SourceBlock::Val(0, 0));
+
+  for (auto* pred : block->preds()) {
+    if (pred->src() == nullptr) {
+      continue;
+    }
+
+    auto* pred_sb = source_blocks::get_last_source_block(pred->src());
+    if (!pred_sb) {
+      // Missing information; give up
+      return;
+    }
+
+    // `SourceBlock::max` is a bit dubious, as the appear100 values really
+    // represent a set
+    limit_sb.max(*pred_sb);
+  }
+  source_blocks::foreach_source_block(block,
+                                      [&](auto* sb) { sb->min(limit_sb); });
+}
+
 void fix_chain_violations(ControlFlowGraph* cfg) {
   impl::visit_in_order(
       cfg,
@@ -886,8 +925,8 @@ void chain_and_dom_update(
         // Within and across basic blocks, we want to make sure that no cold
         // value precedes a hot value
         bool cold_precedes_hot = sb_val && *last_val < *sb_val;
-        // Within a basic block, we want to make sure that no hot value precedes
-        // a cold value
+        // Within a basic block, we want to make sure that no hot value
+        // precedes a cold value
         bool hot_precedes_cold = sb_val && *last_val > *sb_val &&
                                  !first_in_block && !prev_insn_can_throw;
         if (cold_precedes_hot || hot_precedes_cold) {
@@ -911,8 +950,8 @@ size_t chain_and_dom_violations_impl(
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
   ChainAndDomState state{};
   bool first = true;
-  // True if any instruction that we've encountered since the last source block
-  // can throw
+  // True if any instruction that we've encountered since the last source
+  // block can throw
   bool prev_insn_can_throw = false;
   for (const auto& mie : *block) {
     switch (mie.type) {
