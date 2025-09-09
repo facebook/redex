@@ -159,6 +159,13 @@ class InjectionIdAnalyzer final
 using ConstantPrimitiveAnalyzer =
     InstructionAnalyzerCombiner<PrimitiveAnalyzer>;
 
+class ResourceIdAnalyzer final
+    : public InstructionAnalyzerBase<ResourceIdAnalyzer, ConstantEnvironment> {
+ public:
+  static bool analyze_r_const(const IRInstruction* insn,
+                              ConstantEnvironment* env);
+};
+
 /*
  * Defines default analyses of opcodes that have the potential to let
  * heap-allocated values escape. It sets the escaped values to Top.

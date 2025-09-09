@@ -429,6 +429,15 @@ bool LocalArrayAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
   }
 }
 
+bool ResourceIdAnalyzer::analyze_r_const(const IRInstruction* insn,
+                                         ConstantEnvironment* env) {
+  auto id = static_cast<uint32_t>(insn->get_literal());
+  TRACE(CONSTP, 5, "Discovered new resource id for reg: %d value: %d",
+        insn->dest(), id);
+  env->set(insn->dest(), ConstantResourceIdDomain({.id = id}));
+  return true;
+}
+
 bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
                                         ConstantEnvironment* env) {
   if (opcode::is_a_load_param(insn->opcode())) {

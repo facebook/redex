@@ -44,6 +44,17 @@ using StringSetDomain = sparta::PatriciaTreeSetAbstractDomain<const DexString*>;
 
 using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
 
+struct ResourceId {
+  uint32_t id;
+  bool operator==(const ResourceId& other) const { return id == other.id; }
+  friend std::ostream& operator<<(std::ostream& out, const ResourceId& x) {
+    out << "R0x" << std::to_string(x.id);
+    return out;
+  }
+};
+
+using ConstantResourceIdDomain = sparta::ConstantAbstractDomain<ResourceId>;
+
 using ConstantClassObjectDomain =
     sparta::ConstantAbstractDomain<const DexType*>;
 
@@ -88,6 +99,7 @@ using ConstantValue =
                                           StringDomain,
                                           ConstantClassObjectDomain,
                                           ConstantInjectionIdDomain,
+                                          ConstantResourceIdDomain,
                                           ObjectWithImmutAttrDomain,
                                           NewObjectDomain,
                                           AbstractHeapPointer>;
