@@ -524,6 +524,7 @@ libopt_la_SOURCES = \
 	opt/string_concatenator/StringConcatenator.cpp \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
+	opt/optimize_resources/MaterializeResourceConstants.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
 	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \
 	opt/typedef-anno-checker/TypedefAnnoOptPass.cpp \
