@@ -89,7 +89,9 @@ UnorderedSet<uint32_t> find_code_resource_references(
   walk::parallel::opcodes(scope, [&](DexMethod* m, IRInstruction* insn) {
     // Collect all accessed fields that could be R fields, or values that got
     // inlined elsewhere.
-    if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
+    if (insn->opcode() == IOPCODE_R_CONST) {
+      potential_ids_from_code.emplace(insn->get_literal());
+    } else if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
       auto* field = resolve_field(insn->get_field(), FieldSearch::Static);
       if ((field != nullptr) && field->is_concrete()) {
         accessed_sfields.emplace(field);

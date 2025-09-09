@@ -30,6 +30,7 @@
 #include "SideEffectSummary.h"
 #include "Timer.h"
 #include "Trace.h"
+#include "Walkers.h"
 
 namespace {
 // See the following, which has informed class names to look for.
@@ -420,6 +421,21 @@ void RClassWriter::remap_resource_class_scalars(
       }
     }
   }
+  walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
+    if (insn->opcode() == IOPCODE_R_CONST) {
+      int64_t old = insn->get_literal();
+      always_assert_log(old_to_remapped_ids.count(old),
+                        "Encountered resource ID %llx which cannot be "
+                        "remapped",
+                        (long long)old);
+      always_assert_log(old <= std::numeric_limits<uint32_t>::max(),
+                        "Resource ID %llx needs to fit in 32 bits",
+                        (long long)old);
+      always_assert_log(old >= 0, "Resource ID %llx must be positive",
+                        (long long)old);
+      insn->set_literal(old_to_remapped_ids.at((uint32_t)old));
+    }
+  });
 }
 
 namespace {
