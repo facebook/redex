@@ -1590,6 +1590,7 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_SHR_INT_LIT:
   case OPCODE_USHR_INT_LIT:
     return false;
+  case IOPCODE_R_CONST:
   case OPCODE_CONST:
     return false;
   case OPCODE_FILL_ARRAY_DATA:

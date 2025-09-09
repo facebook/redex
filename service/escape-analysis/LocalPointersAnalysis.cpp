@@ -227,6 +227,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
     return true;
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return false;
+  case IOPCODE_R_CONST:
   case IOPCODE_INJECTION_ID:
   case IOPCODE_UNREACHABLE:
     return false;

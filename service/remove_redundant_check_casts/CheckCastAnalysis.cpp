@@ -37,6 +37,7 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_MOVE_RESULT_WIDE:
   case OPCODE_MOVE_EXCEPTION:
   case OPCODE_RETURN_VOID:
+  case IOPCODE_R_CONST:
   case OPCODE_CONST:
   case OPCODE_CONST_WIDE:
   case OPCODE_CONST_STRING:
