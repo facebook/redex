@@ -125,7 +125,7 @@ class ControlFlowGraph final {
 
   void add(const std::string& node, const Statement& stmt) {
     ControlPoint cp(node);
-    m_statements.emplace(std::make_pair(cp, stmt));
+    m_statements.emplace(cp, stmt);
     // Ensure that the pred/succ entries for the node are initialized
     m_predecessors[cp];
     m_successors[cp];
