@@ -48,7 +48,9 @@ struct ResourceId {
   uint32_t id;
   bool operator==(const ResourceId& other) const { return id == other.id; }
   friend std::ostream& operator<<(std::ostream& out, const ResourceId& x) {
-    out << "R0x" << std::to_string(x.id);
+    std::ostringstream oss;
+    oss << "R" << std::hex << std::showbase << x.id;
+    out << std::move(oss).str();
     return out;
   }
 };
