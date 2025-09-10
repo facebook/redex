@@ -962,6 +962,14 @@ class TraceClassAfterEachPass {
     std::vector<DexField*> fields = cls->get_all_fields();
     for (auto* v : fields) {
       fprintf(m_fd, "Field %s\n", SHOW(v));
+      if (v->is_concrete() && v->get_static_value() != nullptr) {
+        auto* static_val = v->get_static_value();
+        // Make the printing less verbose; print when the value is nonzero.
+        auto zero = DexEncodedValue::zero_for_type(v->get_type());
+        if (static_val->value() != zero->value()) {
+          fprintf(m_fd, "  Value: %s\n", SHOW(v->get_static_value()));
+        }
+      }
     }
     for (auto* m : methods) {
       dump_method(m);
