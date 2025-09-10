@@ -716,6 +716,9 @@ void sweep(DexStoresVector& stores,
            ConcurrentSet<std::string>* removed_symbols = nullptr,
            bool output_full_removed_symbols = false);
 
+size_t sweep_annotation_elements(DexStoresVector& stores,
+                                 const ReachableObjects& reachables);
+
 void reanimate_zombie_methods(const ReachableAspects& reachable_aspects);
 
 void sweep_code(

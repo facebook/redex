@@ -58,6 +58,10 @@ class RemoveUnreachablePassBase : public Pass {
     return m_prune_uninstantiable_insns || m_throw_propagation;
   }
 
+  virtual bool should_sweep_annotation_elements() const {
+    return m_sweep_annotation_elements;
+  }
+
   static reachability::ObjectCounts before_metrics(DexStoresVector& stores,
                                                    PassManager& pm);
 
@@ -73,6 +77,7 @@ class RemoveUnreachablePassBase : public Pass {
   bool m_prune_uncallable_virtual_methods = false;
   bool m_prune_unreferenced_interfaces = false;
   bool m_throw_propagation = false;
+  bool m_sweep_annotation_elements = false;
 
   static bool s_emit_graph_on_last_run;
   static size_t s_all_reachability_runs;
