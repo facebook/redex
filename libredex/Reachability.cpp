@@ -7,6 +7,7 @@
 
 #include "Reachability.h"
 
+#include <atomic>
 #include <cinttypes>
 
 #include "AnnotationSignatureParser.h"
@@ -2110,6 +2111,127 @@ void sweep_interfaces(const ReachableObjects& reachables, DexClass* cls) {
   cls->set_interfaces(new_interfaces);
 }
 
+using MarkedAnnotationMembers =
+    InsertOnlyConcurrentMap<const DexClass*,
+                            std::set<const DexString*, dexstrings_comparator>>;
+
+EncodedAnnotations sweep_annotation_elements(
+    const MarkedAnnotationMembers& marked_annotation_members,
+    const DexType* annotation_type,
+    const EncodedAnnotations& annotation_elements,
+    size_t* changes) {
+  auto* anno_cls = type_class(annotation_type);
+  auto vmethod_names_it = anno_cls == nullptr || anno_cls->is_external()
+                              ? marked_annotation_members.end()
+                              : marked_annotation_members.find(anno_cls);
+  EncodedAnnotations new_elements;
+  auto push_orig = [&](const DexAnnotationElement& element) {
+    new_elements.push_back(element.clone());
+  };
+  auto should_keep = [&](const DexString* string) {
+    // If the type of this annotation is unknown, or external, keep all
+    // annotation elements.
+    if (vmethod_names_it == marked_annotation_members.end()) {
+      return true;
+    }
+    const auto& vmethod_names = vmethod_names_it->second;
+    return vmethod_names.find(string) != vmethod_names.end();
+  };
+
+  for (const auto& element : annotation_elements) {
+    if (should_keep(element.string)) {
+      TRACE(REACH, 5,
+            "Annotation instances of type %s will keep element named %s",
+            SHOW(annotation_type), SHOW(element.string));
+      // Recurse and look for inner annotations.
+      if (element.encoded_value->evtype() == DEVT_ANNOTATION) {
+        auto* eva = dynamic_cast<DexEncodedValueAnnotation*>(
+            element.encoded_value.get());
+        size_t inner_changes{0};
+        auto inner_new_elements =
+            sweep_annotation_elements(marked_annotation_members, eva->type(),
+                                      eva->annotations(), &inner_changes);
+        if (inner_changes != 0) {
+          auto new_eva =
+              std::unique_ptr<DexEncodedValue>(new DexEncodedValueAnnotation(
+                  eva->type(), std::move(inner_new_elements)));
+          DexAnnotationElement new_element(element.string, std::move(new_eva));
+          new_elements.push_back(std::move(new_element));
+          *changes += inner_changes;
+        } else {
+          push_orig(element);
+        }
+      } else {
+        push_orig(element);
+      }
+    } else {
+      TRACE(REACH, 5,
+            "Annotation instances of type %s will DROP element named %s",
+            SHOW(annotation_type), SHOW(element.string));
+      (*changes)++;
+    }
+  }
+  return new_elements;
+}
+
+size_t sweep_annotation_set(
+    const MarkedAnnotationMembers& marked_annotation_members,
+    const DexAnnotationSet* aset,
+    DexAnnotationSet* output) {
+  always_assert(aset != nullptr);
+  always_assert(output != nullptr);
+
+  size_t changes{0};
+  for (const auto& anno : aset->get_annotations()) {
+    auto updated_anno =
+        std::make_unique<DexAnnotation>(anno->type(), anno->viz());
+    auto new_elements = sweep_annotation_elements(
+        marked_annotation_members, anno->type(), anno->anno_elems(), &changes);
+    for (auto& new_element : new_elements) {
+      updated_anno->add_element(new_element.clone());
+    }
+    output->add_annotation(std::move(updated_anno));
+  }
+  return changes;
+}
+
+template <class DexMember>
+size_t sweep_annotations_impl(
+    const MarkedAnnotationMembers& marked_annotation_members,
+    DexMember* member) {
+  auto aset = member->get_anno_set();
+  if (aset == nullptr) {
+    return 0;
+  }
+  auto updated_set = std::make_unique<DexAnnotationSet>();
+  auto changes =
+      sweep_annotation_set(marked_annotation_members, aset, updated_set.get());
+  if (changes > 0) {
+    auto& dest_vec = aset->get_annotations();
+    dest_vec.clear();
+    auto& src_vec = updated_set->get_annotations();
+    std::move(src_vec.begin(), src_vec.end(), std::back_inserter(dest_vec));
+  }
+  return changes;
+}
+
+size_t sweep_annotations(
+    const ReachableObjects& reachables,
+    const MarkedAnnotationMembers& marked_annotation_members,
+    DexClass* cls) {
+  always_assert(reachables.marked(cls));
+  auto changes = sweep_annotations_impl(marked_annotation_members, cls);
+  for (auto* const m : cls->get_all_methods()) {
+    changes += sweep_annotations_impl(marked_annotation_members, m);
+  }
+  for (auto* const f : cls->get_all_fields()) {
+    changes += sweep_annotations_impl(marked_annotation_members, f);
+  }
+  TRACE(REACH, 4, "swept %zu annotation elements on class %s", changes,
+        SHOW(cls));
+  return changes;
+}
+
 std::vector<DexClass*> mark_classes_abstract(
     DexStoresVector& stores,
     const ReachableObjects& reachables,
@@ -2176,6 +2298,36 @@ void sweep(DexStoresVector& stores,
                       &cls->get_vmethods(), removed_symbols);
     sweep_interfaces(reachables, cls);
   });
+}
+
+size_t sweep_annotation_elements(DexStoresVector& stores,
+                                 const ReachableObjects& reachables) {
+  Timer t("Sweep annotation elements");
+  auto scope = build_class_scope(stores);
+  // For ease of matching, store up-front the vmethod names of annotation
+  // classes that are marked. Annotation elements have only a name, not a
+  // method/proto to match against to know what is marked/unmarked.
+  MarkedAnnotationMembers marked_annotation_members;
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    if (is_annotation(cls)) {
+      always_assert(reachables.marked(cls));
+      std::set<const DexString*, dexstrings_comparator> vmethod_names;
+      for (auto* m : cls->get_vmethods()) {
+        always_assert(reachables.marked(m));
+        TRACE(REACH, 5, "Marked annotation member %s -> %s", SHOW(cls),
+              SHOW(m));
+        vmethod_names.emplace(m->get_name());
+      }
+      marked_annotation_members.emplace(cls, std::move(vmethod_names));
+    }
+  });
+
+  std::atomic<size_t> swept_annotation_elements{0};
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    swept_annotation_elements +=
+        sweep_annotations(reachables, marked_annotation_members, cls);
+  });
+  return swept_annotation_elements;
 }
 
 void reanimate_zombie_methods(const ReachableAspects& reachable_aspects) {

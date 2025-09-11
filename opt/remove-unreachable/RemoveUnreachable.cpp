@@ -211,6 +211,9 @@ void RemoveUnreachablePassBase::bind_config() {
        m_prune_uncallable_virtual_methods);
   bind("prune_unreferenced_interfaces", false, m_prune_unreferenced_interfaces);
   bind("throw_propagation", false, m_throw_propagation);
+  bind("sweep_annotation_elements", false, m_sweep_annotation_elements,
+       "Removes any annotation elements that do not match up with marked "
+       "methods on annotation classes.");
   after_configuration([emit_on_last]() {
     if (emit_on_last) {
       s_emit_graph_on_last_run = true;
@@ -319,6 +322,11 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
         stores, reachable_aspects);
     uninstantiables_stats.report(pm);
     {}
+  }
+  if (should_sweep_annotation_elements()) {
+    pm.incr_metric(
+        "removed_annotation_elements",
+        (int64_t)reachability::sweep_annotation_elements(stores, *reachables));
   }
 
   reachability::ObjectCounts after = reachability::count_objects(stores);
