@@ -2032,12 +2032,12 @@ void project_string_mapping(const UnorderedSet<uint32_t>& used_strings,
   }
 }
 
-#define POOL_FLAGS(pool)                                               \
-  (((pool)->isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0) | \
-   ((pool)->isSorted() ? android::ResStringPool_header::SORTED_FLAG : 0))
+#define POOL_FLAGS(pool)                                              \
+  (((pool).isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0) | \
+   ((pool).isSorted() ? android::ResStringPool_header::SORTED_FLAG : 0))
 
 #define POOL_FLAGS_CLEAR_SORT(pool) \
-  ((pool)->isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0)
+  ((pool).isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0)
 
 void rebuild_type_strings(
     const uint32_t& package_id,
@@ -2109,7 +2109,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     }
   };
   std::shared_ptr<arsc::ResStringPoolBuilder> global_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(&string_pool));
+      std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(string_pool));
   rebuild_string_pool(string_pool, global_old_to_new, remap_spans,
                       global_strings_builder.get());
 
@@ -2156,7 +2156,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     }
 
     // Actually build the key strings pool.
-    auto key_flags = POOL_FLAGS(&key_string_pool);
+    auto key_flags = POOL_FLAGS(key_string_pool);
     if (config.sort_key_strings) {
       key_flags |= android::ResStringPool_header::SORTED_FLAG;
     }
@@ -2199,7 +2199,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     // Copy all type names that were not fully deleted (or empty strings if they
     // were).
     std::shared_ptr<arsc::ResStringPoolBuilder> type_strings_builder =
-        std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(&type_strings));
+        std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(type_strings));
     for (int i = 0; i <= last_kept_type_name; i++) {
       type_strings_builder->add_string(kept_type_names.at(i));
     }
@@ -2290,7 +2290,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
     auto string_pool = string_reader.global_strings();
     TRACE(RES, 9, "Global string pool has %zu styles and %zu total strings",
           string_pool->styleCount(), string_pool->size());
-    auto flags = POOL_FLAGS_CLEAR_SORT(string_pool);
+    auto flags = POOL_FLAGS_CLEAR_SORT(*string_pool);
     // Build global old string to new string mapping and collect
     // new strings to add to global string pool
     std::map<std::string, uint32_t> global_new_strings_to_id;
@@ -2384,7 +2384,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
       // Actually build the key strings pool.
       std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
           std::make_shared<arsc::ResStringPoolBuilder>(
-              POOL_FLAGS_CLEAR_SORT(&key_string_pool));
+              POOL_FLAGS_CLEAR_SORT(key_string_pool));
       rebuild_string_pool_with_addition(key_string_pool, key_id_to_new_strings,
                                         key_strings_builder.get());
       package_builder->set_key_strings(key_strings_builder);
@@ -2622,8 +2622,8 @@ size_t ResourcesArscFile::serialize() {
     android::ResStringPool type_strings(
         type_strings_header, dtohl(type_strings_header->header.size));
     auto type_strings_builder = std::make_shared<arsc::ResStringPoolBuilder>(
-        m_added_types.empty() ? POOL_FLAGS(&type_strings)
-                              : POOL_FLAGS_CLEAR_SORT(&type_strings));
+        m_added_types.empty() ? POOL_FLAGS(type_strings)
+                              : POOL_FLAGS_CLEAR_SORT(type_strings));
     rebuild_type_strings(package_id, type_strings, m_added_types,
                          type_strings_builder.get());
     package_builder->set_type_strings(type_strings_builder);
@@ -3321,7 +3321,7 @@ void ResourcesArscFile::add_styles(
 
     const auto& existing_key_pool = table_snapshot.get_key_strings(package);
 
-    auto key_flags = POOL_FLAGS_CLEAR_SORT(&existing_key_pool);
+    auto key_flags = POOL_FLAGS_CLEAR_SORT(existing_key_pool);
     std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
         std::make_shared<arsc::ResStringPoolBuilder>(key_flags);
 
