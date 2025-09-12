@@ -24,6 +24,15 @@ public class FinalInlineV2Test {
     assertThat(Encodable.S_FLOAT).isEqualTo(-2.0f);
     assertThat(FinalInlineV2ClinitReadAndWriteTest.getLength()).isEqualTo(3);
   }
+
+  @Test
+  public void testFinalInlineByte() {
+    android.util.Log.w("FinalInlineV2Test", "DUMPING:");
+    byte[] a = SomeBytesKt.fillArray();
+    for (int i = 0; i < a.length; i++) {
+      android.util.Log.w("FinalInlineV2Test", Byte.toString(a[i]));
+    }
+  }
 }
 
 class Encodable {
