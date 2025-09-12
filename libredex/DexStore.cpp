@@ -229,15 +229,18 @@ UnorderedSet<const DexType*> get_root_store_types(const DexStoresVector& stores,
   return types;
 }
 
-XStoreRefs::XStoreRefs(const DexStoresVector& stores)
-    : XStoreRefs(stores, "") {}
+XStoreRefs::XStoreRefs(const DexStoresVector& stores,
+                       const bool normal_primary_dex)
+    : XStoreRefs(stores, normal_primary_dex, "") {}
 
 XStoreRefs::XStoreRefs(const DexStoresVector& stores,
+                       const bool normal_primary_dex,
                        std::string shared_module_prefix)
     : m_transitive_resolved_dependencies(
           build_transitive_resolved_dependencies(stores)),
       m_reverse_dependencies(build_reverse_dependencies(stores)),
-      m_shared_module_prefix(std::move(shared_module_prefix)) {
+      m_shared_module_prefix(std::move(shared_module_prefix)),
+      m_normal_primary_dex(normal_primary_dex) {
 
   std::vector<std::pair<const DexClasses*, size_t>> dexes;
 

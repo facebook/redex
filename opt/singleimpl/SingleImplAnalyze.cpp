@@ -26,8 +26,11 @@
 struct AnalysisImpl : SingleImplAnalysis {
   AnalysisImpl(const Scope& scope,
                const ProguardMap& pg_map,
-               const DexStoresVector& stores)
-      : scope(scope), pg_map(pg_map), xstores(stores) {}
+               const DexStoresVector& stores,
+               const ConfigFiles& conf)
+      : scope(scope),
+        pg_map(pg_map),
+        xstores(stores, conf.normal_primary_dex()) {}
 
   void create_single_impl(const TypeMap& single_impl,
                           const TypeSet& intfs,
@@ -566,9 +569,10 @@ std::unique_ptr<SingleImplAnalysis> SingleImplAnalysis::analyze(
     const TypeMap& single_impl,
     const TypeSet& intfs,
     const ProguardMap& pg_map,
-    const SingleImplConfig& config) {
+    const SingleImplConfig& config,
+    const ConfigFiles& global_config) {
   std::unique_ptr<AnalysisImpl> single_impls(
-      new AnalysisImpl(scope, pg_map, stores));
+      new AnalysisImpl(scope, pg_map, stores, global_config));
   single_impls->create_single_impl(single_impl, intfs, config);
   single_impls->collect_field_defs();
   single_impls->collect_method_defs();

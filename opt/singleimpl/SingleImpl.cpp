@@ -154,7 +154,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
 
     std::unique_ptr<SingleImplAnalysis> single_impls =
         SingleImplAnalysis::analyze(scope, stores, single_impl, intfs, pg_map,
-                                    m_pass_config);
+                                    m_pass_config, conf);
 
     auto optimized_stats = optimize(std::move(single_impls), ch, scope,
                                     m_pass_config, android_sdk);

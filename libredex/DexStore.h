@@ -218,9 +218,15 @@ class XStoreRefs {
            store->get_name().rfind(m_shared_module_prefix, 0) == 0;
   }
 
+  // If true, classes.dex is treated like any other dex file in the root of the
+  // input program.
+  bool m_normal_primary_dex{false};
+
  public:
-  explicit XStoreRefs(const DexStoresVector& stores);
-  XStoreRefs(const DexStoresVector& stores, std::string shared_module_prefix);
+  XStoreRefs(const DexStoresVector& stores, const bool normal_primary_dex);
+  XStoreRefs(const DexStoresVector& stores,
+             const bool normal_primary_dex,
+             std::string shared_module_prefix);
 
   /**
    * Gets transitive dependencies. Includes dependencies on root store, but
@@ -319,6 +325,9 @@ class XStoreRefs {
     bool callee_in_root_store = callee_store_idx < m_root_stores;
 
     if (callee_in_root_store) {
+      if (m_normal_primary_dex) {
+        return false;
+      }
       // Check if primary to secondary reference
       return callee_store_idx > caller_store_idx;
     }

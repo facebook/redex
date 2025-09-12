@@ -3115,10 +3115,6 @@ enhanced_dex_stats_t write_classes_to_dex(
     always_assert_log(dex_number == 0, "force_single_dex requires one dex");
   }
 
-  auto interdex_config = json_cfg.get("InterDexPass", Json::Value());
-  auto normal_primary_dex =
-      interdex_config.get("normal_primary_dex", false).asBool();
-
   TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s", filename.c_str());
   auto this_class_order_violations = check_class_order(classes);
   if (this_class_order_violations > 0) {
@@ -3131,9 +3127,9 @@ enhanced_dex_stats_t write_classes_to_dex(
   }
 
   DexOutput dout(filename.c_str(), classes, std::move(gtypes),
-                 normal_primary_dex, store_number, store_name, dex_number,
-                 debug_info_kind, iodi_metadata, conf, pos_mapper, method_to_id,
-                 code_debug_lines, dex_output_config, min_sdk);
+                 conf.normal_primary_dex(), store_number, store_name,
+                 dex_number, debug_info_kind, iodi_metadata, conf, pos_mapper,
+                 method_to_id, code_debug_lines, dex_output_config, min_sdk);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

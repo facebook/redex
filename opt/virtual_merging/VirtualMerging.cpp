@@ -101,7 +101,7 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
                                const api::AndroidSDK* min_sdk_api,
                                PerfConfig perf_config)
     : m_scope(build_class_scope(stores)),
-      m_xstores(stores),
+      m_xstores(stores, inliner_config.shrinker.normal_primary_dex),
       m_xdexes(stores),
       m_type_system(m_scope),
       m_max_overriding_method_instructions(max_overriding_method_instructions),

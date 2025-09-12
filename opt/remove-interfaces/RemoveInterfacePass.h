@@ -63,6 +63,7 @@ class RemoveInterfacePass : public Pass {
 
   void remove_interfaces_for_root(const Scope& scope,
                                   const DexStoresVector& stores,
+                                  const ConfigFiles& conf,
                                   const DexType* root,
                                   const TypeSystem& type_system);
   TypeSet remove_leaf_interfaces(const Scope& scope,

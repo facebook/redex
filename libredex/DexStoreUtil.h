@@ -46,8 +46,3 @@ UnorderedSet<const DexType*> get_non_root_store_types(
     const XStoreRefs& xstores,
     const TypeSet& types,
     bool include_primary_dex);
-
-UnorderedSet<const DexType*> get_non_root_store_types(
-    const DexStoresVector& stores,
-    const TypeSet& types,
-    bool include_primary_dex);

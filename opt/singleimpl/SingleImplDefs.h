@@ -13,6 +13,7 @@
 
 #include "CheckCastTransform.h"
 #include "ClassHierarchy.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
@@ -152,7 +153,8 @@ struct SingleImplAnalysis {
       const TypeMap& single_impl,
       const TypeSet& intfs,
       const ProguardMap& pg_map,
-      const SingleImplConfig& config);
+      const SingleImplConfig& config,
+      const ConfigFiles& global_config);
 
   /**
    * Escape an interface and all parent interfaces.

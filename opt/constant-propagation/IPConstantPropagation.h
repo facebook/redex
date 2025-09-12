@@ -93,6 +93,7 @@ class PassImpl : public Pass {
    * responsible for picking the right Config settings.
    */
   void run(const DexStoresVector& stores,
+           const ConfigFiles& conf,
            int min_sdk = 0,
            const boost::optional<std::string>& = boost::none);
 

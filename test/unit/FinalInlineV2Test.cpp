@@ -93,7 +93,7 @@ TEST_F(FinalInlineTest, encodeTypeValues) {
   store.add_classes({cls, cls2});
   DexStoresVector stores{store};
   auto scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, true);
   run(scope, &xstores);
 
   EXPECT_EQ(cls->get_clinit(), nullptr);
@@ -128,7 +128,7 @@ TEST_F(FinalInlineTest, encodeTypeValuesXStore) {
   store2.add_classes({cls2});
   DexStoresVector stores{store1, store2};
   auto scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, true);
   run(scope, &xstores);
 
   EXPECT_NE(cls->get_clinit(), nullptr);
@@ -255,7 +255,7 @@ TEST_F(FinalInlineTest, ReplaceSgetAddInitClass) {
   store.add_classes({cls, cls2});
   DexStoresVector stores{store};
   auto scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, true);
   run(scope, &xstores, /* create_init_class_insns */ true);
 
   auto expected = assembler::ircode_from_string(R"(
@@ -299,7 +299,7 @@ TEST_F(FinalInlineTest, ReplaceSgetNoInitClass) {
   store.add_classes({cls, cls2});
   DexStoresVector stores{store};
   auto scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, true);
   run(scope, &xstores, /* create_init_class_insns */ true);
 
   auto expected = assembler::ircode_from_string(R"(

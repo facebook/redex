@@ -608,7 +608,7 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
   auto min_sdk = mgr.get_redex_options().min_sdk;
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
   cp::State cp_state;
   auto sfield_stats = run(scope, min_sdk, init_classes_with_side_effects,
                           &xstores, cp_state, m_config, &stores);

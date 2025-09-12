@@ -15,13 +15,13 @@
 #include "SimpleClassHierarchy.h"
 
 class XStoreRefsTest : public RedexTest {
+ public:
   static DexClass* make_simple_class(const std::string& name) {
     ClassCreator cc(DexType::make_type(name));
     cc.set_super(type::java_lang_Object());
     return cc.create();
   }
 
- public:
   void SetUp() override {
     auto helper = redex::test::SimpleClassHierarchy{};
 
@@ -69,10 +69,11 @@ class XStoreRefsTest : public RedexTest {
   DexClass* m_store2_cls = nullptr;
 
   DexStoresVector stores;
+  bool m_normal_primary_dex{true};
 };
 
 TEST_F(XStoreRefsTest, illegal_ref) {
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, m_normal_primary_dex);
 
   EXPECT_FALSE(xstores.illegal_ref(m_foo->get_type(), m_foo->get_type()));
   EXPECT_FALSE(xstores.illegal_ref(m_foo->get_type(), m_bar->get_type()));
@@ -131,7 +132,7 @@ TEST_F(XStoreRefsTest, illegal_ref) {
 }
 
 TEST_F(XStoreRefsTest, illegal_ref_load_types) {
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, m_normal_primary_dex);
 
   EXPECT_FALSE(xstores.illegal_ref_load_types(m_foo->get_type(), m_foo));
   EXPECT_FALSE(xstores.illegal_ref_load_types(m_foo->get_type(), m_bar));
@@ -177,7 +178,7 @@ TEST_F(XStoreRefsTest, illegal_ref_load_types) {
 }
 
 TEST_F(XStoreRefsTest, transitive_resolved_dependencies) {
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, m_normal_primary_dex);
   auto* store0 = &stores.at(0);
   const auto& store0_deps =
       xstores.get_transitive_resolved_dependencies(store0);
@@ -195,4 +196,18 @@ TEST_F(XStoreRefsTest, transitive_resolved_dependencies) {
   EXPECT_EQ(store2_deps.size(), 2);
   EXPECT_TRUE(store2_deps.count(store0));
   EXPECT_TRUE(store2_deps.count(store1));
+}
+
+TEST_F(XStoreRefsTest, normal_and_not_normal) {
+  auto& root_store = stores[0];
+  auto* secondary_dex_cls = XStoreRefsTest::make_simple_class("LAnotherCls;");
+  root_store.add_classes({secondary_dex_cls});
+
+  XStoreRefs xstores_normal_primary(stores, true);
+  EXPECT_FALSE(xstores_normal_primary.illegal_ref(
+      m_store0_cls->get_type(), secondary_dex_cls->get_type()));
+
+  XStoreRefs xstores_abnormal_primary(stores, false);
+  EXPECT_TRUE(xstores_abnormal_primary.illegal_ref(
+      m_store0_cls->get_type(), secondary_dex_cls->get_type()));
 }

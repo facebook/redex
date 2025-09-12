@@ -8,6 +8,7 @@
 #include "VerticalMerging.h"
 
 #include "ClassHierarchy.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
@@ -940,13 +941,13 @@ void VerticalMergingPass::merge_classes(const Scope& scope,
 }
 
 void VerticalMergingPass::run_pass(DexStoresVector& stores,
-                                   ConfigFiles& /*conf*/,
+                                   ConfigFiles& conf,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
   UnorderedMap<const DexType*, DontMergeState> dont_merge_status;
   record_referenced(scope, m_blocklist, &dont_merge_status);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
   size_t num_single_extend;
   auto mergeable_to_merger =
       collect_can_merge(scope, xstores, dont_merge_status, &num_single_extend);

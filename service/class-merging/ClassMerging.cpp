@@ -130,7 +130,7 @@ ModelStats merge_model(const TypeSystem& type_system,
         spec.update_method_profiles_stats);
   Timer t("erase_model");
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
   auto refchecker =
       create_ref_checker(spec.per_dex_grouping, &xstores, conf, min_sdk);
   auto model =
@@ -166,7 +166,7 @@ Model construct_model(const TypeSystem& type_system,
         spec.roots.size());
   Timer t("erase_model");
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
   auto refchecker =
       create_ref_checker(spec.per_dex_grouping, &xstores, conf, min_sdk);
   auto model =

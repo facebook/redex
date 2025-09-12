@@ -36,6 +36,9 @@ struct ShrinkerConfig {
   // Internally used option that decides whether to analyze constructors to find
   // immutable attributes (only relevant when using constant-propagaation).
   bool analyze_constructors{false};
+
+  // Derived from InterDexPass configuration, stored here for convenience.
+  bool normal_primary_dex{true};
 };
 
 } // namespace shrinker

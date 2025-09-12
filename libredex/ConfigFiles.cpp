@@ -663,6 +663,8 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
       fprintf(stderr, "WARNING: Cannot find force_inline annotation %s\n",
               type_s.c_str());
     }
+
+    shrinker_config.normal_primary_dex = normal_primary_dex();
   }
 
   const static UnorderedMap<std::string, inliner::UnfinalizePerfMode>
@@ -902,6 +904,19 @@ bool ConfigFiles::evaluate_package_name() const {
 
 bool ConfigFiles::enforce_class_order() const {
   return m_json.get("enforce_class_order", false);
+}
+
+bool ConfigFiles::normal_primary_dex() const {
+  // Sniff the InterDexPass config, to avoid having redundant configuration
+  // values all over.
+  bool result{true};
+  Json::Value interdex_pass_config;
+  m_json.get("InterDexPass", Json::nullValue, interdex_pass_config);
+  if (!interdex_pass_config.empty()) {
+    JsonWrapper interdex_jw(interdex_pass_config);
+    interdex_jw.get("normal_primary_dex", true, result);
+  }
+  return result;
 }
 
 void ConfigFiles::set_outdir(const std::string& new_outdir) {

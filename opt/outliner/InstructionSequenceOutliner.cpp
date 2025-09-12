@@ -3215,7 +3215,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                   sufficiently_hot_methods.size());
   auto methods_global_order = get_methods_global_order(config, m_config);
   mgr.incr_metric("num_ordered_methods", methods_global_order.size());
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, config.normal_primary_dex());
   size_t dex_id{0};
   const auto& interdex_metrics = mgr.get_interdex_metrics();
   auto it = interdex_metrics.find(interdex::METRIC_RESERVED_MREFS);

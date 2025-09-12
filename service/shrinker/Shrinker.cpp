@@ -84,7 +84,7 @@ Shrinker::Shrinker(
     const boost::optional<std::string>& package_name,
     const method_override_graph::Graph* method_override_graph)
     : m_forest(load(config.reg_alloc_random_forest)),
-      m_xstores(stores),
+      m_xstores(stores, config.normal_primary_dex),
       m_config(config),
       m_min_sdk(min_sdk),
       m_enabled(config.run_const_prop || config.run_cse ||
@@ -103,7 +103,6 @@ Shrinker::Shrinker(
   static_cast<void>(constant_propagation::EnumFieldAnalyzerState::get());
   static_cast<void>(constant_propagation::BoxedBooleanAnalyzerState::get());
   static_cast<void>(constant_propagation::ApiLevelAnalyzerState::get());
-
   if (config.run_cse || config.run_local_dce) {
     if (config.compute_pure_methods) {
       const auto& pure_methods = ::get_pure_methods();
@@ -145,6 +144,8 @@ Shrinker::Shrinker(
     constant_propagation::immutable_state::analyze_constructors(
         scope, &m_immut_analyzer_state);
   }
+  TRACE(MMINL, 1, "shrinker normal_primary_dex: %d; largest_root_store_id: %zu",
+        config.normal_primary_dex, m_xstores.largest_root_store_id());
 }
 
 constant_propagation::Transform::Stats Shrinker::constant_propagation(

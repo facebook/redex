@@ -284,6 +284,7 @@ void PassImpl::optimize(
 }
 
 void PassImpl::run(const DexStoresVector& stores,
+                   const ConfigFiles& conf,
                    int min_sdk,
                    const boost::optional<std::string>& package_name) {
   // reset statistics, to be meaningful when pass runs multiple times
@@ -291,7 +292,7 @@ void PassImpl::run(const DexStoresVector& stores,
   m_transform_stats = Transform::Stats();
 
   auto scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
 
   walk::parallel::code(scope, [&](const DexMethod* /*method*/, IRCode& code) {
     always_assert(code.cfg_built());
@@ -331,7 +332,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
   }
 
   const auto& options = mgr.get_redex_options();
-  run(stores, options.min_sdk, options.package_name);
+  run(stores, config, options.min_sdk, options.package_name);
 
   ScopedMetrics sm(mgr);
   m_transform_stats.log_metrics(sm, /* with_scope= */ false);

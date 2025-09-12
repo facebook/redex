@@ -342,7 +342,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
 
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       original_scope, conf.create_init_class_insns());
-  XStoreRefs xstore_refs(stores);
+  XStoreRefs xstore_refs(stores, conf.normal_primary_dex());
 
   // Setup all external plugins.
   InterDexRegistry* registry = dynamic_cast<InterDexRegistry*>(

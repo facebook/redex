@@ -261,6 +261,11 @@ struct ConfigFiles {
 
   bool disable_violation_fixes() const;
 
+  // If true, classes.dex is treated like any other dex file in the root of
+  // the input program. This is derived from InterDexPass configuration, which
+  // also defaults to true.
+  bool normal_primary_dex() const;
+
  private:
   JsonWrapper m_json;
   std::string outdir;

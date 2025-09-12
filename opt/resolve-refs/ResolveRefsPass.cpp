@@ -499,11 +499,11 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
 }
 
 void ResolveRefsPass::run_pass(DexStoresVector& stores,
-                               ConfigFiles& /* conf */,
+                               ConfigFiles& conf,
                                PassManager& mgr) {
   always_assert(m_min_sdk_api);
   Scope scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
   impl::RefStats stats = walk::parallel::methods<impl::RefStats>(
       scope, [this, &xstores](DexMethod* method) {
         auto local_stats = resolve_refs(method);

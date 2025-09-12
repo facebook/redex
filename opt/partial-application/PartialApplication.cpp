@@ -1205,7 +1205,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
 
   int min_sdk = mgr.get_redex_options().min_sdk;
   const auto* min_sdk_api = get_min_sdk_api(conf, mgr);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
   // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
   // it rejects all the references from stores with id larger than the largest
   // root_store id.
