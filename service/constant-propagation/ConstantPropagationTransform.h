@@ -231,6 +231,18 @@ class value_to_instruction_visitor final
                       ->set_dest(m_original->dest())};
   }
 
+  std::vector<IRInstruction*> operator()(
+      const ConstantResourceIdDomain& dom) const {
+    auto cst = dom.get_constant();
+    if (!cst) {
+      return {};
+    }
+    IRInstruction* insn = new IRInstruction(IOPCODE_R_CONST);
+    insn->set_literal(cst->id);
+    insn->set_dest(m_original->dest());
+    return {insn};
+  }
+
   template <typename Domain>
   std::vector<IRInstruction*> operator()(const Domain& /*dom*/) const {
     return {};

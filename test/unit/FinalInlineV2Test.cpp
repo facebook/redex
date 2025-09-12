@@ -312,3 +312,47 @@ TEST_F(FinalInlineTest, ReplaceSgetNoInitClass) {
   EXPECT_CODE_EQ(cls->get_all_methods()[0]->get_code(), expected.get());
   EXPECT_EQ(field->get_static_value()->value(), 0);
 }
+
+TEST_F(FinalInlineTest, encodeRConst) {
+  ClassCreator cc2(DexType::make_type("LBar;"));
+  cc2.add_method(assembler::method_from_string(R"(
+    (method (public static) "LBar;.go:()I"
+     (
+      (sget "LFoo;.app_name:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )"));
+  cc2.set_super(type::java_lang_Object());
+  auto* bar = cc2.create();
+
+  create_field_with_zero_value(
+      "LFoo;.app_name:I", m_cc.get(), ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+  m_cc->add_method(assembler::method_from_string(R"(
+    (method (public static) "LFoo;.<clinit>:()V"
+     (
+      (r-const v0 2131230721)
+      (sput v0 "LFoo;.app_name:I")
+      (return-void)
+     )
+    )
+  )"));
+  auto* foo = m_cc->create();
+
+  auto store = DexStore("store");
+  store.add_classes({foo, bar});
+  DexStoresVector stores{store};
+  auto scope = build_class_scope(stores);
+  XStoreRefs xstores(stores);
+  run(scope, &xstores);
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (r-const v0 2131230721)
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(bar->get_all_methods().size(), 1);
+  EXPECT_CODE_EQ(bar->get_all_methods()[0]->get_code(), expected.get());
+}
