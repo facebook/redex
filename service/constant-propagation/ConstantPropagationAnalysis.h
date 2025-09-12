@@ -164,6 +164,20 @@ class ResourceIdAnalyzer final
  public:
   static bool analyze_r_const(const IRInstruction* insn,
                               ConstantEnvironment* env);
+  static bool analyze_cmp(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_unop(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_binop_lit(const IRInstruction* insn,
+                                ConstantEnvironment* env);
+
+  static bool analyze_binop(const IRInstruction* insn,
+                            ConstantEnvironment* env);
+
+ private:
+  static bool is_src_known(const IRInstruction* insn,
+                           ConstantEnvironment* env,
+                           src_index_t i);
 };
 
 /*

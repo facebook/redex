@@ -429,6 +429,15 @@ bool LocalArrayAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
   }
 }
 
+bool ResourceIdAnalyzer::is_src_known(const IRInstruction* insn,
+                                      ConstantEnvironment* env,
+                                      src_index_t i) {
+  const auto& register_env = env->get_register_environment();
+  const auto& value = register_env.get(insn->src(i));
+  auto r_domain = value.maybe_get<ConstantResourceIdDomain>();
+  return r_domain != boost::none && r_domain->is_value();
+}
+
 bool ResourceIdAnalyzer::analyze_r_const(const IRInstruction* insn,
                                          ConstantEnvironment* env) {
   auto id = static_cast<uint32_t>(insn->get_literal());
@@ -436,6 +445,44 @@ bool ResourceIdAnalyzer::analyze_r_const(const IRInstruction* insn,
         insn->dest(), id);
   env->set(insn->dest(), ConstantResourceIdDomain({.id = id}));
   return true;
+}
+
+bool ResourceIdAnalyzer::analyze_cmp(const IRInstruction* insn,
+                                     ConstantEnvironment* env) {
+  if (ResourceIdAnalyzer::is_src_known(insn, env, 0) ||
+      ResourceIdAnalyzer::is_src_known(insn, env, 1)) {
+    env->set(insn->dest(), ConstantValue::top());
+    return true;
+  }
+  return false;
+}
+
+bool ResourceIdAnalyzer::analyze_binop(const IRInstruction* insn,
+                                       ConstantEnvironment* env) {
+  if (ResourceIdAnalyzer::is_src_known(insn, env, 0) ||
+      ResourceIdAnalyzer::is_src_known(insn, env, 1)) {
+    env->set(insn->dest(), ConstantValue::top());
+    return true;
+  }
+  return false;
+}
+
+bool ResourceIdAnalyzer::analyze_unop(const IRInstruction* insn,
+                                      ConstantEnvironment* env) {
+  if (ResourceIdAnalyzer::is_src_known(insn, env, 0)) {
+    env->set(insn->dest(), ConstantValue::top());
+    return true;
+  }
+  return false;
+}
+
+bool ResourceIdAnalyzer::analyze_binop_lit(const IRInstruction* insn,
+                                           ConstantEnvironment* env) {
+  if (ResourceIdAnalyzer::is_src_known(insn, env, 0)) {
+    env->set(insn->dest(), ConstantValue::top());
+    return true;
+  }
+  return false;
 }
 
 bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
