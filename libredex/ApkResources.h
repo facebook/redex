@@ -292,9 +292,8 @@ class TableSnapshot {
   TableEntryParser& get_parsed_table() { return m_table_parser; }
   android::ResStringPool& get_global_strings() { return m_global_strings; }
   // Get the key strings pool for a specific package
-  const android::ResStringPool& get_key_strings(uint32_t package_id) const {
-    return m_key_strings.at(package_id);
-  }
+  const android::ResStringPool& get_key_strings(
+      android::ResTable_package* package) const;
 
  private:
   TableEntryParser m_table_parser;

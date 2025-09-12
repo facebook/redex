@@ -309,6 +309,11 @@ TableSnapshot::TableSnapshot(RedexMappedFile& mapped_file, size_t len) {
   }
 }
 
+const android::ResStringPool& TableSnapshot::get_key_strings(
+    android::ResTable_package* package) const {
+  return m_key_strings.at(GET_ID(package));
+}
+
 void TableSnapshot::gather_non_empty_resource_ids(std::vector<uint32_t>* ids) {
   for (const auto& pair : m_table_parser.m_res_id_to_entries) {
     auto id = pair.first;
@@ -1861,22 +1866,7 @@ class PackageStringRefCollector : public apk::TableParser {
     std::map<android::ResTable_type*, std::set<android::ResStringPool_ref*>>
         entries;
     m_package_entries.emplace(package, std::move(entries));
-    std::shared_ptr<android::ResStringPool> key_strings =
-        std::make_shared<android::ResStringPool>();
-    m_package_key_strings.emplace(package, std::move(key_strings));
     apk::TableParser::visit_package(package);
-    return true;
-  }
-
-  bool visit_key_strings(android::ResTable_package* package,
-                         android::ResStringPool_header* pool) override {
-    auto& key_strings = m_package_key_strings.at(package);
-    always_assert_log(key_strings->getError() == android::NO_INIT,
-                      "Key strings re-init!");
-    always_assert_log(key_strings->setTo(pool, dtohl(pool->header.size),
-                                         true) == android::NO_ERROR,
-                      "Failed to parse key strings!");
-    apk::TableParser::visit_key_strings(package, pool);
     return true;
   }
 
@@ -1907,8 +1897,6 @@ class PackageStringRefCollector : public apk::TableParser {
       android::ResTable_package*,
       std::map<android::ResTable_type*, std::set<android::ResStringPool_ref*>>>
       m_package_entries;
-  std::map<android::ResTable_package*, std::shared_ptr<android::ResStringPool>>
-      m_package_key_strings;
 };
 } // namespace
 
@@ -2073,11 +2061,10 @@ void rebuild_type_strings(
 
 void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
   // Find the global string pool and read its settings.
-  GlobalStringPoolReader string_reader;
-  string_reader.visit(m_f.data(), m_arsc_len);
-  auto string_pool = string_reader.global_strings();
+  auto& table_snapshot = get_table_snapshot();
+  auto& string_pool = table_snapshot.get_global_strings();
   TRACE(RES, 9, "Global string pool has %zu styles and %zu total strings",
-        string_pool->styleCount(), string_pool->size());
+        string_pool.styleCount(), string_pool.size());
 
   // 1) Collect all referenced global string indicies and key string indicies.
   PackageStringRefCollector collector;
@@ -2092,7 +2079,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
 
   // 2) Build the compacted map of old -> new indicies for used global strings.
   UnorderedMap<uint32_t, uint32_t> global_old_to_new;
-  project_string_mapping(used_global_strings, *string_pool, &global_old_to_new);
+  project_string_mapping(used_global_strings, string_pool, &global_old_to_new);
 
   // 3) Remap all Res_value structs
   auto remap_value = [&global_old_to_new](android::Res_value* value) {
@@ -2122,8 +2109,8 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     }
   };
   std::shared_ptr<arsc::ResStringPoolBuilder> global_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(string_pool));
-  rebuild_string_pool(*string_pool, global_old_to_new, remap_spans,
+      std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(&string_pool));
+  rebuild_string_pool(string_pool, global_old_to_new, remap_spans,
                       global_strings_builder.get());
 
   // 4) Serialize the ResTable with the modified ResStringPool (which will have
@@ -2142,13 +2129,13 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
       const auto& package_type_entries = package_entry_pairs.second;
       refs.insert(package_type_entries.begin(), package_type_entries.end());
     }
-    auto key_string_pool = collector.m_package_key_strings.at(package);
+    const auto& key_string_pool = table_snapshot.get_key_strings(package);
     UnorderedSet<uint32_t> used_key_strings;
     for (const auto& ref : refs) {
       used_key_strings.emplace(dtohl(ref->index));
     }
     UnorderedMap<uint32_t, uint32_t> key_old_to_new;
-    project_string_mapping(used_key_strings, *key_string_pool, &key_old_to_new,
+    project_string_mapping(used_key_strings, key_string_pool, &key_old_to_new,
                            config.sort_key_strings);
 
     auto& type_strings_header =
@@ -2169,13 +2156,13 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     }
 
     // Actually build the key strings pool.
-    auto key_flags = POOL_FLAGS(key_string_pool);
+    auto key_flags = POOL_FLAGS(&key_string_pool);
     if (config.sort_key_strings) {
       key_flags |= android::ResStringPool_header::SORTED_FLAG;
     }
     std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
         std::make_shared<arsc::ResStringPoolBuilder>(key_flags);
-    rebuild_string_pool(*key_string_pool, key_old_to_new,
+    rebuild_string_pool(key_string_pool, key_old_to_new,
                         key_strings_builder.get());
     package_builder->set_key_strings(key_strings_builder);
     // Copy over all existing type data, which has been remapped by the step
@@ -2286,6 +2273,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
   arsc::ResTableBuilder table_builder;
 
   // Find the global string pool and read its settings.
+  auto& table_snapshot = get_table_snapshot();
   GlobalStringPoolReader string_reader;
   string_reader.visit(m_f.data(), m_arsc_len);
 
@@ -2359,8 +2347,8 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
 
     if (start_package_id == package->id && !allowed_types.empty()) {
       // Set new string to be added to key string pool.
-      auto key_string_pool = collector.m_package_key_strings.at(package);
-      uint32_t new_key_string_index = key_string_pool->size();
+      const auto& key_string_pool = table_snapshot.get_key_strings(package);
+      auto new_key_string_index = (uint32_t)key_string_pool.size();
       std::map<uint32_t, std::string> key_id_to_new_strings;
       key_id_to_new_strings[new_key_string_index] = RESOURCE_NAME_REMOVED;
 
@@ -2380,7 +2368,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
         // keep_resource_specific values are given as standard UTF-8; compare
         // against string pool also as standard UTF-8.
         std::string old_string =
-            arsc::get_string_from_pool(*key_string_pool, old);
+            arsc::get_string_from_pool(key_string_pool, old);
         if (keep_resource_specific.count(old_string) > 0 ||
             unordered_any_of(keep_resource_prefixes, [&](const std::string& v) {
               return old_string.find(v) == 0;
@@ -2396,8 +2384,8 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
       // Actually build the key strings pool.
       std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
           std::make_shared<arsc::ResStringPoolBuilder>(
-              POOL_FLAGS_CLEAR_SORT(key_string_pool));
-      rebuild_string_pool_with_addition(*key_string_pool, key_id_to_new_strings,
+              POOL_FLAGS_CLEAR_SORT(&key_string_pool));
+      rebuild_string_pool_with_addition(key_string_pool, key_id_to_new_strings,
                                         key_strings_builder.get());
       package_builder->set_key_strings(key_strings_builder);
     } else {
@@ -3331,8 +3319,7 @@ void ResourcesArscFile::add_styles(
     auto package_id = package->id;
     auto package_builder = std::make_shared<arsc::ResPackageBuilder>(package);
 
-    const android::ResStringPool& existing_key_pool =
-        table_snapshot.get_key_strings(GET_ID(package));
+    const auto& existing_key_pool = table_snapshot.get_key_strings(package);
 
     auto key_flags = POOL_FLAGS_CLEAR_SORT(&existing_key_pool);
     std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
