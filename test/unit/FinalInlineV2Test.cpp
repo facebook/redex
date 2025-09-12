@@ -344,7 +344,7 @@ TEST_F(FinalInlineTest, encodeRConst) {
   store.add_classes({foo, bar});
   DexStoresVector stores{store};
   auto scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, true);
   run(scope, &xstores);
 
   auto expected = assembler::ircode_from_string(R"(
