@@ -668,7 +668,7 @@ resources::StyleResource read_style_resource(
     android::ResTable_config* config,
     android::ResTable_map_entry* entry) {
   StyleCollector collector(entry);
-  auto parent_id dtohl(entry->parent.ident);
+  auto parent_id = dtohl(entry->parent.ident);
   return {id, *config, parent_id, std::move(collector.m_attributes)};
 }
 } // namespace apk
