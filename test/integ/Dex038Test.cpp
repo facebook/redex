@@ -24,6 +24,8 @@
 #include "Show.h"
 #include "Walkers.h"
 
+using namespace std::literals::string_literals;
+
 using CallSitePredicate = const std::function<bool(DexCallSite*)>&;
 int ensureCallSite(DexIdx* idx, CallSitePredicate predicate) {
   for (int i = 0; i < idx->get_callsite_ids_size(); ++i) {
@@ -361,20 +363,19 @@ TEST(Dex038Test, ReadWriteDex038) {
   std::string output_dex = tmpdir.path + "/output.dex";
   auto gtypes = std::make_shared<GatheredTypes>(&classes);
 
-  write_classes_to_dex(
-      output_dex,
-      &classes,
-      std::move(gtypes),
-      0,
-      nullptr,
-      0,
-      dummy_cfg,
-      pos_mapper.get(),
-      DebugInfoKind::NoCustomSymbolication,
-      &method_to_id,
-      &code_debug_lines,
-      nullptr,
-      "dex\n038\0"); // NOLINT(bugprone-string-literal-with-embedded-nul)
+  write_classes_to_dex(output_dex,
+                       &classes,
+                       std::move(gtypes),
+                       0,
+                       nullptr,
+                       0,
+                       dummy_cfg,
+                       pos_mapper.get(),
+                       DebugInfoKind::NoCustomSymbolication,
+                       &method_to_id,
+                       &code_debug_lines,
+                       nullptr,
+                       "dex\n038\0"s);
 
   delete g_redex;
   g_redex = new RedexContext();

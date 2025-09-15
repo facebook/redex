@@ -23,6 +23,8 @@
 #include "Show.h"
 #include "Walkers.h"
 
+using namespace std::literals::string_literals;
+
 struct DexOutputTestHelper {
   static std::unique_ptr<uint8_t[]> steal_output(DexOutput& output) {
     return std::move(output.m_output);
@@ -88,9 +90,8 @@ class IODITest : public ::testing::Test {
                      pos_mapper.get(),
                      &method_to_id,
                      &code_debug_lines);
-    output.prepare(
-        // NOLINTNEXTLINE(bugprone-string-literal-with-embedded-nul)
-        SortMode::DEFAULT, {SortMode::DEFAULT}, dummy_cfg, "dex\n035\0");
+    output.prepare(SortMode::DEFAULT, {SortMode::DEFAULT}, dummy_cfg,
+                   "dex\n035\0"s);
     if (mids != nullptr) {
       for (auto& iter : UnorderedIterable(method_to_id)) {
         DexMethod* method = iter.first;
