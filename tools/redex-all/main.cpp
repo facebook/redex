@@ -294,14 +294,14 @@ Json::Value reflect_property_definitions() {
     return prop_map;
   }();
 
-  auto create_sorted = [](const auto& input) {
+  auto create_sorted = [](const auto& input) -> Json::Value {
     auto tmp = unordered_to_ordered(input);
 
     Json::Value holder = Json::arrayValue;
     for (auto& prop : tmp) {
       holder.append(redex_properties::get_name(prop));
     }
-    return holder; // NOLINT(clang-diagnostic-nrvo)
+    return holder;
   };
 
   properties["initial"] =
@@ -1511,13 +1511,13 @@ void collect_classes_for_full_jsonl(const DexStore& store,
       class_entry["store"] = store.get_name();
       class_entry["original_store"] = cls->get_location()->get_store_name();
 
-      auto collect_members = [](const auto& members) {
+      auto collect_members = [](const auto& members) -> Json::Value {
         Json::Value members_entry{Json::ValueType::objectValue};
         for (const auto* member : members) {
           members_entry[std::string(member->get_deobfuscated_name_or_empty())] =
               show(member);
         }
-        return members_entry; // NOLINT(clang-diagnostic-nrvo)
+        return members_entry;
       };
       class_entry["ifields"] = collect_members(cls->get_ifields());
       class_entry["sfields"] = collect_members(cls->get_sfields());
