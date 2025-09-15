@@ -282,6 +282,7 @@ static void uleb_append(std::vector<uint8_t>& bytes, uint32_t v) {
 void DexEncodedValue::encode(DexOutputIdx* /*dodx*/,
                              std::vector<uint8_t>& encdata) {
   switch (m_evtype) {
+  case DEVT_BYTE:
   case DEVT_SHORT:
   case DEVT_INT:
   case DEVT_LONG:
@@ -481,6 +482,9 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   DexEncodedValueTypes evt = (DexEncodedValueTypes)DEVT_HDR_TYPE(evhdr);
   uint8_t evarg = DEVT_HDR_ARG(evhdr);
   switch (evt) {
+  case DEVT_BYTE:
+    always_assert_type_log(evarg == 0, INVALID_DEX, "evarg out of bounds");
+    [[fallthrough]];
   case DEVT_SHORT:
     always_assert_type_log(evarg <= 1, INVALID_DEX, "evarg out of bounds");
     [[fallthrough]];
@@ -495,9 +499,6 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValuePrimitive(evt, v));
   }
-  case DEVT_BYTE:
-    always_assert_type_log(evarg == 0, INVALID_DEX, "evarg out of bounds");
-    [[fallthrough]];
   case DEVT_CHAR: {
     always_assert_type_log(evarg <= 1, INVALID_DEX, "evarg out of bounds");
     always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
