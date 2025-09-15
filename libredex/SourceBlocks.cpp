@@ -454,20 +454,17 @@ struct CustomValueInsertHelper {
                                // succ to hot. If this false, the source block
                                // can be either hot or cold
 
-    // NOLINTNEXTLINE
-    FuzzingMetadata() = default;
+    [[maybe_unused]] FuzzingMetadata() = default;
 
     FuzzingMetadata(uint32_t indegrees, uint32_t insertion_id)
         : indegrees(indegrees), insertion_id(insertion_id) {}
 
-    // NOLINTBEGIN
     bool operator<(const FuzzingMetadata& r) const {
       if (indegrees == r.indegrees) {
         return insertion_id < r.insertion_id;
       }
       return indegrees < r.indegrees;
     }
-    // NOLINTEND
   };
 
   UnorderedMap<Block*, FuzzingMetadata> fuzzing_metadata_map;
