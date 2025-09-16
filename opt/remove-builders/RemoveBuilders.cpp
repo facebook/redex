@@ -329,6 +329,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
                                conf.get_inliner_config(),
                                scope,
                                stores,
+                               conf,
                                false);
 
   // Inline non init methods.

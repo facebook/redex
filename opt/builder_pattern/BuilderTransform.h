@@ -18,6 +18,7 @@ namespace builder_pattern {
 class BuilderTransform {
  public:
   BuilderTransform(const Scope& scope,
+                   const ConfigFiles& conf,
                    const TypeSystem& type_system,
                    const DexType* root,
                    const init_classes::InitClassesWithSideEffects&

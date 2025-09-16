@@ -96,12 +96,13 @@ constexpr size_t kAppear100Buckets = 10;
 } // namespace
 
 VirtualMerging::VirtualMerging(DexStoresVector& stores,
+                               const ConfigFiles& conf,
                                inliner::InlinerConfig inliner_config,
                                size_t max_overriding_method_instructions,
                                const api::AndroidSDK* min_sdk_api,
                                PerfConfig perf_config)
     : m_scope(build_class_scope(stores)),
-      m_xstores(stores, inliner_config.shrinker.normal_primary_dex),
+      m_xstores(stores, conf.normal_primary_dex()),
       m_xdexes(stores),
       m_type_system(m_scope),
       m_max_overriding_method_instructions(max_overriding_method_instructions),
@@ -114,9 +115,9 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
   int min_sdk = 0;
   m_inliner.reset(new MultiMethodInliner(
-      m_scope, m_init_classes_with_side_effects, stores, no_default_inlinables,
-      std::ref(m_concurrent_method_resolver), m_inliner_config, min_sdk,
-      MultiMethodInlinerMode::None,
+      m_scope, m_init_classes_with_side_effects, stores, conf,
+      no_default_inlinables, std::ref(m_concurrent_method_resolver),
+      m_inliner_config, min_sdk, MultiMethodInlinerMode::None,
       /* true_virtual_callers */ {},
       /* inline_for_speed */ nullptr,
       /* bool analyze_and_prune_inits */ false,
@@ -1524,7 +1525,7 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   // We don't need to worry about inlining synchronized code, as we always
   // inline at the top-level outside of other try-catch regions.
   inliner_config.respect_sketchy_methods = false;
-  VirtualMerging vm(stores, inliner_config,
+  VirtualMerging vm(stores, conf, inliner_config,
                     m_max_overriding_method_instructions, min_sdk_api,
                     m_perf_config);
   vm.run(conf.get_method_profiles(), m_strategy, m_insertion_strategy);

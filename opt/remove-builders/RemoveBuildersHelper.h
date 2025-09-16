@@ -99,6 +99,7 @@ class BuilderTransform {
                    inliner::InlinerConfig inliner_config,
                    const Scope& scope,
                    DexStoresVector& stores,
+                   const ConfigFiles& conf,
                    bool throws_inline)
       : m_inliner_config(std::move(inliner_config)) {
     // Note: We copy global inline config in the class since it seems that it
@@ -109,8 +110,9 @@ class BuilderTransform {
     UnorderedSet<DexMethod*> no_default_inlinables;
     int min_sdk = 0;
     m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-        scope, init_classes_with_side_effects, stores, no_default_inlinables,
-        std::ref(m_concurrent_method_resolver), m_inliner_config, min_sdk));
+        scope, init_classes_with_side_effects, stores, conf,
+        no_default_inlinables, std::ref(m_concurrent_method_resolver),
+        m_inliner_config, min_sdk));
   }
 
   bool inline_methods(

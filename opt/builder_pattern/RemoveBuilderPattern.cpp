@@ -85,6 +85,7 @@ class RemoveClasses {
  public:
   RemoveClasses(const DexType* super_cls,
                 const Scope& scope,
+                const ConfigFiles& conf,
                 const init_classes::InitClassesWithSideEffects&
                     init_classes_with_side_effects,
                 const inliner::InlinerConfig& inliner_config,
@@ -96,6 +97,7 @@ class RemoveClasses {
         m_blocklist(blocklist),
         m_type_system(scope),
         m_transform(scope,
+                    conf,
                     m_type_system,
                     super_cls,
                     init_classes_with_side_effects,
@@ -438,9 +440,10 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
     TRACE(BLD_PATTERN, 1, "removing root %s w/ %zu iterations", SHOW(root),
           m_max_num_inline_iteration);
     Timer t("root_iteration");
-    RemoveClasses rm_builder_pattern(
-        root, scope, init_classes_with_side_effects, conf.get_inliner_config(),
-        m_blocklist, m_max_num_inline_iteration, stores);
+    RemoveClasses rm_builder_pattern(root, scope, conf,
+                                     init_classes_with_side_effects,
+                                     conf.get_inliner_config(), m_blocklist,
+                                     m_max_num_inline_iteration, stores);
     rm_builder_pattern.optimize();
     rm_builder_pattern.print_stats(mgr);
     rm_builder_pattern.cleanup();

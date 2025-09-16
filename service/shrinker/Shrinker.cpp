@@ -76,6 +76,7 @@ Shrinker::Shrinker(
     const Scope& scope,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
+    const ConfigFiles& conf,
     const ShrinkerConfig& config,
     int min_sdk,
     const UnorderedSet<DexMethodRef*>& configured_pure_methods,
@@ -84,7 +85,7 @@ Shrinker::Shrinker(
     const boost::optional<std::string>& package_name,
     const method_override_graph::Graph* method_override_graph)
     : m_forest(load(config.reg_alloc_random_forest)),
-      m_xstores(stores, config.normal_primary_dex),
+      m_xstores(stores, conf.normal_primary_dex()),
       m_config(config),
       m_min_sdk(min_sdk),
       m_enabled(config.run_const_prop || config.run_cse ||
@@ -145,7 +146,7 @@ Shrinker::Shrinker(
         scope, &m_immut_analyzer_state);
   }
   TRACE(MMINL, 1, "shrinker normal_primary_dex: %d; largest_root_store_id: %zu",
-        config.normal_primary_dex, m_xstores.largest_root_store_id());
+        conf.normal_primary_dex(), m_xstores.largest_root_store_id());
 }
 
 constant_propagation::Transform::Stats Shrinker::constant_propagation(

@@ -1236,7 +1236,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   ShrinkerConfig shrinker_config;
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
-  Shrinker shrinker(stores, scope, init_classes_with_side_effects,
+  Shrinker shrinker(stores, scope, init_classes_with_side_effects, conf,
                     shrinker_config, min_sdk, {}, {}, {},
                     mgr.get_redex_options().package_name);
 

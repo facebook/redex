@@ -15,6 +15,7 @@ namespace builder_pattern {
 
 BuilderTransform::BuilderTransform(
     const Scope& scope,
+    const ConfigFiles& conf,
     const TypeSystem& type_system,
     const DexType* root,
     const init_classes::InitClassesWithSideEffects&
@@ -34,9 +35,9 @@ BuilderTransform::BuilderTransform(
   m_inliner_config.shrinker.compute_pure_methods = false;
   int min_sdk = 0;
   m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-      scope, init_classes_with_side_effects, stores, no_default_inlinables,
-      std::ref(m_concurrent_method_resolver), m_inliner_config, min_sdk,
-      MultiMethodInlinerMode::None));
+      scope, init_classes_with_side_effects, stores, conf,
+      no_default_inlinables, std::ref(m_concurrent_method_resolver),
+      m_inliner_config, min_sdk, MultiMethodInlinerMode::None));
 }
 
 UnorderedSet<IRInstruction*> BuilderTransform::try_inline_calls(

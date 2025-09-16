@@ -990,7 +990,7 @@ void run_inliner(
   ConcurrentMethodResolver concurrent_method_resolver;
   // inline candidates
   MultiMethodInliner inliner(
-      scope, init_classes_with_side_effects, stores, candidates,
+      scope, init_classes_with_side_effects, stores, conf, candidates,
       std::ref(concurrent_method_resolver), inliner_config, min_sdk,
       intra_dex ? IntraDex : InterDex, true_virtual_callers, inline_for_speed,
       analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,

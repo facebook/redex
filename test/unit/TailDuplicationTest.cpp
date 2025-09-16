@@ -58,6 +58,7 @@ size_t make_hot_tails_unique(DexMethod* method, bool shrink = false) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
 
+    ConfigFiles conf = ConfigFiles(Json::nullValue);
     using namespace shrinker;
     ShrinkerConfig shrinker_config;
     shrinker_config.run_const_prop = true;
@@ -69,6 +70,7 @@ size_t make_hot_tails_unique(DexMethod* method, bool shrink = false) {
     Shrinker shrinker(stores,
                       scope,
                       init_classes_with_side_effects,
+                      conf,
                       shrinker_config,
                       min_sdk);
 

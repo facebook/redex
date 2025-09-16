@@ -2060,9 +2060,9 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   inliner_config.rewrite_invoke_super = true;
   int min_sdk = 0;
   MultiMethodInliner inliner(
-      scope, init_classes_with_side_effects, stores, no_default_inlinables,
-      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
-      MultiMethodInlinerMode::None);
+      scope, init_classes_with_side_effects, stores, conf,
+      no_default_inlinables, std::ref(concurrent_method_resolver),
+      inliner_config, min_sdk, MultiMethodInlinerMode::None);
 
   auto lost_returns_through_shrinking = shrink_root_methods(
       apply_shrinking_plugins, inliner, dependencies, root_methods,

@@ -502,7 +502,7 @@ void HotColdMethodSpecializingPass::run_pass(DexStoresVector& stores,
       scope, conf.create_init_class_insns());
 
   shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                              shrinker_config, min_sdk);
+                              conf, shrinker_config, min_sdk);
 
   Stats stats;
   std::mutex stats_mutex;

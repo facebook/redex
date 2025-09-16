@@ -1936,7 +1936,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   auto inliner_config = cfg.get_inliner_config();
   int min_sdk = pm.get_redex_options().min_sdk;
   MultiMethodInliner inliner(
-      scope, init_classes_with_side_effects, stores, no_default_inlinables,
+      scope, init_classes_with_side_effects, stores, cfg, no_default_inlinables,
       std::ref(concurrent_method_resolver), inliner_config, min_sdk,
       MultiMethodInlinerMode::None);
 

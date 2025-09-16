@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexStore.h"
 #include "FrameworkApi.h"
@@ -119,6 +120,7 @@ class VirtualMerging {
   };
 
   VirtualMerging(DexStoresVector&,
+                 const ConfigFiles& conf,
                  inliner::InlinerConfig,
                  size_t,
                  const api::AndroidSDK* min_sdk_api = nullptr,

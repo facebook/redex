@@ -60,6 +60,7 @@ class FinalInlinePassV2 : public Pass {
     size_t deleted_methods{0};
   };
   static Stats run(const Scope&,
+                   const ConfigFiles& conf,
                    int min_sdk,
                    const init_classes::InitClassesWithSideEffects&
                        init_classes_with_side_effects,
@@ -69,6 +70,7 @@ class FinalInlinePassV2 : public Pass {
                    std::optional<DexStoresVector*> stores = std::nullopt);
   static Stats run_inline_ifields(
       const Scope&,
+      const ConfigFiles& conf,
       int min_sdk,
       const init_classes::InitClassesWithSideEffects&
           init_classes_with_side_effects,

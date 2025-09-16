@@ -249,7 +249,7 @@ void TailDuplicationPass::run_pass(DexStoresVector& stores,
 
   int min_sdk = mgr.get_redex_options().min_sdk;
   shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                              m_config, min_sdk, conf.get_pure_methods(),
+                              conf, m_config, min_sdk, conf.get_pure_methods(),
                               conf.get_finalish_field_names(), {},
                               mgr.get_redex_options().package_name);
 

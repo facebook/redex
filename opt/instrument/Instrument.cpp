@@ -1166,7 +1166,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
 
   int min_sdk = pm.get_redex_options().min_sdk;
   shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                              shrinker_config, min_sdk, {}, {},
+                              cfg, shrinker_config, min_sdk, {}, {},
                               finalish_fields);
 
   {

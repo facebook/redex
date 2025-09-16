@@ -34,6 +34,8 @@ class SourceBlocksTest : public RedexIntegrationTest {
     });
   }
 
+  ConfigFiles config_files = ConfigFiles(Json::nullValue);
+
  protected:
   void enable_pass(InsertSourceBlocksPass& isbp) { isbp.m_force_run = true; }
   void enable_always_inject(InsertSourceBlocksPass& isbp) {
@@ -215,7 +217,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               def_inlinables,
+                               config_files, def_inlinables,
                                std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
@@ -445,7 +447,7 @@ TEST_F(SourceBlocksTest, scaling) {
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               def_inlinables,
+                               config_files, def_inlinables,
                                std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();

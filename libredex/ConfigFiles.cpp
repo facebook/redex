@@ -663,8 +663,6 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
       fprintf(stderr, "WARNING: Cannot find force_inline annotation %s\n",
               type_s.c_str());
     }
-
-    shrinker_config.normal_primary_dex = normal_primary_dex();
   }
 
   const static UnorderedMap<std::string, inliner::UnfinalizePerfMode>

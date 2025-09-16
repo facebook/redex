@@ -251,6 +251,8 @@ class VirtualMergingTest : public RedexTest {
     return fail.result();
   }
 
+  ConfigFiles conf = ConfigFiles(Json::nullValue);
+
  protected:
   std::unordered_map<size_t, const DexClass*> types;
   std::unordered_map<const DexClass*, std::vector<const DexClass*>> subtypes;
@@ -276,7 +278,7 @@ TEST_F(VirtualMergingTest, MergedFooNoProfiles) {
   profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50));
   profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100));
 
-  VirtualMerging vm{stores, inliner_config, 100};
+  VirtualMerging vm{stores, conf, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
          VirtualMerging::Strategy::kLexicographical,
@@ -324,7 +326,7 @@ TEST_F(VirtualMergingTest, MergedBarNoProfiles) {
   profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50));
   profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100));
 
-  VirtualMerging vm{stores, inliner_config, 100};
+  VirtualMerging vm{stores, conf, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
          VirtualMerging::Strategy::kLexicographical,
@@ -361,7 +363,7 @@ TEST_F(VirtualMergingTest, MergedFooProfiles) {
   profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50));
   profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100));
 
-  VirtualMerging vm{stores, inliner_config, 100};
+  VirtualMerging vm{stores, conf, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
          VirtualMerging::Strategy::kProfileCallCount,
@@ -398,7 +400,7 @@ TEST_F(VirtualMergingTest, MergedBarFooProfiles) {
   profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50));
   profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100));
 
-  VirtualMerging vm{stores, inliner_config, 100};
+  VirtualMerging vm{stores, conf, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
          VirtualMerging::Strategy::kProfileCallCount,
@@ -436,7 +438,7 @@ TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsAllAppear100) {
   profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50, 100));
   profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100, 100));
 
-  VirtualMerging vm{stores, inliner_config, 100};
+  VirtualMerging vm{stores, conf, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
          VirtualMerging::Strategy::kProfileCallCount,
@@ -475,7 +477,7 @@ TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsDiffAppear100) {
   profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50, 100));
   profile_data.emplace(get_method(1, "foo"), make_call_count_stat(90, 90));
 
-  VirtualMerging vm{stores, inliner_config, 100};
+  VirtualMerging vm{stores, conf, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
          VirtualMerging::Strategy::kProfileAppearBucketsAndCallCount,
@@ -512,7 +514,7 @@ TEST_F(VirtualMergingTest, MergedFooNoProfilesFallthrough) {
   profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50));
   profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100));
 
-  VirtualMerging vm{stores, inliner_config, 100};
+  VirtualMerging vm{stores, conf, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
          VirtualMerging::Strategy::kLexicographical,
@@ -559,7 +561,7 @@ TEST_F(VirtualMergingTest, PerfConfig) {
 
   VirtualMerging::PerfConfig pc{90, 1};
 
-  VirtualMerging vm{stores, inliner_config, 100, nullptr, pc};
+  VirtualMerging vm{stores, conf, inliner_config, 100, nullptr, pc};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
          VirtualMerging::Strategy::kProfileCallCount,

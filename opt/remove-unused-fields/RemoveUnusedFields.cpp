@@ -42,17 +42,19 @@ bool has_non_zero_static_value(DexField* field) {
 class RemoveUnusedFields final {
  public:
   RemoveUnusedFields(const Config& config,
-                     bool create_init_class_insns,
+                     const ConfigFiles& config_files,
                      const ShrinkerConfig& shrinker_config,
                      int min_sdk,
                      DexStoresVector& stores,
                      const Scope& scope)
       : m_config(config),
         m_scope(scope),
-        m_init_classes_with_side_effects(scope, create_init_class_insns),
+        m_init_classes_with_side_effects(
+            scope, config_files.create_init_class_insns()),
         m_shrinker(stores,
                    scope,
                    m_init_classes_with_side_effects,
+                   config_files,
                    shrinker_config,
                    min_sdk) {
     analyze();
@@ -286,8 +288,8 @@ void PassImpl::run_pass(DexStoresVector& stores,
   shrinker_config.compute_pure_methods = false;
 
   int min_sdk = mgr.get_redex_options().min_sdk;
-  RemoveUnusedFields rmuf(m_config, conf.create_init_class_insns(),
-                          shrinker_config, min_sdk, stores, scope);
+  RemoveUnusedFields rmuf(m_config, conf, shrinker_config, min_sdk, stores,
+                          scope);
   mgr.set_metric("unread_fields", rmuf.unread_fields().size());
   mgr.set_metric("unwritten_fields", rmuf.unwritten_fields().size());
   mgr.set_metric("zero_written_fields", rmuf.zero_written_fields().size());
