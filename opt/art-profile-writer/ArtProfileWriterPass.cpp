@@ -119,9 +119,12 @@ bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
 }
 
 void never_inline(bool attach_annotations,
+                  float hot_block_appear_threshold,
+                  float hot_method_appear_threshold,
                   const Scope& scope,
                   const baseline_profiles::BaselineProfile& baseline_profile,
-                  PassManager& mgr) {
+                  PassManager& mgr,
+                  const method_profiles::MethodProfiles& method_profiles) {
   DexAnnotationSet anno_set;
   anno_set.add_annotation(std::make_unique<DexAnnotation>(
       type::dalvik_annotation_optimization_NeverInline(),
@@ -213,6 +216,31 @@ void never_inline(bool attach_annotations,
     }
     receiver_types.emplace(method, std::move(map));
   });
+  auto method_profile_appears = [&](DexMethod* method, float appear_threshold) {
+    for (const auto& p : method_profiles.all_interactions()) {
+      auto it = p.second.find(method);
+      if (it != p.second.end() &&
+          it->second.appear_percent >= appear_threshold) {
+        return true;
+      }
+    }
+    return false;
+  };
+  auto is_sufficiently_hot = [&](cfg::Block* block, DexMethod* callee) {
+    if (!is_compiled(baseline_profile, callee)) {
+      return false;
+    }
+    if (hot_block_appear_threshold >= 0 &&
+        !source_blocks::maybe_hot(block, hot_block_appear_threshold)) {
+      return false;
+    }
+    if (hot_method_appear_threshold >= 0 &&
+        !source_blocks::method_maybe_hot(callee, hot_method_appear_threshold) &&
+        !method_profile_appears(callee, hot_method_appear_threshold)) {
+      return false;
+    }
+    return true;
+  };
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
     if (!is_compiled(baseline_profile, caller)) {
       return;
@@ -267,7 +295,7 @@ void never_inline(bool attach_annotations,
           continue;
         }
 
-        if (is_compiled(baseline_profile, callee)) {
+        if (is_sufficiently_hot(b, callee)) {
           hot_hot_callees.insert(callee);
         } else {
           hot_cold_callees.insert(callee);
@@ -710,6 +738,11 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_inline_estimate", false, m_never_inline_estimate);
   bind("never_inline_attach_annotations", false,
        m_never_inline_attach_annotations);
+  bind("never_inline_hot_block_appear_threshold", -1.0f,
+       m_never_inline_hot_block_appear_threshold);
+  bind("never_inline_hot_method_appear_threshold", -1.0f,
+       m_never_inline_hot_method_appear_threshold);
+
   bind("include_strings_lookup_class", false, m_include_strings_lookup_class);
   bind("override_strip_classes", std::nullopt, m_override_strip_classes,
        "Override the strip_classes flag to the one given.");
@@ -1086,7 +1119,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  never_inline(m_never_inline_attach_annotations, scope, manual_profile, mgr);
+  never_inline(m_never_inline_attach_annotations,
+               m_never_inline_hot_block_appear_threshold,
+               m_never_inline_hot_method_appear_threshold, scope,
+               manual_profile, mgr, method_profiles);
 }
 
 static ArtProfileWriterPass s_pass;
