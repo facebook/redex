@@ -26,6 +26,8 @@ class ArtProfileWriterPass : public Pass {
  private:
   bool m_never_inline_estimate;
   bool m_never_inline_attach_annotations;
+  float m_never_inline_hot_block_appear_threshold;
+  float m_never_inline_hot_method_appear_threshold;
   bool m_include_strings_lookup_class;
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
   std::optional<bool> m_override_strip_classes;
