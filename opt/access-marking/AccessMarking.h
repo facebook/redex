@@ -41,6 +41,8 @@ class AccessMarkingPass : public Pass {
          "Mark every written non-final, non-volatile field as final.");
     bind("privatize_methods", true, m_privatize_methods,
          "Mark every eligible method as private.");
+    bind("mark_do_not_strip_as_final", false, m_mark_do_not_strip_as_final,
+         "Mark methods with DoNotStrip as final.");
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -51,4 +53,5 @@ class AccessMarkingPass : public Pass {
   bool m_finalize_unwritten_fields{true};
   bool m_finalize_written_fields{false};
   bool m_privatize_methods{true};
+  bool m_mark_do_not_strip_as_final{false};
 };

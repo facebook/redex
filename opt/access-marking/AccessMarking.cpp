@@ -42,11 +42,15 @@ size_t mark_classes_final(const Scope& scope) {
 }
 
 size_t mark_methods_final(const Scope& scope,
-                          const mog::Graph& override_graph) {
+                          const mog::Graph& override_graph,
+                          bool mark_do_not_strip_as_final) {
   size_t n_methods_finalized = 0;
   for (auto const& cls : scope) {
     for (auto const& method : cls->get_vmethods()) {
-      if (!can_rename(method) || is_abstract(method) || is_final(method)) {
+      bool is_can_rename = mark_do_not_strip_as_final
+                               ? !method->rstate.no_optimizations()
+                               : can_rename(method);
+      if (!is_can_rename || is_abstract(method) || is_final(method)) {
         continue;
       }
       if (override_graph.get_node(method).children.empty()) {
@@ -193,13 +197,14 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
     TRACE(ACCESS, 1, "Finalized %zu classes", n_classes_final);
   }
   if (m_finalize_methods) {
-    auto n_methods_final = mark_methods_final(scope, *override_graph);
+    auto n_methods_final = mark_methods_final(scope, *override_graph,
+                                              m_mark_do_not_strip_as_final);
     pm.incr_metric("finalized_methods", n_methods_final);
     TRACE(ACCESS, 1, "Finalized %zu methods", n_methods_final);
   }
   if (m_finalize_unwritten_fields || m_finalize_written_fields) {
-    auto n_fields_final = mark_fields_final(
-        scope, m_finalize_unwritten_fields, m_finalize_written_fields);
+    auto n_fields_final = mark_fields_final(scope, m_finalize_unwritten_fields,
+                                            m_finalize_written_fields);
     pm.incr_metric("finalized_fields", n_fields_final);
     TRACE(ACCESS, 1, "Finalized %zu fields", n_fields_final);
   }
