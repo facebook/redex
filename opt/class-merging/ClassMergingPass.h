@@ -10,7 +10,6 @@
 #include "Pass.h"
 
 #include <boost/optional.hpp>
-#include <unordered_set>
 
 #include "Model.h"
 

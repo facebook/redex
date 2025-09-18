@@ -278,12 +278,12 @@ class TypeInference final
   explicit TypeInference(
       const cfg::ControlFlowGraph& cfg,
       bool skip_check_cast_upcasting = false,
-      const UnorderedSet<DexType*>& annotations = UnorderedSet<DexType*>(),
+      UnorderedSet<DexType*> annotations = UnorderedSet<DexType*>(),
       const method_override_graph::Graph* method_override_graph = nullptr)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
         m_skip_check_cast_upcasting(skip_check_cast_upcasting),
-        m_annotations{annotations},
+        m_annotations(std::move(annotations)),
         m_method_override_graph(method_override_graph) {}
 
   void run(const DexMethod* dex_method);
@@ -323,7 +323,9 @@ class TypeInference final
     return m_type_envs;
   }
 
-  UnorderedSet<DexType*> get_annotations() const { return m_annotations; }
+  const UnorderedSet<DexType*>& get_annotations() const {
+    return m_annotations;
+  }
 
  private:
   void populate_type_environments();

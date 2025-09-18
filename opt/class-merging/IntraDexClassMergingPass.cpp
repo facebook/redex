@@ -24,14 +24,6 @@ void IntraDexClassMergingPass::bind_config() {
        "Do not merge the classes or its implementors");
   utils::load_types_and_prefixes(excl_names, m_merging_spec.exclude_types,
                                  m_merging_spec.exclude_prefixes);
-  std::vector<std::string> ordered_set_excl_names;
-  bind("ordered_set_exclude",
-       {},
-       ordered_set_excl_names,
-       "Do not merge the classes or its implementors if present in the ordered "
-       "set");
-  utils::load_types(ordered_set_excl_names,
-                    m_merging_spec.exclude_ordered_set_types);
   bind("global_min_count",
        4,
        m_global_min_count,
@@ -173,7 +165,7 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
   }
 
   class_merging::merge_model(type_system, scope, conf, mgr, stores,
-                             m_merging_spec);
+                             m_merging_spec, true /* is_intra_dex */);
 
   post_dexen_changes(scope, stores);
 

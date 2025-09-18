@@ -460,8 +460,8 @@ HotColdMethodSpecializingPass::analyze_and_specialize(
     for (auto& mie : *block) {
       if (mie.type == MFLOW_SOURCE_BLOCK) {
         mie.src_block->foreach_val(
-          [](auto& val) { val = SourceBlock::Val(0, 0); });
-    }
+            [](auto& val) { val = SourceBlock::Val(0, 0); });
+      }
     }
   }
 

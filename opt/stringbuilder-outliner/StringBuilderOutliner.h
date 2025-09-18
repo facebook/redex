@@ -143,6 +143,7 @@ using BuilderStateMap =
 struct Config {
   size_t max_outline_length{9};
   size_t min_outline_count{10};
+  bool derive_method_profiles_stats{true};
 };
 
 struct Stats {
@@ -163,7 +164,18 @@ class Outliner {
 
   void create_outline_helpers(DexStoresVector* stores);
 
-  void transform(IRCode* code);
+  void transform(const DexMethod* source_method, IRCode* code);
+
+  void set_hot_method_from_callsite();
+
+  std::vector<SourceBlock*> get_hot_source_blocks(
+      const std::vector<DexMethod*>& sources) const;
+
+  using OutlinedMethods = ConcurrentMap<DexMethod*, std::vector<DexMethod*>>;
+
+  const OutlinedMethods& get_outlined_methods() const {
+    return m_target_to_source_map;
+  }
 
  private:
   InstructionSet find_tostring_instructions(
@@ -203,6 +215,10 @@ class Outliner {
   UnorderedMap<const DexTypeList*, DexMethod*> m_outline_helpers;
 
   InsertOnlyConcurrentMap<const IRCode*, BuilderStateMap> m_builder_state_maps;
+
+  // Maps each outlined target method to it's sources to derive method profile
+  // stats
+  OutlinedMethods m_target_to_source_map;
 };
 
 class StringBuilderOutlinerPass : public Pass {
@@ -280,6 +296,11 @@ OSDCE. This is generally true in practice.
          m_config.max_outline_length);
     bind("min_outline_count", m_config.min_outline_count,
          m_config.min_outline_count);
+    bind("derive_method_profiles_stats",
+         m_config.derive_method_profiles_stats,
+         m_config.derive_method_profiles_stats,
+         "Whether to derive method profile stats for generated outline methods "
+         "from methods outlined from");
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

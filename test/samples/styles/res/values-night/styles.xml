@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Night mode complex hierarchy -->
+<style name="ParentStyle">
+  <item name="android:layout_margin">16dp</item>
+  <item name="android:padding">8dp</item>
+  <item name="android:layout_width">match_parent</item>
+  <item name="android:layout_height">match_parent</item>
+</style>
+
+<style name="ChildStyle" parent="ParentStyle">
+  <item name="android:textSize">18sp</item>
+  <item name="android:background">#444344</item>
+  <item name="android:layout_height">wrap_content</item>
+</style>
+
+<style name="GrandchildStyle1" parent="ChildStyle">
+  <item name="android:background">#444444</item>
+  <item name="android:layout_width">match_parent</item>
+  <item name="android:layout_height">wrap_content</item>
+</style>
+
+<style name="GrandchildStyle2" parent="ChildStyle">
+  <item name="android:background">#555555</item>
+  <item name="android:layout_width">match_parent</item>
+  <item name="android:layout_height">wrap_content</item>
+</style>
+
+</resources>

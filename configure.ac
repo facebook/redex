@@ -17,12 +17,12 @@ LT_INIT
 
 AC_CONFIG_MACRO_DIR([m4])
 
-AM_PATH_PYTHON([3.0], [], [AC_MSG_ERROR([Redex requires python3])])
+AM_PATH_PYTHON([3.9], [], [AC_MSG_ERROR([Redex requires python >= 3.9])])
 
 # Checks for libraries.
 AX_PTHREAD
-AX_BOOST_BASE([1.71.0], [], [AC_MSG_ERROR(
-              [Please install boost >= 1.71 (including filesystem)])])
+AX_BOOST_BASE([1.74.0], [], [AC_MSG_ERROR(
+              [Please install boost >= 1.74 (including filesystem)])])
 AX_BOOST_FILESYSTEM
 AX_BOOST_REGEX
 AX_BOOST_PROGRAM_OPTIONS
@@ -34,13 +34,13 @@ AC_CHECK_LIB([jsoncpp], [main], [], [AC_MSG_ERROR([Please install jsoncpp])])
 # check whether user enabled protobuf
 AC_ARG_ENABLE([protobuf],
     [AS_HELP_STRING([--enable-protobuf],
-        [Enable the protobuf for AppBundle build])],
-    [ AC_DEFINE(HAS_PROTOBUF) ]
+        [Enable the protobuf for AppBundle build])]
 )
 
 AS_IF([test "x$enable_protobuf" = "xyes"], [
     # user enabled protobuf
     # check if protobuf is installed
+    AC_DEFINE(HAS_PROTOBUF)
 
     # proto compiler
     # allow users to specify the path to protobuf compiler
@@ -216,6 +216,30 @@ AS_IF([test "x$enable_tests" != "xno"], [
             [],
             [AC_MSG_ERROR([--with-googletest is specified but does not seem to point at a valid GoogleTest installation with necessary header and library files])])
     fi
+])
+
+# check whether user enabled kotlin tests
+AC_ARG_ENABLE([kotlin-tests],
+    [AS_HELP_STRING([--disable-kotlin-tests],
+        [Disable running kotlin tests])]
+)
+AM_CONDITIONAL([RUN_KOTLIN_TESTS],[test "x$enable_kotlin_tests" != "xno"])
+AS_IF([test "x$enable_kotlin_tests" != "xno"], [
+    # user enabled kotlin tests
+    # check if kotlinc is installed
+
+    # allow users to specify the path to kotlinc
+    # --with-kotlinc
+
+    AC_ARG_WITH([kotlinc],
+        [AS_HELP_STRING([--with-kotlinc=/path/to/kotlinc],
+            [Location of the Kotlin compiler.])],
+        [KOTLINC="$withval"],
+        [ AS_IF([test "x${KOTLINC}" == "x"],
+            [AC_PATH_PROG([KOTLINC], [kotlinc], [no_kotlinc])])
+        ]
+    )
+    AS_IF([test "${KOTLINC}" == "no_kotlinc"], [AC_MSG_ERROR([Kotlin compiler kotlinc not found.])])
 ])
 
 # Checks for header files.

@@ -119,8 +119,8 @@ class ConstructorAnalysisEnvironment final
     return !value.get_constant() || *value.get_constant();
   }
 
-  void mutate_params(std::function<void(ParamDomainEnvironment*)> f) {
-    apply<0>(std::move(f));
+  void mutate_params(const std::function<void(ParamDomainEnvironment*)>& f) {
+    apply<0>(f);
   }
 
   void add_read_unwritten_field(DexField* f) {

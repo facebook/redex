@@ -11,16 +11,16 @@
 #include "IRCode.h"
 #include "IRList.h"
 
-namespace editable_cfg_adapter {
+namespace cfg_adapter {
 
 /**
  * Given an IRCode object and a function to apply to each element, these
  * functions will iterate through whichever data structure actually holds the
- * code (because the editable CFG "steals" the code out of the IRCode). See the
- * comment at the top of ControlFlow.h for more details about the editable CFG.
+ * code (because the CFG "steals" the code out of the IRCode). See the
+ * comment at the top of ControlFlow.h for more details about the CFG.
  *
  * These methods are here to bridge the gap between the list backed IRCode
- * implementation and the editable graph based representation.
+ * implementation and the graph based representation.
  */
 
 enum LoopExit {
@@ -34,7 +34,7 @@ enum LoopExit {
  */
 template <typename Function>
 void iterate(IRCode* code, Function func) {
-  if (code->editable_cfg_built()) {
+  if (code->cfg_built()) {
     for (MethodItemEntry& mie : cfg::InstructionIterable(code->cfg())) {
       if (func(mie) == LOOP_BREAK) {
         break;
@@ -57,7 +57,7 @@ void iterate(IRCode* code, Function func) {
  */
 template <typename Function>
 void iterate_all(IRCode* code, Function func) {
-  if (code->editable_cfg_built()) {
+  if (code->cfg_built()) {
     for (cfg::Block* b : code->cfg().blocks()) {
       for (auto& mie : *b) {
         if (func(mie) == LOOP_BREAK) {
@@ -80,7 +80,7 @@ void iterate_all(IRCode* code, Function func) {
  */
 template <typename Function>
 void iterate_with_iterator(IRCode* code, Function func) {
-  if (code->editable_cfg_built()) {
+  if (code->cfg_built()) {
     auto ii = cfg::InstructionIterable(code->cfg());
     const auto& end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
@@ -111,4 +111,4 @@ void iterate_all(const IRCode* code,
 void iterate_with_iterator(
     const IRCode* code, std::function<LoopExit(IRList::const_iterator)> func);
 
-}; // namespace editable_cfg_adapter
+}; // namespace cfg_adapter

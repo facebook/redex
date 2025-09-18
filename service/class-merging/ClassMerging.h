@@ -15,14 +15,16 @@ ModelStats merge_model(Scope& scope,
                        ConfigFiles& conf,
                        PassManager& mgr,
                        DexStoresVector& stores,
-                       ModelSpec& spec);
+                       ModelSpec& spec,
+                       const bool is_intra_dex);
 
 ModelStats merge_model(const TypeSystem&,
                        Scope& scope,
                        ConfigFiles& conf,
                        PassManager& mgr,
                        DexStoresVector& stores,
-                       ModelSpec& spec);
+                       ModelSpec& spec,
+                       const bool is_intra_dex);
 
 Model construct_model(const TypeSystem& type_system,
                       Scope& scope,

@@ -125,7 +125,7 @@ Stats StripDebugInfo::run(IRCode& code, bool should_drop_synth) {
   ++stats.num_matches;
   bool debug_info_empty = true;
   bool force_discard = m_config.drop_all_dbg_info || should_drop_synth;
-  always_assert(code.editable_cfg_built());
+  always_assert(code.cfg_built());
   auto& cfg = code.cfg();
   for (auto* b : cfg.blocks()) {
     auto it = b->begin();

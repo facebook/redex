@@ -62,7 +62,7 @@ TEST_F(RemoveNullcheckStringArgTest, gen_methods_with_expr) {
     pass.setup(transferMapForParam, transferMapForExpr, newMethods);
     // There will be 8 wrapper methods generated for different error message.
     EXPECT_EQ(newMethods.size(), 8);
-    for (const auto& m : newMethods) {
+    for (const auto& m : UnorderedIterable(newMethods)) {
       printf("New method name is: %s \n code is: \n%s\n", SHOW(m->get_name()),
              SHOW(m->get_code()));
     }

@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <unordered_set>
-
 #include <sparta/IntervalDomain.h>
 #include <sparta/LiftedDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
@@ -131,25 +129,24 @@ using Environment = EnvironmentWithStoreImpl<BlameStore>;
 
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  explicit FixpointIterator(
-      const cfg::ControlFlowGraph& cfg,
-      std::unordered_set<const IRInstruction*> allocators,
-      std::unordered_set<DexMethodRef*> safe_method_refs,
-      std::unordered_set<const DexString*> safe_method_names);
+  explicit FixpointIterator(const cfg::ControlFlowGraph& cfg,
+                            UnorderedSet<const IRInstruction*> allocators,
+                            UnorderedSet<DexMethodRef*> safe_method_refs,
+                            UnorderedSet<const DexString*> safe_method_names);
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override;
 
  private:
   // The instructions whose results we track for escapes.
-  std::unordered_set<const IRInstruction*> m_allocators;
+  UnorderedSet<const IRInstruction*> m_allocators;
 
   // Methods that are assumed not to escape any of their parameters.
-  std::unordered_set<DexMethodRef*> m_safe_method_refs;
+  UnorderedSet<DexMethodRef*> m_safe_method_refs;
 
   // Methods that are assumed not to escape any of their parameters, identified
   // by their names.
-  std::unordered_set<const DexString*> m_safe_method_names;
+  UnorderedSet<const DexString*> m_safe_method_names;
 
   /* Returns true if and only if `insn` is considered an allocator */
   bool is_allocator(const IRInstruction* insn) const;
@@ -270,7 +267,7 @@ class BlameMap {
  *
  */
 BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
-                         std::unordered_set<const IRInstruction*> allocators,
+                         UnorderedSet<const IRInstruction*> allocators,
                          std::initializer_list<SafeMethod> safe_methods = {});
 
 inline bool FixpointIterator::is_allocator(const IRInstruction* insn) const {

@@ -760,7 +760,7 @@ Stats run_split_dexes(DexStoresVector& stores,
           }
           left -= required;
           always_assert(data.m->get_code());
-          always_assert(data.m->get_code()->editable_cfg_built());
+          always_assert(data.m->get_code()->cfg_built());
           size_t orig_size = data.m->get_code()->cfg().estimate_code_units();
           auto new_methods =
               run_split(data, data.m, data.m->get_code(), case_threshold);

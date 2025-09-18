@@ -1209,7 +1209,7 @@ static void get_recurring_cores(
         if (!can_outline_from_method(method)) {
           return;
         }
-        always_assert(code.editable_cfg_built());
+        always_assert(code.cfg_built());
         code.cfg().calculate_exit_block();
         CanOutlineBlockDecider block_decider(
             config.profile_guidance, throughput_interaction_indices,
@@ -2468,8 +2468,8 @@ static NewlyOutlinedMethods outline(
     auto count = cwi.info.count;
     Priority primary_priority = (savings + 1) * 100000 / (size * count);
     // clip primary_priority to 32-bit
-    if (primary_priority >= (1UL << 32)) {
-      primary_priority = (1UL << 32) - 1;
+    if (primary_priority >= (static_cast<uint64_t>(1u) << 32)) {
+      primary_priority = (static_cast<uint64_t>(1u) << 32) - 1;
     }
     // make unique via candidate id
     return (primary_priority << 32) | id;

@@ -149,10 +149,9 @@ void push_header_with_updated_size(android::ResChunk_header* header,
   auto start_pos = out->size();
   push_header(header, out);
   auto bytes_written = out->size() - start_pos;
-  LOG_ALWAYS_FATAL_IF(
-      bytes_written < sizeof(android::ResChunk_header),
-      "Expected at least %zu header bytes. Actual %zu.",
-      sizeof(android::ResChunk_header), bytes_written);
+  LOG_ALWAYS_FATAL_IF(bytes_written < sizeof(android::ResChunk_header),
+                      "Expected at least %zu header bytes. Actual %zu.",
+                      sizeof(android::ResChunk_header), bytes_written);
   write_long_at_pos(start_pos + 2 * sizeof(uint16_t), new_size, out);
 }
 
@@ -196,8 +195,8 @@ uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id) {
 }
 
 namespace {
-bool are_configs_equivalent_compat(android::ResTable_config* a,
-                                   android::ResTable_config* b) {
+bool are_configs_equivalent_compat(const android::ResTable_config* a,
+                                   const android::ResTable_config* b) {
   auto config_size = sizeof(android::ResTable_config);
 
   android::ResTable_config config_a{};
@@ -212,8 +211,8 @@ bool are_configs_equivalent_compat(android::ResTable_config* a,
 }
 } // namespace
 
-bool are_configs_equivalent(android::ResTable_config* a,
-                            android::ResTable_config* b) {
+bool are_configs_equivalent(const android::ResTable_config* a,
+                            const android::ResTable_config* b) {
   auto a_size = dtohl(a->size);
   auto b_size = dtohl(b->size);
   if (a_size == b_size) {
@@ -560,6 +559,20 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
   write_short_at_pos(type_count_pos, type_count, out);
 }
 
+void ResTableTypeDefiner::add(android::ResTable_config* config,
+                              ResComplexEntryBuilder& builder) {
+  android::Vector<char> serialized_entry;
+  builder.serialize(&serialized_entry);
+  LOG_ALWAYS_FATAL_IF(serialized_entry.empty(), "Serialized entry is empty");
+
+  m_serialized_entries.emplace_back(std::move(serialized_entry));
+
+  const auto& stored_data = m_serialized_entries.back();
+  EntryValueData new_entry_data((uint8_t*)stored_data.array(),
+                                stored_data.size());
+  add(config, new_entry_data);
+}
+
 void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
   // Validation
   LOG_ALWAYS_FATAL_IF(m_configs.size() != m_data.size(),
@@ -664,6 +677,26 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
     push_vec(entry_data, out);
   }
   write_short_at_pos(type_count_pos, type_count, out);
+}
+
+void ResComplexEntryBuilder::serialize(android::Vector<char>* out) {
+  std::sort(m_attributes.begin(), m_attributes.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+  android::ResTable_map_entry entry;
+  entry.size = sizeof(android::ResTable_map_entry);
+  entry.flags = android::ResTable_entry::FLAG_COMPLEX;
+  entry.key.index = m_key_string_index;
+  entry.parent.ident = m_parent_id;
+  entry.count = m_attributes.size();
+
+  push_struct(entry, out);
+
+  for (const auto& attr : m_attributes) {
+    android::ResTable_map map;
+    map.name.ident = attr.first;
+    map.value = attr.second;
+    push_struct(map, out);
+  }
 }
 
 void ResStringPoolBuilder::add_string(const char* s, size_t len) {

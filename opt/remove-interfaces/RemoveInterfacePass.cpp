@@ -337,7 +337,7 @@ size_t exclude_unremovables(const Scope& scope,
       }
     }
 
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
       auto* insn = mie.insn;

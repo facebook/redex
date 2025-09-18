@@ -79,7 +79,7 @@ bool is_compiled(const baseline_profiles::BaselineProfile& baseline_profile,
 
 bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
   auto* code = method->get_code();
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   if (cfg.blocks().size() != 1) {
     return false;
@@ -723,18 +723,6 @@ std::ostream& operator<<(std::ostream& os,
 }
 
 void ArtProfileWriterPass::bind_config() {
-  bind("perf_appear100_threshold", m_perf_config.appear100_threshold,
-       m_perf_config.appear100_threshold);
-  bind("perf_call_count_threshold", m_perf_config.call_count_threshold,
-       m_perf_config.call_count_threshold);
-  bind("perf_coldstart_appear100_threshold",
-       m_perf_config.coldstart_appear100_threshold,
-       m_perf_config.coldstart_appear100_threshold);
-  bind("perf_coldstart_appear100_nonhot_threshold",
-       m_perf_config.coldstart_appear100_threshold,
-       m_perf_config.coldstart_appear100_nonhot_threshold);
-  bind("perf_interactions", m_perf_config.interactions,
-       m_perf_config.interactions);
   bind("never_inline_estimate", false, m_never_inline_estimate);
   bind("never_inline_attach_annotations", false,
        m_never_inline_attach_annotations);
@@ -746,10 +734,6 @@ void ArtProfileWriterPass::bind_config() {
   bind("include_strings_lookup_class", false, m_include_strings_lookup_class);
   bind("override_strip_classes", std::nullopt, m_override_strip_classes,
        "Override the strip_classes flag to the one given.");
-  after_configuration([this] {
-    always_assert(m_perf_config.coldstart_appear100_nonhot_threshold <=
-                  m_perf_config.coldstart_appear100_threshold);
-  });
 }
 
 void ArtProfileWriterPass::eval_pass(DexStoresVector& /*stores*/,

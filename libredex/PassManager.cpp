@@ -20,7 +20,6 @@
 #include <sstream>
 #include <thread>
 #include <typeinfo>
-#include <unordered_set>
 #include <utility>
 
 #ifdef __linux__
@@ -263,7 +262,7 @@ class CheckerConfig {
         });
       }
       auto* code = dex_method->get_code();
-      return code->editable_cfg_built() ? show(code->cfg()) : show(code);
+      return code->cfg_built() ? show(code->cfg()) : show(code);
     };
 
     auto res =
@@ -328,7 +327,7 @@ class CheckerConfig {
   }
 
  private:
-  std::unordered_set<std::string> m_type_checker_trigger_passes;
+  UnorderedSet<std::string> m_type_checker_trigger_passes;
   UnorderedSet<std::string> m_external_check_allowlist;
   UnorderedSet<std::string> m_definition_check_allowlist;
   UnorderedSet<std::string> m_external_check_allowlist_prefixes;
@@ -535,7 +534,7 @@ class JNINativeContextHelper {
     output_symbols.reserve(m_removable_natives.size());
 
     // Might be non-deterministic in order, put them in a vector and sort.
-    for (auto* func : m_removable_natives) {
+    for (auto* func : UnorderedIterable(m_removable_natives)) {
       output_symbols.push_back(func->get_name());
     }
 
@@ -552,8 +551,8 @@ class JNINativeContextHelper {
   }
 
  private:
-  std::unordered_set<native::Function*> m_removable_natives;
-  std::unordered_set<DexMethod*> m_java_method_no_impl_on_input;
+  UnorderedSet<native::Function*> m_removable_natives;
+  UnorderedSet<DexMethod*> m_java_method_no_impl_on_input;
 };
 
 void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {
@@ -648,10 +647,10 @@ bool is_run_hasher_after_each_pass(const ConfigFiles& conf,
   return hasher_args.get("run_after_each_pass", false).asBool();
 }
 
-void ensure_editable_cfg(DexStoresVector& stores) {
+void ensure_cfg(DexStoresVector& stores) {
   auto temp_scope = build_class_scope(stores);
   walk::parallel::code(temp_scope, [&](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ true, /*fresh_editable_build*/ false);
+    code.build_cfg(/*rebuild_even_if_already_built*/ false);
   });
 }
 
@@ -826,7 +825,7 @@ class AfterPassSizes {
           std::cerr << "Running " << pass_name << std::endl;
         }
         if (!pass->is_cfg_legacy()) {
-          ensure_editable_cfg(*stores);
+          ensure_cfg(*stores);
         }
         pass->run_pass(*stores, *conf, *m_mgr);
       }
@@ -940,7 +939,7 @@ class TraceClassAfterEachPass {
     fprintf(m_fd, "Method %s\n", SHOW(m));
     auto* code = m->get_code();
     if (code != nullptr) {
-      if (code->editable_cfg_built()) {
+      if (code->cfg_built()) {
         auto& cfg = code->cfg();
         // Note: would be nice to make the special printers from ShowCFG
         // configurable/callable from here.
@@ -975,7 +974,7 @@ class TraceClassAfterEachPass {
     if (code == nullptr) {
       return boost::none;
     }
-    if (code->editable_cfg_built()) {
+    if (code->cfg_built()) {
       auto& cfg = code->cfg();
       for (auto* b : cfg.blocks()) {
         auto sbs = source_blocks::gather_source_blocks(b);
@@ -1296,20 +1295,19 @@ void PassManager::init_property_interactions(ConfigFiles& /*conf*/) {
     Pass* pass = m_activated_passes[i];
     auto* pass_info = &m_pass_info[i];
     auto m = pass->get_property_interactions();
-    for (auto it = m.begin(); it != m.end();) {
-      auto&& [name, property_interaction] = *it;
+    unordered_erase_if(m, [&](auto& p) {
+      auto&& [name, property_interaction] = p;
 
       if (m_properties_manager != nullptr &&
           !m_properties_manager->property_is_enabled(name)) {
-        it = m.erase(it);
-        continue;
+        return true;
       }
 
       always_assert_log(property_interaction.is_valid(),
                         "%s has an invalid property interaction for %s",
                         pass->name().c_str(), redex_properties::get_name(name));
-      ++it;
-    }
+      return false;
+    });
     pass_info->property_interactions = std::move(m);
   }
 }
@@ -1385,9 +1383,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   check_unique_deobfuscated.run_initially(scope);
 
   VisualizerHelper graph_visualizer(conf);
-  ViolationsTracking violatios_tracking(
-      pm_config->violations_tracking ||
-      (assessor_config->run_after_each_pass && g_redex->instrument_mode));
+  ViolationsTracking violatios_tracking(pm_config->violations_tracking);
 
   sanitizers::lsan_do_recoverable_leak_check();
 
@@ -1429,31 +1425,31 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
     ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
     ConcurrentSet<DexMethod*> unique_methods;
-    bool is_editable_cfg_friendly = !pass->is_cfg_legacy();
-    walk::parallel::code(build_class_scope(stores), [&](DexMethod* m,
-                                                        IRCode& code) {
-      if (is_editable_cfg_friendly) {
-        always_assert_log(code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
-        code.cfg().reset_exit_block();
-      }
-      if (slow_invariants_debug) {
-        std::vector<DexMethodRef*> methods;
-        methods.reserve(1000);
-        methods.push_back(m);
-        code.gather_methods(methods);
-        for (auto* mref : methods) {
-          always_assert_log(
-              DexMethod::get_method(mref->get_class(), mref->get_name(),
-                                    mref->get_proto()) != nullptr,
-              "Did not find %s in the context, referenced from %s!", SHOW(mref),
-              SHOW(m));
-          all_code_referenced_methods.insert(mref);
-        }
-        if (!unique_methods.insert(m)) {
-          not_reached_log("Duplicate method: %s", SHOW(m));
-        }
-      }
-    });
+    bool is_cfg_friendly = !pass->is_cfg_legacy();
+    walk::parallel::code(
+        build_class_scope(stores), [&](DexMethod* m, IRCode& code) {
+          if (is_cfg_friendly) {
+            always_assert_log(code.cfg_built(), "%s has a cfg!", SHOW(m));
+            code.cfg().reset_exit_block();
+          }
+          if (slow_invariants_debug) {
+            std::vector<DexMethodRef*> methods;
+            methods.reserve(1000);
+            methods.push_back(m);
+            code.gather_methods(methods);
+            for (auto* mref : methods) {
+              always_assert_log(
+                  DexMethod::get_method(mref->get_class(), mref->get_name(),
+                                        mref->get_proto()) != nullptr,
+                  "Did not find %s in the context, referenced from %s!",
+                  SHOW(mref), SHOW(m));
+              all_code_referenced_methods.insert(mref);
+            }
+            if (!unique_methods.insert(m)) {
+              not_reached_log("Duplicate method: %s", SHOW(m));
+            }
+          }
+        });
     if (slow_invariants_debug) {
       ScopedMetrics sm(*this);
       sm.set_metric("num_code_referenced_methods",
@@ -1546,20 +1542,20 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       double cpu_time_start = ((double)std::clock()) / CLOCKS_PER_SEC;
       auto wall_time_start = std::chrono::steady_clock::now();
       if (pass->is_cfg_legacy()) {
-        // if this pass hasn't been updated to editable_cfg yet, clear_cfg. In
-        // the future, once all editable cfg updates are done, this branch will
+        // if this pass hasn't been updated to cfg yet, clear_cfg. In
+        // the future, once all cfg updates are done, this branch will
         // be removed.
         auto temp_scope = build_class_scope(stores);
         walk::parallel::code(
             temp_scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
-        TRACE(PM, 2, "%s Pass has not been updated to editable cfg.\n",
+        TRACE(PM, 2, "%s Pass has not been updated to cfg.\n",
               SHOW(pass->name()));
       } else {
         // Run build_cfg() in case any newly added methods by previous passes
-        // are not built as editable cfg. But if editable cfg is already built,
+        // are not built as cfg. But if cfg is already built,
         // no need to rebuild it.
-        ensure_editable_cfg(stores);
-        TRACE(PM, 2, "%s Pass uses editable cfg.\n", SHOW(pass->name()));
+        ensure_cfg(stores);
+        TRACE(PM, 2, "%s Pass uses cfg.\n", SHOW(pass->name()));
       }
       pass->run_pass(stores, conf, *this);
       auto wall_time_end = std::chrono::steady_clock::now();
@@ -1586,7 +1582,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
           size_t total_mrefs = 0;
           for (auto& dex : root_dexen) {
             std::vector<DexMethodRef*> mrefs;
-            std::unordered_set<DexMethodRef*> mrefs_set;
+            UnorderedSet<DexMethodRef*> mrefs_set;
             for (DexClass* cls : dex) {
               cls->gather_methods(mrefs);
             }
@@ -1607,8 +1603,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (!pass->is_cfg_legacy()) {
         auto temp_scope = build_class_scope(stores);
         walk::parallel::code(temp_scope, [&](DexMethod* method, IRCode& code) {
-          always_assert_log(code.editable_cfg_built(),
-                            "%s has no editable cfg after cfg-friendly pass %s",
+          always_assert_log(code.cfg_built(),
+                            "%s has no cfg after cfg-friendly pass %s",
                             SHOW(method), pass->name().c_str());
           code.cfg().simplify();
         });

@@ -147,7 +147,7 @@ ConcurrentSet<DexMethod*> find_private_methods(
 void fix_call_sites_private(const std::vector<DexClass*>& scope,
                             const ConcurrentSet<DexMethod*>& privates) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    always_assert(code.editable_cfg_built());
+    always_assert(code.cfg_built());
     auto& cfg = code.cfg();
     for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;

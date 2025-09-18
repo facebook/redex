@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <unordered_set>
-
 #include "Pass.h"
 
 namespace builder_pattern {

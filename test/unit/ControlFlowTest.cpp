@@ -374,7 +374,7 @@ TEST_F(ControlFlowTest, copyConstructibleIterator) {
   }
 }
 
-TEST_F(ControlFlowTest, editableBuildAndLinearizeNoChange) {
+TEST_F(ControlFlowTest, buildAndLinearizeNoChange) {
   const auto* str = R"(
     (
       (const v0 0)
@@ -1044,8 +1044,8 @@ TEST_F(ControlFlowTest, deep_copy1) {
   cfg::ControlFlowGraph copy;
   orig.deep_copy(&copy);
   EXPECT_TRUE(orig.structural_equals(copy));
-  IRList* orig_list = orig.linearize();
-  IRList* copy_list = copy.linearize();
+  auto orig_list = orig.linearize();
+  auto copy_list = copy.linearize();
 
   EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
@@ -1074,8 +1074,8 @@ TEST_F(ControlFlowTest, deep_copy2) {
   cfg::ControlFlowGraph copy;
   orig.deep_copy(&copy);
   EXPECT_TRUE(orig.structural_equals(copy));
-  IRList* orig_list = orig.linearize();
-  IRList* copy_list = copy.linearize();
+  auto orig_list = orig.linearize();
+  auto copy_list = copy.linearize();
 
   EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
@@ -1113,8 +1113,8 @@ TEST_F(ControlFlowTest, deep_copy3) {
   cfg::ControlFlowGraph copy;
   orig.deep_copy(&copy);
   EXPECT_TRUE(orig.structural_equals(copy));
-  IRList* orig_list = orig.linearize();
-  IRList* copy_list = copy.linearize();
+  auto orig_list = orig.linearize();
+  auto copy_list = copy.linearize();
 
   EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
@@ -2425,40 +2425,7 @@ TEST_F(ControlFlowTest, get_param_instructions_basic) {
   EXPECT_EQ(&*param_insns_range.end(), &*std::next(cfg.entry_block()->begin()));
 }
 
-TEST_F(ControlFlowTest, get_param_instructions_basic_non_editable) {
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (load-param v0)
-      (const-string "one")
-      (move-result-pseudo v0)
-      (return v0)
-    )
-  )");
-
-  code->build_cfg();
-  auto& cfg = code->cfg();
-
-  MethodItemEntry* param_insn = &*cfg.entry_block()->begin();
-  auto param_insns_range = cfg.get_param_instructions();
-  EXPECT_FALSE(param_insns_range.empty());
-  EXPECT_EQ(&*param_insns_range.begin(), param_insn);
-  EXPECT_EQ(&*param_insns_range.end(), &*std::next(cfg.entry_block()->begin()));
-}
-
 TEST_F(ControlFlowTest, get_param_instructions_empty) {
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (.dbg DBG_SET_PROLOGUE_END)
-    )
-  )");
-
-  code->build_cfg();
-  auto& cfg = code->cfg();
-
-  EXPECT_TRUE(cfg.get_param_instructions().empty());
-}
-
-TEST_F(ControlFlowTest, get_param_instructions_empty_not_editable) {
   auto code = assembler::ircode_from_string(R"(
     (
       (.dbg DBG_SET_PROLOGUE_END)
@@ -2739,7 +2706,7 @@ OPCODE: GOTO
 )");
 }
 
-TEST_F(ControlFlowTest, non_editable_cfg_case_keys) {
+TEST_F(ControlFlowTest, non_cfg_case_keys) {
   auto code = assembler::ircode_from_string(R"(
     (
       (switch v0 (:a :b))

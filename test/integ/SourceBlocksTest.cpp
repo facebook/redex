@@ -51,6 +51,9 @@ class SourceBlocksTest : public RedexIntegrationTest {
   void set_force_serialize(InsertSourceBlocksPass& isbp) {
     isbp.m_force_serialize = true;
   }
+  void set_fix_violations(InsertSourceBlocksPass& isbp) {
+    isbp.m_fix_violations = true;
+  }
 
   template <bool kFull>
   std::string get_blocks_as_txt_impl(const cfg::ControlFlowGraph& cfg) {
@@ -74,7 +77,7 @@ class SourceBlocksTest : public RedexIntegrationTest {
           oss << "(";
           bool first_val = true;
           for (size_t i = 0; i < sb->vals_size; i++) {
-            auto& val = sb->vals[i];
+            const auto& val = sb->get_at(i);
             if (!first_val) {
               oss << "|";
             }
@@ -837,6 +840,257 @@ TEST_F(SourceBlocksTest, source_blocks_access_methods) {
   }
 }
 
+TEST_F(SourceBlocksTest, fix_hot_method_cold_entry_violations_test) {
+  auto* profile_path = std::getenv("hot-method-cold-entry");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto* type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$ViolationsFixTest;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+    set_fix_violations(isbp);
+  });
+
+  UnorderedMap<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.hot_method:()V",
+       "B0: 0(1:0.5)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.cold_method:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.hot_method_2:()V",
+       "B0: 0(1:0.5)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.idom_branch:()V",
+       "B0: 0(0:0)\nB1: 1(0:0)\nB2: 2(0:0)\nB3: 3(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.branch_1:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.branch_2:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.<init>:()V",
+       "B0: 0(0:0)"},
+
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
+TEST_F(SourceBlocksTest, fix_idom_test) {
+  auto* profile_path = std::getenv("idom");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto* type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$ViolationsFixTest;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+    set_fix_violations(isbp);
+  });
+
+  UnorderedMap<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.hot_method:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.cold_method:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.hot_method_2:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.idom_branch:()V",
+       "B0: 0(1:0)\nB1: 1(1:0.1)\nB2: 2(0:0)\nB3: 3(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.branch_1:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.branch_2:()V",
+       "B0: 0(1:0.5)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.<init>:()V",
+       "B0: 0(0:0)"},
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
+TEST_F(SourceBlocksTest, chain_and_dom_fix_chain_test) {
+  auto* profile_path = std::getenv("chain-and-dom");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto* type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$ChainAndDomClass;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, true);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+    set_fix_violations(isbp);
+  });
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    if (m->get_name()->str().substr(0, 6) == "chains") {
+      cfg::ScopedCFG cfg{m->get_code()};
+      // After fix_chain_violations, check if all source blocks now have values
+      // of (1:0)
+      for (auto* b : cfg->blocks()) {
+        for (const auto& mie : *b) {
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            auto* sb = mie.src_block.get();
+            ASSERT_EQ(sb->get_at(0)->val, 1.0f);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_F(SourceBlocksTest, chain_and_dom_fix_thrower_test) {
+  auto* profile_path = std::getenv("chain-and-dom");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto* type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$ChainAndDomClass;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, true);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+    set_fix_violations(isbp);
+  });
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    if (m->get_name()->str().substr(0, 7) == "thrower") {
+      cfg::ScopedCFG cfg{m->get_code()};
+
+      // should expect the (0:0) blocks to be converted into (1:1) unless
+      // there is a throw exception
+      std::vector<int> expected_vals{1, 0};
+      int idx = 0;
+      for (auto* b : cfg->blocks()) {
+        for (const auto& mie : *b) {
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            auto* sb = mie.src_block.get();
+            ASSERT_EQ(sb->get_at(0)->val, expected_vals[idx]);
+            idx++;
+          }
+        }
+      }
+    }
+  }
+}
+
 namespace {
 namespace access_methods {
 
@@ -922,7 +1176,8 @@ INSTANTIATE_TEST_SUITE_P(
          "String;)Ljava/lang/String;@0(0.1:0.2)",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.3:0.4)"},
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.3:0."
+         "4)"},
         {"profile_access_hash",
          "B0: "
          "Lcom/facebook/redextest/"
@@ -930,7 +1185,8 @@ INSTANTIATE_TEST_SUITE_P(
          "String;)Ljava/lang/String;@0(0.6:0.7)",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.8:0.9)"},
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.8:0."
+         "9)"},
         {"profile_access_both",
          // When both are available prefer hash.
          "B0: "
@@ -939,5 +1195,6 @@ INSTANTIATE_TEST_SUITE_P(
          "String;)Ljava/lang/String;@0(0.6:0.7)",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.8:0.9)"}}),
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.8:0."
+         "9)"}}),
     [](const auto& info) { return info.param.profile; });

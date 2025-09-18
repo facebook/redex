@@ -64,7 +64,7 @@ void scan_any_init_reachables(
   if (code == nullptr) {
     return;
   }
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   // We include all methods reachable from clinits and ctors. Even methods don't
   // access fields can indirectly consume field values through ctor calls.
@@ -127,9 +127,7 @@ DexTypeEnvironment env_with_params(const IRCode* code,
 
   size_t idx = 0;
   DexTypeEnvironment env;
-  boost::sub_range<IRList> param_instructions =
-      code->editable_cfg_built() ? code->cfg().get_param_instructions()
-                                 : code->get_param_instructions();
+  boost::sub_range<IRList> param_instructions = code->get_param_instructions();
   for (auto& mie : InstructionIterable(param_instructions)) {
     env.set(mie.insn->dest(), args.get(idx++));
   }
@@ -156,7 +154,7 @@ void GlobalTypeAnalyzer::analyze_node(
   auto intra_ta = get_internal_local_analysis(method);
   const auto outgoing_edges =
       call_graph::GraphInterface::successors(*m_call_graph, node);
-  std::unordered_set<IRInstruction*> outgoing_insns;
+  UnorderedSet<IRInstruction*> outgoing_insns;
   for (const auto& edge : outgoing_edges) {
     if (edge->callee() == m_call_graph->exit()) {
       continue; // ghost edge to the ghost exit node

@@ -9,12 +9,12 @@
 
 #include <iostream>
 #include <sstream>
-#include <unordered_set>
 #include <vector>
 
 #include <sparta/WeakTopologicalOrdering.h>
 
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "Show.h"
 #include "Timer.h"
@@ -40,7 +40,7 @@ std::ostream& operator<<(std::ostream& o,
 }
 
 auto compute_deps(const Scope& scope,
-                  const std::unordered_set<const DexClass*>& scope_set) {
+                  const UnorderedSet<const DexClass*>& scope_set) {
   InsertOnlyConcurrentMap<DexClass*, std::vector<DexClass*>> deps_parallel;
   ConcurrentMap<DexClass*, std::vector<DexClass*>> reverse_deps_parallel;
   ConcurrentSet<DexClass*> is_target;
@@ -70,7 +70,7 @@ auto compute_deps(const Scope& scope,
 
     auto* clinit = cls->get_clinit();
     if (clinit != nullptr && clinit->get_code() != nullptr) {
-      editable_cfg_adapter::iterate_with_iterator(
+      cfg_adapter::iterate_with_iterator(
           clinit->get_code(), [&](const IRList::iterator& it) {
             auto* insn = it->insn;
             if (opcode::is_an_sfield_op(insn->opcode())) {
@@ -80,7 +80,7 @@ auto compute_deps(const Scope& scope,
             } else if (opcode::is_new_instance(insn->opcode())) {
               add_dep(type_class(insn->get_type()));
             }
-            return editable_cfg_adapter::LOOP_CONTINUE;
+            return cfg_adapter::LOOP_CONTINUE;
           });
     }
 
@@ -93,11 +93,11 @@ auto compute_deps(const Scope& scope,
     }
     all.insert(cls);
   });
-  std::unordered_map<DexClass*, std::vector<DexClass*>> deps;
+  UnorderedMap<DexClass*, std::vector<DexClass*>> deps;
   for (auto& kv : UnorderedIterable(deps_parallel)) {
     deps[kv.first] = std::move(kv.second);
   }
-  std::unordered_map<DexClass*, std::vector<DexClass*>> reverse_deps;
+  UnorderedMap<DexClass*, std::vector<DexClass*>> reverse_deps;
   for (auto& kv : UnorderedIterable(reverse_deps_parallel)) {
     reverse_deps[kv.first] = std::move(kv.second);
   }
@@ -117,7 +117,7 @@ namespace init_deps {
 Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
   Timer timer{"reverse_tsort_by_clinit_deps"};
 
-  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
+  UnorderedSet<const DexClass*> scope_set(scope.begin(), scope.end());
 
   // Collect data for WTO.
   // NOTE: Doing this already also as reverse so we don't have to do that later.
@@ -148,7 +148,7 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
   ++it;
 
   Scope result;
-  std::unordered_set<DexClass*> taken;
+  UnorderedSet<DexClass*> taken;
 
   for (; it != it_end; ++it) {
     if (it->is_scc()) {
@@ -183,10 +183,10 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
 }
 
 Scope reverse_tsort_by_init_deps(const Scope& scope, size_t& possible_cycles) {
-  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
+  UnorderedSet<const DexClass*> scope_set(scope.begin(), scope.end());
   Scope result;
-  std::unordered_set<const DexClass*> visiting;
-  std::unordered_set<const DexClass*> visited;
+  UnorderedSet<const DexClass*> visiting;
+  UnorderedSet<const DexClass*> visited;
   std::function<void(DexClass*)> visit = [&](DexClass* cls) {
     if (visited.count(cls) != 0 || scope_set.count(cls) == 0) {
       return;
@@ -194,7 +194,7 @@ Scope reverse_tsort_by_init_deps(const Scope& scope, size_t& possible_cycles) {
     if (visiting.count(cls) != 0) {
       ++possible_cycles;
       TRACE(FINALINLINE, 1, "Possible class init cycle (could be benign):");
-      for (const auto* visiting_cls : visiting) {
+      for (const auto* visiting_cls : UnorderedIterable(visiting)) {
         TRACE(FINALINLINE, 1, "  %s", SHOW(visiting_cls));
       }
       TRACE(FINALINLINE, 1, "  %s", SHOW(cls));
@@ -210,17 +210,17 @@ Scope reverse_tsort_by_init_deps(const Scope& scope, size_t& possible_cycles) {
     if (ctors.size() == 1) {
       auto* ctor = ctors[0];
       if (ctor != nullptr && ctor->get_code() != nullptr) {
-        editable_cfg_adapter::iterate_with_iterator(
+        cfg_adapter::iterate_with_iterator(
             ctor->get_code(), [&](const IRList::iterator& it) {
               auto* insn = it->insn;
               if (opcode::is_an_iget(insn->opcode())) {
                 auto* dependee_cls = type_class(insn->get_field()->get_class());
                 if (dependee_cls == nullptr || dependee_cls == cls) {
-                  return editable_cfg_adapter::LOOP_CONTINUE;
+                  return cfg_adapter::LOOP_CONTINUE;
                 }
                 visit(dependee_cls);
               }
-              return editable_cfg_adapter::LOOP_CONTINUE;
+              return cfg_adapter::LOOP_CONTINUE;
             });
       }
     }

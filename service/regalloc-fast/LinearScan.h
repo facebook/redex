@@ -216,7 +216,7 @@ class LinearScanAllocator final {
   void allocate();
 
  private:
-  // Ensure that we have an editable CFG for the duration of the optimization
+  // Ensure that we have an CFG for the duration of the optimization
   cfg::ScopedCFG m_cfg;
   bool m_is_static;
 

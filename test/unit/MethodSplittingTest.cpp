@@ -969,7 +969,7 @@ TEST_F(MethodSplitterTest, DuplicateSourceBlocksWithReturn) {
   auto profile = std::vector<source_blocks::ProfileData>{
       std::make_pair("(1:1 g(0:0 g(1:1)) b)", boost::none)};
   auto res =
-      source_blocks::insert_source_blocks(m, &m->get_code()->cfg(), false, profile,
+      source_blocks::insert_source_blocks(m, &m->get_code()->cfg(), profile,
                                           /*serialize=*/true);
   auto config = defaultConfig();
   method_splitting_impl::reduce_cfg(m, config.split_block_size);

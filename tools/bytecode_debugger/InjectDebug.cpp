@@ -16,6 +16,7 @@
 #include "IRCode.h"
 #include "InstructionLowering.h"
 #include "RedexContext.h"
+#include "ScopedCFG.h"
 #include "ToolsCommon.h"
 #include "TypeInference.h"
 
@@ -80,12 +81,16 @@ void InjectDebug::inject_method(DexMethod* dex_method, int* line_start) {
     dbg->get_entries().clear();
   }
 
-  ir_code->build_cfg(false);
-  type_inference::TypeInference type_inf(ir_code->cfg());
-  type_inf.run(dex_method);
-
-  UnorderedMap<const IRInstruction*, type_inference::TypeEnvironment>&
-      type_envs = type_inf.get_type_environments();
+  auto type_envs = [&]() {
+    cfg::ScopedCFG cfg(ir_code);
+    type_inference::TypeInference type_inf(*cfg);
+    type_inf.run(dex_method);
+    auto res = type_inf.get_type_environments();
+    for (auto& mie : InstructionIterable(*cfg)) {
+      type_inf.analyze_instruction(mie.insn, &res.at(mie.insn));
+    }
+    return res;
+  }();
 
   boost::sub_range<IRList> param_instructions =
       ir_code->get_param_instructions();
@@ -94,7 +99,6 @@ void InjectDebug::inject_method(DexMethod* dex_method, int* line_start) {
   // Emit local variables for every param
   for (; ir_it != param_instructions.end(); ++ir_it) {
     if (ir_it->type == MethodItemType::MFLOW_OPCODE) {
-      type_inf.analyze_instruction(ir_it->insn, &type_envs.at(ir_it->insn));
       if (ir_it->insn->has_dest()) {
         inject_register(ir_code, ir_it, type_envs.at(ir_it->insn),
                         ir_it->insn->dest());
@@ -112,7 +116,6 @@ void InjectDebug::inject_method(DexMethod* dex_method, int* line_start) {
       ++(*line_start);
       // Make debugger stop at every instruction, and provide local variables to
       // debug each instruction's source and destination registers
-      type_inf.analyze_instruction(ir_it->insn, &type_envs.at(ir_it->insn));
       for (reg_t src_reg : ir_it->insn->srcs_copy()) {
         inject_register(ir_code, ir_it, type_envs.at(ir_it->insn), src_reg);
       }
@@ -125,8 +128,6 @@ void InjectDebug::inject_method(DexMethod* dex_method, int* line_start) {
         // Must check dest() of next instruction for the result of current instr
         IRList::iterator next_it = std::next(ir_it);
         if (next_it->insn->has_dest()) {
-          type_inf.analyze_instruction(next_it->insn,
-                                       &type_envs.at(next_it->insn));
           inject_register(ir_code, ir_it, type_envs.at(next_it->insn),
                           next_it->insn->dest());
         }

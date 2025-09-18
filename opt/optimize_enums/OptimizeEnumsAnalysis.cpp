@@ -151,7 +151,6 @@ OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
   auto* clinit = m_cls->get_clinit();
   always_assert(clinit && clinit->get_code());
   auto& clinit_cfg = clinit->get_code()->cfg();
-  always_assert(clinit_cfg.editable());
 
   clinit_cfg.calculate_exit_block();
   m_analyzer = std::make_unique<impl::Analyzer>(

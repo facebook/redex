@@ -128,7 +128,7 @@ class OverriddenVirtualScopesAnalysis {
   //    invoked even if overridden by all instantiable children
   void scan_code(const Scope& scope) {
     walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-      editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
+      cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
         auto* insn = mie.insn;
         if (insn->opcode() == OPCODE_NEW_INSTANCE ||
             insn->opcode() == OPCODE_CONST_CLASS) {
@@ -148,7 +148,7 @@ class OverriddenVirtualScopesAnalysis {
             m_resolved_super_invoked_methods.insert(callee);
           }
         }
-        return editable_cfg_adapter::LOOP_CONTINUE;
+        return cfg_adapter::LOOP_CONTINUE;
       });
     });
   }
@@ -291,7 +291,7 @@ remove_uninstantiables_impl::Stats run_remove_uninstantiables(
         if (code == nullptr) {
           return remove_uninstantiables_impl::Stats();
         }
-        always_assert(code->editable_cfg_built());
+        always_assert(code->cfg_built());
         if (overridden_virtual_scopes_analysis.keep_code(method)) {
           auto& cfg = code->cfg();
           return remove_uninstantiables_impl::replace_uninstantiable_refs(

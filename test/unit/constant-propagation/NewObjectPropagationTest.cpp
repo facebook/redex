@@ -54,9 +54,9 @@ void AbstractDomainPropertyTest<NewObjectDomain>::TearDownTestCase() {
   delete g_redex;
 }
 
-INSTANTIATE_TYPED_TEST_CASE_P(NewObjectDomain,
-                              AbstractDomainPropertyTest,
-                              NewObjectDomain);
+INSTANTIATE_TYPED_TEST_SUITE_P(NewObjectDomain,
+                               AbstractDomainPropertyTest,
+                               NewObjectDomain);
 
 template <>
 std::vector<NewObjectDomain>

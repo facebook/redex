@@ -256,7 +256,7 @@ void add_pass_properties_reflection(Json::Value& value, Pass* pass) {
   Json::Value preserves = Json::arrayValue;
   Json::Value requires_finally = Json::arrayValue;
 
-  for (const auto& [property, inter] : interactions) {
+  for (const auto& [property, inter] : UnorderedIterable(interactions)) {
     if (inter.establishes) {
       establishes.append(get_name(property));
     }
@@ -295,9 +295,7 @@ Json::Value reflect_property_definitions() {
   }();
 
   auto create_sorted = [](const auto& input) {
-    std::vector<redex_properties::Property> tmp;
-    std::copy(input.begin(), input.end(), std::back_inserter(tmp));
-    std::sort(tmp.begin(), tmp.end());
+    auto tmp = unordered_to_ordered(input);
 
     Json::Value holder = Json::arrayValue;
     for (auto& prop : tmp) {
@@ -1861,19 +1859,18 @@ int check_pass_properties(const Arguments& args) {
   std::vector<std::pair<std::string, PropertyInteractions>> pass_interactions;
   for (const auto& [pass, _] : active_passes.activated_passes) {
     auto m = pass->get_property_interactions();
-    for (auto it = m.begin(); it != m.end();) {
-      auto&& [name, property_interaction] = *it;
+    unordered_erase_if(m, [pass_ = pass, &props_manager](auto& p) {
+      auto&& [name, property_interaction] = p;
 
       if (!props_manager.property_is_enabled(name)) {
-        it = m.erase(it);
-        continue;
+        return true;
       }
 
       always_assert_log(property_interaction.is_valid(),
                         "%s has an invalid property interaction for %s",
-                        pass->name().c_str(), get_name(name));
-      ++it;
-    }
+                        pass_->name().c_str(), get_name(name));
+      return false;
+    });
     pass_interactions.emplace_back(pass->name(), std::move(m));
   }
   auto failure = Manager::verify_pass_interactions(pass_interactions, conf);
@@ -2093,7 +2090,7 @@ int main(int argc, char* argv[]) {
       std::vector<android::ResTable_config> configs;
       post_res_table->get_configurations(APPLICATION_PACKAGE, "string",
                                          &configs);
-      dump_string_locales(STRING_LOCALE_DUMP, configs);
+      dump_string_locales(conf.metafile(STRING_LOCALE_DUMP), configs);
     }
 
     {

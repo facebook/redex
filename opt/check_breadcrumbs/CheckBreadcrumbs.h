@@ -11,6 +11,7 @@
 #include <map>
 #include <vector>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h" // All the comparators.
 #include "DexStore.h" // XStoreRefs.
 #include "Pass.h"
@@ -108,7 +109,7 @@ class Breadcrumbs {
  private:
   const Scope& m_scope;
   Scope m_scope_to_walk;
-  std::unordered_set<const DexClass*> m_classes;
+  UnorderedSet<const DexClass*> m_classes;
   std::map<const DexType*, Fields, dextypes_comparator> m_bad_fields;
   std::map<const DexType*, Methods, dextypes_comparator> m_bad_methods;
   std::map<const DexType*, MethodInsns, dextypes_comparator> m_bad_type_insns;
@@ -125,10 +126,10 @@ class Breadcrumbs {
   MethodInsnsType m_illegal_field_cls;
   MethodInsnsType m_illegal_method_call;
   XStoreRefs m_xstores;
-  std::unordered_set<const DexType*> m_allow_violations;
-  std::unordered_set<std::string> m_allow_violation_type_prefixes;
-  std::unordered_set<const DexType*> m_types_with_allowed_violations;
-  std::unordered_set<std::string> m_type_prefixes_with_allowed_violations;
+  UnorderedSet<const DexType*> m_allow_violations;
+  UnorderedSet<std::string> m_allow_violation_type_prefixes;
+  UnorderedSet<const DexType*> m_types_with_allowed_violations;
+  UnorderedSet<std::string> m_type_prefixes_with_allowed_violations;
   std::vector<std::string> m_unneeded_violations_file_lines;
   bool m_multiple_root_store_dexes;
   bool m_reject_illegal_refs_root_store;

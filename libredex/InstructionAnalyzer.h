@@ -90,11 +90,11 @@
  * to store state. State is instead passed as an explicit argument to each
  * method.
  */
-template <typename Derived, typename _Env, typename _State = std::nullptr_t>
+template <typename Derived, typename Env_, typename State_ = std::nullptr_t>
 class InstructionAnalyzerBase {
  public:
-  using State = _State;
-  using Env = _Env;
+  using Env = Env_;
+  using State = State_;
 
   static bool analyze_default(const State& /*state*/,
                               const IRInstruction* /*insn*/,
@@ -120,11 +120,11 @@ class InstructionAnalyzerBase {
  * specialization makes them easier to write -- instead of passing an unused
  * nullptr around, the analyze_* methods can omit the state parameter entirely.
  */
-template <typename Derived, typename _Env>
-class InstructionAnalyzerBase<Derived, _Env, std::nullptr_t> {
+template <typename Derived, typename Env_>
+class InstructionAnalyzerBase<Derived, Env_, std::nullptr_t> {
  public:
   using State = std::nullptr_t;
-  using Env = _Env;
+  using Env = Env_;
 
   static bool analyze_default(const IRInstruction* /*insn*/, Env* /*env*/) {
     return false;
@@ -149,7 +149,7 @@ class InstructionAnalyzerBase<Derived, _Env, std::nullptr_t> {
 };
 
 /*
- * The run() method of this class will run each sub-analyzer in the Analyzers
+ * operator() of this class will run each sub-analyzer in the Analyzers
  * list from left to right on the given instruction.
  */
 template <typename... Analyzers>

@@ -9,12 +9,15 @@
 #include <gtest/gtest.h>
 
 #include "ApkResources.h"
+#include "GlobalConfig.h"
+#include "ReachableResources.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
 #include "ResourcesTestDefs.h"
-#include "Trace.h"
+#include "ResourcesValidationHelper.h"
+#include "Styles.h"
 #include "androidfw/ResourceTypes.h"
 #include "arsc/TestStructures.h"
 #include "utils/Serialize.h"
@@ -38,8 +41,28 @@ void setup_resources_and_run(
   auto layout_dest = layout_dir.string() + "/activity_main.xml";
   redex::copy_file(get_env("test_layout_path"), layout_dest);
 
+  auto raw_dir = p / "res/raw/";
+  create_directories(raw_dir);
+
+  path test_raw_path(get_env("test_raw_path"));
+  for (const auto& entry :
+       boost::filesystem::directory_iterator(test_raw_path)) {
+    auto file = entry.path().filename().string();
+    auto file_dest = raw_dir.string() + file;
+    auto file_source = entry.path().string();
+    redex::copy_file(file_source, file_dest);
+  }
+
   ApkResources resources(tmp_dir.path);
   callback(tmp_dir.path, &resources);
+}
+
+DexStoresVector make_empty_stores() {
+  DexStoresVector stores;
+  DexStore store("classes");
+  store.add_classes({});
+  stores.emplace_back(store);
+  return stores;
 }
 
 // Asserts that the given loaded resources.arsc file has an overlayable entry
@@ -311,4 +334,87 @@ TEST(ApkResources, TestDeleteOverlayableIds) {
     auto res_table = resources.load_res_table();
     run_verify(res_table.get(), 0, 0, {});
   }
+}
+
+TEST(ApkResources, TestReachableRoots) {
+  std::unordered_set<std::string> expected_resource_roots{
+      "keep_me_unused_color", "keep_me_unused_str", "red", "welcome", "plate"};
+  setup_resources_and_run(
+      [&](const std::string& temp_dir_path, ApkResources* resources) {
+        ResourceConfig global_resources_config;
+        resources::ReachabilityOptions options;
+        options.assume_reachable_prefixes.emplace_back("keep_me_");
+        options.assume_reachable_names.insert("red");
+        options.assume_reachable_names.insert("welcome");
+        options.assume_reachable_names.insert("plate");
+        auto res_table = resources->load_res_table();
+        resources::ReachableResources reachable_resources(
+            temp_dir_path, global_resources_config, options);
+        // For this test, no roots from code are applicable.
+        DexStoresVector stores = make_empty_stores();
+        auto roots = reachable_resources.get_resource_roots(stores);
+        for (const auto& name : expected_resource_roots) {
+          auto expected_id = res_table->name_to_ids.at(name).at(0);
+          EXPECT_EQ(roots.count(expected_id), 1)
+              << name << " (0x" << std::hex << expected_id << std::dec
+              << ") should have been returned as a reachable root!";
+        }
+      });
+}
+
+TEST(ApkResources, TestKeepResources) {
+  UnorderedSet<std::string> expected_keep_resources{
+      "CronetProviderClassName", "FooProviderClassName",
+      "BarProviderClassName",    "AnakinProviderClassName",
+      "YodaProviderClassName",   "PadmeProviderClassName",
+      "NabooProviderClassName",  "ObiWanProviderClassName"};
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, ApkResources* resources) {
+        auto keep_resources_found = resources->get_all_keep_resources();
+        EXPECT_EQ(expected_keep_resources, keep_resources_found);
+      });
+}
+
+TEST(ApkResources, TestNames) {
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, ApkResources* resources) {
+        auto res_table = resources->load_res_table();
+        EXPECT_TRUE(res_table->is_type_named(0x1, "array"));
+        EXPECT_TRUE(res_table->is_type_named(0x2, "attr"));
+      });
+}
+
+TEST(ApkResources, WalkReferences) {
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, ApkResources* resources) {
+        auto res_table = resources->load_res_table();
+        validate_walk_references_for_resource(res_table.get());
+      });
+}
+
+TEST(ApkResources, StyleAnalysis) {
+  setup_resources_and_run(
+      [&](const std::string& temp_dir_path, ApkResources* resources) {
+        auto res_table = resources->load_res_table();
+        std::vector<std::string> ambiguous_style_names{
+            "AmbiguousBig", "AmbiguousParent", "AmbiguousSmall", "Confusing",
+            "DupTheme1",    "DupTheme2",       "NightParent",    "Unclear"};
+
+        DexStoresVector stores = make_empty_stores();
+        resources::ReachabilityOptions options;
+        UnorderedSet<uint32_t> additional_roots;
+        ResourceConfig global_resource_config;
+        StyleAnalysis style_analysis(temp_dir_path,
+                                     global_resource_config,
+                                     options,
+                                     stores,
+                                     additional_roots);
+        auto ambiguous = style_analysis.ambiguous_styles();
+        EXPECT_EQ(ambiguous.size(), ambiguous_style_names.size());
+        for (auto& name : ambiguous_style_names) {
+          auto id = res_table->name_to_ids.at(name).at(0);
+          EXPECT_EQ(ambiguous.count(id), 1)
+              << "Resource " << name << " should be marked as ambiguous";
+        }
+      });
 }

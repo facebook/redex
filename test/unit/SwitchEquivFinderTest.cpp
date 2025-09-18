@@ -409,44 +409,6 @@ TEST_F(SwitchEquivFinderTest, other_entry_points) {
   code->clear_cfg();
 }
 
-TEST_F(SwitchEquivFinderTest, other_entry_points2) {
-  setup();
-
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (load-param v2)
-      (if-eqz v2 :non_leaf)
-
-      (sget-object "LFoo;.table:[LBar;")
-      (move-result-pseudo v0)
-      (const v1 0)
-      (invoke-virtual (v1) "LEnum;.ordinal:()I")
-      (move-result v1)
-      (aget v0 v1)
-      (move-result-pseudo v1)
-      (const v2 0)
-      (if-le v2 v1 :case0)
-
-      (:non_leaf)
-      (const v2 1)
-      (if-eq v2 v1 :case1)
-
-      (:case0)
-      (return v0)
-
-      (:case1)
-      (invoke-static (v2) "LFoo;.useReg:(I)V")
-      (return v1)
-    )
-)");
-
-  code->build_cfg();
-  auto& cfg = code->cfg();
-  SwitchEquivFinder finder(&cfg, get_first_occurrence(cfg, OPCODE_IF_LE), 1);
-  ASSERT_FALSE(finder.success());
-  code->clear_cfg();
-}
-
 TEST_F(SwitchEquivFinderTest, goto_default) {
   setup();
 
@@ -1291,7 +1253,7 @@ TEST_F(SwitchEquivFinderTest,
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
-  source_blocks::insert_source_blocks(method, &cfg, false);
+  source_blocks::insert_source_blocks(method, &cfg);
 
   // Further manipulation to make it the right form like we saw in the wild. All
   // this is doing is making sure we have a block with a source block but actual

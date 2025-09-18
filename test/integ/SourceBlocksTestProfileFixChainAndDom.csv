@@ -1,0 +1,5 @@
+interaction,appear#
+ColdStart,4
+name,profiled_srcblks_exprs
+Lcom/facebook/redextest/SourceBlocksTest$ChainAndDomClass;.chains:()V,(0.0:0.0(0.0:0.0)(1.0:0.1))
+Lcom/facebook/redextest/SourceBlocksTest$ChainAndDomClass;.thrower:(I)V,(1.0:0.0(0.0:0.0))

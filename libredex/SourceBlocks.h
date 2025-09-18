@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 
+#include "CallGraph.h"
 #include "ControlFlow.h"
 #include "CppUtil.h"
 #include "Debug.h"
@@ -201,6 +202,33 @@ void visit_in_order(const ControlFlowGraph* cfg,
              cfg->num_blocks());
 }
 
+// This is an implementation of Breadth-First Search for call-graphs.
+template <typename MethodStartFn>
+void visit_by_levels(const call_graph::Graph* cg,
+                     const MethodStartFn& method_start_fn) {
+  UnorderedSet<call_graph::NodeId> visited;
+  std::queue<call_graph::NodeId> queue;
+  queue.push(cg->entry());
+  visited.insert(cg->entry());
+
+  while (!queue.empty()) {
+    const auto* cur = queue.front();
+    queue.pop();
+
+    method_start_fn(cur);
+
+    auto callees = cur->callees();
+    for (const auto& edge : callees) {
+      const auto* callee = edge->callee();
+      if (visited.count(callee)) {
+        continue;
+      }
+      visited.insert(callee);
+      queue.push(callee);
+    }
+  }
+}
+
 } // namespace impl
 
 struct InsertResult {
@@ -208,6 +236,7 @@ struct InsertResult {
   std::string serialized;
   std::string serialized_idom_map;
   bool profile_success;
+  size_t normalized_count;
 };
 
 // Source data for a profile = interaction. Three options per interactions:
@@ -222,17 +251,44 @@ using ProfileData =
 
 InsertResult insert_source_blocks(const DexString* method,
                                   ControlFlowGraph* cfg,
-                                  bool use_global_default_value,
                                   const std::vector<ProfileData>& profiles = {},
                                   bool serialize = true,
                                   bool insert_after_excs = false);
 
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,
-                                  bool use_global_default_value,
                                   const std::vector<ProfileData>& profiles = {},
                                   bool serialize = true,
                                   bool insert_after_excs = false);
+
+InsertResult insert_custom_source_blocks(
+    const DexString* method,
+    ControlFlowGraph* cfg,
+    const std::vector<ProfileData>& profiles = {},
+    bool serialize = true,
+    bool insert_after_excs = false,
+    bool enable_fuzzing = false,
+    bool must_be_cold = false);
+
+UnorderedMap<Block*, uint32_t> insert_custom_source_blocks_get_indegrees(
+    const DexString* method,
+    ControlFlowGraph* cfg,
+    const std::vector<ProfileData>& profiles = {},
+    bool serialize = true,
+    bool insert_after_excs = false,
+    bool enable_fuzzing = false);
+
+struct SourceBlockMetric {
+  size_t hot_block_count{0};
+  size_t cold_block_count{0};
+  size_t hot_throw_cold_count{0};
+};
+
+using SourceBlockInvokeMap =
+    ConcurrentMap<const DexMethod*,
+                  UnorderedMap<IRInstruction*, std::vector<bool>>>;
+
+SourceBlockMetric gather_source_block_metrics(ControlFlowGraph* cfg);
 
 void fix_chain_violations(ControlFlowGraph* cfg);
 
@@ -241,6 +297,9 @@ void fix_idom_violations(ControlFlowGraph* cfg);
 void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg);
 
 bool has_source_block_positive_val(const SourceBlock* sb);
+
+size_t compute_method_violations(const call_graph::Graph& call_graph,
+                                 const Scope& scope);
 
 void scale_source_blocks(cfg::Block* block);
 
@@ -453,6 +512,19 @@ inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
   return const_cast<SourceBlock*>(
       get_last_source_block(const_cast<cfg::Block*>(b)));
 }
+// This helper gets the last source block in a block if it is after a throw,
+// otherwise returns a nullptr
+inline SourceBlock* get_last_source_block_if_after_throw(cfg::Block* b) {
+  for (auto it = b->rbegin(); it != b->rend(); it++) {
+    if (it->type == MFLOW_OPCODE && opcode::is_throw(it->insn->opcode())) {
+      return nullptr;
+    }
+    if (it->type == MFLOW_SOURCE_BLOCK) {
+      return it->src_block.get();
+    }
+  }
+  return nullptr;
+}
 
 IRList::iterator find_first_block_insert_point(cfg::Block* b);
 
@@ -502,9 +574,11 @@ inline float get_factor(SourceBlock* dominating,
 }
 
 inline void normalize(SourceBlock* sb, size_t idx, float factor) {
-  if (sb->vals[idx]) {
-    sb->vals[idx]->val *= factor;
-  }
+  sb->apply_at(idx, [&](auto& val) {
+    if (val) {
+      val->val *= factor;
+    }
+  });
 }
 
 inline void normalize(SourceBlock* dominating,
@@ -557,18 +631,22 @@ SourceBlockConsistencyCheck& get_sbcc();
 struct ViolationsHelper {
   struct ViolationsHelperImpl;
   std::unique_ptr<ViolationsHelperImpl> impl;
+  bool track_intermethod_violations{false};
 
   enum class Violation {
     kHotImmediateDomNotHot,
     kChainAndDom,
     kUncoveredSourceBlocks,
     kHotMethodColdEntry,
+    kHotNoHotPred,
+    KHotAllChildrenCold,
   };
 
   ViolationsHelper(Violation v,
                    const Scope& scope,
                    size_t top_n,
-                   std::vector<std::string> to_vis);
+                   std::vector<std::string> to_vis,
+                   bool track_intermethod_violations = false);
   ~ViolationsHelper();
 
   void process(ScopedMetrics* sm);

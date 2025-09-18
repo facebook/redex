@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <fstream>
 #include <iosfwd>
-#include <unordered_set>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -132,8 +131,8 @@ size_t sum_instructions(const MethodInsnsType& map) {
 void build_allowed_violations(const Scope& scope,
                               const std::string& allowed_violations_file_path,
                               bool enforce_types_exist,
-                              std::unordered_set<const DexType*>* types,
-                              std::unordered_set<std::string>* type_prefixes,
+                              UnorderedSet<const DexType*>* types,
+                              UnorderedSet<std::string>* type_prefixes,
                               std::vector<std::string>* unneeded_lines) {
   if (!boost::filesystem::exists(allowed_violations_file_path)) {
     return;
@@ -268,11 +267,11 @@ void print_allowed_violations_per_class(
 }
 
 template <typename T, typename PrinterFn>
-void gather_unnessary_allows(const std::unordered_set<T>& expected_violations,
-                             const std::unordered_set<T>& actual_violations,
+void gather_unnessary_allows(const UnorderedSet<T>& expected_violations,
+                             const UnorderedSet<T>& actual_violations,
                              const PrinterFn& printer,
                              std::vector<std::string>* unneeded_lines) {
-  for (auto& e : expected_violations) {
+  for (auto& e : UnorderedIterable(expected_violations)) {
     if (!actual_violations.count(e)) {
       unneeded_lines->emplace_back(printer(e));
     }
@@ -428,7 +427,7 @@ bool Breadcrumbs::should_allow_violations(const DexType* type) {
     return true;
   }
   auto dname = show_deobfuscated(type);
-  for (const auto& s : m_allow_violation_type_prefixes) {
+  for (const auto& s : UnorderedIterable(m_allow_violation_type_prefixes)) {
     if (boost::algorithm::starts_with(dname, s)) {
       m_types_with_allowed_violations.emplace(type);
       m_type_prefixes_with_allowed_violations.emplace(s);

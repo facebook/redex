@@ -10,6 +10,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
+#include <boost/graph/adjacency_list.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/optional.hpp>
 #include <cstdint>
@@ -37,6 +38,16 @@ const uint32_t PACKAGE_RESID_START = 0x7f000000;
 const uint32_t APPLICATION_PACKAGE = 0x7f;
 
 namespace resources {
+// Use case specific options for traversing and establishing reachable roots.
+struct ReachabilityOptions {
+  bool assume_id_inlined{false};
+  bool check_string_for_name{false};
+  bool granular_style_reachability{false};
+  std::vector<std::string> assume_reachable_prefixes;
+  UnorderedSet<std::string> assume_reachable_names;
+  UnorderedSet<std::string> disallowed_types;
+};
+
 // Holder object for details about a type that is pending creation.
 struct TypeDefinition {
   uint32_t package_id;
@@ -67,6 +78,19 @@ inline std::string fully_qualified_external_name(
     return java_names::external_to_internal(package_name + class_name);
   }
   return java_names::external_to_internal(class_name);
+}
+
+// If the given type name is a custom type, i.e. "dimen.2" return the actual
+// type it represents, in this example "dimen". Otherwise string is returned as
+// is.
+inline std::string type_name_from_possibly_custom_type_name(
+    const std::string& type_name) {
+  auto end_pos = type_name.rfind('.');
+  if (end_pos == std::string::npos) {
+    return type_name;
+  } else {
+    return type_name.substr(0, end_pos);
+  }
 }
 
 struct StringOrReference {
@@ -109,6 +133,152 @@ struct StringOrReferenceHasher {
 
 using StringOrReferenceSet =
     UnorderedSet<StringOrReference, StringOrReferenceHasher>;
+
+// Helper for parsing resources in "tools:keep" part of xml file
+UnorderedSet<std::string> parse_keep_xml_file(const std::string& xml_file_path);
+
+// Basic scaffolding to represent styles and their hierarchy in the application.
+// This representation is meant to be common between .apk and .aab inputs, which
+// is why android::ResTable_config is emitted as a copy here (since .pb
+// representation of config can be easily converted to the .arsc form, for a
+// common interface between the two).
+struct StyleResource {
+  struct Value {
+    struct Span {
+      Span(std::string tag, uint32_t first_char, uint32_t last_char)
+          : tag(std::move(tag)), first_char(first_char), last_char(last_char) {}
+      std::string tag;
+      uint32_t first_char;
+      uint32_t last_char;
+
+      bool operator==(const Span& other) const {
+        if (tag != other.tag) {
+          return false;
+        }
+        if (first_char != other.first_char) {
+          return false;
+        }
+        return last_char == other.last_char;
+      }
+    };
+
+    Value(uint8_t dt, uint32_t bytes) : data_type(dt), value_bytes(bytes) {}
+    Value(uint8_t dt, const std::string& str)
+        : data_type(dt), value_string(str) {}
+    Value(uint8_t dt, const std::string& str, std::vector<Span> styled)
+        : data_type(dt), value_string(str), styled_string(std::move(styled)) {}
+
+    bool operator==(const Value& other) const {
+      if (data_type != other.data_type) {
+        return false;
+      }
+      if (value_bytes != other.value_bytes) {
+        return false;
+      }
+      if (value_string != other.value_string) {
+        return false;
+      }
+      return styled_string == other.styled_string;
+    }
+
+    uint8_t get_data_type() const { return data_type; }
+    uint32_t get_value_bytes() const { return value_bytes; }
+    const boost::optional<std::string>& get_value_string() const {
+      return value_string;
+    }
+    const std::vector<Span>& get_styled_string() const { return styled_string; }
+
+   private:
+    uint8_t data_type{0};
+    uint32_t value_bytes{0};
+    boost::optional<std::string> value_string{boost::none};
+    std::vector<Span> styled_string;
+  };
+
+  using AttrMap = std::map<uint32_t, Value>;
+
+  uint32_t id{0};
+  android::ResTable_config config{};
+  uint32_t parent{0};
+  AttrMap attributes;
+
+  bool operator==(const StyleResource& other) const {
+    if (parent != other.parent) {
+      return false;
+    }
+    return attributes == other.attributes;
+  }
+};
+
+// Map of ID to parsed style information (one ID can map to many due to
+// different configs, i.e. default / night mode / land, etc).
+using StyleMap = std::unordered_map<uint32_t, std::vector<StyleResource>>;
+
+struct StyleInfo {
+  // Graph of style resource IDs as vertex, edge to denote a style's parent (if
+  // that parent is also defined in the application). Note that styles which
+  // inherit from framework styles will lack an outbound edge.
+  struct Node {
+    uint32_t id{0};
+  };
+  using Graph =
+      boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, Node>;
+  using vertex_t = boost::graph_traits<Graph>::vertex_descriptor;
+  Graph graph;
+  // Actual representation of the parsed style information from the application.
+  StyleMap styles;
+  // Returns information from the graph as a .dot format, for visualization.
+  // Optionally this can exclude nodes that have no outgoing/inbound edges which
+  // might not be interesting to look at.
+  std::string print_as_dot(bool exclude_nodes_with_no_edges = false);
+  // As above, "stringify" function is to convert the ID to a readable name. By
+  // default an implementation that prints the ID as hex will be used.
+  std::string print_as_dot(
+      const std::function<std::string(uint32_t)>& stringify,
+      const UnorderedMap<uint32_t, UnorderedMap<std::string, std::string>>&
+          node_options,
+      bool exclude_nodes_with_no_edges = false);
+
+  // Returns the set of root vertices in the graph. These are typically the
+  // top-level styles in the style hierarchy.
+  UnorderedSet<vertex_t> get_roots() const;
+};
+
+// Modification specification for styles in APK and App Bundle containers.
+// This structure defines operations that can be performed on styles during
+// serialization.
+struct StyleModificationSpec {
+  enum class ModificationType { ADD_ATTRIBUTE, REMOVE_ATTRIBUTE, DELETE_STYLE };
+
+  struct Modification {
+    ModificationType type;
+
+    uint32_t resource_id{0};
+    std::optional<uint32_t> attribute_id{std::nullopt};
+    std::optional<StyleResource::Value> value{std::nullopt};
+    std::optional<uint32_t> parent_id{std::nullopt};
+
+    explicit Modification(uint32_t resource_id)
+        : type(ModificationType::DELETE_STYLE), resource_id{resource_id} {}
+    Modification(uint32_t resource_id, uint32_t attr_id)
+        : type(ModificationType::REMOVE_ATTRIBUTE),
+          resource_id{resource_id},
+          attribute_id(attr_id) {}
+    Modification(uint32_t resource_id,
+                 uint32_t attr_id,
+                 const StyleResource::Value& val)
+        : type(ModificationType::ADD_ATTRIBUTE),
+          resource_id{resource_id},
+          attribute_id(attr_id),
+          value(val) {}
+  };
+
+  std::vector<Modification> modifications;
+};
+
+using ResourceAttributeMap =
+    UnorderedMap<uint32_t,
+                 UnorderedMap<uint32_t, StyleModificationSpec::Modification>>;
 
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
@@ -274,7 +444,8 @@ class ResourceTableFile {
   // file paths.
   virtual void walk_references_for_resource(
       uint32_t resID,
-      ResourcePathType path_type,
+      const ResourcePathType& path_type,
+      const resources::ReachabilityOptions& reachability_options,
       UnorderedSet<uint32_t>* nodes_visited,
       UnorderedSet<std::string>* potential_file_paths) = 0;
 
@@ -308,6 +479,26 @@ class ResourceTableFile {
   // Returns a set of IDs that are overlayable, to be used as reachability roots
   virtual UnorderedSet<uint32_t> get_overlayable_id_roots() = 0;
 
+  // Builds a map of resource ID -> information about style resources in all
+  // configurations.
+  virtual resources::StyleMap get_style_map() = 0;
+
+  // Deletes referenced attribute/value in android app
+  virtual void apply_attribute_removals(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) = 0;
+
+  // Adds referenced attribute/value in android app
+  virtual void apply_attribute_additions(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) = 0;
+
+  // Builds a graph of all styles in the application, with outgoing edges to
+  // the parent of each style.
+  resources::StyleInfo load_style_info();
+
   // Takes effect during serialization. Appends a new type with the given
   // details (id, name) to the package. It will contain types with the given
   // configs and use existing resource entry/value data of "source_res_ids" to
@@ -334,6 +525,14 @@ class ResourceTableFile {
     return std::vector<uint32_t>{};
   }
 
+  // Checks if the given type id is of the given name, coalescing custom type
+  // names.
+  bool is_type_named(uint8_t type_id, const std::string& type_name) const {
+    auto search = m_application_type_ids_to_names.find(type_id);
+    return search != m_application_type_ids_to_names.end() &&
+           search->second == type_name;
+  }
+
   std::vector<uint32_t> sorted_res_ids;
   std::map<uint32_t, std::string> id_to_name;
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
@@ -341,6 +540,9 @@ class ResourceTableFile {
   // Pending changes to take effect during serialization
   UnorderedSet<uint32_t> m_ids_to_remove;
   std::vector<resources::TypeDefinition> m_added_types;
+  // type ids to coalesced type names (i.e. type id for "style.2" will be mapped
+  // to "style" here).
+  UnorderedMap<uint8_t, std::string> m_application_type_ids_to_names;
 
  protected:
   ResourceTableFile() {}
@@ -424,6 +626,8 @@ class AndroidResources {
   virtual void finalize_bundle_config(const ResourceConfig& config);
 
   const std::string& get_directory() { return m_directory; }
+
+  UnorderedSet<std::string> get_all_keep_resources();
 
   virtual ~AndroidResources() {}
 

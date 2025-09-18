@@ -343,7 +343,7 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
   // We use that simplification later to not have to walk through
   // blocks.
   {
-    std::unordered_set<Block*> seen_blocks;
+    UnorderedSet<Block*> seen_blocks;
     for (auto* monitor_insn : monitor_insns) {
       auto* b = block_map.at(monitor_insn);
       if (seen_blocks.count(b) > 0) {
@@ -627,7 +627,7 @@ boost::optional<std::string> verify(cfg::ControlFlowGraph& cfg,
     }
 
     auto cover = [](const auto& s) {
-      std::unordered_set<const IRInstruction*> res;
+      UnorderedSet<const IRInstruction*> res;
       for (const auto& p : s.bindings()) {
         if (p.second.is_value() && *p.second.get_constant() != 0) {
           res.insert(p.first);
@@ -644,7 +644,7 @@ boost::optional<std::string> verify(cfg::ControlFlowGraph& cfg,
           oss << " " << i << "(" << show(i) << ")";
         };
         oss << "[";
-        for (auto* i : c) {
+        for (auto* i : UnorderedIterable(c)) {
           add(i);
         }
         oss << "]";
@@ -664,28 +664,26 @@ boost::optional<std::string> verify(cfg::ControlFlowGraph& cfg,
 
 struct Stats {
   static constexpr size_t kArraySize = analysis::kMaxLockDepth + 1;
-  std::array<std::unordered_set<DexMethod*>, kArraySize> counts;
-  std::array<std::unordered_set<DexMethod*>, kArraySize> counts_per;
+  std::array<UnorderedSet<DexMethod*>, kArraySize> counts;
+  std::array<UnorderedSet<DexMethod*>, kArraySize> counts_per;
   size_t all_methods{1};
   size_t methods_with_locks{0};
   size_t removed{0};
-  std::unordered_set<DexMethod*> methods_with_issues;
-  std::unordered_set<DexMethod*> non_singleton_rdefs;
+  UnorderedSet<DexMethod*> methods_with_issues;
+  UnorderedSet<DexMethod*> non_singleton_rdefs;
 
   Stats& operator+=(const Stats& rhs) {
     for (size_t i = 0; i < counts.size(); ++i) {
-      counts[i].insert(rhs.counts[i].begin(), rhs.counts[i].end());
+      insert_unordered_iterable(counts[i], rhs.counts[i]);
     }
     for (size_t i = 0; i < counts_per.size(); ++i) {
-      counts_per[i].insert(rhs.counts_per[i].begin(), rhs.counts_per[i].end());
+      insert_unordered_iterable(counts_per[i], rhs.counts_per[i]);
     }
     all_methods += rhs.all_methods;
     methods_with_locks += rhs.methods_with_locks;
     removed += rhs.removed;
-    methods_with_issues.insert(rhs.methods_with_issues.begin(),
-                               rhs.methods_with_issues.end());
-    non_singleton_rdefs.insert(rhs.non_singleton_rdefs.begin(),
-                               rhs.non_singleton_rdefs.end());
+    insert_unordered_iterable(methods_with_issues, methods_with_issues);
+    insert_unordered_iterable(non_singleton_rdefs, rhs.non_singleton_rdefs);
     return *this;
   }
 };
@@ -701,7 +699,7 @@ bool has_monitor_ops(cfg::ControlFlowGraph& cfg) {
 
 Stats run_locks_removal(DexMethod* m, IRCode* code) {
   // 1) Check whether there are MONITOR_ENTER instructions.
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   if (!has_monitor_ops(cfg)) {
     return Stats{};
@@ -776,28 +774,25 @@ void run_impl(DexStoresVector& stores,
   if (!prof.has_stats()) {
     TRACE(LOCKS, 2, "No profiles available!");
   }
-  auto sorted = [&prof](const std::unordered_set<DexMethod*>& in) {
-    std::vector<DexMethod*> ret(in.begin(), in.end());
-    std::sort(ret.begin(),
-              ret.end(),
-              [&prof](const DexMethod* lhs, const DexMethod* rhs) {
-                auto lhs_prof =
-                    prof.get_method_stat(method_profiles::COLD_START, lhs);
-                auto rhs_prof =
-                    prof.get_method_stat(method_profiles::COLD_START, rhs);
-                if (lhs_prof) {
-                  if (rhs_prof) {
-                    return lhs_prof->call_count > rhs_prof->call_count;
-                  }
-                  return true;
-                }
-                if (rhs_prof) {
-                  return false;
-                }
+  auto sorted = [&prof](const UnorderedSet<DexMethod*>& in) {
+    return unordered_to_ordered(
+        in, [&prof](const DexMethod* lhs, const DexMethod* rhs) {
+          auto lhs_prof =
+              prof.get_method_stat(method_profiles::COLD_START, lhs);
+          auto rhs_prof =
+              prof.get_method_stat(method_profiles::COLD_START, rhs);
+          if (lhs_prof) {
+            if (rhs_prof) {
+              return lhs_prof->call_count > rhs_prof->call_count;
+            }
+            return true;
+          }
+          if (rhs_prof) {
+            return false;
+          }
 
-                return compare_dexmethods(lhs, rhs);
-              });
-    return ret;
+          return compare_dexmethods(lhs, rhs);
+        });
   };
 
   print("all_methods", stats.all_methods);

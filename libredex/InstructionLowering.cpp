@@ -434,7 +434,7 @@ Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
   // code when there is an empty block (a block with only a goto in it). To
   // avoid this bug, we use the CFG to remove empty blocks.
   if (lower_with_cfg) {
-    code->build_cfg(/* editable */ true);
+    code->build_cfg();
     code->clear_cfg();
   }
 

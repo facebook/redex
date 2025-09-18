@@ -48,6 +48,22 @@ bool is_anonymous(std::string_view name) {
   return true;
 }
 
+bool is_kotlin_default_arg_method(const DexMethod& method) {
+  return boost::algorithm::ends_with(method.get_name()->str(), "$default");
+}
+
+bool is_composable_method(const DexMethod* method) {
+  const auto* anno_set = method->get_anno_set();
+  if (anno_set == nullptr) {
+    return false;
+  }
+  std::vector<DexType*> types;
+  anno_set->gather_types(types);
+  return std::find(types.begin(), types.end(),
+                   DexType::get_type(
+                       "Landroidx/compose/runtime/Composable;")) != types.end();
+}
+
 } // namespace
 
 // Setup types/strings needed for the pass
@@ -77,13 +93,13 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
                                 ConfigFiles&,
                                 PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  std::unordered_set<DexType*> delegate_types{
+  UnorderedSet<DexType*> delegate_types{
       DexType::get_type(KPROPERTY_ARRAY),
       DexType::get_type(R_PROP_SIGNATURE),
       DexType::get_type(W_PROP_SIGNATURE),
       DexType::get_type(RW_PROP_SIGNATURE),
   };
-  std::unordered_set<DexType*> lazy_delegate_types{
+  UnorderedSet<DexType*> lazy_delegate_types{
       DexType::get_type(LAZY_SIGNATURE),
   };
 
@@ -140,8 +156,11 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
   if (cls->rstate.is_cls_kotlin()) {
     stats.kotlin_class++;
     for (auto* method : cls->get_all_methods()) {
-      if (boost::algorithm::ends_with(method->get_name()->str(), "$default")) {
+      if (is_kotlin_default_arg_method(*method)) {
         stats.kotlin_default_arg_method++;
+      }
+      if (is_composable_method(method)) {
+        stats.kotlin_composable_method++;
       }
     }
     if (is_anonymous(cls->get_name()->str())) {
@@ -178,7 +197,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
     }
   }
 
-  always_assert(method->get_code()->editable_cfg_built());
+  always_assert(method->get_code()->cfg_built());
   auto& cfg = method->get_code()->cfg();
 
   for (const auto& it : cfg::InstructionIterable(cfg)) {
@@ -190,6 +209,15 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
         stats.kotlin_null_check_insns++;
       }
     } break;
+    case OPCODE_AND_INT_LIT: {
+      if (is_kotlin_default_arg_method(*method)) {
+        stats.kotlin_default_arg_check_insns++;
+      }
+      if (is_composable_method(method)) {
+        stats.kotlin_composable_and_lit_insns++;
+      }
+      stats.kotlin_and_lit_insns++;
+    } break;
     default:
       break;
     }
@@ -199,6 +227,11 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
 
 void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_null_check_insns", kotlin_null_check_insns);
+  mgr.incr_metric("kotlin_default_arg_check_insns",
+                  kotlin_default_arg_check_insns);
+  mgr.incr_metric("kotlin_composable_and_lit_insns",
+                  kotlin_composable_and_lit_insns);
+  mgr.incr_metric("kotlin_and_lit_insns", kotlin_and_lit_insns);
   mgr.incr_metric("java_public_param_objects", java_public_param_objects);
   mgr.incr_metric("kotlin_public_param_objects", kotlin_public_param_objects);
   mgr.incr_metric("no_of_delegates", kotlin_delegates);
@@ -211,6 +244,7 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_companion_class", kotlin_companion_class);
   mgr.incr_metric("di_generated_class", di_generated_class);
   mgr.incr_metric("kotlin_default_arg_method", kotlin_default_arg_method);
+  mgr.incr_metric("kotlin_composable_method", kotlin_composable_method);
   mgr.incr_metric("kotlin_coroutine_continuation_base",
                   kotlin_coroutine_continuation_base);
   mgr.incr_metric("kotlin_enum_class", kotlin_enum_class);

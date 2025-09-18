@@ -520,6 +520,5 @@ struct RedexContext {
 
   bool m_ordering_changes_allowed{true};
 
-  std::queue<DexMethodRef*> m_leaked_methods;
-  std::mutex m_leaked_methods_mutex;
+  std::atomic<size_t> m_leaked_methods_count{0};
 };

@@ -125,8 +125,6 @@ struct ModelSpec {
   ConstTypeHashSet exclude_types;
   // prefixes of types to exclude from the model
   UnorderedSet<std::string> exclude_prefixes;
-  // types to exclude only when they are placed in the ordred set
-  ConstTypeHashSet exclude_ordered_set_types;
   // prefix for class generation
   std::string class_name_prefix;
   // type tag config
@@ -402,7 +400,6 @@ class Model {
   MergerType* build_mergers(const DexType* root);
   void exclude_types(const ConstTypeHashSet& exclude_types);
   bool is_excluded(const DexType* type) const;
-  bool is_ordered_set_excluded(const DexType* type) const;
 
   // MergerType creator helpers
   MergerType& create_dummy_merger(const DexType* type);

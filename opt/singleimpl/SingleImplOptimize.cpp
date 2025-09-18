@@ -366,7 +366,7 @@ CheckCastSet OptimizationImpl::fix_instructions(
         auto* caller = const_cast<DexMethod*>(caller_const);
         std::vector<reg_t> temps; // Cached temps.
         auto* code = caller->get_code();
-        always_assert(code->editable_cfg_built());
+        always_assert(code->cfg_built());
         auto& cfg = code->cfg();
         auto& mutation = method_mutations.at(caller);
         for (const auto& insn_it_pair :
@@ -848,7 +848,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
     for (auto&& [method, _] :
          UnorderedIterable(intf_data.referencing_methods)) {
       auto* code = method->get_code();
-      always_assert(code->editable_cfg_built());
+      always_assert(code->cfg_built());
       auto emplaced =
           method_mutations.emplace(method, cfg::CFGMutation(code->cfg()))
               .second;
@@ -900,7 +900,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
   {
     for_all_methods(mutated_methods, [&](const DexMethod* m) {
       const auto* code = m->get_code();
-      always_assert(code->editable_cfg_built());
+      always_assert(code->cfg_built());
       const auto& cfg = code->cfg();
       size_t found = 0;
       for (const auto& mie : InstructionIterable(cfg)) {
@@ -938,7 +938,7 @@ check_casts::impl::Stats OptimizationImpl::post_process(
       [&stats, &mutex, removed_instructions, &api](const DexMethod* m_const) {
         auto* m = const_cast<DexMethod*>(m_const);
         auto* code = m->get_code();
-        always_assert(code->editable_cfg_built());
+        always_assert(code->cfg_built());
         auto& cfg = code->cfg();
         // T131253060 If enable weaken, we are hitting an assertion in
         // CheckCastAnalysis where a definition of a value is unknown. This only

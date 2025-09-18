@@ -176,7 +176,7 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
     return false;
   }
   bool res = true;
-  editable_cfg_adapter::iterate_with_iterator(
+  cfg_adapter::iterate_with_iterator(
       const_cast<IRCode*>(method->get_code()), [&](const IRList::iterator& it) {
         auto* insn = it->insn;
         if (opcode::is_an_iget(insn->opcode())) {
@@ -198,7 +198,7 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
             // not implemented by us, so they won't access our instance fields
             // as well.
             if ((callee == nullptr) || (callee->get_code() == nullptr)) {
-              return editable_cfg_adapter::LOOP_CONTINUE;
+              return cfg_adapter::LOOP_CONTINUE;
             }
           } else {
             bool no_current_type = true;
@@ -223,7 +223,7 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
               no_current_type = false;
             }
             if (no_current_type) {
-              return editable_cfg_adapter::LOOP_CONTINUE;
+              return cfg_adapter::LOOP_CONTINUE;
             }
           }
           // Recusive check every methods accessed from <init>.
@@ -232,10 +232,10 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
                                ifield_cls, callee, blocklist_ifields, visited);
           if (!keep_going) {
             res = false;
-            return editable_cfg_adapter::LOOP_BREAK;
+            return cfg_adapter::LOOP_BREAK;
           }
         }
-        return editable_cfg_adapter::LOOP_CONTINUE;
+        return cfg_adapter::LOOP_CONTINUE;
       });
   return res;
 }
@@ -354,37 +354,33 @@ EligibleIfields gather_safely_inferable_ifield_candidates(
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     // Remove candidate field if it was written in code other than its class'
     // init function.
-    editable_cfg_adapter::iterate_with_iterator(
-        &code, [&](const IRList::iterator& it) {
-          auto* insn = it->insn;
-          auto op = insn->opcode();
-          if (opcode::is_an_iput(op)) {
-            auto* field =
-                resolve_field(insn->get_field(), FieldSearch::Instance);
-            if (field == nullptr ||
-                (method::is_init(method) &&
-                 method->get_class() == field->get_class())) {
-              // If couldn't resolve the field, or this method is this field's
-              // class's init function, move on.
-              return editable_cfg_adapter::LOOP_CONTINUE;
-            }
-            // We assert that final fields are not modified outside of <init>
-            // methods. javac seems to enforce this, but it's unclear if the JVM
-            // spec actually forbids that. Doing the check here simplifies the
-            // constant propagation analysis later -- we can determine the
-            // values of these fields without analyzing any methods invoked from
-            // the <init> methods.
-            always_assert_log(
-                !is_final(field),
-                "FinalInlinePassV2: encountered one final instance "
-                "field been changed outside of its class's <init> "
-                "file, for temporary solution set "
-                "\"inline_instance_field\" in \"FinalInlinePassV2\" "
-                "to be false.");
-            invalid_candidates.insert(field);
-          }
-          return editable_cfg_adapter::LOOP_CONTINUE;
-        });
+    cfg_adapter::iterate_with_iterator(&code, [&](const IRList::iterator& it) {
+      auto* insn = it->insn;
+      auto op = insn->opcode();
+      if (opcode::is_an_iput(op)) {
+        auto* field = resolve_field(insn->get_field(), FieldSearch::Instance);
+        if (field == nullptr || (method::is_init(method) &&
+                                 method->get_class() == field->get_class())) {
+          // If couldn't resolve the field, or this method is this field's
+          // class's init function, move on.
+          return cfg_adapter::LOOP_CONTINUE;
+        }
+        // We assert that final fields are not modified outside of <init>
+        // methods. javac seems to enforce this, but it's unclear if the JVM
+        // spec actually forbids that. Doing the check here simplifies the
+        // constant propagation analysis later -- we can determine the
+        // values of these fields without analyzing any methods invoked from
+        // the <init> methods.
+        always_assert_log(!is_final(field),
+                          "FinalInlinePassV2: encountered one final instance "
+                          "field been changed outside of its class's <init> "
+                          "file, for temporary solution set "
+                          "\"inline_instance_field\" in \"FinalInlinePassV2\" "
+                          "to be false.");
+        invalid_candidates.insert(field);
+      }
+      return cfg_adapter::LOOP_CONTINUE;
+    });
   });
   for (DexField* field : UnorderedIterable(ifields_candidates)) {
     if (invalid_candidates.count(field) == 0u) {

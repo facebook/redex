@@ -37,8 +37,7 @@ TEST_F(NopperTest, noppable_blocks_insert_nops) {
   EXPECT_EQ(code->cfg().blocks().size(), 3);
   EXPECT_EQ(noppable_blocks.size(), 3);
 
-  std::unordered_set<cfg::Block*> set(noppable_blocks.begin(),
-                                      noppable_blocks.end());
+  UnorderedSet<cfg::Block*> set(noppable_blocks.begin(), noppable_blocks.end());
   nopper_impl::insert_nops(code->cfg(), set);
   code->clear_cfg();
 
@@ -138,8 +137,7 @@ TEST_F(NopperTest, noppable_blocks_insert_nops_with_auxiliary_defs) {
   EXPECT_EQ(code->cfg().blocks().size(), 1);
   EXPECT_EQ(noppable_blocks.size(), 1);
 
-  std::unordered_set<cfg::Block*> set(noppable_blocks.begin(),
-                                      noppable_blocks.end());
+  UnorderedSet<cfg::Block*> set(noppable_blocks.begin(), noppable_blocks.end());
   auto* nopper_type = DexType::make_type("Lnopper;");
   auto ad = nopper_impl::create_auxiliary_defs(nopper_type);
   nopper_impl::insert_nops(code->cfg(), set, &ad);

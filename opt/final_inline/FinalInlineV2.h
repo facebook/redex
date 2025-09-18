@@ -107,7 +107,7 @@ class StaticFieldReadAnalysis {
 
  private:
   const call_graph::Graph& m_graph;
-  std::unordered_map<const DexMethod*, Result> m_summaries;
+  UnorderedMap<const DexMethod*, Result> m_summaries;
   UnorderedSet<const DexMethod*> m_finalized;
   UnorderedSet<const DexMethodRef*> m_allowed_opaque_callees;
 

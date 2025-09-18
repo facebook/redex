@@ -362,7 +362,7 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
         if (code == nullptr) {
           return Stats();
         }
-        always_assert(code->editable_cfg_built());
+        always_assert(code->cfg_built());
         auto& cfg = code->cfg();
         if (method::is_clinit(method)) {
           clinits.insert(method);

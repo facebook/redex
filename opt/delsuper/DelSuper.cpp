@@ -153,7 +153,7 @@ class DelSuper {
 
     // TODO: rewrite the following code to not require a random-access
     // container of instructions
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     std::vector<IRInstruction*> insns;
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
