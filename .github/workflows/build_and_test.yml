@@ -53,9 +53,9 @@ jobs:
         # We intentionally don't explicitly spell out all versions, so that 0
         # will always track the default from apt.llvm.org (usually the latest
         # stable clang).
-        - 0  # At time of edit 20.
+        - 0  # At time of edit 21.
+        - 20
         - 19
-        - 18
     steps:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/prepare_debian"
