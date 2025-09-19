@@ -7,10 +7,9 @@
 
 #include "Show.h"
 
-#include <codecvt>
 #include <iomanip>
-#include <locale>
 
+#include <boost/locale/encoding_utf.hpp>
 #include <boost/version.hpp>
 // Quoted was accepted into public components as of 1.73. The `detail`
 // header was removed in 1.74.
@@ -1787,8 +1786,8 @@ std::string escape_string(const char* ptr) {
         code_point += low_unit - 0xDC00;
         code_point += 0x10000;
       }
-      std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
-      std::string result = convert.to_bytes(&code_point, &code_point + 1);
+      std::string result =
+          boost::locale::conv::utf_to_utf<char>(&code_point, &code_point + 1);
       oss << result;
     }
   }
