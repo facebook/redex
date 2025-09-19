@@ -245,7 +245,7 @@ void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
         conf.metafile(REFLECTION_ANALYSIS_RESULT_FILE);
     std::ofstream file(results_filename);
 
-    for (const auto& entry : UnorderedIterable(*m_result)) {
+    for (const auto& entry : *m_result) {
       if (!entry.second.empty()) {
         file << show(entry.first) << " -> " << entry.second << std::endl;
       }

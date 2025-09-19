@@ -172,7 +172,7 @@ void analyze_scope(
     CalleesCache* callees_cache) {
   Timer t("analyze_scope");
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    always_assert(code.cfg_built());
+    always_assert(code.editable_cfg_built());
     using Map = UnorderedMap<CalleesKey, const Callees*, CalleesKeyHash>;
     std::array<Map, 2> local_callees_cache;
     auto resolve_invoke_callees = [&](auto* insn) {
@@ -473,7 +473,7 @@ UnorderedSet<IRInstruction*> Analyzer::get_inlinables() const {
 }
 
 MethodSummaries compute_method_summaries(
-    const Scope&,
+    const Scope& /*scope*/,
     const ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>& dependencies,
     const mog::Graph& method_override_graph,
     const UnorderedSet<DexClass*>& excluded_classes,

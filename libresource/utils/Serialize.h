@@ -65,8 +65,8 @@ size_t compute_entry_value_length(android::ResTable_entry* entry);
 uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id);
 // Whether or not the two configs should be treated as equal (note: this is not
 // simply a byte by byte compare).
-bool are_configs_equivalent(const android::ResTable_config* a,
-                            const android::ResTable_config* b);
+bool are_configs_equivalent(android::ResTable_config* a,
+                            android::ResTable_config* b);
 // Returns whether or not the given config is the default (basically an empty
 // config).
 bool is_default_config(android::ResTable_config* c);
@@ -328,9 +328,6 @@ class ResTableTypeProjector : public ResTableTypeBuilder {
 // Builder for defining a new ResTable_typeSpec along with its ResTable_type
 // structures, entries, values. In all cases, given data should be in device
 // order.
-// Forward declaration
-class ResComplexEntryBuilder;
-
 class ResTableTypeDefiner : public ResTableTypeBuilder {
  public:
   ResTableTypeDefiner(uint32_t package_id,
@@ -353,7 +350,6 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
     auto& vec = m_data.at(config);
     vec.emplace_back(data);
   }
-  void add(android::ResTable_config* config, ResComplexEntryBuilder& builder);
   // Convenience method for above.
   template <typename T>
   void add(android::ResTable_config* config, T* ptr) {
@@ -375,40 +371,6 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
       m_data;
   const std::vector<android::ResTable_config*> m_configs;
   const std::vector<uint32_t> m_flags;
-  std::vector<android::Vector<char>> m_serialized_entries;
-};
-
-/**
- * Builder for creating a complex entry (ResTable_map_entry) which is used to
- * represent styles in the resource table.
- */
-class ResComplexEntryBuilder {
- public:
-  ResComplexEntryBuilder() : m_key_string_index(0), m_parent_id(0) {}
-
-  void set_key_string_index(uint32_t index) { m_key_string_index = index; }
-  void set_parent_id(uint32_t id) { m_parent_id = id; }
-  void add(uint32_t attr_id, const android::Res_value& value) {
-    m_attributes.emplace_back(attr_id, value);
-  }
-  void add(const android::ResTable_map* map) {
-    m_attributes.emplace_back(map->name.ident, map->value);
-  }
-  void add(uint32_t attr_id, uint8_t data_type, uint32_t data) {
-    android::Res_value value;
-    value.size = sizeof(android::Res_value);
-    value.dataType = data_type;
-    value.data = data;
-    value.res0 = 0;
-    m_attributes.emplace_back(attr_id, value);
-  }
-
-  void serialize(android::Vector<char>* out);
-
- private:
-  uint32_t m_key_string_index;
-  uint32_t m_parent_id;
-  std::vector<std::pair<uint32_t, android::Res_value>> m_attributes;
 };
 
 // Struct for defining an existing type and the collection of entries in all

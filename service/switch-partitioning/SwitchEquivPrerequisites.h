@@ -8,12 +8,12 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <unordered_map>
 #include <vector>
 
 #include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
 #include "Debug.h"
-#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "Trace.h"

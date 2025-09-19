@@ -369,17 +369,12 @@ VmStats get_mem_stats() {
 }
 
 bool try_reset_hwm_mem_stat() {
-#ifdef __linux__
   // See http://man7.org/linux/man-pages/man5/proc.5.html for `clear_refs` and
   // the magic `5`.
-  std::ofstream ofs("/proc/self/clear_refs");
-  if (ofs.fail()) {
+  std::ofstream ifs("/proc/self/clear_refs");
+  if (ifs.fail()) {
     return false;
   }
-  ofs << 5;
-  ofs.flush(); // Flush to trigger writing, so fail() indicates if write fails.
-  return !ofs.fail();
-#else
-  return false;
-#endif // __linux__
+  ifs << 5;
+  return true;
 }

@@ -984,24 +984,6 @@ void IRList::insn_clear_and_dispose() {
   });
 }
 
-bool SourceBlock::operator==(const SourceBlock& other) const {
-  if (src != other.src || id != other.id || vals_size != other.vals_size) {
-    return false;
-  }
-  if (vals_ == nullptr) {
-    return is_default_values(other.vals_.get(), other.vals_size);
-  }
-  if (other.vals_ == nullptr) {
-    return is_default_values(vals_.get(), vals_size);
-  }
-  for (size_t i = 0; i < vals_size; i++) {
-    if (vals_[i] != other.vals_[i]) {
-      return false;
-    }
-  }
-  return true;
-}
-
 size_t SourceBlock::hash_ids() const {
   std::size_t hash = id;
   auto* cur = this->next.get();
@@ -1014,82 +996,6 @@ size_t SourceBlock::hash_ids() const {
   }
 
   return hash;
-}
-
-const SourceBlock::Val SourceBlock::default_value =
-    SourceBlock::Val::default_value();
-
-void SourceBlock::fill(const Val& val) {
-  if (vals_ == nullptr) {
-    if (val.is_default_value()) {
-      return;
-    }
-    denormalize();
-  } else if (val.is_default_value()) {
-    vals_.reset();
-    return;
-  }
-  for (size_t i = 0; i < vals_size; i++) {
-    vals_[i] = val;
-  }
-}
-
-void SourceBlock::max(const SourceBlock& other) {
-  size_t len = std::min(vals_size, other.vals_size);
-  auto max_val = [](Val& val, const Val& other_val) {
-    if (!val) {
-      val = other_val;
-    } else if (other_val) {
-      val->val = std::max(val->val, other_val->val);
-      val->appear100 = std::max(val->appear100, other_val->appear100);
-    }
-  };
-  if (other.vals_ == nullptr) {
-    if (vals_ == nullptr) {
-      return;
-    }
-    for (size_t i = 0; i != len; ++i) {
-      max_val(vals_[i], Val::default_value());
-    }
-    return;
-  }
-  denormalize();
-  for (size_t i = 0; i != len; ++i) {
-    max_val(vals_[i], other.vals_[i]);
-  }
-}
-
-void SourceBlock::min(const SourceBlock& other) {
-  size_t len = std::min(vals_size, other.vals_size);
-  auto min_val = [](Val& val, const Val& other_val) {
-    if (!val) {
-      val = other_val;
-    } else if (other_val) {
-      val->val = std::min(val->val, other_val->val);
-      val->appear100 = std::min(val->appear100, other_val->appear100);
-    }
-  };
-  if (other.vals_ == nullptr) {
-    if (vals_ == nullptr) {
-      return;
-    }
-    for (size_t i = 0; i != len; ++i) {
-      min_val(vals_[i], Val::default_value());
-    }
-    return;
-  }
-  denormalize();
-  for (size_t i = 0; i != len; ++i) {
-    min_val(vals_[i], other.vals_[i]);
-  }
-}
-
-void SourceBlock::denormalize() {
-  if (vals_size == 0 || vals_ != nullptr) {
-    return;
-  }
-  vals_ = std::make_unique<Val[]>(vals_size);
-  std::fill_n(vals_.get(), vals_size, Val::default_value());
 }
 
 std::string SourceBlock::show(bool quoted_src) const {
@@ -1109,7 +1015,7 @@ std::string SourceBlock::show(bool quoted_src) const {
     o << "@" << cur->id;
     o << "(";
     for (size_t i = 0; i != cur->vals_size; ++i) {
-      const auto& val = cur->get_at(i);
+      auto& val = cur->vals[i];
       if (val) {
         o << val->val << ":" << val->appear100;
       } else {

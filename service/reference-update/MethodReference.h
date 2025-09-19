@@ -22,7 +22,7 @@ namespace method_reference {
 // A callsite instruction in caller. mie should always contain an IRInstruction.
 struct CallSite {
   DexMethod* caller;
-  MethodItemEntry* mie; // Note: this will be removed once cfg is fully
+  MethodItemEntry* mie; // Note: this will be removed once editable cfg is fully
                         // updated.
   IRInstruction* insn;
   DexMethod* callee;

@@ -41,9 +41,9 @@ struct Constants {
       SignedConstantDomain(sign_domain::Interval::NEZ)};
 };
 
-INSTANTIATE_TYPED_TEST_SUITE_P(SignedConstantDomain,
-                               AbstractDomainPropertyTest,
-                               SignedConstantDomain);
+INSTANTIATE_TYPED_TEST_CASE_P(SignedConstantDomain,
+                              AbstractDomainPropertyTest,
+                              SignedConstantDomain);
 
 template <>
 std::vector<SignedConstantDomain>

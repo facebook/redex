@@ -200,7 +200,7 @@ uint32_t rewrite_string_literal_instructions(const Scope& scope,
                                              const TypeStringMap& mapping) {
   std::atomic<uint32_t> total_updates(0);
   walk::parallel::code(scope, [&](DexMethod* /*meth*/, IRCode& code) {
-    always_assert(code.cfg_built());
+    always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
     for (const auto& mie : InstructionIterable(cfg)) {
       auto* insn = mie.insn;

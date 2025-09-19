@@ -99,36 +99,6 @@ static bool same_branch_and_goto_successors(const cfg::Block* b1,
   if (b1_succs.size() != b2_succs.size()) {
     return false;
   }
-
-  // For small succs numbers sort the vectors and compare that way.
-  if (b1_succs.size() < 10) {
-    auto cmp = [](const cfg::Edge* a, const cfg::Edge* b) {
-      if (a->type() != b->type()) {
-        return a->type() < b->type();
-      }
-      return a->case_key().value_or(0) < b->case_key().value_or(0);
-    };
-    std::sort(b1_succs.begin(), b1_succs.end(), cmp);
-    std::sort(b2_succs.begin(), b2_succs.end(), cmp);
-    for (size_t i = 0; i < b1_succs.size(); i++) {
-      auto* b1_succ = b1_succs[i];
-      auto* b2_succ = b2_succs[i];
-      if (b1_succ->type() != b2_succ->type() ||
-          b1_succ->case_key().value_or(0) != b2_succ->case_key().value_or(0)) {
-        return false;
-      }
-      auto* b1_succ_target = b1_succ->target();
-      auto* b2_succ_target = b2_succ->target();
-      // Either targets need to be the same, or both targets must be pointing
-      // to same block (to support deduping of simple self-loops).
-      if (b1_succ_target != b2_succ_target &&
-          (b1_succ_target != b1 || b2_succ_target != b2)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   using Key = std::pair<cfg::EdgeType, cfg::Edge::CaseKey>;
   UnorderedMap<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
   for (auto* b2_succ : b2_succs) {

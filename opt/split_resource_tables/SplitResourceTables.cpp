@@ -13,6 +13,7 @@
 #include <cinttypes>
 #include <json/value.h>
 #include <map>
+#include <unordered_set>
 
 #include "ApkResources.h"
 #include "ConfigFiles.h"

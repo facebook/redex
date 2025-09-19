@@ -17,6 +17,7 @@
 #include "ConfigFiles.h"
 #include "RedexProperties.h"
 #include "RedexPropertyChecker.h"
+#include "StlUtil.h"
 #include "Trace.h"
 
 namespace redex_properties {
@@ -35,19 +36,16 @@ template <typename CollectionT>
 CollectionT filter_out_disabled_properties(const CollectionT& c,
                                            const Manager& mgr) {
   CollectionT res;
-  for (const auto& x : UnorderedIterable(c)) {
-    if (mgr.property_is_enabled(x)) {
-      res.insert(x);
-    }
-  }
+  std::copy_if(c.begin(), c.end(), std::inserter(res, res.end()),
+               [&mgr](const auto& x) { return mgr.property_is_enabled(x); });
   return res;
 }
 
 } // namespace
 
-const UnorderedSet<Property>& Manager::get_default_initial() {
+const std::unordered_set<Property>& Manager::get_default_initial() {
   static const auto default_initial_properties = []() {
-    UnorderedSet<Property> set;
+    std::unordered_set<Property> set;
 #define REDEX_PROPS(name, _neg, is_init, _final, _def_pres) \
   if (is_init) {                                            \
     set.insert(Property::name);                             \
@@ -59,13 +57,13 @@ const UnorderedSet<Property>& Manager::get_default_initial() {
   return default_initial_properties;
 }
 
-UnorderedSet<Property> Manager::get_initial() const {
+std::unordered_set<Property> Manager::get_initial() const {
   return filter_out_disabled_properties(get_default_initial(), *this);
 }
 
-const UnorderedSet<Property>& Manager::get_default_final() {
+const std::unordered_set<Property>& Manager::get_default_final() {
   static const auto default_final_properties = []() {
-    UnorderedSet<Property> set;
+    std::unordered_set<Property> set;
 #define REDEX_PROPS(name, _neg, _init, is_final, _def_pres) \
   if (is_final) {                                           \
     set.insert(Property::name);                             \
@@ -77,14 +75,14 @@ const UnorderedSet<Property>& Manager::get_default_final() {
   return default_final_properties;
 }
 
-UnorderedSet<Property> Manager::get_final() const {
+std::unordered_set<Property> Manager::get_final() const {
   return filter_out_disabled_properties(get_default_final(), *this);
 }
 
-UnorderedSet<Property> Manager::get_required(
+std::unordered_set<Property> Manager::get_required(
     const PropertyInteractions& interactions) const {
-  UnorderedSet<Property> res;
-  for (const auto& [property, interaction] : UnorderedIterable(interactions)) {
+  std::unordered_set<Property> res;
+  for (const auto& [property, interaction] : interactions) {
     if (interaction.requires_) {
       res.insert(property);
     }
@@ -100,9 +98,9 @@ void Manager::check(DexStoresVector& stores, PassManager& mgr) {
   }
 }
 
-const UnorderedSet<Property>& Manager::apply(
+const std::unordered_set<Property>& Manager::apply(
     const PropertyInteractions& interactions) {
-  unordered_erase_if(m_established, [&](const auto& property) {
+  std20::erase_if(m_established, [&](const auto& property) {
     auto it = interactions.find(property);
     if (it == interactions.end()) {
       return !is_negative(property) && !is_default_preserving(property);
@@ -110,7 +108,7 @@ const UnorderedSet<Property>& Manager::apply(
     const auto& interaction = it->second;
     return !interaction.preserves;
   });
-  for (const auto& [property, interaction] : UnorderedIterable(interactions)) {
+  for (const auto& [property, interaction] : interactions) {
     if (interaction.establishes) {
       m_established.insert(property);
     }
@@ -118,7 +116,7 @@ const UnorderedSet<Property>& Manager::apply(
   return m_established;
 }
 
-const UnorderedSet<Property>& Manager::apply_and_check(
+const std::unordered_set<Property>& Manager::apply_and_check(
     const PropertyInteractions& interactions,
     DexStoresVector& stores,
     PassManager& mgr) {
@@ -139,7 +137,7 @@ std::optional<std::string> Manager::verify_pass_interactions(
 
   auto log_established_properties = [&](const std::string& title) {
     oss << "  " << title << ": ";
-    for (const auto& property : UnorderedIterable(m.m_established)) {
+    for (const auto& property : m.m_established) {
       oss << property << ", ";
     }
     oss << "\n";
@@ -147,7 +145,7 @@ std::optional<std::string> Manager::verify_pass_interactions(
   log_established_properties("initial state establishes");
 
   auto check = [&](const auto& properties) {
-    for (auto& property : UnorderedIterable(properties)) {
+    for (auto& property : properties) {
       if (!m.m_established.count(property)) {
         oss << "    *** REQUIRED PROPERTY NOT CURRENTLY ESTABLISHED ***: "
             << property << "\n";
@@ -165,8 +163,7 @@ std::optional<std::string> Manager::verify_pass_interactions(
     oss << pass_name << "\n";
     m.apply(interactions);
     log_established_properties("establishes");
-    for (const auto& [property, interaction] :
-         UnorderedIterable(interactions)) {
+    for (const auto& [property, interaction] : interactions) {
       if (interaction.requires_finally) {
         final_properties.insert(property);
       }
@@ -220,7 +217,7 @@ static bool pass_is_enabled(const std::string& pass_name,
 bool Manager::property_is_enabled(const Property& property) const {
   // If we had c++20, we could use a constexpr sorted std::array with
   // std::lower_bound for fast lookups...
-  static const UnorderedMap<Property, bool (*)(const ConfigFiles&)>
+  static const std::unordered_map<Property, bool (*)(const ConfigFiles&)>
       enable_check_funcs{{
           Property::HasSourceBlocks,
           [](const ConfigFiles& conf) {

@@ -53,16 +53,6 @@ inline bool is_overlayable(const std::string& name,
   return res_table->get_overlayable_id_roots().count(id) > 0;
 }
 
-// Android resource attribute IDs
-const uint32_t kBackgroundAttrId = 0x010100d4;
-const uint32_t kTextColorAttrId = 0x01010098;
-const uint32_t kTextStyleAttrId = 0x01010097;
-const uint32_t kTextSizeAttrId = 0x01010095;
-const uint32_t kEnabledAttrId = 0x0101000e;
-const uint32_t kFloatAttrId = 0x01010099;
-const uint32_t kDimensionAttrId = 0x0101009a;
-const uint32_t kFractionAttrId = 0x0101009b;
-
 namespace sample_app {
 inline std::vector<std::string> EXPECTED_OVERLAYABLE_RESOURCES{
     "button_txt", "log_msg", "log_msg_again", "welcome", "yummy_orange"};

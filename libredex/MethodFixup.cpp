@@ -34,7 +34,7 @@ void fixup_references_to_removed_methods(
 
   // Fixup references in code to deleted vmathods to point to the base one.
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
-    cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
+    editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
       auto* insn = mie.insn;
       auto op = insn->opcode();
       if (opcode::is_invoke_virtual(op)) {
@@ -47,7 +47,7 @@ void fixup_references_to_removed_methods(
                             !opcode::is_invoke_interface(op) ||
                             !removed_vmethods.count(insn->get_method()),
                         "%s", SHOW(insn));
-      return cfg_adapter::LOOP_CONTINUE;
+      return editable_cfg_adapter::LOOP_CONTINUE;
     });
   });
 }

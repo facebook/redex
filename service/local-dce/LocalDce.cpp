@@ -97,7 +97,7 @@ LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
                                 const std::vector<cfg::Block*>& blocks,
                                 bool* any_init_class_insns) {
   auto regs = cfg.get_registers_size();
-  UnorderedMap<cfg::BlockId, boost::dynamic_bitset<>> liveness;
+  std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
   for (cfg::Block* b : cfg.blocks()) {
     liveness.emplace(b->id(), boost::dynamic_bitset<>(regs + 1));
   }

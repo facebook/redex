@@ -709,7 +709,7 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
 
   std::vector<s_expr> vals;
   for (size_t i = 0; i != src->vals_size; ++i) {
-    const auto& val = src->get_at(i);
+    auto& val = src->vals[i];
     if (val) {
       vals.emplace_back(
           std::vector<s_expr>{s_expr(std::to_string(val->val)),

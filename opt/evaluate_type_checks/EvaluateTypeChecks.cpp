@@ -340,7 +340,7 @@ void handle_false_case(IRInstruction* insn,
 }
 
 RemoveResult analyze_and_evaluate(DexMethod* method) {
-  always_assert(method->get_code()->cfg_built());
+  always_assert(method->get_code()->editable_cfg_built());
   auto& cfg = method->get_code()->cfg();
   CFGMutation mutation(cfg);
 
@@ -505,7 +505,7 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
         }
         auto has_instance_of_check_cast = [&code]() {
           std::pair<bool, bool> res;
-          always_assert(code->cfg_built());
+          always_assert(code->editable_cfg_built());
           auto& cfg = code->cfg();
           for (const auto& mie : cfg::InstructionIterable(cfg)) {
             if (mie.type != MFLOW_OPCODE) {

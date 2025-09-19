@@ -7,13 +7,12 @@
 
 #pragma once
 
-#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "FrameworkApi.h"
 
 namespace api {
 
-using TypeToFrameworkAPI = UnorderedMap<const DexType*, FrameworkAPI>;
+using TypeToFrameworkAPI = std::unordered_map<const DexType*, FrameworkAPI>;
 
 class ApiLevelsUtils {
  public:
@@ -43,7 +42,7 @@ class ApiLevelsUtils {
    */
   void gather_non_private_members(const Scope& scope);
 
-  void filter_types(const UnorderedSet<const DexType*>& types,
+  void filter_types(const std::unordered_set<const DexType*>& types,
                     const Scope& scope);
 
  private:
@@ -51,7 +50,7 @@ class ApiLevelsUtils {
   void check_and_update_release_to_framework(const Scope& scope);
 
   TypeToFrameworkAPI m_types_to_framework_api;
-  UnorderedSet<const DexType*> m_framework_classes;
+  std::unordered_set<const DexType*> m_framework_classes;
   std::string m_framework_api_info_filename;
   api::AndroidSDK m_sdk_api;
 
@@ -59,8 +58,8 @@ class ApiLevelsUtils {
    * NOTE: Those work as "non-private" in the sense that we check where
    *       they are referenced:
    */
-  UnorderedSet<DexMethodRef*> m_methods_non_private;
-  UnorderedSet<DexFieldRef*> m_fields_non_private;
+  std::unordered_set<DexMethodRef*> m_methods_non_private;
+  std::unordered_set<DexFieldRef*> m_fields_non_private;
 };
 
 } // namespace api

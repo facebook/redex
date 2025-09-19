@@ -188,49 +188,9 @@ bool find_nested_tag(const std::string& search_tag,
   return find_result;
 }
 
-void union_style_and_parent_attribute_values_impl(
-    const uint32_t id,
-    const std::map<uint32_t, const ConfigValues>& id_to_configvalue,
-    UnorderedSet<uint32_t>* seen,
-    std::vector<aapt::pb::Style::Entry>* out) {
-  if (seen->count(id) > 0) {
-    return;
-  }
-  seen->insert(id);
-
-  auto search = id_to_configvalue.find(id);
-  if (search == id_to_configvalue.end()) {
-    return;
-  }
-  for (const auto& cv : search->second) {
-    const auto& value = cv.value();
-    if (value.has_compound_value() && value.compound_value().has_style()) {
-      const auto& style = value.compound_value().style();
-      const auto& entries = style.entry();
-      for (int i = 0; i < entries.size(); i++) {
-        out->push_back(entries[i]);
-      }
-      if (style.has_parent()) {
-        auto parent_id = style.parent().id();
-        union_style_and_parent_attribute_values_impl(
-            parent_id, id_to_configvalue, seen, out);
-      }
-    }
-  }
-}
-
-void union_style_and_parent_attribute_values(
-    const uint32_t id,
-    const std::map<uint32_t, const ConfigValues>& id_to_configvalue,
-    std::vector<aapt::pb::Style::Entry>* out) {
-  UnorderedSet<uint32_t> seen;
-  union_style_and_parent_attribute_values_impl(id, id_to_configvalue, &seen,
-                                               out);
-}
-
 // Traverse a compound value message, and return a list of Item defined in
 // this message.
-std::vector<aapt::pb::Item> get_items_from_compound_value(
+std::vector<aapt::pb::Item> get_items_from_CV(
     const aapt::pb::CompoundValue& comp_value) {
   std::vector<aapt::pb::Item> ret;
   if (comp_value.has_style()) {
@@ -264,10 +224,10 @@ std::vector<aapt::pb::Item> get_items_from_compound_value(
 // Traverse a compound value message, and return a list of Reference messages
 // used in this message.
 std::vector<aapt::pb::Reference> get_references(
-    const aapt::pb::CompoundValue& comp_value,
-    const std::vector<aapt::pb::Item>& items) {
+    const aapt::pb::CompoundValue& comp_value) {
   std::vector<aapt::pb::Reference> ret;
   // Find refs from Item message.
+  const auto& items = get_items_from_CV(comp_value);
   for (size_t i = 0; i < items.size(); i++) {
     if (items[i].has_ref()) {
       ret.push_back(items[i].ref());
@@ -750,12 +710,6 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
 //
 
 } // namespace
-
-using StyleResource = resources::StyleResource;
-using StyleModificationSpec = resources::StyleModificationSpec;
-using ResourceAttributeMap =
-    UnorderedMap<uint32_t,
-                 UnorderedMap<uint32_t, StyleModificationSpec::Modification>>;
 
 boost::optional<int32_t> BundleResources::get_min_sdk() {
   std::string base_manifest = (boost::filesystem::path(m_directory) /
@@ -1921,12 +1875,6 @@ void ResourcesPbFile::collect_resource_data_for_file(
               m_res_id_to_configvalue.emplace(current_resource_id,
                                               pb_entry.config_value());
             }
-            if (current_package_id == APPLICATION_PACKAGE) {
-              m_application_type_ids_to_names.emplace(
-                  (uint8_t)current_type_id,
-                  resources::type_name_from_possibly_custom_type_name(
-                      current_type_name));
-            }
           }
         }
         std::sort(sorted_res_ids.begin(), sorted_res_ids.end());
@@ -2016,8 +1964,8 @@ std::vector<std::string> ResourcesPbFile::get_files_by_rid(
       const auto& file_path = value.item().file().path();
       handle_path(file_path);
     } else if (value.has_compound_value()) {
-      // For compound value, we flatten it and check all its Item messages.
-      const auto& items = get_items_from_compound_value(value.compound_value());
+      // For coumpound value, we flatten it and check all its item messages.
+      const auto& items = get_items_from_CV(value.compound_value());
       for (size_t n = 0; n < items.size(); n++) {
         if (items[n].has_file()) {
           const auto& file_path = items[n].file().path();
@@ -2031,104 +1979,86 @@ std::vector<std::string> ResourcesPbFile::get_files_by_rid(
 
 void ResourcesPbFile::walk_references_for_resource(
     uint32_t resID,
-    const ResourcePathType& path_type,
-    const resources::ReachabilityOptions& reachability_options,
+    ResourcePathType path_type,
     UnorderedSet<uint32_t>* nodes_visited,
     UnorderedSet<std::string>* potential_file_paths) {
-  if (nodes_visited->find(resID) != nodes_visited->end() ||
-      m_res_id_to_configvalue.count(resID) == 0) {
+  if (nodes_visited->find(resID) != nodes_visited->end()) {
     // Return directly if a node is visited.
     return;
   }
   nodes_visited->emplace(resID);
-
-  auto handle_item_if_file = [&](uint32_t id, const aapt::pb::Item& item) {
-    if (item.has_file()) {
-      if (path_type == ResourcePathType::ZipPath) {
-        auto item_path =
-            resolve_module_name_for_resource_id(id) + "/" + item.file().path();
-        potential_file_paths->insert(item_path);
-      } else {
-        potential_file_paths->insert(item.file().path());
-      }
-    }
+  if (m_res_id_to_configvalue.find(resID) == m_res_id_to_configvalue.end()) {
+    // We might have some potential resource ID that does not actually
+    // exist.
+    return;
+  }
+  auto module_name = resolve_module_name_for_resource_id(resID);
+  const auto& initial_values = m_res_id_to_configvalue.at(resID);
+  std::stack<const aapt::pb::ConfigValue*> nodes_to_explore;
+  auto push_to_stack = [&nodes_to_explore](const aapt::pb::ConfigValue& cv) {
+    nodes_to_explore.push(&cv);
   };
-
-  // For a given ID, collect any file paths and emit reachable Reference data
-  // structures.
-  auto collect_impl = [&](uint32_t id, std::stack<aapt::pb::Reference>* out) {
-    auto res_id_search = m_res_id_to_configvalue.find(id);
-    if (res_id_search == m_res_id_to_configvalue.end()) {
-      // We might have some potential resource ID that does not actually exist.
-      return;
-    }
-    const auto& config_values = res_id_search->second;
-    for (const auto& cv : config_values) {
-      const auto& value = cv.value();
-      std::vector<aapt::pb::Item> items;
-      std::vector<aapt::pb::Reference> references;
-      if (reachability_options.granular_style_reachability &&
-          value.has_compound_value() && value.compound_value().has_style()) {
-        std::vector<aapt::pb::Style::Entry> style_entries;
-        // Resolve Style Entries up the parent hierarchy, without emitting a
-        // reference to the parent itself (to disambiguate).
-        union_style_and_parent_attribute_values(id, m_res_id_to_configvalue,
-                                                &style_entries);
-        for (auto& entry : style_entries) {
-          if (entry.has_item()) {
-            items.push_back(entry.item());
-            if (entry.item().has_ref()) {
-              references.push_back(entry.item().ref());
-            }
-          }
-          if (entry.has_key()) {
-            references.push_back(entry.key());
-          }
-        }
-      } else if (value.has_compound_value()) {
-        items = get_items_from_compound_value(value.compound_value());
-        references = get_references(value.compound_value(), items);
-      } else {
-        items.push_back(value.item());
-        if (value.item().has_ref()) {
-          references.push_back(value.item().ref());
-        }
-      }
-
-      // Handle items, refs
-      for (auto& i : items) {
-        handle_item_if_file(id, i);
-      }
-      for (auto& ref : references) {
-        out->push(ref);
-      }
-    }
-  };
-
-  std::stack<aapt::pb::Reference> nodes_to_explore;
-  collect_impl(resID, &nodes_to_explore);
+  std::for_each(initial_values.begin(), initial_values.end(), push_to_stack);
 
   while (!nodes_to_explore.empty()) {
-    auto reference = nodes_to_explore.top();
+    const auto& r = nodes_to_explore.top();
+    const auto& value = r->value();
     nodes_to_explore.pop();
 
-    std::vector<uint32_t> ref_ids;
-    if (reference.id() != 0) {
-      ref_ids.push_back(reference.id());
-    } else if (!reference.name().empty()) {
-      // Since id of a Reference message is optional, once ref_id =0, it is
-      // possible that the resource is refered by name. If we can make sure it
-      // won't happen, this branch can be removed.
-      ref_ids = get_res_ids_by_name(reference.name());
+    std::vector<aapt::pb::Item> items;
+    std::vector<aapt::pb::Reference> refs;
+
+    if (value.has_compound_value()) {
+      items = get_items_from_CV(value.compound_value());
+      refs = get_references(value.compound_value());
+    } else {
+      items.push_back(value.item());
+      if (value.item().has_ref()) {
+        refs.push_back(value.item().ref());
+      }
     }
-    for (auto ref_id : ref_ids) {
-      // Skip if the node has been visited.
-      if (ref_id <= PACKAGE_RESID_START ||
-          nodes_visited->find(ref_id) != nodes_visited->end()) {
+
+    // For each Item, store the path of FileReference into string values.
+    for (size_t i = 0; i < items.size(); i++) {
+      const auto& item = items[i];
+      if (item.has_file()) {
+        if (path_type == ResourcePathType::ZipPath) {
+          // NOTE: We are mapping original given resource ID to a module name,
+          // when in reality resource ID for current item from the stack could
+          // be several references away. This should work for all our expected
+          // inputs but is shaky nonetheless.
+          auto item_path = module_name + "/" + item.file().path();
+          potential_file_paths->insert(item_path);
+        } else {
+          potential_file_paths->insert(item.file().path());
+        }
         continue;
       }
-      nodes_visited->insert(ref_id);
-      collect_impl(ref_id, &nodes_to_explore);
+    }
+
+    // For each Reference, follow its id to traverse the resources.
+    for (size_t i = 0; i < refs.size(); i++) {
+      std::vector<uint32_t> ref_ids;
+      if (refs[i].id() != 0) {
+        ref_ids.push_back(refs[i].id());
+      } else if (!refs[i].name().empty()) {
+        // Since id of a Reference message is optional, once ref_id =0, it is
+        // possible that the resource is refered by name. If we can make sure it
+        // won't happen, this branch can be removed.
+        ref_ids = get_res_ids_by_name(refs[i].name());
+      }
+
+      for (size_t n = 0; n < ref_ids.size(); n++) {
+        // Skip if the node has been visited.
+        const auto ref_id = ref_ids[n];
+        if (ref_id <= PACKAGE_RESID_START ||
+            nodes_visited->find(ref_id) != nodes_visited->end()) {
+          continue;
+        }
+        nodes_visited->insert(ref_id);
+        const auto& inner_values = m_res_id_to_configvalue.at(ref_id);
+        std::for_each(inner_values.begin(), inner_values.end(), push_to_stack);
+      }
     }
   }
 }
@@ -2540,507 +2470,6 @@ UnorderedSet<uint32_t> ResourcesPbFile::get_overlayable_id_roots() {
     }
   }
   return overlayable_ids;
-}
-
-bool has_style_value(const aapt::pb::ConfigValue& config_value) {
-  return config_value.has_value() &&
-         config_value.value().has_compound_value() &&
-         config_value.value().compound_value().has_style();
-}
-
-std::vector<StyleResource::Value::Span> create_styled_string(
-    const ::aapt::pb::Item& item) {
-  std::vector<StyleResource::Value::Span> spans;
-  for (const auto& span : item.styled_str().span()) {
-    spans.emplace_back(span.tag(), span.first_char(), span.last_char());
-  }
-  return spans;
-}
-
-std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
-    const aapt::pb::Primitive& prim) {
-  uint8_t data_type = android::Res_value::TYPE_NULL;
-  uint32_t value = 0;
-
-  // Use oneof_value_case() instead of has_*() for better compatibility with
-  // older versions of protobuf.
-  switch (prim.oneof_value_case()) {
-  case aapt::pb::Primitive::kFloatValue:
-    data_type = android::Res_value::TYPE_FLOAT;
-    value = prim.float_value();
-    break;
-  case aapt::pb::Primitive::kDimensionValue:
-    data_type = android::Res_value::TYPE_DIMENSION;
-    value = prim.dimension_value();
-    break;
-  case aapt::pb::Primitive::kFractionValue:
-    data_type = android::Res_value::TYPE_FRACTION;
-    value = prim.fraction_value();
-    break;
-  case aapt::pb::Primitive::kIntDecimalValue:
-    data_type = android::Res_value::TYPE_INT_DEC;
-    value = prim.int_decimal_value();
-    break;
-  case aapt::pb::Primitive::kIntHexadecimalValue:
-    data_type = android::Res_value::TYPE_INT_HEX;
-    value = prim.int_hexadecimal_value();
-    break;
-  case aapt::pb::Primitive::kBooleanValue:
-    data_type = android::Res_value::TYPE_INT_BOOLEAN;
-    value = static_cast<uint32_t>(prim.boolean_value());
-    break;
-  case aapt::pb::Primitive::kColorArgb4Value:
-    data_type = android::Res_value::TYPE_INT_COLOR_ARGB4;
-    value = prim.color_argb4_value();
-    break;
-  case aapt::pb::Primitive::kColorArgb8Value:
-    data_type = android::Res_value::TYPE_INT_COLOR_ARGB8;
-    value = prim.color_argb8_value();
-    break;
-  case aapt::pb::Primitive::kColorRgb4Value:
-    data_type = android::Res_value::TYPE_INT_COLOR_RGB4;
-    value = prim.color_rgb4_value();
-    break;
-  case aapt::pb::Primitive::kColorRgb8Value:
-    data_type = android::Res_value::TYPE_INT_COLOR_RGB8;
-    value = prim.color_rgb8_value();
-    break;
-  default:
-    // Empty, null and deprecated values.
-    break;
-  }
-
-  return {data_type, value};
-}
-
-void process_style_entry_item(uint32_t attr_id,
-                              const aapt::pb::Item& item,
-                              StyleResource& style_entry) {
-  auto add_attribute = [&attr_id, &style_entry](uint8_t type, auto value) {
-    style_entry.attributes.insert({attr_id, StyleResource::Value(type, value)});
-  };
-
-  if (item.has_ref()) {
-    add_attribute(android::Res_value::TYPE_REFERENCE, item.ref().id());
-  } else if (item.has_str()) {
-    add_attribute(android::Res_value::TYPE_STRING, item.str().value());
-  } else if (item.has_raw_str()) {
-    add_attribute(android::Res_value::TYPE_STRING, item.raw_str().value());
-  } else if (item.has_styled_str()) {
-    const auto& styled_string = create_styled_string(item);
-    style_entry.attributes.insert(
-        {attr_id,
-         StyleResource::Value(android::Res_value::TYPE_STRING,
-                              item.styled_str().value(), styled_string)});
-  } else if (item.has_prim()) {
-    const auto [data_type, value] =
-        convert_primitive_to_res_value_data(item.prim());
-    add_attribute(data_type, value);
-  }
-}
-
-resources::StyleMap ResourcesPbFile::get_style_map() {
-  resources::StyleMap style_map;
-
-  UnorderedSet<uint8_t> style_type_ids;
-  for (const auto& [type_id, name] :
-       UnorderedIterable(m_application_type_ids_to_names)) {
-    if (name == "style") {
-      style_type_ids.emplace(type_id);
-    }
-  }
-
-  for (const auto& [res_id, config_values] : m_res_id_to_configvalue) {
-    uint8_t type_id = (res_id >> TYPE_INDEX_BIT_SHIFT) & 0xFF;
-
-    if (style_type_ids.find(type_id) == style_type_ids.end()) {
-      continue;
-    }
-
-    for (const auto& config_value : config_values) {
-      if (!has_style_value(config_value)) {
-        continue;
-      }
-
-      const auto& style = config_value.value().compound_value().style();
-      StyleResource style_entry;
-
-      style_entry.id = res_id;
-      style_entry.config =
-          convert_to_arsc_config(res_id, config_value.config());
-
-      if (style.has_parent()) {
-        style_entry.parent = style.parent().id();
-      }
-
-      for (const auto& entry : style.entry()) {
-        if (entry.has_key() && entry.has_item()) {
-          uint32_t attr_id = entry.key().id();
-          process_style_entry_item(attr_id, entry.item(), style_entry);
-        }
-      }
-
-      style_map[res_id].push_back(std::move(style_entry));
-    }
-  }
-
-  return style_map;
-}
-
-bool does_resource_exists_in_file(uint32_t resource_id,
-                                  const std::string& file_path) {
-  bool resource_found = false;
-  read_protobuf_file_contents(
-      file_path,
-      [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
-        aapt::pb::ResourceTable pb_restable;
-        if (!pb_restable.ParseFromCodedStream(&input)) {
-          return;
-        }
-
-        for (const auto& pb_package : pb_restable.package()) {
-          auto package_id = pb_package.package_id().id();
-          for (const auto& pb_type : pb_package.type()) {
-            auto type_id = pb_type.type_id().id();
-            for (const auto& pb_entry : pb_type.entry()) {
-              auto entry_id = pb_entry.entry_id().id();
-              auto current_resource_id =
-                  MAKE_RES_ID(package_id, type_id, entry_id);
-              if (current_resource_id == resource_id) {
-                resource_found = true;
-                return;
-              }
-            }
-          }
-        }
-      });
-  return resource_found;
-}
-
-void assert_resource_in_one_files(
-    uint32_t resource_id, const std::vector<std::string>& resources_pb_paths) {
-  std::unordered_set<std::string> files;
-  for (const auto& path : resources_pb_paths) {
-    if (does_resource_exists_in_file(resource_id, path)) {
-      files.insert(path);
-    }
-  }
-
-  always_assert_log(files.size() <= 1, "Resource 0x%x is in %zu files",
-                    resource_id, files.size());
-}
-
-// Finds a resource in a protocol buffer table and applies a modification to
-// it The modification is applied using the user-provided callback function
-// Returns true if the resource was found and modified, false otherwise
-bool modify_attribute_from_style_resource(
-    const ResourceAttributeMap& modifications,
-    aapt::pb::ResourceTable& resource_table,
-    const std::function<
-        bool(aapt::pb::Style*,
-             const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&,
-             UnorderedMap<uint32_t, StyleModificationSpec::Modification>&)>&
-        modifier_function,
-    ResourceAttributeMap& modified_resources) {
-
-  constexpr const char* STYLE_TYPE_NAME = "style";
-  bool is_file_modified = false;
-
-  if (traceEnabled(RES, 9)) {
-    std::string serialized;
-    resource_table.SerializeToString(&serialized);
-    TRACE(RES, 9, "Package count: %d", resource_table.package_size());
-  }
-
-  for (int package_idx = 0; package_idx < resource_table.package_size();
-       package_idx++) {
-    auto* package = resource_table.mutable_package(package_idx);
-    TRACE(RES, 9, "  Package[%d]: id=0x%x name=%s", package_idx,
-          package->package_id().id(), package->package_name().c_str());
-
-    TRACE(RES, 9, "  Type count: %d", package->type_size());
-    for (int type_idx = 0; type_idx < package->type_size(); type_idx++) {
-      auto* resource_type = package->mutable_type(type_idx);
-      if (resource_type->name() != STYLE_TYPE_NAME) {
-        continue;
-      }
-
-      TRACE(RES, 9, "    Type[%d]: id=0x%x name=%s entry_count=%d", type_idx,
-            resource_type->type_id().id(), resource_type->name().c_str(),
-            resource_type->entry_size());
-
-      for (int entry_idx = 0; entry_idx < resource_type->entry_size();
-           entry_idx++) {
-        auto* resource_entry = resource_type->mutable_entry(entry_idx);
-        auto resource_id = MAKE_RES_ID(package->package_id().id(),
-                                       resource_type->type_id().id(),
-                                       resource_entry->entry_id().id());
-
-        TRACE(RES, 9,
-              "      Entry[%d]: id=0x%x name=%s "
-              "config_value_count=%d",
-              entry_idx, resource_id, resource_entry->name().c_str(),
-              resource_entry->config_value_size());
-
-        const auto& modification_pair = modifications.find(resource_id);
-        if (modification_pair == modifications.end()) {
-          continue;
-        }
-
-        for (int config_idx = 0;
-             config_idx < resource_entry->config_value_size();
-             config_idx++) {
-          auto* config_value = resource_entry->mutable_config_value(config_idx);
-
-          if (!config_value->has_value() ||
-              !config_value->value().has_compound_value() ||
-              !config_value->value().compound_value().has_style()) {
-            continue;
-          }
-
-          auto* style = config_value->mutable_value()
-                            ->mutable_compound_value()
-                            ->mutable_style();
-          TRACE(RES, 9, "        Style has %d attributes", style->entry_size());
-
-          UnorderedMap<uint32_t, StyleModificationSpec::Modification>
-              modified_attributes;
-          is_file_modified |= modifier_function(
-              style, modification_pair->second, modified_attributes);
-
-          if (!modified_attributes.empty()) {
-            modified_resources.insert({resource_id, modified_attributes});
-          }
-        }
-      }
-    }
-  }
-
-  return is_file_modified;
-}
-
-void apply_attribute_modification_for_file(
-    const ResourceAttributeMap& modifications,
-    const std::string& resource_path,
-    const std::function<
-        bool(aapt::pb::Style*,
-             const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&,
-             UnorderedMap<uint32_t, StyleModificationSpec::Modification>&)>&
-        modifier_function,
-    ResourceAttributeMap& modified_resources) {
-  read_protobuf_file_contents(
-      resource_path,
-      [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
-        aapt::pb::ResourceTable resource_table;
-        if (!resource_table.ParseFromCodedStream(&input)) {
-          TRACE(RES, 9, "Failed to read resource file: %s",
-                resource_path.c_str());
-          return;
-        }
-
-        // Apply modifications to the resource file
-        bool is_file_modified = modify_attribute_from_style_resource(
-            modifications, resource_table, modifier_function,
-            modified_resources);
-
-        if (is_file_modified) {
-          std::ofstream output_file(resource_path, std::ofstream::binary);
-          if (!resource_table.SerializeToOstream(&output_file)) {
-            TRACE(RES, 9, "Failed to write modified resource file: %s",
-                  resource_path.c_str());
-          }
-        }
-      });
-}
-
-// Assumes all modifications are being done on unambiguous resources
-void ResourcesPbFile::apply_attribute_removals(
-    const std::vector<StyleModificationSpec::Modification>& modifications,
-    const std::vector<std::string>& resources_pb_paths) {
-  ResourceAttributeMap modified_resources;
-
-  const auto& attribute_removal_function =
-      [](aapt::pb::Style* style,
-         const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
-             attribute_map,
-         UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
-             modified_attributes) -> bool {
-    bool removed_any = false;
-    for (int attr = style->entry_size() - 1; attr >= 0; attr--) {
-      auto* style_entry = style->mutable_entry(attr);
-      if (style_entry->has_key()) {
-        uint32_t attr_id = style_entry->key().id();
-        TRACE(RES, 9, "        Attribute[%d]: id=0x%x", attr, attr_id);
-
-        auto it = attribute_map.find(attr_id);
-        if (it != attribute_map.end()) {
-          style->mutable_entry()->DeleteSubrange(attr, 1);
-          modified_attributes.insert({attr_id, it->second});
-          removed_any = true;
-        }
-      }
-    }
-    return removed_any;
-  };
-
-  ResourceAttributeMap removals;
-  for (const auto& mod : modifications) {
-    if (mod.type == StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE) {
-      uint32_t resource_id = mod.resource_id;
-      assert_resource_in_one_files(resource_id, resources_pb_paths);
-      removals[resource_id].insert({mod.attribute_id.value(), mod});
-    }
-  }
-
-  for (const auto& resource_path : resources_pb_paths) {
-    TRACE(RES, 9, "Examining resource file: %s", resource_path.c_str());
-    apply_attribute_modification_for_file(removals, resource_path,
-                                          attribute_removal_function,
-                                          modified_resources);
-  }
-
-  for (const auto& [resource_id, attr_map] :
-       UnorderedIterable(modified_resources)) {
-    for (const auto& [attr_id, mod] : UnorderedIterable(attr_map)) {
-      TRACE(RES, 8, "Successfully removed attribute 0x%x from resource 0x%x",
-            attr_id, resource_id);
-    }
-  }
-}
-
-void add_attribute_to_style(aapt::pb::Item* item,
-                            const StyleResource::Value& value) {
-  item->clear_prim();
-  item->clear_str();
-  item->clear_raw_str();
-  item->clear_styled_str();
-  item->clear_file();
-
-  if (value.get_data_type() == android::Res_value::TYPE_REFERENCE) {
-    auto* ref = item->mutable_ref();
-    ref->set_id(value.get_value_bytes());
-    ref->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
-    return;
-  }
-
-  if (value.get_data_type() == android::Res_value::TYPE_STRING &&
-      value.get_value_string()) {
-    if (!value.get_styled_string().empty()) {
-      auto* styled_str = item->mutable_styled_str();
-      styled_str->set_value(value.get_value_string().value());
-
-      for (const auto& span : value.get_styled_string()) {
-        auto* pb_span = styled_str->add_span();
-        pb_span->set_tag(span.tag);
-        pb_span->set_first_char(span.first_char);
-        pb_span->set_last_char(span.last_char);
-      }
-    } else {
-      auto* str = item->mutable_str();
-      str->set_value(value.get_value_string().value());
-    }
-    return;
-  }
-
-  auto value_bytes = value.get_value_bytes();
-  auto* prim = item->mutable_prim();
-
-  switch (value.get_data_type()) {
-  case android::Res_value::TYPE_INT_BOOLEAN:
-    prim->set_boolean_value(value_bytes != 0);
-    break;
-  case android::Res_value::TYPE_INT_COLOR_ARGB8:
-    prim->set_color_argb8_value(value_bytes);
-    break;
-  case android::Res_value::TYPE_INT_COLOR_RGB8:
-    prim->set_color_rgb8_value(value_bytes);
-    break;
-  case android::Res_value::TYPE_INT_COLOR_ARGB4:
-    prim->set_color_argb4_value(value_bytes);
-    break;
-  case android::Res_value::TYPE_INT_COLOR_RGB4:
-    prim->set_color_rgb4_value(value_bytes);
-    break;
-  case android::Res_value::TYPE_INT_DEC:
-    prim->set_int_decimal_value(value_bytes);
-    break;
-  case android::Res_value::TYPE_INT_HEX:
-    prim->set_int_hexadecimal_value(value_bytes);
-    break;
-  case android::Res_value::TYPE_FLOAT:
-    prim->set_float_value(value_bytes);
-    break;
-  case android::Res_value::TYPE_DIMENSION:
-    prim->set_dimension_value(value_bytes);
-    break;
-  case android::Res_value::TYPE_FRACTION:
-    prim->set_fraction_value(value_bytes);
-    break;
-  default:
-    TRACE(RES, 9, "Unsupported primitive type: %d", value.get_data_type());
-    break;
-  }
-}
-
-bool attribute_addition_function(
-    aapt::pb::Style* style,
-    const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
-        attributes_to_add,
-    UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
-        modified_attributes) {
-  if (attributes_to_add.empty()) {
-    return false;
-  }
-
-  for (const auto& [attr_id, mod] : UnorderedIterable(attributes_to_add)) {
-
-    auto* new_entry = style->add_entry();
-    auto* key = new_entry->mutable_key();
-    key->set_id(attr_id);
-    key->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
-
-    add_attribute_to_style(new_entry->mutable_item(), mod.value.value());
-
-    modified_attributes.insert({attr_id, mod});
-    TRACE(RES, 9, "        Added new attribute: id=0x%x", attr_id);
-  }
-
-  reorder_style(style);
-
-  return true;
-}
-
-void ResourcesPbFile::apply_attribute_additions(
-    const std::vector<StyleModificationSpec::Modification>& modifications,
-    const std::vector<std::string>& resources_pb_paths) {
-  ResourceAttributeMap modified_resources;
-
-  ResourceAttributeMap additions;
-  for (const auto& mod : modifications) {
-    if (mod.type == StyleModificationSpec::ModificationType::ADD_ATTRIBUTE) {
-      int32_t resource_id = mod.resource_id;
-      assert_resource_in_one_files(resource_id, resources_pb_paths);
-      additions[resource_id].insert({mod.attribute_id.value(), mod});
-    }
-  }
-
-  for (const auto& resource_path : resources_pb_paths) {
-    TRACE(RES, 9, "Examining resource file for additions: %s",
-          resource_path.c_str());
-    apply_attribute_modification_for_file(additions, resource_path,
-                                          attribute_addition_function,
-                                          modified_resources);
-  }
-
-  if (traceEnabled(RES, 8)) {
-    for (const auto& [resource_id, attr_map] :
-         UnorderedIterable(modified_resources)) {
-      for (const auto& [attr_id, mod] : UnorderedIterable(attr_map)) {
-        TRACE(RES, 8, "Successfully added attribute 0x%x to resource 0x%x",
-              attr_id, resource_id);
-      }
-    }
-  }
 }
 
 ResourcesPbFile::~ResourcesPbFile() {}

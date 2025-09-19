@@ -272,7 +272,7 @@ void gather_caller_callees(
         caller->rstate.should_not_outline()) {
       return;
     }
-    always_assert(code.cfg_built());
+    always_assert(code.editable_cfg_built());
     CanOutlineBlockDecider block_decider(
         profile_guidance_config, throughput_interaction_indices,
         throughput_methods.count(caller) != 0u,
@@ -392,8 +392,9 @@ class CalleeInvocationSelector {
   // we need to efficiently track what all the underlying call-site summaries
   // were. We do that via a "disjoint_sets" data structure what all the
   // underlying call-site summaries are.
-  using Rank = UnorderedMap<const CallSiteSummary*, size_t>;
-  using Parent = UnorderedMap<const CallSiteSummary*, const CallSiteSummary*>;
+  using Rank = std::unordered_map<const CallSiteSummary*, size_t>;
+  using Parent =
+      std::unordered_map<const CallSiteSummary*, const CallSiteSummary*>;
   using RankPMap = boost::associative_property_map<Rank>;
   using ParentPMap = boost::associative_property_map<Parent>;
   using CallSiteSummarySets = boost::disjoint_sets<RankPMap, ParentPMap>;
@@ -539,7 +540,7 @@ class CalleeInvocationSelector {
     uint64_t b = m_running_index++;
     always_assert(positive < 2);
     always_assert(a < (1UL << 31));
-    always_assert(b < (static_cast<uint64_t>(1u) << 32));
+    always_assert(b < (1UL << 32));
     return (positive << 63) | (a << 32) | b;
   }
 

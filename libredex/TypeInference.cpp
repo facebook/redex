@@ -339,6 +339,34 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   }
 }
 
+template <typename DexTypeCollection>
+const DexType* merge_dex_types(const DexTypeCollection& collection,
+                               const DexType* default_type) {
+  if (collection.empty()) {
+    return default_type;
+  }
+
+  return unordered_accumulate(
+      collection, static_cast<const DexType*>(nullptr),
+      [&default_type](const DexType* t1, const DexType* t2) -> const DexType* {
+        if (!t1) {
+          return t2;
+        }
+        if (!t2) {
+          return t1;
+        }
+
+        DexTypeDomain d1 = DexTypeDomain::create_nullable(t1);
+        DexTypeDomain d2 = DexTypeDomain::create_nullable(t2);
+        d1.join_with(d2);
+
+        auto maybe_dextype = d1.get_dex_type();
+
+        // In case of the join giving up, bail to a default type
+        return maybe_dextype ? *maybe_dextype : default_type;
+      });
+}
+
 boost::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
     const UnorderedSet<DexType*>& typedef_annotations) {
@@ -709,34 +737,25 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       break;
     }
 
-    auto* default_type = type::java_lang_Throwable();
-    const DexType* merged_catch_type = std::accumulate(
-        preds.begin(), preds.end(), (const DexType*)nullptr,
-        [default_type](const auto* acc, auto* edge) {
-          if (edge->type() != cfg::EDGE_THROW) {
-            return acc;
-          }
+    UnorderedSet<DexType*> catch_types;
 
-          auto* catch_type = edge->throw_info()->catch_type;
-          const auto* actual_catch_type =
-              catch_type != nullptr ? catch_type : default_type;
+    for (cfg::Edge* edge : preds) {
+      if (edge->type() != cfg::EDGE_THROW) {
+        continue;
+      }
 
-          if (acc == nullptr) {
-            return actual_catch_type;
-          }
-
-          DexTypeDomain d1 = DexTypeDomain::create_nullable(acc);
-          DexTypeDomain d2 = DexTypeDomain::create_nullable(actual_catch_type);
-          d1.join_with(d2);
-
-          auto maybe_dextype = d1.get_dex_type();
-
-          // In case of the join giving up, bail to a default type
-          return maybe_dextype ? *maybe_dextype : default_type;
-        });
-    if (merged_catch_type == nullptr) {
-      merged_catch_type = default_type;
+      DexType* catch_type = edge->throw_info()->catch_type;
+      if (catch_type != nullptr) {
+        catch_types.emplace(catch_type);
+      } else {
+        // catch all
+        catch_types.emplace(type::java_lang_Throwable());
+      }
     }
+
+    const auto* merged_catch_type =
+        merge_dex_types(catch_types,
+                        /* default */ type::java_lang_Throwable());
 
     set_reference(current_state, insn->dest(), merged_catch_type);
     break;

@@ -48,10 +48,8 @@ TEST_F(ConstantPropagationTest, SourceBlockTargetMutating) {
   for (auto block : code->cfg().blocks()) {
     for (auto sb : source_blocks::gather_source_blocks(block)) {
       if (sb->id == 2) {
-        auto value = sb->get_at(0);
-        ASSERT_TRUE(value);
-        ASSERT_EQ(value->val, 0);
-        ASSERT_EQ(value->appear100, 0);
+        ASSERT_EQ(sb->get_val(0).get(), 0);
+        ASSERT_EQ(sb->get_appear100(0).get(), 0);
       }
     }
   }

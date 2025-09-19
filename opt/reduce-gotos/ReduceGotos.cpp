@@ -130,7 +130,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
     auto* insn = it->insn;
     cfg::Block* goto_target = b->goes_to();
 
-    UnorderedSet<cfg::Edge*> fallthrough_edges;
+    std::unordered_set<cfg::Edge*> fallthrough_edges;
     auto branch_edges = cfg.get_succ_edges_of_type(b, cfg::EDGE_BRANCH);
     for (cfg::Edge* branch_edge : branch_edges) {
       if (branch_edge->target() == goto_target) {
@@ -517,10 +517,9 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
   } while (rerun);
 }
 
-ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code,
-                                                     bool for_performance) {
+ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code, bool for_performance) {
   Stats stats;
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   code->cfg().calculate_exit_block();
   auto& cfg = code->cfg();
   process_code_switches(cfg, stats);

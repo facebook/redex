@@ -823,6 +823,7 @@ class OptimizeEnums {
                                                    generated_switch_cases);
 
     walk::parallel::code(m_scope, [&](DexMethod*, IRCode& code) {
+      always_assert(code.cfg().editable());
       cfg::ControlFlowGraph& cfg = code.cfg();
       cfg.calculate_exit_block();
       unmap.unmap_switchmaps(cfg);

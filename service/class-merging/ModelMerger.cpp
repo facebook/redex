@@ -10,7 +10,6 @@
 #include "CFGMutation.h"
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
-#include "Inliner.h"
 #include "MethodReference.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -46,8 +45,8 @@ TypeTags collect_type_tags(const std::vector<const MergerType*>& mergers) {
   for (const auto* merger : mergers) {
     for (const auto* const type : merger->mergeables) {
       auto type_tag = type_tag_utils::parse_model_type_tag(type_class(type));
-      always_assert_log(type_tag != boost::none,
-                        "Type tag is missing from %s\n", SHOW(type));
+      always_assert_log(
+          type_tag != boost::none, "Type tag is missing from %s\n", SHOW(type));
       type_tags.set_type_tag(type, *type_tag);
     }
   }
@@ -108,8 +107,8 @@ bool is_simple_type_ref(IRInstruction* insn) {
 void update_code_type_refs(
     const Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger) {
-  TRACE(CLMG, 8,
-        "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
+  TRACE(
+      CLMG, 8, "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
   UnorderedTypeSet mergeables;
   for (const auto& pair : UnorderedIterable(mergeable_to_merger)) {
     mergeables.insert(pair.first);
@@ -195,8 +194,8 @@ void update_refs_to_mergeable_fields(
     bool disable_violation_fixes) {
   UnorderedMap<DexField*, DexField*> fields_lookup;
   for (const auto& merger : mergers) {
-    cook_merger_fields_lookup(merger_fields.at(merger->type), merger->field_map,
-                              fields_lookup);
+    cook_merger_fields_lookup(
+        merger_fields.at(merger->type), merger->field_map, fields_lookup);
   }
   TRACE(CLMG, 8, "  Updating field refs");
   walk::parallel::code(scope, [&](DexMethod* /*meth*/, IRCode& code) {
@@ -304,14 +303,12 @@ void update_instance_of(
     const Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger,
     const UnorderedMap<const DexType*, DexMethod*>& merger_to_instance_of_meth,
-    const TypeTags& type_tags,
-    const bool is_intra_dex) {
+    const TypeTags& type_tags) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    always_assert(code.cfg_built());
+    always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
     cfg::CFGMutation mutation(cfg);
     auto ii = cfg::InstructionIterable(cfg);
-    std::vector<IRInstruction*> instance_of_invokes;
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto* insn = it->insn;
       if (!insn->has_type() || insn->opcode() != OPCODE_INSTANCE_OF) {
@@ -323,8 +320,8 @@ void update_instance_of(
       }
 
       always_assert(type_class(type));
-      TRACE(CLMG, 9, " patching INSTANCE_OF at %s %s", SHOW(insn),
-            SHOW(caller));
+      TRACE(
+          CLMG, 9, " patching INSTANCE_OF at %s %s", SHOW(insn), SHOW(caller));
       // Load type_tag.
       auto type_tag = type_tags.get_type_tag(type);
       auto type_tag_reg = cfg.allocate_temp();
@@ -336,8 +333,8 @@ void update_instance_of(
       std::vector<reg_t> args;
       args.push_back(insn->src(0));
       args.push_back(type_tag_reg);
-      auto* invoke = method_reference::make_invoke(instance_of_meth,
-                                                   OPCODE_INVOKE_STATIC, args);
+      auto* invoke = method_reference::make_invoke(
+          instance_of_meth, OPCODE_INVOKE_STATIC, args);
       // MOVE_RESULT to dst of INSTANCE_OF.
       auto* move_res = new IRInstruction(OPCODE_MOVE_RESULT);
       move_res->set_dest(std::next(it)->insn->dest());
@@ -345,23 +342,10 @@ void update_instance_of(
           it, std::vector<IRInstruction*>{load_type_tag, invoke, move_res});
       // remove original INSTANCE_OF.
       mutation.remove(it);
-      instance_of_invokes.push_back(invoke);
 
       TRACE(CLMG, 9, " patched INSTANCE_OF in \n%s", SHOW(cfg));
     }
     mutation.flush();
-
-    if (!is_intra_dex) {
-      return;
-    }
-    for (auto* invoke : instance_of_invokes) {
-      // Inline the invoke to INSTANCE_OF method.
-      auto* callee = resolve_invoke_method(invoke, caller);
-      bool is_inlined = inliner::inline_with_cfg(
-          caller, callee, invoke, nullptr, nullptr, cfg.get_registers_size());
-      TRACE(CLMG, 9, " inlined (%d) INSTANCE_OF in \n%s", is_inlined,
-            SHOW(cfg));
-    }
   });
 }
 
@@ -369,7 +353,7 @@ void update_instance_of_no_type_tag(
     const Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger) {
   walk::parallel::code(scope, [&](DexMethod* /*caller*/, IRCode& code) {
-    always_assert(code.cfg_built());
+    always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
     auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -398,8 +382,7 @@ void update_refs_to_mergeable_types(
     const TypeTags& type_tags,
     const MergerToField& type_tag_fields,
     UnorderedMap<DexMethod*, std::string>& method_debug_map,
-    bool has_type_tags,
-    const bool is_intra_dex) {
+    bool has_type_tags) {
   // Update simple type referencing instructions to instantiate merger type.
   update_code_type_refs(scope, mergeable_to_merger);
   type_reference::update_method_signature_type_references(
@@ -424,11 +407,8 @@ void update_refs_to_mergeable_types(
     merger_to_instance_of_meth[type] = instance_of_meth;
     type_class(type)->add_method(instance_of_meth);
   }
-  update_instance_of(scope,
-                     mergeable_to_merger,
-                     merger_to_instance_of_meth,
-                     type_tags,
-                     is_intra_dex);
+  update_instance_of(
+      scope, mergeable_to_merger, merger_to_instance_of_meth, type_tags);
 }
 
 std::string merger_info(const MergerType& merger) {
@@ -473,8 +453,8 @@ void fix_existing_merger_cls(const Model& model,
                              const MergerType& merger,
                              DexClass* cls,
                              DexType* type) {
-  always_assert_log(!cls->is_external(), "%s and must be an internal DexClass",
-                    SHOW(type));
+  always_assert_log(
+      !cls->is_external(), "%s and must be an internal DexClass", SHOW(type));
   always_assert_log(merger.mergeables.empty(),
                     "%s cannot have mergeables",
                     merger_info(merger).c_str());
@@ -657,19 +637,22 @@ std::vector<DexClass*> ModelMerger::merge_model(
 
   TypeTags type_tags = input_has_type_tag ? collect_type_tags(to_materialize)
                                           : gen_type_tags(to_materialize);
-  auto type_tag_fields = get_type_tag_fields(to_materialize, input_has_type_tag,
-                                             model_spec.generate_type_tag());
+  auto type_tag_fields = get_type_tag_fields(
+      to_materialize, input_has_type_tag, model_spec.generate_type_tag());
   UnorderedMap<DexMethod*, std::string> method_debug_map;
   auto parent_to_children =
       model.get_type_system().get_class_scopes().get_parent_to_children();
-  update_refs_to_mergeable_types(
-      scope, parent_to_children, to_materialize, mergeable_to_merger, type_tags,
-      type_tag_fields, method_debug_map, model_spec.has_type_tag(),
-      m_is_intra_dex_merging);
+  update_refs_to_mergeable_types(scope,
+                                 parent_to_children,
+                                 to_materialize,
+                                 mergeable_to_merger,
+                                 type_tags,
+                                 type_tag_fields,
+                                 method_debug_map,
+                                 model_spec.has_type_tag());
   trim_method_debug_map(mergeable_to_merger, method_debug_map);
-  update_refs_to_mergeable_fields(scope, to_materialize, mergeable_to_merger,
-                                  m_merger_fields,
-                                  conf.disable_violation_fixes());
+  update_refs_to_mergeable_fields(
+      scope, to_materialize, mergeable_to_merger, m_merger_fields, conf.disable_violation_fixes());
 
   // Merge methods
   method_profiles::MethodProfiles& method_profile = conf.get_method_profiles();

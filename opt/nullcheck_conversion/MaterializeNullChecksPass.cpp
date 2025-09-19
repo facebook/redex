@@ -41,7 +41,7 @@ MaterializeNullChecksPass::Stats MaterializeNullChecksPass::rewrite_null_check(
   if (code == nullptr) {
     return stats;
   }
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {

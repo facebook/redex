@@ -251,14 +251,21 @@ bool add_param_annotation(DexMethod* m,
   return add_param_annotation_set(m, &anno_set, param, class_stats);
 }
 
+void patch_param_candidates(std::vector<ParamCandidate>& param_candidates,
+                            Stats& class_stats) {
+  for (auto& param : param_candidates) {
+    add_param_annotation(param.method, param.anno, param.index, class_stats);
+  }
+}
+
 // Run usedefs to see if the source of the annotated value is a parameter
-// If it is, add the param to the patching candidates.
-void find_patchable_parameters(DexMethod* m,
-                               IRInstruction* insn,
-                               src_index_t arg_index,
-                               const TypedefAnnoType* typedef_anno,
-                               live_range::UseDefChains* ud_chains,
-                               PatchingCandidates& param_candidates) {
+// If it is, return the index the parameter. If not, return -1
+void find_and_patch_parameter(DexMethod* m,
+                              IRInstruction* insn,
+                              src_index_t arg_index,
+                              const TypedefAnnoType* typedef_anno,
+                              live_range::UseDefChains* ud_chains,
+                              std::vector<ParamCandidate>& param_candidates) {
   // Patch missing parameter annotations from accessed fields
   live_range::Use use_of_id{insn, arg_index};
   auto udchains_it = ud_chains->find(use_of_id);
@@ -275,7 +282,7 @@ void find_patchable_parameters(DexMethod* m,
         if (!is_static(m)) {
           param_index -= 1;
         }
-        param_candidates.add_param_candidate(m, typedef_anno, param_index);
+        param_candidates.emplace_back(m, typedef_anno, param_index);
         return;
       }
       param_index += 1;
@@ -283,12 +290,13 @@ void find_patchable_parameters(DexMethod* m,
   }
 }
 
-void patch_param_from_method_invoke(TypeEnvironments& envs,
-                                    type_inference::TypeInference& inference,
-                                    DexMethod* caller,
-                                    IRInstruction* invoke,
-                                    live_range::UseDefChains* ud_chains,
-                                    PatchingCandidates& candidates) {
+void patch_param_from_method_invoke(
+    TypeEnvironments& envs,
+    type_inference::TypeInference& inference,
+    DexMethod* caller,
+    IRInstruction* invoke,
+    live_range::UseDefChains* ud_chains,
+    std::vector<ParamCandidate>& missing_param_annos) {
   always_assert(opcode::is_an_invoke(invoke->opcode()));
   auto* def_method = resolve_method(caller, invoke);
   if ((def_method == nullptr) || ((def_method->get_param_anno() == nullptr) &&
@@ -317,8 +325,8 @@ void patch_param_from_method_invoke(TypeEnvironments& envs,
       // Safe assignment. Nothing to do.
       continue;
     }
-    find_patchable_parameters(caller, invoke, arg_index, *param_typedef_anno,
-                              ud_chains, candidates);
+    find_and_patch_parameter(caller, invoke, arg_index, *param_typedef_anno,
+                             ud_chains, missing_param_annos);
     TRACE(TAC, 2, "Missing param annotation %s in %s", SHOW(param_anno.second),
           SHOW(caller));
   }
@@ -333,7 +341,7 @@ void collect_setter_missing_param_annos(
     DexMethod* setter,
     IRInstruction* insn,
     live_range::UseDefChains* ud_chains,
-    PatchingCandidates& candidates) {
+    std::vector<ParamCandidate>& missing_param_annos) {
   always_assert(opcode::is_an_iput(insn->opcode()) ||
                 opcode::is_an_sput(insn->opcode()));
   auto* field_ref = insn->get_field();
@@ -343,8 +351,8 @@ void collect_setter_missing_param_annos(
     return;
   }
 
-  find_patchable_parameters(setter, insn, 0, *field_anno, ud_chains,
-                            candidates);
+  find_and_patch_parameter(setter, insn, 0, *field_anno, ud_chains,
+                           missing_param_annos);
 }
 
 } // namespace
@@ -359,11 +367,6 @@ void PatchingCandidates::apply_patching(std::mutex& mutex, Stats& class_stats) {
        unordered_to_ordered_keys(m_method_candidates, compare_dexmethods)) {
     auto* anno = m_method_candidates.at(method);
     add_annotation(method, anno, mutex, class_stats);
-  }
-  for (auto& pc :
-       unordered_to_ordered_keys(m_param_candidates, compare_param_candidate)) {
-    auto* anno = m_param_candidates.at(pc);
-    add_param_annotation(pc.method, anno, pc.index, class_stats);
   }
 }
 
@@ -440,68 +443,29 @@ bool TypedefAnnoPatcher::patch_if_overriding_annotated_methods(
 }
 
 void TypedefAnnoPatcher::run(const Scope& scope) {
+  m_patcher_stats =
+      walk::parallel::classes<PatcherStats>(scope, [this](DexClass* cls) {
+        // All the updates happening in this walk is local to the current class.
+        // Therefore, there's no race condition.
+        auto class_stats = PatcherStats();
+        if (is_enum(cls) && type::is_kotlin_class(cls)) {
+          fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
+        }
+        for (auto* m : cls->get_all_methods()) {
+          patch_parameters_and_returns(
+              m, class_stats.patch_parameters_and_returns);
+          patch_if_overriding_annotated_methods(
+              m, class_stats.patch_synth_methods_overriding_annotated_methods);
+          if (is_constructor(m) &&
+              has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
+            patch_synth_cls_fields_from_ctor_param(
+                m, class_stats.patch_synth_cls_fields_from_ctor_param);
+          }
+        }
+        return class_stats;
+      });
+
   PatchingCandidates candidates;
-  const auto phase_one = [this, &scope, &candidates]() {
-    m_patcher_stats += walk::parallel::classes<PatcherStats>(
-        scope, [this, &candidates](DexClass* cls) {
-          // All the updates happening in this walk is local to the current
-          // class. Therefore, there's no race condition between individual
-          // annotation patching.
-          auto class_stats = PatcherStats();
-          if (is_enum(cls) && type::is_kotlin_class(cls)) {
-            fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
-          }
-          for (auto* m : cls->get_all_methods()) {
-            collect_param_candidates(m, candidates);
-            collect_return_candidates(m, candidates);
-            patch_if_overriding_annotated_methods(
-                m,
-                class_stats.patch_synth_methods_overriding_annotated_methods);
-            if (is_constructor(m) &&
-                has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
-              patch_synth_cls_fields_from_ctor_param(
-                  m, class_stats.patch_synth_cls_fields_from_ctor_param,
-                  candidates);
-            }
-          }
-          return class_stats;
-        });
-
-    size_t candidates_size = candidates.candidates_size();
-    if (candidates_size == 0) {
-      // Nothing to patch.
-      TRACE(TAC, 2, "[patcher] Nothing to patch");
-      return false;
-    }
-    Stats new_stats = {};
-    candidates.apply_patching(m_anno_patching_mutex, new_stats);
-    TRACE(TAC, 2,
-          "[patcher] Phase 1: Patches %zu candidates; patched params %zu; "
-          "patched field/methods %zu",
-          candidates_size, new_stats.num_patched_parameters,
-          new_stats.num_patched_fields_and_methods);
-    candidates = {};
-    if (new_stats.not_zero()) {
-      m_patcher_stats.patch_parameters_and_returns += new_stats;
-      return true;
-    }
-
-    // All candidates are patched. Nothing to do.
-    return false;
-  };
-
-  // Fix point iteration on phase one.
-  for (size_t i = 0;; i++) {
-    if (!phase_one()) {
-      break;
-    }
-    if (i >= m_max_iteration) {
-      always_assert_log(
-          false, "[patcher] Too many iterations to stabilize. Giving up.");
-    }
-  }
-
-  candidates = {};
   m_patcher_stats += walk::parallel::classes<PatcherStats>(
       scope, [this, &candidates](DexClass* cls) {
         auto class_stats = PatcherStats();
@@ -572,10 +536,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
         return class_stats;
       });
 
-  candidates = {};
-  patch_chained_getters(candidates);
-  candidates.apply_patching(m_anno_patching_mutex,
-                            m_patcher_stats.patch_chained_getters);
+  patch_chained_getters(m_patcher_stats.patch_chained_getters);
 }
 
 void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {
@@ -586,12 +547,12 @@ void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {
   }
 }
 
-void TypedefAnnoPatcher::patch_chained_getters(PatchingCandidates& candidates) {
+void TypedefAnnoPatcher::patch_chained_getters(Stats& class_stats) {
   auto sorted_candidates =
       unordered_to_ordered(m_chained_getters, compare_dexclasses);
   for (auto* cls : sorted_candidates) {
     for (auto* m : cls->get_all_methods()) {
-      collect_return_candidates(m, candidates);
+      patch_parameters_and_returns(m, class_stats);
     }
   }
 }
@@ -762,7 +723,8 @@ void TypedefAnnoPatcher::patch_lambdas(
     return;
   }
 
-  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(method));
+  always_assert_log(code->editable_cfg_built(), "%s has no cfg built",
+                    SHOW(method));
   auto& cfg = code->cfg();
 
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
@@ -782,7 +744,15 @@ void TypedefAnnoPatcher::patch_lambdas(
         // parameters. Find any missing parameter annotations and add them to
         // the map of src index to annotation, but don't patch the static
         // method since a different visit of that method will patch it
-        collect_param_candidates(static_method, candidates);
+        std::vector<ParamCandidate> missing_param_annos;
+        patch_parameters_and_returns(static_method, class_stats,
+                                     &missing_param_annos);
+        // Patch missing param annotations
+        for (auto& param : missing_param_annos) {
+          patch_synthetic_field_from_local_var_lambda(
+              ud_chains, insn, param.index, param.anno, patched_fields,
+              candidates, m_anno_patching_mutex, class_stats);
+        }
         // If the static method has parameter annotations, patch the synthetic
         // fields as expected
         if (static_method->get_param_anno() != nullptr) {
@@ -825,12 +795,13 @@ void TypedefAnnoPatcher::patch_lambdas(
 // parameters. If it does, find the field that the parameter got put into and
 // annotate it.
 void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
-    DexMethod* ctor, Stats& class_stats, PatchingCandidates& candidates) {
+    DexMethod* ctor, Stats& class_stats) {
   IRCode* code = ctor->get_code();
   if (code == nullptr) {
     return;
   }
-  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(ctor));
+  always_assert_log(code->editable_cfg_built(), "%s has no cfg built",
+                    SHOW(ctor));
   auto& cfg = code->cfg();
 
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
@@ -857,10 +828,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
       }
       auto annotation = env.get_annotation(insn->src(0));
       if (annotation != boost::none) {
-        // We have to patch the field here now. Otherwise, the getter won't be
-        // considered as candidate by the collection logic down below.
         add_annotation(field, *annotation, m_anno_patching_mutex, class_stats);
-
         auto field_name = field->get_simple_deobfuscated_name();
         field_name.at(0) = std::toupper(field_name.at(0));
         const auto int_or_string =
@@ -868,15 +836,15 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
                 ? "I"
                 : type::java_lang_String()->get_name()->str();
         // add annotations to the Kotlin getter and setter methods
-        auto* getter = DexMethod::get_method(
+        auto* getter_method = DexMethod::get_method(
             class_name_dot + "get" + field_name + ":()" + int_or_string);
-        if ((getter != nullptr) && getter->is_def()) {
-          collect_return_candidates(getter->as_def(), candidates);
+        if (getter_method != nullptr) {
+          patch_parameters_and_returns(getter_method->as_def(), class_stats);
         }
-        auto* setter = DexMethod::get_method(
+        auto* setter_method = DexMethod::get_method(
             class_name_dot + "set" + field_name + ":(" + int_or_string + ")V");
-        if ((setter != nullptr) && setter->is_def()) {
-          collect_param_candidates(setter->as_def(), candidates);
+        if (setter_method != nullptr) {
+          patch_parameters_and_returns(setter_method->as_def(), class_stats);
         }
       }
     }
@@ -941,17 +909,20 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(const DexClass* anon_cls,
 // argument, patch the parameter
 // 2. if a parameter is passed into a field write and the field is annotated,
 // patch the parameter
+// 3. if all method returns are annotated as per TypeInference, patch the method
 //
 // if missing_param_annos is not nullptr, do not patch anything. Upon obtaining
 // the parameter annotations, just add them to missing_param_annos
-void TypedefAnnoPatcher::collect_param_candidates(
-    DexMethod* m, PatchingCandidates& candidates) {
+void TypedefAnnoPatcher::patch_parameters_and_returns(
+    DexMethod* m,
+    Stats& class_stats,
+    std::vector<ParamCandidate>* missing_param_annos) {
   IRCode* code = m->get_code();
   if (code == nullptr) {
     return;
   }
 
-  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(m));
+  always_assert_log(code->editable_cfg_built(), "%s has no cfg built", SHOW(m));
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
                                           &m_method_override_graph);
@@ -961,42 +932,21 @@ void TypedefAnnoPatcher::collect_param_candidates(
   live_range::MoveAwareChains chains(m->get_code()->cfg());
   live_range::UseDefChains ud_chains = chains.get_use_def_chains();
 
+  boost::optional<const TypedefAnnoType*> anno = boost::none;
+  std::vector<ParamCandidate> param_candidates_local;
+  bool patch_return = missing_param_annos == nullptr;
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       IROpcode opcode = insn->opcode();
       if (opcode::is_an_invoke(opcode)) {
         patch_param_from_method_invoke(envs, inference, m, insn, &ud_chains,
-                                       candidates);
+                                       param_candidates_local);
       } else if (opcode::is_an_iput(opcode) || opcode::is_an_sput(opcode)) {
         collect_setter_missing_param_annos(inference, m, insn, &ud_chains,
-                                           candidates);
-      }
-    }
-  }
-}
-
-void TypedefAnnoPatcher::collect_return_candidates(
-    DexMethod* m, PatchingCandidates& candidates) {
-  IRCode* code = m->get_code();
-  if (code == nullptr) {
-    return;
-  }
-
-  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(m));
-  auto& cfg = code->cfg();
-  type_inference::TypeInference inference(cfg, false, m_typedef_annos,
-                                          &m_method_override_graph);
-  inference.run(m);
-
-  TypeEnvironments& envs = inference.get_type_environments();
-  boost::optional<const TypedefAnnoType*> anno = boost::none;
-  bool patch_return = true;
-  for (cfg::Block* b : cfg.blocks()) {
-    for (auto& mie : InstructionIterable(b)) {
-      auto* insn = mie.insn;
-      IROpcode opcode = insn->opcode();
-      if ((opcode == OPCODE_RETURN_OBJECT || opcode == OPCODE_RETURN)) {
+                                           param_candidates_local);
+      } else if ((opcode == OPCODE_RETURN_OBJECT || opcode == OPCODE_RETURN) &&
+                 patch_return) {
         auto return_anno = envs.at(insn).get_annotation(insn->src(0));
         if (return_anno == boost::none ||
             (anno != boost::none && return_anno != anno)) {
@@ -1008,11 +958,22 @@ void TypedefAnnoPatcher::collect_return_candidates(
     }
   }
 
+  if (missing_param_annos != nullptr) {
+    missing_param_annos->insert(missing_param_annos->end(),
+                                param_candidates_local.begin(),
+                                param_candidates_local.end());
+  } else {
+    patch_param_candidates(param_candidates_local, class_stats);
+  }
+
   if (patch_return && anno != boost::none) {
-    candidates.add_method_candidate(m, *anno);
+    add_annotation(m, const_cast<TypedefAnnoType*>(*anno),
+                   m_anno_patching_mutex, class_stats);
     auto class_name = type_class(m->get_class())->str();
     auto class_name_prefix = class_name.substr(0, class_name.size() - 1);
-    m_patched_returns.insert(class_name_prefix);
+    if (m_patched_returns.count(class_name_prefix) == 0u) {
+      m_patched_returns.insert(class_name_prefix);
+    }
   }
 }
 

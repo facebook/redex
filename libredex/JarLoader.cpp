@@ -25,7 +25,6 @@
 #endif
 
 #include "Creators.h"
-#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DuplicateClasses.h"
 #include "JarLoader.h"
@@ -127,8 +126,7 @@ constexpr size_t CP_CONST_PACKAGE =     20;
 
 /* clang-format on */
 
-cp_entry parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end) {
-  cp_entry cpe;
+bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
   cpe.tag = read8(buffer, buffer_end);
   switch (cpe.tag) {
   case CP_CONST_CLASS:
@@ -137,43 +135,41 @@ cp_entry parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end) {
   case CP_CONST_MODULE:
   case CP_CONST_PACKAGE:
     cpe.s0 = read16(buffer, buffer_end);
-    return cpe;
+    return true;
   case CP_CONST_FIELD:
   case CP_CONST_METHOD:
   case CP_CONST_INTERFACE:
   case CP_CONST_NAMEANDTYPE:
     cpe.s0 = read16(buffer, buffer_end);
     cpe.s1 = read16(buffer, buffer_end);
-    return cpe;
+    return true;
   case CP_CONST_METHHANDLE:
     cpe.s0 = read8(buffer, buffer_end);
     cpe.s1 = read16(buffer, buffer_end);
-    return cpe;
+    return true;
   case CP_CONST_INT:
   case CP_CONST_FLOAT:
     cpe.i0 = read32(buffer, buffer_end);
-    return cpe;
+    return true;
   case CP_CONST_LONG:
   case CP_CONST_DOUBLE:
     cpe.i0 = read32(buffer, buffer_end);
     cpe.i1 = read32(buffer, buffer_end);
-    return cpe;
+    return true;
   case CP_CONST_UTF8:
     cpe.len = read16(buffer, buffer_end);
     cpe.data = buffer;
     buffer += cpe.len;
     always_assert_type_log(buffer <= buffer_end, BUFFER_END_EXCEEDED,
                            "Buffer overflow");
-    return cpe;
+    return true;
   case CP_CONST_INVOKEDYN:
-    always_assert_type_log(cpe.tag != CP_CONST_INVOKEDYN,
-                           RedexError::INVALID_JAVA,
-                           "INVOKEDYN constant unsupported");
-    UNREACHABLE();
+    std::cerr << "INVOKEDYN constant unsupported, Bailing\n";
+    return false;
   }
-  always_assert_type_log(false, RedexError::INVALID_JAVA,
-                         "Unrecognized constant pool tag 0x%x", cpe.tag);
-  UNREACHABLE();
+  std::cerr << "Unrecognized constant pool tag 0x" << std::hex << cpe.tag
+            << ", Bailing\n";
+  return false;
 }
 
 void skip_attributes(uint8_t*& buffer, uint8_t* buffer_end) {
@@ -193,20 +189,28 @@ constexpr size_t MAX_CLASS_NAMELEN = static_cast<size_t>(8 * 1024);
 
 DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
   char nbuffer[MAX_CLASS_NAMELEN];
-  always_assert_type_log(cref < cpool.size(), RedexError::INVALID_JAVA,
-                         "Illegal cref");
-  always_assert_type_log(cpool[cref].tag == CP_CONST_CLASS,
-                         RedexError::INVALID_JAVA,
-                         "Non-class ref in get_class_name");
+  if (cref >= cpool.size()) {
+    std::cerr << "Illegal cref, Bailing\n";
+    return nullptr;
+  }
+  if (cpool[cref].tag != CP_CONST_CLASS) {
+    std::cerr << "Non-class ref in get_class_name, Bailing\n";
+    return nullptr;
+  }
   uint16_t utf8ref = cpool[cref].s0;
-  always_assert_type_log(utf8ref < cpool.size(), RedexError::INVALID_JAVA,
-                         "utf8 ref out of bound");
+  if (utf8ref >= cpool.size()) {
+    std::cerr << "utf8 ref out of bound, bailing\n";
+    return nullptr;
+  }
   const cp_entry& utf8cpe = cpool[utf8ref];
-  always_assert_type_log(utf8cpe.tag == CP_CONST_UTF8, RedexError::INVALID_JAVA,
-                         "Non-utf8 ref in get_utf8");
-  always_assert_type_log(utf8cpe.len <= (MAX_CLASS_NAMELEN + 3),
-                         RedexError::INVALID_JAVA,
-                         "classname is greater than max");
+  if (utf8cpe.tag != CP_CONST_UTF8) {
+    std::cerr << "Non-utf8 ref in get_utf8, Bailing\n";
+    return nullptr;
+  }
+  if (utf8cpe.len > (MAX_CLASS_NAMELEN + 3)) {
+    std::cerr << "classname is greater than max, bailing";
+    return nullptr;
+  }
   try {
     nbuffer[0] = 'L';
     memcpy(nbuffer + 1, utf8cpe.data, utf8cpe.len);
@@ -218,25 +222,37 @@ DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
   }
 }
 
-std::string_view extract_utf8(std::vector<cp_entry>& cpool, uint16_t utf8ref) {
-  always_assert_type_log(utf8ref < cpool.size(), RedexError::INVALID_JAVA,
-                         "utf8 ref out of bound");
+bool extract_utf8(std::vector<cp_entry>& cpool,
+                  uint16_t utf8ref,
+                  std::string_view* out) {
+  if (utf8ref >= cpool.size()) {
+    std::cerr << "utf8 ref out of bound, bailing\n";
+    return false;
+  }
   const cp_entry& utf8cpe = cpool[utf8ref];
-  always_assert_type_log(utf8cpe.tag == CP_CONST_UTF8, RedexError::INVALID_JAVA,
-                         "Non-utf8 ref in get_utf8");
-  always_assert_type_log(
-      utf8cpe.len <= (MAX_CLASS_NAMELEN - 1), RedexError::INVALID_JAVA,
-      "Name is greater (%u) than max (%zu)", utf8cpe.len, MAX_CLASS_NAMELEN);
-  return std::string_view((const char*)utf8cpe.data, utf8cpe.len);
+  if (utf8cpe.tag != CP_CONST_UTF8) {
+    std::cerr << "Non-utf8 ref in get_utf8, bailing\n";
+    return false;
+  }
+  if (utf8cpe.len > (MAX_CLASS_NAMELEN - 1)) {
+    std::cerr << "Name is greater (" << utf8cpe.len << ") than max ("
+              << MAX_CLASS_NAMELEN << "), bailing\n";
+    return false;
+  }
+  *out = std::string_view((const char*)utf8cpe.data, utf8cpe.len);
+  return true;
 }
 
 DexField* make_dexfield(std::vector<cp_entry>& cpool,
                         DexType* self,
                         cp_field_info& finfo,
-                        UnorderedSet<const DexField*>& added) {
-  std::string_view nbuffer = extract_utf8(cpool, finfo.nameNdx);
-  std::string_view dbuffer = extract_utf8(cpool, finfo.descNdx);
-  always_assert_type_log(!nbuffer.empty(), INVALID_JAVA, "Empty field name");
+                        std::unordered_set<const DexField*>& added) {
+  std::string_view dbuffer;
+  std::string_view nbuffer;
+  if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
+      !extract_utf8(cpool, finfo.descNdx, &dbuffer)) {
+    return nullptr;
+  }
   const auto* name = DexString::make_string(nbuffer);
   DexType* desc = DexType::make_type(dbuffer);
   DexField* field =
@@ -280,8 +296,10 @@ void init_basic_types() {
 namespace {
 
 DexType* parse_type(std::string_view& buf) {
-  always_assert_type_log(!buf.empty(), RedexError::INVALID_JAVA,
-                         "Invalid empty parse-type");
+  if (buf.empty()) {
+    std::cerr << "Invalid empty parse-type, bailing\n";
+    return nullptr;
+  }
 
   char desc = buf.at(0);
   const std::string_view buf_start = buf;
@@ -314,8 +332,10 @@ DexType* parse_type(std::string_view& buf) {
     // Find semicolon.
     for (size_t i = 1; i < buf.size(); i++) {
       if (buf[i] == ';') {
-        always_assert_type_log(i != 1, RedexError::INVALID_JAVA,
-                               "Empty class name");
+        if (i == 1) {
+          std::cerr << "Empty class name, bailing\n";
+          return nullptr;
+        }
         auto ret = buf.substr(0, i + 1);
         buf = buf.substr(i + 1);
         redex_assert(buf.size() < start_size);
@@ -323,9 +343,8 @@ DexType* parse_type(std::string_view& buf) {
       }
       // TODO: Check valid class name chars.
     }
-    always_assert_type_log(
-        false, RedexError::INVALID_JAVA,
-        "Could not parse reference type, no suffix semicolon");
+    std::cerr << "Could not parse reference type, no suffix semicolon\n";
+    return nullptr;
   }
   case '[': {
     // Figure out array depth.
@@ -337,13 +356,17 @@ DexType* parse_type(std::string_view& buf) {
       }
       return buf.size();
     }();
-    always_assert_type_log(depth != buf.size(), RedexError::INVALID_JAVA,
-                           "Could not parse array type, no element type");
+    if (depth == buf.size()) {
+      std::cerr << "Could not parse array type, no element type\n";
+      return nullptr;
+    }
 
     // Easiest to go recursive here.
     buf = buf.substr(depth);
     auto* elem_type = parse_type(buf);
-    redex_assert(elem_type != nullptr);
+    if (elem_type == nullptr) {
+      return nullptr;
+    }
     redex_assert(!type::is_array(elem_type));
     redex_assert(buf.size() < start_size);
     auto* ret = type::make_array_type(elem_type, depth);
@@ -351,15 +374,14 @@ DexType* parse_type(std::string_view& buf) {
     return ret;
   }
   }
-  always_assert_type_log(false, RedexError::INVALID_JAVA,
-                         "Invalid parse-type '%c'", desc);
-  UNREACHABLE();
+  std::cerr << "Invalid parse-type '" << desc << "', bailing\n";
+  return nullptr;
 }
 
 DexTypeList* extract_arguments(std::string_view& buf) {
-  always_assert_type_log(buf.size() >= 2, RedexError::INVALID_JAVA,
-                         "Invalid argument list without open-close-parens");
-
+  if (buf.size() < 2) {
+    return nullptr;
+  }
   buf = buf.substr(1);
   if (buf.at(0) == ')') {
     buf = buf.substr(1);
@@ -368,12 +390,17 @@ DexTypeList* extract_arguments(std::string_view& buf) {
   DexTypeList::ContainerType args;
   while (buf.at(0) != ')') {
     DexType* dtype = parse_type(buf);
-    redex_assert(dtype != nullptr);
-    always_assert_type_log(dtype != sSimpleTypeV, RedexError::INVALID_JAVA,
-                           "Invalid argument type 'V' in args");
+    if (dtype == nullptr) {
+      return nullptr;
+    }
+    if (dtype == sSimpleTypeV) {
+      std::cerr << "Invalid argument type 'V' in args, bailing\n";
+      return nullptr;
+    }
     args.push_back(dtype);
-    always_assert_type_log(!buf.empty(), RedexError::INVALID_JAVA,
-                           "Missing close parens");
+    if (buf.empty()) {
+      return nullptr;
+    }
   }
   buf = buf.substr(1);
   return DexTypeList::make_type_list(std::move(args));
@@ -382,25 +409,35 @@ DexTypeList* extract_arguments(std::string_view& buf) {
 DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
                           DexType* self,
                           cp_method_info& finfo,
-                          UnorderedSet<const DexMethod*>& added) {
-  std::string_view nbuffer = extract_utf8(cpool, finfo.nameNdx);
-  std::string_view dbuffer = extract_utf8(cpool, finfo.descNdx);
+                          std::unordered_set<const DexMethod*>& added) {
+  std::string_view dbuffer;
+  std::string_view nbuffer;
+  if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
+      !extract_utf8(cpool, finfo.descNdx, &dbuffer)) {
+    return nullptr;
+  }
   always_assert_type_log(!nbuffer.empty(), INVALID_JAVA, "Empty method name");
   const auto* name = DexString::make_string(nbuffer);
   std::string_view ptr = dbuffer;
   DexTypeList* tlist = extract_arguments(ptr);
-  redex_assert(tlist != nullptr);
+  if (tlist == nullptr) {
+    return nullptr;
+  }
   DexType* rtype = parse_type(ptr);
-  redex_assert(rtype != nullptr);
+  if (rtype == nullptr) {
+    return nullptr;
+  }
   DexProto* proto = DexProto::make_proto(rtype, tlist);
   DexMethod* method =
       static_cast<DexMethod*>(DexMethod::make_method(self, name, proto));
   auto inserted = added.insert(method).second;
   always_assert_type_log(inserted, INVALID_JAVA, "Duplicate method %s",
                          SHOW(method));
-  always_assert_type_log(!method->is_concrete(), RedexError::INVALID_JAVA,
-                         "Pre-concrete method attempted to load '%s'",
-                         SHOW(method));
+  if (method->is_concrete()) {
+    std::cerr << "Pre-concrete method attempted to load '" << show(method)
+              << "', bailing\n";
+    return nullptr;
+  }
   uint32_t access = finfo.aflags;
   bool is_virt = true;
   if (nbuffer[0] == '<') {
@@ -430,16 +467,22 @@ bool parse_class(uint8_t* buffer,
   uint16_t vminor DEBUG_ONLY = read16(buffer, buffer_end);
   uint16_t vmajor DEBUG_ONLY = read16(buffer, buffer_end);
   uint16_t cp_count = read16(buffer, buffer_end);
-  always_assert_type_log(magic == kClassMagic, RedexError::INVALID_JAVA,
-                         "Bad class magic 0x%x", magic);
+  if (magic != kClassMagic) {
+    std::cerr << "Bad class magic " << std::hex << magic << ", Bailing\n";
+    return false;
+  }
   std::vector<cp_entry> cpool;
   cpool.resize(cp_count);
   /* The zero'th entry is always empty.  Java is annoying. */
   for (size_t i = 1; i < cp_count; i++) {
-    cpool[i] = parse_cp_entry(buffer, buffer_end);
+    if (!parse_cp_entry(buffer, buffer_end, cpool[i])) {
+      return false;
+    }
     if (cpool[i].tag == CP_CONST_LONG || cpool[i].tag == CP_CONST_DOUBLE) {
-      always_assert_type_log(i + 1 < cp_count, RedexError::INVALID_JAVA,
-                             "Bad long/double constant");
+      if (i + 1 >= cp_count) {
+        std::cerr << "Bad long/double constant, bailing.\n";
+        return false;
+      }
       cpool[i + 1] = cpool[i];
       i++;
     }
@@ -459,8 +502,10 @@ bool parse_class(uint8_t* buffer,
   }
 
   DexType* self = make_dextype_from_cref(cpool, clazz);
-  always_assert_type_log(self != nullptr, RedexError::INVALID_JAVA,
-                         "Bad class cpool index %u", clazz);
+  if (self == nullptr) {
+    std::cerr << "Bad class cpool index " << clazz << ", Bailing\n";
+    return false;
+  }
   DexClass* cls = type_class(self);
   if (cls != nullptr) {
     // We are seeing duplicate classes when parsing jar file
@@ -495,24 +540,28 @@ bool parse_class(uint8_t* buffer,
   cc.set_external();
   if (super != 0) {
     DexType* sclazz = make_dextype_from_cref(cpool, super);
-    always_assert_type_log(sclazz != nullptr, RedexError::INVALID_JAVA,
-                           "Bad super class cpool index %u", super);
+    if (sclazz == nullptr) {
+      std::cerr << "Bad super class cpool index " << super << ", Bailing\n";
+      return false;
+    }
     cc.set_super(sclazz);
-  } else {
-    always_assert_type_log(self->get_name()->str() == "Ljava/lang/Object;",
-                           RedexError::INVALID_JAVA,
-                           "Missing super for class cpool index %u", clazz);
+  } else if (self->get_name()->str() != "Ljava/lang/Object;") {
+    std::cerr << "Missing super for class cpool index " << clazz
+              << ", Bailing\n";
+    return false;
   }
   cc.set_access((DexAccessFlags)aflags);
-
-  for (int i = 0; i < ifcount; i++) {
-    uint16_t iface = read16(buffer, buffer_end);
-    DexType* iftype = make_dextype_from_cref(cpool, iface);
-    always_assert_type_log(iftype != nullptr, RedexError::INVALID_JAVA,
-                           "Bad interface cpool index %u", super);
-    cc.add_interface(iftype);
+  if (ifcount != 0u) {
+    for (int i = 0; i < ifcount; i++) {
+      uint16_t iface = read16(buffer, buffer_end);
+      DexType* iftype = make_dextype_from_cref(cpool, iface);
+      if (iftype == nullptr) {
+        std::cerr << "Bad interface cpool index " << super << ", Bailing\n";
+        return false;
+      }
+      cc.add_interface(iftype);
+    }
   }
-
   uint16_t fcount = read16(buffer, buffer_end);
 
   auto invoke_attr_hook =
@@ -525,14 +574,19 @@ bool parse_class(uint8_t* buffer,
         for (uint16_t j = 0; j < attributes_count; j++) {
           uint16_t attribute_name_index = read16(attrPtr, buffer_end);
           uint32_t attribute_length = read32(attrPtr, buffer_end);
-          std::string_view attribute_name =
-              extract_utf8(cpool, attribute_name_index);
+          std::string_view attribute_name;
+          auto extract_res =
+              extract_utf8(cpool, attribute_name_index, &attribute_name);
+          always_assert_log(
+              extract_res,
+              "attribute hook was specified, but failed to load the attribute "
+              "name due to insufficient name buffer");
           attr_hook(field_or_method, attribute_name, attrPtr, buffer_end);
           attrPtr += attribute_length;
         }
       };
 
-  UnorderedSet<const DexField*> added_fields;
+  std::unordered_set<const DexField*> added_fields;
   for (int i = 0; i < fcount; i++) {
     cp_field_info cpfield;
     cpfield.aflags = read16(buffer, buffer_end);
@@ -541,13 +595,15 @@ bool parse_class(uint8_t* buffer,
     uint8_t* attrPtr = buffer;
     skip_attributes(buffer, buffer_end);
     DexField* field = make_dexfield(cpool, self, cpfield, added_fields);
-    redex_assert(field != nullptr);
+    if (field == nullptr) {
+      return false;
+    }
     cc.add_field(field);
     invoke_attr_hook({field}, attrPtr);
   }
 
   uint16_t mcount = read16(buffer, buffer_end);
-  UnorderedSet<const DexMethod*> added_methods;
+  std::unordered_set<const DexMethod*> added_methods;
   if (mcount != 0u) {
     for (int i = 0; i < mcount; i++) {
       cp_method_info cpmethod;
@@ -558,7 +614,9 @@ bool parse_class(uint8_t* buffer,
       uint8_t* attrPtr = buffer;
       skip_attributes(buffer, buffer_end);
       DexMethod* method = make_dexmethod(cpool, self, cpmethod, added_methods);
-      redex_assert(method != nullptr);
+      if (method == nullptr) {
+        return false;
+      }
       cc.add_method(method);
       invoke_attr_hook({method}, attrPtr);
     }
@@ -695,89 +753,106 @@ struct jar_entry {
   std::string filename;
 };
 
-pk_cdir_end find_central_directory(const uint8_t* mapping, ssize_t size) {
+bool find_central_directory(const uint8_t* mapping,
+                            ssize_t size,
+                            pk_cdir_end& pce) {
   ssize_t soffset = (size - sizeof(pk_cdir_end));
-  always_assert_type_log(soffset >= 0, RedexError::INVALID_JAVA,
-                         "Zip too small");
-  ssize_t eoffset = std::max((ssize_t)0, soffset - kMaxCDirEndSearch);
+  ssize_t eoffset = soffset - kMaxCDirEndSearch;
+  if (soffset < 0) {
+    return false;
+  }
+  if (eoffset < 0) {
+    eoffset = 0;
+  }
   do {
     const uint8_t* cdsearch = mapping + soffset;
     if (memcmp(cdsearch, kCDirEnd.data(), kCDirEnd.size()) == 0) {
-      pk_cdir_end pce;
       memcpy(&pce, cdsearch, sizeof(pk_cdir_end));
-      return pce;
+      return true;
     }
   } while (soffset-- > eoffset);
-  always_assert_type_log(false, RedexError::INVALID_JAVA,
-                         "End of central directory record not found");
-  UNREACHABLE();
+  std::cerr << "End of central directory record not found, bailing\n";
+  return false;
 }
 
-void validate_pce(pk_cdir_end& pce, ssize_t size) {
+bool validate_pce(pk_cdir_end& pce, ssize_t size) {
   /* We only support a limited feature set.  We
    * don't support disk-spanning, so bail if that's the case.
    */
-  always_assert_type_log(pce.cd_diskno == pce.diskno && pce.cd_diskno == 0 &&
-                             pce.cd_entries == pce.cd_disk_entries,
-                         RedexError::INVALID_JAVA,
-                         "Disk spanning is not supported");
+  if (pce.cd_diskno != pce.diskno || pce.cd_diskno != 0 ||
+      pce.cd_entries != pce.cd_disk_entries) {
+    std::cerr << "Disk spanning is not supported, bailing\n";
+    return false;
+  }
   ssize_t data_size = size - sizeof(pk_cdir_end);
-  always_assert_type_log(pce.cd_disk_offset + pce.cd_size <= data_size,
-                         RedexError::INVALID_JAVA,
-                         "Central directory overflow, invalid pce structure");
+  if (pce.cd_disk_offset + pce.cd_size > data_size) {
+    std::cerr << "Central directory overflow, invalid pce structure\n";
+    return false;
+  }
+  return true;
 }
 
-jar_entry extract_jar_entry(const uint8_t*& mapping,
-                            size_t& offset,
-                            size_t total_size) {
-  jar_entry je;
-  always_assert_type_log(offset + kCDFile.size() <= total_size,
-                         RedexError::INVALID_JAVA,
-                         "Reading mapping out of bound");
-  always_assert_type_log(memcmp(mapping, kCDFile.data(), kCDFile.size()) == 0,
-                         RedexError::INVALID_JAVA,
-                         "Invalid central directory entry");
+bool extract_jar_entry(const uint8_t*& mapping,
+                       size_t& offset,
+                       size_t total_size,
+                       jar_entry& je) {
+  if (offset + kCDFile.size() > total_size) {
+    std::cerr << "Reading mapping out of bound, bailing\n";
+    return false;
+  }
+  if (memcmp(mapping, kCDFile.data(), kCDFile.size()) != 0) {
+    std::cerr << "Invalid central directory entry, bailing\n";
+    return false;
+  }
   offset += sizeof(pk_cd_file);
-  always_assert_type_log(offset < total_size, RedexError::INVALID_JAVA,
-                         "Reading mapping out of bound");
+  if (offset >= total_size) {
+    std::cerr << "Reading mapping out of bound\n";
+    return false;
+  }
   memcpy(&je.cd_entry, mapping, sizeof(pk_cd_file));
   mapping += sizeof(pk_cd_file);
   offset += je.cd_entry.fname_len;
-  always_assert_type_log(offset < total_size, RedexError::INVALID_JAVA,
-                         "Reading mapping out of bound");
+  if (offset >= total_size) {
+    std::cerr << "Reading mapping out of bound\n";
+    return false;
+  }
   je.filename = std::string((const char*)mapping, je.cd_entry.fname_len);
   mapping += je.cd_entry.fname_len;
   offset = offset + je.cd_entry.extra_len + je.cd_entry.comment_len;
   mapping += je.cd_entry.extra_len;
   mapping += je.cd_entry.comment_len;
-  return je;
+  return true;
 }
 
-std::vector<jar_entry> get_jar_entries(const uint8_t* mapping,
-                                       size_t size,
-                                       pk_cdir_end& pce) {
+bool get_jar_entries(const uint8_t* mapping,
+                     size_t size,
+                     pk_cdir_end& pce,
+                     std::vector<jar_entry>& files) {
   const uint8_t* cdir = mapping + pce.cd_disk_offset;
-  std::vector<jar_entry> files;
-  files.reserve(pce.cd_entries);
+  files.resize(pce.cd_entries);
   size_t offset = pce.cd_disk_offset;
   for (int entry = 0; entry < pce.cd_entries; entry++) {
-    files.emplace_back(extract_jar_entry(cdir, offset, size));
+    if (!extract_jar_entry(cdir, offset, size, files[entry])) {
+      return false;
+    }
   }
-  return files;
+  return true;
 }
 
-void jar_uncompress(Bytef* dest,
-                    uLongf* destLen,
-                    const Bytef* source,
-                    uLong sourceLen,
-                    uint32_t comp_method) {
+int jar_uncompress(Bytef* dest,
+                   uLongf* destLen,
+                   const Bytef* source,
+                   uLong sourceLen,
+                   uint32_t comp_method) {
   if (comp_method == kCompMethodStore) {
-    always_assert_type_log(sourceLen <= *destLen, RedexError::INVALID_JAVA,
-                           "Not enough space for STOREd entry: %lu vs %lu",
-                           sourceLen, *destLen);
+    if (sourceLen > *destLen) {
+      std::cerr << "Not enough space for STOREd entry: " << sourceLen << " vs "
+                << *destLen << std::endl;
+      return Z_BUF_ERROR;
+    }
     memcpy(dest, source, sourceLen);
     *destLen = sourceLen;
-    return;
+    return Z_OK;
   }
 
   z_stream stream;
@@ -791,42 +866,43 @@ void jar_uncompress(Bytef* dest,
   stream.zfree = (free_func)0;
 
   err = inflateInit2(&stream, -MAX_WBITS);
-  always_assert_type_log(err == Z_OK, RedexError::INVALID_JAVA,
-                         "Failed decompression");
+  if (err != Z_OK) {
+    return err;
+  }
 
   err = inflate(&stream, Z_FINISH);
   if (err != Z_STREAM_END) {
     inflateEnd(&stream);
-    always_assert_type_log(err == Z_STREAM_END, RedexError::INVALID_JAVA,
-                           "Failed decompression");
+    return err;
   }
   *destLen = stream.total_out;
 
   err = inflateEnd(&stream);
-  always_assert_type_log(err == Z_OK, RedexError::INVALID_JAVA,
-                         "Failed inflateEnd");
+  return err;
 }
 
-void decompress_class(jar_entry& file,
+bool decompress_class(jar_entry& file,
                       const uint8_t* mapping,
                       size_t map_size,
                       uint8_t* outbuffer,
                       ssize_t bufsize) {
-  always_assert_type_log(file.cd_entry.comp_method == kCompMethodDeflate ||
-                             file.cd_entry.comp_method == kCompMethodStore,
-                         RedexError::INVALID_JAVA,
-                         "Unknown compression method %u for %s",
-                         file.cd_entry.comp_method, file.filename.c_str());
+  if (file.cd_entry.comp_method != kCompMethodDeflate &&
+      file.cd_entry.comp_method != kCompMethodStore) {
+    std::cerr << "Unknown compression method " << file.cd_entry.comp_method
+              << " for " << file.filename << ", Bailing\n";
+    return false;
+  }
 
   static_assert(kLFile.size() <= sizeof(pk_lfile));
-  always_assert_type_log(file.cd_entry.disk_offset + sizeof(pk_lfile) <
-                             map_size,
-                         RedexError::INVALID_JAVA,
-                         "Entry out of map bounds!");
+  if (file.cd_entry.disk_offset + sizeof(pk_lfile) >= map_size) {
+    std::cerr << "Entry out of map bounds!\n";
+    return false;
+  }
   const uint8_t* lfile = mapping + file.cd_entry.disk_offset;
-  always_assert_type_log(memcmp(lfile, kLFile.data(), kLFile.size()) == 0,
-                         RedexError::INVALID_JAVA,
-                         "Invalid local file entry");
+  if (memcmp(lfile, kLFile.data(), kLFile.size()) != 0) {
+    std::cerr << "Invalid local file entry, bailing\n";
+    return false;
+  }
 
   pk_lfile pkf;
   memcpy(&pkf, lfile, sizeof(pk_lfile));
@@ -839,48 +915,58 @@ void decompress_class(jar_entry& file,
 
   lfile += sizeof(pk_lfile);
 
-  always_assert_type_log(file.cd_entry.disk_offset + sizeof(pk_lfile) +
-                                 pkf.fname_len + pkf.extra_len + pkf.comp_size <
-                             map_size,
-                         RedexError::INVALID_JAVA,
-                         "Complete entry exceeds mapping bounds.");
+  if (file.cd_entry.disk_offset + sizeof(pk_lfile) + pkf.fname_len +
+          pkf.extra_len + pkf.comp_size >=
+      map_size) {
+    std::cerr << "Complete entry exceeds mapping bounds.\n";
+    return false;
+  }
 
-  always_assert_type_log(
-      pkf.fname_len == file.cd_entry.fname_len &&
-          pkf.comp_size == file.cd_entry.comp_size &&
-          pkf.ucomp_size == file.cd_entry.ucomp_size &&
-          pkf.comp_method == file.cd_entry.comp_method &&
-          file.filename == std::string_view((const char*)lfile, pkf.fname_len),
-      RedexError::INVALID_JAVA,
-      "Directory entry doesn't match local file header %u %u %u %u %u "
-      "%u %u %u extra %u",
-      pkf.fname_len, pkf.comp_size, pkf.ucomp_size, pkf.comp_method,
-      file.cd_entry.fname_len, file.cd_entry.comp_size,
-      file.cd_entry.ucomp_size, file.cd_entry.comp_method, pkf.extra_len);
+  if (pkf.fname_len != file.cd_entry.fname_len ||
+      pkf.comp_size != file.cd_entry.comp_size ||
+      pkf.ucomp_size != file.cd_entry.ucomp_size ||
+      pkf.comp_method != file.cd_entry.comp_method ||
+      file.filename != std::string_view((const char*)lfile, pkf.fname_len)) {
+    std::cerr << "Directory entry doesn't match local file header, Bailing "
+              << pkf.fname_len << " " << pkf.comp_size << " " << pkf.ucomp_size
+              << " " << pkf.comp_method << " " << file.cd_entry.fname_len << " "
+              << file.cd_entry.comp_size << " " << file.cd_entry.ucomp_size
+              << " " << file.cd_entry.comp_method << " extra " << pkf.extra_len
+              << "\n";
+    return false;
+  }
 
   lfile += pkf.fname_len;
   lfile += pkf.extra_len;
 
   uLongf dlen = bufsize;
-  jar_uncompress(outbuffer, &dlen, lfile, pkf.comp_size,
-                 file.cd_entry.comp_method);
-  always_assert_type_log(dlen == pkf.ucomp_size, RedexError::INVALID_JAVA,
-                         "mis-match on uncompressed size");
+  int zlibrv = jar_uncompress(outbuffer, &dlen, lfile, pkf.comp_size,
+                              file.cd_entry.comp_method);
+  if (zlibrv != Z_OK) {
+    std::cerr << "uncompress failed with code " << zlibrv << ", Bailing\n";
+    return false;
+  }
+  if (dlen != pkf.ucomp_size) {
+    std::cerr << "mis-match on uncompressed size, Bailing\n";
+    return false;
+  }
+  return true;
 }
 
-constexpr size_t kStartBufferSize = static_cast<size_t>(128 * 1024);
-constexpr size_t kMaxBufferSize = static_cast<size_t>(8 * 1024 * 1024);
+constexpr size_t kStartBufferSize = 128 * 1024;
 
-template <typename Fn, typename InitFn>
-void process_jar_entries(std::vector<jar_entry>& files,
-                         const uint8_t* mapping,
-                         const size_t map_size,
-                         const Fn& fn,
-                         const InitFn& init_fn) {
+bool process_jar_entries(
+    const DexLocation* location,
+    std::vector<jar_entry>& files,
+    const uint8_t* mapping,
+    const size_t map_size,
+    Scope* classes,
+    const attribute_hook_t& attr_hook,
+    const jar_loader::duplicate_allowed_hook_t& is_allowed) {
   ssize_t bufsize = kStartBufferSize;
   std::unique_ptr<uint8_t[]> outbuffer = std::make_unique<uint8_t[]>(bufsize);
   constexpr std::string_view kClassEndString = ".class";
-  init_fn();
+  init_basic_types();
   for (auto& file : files) {
     if (file.cd_entry.ucomp_size == 0) {
       continue;
@@ -897,11 +983,6 @@ void process_jar_entries(std::vector<jar_entry>& files,
       continue;
     }
 
-    // Reject uncharacteristically large files.
-    always_assert_type_log(file.cd_entry.ucomp_size <= kMaxBufferSize,
-                           INVALID_JAVA, "Entry %s with size %u is too large",
-                           file.filename.c_str(), file.cd_entry.ucomp_size);
-
     // Resize output if necessary.
     if (bufsize < file.cd_entry.ucomp_size) {
       while (bufsize < file.cd_entry.ucomp_size) {
@@ -910,21 +991,16 @@ void process_jar_entries(std::vector<jar_entry>& files,
       outbuffer = std::make_unique<uint8_t[]>(bufsize);
     }
 
-    decompress_class(file, mapping, map_size, outbuffer.get(), bufsize);
+    if (!decompress_class(file, mapping, map_size, outbuffer.get(), bufsize)) {
+      return false;
+    }
 
-    fn(outbuffer.get(), bufsize);
+    if (!parse_class(outbuffer.get(), bufsize, classes, attr_hook, is_allowed,
+                     location)) {
+      return false;
+    }
   }
-}
-
-template <typename Fn, typename InitFn>
-void process_jar_impl(const uint8_t* mapping,
-                      size_t size,
-                      const Fn& fn,
-                      const InitFn& init_fn) {
-  auto pce = find_central_directory(mapping, size);
-  validate_pce(pce, size);
-  auto files = get_jar_entries(mapping, size, pce);
-  process_jar_entries(files, mapping, size, fn, init_fn);
+  return true;
 }
 
 } // namespace
@@ -937,10 +1013,28 @@ bool default_duplicate_allow_fn(const DexClass* c, const std::string&) {
 
 } // namespace jar_loader
 
-void process_jar(const uint8_t* mapping,
+bool process_jar(const DexLocation* location,
+                 const uint8_t* mapping,
                  size_t size,
-                 const std::function<void(uint8_t*, size_t)>& on_class) {
-  process_jar_impl(mapping, size, on_class, []() {});
+                 Scope* classes,
+                 const attribute_hook_t& attr_hook,
+                 const jar_loader::duplicate_allowed_hook_t& is_allowed) {
+  pk_cdir_end pce;
+  std::vector<jar_entry> files;
+  if (!find_central_directory(mapping, size, pce)) {
+    return false;
+  }
+  if (!validate_pce(pce, size)) {
+    return false;
+  }
+  if (!get_jar_entries(mapping, size, pce, files)) {
+    return false;
+  }
+  if (!process_jar_entries(location, files, mapping, size, classes, attr_hook,
+                           is_allowed)) {
+    return false;
+  }
+  return true;
 }
 
 bool load_jar_file(const DexLocation* location,
@@ -948,19 +1042,22 @@ bool load_jar_file(const DexLocation* location,
                    const attribute_hook_t& attr_hook,
                    const jar_loader::duplicate_allowed_hook_t& is_allowed) {
   boost::iostreams::mapped_file file;
-  file.open(location->get_file_name().c_str(),
-            boost::iostreams::mapped_file::readonly);
+  try {
+    file.open(location->get_file_name().c_str(),
+              boost::iostreams::mapped_file::readonly);
+  } catch (const std::exception&) {
+    std::cerr << "error: cannot open jar file: " << location->get_file_name()
+              << "\n";
+    return false;
+  }
 
   const auto* mapping = reinterpret_cast<const uint8_t*>(file.const_data());
-  auto init_fn = []() { init_basic_types(); };
-  auto on_class = [classes, &attr_hook, &is_allowed, location](uint8_t* buffer,
-                                                               size_t size) {
-    auto parse_result =
-        parse_class(buffer, size, classes, attr_hook, is_allowed, location);
-    always_assert_type_log(parse_result, RedexError::INVALID_JAVA,
-                           "Failed to parse class");
-  };
-  process_jar_impl(mapping, file.size(), on_class, init_fn);
+  if (!process_jar(location, mapping, file.size(), classes, attr_hook,
+                   is_allowed)) {
+    std::cerr << "error: cannot process jar: " << location->get_file_name()
+              << "\n";
+    return false;
+  }
   return true;
 }
 

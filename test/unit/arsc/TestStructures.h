@@ -9,7 +9,6 @@
 
 #include "Util.h"
 #include "androidfw/ResourceTypes.h"
-#include "utils/Serialize.h"
 
 // Data that is used to write many test cases against. Meant to be included from
 // individual test cpp files that want to code against it.
@@ -27,51 +26,18 @@ PACKED(struct EntryAndValue {
 });
 
 // For testing simplicity, a map that has two items in it.
-struct MapEntryAndTwoValues {
+struct MapEntryAndValues {
   android::ResTable_map_entry entry{};
   android::ResTable_map item0{};
   android::ResTable_map item1{};
-
-  template <typename T>
-  static bool extract_at(const android::Vector<char>& data,
-                         size_t index,
-                         T* result) {
-    static_assert(std::is_trivially_copyable_v<T>,
-                  "Not trivially copyable, can't safely memcpy");
-    const size_t size = sizeof(T);
-    const size_t offset = index * size;
-
-    if (offset + size <= data.size()) {
-      memcpy(result, data.array() + offset, size);
-      return true;
-    }
-    return false;
-  }
-
-  explicit MapEntryAndTwoValues(arsc::ResComplexEntryBuilder builder) {
-    android::Vector<char> complex_entry_data;
-    builder.serialize(&complex_entry_data);
-
-    const size_t entry_size = sizeof(android::ResTable_map_entry);
-    const size_t map_size = sizeof(android::ResTable_map);
-
-    if (entry_size <= complex_entry_data.size()) {
-      memcpy(&entry,
-             complex_entry_data.array(),
-             sizeof(android::ResTable_map_entry));
-
-      auto count = entry.count;
-      if (count > 0 && entry_size + map_size <= complex_entry_data.size()) {
-        memcpy(&item0, complex_entry_data.array() + entry_size, map_size);
-
-        if (count > 1 &&
-            entry_size + 2 * map_size <= complex_entry_data.size()) {
-          memcpy(&item1,
-                 complex_entry_data.array() + entry_size + map_size,
-                 map_size);
-        }
-      }
-    }
+  MapEntryAndValues(uint32_t key_string_idx, uint32_t parent_ident) {
+    entry.size = sizeof(android::ResTable_map_entry);
+    entry.count = 2;
+    entry.flags = android::ResTable_entry::FLAG_COMPLEX;
+    entry.key.index = key_string_idx;
+    entry.parent.ident = parent_ident;
+    item0.value.size = sizeof(android::Res_value);
+    item1.value.size = sizeof(android::Res_value);
   }
 };
 
@@ -83,7 +49,7 @@ extern EntryAndValue e2;
 extern EntryAndValue id_0;
 extern EntryAndValue id_1;
 extern EntryAndValue id_2;
-extern MapEntryAndTwoValues style;
+extern MapEntryAndValues style;
 
 // A package called "foo"
 extern android::ResTable_package foo_package;

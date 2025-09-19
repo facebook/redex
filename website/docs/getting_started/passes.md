@@ -589,22 +589,6 @@ size.
 See related:
 * [`StaticReloPass`](#staticrelopass)
 
-## StringBuilderOutlinerPass
-This pass looks for recurring sequences of StringBuilder calls, and then outlines them. Outlining is essentially the opposite of inlining, it finds repeated sequences of code and extracts them into an external function, often referred to as the outlined function.
-
-This outliner pass specifically deals with StringBuilders because they are very commonly instantiated in Java code.
-
-A common pattern for StringBuilders are
-```
-StringBuilder builder = new StringBuilder();
-builder.append(...);
-builder.append(...);
-builder.append(...);
-builder.toString();
-```
-
-Since a StringBuilder's methods are independent of any state in the user's code, they can be safely moved and outlined to create contigious sequences of repetitive code. The outlining only happens if certain conditions are met, including if there are enough use sites and if there aren't too many parameters (as this might increase register pressure in the caller).
-
 ## StringConcatenatorPass
 
 Reduce string operations as well as reducing the number of strings that need

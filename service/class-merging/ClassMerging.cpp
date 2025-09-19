@@ -103,8 +103,7 @@ ModelStats merge_model(Scope& scope,
                        ConfigFiles& conf,
                        PassManager& mgr,
                        DexStoresVector& stores,
-                       ModelSpec& spec,
-                       const bool is_intra_dex) {
+                       ModelSpec& spec) {
   always_assert(!spec.roots.empty());
   TypeSystem type_system(scope);
   if (spec.merging_targets.empty()) {
@@ -113,7 +112,7 @@ ModelStats merge_model(Scope& scope,
   if (spec.merging_targets.empty()) {
     return ModelStats();
   }
-  return merge_model(type_system, scope, conf, mgr, stores, spec, is_intra_dex);
+  return merge_model(type_system, scope, conf, mgr, stores, spec);
 }
 
 ModelStats merge_model(const TypeSystem& type_system,
@@ -121,8 +120,7 @@ ModelStats merge_model(const TypeSystem& type_system,
                        ConfigFiles& conf,
                        PassManager& mgr,
                        DexStoresVector& stores,
-                       ModelSpec& spec,
-                       const bool is_intra_dex) {
+                       ModelSpec& spec) {
   TRACE(CLMG, 2,
         "[ClassMerging] merging %s model merging targets %zu roots %zu; "
         "update_method_profiles_stats %d",
@@ -142,7 +140,7 @@ ModelStats merge_model(const TypeSystem& type_system,
   if (!spec.update_method_profiles_stats) {
     update_method_profiles_stats = false;
   }
-  ModelMerger mm(is_intra_dex);
+  ModelMerger mm;
   auto merger_classes =
       mm.merge_model(scope, stores, conf, model, update_method_profiles_stats);
   auto num_dedupped = method_dedup::dedup_constructors(merger_classes, scope);

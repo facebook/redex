@@ -17,8 +17,8 @@ void unmark_keep(const Scope& scope,
   if (package_list.empty() && supercls_list.empty()) {
     return;
   }
-  UnorderedSet<const DexType*> superclasses;
-  UnorderedSet<const DexType*> interface_list;
+  std::unordered_set<const DexType*> superclasses;
+  std::unordered_set<const DexType*> interface_list;
   for (const auto& cls_name : supercls_list) {
     const DexType* supercls_type = DexType::get_type(cls_name);
     if (supercls_type != nullptr) {
@@ -33,7 +33,7 @@ void unmark_keep(const Scope& scope,
   TypeSystem ts(scope);
   // Unmark proguard keep rule for interface implementors like
   // "-keep class * extend xxx".
-  for (const DexType* intf_type : UnorderedIterable(interface_list)) {
+  for (const DexType* intf_type : interface_list) {
     for (const DexType* implementor : ts.get_implementors(intf_type)) {
       DexClass* implementor_cls = type_class(implementor);
       if (implementor_cls != nullptr) {

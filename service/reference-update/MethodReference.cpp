@@ -63,7 +63,7 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
                     SHOW(new_callee.method), SHOW(callsite.caller));
 
   auto* code = callsite.caller->get_code();
-  if (code->cfg_built()) {
+  if (code->editable_cfg_built()) {
     auto& cfg = code->cfg();
     auto* insn = callsite.insn;
     auto iterator = cfg.find_insn(insn);
@@ -112,7 +112,7 @@ void update_call_refs_simple(
   }
 
   auto patcher = [&](DexMethod* meth, IRCode& code) {
-    if (code.cfg_built()) {
+    if (code.editable_cfg_built()) {
       auto& cfg = code.cfg();
       for (auto& mie : cfg::InstructionIterable(cfg)) {
         auto* insn = mie.insn;
@@ -186,7 +186,7 @@ CallSites collect_call_refs(const Scope& scope, const T& callees) {
     if (!code) {
       return call_sites;
     }
-    if (code->cfg_built()) {
+    if (code->editable_cfg_built()) {
       auto& cfg = code->cfg();
       for (auto& mie : cfg::InstructionIterable(cfg)) {
         auto* insn = mie.insn;
@@ -268,7 +268,7 @@ int wrap_instance_call_with_static(
     }
     auto* code = method->get_code();
     if (code != nullptr) {
-      if (code->cfg_built()) {
+      if (code->editable_cfg_built()) {
         auto& cfg = code->cfg();
         for (auto& mie : cfg::InstructionIterable(cfg)) {
           IRInstruction* insn = mie.insn;

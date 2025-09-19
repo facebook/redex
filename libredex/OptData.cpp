@@ -47,22 +47,22 @@ bool get_line_num(const DexMethod* method,
   bool find_first_pos = insn == nullptr;
   size_t cur_line = 0;
   bool success{false};
-  cfg_adapter::iterate_all(code, [&](const MethodItemEntry& mie) {
+  editable_cfg_adapter::iterate_all(code, [&](const MethodItemEntry& mie) {
     if (mie.type == MFLOW_POSITION) {
       cur_line = mie.pos->line;
       if (find_first_pos) {
         *line_num = cur_line;
         success = true;
-        return cfg_adapter::LOOP_BREAK;
+        return editable_cfg_adapter::LOOP_BREAK;
       }
     }
     if (mie.type == MFLOW_OPCODE && mie.insn == insn) {
       // We want to get the last position found before the insn we care about.
       *line_num = cur_line;
       success = true;
-      return cfg_adapter::LOOP_BREAK;
+      return editable_cfg_adapter::LOOP_BREAK;
     }
-    return cfg_adapter::LOOP_CONTINUE;
+    return editable_cfg_adapter::LOOP_CONTINUE;
   });
   return success;
 }
@@ -367,7 +367,7 @@ void OptDataMapper::serialize_class(
   cls_data["package"] = str_copy(cls_opt_data->m_package);
   cls_data["source_file"] =
       cls_opt_data->m_has_srcfile ? str_copy(cls_opt_data->m_filename) : "";
-  cls_data["name"] = name;
+  cls_data["name"] = std::move(name);
   arr->append(cls_data);
   serialize_opt_nopt_helper(cls_opt_data->m_opts, cls_opt_data->m_nopts, cls_id,
                             opt_arr, nopt_arr);

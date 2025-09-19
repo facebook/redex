@@ -441,9 +441,7 @@ Stats apply_transform(const PassState& pass_state,
     cfg.create_branch(transform.block, new_switch, nullptr, new_edges);
 
     // Reset successor of last prologue block to implement the default case.
-    // Make copy of succs to enable modification within loop
-    auto succs_copy = transform.block->succs();
-    for (auto* edge : succs_copy) {
+    for (const auto& edge : transform.block->succs()) {
       if (edge->type() == cfg::EDGE_GOTO) {
         cfg.set_edge_target(edge, default_case);
       }

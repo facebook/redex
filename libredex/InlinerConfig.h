@@ -15,10 +15,6 @@
 // cost. It just takes too much time to run the analysis for large methods.
 const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 5000;
 
-// Maximum size of reduced code to keep for specific call-site. It just takes
-// too much memory to retain individual larger reduced code.
-const size_t MAX_REDUCED_SIZE = 100;
-
 namespace inliner {
 
 enum UnfinalizePerfMode {
@@ -68,13 +64,9 @@ struct InlinerConfig {
   // branch opcodes to encode large jumps.
   uint64_t instruction_size_buffer{1 << 12};
 
-  // max_cost_for_constant_propagation is maximum size of code
-  // we can tolerate when making decision to inline
+  // max_cost_for_constant_propagation is amoungt of constant propagation
+  // analysis redex compiler can tolerate when making decision to inline
   size_t max_cost_for_constant_propagation{MAX_COST_FOR_CONSTANT_PROPAGATION};
-
-  // max_reduced_size is maximum size of reduced code to keep for particular
-  // callsite.
-  size_t max_reduced_size{MAX_REDUCED_SIZE};
 
   std::string unfinalize_perf_mode_str{"not-cold"};
   UnfinalizePerfMode unfinalize_perf_mode{UnfinalizePerfMode::NOT_COLD};

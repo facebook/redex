@@ -27,12 +27,6 @@ struct CallSiteSummary {
                                const ConstantValue& value);
 };
 
-struct CallSiteSummaryHasher {
-  size_t operator()(const CallSiteSummary& css) const {
-    return std::hash<std::string>()(css.get_key());
-  }
-};
-
 inline bool operator==(const CallSiteSummary& a, const CallSiteSummary& b) {
   return a.result_used == b.result_used && a.arguments.equals(b.arguments);
 }
@@ -106,8 +100,7 @@ class CallSiteSummarizer {
   /**
    * Internalized call-site summaries.
    */
-  InsertOnlyConcurrentSet<CallSiteSummary, CallSiteSummaryHasher>
-      m_call_site_summaries;
+  InsertOnlyConcurrentMap<std::string, CallSiteSummary> m_call_site_summaries;
 
   /**
    * For all (reachable) invoke instructions in a given method, collect

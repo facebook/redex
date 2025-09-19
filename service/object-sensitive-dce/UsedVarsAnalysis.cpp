@@ -220,6 +220,7 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
 
 std::vector<cfg::InstructionIterator> get_dead_instructions(
     const cfg::ControlFlowGraph& cfg, const FixpointIterator& fp_iter) {
+  always_assert(cfg.editable());
   std::vector<cfg::InstructionIterator> dead_instructions;
   for (auto* block : cfg.blocks()) {
     auto used_vars = fp_iter.get_used_vars_at_exit(block);

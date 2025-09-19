@@ -153,7 +153,6 @@ check_PROGRAMS = \
     resolver_test \
     resolve_proguard_value_test \
     resource_inlining_test \
-    resource_value_merging \
     resources_test \
     result_propagation_test \
     side_effects_summary_test \
@@ -463,8 +462,6 @@ resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp ScopeH
 
 resource_inlining_test_SOURCES = ResourceInliningTest.cpp ScopeHelper.cpp
 
-resource_value_merging_SOURCES = ResourceValueMergingPassTest.cpp
-
 result_propagation_test_SOURCES = ResultPropagationTest.cpp
 result_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -540,10 +537,7 @@ resources_test_SOURCES = RedexResourcesTest.cpp
 EXTRA_resources_test_DEPENDENCIES = resources_test.env more_resources/res/layout/class_names.xml
 $(eval $(call make_env,resources_test,\
   test_layout_path=$(srcdir)/example_layout_with_onclick.xml \
-  another_layout_path=more_resources/res/layout/class_names.xml \
-  single_resource_inclusion_path=$(srcdir)/example_single_resource_to_keep.xml \
-  multiple_resource_inclusion_path=$(srcdir)/example_multiple_resource_to_keep.xml \
-  empty_resource_inclusion_path=$(srcdir)/example_no_resource_to_keep.xml))
+  another_layout_path=more_resources/res/layout/class_names.xml))
 
 more_resources/res/layout/class_names.xml:
 	mkdir -p more_resources && unzip ../samples/more_resources/unsigned.apk -d more_resources res/layout/class_names.xml

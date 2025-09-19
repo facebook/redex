@@ -7,7 +7,6 @@
 
 #include "TypeAnalysisTransform.h"
 
-#include "DeterministicContainers.h"
 #include "DexInstruction.h"
 #include "IRInstruction.h"
 #include "KotlinNullCheckMethods.h"
@@ -41,17 +40,16 @@ struct TestZeroNullnessResults {
  * later.
  * TODO: cover other branch type for constant values.
  */
-static const UnorderedMap<IROpcode,
-                          TestZeroNullnessResults,
-                          boost::hash<IROpcode>>
-    test_zero_results{
-        {OPCODE_IF_EQZ, {ALWAYS_TAKEN, NEVER_TAKEN}},
-        {OPCODE_IF_NEZ, {NEVER_TAKEN, ALWAYS_TAKEN}},
-        {OPCODE_IF_LTZ, {UNKNOWN, UNKNOWN}},
-        {OPCODE_IF_GTZ, {UNKNOWN, UNKNOWN}},
-        {OPCODE_IF_LEZ, {UNKNOWN, UNKNOWN}},
-        {OPCODE_IF_GEZ, {UNKNOWN, UNKNOWN}},
-    };
+static const std::
+    unordered_map<IROpcode, TestZeroNullnessResults, boost::hash<IROpcode>>
+        test_zero_results{
+            {OPCODE_IF_EQZ, {ALWAYS_TAKEN, NEVER_TAKEN}},
+            {OPCODE_IF_NEZ, {NEVER_TAKEN, ALWAYS_TAKEN}},
+            {OPCODE_IF_LTZ, {UNKNOWN, UNKNOWN}},
+            {OPCODE_IF_GTZ, {UNKNOWN, UNKNOWN}},
+            {OPCODE_IF_LEZ, {UNKNOWN, UNKNOWN}},
+            {OPCODE_IF_GEZ, {UNKNOWN, UNKNOWN}},
+        };
 
 BranchResult evaluate_branch(IROpcode op, Nullness operand_nullness) {
   always_assert(operand_nullness != NN_BOTTOM);
@@ -90,7 +88,7 @@ void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
   auto result =
       evaluate_branch(last_insn->opcode(), domain.get_nullness().element());
   if (result == ALWAYS_TAKEN) {
-    // In cfg, there is no OPCODE_GOTO. We just put an tempary GOTO
+    // In editable cfg, there is no OPCODE_GOTO. We just put an tempary GOTO
     // insn here, and will be handled during actual code tranform.
     m_replacements.push_back({block->to_cfg_instruction_iterator(insn_it),
                               new IRInstruction(OPCODE_GOTO)});
@@ -193,7 +191,7 @@ Transform::Stats Transform::apply(
 
 void Transform::apply_changes(DexMethod* method) {
   auto* code = method->get_code();
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   for (auto const& p : m_replacements) {
     const cfg::InstructionIterator& it = p.first;

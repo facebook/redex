@@ -60,8 +60,8 @@ int Loop::get_loop_depth() const {
  * Returns the blocks that are not in the Loop but that have at least one
  * predecessor inside the loop.
  */
-UnorderedSet<cfg::Block*> Loop::get_exit_blocks() const {
-  UnorderedSet<cfg::Block*> result;
+std::unordered_set<cfg::Block*> Loop::get_exit_blocks() const {
+  std::unordered_set<cfg::Block*> result;
   for (auto* block : m_blocks) {
     for (auto* edge : block->succs()) {
       if (!contains(edge->target())) {
@@ -81,7 +81,7 @@ std::vector<cfg::Block*> Loop::get_blocks() const { return m_blocks; }
  * Recursively updates the parent_loop fields for this loop and all subloops
  */
 void Loop::update_parent_loop_fields() {
-  for (auto* sub : UnorderedIterable(m_subloops)) {
+  for (auto* sub : m_subloops) {
     sub->m_parent_loop = this;
     sub->update_parent_loop_fields();
   }
@@ -94,6 +94,10 @@ Loop::iterator Loop::end() { return m_blocks.end(); }
 Loop::reverse_iterator Loop::rbegin() { return m_blocks.rbegin(); }
 
 Loop::reverse_iterator Loop::rend() { return m_blocks.rend(); }
+
+Loop::subloop_iterator Loop::subloop_begin() { return m_subloops.begin(); }
+
+Loop::subloop_iterator Loop::subloop_end() { return m_subloops.end(); }
 
 /*
  * Traverses the control flow graph and constructs loop objects for all loops
@@ -157,8 +161,8 @@ void LoopInfo::init(T& cfg, Fn preheader_fn) {
   //
   for (auto it = level_order.rbegin(); it != level_order.rend(); ++it) {
     std::vector<cfg::Block*> blocks_in_loop;
-    UnorderedSet<cfg::Block*> block_set;
-    UnorderedSet<Loop*> subloops;
+    std::unordered_set<cfg::Block*> block_set;
+    std::unordered_set<Loop*> subloops;
     const auto& wto_comp = it->get();
 
     // construct blocks_in_loop, block_set, and subloops

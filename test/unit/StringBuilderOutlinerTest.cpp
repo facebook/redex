@@ -78,7 +78,7 @@ class StringBuilderOutlinerTest : public RedexTest {
     Outliner outliner(m_config);
     outliner.analyze(*code);
     outliner.create_outline_helpers(&m_stores);
-    outliner.transform(nullptr, code);
+    outliner.transform(code);
 
     // Use OSDCE to remove any unused new-instance StringBuilder opcodes. When
     // running this pass against an app, the app's redex config should always
@@ -296,7 +296,7 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   // ensures that running StringBuilderOutlinerPass before OSDCE won't
   // inadvertently cause dead code to be retained.
   auto* outline_helper_code = outline_helper_method->get_code();
-  // When outline_helper_method was created, it generated cfg.
+  // When outline_helper_method was created, it generated editable cfg.
   // Therefore, need to be cleared before comparing code.
   outline_helper_code->clear_cfg();
   EXPECT_CODE_EQ(expected_outlined_code.get(), outline_helper_code);
@@ -314,9 +314,8 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   ptrs::FixpointIterator ptrs_fp_iter(outline_helper_cfg,
                                       invoke_to_esc_summary_map);
   ptrs_fp_iter.run(ptrs::Environment());
-  bool result_may_be_pointer = true;
-  auto esc_summary = ptrs::get_escape_summary(
-      ptrs_fp_iter, *outline_helper_code, result_may_be_pointer);
+  auto esc_summary =
+      ptrs::get_escape_summary(ptrs_fp_iter, *outline_helper_code);
   EXPECT_EQ(esc_summary.returned_parameters,
             ptrs::ParamSet{ptrs::FRESH_RETURN});
   EXPECT_EQ(esc_summary.escaping_parameters.size(), 0);

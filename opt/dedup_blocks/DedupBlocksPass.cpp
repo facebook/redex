@@ -35,7 +35,7 @@ void DedupBlocksPass::run_pass(DexStoresVector& stores,
         }
 
         TRACE(DEDUP_BLOCKS, 3, "[dedup blocks] method %s", SHOW(method));
-        always_assert(code->cfg_built());
+        always_assert(code->editable_cfg_built());
         auto& cfg = code->cfg();
 
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] method %s before:\n%s",

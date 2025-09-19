@@ -24,7 +24,6 @@ struct Timer {
 
   // there should be no currently running Timers when this function is called
   static const times_t& get_times() { return s_times; }
-  static void clear_times() { s_times.clear(); }
 
   static void add_timer(std::string msg, double dur_s);
 

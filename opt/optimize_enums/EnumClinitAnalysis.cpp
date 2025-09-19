@@ -261,7 +261,7 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls,
   always_assert(is_enum(cls));
 
   auto* code = cls->get_clinit()->get_code();
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   auto fp_iter = std::make_unique<cp::intraprocedural::FixpointIterator>(
       /* cp_state */ nullptr,

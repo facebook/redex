@@ -85,7 +85,7 @@ RemoveArgs::PassStats RemoveArgs::run(ConfigFiles& config) {
 void RemoveArgs::gather_results_used() {
   walk::parallel::code(m_scope, [&result_used = m_result_used](DexMethod*,
                                                                IRCode& code) {
-    always_assert(code.cfg_built());
+    always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
     auto ii = InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -171,8 +171,7 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
         auto* caller_proto = caller->get_proto();
         defined_protos.insert(caller_proto);
         if (!can_rename(caller) || is_native(caller) ||
-            caller->rstate.no_optimizations() ||
-            has_any_parameter_annotation(caller)) {
+            caller->rstate.no_optimizations()) {
           record_fixed_proto(caller_proto, 1);
         } else if (caller->is_virtual()) {
           auto is_interface_method =
@@ -201,7 +200,7 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
         if (code == nullptr) {
           return;
         }
-        always_assert(code->cfg_built());
+        always_assert(code->editable_cfg_built());
         for (const auto& mie : InstructionIterable(code->cfg())) {
           if (mie.insn->has_method()) {
             auto* callee = mie.insn->get_method();
@@ -409,7 +408,7 @@ std::map<uint16_t, cfg::InstructionIterator> compute_dead_insns(
     return dead_args_and_insns;
   }
 
-  always_assert(code.cfg_built());
+  always_assert(code.editable_cfg_built());
   const auto& cfg = code.cfg();
   LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain());
@@ -582,8 +581,7 @@ void RemoveArgs::gather_updated_entries(
         for (const auto* m : UnorderedIterable(kvp->second)) {
           // If we can't edit, just skip
           if (!can_rename(m) || is_native(m) || m->rstate.no_optimizations() ||
-              has_any_annotation(m, no_devirtualize_annos) ||
-              has_any_parameter_annotation(m)) {
+              has_any_annotation(m, no_devirtualize_annos)) {
             return;
           }
 
@@ -711,7 +709,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
     auto* code = method->get_code();
     if (code != nullptr) {
-      always_assert(code->cfg_built());
+      always_assert(code->editable_cfg_built());
       auto& cfg = code->cfg();
       cfg.calculate_exit_block();
     }
@@ -775,7 +773,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
 
       if (!entry.is_reordered) {
         if (!entry.dead_insns.empty()) {
-          always_assert(method->get_code()->cfg_built());
+          always_assert(method->get_code()->editable_cfg_built());
           auto& cfg = method->get_code()->cfg();
           // We update the method signature, so we must remove unused
           // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
@@ -787,7 +785,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
       }
 
       if (entry.remove_result && method->get_code() != nullptr) {
-        always_assert(method->get_code()->cfg_built());
+        always_assert(method->get_code()->editable_cfg_built());
         auto& cfg = method->get_code()->cfg();
         for (const auto& mie : InstructionIterable(cfg)) {
           auto* insn = mie.insn;
@@ -861,7 +859,7 @@ std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
         if (code == nullptr) {
           return 0;
         }
-        always_assert(code->cfg_built());
+        always_assert(code->editable_cfg_built());
         auto& cfg = code->cfg();
         size_t callsite_args_removed = 0;
         for (const auto& mie : InstructionIterable(cfg)) {

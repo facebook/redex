@@ -7,7 +7,6 @@
 
 package redex;
 
-import android.annotation.SuppressLint;
 import javax.annotation.Nullable;
 import org.junit.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,10 +15,6 @@ public class UseKtEnumTransformTest {
 
   D getD() {
     return D.D0;
-  }
-
-  F getF() {
-    return F.F0;
   }
 
   void sayHello(String s) {
@@ -36,21 +31,5 @@ public class UseKtEnumTransformTest {
                   + (d != null
                       ? d
                       : "unknown"));
-  }
-
-  @SuppressLint("DeadVariable")
-  @Test
-  public void testException() {
-    F f = null;
-    if (System.currentTimeMillis() > 0) {
-      f = getF();
-    }
-    try {
-      String s = String.valueOf(System.err);
-    } catch (Exception e) {
-      StringBuilder sb = new StringBuilder("Hello ");
-      sb.append(f != null ? f : e);
-      sayHello(sb.toString());
-    }
   }
 }

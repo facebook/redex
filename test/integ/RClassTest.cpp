@@ -87,7 +87,7 @@ IRInstruction* find_fill_array_data_use(
   return matched.front();
 }
 
-// Build cfg, set rstate as we expect to simulate outlined methods
+// Build editable cfg, set rstate as we expect to simulate outlined methods
 void prepare_methods_for_test(DexClasses& classes) {
   for (auto* cls : classes) {
     for (auto* m : cls->get_all_methods()) {

@@ -735,10 +735,12 @@ using AnchorEnvironment =
 
 class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
  public:
-  AnchorPropagation(const cfg::ControlFlowGraph& cfg, bool is_static_method)
+  AnchorPropagation(const cfg::ControlFlowGraph& cfg,
+                    bool is_static_method,
+                    IRCode* code)
       : BaseIRAnalyzer(cfg),
         m_is_static_method(is_static_method),
-        m_cfg(cfg),
+        m_code(code),
         m_this_anchor(nullptr) {}
 
   void analyze_instruction(const IRInstruction* insn,
@@ -819,13 +821,13 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
     AnchorEnvironment env;
     // We first initialize all registers to `null`.
     env.set(RESULT_REGISTER, AnchorDomain());
-    for (size_t reg = 0; reg < m_cfg.get_registers_size(); ++reg) {
+    for (size_t reg = 0; reg < m_code->get_registers_size(); ++reg) {
       env.set(reg, AnchorDomain());
     }
     // We then initialize the parameters of the method.
     bool first_param = true;
     for (const MethodItemEntry& mie :
-         InstructionIterable(m_cfg.get_param_instructions())) {
+         InstructionIterable(m_code->get_param_instructions())) {
       IRInstruction* insn = mie.insn;
       if (first_param && !m_is_static_method) {
         always_assert_log(insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT,
@@ -852,7 +854,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
   }
 
   bool m_is_static_method;
-  const cfg::ControlFlowGraph& m_cfg;
+  IRCode* m_code;
   IRInstruction* m_this_anchor;
 };
 
@@ -871,13 +873,13 @@ class PointsToActionGenerator final {
   void run() {
     IRCode* code = m_dex_method->get_code();
     always_assert(code != nullptr);
-    always_assert(code->cfg_built());
+    code->build_cfg(/* editable */ false);
     cfg::ControlFlowGraph& cfg = code->cfg();
     cfg.calculate_exit_block();
 
     // We first propagate the anchors across the code.
     m_analysis =
-        std::make_unique<AnchorPropagation>(cfg, is_static(m_dex_method));
+        std::make_unique<AnchorPropagation>(cfg, is_static(m_dex_method), code);
     m_analysis->run();
 
     // Then we assign a unique variable to each anchor.

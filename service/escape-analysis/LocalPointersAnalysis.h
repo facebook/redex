@@ -177,29 +177,26 @@ class EnvironmentWithStoreImpl final
   }
 };
 
-using ParamSet = UnorderedSet<uint16_t>;
+using ParamSet = sparta::PatriciaTreeSetAbstractDomain<uint16_t>;
 
 // For denoting that a returned value is freshly allocated in the summarized
 // method and only escaped at the return opcode(s).
 constexpr uint16_t FRESH_RETURN = std::numeric_limits<uint16_t>::max();
 
-// For denoting a returned value that escaped.
-constexpr uint16_t ESCAPED_FRESH_RETURN = FRESH_RETURN - 1;
-
 struct EscapeSummary {
   // The elements of this set represent the indexes of the src registers that
   // escape.
-  ParamSet escaping_parameters;
+  UnorderedSet<uint16_t> escaping_parameters;
 
-  // The indices of the src registers that may be returned. This is useful for
+  // The indices of the src registers that are returned. This is useful for
   // modeling methods that return `this`, though it is also able to model the
   // general case. It is a set instead of a single value since a method may
   // return different values depending on its inputs.
-  // We only track returned parameters that may pass "pointers". Other returned
-  // values are not tracked. We do not model whether a method returns at all,
-  // and thus the empty set is not special. See UsedVarsTest_noReturn for more
-  // background on that.
-  ParamSet returned_parameters;
+  //
+  // Note that if only some of the returned values are parameters, this will be
+  // set to Top. A non-extremal value indicates that the return value must be
+  // an element of the set.
+  ParamSet returned_parameters = ParamSet::bottom();
 
   EscapeSummary() = default;
 
@@ -214,8 +211,6 @@ struct EscapeSummary {
     return escaping_parameters == other.escaping_parameters &&
            returned_parameters == other.returned_parameters;
   }
-
-  bool operator<=(const EscapeSummary& other) const;
 
   void join_with(const EscapeSummary& other);
 };
@@ -311,11 +306,6 @@ using FixpointIteratorMap =
 
 using SummaryMap = UnorderedMap<const DexMethodRef*, EscapeSummary>;
 
-struct AnalyzeScopeResult {
-  FixpointIteratorMap data;
-  size_t iterations;
-};
-
 /*
  * Analyze all methods in scope, making sure to analyze the callees before
  * their callers.
@@ -323,7 +313,7 @@ struct AnalyzeScopeResult {
  * If a non-null SummaryMap pointer is passed in, it will get populated
  * with the escape summaries of the methods in scope.
  */
-AnalyzeScopeResult analyze_scope(
+FixpointIteratorMap analyze_scope(
     const Scope&,
     const call_graph::Graph&,
     SummaryMap* = nullptr,
@@ -344,8 +334,7 @@ void collect_exiting_pointers(const FixpointIterator& fp_iter,
  * pointers are treated as escaping.
  */
 EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
-                                 const IRCode& code,
-                                 bool result_may_be_pointer);
+                                 const IRCode& code);
 
 /* Whether a method is virtual but not final, or in a final class. */
 bool may_be_overridden(const DexMethod*);

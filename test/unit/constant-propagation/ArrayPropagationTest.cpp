@@ -19,9 +19,9 @@ struct SignedConstantDomainZero {
 using PrimitiveArrayDomain =
     ConstantArrayDomain<SignedConstantDomain, SignedConstantDomainZero>;
 
-INSTANTIATE_TYPED_TEST_SUITE_P(PrimitiveArrayDomain,
-                               AbstractDomainPropertyTest,
-                               PrimitiveArrayDomain);
+INSTANTIATE_TYPED_TEST_CASE_P(PrimitiveArrayDomain,
+                              AbstractDomainPropertyTest,
+                              PrimitiveArrayDomain);
 
 template <>
 std::vector<PrimitiveArrayDomain>

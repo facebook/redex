@@ -32,7 +32,8 @@ class IPReflectionAnalysisPass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  using Result = UnorderedMap<const DexMethod*, reflection::ReflectionSites>;
+  using Result =
+      std::unordered_map<const DexMethod*, reflection::ReflectionSites>;
 
   std::shared_ptr<Result> get_result() { return m_result; }
 

@@ -75,7 +75,7 @@ class Transform final {
   explicit Transform(Config config, const State& state)
       : m_config(config), m_state(state) {}
 
-  // Apply all available transformations on cfg
+  // Apply all available transformations on editable cfg
   // May run cfg.calculate_exit_block as a side-effect.
   void apply(const intraprocedural::FixpointIterator& fp_iter,
              const WholeProgramState& wps,
@@ -85,7 +85,7 @@ class Transform final {
              DexType* declaring_type,
              DexProto*);
 
-  // Apply transformations on cfg; don't call directly, prefer calling
+  // Apply transformations on editable cfg; don't call directly, prefer calling
   // `apply` instead.
   void legacy_apply_constants_and_prune_unreachable(
       const intraprocedural::FixpointIterator&,
@@ -94,7 +94,7 @@ class Transform final {
       const XStoreRefs*,
       const DexType*);
 
-  // Apply targets-forwarding transformations on cfg; don't call
+  // Apply targets-forwarding transformations on editable cfg; don't call
   // directly, prefer calling `apply` instead.
   // Runs cfg.calculate_exit_block as a side-effect.
   void legacy_apply_forward_targets(const intraprocedural::FixpointIterator&,

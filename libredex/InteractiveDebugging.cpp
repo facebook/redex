@@ -103,7 +103,7 @@ CFGHolder::CFGHolder(const IRCode* ir_code)
 
   m_cfg_was_built = m_ir_code->cfg_built();
   if (!m_cfg_was_built) {
-    m_ir_code->build_cfg();
+    m_ir_code->build_cfg(true);
   }
 }
 

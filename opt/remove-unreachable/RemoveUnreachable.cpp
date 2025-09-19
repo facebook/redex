@@ -73,12 +73,13 @@ void root_metrics(DexStoresVector& stores, PassManager& pm) {
 }
 
 using ConcurrentReferencesMap =
-    ConcurrentMap<std::string, UnorderedSet<std::string>>;
+    ConcurrentMap<std::string, std::unordered_set<std::string>>;
 
 template <class Container>
-void update_references(Container& c, UnorderedSet<std::string>& references) {
-  for (auto& x : UnorderedIterable(c)) {
-    references.insert(show_deobfuscated(x));
+void update_references(Container& c,
+                       std::unordered_set<std::string>& references) {
+  for (auto i = c.begin(); i != c.end(); i++) {
+    references.insert(show_deobfuscated(*i));
   }
 }
 
@@ -92,15 +93,15 @@ void gather_references(const reachability::ReachableObjects& reachables,
   const auto it = std::partition(c->begin(), c->end(), p);
 
   for (auto elem = it; elem != c->end(); elem++) {
-    UnorderedSet<std::string> current_references;
+    std::unordered_set<std::string> current_references;
 
-    UnorderedSet<DexMethodRef*> mrefs;
+    std::unordered_set<DexMethodRef*> mrefs;
     (*elem)->gather_methods(mrefs);
 
-    UnorderedSet<DexFieldRef*> frefs;
+    std::unordered_set<DexFieldRef*> frefs;
     (*elem)->gather_fields(frefs);
 
-    UnorderedSet<DexType*> trefs;
+    std::unordered_set<DexType*> trefs;
     (*elem)->gather_types(trefs);
 
     update_references(mrefs, current_references);
@@ -149,9 +150,10 @@ void write_out_removed_symbols_references(
                       std::inserter(sorted, sorted.end()),
                       [](const std::string& s) { return &s; });
 
-  UnorderedMap<std::string, UnorderedSet<std::string>> referenced_to_references;
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+      referenced_to_references;
   for (const auto& pair : UnorderedIterable(references)) {
-    for (const auto& elem : UnorderedIterable(pair.second)) {
+    for (const auto& elem : pair.second) {
       referenced_to_references[elem].emplace(pair.first);
     }
   }
@@ -162,8 +164,7 @@ void write_out_removed_symbols_references(
     }
 
     out << *s_ptr << std::endl;
-    for (const auto& ref :
-         UnorderedIterable(referenced_to_references.at(*s_ptr))) {
+    for (const auto& ref : referenced_to_references.at(*s_ptr)) {
       out << "\t" << ref << std::endl;
     }
   }

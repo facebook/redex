@@ -38,25 +38,15 @@ class TypedefAnnoCheckerPass : public Pass {
   struct Config {
     DexType* int_typedef{nullptr};
     DexType* str_typedef{nullptr};
-    size_t max_patcher_iteration{10};
-    UnorderedSet<DexType*> generated_type_annos;
   };
 
   void bind_config() override {
     bind("int_typedef", {}, m_config.int_typedef);
     bind("str_typedef", {}, m_config.str_typedef);
-    bind("max_patcher_iteration",
-         10,
-         m_config.max_patcher_iteration,
-         "Maximum number of Typedef annotation patcher iterations");
-    bind("generated_type_annos",
-         {},
-         m_config.generated_type_annos,
-         "Denote annotation types that are flagging generated methods.");
   }
 
   explicit TypedefAnnoCheckerPass(Config config)
-      : Pass("TypedefAnnoCheckerPass"), m_config(std::move(config)) {}
+      : Pass("TypedefAnnoCheckerPass"), m_config(config) {}
 
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,
@@ -65,9 +55,10 @@ class TypedefAnnoCheckerPass : public Pass {
  private:
   void gather_typedef_values(
       const DexClass* cls,
-      InsertOnlyConcurrentMap<const DexClass*, UnorderedSet<const DexString*>>&
+      InsertOnlyConcurrentMap<const DexClass*,
+                              std::unordered_set<const DexString*>>&
           strdef_constants,
-      InsertOnlyConcurrentMap<const DexClass*, UnorderedSet<uint64_t>>&
+      InsertOnlyConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
           intdef_constants);
 
   Config m_config;
@@ -94,10 +85,11 @@ struct CheckerStats {
 };
 
 using StrDefConstants =
-    InsertOnlyConcurrentMap<const DexClass*, UnorderedSet<const DexString*>>;
+    InsertOnlyConcurrentMap<const DexClass*,
+                            std::unordered_set<const DexString*>>;
 
 using IntDefConstants =
-    InsertOnlyConcurrentMap<const DexClass*, UnorderedSet<uint64_t>>;
+    InsertOnlyConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>;
 
 class TypedefAnnoChecker {
  public:
@@ -113,7 +105,6 @@ class TypedefAnnoChecker {
 
   bool is_value_of_opt(const DexMethod* m);
   bool is_delegate(const DexMethod* m);
-  bool is_generated(const DexMethod* m) const;
 
   void run(DexMethod* m);
 

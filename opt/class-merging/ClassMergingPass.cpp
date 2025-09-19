@@ -297,7 +297,7 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
       model_spec.include_primary_dex = true;
     }
     total_stats +=
-        class_merging::merge_model(scope, conf, mgr, stores, model_spec, false);
+        class_merging::merge_model(scope, conf, mgr, stores, model_spec);
   }
   post_dexen_changes(scope, stores);
   total_stats.update_redex_stats(" total", mgr);

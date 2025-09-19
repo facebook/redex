@@ -52,10 +52,6 @@ public class MainActivity extends Activity {
       throw new AssertionError("Unexpected value: " + sentence);
     }
     android.util.Log.w("BNDL", sentence);
-
-    android.util.Log.w("BNDL",
-        "Force R.style.ChildWithParentAttr to be directly reachable; id = 0x"
-            + Integer.toHexString(R.style.ChildWithParentAttr));
   }
 
   public void performFoo(View v) {

@@ -96,7 +96,7 @@ TEST_F(ResultPropagationTest, useSwitch) {
         }
 
         IRCode* code = m->get_code();
-        code->build_cfg();
+        code->build_cfg(/* editable */ true);
         auto actual = find_return_param_index(code->cfg());
         code->clear_cfg();
         if (expected) {

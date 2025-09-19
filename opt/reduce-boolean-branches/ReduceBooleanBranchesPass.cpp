@@ -42,7 +42,7 @@ void ReduceBooleanBranchesPass::run_pass(DexStoresVector& stores,
         if ((code == nullptr) || method->rstate.no_optimizations()) {
           return reduce_boolean_branches_impl::Stats{};
         }
-        always_assert(code->cfg_built());
+        always_assert(code->editable_cfg_built());
         reduce_boolean_branches_impl::ReduceBooleanBranches rbb(
             config, is_static(method), method->get_proto()->get_args(), code);
         while (rbb.run()) {

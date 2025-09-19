@@ -190,7 +190,6 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     // the stack and registers.
     fp_iter->set_whole_program_state(std::move(wps));
     fp_iter->run(Domain{{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
-    m_stats.heap_analysis_iterations++;
   }
   compute_analysis_stats(fp_iter->get_whole_program_state(),
                          definitely_assigned_ifields);
@@ -294,7 +293,7 @@ void PassImpl::run(const DexStoresVector& stores,
   XStoreRefs xstores(stores);
 
   walk::parallel::code(scope, [&](const DexMethod* /*method*/, IRCode& code) {
-    always_assert(code.cfg_built());
+    always_assert(code.editable_cfg_built());
     code.cfg().calculate_exit_block();
   });
 
@@ -345,14 +344,10 @@ void PassImpl::run_pass(DexStoresVector& stores,
   mgr.incr_metric("callgraph_edges", m_stats.callgraph_edges);
   mgr.incr_metric("callgraph_nodes", m_stats.callgraph_nodes);
   mgr.incr_metric("callgraph_callsites", m_stats.callgraph_callsites);
-  mgr.incr_metric("heap_analysis_iterations", m_stats.heap_analysis_iterations);
   mgr.incr_metric("fp_iter.method_cache_hits",
                   m_stats.fp_iter.method_cache_hits);
   mgr.incr_metric("fp_iter.method_cache_misses",
                   m_stats.fp_iter.method_cache_misses);
-
-  mgr.set_metric("config.max_heap_analysis_iterations",
-                 m_config.max_heap_analysis_iterations);
 }
 
 static PassImpl s_pass;

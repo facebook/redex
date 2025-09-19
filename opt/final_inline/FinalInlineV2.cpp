@@ -240,58 +240,61 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
   }
 
   Result ret{};
-  cfg_adapter::iterate_with_iterator(code, [&](const IRList::iterator& it) {
-    auto* insn = it->insn;
-    if (opcode::is_an_sget(insn->opcode())) {
-      ret.add(insn->get_field());
-    }
-    return cfg_adapter::LOOP_CONTINUE;
-  });
+  editable_cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::iterator& it) {
+        auto* insn = it->insn;
+        if (opcode::is_an_sget(insn->opcode())) {
+          ret.add(insn->get_field());
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
 
   pending_methods.emplace(method);
   m_summaries[method] = ret;
 
   bool callee_pending = false;
 
-  cfg_adapter::iterate_with_iterator(code, [&](const IRList::iterator& it) {
-    auto* insn = it->insn;
-    if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee_method_def =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
-      if ((callee_method_def == nullptr) || callee_method_def->is_external() ||
-          !callee_method_def->is_concrete() ||
-          (m_allowed_opaque_callees.count(callee_method_def) != 0u)) {
-        return cfg_adapter::LOOP_CONTINUE;
-      }
-      const auto& callees = resolve_callees_in_graph(m_graph, insn);
-      if (callees.empty()) {
-        TRACE(FINALINLINE, 2, "%s has opaque callees %s", SHOW(method),
-              SHOW(insn->get_method()));
-        ret = Result::top();
-        callee_pending = false;
-        return cfg_adapter::LOOP_BREAK;
-      }
+  editable_cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::iterator& it) {
+        auto* insn = it->insn;
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto* callee_method_def = resolve_method(
+              insn->get_method(), opcode_to_search(insn), method);
+          if ((callee_method_def == nullptr) ||
+              callee_method_def->is_external() ||
+              !callee_method_def->is_concrete() ||
+              (m_allowed_opaque_callees.count(callee_method_def) != 0u)) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          const auto& callees = resolve_callees_in_graph(m_graph, insn);
+          if (callees.empty()) {
+            TRACE(FINALINLINE, 2, "%s has opaque callees %s", SHOW(method),
+                  SHOW(insn->get_method()));
+            ret = Result::top();
+            callee_pending = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
 
-      for (const DexMethod* callee : UnorderedIterable(callees)) {
-        Result callee_result;
-        if (pending_methods.count(callee) != 0u) {
-          callee_pending = true;
-          callee_result = m_summaries.at(callee);
-        } else {
-          callee_result = analyze(callee, pending_methods);
+          for (const DexMethod* callee : UnorderedIterable(callees)) {
+            Result callee_result;
+            if (pending_methods.count(callee) != 0u) {
+              callee_pending = true;
+              callee_result = m_summaries.at(callee);
+            } else {
+              callee_result = analyze(callee, pending_methods);
+            }
+            ret.join_with(callee_result);
+            if (ret.is_top()) {
+              callee_pending = false;
+              return editable_cfg_adapter::LOOP_BREAK;
+            }
+            if (pending_methods.count(callee) != 0u) {
+              callee_pending = true;
+            }
+          }
         }
-        ret.join_with(callee_result);
-        if (ret.is_top()) {
-          callee_pending = false;
-          return cfg_adapter::LOOP_BREAK;
-        }
-        if (pending_methods.count(callee) != 0u) {
-          callee_pending = true;
-        }
-      }
-    }
-    return cfg_adapter::LOOP_CONTINUE;
-  });
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
   if (!callee_pending) {
     pending_methods.erase(method);
   }

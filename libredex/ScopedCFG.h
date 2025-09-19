@@ -14,15 +14,15 @@ namespace cfg {
 
 /**
  * RAII abstraction for accessing the Editable ControlFlowGraph for a given
- * IRCode instance.  Will create an CFG if one does not already exist,
+ * IRCode instance.  Will create an editable CFG if one does not already exist,
  * which will be cleared when the instance is cleaned up, whereas an existing
- * CFG will remaining after the instance is cleaned up.
+ * editable CFG will remaining after the instance is cleaned up.
  */
 class ScopedCFG {
  public:
   ScopedCFG() = default;
 
-  /** Ensure an CFG exists for `code`, creating one if needed. */
+  /** Ensure an editable CFG exists for `code`, creating one if needed. */
   inline explicit ScopedCFG(IRCode* code);
 
   ScopedCFG(const ScopedCFG&) = delete;
@@ -52,9 +52,9 @@ class ScopedCFG {
 };
 
 ScopedCFG::ScopedCFG(IRCode* code)
-    : m_code(code), m_owns_cfg(!code->cfg_built()) {
+    : m_code(code), m_owns_cfg(!code->editable_cfg_built()) {
   if (m_owns_cfg) {
-    m_code->build_cfg();
+    m_code->build_cfg(/* editable */ true);
   }
 }
 

@@ -11,6 +11,7 @@
  */
 #include "MethodClosures.h"
 
+#include "ConcurrentContainers.h"
 #include "Lazy.h"
 #include "LiveRange.h"
 #include "Liveness.h"
@@ -19,7 +20,6 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "StlUtil.h"
-#include "WorkQueue.h"
 
 namespace {
 

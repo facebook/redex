@@ -92,6 +92,19 @@ bool is_model_gen(const DexMethod* m) {
   return anno != nullptr;
 }
 
+bool is_generated(const DexMethod* m) {
+  DexType* type = m->get_class();
+  DexClass* cls = type_class(type);
+  if (cls->get_anno_set() == nullptr) {
+    return false;
+  }
+  UnorderedSet<DexType*> generated_annos = {
+      DexType::make_type(
+          "Lcom/facebook/xapp/messaging/composer/annotation/Generated;"),
+      DexType::make_type("Lcom/facebook/litho/annotations/Generated;")};
+  return has_any_annotation(cls, generated_annos);
+}
+
 struct MaybeParamName {
   std::optional<std::string_view> name;
   MaybeParamName(const DexMethod* method, size_t param_index)
@@ -143,21 +156,6 @@ bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
     return false;
   }
   return true;
-}
-
-bool TypedefAnnoChecker::is_generated(const DexMethod* m) const {
-  if (m_config.generated_type_annos.empty()) {
-    return false;
-  }
-  DexType* type = m->get_class();
-  DexClass* cls = type_class(type);
-  if (cls->get_anno_set() == nullptr) {
-    return false;
-  }
-  if (has_any_annotation(cls, m_config.generated_type_annos)) {
-    return true;
-  }
-  return false;
 }
 
 bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
@@ -220,14 +218,13 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     return;
   }
 
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
-  redex_assert(m_config.int_typedef != nullptr);
-  redex_assert(m_config.str_typedef != nullptr);
-  type_inference::TypeInference inference(
-      cfg, false,
-      UnorderedSet<DexType*>{m_config.int_typedef, m_config.str_typedef},
-      &m_method_override_graph);
+  UnorderedSet<DexType*> anno_set;
+  anno_set.emplace(m_config.int_typedef);
+  anno_set.emplace(m_config.str_typedef);
+  type_inference::TypeInference inference(cfg, false, anno_set,
+                                          &m_method_override_graph);
   inference.run(m);
 
   live_range::MoveAwareChains chains(cfg);
@@ -252,10 +249,6 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   }
   if (!m_good) {
     TRACE(TAC, 2, "Done checking %s", SHOW(m));
-  }
-  // Clean up the param names from dex debug items
-  if (code->get_debug_item() != nullptr) {
-    code->get_debug_item()->remove_param_names();
   }
 }
 
@@ -763,7 +756,7 @@ void TypedefAnnoCheckerPass::gather_typedef_values(
     IntDefConstants& intdef_constants) {
   const std::vector<DexField*>& fields = cls->get_sfields();
   if (get_annotation(cls, m_config.str_typedef) != nullptr) {
-    UnorderedSet<const DexString*> str_values;
+    std::unordered_set<const DexString*> str_values;
     for (auto* field : fields) {
       str_values.emplace(
           dynamic_cast<DexEncodedValueString*>(field->get_static_value())
@@ -771,7 +764,7 @@ void TypedefAnnoCheckerPass::gather_typedef_values(
     }
     strdef_constants.emplace(cls, std::move(str_values));
   } else if (get_annotation(cls, m_config.int_typedef) != nullptr) {
-    UnorderedSet<uint64_t> int_values;
+    std::unordered_set<uint64_t> int_values;
     for (auto* field : fields) {
       int_values.emplace(field->get_static_value()->value());
     }

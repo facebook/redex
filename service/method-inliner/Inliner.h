@@ -25,7 +25,7 @@ namespace inliner {
 struct InlinerConfig;
 
 /*
- * Use the CFG instead of IRCode to do the inlining. Return true on
+ * Use the editable CFG instead of IRCode to do the inlining. Return true on
  * success. Registers starting with next_caller_reg must be available
  */
 bool inline_with_cfg(DexMethod* caller_method,
@@ -689,9 +689,7 @@ class MultiMethodInliner {
                                         cfg::Block* caller_block,
                                         ReducedCode* reduced_callee);
 
-  const api::AndroidSDK* m_min_sdk_api;
-
-  std::unique_ptr<InsertOnlyConcurrentMap<size_t, RefChecker>> m_ref_checkers;
+  std::unique_ptr<std::vector<std::unique_ptr<RefChecker>>> m_ref_checkers;
 
   /**
    * Resolver function to map a method reference to a method definition. Must be
@@ -715,9 +713,9 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  ConcurrentMethodToMethodOccurrences m_callee_caller;
+  ConcurrentMethodToMethodOccurrences callee_caller;
 
-  ConcurrentMethodToMethodOccurrences m_caller_callee;
+  ConcurrentMethodToMethodOccurrences caller_callee;
 
   // Auxiliary data for a caller that contains true virtual callees
   struct CallerVirtualCallees {
@@ -906,7 +904,7 @@ class MultiMethodInliner {
  public:
   const InliningInfo& get_info() { return info; }
 
-  size_t get_callers() { return m_caller_callee.size(); }
+  size_t get_callers() { return caller_callee.size(); }
 
   double get_call_site_inlined_cost_seconds() const {
     return m_call_site_inlined_cost_timer.get_seconds();

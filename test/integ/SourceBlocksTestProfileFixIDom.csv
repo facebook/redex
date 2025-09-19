@@ -1,6 +1,0 @@
-interaction,appear#
-ColdStart,4
-name,profiled_srcblks_exprs
-Lcom/facebook/redextest/SourceBlocksTest$ViolationsFixTest;.idom_branch:()V,(0.0:0.0 g(1.0:0.1 g(0.0:0.0)) b(0.0:0.0 g))
-Lcom/facebook/redextest/SourceBlocksTest$ViolationsFixTest;.branch_1:()V,(0.0:0.0)
-Lcom/facebook/redextest/SourceBlocksTest$ViolationsFixTest;.branch_2:()V,(1.0:0.5)

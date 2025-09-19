@@ -76,7 +76,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/resolve-proguard-values \
 	-I$(top_srcdir)/opt/resolve-refs \
 	-I$(top_srcdir)/opt/resources-inlining-pass \
-	-I$(top_srcdir)/opt/resource-value-merging-pass \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shrinker \
 	-I$(top_srcdir)/opt/shorten-srcstrings \

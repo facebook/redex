@@ -92,11 +92,6 @@ using ConstantValue =
                                           NewObjectDomain,
                                           AbstractHeapPointer>;
 
-// Monitor the size of SignedConstantDomain to avoid blowing up memory usage.
-static_assert(sizeof(ConstantValue) > sizeof(SignedConstantDomain),
-              "SignedConstantDomain has become the bottleneck of "
-              "ConstantValue. Remove this assertion if this is intended.");
-
 struct ConstantValueDefaultValue {
   ConstantValue operator()() { return SignedConstantDomain(0); }
 };

@@ -56,7 +56,7 @@ macro(add_dependent_packages_for_redex)
     print_dirs("${ZLIB_INCLUDE_DIRS}" "ZLIB_INCLUDE_DIRS")
     print_dirs("${ZLIB_LIBRARIES}" "ZLIB_LIBRARIES")
 
-    find_package(Boost 1.74.0 REQUIRED COMPONENTS regex filesystem program_options iostreams thread)
+    find_package(Boost 1.71.0 REQUIRED COMPONENTS regex filesystem program_options iostreams thread CONFIG)
     print_dirs("${Boost_INCLUDE_DIRS}" "Boost_INCLUDE_DIRS")
     print_dirs("${Boost_LIBRARIES}" "Boost_LIBRARIES")
 

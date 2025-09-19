@@ -1110,7 +1110,7 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method,
   if (code == nullptr) {
     return;
   }
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   if (cache == nullptr) {
@@ -1163,7 +1163,7 @@ ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   if (code == nullptr) {
     return reflection_sites;
   }
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   for (auto& mie : InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
@@ -1188,7 +1188,7 @@ AbstractObjectDomain ReflectionAnalysis::get_return_value() const {
 boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
     IRInstruction* invoke_insn) const {
   auto* code = const_cast<DexMethod*>(m_dex_method)->get_code();
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   IRInstruction* move_result_insn = nullptr;
   auto ii = InstructionIterable(cfg);

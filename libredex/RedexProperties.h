@@ -9,9 +9,8 @@
 
 #include <iosfwd>
 #include <string>
+#include <unordered_map>
 #include <vector>
-
-#include "DeterministicContainers.h"
 
 namespace redex_properties {
 
@@ -82,7 +81,7 @@ std::vector<Property> get_all_properties();
 const char* get_name(Property property);
 std::ostream& operator<<(std::ostream& os, const Property& property);
 
-using PropertyInteractions = UnorderedMap<Property, PropertyInteraction>;
+using PropertyInteractions = std::unordered_map<Property, PropertyInteraction>;
 
 // Legacy naming scheme. May update references at some point.
 

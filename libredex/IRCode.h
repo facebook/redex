@@ -38,7 +38,7 @@ class IRCode {
       const DexCatches& catches,
       std::vector<std::unique_ptr<DexTryItem>>* tries);
 
-  std::unique_ptr<IRList> m_ir_list;
+  IRList* m_ir_list;
   std::unique_ptr<cfg::ControlFlowGraph> m_cfg;
 
   reg_t m_registers_size{0};
@@ -118,19 +118,25 @@ class IRCode {
 
   void cleanup_debug();
 
-  reg_t get_registers_size() const;
+  reg_t get_registers_size() const { return m_registers_size; }
 
-  void set_registers_size(reg_t sz);
+  void set_registers_size(reg_t sz) { m_registers_size = sz; }
 
-  reg_t allocate_temp();
+  reg_t allocate_temp() { return m_registers_size++; }
 
-  reg_t allocate_wide_temp();
+  reg_t allocate_wide_temp() {
+    reg_t new_reg = m_registers_size;
+    m_registers_size += 2;
+    return new_reg;
+  }
 
   /*
    * Find the subrange of load-param instructions. These instructions should
    * always be at the beginning of the method.
    */
-  boost::sub_range<IRList> get_param_instructions() const;
+  boost::sub_range<IRList> get_param_instructions() const {
+    return m_ir_list->get_param_instructions();
+  }
 
   void set_debug_item(std::unique_ptr<DexDebugItem> dbg) {
     m_dbg = std::move(dbg);
@@ -157,15 +163,18 @@ class IRCode {
   const cfg::ControlFlowGraph& cfg() const { return *m_cfg; }
 
   // Build a Control Flow Graph
-  //  * A CFG's blocks each own a small IRList (with
+  //  * A non editable CFG's blocks have begin and end pointers into the big
+  //    linear IRList in IRCode
+  //  * An editable CFG's blocks each own a small IRList (with
   //    MethodItemEntries taken from IRCode)
-  // Changes to an CFG are reflected in IRCode after `clear_cfg` is
-  // called. For cfg, it is only rebuilt when the flag
-  // rebuild_even_if_already_built is true. Otherwise, the current
-  // cfg will be kept.
-  void build_cfg(bool rebuild_even_if_already_built = true);
+  // Changes to an editable CFG are reflected in IRCode after `clear_cfg` is
+  // called. For editable cfg, it is only rebuilt when the flag
+  // rebuild_editable_even_if_already_built is true. Otherwise, the current
+  // editable cfg will be kept.
+  void build_cfg(bool editable = true,
+                 bool rebuild_editable_even_if_already_built = true);
 
-  // Linearize CFG back into m_ir_list
+  // if the cfg was editable, linearize it back into m_ir_list
   // custom_strategy controls the linearization of the CFG.
   //
   // The CFG may have stored instructions that were removed. If deleted_insns is
@@ -175,7 +184,8 @@ class IRCode {
                      custom_strategy = nullptr,
                  std::vector<IRInstruction*>* deleted_insns = nullptr);
 
-  bool cfg_built() const { return m_cfg != nullptr; }
+  bool cfg_built() const;
+  bool editable_cfg_built() const;
 
   /* Generate DexCode from IRCode */
   std::unique_ptr<DexCode> sync(const DexMethod*);

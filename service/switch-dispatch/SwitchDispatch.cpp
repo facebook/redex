@@ -749,7 +749,7 @@ bool may_be_dispatch(const DexMethod* method) {
     return false;
   }
   auto* code = const_cast<DexMethod*>(method)->get_code();
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   uint32_t branches = 0;
   for (auto& mie : cfg::InstructionIterable(cfg)) {

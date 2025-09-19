@@ -48,21 +48,6 @@ static SourceBlockConsistencyCheck s_sbcc;
 
 const SourceBlock::Val global_default_val = SourceBlock::Val(1, 1);
 
-static char get_edge_char(const Edge* e) {
-  switch (e->type()) {
-  case EDGE_BRANCH:
-    return 'b';
-  case EDGE_GOTO:
-    return 'g';
-  case EDGE_THROW:
-    return 't';
-  case EDGE_GHOST:
-  case EDGE_TYPE_SIZE:
-    not_reached();
-  }
-  not_reached(); // For GCC.
-}
-
 struct InsertHelper {
   std::ostringstream oss;
   const DexString* method;
@@ -179,12 +164,12 @@ struct InsertHelper {
     return SourceBlock::Val{nested_val, appear100};
   }
 
-  void start(Block* cur) {
+  void start(Block* cur, bool use_global_default_value) {
     if (serialize) {
       oss << "(" << id;
     }
 
-    auto val = start_profile(cur, false);
+    auto val = start_profile(cur, use_global_default_value, false);
 
     source_blocks::impl::BlockAccessor::push_source_block(
         cur, std::make_unique<SourceBlock>(method, id, val));
@@ -227,7 +212,7 @@ struct InsertHelper {
           oss << "(" << id << ")";
         }
 
-        auto nested_val = start_profile(cur,
+        auto nested_val = start_profile(cur, use_global_default_value,
                                         /*empty_inner_tail=*/true);
         it = source_blocks::impl::BlockAccessor::insert_source_block_after(
             cur, insert_after,
@@ -239,18 +224,21 @@ struct InsertHelper {
   }
 
   std::vector<SourceBlock::Val> start_profile(Block* cur,
+                                              bool use_global_default_value,
                                               bool empty_inner_tail = false) {
     std::vector<SourceBlock::Val> ret;
     ret.reserve(parser_state.size());
     for (auto& p_state : parser_state) {
-      ret.emplace_back(start_profile_one(cur, empty_inner_tail, p_state));
+      ret.emplace_back(start_profile_one(cur, empty_inner_tail, p_state,
+                                         use_global_default_value));
     }
     return ret;
   }
 
   SourceBlock::Val start_profile_one(Block* cur,
                                      bool empty_inner_tail,
-                                     ProfileParserState& p_state) {
+                                     ProfileParserState& p_state,
+                                     bool use_global_default_value) {
     if (p_state.had_profile_failure) {
       return kFailVal;
     }
@@ -278,7 +266,9 @@ struct InsertHelper {
     if (empty_inner_tail) {
       redex_assert(matcher_state.inner_tail.is_nil());
     }
-    auto val = parse_val(*matcher_state.val_str_ptr);
+    auto val = (use_global_default_value)
+                   ? global_default_val
+                   : parse_val(*matcher_state.val_str_ptr);
     TRACE(MMINL,
           5,
           "Started block with val=%f/%f. Popping %s, pushing %s + %s",
@@ -292,6 +282,21 @@ struct InsertHelper {
       p_state.expr_stack.push_back(std::move(matcher_state.inner_tail));
     }
     return val;
+  }
+
+  static char get_edge_char(const Edge* e) {
+    switch (e->type()) {
+    case EDGE_BRANCH:
+      return 'b';
+    case EDGE_GOTO:
+      return 'g';
+    case EDGE_THROW:
+      return 't';
+    case EDGE_GHOST:
+    case EDGE_TYPE_SIZE:
+      not_reached();
+    }
+    not_reached(); // For GCC.
   }
 
   void edge(Block* cur, const Edge* e) {
@@ -403,423 +408,13 @@ struct InsertHelper {
       for (auto* b : cfg.blocks()) {
         auto vec = gather_source_blocks(b);
         for (auto* sb : vec) {
-          const_cast<SourceBlock*>(sb)->set_at(i, val);
+          const_cast<SourceBlock*>(sb)->vals[i] = val;
         }
       }
     }
     return ret;
   }
 };
-
-struct CustomValueInsertHelper {
-
-  enum class CustomInsertionType { DEFAULT_VALUES = 0, FUZZING_VALUES = 1 };
-
-  std::ostringstream oss;
-  const DexString* method;
-  uint32_t id{0};
-  bool serialize;
-  bool insert_after_excs;
-  CustomInsertionType insertion_type;
-  size_t interaction_size;
-  float cold_to_hot_generation_ratio{0.2f};
-  float hot_throw_cold_generation_ratio{0.01f};
-
-  CustomValueInsertHelper(const DexString* method,
-                          const std::vector<ProfileData>& profiles,
-                          bool serialize,
-                          bool insert_after_excs,
-                          CustomInsertionType insertion_type)
-      : method(method),
-        serialize(serialize),
-        insert_after_excs(insert_after_excs),
-        insertion_type(insertion_type),
-        interaction_size(profiles.size()) {}
-
-  struct FuzzingMetadata {
-    uint32_t indegrees{0};
-    uint32_t insertion_id{0};
-    bool has_values{false}; // to check if a block has had it's values filled in
-    bool should_be_hot{false}; // to check if a block should be set as hot, used
-                               // if a pred is hot and wants to set at least one
-                               // succ to hot. If this false, the source block
-                               // can be either hot or cold
-
-    // NOLINTNEXTLINE
-    FuzzingMetadata() = default;
-
-    FuzzingMetadata(uint32_t indegrees, uint32_t insertion_id)
-        : indegrees(indegrees), insertion_id(insertion_id) {}
-
-    // NOLINTBEGIN
-    bool operator<(const FuzzingMetadata& r) const {
-      if (indegrees == r.indegrees) {
-        return insertion_id < r.insertion_id;
-      }
-      return indegrees < r.indegrees;
-    }
-    // NOLINTEND
-  };
-
-  UnorderedMap<Block*, FuzzingMetadata> fuzzing_metadata_map;
-
-  std::vector<SourceBlock::Val> generate_default_data_for_fuzzing(
-      Block* /*b*/) {
-    // sets all blocks' values to (-1|-1)
-    std::vector<SourceBlock::Val> interaction_pairs;
-    interaction_pairs.reserve(interaction_size);
-
-    for (size_t i = 0; i < interaction_size; ++i) {
-      float hit = -1;
-      float appear100 = -1;
-      interaction_pairs.emplace_back(hit, appear100);
-    }
-
-    return interaction_pairs;
-  }
-
-  std::vector<SourceBlock::Val> start_profile(Block* cur) {
-    std::vector<SourceBlock::Val> ret;
-    bool use_fuzzing = (insertion_type == CustomInsertionType::FUZZING_VALUES);
-    std::vector<SourceBlock::Val> fuzzing_values;
-    if (use_fuzzing) {
-      fuzzing_values = generate_default_data_for_fuzzing(cur);
-    }
-    ret.reserve(interaction_size);
-
-    for (size_t i = 0; i < interaction_size; ++i) {
-      const auto& value_to_insert =
-          use_fuzzing ? fuzzing_values.at(i) : global_default_val;
-      ret.emplace_back(value_to_insert);
-    }
-    return ret;
-  }
-
-  void start(Block* cur) {
-    if (serialize) {
-      oss << "(" << id;
-    }
-
-    if (fuzzing_metadata_map.find(cur) == fuzzing_metadata_map.end()) {
-      fuzzing_metadata_map.insert({cur, FuzzingMetadata(0, 0)});
-    }
-
-    auto val = start_profile(cur);
-
-    source_blocks::impl::BlockAccessor::push_source_block(
-        cur, std::make_unique<SourceBlock>(method, id, val));
-    ++id;
-
-    if (insert_after_excs) {
-      if (cur->cfg().get_succ_edge_of_type(cur, EdgeType::EDGE_THROW) !=
-          nullptr) {
-        // Nothing to do.
-        return;
-      }
-      for (auto it = cur->begin(); it != cur->end(); ++it) {
-        if (it->type != MFLOW_OPCODE) {
-          continue;
-        }
-        if (!opcode::can_throw(it->insn->opcode())) {
-          continue;
-        }
-        // Exclude throws (explicitly).
-        if (it->insn->opcode() == OPCODE_THROW) {
-          continue;
-        }
-        // Get to the next instruction.
-        auto next_it = std::next(it);
-        while (next_it != cur->end() && next_it->type != MFLOW_OPCODE) {
-          ++next_it;
-        }
-        if (next_it == cur->end()) {
-          break;
-        }
-
-        auto insert_after =
-            opcode::is_move_result_any(next_it->insn->opcode()) ? next_it : it;
-
-        // This is not really what the structure looks like, but easy to
-        // parse and write. Otherwise, we would need to remember that
-        // we had a nesting.
-
-        if (serialize) {
-          oss << "(" << id << ")";
-        }
-
-        auto nested_val = start_profile(cur);
-        it = source_blocks::impl::BlockAccessor::insert_source_block_after(
-            cur, insert_after,
-            std::make_unique<SourceBlock>(method, id, nested_val));
-        ++id;
-      }
-    }
-  }
-
-  void edge(Block* /*cur*/, const Edge* e) {
-    if (serialize) {
-      oss << " " << get_edge_char(e);
-    }
-    Block* target = e->target();
-    fuzzing_metadata_map.try_emplace(target, 0, 0).first->second.indegrees++;
-  }
-
-  void end(Block* /*cur*/) {
-    if (serialize) {
-      oss << ")";
-    }
-  }
-};
-
-struct RandomGenerator {
-  std::random_device dev;
-  std::mt19937 random_number_generator;
-  std::uniform_real_distribution<> uniform_distribution;
-  float cold_to_hot_generation_ratio{0.5f};
-  float hot_throw_cold_generation_ratio{0.01f};
-
-  RandomGenerator() = delete;
-
-  explicit RandomGenerator(float cold_to_hot_generation_ratio,
-                           float hot_throw_cold_generation_ratio = 0.05f)
-      : random_number_generator(dev()),
-        uniform_distribution(0.0, 1.0),
-        cold_to_hot_generation_ratio(cold_to_hot_generation_ratio),
-        hot_throw_cold_generation_ratio(hot_throw_cold_generation_ratio) {}
-
-  explicit RandomGenerator(int seed,
-                           const std::string& method_name,
-                           float cold_to_hot_generation_ratio,
-                           float hot_throw_cold_generation_ratio = 0.05f)
-      : random_number_generator(seed ^ std::hash<std::string>{}(method_name)),
-        uniform_distribution(0.0, 1.0),
-        cold_to_hot_generation_ratio(cold_to_hot_generation_ratio),
-        hot_throw_cold_generation_ratio(hot_throw_cold_generation_ratio) {}
-
-  float generate_appear100() {
-    return uniform_distribution(random_number_generator);
-  }
-
-  float generate_block_hit() {
-    float hit_percent = uniform_distribution(random_number_generator);
-    if (hit_percent <= cold_to_hot_generation_ratio) {
-      return 0.0;
-    } else {
-      return 1.0;
-    }
-  }
-
-  // This generates if a block should be converted from hot -> throw -> hot to
-  // hot -> throw -> cold
-  bool generate_if_convert_hot_throw_cold() {
-    float convert_percent = uniform_distribution(random_number_generator);
-    return (convert_percent <= hot_throw_cold_generation_ratio);
-  }
-
-  // generates a random size_t between [start, end] inclusive
-  size_t generate_random_number_in_range(int start, int end) {
-    return start + (size_t)((uniform_distribution(random_number_generator)) *
-                            ((end - start) + 1));
-  }
-};
-
-bool is_hot_block(const Block* block) {
-  return has_source_block_positive_val(get_last_source_block(block));
-}
-
-void set_block_appear100(Block* block, float appear100) {
-  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
-  for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->get_at(i)) {
-        source_block->apply_at(i,
-                               [&](auto& val) { val->appear100 = appear100; });
-      }
-    }
-  }
-}
-
-void set_block_value(Block* block, float hit) {
-  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
-  for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->get_at(i)) {
-        source_block->apply_at(i, [&](auto& val) { val->val = hit; });
-      }
-    }
-  }
-}
-
-int get_number_of_throws_in_block(Block* curr) {
-  int count{0};
-  for (auto& mie : *curr) {
-    if (mie.type == MFLOW_OPCODE && opcode::can_throw(mie.insn->opcode())) {
-      count++;
-    }
-  }
-  return count;
-}
-
-void set_source_block_value(SourceBlock* source_block, float hit) {
-  for (auto* sb = source_block; sb != nullptr; sb = sb->next.get()) {
-    for (size_t i = 0; i < sb->vals_size; i++) {
-      if (sb->get_at(i)) {
-        source_block->apply_at(i, [&](auto& val) { val->val = hit; });
-      }
-    }
-  }
-}
-
-struct TopoTraversalHelper {
-
-  CustomValueInsertHelper* value_insert_helper;
-  RandomGenerator* generator;
-  dominators::SimpleFastDominators<cfg::GraphInterface>* doms;
-  ControlFlowGraph* cfg;
-
-  float appear100{0.0f};
-  float entry_hit{0.0f};
-
-  explicit TopoTraversalHelper(
-      CustomValueInsertHelper* value_insert_helper,
-      RandomGenerator* generator,
-      dominators::SimpleFastDominators<cfg::GraphInterface>* doms,
-      ControlFlowGraph* cfg)
-      : value_insert_helper(value_insert_helper),
-        generator(generator),
-        doms(doms),
-        cfg(cfg) {}
-
-  bool all_preds_are_cold(const Block* block) {
-    auto& metadata = value_insert_helper->fuzzing_metadata_map;
-    for (const auto& edge : block->preds()) {
-      auto* pred = edge->src();
-      if (!metadata.at(pred).has_values) {
-        // If there are no values in this predecessor (cause of cycles) then
-        // ignore it
-        continue;
-      }
-      if (is_hot_block(pred)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  // This function takes a block that has already been chosen to be set as hot
-  // -> throw -> cold. Since there may be more than 1 throw instruction in a
-  // block, this will chose a random throw, and all source blocks from that
-  // throw onwards will be cold
-  void set_block_as_hot_throw_cold(Block* block, int throw_count) {
-    size_t throw_to_convert =
-        generator->generate_random_number_in_range(0, throw_count - 1);
-    size_t current_throw = 0;
-    bool set_hot = true;
-
-    for (auto& mie : *block) {
-      if (mie.type == MFLOW_OPCODE && opcode::can_throw(mie.insn->opcode())) {
-        if (current_throw >= throw_to_convert) {
-          set_hot = false;
-        }
-        current_throw++;
-      }
-
-      if (mie.type == MFLOW_SOURCE_BLOCK) {
-        if (set_hot) {
-          set_source_block_value(mie.src_block.get(), 1);
-        } else {
-          set_source_block_value(mie.src_block.get(), 0);
-        }
-      }
-    }
-  }
-
-  void set_block_random_value(Block* block) {
-    int next_hit = generator->generate_block_hit();
-    int throw_count = get_number_of_throws_in_block(block);
-
-    if (next_hit == 0 || throw_count == 0) {
-      set_block_value(block, next_hit);
-    } else {
-      bool should_convert_to_hot_throw_cold =
-          generator->generate_if_convert_hot_throw_cold();
-      if (should_convert_to_hot_throw_cold) {
-        set_block_as_hot_throw_cold(block, throw_count);
-      } else {
-        set_block_value(block, next_hit);
-      }
-    }
-  }
-
-  // This assumes the last source block is HOT (and has no throws after it), and
-  // sets a random child to be HOT
-  void set_succ_randomly_hot(Block* block) {
-    auto& metadata = value_insert_helper->fuzzing_metadata_map;
-    const auto& successors = block->succs();
-    size_t successor_size = successors.size();
-    size_t next_hot_block_idx =
-        generator->generate_random_number_in_range(0, successor_size - 1);
-
-    for (size_t i = 0; i < successor_size; ++i) {
-      auto* succ_block = successors.at(i)->target();
-
-      if (next_hot_block_idx == i) {
-        metadata.at(succ_block).should_be_hot = true;
-      }
-    }
-  }
-
-  void process_block(Block* cur, bool must_be_cold) {
-    auto& metadata = value_insert_helper->fuzzing_metadata_map;
-    if (cur == cfg->entry_block()) {
-      entry_hit = generator->generate_block_hit();
-      if (must_be_cold) {
-        entry_hit = 0.0;
-      }
-      appear100 = 0.0;
-      if (entry_hit > 0) { // entry_hit is HOT.
-        appear100 = generator->generate_appear100();
-      }
-      set_block_appear100(cur, appear100);
-      set_block_value(cur, entry_hit);
-      metadata.at(cur).has_values = true;
-    } else {
-      if (!metadata.at(cur).has_values) {
-        // if a block has values, don't need to deal with it again
-        // (for example, the entry block).
-        if (entry_hit == 0.0f || !is_hot_block(doms->get_idom(cur)) ||
-            all_preds_are_cold(cur)) {
-          // This block must be listed as COLD now.
-          set_block_value(cur, 0);
-        } else {
-          if (metadata.at(cur).should_be_hot) {
-            // This block must be set to HOT now
-            set_block_value(cur, 1);
-          } else {
-            // This block can be either HOT or COLD.
-            set_block_random_value(cur);
-          }
-        }
-        set_block_appear100(cur, appear100);
-        metadata.at(cur).has_values = true;
-      }
-    }
-
-    auto* last_source_block_or_throw =
-        get_last_source_block_if_after_throw(cur);
-    // This is to check if there is a throw after a source block, if there is a
-    // throw, last_source_block_or_throw is null, and therefore the successors
-    // can be COLD. Otherwise, if there exists a source block at the end of this
-    // block and it is hot, then the hot path must continue into at least one
-    // successor
-    if ((last_source_block_or_throw != nullptr) &&
-        has_source_block_positive_val(last_source_block_or_throw)) {
-      set_succ_randomly_hot(cur);
-    }
-  }
-};
-
-using InsertionType = CustomValueInsertHelper::CustomInsertionType;
 
 } // namespace
 
@@ -827,11 +422,13 @@ SourceBlockConsistencyCheck& get_sbcc() { return s_sbcc; }
 
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,
+                                  bool use_global_default_value,
                                   const std::vector<ProfileData>& profiles,
                                   bool serialize,
                                   bool insert_after_excs) {
-  return insert_source_blocks(&method->get_deobfuscated_name(), cfg, profiles,
-                              serialize, insert_after_excs);
+  return insert_source_blocks(&method->get_deobfuscated_name(), cfg,
+                              use_global_default_value, profiles, serialize,
+                              insert_after_excs);
 }
 
 static std::string get_serialized_idom_map(ControlFlowGraph* cfg) {
@@ -883,28 +480,16 @@ static std::string get_serialized_idom_map(ControlFlowGraph* cfg) {
   return ss_idom_map.str();
 }
 
-size_t normalize_blocks(ControlFlowGraph* cfg) {
-  size_t normalized_blocks = 0;
-  for (auto* block : cfg->blocks()) {
-    source_blocks::foreach_source_block(block, [&](const auto& sb) {
-      if (sb->normalize()) {
-        normalized_blocks++;
-      }
-    });
-  }
-  return normalized_blocks;
-}
-
 InsertResult insert_source_blocks(const DexString* method,
                                   ControlFlowGraph* cfg,
+                                  bool use_global_default_value,
                                   const std::vector<ProfileData>& profiles,
                                   bool serialize,
                                   bool insert_after_excs) {
   InsertHelper helper(method, profiles, serialize, insert_after_excs);
 
   impl::visit_in_order(
-      cfg,
-      [&](Block* cur) { helper.start(cur); },
+      cfg, [&](Block* cur) { helper.start(cur, use_global_default_value); },
       [&](Block* cur, const Edge* e) { helper.edge(cur, e); },
       [&](Block* cur) { helper.end(cur); });
 
@@ -912,273 +497,7 @@ InsertResult insert_source_blocks(const DexString* method,
 
   auto idom_map = get_serialized_idom_map(cfg);
 
-  return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures,
-          normalize_blocks(cfg)};
-}
-
-// This metric checks if there exists a block such that it starts out with hot
-// source blocks, encounters a throw instruction somewhere, and then has cold
-// source blocks. It does this by first checking the first source block is hot,
-// and then checking if there has been a throw, then seeing if any subsequent
-// source block is cold.
-bool block_is_hot_throw_cold(Block* cur) {
-  bool seen_src_block = false;
-  bool seen_throw = false;
-  for (auto& mie : *cur) {
-    if (mie.type == MFLOW_OPCODE && opcode::can_throw(mie.insn->opcode())) {
-      seen_throw = true;
-    }
-
-    if (mie.type == MFLOW_SOURCE_BLOCK) {
-      if (!seen_src_block) {
-        // Cold initial source blocks do not count here
-        if (!has_source_block_positive_val(mie.src_block.get())) {
-          return false;
-        }
-        // If a throw has been seen before the initial source block, this also
-        // does not count
-        if (seen_throw) {
-          return false;
-        }
-        seen_src_block = true;
-      } else {
-        // This means a throw has been seen, and the current source block is
-        // cold while the initial one is hot
-        if (seen_throw && !has_source_block_positive_val(mie.src_block.get())) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-void update_source_block_metric(Block* cur, SourceBlockMetric& metrics) {
-  auto source_blocks = gather_source_blocks(cur);
-  for (const auto& source_block : source_blocks) {
-    if (has_source_block_positive_val(source_block)) {
-      metrics.hot_block_count++;
-    } else {
-      metrics.cold_block_count++;
-    }
-  }
-
-  if (block_is_hot_throw_cold(cur)) {
-    metrics.hot_throw_cold_count++;
-  }
-}
-
-SourceBlockMetric gather_source_block_metrics(ControlFlowGraph* cfg) {
-  SourceBlockMetric metrics = {0, 0, 0};
-
-  impl::visit_in_order(
-      cfg,
-      [&](Block* cur) { update_source_block_metric(cur, metrics); },
-      [&](Block* /*cur*/, const Edge* /*e*/) {},
-      [&](Block* /*cur*/) {});
-
-  return metrics;
-}
-
-// CustomValueInsertHelper must have the correct indegrees initialized to have
-// this work as intended. Running this traversal will also modify the state of
-// the CustomValueInsertHelper to have different indegrees
-template <typename BlockFn>
-void topo_traverse(CustomValueInsertHelper& helper,
-                   Block* start_block,
-                   const BlockFn& block_fn) {
-  auto& metadata = helper.fuzzing_metadata_map;
-  auto topo_comparator = [&metadata](Block* l, Block* r) {
-    return metadata.at(l) < metadata.at(r);
-  };
-
-  // The traversal uses a multiset to be able to process the block with the
-  // lowest number of indegrees, and allows updating the position of other nodes
-  // in the multiset if their indegrees change during the traversal.
-  std::multiset<Block*, decltype(topo_comparator)> process_queue(
-      topo_comparator);
-  UnorderedSet<Block*> visited;
-  uint32_t insertion_order_id = 0;
-
-  block_fn(start_block);
-  metadata.at(start_block).insertion_id = insertion_order_id;
-  visited.insert(start_block);
-  process_queue.insert(start_block);
-  ++insertion_order_id;
-
-  while (!process_queue.empty()) {
-    auto current = process_queue.begin();
-    process_queue.erase(process_queue.begin());
-
-    block_fn(*current);
-
-    for (const auto& edge : (*current)->succs()) {
-      auto* neighbor = edge->target();
-      bool re_add_neighbor = false;
-
-      if (process_queue.count(neighbor)) {
-        // Erasing from the queue and readding allows reordering and updating of
-        // the queue if the neighbor's new indegrees gives it more priority now
-        process_queue.erase(neighbor);
-        re_add_neighbor = true;
-      }
-      metadata.at(neighbor).indegrees--;
-      if (re_add_neighbor) {
-        process_queue.insert(neighbor);
-      }
-
-      if (!visited.count(neighbor)) {
-        metadata.at(neighbor).insertion_id = insertion_order_id;
-        ++insertion_order_id;
-        visited.insert(neighbor);
-        process_queue.insert(neighbor);
-      }
-    }
-  }
-}
-
-bool is_hot_block(const Block* block) {
-  return has_source_block_positive_val(get_first_source_block(block));
-}
-
-void set_block_appear100(Block* block, float appear100) {
-  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
-  for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->get_at(i)) {
-        source_block->apply_at(i,
-                               [&](auto& val) { val->appear100 = appear100; });
-      }
-    }
-  }
-}
-
-void set_block_value(Block* block, float hit) {
-  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
-  for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->get_at(i)) {
-        source_block->apply_at(i, [&](auto& val) { val->val = hit; });
-      }
-    }
-  }
-}
-
-/*
-The follow method runs a topo-traversal of the method's CFG, filling out source
-blocks as it goes.
-
-Starting from the entry block, each block gets processed based on the number of
-indegrees it has. The lower the number of indegrees, the more priority a block
-has. Therefore, a multiset is used as the processing queue because it allows
-easy retrieval of the block with the lowest indegrees (stored in the metadata),
-and allows updating current blocks and modifying their processing order inside
-the processing queue. There might be ties in indegrees, if so, the block that
-was first inserted among the tied ones is processed first.
-
-There are a few helpers generated, including a dominator tree to find the
-immediate dominator quickly, and a Random Generator to generate fuzzing data.
-
-There are in general a few cases while filling out source block values during
-the traversal:
-
-1) In order to determine a source block's values, its predecessor and immediate
-dominator values must be known, therefore the traversal must visit and fill
-their values out first. This is also why the traversal uses indegrees to
-traverse, as it will traverse both the predecessors and immediate dominator of a
-block before getting to it.
-
-2) if the immediate dominator is cold OR if all predecessors are cold OR if the
-entry block is cold, then the block must be cold, otherwise can be either hot or
-cold.
-
-3) all source blocks should have the same appear100 value in the method.
-*/
-void run_topotraversal_fuzzing(ControlFlowGraph* cfg,
-                               CustomValueInsertHelper& helper,
-                               const std::string& method_name,
-                               bool use_seed,
-                               int seed,
-                               bool must_be_cold) {
-
-  RandomGenerator generator =
-      use_seed ? RandomGenerator(seed, method_name,
-                                 helper.cold_to_hot_generation_ratio,
-                                 helper.hot_throw_cold_generation_ratio)
-               : RandomGenerator(helper.cold_to_hot_generation_ratio,
-                                 helper.hot_throw_cold_generation_ratio);
-  auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(*cfg);
-  TopoTraversalHelper traversal_helper(&helper, &generator, &doms, cfg);
-
-  topo_traverse(helper, cfg->entry_block(), [&](Block* cur) {
-    traversal_helper.process_block(cur, must_be_cold);
-  });
-}
-
-InsertResult insert_custom_source_blocks(
-    const DexString* method,
-    ControlFlowGraph* cfg,
-    const std::vector<ProfileData>& profiles,
-    bool serialize,
-    bool insert_after_excs,
-    bool enable_fuzzing,
-    bool must_be_cold) {
-  // If fuzzing is on and must_be_cold is true, then the method's entry hit
-  // should be cold, otherwise it should be randomly generated by the
-  // RandomGenerator
-
-  InsertionType insertion_type = InsertionType::DEFAULT_VALUES;
-  if (enable_fuzzing) {
-    insertion_type = InsertionType::FUZZING_VALUES;
-  }
-  int seed = 5000;
-  bool use_seed = true;
-  CustomValueInsertHelper helper(method, profiles, serialize, insert_after_excs,
-                                 insertion_type);
-  impl::visit_in_order(
-      cfg,
-      [&](Block* cur) { helper.start(cur); },
-      [&](Block* cur, const Edge* e) { helper.edge(cur, e); },
-      [&](Block* cur) { helper.end(cur); });
-
-  if (insertion_type == InsertionType::FUZZING_VALUES) {
-    run_topotraversal_fuzzing(cfg, helper, std::string(method->str()), use_seed,
-                              seed, must_be_cold);
-  }
-
-  auto idom_map = get_serialized_idom_map(cfg);
-
-  return {helper.id, helper.oss.str(), std::move(idom_map), true,
-          normalize_blocks(cfg)};
-}
-
-UnorderedMap<Block*, uint32_t> insert_custom_source_blocks_get_indegrees(
-    const DexString* method,
-    ControlFlowGraph* cfg,
-    const std::vector<ProfileData>& profiles,
-    bool serialize,
-    bool insert_after_excs,
-    bool enable_fuzzing) {
-
-  InsertionType insertion_type = InsertionType::DEFAULT_VALUES;
-  if (enable_fuzzing) {
-    insertion_type = InsertionType::FUZZING_VALUES;
-  }
-  CustomValueInsertHelper helper(method, profiles, serialize, insert_after_excs,
-                                 insertion_type);
-  impl::visit_in_order(
-      cfg,
-      [&](Block* cur) { helper.start(cur); },
-      [&](Block* cur, const Edge* e) { helper.edge(cur, e); },
-      [&](Block* cur) { helper.end(cur); });
-
-  UnorderedMap<Block*, uint32_t> indegrees;
-  for (auto& entry : UnorderedIterable(helper.fuzzing_metadata_map)) {
-    Block* cur = entry.first;
-    CustomValueInsertHelper::FuzzingMetadata& metadata = entry.second;
-    indegrees.emplace(cur, metadata.indegrees);
-  }
-  return indegrees;
+  return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures};
 }
 
 void scale_source_blocks(cfg::Block* block) {
@@ -1243,8 +562,8 @@ void fix_chain_violations(ControlFlowGraph* cfg) {
               }
               for (size_t i = 0; i < sb->vals_size; i++) {
                 if (any_hit_rev[i] && sb->get_val(i).value_or(0) <= 0) {
-                  sb->set_at(
-                      i, SourceBlock::Val(1, sb->get_appear100(i).value_or(1)));
+                  sb->vals[i] =
+                      SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
                 }
               }
             }
@@ -1272,8 +591,8 @@ void fix_chain_violations(ControlFlowGraph* cfg) {
                 if (sb->get_val(i).value_or(0) > 0) {
                   any_hit_for[i] = true;
                 } else if (any_hit_for[i]) {
-                  sb->set_at(
-                      i, SourceBlock::Val(1, sb->get_appear100(i).value_or(1)));
+                  sb->vals[i] =
+                      SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
                 }
               }
             }
@@ -1298,9 +617,8 @@ void fix_idom_violation(
   }
   foreach_source_block(cur, [&](auto& sb) {
     if (sb->get_val(vals_index).value_or(0) <= 0) {
-      sb->set_at(
-          vals_index,
-          SourceBlock::Val(1, sb->get_appear100(vals_index).value_or(1)));
+      sb->vals[vals_index] =
+          SourceBlock::Val(1, sb->get_appear100(vals_index).value_or(1));
     }
   });
   auto* idom = dom.get_idom(cur);
@@ -1341,7 +659,7 @@ void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg) {
   for (uint32_t i = 0; i < vals_size; i++) {
     if (sb->get_val(i).value_or(0) <= 0 &&
         sb->get_appear100(i).value_or(0) > 0) {
-      sb->set_at(i, SourceBlock::Val(1, sb->get_appear100(i).value_or(1)));
+      sb->vals[i] = SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
     }
   };
 }
@@ -1416,7 +734,7 @@ size_t count_block_has_incomplete_sbs(
     return 0;
   }
   for (uint32_t idx = 0; idx < sb->vals_size; idx++) {
-    if (!sb->get_at(idx)) {
+    if (!sb->vals[idx]) {
       return 1;
     }
   }
@@ -1460,10 +778,6 @@ size_t hot_no_hot_pred(
     return 0;
   }
 
-  if (block->preds().empty()) {
-    return 0;
-  }
-
   for (auto* predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
@@ -1474,80 +788,20 @@ size_t hot_no_hot_pred(
   return 1;
 }
 
-size_t hot_all_children_cold(Block* block) {
-  auto* last_sb_before_throw =
-      source_blocks::get_last_source_block_if_after_throw(block);
-
-  if ((last_sb_before_throw == nullptr) ||
-      !has_source_block_positive_val(last_sb_before_throw)) {
+// TODO: Isn't that the same as before, just this time correct w/ counting?
+size_t hot_all_pred_cold(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  auto* first_sb_current_b = source_blocks::get_first_source_block(block);
+  if (!has_source_block_positive_val(first_sb_current_b)) {
     return 0;
   }
 
-  bool has_successor = false;
-  for (auto* successor : block->succs()) {
-    auto* first_sb_succ =
-        source_blocks::get_first_source_block(successor->src());
-    has_successor = true;
-    // This means that for this current hot block (with respect to the last
-    // source block of the hot block), there exists at least one successor
-    // that is hot, therefore this not a violation
-    if (has_source_block_positive_val(first_sb_succ)) {
+  for (auto* predecessor : block->preds()) {
+    auto* first_sb_pred =
+        source_blocks::get_first_source_block(predecessor->src());
+    if (has_source_block_positive_val(first_sb_pred)) {
       return 0;
-    }
-  }
-  // Only blocks with successors should have this count as a violation
-  return has_successor ? 1 : 0;
-}
-
-size_t hot_callee_all_cold_callers(call_graph::NodeId node,
-                                   SourceBlockInvokeMap& src_block_invoke_map) {
-  // Ignore Ghost Nodes
-  if (node->is_entry() || node->is_exit()) {
-    return 0;
-  }
-
-  auto* callee_method = const_cast<DexMethod*>(node->method());
-  if (callee_method == nullptr || callee_method->get_code() == nullptr) {
-    return 0;
-  }
-
-  ScopedCFG callee_cfg(callee_method->get_code());
-
-  // Cold Callees do not count
-  auto* callee_entry_block = get_first_source_block(callee_cfg->entry_block());
-  if ((callee_entry_block == nullptr) || callee_entry_block->vals_size == 0 ||
-      callee_entry_block->get_val(0).value_or(0) == 0) {
-    return 0;
-  }
-
-  for (const auto* caller_edge : node->callers()) {
-    const auto* caller = caller_edge->caller();
-    // If a node is connected to the ghost entry node, we should not count it as
-    // a violation because we can treat a ghost node's transition to its
-    // successors as hot
-    if (caller->is_entry()) {
-      return 0;
-    }
-
-    auto* caller_method = const_cast<DexMethod*>(caller->method());
-    if (caller_method == nullptr || caller_method->get_code() == nullptr) {
-      continue;
-    }
-
-    auto* invoke_insn = caller_edge->invoke_insn();
-    // TODO(T229471397): With multiple-callee graphs, there might be more
-    // accurate way to check which specific method is calling the callee
-    // (method override check)
-
-    if (src_block_invoke_map.count(caller_method) == 0) {
-      continue;
-    }
-    const auto& source_block_bools_before_invoke =
-        src_block_invoke_map.at_unsafe(caller_method)[invoke_insn];
-    for (auto b : source_block_bools_before_invoke) {
-      if (b) {
-        return 0;
-      }
     }
   }
   return 1;
@@ -1602,34 +856,6 @@ size_t hot_method_cold_entry_violations_tmpl(Block* block, const Fn& fn) {
   return sum;
 }
 
-template <typename Fn>
-size_t hot_all_children_cold_violations_tmpl(Block* block, const Fn& fn) {
-  size_t sum{0};
-
-  auto* last_sb_before_throw =
-      source_blocks::get_last_source_block_if_after_throw(block);
-
-  if (last_sb_before_throw &&
-      has_source_block_positive_val(last_sb_before_throw)) {
-    bool has_successor = false;
-    bool has_cold_child = true;
-    for (auto* successor : block->succs()) {
-      auto* first_sb_succ =
-          source_blocks::get_first_source_block(successor->src());
-      has_successor = true;
-      if (has_source_block_positive_val(first_sb_succ)) {
-        has_cold_child = false;
-        break;
-      }
-    }
-    if (has_successor && has_cold_child) {
-      sum++;
-    }
-  }
-  sum = fn(sum);
-  return sum;
-}
-
 size_t chain_hot_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
@@ -1656,13 +882,6 @@ size_t hot_method_cold_entry_block_violations(
   return hot_method_cold_entry_violations_tmpl(
       block, [](auto val) { return val > 0 ? 1 : 0; });
 }
-
-size_t hot_all_children_cold_violations(
-    Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return hot_all_children_cold_violations_tmpl(block,
-                                               [](auto val) { return val; });
-};
 
 struct ChainAndDomState {
   const SourceBlock* last{nullptr};
@@ -1773,7 +992,7 @@ size_t chain_and_dom_violations_coldstart(
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 11> gCounters =
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 10> gCounters =
     {{{"~blocks~count", &count_blocks},
       {"~blocks~with~source~blocks", &count_block_has_sbs},
       {"~blocks~with~incomplete-source~blocks",
@@ -1787,14 +1006,13 @@ constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 11> gCounters =
       {"~flow~violation~seen~method~cold~entry",
        &hot_method_cold_entry_violations},
       {"~flow~violation~seen~method~cold~entry~blocks",
-       &hot_method_cold_entry_block_violations},
-      {"~flow~violation~hot~all~children~cold",
-       &hot_all_children_cold_violations}}};
+       &hot_method_cold_entry_block_violations}}};
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 2>
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
     gCountersNonEntry = {{
         {"~flow~violation~idom", &hot_immediate_dom_not_hot},
         {"~flow~violation~direct~predecessors", &hot_no_hot_pred},
+        {"~flow~violation~cold~direct~predecessors", &hot_all_pred_cold},
     }};
 
 struct SourceBlocksStats {
@@ -1897,7 +1115,7 @@ void track_source_block_coverage(ScopedMetrics& sm,
         if (code == nullptr) {
           return ret;
         }
-        code->build_cfg();
+        code->build_cfg(/* editable */ true);
         auto& cfg = code->cfg();
         auto dominators =
             dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
@@ -1953,63 +1171,11 @@ void track_source_block_coverage(ScopedMetrics& sm,
   }
 }
 
-size_t compute_method_violations(const call_graph::Graph& call_graph,
-                                 const Scope& scope) {
-  size_t count{0};
-
-  SourceBlockInvokeMap src_block_invoke_map;
-  // Builds a graph of method -> invoke insn -> vector<bool> each bool
-  // representing if the coldstart interaction of the source block right
-  // before that invoke is hot or not
-  walk::parallel::methods(scope, [&](DexMethod* current_method) {
-    if (current_method == nullptr || current_method->get_code() == nullptr) {
-      return;
-    }
-
-    ScopedCFG cfg(current_method->get_code());
-    cfg->remove_unreachable_blocks();
-
-    IRInstruction* current_invoke_insn = nullptr;
-    for (auto* block : cfg->blocks()) {
-      for (auto it = block->rbegin(); it != block->rend(); ++it) {
-        if (it->type == MFLOW_OPCODE) {
-          auto* instruction = it->insn;
-          if (opcode::is_an_invoke(instruction->opcode())) {
-            current_invoke_insn = instruction;
-          }
-        } else if (it->type == MFLOW_SOURCE_BLOCK) {
-          if (current_invoke_insn != nullptr) {
-            SourceBlock* sb = it->src_block.get();
-            if ((sb != nullptr) && sb->vals_size == 0) {
-              continue;
-            }
-            bool is_hot = (sb != nullptr) && sb->get_val(0).value_or(0) > 0;
-            src_block_invoke_map.update(
-                current_method, [&](const DexMethod*, auto& method_map, bool) {
-                  method_map[current_invoke_insn].push_back(is_hot);
-                });
-            current_invoke_insn = nullptr;
-          }
-        }
-      }
-    }
-  });
-
-  impl::visit_by_levels(&call_graph, [&](call_graph::NodeId node) {
-    count += hot_callee_all_cold_callers(node, src_block_invoke_map);
-  });
-
-  return count;
-}
-
 struct ViolationsHelper::ViolationsHelperImpl {
   size_t top_n;
   UnorderedMap<DexMethod*, size_t> violations_start;
-  size_t method_violations{0};
   std::vector<std::string> print;
-  Scope scope;
   bool processed{false};
-  bool track_intermethod_violations{false};
 
   using Violation = ViolationsHelper::Violation;
   const Violation v;
@@ -2017,13 +1183,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
   ViolationsHelperImpl(Violation v,
                        const Scope& scope,
                        size_t top_n,
-                       std::vector<std::string> to_vis,
-                       bool track_intermethod_violations)
-      : top_n(top_n),
-        print(std::move(to_vis)),
-        scope(scope),
-        track_intermethod_violations(track_intermethod_violations),
-        v(v) {
+                       std::vector<std::string> to_vis)
+      : top_n(top_n), print(std::move(to_vis)), v(v) {
     {
       std::mutex lock;
       walk::parallel::methods(scope, [this, &lock, v](DexMethod* m) {
@@ -2039,15 +1200,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
       });
     }
 
-    if (track_intermethod_violations) {
-      auto method_override_graph = method_override_graph::build_graph(scope);
-      auto call_graph = std::make_unique<call_graph::Graph>(
-          call_graph::single_callee_graph(*method_override_graph, scope));
-
-      auto val = compute_method_violations(*call_graph, scope);
-      method_violations = val;
-    }
-
     print_all();
   }
 
@@ -2061,10 +1213,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return uncovered_source_blocks_violations_cfg(cfg);
     case Violation::kHotMethodColdEntry:
       return hot_method_cold_entry_violations_cfg(cfg);
-    case Violation::kHotNoHotPred:
-      return hot_no_hot_pred_cfg(cfg);
-    case Violation::KHotAllChildrenCold:
-      return hot_all_children_cold_cfg(cfg);
     }
     not_reached();
   }
@@ -2080,7 +1228,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
     processed = true;
 
     std::atomic<size_t> change_sum{0};
-    long long method_violation_change_sum{0};
 
     {
       std::mutex lock;
@@ -2118,17 +1265,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
             }
             MethodDelta m_t{m, m_delta, s};
             auto cmp = [](const auto& t1, const auto& t2) {
-              double t1_proportional_violations =
-                  (double)t1.violations_delta / (double)t1.method_size;
-              double t2_proportional_violations =
-                  (double)t2.violations_delta / (double)t2.method_size;
-              if (t1_proportional_violations > t2_proportional_violations) {
-                return true;
-              }
-              if (t1_proportional_violations < t2_proportional_violations) {
-                return false;
-              }
-
               if (t1.violations_delta > t2.violations_delta) {
                 return true;
               }
@@ -2192,18 +1328,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
     print_all();
 
     TRACE(MMINL, 0, "Introduced %zu violations.", change_sum.load());
-    if (track_intermethod_violations) {
-      auto method_override_graph = method_override_graph::build_graph(scope);
-      auto call_graph = std::make_unique<call_graph::Graph>(
-          call_graph::single_callee_graph(*method_override_graph, scope));
-      auto val = compute_method_violations(*call_graph, scope);
-      method_violation_change_sum = val - method_violations;
-      TRACE(MMINL, 0, "Introduced %lld inter-method violations.",
-            method_violation_change_sum);
-    }
     if (sm != nullptr) {
       sm->set_metric("new_violations", change_sum.load());
-      sm->set_metric("new_method_violations", method_violation_change_sum);
     }
   }
 
@@ -2266,29 +1392,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
     return sum;
   }
 
-  static size_t hot_no_hot_pred_cfg(cfg::ControlFlowGraph& cfg) {
-    size_t sum{0};
-
-    cfg.remove_unreachable_blocks();
-    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
-
-    for (auto* b : cfg.blocks()) {
-      sum += hot_no_hot_pred(b, dom);
-    }
-    return sum;
-  }
-
-  static size_t hot_all_children_cold_cfg(cfg::ControlFlowGraph& cfg) {
-    size_t sum{0};
-
-    cfg.remove_unreachable_blocks();
-
-    for (auto* b : cfg.blocks()) {
-      sum += hot_all_children_cold(b);
-    }
-    return sum;
-  }
-
   void print_all() const {
     for (const auto& m_str : print) {
       auto* m = DexMethod::get_method(m_str);
@@ -2298,26 +1401,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
         print_cfg_with_violations(v, m_def);
       }
     }
-    walk::methods(scope, [this](DexMethod* m) {
-      auto* code = m->get_code();
-      if (code == nullptr) {
-        return;
-      }
-      cfg::ScopedCFG cfg(code);
-      const auto& cur_method_name = show(m);
-      for (auto* block : cfg->blocks()) {
-        auto vec = gather_source_blocks(block);
-        for (auto* sb : vec) {
-          auto it = std::find(print.begin(), print.end(), sb->src->str());
-          if (it != std::end(print) && *it != cur_method_name) {
-            TRACE(MMINL, 0, "### METHOD %s HAS SOURCE BLOCKS FROM %s ###",
-                  cur_method_name.c_str(), (*it).c_str());
-            print_cfg_with_violations(v, m->as_def());
-            return;
-          }
-        }
-      }
-    });
   }
 
   template <typename SpecialT>
@@ -2375,7 +1458,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           auto* sb = first_sb_immediate_dominator;
           os << " \"" << show(sb->src) << "\"@" << sb->id;
           for (size_t i = 0; i < sb->vals_size; i++) {
-            const auto& val = sb->get_at(i);
+            auto& val = sb->vals[i];
             os << " ";
             if (val) {
               os << val->val << "/" << val->appear100;
@@ -2525,98 +1608,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
       print_cfg_with_violations<HotMethodColdEntry>(m);
       return;
     }
-    case Violation::kHotNoHotPred: {
-      struct HotNoHotPred {
-        cfg::Block* cur{nullptr};
-
-        dominators::SimpleFastDominators<cfg::GraphInterface> dom;
-
-        explicit HotNoHotPred(cfg::ControlFlowGraph& cfg) : dom(cfg) {}
-
-        void mie_before(std::ostream&, const MethodItemEntry&) {}
-        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
-          if (mie.type != MFLOW_SOURCE_BLOCK) {
-            return;
-          }
-
-          if (!source_blocks::has_source_block_positive_val(
-                  mie.src_block.get())) {
-            os << " NOT HOT\n";
-            return;
-          }
-
-          bool violation_found = true;
-
-          if (cur->preds().empty()) {
-            violation_found = false;
-          }
-
-          for (auto* predecessor : cur->preds()) {
-            auto* first_sb_pred =
-                source_blocks::get_first_source_block(predecessor->src());
-            if (source_blocks::has_source_block_positive_val(first_sb_pred)) {
-              violation_found = false;
-              break;
-            }
-          }
-
-          if (violation_found) {
-            os << " !!! HOT BLOCK NO HOT PRED\n";
-          }
-        }
-
-        void start_block(std::ostream&, cfg::Block* b) { cur = b; }
-        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
-      };
-      print_cfg_with_violations<HotNoHotPred>(m);
-      return;
-    }
-    case Violation::KHotAllChildrenCold: {
-      struct HotAllChildrenCold {
-        cfg::Block* cur{nullptr};
-
-        explicit HotAllChildrenCold(cfg::ControlFlowGraph&) {}
-
-        void mie_before(std::ostream&, const MethodItemEntry&) {}
-        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
-          if (mie.type != MFLOW_SOURCE_BLOCK) {
-            return;
-          }
-
-          auto* last_sb_before_throw =
-              source_blocks::get_last_source_block_if_after_throw(cur);
-
-          if (mie.src_block.get() != last_sb_before_throw) {
-            return;
-          }
-
-          if ((last_sb_before_throw == nullptr) ||
-              !has_source_block_positive_val(last_sb_before_throw)) {
-            return;
-          }
-
-          os << " HOT\n";
-
-          bool has_successor = false;
-          for (auto* successor : cur->succs()) {
-            auto* first_sb_succ =
-                source_blocks::get_first_source_block(successor->src());
-            has_successor = true;
-            if (has_source_block_positive_val(first_sb_succ)) {
-              return;
-            }
-          }
-          if (has_successor) {
-            os << " !!! HOT ALL CHILDREN COLD\n";
-          }
-        }
-
-        void start_block(std::ostream&, cfg::Block* b) { cur = b; }
-        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
-      };
-      print_cfg_with_violations<HotAllChildrenCold>(m);
-      return;
-    }
     }
     not_reached();
   }
@@ -2625,10 +1616,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
 ViolationsHelper::ViolationsHelper(Violation v,
                                    const Scope& scope,
                                    size_t top_n,
-                                   std::vector<std::string> to_vis,
-                                   bool track_intermethod_violations)
+                                   std::vector<std::string> to_vis)
     : impl(std::make_unique<ViolationsHelperImpl>(
-          v, scope, top_n, std::move(to_vis), track_intermethod_violations)) {}
+          v, scope, top_n, std::move(to_vis))) {}
 ViolationsHelper::~ViolationsHelper() {}
 
 void ViolationsHelper::process(ScopedMetrics* sm) {
@@ -2710,7 +1700,9 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
   if (ref != nullptr) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
-  new_sb->fill(val);
+  for (size_t i = 0; i < new_sb->vals_size; i++) {
+    new_sb->vals[i] = val;
+  }
   return new_sb;
 }
 
@@ -2725,7 +1717,9 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
   if (opt_val) {
-    new_sb->fill(*opt_val);
+    for (size_t i = 0; i < new_sb->vals_size; i++) {
+      new_sb->vals[i] = *opt_val;
+    }
   }
   return new_sb;
 }
@@ -2740,7 +1734,9 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
   if (ref != nullptr) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
-  new_sb->fill(SourceBlock::Val::none());
+  for (size_t i = 0; i < new_sb->vals_size; i++) {
+    new_sb->vals[i] = SourceBlock::Val::none();
+  }
   for (const auto& other : many) {
     new_sb->max(*other);
   }

@@ -175,7 +175,7 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
 LocalDce::Stats Shrinker::local_dce(IRCode* code,
                                     bool normalize_new_instances,
                                     DexType* declaring_type) {
-  // LocalDce doesn't care if cfg_built
+  // LocalDce doesn't care if editable_cfg_built
   auto local_dce = LocalDce(&m_init_classes_with_side_effects, m_pure_methods);
   local_dce.dce(code, normalize_new_instances, declaring_type);
   return local_dce.get_stats();
@@ -218,8 +218,8 @@ void Shrinker::shrink_code(
     DexType* declaring_type,
     DexProto* proto,
     const std::function<std::string()>& method_describer) {
-  always_assert(code->cfg_built());
-  // force simplification/linearization of any existing cfg once, and
+  always_assert(code->editable_cfg_built());
+  // force simplification/linearization of any existing editable cfg once, and
   // forget existing cfg for a clean start
   code->cfg().recompute_registers_size();
   code->clear_cfg();
@@ -285,7 +285,7 @@ void Shrinker::shrink_code(
         traceEnabled(MMINL, kMMINLDataCollectionLevel)) {
       auto timer = m_reg_alloc_timer.scope();
 
-      // It's OK to ensure we have an CFG, the allocator would build
+      // It's OK to ensure we have an editable CFG, the allocator would build
       // it, too.
       auto before_features = get_features(4);
 

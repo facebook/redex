@@ -56,7 +56,7 @@ UnorderedBag<MethodOrderedSet> get_duplicate_methods_simple(
   DuplicateMethods duplicates;
   for (DexMethod* method : methods) {
     always_assert(method->get_code());
-    always_assert(method->get_code()->cfg_built());
+    always_assert(method->get_code()->editable_cfg_built());
     duplicates[CodeAsKey(method->get_code()->cfg(), dedup_fill_in_stack_trace)]
         .emplace(method);
   }

@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "TypeUtil.h"
@@ -42,7 +44,7 @@ class PointsToSemanticsUtils final {
   bool is_get_class_invocation(IRInstruction* insn) const;
 
  private:
-  UnorderedSet<DexType*> m_primitive_type_wrappers{
+  std::unordered_set<DexType*> m_primitive_type_wrappers{
       type::java_lang_Boolean(),   type::java_lang_Byte(),
       type::java_lang_Character(), type::java_lang_Double(),
       type::java_lang_Float(),     type::java_lang_Integer(),

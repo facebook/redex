@@ -115,7 +115,7 @@ std::vector<cfg::Block*> get_noppable_blocks(cfg::ControlFlowGraph& cfg) {
 }
 
 size_t insert_nops(cfg::ControlFlowGraph& cfg,
-                   const UnorderedSet<cfg::Block*>& blocks,
+                   const std::unordered_set<cfg::Block*>& blocks,
                    AuxiliaryDefs* auxiliary_defs) {
   cfg::CFGMutation mutation(cfg);
   size_t nops_inserted = 0;

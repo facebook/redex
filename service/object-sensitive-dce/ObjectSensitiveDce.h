@@ -31,7 +31,6 @@ class ObjectSensitiveDce {
     size_t init_class_instructions_refined{0};
     size_t methods_with_summaries{0};
     size_t modified_params{0};
-    size_t lpa_iterations{0};
   };
 
   /*

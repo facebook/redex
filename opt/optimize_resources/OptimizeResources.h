@@ -11,7 +11,6 @@
 #include "GlobalConfig.h"
 #include "Pass.h"
 #include "ReachableResources.h"
-#include "RedexResources.h"
 #include "Trace.h"
 
 namespace opt_res {

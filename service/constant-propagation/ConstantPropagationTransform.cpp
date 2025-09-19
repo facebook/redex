@@ -872,6 +872,7 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
     cfg::ControlFlowGraph& cfg,
     const XStoreRefs* xstores,
     const DexType* declaring_type) {
+  always_assert(cfg.editable());
   always_assert(m_mutation == nullptr);
   m_mutation = std::make_unique<cfg::CFGMutation>(cfg);
   npe::NullPointerExceptionCreator npe_creator(&cfg);

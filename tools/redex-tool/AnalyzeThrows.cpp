@@ -11,7 +11,6 @@
 
 #include "ControlFlow.h"
 #include "IRCode.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Tool.h"
 #include "Walkers.h"
@@ -177,8 +176,9 @@ void collect_throwing_blocks(DexMethod* meth, LogicalBlock& throwing_blocks) {
 void find_throwing_block(const Scope& scope) {
   LogicalBlock throwing_blocks;
   walk::code(scope, [&](DexMethod* meth, IRCode& code) {
-    cfg::ScopedCFG cfg(&code);
-    for (const auto& block : cfg->blocks()) {
+    code.build_cfg(/* editable */ false);
+    const auto& cfg = code.cfg();
+    for (const auto& block : cfg.blocks()) {
       if (is_throw_block(meth, block)) {
         // do the analysis to find the blocks contributing to the throw
         collect_throwing_blocks(meth, throwing_blocks);

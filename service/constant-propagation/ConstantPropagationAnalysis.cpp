@@ -9,7 +9,6 @@
 
 #include <boost/functional/hash.hpp>
 #include <cinttypes>
-#include <cstring>
 #include <limits>
 #include <mutex>
 #include <set>
@@ -54,17 +53,10 @@ namespace {
 // reinterpret the long's bits as a double
 template <typename Out, typename In>
 static Out reinterpret_bits(In in) {
-  static_assert(sizeof(Out) == sizeof(In), "Size mismatch");
-  static_assert(std::is_trivially_copyable_v<In> &&
-                    std::is_trivially_copyable_v<Out>,
-                "Not trivially copyable, can't safely memcpy");
-
-  if constexpr (std::is_same_v<In, Out>) {
+  if (std::is_same<In, Out>::value) {
     return in;
   }
-  Out res;
-  std::memcpy(&res, &in, sizeof(In));
-  return res;
+  return *reinterpret_cast<Out*>(&in);
 }
 
 bool is_compare_floating(IROpcode op) {
@@ -85,13 +77,6 @@ bool is_less_than_bias(IROpcode op) {
 //   Should be float, double, or int64_t
 template <typename Operand, typename Stored>
 void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
-  static_assert(std::is_same_v<Stored, int32_t> ||
-                std::is_same_v<Stored, int64_t>);
-  static_assert(std::is_floating_point_v<Operand> ||
-                std::is_same_v<Operand, int64_t>);
-  static_assert(sizeof(Operand) == sizeof(Stored),
-                "Operand and Stored must have the same size.");
-
   IROpcode op = insn->opcode();
   auto scd_left = env->get<SignedConstantDomain>(insn->src(0));
   const auto scd_right = env->get<SignedConstantDomain>(insn->src(1));
@@ -138,10 +123,6 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
 // https://cs.android.com/android/platform/superproject/main/+/main:art/runtime/entrypoints/entrypoint_utils-inl.h;l=702;drc=d5137445c0d4067406cb3e38aade5507ff2fcd16
 template <typename INT_TYPE, typename FLOAT_TYPE>
 inline INT_TYPE art_float_to_integral(FLOAT_TYPE f) {
-  static_assert(std::is_integral_v<INT_TYPE>, "INT_TYPE must be integral");
-  static_assert(std::is_floating_point_v<FLOAT_TYPE>,
-                "FLOAT_TYPE must be floating-point");
-
   const INT_TYPE kMaxInt =
       static_cast<INT_TYPE>(std::numeric_limits<INT_TYPE>::max());
   const INT_TYPE kMinInt =
@@ -1682,7 +1663,7 @@ void semantically_inline_method(
     const IRInstruction* insn,
     const InstructionAnalyzer<ConstantEnvironment>& analyzer,
     ConstantEnvironment* env) {
-  always_assert(callee_code->cfg_built());
+  always_assert(callee_code->editable_cfg_built());
   auto& cfg = callee_code->cfg();
 
   // Set up the environment at entry into the callee.
@@ -1710,7 +1691,7 @@ void semantically_inline_method(
 
 ReturnState collect_return_state(
     IRCode* code, const intraprocedural::FixpointIterator& fp_iter) {
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   auto return_state = ReturnState::bottom();
   for (cfg::Block* b : cfg.blocks()) {

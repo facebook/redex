@@ -27,12 +27,9 @@ class DexLimitsChecker : public PropertyChecker {
   void run_checker(DexStoresVector&, ConfigFiles&, PassManager&, bool) override;
 
   struct DexData {
-    // These should be sets, but for overhead reasons we keep these as vectors
-    // and only translate them when we find an issue.
-    std::vector<DexFieldRef*> fields;
-    std::vector<DexMethodRef*> methods;
-    std::vector<DexType*> types;
-    // These are hopefully small and transitioning is annoying.
+    UnorderedSet<DexFieldRef*> fields;
+    UnorderedSet<DexMethodRef*> methods;
+    UnorderedSet<DexType*> types;
     UnorderedSet<DexType*> pending_init_class_fields;
     UnorderedSet<DexType*> pending_init_class_types;
   };

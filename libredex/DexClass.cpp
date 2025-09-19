@@ -431,12 +431,11 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
   uint32_t line_start = read_uleb128_checked<redex::DexAssert>(encdata);
   uint32_t paramcount = read_uleb128_checked<redex::DexAssert>(encdata);
   while ((paramcount--) != 0u) {
-    // We keep the parameter string name for printing debug info in our
-    // checkers. However, we do not write them out into the output. We emit
-    // matching number of nulls as method arguments at the end.
-    const DexString* param_name = decode_noindexable_string(idx, encdata);
-    // param_name can be nullptr !!!
-    m_param_names.push_back(param_name);
+    // We intentionally drop the parameter string name here because we don't
+    // have a convenient representation of it, and our internal tooling doesn't
+    // use this info anyway.
+    // We emit matching number of nulls as method arguments at the end.
+    decode_noindexable_string(idx, encdata);
   }
   m_dbg_entries = eval_debug_instructions(idx, encdata, line_start);
   m_on_disk_size = orig_size - encdata.size();
@@ -455,8 +454,7 @@ uint32_t DexDebugItem::get_line_start() const {
   return 0;
 }
 
-DexDebugItem::DexDebugItem(const DexDebugItem& that)
-    : m_param_names(that.m_param_names) {
+DexDebugItem::DexDebugItem(const DexDebugItem& that) {
   UnorderedMap<DexPosition*, DexPosition*> pos_map;
   m_dbg_entries.reserve(that.m_dbg_entries.size());
   for (const auto& entry : that.m_dbg_entries) {
@@ -1237,8 +1235,6 @@ void DexClass::load_class_data_item(
     always_assert_type_log(is_static(access_flags), INVALID_DEX,
                            "Static field not marked static");
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
-    always_assert_type_log(df->get_class() == get_type(), INVALID_DEX,
-                           "Referenced field does not belong to class");
     std::unique_ptr<DexEncodedValue> ev = nullptr;
     if (it != used.end()) {
       ev = std::move(*it);
@@ -1258,8 +1254,6 @@ void DexClass::load_class_data_item(
     always_assert_type_log(!is_static(access_flags), INVALID_DEX,
                            "Non-Static field marked static");
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
-    always_assert_type_log(df->get_class() == get_type(), INVALID_DEX,
-                           "Referenced field does not belong to class");
     df->make_concrete(access_flags);
     m_ifields.push_back(df);
   }
@@ -1277,8 +1271,6 @@ void DexClass::load_class_data_item(
     uint32_t code_off = read_uleb128(&encd);
     // Find method in method index, returns same pointer for same method.
     DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
-    always_assert_type_log(dm->get_class() == get_type(), INVALID_DEX,
-                           "Referenced method does not belong to class");
     std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
     if (dc && (dc->get_debug_item() != nullptr)) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
@@ -2329,7 +2321,8 @@ DexProto* DexType::get_non_overlapping_proto(const DexString* method_name,
 void DexMethod::add_load_params(size_t num_add_loads) {
   IRCode* code = this->get_code();
   always_assert_log(code, "Method don't have IRCode\n");
-  always_assert_log(code->cfg_built(), "should be edtiable cfg here\n");
+  always_assert_log(code->editable_cfg_built(),
+                    "should be edtiable cfg here\n");
   auto& cfg = code->cfg();
   auto* block = cfg.entry_block();
   auto last_loading = block->get_last_param_loading_insn();

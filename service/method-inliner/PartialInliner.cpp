@@ -264,7 +264,7 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
 
   // Re-build cfg once more to get linearized representation, good for
   // chaining fallthrough branches
-  partial_code->code().build_cfg();
+  partial_code->code().build_cfg(/* editable */ true);
 
   TRACE(INLINE, 5,
         "Derived partial code (%u code units) for %s:\nbefore:\n%s\nafter:\n%s",

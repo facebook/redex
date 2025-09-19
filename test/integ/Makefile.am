@@ -56,15 +56,6 @@ check_PROGRAMS = \
     uses_app_module_annotation_test \
     verifier_artifacts_test
 
-if RUN_KOTLIN_TESTS
-# Add Kotlin tests here.
-check_PROGRAMS += \
-    bitwise_ops_constant_propagation_test \
-    kotlin_default_args_test \
-    recursive_bitset_constant_propagation_test \
-    remove_redundant_nullcheck
-endif
-
 # As CircleCI treats XFAIL tests as fails, we need to exclude failing
 # tests explicitly.
 #
@@ -105,15 +96,6 @@ TESTS = \
     type_analysis_transform_test \
     uses_app_module_annotation_test \
     verifier_artifacts_test
-
-if RUN_KOTLIN_TESTS
-# Add Kotlin tests here.
-TESTS += \
-    bitwise_ops_constant_propagation_test \
-    kotlin_default_args_test \
-    recursive_bitset_constant_propagation_test \
-    remove_redundant_nullcheck
-endif
 
 app_module_usage_test_SOURCES = AppModuleUsageTest.cpp
 EXTRA_app_module_usage_test_DEPNDENCIES = uses_app_module_annotation-class.dex app_module_usage_test-class.dex app_module_usage_test_other-class.dex app_module_usage_test_third-class.dex
@@ -344,35 +326,3 @@ uses_app_module_annotation_test-class.jar: UsesAppModuleAnnotated.java
 
 verifier_artifacts_test-class.jar: VerifierTest.java
 	$(create_jar)
-
-if RUN_KOTLIN_TESTS
-kotlinc_source_target = -jvm-target 9
-
-kotlin_default_args_test_SOURCES = KotlinDefaultArgsTest.cpp
-EXTRA_kotlin_default_args_test_DEPENDENCIES = kotlin_default_args_test-class.dex
-bitwise_ops_constant_propagation_test_SOURCES = BitwiseOpsConstantPropagationTest.cpp
-EXTRA_bitwise_ops_constant_propagation_test_DEPENDENCIES = bitwise_ops_constant_propagation_test-class.dex
-recursive_bitset_constant_propagation_test_SOURCES = RecursiveBitsetConstantPropagationTest.cpp
-EXTRA_recursive_bitset_constant_propagation_test_DEPENDENCIES = recursive_bitset_constant_propagation_test-class.dex
-remove_redundant_nullcheck_SOURCES = TypeAnalysisRemoveRedundantNullCheck.cpp
-EXTRA_remove_redundant_nullcheck_DEPENDENCIES = remove_redundant_nullcheck-class.dex
-
-define create_jar_from_kotlin
-	mkdir -p $@.tmp
-	$(KOTLINC) $(kotlinc_source_target) -cp "$(srcdir)" -d $@.tmp $^
-	jar cf $@ -C $@.tmp .
-endef
-
-kotlin_default_args_test-class.jar: KotlinDefaultArgs.kt
-	$(create_jar_from_kotlin)
-
-bitwise_ops_constant_propagation_test-class.jar: BitwiseOpsConstantPropagationTest.kt
-	$(create_jar_from_kotlin)
-
-recursive_bitset_constant_propagation_test-class.jar: RecursiveBitsetConstantPropagation.kt
-	$(create_jar_from_kotlin)
-
-remove_redundant_nullcheck-class.jar: TypeAnalysisRemoveRedundantNullCheck.kt
-	$(create_jar_from_kotlin)
-
-endif

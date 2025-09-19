@@ -18,9 +18,6 @@ class PrintKotlinStats : public Pass {
   struct Stats {
     size_t unknown_null_check_insns{0};
     size_t kotlin_null_check_insns{0};
-    size_t kotlin_default_arg_check_insns{0};
-    size_t kotlin_composable_and_lit_insns{0};
-    size_t kotlin_and_lit_insns{0};
     size_t java_public_param_objects{0};
     size_t kotlin_public_param_objects{0};
     size_t kotlin_delegates{0};
@@ -33,16 +30,12 @@ class PrintKotlinStats : public Pass {
     size_t kotlin_companion_class{0};
     size_t di_generated_class{0};
     size_t kotlin_default_arg_method{0};
-    size_t kotlin_composable_method{0};
     size_t kotlin_coroutine_continuation_base{0};
     size_t kotlin_enum_class{0};
 
     Stats& operator+=(const Stats& that) {
       unknown_null_check_insns += that.unknown_null_check_insns;
       kotlin_null_check_insns += that.kotlin_null_check_insns;
-      kotlin_default_arg_check_insns += that.kotlin_default_arg_check_insns;
-      kotlin_composable_and_lit_insns += that.kotlin_composable_and_lit_insns;
-      kotlin_and_lit_insns += that.kotlin_and_lit_insns;
       java_public_param_objects += that.java_public_param_objects;
       kotlin_public_param_objects += that.kotlin_public_param_objects;
       kotlin_delegates += that.kotlin_delegates;
@@ -55,7 +48,6 @@ class PrintKotlinStats : public Pass {
       kotlin_companion_class += that.kotlin_companion_class;
       di_generated_class += that.di_generated_class;
       kotlin_default_arg_method += that.kotlin_default_arg_method;
-      kotlin_composable_method += that.kotlin_composable_method;
       kotlin_coroutine_continuation_base +=
           that.kotlin_coroutine_continuation_base;
       kotlin_enum_class += that.kotlin_enum_class;

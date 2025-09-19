@@ -81,8 +81,9 @@ class Loop {
  public:
   using iterator = std::vector<cfg::Block*>::iterator;
   using reverse_iterator = std::vector<cfg::Block*>::reverse_iterator;
+  using subloop_iterator = std::unordered_set<Loop*>::iterator;
   Loop(const std::vector<cfg::Block*>& blocks,
-       const UnorderedSet<Loop*>& subloops,
+       const std::unordered_set<Loop*>& subloops,
        cfg::Block* loop_preheader)
       : m_blocks(blocks),
         m_block_set(blocks.begin(), blocks.end()),
@@ -90,7 +91,7 @@ class Loop {
         m_loop_preheader(loop_preheader),
         m_parent_loop(nullptr) {}
   Loop(const std::vector<cfg::Block*>& blocks,
-       const UnorderedSet<Loop*>& subloops,
+       const std::unordered_set<Loop*>& subloops,
        cfg::Block* loop_preheader,
        Loop* parent_loop)
       : m_blocks(blocks),
@@ -105,21 +106,22 @@ class Loop {
   bool contains(Loop* l) const;
   bool contains(cfg::Block* block) const;
   int get_loop_depth() const;
-  UnorderedSet<cfg::Block*> get_exit_blocks() const;
+  std::unordered_set<cfg::Block*> get_exit_blocks() const;
   std::vector<cfg::Block*> get_blocks() const;
   void update_parent_loop_fields();
-
   iterator begin();
   iterator end();
   reverse_iterator rbegin();
   reverse_iterator rend();
+  subloop_iterator subloop_begin();
+  subloop_iterator subloop_end();
 
  private:
   Loop(const Loop&) = delete;
   const Loop& operator=(const Loop&) = delete;
   std::vector<cfg::Block*> m_blocks;
-  UnorderedSet<cfg::Block*> m_block_set;
-  UnorderedSet<Loop*> m_subloops;
+  std::unordered_set<cfg::Block*> m_block_set;
+  std::unordered_set<Loop*> m_subloops;
   cfg::Block* m_loop_preheader;
   Loop* m_parent_loop;
 };
@@ -142,8 +144,8 @@ class LoopInfo {
   void init(Cfg& cfg, Fn fn);
 
   std::deque<Loop> m_loops;
-  UnorderedMap<cfg::Block*, int> m_loop_depth;
-  UnorderedMap<cfg::Block*, Loop*> m_block_location;
+  std::unordered_map<cfg::Block*, int> m_loop_depth;
+  std::unordered_map<cfg::Block*, Loop*> m_block_location;
 };
 
 } // namespace loop_impl

@@ -688,7 +688,7 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
         if (code == nullptr || m->rstate.no_optimizations()) {
           return ReduceArrayLiterals::Stats();
         }
-        always_assert(code->cfg_built());
+        always_assert(code->editable_cfg_built());
         ReduceArrayLiterals ral(code->cfg(), m_max_filled_elements, min_sdk,
                                 arch);
         ral.patch();

@@ -20,7 +20,6 @@
 #include "DuplicateClasses.h"
 #include "KeepReason.h"
 #include "ProguardConfiguration.h"
-#include "Sanitizers.h"
 #include "Show.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -761,12 +760,13 @@ void RedexContext::erase_method(const DexType* type,
 }
 
 void RedexContext::leak_method(DexMethodRef* method) {
-  sanitizers::lsan_ignore_object(method);
-  m_leaked_methods_count.fetch_add(1, std::memory_order_relaxed);
+  std::lock_guard<std::mutex> l(m_leaked_methods_mutex);
+  m_leaked_methods.push(method);
 }
 
 size_t RedexContext::leaked_methods() {
-  return m_leaked_methods_count.load(std::memory_order_relaxed);
+  std::lock_guard<std::mutex> l(m_leaked_methods_mutex);
+  return m_leaked_methods.size();
 }
 
 // TODO: Need a better interface.

@@ -162,9 +162,8 @@ class SignedConstantDomain final
       case sign_domain::Interval::NEZ:
         return nez();
       case sign_domain::Interval::SIZE:
-        break;
+        not_reached();
       }
-      not_reached();
     }
 
     static Bounds from_integer(int64_t integer) {

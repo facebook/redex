@@ -866,7 +866,7 @@ static size_t analyze_read_locations(
         }
 
         bool unknown = false;
-        cfg_adapter::iterate_with_iterator(
+        editable_cfg_adapter::iterate_with_iterator(
             method->get_code(), [&](const IRList::iterator& it) {
               auto* insn = it->insn;
               auto opcode = insn->opcode();
@@ -943,8 +943,8 @@ static size_t analyze_read_locations(
                 break;
               }
 
-              return unknown ? cfg_adapter::LOOP_BREAK
-                             : cfg_adapter::LOOP_CONTINUE;
+              return unknown ? editable_cfg_adapter::LOOP_BREAK
+                             : editable_cfg_adapter::LOOP_CONTINUE;
             });
 
         if (unknown) {

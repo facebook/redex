@@ -9,7 +9,6 @@
 
 #include "ClassHierarchy.h"
 #include "ConfigFiles.h"
-#include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -77,7 +76,7 @@ std::vector<DexClassSet> collect_can_merge(
     // Build the map of interfaces and list of classes that implement
     // the interfaces
     ImplementorsToInterfaces interface_class_map;
-    UnorderedSet<DexClass*> ifaces;
+    std::unordered_set<DexClass*> ifaces;
     // Find interfaces that are not external, can be deleted, and can be
     // renamed.
     for (auto* cls : classes_group) {
@@ -86,7 +85,7 @@ std::vector<DexClassSet> collect_can_merge(
         ifaces.emplace(cls);
       }
     }
-    for (const auto& cls : UnorderedIterable(ifaces)) {
+    for (const auto& cls : ifaces) {
       TRACE(MEINT, 7, "interfaces: %p", cls->get_type());
       const TypeSet& implementors =
           type_system.get_implementors(cls->get_type());
@@ -176,8 +175,8 @@ void strip_out_collision(const Scope& scope,
     mergeables.insert(i.first);
   }
 
-  UnorderedSet<DexMethodRef*> fake_sets;
-  UnorderedSet<const DexType*> to_delete;
+  std::unordered_set<DexMethodRef*> fake_sets;
+  std::unordered_set<const DexType*> to_delete;
   const auto fake_update = [&](DexMethod* meth) {
     DexProto* proto = meth->get_proto();
     // TODO(suree404): Only eliminate true virtual.
@@ -221,14 +220,14 @@ void strip_out_collision(const Scope& scope,
   };
 
   walk::methods(scope, fake_update);
-  for (DexMethodRef* fake_method : UnorderedIterable(fake_sets)) {
+  for (DexMethodRef* fake_method : fake_sets) {
     TRACE(MEINT, 7, "Erasing fake method");
     TRACE(MEINT, 7, "%s", SHOW(fake_method));
     TRACE(MEINT, 7, "");
     DexMethod::erase_method(fake_method);
   }
 
-  for (const DexType* to_del : UnorderedIterable(to_delete)) {
+  for (const DexType* to_del : to_delete) {
     DexClass* to_del_cls = type_class(to_del);
     for (auto it = candidates->begin(); it != candidates->end(); ++it) {
       if (it->find(to_del_cls) != it->end()) {
@@ -272,7 +271,7 @@ bool will_fail_relocate(DexMethod* method) {
  * interface.
  */
 void strip_out_dmethod_relo_problem_intf(std::vector<DexClassSet>* candidates) {
-  UnorderedSet<DexClass*> to_delete;
+  std::unordered_set<DexClass*> to_delete;
   for (auto it = candidates->begin(); it != candidates->end(); ++it) {
     const DexClassSet& intf_set = *it;
     if (intf_set.size() <= 1) {
@@ -292,7 +291,7 @@ void strip_out_dmethod_relo_problem_intf(std::vector<DexClassSet>* candidates) {
       }
     }
   }
-  for (DexClass* intf : UnorderedIterable(to_delete)) {
+  for (DexClass* intf : to_delete) {
     TRACE(MEINT, 7, "Excluding interface %s because of dmethod relocation.",
           SHOW(intf->get_type()));
     for (auto it = candidates->begin(); it != candidates->end(); ++it) {
@@ -408,7 +407,7 @@ UnorderedMap<const DexType*, DexType*> merge_interfaces(
 
     // Get original interfaces of target interface and use that as the start
     // point of its new interfaces.
-    UnorderedSet<DexType*> new_intfs;
+    std::unordered_set<DexType*> new_intfs;
     const auto* original_intf = merge_to_intf->get_interfaces();
     new_intfs.insert(original_intf->begin(), original_intf->end());
 
@@ -433,12 +432,8 @@ UnorderedMap<const DexType*, DexType*> merge_interfaces(
     // Get rid of merge target in new interfaces set if it was added in.
     new_intfs.erase(merge_to_intf->get_type());
     // Set super interfaces to merged super interfaces.
-    DexTypeList::ContainerType vec;
-    insert_unordered_iterable(vec, vec.end(), new_intfs);
-    // TODO: The resulting vec is not deterministically ordered. This is a
-    // potential source of non-determinism. Consider sorting or retaining
-    // original order.
-    DexTypeList* implements = DexTypeList::make_type_list(std::move(vec));
+    DexTypeList::ContainerType deque{new_intfs.begin(), new_intfs.end()};
+    DexTypeList* implements = DexTypeList::make_type_list(std::move(deque));
     merge_to_intf->set_interfaces(implements);
   }
   return intf_merge_map;
@@ -529,7 +524,7 @@ void remove_implements(
       continue;
     }
     TRACE(MEINT, 9, "Updating interface for %p", cls->get_type());
-    UnorderedSet<DexType*> new_intfs;
+    std::unordered_set<DexType*> new_intfs;
     TRACE_NO_LINE(MEINT, 9, "Original was:");
     for (DexType* cls_intf : *cls->get_interfaces()) {
       TRACE_NO_LINE(MEINT, 9, "%p ", cls_intf);
@@ -544,17 +539,14 @@ void remove_implements(
         new_intfs.emplace(cls_intf);
       }
     }
-    DexTypeList::ContainerType vec;
+    DexTypeList::ContainerType deque;
     TRACE_NO_LINE(MEINT, 9, "\nAfter is:");
-    for (DexType* intf : UnorderedIterable(new_intfs)) {
+    for (DexType* intf : new_intfs) {
       TRACE_NO_LINE(MEINT, 9, "%p ", intf);
-      vec.emplace_back(intf);
+      deque.emplace_back(intf);
     }
-    // TODO: The resulting vec is not deterministically ordered. This is a
-    // potential source of non-determinism. Consider sorting or retaining
-    // original order.
     TRACE(MEINT, 9, "");
-    DexTypeList* implements = DexTypeList::make_type_list(std::move(vec));
+    DexTypeList* implements = DexTypeList::make_type_list(std::move(deque));
     cls->set_interfaces(implements);
   }
 }

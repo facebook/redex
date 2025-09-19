@@ -9,7 +9,7 @@
 
 #include <utility>
 
-namespace cfg_adapter {
+namespace editable_cfg_adapter {
 
 void iterate(const IRCode* code,
              std::function<LoopExit(const MethodItemEntry&)> func) {
@@ -27,4 +27,4 @@ void iterate_with_iterator(
     const IRCode* code, std::function<LoopExit(IRList::const_iterator)> func) {
   iterate_with_iterator(const_cast<IRCode*>(code), std::move(func));
 }
-} // namespace cfg_adapter
+} // namespace editable_cfg_adapter

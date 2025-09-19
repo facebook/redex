@@ -8,6 +8,7 @@
 #include "Mutators.h"
 
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 
@@ -18,9 +19,9 @@ void drop_this(DexMethod* method) {
     return;
   }
   cfg::ScopedCFG cfg(code);
-  auto nregs = cfg->get_registers_size();
+  auto nregs = code->get_registers_size();
   assert_log(nregs >= 1, "Too few regs: %s\n", SHOW(method));
-  cfg->set_registers_size(nregs - 1);
+  code->set_registers_size(nregs - 1);
   cfg::Block* first_block_with_insns = cfg->get_first_block_with_insns();
   auto this_insn = first_block_with_insns->get_first_insn();
   always_assert(opcode::is_a_load_param(this_insn->insn->opcode()));

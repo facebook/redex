@@ -49,10 +49,12 @@ bool load_jar_file(const DexLocation* location,
 bool load_class_file(const std::string& filename, Scope* classes = nullptr);
 
 void init_basic_types();
-// For testing purposes. Must call init_basic_types() if loading a class file.
-void process_jar(const uint8_t* mapping,
+bool process_jar(const DexLocation* location,
+                 const uint8_t* mapping,
                  size_t size,
-                 const std::function<void(uint8_t*, size_t)>& on_class);
+                 Scope* classes,
+                 const attribute_hook_t& attr_hook,
+                 const jar_loader::duplicate_allowed_hook_t& is_allowed);
 
 bool parse_class(uint8_t* buffer,
                  size_t buffer_size,

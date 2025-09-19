@@ -81,12 +81,6 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
     return true;
   }
 
-  if (b->preds().size() > 1) {
-    // If there exists multiple ways to get to a block, this can be problematic
-    // for tracking extra loads, which only is implemented for leafs.
-    return true;
-  }
-
   const auto& last = b->get_last_insn();
   if (last == b->end()) {
     // No instructions in this block => can't be part of the switching logic =>
@@ -309,6 +303,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
               // A switch cannot represent this control flow graph unless we
               // duplicate this leaf. See the comment on
               // m_leaf_duplication_threshold for more details.
+              always_assert(m_cfg->editable());
               cfg::Block* copy = m_cfg->duplicate_block(next);
               edges_to_move.emplace_back(succ, copy);
               m_extra_loads.emplace(copy, loads);
@@ -725,6 +720,7 @@ size_t SwitchEquivEditor::normalize_sled_blocks(
     if (is_sled(b)) {
       auto* dest = b->goes_to_only_edge();
       if (!is_sled(dest) && dest->num_opcodes() < leaf_duplication_threshold) {
+        always_assert(cfg->editable());
         // Make a replacement for b, which is b's source blocks plus dest.
         TRACE(SWITCH_EQUIV, 2,
               "Removing sled block B%zu; duplicating instructions from B%zu",

@@ -15,7 +15,6 @@
 #include "ApiLevelChecker.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
-#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -38,8 +37,8 @@ struct Rebinder {
   template <typename T>
   struct RefStats {
     int count = 0;
-    UnorderedSet<T> in;
-    UnorderedSet<T> out;
+    std::unordered_set<T> in;
+    std::unordered_set<T> out;
 
     void insert(T tin, T tout) {
       ++count;
@@ -66,8 +65,12 @@ struct Rebinder {
 
     RefStats& operator+=(const RefStats& rhs) {
       count += rhs.count;
-      insert_unordered_iterable(in, rhs.in);
-      insert_unordered_iterable(out, rhs.out);
+      if (!rhs.in.empty()) {
+        in.insert(rhs.in.begin(), rhs.in.end());
+      }
+      if (!rhs.out.empty()) {
+        out.insert(rhs.out.begin(), rhs.out.end());
+      }
       return *this;
     }
   };
@@ -101,7 +104,7 @@ struct Rebinder {
           }
           bool is_support_lib = api::is_support_lib_type(method->get_class());
           RebinderRefs rebinder_refs;
-          always_assert(method->get_code()->cfg_built());
+          always_assert(method->get_code()->editable_cfg_built());
           auto& cfg = method->get_code()->cfg();
           for (auto& mie : cfg::InstructionIterable(cfg)) {
             auto* insn = mie.insn;

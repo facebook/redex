@@ -9,6 +9,7 @@
 
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
+#include <unordered_map>
 
 #include "ControlFlow.h"
 #include "IRCode.h"

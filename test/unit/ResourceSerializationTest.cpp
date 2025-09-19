@@ -551,7 +551,7 @@ TEST(ResTable, AppendNewType) {
     ResourcesArscFile arsc_file(dest_file_path);
     std::vector<android::ResTable_config*> config_ptrs;
     config_ptrs.emplace_back(&default_config);
-    arsc_file.define_type(0x7f, 3, "dimen.2", config_ptrs, source_ids);
+    arsc_file.define_type(0x7f, 3, "foo", config_ptrs, source_ids);
     arsc_file.serialize();
   }
 
@@ -587,25 +587,6 @@ TEST(ResTable, AppendNewType) {
   std::vector<std::string> type_names;
   round_trip_snapshot.get_type_names(APPLICATION_PACKAGE, &type_names);
   ASSERT_EQ(type_names.size(), original_type_names.size() + 1);
-
-  {
-    auto type_ids_to_names =
-        round_trip_snapshot.get_type_ids_to_resource_type_names(
-            APPLICATION_PACKAGE);
-    ASSERT_EQ(type_ids_to_names.size(), 3);
-    ASSERT_STREQ(type_ids_to_names[1].c_str(), "dimen");
-    ASSERT_STREQ(type_ids_to_names[2].c_str(), "string");
-    ASSERT_STREQ(type_ids_to_names[3].c_str(), "dimen.2");
-  }
-  {
-    auto type_ids_to_names =
-        round_trip_snapshot.get_type_ids_to_resource_type_names(
-            APPLICATION_PACKAGE, true);
-    ASSERT_EQ(type_ids_to_names.size(), 3);
-    ASSERT_STREQ(type_ids_to_names[1].c_str(), "dimen");
-    ASSERT_STREQ(type_ids_to_names[2].c_str(), "string");
-    ASSERT_STREQ(type_ids_to_names[3].c_str(), "dimen");
-  }
 }
 
 TEST(ResStringPoolBuilder, TestPoolRebuild8) {
@@ -924,27 +905,15 @@ void build_arsc_file_and_validate(
       foo_package.id, 2, style_configs, style_flags);
   package_builder->add_type(style_type_definer);
 
-  arsc::ResComplexEntryBuilder complex_entry_builder;
-  complex_entry_builder.set_key_string_index(3);
-  complex_entry_builder.set_parent_id(0);
+  style.item0.name.ident = 0x01010098; // android:textColor
+  style.item0.value.dataType = android::Res_value::TYPE_INT_COLOR_RGB8;
+  style.item0.value.data = 0xFF0000FF;
 
-  std::vector<std::tuple<uint8_t, uint32_t, uint32_t>> attributes = {
-      {android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF0000FF, 0x01010098},
-      {android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF00FF00, 0x010100d4}};
+  style.item1.name.ident = 0x010100d4; // android:background
+  style.item1.value.dataType = android::Res_value::TYPE_INT_COLOR_RGB8;
+  style.item1.value.data = 0xFF00FF00;
 
-  for (const auto& [data_type, data_value, attr_id] : attributes) {
-    android::Res_value value;
-    value.size = sizeof(android::Res_value);
-    value.dataType = data_type;
-    value.data = data_value;
-    complex_entry_builder.add(attr_id, value);
-  }
-
-  android::Vector<char> complex_entry_data;
-  complex_entry_builder.serialize(&complex_entry_data);
-
-  style_type_definer->add(&xxhdpi_config, {(uint8_t*)complex_entry_data.array(),
-                                           complex_entry_data.size()});
+  style_type_definer->add(&xxhdpi_config, &style);
 
   // Write to a file, give the callback the temp dir and file to validate
   // against.
@@ -1016,7 +985,7 @@ std::vector<arsc::TypeInfo> load_types(const RedexMappedFile& arsc_file) {
     EXPECT_EQ((expected).value.data, __actual_value.data);          \
   })
 // Assert values in the table match the two items expecrted in the
-// "MapEntryAndTwoValues"
+// "MapEntryAndValues"
 #define ASSERT_MAP_ENTRY_VALUES(table, config_str, entry_str, expected) \
   ({                                                                    \
     uint32_t __id = (table).get_identifier(entry_str);                  \
@@ -1092,21 +1061,9 @@ TEST(ResTable, ComputeSizes) {
   EntryAndValue simple(0, android::Res_value::TYPE_DIMENSION, 1000);
   EXPECT_EQ(arsc::compute_entry_value_length(&simple.entry),
             sizeof(EntryAndValue));
-
-  arsc::ResComplexEntryBuilder complex_builder;
-  complex_builder.set_key_string_index(1);
-  complex_builder.add(0x01010098, android::Res_value::TYPE_INT_COLOR_RGB8,
-                      0xff0000ff);
-
-  android::Vector<char> complex_entry_data;
-  complex_builder.serialize(&complex_entry_data);
-
-  android::ResTable_entry* complex_entry_ptr =
-      (android::ResTable_entry*)complex_entry_data.array();
-
-  size_t expected_size =
-      sizeof(android::ResTable_map_entry) + sizeof(android::ResTable_map);
-  EXPECT_EQ(arsc::compute_entry_value_length(complex_entry_ptr), expected_size);
+  MapEntryAndValues complex(1, 0);
+  EXPECT_EQ(arsc::compute_entry_value_length(&complex.entry),
+            sizeof(MapEntryAndValues));
 }
 
 TEST(ResTable, DeleteAllEntriesInType) {
@@ -1495,7 +1452,7 @@ TEST(ResTable, GetStringsByName) {
   // cyclic.
   EntryAndValue third(2, android::Res_value::TYPE_STRING, 3);
   EntryAndValue third_land(2, android::Res_value::TYPE_REFERENCE, 0x7f010003);
-  type_definer->add(&default_config, &third);
+  type_definer->add(&default_config, {(uint8_t*)&third, sizeof(EntryAndValue)});
   type_definer->add(&land_config, &third_land);
 
   EntryAndValue fourth(3, android::Res_value::TYPE_REFERENCE, 0x7f010002);
@@ -1974,282 +1931,4 @@ TEST(Xml, AttributeSorting) {
                                            ATTR_ID_COUNT, pool_lookup),
               4);
   }
-}
-
-TEST(ResTableTypeDefiner, AddComplexEntryBuilder) {
-  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
-  auto global_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
-  auto key_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
-  auto type_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
-
-  key_strings_builder->add_string("test_entry");
-  type_strings_builder->add_string("style");
-
-  auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
-  package_builder->set_key_strings(key_strings_builder);
-  package_builder->set_type_strings(type_strings_builder);
-
-  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
-  table_builder->set_global_strings(global_strings_builder);
-  table_builder->add_package(package_builder);
-
-  std::vector<android::ResTable_config*> configs = {&default_config,
-                                                    &land_config};
-  std::vector<uint32_t> flags = {android::ResTable_config::CONFIG_ORIENTATION};
-
-  auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      foo_package.id, 1, configs, flags);
-  package_builder->add_type(type_definer);
-
-  arsc::ResComplexEntryBuilder default_builder;
-  default_builder.set_key_string_index(0);
-  default_builder.set_parent_id(0);
-  default_builder.add(0x01010098, android::Res_value::TYPE_INT_COLOR_RGB8,
-                      0xFF0000FF);
-  default_builder.add(0x010100d4, android::Res_value::TYPE_INT_COLOR_RGB8,
-                      0xFF00FF00);
-
-  arsc::ResComplexEntryBuilder land_builder;
-  land_builder.set_key_string_index(0);
-  land_builder.set_parent_id(0);
-  land_builder.add(0x01010098, android::Res_value::TYPE_INT_COLOR_RGB8,
-                   0xFFFF0000);
-  land_builder.add(0x010100d4, android::Res_value::TYPE_INT_COLOR_RGB8,
-                   0xFF000000);
-
-  type_definer->add(&default_config, default_builder);
-  type_definer->add(&land_config, land_builder);
-
-  android::Vector<char> serialized;
-  table_builder->serialize(&serialized);
-
-  auto tmp_dir =
-      redex::make_tmp_dir("ResTableTypeDefiner_AddComplexEntryBuilder%%%%%%%%");
-  auto arsc_path = tmp_dir.path + "/resources.arsc";
-  write_to_file(arsc_path, serialized);
-
-  auto table_dump = aapt_dump_and_parse(arsc_path);
-
-  uint32_t resource_id = 0x7f010000;
-
-  auto default_values = table_dump.get_complex_values("default", resource_id);
-  ASSERT_EQ(default_values.size(), 2);
-  EXPECT_EQ(default_values[0].key, 0x01010098);
-  EXPECT_EQ(default_values[0].data, 0xFF0000FF);
-  EXPECT_EQ(default_values[1].key, 0x010100d4);
-  EXPECT_EQ(default_values[1].data, 0xFF00FF00);
-
-  auto land_values = table_dump.get_complex_values("land", resource_id);
-  ASSERT_EQ(land_values.size(), 2);
-  EXPECT_EQ(land_values[0].key, 0x01010098);
-  EXPECT_EQ(land_values[0].data, 0xFFFF0000);
-  EXPECT_EQ(land_values[1].key, 0x010100d4);
-  EXPECT_EQ(land_values[1].data, 0xFF000000);
-}
-
-TEST(ResourcesArscFile, ApplyAttributeRemovals) {
-  build_arsc_file_and_validate([&](const std::string& /* unused */,
-                                   const std::string& arsc_path) {
-    auto initial_dump = aapt_dump_and_parse(arsc_path);
-    uint32_t resource_id = 0x7f020000;
-    auto initial_values =
-        initial_dump.get_complex_values("xxhdpi", resource_id);
-    ASSERT_EQ(initial_values.size(), 2);
-    EXPECT_EQ(initial_values[0].key, 0x01010098);
-    EXPECT_EQ(initial_values[1].key, 0x010100d4);
-
-    {
-      ResourcesArscFile arsc_file(arsc_path);
-      std::vector<resources::StyleModificationSpec::Modification> modifications;
-      resources::StyleModificationSpec::Modification mod{resource_id,
-                                                         0x010100d4};
-      modifications.push_back(mod);
-
-      arsc_file.apply_attribute_removals(modifications, {});
-    }
-    {
-      auto modified_dump = aapt_dump_and_parse(arsc_path);
-      auto modified_values =
-          modified_dump.get_complex_values("xxhdpi", resource_id);
-      ASSERT_EQ(modified_values.size(), 1);
-      EXPECT_EQ(modified_values[0].key, 0x01010098);
-    }
-
-    {
-      ResourcesArscFile arsc_file(arsc_path);
-      std::vector<resources::StyleModificationSpec::Modification> modifications;
-      resources::StyleModificationSpec::Modification mod{resource_id,
-                                                         0x01010000};
-      modifications.push_back(mod);
-
-      arsc_file.apply_attribute_removals(modifications, {});
-    }
-    {
-      auto modified_dump = aapt_dump_and_parse(arsc_path);
-      auto modified_values =
-          modified_dump.get_complex_values("xxhdpi", resource_id);
-      ASSERT_EQ(modified_values.size(), 1);
-      EXPECT_EQ(modified_values[0].key, 0x01010098);
-    }
-
-    {
-      ResourcesArscFile arsc_file(arsc_path);
-      std::vector<resources::StyleModificationSpec::Modification> modifications;
-      resources::StyleModificationSpec::Modification mod{0x7f030000,
-                                                         0x01010098};
-      modifications.push_back(mod);
-
-      arsc_file.apply_attribute_removals(modifications, {});
-    }
-    {
-      auto modified_dump = aapt_dump_and_parse(arsc_path);
-      auto modified_values =
-          modified_dump.get_complex_values("xxhdpi", resource_id);
-      ASSERT_EQ(modified_values.size(), 1);
-      EXPECT_EQ(modified_values[0].key, 0x01010098);
-    }
-
-    {
-      ResourcesArscFile arsc_file(arsc_path);
-      std::vector<resources::StyleModificationSpec::Modification> modifications;
-
-      resources::StyleModificationSpec::Modification mod1{resource_id,
-                                                          0x01010098};
-      resources::StyleModificationSpec::Modification mod2{resource_id,
-                                                          0x01010099};
-      modifications.push_back(mod1);
-      modifications.push_back(mod2);
-
-      arsc_file.apply_attribute_removals(modifications, {});
-    }
-    {
-      auto final_dump = aapt_dump_and_parse(arsc_path);
-      auto final_values = final_dump.get_complex_values("xxhdpi", resource_id);
-      ASSERT_EQ(final_values.size(), 0);
-    }
-  });
-}
-TEST(ResComplexEntryBuilder, AttributeSorting) {
-  arsc::ResComplexEntryBuilder builder;
-  builder.set_key_string_index(0);
-  builder.set_parent_id(0);
-
-  uint32_t high_attr_id = 0x01010200;
-  uint32_t mid_attr_id = 0x01010150;
-  uint32_t low_attr_id = 0x01010100;
-
-  builder.add(high_attr_id, android::Res_value::TYPE_INT_COLOR_RGB8,
-              0xFF0000FF);
-  builder.add(mid_attr_id, android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF00FF00);
-  builder.add(low_attr_id, android::Res_value::TYPE_INT_COLOR_RGB8, 0xFFFF0000);
-
-  android::Vector<char> serialized;
-  builder.serialize(&serialized);
-
-  ASSERT_GT(serialized.size(), 0);
-
-  android::ResTable_map_entry map_entry;
-  std::memcpy(&map_entry, serialized.array(),
-              sizeof(android::ResTable_map_entry));
-  ASSERT_EQ(map_entry.count, 3);
-
-  std::vector<android::ResTable_map> maps(3);
-  std::memcpy(maps.data(),
-              serialized.array() + sizeof(android::ResTable_map_entry),
-              3 * sizeof(android::ResTable_map));
-
-  EXPECT_EQ(maps[0].name.ident, low_attr_id);
-  EXPECT_EQ(maps[1].name.ident, mid_attr_id);
-  EXPECT_EQ(maps[2].name.ident, high_attr_id);
-}
-
-TEST(ResourcesArscFile, ApplyAttributeAdditions) {
-  build_arsc_file_and_validate([&](const std::string& /* unused */,
-                                   const std::string& arsc_path) {
-    auto initial_dump = aapt_dump_and_parse(arsc_path);
-    uint32_t resource_id = 0x7f020000;
-    auto initial_values =
-        initial_dump.get_complex_values("xxhdpi", resource_id);
-    ASSERT_EQ(initial_values.size(), 2);
-    EXPECT_EQ(initial_values[0].key, 0x01010098);
-    EXPECT_EQ(initial_values[1].key, 0x010100d4);
-
-    {
-      ResourcesArscFile arsc_file(arsc_path);
-      std::vector<resources::StyleModificationSpec::Modification> modifications;
-      resources::StyleModificationSpec::Modification mod{
-          resource_id, 0x01010099,
-          resources::StyleResource::Value{
-              android::Res_value::TYPE_INT_COLOR_RGB8, 0xFFFFFFFF}};
-      modifications.push_back(mod);
-
-      arsc_file.apply_attribute_additions(modifications, {});
-    }
-    {
-      auto modified_dump = aapt_dump_and_parse(arsc_path);
-      auto modified_values =
-          modified_dump.get_complex_values("xxhdpi", resource_id);
-      ASSERT_EQ(modified_values.size(), 3);
-      EXPECT_EQ(modified_values[0].key, 0x01010098);
-      EXPECT_EQ(modified_values[1].key, 0x01010099);
-      EXPECT_EQ(modified_values[1].data, 0xFFFFFFFF);
-      EXPECT_EQ(modified_values[2].key, 0x010100d4);
-    }
-
-    {
-      ResourcesArscFile arsc_file(arsc_path);
-      std::vector<resources::StyleModificationSpec::Modification> modifications;
-      resources::StyleModificationSpec::Modification mod1{
-          resource_id, 0x01010100,
-          resources::StyleResource::Value{
-              android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF000000}};
-      resources::StyleModificationSpec::Modification mod2{
-          resource_id, 0x01010101,
-          resources::StyleResource::Value{
-              android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF888888}};
-      modifications.push_back(mod1);
-      modifications.push_back(mod2);
-
-      arsc_file.apply_attribute_additions(modifications, {});
-    }
-    {
-      auto final_dump = aapt_dump_and_parse(arsc_path);
-      auto final_values = final_dump.get_complex_values("xxhdpi", resource_id);
-      ASSERT_EQ(final_values.size(), 5);
-      EXPECT_EQ(final_values[0].key, 0x01010098);
-      EXPECT_EQ(final_values[1].key, 0x01010099);
-      EXPECT_EQ(final_values[2].key, 0x010100d4);
-      EXPECT_EQ(final_values[3].key, 0x01010100);
-      EXPECT_EQ(final_values[3].data, 0xFF000000);
-      EXPECT_EQ(final_values[4].key, 0x01010101);
-      EXPECT_EQ(final_values[4].data, 0xFF888888);
-    }
-
-    {
-      ResourcesArscFile arsc_file(arsc_path);
-      std::vector<resources::StyleModificationSpec::Modification> modifications;
-      resources::StyleModificationSpec::Modification mod{
-          0x7f030000, 0x01010102,
-          resources::StyleResource::Value{
-              android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF123456}};
-      modifications.push_back(mod);
-
-      arsc_file.apply_attribute_additions(modifications, {});
-    }
-    {
-      auto unchanged_dump = aapt_dump_and_parse(arsc_path);
-      auto unchanged_values =
-          unchanged_dump.get_complex_values("xxhdpi", resource_id);
-      ASSERT_EQ(unchanged_values.size(), 5);
-      EXPECT_EQ(unchanged_values[0].key, 0x01010098);
-      EXPECT_EQ(unchanged_values[1].key, 0x01010099);
-      EXPECT_EQ(unchanged_values[2].key, 0x010100d4);
-      EXPECT_EQ(unchanged_values[3].key, 0x01010100);
-      EXPECT_EQ(unchanged_values[4].key, 0x01010101);
-    }
-  });
 }

@@ -13,7 +13,7 @@
 namespace constant_propagation {
 namespace definitely_assigned_ifields {
 // Computes the set of ifields which have are guaranteed to have been written to
-// before they are ever read. This method assumes that cfgs have been
+// before they are ever read. This method assumes that editable cfgs have been
 // build, and exit-blocks calculated.
 UnorderedSet<const DexField*> get_definitely_assigned_ifields(
     const Scope& scope);

@@ -12,7 +12,6 @@
 #include <sparta/PatriciaTreeSet.h>
 
 #include "Resolver.h"
-#include "Show.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 
@@ -242,25 +241,28 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
     env->set_may_escape(insn->src(src_idx), insn);
   }
 
-  if (!dest_may_be_pointer(insn)) {
-    env->set_pointers(RESULT_REGISTER, PointerSet::top());
-  }
-
-  PointerSet returned_ptrs;
-  for (auto src_idx : UnorderedIterable(summary.returned_parameters)) {
-    if (src_idx == FRESH_RETURN) {
-      returned_ptrs.add(insn);
-    } else if (src_idx == ESCAPED_FRESH_RETURN) {
-      returned_ptrs.add(insn);
-      // escape just insn right here; we are going to override
-      // RESULT_REGISTER in a moment with a more precise pointer set.
-      escape_dest(insn, RESULT_REGISTER, env);
-    } else {
-      returned_ptrs.join_with(env->get_pointers(insn->src(src_idx)));
+  switch (summary.returned_parameters.kind()) {
+  case sparta::AbstractValueKind::Value: {
+    PointerSet returned_ptrs;
+    for (auto src_idx : summary.returned_parameters.elements()) {
+      if (src_idx == FRESH_RETURN) {
+        returned_ptrs.add(insn);
+      } else {
+        returned_ptrs.join_with(env->get_pointers(insn->src(src_idx)));
+      }
     }
+    env->set_pointers(RESULT_REGISTER, returned_ptrs);
+    break;
   }
-  // Note that returned_ptrs is empty initially
-  env->set_pointers(RESULT_REGISTER, returned_ptrs);
+  case sparta::AbstractValueKind::Top:
+  case sparta::AbstractValueKind::Bottom: {
+    // We are intentionally handling Bottom by setting the result register to
+    // Top. This is a loss of precision but it makes it easier to implement
+    // dead code elimination. See UsedVarsTest_noReturn for details.
+    escape_dest(insn, RESULT_REGISTER, env);
+    break;
+  }
+  }
 }
 
 /*
@@ -406,13 +408,11 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
                                          excluded_classes);
   fp_iter->run(Environment());
 
-  bool result_may_be_pointer =
-      !type::is_primitive(method->get_proto()->get_rtype());
-  auto summary = get_escape_summary(*fp_iter, *code, result_may_be_pointer);
+  auto summary = get_escape_summary(*fp_iter, *code);
   return std::make_pair(std::move(fp_iter), std::move(summary));
 }
 
-AnalyzeScopeResult analyze_scope(
+FixpointIteratorMap analyze_scope(
     const Scope& scope,
     const call_graph::Graph& call_graph,
     SummaryMap* summary_map_ptr,
@@ -429,17 +429,15 @@ AnalyzeScopeResult analyze_scope(
     affected_methods->insert(method);
   });
 
-  size_t iterations = 0;
   while (!affected_methods->empty()) {
-    ++iterations;
     InsertOnlyConcurrentMap<const DexMethod*, EscapeSummary>
         changed_effect_summaries;
     auto next_affected_methods =
         std::make_unique<ConcurrentSet<const DexMethod*>>();
     workqueue_run<const DexMethod*>(
         [&](const DexMethod* method) {
-          auto p = analyze_method(method, call_graph, *summary_map_ptr,
-                                  excluded_classes);
+          auto p = analyze_method(
+              method, call_graph, *summary_map_ptr, excluded_classes);
           auto& new_fp_iter = p.first;
           auto& new_summary = p.second;
           fp_iter_map.update(method, [&](auto*, auto& v, bool exists) {
@@ -447,15 +445,8 @@ AnalyzeScopeResult analyze_scope(
             std::swap(new_fp_iter, v);
           });
           auto it = summary_map_ptr->find(method);
-          if (it != summary_map_ptr->end()) {
-            always_assert_log(it->second <= new_summary,
-                              "Illegal summary transition for %s:\n  %s\nis "
-                              "not less or equal to\n  %s\n",
-                              SHOW(method), SHOW(it->second),
-                              SHOW(new_summary));
-            if (it->second == new_summary) {
-              return;
-            }
+          if (it != summary_map_ptr->end() && it->second == new_summary) {
+            return;
           }
           changed_effect_summaries.emplace(method, std::move(new_summary));
           const auto& callers = call_graph.get_callers(method);
@@ -469,7 +460,7 @@ AnalyzeScopeResult analyze_scope(
     std::swap(next_affected_methods, affected_methods);
   }
 
-  return AnalyzeScopeResult{std::move(fp_iter_map), iterations};
+  return fp_iter_map;
 }
 
 void collect_exiting_pointers(const FixpointIterator& fp_iter,
@@ -488,7 +479,7 @@ void collect_exiting_pointers(const FixpointIterator& fp_iter,
     auto* insn = last_insn_it->insn;
     const auto& state =
         fp_iter.get_exit_state_at(const_cast<cfg::Block*>(block));
-    if (opcode::is_return_object(insn->opcode())) {
+    if (opcode::is_a_return_value(insn->opcode())) {
       returned_ptrs->join_with(state.get_pointers(insn->src(0)));
     } else if (insn->opcode() == OPCODE_THROW) {
       thrown_ptrs->join_with(state.get_pointers(insn->src(0)));
@@ -497,8 +488,7 @@ void collect_exiting_pointers(const FixpointIterator& fp_iter,
 }
 
 EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
-                                 const IRCode& code,
-                                 bool result_may_be_pointer) {
+                                 const IRCode& code) {
   EscapeSummary summary;
 
   PointerSet returned_ptrs;
@@ -511,7 +501,9 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
       fp_iter.get_exit_state_at(const_cast<cfg::Block*>(cfg.exit_block()));
   uint16_t idx{0};
   UnorderedMap<const IRInstruction*, uint16_t> param_indexes;
-  boost::sub_range<IRList> param_instruction = cfg.get_param_instructions();
+  boost::sub_range<IRList> param_instruction =
+      code.editable_cfg_built() ? cfg.get_param_instructions()
+                                : code.get_param_instructions();
   for (auto& mie : InstructionIterable(param_instruction)) {
     auto* insn = mie.insn;
     if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
@@ -528,29 +520,28 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
 
   switch (returned_ptrs.kind()) {
   case sparta::AbstractValueKind::Value: {
-    always_assert(result_may_be_pointer);
     summary.returned_parameters = ParamSet();
     for (const auto* insn : returned_ptrs.elements()) {
       if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
-        summary.returned_parameters.insert(param_indexes.at(insn));
+        summary.returned_parameters.add(param_indexes.at(insn));
       } else if (!exit_state.may_have_escaped(insn)) {
-        summary.returned_parameters.insert(FRESH_RETURN);
+        summary.returned_parameters.add(FRESH_RETURN);
       } else {
-        // We are returning a possibly escaped pointer that did not originate
-        // from an input parameter.
-        summary.returned_parameters.insert(ESCAPED_FRESH_RETURN);
+        // We are returning a pointer that did not originate from an input
+        // parameter. We have no way of representing these values in our
+        // summary, hence we set the return value to Top.
+        summary.returned_parameters.set_to_top();
+        break;
       }
     }
     break;
   }
   case sparta::AbstractValueKind::Top: {
-    always_assert(!result_may_be_pointer);
+    summary.returned_parameters.set_to_top();
     break;
   }
   case sparta::AbstractValueKind::Bottom: {
-    always_assert_log(!result_may_be_pointer || cfg.return_blocks().empty(),
-                      "Does the cfg contain unreachable blocks?\n%s",
-                      SHOW(cfg));
+    summary.returned_parameters.set_to_bottom();
     break;
   }
   }
@@ -567,14 +558,7 @@ std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary) {
     o << p_idx;
     first = false;
   }
-  first = true;
-  for (auto p_idx : UnorderedIterable(summary.returned_parameters)) {
-    if (!first) {
-      o << ", ";
-    }
-    o << p_idx;
-    first = false;
-  }
+  o << " Returned parameters: " << summary.returned_parameters;
   return o;
 }
 
@@ -585,14 +569,29 @@ sparta::s_expr to_s_expr(const EscapeSummary& summary) {
   for (auto idx : escaping_parameters) {
     escaping_params_s_exprs.emplace_back(idx);
   }
-  std::vector<sparta::s_expr> returned_params_s_exprs;
-  auto returned_parameters = unordered_to_ordered(summary.returned_parameters);
-  returned_params_s_exprs.reserve(returned_parameters.size());
-  for (auto idx : returned_parameters) {
-    returned_params_s_exprs.emplace_back(idx);
+  sparta::s_expr returned_params_s_expr;
+  switch (summary.returned_parameters.kind()) {
+  case sparta::AbstractValueKind::Top:
+    returned_params_s_expr = sparta::s_expr("Top");
+    break;
+  case sparta::AbstractValueKind::Bottom:
+    returned_params_s_expr = sparta::s_expr("Bottom");
+    break;
+  case sparta::AbstractValueKind::Value: {
+    std::vector<sparta::s_expr> idx_s_exprs;
+    const auto& elems = summary.returned_parameters.elements();
+    std::vector<uint16_t> returned_parameters(elems.begin(), elems.end());
+    std::sort(returned_parameters.begin(), returned_parameters.end());
+    idx_s_exprs.reserve(returned_parameters.size());
+    for (auto idx : returned_parameters) {
+      idx_s_exprs.emplace_back(idx);
+    }
+    returned_params_s_expr = sparta::s_expr(idx_s_exprs);
+    break;
+  }
   }
   return sparta::s_expr{sparta::s_expr(escaping_params_s_exprs),
-                        sparta::s_expr(returned_params_s_exprs)};
+                        returned_params_s_expr};
 }
 
 EscapeSummary EscapeSummary::from_s_expr(const sparta::s_expr& expr) {
@@ -604,31 +603,27 @@ EscapeSummary EscapeSummary::from_s_expr(const sparta::s_expr& expr) {
     summary.escaping_parameters.emplace(escaping_params_s_expr[i].get_int32());
   }
   auto returned_params_s_expr = expr[1];
-  always_assert(returned_params_s_expr.is_list());
-  for (size_t i = 0; i < returned_params_s_expr.size(); ++i) {
-    summary.returned_parameters.emplace(returned_params_s_expr[i].get_int32());
+  if (returned_params_s_expr.is_string()) {
+    const auto& s = returned_params_s_expr.get_string();
+    if (s == "Top") {
+      summary.returned_parameters.set_to_top();
+    } else {
+      redex_assert(s == "Bottom");
+      summary.returned_parameters.set_to_bottom();
+    }
+  } else {
+    always_assert(returned_params_s_expr.is_list());
+    summary.returned_parameters = ParamSet();
+    for (size_t i = 0; i < returned_params_s_expr.size(); ++i) {
+      summary.returned_parameters.add(returned_params_s_expr[i].get_int32());
+    }
   }
   return summary;
 }
 
-bool EscapeSummary::operator<=(const EscapeSummary& other) const {
-  return unordered_all_of(
-             escaping_parameters,
-             [&](auto idx) { return other.escaping_parameters.count(idx); }) &&
-         unordered_all_of(returned_parameters, [&](size_t idx) -> bool {
-           if (idx == FRESH_RETURN &&
-               (other.returned_parameters.count(ESCAPED_FRESH_RETURN) != 0u)) {
-             // As more escaping parameters are discovered, previously apparent
-             // unescaped fresh returns can become unrepresentable.
-             return true;
-           }
-           return other.returned_parameters.count(idx) != 0u;
-         });
-}
-
 void EscapeSummary::join_with(const EscapeSummary& other) {
   insert_unordered_iterable(escaping_parameters, other.escaping_parameters);
-  insert_unordered_iterable(returned_parameters, other.returned_parameters);
+  returned_parameters.join_with(other.returned_parameters);
 }
 
 bool may_be_overridden(const DexMethod* method) {

@@ -11,12 +11,12 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include <sparta/MonotonicFixpointIterator.h>
 
 #include "ControlFlow.h"
-#include "DeterministicContainers.h"
 #include "Dominators.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -148,7 +148,7 @@ class SourceBlockConsistencyCheck {
  private:
   void rebuild_sbdi(DexMethod* dex_method, const cfg::ControlFlowGraph& cfg);
 
-  UnorderedMap<DexMethod*, SBConsistencyContext> m_context_map;
+  std::unordered_map<DexMethod*, SBConsistencyContext> m_context_map;
 
   bool m_is_initialized = false;
 };

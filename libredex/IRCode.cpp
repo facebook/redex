@@ -197,7 +197,6 @@ static void shard_multi_target(IRList* ir,
   uint16_t entries = *data++;
   auto ftype = fopcode->opcode();
   uint32_t base = bm.by<Entry>().at(src);
-
   if (ftype == FOPCODE_PACKED_SWITCH) {
     int32_t case_key = read_int32(data);
     for (int i = 0; i < entries; i++) {
@@ -205,24 +204,17 @@ static void shard_multi_target(IRList* ir,
       insert_multi_branch_target(ir, case_key + i,
                                  get_bm_target_checked(bm, targetaddr), src);
     }
-    return;
-  }
-
-  if (ftype == FOPCODE_SPARSE_SWITCH) {
-    const uint16_t* tdata =
-        data + static_cast<ptrdiff_t>(2 * entries); // entries are 32b
+  } else if (ftype == FOPCODE_SPARSE_SWITCH) {
+    const uint16_t* tdata = data + 2 * entries; // entries are 32b
     for (int i = 0; i < entries; i++) {
       int32_t case_key = read_int32(data);
       uint32_t targetaddr = base + read_int32(tdata);
       insert_multi_branch_target(ir, case_key,
                                  get_bm_target_checked(bm, targetaddr), src);
     }
-    return;
+  } else {
+    not_reached_log("Bad fopcode 0x%04x in shard_multi_target", ftype);
   }
-
-  always_assert_type_log(
-      ftype == FOPCODE_PACKED_SWITCH || ftype == FOPCODE_SPARSE_SWITCH,
-      INVALID_DEX, "Bad fopcode 0x%04x in shard_multi_target", ftype);
 }
 
 static void generate_branch_targets(
@@ -532,8 +524,8 @@ get_old_to_new_position_copies(IRList* ir_list) {
 }
 
 // TODO: merge this and MethodSplicer.
-std::unique_ptr<IRList> deep_copy_ir_list(IRList* old_ir_list) {
-  auto ir_list = std::make_unique<IRList>();
+IRList* deep_copy_ir_list(IRList* old_ir_list) {
+  IRList* ir_list = new IRList();
 
   UnorderedMap<DexPosition*, std::unique_ptr<DexPosition>> old_position_to_new =
       get_old_to_new_position_copies(old_ir_list);
@@ -603,25 +595,24 @@ IRCode::IRCode() : m_ir_list(new IRList()) {}
 
 IRCode::~IRCode() {
   // Let the CFG clean itself up.
-  if (m_cfg != nullptr) {
-    if (m_owns_insns) {
-      m_cfg->set_insn_ownership(true);
-    }
-  } else {
-    always_assert(m_ir_list != nullptr);
-    if (m_owns_insns) {
-      m_ir_list->insn_clear_and_dispose();
-    } else {
-      m_ir_list->clear_and_dispose();
-    }
+  if (m_cfg != nullptr && m_cfg->editable() && m_owns_insns) {
+    m_cfg->set_insn_ownership(true);
   }
+
+  if (m_owns_insns) {
+    m_ir_list->insn_clear_and_dispose();
+  } else {
+    m_ir_list->clear_and_dispose();
+  }
+
+  delete m_ir_list;
 }
 
 IRCode::IRCode(DexMethod* method) : m_ir_list(new IRList()) {
   auto* dc = method->get_dex_code();
   generate_load_params(method, dc->get_registers_size() - dc->get_ins_size(),
                        this);
-  balloon(const_cast<DexMethod*>(method), m_ir_list.get());
+  balloon(const_cast<DexMethod*>(method), m_ir_list);
   m_dbg = dc->release_debug_item();
 }
 
@@ -630,7 +621,7 @@ std::unique_ptr<IRCode> IRCode::for_method(DexMethod* method) {
   auto* dc = method->get_dex_code();
   generate_load_params(method, dc->get_registers_size() - dc->get_ins_size(),
                        code.get());
-  balloon(const_cast<DexMethod*>(method), code->m_ir_list.get());
+  balloon(const_cast<DexMethod*>(method), code->m_ir_list);
   code->m_dbg = dc->release_debug_item();
   return code;
 }
@@ -641,11 +632,12 @@ IRCode::IRCode(DexMethod* method, size_t temp_regs) : m_ir_list(new IRList()) {
 }
 
 IRCode::IRCode(const IRCode& code) {
-  if (code.cfg_built()) {
+  if (code.editable_cfg_built()) {
+    m_ir_list = new IRList(); // Empty.
     m_cfg = std::make_unique<cfg::ControlFlowGraph>();
     code.m_cfg->deep_copy(m_cfg.get());
   } else {
-    auto* old_ir_list = code.m_ir_list.get();
+    IRList* old_ir_list = code.m_ir_list;
     m_ir_list = deep_copy_ir_list(old_ir_list);
   }
   m_registers_size = code.m_registers_size;
@@ -656,66 +648,53 @@ IRCode::IRCode(const IRCode& code) {
 
 IRCode::IRCode(std::unique_ptr<cfg::ControlFlowGraph> cfg) {
   always_assert(cfg);
+  always_assert(cfg->editable());
+  m_ir_list = new IRList(); // Empty.
   m_cfg = std::move(cfg);
   m_registers_size = m_cfg->get_registers_size();
 }
 
 void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
 
-reg_t IRCode::get_registers_size() const {
-  always_assert(!cfg_built());
-  return m_registers_size;
-}
-
-void IRCode::set_registers_size(reg_t sz) {
-  always_assert(!cfg_built());
-  m_registers_size = sz;
-}
-
-reg_t IRCode::allocate_temp() {
-  always_assert(!cfg_built());
-  return m_registers_size++;
-}
-
-reg_t IRCode::allocate_wide_temp() {
-  always_assert(!cfg_built());
-  reg_t new_reg = m_registers_size;
-  m_registers_size += 2;
-  return new_reg;
-}
-
-void IRCode::build_cfg(bool rebuild_even_if_already_built) {
+void IRCode::build_cfg(bool editable,
+                       bool rebuild_editable_even_if_already_built) {
   always_assert_log(
-      !m_cfg_serialized_with_custom_strategy,
-      "Cannot build CFG after being serialized with custom strategy. "
+      !editable || !m_cfg_serialized_with_custom_strategy,
+      "Cannot build editable CFG after being serialized with custom strategy. "
       "Rebuilding CFG will cause problems with basic block ordering.");
-  if (!rebuild_even_if_already_built && cfg_built()) {
-    // If current code already has cfg, and no need to rebuild a fresh
-    // cfg, just keep current cfg and return.
+  if (editable && !rebuild_editable_even_if_already_built &&
+      editable_cfg_built()) {
+    // If current code already has editable_cfg, and no need to rebuild a fresh
+    // editable cfg, just keep current cfg and return.
     return;
   }
   clear_cfg();
-  m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list.get(),
-                                                  m_registers_size);
-  m_ir_list->clear_and_dispose();
-  m_ir_list.reset();
+  m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, m_registers_size,
+                                                  editable);
 }
 
 void IRCode::clear_cfg(
     const std::unique_ptr<cfg::LinearizationStrategy>& custom_strategy,
     std::vector<IRInstruction*>* deleted_insns) {
   if (!m_cfg) {
-    always_assert(m_ir_list != nullptr);
     return;
   }
 
   if (custom_strategy) {
+    always_assert_log(
+        m_cfg->editable(),
+        "Cannot linearize non-editable CFG with custom strategy!");
     m_cfg_serialized_with_custom_strategy = true;
   }
 
-  m_registers_size = m_cfg->get_registers_size();
-  always_assert(m_ir_list == nullptr);
-  m_ir_list = m_cfg->linearize(custom_strategy);
+  if (m_cfg->editable()) {
+    m_registers_size = m_cfg->get_registers_size();
+    if (m_ir_list != nullptr) {
+      m_ir_list->clear_and_dispose();
+      delete m_ir_list;
+    }
+    m_ir_list = m_cfg->linearize(custom_strategy);
+  }
 
   if (deleted_insns != nullptr) {
     auto removed = m_cfg->release_removed_instructions();
@@ -729,6 +708,12 @@ void IRCode::clear_cfg(
       ++it;
     }
   }
+}
+
+bool IRCode::cfg_built() const { return m_cfg != nullptr; }
+
+bool IRCode::editable_cfg_built() const {
+  return m_cfg != nullptr && m_cfg->editable();
 }
 
 namespace {
@@ -965,7 +950,7 @@ bool IRCode::try_sync(DexCode* code) {
                           "%s refers to nonexistent branch instruction",
                           SHOW(*mentry));
         int32_t branch_offset = entry_to_addr.at(mentry) - branch_addr->second;
-        needs_resync |= !encode_offset(m_ir_list.get(), mentry, branch_offset);
+        needs_resync |= !encode_offset(m_ir_list, mentry, branch_offset);
       }
     }
   }
@@ -1147,8 +1132,7 @@ bool IRCode::try_sync(DexCode* code) {
 
   auto* debugitem = code->get_debug_item();
   if (debugitem != nullptr) {
-    gather_debug_entries(m_ir_list.get(), entry_to_addr,
-                         &debugitem->get_entries());
+    gather_debug_entries(m_ir_list, entry_to_addr, &debugitem->get_entries());
   }
   // Step 5, try/catch blocks
   TRACE(MTRANS, 5, "Emitting try items & catch handlers");
@@ -1204,16 +1188,8 @@ bool IRCode::try_sync(DexCode* code) {
   return true;
 }
 
-boost::sub_range<IRList> IRCode::get_param_instructions() const {
-  if (cfg_built()) {
-    return m_cfg->get_param_instructions();
-  } else {
-    return m_ir_list->get_param_instructions();
-  }
-}
-
 void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     m_cfg->gather_catch_types(ltype);
   } else {
     m_ir_list->gather_catch_types(ltype);
@@ -1224,7 +1200,7 @@ void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
 }
 
 void IRCode::gather_strings(std::vector<const DexString*>& lstring) const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     m_cfg->gather_strings(lstring);
   } else {
     m_ir_list->gather_strings(lstring);
@@ -1235,7 +1211,7 @@ void IRCode::gather_strings(std::vector<const DexString*>& lstring) const {
 }
 
 void IRCode::gather_types(std::vector<DexType*>& ltype) const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     m_cfg->gather_types(ltype);
   } else {
     m_ir_list->gather_types(ltype);
@@ -1243,7 +1219,7 @@ void IRCode::gather_types(std::vector<DexType*>& ltype) const {
 }
 
 void IRCode::gather_init_classes(std::vector<DexType*>& ltype) const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     m_cfg->gather_init_classes(ltype);
   } else {
     m_ir_list->gather_init_classes(ltype);
@@ -1251,7 +1227,7 @@ void IRCode::gather_init_classes(std::vector<DexType*>& ltype) const {
 }
 
 void IRCode::gather_fields(std::vector<DexFieldRef*>& lfield) const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     m_cfg->gather_fields(lfield);
   } else {
     m_ir_list->gather_fields(lfield);
@@ -1259,7 +1235,7 @@ void IRCode::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 }
 
 void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     m_cfg->gather_methods(lmethod);
   } else {
     m_ir_list->gather_methods(lmethod);
@@ -1267,7 +1243,7 @@ void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
 }
 
 void IRCode::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     m_cfg->gather_callsites(lcallsite);
   } else {
     m_ir_list->gather_callsites(lcallsite);
@@ -1276,7 +1252,7 @@ void IRCode::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
 
 void IRCode::gather_methodhandles(
     std::vector<DexMethodHandle*>& lmethodhandle) const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     m_cfg->gather_methodhandles(lmethodhandle);
   } else {
     m_ir_list->gather_methodhandles(lmethodhandle);
@@ -1288,7 +1264,7 @@ void IRCode::gather_methodhandles(
  * all the instructions.
  */
 size_t IRCode::sum_opcode_sizes() const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     return m_cfg->sum_opcode_sizes();
   }
   return m_ir_list->sum_opcode_sizes();
@@ -1296,7 +1272,7 @@ size_t IRCode::sum_opcode_sizes() const {
 
 // similar to sum_opcode_sizes, but takes into account non-opcode payloads
 uint32_t IRCode::estimate_code_units() const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     return m_cfg->estimate_code_units();
   }
   uint32_t code_units = m_ir_list->estimate_code_units();
@@ -1317,14 +1293,14 @@ uint32_t IRCode::estimate_code_units() const {
  * Returns the number of instructions.
  */
 size_t IRCode::count_opcodes() const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     return m_cfg->num_opcodes();
   }
   return m_ir_list->count_opcodes();
 }
 
 bool IRCode::has_try_blocks() const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     auto b = this->cfg().blocks();
     return std::any_of(b.begin(), b.end(),
                        [](auto* block) { return block->is_catch(); });
@@ -1335,7 +1311,7 @@ bool IRCode::has_try_blocks() const {
 }
 
 bool IRCode::is_unreachable() const {
-  if (cfg_built()) {
+  if (editable_cfg_built()) {
     return this->cfg().entry_block()->is_unreachable();
   }
   auto it = InstructionIterable(this).begin();

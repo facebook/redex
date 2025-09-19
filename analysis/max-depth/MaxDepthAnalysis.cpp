@@ -10,6 +10,7 @@
 #include <sparta/AbstractDomain.h>
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
 #include "ControlFlow.h"
 #include "DexClass.h"

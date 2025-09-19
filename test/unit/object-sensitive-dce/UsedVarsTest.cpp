@@ -324,7 +324,7 @@ TEST_F(UsedVarsTest, noReturn) {
         invoke_to_eff_summary_map.emplace(
             insn, side_effects::Summary(side_effects::EFF_THROWS, {}));
         invoke_to_esc_summary_map.emplace(
-            insn, ptrs::EscapeSummary(ptrs::ParamSet(), {}));
+            insn, ptrs::EscapeSummary(ptrs::ParamSet::bottom(), {}));
       }
     }
   }

@@ -54,8 +54,7 @@ class ResourcesPbFile : public ResourceTableFile {
       ResourcePathType path_type = ResourcePathType::DevicePath) override;
   void walk_references_for_resource(
       uint32_t resID,
-      const ResourcePathType& path_type,
-      const resources::ReachabilityOptions& reachability_options,
+      ResourcePathType path_type,
       UnorderedSet<uint32_t>* nodes_visited,
       UnorderedSet<std::string>* potential_file_paths) override;
   uint64_t resource_value_count(uint32_t res_id) override;
@@ -79,15 +78,6 @@ class ResourcesPbFile : public ResourceTableFile {
   UnorderedMap<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() override;
   UnorderedSet<uint32_t> get_overlayable_id_roots() override;
-  resources::StyleMap get_style_map() override;
-  void apply_attribute_removals(
-      const std::vector<resources::StyleModificationSpec::Modification>&
-          modifications,
-      const std::vector<std::string>& resources_pb_paths) override;
-  void apply_attribute_additions(
-      const std::vector<resources::StyleModificationSpec::Modification>&
-          modifications,
-      const std::vector<std::string>& resources_pb_paths) override;
 
   const std::map<uint32_t, const ConfigValues>& get_res_id_to_configvalue()
       const {
@@ -152,8 +142,5 @@ class BundleResources : public AndroidResources {
       const std::map<std::string, std::string>& rename_map,
       size_t* out_num_renamed) override;
 };
-
-bool does_resource_exists_in_file(uint32_t resource_id,
-                                  const std::string& file_path);
 
 #endif // HAS_PROTOBUF

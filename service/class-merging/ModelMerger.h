@@ -8,8 +8,8 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <unordered_set>
 
-#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Model.h"
 #include "Trace.h"
@@ -29,8 +29,6 @@ using MergerFields = UnorderedMap<const DexType*, std::vector<DexField*>>;
 class ModelMerger {
 
  public:
-  explicit ModelMerger(const bool is_intra_dex_merging)
-      : m_is_intra_dex_merging(is_intra_dex_merging) {}
   virtual ~ModelMerger() {}
 
   std::vector<DexClass*> merge_model(Scope& scope,
@@ -57,7 +55,6 @@ class ModelMerger {
   ModelStats m_stats;
   static const std::vector<DexField*> empty_fields;
   MergerFields m_merger_fields;
-  const bool m_is_intra_dex_merging;
 
   void update_merger_fields(const MergerType& merger);
   void update_stats(const std::string& name,

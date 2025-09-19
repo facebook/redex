@@ -458,7 +458,7 @@ void AnalysisImpl::analyze_opcodes() {
   };
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    redex_assert(code.cfg_built());
+    redex_assert(code.editable_cfg_built());
     auto ii = InstructionIterable(code.cfg());
     auto end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {

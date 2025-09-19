@@ -581,7 +581,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
   intraprocedural::FixpointIterator intra_cp(
       /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
-  EXPECT_TRUE(method->get_code()->cfg_built());
+  EXPECT_TRUE(method->get_code()->editable_cfg_built());
   rat.apply(intra_cp, WholeProgramState(), method);
 
   auto expected_code = assembler::ircode_from_string(R"(

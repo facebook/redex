@@ -7,7 +7,8 @@
 
 #include "ReorderInterfacesDecl.h"
 
-#include "DeterministicContainers.h"
+#include <unordered_map>
+
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Resolver.h"
@@ -24,7 +25,7 @@
  * to increase consistency across Classes.
  */
 namespace {
-using CallFrequencyMap = UnorderedMap<const DexType*, int>;
+using CallFrequencyMap = std::unordered_map<const DexType*, int>;
 
 /**
  * Helper class to implement the pass

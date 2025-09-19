@@ -671,7 +671,6 @@ struct DexDebugEntry final {
 };
 
 class DexDebugItem {
-  std::vector<const DexString*> m_param_names;
   std::vector<DexDebugEntry> m_dbg_entries;
   uint32_t m_on_disk_size{0};
   uint32_t m_source_checksum{0};
@@ -689,10 +688,6 @@ class DexDebugItem {
     m_dbg_entries.swap(dbg_entries);
   }
   uint32_t get_line_start() const;
-  const std::vector<const DexString*>& get_param_names() const {
-    return m_param_names;
-  }
-  void remove_param_names() { m_param_names.clear(); }
   uint32_t get_on_disk_size() const { return m_on_disk_size; }
   uint32_t get_source_checksum() const { return m_source_checksum; }
   uint32_t get_source_offset() const { return m_source_offset; }

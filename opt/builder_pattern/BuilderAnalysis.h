@@ -7,8 +7,9 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "ControlFlow.h"
-#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
 

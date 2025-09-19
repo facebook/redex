@@ -131,6 +131,7 @@ bool params_contain_object_type(const DexMethod* method,
 ParamSummary calculate_param_summary(DexMethod* method,
                                      const DexType* object_type) {
   auto& code = *method->get_code();
+  always_assert(code.cfg().editable());
   auto& cfg = code.cfg();
   cfg.calculate_exit_block();
   ParamSummary summary;
@@ -138,17 +139,20 @@ ParamSummary calculate_param_summary(DexMethod* method,
   ptrs::FixpointIterator fp_iter(cfg, ptrs::InvokeToSummaryMap(),
                                  /*escape_check_cast*/ true);
   fp_iter.run(ptrs::Environment());
-  bool result_may_be_pointer =
-      !type::is_primitive(method->get_proto()->get_rtype());
-  auto escape_summary =
-      ptrs::get_escape_summary(fp_iter, code, result_may_be_pointer);
+  auto escape_summary = ptrs::get_escape_summary(fp_iter, code);
+  if (escape_summary.returned_parameters.kind() ==
+      sparta::AbstractValueKind::Top) {
+    return summary;
+  }
 
   auto* args = method->get_proto()->get_args();
   auto& escaping_params = escape_summary.escaping_parameters;
-  auto& returned_elements = escape_summary.returned_parameters;
-  if (returned_elements.count(ptrs::ESCAPED_FRESH_RETURN) == 0u) {
+  if (escape_summary.returned_parameters.kind() ==
+      sparta::AbstractValueKind::Value) {
+    const auto& returned_elements =
+        escape_summary.returned_parameters.elements();
     if (returned_elements.size() == 1) {
-      auto returned = *unordered_any(returned_elements);
+      auto returned = *returned_elements.begin();
       if (returned != ptrs::FRESH_RETURN &&
           (escaping_params.count(returned) == 0u)) {
         DexType* cmp = is_static(method) ? *(args->begin() + returned)
@@ -163,7 +167,9 @@ ParamSummary calculate_param_summary(DexMethod* method,
       }
     } else {
       // Treat as escaping if there are multiple returns.
-      insert_unordered_iterable(escaping_params, returned_elements);
+      for (auto param : returned_elements) {
+        escaping_params.insert(param);
+      }
     }
   }
   // Non-escaping java.lang.Object params are stored in safe_params.

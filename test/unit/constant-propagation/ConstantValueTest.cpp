@@ -44,9 +44,9 @@ struct Constants {
   }
 };
 
-INSTANTIATE_TYPED_TEST_SUITE_P(ConstantValue,
-                               AbstractDomainPropertyTest,
-                               ConstantValue);
+INSTANTIATE_TYPED_TEST_CASE_P(ConstantValue,
+                              AbstractDomainPropertyTest,
+                              ConstantValue);
 
 template <>
 void AbstractDomainPropertyTest<ConstantValue>::SetUpTestCase() {

@@ -20,7 +20,6 @@ std::string CallSiteSummary::get_key() const {
   }
   const auto& bindings = arguments.bindings();
   std::vector<reg_t> ordered_arg_idxes;
-  ordered_arg_idxes.reserve(bindings.size());
   for (const auto& p : bindings) {
     ordered_arg_idxes.push_back(p.first);
   }
@@ -175,7 +174,10 @@ CallSiteSummarizer::CallSiteSummarizer(
 
 const CallSiteSummary* CallSiteSummarizer::internalize_call_site_summary(
     const CallSiteSummary& call_site_summary) {
-  return m_call_site_summaries.insert(call_site_summary).first;
+  return m_call_site_summaries
+      .get_or_emplace_and_assert_equal(call_site_summary.get_key(),
+                                       call_site_summary)
+      .first;
 }
 
 void CallSiteSummarizer::summarize() {

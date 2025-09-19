@@ -44,18 +44,18 @@ class RemoveNullcheckStringArg : public Pass {
   // wrapper method takes the index of the parameter as an argument. In this
   // case, we will construct a string from the index with additional information
   // as part of the wrapper method and print that as part of the trace.
-  using TransferMapForParam = UnorderedMap<DexMethodRef*, DexMethod*>;
+  using TransferMapForParam = std::unordered_map<DexMethodRef*, DexMethod*>;
 
   // Records the wrapper method for assertions with a simple message to indicate
   // where the error comes from. In this case, we will construct a string based
   // on error src as part of the wrapper method and print that as part of the
   // trace.
-  using TransferMapForExpr =
-      UnorderedMap<DexMethodRef*,
-                   UnorderedMap<const kotlin_nullcheck_wrapper::NullErrSrc,
-                                DexMethod*,
-                                std::hash<int>>>;
-  using NewMethodSet = UnorderedSet<DexMethod*>;
+  using TransferMapForExpr = std::unordered_map<
+      DexMethodRef*,
+      std::unordered_map<const kotlin_nullcheck_wrapper::NullErrSrc,
+                         DexMethod*,
+                         std::hash<int>>>;
+  using NewMethodSet = std::unordered_set<DexMethod*>;
   struct Stats {
     // The number of null-check which are optmized by this pass.
     size_t null_check_insns_changed{0};

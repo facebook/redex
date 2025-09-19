@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <utility>
-
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "GlobalConfig.h"
@@ -17,23 +15,23 @@
 #include "RedexResources.h"
 
 namespace resources {
+// Use case specific options for traversing and establishing reachable roots.
+struct ReachabilityOptions {
+  bool assume_id_inlined{false};
+  bool check_string_for_name{false};
+  std::vector<std::string> assume_reachable_prefixes;
+  UnorderedSet<std::string> disallowed_types;
+};
+
 class ReachableResources {
  public:
   ReachableResources(const std::string& zip_dir,
                      const GlobalConfig& global_config,
-                     ReachabilityOptions options)
-      : m_zip_dir(zip_dir), m_options(std::move(options)) {
+                     const ReachabilityOptions& options)
+      : m_zip_dir(zip_dir), m_options(options) {
     m_resources = create_resource_reader(zip_dir);
     m_res_table = m_resources->load_res_table();
     m_r_class_reader = std::make_unique<RClassReader>(global_config);
-  }
-  ReachableResources(const std::string& zip_dir,
-                     const ResourceConfig& global_resources_config,
-                     ReachabilityOptions options)
-      : m_zip_dir(zip_dir), m_options(std::move(options)) {
-    m_resources = create_resource_reader(zip_dir);
-    m_res_table = m_resources->load_res_table();
-    m_r_class_reader = std::make_unique<RClassReader>(global_resources_config);
   }
 
   // Establishes reachable entry points from the given classes,

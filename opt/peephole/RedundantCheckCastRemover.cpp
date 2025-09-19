@@ -7,7 +7,8 @@
 
 #include "RedundantCheckCastRemover.h"
 
-#include "DeterministicContainers.h"
+#include <unordered_map>
+
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -27,7 +28,7 @@ void RedundantCheckCastRemover::run() {
                                m::check_cast_(),
                                m::move_result_pseudo_object_());
 
-  UnorderedMap<DexMethod*, std::vector<IRInstruction*>> to_remove;
+  std::unordered_map<DexMethod*, std::vector<IRInstruction*>> to_remove;
 
   std::atomic<uint32_t> num_check_casts_removed(0);
   walk::parallel::matching_opcodes_in_block(

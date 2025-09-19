@@ -460,27 +460,28 @@ FieldStatsMap analyze(const Scope& scope) {
       }
     }
     bool is_clinit = method::is_clinit(method);
-    cfg_adapter::iterate(method->get_code(), [&](const MethodItemEntry& mie) {
-      auto* insn = mie.insn;
-      auto op = insn->opcode();
-      if (!insn->has_field()) {
-        return cfg_adapter::LOOP_CONTINUE;
-      }
-      auto* field = resolve_field(insn->get_field());
-      if (field == nullptr) {
-        return cfg_adapter::LOOP_CONTINUE;
-      }
-      if (opcode::is_an_sget(op) || opcode::is_an_iget(op)) {
-        ++field_stats[field].reads;
-      } else if (opcode::is_an_sput(op) || opcode::is_an_iput(op)) {
-        ++field_stats[field].writes;
-        if (is_clinit && is_static(field) &&
-            field->get_class() == method->get_class()) {
-          ++field_stats[field].init_writes;
-        }
-      }
-      return cfg_adapter::LOOP_CONTINUE;
-    });
+    editable_cfg_adapter::iterate(
+        method->get_code(), [&](const MethodItemEntry& mie) {
+          auto* insn = mie.insn;
+          auto op = insn->opcode();
+          if (!insn->has_field()) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          auto* field = resolve_field(insn->get_field());
+          if (field == nullptr) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          if (opcode::is_an_sget(op) || opcode::is_an_iget(op)) {
+            ++field_stats[field].reads;
+          } else if (opcode::is_an_sput(op) || opcode::is_an_iput(op)) {
+            ++field_stats[field].writes;
+            if (is_clinit && is_static(field) &&
+                field->get_class() == method->get_class()) {
+              ++field_stats[field].init_writes;
+            }
+          }
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        });
     for (auto& p : UnorderedIterable(field_stats)) {
       concurrent_field_stats.update(
           p.first, [&](DexField*, FieldStats& fs, bool) { fs += p.second; });

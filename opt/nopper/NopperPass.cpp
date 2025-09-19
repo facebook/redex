@@ -123,7 +123,7 @@ void NopperPass::run_pass(DexStoresVector& stores,
   auto end = (size_t)std::lround(noppable_blocks_vec.size() * m_probability);
   noppable_blocks_vec.resize(end);
 
-  UnorderedMap<DexMethod*, UnorderedSet<cfg::Block*>> noppable_blocks;
+  UnorderedMap<DexMethod*, std::unordered_set<cfg::Block*>> noppable_blocks;
   for (auto&& [method, block] : noppable_blocks_vec) {
     noppable_blocks[method].insert(block);
   }

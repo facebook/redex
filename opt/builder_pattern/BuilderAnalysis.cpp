@@ -218,7 +218,7 @@ void BuilderAnalysis::run_analysis() {
     return;
   }
 
-  always_assert(code->cfg_built());
+  always_assert(code->editable_cfg_built());
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
   m_analyzer.reset(new impl::Analyzer(
