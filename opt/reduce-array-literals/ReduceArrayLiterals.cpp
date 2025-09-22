@@ -144,14 +144,20 @@ bool is_array_literal(const TrackedValue& tv) {
   return is_new_array(tv) && (int64_t)tv.aput_insns_size == tv.length;
 }
 
-bool add_element(TrackedValue& array,
-                 int64_t index,
-                 const IRInstruction* aput_insn) {
+bool can_add_element(TrackedValue& array,
+                     int64_t index,
+                     const IRInstruction* aput_insn) {
   always_assert(is_new_array(array));
   always_assert(is_next_index(array, index));
   always_assert(!is_array_literal(array));
   always_assert(aput_insn != nullptr);
-  if (array.aput_insns_range.contains(aput_insn)) {
+  return !array.aput_insns_range.contains(aput_insn);
+}
+
+bool add_element(TrackedValue& array,
+                 int64_t index,
+                 const IRInstruction* aput_insn) {
+  if (!can_add_element(array, index, aput_insn)) {
     return false;
   }
   array.aput_insns_size++;
@@ -185,99 +191,38 @@ using EscapedArrayDomain =
 using TrackedDomainEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, TrackedDomain>;
 
-class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
+class Analyzer final
+    : public BaseEdgeAwareIRAnalyzer<TrackedDomainEnvironment> {
 
  public:
-  explicit Analyzer(cfg::ControlFlowGraph& cfg) : BaseIRAnalyzer(cfg) {
+  explicit Analyzer(cfg::ControlFlowGraph& cfg) : BaseEdgeAwareIRAnalyzer(cfg) {
     MonotonicFixpointIterator::run(TrackedDomainEnvironment::top());
   }
 
-  void analyze_instruction(
+  void analyze_instruction_normal(
       const IRInstruction* insn,
       TrackedDomainEnvironment* current_state) const override {
-
-    const auto set_current_state_at = [&](reg_t reg, bool wide,
-                                          const TrackedDomain& value) {
-      current_state->set(reg, value);
-      if (wide) {
-        current_state->set(reg + 1, TrackedDomain::top());
-      }
-    };
-
-    const auto get_singleton =
-        [](const TrackedDomain& domain) -> boost::optional<TrackedValue> {
-      always_assert(domain.kind() == AbstractValueKind::Value);
-      const auto& elements = domain.elements();
-      if (elements.size() != 1) {
-        return boost::none;
-      }
-      return boost::optional<TrackedValue>(*elements.begin());
-    };
-
-    const auto escape_new_arrays = [&](uint32_t reg) {
-      const auto& domain = current_state->get(reg);
-      always_assert(domain.kind() == AbstractValueKind::Value);
-      for (const auto& value : domain.elements()) {
-        if (is_new_array(value)) {
-          if (is_array_literal(value)) {
-            auto escaped_array = EscapedArrayDomain(get_aput_insns(value));
-            auto it = m_escaped_arrays.find(value.new_array_insn);
-            if (it == m_escaped_arrays.end()) {
-              m_escaped_arrays.emplace(value.new_array_insn, escaped_array);
-            } else {
-              it->second.join_with(escaped_array);
-            }
-            TRACE(RAL, 4, "[RAL]   literal array escaped");
-          } else {
-            TRACE(RAL, 4, "[RAL]   non-literal array escaped");
-            m_escaped_arrays[value.new_array_insn] = EscapedArrayDomain::top();
-          }
-        }
-      }
-    };
-
-    const auto default_case = [&]() {
-      // mark escaping arrays
-      for (size_t i = 0; i < insn->srcs_size(); i++) {
-        escape_new_arrays(insn->src(i));
-      }
-
-      // If we get here, reset destination.
-      if (insn->has_dest()) {
-        set_current_state_at(insn->dest(), insn->dest_is_wide(),
-                             TrackedDomain(make_other()));
-      } else if (insn->has_move_result_any()) {
-        current_state->set(RESULT_REGISTER, TrackedDomain(make_other()));
-      }
-    };
-
     TRACE(RAL, 3, "[RAL] %s", SHOW(insn));
     switch (insn->opcode()) {
     case OPCODE_CONST:
       set_current_state_at(insn->dest(), false /* is_wide */,
-                           TrackedDomain(make_literal(insn)));
+                           TrackedDomain(make_literal(insn)), current_state);
       break;
 
     case OPCODE_NEW_ARRAY: {
       TRACE(RAL, 4, "[RAL]   new array of type %s", SHOW(insn->get_type()));
       const auto length = get_singleton(current_state->get(insn->src(0)));
-      if (length && is_literal(*length)) {
-        auto length_literal = get_literal(*length);
-        TRACE(RAL, 4, "[RAL]     with length %" PRId64, length_literal);
-        always_assert(length_literal >= 0 && length_literal <= 2147483647);
-        current_state->set(RESULT_REGISTER,
-                           TrackedDomain(make_array(length_literal, insn)));
-        break;
+      if (!length || !is_literal(*length)) {
+        m_escaped_arrays[insn] = EscapedArrayDomain::top();
+        default_case(insn, current_state);
       }
-
-      m_escaped_arrays[insn] = EscapedArrayDomain::top();
-      default_case();
       break;
     }
 
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
       const auto& value = current_state->get(RESULT_REGISTER);
-      set_current_state_at(insn->dest(), false /* is_wide */, value);
+      set_current_state_at(insn->dest(), false /* is_wide */, value,
+                           current_state);
       break;
     }
 
@@ -288,13 +233,77 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
     case OPCODE_APUT_SHORT:
     case OPCODE_APUT_OBJECT:
     case OPCODE_APUT_BOOLEAN: {
-      escape_new_arrays(insn->src(0));
+      escape_new_arrays(insn->src(0), current_state);
       const auto array = get_singleton(current_state->get(insn->src(1)));
       const auto index = get_singleton(current_state->get(insn->src(2)));
       TRACE(RAL, 4, "[RAL]   aput: %d %d", array && is_new_array(*array),
             index && is_literal(*index));
-      if (array && is_new_array(*array) && !is_array_literal(*array) && index &&
-          is_literal(*index)) {
+      if (is_array_construction_in_progress(array, index)) {
+        int64_t index_literal = get_literal(*index);
+        TRACE(RAL, 4, "[RAL]    index %" PRIu64 " of %u", index_literal,
+              array->length);
+        if (is_next_index(*array, index_literal)) {
+          TRACE(RAL, 4, "[RAL]    is next");
+          TrackedValue new_array = *array;
+          if (can_add_element(new_array, index_literal, insn)) {
+            break;
+          }
+        }
+      }
+
+      default_case(insn, current_state);
+      break;
+    }
+
+    case OPCODE_MOVE: {
+      const auto value = get_singleton(current_state->get(insn->src(0)));
+      if (value && is_literal(*value)) {
+        set_current_state_at(insn->dest(), false /* is_wide */,
+                             TrackedDomain(*value), current_state);
+        break;
+      }
+
+      default_case(insn, current_state);
+      break;
+    }
+
+    default: {
+      default_case(insn, current_state);
+      break;
+    }
+    }
+  }
+
+  void analyze_no_throw(
+      const IRInstruction* insn,
+      TrackedDomainEnvironment* current_state) const override {
+    TRACE(RAL, 3, "[RAL] %s", SHOW(insn));
+    switch (insn->opcode()) {
+    case OPCODE_NEW_ARRAY: {
+      TRACE(RAL, 4, "[RAL]   new array of type %s", SHOW(insn->get_type()));
+      const auto length = get_singleton(current_state->get(insn->src(0)));
+      if (length && is_literal(*length)) {
+        auto length_literal = get_literal(*length);
+        TRACE(RAL, 4, "[RAL]     with length %" PRId64, length_literal);
+        always_assert(length_literal >= 0 && length_literal <= 2147483647);
+        current_state->set(RESULT_REGISTER,
+                           TrackedDomain(make_array(length_literal, insn)));
+      }
+      break;
+    }
+
+    case OPCODE_APUT:
+    case OPCODE_APUT_BYTE:
+    case OPCODE_APUT_CHAR:
+    case OPCODE_APUT_WIDE:
+    case OPCODE_APUT_SHORT:
+    case OPCODE_APUT_OBJECT:
+    case OPCODE_APUT_BOOLEAN: {
+      const auto array = get_singleton(current_state->get(insn->src(1)));
+      const auto index = get_singleton(current_state->get(insn->src(2)));
+      TRACE(RAL, 4, "[RAL]   aput: %d %d", array && is_new_array(*array),
+            index && is_literal(*index));
+      if (is_array_construction_in_progress(array, index)) {
         int64_t index_literal = get_literal(*index);
         TRACE(RAL, 4, "[RAL]    index %" PRIu64 " of %u", index_literal,
               array->length);
@@ -303,29 +312,13 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
           TrackedValue new_array = *array;
           if (add_element(new_array, index_literal, insn)) {
             current_state->set(insn->src(1), TrackedDomain(new_array));
-            break;
           }
         }
       }
-
-      default_case();
-      break;
-    }
-
-    case OPCODE_MOVE: {
-      const auto value = get_singleton(current_state->get(insn->src(0)));
-      if (value && is_literal(*value)) {
-        set_current_state_at(insn->dest(), false /* is_wide */,
-                             TrackedDomain(*value));
-        break;
-      }
-
-      default_case();
       break;
     }
 
     default: {
-      default_case();
       break;
     }
     }
@@ -345,6 +338,74 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
   }
 
  private:
+  bool is_array_construction_in_progress(
+      const boost::optional<TrackedValue>& array,
+      const boost::optional<TrackedValue>& index) const {
+    return array && is_new_array(*array) && !is_array_literal(*array) &&
+           index && is_literal(*index);
+  }
+
+  void set_current_state_at(reg_t reg,
+                            bool wide,
+                            const TrackedDomain& value,
+                            TrackedDomainEnvironment* current_state) const {
+    current_state->set(reg, value);
+    if (wide) {
+      current_state->set(reg + 1, TrackedDomain::top());
+    }
+  }
+
+  boost::optional<TrackedValue> get_singleton(
+      const TrackedDomain& domain) const {
+    if (domain.kind() != AbstractValueKind::Value) {
+      return boost::none;
+    }
+    const auto& elements = domain.elements();
+    if (elements.size() != 1) {
+      return boost::none;
+    }
+    return boost::optional<TrackedValue>(*elements.begin());
+  }
+
+  void escape_new_arrays(uint32_t reg,
+                         TrackedDomainEnvironment* current_state) const {
+    const auto& domain = current_state->get(reg);
+    always_assert(domain.kind() == AbstractValueKind::Value);
+    for (const auto& value : domain.elements()) {
+      if (is_new_array(value)) {
+        if (is_array_literal(value)) {
+          auto escaped_array = EscapedArrayDomain(get_aput_insns(value));
+          auto it = m_escaped_arrays.find(value.new_array_insn);
+          if (it == m_escaped_arrays.end()) {
+            m_escaped_arrays.emplace(value.new_array_insn, escaped_array);
+          } else {
+            it->second.join_with(escaped_array);
+          }
+          TRACE(RAL, 4, "[RAL]   literal array escaped");
+        } else {
+          TRACE(RAL, 4, "[RAL]   non-literal array escaped");
+          m_escaped_arrays[value.new_array_insn] = EscapedArrayDomain::top();
+        }
+      }
+    }
+  }
+
+  void default_case(const IRInstruction* insn,
+                    TrackedDomainEnvironment* current_state) const {
+    // mark escaping arrays
+    for (size_t i = 0; i < insn->srcs_size(); i++) {
+      escape_new_arrays(insn->src(i), current_state);
+    }
+
+    // If we get here, reset destination.
+    if (insn->has_dest()) {
+      set_current_state_at(insn->dest(), insn->dest_is_wide(),
+                           TrackedDomain(make_other()), current_state);
+    } else if (insn->has_move_result_any()) {
+      current_state->set(RESULT_REGISTER, TrackedDomain(make_other()));
+    }
+  }
+
   mutable UnorderedMap<const IRInstruction*, EscapedArrayDomain>
       m_escaped_arrays;
 };
