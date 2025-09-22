@@ -9,7 +9,6 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <functional>
 #include <initializer_list>
 #include <limits>
 #include <memory>
@@ -20,8 +19,6 @@
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAccess.h"
-#include "DexDefs.h"
-#include "DexEncoding.h"
 #include "DexMemberRefs.h"
 #include "NoDefaultComparator.h"
 #include "ReferencedState.h"
@@ -74,6 +71,8 @@ class DexString;
 class DexType;
 class PositionMapper;
 struct SourceBlock;
+
+struct dex_class_def;
 
 // Must be same as in DexAnnotations.h!
 using ParamAnnotations = std::map<int, std::unique_ptr<DexAnnotationSet>>;
@@ -132,23 +131,21 @@ class DexString {
     return std::string(m_repr.storage, m_repr.length);
   }
 
-  uint32_t get_entry_size() const {
-    uint32_t len = uleb128_encoding_size(m_repr.utfsize);
-    len += size();
-    len++; // NULL byte
-    return len;
-  }
+  uint32_t get_entry_size() const;
 
-  void encode(uint8_t* output) const {
-    output = write_uleb128(output, m_repr.utfsize);
-    strcpy((char*)output, c_str());
-  }
+  void encode(uint8_t* output) const;
 
  private:
   DexStringRepr m_repr;
 
   friend struct RedexContext;
 };
+
+namespace dexstrings::details {
+
+bool compare_dexstrings_slowpath(const DexString* a, const DexString* b);
+
+} // namespace dexstrings::details
 
 /* Non-optimizing DexSpec compliant ordering */
 inline bool compare_dexstrings(const DexString* a, const DexString* b) {
@@ -168,34 +165,7 @@ inline bool compare_dexstrings(const DexString* a, const DexString* b) {
    * Bother, need to do code-point character-by-character
    * comparison.
    */
-  const char* sa = a->c_str();
-  const char* sb = b->c_str();
-  /* Equivalence test first, so we don't worry about walking
-   * off the end.
-   */
-  if (strcmp(sa, sb) == 0) {
-    return false;
-  }
-  if (strlen(sa) == 0) {
-    return true;
-  }
-  if (strlen(sb) == 0) {
-    return false;
-  }
-  while (true) {
-    uint32_t cpa = mutf8_next_code_point(sa);
-    uint32_t cpb = mutf8_next_code_point(sb);
-    if (cpa == cpb) {
-      if (*sa == '\0') {
-        return true;
-      }
-      if (*sb == '\0') {
-        return false;
-      }
-      continue;
-    }
-    return (cpa < cpb);
-  }
+  return dexstrings::details::compare_dexstrings_slowpath(a, b);
 }
 
 struct dexstrings_comparator {

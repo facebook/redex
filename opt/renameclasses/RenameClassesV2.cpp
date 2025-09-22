@@ -16,6 +16,7 @@
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
+#include "DexEncoding.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "KeepReason.h"

@@ -20,6 +20,7 @@
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
+#include "DexEncoding.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"

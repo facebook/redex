@@ -7,6 +7,8 @@
 
 #include "DexStoreUtil.h"
 
+#include "DexEncoding.h"
+
 bool is_canary(DexClass* clazz) {
   const char* cname = clazz->get_type()->get_name()->c_str();
   return strncmp(cname, SECONDARY_CANARY_PREFIX,

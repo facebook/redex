@@ -9,6 +9,7 @@
 
 #include <fstream>
 
+#include "DexEncoding.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"
