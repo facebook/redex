@@ -39,7 +39,8 @@ class InterDexTest : public RedexIntegrationTest {
 
     if (minimize_cross_dex_refs_explore_alternatives) {
       cfg["InterDexPass"]["minimize_cross_dex_refs"] = true;
-      cfg["InterDexPass"]["reserved_trefs"] = kOldMaxTypeRefs - 16;
+      cfg["InterDexPass"]["reserved_trefs"] =
+          static_cast<uint64_t>(kOldMaxTypeRefs - 16);
       cfg["InterDexPass"]["minimize_cross_dex_refs_explore_alternatives"] = 24;
       cfg["InterDexPass"]["order_interdex"] = true;
     }
