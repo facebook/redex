@@ -574,7 +574,8 @@ CallgraphStats get_num_nodes_edges(const Graph& graph) {
       num_callsites += callsites.size();
     }
   }
-  return CallgraphStats(visited_node.size(), num_edge, num_callsites);
+  return CallgraphStats(static_cast<uint32_t>(visited_node.size()), num_edge,
+                        num_callsites);
 }
 
 const MethodBag& Graph::get_callers(const DexMethod* callee) const {

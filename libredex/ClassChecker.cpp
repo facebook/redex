@@ -49,7 +49,7 @@ void print_failed_external_check(
          << pair.first->get_deobfuscated_name_or_empty_copy() << ")\n"
          << "  has external children:\n";
     for (const auto* type : UnorderedIterable(pair.second)) {
-      *oss << INDENTATION << show(type) << std::endl;
+      *oss << INDENTATION << show(type) << '\n';
     }
     counter++;
     if (counter == MAX_ITEMS_TO_PRINT) {
@@ -72,7 +72,7 @@ void print_failed_definition_check(
          << pair.first->get_deobfuscated_name_or_empty_copy() << ")\n"
          << "  references type not defined internally or externally:\n";
     for (const auto* type : UnorderedIterable(pair.second)) {
-      *oss << INDENTATION << show(type) << std::endl;
+      *oss << INDENTATION << show(type) << '\n';
     }
 
     counter++;
@@ -261,27 +261,26 @@ std::ostringstream ClassChecker::print_failed_classes() {
   if (!m_failed_classes_external_check.empty()) {
     oss << "External classes with internal class hierarchy (likely dependency "
            "setting issue if fail at input):"
-        << std::endl;
+        << '\n';
     print_failed_external_check(m_failed_classes_external_check, &oss);
-    oss << std::endl;
+    oss << '\n';
   }
   if (!m_failed_classes_definition_check.empty()) {
     oss << "Class reference type not defined (likely dependency setting issue "
            "if fail at input):"
-        << std::endl;
+        << '\n';
     print_failed_definition_check(m_failed_classes_definition_check, &oss);
-    oss << std::endl;
+    oss << '\n';
   }
   if (!m_failed_classes_abstract_check.empty()) {
-    oss << "Nonabstract classes with abstract methods:" << std::endl;
+    oss << "Nonabstract classes with abstract methods:" << '\n';
     print_failed_things(m_failed_classes_abstract_check, &oss);
-    oss << std::endl;
+    oss << '\n';
   }
   if (!m_failed_methods.empty()) {
-    oss << "Methods incorrectly overriding super class final method:"
-        << std::endl;
+    oss << "Methods incorrectly overriding super class final method:" << '\n';
     print_failed_things(m_failed_methods, &oss);
-    oss << std::endl;
+    oss << '\n';
   }
   return oss;
 }

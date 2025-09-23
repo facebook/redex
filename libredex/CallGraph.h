@@ -51,7 +51,7 @@ struct CallSite {
   const DexMethod* callee;
   IRInstruction* invoke_insn;
 
-  CallSite() { not_reached(); }
+  [[noreturn]] CallSite() { not_reached(); }
   CallSite(const DexMethod* callee, IRInstruction* invoke_insn)
       : callee(callee), invoke_insn(invoke_insn) {}
 };

@@ -218,13 +218,13 @@ bool CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
 
   // Sequencing of the many options is really hard. We want to retain the
   // optimized variants, so exclude some combinations.
-  redex_assert(!(m_replace.has_value() && (!m_insert_after_var.empty() ||
-                                           !m_insert_before_var.empty())));
-  redex_assert(!(!m_insert_after.empty() && (!m_insert_after_var.empty() ||
-                                             !m_insert_before_var.empty())));
-  redex_assert(!(!m_insert_before.empty() && (!m_insert_after_var.empty() ||
-                                              !m_insert_before_var.empty())));
-  redex_assert(!(!m_insert_after_var.empty() && !m_insert_before_var.empty()));
+  redex_assert(!m_replace.has_value() ||
+               (m_insert_after_var.empty() && m_insert_before_var.empty()));
+  redex_assert(m_insert_after.empty() ||
+               (m_insert_after_var.empty() && m_insert_before_var.empty()));
+  redex_assert(m_insert_before.empty() ||
+               (m_insert_after_var.empty() && m_insert_before_var.empty()));
+  redex_assert(m_insert_after_var.empty() || m_insert_before_var.empty());
 
   if (!m_insert_after_var.empty() || !m_insert_before_var.empty()) {
     if (!m_insert_before_var.empty()) {

@@ -111,7 +111,7 @@ class ConcurrentHashtable final {
               typename = typename std::enable_if_t<
                   std::is_same_v<key_type2, value_type>>>
     const key_type2& operator()(const key_type2& key) {
-      return key;
+      return key; // NOLINT(bugprone-return-const-ref-from-parameter)
     }
 
     template <typename key_type2 = key_type,
@@ -358,8 +358,9 @@ class ConcurrentHashtable final {
         continue;
       }
       if (!new_node) {
-        new_node =
-            new Node(ConstRefKeyArgsTag(), key, std::forward<Args>(args)...);
+        new_node = new Node(
+            ConstRefKeyArgsTag(), key,
+            std::forward<Args>(args)...); // NOLINT(bugprone-use-after-move)
       }
       new_node->prev = root;
       if (root_loc->compare_exchange_strong(root, new_node)) {
@@ -445,7 +446,7 @@ class ConcurrentHashtable final {
         storage = m_storage.load();
         continue;
       }
-      if (!new_node) {
+      if (new_node == nullptr) {
         new_node = new Node(ConstRefValueTag(), value);
       }
       new_node->prev = root;
@@ -489,9 +490,10 @@ class ConcurrentHashtable final {
         storage = m_storage.load();
         continue;
       }
-      if (!new_node) {
-        new_node =
-            new Node(RvalueRefValueTag(), std::forward<value_type>(value));
+      if (new_node == nullptr) {
+        new_node = new Node(
+            RvalueRefValueTag(),
+            std::forward<value_type>(value)); // NOLINT(bugprone-use-after-move)
         value_ptr = &new_node->value;
       }
       new_node->prev = root;
@@ -872,12 +874,12 @@ class ConcurrentHashtableIterator final {
         return;
       }
       m_node = ConcurrentHashtable::get_node(m_storage->ptrs[m_index].load());
-    } while (!m_node);
+    } while (m_node == nullptr);
   }
 
   ConcurrentHashtableIterator(Storage* storage, size_t index, Node* node)
       : m_storage(storage), m_index(index), m_node(node) {
-    if (!node && index < storage->size) {
+    if ((node == nullptr) && index < storage->size) {
       advance();
     }
   }
@@ -1408,7 +1410,7 @@ class ConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     const auto& map = this->get_container(slot);
     const auto* ptr = map.get(key);
-    if (!ptr) {
+    if (ptr == nullptr) {
       return default_value;
     }
     std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));

@@ -302,10 +302,12 @@ opcode::Branchingness Block::branchingness() const {
   return opcode::BRANCH_NONE;
 }
 
-uint32_t Block::num_opcodes() const { return m_entries.count_opcodes(); }
+uint32_t Block::num_opcodes() const {
+  return static_cast<uint32_t>(m_entries.count_opcodes());
+}
 
 uint32_t Block::sum_opcode_sizes() const {
-  return m_entries.sum_opcode_sizes();
+  return static_cast<uint32_t>(m_entries.sum_opcode_sizes());
 }
 
 uint32_t Block::estimate_code_units() const {
@@ -1589,7 +1591,7 @@ ControlFlowGraph::primary_instruction_of_move_result_for_type_check(
     const cfg::InstructionIterator& it) {
   auto* move_result_insn = it->insn;
   always_assert(opcode::is_move_result_any(move_result_insn->opcode()));
-  auto* block = const_cast<Block*>(it.block());
+  auto* block = it.block();
   if (block->get_first_insn()->insn == move_result_insn) {
     const auto& preds = block->preds();
     always_assert(preds.size() == 1);
@@ -1608,7 +1610,7 @@ cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     const cfg::InstructionIterator& it) const {
   auto* move_result_insn = it->insn;
   always_assert(opcode::is_move_result_any(move_result_insn->opcode()));
-  auto* block = const_cast<Block*>(it.block());
+  auto* block = it.block();
   if (block->get_first_insn()->insn == move_result_insn) {
     const auto& preds = block->preds();
     always_assert(preds.size() == 1);
@@ -3241,9 +3243,10 @@ DexPosition* ControlFlowGraph::get_dbg_pos(const cfg::InstructionIterator& it) {
     if (b->preds().size() == 1 && !reverse_gotos.empty()) {
       Block* prev_block = reverse_gotos[0]->src();
       if (!prev_block->empty()) {
-        auto* result = search_block(prev_block, std::prev(prev_block->end()));
-        if (result != nullptr) {
-          return result;
+        auto* search_result =
+            search_block(prev_block, std::prev(prev_block->end()));
+        if (search_result != nullptr) {
+          return search_result;
         }
       }
       // Didn't find any MFLOW_POSITIONs in `prev_block`, keep going.
