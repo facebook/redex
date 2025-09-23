@@ -60,6 +60,9 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
   const uint8_t* callsite_data = m_dexbase + m_callsite_ids[csidx].callsite_off;
   auto callsite_eva = get_encoded_value_array(this, callsite_data);
   auto* evalues = callsite_eva->evalues();
+  redex_assert(evalues != nullptr);
+  always_assert_type_log(!evalues->empty(), INVALID_DEX,
+                         "Missing callsite idx data");
   DexEncodedValue* ev_linker_method_handle = evalues->at(0).get();
   always_assert_type_log(ev_linker_method_handle->evtype() ==
                              DEVT_METHOD_HANDLE,
