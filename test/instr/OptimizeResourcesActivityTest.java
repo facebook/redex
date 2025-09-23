@@ -58,7 +58,7 @@ public class OptimizeResourcesActivityTest {
 
     public void bar() {
       int a = 0x7f040000;
-      int b = 0x7f090000;
+      int b = 0x7f0a0000;
       android.util.Log.w("UsedResources",
                          "USING " + a + " " + b +
                              "/2130903043 2130837504 21308375050000 " + FOO);

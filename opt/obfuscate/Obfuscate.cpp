@@ -31,8 +31,6 @@ static const char* METRIC_DMETHODS_RENAMED = "dmethods_renamed";
 static const char* METRIC_VMETHODS_TOTAL = "vmethods_total";
 static const char* METRIC_VMETHODS_RENAMED = "vmethods_renamed";
 
-using std::unordered_set;
-
 /* Obfuscates a list of members
  * RenamingContext - the context that we need to be able to do renaming for this
  *   member. Will not be modified and will be shared between all members in a

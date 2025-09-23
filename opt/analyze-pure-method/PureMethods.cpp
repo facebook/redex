@@ -18,7 +18,7 @@ bool AnalyzePureMethodsPass::analyze_and_check_pure_method_helper(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     IRCode* code) {
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
 
   // MoveAwareFixpointIterator to see if any object accessed is parameter (OK)
@@ -54,10 +54,10 @@ AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
       scope, /* create_init_class_insns */ false, method_override_graph.get());
 
   Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
-    Stats stats;
+    Stats method_stats;
     if ((method->get_code() == nullptr) || method->rstate.no_optimizations() ||
         method->rstate.immutable_getter()) {
-      return stats;
+      return method_stats;
     }
     auto* code = method->get_code();
     bool is_method_pure = false;
@@ -77,18 +77,18 @@ AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
 
     if (!is_method_pure && method->rstate.pure_method()) {
       method->rstate.reset_pure_method();
-      stats.number_of_pure_methods_invalidated++;
+      method_stats.number_of_pure_methods_invalidated++;
     }
 
     if (!is_method_pure) {
-      return stats;
+      return method_stats;
     }
 
     TRACE(CSE, 5, "[analyze_and_get_pure_methods] adding method %s\n",
           SHOW(method));
-    stats.number_of_pure_methods_detected++;
+    method_stats.number_of_pure_methods_detected++;
     method->rstate.set_pure_method();
-    return stats;
+    return method_stats;
   });
 
   return stats;

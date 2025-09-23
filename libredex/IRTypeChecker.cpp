@@ -442,7 +442,7 @@ Result check_load_params(const DexMethod* method) {
 // variables in a "big block", the most common form of allocation+init.
 Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
   auto* code = (const_cast<DexMethod*>(method))->get_code();
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
 
   UnorderedSet<cfg::BlockId> block_visited;
@@ -668,7 +668,7 @@ Result check_structure(const DexMethod* method,
 }
 
 /*
- * Sanity-check the structure of the positions for editable cfg format.
+ * Sanity-check the structure of the positions for cfg format.
  */
 Result check_positions_cfg(cfg::ControlFlowGraph& cfg) {
   UnorderedSet<DexPosition*> positions;

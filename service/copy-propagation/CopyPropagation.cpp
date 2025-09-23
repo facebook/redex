@@ -562,7 +562,7 @@ Stats CopyPropagation::run(IRCode* code,
                            DexTypeList* args,
                            std::function<std::string()> method_describer) {
   Stats stats;
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   if (m_config.canonicalize_locks && !m_config.regalloc_has_run) {
     auto res = locks::run(cfg);

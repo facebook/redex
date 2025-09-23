@@ -16,6 +16,7 @@
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "RedexResources.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {
@@ -51,11 +52,18 @@ UnorderedSet<uint32_t> get_disallowed_resources(
   return disallowed_resources;
 }
 
-UnorderedSet<uint32_t> get_resources_by_name_prefix(
+UnorderedSet<uint32_t> get_resources_by_prefix_and_name(
     const std::vector<std::string>& prefixes,
+    const UnorderedSet<std::string>& names,
     const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
   UnorderedSet<uint32_t> found_resources;
   for (const auto& pair : name_to_ids) {
+    if (names.find(pair.first) != names.end()) {
+      TRACE(RES, 1, "Resource added by name matching: %s", pair.first.c_str());
+      found_resources.insert(pair.second.begin(), pair.second.end());
+      continue;
+    }
+
     for (const auto& prefix : UnorderedIterable(prefixes)) {
       if (boost::algorithm::starts_with(pair.first, prefix)) {
         found_resources.insert(pair.second.begin(), pair.second.end());
@@ -194,9 +202,14 @@ UnorderedSet<uint32_t> ReachableResources::get_resource_roots(
   }
   m_manifest_roots = manifest_roots.size();
 
+  auto resources_to_keep = m_resources->get_all_keep_resources();
+  insert_unordered_iterable(resources_to_keep,
+                            m_options.assume_reachable_names);
+
   // Configured assumptions.
-  auto assumed_reachable_roots = get_resources_by_name_prefix(
-      m_options.assume_reachable_prefixes, m_res_table->name_to_ids);
+  auto assumed_reachable_roots = get_resources_by_prefix_and_name(
+      m_options.assume_reachable_prefixes, resources_to_keep,
+      m_res_table->name_to_ids);
   // Configured roots by resource type. These should be traversed like any other
   // reachable root.
   auto disallowed_type_ids =
@@ -221,8 +234,9 @@ UnorderedSet<uint32_t> ReachableResources::compute_transitive_closure(
   UnorderedSet<uint32_t> nodes_visited;
   UnorderedSet<std::string> potential_file_paths;
   for (uint32_t root : UnorderedIterable(roots)) {
-    m_res_table->walk_references_for_resource(
-        root, ResourcePathType::ZipPath, &nodes_visited, &potential_file_paths);
+    m_res_table->walk_references_for_resource(root, ResourcePathType::ZipPath,
+                                              m_options, &nodes_visited,
+                                              &potential_file_paths);
   }
 
   UnorderedSet<std::string> next_xml_files;
@@ -243,7 +257,7 @@ UnorderedSet<uint32_t> ReachableResources::compute_transitive_closure(
           m_resources->get_xml_reference_attributes(str);
       for (uint32_t attribute : UnorderedIterable(xml_reference_attributes)) {
         m_res_table->walk_references_for_resource(
-            attribute, ResourcePathType::ZipPath, &nodes_visited,
+            attribute, ResourcePathType::ZipPath, m_options, &nodes_visited,
             &potential_file_paths);
       }
     }

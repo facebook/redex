@@ -43,8 +43,10 @@ struct CodeRefs {
 class RefChecker {
  public:
   RefChecker() = delete;
-  RefChecker(const RefChecker&) = delete;
-  RefChecker& operator=(const RefChecker&) = delete;
+  RefChecker(const RefChecker&) = default;
+  RefChecker(RefChecker&&) = default;
+  RefChecker& operator=(const RefChecker&) = default;
+  RefChecker& operator=(RefChecker&&) = default;
   explicit RefChecker(const XStoreRefs* xstores,
                       size_t store_idx,
                       const api::AndroidSDK* min_sdk_api)
@@ -78,6 +80,11 @@ class RefChecker {
   bool check_code_refs(const CodeRefs& code_refs) const;
 
   bool is_in_primary_dex(const DexType* type) const;
+
+  bool operator==(const RefChecker& other) const {
+    return m_xstores == other.m_xstores && m_store_idx == other.m_store_idx &&
+           m_min_sdk_api == other.m_min_sdk_api;
+  }
 
  private:
   const XStoreRefs* m_xstores;

@@ -147,7 +147,7 @@ void RuntimeAssertTransform::apply(
     DexMethod* method) {
   auto* code = method->get_code();
   always_assert(code != nullptr);
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {

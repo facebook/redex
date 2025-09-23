@@ -10,8 +10,6 @@
 #include "CFGInliner.h"
 #include "ControlFlow.h"
 
-#include <unordered_map>
-
 #include <boost/optional.hpp>
 
 using namespace cfg;

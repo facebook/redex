@@ -44,6 +44,12 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               bool default_value);
 
 namespace apk {
+
+resources::StyleResource read_style_resource(uint32_t id,
+                                             android::ResTable_config* config,
+                                             android::ResTable_map_entry* entry,
+                                             size_t entry_value_len);
+
 class XmlValueCollector : public arsc::XmlFileVisitor {
  public:
   ~XmlValueCollector() override {}
@@ -226,6 +232,12 @@ class TableSnapshot {
   // Given a package id (shifted to low bits) emit the values from the type
   // strings pool.
   void get_type_names(uint32_t package_id, std::vector<std::string>* out);
+  // Given a package id (shifted to low bits) return the type ids to the string
+  // name of that type, optionally coalesing custom resource types to their
+  // "normal" type (i.e. when true "dimen.2" will be returned as "dimen" to
+  // reflect the fact that it's really meant to be interpreted as dimen).
+  UnorderedMap<uint8_t, std::string> get_type_ids_to_resource_type_names(
+      uint32_t package_id, bool coalesce_custom_type_names = false);
   // Fills the output vec with ResTable_config objects for the given type in the
   // package
   void get_configurations(uint32_t package_id,
@@ -236,6 +248,17 @@ class TableSnapshot {
   // Returns true if the given ids are from the same type, and all
   // entries/values in all configurations are byte for byte identical.
   bool are_values_identical(uint32_t a, uint32_t b);
+  // Options for collect_resource_values() below.
+  struct CollectionOptions {
+    // If present, limit the result to only values in the given configs.
+    boost::optional<std::vector<android::ResTable_config>> include_configs{
+        boost::none};
+    // If true, collect the parent id for ResTable_map_entry occurrences.
+    bool include_map_entry_parents{true};
+    // If true, collect ids from ResTable_map structures that follow
+    // ResTable_map_entry occurrences.
+    bool include_map_elements{true};
+  };
   // For every non-empty entry in all configs, coalesce the entry into a list of
   // values. For complex entries, this emits Res_value structures representing
   // the entry's parent (which is useful for reachability purposes).
@@ -243,9 +266,21 @@ class TableSnapshot {
                                std::vector<android::Res_value>* out);
   // Same as above, but if given list of "include_configs" is non-empty, results
   // written to out will be restricted to only these configs.
-  void collect_resource_values(
+  void collect_resource_values(uint32_t id,
+                               const CollectionOptions& options,
+                               std::vector<android::Res_value>* out);
+  // Similar to collect_resource_values(), but look at all entry/values for the
+  // id, collecting attribute values, and recurse to do the same for any parent
+  // styles. This does not mimic any child overriding logic, as would happen at
+  // runtime (hence the name "union" in this method name) since choosing best
+  // configuration is not implemented here.
+  void union_style_and_parent_attribute_values(
+      uint32_t id, std::vector<android::Res_value>* out);
+  // Recursive helper for above.
+  void union_style_and_parent_attribute_values_impl(
       uint32_t id,
-      std::vector<android::ResTable_config> include_configs,
+      const CollectionOptions& options,
+      UnorderedSet<uint32_t>* seen,
       std::vector<android::Res_value>* out);
   bool is_valid_global_string_idx(size_t idx) const;
   // Convenience method to Read a string from the global string pool as standard
@@ -313,7 +348,8 @@ class ResourcesArscFile : public ResourceTableFile {
       ResourcePathType path_type = ResourcePathType::DevicePath) override;
   void walk_references_for_resource(
       uint32_t resID,
-      ResourcePathType path_type,
+      const ResourcePathType& path_type,
+      const resources::ReachabilityOptions& reachability_options,
       UnorderedSet<uint32_t>* nodes_visited,
       UnorderedSet<std::string>* potential_file_paths) override;
   uint64_t resource_value_count(uint32_t res_id) override;
@@ -330,6 +366,16 @@ class ResourcesArscFile : public ResourceTableFile {
   UnorderedMap<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() override;
   UnorderedSet<uint32_t> get_overlayable_id_roots() override;
+  resources::StyleMap get_style_map() override;
+  // Deletes referenced attribute/value in android app
+  void apply_attribute_removals(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) override;
+  void apply_attribute_additions(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) override;
   ~ResourcesArscFile() override;
 
   size_t get_length() const;
@@ -338,6 +384,14 @@ class ResourcesArscFile : public ResourceTableFile {
 
  private:
   void mark_file_closed();
+  void modify_attributes(
+      const resources::ResourceAttributeMap& resource_id_to_mod_attribute,
+      const std::function<void(
+          android::ResTable_entry* entry_ptr,
+          const UnorderedMap<uint32_t,
+                             resources::StyleModificationSpec::Modification>&
+              attrs_to_modify,
+          arsc::ResComplexEntryBuilder& builder)>& get_attributes);
 
   std::string m_path;
   RedexMappedFile m_f;

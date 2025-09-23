@@ -126,10 +126,17 @@ struct SourceBlock {
     static constexpr float kNoneVal = std::numeric_limits<float>::quiet_NaN();
 
    public:
-    Val() {}
+    Val() = default;
+
     constexpr Val(float v, float a) noexcept : m_val({v, a}) {}
 
     static constexpr Val none() { return Val(kNoneVal, kNoneVal); }
+
+    static constexpr Val default_value() { return Val(0, 0); }
+
+    bool is_default_value() const {
+      return m_val.val == 0 && m_val.appear100 == 0;
+    }
 
     // NOLINTNEXTLINE
     /* implicit */ operator bool() const { return m_val.val == m_val.val; };
@@ -171,7 +178,6 @@ struct SourceBlock {
     ValPair m_val;
   };
   const uint32_t vals_size{0};
-  const std::unique_ptr<Val[]> vals;
 
   SourceBlock() = default;
   SourceBlock(const DexString* src, size_t id) : src(src), id(id) {}
@@ -179,28 +185,61 @@ struct SourceBlock {
       : src(src),
         id(id),
         vals_size(v.size()),
-        vals(clone_vals(v.data(), v.size())) {}
+        vals_(clone_vals(v.data(), v.size())) {}
   SourceBlock(const SourceBlock& other)
       : src(other.src),
         next(other.next == nullptr ? nullptr : new SourceBlock(*other.next)),
         id(other.id),
         vals_size(other.vals_size),
-        vals(clone_vals(other.vals.get(), other.vals_size)) {}
+        vals_(clone_vals(other.vals_.get(), other.vals_size)) {}
 
   boost::optional<float> get_val(size_t i) const {
-    return vals[i] ? boost::optional<float>(vals[i]->val) : boost::none;
+    const auto& val = get_at(i);
+    return val ? boost::optional<float>(val->val) : boost::none;
   }
   boost::optional<float> get_appear100(size_t i) const {
-    return vals[i] ? boost::optional<float>(vals[i]->appear100) : boost::none;
+    const auto& val = get_at(i);
+    return val ? boost::optional<float>(val->appear100) : boost::none;
   }
 
-  void fill(const Val& val) {
-    for (size_t i = 0; i < vals_size; i++) {
-      vals[i] = val;
+  const Val& get_at(size_t i) const {
+    if (vals_) {
+      return vals_[i];
     }
+    return default_value;
+  }
+
+  void set_at(size_t i, const Val& val) {
+    if (vals_ == nullptr) {
+      if (val.is_default_value()) {
+        return;
+      }
+      denormalize();
+    }
+    vals_[i] = val;
+  }
+
+  void fill(const Val& val);
+
+  template <typename Fn>
+  void apply_at(size_t i, const Fn& fn) {
+    if (vals_ == nullptr) {
+      Val val = Val::default_value();
+      fn(val);
+      if (val.is_default_value()) {
+        return;
+      }
+      denormalize();
+      vals_[i] = val;
+      return;
+    }
+    fn(vals_[i]);
   }
 
   static std::unique_ptr<Val[]> clone_vals(const Val* vals, size_t vals_size) {
+    if (is_default_values(vals, vals_size)) {
+      return nullptr;
+    }
     auto res = std::make_unique<Val[]>(vals_size);
     for (size_t i = 0; i < vals_size; i++) {
       res[i] = vals[i];
@@ -210,16 +249,50 @@ struct SourceBlock {
 
   template <typename Fn>
   void foreach_val(const Fn& fn) const {
+    if (vals_ == nullptr) {
+      for (size_t i = 0; i < vals_size; i++) {
+        const Val val = Val::default_value();
+        fn(val);
+      }
+      return;
+    }
     for (size_t i = 0; i < vals_size; i++) {
-      auto& val = vals[i];
+      const Val& val = vals_[i];
       fn(val);
     }
   }
 
   template <typename Fn>
-  bool foreach_val_early(const Fn& fn) const {
+  void foreach_val(const Fn& fn) {
+    if (vals_ == nullptr) {
+      for (size_t i = 0; i < vals_size; i++) {
+        Val val = Val::default_value();
+        fn(val);
+        if (!val.is_default_value()) {
+          denormalize();
+          vals_[i] = val;
+        }
+      }
+      return;
+    }
     for (size_t i = 0; i < vals_size; i++) {
-      auto& val = vals[i];
+      fn(vals_[i]);
+    }
+  }
+
+  template <typename Fn>
+  bool foreach_val_early(const Fn& fn) const {
+    if (vals_ == nullptr) {
+      for (size_t i = 0; i < vals_size; i++) {
+        const Val val = Val::default_value();
+        if (fn(val)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    for (size_t i = 0; i < vals_size; i++) {
+      const Val& val = vals_[i];
       if (fn(val)) {
         return true;
       }
@@ -227,17 +300,31 @@ struct SourceBlock {
     return false;
   }
 
-  bool operator==(const SourceBlock& other) const {
-    if (src != other.src || id != other.id || vals_size != other.vals_size) {
+  template <typename Fn>
+  bool foreach_val_early(const Fn& fn) {
+    if (vals_ == nullptr) {
+      for (size_t i = 0; i < vals_size; i++) {
+        Val val = Val::default_value();
+        auto res = fn(val);
+        if (!val.is_default_value()) {
+          denormalize();
+          vals_[i] = val;
+        }
+        if (res) {
+          return true;
+        }
+      }
       return false;
     }
     for (size_t i = 0; i < vals_size; i++) {
-      if (vals[i] != other.vals[i]) {
-        return false;
+      if (fn(vals_[i])) {
+        return true;
       }
     }
-    return true;
+    return false;
   }
+
+  bool operator==(const SourceBlock& other) const;
 
   bool operator!=(const SourceBlock& other) const { return !(*this == other); }
 
@@ -268,31 +355,40 @@ struct SourceBlock {
 
   std::string show(bool quoted_src = false) const;
 
-  void max(const SourceBlock& other) {
-    size_t len = std::min(vals_size, other.vals_size);
-    for (size_t i = 0; i != len; ++i) {
-      if (!vals[i]) {
-        vals[i] = other.vals[i];
-      } else if (other.vals[i]) {
-        vals[i]->val = std::max(vals[i]->val, other.vals[i]->val);
-        vals[i]->appear100 =
-            std::max(vals[i]->appear100, other.vals[i]->appear100);
-      }
+  void max(const SourceBlock& other);
+
+  void min(const SourceBlock& other);
+
+  bool normalize() {
+    if (vals_ == nullptr) {
+      return true;
     }
+    if (is_default_values(vals_.get(), vals_size)) {
+      vals_.reset();
+      return true;
+    }
+    return false;
   }
 
-  void min(const SourceBlock& other) {
-    size_t len = std::min(vals_size, other.vals_size);
-    for (size_t i = 0; i != len; ++i) {
-      if (!vals[i]) {
-        vals[i] = other.vals[i];
-      } else if (other.vals[i]) {
-        vals[i]->val = std::min(vals[i]->val, other.vals[i]->val);
-        vals[i]->appear100 =
-            std::min(vals[i]->appear100, other.vals[i]->appear100);
+ private:
+  static const Val default_value;
+
+  // nullptr vals_ represents vals_size many Val::default_value() values.
+  std::unique_ptr<Val[]> vals_;
+
+  static bool is_default_values(const Val* vals, size_t vals_size) {
+    if (vals == nullptr) {
+      return true;
+    }
+    for (size_t i = 0; i < vals_size; i++) {
+      if (!vals[i].is_default_value()) {
+        return false;
       }
     }
+    return true;
   }
+
+  void denormalize();
 };
 
 static_assert(sizeof(void*) != 8 || sizeof(SourceBlock) == 32);
@@ -693,6 +789,7 @@ class InstructionIteratorImpl {
     to_next_instruction();
   }
 
+  // NOLINTNEXTLINE(google-explicit-constructor)
   InstructionIteratorImpl(const InstructionIteratorImpl<false>& rhs)
       : m_it(rhs.m_it), m_end(rhs.m_end) {}
 

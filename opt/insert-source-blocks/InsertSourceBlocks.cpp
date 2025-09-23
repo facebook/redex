@@ -393,15 +393,18 @@ struct Injector {
   std::vector<std::unique_ptr<ProfileFile>> profile_files;
   std::vector<std::string> interactions;
   bool use_default_value;
+  bool use_fuzzing_values;
   bool always_inject;
   bool fix_violations;
 
   Injector(ConfigFiles& conf,
            bool always_inject,
            bool use_default_value,
+           bool use_fuzzing_values,
            bool fix_violations)
       : conf(conf),
         use_default_value(use_default_value),
+        use_fuzzing_values(use_fuzzing_values),
         always_inject(always_inject),
         fix_violations(fix_violations) {
     // Prefetch the method profiles. We may need them when block profiles
@@ -566,6 +569,335 @@ struct Injector {
     return std::make_pair(std::move(profiles), found_one);
   }
 
+  struct MethodFuzzingMetadata {
+    size_t indegrees{0};
+    size_t insertion_id{0};
+    bool has_values{false};
+    int hit;
+
+    MethodFuzzingMetadata(size_t indegrees, size_t insertion_id)
+        : indegrees(indegrees), insertion_id(insertion_id) {}
+
+    bool operator<(const MethodFuzzingMetadata& r) const {
+      if (indegrees == r.indegrees) {
+        return insertion_id < r.insertion_id;
+      }
+      return indegrees < r.indegrees;
+    }
+  };
+
+  template <typename NodeIdFn>
+  void topo_traverse_callgraph(
+      UnorderedMap<call_graph::NodeId, MethodFuzzingMetadata>& metadata,
+      call_graph::Graph& call_graph,
+      const NodeIdFn& nodeid_fn) {
+
+    auto topo_comparator = [&](call_graph::NodeId l, call_graph::NodeId r) {
+      return metadata.at(l) < metadata.at(r);
+    };
+
+    std::multiset<call_graph::NodeId, decltype(topo_comparator)> process_queue(
+        topo_comparator);
+    UnorderedSet<call_graph::NodeId> visited;
+    size_t insertion_order_id = 0;
+    const auto* start_node = call_graph.entry();
+
+    visited.insert(start_node);
+    process_queue.insert(start_node);
+
+    while (!process_queue.empty()) {
+      auto temp = process_queue.begin();
+      auto current = *temp;
+      process_queue.erase(process_queue.begin());
+
+      nodeid_fn(current);
+
+      for (const auto& edge : current->callees()) {
+        auto* neighbor = edge->callee();
+        bool re_add_neighbor = false;
+
+        if (process_queue.count(neighbor)) {
+          process_queue.erase(neighbor);
+          re_add_neighbor = true;
+        }
+        metadata.at(neighbor).indegrees--;
+        if (re_add_neighbor) {
+          process_queue.insert(neighbor);
+        }
+
+        if (!visited.count(neighbor)) {
+          metadata.at(neighbor).insertion_id = insertion_order_id;
+          ++insertion_order_id;
+          visited.insert(neighbor);
+          process_queue.insert(neighbor);
+        }
+      }
+    }
+  }
+
+  // operator+= does not work well, too much copying around.
+  struct SerializedMethodInfo {
+    const DexString* method;
+    std::string s_expression;
+    std::string idom_map;
+  };
+  struct SimpleSMIStore {
+    std::mutex acc_mutex{};
+    std::deque<SerializedMethodInfo> data{};
+
+    void add(SerializedMethodInfo&& in) {
+      std::unique_lock<std::mutex> lock{acc_mutex};
+      data.emplace_back(in);
+    }
+  };
+
+  struct InsertResult {
+    size_t skipped{0};
+    size_t blocks{0};
+    size_t profile_count{0};
+    size_t profile_failed{0};
+    size_t access_methods{0};
+    size_t hot_src_block_count{0};
+    size_t cold_src_block_count{0};
+    size_t hot_throw_cold_block_count{0};
+    size_t normalized_blocks{0};
+
+    InsertResult() = default;
+    InsertResult(size_t skipped, size_t access_methods)
+        : skipped(skipped), access_methods(access_methods) {}
+    InsertResult(size_t access_methods,
+                 size_t blocks,
+                 size_t profile_count,
+                 size_t profile_failed,
+                 size_t hot_src_block_count,
+                 size_t cold_src_block_count,
+                 size_t hot_throw_cold_block_count,
+                 size_t normalized_blocks)
+        : blocks(blocks),
+          profile_count(profile_count),
+          profile_failed(profile_failed),
+          access_methods(access_methods),
+          hot_src_block_count(hot_src_block_count),
+          cold_src_block_count(cold_src_block_count),
+          hot_throw_cold_block_count(hot_throw_cold_block_count),
+          normalized_blocks(normalized_blocks) {}
+
+    InsertResult& operator+=(const InsertResult& other) {
+      skipped += other.skipped;
+      blocks += other.blocks;
+      profile_count += other.profile_count;
+      profile_failed += other.profile_failed;
+      access_methods += other.access_methods;
+      hot_src_block_count += other.hot_src_block_count;
+      cold_src_block_count += other.cold_src_block_count;
+      hot_throw_cold_block_count += other.hot_throw_cold_block_count;
+      normalized_blocks += other.normalized_blocks;
+      return *this;
+    }
+  };
+
+  InsertResult insert_source_blocks_into_method(
+      DexMethod* method,
+      std::vector<const DexMethodRef*>& failed_methods,
+      SimpleSMIStore& smi,
+      std::mutex& failed_methods_mutex,
+      bool serialize,
+      bool exc_inject,
+      int32_t block_appear100_threshold,
+      bool must_be_cold = false) {
+    auto* code = method->get_code();
+    if (code != nullptr) {
+      auto access_method = is_traditional_access_method(method);
+      const DexType* access_method_type = nullptr;
+      std::string_view access_method_name;
+      std::string access_method_hash_name;
+
+      always_assert(code->cfg_built());
+      auto& cfg = code->cfg();
+      if (access_method) {
+        access_method_type = access_method->first;
+        access_method_name = access_method->second;
+
+        auto hash_value = hasher::stable_hash(cfg);
+
+        access_method_hash_name =
+            hasher::hashed_name(hash_value, access_method_name);
+      }
+
+      const auto* sb_name = [&]() {
+        if (!access_method) {
+          return &method->get_deobfuscated_name();
+        }
+        // Emulate show.
+        std::string new_name = show_deobfuscated(method->get_class());
+        new_name.append(".access$");
+        new_name.append(access_method_hash_name);
+        new_name.append(":");
+        new_name.append(show_deobfuscated(method->get_proto()));
+        return DexString::make_string(new_name);
+      }();
+
+      source_blocks::InsertResult res;
+      // NOLINTBEGIN(facebook-hte-NullableDereference)
+      auto profiles =
+          find_profiles(method, access_method_type, access_method_name,
+                        access_method_hash_name);
+      // NOLINTEND(facebook-hte-NullableDereference)
+      if (!profiles.second && !always_inject) {
+        // Skip without profile.
+        return InsertResult(access_method ? 1 : 0, 1);
+      }
+
+      if (use_default_value || use_fuzzing_values) {
+
+        res = source_blocks::insert_custom_source_blocks(
+            sb_name, &cfg, profiles.first, serialize, exc_inject,
+            use_fuzzing_values, must_be_cold);
+      } else {
+        res = source_blocks::insert_source_blocks(sb_name, &cfg, profiles.first,
+                                                  serialize, exc_inject);
+      }
+
+      if (fix_violations) {
+        source_blocks::fix_hot_method_cold_entry_violations(&cfg);
+        source_blocks::fix_chain_violations(&cfg);
+        source_blocks::fix_idom_violations(&cfg);
+      }
+
+      if (block_appear100_threshold > 0) {
+        always_assert(block_appear100_threshold <= 100);
+        source_blocks::adjust_block_hits_with_appear100_threshold(
+            &cfg, block_appear100_threshold);
+      }
+
+      smi.add({sb_name, std::move(res.serialized),
+               std::move(res.serialized_idom_map)});
+
+      if (!res.profile_success) {
+        std::unique_lock<std::mutex> lock{failed_methods_mutex};
+        failed_methods.push_back(method);
+      }
+
+      auto source_block_metrics =
+          source_blocks::gather_source_block_metrics(&cfg);
+      size_t hot_src_block_current_count = source_block_metrics.hot_block_count;
+      size_t cold_src_block_current_count =
+          source_block_metrics.cold_block_count;
+      size_t hot_throw_cold_block_count =
+          source_block_metrics.hot_throw_cold_count;
+
+      return InsertResult(access_method ? 1 : 0, res.block_count,
+                          profiles.second ? 1 : 0, res.profile_success ? 0 : 1,
+                          hot_src_block_current_count,
+                          cold_src_block_current_count,
+                          hot_throw_cold_block_count, res.normalized_count);
+    }
+    return InsertResult();
+  }
+
+  InsertResult run_fuzzing_on_source_blocks(
+      const Scope& scope,
+      std::vector<const DexMethodRef*>& failed_methods,
+      SimpleSMIStore& smi,
+      std::mutex& failed_methods_mutex,
+      bool serialize,
+      bool exc_inject) {
+    auto method_override_graph = method_override_graph::build_graph(scope);
+    auto call_graph = std::make_unique<call_graph::Graph>(
+        call_graph::single_callee_graph(*method_override_graph, scope));
+
+    UnorderedMap<call_graph::NodeId, MethodFuzzingMetadata> method_metadata;
+    UnorderedMap<IRInstruction*, bool> caller_hit_lookup;
+    // Set up and count indegrees
+    source_blocks::impl::visit_by_levels(
+        &*call_graph, [&](call_graph::NodeId node) {
+          if (method_metadata.find(node) == method_metadata.end()) {
+            method_metadata.insert({node, MethodFuzzingMetadata(0, 0)});
+          }
+          method_metadata.at(node).indegrees = node->callers().size();
+        });
+
+    InsertOnlyConcurrentSet<DexMethod*> seen_methods;
+    InsertResult res;
+    topo_traverse_callgraph(
+        method_metadata, *call_graph, [&](call_graph::NodeId node) {
+          if (node->is_entry() || node->is_exit() ||
+              (node->method() == nullptr)) {
+            return;
+          }
+          bool must_be_cold = false;
+          bool all_cold_callers = true;
+          bool seen_caller = false;
+          // Checks all the callers to see if there is at least one hot source
+          // block before the invoke instruction, if there is, then the callee
+          // is hot
+          for (const auto& edge : node->callers()) {
+            const auto* caller = edge->caller();
+            if (caller->is_entry() || caller->is_exit() ||
+                (caller->method() == nullptr)) {
+              continue;
+            }
+            auto* caller_invoke_insn = edge->invoke_insn();
+            if (caller_hit_lookup.find(caller_invoke_insn) ==
+                caller_hit_lookup.end()) {
+              continue;
+            }
+            seen_caller = true;
+            if (caller_hit_lookup.at(caller_invoke_insn)) {
+              // At least one caller has a hot source block before the invoke
+              all_cold_callers = false;
+            }
+          }
+
+          must_be_cold = (seen_caller && all_cold_callers);
+          auto* method = const_cast<DexMethod*>(node->method());
+          res += insert_source_blocks_into_method(
+              method, failed_methods, smi, failed_methods_mutex, serialize,
+              exc_inject, 0, must_be_cold);
+          seen_methods.insert(method);
+
+          // Update the caller_hit_lookup map with the hit status of the
+          // block with new source blocks
+          auto* code = method->get_code();
+          if (code != nullptr) {
+            auto& cfg = code->cfg();
+            for (auto* block : cfg.blocks()) {
+              SourceBlock* prev_sb = nullptr;
+              for (auto it = block->begin(); it != block->end(); it++) {
+                if (it->type == MFLOW_OPCODE) {
+                  if (opcode::is_an_invoke(it->insn->opcode())) {
+                    if ((prev_sb != nullptr) && prev_sb->vals_size > 0) {
+                      auto* invoke_insn = it->insn;
+                      bool hit = prev_sb->get_val(0).value_or(0) > 0;
+                      caller_hit_lookup[invoke_insn] =
+                          std::max(caller_hit_lookup[invoke_insn], hit);
+                    }
+                  }
+                }
+
+                if (it->type == MFLOW_SOURCE_BLOCK) {
+                  prev_sb = it->src_block.get();
+                }
+              }
+            }
+          }
+        });
+
+    // The call graph may not contain every single method possible, therefore
+    // a loop over all methods in the scope is needed again to fill in the
+    // source blocks of methods that were not seen in the call graph
+    res += walk::parallel::methods<InsertResult>(scope, [&](DexMethod* method) {
+      if (seen_methods.count(method) == 0) {
+        return insert_source_blocks_into_method(method, failed_methods, smi,
+                                                failed_methods_mutex, serialize,
+                                                exc_inject, 0);
+      } else {
+        return InsertResult();
+      }
+    });
+    return res;
+  }
+
   void run_source_blocks(DexStoresVector& stores,
                          PassManager& mgr,
                          bool serialize,
@@ -573,129 +905,26 @@ struct Injector {
                          int32_t block_appear100_threshold) {
     auto scope = build_class_scope(stores);
 
-    // operator+= does not work well, too much copying around.
-    struct SerializedMethodInfo {
-      const DexString* method;
-      std::string s_expression;
-      std::string idom_map;
-    };
-    struct SimpleSMIStore {
-      std::mutex acc_mutex{};
-      std::deque<SerializedMethodInfo> data{};
-
-      void add(SerializedMethodInfo&& in) {
-        std::unique_lock<std::mutex> lock{acc_mutex};
-        data.emplace_back(in);
-      }
-    };
     SimpleSMIStore smi{};
-
-    struct InsertResult {
-      size_t skipped{0};
-      size_t blocks{0};
-      size_t profile_count{0};
-      size_t profile_failed{0};
-      size_t access_methods{0};
-
-      InsertResult() = default;
-      InsertResult(size_t skipped, size_t access_methods)
-          : skipped(skipped), access_methods(access_methods) {}
-      InsertResult(size_t access_methods,
-                   size_t blocks,
-                   size_t profile_count,
-                   size_t profile_failed)
-          : blocks(blocks),
-            profile_count(profile_count),
-            profile_failed(profile_failed),
-            access_methods(access_methods) {}
-
-      InsertResult& operator+=(const InsertResult& other) {
-        skipped += other.skipped;
-        blocks += other.blocks;
-        profile_count += other.profile_count;
-        profile_failed += other.profile_failed;
-        access_methods += other.access_methods;
-        return *this;
-      }
-    };
 
     std::vector<const DexMethodRef*> failed_methods{};
     std::mutex failed_methods_mutex{};
     failed_methods.reserve(10000);
 
-    auto res =
-        walk::parallel::methods<InsertResult>(scope, [&](DexMethod* method) {
-          auto* code = method->get_code();
-          if (code != nullptr) {
-            auto access_method = is_traditional_access_method(method);
-            const DexType* access_method_type = nullptr;
-            std::string_view access_method_name;
-            std::string access_method_hash_name;
-
-            always_assert(code->editable_cfg_built());
-            auto& cfg = code->cfg();
-            if (access_method) {
-              access_method_type = access_method->first;
-              access_method_name = access_method->second;
-
-              auto hash_value = hasher::stable_hash(cfg);
-
-              access_method_hash_name =
-                  hasher::hashed_name(hash_value, access_method_name);
-            }
-
-            const auto* sb_name = [&]() {
-              if (!access_method) {
-                return &method->get_deobfuscated_name();
-              }
-              // Emulate show.
-              std::string new_name = show_deobfuscated(method->get_class());
-              new_name.append(".access$");
-              new_name.append(access_method_hash_name);
-              new_name.append(":");
-              new_name.append(show_deobfuscated(method->get_proto()));
-              return DexString::make_string(new_name);
-            }();
-
-            source_blocks::InsertResult res;
-            auto profiles =
-                find_profiles(method, access_method_type, access_method_name,
-                              access_method_hash_name);
-            if (!profiles.second && !always_inject) {
-              // Skip without profile.
-              return InsertResult(access_method ? 1 : 0, 1);
-            }
-            res = source_blocks::insert_source_blocks(
-                sb_name, &cfg, use_default_value, profiles.first, serialize,
-                exc_inject);
-
-            if (fix_violations) {
-              source_blocks::fix_hot_method_cold_entry_violations(&cfg);
-              source_blocks::fix_chain_violations(&cfg);
-              source_blocks::fix_idom_violations(&cfg);
-            }
-
-            if (block_appear100_threshold > 0) {
-              always_assert(block_appear100_threshold <= 100);
-              source_blocks::adjust_block_hits_with_appear100_threshold(
-                  &cfg, block_appear100_threshold);
-            }
-
-            smi.add({sb_name, std::move(res.serialized),
-                     std::move(res.serialized_idom_map)});
-
-            if (!res.profile_success) {
-              std::unique_lock<std::mutex> lock{failed_methods_mutex};
-              failed_methods.push_back(method);
-            }
-
-            return InsertResult(access_method ? 1 : 0,
-                                res.block_count,
-                                profiles.second ? 1 : 0,
-                                res.profile_success ? 0 : 1);
-          }
-          return InsertResult();
-        });
+    InsertResult res;
+    if (use_fuzzing_values && !use_default_value) {
+      // This path is used for fuzzing
+      res = run_fuzzing_on_source_blocks(scope, failed_methods, smi,
+                                         failed_methods_mutex, serialize,
+                                         exc_inject);
+    } else {
+      res =
+          walk::parallel::methods<InsertResult>(scope, [&](DexMethod* method) {
+            return insert_source_blocks_into_method(
+                method, failed_methods, smi, failed_methods_mutex, serialize,
+                exc_inject, block_appear100_threshold);
+          });
+    }
 
     if (conf.get_global_config()
             .get_config_by_name<AssessorConfig>("assessor")
@@ -709,7 +938,11 @@ struct Injector {
     mgr.set_metric("methods_with_profiles", res.profile_count);
     mgr.set_metric("profile_failed", res.profile_failed);
     mgr.set_metric("access_methods", res.access_methods);
-
+    mgr.set_metric("hot_source_block_count", res.hot_src_block_count);
+    mgr.set_metric("cold_source_block_count", res.cold_src_block_count);
+    mgr.set_metric("hot_throw_cold_block_count",
+                   res.hot_throw_cold_block_count);
+    mgr.set_metric("normalized_blocks", res.normalized_blocks);
     {
       size_t unresolved = 0;
       for (const auto& p_file : profile_files) {
@@ -909,7 +1142,9 @@ void InsertSourceBlocksPass::bind_config() {
        m_fix_violations,
        m_fix_violations,
        "Applies best effort fix to all source block violations.");
-
+  bind("enable_source_block_fuzzing", m_enable_source_block_fuzzing,
+       m_enable_source_block_fuzzing,
+       "When enabled, applies fuzzing to inserted source block");
   bind("block_appear100_threshold", m_block_appear100_threshold,
        m_block_appear100_threshold,
        "Block appear100 threshold configuration (0-100)");
@@ -926,7 +1161,8 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   bool is_instr_mode = mgr.get_redex_options().instrument_pass_enabled;
   bool always_inject = m_always_inject || m_force_serialize || is_instr_mode;
 
-  Injector inj(conf, always_inject, m_use_default_value, m_fix_violations);
+  Injector inj(conf, always_inject, m_use_default_value,
+               m_enable_source_block_fuzzing, m_fix_violations);
 
   inj.prepare_profile_files_and_interactions(m_profile_files,
                                              m_ordered_interactions);
@@ -940,6 +1176,17 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   for (auto&& [interaction_id, index] :
        UnorderedIterable(g_redex->get_sb_interaction_indices())) {
     mgr.set_metric("interaction_" + interaction_id, index);
+  }
+
+  {
+    Timer timer("Compute method violations");
+    auto scope = build_class_scope(stores);
+    auto method_override_graph = method_override_graph::build_graph(scope);
+    auto call_graph = std::make_unique<call_graph::Graph>(
+        call_graph::single_callee_graph(*method_override_graph, scope));
+
+    auto val = source_blocks::compute_method_violations(*call_graph, scope);
+    mgr.set_metric("method~violation~hot~callee~cold~callers", val);
   }
 }
 

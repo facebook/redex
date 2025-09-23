@@ -12,9 +12,9 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
+
+#include "DeterministicContainers.h"
 
 struct ConfigFiles;
 class DexStore;
@@ -32,20 +32,19 @@ class Manager {
 
   bool property_is_enabled(const Property& property) const;
 
-  std::unordered_set<Property> get_initial() const;
-  static const std::unordered_set<Property>& get_default_initial();
+  UnorderedSet<Property> get_initial() const;
+  static const UnorderedSet<Property>& get_default_initial();
 
-  std::unordered_set<Property> get_final() const;
-  static const std::unordered_set<Property>& get_default_final();
+  UnorderedSet<Property> get_final() const;
+  static const UnorderedSet<Property>& get_default_final();
 
-  std::unordered_set<Property> get_required(
+  UnorderedSet<Property> get_required(
       const PropertyInteractions& interactions) const;
 
   void check(DexStoresVector& stores, PassManager& mgr);
 
-  const std::unordered_set<Property>& apply(
-      const PropertyInteractions& interactions);
-  const std::unordered_set<Property>& apply_and_check(
+  const UnorderedSet<Property>& apply(const PropertyInteractions& interactions);
+  const UnorderedSet<Property>& apply_and_check(
       const PropertyInteractions& interactions,
       DexStoresVector& stores,
       PassManager& mgr);
@@ -55,7 +54,7 @@ class Manager {
           pass_interactions,
       ConfigFiles& conf);
 
-  const std::unordered_set<Property>& get_established() const {
+  const UnorderedSet<Property>& get_established() const {
     return m_established;
   }
 
@@ -63,7 +62,7 @@ class Manager {
   // TODO: See whether we can make checkers use const.
   ConfigFiles& m_conf;
 
-  std::unordered_set<Property> m_established;
+  UnorderedSet<Property> m_established;
 
   std::vector<redex_properties::PropertyChecker*> m_checkers;
 };

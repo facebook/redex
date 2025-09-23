@@ -67,4 +67,55 @@ public class SourceBlocksTest {
       SourceBlocksTest.bazzz();
     }
   }
+
+  static class ViolationsFixTest {
+
+    public void idom_branch() {
+      int x = 0;
+      if (x == 1) {
+        branch_1();
+      } else {
+        branch_2();
+      }
+    };
+
+    public void branch_1() {
+      System.out.println("x = 0");
+    }
+
+    public void branch_2() {
+      System.out.println("x = 1");
+    }
+
+     public void hot_method() {
+      System.out.print("Cold Entry");
+    }
+
+    public void cold_method() {
+      System.out.print("Cold Entry");
+    }
+
+    public void hot_method_2() {
+      System.out.print("Hot Entry");
+    }
+
+  }
+
+  static class ChainAndDomClass {
+
+    public void chains() {
+      int i = 0;
+      System.out.println(i);
+    }
+
+    public void throwable() throws RuntimeException {
+      throw new RuntimeException();
+    }
+
+    public void thrower(int j) {
+      j = 1;
+      throwable();
+      j++;
+    }
+  }
 }

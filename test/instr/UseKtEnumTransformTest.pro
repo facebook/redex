@@ -4,6 +4,7 @@
 
 -keep class redex.UseKtEnumTransformTest {
     void testStringConcat();
+    void testException();
 }
 
 # Don't muck with test infra

@@ -18,7 +18,7 @@ void InsertDebugInfoPass::run_pass(DexStoresVector& stores,
   std::atomic<uint32_t> patched_method = 0;
   walk::parallel::code(
       build_class_scope(stores), [&](DexMethod* method, IRCode& code) {
-        always_assert(code.editable_cfg_built());
+        always_assert(code.cfg_built());
         bool has_position = false;
         auto& cfg = code.cfg();
         for (auto* block : cfg.blocks()) {

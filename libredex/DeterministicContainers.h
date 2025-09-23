@@ -432,6 +432,325 @@ bool operator!=(const UnorderedMap<Key, Value, Hash, KeyEqual>& lhs,
   return lhs._internal_unsafe_unwrap() != rhs._internal_unsafe_unwrap();
 }
 
+template <class Key,
+          class Value,
+          class Hash = std::hash<Key>,
+          class KeyEqual = std::equal_to<Key>>
+class UnorderedMultiMap
+    : UnorderedBase<UnorderedMultiMap<Key, Value, Hash, KeyEqual>> {
+  using Type = std::unordered_multimap<Key, Value, Hash, KeyEqual>;
+  Type m_data;
+
+ public:
+  using key_type = typename Type::key_type;
+  using mapped_type = typename Type::mapped_type;
+  using value_type = typename Type::value_type;
+  using size_type = typename Type::size_type;
+  using difference_type = typename Type::difference_type;
+  using hasher = typename Type::hasher;
+  using key_equal = typename Type::key_equal;
+  using reference = typename Type::reference;
+  using const_reference = typename Type::const_reference;
+  using pointer = typename Type::pointer;
+
+  class FixedIterator;
+
+  class ConstFixedIterator {
+    typename Type::const_iterator m_entry;
+
+   public:
+    const value_type* operator->() const { return &*m_entry; }
+
+    const value_type& operator*() const { return *m_entry; }
+
+    bool operator==(const FixedIterator& other) const {
+      return m_entry == other._internal_unsafe_unwrap();
+    }
+
+    bool operator!=(const FixedIterator& other) const {
+      return m_entry != other._internal_unsafe_unwrap();
+    }
+
+    bool operator==(const ConstFixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const ConstFixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    explicit ConstFixedIterator(typename Type::const_iterator entry)
+        : m_entry(entry) {}
+
+    typename Type::const_iterator _internal_unsafe_unwrap() const {
+      return m_entry;
+    }
+  };
+
+  class FixedIterator {
+    typename Type::iterator m_entry;
+
+   public:
+    value_type* operator->() const { return &*m_entry; }
+
+    value_type& operator*() const { return *m_entry; }
+
+    bool operator==(const FixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const FixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    bool operator==(const ConstFixedIterator& other) const {
+      return m_entry == other._internal_unsafe_unwrap();
+    }
+
+    bool operator!=(const ConstFixedIterator& other) const {
+      return m_entry != other._internal_unsafe_unwrap();
+    }
+
+    explicit FixedIterator(typename Type::iterator entry) : m_entry(entry) {}
+
+    typename Type::iterator _internal_unsafe_unwrap() const { return m_entry; }
+  };
+
+  // TODO: Make extra non-deterministic in debug builds
+  class UnorderedIterable {
+    Type& m_data;
+
+   public:
+    using iterator = typename Type::iterator;
+    using const_iterator = typename Type::const_iterator;
+
+    explicit UnorderedIterable(Type& data) : m_data(data) {}
+
+    iterator begin() { return m_data.begin(); }
+
+    iterator end() { return m_data.end(); }
+
+    const_iterator begin() const { return m_data.begin(); }
+
+    const_iterator end() const { return m_data.end(); }
+
+    const_iterator cbegin() const { return m_data.cbegin(); }
+
+    const_iterator cend() const { return m_data.cend(); }
+
+    iterator find(const Key& key) { return m_data.find(key); }
+
+    const_iterator find(const Key& key) const { return m_data.find(key); }
+
+    template <typename possibly_const_iterator>
+    iterator erase(possibly_const_iterator position) {
+      return m_data.erase(position);
+    }
+  };
+
+  // TODO: Make extra non-deterministic in debug builds
+  class ConstUnorderedIterable {
+    const Type& m_data;
+
+   public:
+    using const_iterator = typename Type::const_iterator;
+
+    explicit ConstUnorderedIterable(const Type& data) : m_data(data) {}
+
+    const_iterator begin() const { return m_data.begin(); }
+
+    const_iterator end() const { return m_data.end(); }
+
+    const_iterator cbegin() const { return m_data.cbegin(); }
+
+    const_iterator cend() const { return m_data.cend(); }
+
+    const_iterator find(const Key& key) const { return m_data.find(key); }
+  };
+
+  UnorderedMultiMap() = default;
+
+  explicit UnorderedMultiMap(size_t bucket_count) : m_data(bucket_count) {}
+
+  UnorderedMultiMap(size_t bucket_count, const Hash& hash)
+      : m_data(bucket_count, hash) {}
+
+  UnorderedMultiMap(size_t bucket_count,
+                    const Hash& hash,
+                    const KeyEqual& equal)
+      : m_data(bucket_count, hash, equal) {}
+
+  UnorderedMultiMap(const UnorderedMultiMap& other) = default;
+
+  UnorderedMultiMap(UnorderedMultiMap&& other) noexcept = default;
+
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+  /* implicit */ UnorderedMultiMap(
+      std::initializer_list<std::pair<const Key, Value>> init)
+      : m_data(init) {}
+
+  template <class InputIt>
+  UnorderedMultiMap(InputIt first, InputIt last) : m_data(first, last) {}
+
+  UnorderedMultiMap& operator=(const UnorderedMultiMap& other) = default;
+
+  UnorderedMultiMap& operator=(UnorderedMultiMap&& other) noexcept = default;
+
+  template <typename... Args>
+  FixedIterator emplace(Args&&... args) {
+    auto it = m_data.emplace(std::forward<Args>(args)...);
+    return FixedIterator(it);
+  }
+
+  template <typename... Args>
+  FixedIterator emplace_hint(ConstFixedIterator hint, Args&&... args) {
+    auto it = m_data.emplace_hint(hint._internal_unsafe_unwrap(),
+                                  std::forward<Args>(args)...);
+    return FixedIterator(it);
+  }
+
+  FixedIterator insert(const std::pair<Key, Value>& value) {
+    auto it = m_data.insert(value);
+    return FixedIterator(it);
+  }
+
+  FixedIterator insert(std::pair<Key, Value>&& value) {
+    auto it = m_data.insert(std::forward<std::pair<Key, Value>>(value));
+    return FixedIterator(it);
+  }
+
+  template <typename P>
+  FixedIterator insert(P&& value) {
+    auto it = m_data.insert(std::forward<P>(value));
+    return FixedIterator(it);
+  }
+
+  FixedIterator insert(ConstFixedIterator hint,
+                       const std::pair<Key, Value>& value) {
+    auto it = m_data.insert(hint._internal_unsafe_unwrap(), value);
+    return FixedIterator(it);
+  }
+
+  FixedIterator insert(ConstFixedIterator hint, std::pair<Key, Value>&& value) {
+    auto it = m_data.insert(hint._internal_unsafe_unwrap(),
+                            std::forward<std::pair<Key, Value>>(value));
+    return FixedIterator(it);
+  }
+
+  template <typename P>
+  FixedIterator insert(ConstFixedIterator hint, P&& value) {
+    auto it =
+        m_data.insert(hint._internal_unsafe_unwrap(), std::forward<P>(value));
+    return FixedIterator(it);
+  }
+
+  template <class InputIt>
+  void insert(InputIt first, InputIt last) {
+    m_data.insert(first, last);
+  }
+
+  void insert(std::initializer_list<std::pair<Key, Value>> ilist) {
+    m_data.insert(ilist);
+  }
+
+  FixedIterator _internal_unordered_any() {
+    return FixedIterator(m_data.begin());
+  }
+
+  ConstFixedIterator _internal_unordered_any() const {
+    return ConstFixedIterator(m_data.begin());
+  }
+
+  FixedIterator find(const Key& key) { return FixedIterator(m_data.find(key)); }
+
+  ConstFixedIterator find(const Key& key) const {
+    return ConstFixedIterator(m_data.find(key));
+  }
+
+  // This only returns FixedPointer Iterators, meaning it cannot be used to
+  // iterate over the actual range, to do so, unordered_equal_range has to be
+  // used
+  std::pair<FixedIterator, FixedIterator> equal_range(const Key& key) {
+    auto [first, last] = m_data.equal_range(key);
+    return std::make_pair(FixedIterator(first), FixedIterator(last));
+  }
+
+  std::pair<ConstFixedIterator, ConstFixedIterator> equal_range(
+      const Key& key) const {
+    auto [first, last] = m_data.equal_range(key);
+    return std::make_pair(ConstFixedIterator(first), ConstFixedIterator(last));
+  }
+
+  ConstFixedIterator end() const { return ConstFixedIterator(m_data.end()); }
+
+  FixedIterator end() { return FixedIterator(m_data.end()); }
+
+  ConstFixedIterator cend() const { return ConstFixedIterator(m_data.end()); }
+
+  size_t erase(const Key& key) { return m_data.erase(key); }
+
+  void erase(FixedIterator position) {
+    // We intentionally do not return the iterator here, as it is not
+    // ordered.
+    (void)m_data.erase(position._internal_unsafe_unwrap());
+  }
+
+  void erase(ConstFixedIterator position) {
+    // We intentionally do not return the iterator here, as it is not
+    // ordered.
+    m_data.erase(position._internal_unsafe_unwrap());
+  }
+
+  void clear() { m_data.clear(); }
+
+  size_t count(const Key& key) const { return m_data.count(key); }
+
+  void reserve(size_t size) { m_data.reserve(size); }
+
+  size_t size() const { return m_data.size(); }
+
+  bool empty() const { return m_data.empty(); }
+
+  std::pair<typename Type::const_iterator, typename Type::const_iterator>
+  _internal_unordered_equal_range(const Key& key) const {
+    return m_data.equal_range(key);
+  }
+
+  UnorderedIterable _internal_unordered_iterable() {
+    return UnorderedIterable(m_data);
+  }
+
+  ConstUnorderedIterable _internal_unordered_iterable() const {
+    return ConstUnorderedIterable(m_data);
+  }
+
+  template <typename possibly_const_iterator>
+  auto _internal_to_fixed_iterator(possibly_const_iterator it) const {
+    if constexpr (std::is_same_v<possibly_const_iterator,
+                                 typename Type::const_iterator>) {
+      return ConstFixedIterator(it);
+    } else {
+      return FixedIterator(it);
+    }
+  }
+
+  const Type& _internal_unsafe_unwrap() const { return m_data; }
+
+  Type& _internal_unsafe_unwrap() { return m_data; }
+};
+
+template <class Key, class Value, class Hash, class KeyEqual>
+bool operator==(const UnorderedMultiMap<Key, Value, Hash, KeyEqual>& lhs,
+                const UnorderedMultiMap<Key, Value, Hash, KeyEqual>& rhs) {
+  return lhs._internal_unsafe_unwrap() == rhs._internal_unsafe_unwrap();
+}
+
+template <class Key, class Value, class Hash, class KeyEqual>
+bool operator!=(const UnorderedMultiMap<Key, Value, Hash, KeyEqual>& lhs,
+                const UnorderedMultiMap<Key, Value, Hash, KeyEqual>& rhs) {
+  return lhs._internal_unsafe_unwrap() != rhs._internal_unsafe_unwrap();
+}
+
 class UnorderedBagBase {};
 
 template <class Value>
@@ -1010,6 +1329,25 @@ template <
                      bool> = true>
 const Collection& UnorderedIterable(const Collection& collection) {
   return collection;
+}
+
+template <class UnorderedCollection,
+          class Key,
+          std::enable_if_t<std::is_base_of_v<UnorderedBase<UnorderedCollection>,
+                                             UnorderedCollection>,
+                           bool> = true>
+auto unordered_equal_range(const UnorderedCollection& collection,
+                           const Key& key) {
+  return collection._internal_unordered_equal_range(key);
+}
+
+template <
+    class Collection,
+    class Key,
+    std::enable_if_t<!std::is_base_of_v<UnorderedBase<Collection>, Collection>,
+                     bool> = true>
+auto unordered_equal_range(const Collection& collection, const Key& key) {
+  return collection.equal_range(key);
 }
 
 template <class UnorderedCollection,

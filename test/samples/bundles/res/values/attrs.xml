@@ -3,6 +3,7 @@
   <attr name="themePadding" format="reference|dimension" />
   <attr name="themeColor" format="reference|color" />
   <attr name="themeUnused" format="reference" />
+  <attr name="someKindOfStyle" format="reference"/>
   <declare-styleable name="WickedCoolButton">
     <attr name="a_boolean" format="boolean" />
     <attr name="fancy_effects">

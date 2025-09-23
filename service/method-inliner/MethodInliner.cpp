@@ -343,10 +343,10 @@ SameImplementationMap get_same_implementation_map(
     SameImplementation same_implementation{nullptr, {}};
     auto consider_method = [&](DexMethod* method) {
       always_assert(method->get_code());
-      always_assert(method->get_code()->editable_cfg_built());
+      always_assert(method->get_code()->cfg_built());
       if (same_implementation.representative != nullptr) {
-        always_assert(same_implementation.representative->get_code()
-                          ->editable_cfg_built());
+        always_assert(
+            same_implementation.representative->get_code()->cfg_built());
         if (!method->get_code()->cfg().structural_equals(
                 same_implementation.representative->get_code()->cfg())) {
           return false;

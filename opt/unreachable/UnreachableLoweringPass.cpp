@@ -78,7 +78,7 @@ void UnreachableLoweringPass::eval_pass(DexStoresVector& stores,
     main_block->ret_void();
     init_method = method_creator.create();
     cls->add_method(init_method);
-    init_method->get_code()->build_cfg(/* editable */ true);
+    init_method->get_code()->build_cfg();
     init_method->rstate.set_generated();
     init_method->set_deobfuscated_name(show_deobfuscated(init_method));
   }
@@ -97,7 +97,7 @@ void UnreachableLoweringPass::eval_pass(DexStoresVector& stores,
     main_block->throwex(var);
     m_create_and_throw_method = method_creator.create();
     cls->add_method(m_create_and_throw_method);
-    m_create_and_throw_method->get_code()->build_cfg(/* editable */ true);
+    m_create_and_throw_method->get_code()->build_cfg();
     m_create_and_throw_method->rstate.set_generated();
     m_create_and_throw_method->rstate.set_root();
     m_create_and_throw_method->set_deobfuscated_name(

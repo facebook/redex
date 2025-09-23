@@ -81,7 +81,7 @@ UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
         },
         [&](DexMethod* meth, const IRCode& /*code*/) {
           auto* base_cls = meth->get_class();
-          always_assert(meth->get_code()->editable_cfg_built());
+          always_assert(meth->get_code()->cfg_built());
           for (auto& mie : cfg::InstructionIterable(meth->get_code()->cfg())) {
             auto* inst = mie.insn;
             DexType* called_cls = nullptr;
@@ -1542,7 +1542,7 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
             plugin->name().c_str(), SHOW(cls));
       classes.push_back(cls);
-      // For the plugin cls, make sure all methods are editable cfg built.
+      // For the plugin cls, make sure all methods are cfg built.
       for (auto* m : cls->get_all_methods()) {
         if (m->get_code() == nullptr) {
           continue;

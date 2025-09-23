@@ -105,7 +105,7 @@ IntrinsifyNullChecksPass::Stats IntrinsifyNullChecksPass::convert_getClass(
   if (code == nullptr) {
     return stats;
   }
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {

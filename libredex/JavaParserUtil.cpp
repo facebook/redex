@@ -7,8 +7,7 @@
 
 #include "JavaParserUtil.h"
 #include "Debug.h"
-
-#include <unordered_set>
+#include "DeterministicContainers.h"
 
 namespace java_declarations {
 
@@ -43,7 +42,7 @@ std::string_view next_token(std::string_view& line) {
   return ret;
 }
 
-const std::unordered_set<std::string_view> JAVA_ACCESS_MODIFIERS = {
+const UnorderedSet<std::string_view> JAVA_ACCESS_MODIFIERS = {
     "public", "protected", "private"};
 const std::string_view JAVA_STATIC_MODIFIER = "static";
 const std::string_view JAVA_FINAL_MODIFIER = "final";
@@ -55,7 +54,7 @@ const std::string_view JAVA_NATIVE_MODIFIER = "native";
 const std::string_view JAVA_STRICTFP_MODIFIER = "strictfp";
 
 bool is_field_modifier(std::string_view token) {
-  const static std::unordered_set<std::string_view> field_modifiers{
+  const static UnorderedSet<std::string_view> field_modifiers{
       JAVA_STATIC_MODIFIER,
       JAVA_FINAL_MODIFIER,
       JAVA_TRANSIENT_MODIFIER,
@@ -66,7 +65,7 @@ bool is_field_modifier(std::string_view token) {
 }
 
 bool is_method_modifier(std::string_view token) {
-  const static std::unordered_set<std::string_view> method_modifiers{
+  const static UnorderedSet<std::string_view> method_modifiers{
       JAVA_STATIC_MODIFIER,       JAVA_FINAL_MODIFIER,  JAVA_ABSTRACT_MODIFIER,
       JAVA_SYNCHRONIZED_MODIFIER, JAVA_NATIVE_MODIFIER, JAVA_STRICTFP_MODIFIER,
   };

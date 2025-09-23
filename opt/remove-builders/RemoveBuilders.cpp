@@ -43,15 +43,16 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   always_assert(!(method->get_access() & ACC_STATIC));
 
   auto* code = method->get_code();
-  auto ii = InstructionIterable(code);
+  auto& cfg = code->cfg();
+  auto ii = InstructionIterable(cfg.get_param_instructions());
+  always_assert(ii.begin() != ii.end());
   auto* this_insn = ii.begin()->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
-  auto regs_size = code->get_registers_size();
+  auto regs_size = cfg.get_registers_size();
   auto* this_cls = method->get_class();
-  code->build_cfg(/* editable */ false);
-  const auto& blocks = code->cfg().blocks_reverse_post_deprecated();
-  std::function<void(IRList::iterator, TaintedRegs*)> trans =
-      [&](const IRList::iterator& it, TaintedRegs* tregs) {
+  const auto& blocks = cfg.blocks_reverse_post_deprecated();
+  std::function<void(cfg::InstructionIterator, TaintedRegs*)> trans =
+      [&](const cfg::InstructionIterator& it, TaintedRegs* tregs) {
         auto* insn = it->insn;
         if (insn == this_insn) {
           tregs->m_reg_set[insn->dest()] = true;
@@ -59,7 +60,8 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
           transfer_object_reach(this_cls, regs_size, insn, tregs->m_reg_set);
         }
       };
-  auto taint_map = forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
+  auto taint_map = forwards_dataflow(
+      cfg.entry_block(), blocks, TaintedRegs(regs_size + 1), trans);
   return tainted_reg_escapes(
       this_cls, method, *taint_map, enable_buildee_constr_change);
 }
@@ -195,7 +197,8 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
   if (code == nullptr) {
     return builders;
   }
-  for (auto& mie : InstructionIterable(code)) {
+  auto& cfg = code->cfg();
+  for (auto& mie : InstructionIterable(cfg)) {
     auto* insn = mie.insn;
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
       DexType* cls = insn->get_type();
@@ -215,10 +218,10 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
   always_assert(method != nullptr);
 
   auto* code = method->get_code();
-  code->build_cfg(/* editable */ false);
-  const auto& blocks = code->cfg().blocks_reverse_post_deprecated();
-  auto regs_size = method->get_code()->get_registers_size();
-  auto taint_map = get_tainted_regs(regs_size, blocks, builder);
+  auto& cfg = code->cfg();
+  const auto& blocks = cfg.blocks_reverse_post_deprecated();
+  auto regs_size = cfg.get_registers_size();
+  auto taint_map = get_tainted_regs(cfg, regs_size, blocks, builder);
   return tainted_reg_escapes(
       builder, method, *taint_map, m_enable_buildee_constr_change);
 }

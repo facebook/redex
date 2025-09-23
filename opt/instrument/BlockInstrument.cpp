@@ -273,11 +273,11 @@ InstrumentedType get_instrumented_type(const MethodInfo& i) {
   }
 }
 
-using MethodDictionary = std::unordered_map<const DexString*, size_t>;
+using MethodDictionary = UnorderedMap<const DexString*, size_t>;
 
 MethodDictionary create_method_dictionary(
     const std::string& file_name, const std::vector<MethodInfo>& all_info) {
-  std::unordered_set<const DexString*> methods_set;
+  UnorderedSet<const DexString*> methods_set;
   for (const auto& info : all_info) {
     methods_set.insert(info.method->get_deobfuscated_name_or_null());
     for (const auto& sb_vec : info.bit_id_2_source_blocks) {
@@ -289,8 +289,7 @@ MethodDictionary create_method_dictionary(
       methods_set.insert(sb->src);
     }
   }
-  std::vector<const DexString*> methods(methods_set.begin(), methods_set.end());
-  std::sort(methods.begin(), methods.end(), compare_dexstrings);
+  auto methods = unordered_to_ordered(methods_set, compare_dexstrings);
   size_t idx{0};
 
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
@@ -840,8 +839,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       return seed;
     }
   };
-  using DedupeMap =
-      std::unordered_map<CatchCoverage, cfg::Block*, CatchCoverageHash>;
+  using DedupeMap = UnorderedMap<CatchCoverage, cfg::Block*, CatchCoverageHash>;
 
   enum RegType {
     kNone,
@@ -957,7 +955,7 @@ void create_block_info(
     const DexMethod* method,
     cfg::Block* block,
     const InstrumentPass::Options& options,
-    const std::unordered_map<const cfg::Block*, BlockInfo*>& block_mapping) {
+    const UnorderedMap<const cfg::Block*, BlockInfo*>& block_mapping) {
   auto* trg_block_info = block_mapping.at(block);
 
   auto trace_at_exit = at_scope_exit([&]() {
@@ -1108,7 +1106,7 @@ auto get_blocks_to_instrument(const DexMethod* m,
   // Future work: Pick minimal instrumentation candidates.
   std::vector<BlockInfo> block_info_list;
   block_info_list.reserve(blocks.size());
-  std::unordered_map<const cfg::Block*, BlockInfo*> block_mapping;
+  UnorderedMap<const cfg::Block*, BlockInfo*> block_mapping;
   for (cfg::Block* b : blocks) {
     block_info_list.emplace_back(b, LI.get_loop_for(b), BlockType::Unspecified);
     block_mapping[b] = &block_info_list.back();
@@ -1227,7 +1225,7 @@ MethodInfo instrument_basic_blocks(
 
   using namespace cfg;
 
-  always_assert(code.editable_cfg_built());
+  always_assert(code.cfg_built());
   ControlFlowGraph& cfg = code.cfg();
 
   std::string before_cfg =
@@ -1863,12 +1861,12 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   // Create Buildable CFG so we can inline functions correctly.
   if (options.inline_onBlockHit) {
     IRCode* blockHit_code = onBlockHit->get_code();
-    always_assert(blockHit_code->editable_cfg_built());
+    always_assert(blockHit_code->cfg_built());
   }
 
   for (const auto& en : onNonLoopBlockHit_map) {
     IRCode* nonLoopBlockHit_code = en.second->get_code();
-    always_assert(nonLoopBlockHit_code->editable_cfg_built());
+    always_assert(nonLoopBlockHit_code->cfg_built());
   }
 
   DexMethod* binaryIncrementer;
@@ -1889,7 +1887,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     break;
   }
   IRCode* binaryIncrementer_code = binaryIncrementer->get_code();
-  always_assert(binaryIncrementer_code->editable_cfg_built());
+  always_assert(binaryIncrementer_code->cfg_built());
 
   // This method_offset is used in sMethodStats[] to locate a method profile.
   // We have a small header in the beginning of sMethodStats.

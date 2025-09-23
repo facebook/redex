@@ -573,10 +573,10 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
       if (tmp_vec.size() > *m_config.exp_force_top_x_entries) {
         tmp_vec.resize(*m_config.exp_force_top_x_entries);
       }
-      std::transform(tmp_vec.begin(), tmp_vec.end(),
-                     std::inserter(top_n_entries.at(p.second),
-                                   top_n_entries.at(p.second).begin()),
-                     [](const auto& p) { return p.first; });
+      auto& set = top_n_entries.at(p.second);
+      for (auto& q : UnorderedIterable(tmp_vec)) {
+        set.emplace(q.first);
+      }
     }
   }
 
@@ -618,7 +618,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
 
     // Fill the queue with all our edges.
     for (const auto& p : UnorderedIterable(m_inline_calls)) {
-      for (const auto* callee : p.second) {
+      for (const auto* callee : UnorderedIterable(p.second)) {
         if (p.first != callee) { // No cycles.
           queue.emplace(p.first, callee);
           filtered_map[callee];
@@ -655,11 +655,10 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   UnorderedMap<const DexMethod*, MethodContext> m_cache;
   PGIForest m_forest;
   DecisionTreesConfig m_config;
-  std::vector<std::unordered_set<const DexMethodRef*>> top_n_entries;
+  std::vector<UnorderedSet<const DexMethodRef*>> top_n_entries;
   // Collect "yes" decisions based on methods, possibly to break chains later.
   std::mutex m_inline_calls_mutex;
-  UnorderedMap<const DexMethod*, std::unordered_set<const DexMethod*>>
-      m_inline_calls;
+  UnorderedMap<const DexMethod*, UnorderedSet<const DexMethod*>> m_inline_calls;
   bool m_inline_calls_culled{false};
 };
 
@@ -782,9 +781,9 @@ class InlineForSpeedCallerList final : public InlineForSpeedBase {
 
  private:
   // Binding late to support methods synthesized before PGI time.
-  static std::unordered_set<const DexMethodRef*> gather_methods(
+  static UnorderedSet<const DexMethodRef*> gather_methods(
       const std::vector<std::string>& caller_list, bool by_prefix) {
-    std::unordered_set<const DexMethodRef*> ret;
+    UnorderedSet<const DexMethodRef*> ret;
     auto collect = [&](auto fn) {
       for (const auto& str_mref : caller_list) {
         auto* mref = fn(str_mref);
@@ -866,7 +865,7 @@ class InlineForSpeedCallerList final : public InlineForSpeedBase {
     return insert_it.first->second;
   }
 
-  const std::unordered_set<const DexMethodRef*> m_caller_methods;
+  const UnorderedSet<const DexMethodRef*> m_caller_methods;
   const MethodProfiles* m_method_profiles;
   const float m_callee_min_hits;
   const float m_callee_min_appear;

@@ -72,7 +72,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
               return stats;
             }
 
-            always_assert(method->get_code()->editable_cfg_built());
+            always_assert(method->get_code()->cfg_built());
             auto& cfg = method->get_code()->cfg();
             auto iterable = cfg::InstructionIterable(cfg);
             for (auto it = iterable.begin(); it != iterable.end(); it++) {

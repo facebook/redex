@@ -576,7 +576,7 @@ size_t rename_virtuals(
   TRACE(OBFUSCATE, 2, "Virtual renamed: %zu", renamed);
 
   // rename interfaces
-  std::unordered_set<const VirtualScope*> visited;
+  UnorderedSet<const VirtualScope*> visited;
   size_t intf_renamed = vr.rename_interface_scopes(seed);
   TRACE(OBFUSCATE, 2, "Interface renamed: %zu", intf_renamed);
   TRACE(OBFUSCATE, 2, "MAX seed: %d", seed);

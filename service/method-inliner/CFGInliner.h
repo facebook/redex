@@ -39,7 +39,7 @@ class CFGInliner {
    * Uses provided plugin to update caller and/or copy of callee
    */
   static void inline_cfg(ControlFlowGraph* caller,
-                         const cfg::InstructionIterator& inline_site,
+                         cfg::InstructionIterator inline_site,
                          DexType* needs_receiver_cast,
                          DexType* needs_init_class,
                          const ControlFlowGraph& callee,
@@ -74,7 +74,7 @@ class CFGInliner {
    * If `it` isn't first, make it the first instruction of its block
    */
   static std::pair<Block*, Block*> maybe_split_block_before(
-      ControlFlowGraph* caller, const InstructionIterator& it);
+      ControlFlowGraph* caller, InstructionIterator& it);
 
   /*
    * Change the register numbers to not overlap with caller.

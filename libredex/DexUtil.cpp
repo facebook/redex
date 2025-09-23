@@ -373,11 +373,11 @@ VisibilityChanges get_visibility_changes(
   always_assert(code != nullptr);
   VisibilityChanges changes;
   VisibilityChangeGetter getter{changes, scope, effective_caller_resolved_from};
-  editable_cfg_adapter::iterate(const_cast<IRCode*>(code),
-                                [&getter](MethodItemEntry& mie) {
-                                  getter.process_insn(mie.insn);
-                                  return editable_cfg_adapter::LOOP_CONTINUE;
-                                });
+  cfg_adapter::iterate(const_cast<IRCode*>(code),
+                       [&getter](MethodItemEntry& mie) {
+                         getter.process_insn(mie.insn);
+                         return cfg_adapter::LOOP_CONTINUE;
+                       });
 
   std::vector<DexType*> types;
   code->gather_catch_types(types);
@@ -408,7 +408,7 @@ bool gather_invoked_methods_that_prevent_relocation(
     UnorderedSet<DexMethodRef*>* methods_preventing_relocation) {
   const auto* code = method->get_code();
   always_assert(code);
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   const auto& cfg = code->cfg();
   bool can_relocate = true;
   for (const auto& mie : InstructionIterable(cfg)) {

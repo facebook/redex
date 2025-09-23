@@ -605,6 +605,8 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("max_cost_for_constant_propagation",
          MAX_COST_FOR_CONSTANT_PROPAGATION,
          inliner_config->max_cost_for_constant_propagation);
+  jw.get("max_reduced_size", MAX_REDUCED_SIZE,
+         inliner_config->max_reduced_size);
   jw.get("enforce_method_size_limit",
          true,
          inliner_config->enforce_method_size_limit);

@@ -30,23 +30,19 @@
  * connected to their predecessors and successors by `Edge`s that specify
  * the type of connection.
  *
- * EDITABLE MODE:
- * Right now there are two types of CFGs. Editable and non-editable:
- * A non editable CFG's blocks have begin and end pointers into the big linear
- * IRList inside IRCode.
- * An editable CFG's blocks each own a small IRList (with MethodItemEntries
+ * An CFG's blocks each own a small IRList (with MethodItemEntries
  * taken from IRCode)
  *
- * Editable mode is the new version of the CFG. In the future, it will replace
- * IRCode entirely as the primary code representation. To build an editable CFG,
+ * In the future, CFGs will replace
+ * IRCode entirely as the primary code representation. To build an CFG,
  * call
  *
- * `code->build_cfg(true)`
+ * `code->build_cfg()`
  *
- * The editable CFG takes the MethodItemEntries from the IRCode object and moves
- * them into the blocks. The editable CFG steals the code out of the IRCode
- * object. After you've built the CFG in editable mode, you should use the CFG,
- * not the IRCode. The IRCode is empty while the editable CFG exists.
+ * The CFG takes the MethodItemEntries from the IRCode object and moves
+ * them into the blocks. The CFG steals the code out of the IRCode
+ * object. After you've built the CFG, you should use the CFG,
+ * not the IRCode. The IRCode is empty while the CFG exists.
  *
  * You can make all sorts of changes to the CFG and when
  * you're done, move it all back into an IRCode object with
@@ -59,8 +55,8 @@
  * the CFG.
  *
  * TODO: Add useful CFG editing methods
- * TODO: phase out edits to the IRCode and move them all to the editable CFG
- * TODO: remove non-editable CFG option
+ * TODO: phase out edits to the IRCode and move them all to the CFG
+ * TODO: remove non-CFG option
  *
  * TODO?: make MethodItemEntry's fields private?
  */
@@ -89,14 +85,14 @@ namespace cfg {
 enum EdgeType : uint8_t {
   // The false branch of an if statement, default of a switch, or unconditional
   // goto
-  EDGE_GOTO,
+  EDGE_GOTO = 0,
   // The true branch of an if statement or non-default case of a switch
-  EDGE_BRANCH,
+  EDGE_BRANCH = 1,
   // The edges to a catch block
-  EDGE_THROW,
+  EDGE_THROW = 2,
   // A "fake" edge so that we can have a single exit block
-  EDGE_GHOST,
-  EDGE_TYPE_SIZE
+  EDGE_GHOST = 3,
+  EDGE_TYPE_SIZE = 4
 };
 
 class Block;
@@ -450,15 +446,9 @@ class Block final {
 
   BlockId m_id;
 
-  // MethodItemEntries get moved from IRCode into here (if m_editable)
+  // MethodItemEntries get moved from IRCode into here
   // otherwise, this is empty.
   IRList m_entries;
-
-  // TODO delete these
-  // These refer into the IRCode IRList
-  // These are only used in non-editable mode.
-  IRList::iterator m_begin;
-  IRList::iterator m_end;
 
   std::vector<Edge*> m_preds;
   std::vector<Edge*> m_succs;
@@ -489,18 +479,14 @@ class ControlFlowGraph {
   ControlFlowGraph() = default;
   ControlFlowGraph(const ControlFlowGraph&) = delete;
 
-  /*
-   * if editable is false, changes to the CFG aren't reflected in the output dex
-   * instructions.
-   */
-  ControlFlowGraph(IRList* ir, reg_t registers_size, bool editable = true);
+  ControlFlowGraph(IRList* ir, reg_t registers_size);
   ~ControlFlowGraph();
 
   /*
    * convert from the graph representation to a list of MethodItemEntries
    * Using custom_strategy allows custom order linearization of the CFG.
    */
-  IRList* linearize(
+  std::unique_ptr<IRList> linearize(
       const std::unique_ptr<LinearizationStrategy>& custom_strategy = nullptr);
 
   // Return the blocks of this CFG in an arbitrary order.
@@ -554,7 +540,7 @@ class ControlFlowGraph {
    *
    * The exit blocks are not computed upon creation. It is left up to the user
    * to call this method if they plan to use the exit block. If you make
-   * significant changes to this CFG in editable mode that effect the exit
+   * significant changes to this CFG that effect the exit
    * points of the method, you need to call this method again.
    * TODO: detect changes and recompute when necessary.
    */
@@ -901,9 +887,6 @@ class ControlFlowGraph {
    */
   std::ostream& write_dot_format(std::ostream&) const;
 
-  // Do writes to this CFG propagate back to IR and Dex code?
-  bool editable() const { return m_editable; }
-
   size_t num_blocks() const { return m_blocks.size(); }
   size_t num_edges() const { return m_edges.size(); }
 
@@ -929,7 +912,6 @@ class ControlFlowGraph {
   std::pair<uint32_t, bool> remove_unreachable_blocks();
 
   // transform the CFG to an equivalent but more canonical state
-  // Assumes m_editable is true
   // returns the number of instructions removed
   uint32_t simplify();
 
@@ -946,7 +928,7 @@ class ControlFlowGraph {
   // similar to sum_opcode_sizes, but takes into account non-opcode payloads
   uint32_t estimate_code_units() const;
 
-  // The editable cfg is missing plain OPCODE_GOTOs; this function computes a
+  // The cfg is missing plain OPCODE_GOTOs; this function computes a
   // size adjustment to account for that.
   uint32_t get_size_adjustment(bool assume_no_unreachable_blocks = false);
 
@@ -969,7 +951,7 @@ class ControlFlowGraph {
   // the instructions.
   void recompute_registers_size();
 
-  // Only used in editable cfg. \returns the first block that has instructions
+  // Only used in cfg. \returns the first block that has instructions
   // if there is any. Otherwise, \returns null.
   Block* get_first_block_with_insns() const;
 
@@ -991,9 +973,10 @@ class ControlFlowGraph {
       const cfg::InstructionIterator& it);
 
   cfg::InstructionIterator primary_instruction_of_move_result(
-      const cfg::InstructionIterator& it);
+      const cfg::InstructionIterator& it) const;
 
-  cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
+  cfg::InstructionIterator move_result_of(
+      const cfg::InstructionIterator& it) const;
 
   /*
    * Gets the next instruction, following gotos if the end of blocks are
@@ -1001,7 +984,7 @@ class ControlFlowGraph {
    * returned.
    */
   cfg::InstructionIterator next_following_gotos(
-      const cfg::InstructionIterator& it);
+      const cfg::InstructionIterator& it) const;
 
   /*
    * clear and fill `new_cfg` with a copy of `this`. Copies of all instructions
@@ -1091,7 +1074,6 @@ class ControlFlowGraph {
 
   // remove all MFLOW_TRY and MFLOW_CATCH markers because that information is
   // moved into the edges.
-  // Assumes m_editable is true
   void remove_try_catch_markers();
 
   // helper functions
@@ -1309,11 +1291,9 @@ class ControlFlowGraph {
   Blocks m_blocks;
   EdgeSet m_edges;
 
-  IRList* m_orig_list{nullptr}; // Only set when !m_editable.
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   reg_t m_registers_size{0};
-  bool m_editable{true};
   bool m_owns_insns{false};
   bool m_owns_removed_insns{true};
   std::vector<IRInstruction*> m_removed_insns;
@@ -1406,7 +1386,6 @@ class InstructionIteratorImpl {
   InstructionIteratorImpl() = delete;
 
   explicit InstructionIteratorImpl(Cfg& cfg, bool is_begin) : m_cfg(&cfg) {
-    always_assert(m_cfg->editable());
     if (is_begin) {
       m_block = m_cfg->m_blocks.begin();
       if (m_block != m_cfg->m_blocks.end()) {
@@ -1563,8 +1542,6 @@ template <class ForwardIt>
 bool ControlFlowGraph::replace_insns(const InstructionIterator& it,
                                      const ForwardIt& begin,
                                      const ForwardIt& end) {
-  always_assert(m_editable);
-
   // Save these values before we insert in case the insertion causes iterator
   // invalidation.
   auto* insn_to_del = it->insn;
@@ -1734,7 +1711,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         insert_source_block = true;
         invalidated_its = true;
         // FIXME: Copying the outgoing throw edges isn't enough.
-        // When the editable CFG is constructed, we transform the try regions
+        // When the CFG is constructed, we transform the try regions
         // into throw edges. We only add these edges to blocks that may throw,
         // thus losing the knowledge of which blocks were originally inside a
         // try region. If we add a new throwing instruction here. It may be

@@ -33,6 +33,10 @@ struct Stats {
     num_patched_fields_and_methods += other.num_patched_fields_and_methods;
     return *this;
   }
+
+  bool not_zero() const {
+    return num_patched_parameters != 0 || num_patched_fields_and_methods != 0;
+  }
 };
 
 struct PatcherStats {
@@ -63,35 +67,60 @@ struct PatcherStats {
   }
 };
 
+struct ParamCandidate {
+  DexMethod* method;
+  src_index_t index;
+
+  ParamCandidate(DexMethod* method, src_index_t src_index)
+      : method(method), index(src_index) {}
+};
+
+inline size_t hash_value(ParamCandidate pc) {
+  return ((size_t)pc.method) ^ (size_t)(pc.index);
+}
+
+inline bool operator==(const ParamCandidate& a, const ParamCandidate& b) {
+  return a.method == b.method && a.index == b.index;
+}
+
+inline bool compare_param_candidate(const ParamCandidate& l,
+                                    const ParamCandidate& r) {
+  if (l.method == r.method) {
+    return l.index < r.index;
+  }
+  return compare_dexmethods(l.method, r.method);
+}
+
 class PatchingCandidates {
 
  public:
   void add_field_candidate(DexField* field, const TypedefAnnoType* anno) {
-    m_field_candidates.insert_or_assign(
-        std::make_pair(field, const_cast<TypedefAnnoType*>(anno)));
+    m_field_candidates.get_or_emplace_and_assert_equal(
+        field, const_cast<TypedefAnnoType*>(anno));
   }
   void add_method_candidate(DexMethod* method, const TypedefAnnoType* anno) {
-    m_method_candidates.insert_or_assign(
-        std::make_pair(method, const_cast<TypedefAnnoType*>(anno)));
+    m_method_candidates.get_or_emplace_and_assert_equal(
+        method, const_cast<TypedefAnnoType*>(anno));
+  }
+  void add_param_candidate(DexMethod* method,
+                           const TypedefAnnoType* anno,
+                           src_index_t index) {
+    m_param_candidates.get_or_emplace_and_assert_equal(
+        ParamCandidate(method, index), const_cast<TypedefAnnoType*>(anno));
+  }
+  size_t candidates_size() const {
+    return m_field_candidates.size() + m_method_candidates.size() +
+           m_param_candidates.size();
   }
   void apply_patching(std::mutex& mutex, Stats& class_stats);
 
  private:
-  ConcurrentMap<DexField*, TypedefAnnoType*> m_field_candidates;
-  ConcurrentMap<DexMethod*, TypedefAnnoType*> m_method_candidates;
-};
-
-struct ParamCandidate {
-  DexMethod* method;
-  TypedefAnnoType* anno;
-  src_index_t index;
-
-  ParamCandidate(DexMethod* method,
-                 const TypedefAnnoType* anno,
-                 src_index_t src_index)
-      : method(method),
-        anno(const_cast<TypedefAnnoType*>(anno)),
-        index(src_index) {}
+  InsertOnlyConcurrentMap<DexField*, TypedefAnnoType*> m_field_candidates;
+  InsertOnlyConcurrentMap<DexMethod*, TypedefAnnoType*> m_method_candidates;
+  InsertOnlyConcurrentMap<ParamCandidate,
+                          TypedefAnnoType*,
+                          boost::hash<ParamCandidate>>
+      m_param_candidates;
 };
 
 class TypedefAnnoPatcher {
@@ -99,7 +128,8 @@ class TypedefAnnoPatcher {
   explicit TypedefAnnoPatcher(
       const TypedefAnnoCheckerPass::Config& config,
       const method_override_graph::Graph& method_override_graph)
-      : m_method_override_graph(method_override_graph) {
+      : m_method_override_graph(method_override_graph),
+        m_max_iteration(config.max_patcher_iteration) {
     m_typedef_annos.insert(config.int_typedef);
     m_typedef_annos.insert(config.str_typedef);
   }
@@ -111,15 +141,17 @@ class TypedefAnnoPatcher {
  private:
   bool patch_if_overriding_annotated_methods(DexMethod* m, Stats& class_stats);
 
-  void patch_parameters_and_returns(
-      DexMethod* method,
-      Stats& class_stats,
-      std::vector<ParamCandidate>* missing_param_annos = nullptr);
+  void collect_param_candidates(DexMethod* method,
+                                PatchingCandidates& candidates);
+
+  void collect_return_candidates(DexMethod* method,
+                                 PatchingCandidates& candidates);
 
   void patch_enclosing_lambda_fields(const DexClass* cls, Stats& class_stats);
 
   void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor,
-                                              Stats& class_stats);
+                                              Stats& class_stats,
+                                              PatchingCandidates& candidates);
 
   void patch_lambdas(DexMethod* method,
                      std::vector<const DexField*>* patched_fields,
@@ -132,10 +164,11 @@ class TypedefAnnoPatcher {
   void fix_kt_enum_ctor_param(const DexClass* cls, Stats& class_stats);
 
   void populate_chained_getters(DexClass* cls);
-  void patch_chained_getters(Stats& class_stats);
+  void patch_chained_getters(PatchingCandidates& candidates);
 
   UnorderedSet<TypedefAnnoType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
+  const size_t m_max_iteration;
   ConcurrentMap<std::string, std::vector<const DexField*>> m_lambda_anno_map;
   InsertOnlyConcurrentSet<std::string_view> m_patched_returns;
   InsertOnlyConcurrentSet<DexClass*> m_chained_getters;
