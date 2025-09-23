@@ -13,7 +13,6 @@
 #include "BundleResources.h"
 
 #include <fstream>
-#include <istream>
 #include <map>
 #include <queue>
 #include <stdexcept>
@@ -50,7 +49,8 @@ void read_protobuf_file_contents(
       return;
     }
     google::protobuf::io::CodedInputStream input(
-        (const google::protobuf::uint8*)data, size);
+        reinterpret_cast<const google::protobuf::uint8*>(data),
+        static_cast<int>(size));
     fn(input, size);
   });
 }
@@ -1500,7 +1500,7 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
                   auto* remapped_entry =
                       new_remapped_entry(*source_entry, source_id, old_to_new);
                   remapped_entry->mutable_entry_id()->set_id(
-                      current_entry_id++);
+                      static_cast<uint32_t>(current_entry_id++));
                   new_entries.AddAllocated(remapped_entry);
                 }
                 new_type->clear_entry();
@@ -1941,7 +1941,7 @@ void ResourcesPbFile::get_type_names(std::vector<std::string>* type_names) {
                     "Must provide an empty vector, for documented indexing "
                     "scheme to be valid");
   auto highest_type_id = m_type_id_to_names.rbegin()->first;
-  for (size_t i = 1; i <= highest_type_id; i++) {
+  for (uint32_t i = 1; i <= highest_type_id; i++) {
     auto search = m_type_id_to_names.find(i);
     if (search != m_type_id_to_names.end()) {
       type_names->emplace_back(search->second);
@@ -2561,7 +2561,7 @@ std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
   switch (prim.oneof_value_case()) {
   case aapt::pb::Primitive::kFloatValue:
     data_type = android::Res_value::TYPE_FLOAT;
-    value = prim.float_value();
+    value = static_cast<uint32_t>(prim.float_value());
     break;
   case aapt::pb::Primitive::kDimensionValue:
     data_type = android::Res_value::TYPE_DIMENSION;
@@ -2610,7 +2610,8 @@ std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
 void process_style_entry_item(uint32_t attr_id,
                               const aapt::pb::Item& item,
                               StyleResource& style_entry) {
-  auto add_attribute = [&attr_id, &style_entry](uint8_t type, auto value) {
+  auto add_attribute = [&attr_id, &style_entry](uint8_t type,
+                                                const auto& value) {
     style_entry.attributes.insert({attr_id, StyleResource::Value(type, value)});
   };
 
@@ -2891,13 +2892,13 @@ void add_attribute_to_style(aapt::pb::Item* item,
     prim->set_color_rgb4_value(value_bytes);
     break;
   case android::Res_value::TYPE_INT_DEC:
-    prim->set_int_decimal_value(value_bytes);
+    prim->set_int_decimal_value(static_cast<int32_t>(value_bytes));
     break;
   case android::Res_value::TYPE_INT_HEX:
     prim->set_int_hexadecimal_value(value_bytes);
     break;
   case android::Res_value::TYPE_FLOAT:
-    prim->set_float_value(value_bytes);
+    prim->set_float_value(static_cast<float>(value_bytes));
     break;
   case android::Res_value::TYPE_DIMENSION:
     prim->set_dimension_value(value_bytes);
@@ -3140,7 +3141,7 @@ void ResourcesPbFile::add_styles(
       continue;
     }
 
-    int32_t resource_id = mod.resource_id;
+    uint32_t resource_id = mod.resource_id;
     TRACE(RES, 1, "Adding style for resource id: 0x%x", resource_id);
     id_to_mods[resource_id].push_back(mod);
   }

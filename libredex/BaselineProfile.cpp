@@ -66,8 +66,10 @@ get_baseline_profiles(
           continue;
         }
 
-        if (stat.appear_percent < interaction_config.threshold ||
-            stat.call_count < interaction_config.call_threshold) {
+        if (stat.appear_percent <
+                static_cast<double>(interaction_config.threshold) ||
+            stat.call_count <
+                static_cast<double>(interaction_config.call_threshold)) {
           continue;
         }
 

@@ -8,7 +8,6 @@
 #include "BalancedPartitioning.h"
 
 #include <algorithm>
-#include <cassert>
 #include <optional>
 
 #include "Debug.h"
@@ -44,8 +43,8 @@ void BalancedPartitioning::run() const {
   auto wq = workqueue_foreach<WorkItem>(
       [&](sparta::WorkerState<WorkItem>* worker_state,
           const WorkItem& work_item) {
-        uint32_t num_documents =
-            std::distance(work_item.document_begin, work_item.document_end);
+        uint32_t num_documents = static_cast<uint32_t>(
+            std::distance(work_item.document_begin, work_item.document_end));
         if (num_documents == 0) {
           return;
         }
@@ -77,8 +76,8 @@ void BalancedPartitioning::run() const {
                            });
 
         uint32_t mid_offset =
-            work_item.offset +
-            std::distance(work_item.document_begin, document_mid);
+            work_item.offset + static_cast<uint32_t>(std::distance(
+                                   work_item.document_begin, document_mid));
 
         // Two recursive tasks
         worker_state->push_task(
@@ -120,7 +119,8 @@ void BalancedPartitioning::run_iterations(
 uint32_t BalancedPartitioning::update_documents(
     const std::vector<Document*>::iterator& document_begin,
     const std::vector<Document*>::iterator& document_end) const {
-  uint32_t num_documents = std::distance(document_begin, document_end);
+  uint32_t num_documents =
+      static_cast<uint32_t>(std::distance(document_begin, document_end));
 
   // Get the maximum kmer adjacent to the given set of documents
   uint32_t max_kmer = 0;
@@ -212,7 +212,7 @@ uint32_t BalancedPartitioning::run_iteration(
   std::vector<GainPair> gains(num_documents);
   for (auto it = document_begin; it != document_end; it++) {
     Document* doc = *it;
-    uint32_t index = it - document_begin;
+    uint32_t index = static_cast<uint32_t>(it - document_begin);
     bool from_left_to_right = (doc->bucket == left_bucket);
     double gain = move_gain(doc, from_left_to_right, signatures);
     gains[index] = std::make_pair(gain, index);
@@ -234,8 +234,9 @@ uint32_t BalancedPartitioning::run_iteration(
 
   // Exchange: change buckets and update queryVertex signatures
   uint32_t num_moved_data_vertices = 0;
-  uint32_t min_size = std::min(std::distance(left_gains, left_end),
-                               std::distance(right_gains, right_end));
+  uint32_t min_size =
+      static_cast<uint32_t>(std::min(std::distance(left_gains, left_end),
+                                     std::distance(right_gains, right_end)));
   for (uint32_t I = 0; I < min_size; I++) {
     if (left_gains[I].first + right_gains[I].first <= 0.0) {
       break;
@@ -304,7 +305,8 @@ void BalancedPartitioning::split(
     const std::vector<Document*>::iterator& document_begin,
     const std::vector<Document*>::iterator& document_end,
     uint32_t start_bucket) const {
-  uint32_t num_documents = std::distance(document_begin, document_end);
+  uint32_t num_documents =
+      static_cast<uint32_t>(std::distance(document_begin, document_end));
   always_assert_log(num_documents > 0, "Incorrect number of documents %u",
                     num_documents);
 
