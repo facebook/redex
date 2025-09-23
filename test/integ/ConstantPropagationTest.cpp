@@ -59,7 +59,7 @@ bool has_conditional_branch(DexMethod* method) {
 class ConstantPropagationTest : public RedexIntegrationTest {};
 
 TEST_F(ConstantPropagationTest, constantPropagation) {
-  std::cout << "Loaded classes: " << classes->size() << std::endl;
+  std::cout << "Loaded classes: " << classes->size() << "\n";
 
   size_t before_methods = 0;
   TRACE(CONSTP, 1, "Code before:");

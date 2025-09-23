@@ -23,7 +23,7 @@ class InterDexTest : public RedexIntegrationTest {
   void define_dex_removal_test(
       const std::vector<std::string>& betmap,
       bool minimize_cross_dex_refs_explore_alternatives = false) {
-    std::cout << "Loaded classes: " << classes->size() << std::endl;
+    std::cout << "Loaded classes: " << classes->size() << "\n";
 
     auto tmp_dir = redex::make_tmp_dir("redex_interdex_test_%%%%%%%%");
 
@@ -66,7 +66,7 @@ class InterDexTest : public RedexIntegrationTest {
     betamap_out.open(path.c_str(), std::ios::out);
     for (const std::string& cls : betamap) {
       betamap_out << cls;
-      betamap_out << std::endl;
+      betamap_out << "\n";
     }
     return path;
   }
@@ -90,9 +90,9 @@ TEST_F(InterDexTest, dex_removal) {
     );
 
   for (size_t i = 0 ; i < stores[0].get_dexen().size(); i++) {
-    std::cout << "in dex " << i << std::endl;
+    std::cout << "in dex " << i << "\n";
     for (size_t j = 0; j < stores[0].get_dexen()[i].size(); j++) {
-      std::cout << "  " << stores[0].get_dexen()[i][j]->get_name()->str() << std::endl;
+      std::cout << "  " << stores[0].get_dexen()[i][j]->get_name()->str() << "\n";
     }
   }
 

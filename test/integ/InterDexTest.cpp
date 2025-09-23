@@ -33,7 +33,7 @@ class InterDexTest : public RedexIntegrationTest {
       }
     }
 
-    std::cout << "Loaded classes: " << classes->size() << std::endl;
+    std::cout << "Loaded classes: " << classes->size() << "\n";
 
     auto tmp_dir = redex::make_tmp_dir("redex_interdex_test_%%%%%%%%");
 
@@ -98,7 +98,7 @@ class InterDexTest : public RedexIntegrationTest {
     betamap_out.open(path.c_str(), std::ios::out);
     for (const std::string& cls : betamap) {
       betamap_out << cls;
-      betamap_out << std::endl;
+      betamap_out << "\n";
     }
     return path;
   }

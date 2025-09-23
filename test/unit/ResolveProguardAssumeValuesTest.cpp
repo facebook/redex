@@ -49,12 +49,12 @@ void test(const std::string& code_str, const std::string& expected_str) {
   code_ptr->build_cfg();
   ResolveProguardAssumeValuesPass::process_for_code(code_ptr->cfg());
   auto& cfg = code_ptr->cfg();
-  std::cerr << "after:" << std::endl << SHOW(cfg);
+  std::cerr << "after:" << "\n" << SHOW(cfg);
 
   auto* expected_ptr = expected.get();
   expected_ptr->build_cfg();
   auto& expected_cfg = expected_ptr->cfg();
-  std::cerr << "expected:" << std::endl << SHOW(expected_cfg);
+  std::cerr << "expected:" << "\n" << SHOW(expected_cfg);
   code_ptr->clear_cfg();
   expected_ptr->clear_cfg();
 

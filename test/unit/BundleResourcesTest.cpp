@@ -60,9 +60,9 @@ void dump_string_reference_set(
   for (const auto& c : UnorderedIterable(layout_classes)) {
     if (c.is_reference()) {
       std::cerr << "LAYOUT CLASS REF: 0x" << std::hex << c.ref << std::dec
-                << std::endl;
+                << "\n";
     } else {
-      std::cerr << "LAYOUT CLASS: " << c.str << std::endl;
+      std::cerr << "LAYOUT CLASS: " << c.str << "\n";
     }
   }
 }

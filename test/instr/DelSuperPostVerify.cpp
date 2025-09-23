@@ -21,7 +21,7 @@
  * following a redex transformation.
  */
 TEST_F(PostVerify, DelSuper) {
-  std::cout << "Loaded classes: " << classes.size() << std::endl;
+  std::cout << "Loaded classes: " << classes.size() << "\n";
 
   // Should have C1 and 2 C2 still
 

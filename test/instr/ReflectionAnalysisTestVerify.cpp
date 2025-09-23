@@ -23,7 +23,7 @@ std::string to_string(const ReflectionSites& reflection_sites) {
         out << ";";
       }
     }
-    out << "}" << std::endl;
+    out << "}" << "\n";
   }
 
   return out.str();

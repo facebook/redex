@@ -105,7 +105,7 @@ class IRFixpointIterator final
 class MonotonicFixpointTest : public RedexIntegrationTest {};
 
 TEST_F(MonotonicFixpointTest, livenessAnalysis) {
-  std::cout << "Loaded classes: " << classes->size() << std::endl;
+  std::cout << "Loaded classes: " << classes->size() << "\n";
 
   for (const auto& cls : *classes) {
     if (std::strcmp(cls->get_name()->c_str(),
@@ -116,8 +116,8 @@ TEST_F(MonotonicFixpointTest, livenessAnalysis) {
           code->build_cfg();
           cfg::ControlFlowGraph& cfg = code->cfg();
           cfg.calculate_exit_block();
-          std::cout << "CFG of function_1:" << std::endl
-                    << SHOW(cfg) << std::endl;
+          std::cout << "CFG of function_1:" << "\n"
+                    << SHOW(cfg) << "\n";
           ASSERT_EQ(cfg.exit_block()->id(), 2);
           IRFixpointIterator fixpoint_iterator(cfg);
           fixpoint_iterator.run(LivenessDomain());

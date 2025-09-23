@@ -48,7 +48,7 @@ instructions in the optimized method.
 class PropagationTest1 : public RedexIntegrationTest {};
 
 TEST_F(PropagationTest1, localDCE1) {
-  std::cout << "Loaded classes: " << classes->size() << std::endl;
+  std::cout << "Loaded classes: " << classes->size() << "\n";
 
   TRACE(DCE, 2, "Code before:");
   for (const auto& cls : *classes) {

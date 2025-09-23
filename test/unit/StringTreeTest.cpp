@@ -142,7 +142,7 @@ TEST_F(StringTreeTest, testSubtreeOfDifferentSize) {
 
   std::string hex = toHexRepresentation(encoded);
 
-  std::cout << hex << std::endl;
+  std::cout << hex << "\n";
 
   EXPECT_EQ(
       hex,
@@ -484,7 +484,7 @@ TEST_F(StringTreeTest, testSSS) {
 
   std::string hex = toHexRepresentation(encoded);
 
-  std::cout << hex << std::endl;
+  std::cout << hex << "\n";
   EXPECT_EQ(hex, "7373730801");
 }
 
@@ -492,7 +492,7 @@ TEST_F(StringTreeTest, testMapWithValues) {
   auto encoded = StringTreeMap<int16_t>::encode_string_tree_map(
       {{"aaa", 900}, {"aba", 1584}});
   std::string hex = toHexRepresentation(encoded);
-  std::cerr << hex << std::endl;
+  std::cerr << hex << "\n";
   EXPECT_EQ(hex, "61100361620e01016102444e016102705801");
 }
 
@@ -516,7 +516,7 @@ TEST_F(StringTreeTest, testFullMapWithValues) {
        {"a8a", 20984}, {"a9a", 21893}, {"a_a", 22801}, {"a$a", 543},
        {"a.a", 11089}});
   std::string hex = toHexRepresentation(encoded);
-  std::cerr << hex << std::endl;
+  std::cerr << hex << "\n";
   EXPECT_EQ(
       hex,
       "611042242e0c03013012030131180301321e030133240301342a03013530030136360301"
@@ -543,7 +543,7 @@ TEST_F(StringTreeTest, testTheLimits) {
   auto encoded = StringTreeMap<int32_t>::encode_string_tree_map(
       {{"xyz", 2147483647}, {"xx", -2147483648}, {"y", -1}, {"yy", 0}});
   std::string hex = toHexRepresentation(encoded);
-  std::cerr << hex << std::endl;
+  std::cerr << hex << "\n";
   EXPECT_EQ(hex,
             "100378792001011003787917010106404040404042017a067f7f7f7f7f4101067f"
             "7f7f7f7f4302790801");
@@ -558,7 +558,7 @@ TEST_F(StringTreeTest, testVariableLengthPayloads) {
                                                       {"xyz", 4096},
                                                       {"xyzz", 4097}});
   std::string hex = toHexRepresentation(encoded);
-  std::cerr << hex << std::endl;
+  std::cerr << hex << "\n";
   EXPECT_EQ(hex,
             "1003617816010162017f026302404102640241410179027f7f027a03404041027a"
             "0341404101");

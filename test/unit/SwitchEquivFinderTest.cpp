@@ -45,7 +45,7 @@ void print_extra_loads(const SwitchEquivFinder::ExtraLoads& extra_loads) {
       std::cerr << "v" << r << " ~ " << SHOW(i);
       first = false;
     }
-    std::cerr << "} " << std::endl;
+    std::cerr << "} " << "\n";
   }
 }
 
@@ -877,7 +877,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_different_regs) {
 
   code->build_cfg();
   auto& cfg = code->cfg();
-  std::cerr << SHOW(cfg) << std::endl;
+  std::cerr << SHOW(cfg) << "\n";
   SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
   EXPECT_TRUE(finder.success());
   EXPECT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS));
@@ -1105,7 +1105,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_dup_keys_extra_load) {
 
   code->build_cfg();
   auto& cfg = code->cfg();
-  std::cerr << SHOW(cfg) << std::endl;
+  std::cerr << SHOW(cfg) << "\n";
   SwitchEquivFinder finder(&cfg,
                            get_first_branch(cfg),
                            1,
@@ -1218,7 +1218,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_move_duplicate) {
   // Make sure that the use of v2 from leaf blocks is handled properly.
   auto instructions_copied =
       SwitchEquivEditor::copy_extra_loads_to_leaf_blocks(finder, &cfg);
-  std::cerr << "Post edit " << SHOW(cfg) << std::endl;
+  std::cerr << "Post edit " << SHOW(cfg) << "\n";
   EXPECT_GT(instructions_copied, 0);
   // Ensure the blocks that use v2 get a new def that makes sense. More than
   // these two blocks will get the new instructions (as it is overly broad) but

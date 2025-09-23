@@ -56,7 +56,7 @@ TEST_F(IRCodeTest, infinite_loop) {
   )");
 
   auto* code = method->get_code();
-  std::cout << show(code) << std::endl;
+  std::cout << show(code) << "\n";
 
   instruction_lowering::lower(method);
   auto dex_code = code->sync(method);
@@ -82,7 +82,7 @@ TEST_F(IRCodeTest, useless_goto) {
   )");
 
   auto* code = method->get_code();
-  std::cout << show(code) << std::endl;
+  std::cout << show(code) << "\n";
 
   instruction_lowering::lower(method);
   auto dex_code = code->sync(method);
@@ -108,7 +108,7 @@ TEST_F(IRCodeTest, useless_if) {
   )");
 
   auto* code = method->get_code();
-  std::cout << show(code) << std::endl;
+  std::cout << show(code) << "\n";
 
   instruction_lowering::lower(method);
   auto dex_code = code->sync(method);

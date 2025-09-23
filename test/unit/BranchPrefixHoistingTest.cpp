@@ -38,7 +38,7 @@ void test(const std::string& code_str,
   auto* code = method->get_code();
   code->build_cfg();
   auto& cfg = code->cfg();
-  std::cerr << "before:" << std::endl << SHOW(cfg);
+  std::cerr << "before:" << "\n" << SHOW(cfg);
 
   Lazy<const constant_uses::ConstantUses> constant_uses([&] {
     return std::make_unique<const constant_uses::ConstantUses>(
@@ -48,13 +48,13 @@ void test(const std::string& code_str,
   int actual_insns_hoisted = branch_prefix_hoisting_impl::process_cfg(
       cfg, constant_uses, can_allocate_regs);
 
-  std::cerr << "after:" << std::endl << SHOW(code->cfg());
+  std::cerr << "after:" << "\n" << SHOW(code->cfg());
   EXPECT_EQ(expected_instructions_hoisted, actual_insns_hoisted);
   auto expected = assembler::ircode_from_string(expected_str);
   auto* expected_ptr = expected.get();
   expected_ptr->build_cfg();
   auto& expected_cfg = expected_ptr->cfg();
-  std::cerr << "expected:" << std::endl << SHOW(expected_cfg);
+  std::cerr << "expected:" << "\n" << SHOW(expected_cfg);
   if (full_validation) {
     code->clear_cfg();
     expected_ptr->clear_cfg();

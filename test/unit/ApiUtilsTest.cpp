@@ -62,7 +62,7 @@ void add_usage(Scope* scope, DexMethodRef* mref) {
       )
     )
   )";
-  std::cout << code_str << std::endl;
+  std::cout << code_str << "\n";
   auto* method = assembler::method_from_string(code_str);
   new_cls->add_method(method);
 }

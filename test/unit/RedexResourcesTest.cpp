@@ -83,13 +83,13 @@ TEST(RedexResources, Mutf8Conversion) {
       EXPECT_EQ(static_cast<uint8_t>(c), expected_bytes[i++]);
       if (be_noisy) {
         std::cout << "GOT CHAR: 0x" << std::hex << to_uint(c) << std::dec
-                  << std::endl;
+                  << "\n";
       }
     }
     if (be_noisy) {
       std::cout << "Original:  " << std::string(input.begin(), input.end())
-                << std::endl
-                << "Converted: " << converted << std::endl;
+                << "\n"
+                << "Converted: " << converted << "\n";
     }
   };
 
