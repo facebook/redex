@@ -10,12 +10,9 @@
 #include <array>
 #include <cstdint>
 #include <fstream>
-#include <iostream>
 #include <utility>
 #include <vector>
 #include <zlib.h>
-
-#include "Macros.h"
 
 #if IS_WINDOWS
 #include <Winsock2.h>
@@ -170,14 +167,16 @@ cp_entry parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end) {
                            RedexError::INVALID_JAVA,
                            "INVOKEDYN constant unsupported");
     UNREACHABLE();
+  default:
+    always_assert_type_log(false, RedexError::INVALID_JAVA,
+                           "Unrecognized constant pool tag 0x%x", cpe.tag);
+    UNREACHABLE();
   }
-  always_assert_type_log(false, RedexError::INVALID_JAVA,
-                         "Unrecognized constant pool tag 0x%x", cpe.tag);
-  UNREACHABLE();
 }
 
 void skip_attributes(uint8_t*& buffer, uint8_t* buffer_end) {
-  /* Todo:
+  /*
+   * TODO:
    * Consider adding some verification so we don't walk
    * off the end in the case of a corrupt class file.
    */
@@ -305,6 +304,8 @@ DexType* parse_type(std::string_view& buf) {
     return sSimpleTypeZ;
   case 'V':
     return sSimpleTypeV;
+  default:
+    break; // Fall through to main switch below
   }
 
   buf = buf_start;
@@ -350,10 +351,11 @@ DexType* parse_type(std::string_view& buf) {
 
     return ret;
   }
+  default:
+    always_assert_type_log(false, RedexError::INVALID_JAVA,
+                           "Invalid parse-type '%c'", desc);
+    UNREACHABLE();
   }
-  always_assert_type_log(false, RedexError::INVALID_JAVA,
-                         "Invalid parse-type '%c'", desc);
-  UNREACHABLE();
 }
 
 DexTypeList* extract_arguments(std::string_view& buf) {
@@ -611,7 +613,7 @@ bool load_class_file(const std::string& filename, Scope* classes) {
   size_t size = buf->pubseekoff(0, ifs.end, ifs.in);
   buf->pubseekpos(0, ifs.in);
   auto buffer = std::make_unique<char[]>(size);
-  buf->sgetn(buffer.get(), size);
+  buf->sgetn(buffer.get(), static_cast<std::streamsize>(size));
   const auto* jar_location = DexLocation::make_location("", filename);
   return parse_class(
       reinterpret_cast<uint8_t*>(buffer.get()), size, classes,
@@ -696,7 +698,7 @@ struct jar_entry {
 };
 
 pk_cdir_end find_central_directory(const uint8_t* mapping, ssize_t size) {
-  ssize_t soffset = (size - sizeof(pk_cdir_end));
+  ssize_t soffset = size - static_cast<ssize_t>(sizeof(pk_cdir_end));
   always_assert_type_log(soffset >= 0, RedexError::INVALID_JAVA,
                          "Zip too small");
   ssize_t eoffset = std::max((ssize_t)0, soffset - kMaxCDirEndSearch);
@@ -721,7 +723,7 @@ void validate_pce(pk_cdir_end& pce, ssize_t size) {
                              pce.cd_entries == pce.cd_disk_entries,
                          RedexError::INVALID_JAVA,
                          "Disk spanning is not supported");
-  ssize_t data_size = size - sizeof(pk_cdir_end);
+  ssize_t data_size = size - static_cast<ssize_t>(sizeof(pk_cdir_end));
   always_assert_type_log(pce.cd_disk_offset + pce.cd_size <= data_size,
                          RedexError::INVALID_JAVA,
                          "Central directory overflow, invalid pce structure");
@@ -921,8 +923,8 @@ void process_jar_impl(const uint8_t* mapping,
                       size_t size,
                       const Fn& fn,
                       const InitFn& init_fn) {
-  auto pce = find_central_directory(mapping, size);
-  validate_pce(pce, size);
+  auto pce = find_central_directory(mapping, static_cast<ssize_t>(size));
+  validate_pce(pce, static_cast<ssize_t>(size));
   auto files = get_jar_entries(mapping, size, pce);
   process_jar_entries(files, mapping, size, fn, init_fn);
 }
