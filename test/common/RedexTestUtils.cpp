@@ -17,7 +17,7 @@ bool are_files_equal(const std::string& p1, const std::string& p2) {
   always_assert_log(!f2.fail(), "Failed to read path %s", p2.c_str());
   if (f1.tellg() != f2.tellg()) {
     std::cerr << "File length mismatch. " << f1.tellg() << " != " << f2.tellg()
-              << std::endl;
+              << "\n";
     return false;
   }
   f1.seekg(0, std::ifstream::beg);

@@ -342,7 +342,7 @@ TEST(Dex038Test, ReadWriteDex038) {
   stores.emplace_back(std::move(root_store));
 
   //  DexClasses classes = load_classes_from_dex(dexfile, true, 38);
-  std::cout << "Loaded classes: " << classes.size() << std::endl;
+  std::cout << "Loaded classes: " << classes.size() << "\n";
 
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
   UnorderedMap<DexMethod*, uint64_t> method_to_id;

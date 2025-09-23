@@ -57,7 +57,7 @@ void dump_field_values(const resources::FieldArrayValues& field_values) {
       std::cerr << "0x" << std::hex << i << std::dec;
       first = false;
     }
-    std::cerr << " }" << std::endl;
+    std::cerr << " }" << "\n";
   }
 }
 
@@ -245,7 +245,7 @@ TEST_F(RClassTest, analyzeStaticInitializers) {
 }
 
 TEST_F(RClassTest, remapResourceClassArrays) {
-  std::cout << "BASELINE R <clinit>:" << std::endl;
+  std::cout << "BASELINE R <clinit>:" << "\n";
   auto* clinit = base_r_class->get_clinit();
   auto* code = clinit->get_code();
   dump_code_verbose(code);
@@ -253,7 +253,8 @@ TEST_F(RClassTest, remapResourceClassArrays) {
   // A typical styleable inner class, which has different conventions and is
   // indexed directly into. Deletion should instead insert zeros.
   DexClass* styleable_class = get_r_class(*classes, styleable_r_class_name);
-  std::cout << std::endl << "BASELINE R$styleable <clinit>:" << std::endl;
+  std::cout << "\n"
+            << "BASELINE R$styleable <clinit>:" << "\n";
   auto* styleable_clinit = styleable_class->get_clinit();
   auto* styleable_code = styleable_clinit->get_code();
   dump_code_verbose(styleable_code);
@@ -262,7 +263,8 @@ TEST_F(RClassTest, remapResourceClassArrays) {
   // opcode sequences for filling arrays statically.
   DexClass* another_styleable_r_class =
       get_r_class(*classes, another_styleable_r_class_name);
-  std::cout << std::endl << "BASELINE R$styleable2 <clinit>:" << std::endl;
+  std::cout << "\n"
+            << "BASELINE R$styleable2 <clinit>:" << "\n";
   auto* another_clinit = another_styleable_r_class->get_clinit();
   auto* another_code = another_clinit->get_code();
   dump_code_verbose(another_code);
@@ -331,7 +333,8 @@ TEST_F(RClassTest, remapResourceClassArrays) {
             << "Did not find expected number of new array opcodes!";
       };
 
-  std::cout << std::endl << "MODIFIED R <clinit>:" << std::endl;
+  std::cout << "\n"
+            << "MODIFIED R <clinit>:" << "\n";
   dump_code_verbose(code);
 
   auto no_further_checks = [](const std::string& field_name,
@@ -343,13 +346,15 @@ TEST_F(RClassTest, remapResourceClassArrays) {
                          {"Lcom/redextest/R;.six:[I", 9}},
                         no_further_checks);
 
-  std::cout << std::endl << "MODIFIED R$styleable <clinit>:" << std::endl;
+  std::cout << "\n"
+            << "MODIFIED R$styleable <clinit>:" << "\n";
   dump_code_verbose(styleable_code);
   verify_expected_sizes(styleable_code->cfg(),
                         {{"Lcom/redextest/R$styleable;.four:[I", 2}},
                         no_further_checks);
 
-  std::cout << std::endl << "MODIFIED R$styleable2 <clinit>:" << std::endl;
+  std::cout << "\n"
+            << "MODIFIED R$styleable2 <clinit>:" << "\n";
   dump_code_verbose(another_code);
   auto callback = [](const std::string& /*field_name*/,
                      const std::vector<uint32_t>& payload) {
@@ -429,7 +434,7 @@ TEST_F(RClassTest, bePermissiveWhenInInstrumentationMode) {
   std::vector<DexStore> temp_stores{temp_store};
 
   auto* code = instrumented_r_cls->get_clinit()->get_code();
-  std::cout << "Instrumented R clinit:" << std::endl;
+  std::cout << "Instrumented R clinit:" << "\n";
   dump_code_verbose(code);
 
   std::map<uint32_t, uint32_t> old_to_remapped_ids{{0x7f080000, 0x7f090000},
@@ -438,7 +443,7 @@ TEST_F(RClassTest, bePermissiveWhenInInstrumentationMode) {
   resources::RClassWriter r_class_writer(instrumented_global_resources_config);
   r_class_writer.remap_resource_class_arrays(temp_stores, old_to_remapped_ids);
 
-  std::cout << "Remapped Instrumented R clinit:" << std::endl;
+  std::cout << "Remapped Instrumented R clinit:" << "\n";
   dump_code_verbose(code);
   size_t found_count{0};
   for (const auto& mie : cfg::InstructionIterable(code->cfg())) {

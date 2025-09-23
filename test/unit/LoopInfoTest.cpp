@@ -55,14 +55,11 @@ TEST_F(LoopInfoTest, visit_depth_first) {
   for (const auto& comp : wto) {
     loop_impl::visit_depth_first<std::string>(
         comp, [&s](const std::string& v) { s << v; });
-    s << std::endl;
+    s << "\n";
   }
 
   std::ostringstream check;
-  check << 1 << std::endl
-        << 2 << std::endl
-        << 34567 << std::endl
-        << 8 << std::endl;
+  check << 1 << "\n" << 2 << "\n" << 34567 << "\n" << 8 << "\n";
   EXPECT_EQ(s.str(), check.str());
 }
 

@@ -59,7 +59,7 @@ class ReflectionAnalysisTest : public RedexTest {
           out << ";";
         }
       }
-      out << "}" << std::endl;
+      out << "}" << "\n";
     }
 
     return out.str();
@@ -233,7 +233,7 @@ TEST_F(ReflectionAnalysisTest, instanceOf) {
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   std::cout << "reflection sites: "
-            << to_string(analysis.get_reflection_sites()) << std::endl;
+            << to_string(analysis.get_reflection_sites()) << "\n";
   // clang-format off
   EXPECT_EQ(
       to_string(analysis.get_reflection_sites()),

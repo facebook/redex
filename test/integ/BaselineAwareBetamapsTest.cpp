@@ -65,7 +65,7 @@ class BaselineAwareBetamapsTest : public RedexIntegrationTest {
     betamap_out.open(path.c_str(), std::ios::out);
     for (const std::string& cls : betamap) {
       betamap_out << cls;
-      betamap_out << std::endl;
+      betamap_out << "\n";
     }
     return path;
   }

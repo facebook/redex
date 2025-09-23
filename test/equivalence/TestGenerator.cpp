@@ -57,7 +57,7 @@ void EquivalenceTest::generate_all(DexClass* cls) {
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
-    std::cerr << "Usage: ./TestGenerator classes.dex" << std::endl;
+    std::cerr << "Usage: ./TestGenerator classes.dex" << "\n";
   }
   auto* dex = argv[1];
 
@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
     // Saving before printing is a conventional way of using errno.
     int errsv = errno;
     std::cerr << "error: cannot mkdir meta in outdir. errno = " << errsv
-              << std::endl;
+              << "\n";
     exit(EXIT_FAILURE);
   }
 

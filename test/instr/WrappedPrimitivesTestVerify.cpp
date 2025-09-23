@@ -17,7 +17,7 @@ void dump_method(DexMethod* method) {
   method->balloon();
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
-  std::cout << show(method) << " " << show(cfg) << std::endl;
+  std::cout << show(method) << " " << show(cfg) << "\n";
 }
 } // namespace
 
@@ -82,7 +82,7 @@ TEST_F(PostVerify, VerifyTransform) {
       (move-result-pseudo-object v0)
       (goto :L0)
     ))");
-    std::cerr << multiple_defs_str << std::endl;
+    std::cerr << multiple_defs_str << "\n";
     EXPECT_EQ(multiple_defs_str, assembler::to_string(expected.get()));
   }
 

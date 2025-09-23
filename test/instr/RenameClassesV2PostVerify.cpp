@@ -35,6 +35,6 @@ void verify_layout(const std::string& filename) {
 }
 
 TEST_F(PostVerify, RenameClassesV2) {
-  std::cout << "Loaded classes: " << classes.size() << std::endl;
+  std::cout << "Loaded classes: " << classes.size() << "\n";
   verify_layout(resources["res/layout/simple_layout.xml"]);
 }

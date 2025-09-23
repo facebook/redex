@@ -32,7 +32,7 @@ TEST_F(IRAssemblerTest, disassembleCode) {
 )");
   EXPECT_EQ(code->get_registers_size(), 2);
 
-  std::cout << show(code) << std::endl;
+  std::cout << show(code) << "\n";
   auto s = assembler::to_string(code.get());
   EXPECT_EQ(s,
             "((const v0 0) "

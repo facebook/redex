@@ -107,7 +107,7 @@ void write_to_file(const std::string& output_path,
 // with all our shenanigans going on :) ;)
 std::vector<std::string> aapt_dump_helper(const std::string& arsc_path) {
   std::string arsc_dumper_bin(get_env("arsc_dumper_bin"));
-  std::cerr << "Using aapt at: " << get_env("aapt_path") << std::endl;
+  std::cerr << "Using aapt at: " << get_env("aapt_path") << "\n";
 
   auto tmp_dir = redex::make_tmp_dir("aapt_dump_helper%%%%%%%%");
   auto out = tmp_dir.path + "/out.txt";
@@ -123,10 +123,10 @@ std::vector<std::string> aapt_dump_helper(const std::string& arsc_path) {
     if (fs) {
       std::string line;
       while (std::getline(fs, line)) {
-        std::cerr << line << std::endl;
+        std::cerr << line << "\n";
       }
     } else {
-      std::cerr << "Could not read dump helper errfile" << std::endl;
+      std::cerr << "Could not read dump helper errfile" << "\n";
     }
     throw std::runtime_error("aapt dump failed with exit code " +
                              std::to_string(exit_code));
@@ -139,7 +139,7 @@ std::vector<std::string> aapt_dump_helper(const std::string& arsc_path) {
       data.emplace_back(line);
     }
   } else {
-    std::cerr << "Could not read dump helper outfile" << std::endl;
+    std::cerr << "Could not read dump helper outfile" << "\n";
   }
   return data;
 }
@@ -174,43 +174,43 @@ struct ParsedAaptOutput {
   std::vector<std::string> lines;
 
   void dump() {
-    std::cerr << std::endl << "Dump command output:" << std::endl;
+    std::cerr << "\n"
+              << "Dump command output:" << "\n";
     for (const auto& line : lines) {
-      std::cerr << line << std::endl;
+      std::cerr << line << "\n";
     }
-    std::cerr << std::endl
-              << "Dumping parsed package: " << package_name << std::endl
-              << "IDs (" << id_fully_qualified_names.size()
-              << "):" << std::endl;
+    std::cerr << "\n"
+              << "Dumping parsed package: " << package_name << "\n"
+              << "IDs (" << id_fully_qualified_names.size() << "):" << "\n";
     for (auto& pair : id_fully_qualified_names) {
       std::cerr << "  0x" << std::hex << pair.first << std::dec << " ("
-                << pair.second << ")" << std::endl;
+                << pair.second << ")" << "\n";
     }
-    std::cerr << "Flags (" << flags.size() << "):" << std::endl;
+    std::cerr << "Flags (" << flags.size() << "):" << "\n";
     for (auto& pair : flags) {
       std::cerr << "  0x" << std::hex << pair.first << " -> 0x" << pair.second
-                << std::dec << std::endl;
+                << std::dec << "\n";
     }
-    std::cerr << "Simple entries:" << std::endl;
+    std::cerr << "Simple entries:" << "\n";
     for (auto& config_pair : config_to_simple_values) {
-      std::cerr << "  config: " << config_pair.first << std::endl;
+      std::cerr << "  config: " << config_pair.first << "\n";
       for (auto& entry_pair : config_pair.second) {
         auto& e = entry_pair.second;
         std::cerr << "    0x" << std::hex << entry_pair.first << " (" << e.name
                   << "): " << "t=0x" << unsigned(e.value.dataType) << " d=0x"
-                  << e.value.data << std::dec << std::endl;
+                  << e.value.data << std::dec << "\n";
       }
     }
-    std::cerr << "Complex entries:" << std::endl;
+    std::cerr << "Complex entries:" << "\n";
     for (auto& config_pair : config_to_complex_values) {
-      std::cerr << "  config: " << config_pair.first << std::endl;
+      std::cerr << "  config: " << config_pair.first << "\n";
       for (auto& entry_pair : config_pair.second) {
         auto& e = entry_pair.second;
         std::cerr << "    0x" << std::hex << entry_pair.first << " (" << e.name
-                  << "): Parent = 0x" << e.parent_id << std::dec << std::endl;
+                  << "): Parent = 0x" << e.parent_id << std::dec << "\n";
         for (auto& v : e.values) {
           std::cerr << "      key = 0x" << std::hex << v.key << " (" << v.kind
-                    << "): 0x" << v.data << std::dec << std::endl;
+                    << "): 0x" << v.data << std::dec << "\n";
         }
       }
     }
@@ -251,7 +251,7 @@ struct ParsedAaptOutput {
 
   uint32_t get_identifier(const std::string& fully_qualified) {
     if (fully_qualified_name_to_id.count(fully_qualified) == 0) {
-      std::cerr << "No ID found for " << fully_qualified << std::endl;
+      std::cerr << "No ID found for " << fully_qualified << "\n";
       return 0;
     }
     return fully_qualified_name_to_id.at(fully_qualified);
@@ -359,7 +359,7 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
       auto fully_qualified = what[2].str() + ":" + what[3].str();
       uint32_t type = std::stoul(what[4], nullptr, 16);
       if (type > android::Res_value::TYPE_LAST_INT) {
-        std::cerr << "Bad type: " << line << std::endl;
+        std::cerr << "Bad type: " << line << "\n";
         continue;
       }
       uint32_t data = std::stoul(what[5], nullptr, 16);
@@ -958,7 +958,7 @@ void build_arsc_file_and_validate(
 
   auto tmp_dir = redex::make_tmp_dir("ResTable_BuildNewTable%%%%%%%%");
   auto dest_file_path = tmp_dir.path + "/resources.arsc";
-  std::cerr << "Writing new table to " << dest_file_path.c_str() << std::endl;
+  std::cerr << "Writing new table to " << dest_file_path.c_str() << "\n";
   write_to_file(dest_file_path, out);
   callback(tmp_dir.path, dest_file_path);
 }

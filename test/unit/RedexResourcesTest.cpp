@@ -87,13 +87,13 @@ TEST(RedexResources, Mutf8Conversion) {
       EXPECT_EQ(static_cast<uint8_t>(c), expected_bytes[i++]);
       if (be_noisy) {
         std::cout << "GOT CHAR: 0x" << std::hex << to_uint(c) << std::dec
-                  << std::endl;
+                  << "\n";
       }
     }
     if (be_noisy) {
       std::cout << "Original:  " << std::string(input.begin(), input.end())
-                << std::endl
-                << "Converted: " << converted << std::endl;
+                << "\n"
+                << "Converted: " << converted << "\n";
     }
   };
 
@@ -330,10 +330,10 @@ TEST(RedexResources, StyleInfoGetRoots) {
 
     auto roots = style_info.get_roots();
 
-    std::cout << "Test 4 roots size: " << roots.size() << std::endl;
+    std::cout << "Test 4 roots size: " << roots.size() << "\n";
     for (auto v : UnorderedIterable(roots)) {
       std::cout << "Root vertex: " << v
-                << " with ID: " << style_info.graph[v].id << std::endl;
+                << " with ID: " << style_info.graph[v].id << "\n";
     }
 
     EXPECT_EQ(roots.size(), 2);

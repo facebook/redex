@@ -929,7 +929,7 @@ TEST_F(ControlFlowTest, empty_first_block) {
   cfg.recompute_registers_size();
 
   for (const auto& mie : cfg::ConstInstructionIterable(code->cfg())) {
-    std::cout << show(mie) << std::endl;
+    std::cout << show(mie) << "\n";
   }
 }
 

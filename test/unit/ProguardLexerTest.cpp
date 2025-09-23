@@ -162,7 +162,7 @@ TEST(ProguardLexerTest, assortment) {
   std::vector<Token> tokens = lex(s);
   EXPECT_EQ(tokens.size(), expected.size());
   for (auto i = 0; i < expected.size(); i++) {
-    std::cerr << "Performing test " << i << std::endl;
+    std::cerr << "Performing test " << i << "\n";
     EXPECT_EQ(expected[i].first, tokens[i].line);
     EXPECT_EQ(expected[i].second, tokens[i].type) << tokens[i].show();
   }

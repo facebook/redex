@@ -183,7 +183,7 @@ TEST_F(ClassVCheckerTest, testFinalMethodInSubclassFails) {
   ClassChecker checker;
   checker.run(scope);
   EXPECT_TRUE(checker.fail());
-  std::cerr << checker.print_failed_classes().str() << std::endl;
+  std::cerr << checker.print_failed_classes().str() << "\n";
 }
 
 TEST_F(ClassVCheckerTest, testProtectedFinalMethodInSubclassFails) {
@@ -196,7 +196,7 @@ TEST_F(ClassVCheckerTest, testProtectedFinalMethodInSubclassFails) {
   ClassChecker checker;
   checker.run(scope);
   EXPECT_TRUE(checker.fail());
-  std::cerr << checker.print_failed_classes().str() << std::endl;
+  std::cerr << checker.print_failed_classes().str() << "\n";
 }
 
 TEST_F(ClassVCheckerTest, testDefaultAccessFinalMethodInSubclassSamePkgFails) {
@@ -209,7 +209,7 @@ TEST_F(ClassVCheckerTest, testDefaultAccessFinalMethodInSubclassSamePkgFails) {
   ClassChecker checker;
   checker.run(scope);
   EXPECT_TRUE(checker.fail());
-  std::cerr << checker.print_failed_classes().str() << std::endl;
+  std::cerr << checker.print_failed_classes().str() << "\n";
 }
 
 TEST_F(ClassVCheckerTest, testDefaultAccessFinalMethodInSubclassOtherPkgPass) {
