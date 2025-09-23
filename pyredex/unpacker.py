@@ -504,13 +504,16 @@ class SubdirDexMode(BaseDexMode):
         )
         self._secondary_dir = secondary_dir
         self._store_name = store_name
+        self._raw_secondary_dexs: typing.Set[str] = set()
 
     def detect(self, extracted_apk_dir: str) -> bool:
         secondary_dex_dir = join(extracted_apk_dir, self._secondary_dir)
-        # pyre-fixme[7]: Expected `bool` but got `int`.
-        return isdir(secondary_dex_dir) and len(
-            list(abs_glob(secondary_dex_dir, "*.dex.jar"))
-        )
+        if not isdir(secondary_dex_dir):
+            return False
+
+        has_dex_jars = any(abs_glob(secondary_dex_dir, "*.dex.jar"))
+        has_raw_dexs = any(abs_glob(secondary_dex_dir, "*.dex"))
+        return has_dex_jars or has_raw_dexs
 
     def unpackage(
         self, extracted_apk_dir: str, dex_dir: str, unpackage_metadata: bool = False
@@ -521,6 +524,12 @@ class SubdirDexMode(BaseDexMode):
             extract_dex_from_jar(jar, dexpath)
             os.remove(jar + ".meta")
             os.remove(jar)
+
+        raw_dexes = abs_glob(join(extracted_apk_dir, self._secondary_dir), "*.dex")
+        for raw_dex in raw_dexes:
+            self._raw_secondary_dexs.add(basename(raw_dex))
+            shutil.move(raw_dex, dex_dir)
+
         metadata_txt = join(extracted_apk_dir, self._secondary_dir, "metadata.txt")
         if unpackage_metadata:
             shutil.copy(metadata_txt, dex_dir)
@@ -552,24 +561,38 @@ class SubdirDexMode(BaseDexMode):
             dependencies=self._dependencies,
             locator_store_id=locator_store_id,
         )
+
+        # Make sure we don't have any unexpected dex files starting with 'self._dex_prefix'
+        assert not any(abs_glob(dex_dir, f"{self._dex_prefix}?*.dex"))
+
+        # Special handling of "empty.dex"
+        empty_dex = join(dex_dir, "empty.dex")
+        if isfile(empty_dex):
+            shutil.move(empty_dex, join(extracted_apk_dir, self._secondary_dir))
+
         for i in itertools.count(1):
-            oldpath = join(dex_dir, self._dex_prefix + "%d.dex" % (i + 1))
-            dexpath = join(dex_dir, self._store_name + "-%d.dex" % i)
-            if not isfile(oldpath):
+            dex_file = self._store_name + f"-{i}.dex"
+            dexpath = join(dex_dir, dex_file)
+            if not isfile(dexpath):
                 break
-            shutil.move(oldpath, dexpath)
 
-            jarpath = dexpath + ".jar"
-            create_dex_jar(jarpath, dexpath, reset_timestamps=reset_timestamps)
-            metadata.add_dex(jarpath, BaseDexMode.get_canary(self, i))
+            if dex_file in self._raw_secondary_dexs:
+                metadata.add_dex(dexpath, BaseDexMode.get_canary(self, i))
+                shutil.move(dexpath, join(extracted_apk_dir, self._secondary_dir))
+            else:
+                jarpath = dexpath + ".jar"
+                create_dex_jar(jarpath, dexpath, reset_timestamps=reset_timestamps)
+                metadata.add_dex(jarpath, BaseDexMode.get_canary(self, i))
 
-            dex_meta_base = jarpath + ".meta"
-            dex_meta_path = join(dex_dir, dex_meta_base)
-            with open(dex_meta_path, "w") as dex_meta:
-                dex_meta.write("jar:%d dex:%d\n" % (getsize(jarpath), getsize(dexpath)))
+                dex_meta_base = jarpath + ".meta"
+                dex_meta_path = join(dex_dir, dex_meta_base)
+                with open(dex_meta_path, "w") as dex_meta:
+                    dex_meta.write(
+                        "jar:%d dex:%d\n" % (getsize(jarpath), getsize(dexpath))
+                    )
 
-            shutil.move(dex_meta_path, join(extracted_apk_dir, self._secondary_dir))
-            shutil.move(jarpath, join(extracted_apk_dir, self._secondary_dir))
+                shutil.move(dex_meta_path, join(extracted_apk_dir, self._secondary_dir))
+                shutil.move(jarpath, join(extracted_apk_dir, self._secondary_dir))
         jar_meta_path = join(dex_dir, "metadata.txt")
         metadata.write(jar_meta_path)
         shutil.move(jar_meta_path, join(extracted_apk_dir, self._secondary_dir))
