@@ -673,6 +673,12 @@ bool AnnoKill::kill_annotations() {
                                  if (m_keep.count(type) != 0u) {
                                    return false;
                                  }
+                                 // If only_force_kill is set, we do not remove
+                                 // other anno classes.
+                                 if (m_only_force_kill &&
+                                     m_force_kill.count(type) == 0u) {
+                                   return false;
+                                 }
                                  TRACE(ANNO, 3, "Removing annotation type: %s",
                                        SHOW(type));
                                  classes_removed = true;
