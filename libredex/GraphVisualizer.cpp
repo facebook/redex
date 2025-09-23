@@ -127,14 +127,14 @@ class TaggedBase {
 
   void start_tag(const char* name) {
     indent();
-    m_output << "begin_" << name << std::endl;
+    m_output << "begin_" << name << '\n';
     m_indent++;
   }
 
   void end_tag(const char* name) {
     m_indent--;
     indent();
-    m_output << "end_" << name << std::endl;
+    m_output << "end_" << name << '\n';
   }
 
   struct TagRAII {
@@ -183,7 +183,7 @@ class TaggedBase {
         bool is_quoted = quoted == QUOTED;
         *trg << (is_quoted ? "\"" : "") << tmp << (is_quoted ? "\"" : "");
       }
-      *trg << std::endl;
+      *trg << '\n';
     }
 
     // See copy constructor. Assignment operators for lint.
@@ -237,8 +237,10 @@ class TaggedBase {
 // specialized implementations.
 template <typename T>
 class CodeVisualizer : public TaggedBase {
- public:
+ private:
   explicit CodeVisualizer(std::ostream& output) : TaggedBase(output) {}
+
+ public:
   virtual ~CodeVisualizer() {}
 
   static void dex_string(std::ostream& os, const DexString* s) {
@@ -336,7 +338,7 @@ class CodeVisualizer : public TaggedBase {
     m_output << " i" << insn_id << " ";
   }
 
-  void mie_suffix() { m_output << " <|@" << std::endl; }
+  void mie_suffix() { m_output << " <|@" << '\n'; }
 
   template <typename C, typename... Other>
   void mie_list(C* b, Other... other) {
@@ -373,6 +375,7 @@ class CodeVisualizer : public TaggedBase {
       hir(block);
     }
   }
+  friend T;
 };
 
 using namespace boost::adaptors;
@@ -394,7 +397,7 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
     for (auto b : blocks) {
       m_output << " \"B" << b->id() << "\" ";
     }
-    m_output << std::endl;
+    m_output << '\n';
   }
 
   void predecessors(Block* block) {
@@ -511,14 +514,14 @@ class IRCodeVisualizer : public CodeVisualizer<IRCodeVisualizer> {
   void empty_blocklist(const std::string& name) {
     indent();
     m_output << name;
-    m_output << std::endl;
+    m_output << '\n';
   }
 
   void blocklist(const std::string& name, size_t succ_id) {
     indent();
     m_output << name;
     m_output << " \"B" << succ_id << "\" ";
-    m_output << std::endl;
+    m_output << '\n';
   }
 
   void predecessors(IRCode*) { empty_blocklist("predecessors"); }

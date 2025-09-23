@@ -116,7 +116,7 @@ struct MethodProfileOrderingConfig : public Configurable {
            "log that explains the optimizations it has performed.";
   }
 
-  UnorderedSet<std::string> method_sorting_allowlisted_substrings{};
+  UnorderedSet<std::string> method_sorting_allowlisted_substrings;
   float min_appear_percent{10.0f};
   float second_min_appear_percent{10.0f};
   bool skip_similarity_reordering{false};
