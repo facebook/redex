@@ -7,7 +7,6 @@
 
 #include "FrameworkApi.h"
 
-#include <boost/algorithm/string.hpp>
 #include <fstream>
 #include <istream>
 #include <sstream>
@@ -98,7 +97,6 @@ void parse_framework_description(
     UnorderedMap<const DexType*, FrameworkAPI>* framework_classes) {
   std::string framework_cls_str;
   std::string super_cls_str;
-  std::string class_name;
   uint32_t num_methods;
   uint32_t num_fields;
   uint32_t access_flags;
