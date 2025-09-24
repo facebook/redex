@@ -131,7 +131,7 @@ class DexInstruction : public Gatherable {
    */
   DexInstruction* set_opcode(DexOpcode);
   DexInstruction* set_dest(uint16_t vreg);
-  DexInstruction* set_src(int i, uint16_t vreg);
+  DexInstruction* set_src(size_t i, uint16_t vreg);
   DexInstruction* set_srcs(const std::vector<uint16_t>& vregs);
   DexInstruction* set_arg_word_count(uint16_t count);
   DexInstruction* set_range_base(uint16_t base);
@@ -378,7 +378,7 @@ inline uint32_t fill_array_data_payload_element_count(
   always_assert_log(op_data->opcode() == FOPCODE_FILLED_ARRAY,
                     "DexOpcodeData is not an array payload");
   always_assert(op_data->data_size() >= 3);
-  auto* size_ptr = (uint32_t*)(op_data->data() + 1);
+  const auto* size_ptr = reinterpret_cast<const uint32_t*>(op_data->data() + 1);
   return *size_ptr;
 }
 
@@ -392,15 +392,15 @@ std::unique_ptr<DexOpcodeData> encode_fill_array_data_payload(
   int width = sizeof(IntType);
   size_t total_copy_size = vec.size() * width;
   // one "code unit" is a 2 byte word
-  int total_used_code_units =
-      (total_copy_size + 1 /* for rounding up int division */) / 2 + 4;
+  int total_used_code_units = static_cast<int>(
+      (total_copy_size + 1 /* for rounding up int division */) / 2 + 4);
   std::vector<uint16_t> data(total_used_code_units);
   uint16_t* ptr = data.data();
   ptr[0] = FOPCODE_FILLED_ARRAY; // header
   ptr[1] = width;
-  *(uint32_t*)(ptr + 2) = vec.size();
-  uint8_t* data_bytes = (uint8_t*)(ptr + 4);
-  memcpy(data_bytes, (void*)vec.data(), total_copy_size);
+  *reinterpret_cast<uint32_t*>(ptr + 2) = vec.size();
+  uint8_t* data_bytes = reinterpret_cast<uint8_t*>(ptr + 4);
+  memcpy(data_bytes, vec.data(), total_copy_size);
   return std::make_unique<DexOpcodeData>(data);
 }
 
@@ -430,11 +430,11 @@ std::vector<IntType> get_fill_array_data_payload(const DexOpcodeData* op_data) {
   int width = sizeof(IntType);
   const auto* data = op_data->data();
   always_assert_log(*data++ == width, "Incorrect width");
-  auto count = *((uint32_t*)data);
+  auto count = *reinterpret_cast<const uint32_t*>(data);
   data += 2;
   std::vector<IntType> vec;
   vec.reserve(count);
-  auto* element_data = (uint8_t*)data;
+  const auto* element_data = reinterpret_cast<const uint8_t*>(data);
   for (size_t i = 0; i < count; i++) {
     IntType result = 0;
     memcpy(&result, element_data, width);
