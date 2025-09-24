@@ -8,7 +8,6 @@
 #include "ReduceArrayLiterals.h"
 
 #include <cinttypes>
-#include <vector>
 
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/HashedSetAbstractDomain.h>
@@ -20,11 +19,10 @@
 #include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
+#include "DexStructure.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "InterDexPass.h"
 #include "PassManager.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "Walkers.h"
 
@@ -112,8 +110,10 @@ TrackedValue make_other() {
 TrackedValue make_literal(const IRInstruction* instr) {
   always_assert(instr->opcode() == OPCODE_CONST);
   always_assert(instr->has_literal());
+  auto lit = instr->get_literal();
+  always_assert(lit <= 2147483647 && lit >= -2147483648);
   return (TrackedValue){
-      TrackedValueKind::Literal, {(int32_t)instr->get_literal()}, nullptr};
+      TrackedValueKind::Literal, {static_cast<int32_t>(lit)}, nullptr};
 }
 
 TrackedValue make_array(int32_t length, const IRInstruction* instr) {
@@ -287,7 +287,8 @@ class Analyzer final
         TRACE(RAL, 4, "[RAL]     with length %" PRId64, length_literal);
         always_assert(length_literal >= 0 && length_literal <= 2147483647);
         current_state->set(RESULT_REGISTER,
-                           TrackedDomain(make_array(length_literal, insn)));
+                           TrackedDomain(make_array(
+                               static_cast<int32_t>(length_literal), insn)));
       }
       break;
     }
@@ -631,10 +632,12 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
     const_insn->set_literal(0)->set_dest(m_local_temp_regs[0]);
     new_insns.push_back(const_insn);
     const_insn = new IRInstruction(OPCODE_CONST);
-    const_insn->set_literal(chunk_start)->set_dest(m_local_temp_regs[1]);
+    const_insn->set_literal(static_cast<int64_t>(chunk_start))
+        ->set_dest(m_local_temp_regs[1]);
     new_insns.push_back(const_insn);
     const_insn = new IRInstruction(OPCODE_CONST);
-    const_insn->set_literal(chunk_size)->set_dest(m_local_temp_regs[2]);
+    const_insn->set_literal(static_cast<int64_t>(chunk_size))
+        ->set_dest(m_local_temp_regs[2]);
     new_insns.push_back(const_insn);
     IRInstruction* invoke_static_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
     auto* arraycopy_method = DexMethod::get_method(
