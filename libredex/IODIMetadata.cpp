@@ -11,7 +11,6 @@
 
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "Show.h"
 #include "Trace.h"
 
 namespace {
@@ -53,16 +52,15 @@ std::string IODIMetadata::get_iodi_name(const DexMethod* m) {
   return prefix;
 }
 
-const std::string& IODIMetadata::get_layered_name(const std::string& base_name,
-                                                  size_t layer,
-                                                  std::string& storage) {
+std::string IODIMetadata::get_layered_name(std::string base_name,
+                                           size_t layer) {
   if (layer == 0) {
     return base_name;
   }
-  storage = base_name;
+  std::string& storage = base_name;
   storage += "@";
   storage += std::to_string(layer);
-  return storage;
+  return std::move(storage);
 }
 
 void IODIMetadata::mark_methods(DexStoresVector& scope, bool iodi_layers) {
@@ -178,7 +176,7 @@ void IODIMetadata::write(
       .count = 0,
       .zero = 0,
   };
-  ofs.write((const char*)&header, sizeof(Header));
+  ofs.write(reinterpret_cast<const char*>(&header), sizeof(Header));
 
   struct __attribute__((__packed__)) EntryHeader {
     uint16_t klen;
@@ -196,19 +194,18 @@ void IODIMetadata::write(
     redex_assert(layer < DexOutput::kIODILayerBound);
 
     auto name = get_iodi_name(method);
-    std::string tmp;
-    const std::string& layered_name = get_layered_name(name, layer, tmp);
+    const std::string& layered_name = get_layered_name(name, layer);
 
     always_assert(layered_name.size() < UINT16_MAX);
     entry_hdr.klen = layered_name.size();
     entry_hdr.method_id = method_to_id.at(const_cast<DexMethod*>(method));
-    ofs.write((const char*)&entry_hdr, sizeof(EntryHeader));
+    ofs.write(reinterpret_cast<const char*>(&entry_hdr), sizeof(EntryHeader));
     ofs << layered_name;
   }
   // Rewind and write the header now that we know single/dup counts
   ofs.seekp(0);
   header.count = count;
-  ofs.write((const char*)&header, sizeof(Header));
+  ofs.write(reinterpret_cast<const char*>(&header), sizeof(Header));
   TRACE(IODI, 1,
         "[IODI] Emitted %u entries, %zu in layers (maximum layer %zu).", count,
         layered_count, max_layer + 1);

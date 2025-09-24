@@ -79,9 +79,7 @@ class IODIMetadata {
   void write(std::ostream& ofs, const MethodToIdMap& method_to_id);
 
   static std::string get_iodi_name(const DexMethod* m);
-  static const std::string& get_layered_name(const std::string& base_name,
-                                             size_t layer,
-                                             std::string& storage);
+  static std::string get_layered_name(std::string base_name, size_t layer);
 
   const DexMethod* get_canonical_method(const DexMethod* m) const {
     auto it = m_canonical.find(m);

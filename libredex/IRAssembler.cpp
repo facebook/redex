@@ -7,7 +7,6 @@
 
 #include "IRAssembler.h"
 
-#include <boost/functional/hash.hpp>
 #include <boost/optional/optional.hpp>
 #include <cstdint>
 #include <cstdio>
@@ -58,13 +57,14 @@ std::string reg_to_str(reg_t reg) { return "v" + std::to_string(reg); }
 
 s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   auto op = insn->opcode();
-  auto opcode_str = opcode_to_string_table.at(op);
+  const auto& opcode_str = opcode_to_string_table.at(op);
   std::vector<s_expr> s_exprs{s_expr(opcode_str)};
   if (insn->has_dest()) {
     s_exprs.emplace_back(reg_to_str(insn->dest()));
   }
   if (opcode::has_variable_srcs_size(op)) {
     std::vector<s_expr> src_s_exprs;
+    src_s_exprs.reserve(insn->srcs_size());
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       src_s_exprs.emplace_back(reg_to_str(insn->src(i)));
     }
@@ -185,19 +185,22 @@ std::vector<s_expr> to_s_exprs(
         // Shane thought he could hide from us... hah! a quick linear search
         // got him
         positions_emitted->push_back(pos);
-        return {_to_s_expr(pos, positions_emitted->size() - 1, i)};
+        return {_to_s_expr(pos,
+                           static_cast<uint32_t>(positions_emitted->size() - 1),
+                           static_cast<uint32_t>(i))};
       }
     }
     auto result = to_s_exprs(snay, positions_emitted);
     always_assert(!positions_emitted->empty());
-    auto parent_idx = positions_emitted->size() - 1;
+    auto parent_idx = static_cast<uint32_t>(positions_emitted->size() - 1);
     positions_emitted->push_back(pos);
-    auto pos_idx = positions_emitted->size() - 1;
+    auto pos_idx = static_cast<uint32_t>(positions_emitted->size() - 1);
     result.push_back(_to_s_expr(pos, pos_idx, parent_idx));
     return result;
   } else {
     positions_emitted->push_back(pos);
-    auto idx_str = get_dbg_label(positions_emitted->size() - 1);
+    auto idx_str =
+        get_dbg_label(static_cast<uint32_t>(positions_emitted->size() - 1));
     return {s_expr({
         s_expr(".pos:" + idx_str),
         s_expr(show(pos->method)),
@@ -308,15 +311,12 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   }
   case opcode::Ref::CallSite: {
     not_reached_log("callsites currently unsupported in s-exprs");
-    break;
   }
   case opcode::Ref::MethodHandle: {
     not_reached_log("methodhandles currently unsupported in s-exprs");
-    break;
   }
   case opcode::Ref::Proto: {
     not_reached_log("proto currently unsupported in s-exprs");
-    break;
   }
   }
 

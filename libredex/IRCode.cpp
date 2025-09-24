@@ -398,12 +398,14 @@ void translate_dex_to_ir(
 
     insn->set_srcs_size(dex_insn->srcs_size());
     for (size_t i = 0; i < dex_insn->srcs_size(); ++i) {
-      insn->set_src(i, dex_insn->src(i));
+      insn->set_src(static_cast<src_index_t>(i),
+                    dex_insn->src(static_cast<int>(i)));
     }
     if (dex_opcode::has_range(dex_op)) {
       insn->set_srcs_size(dex_insn->range_size());
       for (size_t i = 0; i < dex_insn->range_size(); ++i) {
-        insn->set_src(i, dex_insn->range_base() + i);
+        insn->set_src(static_cast<src_index_t>(i),
+                      static_cast<reg_t>(dex_insn->range_base() + i));
       }
     }
     if (dex_insn->has_string()) {
@@ -621,7 +623,7 @@ IRCode::IRCode(DexMethod* method) : m_ir_list(new IRList()) {
   auto* dc = method->get_dex_code();
   generate_load_params(method, dc->get_registers_size() - dc->get_ins_size(),
                        this);
-  balloon(const_cast<DexMethod*>(method), m_ir_list.get());
+  balloon(method, m_ir_list.get());
   m_dbg = dc->release_debug_item();
 }
 
@@ -630,7 +632,7 @@ std::unique_ptr<IRCode> IRCode::for_method(DexMethod* method) {
   auto* dc = method->get_dex_code();
   generate_load_params(method, dc->get_registers_size() - dc->get_ins_size(),
                        code.get());
-  balloon(const_cast<DexMethod*>(method), code->m_ir_list.get());
+  balloon(method, code->m_ir_list.get());
   code->m_dbg = dc->release_debug_item();
   return code;
 }
@@ -897,8 +899,8 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
       ;
     }
   } catch (const std::exception& e) {
-    std::cerr << "Failed to sync " << SHOW(method) << std::endl
-              << SHOW(this) << std::endl;
+    std::cerr << "Failed to sync " << SHOW(method) << '\n'
+              << SHOW(this) << '\n';
     print_stack_trace(std::cerr, e);
     throw;
   }
@@ -964,7 +966,8 @@ bool IRCode::try_sync(DexCode* code) {
         always_assert_log(branch_addr != entry_to_addr.end(),
                           "%s refers to nonexistent branch instruction",
                           SHOW(*mentry));
-        int32_t branch_offset = entry_to_addr.at(mentry) - branch_addr->second;
+        int32_t branch_offset = static_cast<int32_t>(entry_to_addr.at(mentry) -
+                                                     branch_addr->second);
         needs_resync |= !encode_offset(m_ir_list.get(), mentry, branch_offset);
       }
     }
@@ -991,8 +994,8 @@ bool IRCode::try_sync(DexCode* code) {
         ++entry_to_addr.at(&mie);
         ++num_align_nops;
       }
-      mie.target->src->dex_insn->set_offset(entry_to_addr.at(&mie) -
-                                            entry_to_addr.at(mie.target->src));
+      mie.target->src->dex_insn->set_offset(static_cast<int32_t>(
+          entry_to_addr.at(&mie) - entry_to_addr.at(mie.target->src)));
       continue;
     }
     if (mie.type != MFLOW_DEX_OPCODE) {
@@ -1038,10 +1041,10 @@ bool IRCode::try_sync(DexCode* code) {
 
       sparse_payload[0] = FOPCODE_SPARSE_SWITCH;
 
-      sparse_payload[1] = (uint16_t)targets.size();
-      uint32_t* spkeys = (uint32_t*)&sparse_payload[2];
-      uint32_t* sptargets =
-          (uint32_t*)&sparse_payload[2 + (targets.size() * 2)];
+      sparse_payload[1] = static_cast<uint16_t>(targets.size());
+      uint32_t* spkeys = reinterpret_cast<uint32_t*>(&sparse_payload[2]);
+      uint32_t* sptargets = reinterpret_cast<uint32_t*>(
+          &sparse_payload[2 + (targets.size() * 2)]);
 
       for (BranchTarget* target : targets) {
         *spkeys++ = target->case_key;
@@ -1053,7 +1056,8 @@ bool IRCode::try_sync(DexCode* code) {
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
-      multi_insn->set_offset(addr - entry_to_addr.at(multiopcode));
+      multi_insn->set_offset(
+          static_cast<int32_t>(addr - entry_to_addr.at(multiopcode)));
       multi_insn->set_opcode(DOPCODE_SPARSE_SWITCH);
       addr += count;
     } else {
@@ -1068,7 +1072,8 @@ bool IRCode::try_sync(DexCode* code) {
       auto packed_payload = std::make_unique<uint16_t[]>(count);
       packed_payload[0] = FOPCODE_PACKED_SWITCH;
       packed_payload[1] = size;
-      uint32_t* psdata = (uint32_t*)&packed_payload[2];
+      uint32_t* psdata = reinterpret_cast<uint32_t*>(&packed_payload[2]);
+      // NOLINTNEXTLINE
       int32_t next_key = *psdata++ = targets.front()->case_key;
       redex_assert(std::as_const(targets).front()->case_key <=
                    std::as_const(targets).back()->case_key);
@@ -1093,7 +1098,8 @@ bool IRCode::try_sync(DexCode* code) {
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
-      multi_insn->set_offset(addr - entry_to_addr.at(multiopcode));
+      multi_insn->set_offset(
+          static_cast<int32_t>(addr - entry_to_addr.at(multiopcode)));
       multi_insn->set_opcode(DOPCODE_PACKED_SWITCH);
       addr += count;
     }

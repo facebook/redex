@@ -297,7 +297,6 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
   switch (opcode::ref(insn->opcode())) {
   case opcode::Ref::None:
   case opcode::Ref::Data:
-    return new DexInstruction(op);
   case opcode::Ref::Literal:
     return new DexInstruction(op);
   case opcode::Ref::String:
@@ -410,7 +409,7 @@ void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
     dex_insn->set_dest(ir_list::move_result_pseudo_of(it)->dest());
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    dex_insn->set_src(i, insn->src(i));
+    dex_insn->set_src(static_cast<int>(i), insn->src(i));
   }
   if (insn->has_literal()) {
     dex_insn->set_literal(insn->get_literal());
@@ -493,9 +492,9 @@ Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
             method_is_hot = [&]() {
               for (const auto& p :
                    conf->get_method_profiles().all_interactions()) {
-                auto it = p.second.find(method);
-                if (it != p.second.end() &&
-                    it->second.appear_percent >
+                auto profile_it = p.second.find(method);
+                if (profile_it != p.second.end() &&
+                    profile_it->second.appear_percent >
                         kSparseSwitchHotMethodAppearThreshold) {
                   return true;
                 }
@@ -566,7 +565,7 @@ uint32_t CaseKeysExtent::estimate_switch_payload_code_units() const {
   } else {
     // packed-switch-payload
     const uint64_t packed_switch_size = get_packed_switch_size();
-    return 4 + packed_switch_size * 2;
+    return 4 + static_cast<uint32_t>(packed_switch_size * 2);
   }
 }
 
