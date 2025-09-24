@@ -892,6 +892,8 @@ class DexMethodRef {
   static void delete_method(DexMethodRef* method);
 
   dex_member_refs::MethodDescriptorTokens get_descriptor_tokens() const;
+
+  static bool is_valid_name(std::string_view name);
 };
 
 class DexMethod : public DexMethodRef {

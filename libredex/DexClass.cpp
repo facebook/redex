@@ -2539,3 +2539,21 @@ dex_member_refs::MethodDescriptorTokens DexMethodRef::get_descriptor_tokens()
 }
 
 DexClass* type_class(const DexType* t) { return g_redex->type_class(t); }
+
+bool DexMethodRef::is_valid_name(std::string_view name) {
+  if (name.empty()) {
+    return false;
+  }
+  if (name[0] == '<') {
+    return name == "<init>" || name == "<clinit>";
+  }
+  if (!is_valid_identifier(name)) {
+    return false;
+  }
+  for (auto c : name) {
+    if (c == '<' || c == '>') {
+      return false;
+    }
+  }
+  return true;
+}
