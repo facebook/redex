@@ -29,7 +29,7 @@ void parse(
       }
       auto* devs = dynamic_cast<DexEncodedValueString*>(strev.get());
       const std::string sigstr = devs->string()->str_copy();
-      always_assert(sigstr.length() > 0);
+      always_assert(!sigstr.empty());
       const auto* sigcstr = sigstr.c_str();
       // @Signature grammar is non-trivial[1], nevermind the fact that
       // Signatures are broken up into arbitrary arrays of strings concatenated

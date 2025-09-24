@@ -60,7 +60,7 @@ void AnalysisUsage::check_dependencies(const std::vector<Pass*>& passes) {
           has_error = true;
         } else {
           // make a line break between errors.
-          error << std::endl;
+          error << '\n';
         }
         error << required_pass << " is required by " << pass->name();
       }

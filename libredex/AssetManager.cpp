@@ -23,11 +23,11 @@ void create_directories_if_not_exists(std::string& dir) {
 
 void check_directory(std::string& dir) {
   if (dir.empty()) {
-    std::cerr << "error: directory not provided" << std::endl;
+    std::cerr << "error: directory not provided" << '\n';
     exit(EXIT_FAILURE);
   }
   if (!boost::filesystem::is_directory(dir.c_str())) {
-    std::cerr << "error: not a writable directory: " << dir << std::endl;
+    std::cerr << "error: not a writable directory: " << dir << '\n';
     exit(EXIT_FAILURE);
   }
 }

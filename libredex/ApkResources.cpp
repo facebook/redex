@@ -718,7 +718,7 @@ size_t write_serialized_data(const android::Vector<char>& vector,
   auto trunc_res = _chsize_s(fd, vec_size);
   _close(fd);
 #else
-  auto trunc_res = truncate(f.filename.c_str(), vec_size);
+  auto trunc_res = truncate(f.filename.c_str(), static_cast<off_t>(vec_size));
 #endif
   redex_assert(trunc_res == 0);
   return vec_size > 0 ? vec_size : f_size;
@@ -1429,8 +1429,7 @@ boost::optional<int32_t> ApkResources::get_min_sdk() {
   return read_xml_value<int32_t>(
       m_manifest, "uses-sdk", android::Res_value::TYPE_INT_DEC, "minSdkVersion",
       [](android::ResXMLTree& parser, size_t idx) {
-        return boost::optional<int32_t>(
-            static_cast<int32_t>(parser.getAttributeData(idx)));
+        return boost::optional<int32_t>(parser.getAttributeData(idx));
       });
 }
 

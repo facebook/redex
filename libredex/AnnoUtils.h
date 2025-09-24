@@ -38,19 +38,19 @@ const DexEncodedValue* parse_default_anno_value(
 
 bool parse_bool_anno_value(const DexMethod* method,
                            const DexType* target_anno,
-                           std::string name = "");
+                           const std::string& name = "");
 
 uint32_t parse_int_anno_value(const DexMethod* method,
                               const DexType* target_anno,
-                              std::string name = "");
+                              const std::string& name = "");
 
 uint32_t parse_int_anno_value(const DexClass* cls,
                               const DexType* target_anno,
-                              std::string name = "");
+                              const std::string& name = "");
 
 std::string parse_str_anno_value(const DexMethod* method,
                                  const DexType* target_anno,
-                                 std::string name = "");
+                                 const std::string& name = "");
 
 template <class DexMember>
 bool has_attribute(DexMember* member,
