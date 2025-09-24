@@ -107,19 +107,23 @@ class ConcurrentHashtable final {
       ConcurrentHashtable<Key, Value, Hash, KeyEqual>>;
 
   struct const_key_projection {
-    template <typename key_type2 = key_type,
-              typename = typename std::enable_if_t<
-                  std::is_same_v<key_type2, value_type>>>
-    const key_type2& operator()(const key_type2& key) {
-      return key; // NOLINT(bugprone-return-const-ref-from-parameter)
+    template <typename key_type2 = key_type>
+    typename std::enable_if_t<std::is_same_v<key_type2, value_type>,
+                              const value_type&>
+    operator()(const value_type& key) const {
+      return key;
     }
 
-    template <typename key_type2 = key_type,
-              typename = typename std::enable_if_t<
-                  !std::is_same_v<key_type2, value_type>>>
-    const key_type2& operator()(const value_type& key) {
+    template <typename key_type2 = key_type>
+    typename std::enable_if_t<!std::is_same_v<key_type2, value_type>,
+                              const key_type&>
+    operator()(const value_type& key) const {
       return key.first;
     }
+
+    // Prevents accidental use of the two methods above with rvalue, e.g.,
+    // value_type().
+    void operator()(value_type&&) const = delete;
   };
 
   /*
