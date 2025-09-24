@@ -14,6 +14,8 @@
 #include <vector>
 #include <zlib.h>
 
+#include "Macros.h"
+
 #if IS_WINDOWS
 #include <Winsock2.h>
 #pragma comment(lib, "ws2_32.lib")
