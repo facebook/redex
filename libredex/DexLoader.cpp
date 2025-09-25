@@ -38,17 +38,15 @@ std::pair<DexLoader::DataUPtr, size_t> mmap_data(const DexLocation* location) {
             location->get_file_name().c_str());
     exit(EXIT_FAILURE);
   }
-  auto* mapped_file_ptr = mapped_file.get();
+  auto* const mapped_file_ptr = mapped_file.release();
   auto data = DexLoader::DataUPtr(
-      reinterpret_cast<const uint8_t*>(mapped_file->const_data()),
+      reinterpret_cast<const uint8_t*>(mapped_file_ptr->const_data()),
       [mapped_file_ptr](auto*) {
         // Data is mapped, don't actually destroy
         // that, close the file and delete that.
         mapped_file_ptr->close();
         delete mapped_file_ptr;
       });
-  // At this point we can release mapped_file.
-  (void)mapped_file.release(); // NOLINT(bugprone-unused-return-value)
 
   return std::make_pair(std::move(data), mapped_file_ptr->size());
 }
