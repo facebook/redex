@@ -333,6 +333,10 @@ class ConcurrentHashtable final {
 
   /*
    * This operation is always thread-safe.
+   *
+   * The semantic is different from that of try_emplace in STL: args may still
+   * have been moved even if insertion does not take place. args is not moved
+   * only if insertion_result::incidentally_constructed_value() is not nullptr.
    */
   template <typename... Args>
   insertion_result try_emplace(const key_type& key, Args&&... args) {
@@ -376,6 +380,10 @@ class ConcurrentHashtable final {
 
   /*
    * This operation is always thread-safe.
+   *
+   * The semantic is different from that of try_emplace in STL: args may still
+   * have been moved even if insertion does not take place. args is not moved
+   * only if insertion_result::incidentally_constructed_value() is not nullptr.
    */
   template <typename... Args>
   insertion_result try_emplace(key_type&& key, Args&&... args) {
@@ -421,6 +429,10 @@ class ConcurrentHashtable final {
 
   /*
    * This operation is always thread-safe.
+   *
+   * The semantic is different from that of try_insert in STL: value may still
+   * have been moved even if insertion does not take place. value is not moved
+   * only if insertion_result::incidentally_constructed_value() is not nullptr.
    */
   insertion_result try_insert(const value_type& value) {
     Node* new_node = nullptr;
@@ -463,6 +475,10 @@ class ConcurrentHashtable final {
 
   /*
    * This operation is always thread-safe.
+   *
+   * The semantic is different from that of try_insert in STL: value may still
+   * have been moved even if insertion does not take place. value is not moved
+   * only if insertion_result::incidentally_constructed_value() is not nullptr.
    */
   insertion_result try_insert(value_type&& value) {
     Node* new_node = nullptr;
