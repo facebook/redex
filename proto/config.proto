@@ -123,6 +123,9 @@ message Optimizations {
 
   // Configuration for archiving the app.
   StoreArchive store_archive = 6;
+
+  // Whether to inject minSdkVersion into the manifests of split APKs.
+  bool inject_min_sdk = 7;
 }
 
 message ResourceOptimizations {
@@ -221,6 +224,8 @@ message UncompressDexFiles {
     UNSPECIFIED = 0;
     // S+ variant will be generated.
     SDK_31 = 1;
+    // T+ variant will be generated.
+    SDK_33 = 3;
     reserved 2;
   }
 }
