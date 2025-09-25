@@ -362,9 +362,8 @@ class ConcurrentHashtable final {
         continue;
       }
       if (!new_node) {
-        new_node = new Node(
-            ConstRefKeyArgsTag(), key,
-            std::forward<Args>(args)...); // NOLINT(bugprone-use-after-move)
+        new_node =
+            new Node(ConstRefKeyArgsTag(), key, std::forward<Args>(args)...);
       }
       new_node->prev = root;
       if (root_loc->compare_exchange_strong(root, new_node)) {
@@ -495,9 +494,8 @@ class ConcurrentHashtable final {
         continue;
       }
       if (new_node == nullptr) {
-        new_node = new Node(
-            RvalueRefValueTag(),
-            std::forward<value_type>(value)); // NOLINT(bugprone-use-after-move)
+        new_node =
+            new Node(RvalueRefValueTag(), std::forward<value_type>(value));
         value_ptr = &new_node->value;
       }
       new_node->prev = root;
