@@ -78,7 +78,7 @@ ACCESSFLAGS
 //
 
 const DexAccessFlags VISIBILITY_MASK =
-    static_cast<DexAccessFlags>(ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED);
+    (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED);
 
 inline bool is_package_private(DexAccessFlags flags) {
   return (flags & VISIBILITY_MASK) == 0;

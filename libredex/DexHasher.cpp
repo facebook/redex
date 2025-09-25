@@ -542,29 +542,27 @@ DexHash Impl::run() {
 
 void Impl::print(std::ostream& ofs) {
   hash_metadata();
-  ofs << "type " << show(m_cls) << " #" << hash_to_string(m_hash) << std::endl;
+  ofs << "type " << show(m_cls) << " #" << hash_to_string(m_hash) << '\n';
   for (auto* field : m_cls->get_ifields()) {
     m_hash = 0;
     hash(field);
-    ofs << "ifield " << show(field) << " #" << hash_to_string(m_hash)
-        << std::endl;
+    ofs << "ifield " << show(field) << " #" << hash_to_string(m_hash) << '\n';
   }
   for (auto* field : m_cls->get_sfields()) {
     m_hash = 0;
     hash(field);
-    ofs << "sfield " << show(field) << " #" << hash_to_string(m_hash)
-        << std::endl;
+    ofs << "sfield " << show(field) << " #" << hash_to_string(m_hash) << '\n';
   }
 
   for (auto* method : m_cls->get_dmethods()) {
     m_hash = 0;
     hash(method);
-    ofs << "dmethod " << show(method) << " " << get_hash() << std::endl;
+    ofs << "dmethod " << show(method) << " " << get_hash() << '\n';
   }
   for (auto* method : m_cls->get_vmethods()) {
     m_hash = 0;
     hash(method);
-    ofs << "vmethod " << show(method) << " " << get_hash() << std::endl;
+    ofs << "vmethod " << show(method) << " " << get_hash() << '\n';
   }
 }
 

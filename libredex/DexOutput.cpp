@@ -649,84 +649,86 @@ void DexOutput::insert_map_item(uint16_t maptype,
 
   switch (maptype) {
   case TYPE_HEADER_ITEM:
-    m_stats.header_item_count += size;
-    m_stats.header_item_bytes += bytes;
+    m_stats.header_item_count += static_cast<int>(size);
+    m_stats.header_item_bytes += static_cast<int>(bytes);
     break;
   case TYPE_STRING_ID_ITEM:
-    m_stats.string_id_count += size;
-    m_stats.string_id_bytes += bytes;
+    m_stats.string_id_count += static_cast<int>(size);
+    m_stats.string_id_bytes += static_cast<int>(bytes);
     break;
   case TYPE_TYPE_ID_ITEM:
-    m_stats.type_id_count += size;
-    m_stats.type_id_bytes += bytes;
+    m_stats.type_id_count += static_cast<int>(size);
+    m_stats.type_id_bytes += static_cast<int>(bytes);
     break;
   case TYPE_PROTO_ID_ITEM:
-    m_stats.proto_id_count += size;
-    m_stats.proto_id_bytes += bytes;
+    m_stats.proto_id_count += static_cast<int>(size);
+    m_stats.proto_id_bytes += static_cast<int>(bytes);
     break;
   case TYPE_FIELD_ID_ITEM:
-    m_stats.field_id_count += size;
-    m_stats.field_id_bytes += bytes;
+    m_stats.field_id_count += static_cast<int>(size);
+    m_stats.field_id_bytes += static_cast<int>(bytes);
     break;
   case TYPE_METHOD_ID_ITEM:
-    m_stats.method_id_count += size;
-    m_stats.method_id_bytes += bytes;
+    m_stats.method_id_count += static_cast<int>(size);
+    m_stats.method_id_bytes += static_cast<int>(bytes);
     break;
   case TYPE_CLASS_DEF_ITEM:
-    m_stats.class_def_count += size;
-    m_stats.class_def_bytes += bytes;
+    m_stats.class_def_count += static_cast<int>(size);
+    m_stats.class_def_bytes += static_cast<int>(bytes);
     break;
   case TYPE_CALL_SITE_ID_ITEM:
-    m_stats.call_site_id_count += size;
-    m_stats.call_site_id_bytes += bytes;
+    m_stats.call_site_id_count += static_cast<int>(size);
+    m_stats.call_site_id_bytes += static_cast<int>(bytes);
     break;
   case TYPE_METHOD_HANDLE_ITEM:
-    m_stats.method_handle_count += size;
-    m_stats.method_handle_bytes += bytes;
+    m_stats.method_handle_count += static_cast<int>(size);
+    m_stats.method_handle_bytes += static_cast<int>(bytes);
     break;
   case TYPE_MAP_LIST:
-    m_stats.map_list_count += size;
-    m_stats.map_list_bytes += bytes;
+    m_stats.map_list_count += static_cast<int>(size);
+    m_stats.map_list_bytes += static_cast<int>(bytes);
     break;
   case TYPE_TYPE_LIST:
-    m_stats.type_list_count += size;
-    m_stats.type_list_bytes += bytes;
+    m_stats.type_list_count += static_cast<int>(size);
+    m_stats.type_list_bytes += static_cast<int>(bytes);
     break;
   case TYPE_ANNOTATION_SET_REF_LIST:
-    m_stats.annotation_set_ref_list_count += size;
-    m_stats.annotation_set_ref_list_bytes += bytes;
+    m_stats.annotation_set_ref_list_count += static_cast<int>(size);
+    m_stats.annotation_set_ref_list_bytes += static_cast<int>(bytes);
     break;
   case TYPE_ANNOTATION_SET_ITEM:
-    m_stats.annotation_set_count += size;
-    m_stats.annotation_set_bytes += bytes;
+    m_stats.annotation_set_count += static_cast<int>(size);
+    m_stats.annotation_set_bytes += static_cast<int>(bytes);
     break;
   case TYPE_CLASS_DATA_ITEM:
-    m_stats.class_data_count += size;
-    m_stats.class_data_bytes += bytes;
+    m_stats.class_data_count += static_cast<int>(size);
+    m_stats.class_data_bytes += static_cast<int>(bytes);
     break;
   case TYPE_CODE_ITEM:
-    m_stats.code_count += size;
-    m_stats.code_bytes += bytes;
+    m_stats.code_count += static_cast<int>(size);
+    m_stats.code_bytes += static_cast<int>(bytes);
     break;
   case TYPE_STRING_DATA_ITEM:
-    m_stats.string_data_count += size;
-    m_stats.string_data_bytes += bytes;
+    m_stats.string_data_count += static_cast<int>(size);
+    m_stats.string_data_bytes += static_cast<int>(bytes);
     break;
   case TYPE_DEBUG_INFO_ITEM:
-    m_stats.debug_info_count += size;
-    m_stats.debug_info_bytes += bytes;
+    m_stats.debug_info_count += static_cast<int>(size);
+    m_stats.debug_info_bytes += static_cast<int>(bytes);
     break;
   case TYPE_ANNOTATION_ITEM:
-    m_stats.annotation_count += size;
-    m_stats.annotation_bytes += bytes;
+    m_stats.annotation_count += static_cast<int>(size);
+    m_stats.annotation_bytes += static_cast<int>(bytes);
     break;
   case TYPE_ENCODED_ARRAY_ITEM:
-    m_stats.encoded_array_count += size;
-    m_stats.encoded_array_bytes += bytes;
+    m_stats.encoded_array_count += static_cast<int>(size);
+    m_stats.encoded_array_bytes += static_cast<int>(bytes);
     break;
   case TYPE_ANNOTATIONS_DIR_ITEM:
-    m_stats.annotations_directory_count += size;
-    m_stats.annotations_directory_bytes += bytes;
+    m_stats.annotations_directory_count += static_cast<int>(size);
+    m_stats.annotations_directory_bytes += static_cast<int>(bytes);
+    break;
+  default:
     break;
   }
 }
@@ -871,9 +873,10 @@ void DexOutput::generate_class_data() {
     } else {
       cdefs[i].static_values_off = 0;
     }
-    m_stats.num_fields += clz->get_ifields().size() + clz->get_sfields().size();
-    m_stats.num_methods +=
-        clz->get_vmethods().size() + clz->get_dmethods().size();
+    m_stats.num_fields +=
+        static_cast<int>(clz->get_ifields().size() + clz->get_sfields().size());
+    m_stats.num_methods += static_cast<int>(clz->get_vmethods().size() +
+                                            clz->get_dmethods().size());
   }
 }
 
@@ -991,9 +994,10 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     auto insns_size =
         ((const dex_code_item*)(m_output.get() + m_offset))->insns_size;
     inc_offset(size);
-    m_stats.num_instructions += code->get_instructions().size();
-    m_stats.num_tries += code->get_tries().size();
-    m_stats.instruction_bytes += insns_size * 2;
+    m_stats.num_instructions +=
+        static_cast<int>(code->get_instructions().size());
+    m_stats.num_tries += static_cast<int>(code->get_tries().size());
+    m_stats.instruction_bytes += static_cast<int>(insns_size * 2);
   }
   /// insert_map_item returns early if m_code_item_emits is empty
   insert_map_item(TYPE_CODE_ITEM, (uint32_t)m_code_item_emits.size(), ci_start,
@@ -1278,7 +1282,7 @@ void DexOutput::generate_annotations() {
     DexAnnotationDirectory* ad = clz->get_annotation_directory();
     if (ad != nullptr) {
       lad.push_back(ad);
-      ad_to_classnum[ad] = i;
+      ad_to_classnum[ad] = static_cast<int>(i);
     }
   }
   std::sort(lad.begin(), lad.end(), annotation_cmp);
@@ -1431,7 +1435,7 @@ struct ParamSizeOrder {
       }
 
       param_size_done.set(size);
-      return size;
+      return static_cast<int32_t>(size);
     }
 
     while (map_cur != map_end) {
@@ -1443,7 +1447,7 @@ struct ParamSizeOrder {
       }
 
       param_size_done.set(size);
-      return size;
+      return static_cast<int32_t>(size);
     }
 
     return -1;
@@ -1491,7 +1495,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
     redex_assert(dbg_item);
     DexMethod* method = it->method;
     redex_assert(!iodi_metadata.is_huge(method));
-    uint32_t param_size = method->get_proto()->get_args()->size();
+    uint32_t param_size =
+        static_cast<uint32_t>(method->get_proto()->get_args()->size());
     // We still want to fill in pos_mapper and code_debug_map, so run the
     // usual code to emit debug info. We cache this and use it later if
     // it turns out we want to emit normal debug info for a given method.
@@ -1715,7 +1720,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       for (auto iter = begin; iter != end; iter++) {
         uint32_t next_size = std::max(bucket_size, iter->first.size);
         uint32_t next_count = bucket_count + 1;
-        size_t inflated_footprint = static_cast<size_t>(next_size * next_count);
+        size_t inflated_footprint = static_cast<size_t>(next_size) * next_count;
         if (inflated_footprint > MAX_BUCKET_INFLATED_SIZE) {
           always_assert(bucket_size != 0 && bucket_count != 0);
           append_bucket(bucket_size, bucket_count);
@@ -1839,8 +1844,9 @@ uint32_t emit_instruction_offset_debug_info_helper(
           //   "how much do we save by using a smaller iodi program after
           //    removing the cost of not using an iodi program for the larger
           //    methods"
-          int64_t win_delta =
-              (base_iodi_size - iodi_size) - total_normal_dbg_cost;
+          int64_t win_delta = (static_cast<int64_t>(base_iodi_size) -
+                               static_cast<int64_t>(iodi_size)) -
+                              static_cast<int64_t>(total_normal_dbg_cost);
           // If it's as good as the win then we use it because we want to make
           // as small debug programs as possible due to dex2oat
           if (win_delta >= max_win_delta) {
@@ -2079,7 +2085,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
       if (requires_iodi_programs) {
         // Here we sanity check to make sure that all IODI programs are at least
         // as long as they need to be.
-        uint32_t param_size = it->method->get_proto()->get_args()->size();
+        uint32_t param_size =
+            static_cast<uint32_t>(it->method->get_proto()->get_args()->size());
         auto size_offset_it = param_size_to_oset.find(param_size);
         always_assert_log(size_offset_it != size_offset_end,
                           "Expected to find param to offset: %s", SHOW(method));
@@ -2264,7 +2271,8 @@ void DexOutput::generate_debug_items() {
         continue;
       }
       dbgcount++;
-      size_t num_params = it.method->get_proto()->get_args()->size();
+      size_t num_params =
+          static_cast<size_t>(it.method->get_proto()->get_args()->size());
       inc_offset(emit_debug_info(&m_dodx, emit_positions, dbg, dc, dci,
                                  m_pos_mapper, m_output.get(), m_offset,
                                  num_params, m_code_debug_lines));
@@ -2275,7 +2283,7 @@ void DexOutput::generate_debug_items() {
                     m_offset - dbg_start);
   }
   m_stats.num_dbg_items += dbgcount;
-  m_stats.dbg_total_size += m_offset - dbg_start;
+  m_stats.dbg_total_size += static_cast<int>(m_offset - dbg_start);
 }
 
 void DexOutput::generate_map() {
@@ -2331,8 +2339,7 @@ static void fix_jumbos(DexClasses* classes, DexOutputIdx* dodx) {
 }
 
 void DexOutput::init_header_offsets(const std::string& dex_magic) {
-  always_assert_log(dex_magic.length() > 0,
-                    "Invalid dex magic from input APK\n");
+  always_assert_log(!dex_magic.empty(), "Invalid dex magic from input APK\n");
   memcpy(hdr.magic, dex_magic.c_str(), sizeof(hdr.magic));
   uint32_t total_hdr_size = sizeof(dex_header);
   insert_map_item(TYPE_HEADER_ITEM, 1, 0, total_hdr_size);
@@ -2951,7 +2958,7 @@ void DexOutput::write() {
   }
   ::write(fd, m_output.get(), m_offset);
   if (0 == fstat(fd, &st)) {
-    m_stats.num_bytes = st.st_size;
+    m_stats.num_bytes = static_cast<int>(st.st_size);
   }
   close(fd);
 
@@ -2993,36 +3000,45 @@ void DexOutput::metrics() {
   for (const auto& p : UnorderedIterable(m_dodx.string_to_idx())) {
     s_unique_references.strings.insert(p.first);
   }
-  m_stats.num_unique_strings = s_unique_references.strings.size();
-  s_unique_references.total_strings_size += m_dodx.string_to_idx().size();
+  m_stats.num_unique_strings =
+      static_cast<int>(s_unique_references.strings.size());
+  s_unique_references.total_strings_size +=
+      static_cast<int>(m_dodx.string_to_idx().size());
   m_stats.strings_total_size = s_unique_references.total_strings_size;
 
   for (const auto& p : UnorderedIterable(m_dodx.type_to_idx())) {
     s_unique_references.types.insert(p.first);
   }
-  m_stats.num_unique_types = s_unique_references.types.size();
-  s_unique_references.total_types_size += m_dodx.type_to_idx().size();
+  m_stats.num_unique_types = static_cast<int>(s_unique_references.types.size());
+  s_unique_references.total_types_size +=
+      static_cast<int>(m_dodx.type_to_idx().size());
   m_stats.types_total_size = s_unique_references.total_types_size;
 
   for (const auto& p : UnorderedIterable(m_dodx.proto_to_idx())) {
     s_unique_references.protos.insert(p.first);
   }
-  m_stats.num_unique_protos = s_unique_references.protos.size();
-  s_unique_references.total_protos_size += m_dodx.proto_to_idx().size();
+  m_stats.num_unique_protos =
+      static_cast<int>(s_unique_references.protos.size());
+  s_unique_references.total_protos_size +=
+      static_cast<int>(m_dodx.proto_to_idx().size());
   m_stats.protos_total_size = s_unique_references.total_protos_size;
 
   for (const auto& p : UnorderedIterable(m_dodx.field_to_idx())) {
     s_unique_references.fields.insert(p.first);
   }
-  m_stats.num_unique_field_refs = s_unique_references.fields.size();
-  s_unique_references.total_fields_size += m_dodx.field_to_idx().size();
+  m_stats.num_unique_field_refs =
+      static_cast<int>(s_unique_references.fields.size());
+  s_unique_references.total_fields_size +=
+      static_cast<int>(m_dodx.field_to_idx().size());
   m_stats.field_refs_total_size = s_unique_references.total_fields_size;
 
   for (const auto& p : UnorderedIterable(m_dodx.method_to_idx())) {
     s_unique_references.methods.insert(p.first);
   }
-  m_stats.num_unique_method_refs = s_unique_references.methods.size();
-  s_unique_references.total_methods_size += m_dodx.method_to_idx().size();
+  m_stats.num_unique_method_refs =
+      static_cast<int>(s_unique_references.methods.size());
+  s_unique_references.total_methods_size +=
+      static_cast<int>(m_dodx.method_to_idx().size());
   m_stats.method_refs_total_size = s_unique_references.total_methods_size;
 }
 

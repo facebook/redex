@@ -92,7 +92,7 @@ void balloon_for_test(const Scope& scope);
 
 static inline const uint8_t* align_ptr(const uint8_t* const ptr,
                                        const size_t alignment) {
-  const size_t alignment_error = ((size_t)ptr) % alignment;
+  const size_t alignment_error = reinterpret_cast<size_t>(ptr) % alignment;
   if (alignment_error != 0) {
     return ptr + alignment - alignment_error;
   } else {

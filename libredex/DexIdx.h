@@ -180,7 +180,9 @@ class DexIdx {
     return m_proto_cache[pidx];
   }
 
-  uint32_t get_file_size() const { return ((dex_header*)m_dexbase)->file_size; }
+  uint32_t get_file_size() const {
+    return reinterpret_cast<const dex_header*>(m_dexbase)->file_size;
+  }
 
   template <typename T>
   const T* get_data(uint32_t offset) {
@@ -205,7 +207,7 @@ class DexIdx {
   }
 
   uint32_t get_checksum() const {
-    return ((const dex_header*)m_dexbase)->checksum;
+    return reinterpret_cast<const dex_header*>(m_dexbase)->checksum;
   }
 
   DexTypeList* get_type_list(uint32_t offset);

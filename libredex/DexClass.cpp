@@ -219,13 +219,15 @@ DexTypeList* DexTypeList::pop_front() const {
 }
 DexTypeList* DexTypeList::pop_front(size_t n) const {
   redex_assert(m_list.size() >= n);
-  ContainerType new_list{m_list.begin() + n, m_list.end()};
+  ContainerType new_list{m_list.begin() + static_cast<ptrdiff_t>(n),
+                         m_list.end()};
   return make_type_list(std::move(new_list));
 }
 
 DexTypeList* DexTypeList::pop_back(size_t n) const {
   redex_assert(m_list.size() >= n);
-  ContainerType new_list{m_list.begin(), m_list.end() - n};
+  ContainerType new_list{m_list.begin(),
+                         m_list.end() - static_cast<ptrdiff_t>(n)};
   return make_type_list(std::move(new_list));
 }
 
@@ -573,10 +575,10 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     if (!positions.empty()) {
       auto line_base = pos_mapper->position_to_line(positions.back());
       auto line = line_base | line_addin;
-      line_info->emplace_back(DebugLineItem(it->addr, line_base));
+      line_info->emplace_back(it->addr, line_base);
       int32_t line_delta;
       if (prev_line) {
-        line_delta = line - *prev_line;
+        line_delta = static_cast<int32_t>(line - *prev_line);
       } else {
         *line_start = line;
         line_delta = 0;
@@ -592,7 +594,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
                      (addr_delta * DBG_LINE_RANGE) + DBG_FIRST_SPECIAL;
       if ((special & ~0xff) != 0u) {
         dbgops.emplace_back(
-            new DexDebugInstruction(DBG_ADVANCE_PC, uint32_t(addr_delta)));
+            new DexDebugInstruction(DBG_ADVANCE_PC, addr_delta));
         special = line_delta - DBG_LINE_BASE + DBG_FIRST_SPECIAL;
       }
       dbgops.emplace_back(
@@ -772,11 +774,11 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
         uint32_t tidx = read_uleb128_checked<redex::DexAssert>(handler);
         uint32_t hoff = read_uleb128_checked<redex::DexAssert>(handler);
         DexType* dt = idx->get_nullable_typeidx(tidx);
-        dextry->m_catches.push_back(std::make_pair(dt, hoff));
+        dextry->m_catches.emplace_back(dt, hoff);
       }
       if (has_catchall) {
         auto hoff = read_uleb128_checked<redex::DexAssert>(handler);
-        dextry->m_catches.push_back(std::make_pair(nullptr, hoff));
+        dextry->m_catches.emplace_back(nullptr, hoff);
       }
       dc->m_tries.emplace_back(dextry);
     }
@@ -793,13 +795,15 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   code->tries_size = 0;
   /* Debug info is added later */
   code->debug_info_off = 0;
-  uint16_t* insns = (uint16_t*)(code + 1);
+  uint16_t* insns = reinterpret_cast<uint16_t*>(code + 1);
   for (auto const& opc : get_instructions()) {
     opc->encode(dodx, insns);
   }
-  code->insns_size = (uint32_t)(insns - ((uint16_t*)(code + 1)));
+  code->insns_size =
+      static_cast<uint32_t>(insns - reinterpret_cast<uint16_t*>(code + 1));
   if (m_tries.empty()) {
-    return ((code->insns_size * sizeof(uint16_t)) + sizeof(dex_code_item));
+    return static_cast<int>((code->insns_size * sizeof(uint16_t)) +
+                            sizeof(dex_code_item));
   }
   /*
    * Now the tries..., obscenely messy encoding :(
@@ -808,15 +812,15 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   if ((code->insns_size & 1) != 0u) {
     insns++;
   }
-  int tries = code->tries_size = m_tries.size();
-  dex_tries_item* dti = (dex_tries_item*)insns;
-  uint8_t* handler_base = (uint8_t*)(dti + tries);
+  int tries = code->tries_size = static_cast<int>(m_tries.size());
+  dex_tries_item* dti = reinterpret_cast<dex_tries_item*>(insns);
+  uint8_t* handler_base = reinterpret_cast<uint8_t*>(dti + tries);
   uint8_t* hemit = handler_base;
   std::unordered_set<DexCatches, boost::hash<DexCatches>> catches_set;
   for (auto& dextry : m_tries) {
     catches_set.insert(dextry->m_catches);
   }
-  hemit = write_uleb128(hemit, catches_set.size());
+  hemit = write_uleb128(hemit, static_cast<uint32_t>(catches_set.size()));
   int tryno = 0;
   UnorderedMap<DexCatches, uint32_t, boost::hash<DexCatches>> catches_map;
   for (auto it = m_tries.begin(); it != m_tries.end(); ++it, ++tryno) {
@@ -827,7 +831,8 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
                   code->insns_size);
     dti[tryno].insn_count = dextry->m_insn_count;
     if (catches_map.find(dextry->m_catches) == catches_map.end()) {
-      catches_map[dextry->m_catches] = hemit - handler_base;
+      catches_map[dextry->m_catches] =
+          static_cast<uint32_t>(hemit - handler_base);
       size_t catchcount = dextry->m_catches.size();
       bool has_catchall = dextry->m_catches.back().first == nullptr;
       if (has_catchall) {
@@ -848,7 +853,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     }
     dti[tryno].handler_off = catches_map.at(dextry->m_catches);
   }
-  return (int)(hemit - ((uint8_t*)output));
+  return static_cast<int>(hemit - reinterpret_cast<uint8_t*>(output));
 }
 
 DexMethod::DexMethod(DexType* type, const DexString* name, DexProto* proto)
@@ -1538,11 +1543,14 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   m_anno =
       DexAnnotationSet::get_annotation_set(idx, annodir->class_annotations_off);
   const uint32_t* annodata = (uint32_t*)(annodir + 1);
-  always_assert_type_log(annodata <= annodata + annodir->fields_size * 2,
-                         INVALID_DEX, "Dex overflow");
-  always_assert_type_log((uint8_t*)(annodata + annodir->fields_size * 2) <=
-                             idx->end(),
-                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      annodata <= annodata + static_cast<size_t>(annodir->fields_size) * 2,
+      INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      reinterpret_cast<const uint8_t*>(
+          annodata + static_cast<size_t>(annodir->methods_size) * 2) <=
+          idx->end(),
+      INVALID_DEX, "Dex overflow");
   for (uint32_t i = 0; i < annodir->fields_size; i++) {
     uint32_t fidx = *annodata++;
     uint32_t off = *annodata++;
@@ -1551,11 +1559,14 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     auto res = field->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach annotation set");
   }
-  always_assert_type_log(annodata <= annodata + annodir->methods_size * 2,
-                         INVALID_DEX, "Dex overflow");
-  always_assert_type_log((uint8_t*)(annodata + annodir->methods_size * 2) <=
-                             idx->end(),
-                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      annodata <= annodata + static_cast<size_t>(annodir->methods_size) * 2,
+      INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      reinterpret_cast<const uint8_t*>(
+          annodata + static_cast<size_t>(annodir->methods_size) * 2) <=
+          idx->end(),
+      INVALID_DEX, "Dex overflow");
   for (uint32_t i = 0; i < annodir->methods_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t off = *annodata++;
@@ -1564,11 +1575,14 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     auto res = method->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach method set");
   }
-  always_assert_type_log(annodata <= annodata + annodir->parameters_size * 2,
-                         INVALID_DEX, "Dex overflow");
-  always_assert_type_log((uint8_t*)(annodata + annodir->parameters_size * 2) <=
-                             idx->end(),
-                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      annodata <= annodata + static_cast<size_t>(annodir->parameters_size) * 2,
+      INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      reinterpret_cast<const uint8_t*>(
+          annodata + static_cast<size_t>(annodir->parameters_size) * 2) <=
+          idx->end(),
+      INVALID_DEX, "Dex overflow");
   for (uint32_t i = 0; i < annodir->parameters_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t xrefoff = *annodata++;
@@ -1578,13 +1592,15 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
       uint32_t count = *annoxref++;
       always_assert_type_log(annoxref <= annoxref + count, INVALID_DEX,
                              "Dex overflow");
-      always_assert_type_log((uint8_t*)(annoxref + count) <= idx->end(),
-                             INVALID_DEX, "Dex overflow");
+      always_assert_type_log(
+          reinterpret_cast<const uint8_t*>(annoxref + count) <= idx->end(),
+          INVALID_DEX, "Dex overflow");
       for (uint32_t j = 0; j < count; j++) {
         uint32_t off = annoxref[j];
         auto aset = DexAnnotationSet::get_annotation_set(idx, off);
         if (aset != nullptr) {
-          method->attach_param_annotation_set(j, std::move(aset));
+          method->attach_param_annotation_set(static_cast<int>(j),
+                                              std::move(aset));
           redex_assert(CONSTP(method)->get_param_anno());
         }
       }

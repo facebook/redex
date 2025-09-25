@@ -43,13 +43,15 @@ struct DexPosition final {
 };
 inline size_t hash_value(const DexPosition* pos) {
   return pos == nullptr ? 0
-                        : ((size_t)pos->method + (size_t)pos->file + pos->line +
+                        : (reinterpret_cast<size_t>(pos->method) +
+                           reinterpret_cast<size_t>(pos->file) + pos->line +
                            hash_value(pos->parent));
 }
 using ConstDexPositionPtrHasher = boost::hash<const DexPosition*>;
 
 inline size_t hash_value(const DexPosition& pos) {
-  return (size_t)pos.method + (size_t)pos.file + pos.line +
+  return reinterpret_cast<size_t>(pos.method) +
+         reinterpret_cast<size_t>(pos.file) + pos.line +
          (pos.parent == nullptr ? 0 : hash_value(*pos.parent));
 }
 using DexPositionHasher = boost::hash<DexPosition>;
@@ -65,7 +67,7 @@ struct PositionCase {
   }
 };
 inline size_t hash_value(const PositionCase& c) {
-  return c.pattern_id ^ (size_t)c.position;
+  return c.pattern_id ^ reinterpret_cast<size_t>(c.position);
 }
 using PositionCaseHasher = boost::hash<PositionCase>;
 

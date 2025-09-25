@@ -15,39 +15,46 @@
 #include "DexMethodHandle.h"
 #include "TypeUtil.h"
 
+// NOLINTBEGIN
 #define INIT_DMAP_ID(TYPE)                                                \
   always_assert_type_log(dh->TYPE##_ids_off < dh->file_size, INVALID_DEX, \
                          #TYPE " section offset out of range");           \
   m_##TYPE##_ids = (dex_##TYPE##_id*)(m_dexbase + dh->TYPE##_ids_off);    \
   m_##TYPE##_ids_size = dh->TYPE##_ids_size;                              \
   m_##TYPE##_cache.resize(dh->TYPE##_ids_size)
+// NOLINTEND
 
 DexIdx::DexIdx(const dex_header* dh) {
-  m_dexbase = (const uint8_t*)dh;
+  m_dexbase = reinterpret_cast<const uint8_t*>(dh);
   INIT_DMAP_ID(string);
   INIT_DMAP_ID(type);
   INIT_DMAP_ID(field);
   INIT_DMAP_ID(method);
   INIT_DMAP_ID(proto);
 
-  dex_map_list* map_list = (dex_map_list*)(m_dexbase + dh->map_off);
+  const dex_map_list* map_list =
+      reinterpret_cast<const dex_map_list*>(m_dexbase + dh->map_off);
   for (uint32_t i = 0; i < map_list->size; i++) {
-    auto& item = map_list->items[i];
+    const auto& item = map_list->items[i];
     switch (item.type) {
     case TYPE_CALL_SITE_ID_ITEM: {
-      dex_callsite_id* callsite_ids =
-          (dex_callsite_id*)((uint8_t*)dh + item.offset);
-      m_callsite_ids = callsite_ids;
+      const dex_callsite_id* callsite_ids =
+          reinterpret_cast<const dex_callsite_id*>(
+              reinterpret_cast<const uint8_t*>(dh) + item.offset);
+      m_callsite_ids = const_cast<dex_callsite_id*>(callsite_ids);
       m_callsite_ids_size = item.size;
       m_callsite_cache.resize(m_callsite_ids_size);
     } break;
     case TYPE_METHOD_HANDLE_ITEM: {
-      dex_methodhandle_id* methodhandle_ids =
-          (dex_methodhandle_id*)((uint8_t*)dh + item.offset);
-      m_methodhandle_ids = methodhandle_ids;
+      const dex_methodhandle_id* methodhandle_ids =
+          reinterpret_cast<const dex_methodhandle_id*>(
+              reinterpret_cast<const uint8_t*>(dh) + item.offset);
+      m_methodhandle_ids = const_cast<dex_methodhandle_id*>(methodhandle_ids);
       m_methodhandle_ids_size = item.size;
       m_methodhandle_cache.resize(m_methodhandle_ids_size);
     } break;
+    default:
+      break;
     }
   }
 }
@@ -125,8 +132,9 @@ std::string_view DexIdx::get_string_data(uint32_t stridx,
   uint32_t stroff = m_string_ids[stridx].offset;
   // Bounds check is conservative. May incorrectly reject short strings
   // at the end of the file.
-  always_assert_type_log(stroff < ((dex_header*)m_dexbase)->file_size - 6,
-                         INVALID_DEX, "String data offset out of range");
+  always_assert_type_log(
+      stroff < reinterpret_cast<const dex_header*>(m_dexbase)->file_size - 6,
+      INVALID_DEX, "String data offset out of range");
   const uint8_t* dstr = m_dexbase + stroff;
   /* Strip off uleb128 size encoding */
 
@@ -141,7 +149,7 @@ std::string_view DexIdx::get_string_data(uint32_t stridx,
   }
   always_assert_type_log(null_cur < m_dexbase + get_file_size(), INVALID_DEX,
                          "Missing null terminator");
-  return std::string_view((const char*)dstr, null_cur - dstr);
+  return std::string_view(reinterpret_cast<const char*>(dstr), null_cur - dstr);
 }
 const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
   uint32_t utfsize;
@@ -200,7 +208,7 @@ DexTypeList* DexIdx::get_type_list(uint32_t offset) {
                          "Size too big");
   always_assert_type_log(offset <= get_file_size() - 2 * size, INVALID_DEX,
                          "Offset out of bounds");
-  const uint16_t* typep = (const uint16_t*)tlp;
+  const uint16_t* typep = reinterpret_cast<const uint16_t*>(tlp);
   DexTypeList::ContainerType tlist;
   tlist.reserve(size);
   for (uint32_t i = 0; i < size; i++) {

@@ -92,7 +92,7 @@ DexDebugInstruction* DexDebugInstruction::make_instruction(
     return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_ADVANCE_LINE: {
-    int32_t v = (uint32_t)read_sleb128_checked<redex::DexAssert>(encdata_ptr);
+    int32_t v = read_sleb128_checked<redex::DexAssert>(encdata_ptr);
     return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_START_LOCAL: {
