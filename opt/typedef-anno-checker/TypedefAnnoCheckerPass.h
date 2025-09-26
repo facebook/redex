@@ -40,6 +40,7 @@ class TypedefAnnoCheckerPass : public Pass {
     DexType* str_typedef{nullptr};
     size_t max_patcher_iteration{10};
     UnorderedSet<DexType*> generated_type_annos;
+    bool skip_anonymous_classes{true};
   };
 
   void bind_config() override {

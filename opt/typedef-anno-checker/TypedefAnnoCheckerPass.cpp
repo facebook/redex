@@ -485,6 +485,11 @@ bool TypedefAnnoChecker::check_typedef_value(
     return true;
   }
 
+  auto* cls = type_class(m->get_class());
+  if (m_config.skip_anonymous_classes && klass::maybe_anonymous_class(cls)) {
+    return true;
+  }
+
   live_range::Use use_of_id{insn, src};
   auto udchains_it = ud_chains->find(use_of_id);
   auto defs_set = udchains_it->second;
