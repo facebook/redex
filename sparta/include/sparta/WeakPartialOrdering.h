@@ -330,13 +330,13 @@ class WpoBuilder final {
   // Nodes are identified by their DFNs in the builder.
   void construct_auxilary(const NodeId& root) {
     // It uses disjoint-sets data structure.
-    typedef std::unordered_map<uint32_t, std::size_t> rank_t;
-    typedef std::unordered_map<uint32_t, uint32_t> parent_t;
+    using rank_t = std::unordered_map<uint32_t, std::size_t>;
+    using parent_t = std::unordered_map<uint32_t, uint32_t>;
     rank_t rank_map;
     parent_t parent_map;
-    typedef boost::associative_property_map<rank_t> r_pmap_t;
+    using r_pmap_t = boost::associative_property_map<rank_t>;
     r_pmap_t r_pmap(rank_map);
-    typedef boost::associative_property_map<parent_t> p_pmap_t;
+    using p_pmap_t = boost::associative_property_map<parent_t>;
     p_pmap_t p_pmap(parent_map);
     boost::disjoint_sets<r_pmap_t, p_pmap_t> dsets(r_pmap, p_pmap);
 
