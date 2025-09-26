@@ -1013,8 +1013,9 @@ class ControlFlowGraph {
 
   // Search all the instructions in this CFG for the given one. Return an
   // iterator to it, or end, if it isn't in the graph.
-  InstructionIterator find_insn(IRInstruction* insn, Block* hint = nullptr);
-  ConstInstructionIterator find_insn(IRInstruction* insn,
+  InstructionIterator find_insn(const IRInstruction* insn,
+                                Block* hint = nullptr);
+  ConstInstructionIterator find_insn(const IRInstruction* insn,
                                      Block* hint = nullptr) const;
 
   // choose an order of blocks for output; note that unless

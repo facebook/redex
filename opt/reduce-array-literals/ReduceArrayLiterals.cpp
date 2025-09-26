@@ -552,7 +552,7 @@ void ReduceArrayLiterals::patch_new_array(
 
   // remove new-array instruction
 
-  auto it = m_cfg.find_insn(const_cast<IRInstruction*>(new_array_insn));
+  auto it = m_cfg.find_insn(new_array_insn);
   always_assert(new_array_insn->opcode() == OPCODE_NEW_ARRAY);
   auto move_result_it = m_cfg.move_result_of(it);
   if (move_result_it.is_end()) {

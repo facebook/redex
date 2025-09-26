@@ -1729,7 +1729,7 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   }
 }
 
-InstructionIterator ControlFlowGraph::find_insn(IRInstruction* insn,
+InstructionIterator ControlFlowGraph::find_insn(const IRInstruction* insn,
                                                 Block* hint) {
   if (hint != nullptr) {
     auto ii = ir_list::InstructionIterable(hint);
@@ -1749,7 +1749,7 @@ InstructionIterator ControlFlowGraph::find_insn(IRInstruction* insn,
   return iterable.end();
 }
 
-ConstInstructionIterator ControlFlowGraph::find_insn(IRInstruction* insn,
+ConstInstructionIterator ControlFlowGraph::find_insn(const IRInstruction* insn,
                                                      Block* hint) const {
   if (hint != nullptr) {
     auto ii = ir_list::InstructionIterable(hint);

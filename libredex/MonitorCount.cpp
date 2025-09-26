@@ -48,7 +48,7 @@ bool has_try_without_catch_all(const cfg::ControlFlowGraph& cfg) {
 static bool is_invoke_insn_in_try(const cfg::ControlFlowGraph& cfg,
                                   const IRInstruction* invoke_insn) {
   if (invoke_insn != nullptr) {
-    auto it = cfg.find_insn(const_cast<IRInstruction*>(invoke_insn));
+    auto it = cfg.find_insn(invoke_insn);
     return !it.is_end() && has_catch(cfg, it.block());
   }
   for (auto* block : cfg.blocks()) {
