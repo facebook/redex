@@ -13,6 +13,7 @@
 #include "DexAnnotation.h"
 #include "DexDebugInstruction.h"
 #include "DexDefs.h"
+#include "DexEncoding.h"
 #include "DexIdx.h"
 #include "DexInstruction.h"
 #include "DexMemberRefs.h"
@@ -147,6 +148,53 @@ const DexString* DexString::get_string(std::string_view s) {
 int32_t DexString::java_hashcode() const {
   return java_hashcode_of_utf8_string(c_str());
 }
+
+uint32_t DexString::get_entry_size() const {
+  uint32_t len = uleb128_encoding_size(m_repr.utfsize);
+  len += size();
+  len++; // NULL byte
+  return len;
+}
+
+void DexString::encode(uint8_t* output) const {
+  output = write_uleb128(output, m_repr.utfsize);
+  strcpy((char*)output, c_str());
+}
+
+namespace dexstrings::details {
+
+bool compare_dexstrings_slowpath(const DexString* a, const DexString* b) {
+  const char* sa = a->c_str();
+  const char* sb = b->c_str();
+  /* Equivalence test first, so we don't worry about walking
+   * off the end.
+   */
+  if (strcmp(sa, sb) == 0) {
+    return false;
+  }
+  if (strlen(sa) == 0) {
+    return true;
+  }
+  if (strlen(sb) == 0) {
+    return false;
+  }
+  while (true) {
+    uint32_t cpa = mutf8_next_code_point(sa);
+    uint32_t cpb = mutf8_next_code_point(sb);
+    if (cpa == cpb) {
+      if (*sa == '\0') {
+        return true;
+      }
+      if (*sb == '\0') {
+        return false;
+      }
+      continue;
+    }
+    return (cpa < cpb);
+  }
+}
+
+} // namespace dexstrings::details
 
 int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
   uint16_t* typep = (uint16_t*)(output + 1);
