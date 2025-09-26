@@ -512,7 +512,12 @@ class SubdirDexMode(BaseDexMode):
             return False
 
         has_dex_jars = any(abs_glob(secondary_dex_dir, "*.dex.jar"))
-        has_raw_dexs = any(abs_glob(secondary_dex_dir, "*.dex"))
+        has_raw_dexs = any(
+            f
+            for f in abs_glob(secondary_dex_dir, "*.dex")
+            if basename(f) != "empty.dex"
+        )
+
         return has_dex_jars or has_raw_dexs
 
     def unpackage(
@@ -527,6 +532,9 @@ class SubdirDexMode(BaseDexMode):
 
         raw_dexes = abs_glob(join(extracted_apk_dir, self._secondary_dir), "*.dex")
         for raw_dex in raw_dexes:
+            if basename(raw_dex) == "empty.dex":
+                continue
+
             self._raw_secondary_dexs.add(basename(raw_dex))
             shutil.move(raw_dex, dex_dir)
 
@@ -564,11 +572,6 @@ class SubdirDexMode(BaseDexMode):
 
         # Make sure we don't have any unexpected dex files starting with 'self._dex_prefix'
         assert not any(abs_glob(dex_dir, f"{self._dex_prefix}?*.dex"))
-
-        # Special handling of "empty.dex"
-        empty_dex = join(dex_dir, "empty.dex")
-        if isfile(empty_dex):
-            shutil.move(empty_dex, join(extracted_apk_dir, self._secondary_dir))
 
         for i in itertools.count(1):
             dex_file = self._store_name + f"-{i}.dex"
