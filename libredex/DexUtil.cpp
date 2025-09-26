@@ -374,11 +374,10 @@ VisibilityChanges get_visibility_changes(
   always_assert(code != nullptr);
   VisibilityChanges changes;
   VisibilityChangeGetter getter{changes, scope, effective_caller_resolved_from};
-  cfg_adapter::iterate(const_cast<IRCode*>(code),
-                       [&getter](MethodItemEntry& mie) {
-                         getter.process_insn(mie.insn);
-                         return cfg_adapter::LOOP_CONTINUE;
-                       });
+  cfg_adapter::iterate(code, [&getter](const MethodItemEntry& mie) {
+    getter.process_insn(mie.insn);
+    return cfg_adapter::LOOP_CONTINUE;
+  });
 
   std::vector<DexType*> types;
   code->gather_catch_types(types);
@@ -392,8 +391,7 @@ VisibilityChanges get_visibility_changes(
     const DexMethod* effective_caller_resolved_from) {
   VisibilityChanges changes;
   VisibilityChangeGetter getter{changes, scope, effective_caller_resolved_from};
-  for (auto& mie :
-       cfg::InstructionIterable(const_cast<cfg::ControlFlowGraph&>(cfg))) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     getter.process_insn(mie.insn);
   }
   std::vector<DexType*> types;
