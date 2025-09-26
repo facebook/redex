@@ -570,12 +570,22 @@ class SubdirDexMode(BaseDexMode):
             locator_store_id=locator_store_id,
         )
 
-        # Make sure we don't have any unexpected dex files starting with 'self._dex_prefix'
-        assert not any(abs_glob(dex_dir, f"{self._dex_prefix}?*.dex"))
+        # Check which prefix we have for dex files.
+        have_class_prefix_dex = any(abs_glob(dex_dir, f"{self._dex_prefix}?*.dex"))
+        have_secondary_prefix_dex = any(abs_glob(dex_dir, f"{self._store_name}-?*.dex"))
+        assert not (
+            have_class_prefix_dex and have_secondary_prefix_dex
+        ), "should not have dex files with mixed prefixes"
 
         for i in itertools.count(1):
             dex_file = self._store_name + f"-{i}.dex"
             dexpath = join(dex_dir, dex_file)
+
+            if have_class_prefix_dex:
+                oldpath = join(dex_dir, self._dex_prefix + "%d.dex" % (i + 1))
+                if isfile(oldpath):
+                    shutil.move(oldpath, dexpath)
+
             if not isfile(dexpath):
                 break
 
