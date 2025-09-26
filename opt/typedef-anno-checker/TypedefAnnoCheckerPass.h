@@ -41,6 +41,7 @@ class TypedefAnnoCheckerPass : public Pass {
     size_t max_patcher_iteration{10};
     UnorderedSet<DexType*> generated_type_annos;
     UnorderedSet<std::string> do_not_check_list;
+    bool skip_anonymous_classes{true};
   };
 
   void bind_config() override {

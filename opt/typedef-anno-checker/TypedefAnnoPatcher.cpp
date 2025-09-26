@@ -677,7 +677,7 @@ void patch_synthetic_field_from_local_var_lambda(
   auto udchains_it = ud_chains.find(use_of_id);
   auto defs_set = udchains_it->second;
   for (IRInstruction* def : defs_set) {
-    DexField* field;
+    DexField* field = nullptr;
     if (def->opcode() == OPCODE_CHECK_CAST) {
       live_range::Use cc_use_of_id{def, (src_index_t)(0)};
       auto cc_udchains_it = ud_chains.find(cc_use_of_id);
