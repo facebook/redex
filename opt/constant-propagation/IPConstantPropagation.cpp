@@ -60,17 +60,17 @@ using CombinedAnalyzer =
 
 class AnalyzerGenerator {
   const ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
-  const ApiLevelAnalyzerState* m_api_level_analyzer_state;
-  const StringAnalyzerState* m_string_analyzer_state;
-  const PackageNameState* m_package_name_state;
+  ApiLevelAnalyzerState* m_api_level_analyzer_state;
+  StringAnalyzerState* m_string_analyzer_state;
+  PackageNameState* m_package_name_state;
   const State& m_cp_state;
 
  public:
   explicit AnalyzerGenerator(
       const ImmutableAttributeAnalyzerState* immut_analyzer_state,
-      const ApiLevelAnalyzerState* api_level_analyzer_state,
-      const StringAnalyzerState* string_analyzer_state,
-      const PackageNameState* package_name_state,
+      ApiLevelAnalyzerState* api_level_analyzer_state,
+      StringAnalyzerState* string_analyzer_state,
+      PackageNameState* package_name_state,
       const State& cp_state)
       : m_immut_analyzer_state(immut_analyzer_state),
         m_api_level_analyzer_state(api_level_analyzer_state),
@@ -116,10 +116,8 @@ class AnalyzerGenerator {
         CombinedAnalyzer(
             class_under_init, immut_analyzer_state, wps_accessor_ptr,
             EnumFieldAnalyzerState::get(), BoxedBooleanAnalyzerState::get(),
-            const_cast<StringAnalyzerState*>(m_string_analyzer_state), nullptr,
-            *const_cast<ApiLevelAnalyzerState*>(m_api_level_analyzer_state),
-            const_cast<PackageNameState*>(m_package_name_state),
-            immut_analyzer_state, nullptr),
+            m_string_analyzer_state, nullptr, *m_api_level_analyzer_state,
+            m_package_name_state, immut_analyzer_state, nullptr),
         std::move(env));
   }
 };
@@ -139,10 +137,10 @@ class AnalyzerGenerator {
  */
 std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const Scope& scope,
-    const ImmutableAttributeAnalyzerState* immut_analyzer_state,
-    const ApiLevelAnalyzerState* api_level_analyzer_state,
-    const StringAnalyzerState* string_analyzer_state,
-    const PackageNameState* package_name_state,
+    ImmutableAttributeAnalyzerState* immut_analyzer_state,
+    ApiLevelAnalyzerState* api_level_analyzer_state,
+    StringAnalyzerState* string_analyzer_state,
+    PackageNameState* package_name_state,
     const State& cp_state) {
   auto method_override_graph = mog::build_graph(scope);
   std::shared_ptr<call_graph::Graph> cg;

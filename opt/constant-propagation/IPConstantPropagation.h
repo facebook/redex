@@ -100,13 +100,12 @@ class PassImpl : public Pass {
   /*
    * Exposed for testing purposes.
    */
-  std::unique_ptr<FixpointIterator> analyze(
-      const Scope&,
-      const ImmutableAttributeAnalyzerState*,
-      const ApiLevelAnalyzerState*,
-      const StringAnalyzerState*,
-      const PackageNameState*,
-      const State&);
+  std::unique_ptr<FixpointIterator> analyze(const Scope&,
+                                            ImmutableAttributeAnalyzerState*,
+                                            ApiLevelAnalyzerState*,
+                                            StringAnalyzerState*,
+                                            PackageNameState*,
+                                            const State&);
 
  private:
   void compute_analysis_stats(const WholeProgramState&,
