@@ -49,10 +49,11 @@ struct WithStateWorkQueueHelper {
 } // namespace redex_workqueue_impl
 
 namespace redex_parallel {
-inline uint32_t default_num_threads() {
+inline size_t default_num_threads() {
   // We prefer boost over std. Use hardware over physical concurrency
   // to take advantage of SMT.
-  return std::max(1u, boost::thread::hardware_concurrency());
+  return static_cast<size_t>(
+      std::max(1u, boost::thread::hardware_concurrency()));
 }
 } // namespace redex_parallel
 
@@ -62,10 +63,9 @@ template <class Input,
           typename std::enable_if<sparta::Arity<Fn>::value == 1, int>::type = 0>
 sparta::WorkQueue<Input,
                   redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>
-workqueue_foreach(
-    const Fn& fn,
-    unsigned int num_threads = redex_parallel::default_num_threads(),
-    bool push_tasks_while_running = false) {
+workqueue_foreach(const Fn& fn,
+                  size_t num_threads = redex_parallel::default_num_threads(),
+                  bool push_tasks_while_running = false) {
   return sparta::WorkQueue<
       Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
@@ -76,10 +76,9 @@ template <class Input,
           typename std::enable_if<sparta::Arity<Fn>::value == 2, int>::type = 0>
 sparta::WorkQueue<Input,
                   redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>
-workqueue_foreach(
-    const Fn& fn,
-    unsigned int num_threads = redex_parallel::default_num_threads(),
-    bool push_tasks_while_running = false) {
+workqueue_foreach(const Fn& fn,
+                  size_t num_threads = redex_parallel::default_num_threads(),
+                  bool push_tasks_while_running = false) {
   return sparta::WorkQueue<
       Input, redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
@@ -91,11 +90,10 @@ template <class Input,
           typename Fn,
           typename Items,
           typename std::enable_if<sparta::Arity<Fn>::value == 1, int>::type = 0>
-void workqueue_run(
-    const Fn& fn,
-    Items& items,
-    unsigned int num_threads = redex_parallel::default_num_threads(),
-    bool push_tasks_while_running = false) {
+void workqueue_run(const Fn& fn,
+                   Items& items,
+                   size_t num_threads = redex_parallel::default_num_threads(),
+                   bool push_tasks_while_running = false) {
   auto wq = sparta::WorkQueue<
       Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
@@ -109,11 +107,10 @@ template <class Input,
           typename Fn,
           typename Items,
           typename std::enable_if<sparta::Arity<Fn>::value == 1, int>::type = 0>
-void workqueue_run(
-    const Fn& fn,
-    const Items& items,
-    unsigned int num_threads = redex_parallel::default_num_threads(),
-    bool push_tasks_while_running = false) {
+void workqueue_run(const Fn& fn,
+                   const Items& items,
+                   size_t num_threads = redex_parallel::default_num_threads(),
+                   bool push_tasks_while_running = false) {
   auto wq = sparta::WorkQueue<
       Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
@@ -127,11 +124,10 @@ template <class Input,
           typename Fn,
           typename Items,
           typename std::enable_if<sparta::Arity<Fn>::value == 2, int>::type = 0>
-void workqueue_run(
-    const Fn& fn,
-    Items& items,
-    unsigned int num_threads = redex_parallel::default_num_threads(),
-    bool push_tasks_while_running = false) {
+void workqueue_run(const Fn& fn,
+                   Items& items,
+                   size_t num_threads = redex_parallel::default_num_threads(),
+                   bool push_tasks_while_running = false) {
   auto wq = sparta::WorkQueue<
       Input, redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
@@ -146,11 +142,10 @@ template <class Input,
           typename Fn,
           typename Items,
           typename std::enable_if<sparta::Arity<Fn>::value == 2, int>::type = 0>
-void workqueue_run(
-    const Fn& fn,
-    const Items& items,
-    unsigned int num_threads = redex_parallel::default_num_threads(),
-    bool push_tasks_while_running = false) {
+void workqueue_run(const Fn& fn,
+                   const Items& items,
+                   size_t num_threads = redex_parallel::default_num_threads(),
+                   bool push_tasks_while_running = false) {
   auto wq = sparta::WorkQueue<
       Input, redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
@@ -166,7 +161,7 @@ void workqueue_run_for(
     InteralType start,
     InteralType end,
     const Fn& fn,
-    unsigned int num_threads = redex_parallel::default_num_threads()) {
+    size_t num_threads = redex_parallel::default_num_threads()) {
   auto wq = sparta::WorkQueue<
       InteralType,
       redex_workqueue_impl::NoStateWorkQueueHelper<InteralType, Fn>>(
