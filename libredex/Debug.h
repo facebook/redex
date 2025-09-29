@@ -81,10 +81,10 @@ extern bool slow_invariants_debug;
   always_assert_type_log(!debug || e, type, msg, ##__VA_ARGS__)
 
 // Helper for const assertions.
-#define CONSTP(e)                                                  \
-  static_cast<std::add_pointer<typename std::add_const<            \
-      typename std::remove_pointer<typename std::remove_reference< \
-          decltype(e)>::type>::type>::type>::type>(e)
+#define CONSTP(e)                                               \
+  static_cast<std::add_pointer_t<                               \
+      typename std::add_const_t<typename std::remove_pointer_t< \
+          typename std::remove_reference_t<decltype(e)>>>>>(e)
 
 namespace redex {
 
