@@ -314,7 +314,7 @@ std::pair<cfg::Block*, reg_t> clone_param_chain(
       cfg.copy_succ_edges(cfg.entry_block(), new_block);
       cfg.set_edge_target(cfg.entry_block()->succs()[0], new_block);
     }
-    IRInstruction* clone_insn = new IRInstruction(**it);
+    auto* clone_insn = new IRInstruction(**it);
     // Replace old_reg with new_reg.
     for (size_t i = 0; i < clone_insn->srcs_size(); ++i) {
       if (clone_insn->src(i) == old_reg) {
@@ -553,7 +553,7 @@ AnalysisData analyze(DexMethod* m,
   }
   data.no_easy_expr = false;
 
-  size_t nr_splits = static_cast<size_t>(std::ceil(
+  auto nr_splits = static_cast<size_t>(std::ceil(
       static_cast<float>(size) / static_cast<float>(code_units_threshold)));
   redex_assert(nr_splits > 1);
   auto switch_range =
@@ -600,17 +600,12 @@ AnalysisData analyze(DexMethod* m,
 
   // Filter out non-hot methods.
   if (hotness_threshold > 0 && method_profiles.has_stats()) {
-    auto is_hot_fn = [&]() {
-      for (const auto& interaction_stats : method_profiles.all_interactions()) {
-        const auto& stats_map = interaction_stats.second;
-        if (stats_map.count(m) != 0 &&
-            stats_map.at(m).call_count >= hotness_threshold) {
-          return true;
-        }
-      }
-      return false;
-    };
-    bool is_hot = is_hot_fn();
+    bool is_hot = std::ranges::any_of(
+        method_profiles.all_interactions(), [&](const auto& interaction_stats) {
+          const auto& stats_map = interaction_stats.second;
+          return stats_map.count(m) != 0 &&
+                 stats_map.at(m).call_count >= hotness_threshold;
+        });
     if (!is_hot) {
       data.not_hot = true;
       return data;
@@ -946,8 +941,7 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("no_slots", result_stats.no_slots);
 
   auto replace_chars = [](std::string& s) {
-    for (size_t i = 0; i < s.length(); ++i) {
-      char& c = s.at(i);
+    for (auto& c : s) {
       if (isalnum(c) == 0) {
         c = '_';
       }
