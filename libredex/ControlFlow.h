@@ -1310,12 +1310,8 @@ class GraphInterface {
   using Graph = ControlFlowGraph;
   using NodeId = Block*;
   using EdgeId = Edge*;
-  static NodeId entry(const Graph& graph) {
-    return const_cast<NodeId>(graph.entry_block());
-  }
-  static NodeId exit(const Graph& graph) {
-    return const_cast<NodeId>(graph.exit_block());
-  }
+  static NodeId entry(const Graph& graph) { return graph.entry_block(); }
+  static NodeId exit(const Graph& graph) { return graph.exit_block(); }
   static const CompactEdgeVector& predecessors(const Graph&, const NodeId& b) {
     return b->preds();
   }
