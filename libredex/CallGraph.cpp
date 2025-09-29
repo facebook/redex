@@ -50,23 +50,24 @@ SingleCalleeStrategy::SingleCalleeStrategy(
 
 CallSites SingleCalleeStrategy::get_callsites(const DexMethod* method) const {
   CallSites callsites;
-  auto* code = const_cast<IRCode*>(method->get_code());
+  const auto* code = method->get_code();
   if (code == nullptr) {
     return callsites;
   }
-  cfg_adapter::iterate_with_iterator(code, [&](const IRList::iterator& it) {
-    auto* insn = it->insn;
-    if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
-      if (callee == nullptr || is_definitely_virtual(callee)) {
+  cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::const_iterator& it) {
+        auto* insn = it->insn;
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto* callee = resolve_invoke_method(insn, method);
+          if (callee == nullptr || is_definitely_virtual(callee)) {
+            return cfg_adapter::LOOP_CONTINUE;
+          }
+          if (callee->is_concrete()) {
+            callsites.emplace_back(callee, insn);
+          }
+        }
         return cfg_adapter::LOOP_CONTINUE;
-      }
-      if (callee->is_concrete()) {
-        callsites.emplace_back(callee, insn);
-      }
-    }
-    return cfg_adapter::LOOP_CONTINUE;
-  });
+      });
   return callsites;
 }
 
@@ -199,32 +200,33 @@ CompleteCallGraphStrategy::CompleteCallGraphStrategy(
 CallSites CompleteCallGraphStrategy::get_callsites(
     const DexMethod* method) const {
   CallSites callsites;
-  auto* code = const_cast<IRCode*>(method->get_code());
+  const auto* code = method->get_code();
   if (code == nullptr) {
     return callsites;
   }
-  cfg_adapter::iterate_with_iterator(code, [&](const IRList::iterator& it) {
-    auto* insn = it->insn;
-    if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
-      if (callee == nullptr) {
-        return cfg_adapter::LOOP_CONTINUE;
-      }
-      if ((callee->get_code() != nullptr) || is_native(callee)) {
-        callsites.emplace_back(callee, insn);
-      }
-      if (opcode::is_invoke_virtual(insn->opcode()) ||
-          opcode::is_invoke_interface(insn->opcode())) {
-        const auto& overriding_methods =
-            get_ordered_overriding_methods_with_code_or_native(callee);
-        for (const auto* overriding_method :
-             UnorderedIterable(overriding_methods)) {
-          callsites.emplace_back(overriding_method, insn);
+  cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::const_iterator& it) {
+        auto* insn = it->insn;
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto* callee = resolve_invoke_method(insn, method);
+          if (callee == nullptr) {
+            return cfg_adapter::LOOP_CONTINUE;
+          }
+          if ((callee->get_code() != nullptr) || is_native(callee)) {
+            callsites.emplace_back(callee, insn);
+          }
+          if (opcode::is_invoke_virtual(insn->opcode()) ||
+              opcode::is_invoke_interface(insn->opcode())) {
+            const auto& overriding_methods =
+                get_ordered_overriding_methods_with_code_or_native(callee);
+            for (const auto* overriding_method :
+                 UnorderedIterable(overriding_methods)) {
+              callsites.emplace_back(overriding_method, insn);
+            }
+          }
         }
-      }
-    }
-    return cfg_adapter::LOOP_CONTINUE;
-  });
+        return cfg_adapter::LOOP_CONTINUE;
+      });
   return callsites;
 }
 
@@ -313,39 +315,40 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
 
 CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
   CallSites callsites;
-  auto* code = const_cast<IRCode*>(method->get_code());
+  const auto* code = method->get_code();
   if (code == nullptr) {
     return callsites;
   }
-  cfg_adapter::iterate_with_iterator(code, [&](const IRList::iterator& it) {
-    auto* insn = it->insn;
-    if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
-      if (callee == nullptr) {
+  cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::const_iterator& it) {
+        auto* insn = it->insn;
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto* callee = resolve_invoke_method(insn, method);
+          if (callee == nullptr) {
+            return cfg_adapter::LOOP_CONTINUE;
+          }
+          if (is_definitely_virtual(callee) &&
+              insn->opcode() != OPCODE_INVOKE_SUPER) {
+            // For true virtual callees, add the callee itself and all of its
+            // overrides if they are not in big virtuals.
+            if (m_big_virtuals.count_unsafe(callee) != 0u) {
+              return cfg_adapter::LOOP_CONTINUE;
+            }
+            if ((callee->get_code() != nullptr) || is_native(callee)) {
+              callsites.emplace_back(callee, insn);
+            }
+            const auto& overriding_methods =
+                get_ordered_overriding_methods_with_code_or_native(callee);
+            for (const auto* overriding_method :
+                 UnorderedIterable(overriding_methods)) {
+              callsites.emplace_back(overriding_method, insn);
+            }
+          } else if (callee->is_concrete()) {
+            callsites.emplace_back(callee, insn);
+          }
+        }
         return cfg_adapter::LOOP_CONTINUE;
-      }
-      if (is_definitely_virtual(callee) &&
-          insn->opcode() != OPCODE_INVOKE_SUPER) {
-        // For true virtual callees, add the callee itself and all of its
-        // overrides if they are not in big virtuals.
-        if (m_big_virtuals.count_unsafe(callee) != 0u) {
-          return cfg_adapter::LOOP_CONTINUE;
-        }
-        if ((callee->get_code() != nullptr) || is_native(callee)) {
-          callsites.emplace_back(callee, insn);
-        }
-        const auto& overriding_methods =
-            get_ordered_overriding_methods_with_code_or_native(callee);
-        for (const auto* overriding_method :
-             UnorderedIterable(overriding_methods)) {
-          callsites.emplace_back(overriding_method, insn);
-        }
-      } else if (callee->is_concrete()) {
-        callsites.emplace_back(callee, insn);
-      }
-    }
-    return cfg_adapter::LOOP_CONTINUE;
-  });
+      });
   return callsites;
 }
 
