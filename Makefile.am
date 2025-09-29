@@ -150,7 +150,6 @@ libredex_la_SOURCES = \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
 	libredex/DuplicateClasses.cpp \
-	libredex/EditableCfgAdapter.cpp \
 	libredex/FbjniMarker.cpp \
 	libredex/FrameworkApi.cpp \
 	libredex/FrequentlyUsedPointersCache.cpp \
