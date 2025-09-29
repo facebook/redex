@@ -553,7 +553,8 @@ AnalysisData analyze(DexMethod* m,
   }
   data.no_easy_expr = false;
 
-  size_t nr_splits = (size_t)std::ceil(((float)size) / code_units_threshold);
+  size_t nr_splits = static_cast<size_t>(std::ceil(
+      static_cast<float>(size) / static_cast<float>(code_units_threshold)));
   redex_assert(nr_splits > 1);
   auto switch_range =
       get_switch_range(*scoped_cfg, switch_it.block(), nr_splits);
@@ -909,17 +910,17 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
 
   auto print_debug = [&](const Stats& stats, const Stats* result_stats) {
     auto print = [&](const auto& in, const std::string& header) {
-      std::cerr << header << std::endl;
+      std::cerr << header << '\n';
       for (const DexMethod* m : unordered_to_ordered(in, compare_dexmethods)) {
-        std::cerr << " * " << show(m) << std::endl;
+        std::cerr << " * " << show(m) << '\n';
       }
     };
     print(stats.large_methods_set, "Large methods");
     print(stats.switch_methods_set, "Large methods with a switch");
     print(stats.large_switches_set, "Large methods with a large switch");
-    std::cerr << stats.constructor << " constructors." << std::endl;
-    std::cerr << stats.non_simple_chain << " non-simple chains." << std::endl;
-    std::cerr << stats.not_hot << " non-hot methods." << std::endl;
+    std::cerr << stats.constructor << " constructors." << '\n';
+    std::cerr << stats.non_simple_chain << " non-simple chains." << '\n';
+    std::cerr << stats.not_hot << " non-hot methods." << '\n';
     if (result_stats != nullptr) {
       print(result_stats->new_methods, "Created methods");
     }
