@@ -440,8 +440,8 @@ Result check_load_params(const DexMethod* method) {
 // proper invoke-direct <init>. Here, we perform simple check to find some
 // missing calls resulting in use of uninitialized variables. We correctly track
 // variables in a "big block", the most common form of allocation+init.
-Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
-  auto* code = (const_cast<DexMethod*>(method))->get_code();
+Result check_uninitialized(DexMethod* method, bool relaxed_init_check) {
+  auto* code = method->get_code();
   always_assert(code->cfg_built());
   auto& cfg = code->cfg();
 
@@ -587,7 +587,7 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
 /*
  * Do a linear pass to sanity-check the structure of the bytecode.
  */
-Result check_structure(const DexMethod* method,
+Result check_structure(DexMethod* method,
                        cfg::ControlFlowGraph& cfg,
                        bool check_no_overwrite_this,
                        bool relaxed_init_check) {
