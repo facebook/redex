@@ -1583,6 +1583,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.BETTER,  # Usually small.
         ),
+        CompressionEntry(
+            "Redex ISB SB To Line Map",
+            lambda args: True,
+            True,
+            [],
+            ["redex-isb-sb-to-lines-mapping.jsonl"],
+            "redex-isb-sb-to-lines-mapping.jsonl.zst",
+            None,
+            CompressionLevel.FAST,  # Large, and not much difference to default size.
+        ),
     ]
 
 
