@@ -32,8 +32,9 @@ constexpr size_t MAX_IMPLS_SIZE = 7;
 std::vector<Location> get_args_for(DexProto* proto, MethodCreator& mc) {
   std::vector<Location> args;
   size_t args_size = proto->get_args()->size();
+  args.reserve(args_size);
   for (size_t arg_loc = 0; arg_loc < args_size; ++arg_loc) {
-    args.push_back(mc.get_local(arg_loc));
+    args.push_back(mc.get_local(static_cast<int>(arg_loc)));
   }
 
   return args;
@@ -131,8 +132,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
     MethodBlock* curr_block;
 
     if (idx < targets.size() - 1) {
-      mb->instance_of(self_loc, type_test_loc,
-                      const_cast<DexType*>(target_type));
+      mb->instance_of(self_loc, type_test_loc, target_type);
       curr_block = mb->if_testz(OPCODE_IF_EQZ, type_test_loc);
     } else {
       // Last case
