@@ -340,7 +340,7 @@ DexType* make_array_type(const DexType* type) {
 DexType* make_array_type(const DexType* type, uint32_t level) {
   always_assert(type != nullptr);
   if (level == 0) {
-    return const_cast<DexType*>(type);
+    return DexType::make_type(type->get_name());
   }
   const auto elem_name = type->str();
   const uint32_t size = elem_name.size() + level;
