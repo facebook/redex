@@ -41,8 +41,7 @@ struct CodeAsKey {
 struct CodeHasher {
   size_t operator()(const CodeAsKey& key) const {
     size_t result = 0;
-    for (auto& mie : cfg::InstructionIterable(
-             const_cast<cfg::ControlFlowGraph&>(key.cfg))) {
+    for (const auto& mie : InstructionIterable(key.cfg)) {
       result ^= mie.insn->hash();
     }
     return result;
