@@ -2302,7 +2302,7 @@ void ControlFlowGraph::calculate_exit_block() {
     // Stack is used to push such objects in order to implement
     // algorithm iteratively.
     struct State {
-      const Block* b{nullptr};
+      Block* b{nullptr};
       const CompactEdgeVector& succs;
       uint32_t element{0};
       uint32_t head{0};
@@ -2345,7 +2345,7 @@ void ControlFlowGraph::calculate_exit_block() {
       if (top_state.head == dfns[top_state.b]) {
         const Block* top{nullptr};
         if (!top_state.has_exit) {
-          exit_blocks.push_back(const_cast<Block*>(top_state.b));
+          exit_blocks.push_back(top_state.b);
           top_state.has_exit = true;
         }
         do {
