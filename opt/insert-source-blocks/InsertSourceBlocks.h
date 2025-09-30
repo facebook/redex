@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include "CallGraph.h"
-#include "MethodOverrideGraph.h"
 #include "Pass.h"
 
 namespace cfg {
