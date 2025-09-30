@@ -197,7 +197,7 @@ class Graph final {
   NodeId exit() const { return m_exit.get(); }
 
   bool has_node(const DexMethod* m) const {
-    return m_nodes.count_unsafe(const_cast<DexMethod*>(m)) != 0;
+    return m_nodes.count_unsafe(m) != 0;
   }
 
   NodeId node(const DexMethod* m) const {
