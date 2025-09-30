@@ -18,6 +18,7 @@
 
 #include <boost/format.hpp>
 
+#include "CallGraph.h"
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -25,6 +26,7 @@
 #include "GlobalConfig.h"
 #include "IRCode.h"
 #include "Macros.h"
+#include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "RedexContext.h"
