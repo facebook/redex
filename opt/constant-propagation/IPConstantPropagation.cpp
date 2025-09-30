@@ -59,7 +59,7 @@ using CombinedAnalyzer =
                                 PrimitiveAnalyzer>;
 
 class AnalyzerGenerator {
-  const ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
+  ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
   ApiLevelAnalyzerState* m_api_level_analyzer_state;
   StringAnalyzerState* m_string_analyzer_state;
   PackageNameState* m_package_name_state;
@@ -67,7 +67,7 @@ class AnalyzerGenerator {
 
  public:
   explicit AnalyzerGenerator(
-      const ImmutableAttributeAnalyzerState* immut_analyzer_state,
+      ImmutableAttributeAnalyzerState* immut_analyzer_state,
       ApiLevelAnalyzerState* api_level_analyzer_state,
       StringAnalyzerState* string_analyzer_state,
       PackageNameState* package_name_state,
@@ -109,15 +109,13 @@ class AnalyzerGenerator {
 
     auto wps_accessor = std::make_unique<WholeProgramStateAccessor>(wps);
     auto* wps_accessor_ptr = wps_accessor.get();
-    auto* immut_analyzer_state =
-        const_cast<ImmutableAttributeAnalyzerState*>(m_immut_analyzer_state);
     return std::make_unique<IntraproceduralAnalysis>(
         &m_cp_state, std::move(wps_accessor), code.cfg(),
         CombinedAnalyzer(
-            class_under_init, immut_analyzer_state, wps_accessor_ptr,
+            class_under_init, m_immut_analyzer_state, wps_accessor_ptr,
             EnumFieldAnalyzerState::get(), BoxedBooleanAnalyzerState::get(),
             m_string_analyzer_state, nullptr, *m_api_level_analyzer_state,
-            m_package_name_state, immut_analyzer_state, nullptr),
+            m_package_name_state, m_immut_analyzer_state, nullptr),
         std::move(env));
   }
 };
