@@ -65,7 +65,7 @@ struct Stats {
 
 using StatsMap = UnorderedMap<const DexMethodRef*, Stats>;
 using AllInteractions = std::map<std::string, StatsMap>;
-const std::string COLD_START = "ColdStart";
+inline const std::string COLD_START = "ColdStart";
 
 class MethodProfiles {
  public:
@@ -200,7 +200,7 @@ class MethodProfiles {
                           const std::vector<DexMethod*>& sources);
 
  private:
-  static AccumulatingTimer s_process_unresolved_lines_timer;
+  static AccumulatingTimer& get_process_unresolved_lines_timer();
   AllInteractions m_method_stats;
   AllInteractions m_baseline_profile_method_stats;
   std::map<std::string, AllInteractions*> m_baseline_manual_interactions;
@@ -317,6 +317,8 @@ class dexmethods_profiled_comparator {
   // See class comment.
   dexmethods_profiled_comparator(const dexmethods_profiled_comparator&) =
       delete;
+  dexmethods_profiled_comparator& operator=(
+      const dexmethods_profiled_comparator&) = delete;
 
   bool operator()(DexMethod* a, DexMethod* b);
 };

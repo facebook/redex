@@ -283,8 +283,8 @@ namespace detail {
 // Re-open the detail namespace to define operator|, because ADL only adds the
 // innermost namespaces for parameter types to the lookup set.
 
-inline constexpr flag_t operator|(AliasFlag a, QuantFlag q) { return {a, q}; }
-inline constexpr flag_t operator|(QuantFlag q, AliasFlag a) { return {a, q}; }
+constexpr flag_t operator|(AliasFlag a, QuantFlag q) { return {a, q}; }
+constexpr flag_t operator|(QuantFlag q, AliasFlag a) { return {a, q}; }
 
 } // namespace detail
 

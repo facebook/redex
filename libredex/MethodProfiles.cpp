@@ -13,6 +13,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/regex.hpp>
+#include <charconv>
 #include <fstream>
 #include <iostream>
 #include <stdlib.h>
@@ -49,8 +50,11 @@ bool empty_column(std::string_view sv) { return sv.empty() || sv == "\n"; }
 
 } // namespace
 
-AccumulatingTimer MethodProfiles::s_process_unresolved_lines_timer(
-    "MethodProfiles::process_unresolved_lines");
+AccumulatingTimer& MethodProfiles::get_process_unresolved_lines_timer() {
+  static AccumulatingTimer s_process_unresolved_lines_timer(
+      "MethodProfiles::process_unresolved_lines");
+  return s_process_unresolved_lines_timer;
+}
 
 std::tuple<const StatsMap&, bool> method_stats_for_interaction_id(
     const std::string& interaction_id, const AllInteractions& interactions) {
@@ -369,7 +373,7 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename,
   // iostreams equivalent and we expect to read very large csv files.
   std::ifstream ifs(csv_filename);
   if (!ifs.good()) {
-    std::cerr << "FAILED to open " << csv_filename << std::endl;
+    std::cerr << "FAILED to open " << csv_filename << '\n';
     return false;
   }
 
@@ -395,7 +399,7 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename,
     }
   }
   if (ifs.bad()) {
-    std::cerr << "FAILED to read a line!" << std::endl;
+    std::cerr << "FAILED to read a line!" << '\n';
     return false;
   }
 
@@ -405,28 +409,25 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename,
   return true;
 }
 
+template <typename IntType = int64_t>
+IntType parse_int(std::string_view tok) {
+  IntType result{};
+  auto [ptr, ec]{std::from_chars(tok.data(), tok.data() + tok.size(), result)};
+  std::string_view rest(ptr, tok.size() - (ptr - tok.data()));
+
+  always_assert_log(ec == std::errc(), "can't parse %s into a int: %s",
+                    SHOW(tok), std::make_error_condition(ec).message().c_str());
+  always_assert_log(empty_column(rest), "can't parse %s into a int", SHOW(tok));
+  return result;
+}
+
 // `strtol` and `strtod` requires c string to be null terminated,
 // std::string_view::data() doesn't have this guarantee. Our `string_view`s are
 // taken from `std::string`s. This should be safe.
-template <typename IntType>
-IntType parse_int(std::string_view tok) {
-  char* ptr = nullptr;
-  const auto parsed = strtol(tok.data(), &ptr, 10);
-  always_assert_log(
-      ptr <= (tok.data() + tok.size()),
-      "strtod went over std::string_view boundary for string_view %s",
-      SHOW(tok));
-
-  std::string_view rest(ptr, tok.size() - (ptr - tok.data()));
-  always_assert_log(ptr != tok.data(), "can't parse %s into a int", SHOW(tok));
-  always_assert_log(empty_column(rest), "can't parse %s into a int", SHOW(tok));
-  always_assert(parsed <= std::numeric_limits<IntType>::max());
-  always_assert(parsed >= std::numeric_limits<IntType>::min());
-  return static_cast<IntType>(parsed);
-}
-
+// Combine with parse_int above after we drop some older compiler support.
 double parse_double(std::string_view tok) {
   char* ptr = nullptr;
+  // NOLINTNEXTLINE(bugprone-suspicious-stringview-data-usage)
   const auto result = strtod(tok.data(), &ptr);
   always_assert_log(
       ptr <= (tok.data() + tok.size()),
@@ -450,14 +451,16 @@ bool MethodProfiles::parse_metadata(std::string_view line) {
       m_interaction_id = std::string(cell);
       return true;
     case 1: {
-      interaction_count = parse_int<uint32_t>(cell);
+      auto parsed = parse_int(cell);
+      always_assert(parsed <= std::numeric_limits<uint32_t>::max());
+      always_assert(parsed >= 0);
+      interaction_count = static_cast<uint32_t>(parsed);
       return true;
     }
     default: {
       bool ok = empty_column(cell);
       if (!ok) {
-        std::cerr << "Unexpected extra value in metadata: " << cell
-                  << std::endl;
+        std::cerr << "Unexpected extra value in metadata: " << cell << '\n';
       }
       return ok;
     }
@@ -727,7 +730,7 @@ void MethodProfiles::process_unresolved_lines(bool baseline_profile_variant) {
     return;
   }
 
-  auto timer_scope = s_process_unresolved_lines_timer.scope();
+  auto timer_scope = get_process_unresolved_lines_timer().scope();
 
   std::set<ParsedMain*> resolved;
   std::mutex resolved_mutex;
@@ -858,7 +861,7 @@ bool MethodProfiles::parse_header(std::string_view line) {
       default: {
         auto ok = empty_column(cell);
         if (!ok) {
-          std::cerr << "Unexpected Metadata Column: " << cell << std::endl;
+          std::cerr << "Unexpected Metadata Column: " << cell << '\n';
         }
         return ok;
       }
@@ -907,14 +910,18 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
 
   m_cache.reserve(initial_order.size());
 
-  m_coldstart_start_marker = static_cast<DexMethod*>(
-      DexMethod::get_method("Lcom/facebook/common/methodpreloader/primarydeps/"
-                            "StartColdStartMethodPreloaderMethodMarker;"
-                            ".startColdStartMethods:()V"));
-  m_coldstart_end_marker = static_cast<DexMethod*>(
-      DexMethod::get_method("Lcom/facebook/common/methodpreloader/primarydeps/"
-                            "EndColdStartMethodPreloaderMethodMarker;"
-                            ".endColdStartMethods:()V"));
+  auto* start_ref = DexMethod::get_method(
+      "Lcom/facebook/common/methodpreloader/primarydeps/"
+      "StartColdStartMethodPreloaderMethodMarker;"
+      ".startColdStartMethods:()V");
+  m_coldstart_start_marker =
+      (start_ref != nullptr) ? start_ref->as_def() : nullptr;
+
+  auto* end_ref = DexMethod::get_method(
+      "Lcom/facebook/common/methodpreloader/primarydeps/"
+      "EndColdStartMethodPreloaderMethodMarker;"
+      ".endColdStartMethods:()V");
+  m_coldstart_end_marker = (end_ref != nullptr) ? end_ref->as_def() : nullptr;
 
   for (const auto& pair : m_method_profiles->all_interactions()) {
     std::string interaction_id = pair.first;
@@ -1002,8 +1009,9 @@ double dexmethods_profiled_comparator::get_method_sort_num(
               mixed_ordering(stat.appear_percent, m_min_appear_percent,
                              stat.order_percent, 0.1);
 
-          secondary_ordering = RANGE_STRIDE * m_interactions.size() +
-                               range_begin + score * RANGE_SIZE / 100.0;
+          secondary_ordering =
+              RANGE_STRIDE * static_cast<double>(m_interactions.size()) +
+              range_begin + score * RANGE_SIZE / 100.0;
         }
         continue;
       }

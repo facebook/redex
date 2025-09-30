@@ -51,8 +51,21 @@ bool is_default_constructor(const DexMethod* meth) {
     auto it = ii.begin();
     const auto end = ii.end();
 
-    return it != end && it++->insn->opcode() == OPCODE_INVOKE_DIRECT &&
-           it != end && it++->insn->opcode() == OPCODE_RETURN_VOID && it == end;
+    if (it == end) {
+      return false;
+    }
+    if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
+      return false;
+    }
+    ++it;
+    if (it == end) {
+      return false;
+    }
+    if (it->insn->opcode() != OPCODE_RETURN_VOID) {
+      return false;
+    }
+    ++it;
+    return it == end;
   }
   return false;
 }
