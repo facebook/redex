@@ -152,7 +152,6 @@ uint64_t stable_hash(ControlFlowGraph& cfg) {
         case EDGE_GHOST:
         case EDGE_TYPE_SIZE:
           not_reached();
-          return 0;
         }
       }();
       hash = hash * 23 + [e]() -> uint64_t {
@@ -172,7 +171,6 @@ uint64_t stable_hash(ControlFlowGraph& cfg) {
         case EDGE_GHOST:
         case EDGE_TYPE_SIZE:
           not_reached();
-          return 0;
         }
       }();
     }
@@ -319,7 +317,6 @@ struct ProfileFile {
                           std::string(line).c_str(),
                           boost::join(split_vec, "'").c_str(),
                           boost::join(exp, ",").c_str(), num);
-        return split_vec;
       };
       check_components(next_line_fn(), 0, {"interaction", "appear#"});
       {
@@ -434,7 +431,7 @@ struct Injector {
 
     // For now, just convert to coverage. Having stats means it's not zero.
     redex_assert(it->second.call_count > 0);
-    return SourceBlock::Val(1, it->second.appear_percent);
+    return SourceBlock::Val(1, static_cast<float>(it->second.appear_percent));
   }
 
   using ProfileResult =
@@ -642,12 +639,12 @@ struct Injector {
     std::string idom_map;
   };
   struct SimpleSMIStore {
-    std::mutex acc_mutex{};
-    std::deque<SerializedMethodInfo> data{};
+    std::mutex acc_mutex;
+    std::deque<SerializedMethodInfo> data;
 
     void add(SerializedMethodInfo&& in) {
       std::unique_lock<std::mutex> lock{acc_mutex};
-      data.emplace_back(in);
+      data.emplace_back(std::move(in));
     }
   };
 
@@ -948,10 +945,12 @@ struct Injector {
       for (const auto& p_file : profile_files) {
         unresolved += p_file->unresolved_methods.size();
       }
-      mgr.set_metric("avg_unresolved_methods_100",
-                     unresolved > 0
-                         ? (int64_t)(unresolved * 100.0 / profile_files.size())
-                         : 0);
+      mgr.set_metric(
+          "avg_unresolved_methods_100",
+          unresolved > 0
+              // NOLINTNEXTLINE(bugprone-narrowing-conversions)
+              ? static_cast<int64_t>(unresolved * 100.0 / profile_files.size())
+              : 0);
     }
 
     if (!failed_methods.empty()) {
@@ -1100,7 +1099,9 @@ struct Injector {
                        std::back_inserter(interactions),
                        [](const auto& p) { return p.first; });
         sort_and_set_indices(
-            interactions, [](const auto& s) -> const std::string& { return s; },
+            interactions,
+            // NOLINTNEXTLINE(bugprone-return-const-ref-from-parameter)
+            [](const auto& s) -> const std::string& { return s; },
             interaction_less);
       }
     }
