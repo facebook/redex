@@ -93,8 +93,7 @@ void LevelChecker::init_method(DexMethod* method) {
     if (cls == nullptr) {
       method_level = s_min_level;
     } else {
-      method_level =
-          cls->rstate.get_api_level(); // NOLINT(bugprone-signed-char-misuse)
+      method_level = cls->rstate.get_api_level();
       always_assert(method_level != -1);
     }
   }
