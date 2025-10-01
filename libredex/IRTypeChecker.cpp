@@ -14,7 +14,6 @@
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexPosition.h"
-#include "Match.h"
 #include "MonitorCount.h"
 #include "RedexContext.h"
 #include "Resolver.h"
@@ -611,7 +610,8 @@ Result check_structure(DexMethod* method,
       if (check_no_overwrite_this) {
         if (op == IOPCODE_LOAD_PARAM_OBJECT && this_insn == nullptr) {
           this_insn = insn;
-        } else if (insn->has_dest() && insn->dest() == this_insn->dest()) {
+        } else if (insn->has_dest() && this_insn != nullptr &&
+                   insn->dest() == this_insn->dest()) {
           return Result::make_error(
               "Encountered overwrite of `this` register by " + show(insn));
         }
@@ -1156,7 +1156,9 @@ struct Throw {
   explicit Throw() {}
 
   // NOLINTNEXTLINE(bugprone-exception-escape)
-  ~Throw() noexcept(false) { throw TypeCheckingException(oss.str()); }
+  [[noreturn]] ~Throw() noexcept(false) {
+    throw TypeCheckingException(oss.str());
+  }
 
   Throw(const Throw&) = delete;
   Throw(Throw&&) = delete;
@@ -1207,12 +1209,10 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
-  case IOPCODE_LOAD_PARAM_WIDE: {
+  case IOPCODE_LOAD_PARAM_WIDE:
+  case OPCODE_NOP: {
     // IOPCODE_LOAD_PARAM_* instructions have been processed before the
     // analysis.
-    break;
-  }
-  case OPCODE_NOP: {
     break;
   }
   case OPCODE_MOVE: {
@@ -1242,12 +1242,10 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     assume_wide_scalar(current_state, RESULT_REGISTER);
     break;
   }
-  case OPCODE_MOVE_EXCEPTION: {
+  case OPCODE_MOVE_EXCEPTION:
+  case OPCODE_RETURN_VOID: {
     // We don't know where to grab the type of the just-caught exception.
     // Simply set to j.l.Throwable here.
-    break;
-  }
-  case OPCODE_RETURN_VOID: {
     break;
   }
   case OPCODE_RETURN: {
@@ -1278,33 +1276,17 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     break;
   }
   case IOPCODE_R_CONST:
-  case OPCODE_CONST: {
-    break;
-  }
-  case OPCODE_CONST_WIDE: {
-    break;
-  }
-  case OPCODE_CONST_STRING: {
-    break;
-  }
-  case OPCODE_CONST_CLASS: {
-    break;
-  }
-  case OPCODE_CONST_METHOD_HANDLE: {
-    break;
-  }
+  case OPCODE_CONST:
+  case OPCODE_CONST_WIDE:
+  case OPCODE_CONST_STRING:
+  case OPCODE_CONST_CLASS:
+  case OPCODE_CONST_METHOD_HANDLE:
   case OPCODE_CONST_METHOD_TYPE: {
     break;
   }
   case OPCODE_MONITOR_ENTER:
-  case OPCODE_MONITOR_EXIT: {
-    assume_reference(current_state, insn->src(0));
-    break;
-  }
-  case OPCODE_CHECK_CAST: {
-    assume_reference(current_state, insn->src(0));
-    break;
-  }
+  case OPCODE_MONITOR_EXIT:
+  case OPCODE_CHECK_CAST:
   case OPCODE_INSTANCE_OF:
   case OPCODE_ARRAY_LENGTH: {
     assume_reference(current_state, insn->src(0));
@@ -1601,18 +1583,12 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
 
     break;
   }
-  case OPCODE_SGET: {
-    break;
-  }
+  case OPCODE_SGET:
   case OPCODE_SGET_BOOLEAN:
   case OPCODE_SGET_BYTE:
   case OPCODE_SGET_CHAR:
-  case OPCODE_SGET_SHORT: {
-    break;
-  }
-  case OPCODE_SGET_WIDE: {
-    break;
-  }
+  case OPCODE_SGET_SHORT:
+  case OPCODE_SGET_WIDE:
   case OPCODE_SGET_OBJECT: {
     break;
   }
@@ -1811,11 +1787,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_XOR_INT:
   case OPCODE_SHL_INT:
   case OPCODE_SHR_INT:
-  case OPCODE_USHR_INT: {
-    assume_integer(current_state, insn->src(0));
-    assume_integer(current_state, insn->src(1));
-    break;
-  }
+  case OPCODE_USHR_INT:
   case OPCODE_DIV_INT:
   case OPCODE_REM_INT: {
     assume_integer(current_state, insn->src(0));
@@ -1827,11 +1799,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_MUL_LONG:
   case OPCODE_AND_LONG:
   case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG: {
-    assume_long(current_state, insn->src(0));
-    assume_long(current_state, insn->src(1));
-    break;
-  }
+  case OPCODE_XOR_LONG:
   case OPCODE_DIV_LONG:
   case OPCODE_REM_LONG: {
     assume_long(current_state, insn->src(0));
@@ -1871,10 +1839,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_XOR_INT_LIT:
   case OPCODE_SHL_INT_LIT:
   case OPCODE_SHR_INT_LIT:
-  case OPCODE_USHR_INT_LIT: {
-    assume_integer(current_state, insn->src(0));
-    break;
-  }
+  case OPCODE_USHR_INT_LIT:
   case OPCODE_DIV_INT_LIT:
   case OPCODE_REM_INT_LIT: {
     assume_integer(current_state, insn->src(0));
@@ -1967,7 +1932,7 @@ std::string IRTypeChecker::dump_annotated_cfg_reduced(DexMethod* method) const {
       }
     }
 
-    void mie_before(std::ostream& os, const MethodItemEntry& mie) {}
+    void mie_before(std::ostream& /* os */, const MethodItemEntry& /* mie */) {}
     void mie_after(std::ostream& os, const MethodItemEntry& mie) {
       if (mie.type != MFLOW_OPCODE) {
         return;
@@ -1997,7 +1962,7 @@ std::string IRTypeChecker::dump_annotated_cfg_reduced(DexMethod* method) const {
       cur = iter.get_entry_state_at(b);
       os << "entry state: " << cur << "\n";
     }
-    void end_block(std::ostream& os, cfg::Block* b) {}
+    void end_block(std::ostream& /* os */, cfg::Block* /* b */) {}
   };
 
   TypeInferenceReducedSpecial special(inf);
