@@ -582,7 +582,8 @@ class IODIEncodingTest : public IODITest {
         if (layered) {
           auto layer = get_iodi_layer(*debug_item);
           if (layer) {
-            pretty_name = IODIMetadata::get_layered_name(pretty_name, *layer);
+            pretty_name =
+                IODIMetadata::get_layered_name(std::move(pretty_name), *layer);
           }
         }
         if (is_plain) {

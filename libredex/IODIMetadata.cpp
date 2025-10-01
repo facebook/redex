@@ -193,8 +193,8 @@ void IODIMetadata::write(
 
     redex_assert(layer < DexOutput::kIODILayerBound);
 
-    auto name = get_iodi_name(method);
-    const std::string& layered_name = get_layered_name(name, layer);
+    const std::string layered_name =
+        get_layered_name(get_iodi_name(method), layer);
 
     always_assert(layered_name.size() < UINT16_MAX);
     entry_hdr.klen = layered_name.size();
