@@ -15,14 +15,13 @@
 #include "DexMethodHandle.h"
 #include "TypeUtil.h"
 
-// NOLINTBEGIN
 #define INIT_DMAP_ID(TYPE)                                                \
   always_assert_type_log(dh->TYPE##_ids_off < dh->file_size, INVALID_DEX, \
                          #TYPE " section offset out of range");           \
-  m_##TYPE##_ids = (dex_##TYPE##_id*)(m_dexbase + dh->TYPE##_ids_off);    \
+  m_##TYPE##_ids = reinterpret_cast<const dex_##TYPE##_id*>(              \
+      m_dexbase + dh->TYPE##_ids_off);                                    \
   m_##TYPE##_ids_size = dh->TYPE##_ids_size;                              \
   m_##TYPE##_cache.resize(dh->TYPE##_ids_size)
-// NOLINTEND
 
 DexIdx::DexIdx(const dex_header* dh) {
   m_dexbase = reinterpret_cast<const uint8_t*>(dh);

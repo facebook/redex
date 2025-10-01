@@ -29,21 +29,21 @@ class DexIdx {
  private:
   const uint8_t* m_dexbase;
 
-  dex_string_id* m_string_ids;
+  const dex_string_id* m_string_ids;
   uint32_t m_string_ids_size;
-  dex_type_id* m_type_ids;
+  const dex_type_id* m_type_ids;
   uint32_t m_type_ids_size;
-  dex_field_id* m_field_ids;
+  const dex_field_id* m_field_ids;
   uint32_t m_field_ids_size;
-  dex_method_id* m_method_ids;
+  const dex_method_id* m_method_ids;
   uint32_t m_method_ids_size;
-  dex_proto_id* m_proto_ids;
+  const dex_proto_id* m_proto_ids;
   uint32_t m_proto_ids_size;
   // The call-site and method-handle tables are optional, so we initialize their
   // sizes to 0.
-  dex_callsite_id* m_callsite_ids;
+  const dex_callsite_id* m_callsite_ids;
   uint32_t m_callsite_ids_size{0};
-  dex_methodhandle_id* m_methodhandle_ids;
+  const dex_methodhandle_id* m_methodhandle_ids;
   uint32_t m_methodhandle_ids_size{0};
 
   std::vector<const DexString*> m_string_cache;
