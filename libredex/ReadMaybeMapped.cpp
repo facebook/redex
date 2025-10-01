@@ -15,9 +15,10 @@
 #include <sys/mman.h> // For madvise
 #endif
 
+#ifdef __APPLE__
 #include "utils/Compat.h" // TEMP_FAILURE_RETRY, if necessary.
+#endif
 
-#include "Debug.h"
 #include "Macros.h"
 
 namespace redex {
@@ -98,7 +99,7 @@ static_assert(sizeof(PageSizeReadFileContents) == 4096 || sizeof(void*) != 8,
 // Note: using boost for Windows compat.
 template <int kMadviseFlags>
 struct MmapFileContents final {
-  boost::iostreams::mapped_file_source mapped_file{};
+  boost::iostreams::mapped_file_source mapped_file;
 
   explicit MmapFileContents(const std::string& file) {
     mapped_file.open(file);

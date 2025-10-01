@@ -7,9 +7,7 @@
 
 #include "ReachableClasses.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <chrono>
+#include <boost/algorithm/string/predicate.hpp>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -19,13 +17,11 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "FbjniMarker.h"
-#include "Match.h"
 #include "RedexResources.h"
 #include "ReflectionAnalysis.h"
 #include "Show.h"
 #include "StringUtil.h"
 #include "Trace.h"
-#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {
@@ -459,7 +455,7 @@ void analyze_reachable_from_manifest(
       auto resources = create_resource_reader(apk_dir);
       return resources->get_manifest_class_info();
     } catch (const std::exception& e) {
-      std::cerr << "Error reading manifest: " << e.what() << std::endl;
+      std::cerr << "Error reading manifest: " << e.what() << '\n';
       return ManifestClassInfo{};
     }
   }();
