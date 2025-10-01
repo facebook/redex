@@ -1759,7 +1759,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                  (int64_t)(100.0 * cpu_time / wall_time.count()));
       set_metric("timing.utilization.100",
                  (int64_t)(100.0 * cpu_time / wall_time.count() /
-                           redex_parallel::default_num_threads()));
+                           static_cast<double>(
+                               redex_parallel::default_num_threads())));
     }
 
     m_current_pass_info = nullptr;
