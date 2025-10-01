@@ -69,9 +69,9 @@ void SoLibrary::populate_functions() {
   for (Json::Value::ArrayIndex i = 0; i < registered_natives_opt->size(); i++) {
     auto klass = (*registered_natives_opt)[i];
     std::string class_name = klass["class_name"].asString();
-    auto methods = klass["registered_functions"];
+    const auto& methods = klass["registered_functions"];
     for (Json::Value::ArrayIndex j = 0; j < methods.size(); j++) {
-      auto method = methods[j];
+      const auto& method = methods[j];
       std::string method_name = method["method_name"].asString();
       std::string desc = method["desc"].asString();
       std::string function_name = method["function"].asString();
