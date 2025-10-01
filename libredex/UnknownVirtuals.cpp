@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <array>
 #include <vector>
 
 #include "UnknownVirtuals.h"
@@ -13,7 +14,7 @@ namespace {
 
 // add any type on which an access is allowed and safe without accessibility
 // issues
-const char* safe_types_on_refs[] = {
+constexpr std::array<const char*, 10> safe_types_on_refs{
     "Ljava/lang/Object;",        "Ljava/lang/String;",  "Ljava/lang/Enum;",
     "Ljava/lang/StringBuilder;", "Ljava/lang/Boolean;", "Ljava/lang/Class;",
     "Ljava/lang/Long;",          "Ljava/lang/Integer;", "Landroid/os/Bundle;",
