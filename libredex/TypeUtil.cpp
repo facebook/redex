@@ -240,8 +240,9 @@ char type_shorty(const DexType* type) {
   case 'D':
   case 'L':
     return name[0];
+  default:
+    not_reached();
   }
-  not_reached();
 }
 
 bool check_cast(const DexType* type, const DexType* base_type) {
@@ -343,7 +344,7 @@ DexType* make_array_type(const DexType* type, uint32_t level) {
     return DexType::make_type(type->get_name());
   }
   const auto elem_name = type->str();
-  const uint32_t size = elem_name.size() + level;
+  const uint32_t size = static_cast<uint32_t>(elem_name.size()) + level;
   std::string name;
   name.reserve(size + 1);
   name.append(level, '[');
@@ -472,8 +473,9 @@ DataType to_datatype(const DexType* t) {
     return DataType::Object;
   case '[':
     return DataType::Array;
+  default:
+    not_reached();
   }
-  not_reached();
 }
 
 bool is_subclass(const DexType* parent, const DexType* child) {

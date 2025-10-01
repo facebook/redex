@@ -614,12 +614,10 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
-  case IOPCODE_LOAD_PARAM_WIDE: {
+  case IOPCODE_LOAD_PARAM_WIDE:
+  case OPCODE_NOP: {
     // IOPCODE_LOAD_PARAM_* instructions have been processed before the
     // analysis.
-    break;
-  }
-  case OPCODE_NOP: {
     break;
   }
   case OPCODE_MOVE: {
@@ -1569,7 +1567,7 @@ void TypeInference::print(std::ostream& output) const {
       IRInstruction* insn = mie.insn;
       auto it = m_type_envs.find(insn);
       always_assert(it != m_type_envs.end());
-      output << SHOW(insn) << " -- " << it->second << std::endl;
+      output << SHOW(insn) << " -- " << it->second << '\n';
     }
   }
 }
@@ -1579,7 +1577,7 @@ void TypeInference::traceState(TypeEnvironment* state) const {
     return;
   }
   std::ostringstream out;
-  out << *state << std::endl;
+  out << *state << '\n';
   TRACE(TYPE, 9, "%s", out.str().c_str());
 }
 

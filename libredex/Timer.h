@@ -23,14 +23,14 @@ struct Timer {
   using times_t = std::vector<std::pair<std::string, double>>;
 
   // there should be no currently running Timers when this function is called
-  static const times_t& get_times() { return s_times; }
-  static void clear_times() { s_times.clear(); }
+  static const times_t& get_times() { return get_s_times(); }
+  static void clear_times() { get_s_times().clear(); }
 
   static void add_timer(std::string msg, double dur_s);
 
  private:
-  static std::mutex s_lock;
-  static times_t s_times;
+  static std::mutex& get_s_lock();
+  static times_t& get_s_times();
   static unsigned s_indent;
   std::string m_msg;
   std::chrono::high_resolution_clock::time_point m_start;
@@ -89,7 +89,7 @@ class AccumulatingTimer {
   using times_impl_t =
       std::list<std::pair<std::string, std::shared_ptr<std::atomic<uint64_t>>>>;
 
-  static std::mutex s_lock;
+  static std::mutex& get_s_lock();
   // We dynamically allocate the static list of times to avoid problems with the
   // static initialization / destruction order.
   static times_impl_t* s_times;
