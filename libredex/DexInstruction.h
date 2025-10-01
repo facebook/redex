@@ -119,7 +119,7 @@ class DexInstruction : public Gatherable {
    */
   DexOpcode opcode() const;
   uint16_t dest() const;
-  uint16_t src(int i) const;
+  uint16_t src(size_t i) const;
   uint16_t arg_word_count() const;
   uint16_t range_base() const;
   uint16_t range_size() const;

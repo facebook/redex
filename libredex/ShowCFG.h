@@ -103,10 +103,10 @@ struct ArraysAndResIds {
           indent = std::string(idx + 2, ' ');
         }
         oss << block_indent << indent << "Resource ID: 0x" << std::hex
-            << (uint32_t)insn->get_literal() << std::dec << std::endl;
+            << (uint32_t)insn->get_literal() << std::dec << '\n';
       } else if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
         auto* data = insn->get_data();
-        oss << block_indent << "  " << SHOW(data) << std::endl;
+        oss << block_indent << "  " << SHOW(data) << '\n';
       }
     }
   }

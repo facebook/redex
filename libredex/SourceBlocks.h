@@ -512,8 +512,7 @@ inline SourceBlock* get_last_source_block(cfg::Block* b) {
   return rit->src_block.get();
 }
 inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
-  return const_cast<SourceBlock*>(
-      get_last_source_block(const_cast<cfg::Block*>(b)));
+  return get_last_source_block(const_cast<cfg::Block*>(b));
 }
 // This helper gets the last source block in a block if it is after a throw,
 // otherwise returns a nullptr

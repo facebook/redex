@@ -33,7 +33,7 @@ void print(std::ostream& output,
     std::vector<sparta::s_expr> s_exprs;
     s_exprs.emplace_back(show(pair.first));
     s_exprs.emplace_back(to_s_expr(pair.second));
-    output << sparta::s_expr(s_exprs) << std::endl;
+    output << sparta::s_expr(s_exprs) << '\n';
   }
 }
 

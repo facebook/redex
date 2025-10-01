@@ -220,7 +220,7 @@ DexInstruction* DexInstruction::set_dest(uint16_t vreg) {
   }
 }
 
-uint16_t DexInstruction::src(int i) const {
+uint16_t DexInstruction::src(size_t i) const {
   auto format = dex_opcode::format(opcode());
   switch (format) {
   case FMT_f11x_s:

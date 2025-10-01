@@ -178,7 +178,7 @@ std::string show_type_list(const DexTypeList* l, bool deobfuscated) {
     return "";
   }
 
-  string_builders::DynamicStringBuilder b(l->size());
+  string_builders::DynamicStringBuilder b(static_cast<uint32_t>(l->size()));
   for (const auto& type : *l) {
     b << show_type(type, deobfuscated);
   }
@@ -934,7 +934,8 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     if (!first) {
       ss << ", ";
     }
-    ss << "v" << insn->src(i);
+    ss << "v";
+    ss << std::to_string(static_cast<unsigned int>(insn->src(i)));
     first = false;
   }
   if (opcode::ref(insn->opcode()) != opcode::Ref::None && !first) {
@@ -1297,8 +1298,8 @@ std::string show(const DexOpcodeData* insn) {
     const uint16_t entries = *data++;
     const uint16_t* tdata = data + static_cast<ptrdiff_t>(2 * entries);
 
-    const uint8_t* data_ptr = (uint8_t*)data;
-    const uint8_t* tdata_ptr = (uint8_t*)tdata;
+    const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data);
+    const uint8_t* tdata_ptr = reinterpret_cast<const uint8_t*>(tdata);
     for (size_t i = 0; i < entries; i++) {
       if (i != 0) {
         ss << ", ";
@@ -1313,7 +1314,7 @@ std::string show(const DexOpcodeData* insn) {
     // See format at
     // https://source.android.com/devices/tech/dalvik/dalvik-bytecode#packed-switch
     const uint16_t entries = *data++;
-    const uint8_t* data_ptr = (uint8_t*)data;
+    const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data);
     int32_t case_key = read<int32_t>(data_ptr, sizeof(int32_t));
     for (size_t i = 0; i < entries; i++) {
       if (i != 0) {
@@ -1328,7 +1329,7 @@ std::string show(const DexOpcodeData* insn) {
     // See format at
     // https://source.android.com/devices/tech/dalvik/dalvik-bytecode#fill-array
     const uint16_t ewidth = *data++;
-    const uint32_t element_count = *((uint32_t*)data);
+    const uint32_t element_count = *reinterpret_cast<const uint32_t*>(data);
     ss << "[" << element_count << " x " << ewidth << "] {";
     auto vec = pretty_array_data_payload(ewidth, element_count, insn->data());
     bool first{true};
@@ -1371,7 +1372,8 @@ std::string show_insn(const DexInstruction* insn, bool deobfuscated) {
     if (!first) {
       ss << ",";
     }
-    ss << " v" << insn->src(i);
+    const uint32_t src_value = static_cast<uint32_t>(insn->src(i));
+    ss << " v" << src_value;
     first = false;
   }
   if (dex_opcode::has_literal(insn->opcode())) {
@@ -1621,24 +1623,28 @@ std::string show(DexIdx* p) {
      << "strings\n"
      << "----------------------------------------\n";
   for (uint32_t i = 0; i < p->m_string_ids_size; i++) {
+    always_assert(i < p->m_string_cache.size());
     ss << show(p->m_string_cache[i]) << "\n";
   }
   ss << "----------------------------------------\n"
      << "types\n"
      << "----------------------------------------\n";
   for (uint32_t i = 0; i < p->m_type_ids_size; i++) {
+    always_assert(i < p->m_type_cache.size());
     ss << show(p->m_type_cache[i]) << "\n";
   }
   ss << "----------------------------------------\n"
      << "fields\n"
      << "----------------------------------------\n";
   for (uint32_t i = 0; i < p->m_field_ids_size; i++) {
+    always_assert(i < p->m_field_cache.size());
     ss << show(p->m_field_cache[i]) << "\n";
   }
   ss << "----------------------------------------\n"
      << "methods\n"
      << "----------------------------------------\n";
   for (uint32_t i = 0; i < p->m_method_ids_size; i++) {
+    always_assert(i < p->m_method_cache.size());
     ss << show(p->m_method_cache[i]) << "\n";
   }
   return ss.str();
@@ -1668,7 +1674,7 @@ std::string show_context(IRCode const* code, IRInstruction const* insn) {
     iter--;
   }
   for (int i = 0; i < 11 && iter != code->end(); i++) {
-    ss << SHOW(*iter++) << std::endl;
+    ss << SHOW(*iter++) << '\n';
   }
   return ss.str();
 }
@@ -1733,7 +1739,7 @@ std::string show_deobfuscated(const DexMethodHandle* methodhandle) {
 
 std::string pretty_bytes(uint64_t val) {
   size_t divisions = 0;
-  double d_val = val;
+  double d_val = static_cast<double>(val);
   while (d_val > 1024 && divisions < 3) {
     d_val /= 1024;
     ++divisions;
@@ -1807,7 +1813,7 @@ std::vector<std::string> pretty_array_data_payload(const uint16_t ewidth,
                                                    const uint16_t* data) {
   std::vector<std::string> result;
   result.reserve(element_count);
-  const uint8_t* data_ptr = (uint8_t*)(data + 3);
+  const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data + 3);
   for (size_t i = 0; i < element_count; i++) {
     auto xx = read<uint64_t>(data_ptr, ewidth);
     std::ostringstream oss;

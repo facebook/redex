@@ -603,11 +603,12 @@ struct RandomGenerator {
         hot_throw_cold_generation_ratio(hot_throw_cold_generation_ratio) {}
 
   float generate_appear100() {
-    return uniform_distribution(random_number_generator);
+    return static_cast<float>(uniform_distribution(random_number_generator));
   }
 
   float generate_block_hit() {
-    float hit_percent = uniform_distribution(random_number_generator);
+    float hit_percent =
+        static_cast<float>(uniform_distribution(random_number_generator));
     if (hit_percent <= cold_to_hot_generation_ratio) {
       return 0.0;
     } else {
@@ -618,7 +619,8 @@ struct RandomGenerator {
   // This generates if a block should be converted from hot -> throw -> hot to
   // hot -> throw -> cold
   bool generate_if_convert_hot_throw_cold() {
-    float convert_percent = uniform_distribution(random_number_generator);
+    float convert_percent =
+        static_cast<float>(uniform_distribution(random_number_generator));
     return (convert_percent <= hot_throw_cold_generation_ratio);
   }
 
@@ -741,18 +743,18 @@ struct TopoTraversalHelper {
   }
 
   void set_block_random_value(Block* block) {
-    int next_hit = generator->generate_block_hit();
+    int next_hit = static_cast<int>(generator->generate_block_hit());
     int throw_count = get_number_of_throws_in_block(block);
 
     if (next_hit == 0 || throw_count == 0) {
-      set_block_value(block, next_hit);
+      set_block_value(block, static_cast<float>(next_hit));
     } else {
       bool should_convert_to_hot_throw_cold =
           generator->generate_if_convert_hot_throw_cold();
       if (should_convert_to_hot_throw_cold) {
         set_block_as_hot_throw_cold(block, throw_count);
       } else {
-        set_block_value(block, next_hit);
+        set_block_value(block, static_cast<float>(next_hit));
       }
     }
   }
@@ -763,8 +765,8 @@ struct TopoTraversalHelper {
     auto& metadata = value_insert_helper->fuzzing_metadata_map;
     const auto& successors = block->succs();
     size_t successor_size = successors.size();
-    size_t next_hot_block_idx =
-        generator->generate_random_number_in_range(0, successor_size - 1);
+    size_t next_hot_block_idx = generator->generate_random_number_in_range(
+        0, static_cast<int>(successor_size - 1));
 
     for (size_t i = 0; i < successor_size; ++i) {
       auto* succ_block = successors.at(i)->target();
@@ -1302,7 +1304,7 @@ void fix_chain_violations(ControlFlowGraph* cfg) {
           }
         }
       },
-      [&](Block* cur, const Edge* e) {}, [&](Block* cur) {});
+      [&](Block* /* cur */, const Edge* /* e */) {}, [&](Block* /* cur */) {});
 }
 
 void fix_idom_violation(
@@ -1344,7 +1346,7 @@ void fix_idom_violations(ControlFlowGraph* cfg) {
           }
         }
       },
-      [&](Block* cur, const Edge* e) {}, [&](Block* cur) {});
+      [&](Block* /* cur */, const Edge* /* e */) {}, [&](Block* /* cur */) {});
 }
 
 void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg) {
@@ -2200,11 +2202,13 @@ struct ViolationsHelper::ViolationsHelperImpl {
         auto mm_top_changes_i = mm_top_changes.sub_scope(std::to_string(i));
         {
           auto mm_top_changes_i_size = mm_top_changes_i.sub_scope("size");
-          mm_top_changes_i_size.set_metric(show(t.method), t.method_size);
+          mm_top_changes_i_size.set_metric(show(t.method),
+                                           static_cast<int64_t>(t.method_size));
         }
         {
           auto mm_top_changes_i_size = mm_top_changes_i.sub_scope("delta");
-          mm_top_changes_i_size.set_metric(show(t.method), t.violations_delta);
+          mm_top_changes_i_size.set_metric(
+              show(t.method), static_cast<int64_t>(t.violations_delta));
         }
       }
     }
@@ -2217,7 +2221,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
       auto call_graph = std::make_unique<call_graph::Graph>(
           call_graph::single_callee_graph(*method_override_graph, scope));
       auto val = compute_method_violations(*call_graph, scope);
-      method_violation_change_sum = val - method_violations;
+      method_violation_change_sum =
+          static_cast<long long>(val - method_violations);
       TRACE(MMINL, 0, "Introduced %lld inter-method violations.",
             method_violation_change_sum);
     }

@@ -85,14 +85,15 @@ void StringTreeMap<ValueType>::encode(std::ostringstream& oss) const {
   if (m_terminal && m_value != 0) {
     uint64_t value_to_write = m_value & 0xFFFFFFFF;
     for (size_t i = 0; i < num_payload_chars; i++) {
-      oss.put(FLAG_PAYLOAD_UNIT | (value_to_write & PAYLOAD_MASK));
+      oss.put(static_cast<char>(FLAG_PAYLOAD_UNIT |
+                                (value_to_write & PAYLOAD_MASK)));
       value_to_write = value_to_write >> BITS_PER_PAYLOAD_UNIT;
     }
   }
   // Followed by the size of this tree's map + 1.
   size_t map_size = m_map.size() + 1;
   always_assert(map_size < 128);
-  oss.put(map_size);
+  oss.put(static_cast<char>(map_size));
   bool first{true};
   UnorderedMap<char, std::ostringstream::pos_type> offsets;
   for (auto&& [c, nested] : m_map) {
@@ -114,9 +115,9 @@ void StringTreeMap<ValueType>::encode(std::ostringstream& oss) const {
       auto pos = oss.tellp();
       always_assert(pos < static_cast<long>(127 * 127 * 127));
       oss.seekp(offsets.at(c));
-      oss.put((pos % 127) + 1);
-      oss.put(((pos / 127) % 127) + 1);
-      oss.put((pos / (static_cast<long>(127 * 127))) + 1);
+      oss.put(static_cast<char>((pos % 127) + 1));
+      oss.put(static_cast<char>(((pos / 127) % 127) + 1));
+      oss.put(static_cast<char>((pos / (static_cast<long>(127 * 127))) + 1));
       oss.seekp(pos);
     }
     rest.encode(oss);
@@ -164,9 +165,9 @@ std::string StringTreeStringMap::encode_string_tree_map(
   auto push_int = [](int32_t value, std::ostringstream* dest) {
     always_assert(value < 127 * 127 * 127);
     auto& stream = *dest;
-    stream.put((value % 127) + 1);
-    stream.put(((value / 127) % 127) + 1);
-    stream.put((value / (127 * 127)) + 1);
+    stream.put(static_cast<char>((value % 127) + 1));
+    stream.put(static_cast<char>(((value / 127) % 127) + 1));
+    stream.put(static_cast<char>((value / (127 * 127)) + 1));
   };
 
   auto compute_utf16_length = [](const std::string& str) {
