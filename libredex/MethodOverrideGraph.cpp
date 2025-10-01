@@ -368,8 +368,6 @@ bool all_overridden_methods_impl(const Graph& graph,
 
 namespace method_override_graph {
 
-Node Graph::empty_node;
-
 bool Node::overrides(const DexMethod* current, const DexType* base_type) const {
   // Trivial case.
   if (type::check_cast(current->get_class(), base_type)) {
@@ -392,7 +390,7 @@ bool Node::overrides(const DexMethod* current, const DexType* base_type) const {
 const Node& Graph::get_node(const DexMethod* method) const {
   auto it = m_nodes.find(method);
   if (it == m_nodes.end()) {
-    return empty_node;
+    return get_empty_node();
   }
   return it->second;
 }
@@ -483,7 +481,7 @@ void Graph::dump(std::ostream& os) const {
   bs::GraphWriter<const DexMethod*> gw(
       [&](std::ostream& os, const DexMethod* method) {
         const auto& s = show_deobfuscated(method);
-        bs::write<uint32_t>(os, s.size());
+        bs::write<uint32_t>(os, static_cast<uint32_t>(s.size()));
         os << s;
       },
       [&](const DexMethod* method) -> std::vector<const DexMethod*> {
