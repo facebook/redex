@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include <algorithm>
 #include <string>
-#include <vector>
 
 #include "Configurable.h"
 #include "DeterministicContainers.h"
@@ -66,8 +64,8 @@ class Pass : public Configurable {
    * against doing so, this is merely a convention.
    */
 
-  virtual void eval_pass(DexStoresVector& stores,
-                         ConfigFiles& conf,
+  virtual void eval_pass(DexStoresVector& /* stores */,
+                         ConfigFiles& /* conf */,
                          PassManager& /* mgr */) {}
   virtual void run_pass(DexStoresVector& stores,
                         ConfigFiles& conf,

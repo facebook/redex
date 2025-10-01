@@ -9,8 +9,6 @@
 
 #include <atomic>
 
-#include <sparta/WorkQueue.h> // For `default_num_threads`.
-
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -49,7 +47,7 @@ class PriorityThreadPool {
  public:
   // Creates an instance with a default number of threads
   PriorityThreadPool() {
-    set_num_threads(redex_parallel::default_num_threads());
+    set_num_threads(static_cast<int>(redex_parallel::default_num_threads()));
   }
 
   // Creates an instance with a custom number of threads
@@ -140,9 +138,7 @@ class PriorityThreadPool {
     wait(/*init_shutdown=*/allow_new_work);
     {
       std::unique_lock<std::mutex> lock{m_mutex};
-      while (m_running > 0) {
-        m_not_running_condition.wait(lock);
-      }
+      m_not_running_condition.wait(lock, [this] { return m_running == 0; });
     }
     for (auto& thread : m_pool) {
       thread.join();

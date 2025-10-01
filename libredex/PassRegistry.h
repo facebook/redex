@@ -37,6 +37,7 @@ struct PassRegistry {
    */
   PassRegistry() {}
   PassRegistry(const PassRegistry&) = delete;
+  PassRegistry& operator=(const PassRegistry&) = delete;
 
   std::vector<Pass*> m_registered_passes;
 };
