@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/thread/thread.hpp>
+#include <boost/thread/thread.hpp> // NOLINT
 #include <exception>
 
 #include <sparta/WorkQueue.h>
