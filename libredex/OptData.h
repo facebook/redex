@@ -16,7 +16,6 @@
 #include "IRInstruction.h"
 #include "OptDataDefs.h"
 #include "Trace.h"
-#include "Util.h"
 
 namespace Json {
 class Value;
@@ -131,12 +130,9 @@ class ClassOptData {
  */
 class OptDataMapper {
  public:
-  static std::mutex s_opt_log_mutex;
+  static std::mutex& get_opt_log_mutex();
 
-  static OptDataMapper& get_instance() {
-    static OptDataMapper instance;
-    return instance;
-  }
+  static OptDataMapper& get_instance();
   OptDataMapper(OptDataMapper const&) = delete;
   void operator=(OptDataMapper const&) = delete;
 

@@ -7,9 +7,7 @@
 
 #include "OptData.h"
 
-#include <cstdarg>
 #include <cstdlib>
-#include <fstream>
 #include <json/value.h>
 #include <mutex>
 #include <string>
@@ -17,12 +15,11 @@
 
 #include "DexClass.h"
 #include "DexPosition.h"
-#include "DexUtil.h"
 #include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "OptDataDefs.h"
-#include "Resolver.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 namespace {
 
@@ -184,7 +181,7 @@ void OptDataMapper::log_opt(OptReason opt,
   if (!m_logs_enabled) {
     return;
   }
-  std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  std::lock_guard<std::mutex> guard(get_opt_log_mutex());
   always_assert_log(method != nullptr, "Can't log null method\n");
   always_assert_log(insn != nullptr, "Can't log null instruction\n");
   auto cls_opt_data = get_cls_opt_data(method->get_class());
@@ -199,7 +196,7 @@ void OptDataMapper::log_nopt(NoptReason nopt,
   if (!m_logs_enabled) {
     return;
   }
-  std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  std::lock_guard<std::mutex> guard(get_opt_log_mutex());
   always_assert_log(method != nullptr, "Can't log null method\n");
   always_assert_log(insn != nullptr, "Can't log null instruction\n");
   auto cls_opt_data = get_cls_opt_data(method->get_class());
@@ -212,7 +209,7 @@ void OptDataMapper::log_opt(OptReason opt, const DexMethod* method) {
   if (!m_logs_enabled) {
     return;
   }
-  std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  std::lock_guard<std::mutex> guard(get_opt_log_mutex());
   always_assert_log(method != nullptr, "Can't log null method\n");
   auto cls_opt_data = get_cls_opt_data(method->get_class());
   auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
@@ -223,7 +220,7 @@ void OptDataMapper::log_nopt(NoptReason nopt, const DexMethod* method) {
   if (!m_logs_enabled) {
     return;
   }
-  std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  std::lock_guard<std::mutex> guard(get_opt_log_mutex());
   always_assert_log(method != nullptr, "Can't log null method\n");
   auto cls_opt_data = get_cls_opt_data(method->get_class());
   auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
@@ -234,7 +231,7 @@ void OptDataMapper::log_opt(OptReason opt, const DexClass* cls) {
   if (!m_logs_enabled) {
     return;
   }
-  std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  std::lock_guard<std::mutex> guard(get_opt_log_mutex());
   always_assert_log(cls != nullptr, "Can't log null class\n");
   auto cls_opt_data = get_cls_opt_data(cls->get_type());
   cls_opt_data->m_opts.emplace_back(opt);
@@ -244,7 +241,7 @@ void OptDataMapper::log_nopt(NoptReason nopt, const DexClass* cls) {
   if (!m_logs_enabled) {
     return;
   }
-  std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  std::lock_guard<std::mutex> guard(get_opt_log_mutex());
   always_assert_log(cls != nullptr, "Can't log null class\n");
   auto cls_opt_data = get_cls_opt_data(cls->get_type());
   cls_opt_data->m_nopts.emplace_back(nopt);
@@ -471,5 +468,14 @@ void OptDataMapper::verify_nopt(NoptReason reason) {
                     reason);
 }
 
-std::mutex OptDataMapper::s_opt_log_mutex;
+std::mutex& OptDataMapper::get_opt_log_mutex() {
+  static std::mutex s_opt_log_mutex;
+  return s_opt_log_mutex;
+}
+
+OptDataMapper& OptDataMapper::get_instance() {
+  static OptDataMapper instance;
+  return instance;
+}
+
 } // namespace opt_metadata
