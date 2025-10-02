@@ -15,9 +15,9 @@
 #include <sys/mman.h> // For madvise
 #endif
 
-#ifdef __APPLE__
-#include "utils/Compat.h" // TEMP_FAILURE_RETRY, if necessary.
-#endif
+// TEMP_FAILURE_RETRY, if necessary.
+// NOLINTNEXTLINE
+#include "utils/Compat.h"
 
 #include "Macros.h"
 
