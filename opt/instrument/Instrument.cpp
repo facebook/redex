@@ -24,6 +24,7 @@
 #include "InitClassesWithSideEffects.h"
 #include "InterDexPass.h"
 #include "InterDexPassPlugin.h"
+#include "JsonWrapper.h"
 #include "Match.h"
 #include "MethodReference.h"
 #include "PassManager.h"
@@ -1085,13 +1086,26 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
 
   // Check whether the analysis class is in the primary dex. We use a heuristic
   // that looks the last 12 characters of the location of the given dex.
-  auto dex_loc = analysis_cls->get_location()->get_file_name();
-  if (dex_loc.size() < 12 /* strlen("/classes.dex") == 12 */ ||
-      dex_loc.substr(dex_loc.size() - 12) != "/classes.dex") {
-    std::cerr << "[InstrumentPass] Analysis class must be in the primary dex. "
-                 "It was in "
-              << dex_loc << std::endl;
-    exit(1);
+  // Skip this check if InterDexPass normal_primary_dex is enabled.
+  bool normal_primary_dex = true; // Default value
+  Json::Value interdex_pass_config;
+  cfg.get_json_config().get("InterDexPass", Json::nullValue,
+                            interdex_pass_config);
+  if (!interdex_pass_config.empty()) {
+    JsonWrapper interdex_jw(interdex_pass_config);
+    interdex_jw.get("normal_primary_dex", true, normal_primary_dex);
+  }
+
+  if (!normal_primary_dex) {
+    auto dex_loc = analysis_cls->get_location()->get_file_name();
+    if (dex_loc.size() < 12 /* strlen("/classes.dex") == 12 */ ||
+        dex_loc.substr(dex_loc.size() - 12) != "/classes.dex") {
+      std::cerr
+          << "[InstrumentPass] Analysis class must be in the primary dex. "
+             "It was in "
+          << dex_loc << std::endl;
+      exit(1);
+    }
   }
 
   // Just do the very minimal common work here: load the analysis class.
