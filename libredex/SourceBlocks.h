@@ -500,7 +500,12 @@ inline void get_hot_cold_units(cfg::ControlFlowGraph& cfg,
   }
 }
 
-inline SourceBlock* get_last_source_block(cfg::Block* b) {
+template <typename BlockType, typename SourceBlockType>
+inline SourceBlockType* get_last_source_block_impl(BlockType* b) {
+  static_assert(
+      std::is_same_v<std::remove_const_t<BlockType>, cfg::Block> &&
+      std::is_same_v<std::remove_const_t<SourceBlockType>, SourceBlock>);
+
   auto rit = std::find_if(b->rbegin(), b->rend(), [](const auto& mie) {
     return mie.type == MFLOW_SOURCE_BLOCK;
   });
@@ -511,9 +516,14 @@ inline SourceBlock* get_last_source_block(cfg::Block* b) {
 
   return rit->src_block.get();
 }
-inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
-  return get_last_source_block(const_cast<cfg::Block*>(b));
+
+inline SourceBlock* get_last_source_block(cfg::Block* b) {
+  return get_last_source_block_impl<cfg::Block, SourceBlock>(b);
 }
+inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
+  return get_last_source_block_impl<const cfg::Block, const SourceBlock>(b);
+}
+
 // This helper gets the last source block in a block if it is after a throw,
 // otherwise returns a nullptr
 inline SourceBlock* get_last_source_block_if_after_throw(cfg::Block* b) {
