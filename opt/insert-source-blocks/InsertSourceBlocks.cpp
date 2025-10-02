@@ -11,15 +11,21 @@
 #include <boost/algorithm/string.hpp>
 #include <cstdint>
 #include <deque>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <mutex>
+#include <optional>
+#include <set>
 #include <string_view>
 
 #include <boost/format.hpp>
+#include <json/value.h>
+#include <json/writer.h>
 
 #include "CallGraph.h"
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexStore.h"
@@ -31,6 +37,7 @@
 #include "PassManager.h"
 #include "RedexContext.h"
 #include "RedexMappedFile.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlockConsistencyCheck.h"
 #include "SourceBlocks.h"
@@ -1158,6 +1165,246 @@ void InsertSourceBlocksPass::bind_config() {
   }
 }
 
+namespace {
+
+std::optional<std::string> collect_source_block_to_lines_mapping_method(
+    DexMethod* m) {
+  auto* code = m->get_code();
+  if (code == nullptr) {
+    return std::nullopt;
+  }
+
+  ScopedCFG cfg{code};
+
+  // Multiple passes are just conceptually simpler.
+
+  // 1. Find majority file.
+  auto majority_file_opt = [&]() -> std::optional<const DexString*> {
+    UnorderedMap<const DexString*, size_t> file_counts;
+    size_t no_file_count{0};
+    bool has_source_blocks{false};
+    for (auto* b : cfg->blocks()) {
+      for (auto& mie : *b) {
+        if (mie.type == MFLOW_POSITION) {
+          auto* dex_pos = mie.pos.get();
+          if (dex_pos->file != nullptr) {
+            ++file_counts[dex_pos->file];
+          } else {
+            ++no_file_count;
+          }
+        }
+        has_source_blocks |= mie.type == MFLOW_SOURCE_BLOCK;
+      }
+    }
+
+    if (!has_source_blocks) {
+      // No source blocks, no mapping necessary.
+      return std::nullopt;
+    }
+
+    if (file_counts.empty() && no_file_count == 0) {
+      // Absolutely no source file data. :-(
+      return std::nullopt;
+    }
+
+    redex_assert(type_class(m->get_class()) != nullptr);
+    const auto* cls_source_file = type_class(m->get_class())->get_source_file();
+
+    if (file_counts.empty()) {
+      return cls_source_file;
+    }
+    auto max_it = unordered_max_element(
+        file_counts, [](const auto& lhs, const auto& rhs) {
+          if (lhs.second < rhs.second) {
+            return true;
+          }
+          if (lhs.second > rhs.second) {
+            return false;
+          }
+          return compare_dexstrings(lhs.first, rhs.first);
+        });
+    redex_assert(max_it != file_counts.cend());
+
+    if (max_it->second <= no_file_count) {
+      return cls_source_file;
+    }
+
+    return max_it->first;
+  }();
+  if (!majority_file_opt) {
+    // No file data at all, give up.
+    return std::nullopt;
+  }
+
+  Json::Value root;
+
+  root["name"] = show(m);
+
+  root["default_file"] = *majority_file_opt == nullptr
+                             ? "UnknownSource"
+                             : (*majority_file_opt)->str_copy();
+
+  // Now find the data for all source blocks.
+  struct SBIdCompare {
+    bool operator()(const SourceBlock* lhs, const SourceBlock* rhs) const {
+      return lhs->id < rhs->id;
+    }
+  };
+  std::map<const SourceBlock*, std::set<uint32_t>, SBIdCompare> sb_data;
+
+  // Assume any following block immediately contains a source block. No
+  // cross-block tracking necessary.
+  // But deal with not-so-nice MIEs.
+  for (auto* b : cfg->blocks()) {
+    std::optional<std::set<uint32_t>*> last;
+    std::optional<uint32_t> last_line;
+    for (auto& mie : *b) {
+      if (mie.type == MFLOW_POSITION) {
+        if (majority_file_opt == mie.pos->file) {
+          last_line = mie.pos->line;
+        } else {
+          last_line = std::nullopt;
+        }
+        continue;
+      }
+
+      if (mie.type == MFLOW_SOURCE_BLOCK) {
+        last = &sb_data[mie.src_block.get()];
+        continue;
+      }
+
+      // We only apply the line number of there is an actual instruction.
+      // The set will deduplicate.
+      if (mie.type == MFLOW_OPCODE && last && last_line) {
+        (*last)->insert(*last_line);
+      }
+    }
+  }
+
+  Json::Value sb_list;
+  std::optional<uint32_t> last_sb_id;
+  for (auto& [sb_ptr, data] : sb_data) {
+    // Integrity check for the array/indexed format.
+    if (last_sb_id) {
+      always_assert_log(sb_ptr->id == *last_sb_id + 1,
+                        "Missing element: %u -> %u", *last_sb_id, sb_ptr->id);
+    } else {
+      always_assert(sb_ptr->id == 0);
+    }
+    last_sb_id = sb_ptr->id;
+
+    Json::Value sb{Json::ValueType::arrayValue};
+    for (auto v : data) {
+      sb.append(v);
+    }
+    sb_list.append(std::move(sb));
+  }
+  root["block_list"] = std::move(sb_list);
+
+  // We want this to be JSONL. Unclear why `<<` does this for redex-stats
+  // but need extra here.
+  Json::StreamWriterBuilder builder;
+  builder["indentation"] = "";
+  auto writer = std::unique_ptr<Json::StreamWriter>(builder.newStreamWriter());
+  std::ostringstream oss;
+  writer->write(root, &oss);
+  return oss.str();
+}
+
+void collect_source_block_to_lines_mapping(DexStoresVector& stores,
+                                           const std::string& output_file) {
+  auto scope = build_class_scope(stores);
+  std::unordered_map<std::string, std::unordered_set<int32_t>>
+      source_block_to_lines_mapping;
+
+  // To have deterministic output have the classes (and methods) sorted. For
+  // performance parallelize the stringification. A standard workqueue and
+  // the scope as a queue of "whose turn is it to write" has been tried but
+  // was too slow. So break up scope into segments that are written to temp
+  // files each and then merged.
+
+  std::sort(scope.begin(), scope.end(), compare_dexclasses);
+
+  redex_assert(!scope.empty());
+  constexpr size_t kThreadFactor = 5u; // For "work balancing."
+  const size_t segments = std::min(
+      scope.size(), kThreadFactor * redex_parallel::default_num_threads());
+
+  auto segment_name = [&](size_t idx) {
+    return output_file + "." + std::to_string(idx);
+  };
+
+  std::set<size_t> finished_segments;
+  std::mutex finished_segments_mutex;
+  std::condition_variable finished_segments_cv;
+
+  auto merger_thread = std::thread([&]() {
+    std::ofstream ofs{output_file};
+
+    for (size_t next = 0; next != segments; ++next) {
+      {
+        std::unique_lock<std::mutex> lock{finished_segments_mutex};
+        finished_segments_cv.wait(lock, [&]() {
+          return !finished_segments.empty() &&
+                 *finished_segments.begin() == next;
+        });
+        redex_assert(!finished_segments.empty());
+        auto it = finished_segments.begin();
+        redex_assert(*it == next);
+        finished_segments.erase(it);
+      }
+
+      auto name = segment_name(next);
+      std::ifstream ifs(name, std::ios_base::binary);
+      ofs << ifs.rdbuf();
+      std::filesystem::remove(name);
+    }
+  });
+
+  {
+    std::vector<size_t> items(segments, 0);
+    std::iota(items.begin(), items.end(), 0);
+    workqueue_run<size_t>(
+        [&](size_t idx) {
+          std::ofstream ofs{segment_name(idx)};
+
+          auto segment_size = scope.size() / items.size();
+          redex_assert(segment_size > 0);
+
+          auto end_it = idx != items.size() - 1
+                            // NOLINTNEXTLINE(bugprone-narrowing-conversions)
+                            ? scope.begin() + (idx + 1) * segment_size
+                            : scope.end();
+          // NOLINTNEXTLINE(bugprone-narrowing-conversions)
+          for (auto cur_it = scope.begin() + idx * segment_size;
+               cur_it != end_it;
+               ++cur_it) {
+            auto* cls = *cur_it;
+            auto methods = cls->get_all_methods();
+            std::sort(methods.begin(), methods.end(), compare_dexmethods);
+            for (auto* m : methods) {
+              auto str_opt = collect_source_block_to_lines_mapping_method(m);
+              if (str_opt) {
+                ofs << *str_opt << "\n";
+              }
+            }
+          }
+
+          {
+            std::unique_lock<std::mutex> lock{finished_segments_mutex};
+            finished_segments.insert(idx);
+          }
+          finished_segments_cv.notify_all();
+        },
+        items);
+  }
+
+  // Wait for the merging to complete.
+  merger_thread.join();
+}
+
+} // namespace
+
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager& mgr) {
@@ -1190,6 +1437,12 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
 
     auto val = source_blocks::compute_method_violations(*call_graph, scope);
     mgr.set_metric("method~violation~hot~callee~cold~callers", val);
+  }
+
+  {
+    Timer timer{"Collect Source Block To Lines Mapping"};
+    collect_source_block_to_lines_mapping(
+        stores, conf.metafile("redex-isb-sb-to-lines-mapping.jsonl"));
   }
 }
 
