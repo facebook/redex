@@ -103,8 +103,6 @@ class CheckerConfig {
         type_checker_args.get("run_on_input_ignore_access", false).asBool();
     m_run_type_checker_after_each_pass =
         type_checker_args.get("run_after_each_pass", true).asBool();
-    m_run_type_checker_after_all_passes =
-        type_checker_args.get("run_after_all_passes", true).asBool();
     m_verify_moves = type_checker_args.get("verify_moves", true).asBool();
     m_validate_invoke_super =
         type_checker_args.get("validate_invoke_super", true).asBool();
@@ -187,8 +185,6 @@ class CheckerConfig {
     return m_run_type_checker_after_each_pass ||
            m_type_checker_trigger_passes.count(pass->name()) > 0;
   }
-
-  bool run_after_all_passes() { return m_run_type_checker_after_all_passes; }
 
   // Literate style.
   CheckerConfig check_no_overwrite_this(bool val) const {
@@ -334,7 +330,6 @@ class CheckerConfig {
   UnorderedSet<std::string> m_definition_check_allowlist_prefixes;
   bool m_run_type_checker_on_input;
   bool m_run_type_checker_after_each_pass;
-  bool m_run_type_checker_after_all_passes;
   bool m_run_type_checker_on_input_ignore_access;
   bool m_verify_moves;
   bool m_validate_invoke_super;
@@ -1662,12 +1657,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   walk::parallel::code(scope,
                        [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
   TRACE(PM, 1, "All opt passes are done, clear cfg\n");
-  if (checker_conf.run_after_all_passes()) {
-    checker_conf
-        .check_no_overwrite_this(get_redex_options().no_overwrite_this())
-        .validate_access(true)
-        .run_verifier(scope);
-  }
+  checker_conf.check_no_overwrite_this(get_redex_options().no_overwrite_this())
+      .validate_access(true)
+      .run_verifier(scope);
 
   jni_native_context_helper.post_passes(scope, conf);
 
