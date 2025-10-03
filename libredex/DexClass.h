@@ -831,7 +831,7 @@ class DexMethodRef {
   bool m_concrete;
   bool m_external;
 
-  ~DexMethodRef() {}
+  virtual ~DexMethodRef() = default;
   DexMethodRef(DexType* type, const DexString* name, DexProto* proto)
       : m_spec(type, name, proto) {
     m_concrete = false;
@@ -940,6 +940,15 @@ class DexMethod : public DexMethodRef {
                                    const DexProto* proto);
 
   static DexMethodRef* make_method(const DexMethodSpec& spec);
+
+  // Similar to make_method but return DexMethod* instead of DexMethodRef*.
+  // Use those only if you are expecting a DexMethod* not a DexMethodRef*
+  // because these methods do runtime check with dynamic_cast.
+  static DexMethod* make_method_downcast(const DexType* type,
+                                         const DexString* name,
+                                         const DexProto* proto);
+
+  static DexMethod* make_method_downcast(const DexMethodSpec& spec);
 
   /**
    * Create a copy of method `that`. This excludes `rstate`.

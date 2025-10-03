@@ -279,9 +279,16 @@ using InterfaceScopes =
 
 class ClassScopes {
  private:
-  static const std::vector<const VirtualScope*> empty_scope;
-  static const std::vector<std::vector<const VirtualScope*>>
-      empty_interface_scope;
+  static const std::vector<const VirtualScope*>& get_empty_scope() {
+    static const std::vector<const VirtualScope*> empty_scope;
+    return empty_scope;
+  }
+  static const std::vector<std::vector<const VirtualScope*>>&
+  get_empty_interface_scope() {
+    static const std::vector<std::vector<const VirtualScope*>>
+        empty_interface_scope;
+    return empty_interface_scope;
+  }
 
   Scopes m_scopes;
   InterfaceScopes m_interface_scopes;
@@ -305,7 +312,7 @@ class ClassScopes {
   const std::vector<const VirtualScope*>& get(const DexType* type) const {
     const auto& scopes_it = m_scopes.find(type);
     if (scopes_it == m_scopes.end()) {
-      return empty_scope;
+      return get_empty_scope();
     }
     return scopes_it->second;
   }
@@ -321,7 +328,7 @@ class ClassScopes {
       const DexType* type) const {
     const auto& scopes_it = m_interface_scopes.find(type);
     if (scopes_it == m_interface_scopes.end()) {
-      return empty_interface_scope;
+      return get_empty_interface_scope();
     }
     return scopes_it->second;
   }

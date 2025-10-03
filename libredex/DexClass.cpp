@@ -916,6 +916,17 @@ DexMethodRef* DexMethod::make_method(const DexMethodSpec& spec) {
   return g_redex->make_method(spec.cls, spec.name, spec.proto);
 }
 
+DexMethod* DexMethod::make_method_downcast(const DexType* type,
+                                           const DexString* name,
+                                           const DexProto* proto) {
+  return dynamic_cast<DexMethod*>(g_redex->make_method(type, name, proto));
+}
+
+DexMethod* DexMethod::make_method_downcast(const DexMethodSpec& spec) {
+  return dynamic_cast<DexMethod*>(
+      g_redex->make_method(spec.cls, spec.name, spec.proto));
+}
+
 DexMethod* DexMethod::make_method_from(DexMethod* that,
                                        DexType* target_cls,
                                        const DexString* name) {
