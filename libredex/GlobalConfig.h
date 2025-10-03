@@ -44,7 +44,6 @@ struct IRTypeCheckerConfig : public Configurable {
   bool annotated_cfg_on_error{false};
   bool check_classes;
   bool run_on_input{true};
-  bool run_after_all_passes{true};
   bool external_check;
   bool definition_check;
 };
