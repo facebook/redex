@@ -82,7 +82,6 @@ void IRTypeCheckerConfig::bind_config() {
   bind("annotated_cfg_on_error", annotated_cfg_on_error,
        annotated_cfg_on_error);
   bind("check_classes", {}, check_classes);
-  bind("run_on_input", {}, run_on_input);
   bind("external_check", false, external_check,
        "ON/OFF switch for dex code validation in external class and internal "
        "class hierarchy - no external class should be inheriting internal "

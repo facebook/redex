@@ -43,7 +43,6 @@ struct IRTypeCheckerConfig : public Configurable {
   bool check_no_overwrite_this;
   bool annotated_cfg_on_error{false};
   bool check_classes;
-  bool run_on_input{true};
   bool external_check;
   bool definition_check;
 };
