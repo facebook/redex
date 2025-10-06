@@ -32,19 +32,22 @@ struct IRTypeCheckerConfig : public Configurable {
            "after various stages of optimization.";
   }
 
-  bool run_after_each_pass;
-  bool verify_moves;
-  bool validate_invoke_super;
+  bool run_after_each_pass{true};
+  bool verify_moves{true};
+  bool validate_invoke_super{true};
+  bool check_no_overwrite_this{false};
+  bool annotated_cfg_on_error{false};
+  bool annotated_cfg_on_error_reduced{true};
+  bool check_classes{true};
+  bool run_on_input{true};
+  bool run_on_input_ignore_access{false};
+  bool external_check{false};
+  bool definition_check{false};
   UnorderedSet<std::string> run_after_passes;
   UnorderedSet<std::string> external_check_allowlist;
   UnorderedSet<std::string> definition_check_allowlist;
   UnorderedSet<std::string> external_check_allowlist_prefixes;
   UnorderedSet<std::string> definition_check_allowlist_prefixes;
-  bool check_no_overwrite_this;
-  bool annotated_cfg_on_error{false};
-  bool check_classes;
-  bool external_check;
-  bool definition_check;
 };
 
 struct HasherConfig : public Configurable {

@@ -95,57 +95,17 @@ class CheckerConfig {
                          bool relaxed_init_check,
                          bool disabled = false)
       : m_relaxed_init_check(relaxed_init_check), m_disabled(disabled) {
-    const Json::Value& type_checker_args =
-        conf.get_json_config()["ir_type_checker"];
-    m_run_type_checker_on_input =
-        type_checker_args.get("run_on_input", true).asBool();
-    m_run_type_checker_on_input_ignore_access =
-        type_checker_args.get("run_on_input_ignore_access", false).asBool();
-    m_run_type_checker_after_each_pass =
-        type_checker_args.get("run_after_each_pass", true).asBool();
-    m_verify_moves = type_checker_args.get("verify_moves", true).asBool();
-    m_validate_invoke_super =
-        type_checker_args.get("validate_invoke_super", true).asBool();
-    m_check_no_overwrite_this =
-        type_checker_args.get("check_no_overwrite_this", false).asBool();
-
-    m_annotated_cfg_on_error =
-        type_checker_args.get("annotated_cfg_on_error", false).asBool();
-    m_annotated_cfg_on_error_reduced =
-        type_checker_args.get("annotated_cfg_on_error_reduced", true).asBool();
-
-    m_check_classes = type_checker_args.get("check_classes", true).asBool();
-    m_external_check = type_checker_args.get("external_check", false).asBool();
-    m_definition_check =
-        type_checker_args.get("definition_check", false).asBool();
-    for (const auto& external_check_allow :
-         type_checker_args["external_check_allowlist"]) {
-      m_external_check_allowlist.insert(external_check_allow.asString());
-    }
-    for (const auto& definition_check_allow :
-         type_checker_args["definition_check_allowlist"]) {
-      m_definition_check_allowlist.insert(definition_check_allow.asString());
-    }
-    for (const auto& external_check_allow_prefix :
-         type_checker_args["external_check_allowlist_prefixes"]) {
-      m_external_check_allowlist_prefixes.insert(
-          external_check_allow_prefix.asString());
-    }
-    for (const auto& definition_check_allow_prefix :
-         type_checker_args["definition_check_allowlist_prefixes"]) {
-      m_definition_check_allowlist_prefixes.insert(
-          definition_check_allow_prefix.asString());
-    }
-    for (const auto& trigger_pass : type_checker_args["run_after_passes"]) {
-      m_type_checker_trigger_passes.insert(trigger_pass.asString());
-    }
+    const auto& global_config = conf.get_global_config();
+    always_assert(global_config.has_config_by_name("ir_type_checker"));
+    m_config = *global_config.get_config_by_name<IRTypeCheckerConfig>(
+        "ir_type_checker");
   }
 
   void on_input(const Scope& scope) {
     if (m_disabled) {
       return;
     }
-    if (!m_run_type_checker_on_input) {
+    if (!m_config.run_on_input) {
       std::cerr << "Note: input type checking is turned off!" << std::endl;
       return;
     }
@@ -156,7 +116,7 @@ class CheckerConfig {
     if (!res) {
       return; // No issues.
     }
-    if (!m_run_type_checker_on_input_ignore_access) {
+    if (!m_config.run_on_input_ignore_access) {
       std::string msg = *res;
       msg +=
           "\n If you are confident that this does not matter (e.g., because "
@@ -182,14 +142,14 @@ class CheckerConfig {
   }
 
   bool run_after_pass(const Pass* pass) {
-    return m_run_type_checker_after_each_pass ||
-           m_type_checker_trigger_passes.count(pass->name()) > 0;
+    return m_config.run_after_each_pass ||
+           m_config.run_after_passes.count(pass->name()) > 0;
   }
 
   // Literate style.
   CheckerConfig check_no_overwrite_this(bool val) const {
     CheckerConfig ret = *this;
-    ret.m_check_no_overwrite_this = val;
+    ret.m_config.check_no_overwrite_this = val;
     return ret;
   }
   CheckerConfig validate_access(bool val) const {
@@ -229,11 +189,11 @@ class CheckerConfig {
 
     auto run_checker_tmpl = [&](DexMethod* dex_method, auto fn) {
       IRTypeChecker checker(dex_method, m_validate_access,
-                            m_validate_invoke_super);
-      if (m_verify_moves) {
+                            m_config.validate_invoke_super);
+      if (m_config.verify_moves) {
         checker.verify_moves();
       }
-      if (m_check_no_overwrite_this) {
+      if (m_config.check_no_overwrite_this) {
         checker.check_no_overwrite_this();
       }
       if (m_relaxed_init_check) {
@@ -248,9 +208,9 @@ class CheckerConfig {
       });
     };
     auto run_checker_error = [&](DexMethod* dex_method) {
-      if (m_annotated_cfg_on_error) {
+      if (m_config.annotated_cfg_on_error) {
         return run_checker_tmpl(dex_method, [&](auto checker) {
-          if (m_annotated_cfg_on_error_reduced) {
+          if (m_config.annotated_cfg_on_error_reduced) {
             return checker.dump_annotated_cfg_reduced(dex_method);
           } else {
             return checker.dump_annotated_cfg(dex_method);
@@ -290,7 +250,7 @@ class CheckerConfig {
       return oss.str();
     }
 
-    if (!m_check_classes) {
+    if (!m_config.check_classes) {
       return boost::none;
     }
 
@@ -298,10 +258,11 @@ class CheckerConfig {
     Timer t1("NonAbstractClassChecker");
 
     ClassChecker class_checker;
-    class_checker.init_setting(m_definition_check, m_definition_check_allowlist,
-                               m_definition_check_allowlist_prefixes,
-                               m_external_check, m_external_check_allowlist,
-                               m_external_check_allowlist_prefixes);
+    class_checker.init_setting(
+        m_config.definition_check, m_config.definition_check_allowlist,
+        m_config.definition_check_allowlist_prefixes, m_config.external_check,
+        m_config.external_check_allowlist,
+        m_config.external_check_allowlist_prefixes);
     class_checker.run(scope);
     if (class_checker.fail()) {
       std::ostringstream oss = class_checker.print_failed_classes();
@@ -323,26 +284,11 @@ class CheckerConfig {
   }
 
  private:
-  UnorderedSet<std::string> m_type_checker_trigger_passes;
-  UnorderedSet<std::string> m_external_check_allowlist;
-  UnorderedSet<std::string> m_definition_check_allowlist;
-  UnorderedSet<std::string> m_external_check_allowlist_prefixes;
-  UnorderedSet<std::string> m_definition_check_allowlist_prefixes;
-  bool m_run_type_checker_on_input;
-  bool m_run_type_checker_after_each_pass;
-  bool m_run_type_checker_on_input_ignore_access;
-  bool m_verify_moves;
-  bool m_validate_invoke_super;
-  bool m_check_no_overwrite_this;
   // TODO(fengliu): Kill the `validate_access` flag.
   bool m_validate_access{true};
-  bool m_annotated_cfg_on_error{false};
-  bool m_annotated_cfg_on_error_reduced{true};
-  bool m_check_classes;
-  bool m_external_check;
-  bool m_definition_check;
   bool m_relaxed_init_check;
   bool m_disabled;
+  IRTypeCheckerConfig m_config;
 };
 
 class CheckUniqueDeobfuscatedNames {
