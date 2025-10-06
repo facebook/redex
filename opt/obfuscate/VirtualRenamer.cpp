@@ -280,8 +280,7 @@ bool VirtualRenamer::usable_name(const DexString* name,
   auto* const proto = scope->methods[0].first->get_proto();
   bool has_ste = stack_trace_elements != nullptr;
   for (const auto& type : hier) {
-    if (DexMethod::get_method(const_cast<DexType*>(type), name, proto) !=
-        nullptr) {
+    if (DexMethod::get_method(type, name, proto) != nullptr) {
       return false;
     }
     if (has_ste) {
