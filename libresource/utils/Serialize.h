@@ -60,7 +60,7 @@ inline void push_struct(const T& item, android::Vector<char>* vec) {
 }
 
 // Returns the size of the entry and the value data structure(s) that follow it.
-size_t compute_entry_value_length(android::ResTable_entry* entry);
+size_t compute_entry_value_length(const android::ResTable_entry* entry);
 // Return in device order the flags for the entry in the type
 uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id);
 // Whether or not the two configs should be treated as equal (note: this is not

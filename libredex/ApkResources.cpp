@@ -208,7 +208,7 @@ bool TableEntryParser::visit_type(android::ResTable_package* package,
   android::TypeVariant tv(type);
   uint16_t entry_id = 0;
   for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it, ++entry_id) {
-    android::ResTable_entry* entry = const_cast<android::ResTable_entry*>(*it);
+    const android::ResTable_entry* entry = *it;
     uint32_t res_id = package_type_id << 16 | entry_id;
     if (entry == nullptr) {
       arsc::EntryValueData data(nullptr, 0);

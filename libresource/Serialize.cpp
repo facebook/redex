@@ -171,7 +171,7 @@ void encode_string16(const android::String16& s, android::Vector<char>* vec) {
   encode_string16(s.string(), s.size(), vec);
 }
 
-size_t compute_entry_value_length(android::ResTable_entry* entry) {
+size_t compute_entry_value_length(const android::ResTable_entry* entry) {
   if (entry == nullptr) {
     return 0;
   }
