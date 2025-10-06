@@ -74,20 +74,26 @@ void OptDecisionsConfig::bind_config() {
 }
 
 void IRTypeCheckerConfig::bind_config() {
-  bind("run_after_each_pass", {}, run_after_each_pass);
-  bind("verify_moves", {}, verify_moves);
-  bind("validate_invoke_super", {}, validate_invoke_super);
+  bind("run_after_each_pass", run_after_each_pass, run_after_each_pass);
+  bind("verify_moves", verify_moves, verify_moves);
+  bind("validate_invoke_super", validate_invoke_super, validate_invoke_super);
   bind("run_after_passes", {}, run_after_passes);
-  bind("check_no_overwrite_this", {}, check_no_overwrite_this);
+  bind("check_no_overwrite_this", check_no_overwrite_this,
+       check_no_overwrite_this);
   bind("annotated_cfg_on_error", annotated_cfg_on_error,
        annotated_cfg_on_error);
-  bind("check_classes", {}, check_classes);
-  bind("external_check", false, external_check,
+  bind("annotated_cfg_on_error_reduced", annotated_cfg_on_error_reduced,
+       annotated_cfg_on_error_reduced);
+  bind("check_classes", check_classes, check_classes);
+  bind("run_on_input", run_on_input, run_on_input);
+  bind("run_on_input_ignore_access", run_on_input_ignore_access,
+       run_on_input_ignore_access);
+  bind("external_check", external_check, external_check,
        "ON/OFF switch for dex code validation in external class and internal "
        "class hierarchy - no external class should be inheriting internal "
        "class");
   bind(
-      "definition_check", false, definition_check,
+      "definition_check", definition_check, definition_check,
       "ON/OFF switch for dex code validation in class definition - all classes "
       "in internal class's hierarchy should be either internal class or "
       "external class");
