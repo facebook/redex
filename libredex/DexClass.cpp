@@ -1275,13 +1275,13 @@ void DexClass::load_class_data_item(
     return;
   }
   const uint8_t* encd = idx->get_uleb_data(cdi_off);
-  always_assert(encd < idx->end());
+  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t sfield_count = read_uleb128(&encd);
-  always_assert(encd < idx->end());
+  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t ifield_count = read_uleb128(&encd);
-  always_assert(encd < idx->end());
+  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t dmethod_count = read_uleb128(&encd);
-  always_assert(encd < idx->end());
+  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t vmethod_count = read_uleb128(&encd);
   uint32_t ndex = 0;
 
