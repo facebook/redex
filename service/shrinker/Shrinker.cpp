@@ -265,7 +265,7 @@ void Shrinker::shrink_code(
   }
 
   using stats_t = std::tuple<size_t, size_t, size_t, size_t>;
-  auto get_features = [&code](size_t mminl_level) -> stats_t {
+  auto get_features = [&code](int mminl_level) -> stats_t {
     if (!traceEnabled(MMINL, mminl_level)) {
       return stats_t{};
     }
@@ -278,7 +278,7 @@ void Shrinker::shrink_code(
     return stats_t{regs_before, insn_before, blocks_before, edges};
   };
 
-  constexpr size_t kMMINLDataCollectionLevel = 10;
+  constexpr int kMMINLDataCollectionLevel = 10;
   auto data_before_reg_alloc = get_features(kMMINLDataCollectionLevel);
 
   size_t reg_alloc_inc{0};
