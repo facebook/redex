@@ -222,6 +222,19 @@ class DexType {
   std::string_view str() const { return get_name()->str(); }
   std::string str_copy() const { return get_name()->str_copy(); }
   DexProto* get_non_overlapping_proto(const DexString*, DexProto*);
+  DexType* to_mutable() const {
+    // This method can be implemented without const_cast:
+    //   return DexType::get_type(this->get_name());
+    // But this doesn't make sense performance wise, and the return value is
+    // always the same. For this reason, the constness of DexType doesn't make a
+    // difference in redex in terms of constness safety.
+    //
+    // Rather than letting const_cast scatter everywhere, we contain the
+    // const_cast call here -- const_cast can now remain a red flag of code
+    // correctness.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    return const_cast<DexType*>(this);
+  }
 };
 
 /* Non-optimizing DexSpec compliant ordering */

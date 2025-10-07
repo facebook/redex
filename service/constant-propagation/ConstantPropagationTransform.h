@@ -220,7 +220,7 @@ class value_to_instruction_visitor final
     if (!cst) {
       return {};
     }
-    auto* type = const_cast<DexType*>(*cst);
+    auto* type = (*cst)->to_mutable();
     if ((m_xstores == nullptr) ||
         m_xstores->illegal_ref(m_declaring_type, type)) {
       return {};
