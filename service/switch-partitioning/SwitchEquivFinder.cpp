@@ -110,13 +110,9 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
 
   auto* last_insn = last->insn;
   auto last_op = last_insn->opcode();
-  if (opcode::is_branch(last_op) && has_src(last_insn, reg)) {
-    // The only non-leaf block is one that branches on the switching reg
-    return false;
-  }
-
+  // The only non-leaf block is one that branches on the switching reg
   // Any other block must be a leaf
-  return true;
+  return !(opcode::is_branch(last_op) && has_src(last_insn, reg));
 }
 
 // For the leaf, check if the non-leaf predecessor block contributes to any
