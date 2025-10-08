@@ -19,6 +19,7 @@
 #include "IRInstruction.h"
 #include "NullPointerExceptionUtil.h"
 #include "Purity.h"
+#include "ReachableClasses.h"
 #include "ReachingDefinitions.h"
 #include "RedexContext.h"
 #include "Resolver.h"
@@ -26,8 +27,6 @@
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
-#include "TypeSystem.h"
-#include "Walkers.h"
 
 namespace {
 
