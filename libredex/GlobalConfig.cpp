@@ -99,14 +99,37 @@ void IRTypeCheckerConfig::bind_config() {
       "external class");
   bind("external_check_allowlist", {}, external_check_allowlist,
        "Allow certain classes to bypass external_check");
-  bind("definition_check_allowlist", {}, definition_check_allowlist,
-       "Allow certain classes to bypass definition_check");
+  bind("definition_check_allowlist_temporary", {}, definition_check_allowlist,
+       "Temporary allow certain classes to bypass definition_check, this list "
+       "is to be cleaned up.");
+  std::vector<Json::Value> official_definition_check_allowlist;
+  bind("definition_check_allowlist", {}, official_definition_check_allowlist,
+       "Allow certain classes to bypass definition_check, define in list of "
+       "dictionary with classes list and a reason string.");
+  for (auto it = official_definition_check_allowlist.begin();
+       it != official_definition_check_allowlist.end();
+       ++it) {
+    const auto& value = *it;
+    always_assert_log(value.isObject(),
+                      "[IRTypeChecker] Wrong specification: allowlist in array "
+                      "not an object");
+    JsonWrapper allowlist_item = JsonWrapper(value);
+    std::string reason;
+    allowlist_item.get("reason", "", reason);
+    always_assert_log(
+        reason.length() > 10,
+        "Please provide a detailed reason for why the classes are allowlisted");
+    UnorderedSet<std::string> classes;
+    allowlist_item.get("classes", {}, classes);
+    insert_unordered_iterable(definition_check_allowlist, classes);
+  }
   bind("external_check_allowlist_prefixes", {},
        external_check_allowlist_prefixes,
        "Allow classes that starts with given prefixes bypass external_check");
   bind("definition_check_allowlist_prefixes", {},
        definition_check_allowlist_prefixes,
-       "Allow classes that starts with given prefixes bypass definition_check");
+       "Allow classes that starts with given prefixes bypass "
+       "definition_check");
 }
 
 void HasherConfig::bind_config() {
