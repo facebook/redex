@@ -7,8 +7,6 @@
 
 #include "CheckCastTransform.h"
 
-#include "ReachingDefinitions.h"
-
 namespace check_casts {
 
 namespace impl {
@@ -17,12 +15,12 @@ Stats apply(cfg::ControlFlowGraph& cfg, const CheckCastReplacements& casts) {
   Stats stats;
   for (const auto& cast : casts) {
     auto it = cfg.find_insn(cast.insn, cast.block);
-    boost::optional<IRInstruction*> replacement_insn = cast.replacement_insn;
+    std::optional<IRInstruction*> replacement_insn = cast.replacement_insn;
     if (replacement_insn) {
       cfg.replace_insn(it, *replacement_insn);
       stats.replaced_casts++;
     } else {
-      boost::optional<DexType*> replacement_type = cast.replacement_type;
+      std::optional<DexType*> replacement_type = cast.replacement_type;
       if (replacement_type) {
         cast.insn->set_type(*replacement_type);
         stats.weakened_casts++;

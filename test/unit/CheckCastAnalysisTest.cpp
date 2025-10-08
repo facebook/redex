@@ -74,8 +74,8 @@ TEST_F(CheckCastAnalysisTest, simple_string) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "Ljava/lang/String;");
-  EXPECT_EQ(it->replacement_insn, boost::none);
-  EXPECT_EQ(it->replacement_type, boost::none);
+  EXPECT_EQ(it->replacement_insn, std::nullopt);
+  EXPECT_EQ(it->replacement_type, std::nullopt);
   method->get_code()->clear_cfg();
 }
 
@@ -103,8 +103,8 @@ TEST_F(CheckCastAnalysisTest, new_instance) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LFoo;");
-  EXPECT_EQ(it->replacement_insn, boost::none);
-  EXPECT_EQ(it->replacement_type, boost::none);
+  EXPECT_EQ(it->replacement_insn, std::nullopt);
+  EXPECT_EQ(it->replacement_type, std::nullopt);
   method->get_code()->clear_cfg();
 }
 
@@ -132,8 +132,8 @@ TEST_F(CheckCastAnalysisTest, parameter) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LBar;");
-  EXPECT_NE(it->replacement_insn, boost::none);
-  EXPECT_EQ(it->replacement_type, boost::none);
+  EXPECT_NE(it->replacement_insn, std::nullopt);
+  EXPECT_EQ(it->replacement_type, std::nullopt);
   method->get_code()->clear_cfg();
 }
 
@@ -160,8 +160,8 @@ TEST_F(CheckCastAnalysisTest, array_parameter) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "Ljava/lang/Object;");
-  EXPECT_NE(it->replacement_insn, boost::none);
-  EXPECT_EQ(it->replacement_type, boost::none);
+  EXPECT_NE(it->replacement_insn, std::nullopt);
+  EXPECT_EQ(it->replacement_type, std::nullopt);
   method->get_code()->clear_cfg();
 }
 
@@ -189,8 +189,8 @@ TEST_F(CheckCastAnalysisTest, this_parameter) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LFoo;");
-  EXPECT_EQ(it->replacement_insn, boost::none);
-  EXPECT_EQ(it->replacement_type, boost::none);
+  EXPECT_EQ(it->replacement_insn, std::nullopt);
+  EXPECT_EQ(it->replacement_type, std::nullopt);
   method->get_code()->clear_cfg();
 }
 
@@ -219,8 +219,8 @@ TEST_F(CheckCastAnalysisTest, get_field) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LBar;");
-  EXPECT_NE(it->replacement_insn, boost::none);
-  EXPECT_EQ(it->replacement_type, boost::none);
+  EXPECT_NE(it->replacement_insn, std::nullopt);
+  EXPECT_EQ(it->replacement_type, std::nullopt);
 
   method->get_code()->clear_cfg();
 }
@@ -272,8 +272,8 @@ TEST_F(CheckCastAnalysisTest, weaken_replace) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LBar;");
-  EXPECT_NE(it->replacement_insn, boost::none);
-  EXPECT_EQ(it->replacement_type, boost::none);
+  EXPECT_NE(it->replacement_insn, std::nullopt);
+  EXPECT_EQ(it->replacement_type, std::nullopt);
   method->get_code()->clear_cfg();
 }
 
@@ -314,8 +314,8 @@ TEST_F(CheckCastAnalysisTest, weaken) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LC;");
-  EXPECT_EQ(it->replacement_insn, boost::none);
-  EXPECT_NE(it->replacement_type, boost::none);
+  EXPECT_EQ(it->replacement_insn, std::nullopt);
+  EXPECT_NE(it->replacement_type, std::nullopt);
   EXPECT_EQ(*it->replacement_type, b_type);
   method->get_code()->clear_cfg();
 }
@@ -362,8 +362,8 @@ TEST_F(CheckCastAnalysisTest, weaken_interface_to_interface) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LK;");
-  EXPECT_EQ(it->replacement_insn, boost::none);
-  EXPECT_NE(it->replacement_type, boost::none);
+  EXPECT_EQ(it->replacement_insn, std::nullopt);
+  EXPECT_NE(it->replacement_type, std::nullopt);
   EXPECT_EQ(*it->replacement_type, j_type);
   method->get_code()->clear_cfg();
 }
@@ -409,8 +409,8 @@ TEST_F(CheckCastAnalysisTest, weaken_replace_class_to_interface) {
   auto* insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LB;");
-  EXPECT_NE(it->replacement_insn, boost::none);
-  EXPECT_EQ(it->replacement_type, boost::none);
+  EXPECT_NE(it->replacement_insn, std::nullopt);
+  EXPECT_EQ(it->replacement_type, std::nullopt);
   method->get_code()->clear_cfg();
 }
 
@@ -533,7 +533,7 @@ TEST_P(CheckCastAnalysisSDKTest, parameter) {
     EXPECT_EQ(rep.insn->opcode(), OPCODE_CHECK_CAST);
     ASSERT_TRUE(rep.replacement_insn);
     EXPECT_EQ((*rep.replacement_insn)->opcode(), OPCODE_MOVE_OBJECT);
-    EXPECT_EQ(rep.replacement_type, boost::none);
+    EXPECT_EQ(rep.replacement_type, std::nullopt);
   } else {
     EXPECT_EQ(replacements.size(), 0);
   }

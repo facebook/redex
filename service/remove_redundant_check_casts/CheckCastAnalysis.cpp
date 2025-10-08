@@ -12,7 +12,6 @@
 #include "FrameworkApi.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
-#include "Trace.h"
 
 namespace check_casts {
 
@@ -181,8 +180,6 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
 
   case OPCODE_INSTANCE_OF:
   case OPCODE_CHECK_CAST:
-    return type::java_lang_Object();
-
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
   case OPCODE_IF_EQZ:
@@ -490,17 +487,14 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
 
       auto dst = move->insn->dest();
       if (src == dst) {
-        redundant_check_casts.emplace_back(block, insn, boost::none,
-                                           boost::none);
+        redundant_check_casts.emplace_back(block, insn, std::nullopt,
+                                           std::nullopt);
       } else {
         auto* new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
         new_move->set_src(0, src);
         new_move->set_dest(dst);
         redundant_check_casts.emplace_back(
-            block,
-            insn,
-            boost::optional<IRInstruction*>(new_move),
-            boost::none);
+            block, insn, std::optional<IRInstruction*>(new_move), std::nullopt);
       }
     } else if (check_type != insn->get_type()) {
       // We don't want to weaken a class to an interface for performance reason.
@@ -510,8 +504,8 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
                                       /* weaken_to_not_interfacy */ true);
       }
       if (check_type != insn->get_type()) {
-        redundant_check_casts.emplace_back(
-            block, insn, boost::none, boost::optional<DexType*>(check_type));
+        redundant_check_casts.emplace_back(block, insn, std::nullopt,
+                                           std::optional<DexType*>(check_type));
       }
     }
   }

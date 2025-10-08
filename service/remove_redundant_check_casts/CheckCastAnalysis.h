@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <optional>
 #include <vector>
 
 #include "CheckCastConfig.h"
@@ -26,13 +26,13 @@ namespace impl {
 struct CheckCastReplacementItem {
   cfg::Block* block;
   IRInstruction* insn;
-  boost::optional<IRInstruction*> replacement_insn;
-  boost::optional<DexType*> replacement_type;
+  std::optional<IRInstruction*> replacement_insn;
+  std::optional<DexType*> replacement_type;
 
   CheckCastReplacementItem(cfg::Block* block,
                            IRInstruction* insn,
-                           boost::optional<IRInstruction*> replacement_insn,
-                           boost::optional<DexType*> replacement_type)
+                           std::optional<IRInstruction*> replacement_insn,
+                           std::optional<DexType*> replacement_type)
       : block(block),
         insn(insn),
         replacement_insn(replacement_insn),
