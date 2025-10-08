@@ -37,13 +37,13 @@ const DexString* gen_new_name(const std::string_view org_name, size_t seed) {
   std::string new_name = str_copy(org_name.substr(0, end));
   new_name.append(mangling_affix);
   while (seed != 0u) {
-    int d = seed % 62;
+    int d = static_cast<int>(seed % 62);
     if (d < 10) {
-      new_name.push_back(d + '0');
+      new_name.push_back(static_cast<char>(d + '0'));
     } else if (d < 36) {
-      new_name.push_back(d - 10 + 'a');
+      new_name.push_back(static_cast<char>(d - 10 + 'a'));
     } else {
-      new_name.push_back(d - 36 + 'A');
+      new_name.push_back(static_cast<char>(d - 36 + 'A'));
     }
     seed /= 62;
   }
@@ -653,9 +653,8 @@ void fix_colliding_dmethods(
         if (!insn->has_method()) {
           continue;
         }
-        auto* const callee = resolve_method(
-            insn->get_method(),
-            opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
+        auto* const callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn), meth);
         if (callee == nullptr ||
             num_additional_args.find(callee) == num_additional_args.end()) {
           continue;
@@ -668,9 +667,8 @@ void fix_colliding_dmethods(
         if (!insn->has_method()) {
           continue;
         }
-        auto* const callee = resolve_method(
-            insn->get_method(),
-            opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
+        auto* const callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn), meth);
         if (callee == nullptr ||
             num_additional_args.find(callee) == num_additional_args.end()) {
           continue;
@@ -690,6 +688,7 @@ void fix_colliding_dmethods(
       // 42 is a dummy int val as the additional argument to the patched
       // colliding method.
       std::vector<uint32_t> additional_args;
+      additional_args.reserve(num_additional_args.at(callee));
       for (size_t i = 0; i < num_additional_args.at(callee); ++i) {
         additional_args.push_back(42);
       }

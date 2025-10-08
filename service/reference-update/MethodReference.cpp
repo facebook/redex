@@ -194,9 +194,8 @@ CallSites collect_call_refs(const Scope& scope, const T& callees) {
           continue;
         }
 
-        auto* const callee = resolve_method(
-            insn->get_method(),
-            opcode_to_search(const_cast<IRInstruction*>(insn)), caller);
+        auto* const callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn), caller);
         if (callee == nullptr || callees.count(callee) == 0) {
           continue;
         }
@@ -211,9 +210,8 @@ CallSites collect_call_refs(const Scope& scope, const T& callees) {
           continue;
         }
 
-        auto* const callee = resolve_method(
-            insn->get_method(),
-            opcode_to_search(const_cast<IRInstruction*>(insn)), caller);
+        auto* const callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn), caller);
         if (callee == nullptr || callees.count(callee) == 0) {
           continue;
         }
@@ -304,7 +302,7 @@ int wrap_instance_call_with_static(
       }
     }
   });
-  return total;
+  return static_cast<int>(total);
 }
 
 } // namespace method_reference
