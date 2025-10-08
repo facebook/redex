@@ -7,18 +7,15 @@
 
 #include "LocalDcePass.h"
 
-#include <vector>
-
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "InitClassesWithSideEffects.h"
+#include "LocalDce.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Purity.h"
-#include "Resolver.h"
 #include "Trace.h"
-#include "Transform.h"
 #include "Walkers.h"
 
 namespace {
