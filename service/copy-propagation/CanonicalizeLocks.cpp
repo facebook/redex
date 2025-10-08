@@ -90,9 +90,6 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
         switch (cur->opcode()) {
         case OPCODE_MONITOR_ENTER:
         case OPCODE_MONITOR_EXIT:
-          next = get_rdef(cur, cur->src(0));
-          break;
-
         case OPCODE_MOVE_OBJECT:
           next = get_rdef(cur, cur->src(0));
           break;

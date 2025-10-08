@@ -550,19 +550,18 @@ VertexMapping AliasedRegisters::get_vertex_mapping(
 std::string AliasedRegisters::dump() const {
   std::ostringstream oss;
   const auto& edges = this->m_graph.get_vertices_with_adjacent_vertex();
-  oss << "Graph [" << std::endl;
+  oss << "Graph [\n";
   for (auto [source, target] : UnorderedIterable(edges)) {
     const Value& r1 = m_graph[source];
     const Value& r2 = m_graph[target];
-    oss << "(" << r1.str().c_str() << " -> " << r2.str().c_str() << ") "
-        << std::endl;
+    oss << "(" << r1.str().c_str() << " -> " << r2.str().c_str() << ") \n";
   }
-  oss << "] insert order [" << std::endl;
+  oss << "] insert order [\n";
   for (auto [v, i] : m_insert_order) {
     const Value& r = m_graph[v];
-    oss << r.str().c_str() << " has index " << i << std::endl;
+    oss << r.str().c_str() << " has index " << i << '\n';
   }
-  oss << "]" << std::endl;
+  oss << "]\n";
   return oss.str();
 }
 
@@ -681,7 +680,7 @@ vertex_t VertexValues::get_vertex(const Value& value) const {
   auto& v = m_indices[value];
   if (v == 0) {
     m_values.push_back(value);
-    v = m_values.size();
+    v = static_cast<vertex_t>(m_values.size());
   }
   return v;
 }
