@@ -846,7 +846,7 @@ class MultiMethodInliner {
     size_t recursive{0};
     size_t max_call_stack_depth{0};
     size_t waited_seconds{0};
-    int critical_path_length{0};
+    uint32_t critical_path_length{0};
 
     // statistics that may be incremented concurrently
     std::atomic<size_t> kotlin_lambda_inlined{0};
@@ -883,7 +883,7 @@ class MultiMethodInliner {
     std::atomic<size_t> constant_invoke_callees_unused_results{0};
     std::atomic<size_t> constant_invoke_callees_no_return{0};
     inliner::CallSiteSummaryStats call_site_summary_stats;
-    AtomicMap<const DexMethod*, size_t> partially_inlined_callees{};
+    AtomicMap<const DexMethod*, size_t> partially_inlined_callees;
   };
   InliningInfo info;
 

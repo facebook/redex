@@ -637,7 +637,7 @@ DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
   if (insn == nullptr) {
     return nullptr;
   }
-  auto* type = const_cast<DexType*>(insn->get_type());
+  auto* type = insn->get_type();
   delete insn;
   return type;
 }
@@ -1395,8 +1395,8 @@ static float get_invoke_cost(const InlinerCostConfig& cost_config,
                              float result_used) {
   float invoke_cost =
       cost_config.cost_invoke + result_used * cost_config.cost_move_result;
-  invoke_cost += get_inlined_regs_cost(callee->get_proto()->get_args()->size(),
-                                       cost_config);
+  invoke_cost += static_cast<float>(get_inlined_regs_cost(
+      callee->get_proto()->get_args()->size(), cost_config));
   return invoke_cost;
 }
 
@@ -1422,7 +1422,7 @@ static size_t get_inlined_cost(IRInstruction* insn,
     } else if (op == IOPCODE_UNREACHABLE) {
       cost += cost_config.op_unreachable_cost;
     } else if (op == IOPCODE_WRITE_BARRIER) {
-      cost += cost_config.cost_invoke;
+      cost += static_cast<size_t>(cost_config.cost_invoke);
     }
   } else {
     cost++;
@@ -1682,7 +1682,7 @@ const InlinedCost* MultiMethodInliner::get_fully_inlined_cost(
   return m_fully_inlined_costs
       .get_or_create_and_assert_equal(
           callee,
-          [&](const auto&) {
+          [&](const auto&) -> InlinedCost {
             InlinedCost inlined_cost(
                 get_inlined_cost(is_static(callee), callee->get_class(),
                                  callee->get_proto(), callee->get_code()));
@@ -1733,7 +1733,7 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
   return m_call_site_inlined_costs
       .get_or_create_and_assert_equal(
           key,
-          [&](const auto&) {
+          [&](const auto&) -> InlinedCost {
             auto inlined_cost = get_inlined_cost(
                 is_static(callee), callee->get_class(), callee->get_proto(),
                 callee->get_code(), call_site_summary);
@@ -1802,11 +1802,16 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
       if (callee_has_result && !call_site_summary->result_used) {
         callees_unused_results += count;
       }
-      inlined_cost.code += call_site_inlined_cost->code * count;
-      inlined_cost.method_refs += call_site_inlined_cost->method_refs * count;
-      inlined_cost.other_refs += call_site_inlined_cost->other_refs * count;
-      inlined_cost.result_used += call_site_inlined_cost->result_used * count;
-      inlined_cost.unused_args += call_site_inlined_cost->unused_args * count;
+      inlined_cost.code +=
+          call_site_inlined_cost->code * static_cast<float>(count);
+      inlined_cost.method_refs +=
+          call_site_inlined_cost->method_refs * static_cast<float>(count);
+      inlined_cost.other_refs +=
+          call_site_inlined_cost->other_refs * static_cast<float>(count);
+      inlined_cost.result_used +=
+          call_site_inlined_cost->result_used * static_cast<float>(count);
+      inlined_cost.unused_args +=
+          call_site_inlined_cost->unused_args * static_cast<float>(count);
       if (call_site_inlined_cost->no_return) {
         callees_no_return++;
       } else {
@@ -1820,11 +1825,11 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
 
     always_assert(callees_analyzed > 0);
     // compute average costs
-    inlined_cost.code /= callees_analyzed;
-    inlined_cost.method_refs /= callees_analyzed;
-    inlined_cost.other_refs /= callees_analyzed;
-    inlined_cost.result_used /= callees_analyzed;
-    inlined_cost.unused_args /= callees_analyzed;
+    inlined_cost.code /= static_cast<float>(callees_analyzed);
+    inlined_cost.method_refs /= static_cast<float>(callees_analyzed);
+    inlined_cost.other_refs /= static_cast<float>(callees_analyzed);
+    inlined_cost.result_used /= static_cast<float>(callees_analyzed);
+    inlined_cost.unused_args /= static_cast<float>(callees_analyzed);
     return inlined_cost;
   }();
   TRACE(INLINE, 4, "get_average_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%zu}",
@@ -1959,7 +1964,8 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
       total_fence_cost += 3 * count;
     }
   }
-  float average_fence_cost = total_fence_cost * 1.0 / caller_count;
+  float average_fence_cost =
+      static_cast<float>(total_fence_cost) / static_cast<float>(caller_count);
   float invoke_cost =
       get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
   TRACE(INLINE, 3,
@@ -1982,9 +1988,10 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   // involved?
   if ((inlined_cost->code + average_fence_cost -
        inlined_cost->unused_args * m_inliner_cost_config.unused_args_discount) *
-              caller_count +
-          classes * (cross_dex_penalty - cross_dex_bonus) >
-      invoke_cost * caller_count + method_cost) {
+              static_cast<float>(caller_count) +
+          static_cast<float>(classes) * (cross_dex_penalty - cross_dex_bonus) >
+      invoke_cost * static_cast<float>(caller_count) +
+          static_cast<float>(method_cost)) {
     return true;
   }
 
@@ -2043,7 +2050,7 @@ bool MultiMethodInliner::should_inline_at_call_site(
       get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
   auto fence_cost = get_needs_constructor_fence(caller, callee) ? 3 : 0;
   float inline_cost =
-      inlined_cost->code + fence_cost -
+      inlined_cost->code + static_cast<float>(fence_cost) -
       inlined_cost->unused_args * m_inliner_cost_config.unused_args_discount +
       cross_dex_penalty;
   bool size_increased = inline_cost > invoke_cost;
@@ -2247,14 +2254,11 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
 
 bool MultiMethodInliner::outlined_invoke_outlined(IRInstruction* insn,
                                                   const DexMethod* caller) {
-  if (!PositionPatternSwitchManager::
-          CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD &&
-      insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(caller) &&
-      is_outlined_method(insn->get_method())) {
-    // TODO: Remove this limitation imposed by symbolication infrastructure.
-    return true;
-  }
-  return false;
+  // TODO: Remove this limitation imposed by symbolication infrastructure.
+  return !PositionPatternSwitchManager::
+             CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD &&
+         insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(caller) &&
+         is_outlined_method(insn->get_method());
 }
 
 /**
@@ -2672,7 +2676,8 @@ float MultiMethodInliner::compute_profile_guided_discount(
   }
 
   // Bias toward inlining if the inlined code is smaller than the original.
-  auto shrinkage = std::min(inline_cost / full_cost->full_code, 1.0f);
+  auto shrinkage =
+      std::min(inline_cost / static_cast<float>(full_cost->full_code), 1.0f);
   auto shrink_discount =
       pow(shrinkage, m_inliner_cost_config.profile_guided_shrink_bias);
 
@@ -2700,12 +2705,12 @@ float MultiMethodInliner::compute_profile_guided_discount(
     float percentage = float(hot_units) / float(hot_units + cold_units);
     const auto t = m_inliner_cost_config.profile_guided_heat_threshold;
     const auto d = m_inliner_cost_config.profile_guided_heat_discount;
-    heat_discount = (d - 1.0) / (1.0 - t);
+    heat_discount = static_cast<float>((d - 1.0) / (1.0 - t));
     heat_discount *= (percentage - t);
     heat_discount += 1.0;
   }
 
-  return shrink_discount * heat_discount;
+  return static_cast<float>(shrink_discount * heat_discount);
 }
 
 namespace inliner {

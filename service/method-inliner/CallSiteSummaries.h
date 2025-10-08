@@ -43,7 +43,9 @@ struct CalleeCallSiteSummary {
 };
 
 inline size_t hash_value(CalleeCallSiteSummary ccss) {
-  return ((size_t)ccss.method) ^ (size_t)(ccss.call_site_summary);
+  return static_cast<size_t>(
+      reinterpret_cast<uintptr_t>(ccss.method) ^
+      reinterpret_cast<uintptr_t>(ccss.call_site_summary));
 }
 
 inline bool operator==(const CalleeCallSiteSummary& a,

@@ -321,7 +321,7 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
         CallSiteSummary call_site_summary;
         const auto& srcs = insn->srcs();
         for (size_t i = is_static(callee) ? 0 : 1; i < srcs.size(); ++i) {
-          auto val = env.get(srcs[i]);
+          auto val = env.get(srcs[static_cast<reg_t>(i)]);
           always_assert(!val.is_bottom());
           if (val.is_top()) {
             continue;

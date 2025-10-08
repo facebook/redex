@@ -12,7 +12,6 @@
 #include "DexPosition.h"
 #include "IRList.h"
 #include "IROpcode.h"
-#include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -166,7 +165,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   auto callee_regs_size = callee.get_registers_size();
   auto old_caller_regs_size = caller->get_registers_size();
   always_assert(next_caller_reg <= old_caller_regs_size);
-  remap_registers(&callee, next_caller_reg);
+  remap_registers(&callee, static_cast<reg_t>(next_caller_reg));
 
   auto alt_srcs = plugin.inline_srcs();
   move_arg_regs(&callee, alt_srcs ? *alt_srcs : inline_site->insn->srcs_copy());
@@ -202,7 +201,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   } else {
     size_t needed_caller_regs_size = next_caller_reg + callee_regs_size;
     if (needed_caller_regs_size > old_caller_regs_size) {
-      caller->set_registers_size(needed_caller_regs_size);
+      caller->set_registers_size(static_cast<reg_t>(needed_caller_regs_size));
     }
   }
 

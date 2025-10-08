@@ -47,11 +47,13 @@ class PriorityThreadPool {
  public:
   // Creates an instance with a default number of threads
   PriorityThreadPool() {
-    set_num_threads(static_cast<int>(redex_parallel::default_num_threads()));
+    set_num_threads(redex_parallel::default_num_threads());
   }
 
   // Creates an instance with a custom number of threads
-  explicit PriorityThreadPool(int num_threads) { set_num_threads(num_threads); }
+  explicit PriorityThreadPool(size_t num_threads) {
+    set_num_threads(num_threads);
+  }
 
   ~PriorityThreadPool() {
     // If the pool was created (>0 threads), `join` must be manually called
@@ -69,7 +71,7 @@ class PriorityThreadPool {
   }
 
   // The number of threads may be set at most once to a positive number
-  void set_num_threads(int num_threads) {
+  void set_num_threads(size_t num_threads) {
     always_assert(m_threads == 0);
     always_assert(!m_shutdown);
     m_threads = num_threads;
@@ -85,7 +87,7 @@ class PriorityThreadPool {
     sparta::AsyncRunner* async_runner =
         redex_thread_pool::ThreadPool::get_instance();
     if (async_runner != nullptr) {
-      for (int i = 0; i < num_threads; ++i) {
+      for (size_t i = 0; i < num_threads; ++i) {
         async_runner->run_async(&PriorityThreadPool::run, this);
       }
       return;
@@ -94,7 +96,7 @@ class PriorityThreadPool {
     boost::thread::attributes attrs;
     attrs.set_stack_size(static_cast<size_t>(8 * 1024 * 1024)); // 8MB stack.
 
-    for (int i = 0; i < num_threads; ++i) {
+    for (size_t i = 0; i < num_threads; ++i) {
       m_pool.emplace_back(attrs, [this]() { this->run(); });
     }
   }
