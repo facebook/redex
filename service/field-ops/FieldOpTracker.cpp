@@ -10,7 +10,6 @@
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
-#include "BaseIRAnalyzer.h"
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "IRCode.h"
