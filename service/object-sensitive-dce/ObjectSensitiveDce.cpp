@@ -7,7 +7,6 @@
 
 #include "ObjectSensitiveDce.h"
 
-#include <fstream>
 #include <functional>
 
 #include "CFGMutation.h"
@@ -19,8 +18,6 @@
 #include "InitClassPruner.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
-#include "PassManager.h"
-#include "ScopedCFG.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"
 

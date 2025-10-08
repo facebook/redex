@@ -9,7 +9,6 @@
 
 #include <sparta/S_Expression.h>
 
-#include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "InitClassesWithSideEffects.h"
