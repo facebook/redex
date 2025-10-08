@@ -21,7 +21,7 @@ struct GroupStats {
   size_t cls_count{0};
   size_t ref_count{0};
   size_t estimated_code_size{0};
-  std::map<size_t, size_t> refs_stats{};
+  std::map<size_t, size_t> refs_stats;
 
   void count(size_t cls_ref, size_t code_size) {
     if (!traceEnabled(CLMG, 5)) {
@@ -80,7 +80,7 @@ void MergingStrategy::group_by_cls_count(
   auto it = mergeable_types.begin();
   for (; remaining_count >= max_mergeables_count;
        remaining_count -= max_mergeables_count) {
-    auto next = std::next(it, max_mergeables_count);
+    auto next = std::next(it, static_cast<long>(max_mergeables_count));
     std::vector<const DexType*> curr_group(it, next);
     walker(curr_group);
     it = next;

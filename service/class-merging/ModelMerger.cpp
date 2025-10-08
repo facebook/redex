@@ -518,17 +518,17 @@ void write_out_type_mapping(const ConfigFiles& conf,
   for (const auto* merger : mergers) {
     for (const auto* mergeable : merger->mergeables) {
       out << SHOW(mergeable) << " -> " << SHOW(merger->type) << " "
-          << type_tags.get_type_tag(mergeable) << std::endl;
+          << type_tags.get_type_tag(mergeable) << '\n';
 
       if (method_dedup_map.count(mergeable) != 0u) {
         for (const auto& symbol_map : method_dedup_map.at(mergeable)) {
           out << "  " << symbol_map.first << " -> " << SHOW(symbol_map.second)
-              << std::endl;
+              << '\n';
         }
       }
     }
   }
-  out << std::endl;
+  out << '\n';
 
   os << out.str();
   TRACE(CLMG,
@@ -741,7 +741,8 @@ std::vector<DexClass*> ModelMerger::merge_model(
       scope.end());
 
   TRACE(CLMG, 3, "created %zu merger classes", merger_classes.size());
-  m_stats.m_num_generated_classes = merger_classes.size();
+  m_stats.m_num_generated_classes =
+      static_cast<uint32_t>(merger_classes.size());
   return merger_classes;
 }
 

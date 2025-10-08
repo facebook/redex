@@ -197,8 +197,8 @@ void Model::init(const Scope& scope,
   MergeabilityChecker checker(scope, spec, m_ref_checker, generated);
   m_non_mergeables = checker.get_non_mergeables();
   TRACE(CLMG, 3, "Non mergeables %zu", m_non_mergeables.size());
-  m_stats.m_non_mergeables = m_non_mergeables.size();
-  m_stats.m_all_types = m_spec.merging_targets.size();
+  m_stats.m_non_mergeables = static_cast<uint32_t>(m_non_mergeables.size());
+  m_stats.m_all_types = static_cast<uint32_t>(m_spec.merging_targets.size());
 }
 
 void Model::build_hierarchy(const TypeSet& roots) {
@@ -452,7 +452,7 @@ void Model::shape_model() {
   }
 
   // Update excluded metrics
-  m_stats.m_excluded = m_excluded.size();
+  m_stats.m_excluded = static_cast<uint32_t>(m_excluded.size());
   TRACE(CLMG, 4, "Excluded types total %zu", m_excluded.size());
 }
 
@@ -589,6 +589,7 @@ TypeGroupByDex Model::group_per_dex(const TypeSet& types,
   std::vector<TypeSet> new_groups(m_x_dex.num_dexes());
   for (const auto* type : types) {
     auto dex_id = m_x_dex.get_dex_idx(type);
+    redex_assert(dex_id < new_groups.size());
     new_groups[dex_id].emplace(type);
   }
   TypeGroupByDex result(m_x_dex.num_dexes());
@@ -707,7 +708,7 @@ void Model::map_fields(MergerType& merger,
       }
       std::ostringstream ss;
       ss << "placeholder_" << index;
-      auto* field_type = merger.field_type_at(index);
+      auto* field_type = merger.field_type_at(static_cast<int>(index));
       fields[index] = DexField::make_field(
                           type, DexString::make_string(ss.str()), field_type)
                           ->make_concrete(ACC_PUBLIC);

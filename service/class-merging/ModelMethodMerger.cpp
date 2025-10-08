@@ -854,7 +854,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
       DexMethod::delete_method(m);
       return true;
     };
-    int before = non_ctors.size() + non_vmethods.size();
+    size_t before = non_ctors.size() + non_vmethods.size();
     non_ctors.erase(
         std::remove_if(non_ctors.begin(), non_ctors.end(), should_erase),
         non_ctors.end());

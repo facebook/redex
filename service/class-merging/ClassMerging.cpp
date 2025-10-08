@@ -36,7 +36,7 @@ std::unique_ptr<RefChecker> create_ref_checker(const bool per_dex_grouping,
   if (!min_sdk_api_file) {
     std::cerr
         << "[ClassMerging] Warning: needs Android SDK API list for android-"
-        << min_sdk << std::endl;
+        << min_sdk << '\n';
   } else {
     min_sdk_api = &conf.get_android_sdk_api(min_sdk);
   }
@@ -45,7 +45,7 @@ std::unique_ptr<RefChecker> create_ref_checker(const bool per_dex_grouping,
     xstores = nullptr;
     store_id = 0;
   } else {
-    always_assert(xstores);
+    always_assert(xstores != nullptr);
     // RefChecker store_idx is initialized with `largest_root_store_id()`, so
     // that it rejects all the references from stores with id larger than the
     // largest root_store id.

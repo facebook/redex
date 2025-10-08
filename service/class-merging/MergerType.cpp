@@ -109,7 +109,7 @@ std::string MergerType::Shape::build_type_name(
   size_t hash = hash_pair.first;
   std::string hash_str = hash_pair.second;
   if (!hash_cache.insert(hash).second) {
-    hash_str = hash_str + "_" + group_count;
+    hash_str = hash_str + "_" + std::to_string(group_count);
   }
   TRACE(CLMG, 5, "group_count %zu, hash_cache %zu", group_count,
         hash_cache.size());

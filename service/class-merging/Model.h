@@ -212,9 +212,9 @@ struct ModelStats {
   uint32_t m_excluded = 0;
   uint32_t m_dropped = 0;
   // InterDex grouping stats
-  std::map<InterdexSubgroupIdx, size_t> m_interdex_groups{};
+  std::map<InterdexSubgroupIdx, size_t> m_interdex_groups;
   // MergingStrategy grouping stats
-  std::map<size_t, size_t> m_merging_size_counts{};
+  std::map<size_t, size_t> m_merging_size_counts;
   // Stats for approximate shape merging
   ApproximateStats m_approx_stats{};
   // Merging related stats
