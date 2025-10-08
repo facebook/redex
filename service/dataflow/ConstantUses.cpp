@@ -275,8 +275,6 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
     // In the Android verifier, the check-cast instruction updates the assumed
     // exact type on the incoming register, even in the case of a zero constant.
     // We don't track exact types here, and just bail out.
-    return TypeDemand::Error;
-
   case OPCODE_INSTANCE_OF:
     // The Android verifier in some ART versions match a pattern of
     // instance-of + ifXXX, and then may strengthen assumptions on the incoming
