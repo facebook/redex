@@ -24,18 +24,14 @@
 
 #include "ClassSplittingPass.h"
 
-#include <algorithm>
-#include <boost/functional/hash.hpp>
+#include <boost/algorithm/string.hpp>
 #include <vector>
 
-#include "ApiLevelChecker.h"
 #include "ClassSplitting.h"
-#include "Creators.h"
 #include "InterDexPass.h"
 #include "MethodProfiles.h"
 #include "PluginRegistry.h"
 #include "Resolver.h"
-#include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
 
