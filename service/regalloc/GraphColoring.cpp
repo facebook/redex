@@ -14,11 +14,11 @@
 #include "CFGMutation.h"
 #include "Debug.h"
 #include "DexOpcode.h"
-#include "DexUtil.h"
 #include "Dominators.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Transform.h"
+#include "TypeUtil.h"
 #include "VirtualRegistersFile.h"
 
 namespace regalloc {
@@ -150,7 +150,7 @@ int score_range_fit(const interference::Graph& ig,
   int score{0};
   auto vreg = range_base;
   for (size_t i = 0; i < range_regs.size(); ++i) {
-    auto reg = range_regs[i];
+    auto reg = range_regs[static_cast<ptrdiff_t>(i)];
     const auto& node = ig.get_node(reg);
     const auto& vreg_file = vreg_files.at(reg);
     if (!vreg_file.is_free(vreg, node.width())) {
@@ -667,7 +667,7 @@ void Allocator::find_split(const interference::Graph& ig,
   auto spill_it = global_spills_ui.begin();
   while (spill_it != global_spills_ui.end()) {
     auto reg = spill_it->first;
-    auto best_cost = ig.get_node(reg).spill_cost();
+    size_t best_cost = static_cast<size_t>(ig.get_node(reg).spill_cost());
     if (best_cost == 0) {
       ++spill_it;
       continue;

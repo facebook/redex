@@ -6,8 +6,6 @@
  */
 
 #include "Split.h"
-#include "Show.h"
-#include "Trace.h"
 
 namespace regalloc {
 

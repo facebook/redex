@@ -8,7 +8,6 @@
 #include "Interference.h"
 
 #include "DexOpcode.h"
-#include "DexUtil.h"
 #include "Show.h"
 
 namespace regalloc {
@@ -164,7 +163,7 @@ size_t dest_bit_width(const cfg::InstructionIterator& it) {
   }
 }
 
-size_t src_bit_width(const IRInstruction* insn, int src_i) {
+bit_width_t src_bit_width(const IRInstruction* insn, int src_i) {
   auto op = insn->opcode();
   // move-* opcodes can always be encoded as move-*/16
   if (opcode::is_a_move(op)) {
@@ -179,7 +178,8 @@ size_t src_bit_width(const IRInstruction* insn, int src_i) {
 vreg_t max_value_for_src(const IRInstruction* insn,
                          size_t src_index,
                          bool src_is_wide) {
-  auto max_value = max_unsigned_value(src_bit_width(insn, src_index));
+  auto max_value =
+      max_unsigned_value(src_bit_width(insn, static_cast<int>(src_index)));
   auto op = insn->opcode();
   if (opcode::has_range_form(op) && insn->srcs_size() == 1) {
     // An `invoke {v0}` opcode can always be rewritten as `invoke/range {v0}`
