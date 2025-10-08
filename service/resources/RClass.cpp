@@ -348,7 +348,8 @@ FieldArrayValues RClassReader::analyze_clinit(
     std::vector<uint32_t> array_content;
     auto len = array_domain.length();
     for (size_t i = 0; i < len; ++i) {
-      auto value = array_domain.get(i).maybe_get<SignedConstantDomain>();
+      auto value = array_domain.get(static_cast<uint32_t>(i))
+                       .maybe_get<SignedConstantDomain>();
       always_assert_log(value,
                         "%s is not in the SignedConstantDomain, "
                         "stored at %zu in %s:\n%s",
@@ -543,7 +544,8 @@ size_t RClassWriter::remap_resource_class_clinit(
       // OPCODE: FILL_ARRAY_DATA v0, <data>
       //   fill-array-data-payload { [10 x 4] { ... yada yada ... } }
       // OPCODE: SPUT_OBJECT v0, Lcom/redextest/R;.six:[I
-      auto size_reg = get_register_for_value(new_values.size());
+      auto size_reg =
+          get_register_for_value(static_cast<int32_t>(new_values.size()));
       auto array_reg = cfg.allocate_temp();
 
       auto* new_array = new IRInstruction(OPCODE_NEW_ARRAY);
