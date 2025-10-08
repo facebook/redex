@@ -52,7 +52,7 @@ struct Location {
   /**
    * Return the register assigned to this Location.
    */
-  int get_reg() const { return reg; }
+  reg_t get_reg() const { return reg; }
 
   static Location& empty() {
     static Location empty_loc(type::_void(), 0);
@@ -412,8 +412,8 @@ struct MethodCreator {
   /**
    * Get an existing local.
    */
-  Location get_local(int i) {
-    always_assert(i < static_cast<int>(locals.size()));
+  Location get_local(size_t i) {
+    always_assert(i < locals.size());
     return locals.at(i);
   }
 

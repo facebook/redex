@@ -472,8 +472,8 @@ uint32_t estimate_deduplicatable_ctor_code_size(const DexClass* cls) {
   return estimated_size;
 }
 
-uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
-                            const std::vector<DexClass*>& scope) {
+size_t dedup_constructors(const std::vector<DexClass*>& classes,
+                          const std::vector<DexClass*>& scope) {
   Timer timer("dedup_constructors");
   std::map<DexMethod*, DexMethod*, dexmethods_comparator> old_to_new;
   CtorSummaries methods_summaries;
