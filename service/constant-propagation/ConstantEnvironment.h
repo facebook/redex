@@ -164,9 +164,10 @@ class ConstantEnvironment final
                             FieldEnvironment(),
                             ConstantHeap())) {}
 
-  static void reduce_product(std::tuple<ConstantRegisterEnvironment,
-                                        FieldEnvironment,
-                                        ConstantHeap>&) {}
+  static void reduce_product(
+      [[maybe_unused]] std::
+          tuple<ConstantRegisterEnvironment, FieldEnvironment, ConstantHeap>&) {
+  }
   /*
    * Getters and setters
    */

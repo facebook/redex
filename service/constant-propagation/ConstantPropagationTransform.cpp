@@ -1026,13 +1026,13 @@ void Transform::forward_targets(
     }
 
     // Find last successor where no assigned reg is live
-    for (int i = unconditional_targets.size() - 1; i >= 1; --i) {
+    for (size_t i = unconditional_targets.size() - 1; i >= 1; --i) {
       const auto& unconditional_target = unconditional_targets.at(i);
       if (is_any_assigned_reg_live_at_target(unconditional_target)) {
         continue;
       }
       TRACE(CONSTP, 2,
-            "forward_targets rewrites target, skipping %d targets, discharged "
+            "forward_targets rewrites target, skipping %zu targets, discharged "
             "%zu assigned regs",
             i, unconditional_target.assigned_regs.size());
       return unconditional_target.target;

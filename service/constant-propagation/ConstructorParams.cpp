@@ -127,7 +127,7 @@ class InitFixpointIterator final
       if (obj_domain.is_value() && *obj_domain.get_constant() == 0) {
         auto* method = resolve_method(insn->get_method(), MethodSearch::Direct);
         if (method == nullptr) {
-          method = static_cast<DexMethod*>(insn->get_method());
+          method = dynamic_cast<DexMethod*>(insn->get_method());
         } else if (method->get_class() != m_current_cls &&
                    !method->is_external()) {
           env->set(RESULT_REGISTER, ParamIdxDomain::top());

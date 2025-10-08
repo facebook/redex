@@ -630,7 +630,7 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     case OPCODE_LONG_TO_INT:
       return apply((int32_t)val);
     case OPCODE_INT_TO_LONG:
-      return apply((int64_t)val);
+      return apply(val);
     case OPCODE_INT_TO_BYTE:
       return apply((int8_t)val);
     case OPCODE_INT_TO_CHAR:
@@ -686,7 +686,7 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
 bool PrimitiveAnalyzer::analyze_binop_lit(
     const IRInstruction* insn, ConstantEnvironment* env) NO_UBSAN_ARITH {
   auto op = insn->opcode();
-  int32_t lit = insn->get_literal();
+  int32_t lit = static_cast<int32_t>(insn->get_literal());
   auto scd = env->get<SignedConstantDomain>(insn->src(0));
   const auto cst = scd.get_constant();
   boost::optional<int64_t> result = boost::none;
@@ -738,9 +738,9 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
     // as in https://source.android.com/devices/tech/dalvik/dalvik-bytecode
     // the following operations have the second operand masked.
     case OPCODE_SHL_INT_LIT: {
-      uint32_t ucst = *cst;
+      uint32_t ucst = static_cast<uint32_t>(*cst);
       uint32_t uresult = ucst << (lit & 0x1f);
-      result = (int32_t)uresult;
+      result = static_cast<int32_t>(uresult);
       break;
     }
     case OPCODE_SHR_INT_LIT: {
@@ -748,7 +748,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
       break;
     }
     case OPCODE_USHR_INT_LIT: {
-      uint32_t ucst = *cst;
+      uint32_t ucst = static_cast<uint32_t>(*cst);
       // defined in dalvik spec
       result = ucst >> (lit & 0x1f);
       break;
@@ -1067,8 +1067,8 @@ bool StaticFinalFieldAnalyzer::analyze_sget(const IRInstruction* insn,
   // and is certainly final and will not be modified
   if ((field != nullptr) && field->is_def() &&
       (dex_field->get_static_value() != nullptr) && is_final(dex_field)) {
-    const auto constant =
-        SignedConstantDomain(dex_field->get_static_value()->value());
+    const auto constant = SignedConstantDomain(
+        static_cast<int64_t>(dex_field->get_static_value()->value()));
     env->set(RESULT_REGISTER, constant);
     return true;
   }
@@ -1363,7 +1363,8 @@ bool NewObjectAnalyzer::analyze_filled_new_array(
   if (ignore_type(state, insn->get_type())) {
     return false;
   }
-  auto array_length = SignedConstantDomain(insn->srcs_size());
+  auto array_length =
+      SignedConstantDomain(static_cast<int64_t>(insn->srcs_size()));
   env->set(RESULT_REGISTER, NewObjectDomain(insn, array_length));
   return true;
 }
@@ -1629,7 +1630,7 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
   if (method == nullptr) {
     // Redex may run without sdk as input, so the method resolving may fail.
     // Example: Integer.valueOf(I) is an external method.
-    method = static_cast<DexMethod*>(method_ref);
+    method = dynamic_cast<DexMethod*>(method_ref);
   }
 
   // Immutable state should not be updated in parallel with analysis.
@@ -1689,7 +1690,7 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
   }
   ObjectWithImmutAttr object(
       ImmutableAttributeAnalyzerState::initialized_type(method),
-      it->second.size());
+      static_cast<uint32_t>(it->second.size()));
   // Only support one register for the object, can be easily extended. For
   // example, virtual method may return `this` pointer, so two registers are
   // holding the same heap object.
@@ -1943,11 +1944,12 @@ void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
 /*
  * Helpers for CFG edge analysis
  */
-
+namespace {
 struct IfZeroMeetWith {
   sign_domain::Interval right_zero_meet_interval;
   boost::optional<sign_domain::Interval> left_zero_meet_interval{boost::none};
 };
+} // namespace
 
 static const UnorderedMap<IROpcode, IfZeroMeetWith, boost::hash<IROpcode>>
     if_zero_meet_with{
@@ -2167,8 +2169,10 @@ void FixpointIterator::analyze_switch(const IRInstruction* insn,
       return;
     }
     auto selector_const = scd->get_constant();
-    if (selector_const && has_switch_consecutive_case_keys(
-                              edge->src(), *selector_const, *selector_const)) {
+    if (selector_const &&
+        has_switch_consecutive_case_keys(
+            edge->src(), static_cast<int32_t>(*selector_const),
+            static_cast<int32_t>(*selector_const))) {
       env->set_to_bottom();
       return;
     }
@@ -2179,7 +2183,8 @@ void FixpointIterator::analyze_switch(const IRInstruction* insn,
     auto lb = numeric_interval_domain.lower_bound();
     auto ub = numeric_interval_domain.upper_bound();
     if (lb > NumericIntervalDomain::MIN && ub < NumericIntervalDomain::MAX &&
-        has_switch_consecutive_case_keys(edge->src(), lb, ub)) {
+        has_switch_consecutive_case_keys(edge->src(), static_cast<int32_t>(lb),
+                                         static_cast<int32_t>(ub))) {
       env->set_to_bottom();
       return;
     }

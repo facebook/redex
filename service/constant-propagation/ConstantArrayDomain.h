@@ -56,7 +56,8 @@ class ConstantArrayDomain final
   ConstantArrayDomain() = default;
 
   static void reduce_product(
-      std::tuple<ArrayLengthDomain, ArrayValuesDomain>& domains) {}
+      [[maybe_unused]] std::tuple<ArrayLengthDomain, ArrayValuesDomain>&
+          domains) {}
 
   explicit ConstantArrayDomain(uint32_t length) {
     mutate_array_length(
@@ -148,14 +149,14 @@ class ConstantArrayDomain final
   }
 
   ConstantArrayDomain<Domain, DefaultValue>& mutate_array_length(
-      std::function<void(ArrayLengthDomain*)> f) {
+      const std::function<void(ArrayLengthDomain*)>& f) {
     this->template apply<0>(f);
     canonicalize();
     return *this;
   }
 
   ConstantArrayDomain<Domain, DefaultValue>& mutate_array_values(
-      std::function<void(ArrayValuesDomain*)> f) {
+      const std::function<void(ArrayValuesDomain*)>& f) {
     this->template apply<1>(f);
     return *this;
   }

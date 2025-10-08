@@ -287,7 +287,7 @@ struct EnumFieldAnalyzerState {
   const DexMethod* enum_equals;
 
   EnumFieldAnalyzerState()
-      : enum_equals(static_cast<DexMethod*>(DexMethod::get_method(
+      : enum_equals(dynamic_cast<DexMethod*>(DexMethod::get_method(
             "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {}
 };
 
@@ -412,9 +412,9 @@ struct BoxedBooleanAnalyzerState {
   const DexField* boolean_false{static_cast<DexField*>(
       DexField::get_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;"))};
   const DexMethod* boolean_valueof{
-      static_cast<DexMethod*>(DexMethod::get_method(
+      dynamic_cast<DexMethod*>(DexMethod::get_method(
           "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;"))};
-  const DexMethod* boolean_booleanvalue{static_cast<DexMethod*>(
+  const DexMethod* boolean_booleanvalue{dynamic_cast<DexMethod*>(
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z"))};
 };
 
