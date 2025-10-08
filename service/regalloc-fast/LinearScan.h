@@ -126,7 +126,7 @@ struct LiveIntervalPoint {
       case Kind::MISSING:
         return 0;
       case Kind::INSTRUCTION:
-        return (size_t)lip.insn;
+        return reinterpret_cast<size_t>(lip.insn);
       case Kind::BLOCK_END:
         return lip.block_id;
       }

@@ -7,8 +7,6 @@
 
 #include "LiveInterval.h"
 
-#include "DexUtil.h"
-
 namespace fastregalloc {
 
 LiveIntervals init_live_intervals(
@@ -70,7 +68,7 @@ IntervalEndPoints calculate_live_interval(
     const std::vector<RangeInBlock>& ranges,
     const LiveIntervalPointIndices& indices) {
   always_assert(!indices.empty());
-  uint32_t max_index = indices.size() - 1;
+  uint32_t max_index = static_cast<uint32_t>(indices.size() - 1);
   uint32_t interval_start = max_index;
   uint32_t interval_end = 0;
   for (const auto& range : ranges) {
