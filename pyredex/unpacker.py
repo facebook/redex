@@ -523,13 +523,6 @@ class SubdirDexMode(BaseDexMode):
     def unpackage(
         self, extracted_apk_dir: str, dex_dir: str, unpackage_metadata: bool = False
     ) -> None:
-        jars = abs_glob(join(extracted_apk_dir, self._secondary_dir), "*.dex.jar")
-        for jar in jars:
-            dexpath = join(dex_dir, basename(jar))[:-4]
-            extract_dex_from_jar(jar, dexpath)
-            os.remove(jar + ".meta")
-            os.remove(jar)
-
         raw_dexes = abs_glob(join(extracted_apk_dir, self._secondary_dir), "*.dex")
         for raw_dex in raw_dexes:
             if basename(raw_dex) == "empty.dex":
@@ -537,6 +530,21 @@ class SubdirDexMode(BaseDexMode):
 
             self._raw_secondary_dexs.add(basename(raw_dex))
             shutil.move(raw_dex, dex_dir)
+
+        jars = abs_glob(join(extracted_apk_dir, self._secondary_dir), "*.dex.jar")
+        for jar in jars:
+            # *.jar without the '.jar' part
+            dex_basename = basename(jar)[:-4]
+            # Assumption: basename should be unique even if we have mixed jars and raw dex files
+            # This is crucial because we use this basename to determine whether to put a dex file into a jar during repackaging
+            assert (
+                dex_basename not in self._raw_secondary_dexs
+            ), "Dex file basenames should be unique with mixed jars and raw dex files"
+            # Set dexpath s.t. extracting from the jar does not change the basename
+            dexpath = join(dex_dir, dex_basename)
+            extract_dex_from_jar(jar, dexpath)
+            os.remove(jar + ".meta")
+            os.remove(jar)
 
         metadata_txt = join(extracted_apk_dir, self._secondary_dir, "metadata.txt")
         if unpackage_metadata:
@@ -578,18 +586,25 @@ class SubdirDexMode(BaseDexMode):
         ), "should not have dex files with mixed prefixes"
 
         for i in itertools.count(1):
+            # dex_file: Canonical name of the dex file we want to have in the repackaged APK.
+            # dexpath: Full path of the canonically named dex file in the APK.
+            # dex_basename: The dex file basename during unpackaging, which is also the name the dex files have in dex_dir. See unpackaging
             dex_file = self._store_name + f"-{i}.dex"
             dexpath = join(dex_dir, dex_file)
+            dex_basename = dex_file
 
             if have_class_prefix_dex:
                 oldpath = join(dex_dir, self._dex_prefix + "%d.dex" % (i + 1))
                 if isfile(oldpath):
+                    dex_basename = oldpath
                     shutil.move(oldpath, dexpath)
 
             if not isfile(dexpath):
                 break
 
-            if dex_file in self._raw_secondary_dexs:
+            # Use the basename to determine whether we should create a jar
+            # At this point the *actual* dex file name has already been canonicalized, i.e., the dexpath
+            if dex_basename in self._raw_secondary_dexs:
                 metadata.add_dex(dexpath, BaseDexMode.get_canary(self, i))
                 shutil.move(dexpath, join(extracted_apk_dir, self._secondary_dir))
             else:
