@@ -9,7 +9,6 @@
 
 #include "ControlFlow.h"
 #include "ProguardMap.h"
-#include "Walkers.h"
 
 namespace constant_propagation {
 

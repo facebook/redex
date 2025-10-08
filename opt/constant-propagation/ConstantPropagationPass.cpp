@@ -9,10 +9,10 @@
 
 #include "ConfigFiles.h"
 #include "ConstantPropagation.h"
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "ScopedMetrics.h"
 #include "Trace.h"
-#include "Walkers.h"
 
 using namespace constant_propagation;
 

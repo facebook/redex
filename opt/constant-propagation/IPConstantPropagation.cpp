@@ -13,11 +13,11 @@
 #include "ConstantPropagationState.h"
 #include "ConstructorParams.h"
 #include "DefinitelyAssignedIFields.h"
+#include "DexUtil.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Purity.h"
-#include "RedexResources.h"
 #include "ScopedMetrics.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -57,6 +57,8 @@ using CombinedAnalyzer =
                                 PackageNameAnalyzer,
                                 NewObjectAnalyzer,
                                 PrimitiveAnalyzer>;
+
+namespace {
 
 class AnalyzerGenerator {
   ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
@@ -119,6 +121,8 @@ class AnalyzerGenerator {
         std::move(env));
   }
 };
+
+} // namespace
 
 /*
  * This algorithm is based off the approach in this paper[1]. We start off by
