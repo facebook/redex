@@ -144,7 +144,8 @@ DexMethod* ClassSplitter::create_trampoline_method(DexMethod* method,
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   trampoline_target_method->set_deobfuscated_name(
       show_deobfuscated(trampoline_target_method));
-  trampoline_target_method->rstate.set_api_level(api_level);
+  trampoline_target_method->rstate.set_api_level(
+      static_cast<int32_t>(api_level));
   target_cls->add_method(trampoline_target_method);
   return trampoline_target_method;
 }
