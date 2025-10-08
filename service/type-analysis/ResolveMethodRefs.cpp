@@ -20,7 +20,7 @@ ResolveMethodRefs::ResolveMethodRefs(
     const XStoreRefs& xstores) {
   Timer t("ResolveMethodRefs");
   walk::parallel::methods(scope, [&](DexMethod* method) {
-    auto* code = const_cast<IRCode*>(method->get_code());
+    auto* code = method->get_code();
     if (code == nullptr) {
       return;
     }

@@ -170,18 +170,18 @@ void GlobalTypeAnalyzer::analyze_node(
 
         auto handle_receiver_domain = [](DexTypeDomain&& receiver_domain) {
           if (receiver_domain.is_bottom() || receiver_domain.is_top()) {
-            return receiver_domain;
+            return std::move(receiver_domain);
           }
 
           if (receiver_domain.is_null()) {
-            return receiver_domain;
+            return std::move(receiver_domain);
           }
 
           // Only the NOT_NULL receiver type domain is visible to the callee.
           // This also helps to ensure global state domains convergence.
           receiver_domain.apply<0>(
               [&](auto* val) { *val = NullnessDomain(Nullness::NOT_NULL); });
-          return receiver_domain;
+          return std::move(receiver_domain);
         };
 
         for (size_t i = 0; i < insn->srcs_size(); ++i) {

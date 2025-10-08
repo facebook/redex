@@ -9,7 +9,6 @@
 
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
-#include "GlobalTypeAnalyzer.h"
 #include "IRCode.h"
 #include "LocalTypeAnalyzer.h"
 #include "PassManager.h"

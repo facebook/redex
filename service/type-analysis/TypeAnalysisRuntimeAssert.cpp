@@ -8,13 +8,10 @@
 #include "TypeAnalysisRuntimeAssert.h"
 
 #include "ControlFlow.h"
-#include "DexAsm.h"
-#include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
-#include "Walkers.h"
 
 namespace type_analyzer {
 

@@ -7,7 +7,6 @@
 
 #include "WholeProgramState.h"
 
-#include "BaseIRAnalyzer.h"
 #include "GlobalTypeAnalyzer.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -410,11 +409,11 @@ std::string WholeProgramState::print_field_partition_diff(
     const WholeProgramState& other) const {
   std::ostringstream ss;
   if (m_field_partition.is_top()) {
-    ss << "[wps] diff this < is top" << std::endl;
+    ss << "[wps] diff this < is top" << '\n';
     return ss.str();
   }
   if (other.m_field_partition.is_top()) {
-    ss << "[wps] diff other > is top" << std::endl;
+    ss << "[wps] diff other > is top" << '\n';
     return ss.str();
   }
   const auto& this_field_bindings = m_field_partition.bindings();
@@ -422,20 +421,20 @@ std::string WholeProgramState::print_field_partition_diff(
   for (const auto& pair : this_field_bindings) {
     const auto* field = pair.first;
     if (other_field_bindings.count(field) == 0u) {
-      ss << "[wps] diff " << field << " < " << pair.second << std::endl;
+      ss << "[wps] diff " << field << " < " << pair.second << '\n';
     } else {
       const auto& this_type = pair.second;
       const auto& other_type = other_field_bindings.at(field);
       if (!this_type.equals(other_type)) {
         ss << "[wps] diff " << field << " < " << this_type << " > "
-           << other_type << std::endl;
+           << other_type << '\n';
       }
     }
   }
   for (const auto& pair : other_field_bindings) {
     const auto* field = pair.first;
     if (this_field_bindings.count(field) == 0u) {
-      ss << "[wps] diff " << field << " > " << pair.second << std::endl;
+      ss << "[wps] diff " << field << " > " << pair.second << '\n';
     }
   }
 
@@ -446,11 +445,11 @@ std::string WholeProgramState::print_method_partition_diff(
     const WholeProgramState& other) const {
   std::ostringstream ss;
   if (m_method_partition.is_top()) {
-    ss << "[wps] diff this < is top" << std::endl;
+    ss << "[wps] diff this < is top" << '\n';
     return ss.str();
   }
   if (other.m_method_partition.is_top()) {
-    ss << "[wps] diff other > is top" << std::endl;
+    ss << "[wps] diff other > is top" << '\n';
     return ss.str();
   }
   const auto& this_method_bindings = m_method_partition.bindings();
@@ -458,20 +457,20 @@ std::string WholeProgramState::print_method_partition_diff(
   for (const auto& pair : this_method_bindings) {
     const auto* method = pair.first;
     if (other_method_bindings.count(method) == 0u) {
-      ss << "[wps] diff " << method << " < " << pair.second << std::endl;
+      ss << "[wps] diff " << method << " < " << pair.second << '\n';
     } else {
       const auto& this_type = pair.second;
       const auto& other_type = other_method_bindings.at(method);
       if (!this_type.equals(other_type)) {
         ss << "[wps] diff " << method << " < " << this_type << " > "
-           << other_type << std::endl;
+           << other_type << '\n';
       }
     }
   }
   for (const auto& pair : other_method_bindings) {
     const auto* method = pair.first;
     if (this_method_bindings.count(method) == 0u) {
-      ss << "[wps] diff " << method << " > " << pair.second << std::endl;
+      ss << "[wps] diff " << method << " > " << pair.second << '\n';
     }
   }
 
