@@ -154,12 +154,6 @@ class CondEnvironment final
           CondEnvironment> {
  public:
   using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
-
-  // Some older compilers complain that the class is not default constructible.
-  // We intended to use the default constructors of the base class (via using
-  // AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor), but some
-  // compilers fail to catch this. So we insert a redundant '= default'.
-  CondEnvironment() = default;
 };
 
 class CseEnvironment final
@@ -1055,7 +1049,7 @@ SharedState::SharedState(
   // The list of methods is not exhaustive; it was derived by observing the most
   // common barriers encountered in real-life code, and then studying their spec
   // to check whether they are "safe" in the context of CSE barriers.
-  static const std::string_view safe_method_names[] = {
+  static constexpr auto safe_method_names = std::to_array<std::string_view>({
       "Landroid/os/SystemClock;.elapsedRealtime:()J",
       "Landroid/os/SystemClock;.uptimeMillis:()J",
       "Landroid/util/SparseArray;.append:(ILjava/lang/Object;)V",
@@ -1153,7 +1147,7 @@ SharedState::SharedState(
       "Ljava/util/LinkedHashMap;.<init>:()V",
       "Ljava/util/LinkedList;.<init>:()V",
       "Ljava/util/Random;.<init>:()V",
-  };
+  });
 
   for (auto const safe_method_name : safe_method_names) {
     auto* method_ref = DexMethod::get_method(safe_method_name);
