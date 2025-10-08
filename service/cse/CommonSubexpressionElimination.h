@@ -66,7 +66,7 @@ inline bool operator==(const Barrier& a, const Barrier& b) {
 
 struct BarrierHasher {
   size_t operator()(const Barrier& b) const {
-    return b.opcode ^ (size_t)b.field;
+    return b.opcode ^ static_cast<size_t>(reinterpret_cast<uintptr_t>(b.field));
   }
 };
 
