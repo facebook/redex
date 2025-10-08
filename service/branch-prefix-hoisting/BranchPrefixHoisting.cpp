@@ -72,12 +72,12 @@ IRInstruction* get_next_common_insn(
       auto* insn = it->insn;
       // Make sure all the constant uses are of same type before hoisting.
       auto type_demand = constant_uses->get_constant_type_demand(insn);
-      if (type_demand == constant_uses::TypeDemand::Error) {
+      if (type_demand == constant_uses::TypeDemand::Error ||
+          (type_demand_opt && *type_demand_opt != type_demand)) {
         return nullptr;
-      } else if (!type_demand_opt) {
+      }
+      if (!type_demand_opt) {
         type_demand_opt = type_demand;
-      } else if (*type_demand_opt != type_demand) {
-        return nullptr;
       }
     }
   }
