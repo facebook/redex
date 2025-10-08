@@ -7,8 +7,7 @@
 
 #include "ApiLevelsUtils.h"
 
-#include <boost/algorithm/string.hpp>
-#include <fstream>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
