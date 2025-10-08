@@ -7,17 +7,11 @@
 
 #pragma once
 
-#include <mutex>
-
-#include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
-#include "ConstantPropagationState.h"
 #include "ConstantPropagationWholeProgramState.h"
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "GlobalConfig.h"
-#include "PassManager.h"
 #include "Trace.h"
 #include "TypeSystem.h"
 

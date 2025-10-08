@@ -13,15 +13,12 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationWholeProgramState.h"
-#include "IPConstantPropagationAnalysis.h"
 #include "Lazy.h"
 #include "LiveRange.h"
-#include "MethodOverrideGraph.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeSystem.h"
-#include "Walkers.h"
 
 namespace wrapped_primitives {
 static std::unique_ptr<WrappedPrimitives> s_instance{nullptr};
