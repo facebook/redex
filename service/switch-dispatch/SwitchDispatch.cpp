@@ -256,8 +256,9 @@ DexMethod* materialize_dispatch(DexMethod* orig_method,
 std::vector<Location> get_args_from(DexMethod* method, MethodCreator& mc) {
   std::vector<Location> args;
   size_t args_size = method->get_proto()->get_args()->size();
+  args.reserve(args_size);
   for (size_t arg_loc = 0; arg_loc < args_size; ++arg_loc) {
-    args.push_back(mc.get_local(arg_loc));
+    args.push_back(mc.get_local(static_cast<int>(arg_loc)));
   }
 
   return args;
@@ -275,7 +276,7 @@ size_t estimate_num_switch_dispatch_needed(
   if (max_num_dispatch_target != boost::none &&
       num_cases > max_num_dispatch_target.get()) {
     return std::ceil(static_cast<float>(num_cases) /
-                     max_num_dispatch_target.get());
+                     static_cast<float>(max_num_dispatch_target.get()));
   }
   if (num_cases > MAX_NUM_DISPATCH_TARGET) {
     size_t total_num_insn = 0;
@@ -636,8 +637,8 @@ DexMethod* create_ctor_or_static_dispatch(
   auto* orig_method = indices_to_callee.begin()->second;
   auto mc = init_method_creator(spec, orig_method);
   auto* dispatch_arg_list = spec.proto->get_args();
-  auto type_tag_loc = mc.get_local(
-      get_type_tag_location_for_ctor_and_static(spec, dispatch_arg_list));
+  auto type_tag_loc = mc.get_local(static_cast<int>(
+      get_type_tag_location_for_ctor_and_static(spec, dispatch_arg_list)));
   auto ret_loc = get_return_location(spec, mc);
   auto* mb = mc.get_main_block();
   // Set type tag field only when using synthesized type tags.
@@ -691,6 +692,7 @@ DexMethod* create_simple_dispatch(
   auto access = get_dispatch_access(first_method);
   MethodCreator mc(dispatch_ref, access, nullptr, true);
   auto args = mc.get_reg_args();
+  always_assert(!args.empty());
   auto method_tag_loc = *args.rbegin();
   // The mc's last argument is a "method tag", pop the argument and pass the
   // rest to the mergeables.

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <boost/optional.hpp> // NOLINT
 #include <utility>
 
 #include "DexClass.h"
