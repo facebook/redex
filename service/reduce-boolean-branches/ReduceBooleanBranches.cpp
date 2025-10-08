@@ -156,11 +156,10 @@ class Analyzer {
       it = m_cfg.find_insn(xor_1_insn, it.block());
       (*negations)++;
     }
-    if (analyze(it.block(), it->insn, it->insn->src(0)) !=
-        AnalysisResult::Boolean) {
-      return InstructionIterable(m_cfg).end();
-    }
-    return it;
+    return analyze(it.block(), it->insn, it->insn->src(0)) ==
+                   AnalysisResult::Boolean
+               ? it
+               : InstructionIterable(m_cfg).end();
   }
 
  private:
