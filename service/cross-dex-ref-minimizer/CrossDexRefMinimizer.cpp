@@ -6,11 +6,9 @@
  */
 
 #include <cinttypes>
-#include <cmath>
 #include <numeric>
 
 #include "CrossDexRefMinimizer.h"
-#include "DexUtil.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -48,7 +46,8 @@ uint64_t CrossDexRefMinimizer::ClassInfo::get_primary_priority_denominator()
   // with highest discount for most infrequent refs.
   // TODO: Try some other variations.
   for (size_t i = 0; i < infrequent_refs_weight.size(); ++i) {
-    denominator -= infrequent_refs_weight[i] / (i + 1);
+    denominator -= static_cast<int64_t>(infrequent_refs_weight[i]) /
+                   static_cast<int64_t>(i + 1);
   }
   return static_cast<uint64_t>(std::max(denominator, INT64_C(1)));
 }
@@ -139,8 +138,11 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
   auto increment = [&ref_counts = m_ref_counts,
                     &max_ref_count = m_max_ref_count](const void* ref) {
     size_t& count = ref_counts[ref];
-    if (count < std::numeric_limits<size_t>::max() && ++count > max_ref_count) {
-      max_ref_count = count;
+    if (count < std::numeric_limits<size_t>::max()) {
+      ++count;
+      if (count > max_ref_count) {
+        max_ref_count = count;
+      }
     }
   };
   for (auto* ref : cls_refs.method_refs) {
@@ -201,7 +203,8 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
                                    size_t item_seed_weight) {
     auto it = ref_counts.find(ref);
     auto ref_count = it == ref_counts.end() ? 1 : it->second;
-    double frequency = ref_count * 1.0 / max_ref_count;
+    double frequency =
+        static_cast<double>(ref_count) / static_cast<double>(max_ref_count);
     // We skip reference that...
     // - only ever appear once (those won't help with prioritization), and
     // - and those which appear extremely frequently (and are therefore likely
@@ -254,7 +257,8 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
       for (DexClass* affected_class : classes) {
         always_assert(affected_class != cls);
         affected_classes[affected_class]
-            .infrequent_refs_weight[frequency - 1] -= weight;
+            .infrequent_refs_weight[frequency - 1] -=
+            static_cast<int32_t>(weight);
       }
     }
     ++frequency;
@@ -266,9 +270,11 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     if (frequency <= INFREQUENT_REFS_COUNT) {
       for (DexClass* affected_class : classes) {
         affected_classes[affected_class]
-            .infrequent_refs_weight[frequency - 1] += weight;
+            .infrequent_refs_weight[frequency - 1] +=
+            static_cast<int32_t>(weight);
       }
-      class_info.infrequent_refs_weight[frequency - 1] += weight;
+      class_info.infrequent_refs_weight[frequency - 1] +=
+          static_cast<int32_t>(weight);
     }
 
     // There's an implicit invariant that class_info and the keys of
@@ -422,7 +428,8 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
       if (frequency <= INFREQUENT_REFS_COUNT) {
         for (DexClass* affected_class : classes) {
           affected_classes[affected_class]
-              .infrequent_refs_weight[frequency - 1] -= weight;
+              .infrequent_refs_weight[frequency - 1] -=
+              static_cast<int32_t>(weight);
         }
       }
       --frequency;
@@ -431,7 +438,8 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
       } else if (frequency <= INFREQUENT_REFS_COUNT) {
         for (DexClass* affected_class : classes) {
           affected_classes[affected_class]
-              .infrequent_refs_weight[frequency - 1] += weight;
+              .infrequent_refs_weight[frequency - 1] +=
+              static_cast<int32_t>(weight);
         }
       }
 
