@@ -3158,6 +3158,9 @@ void InstructionSequenceOutliner::bind_config() {
        "Whether to obfuscate generated method names for outlined methods, "
        "instead of encoding a strong hash of their contents. Obfuscated names "
        "tend to be shorter, but are less stable across builds.");
+  bind("outline_blocklist_prefixes", m_config.outline_blocklist_prefixes,
+       m_config.outline_blocklist_prefixes,
+       "Prefixes of class name that we turn off outlining for");
   after_configuration(
       [this, perf_sensitivity_str = std::move(perf_sensitivity_str)]() {
         always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
@@ -3191,6 +3194,22 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
+  // At the start of pass running, we mark all methods within blocklisted
+  // classes as no_outlining.
+  if (!m_config.outline_blocklist_prefixes.empty()) {
+    walk::parallel::classes(scope, [&](DexClass* cls) {
+      if (unordered_find_if(m_config.outline_blocklist_prefixes,
+                            [cls](const std::string& prefix) {
+                              return boost::starts_with(cls->get_name()->str(),
+                                                        prefix);
+                            }) != m_config.outline_blocklist_prefixes.end()) {
+        for (auto* m : cls->get_all_methods()) {
+          m->rstate.set_no_outlining();
+        }
+      }
+    });
+  }
+
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, config.create_init_class_insns());
 
