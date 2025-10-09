@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "OutliningProfileGuidance.h"
 #include "Pass.h"
 
@@ -31,6 +32,7 @@ struct Config {
   size_t cost_invoke_with_result{4};
   size_t cost_invoke_without_result{3};
   size_t max_args{5};
+  UnorderedSet<std::string> outline_blocklist_prefixes;
 };
 
 } // namespace outliner
