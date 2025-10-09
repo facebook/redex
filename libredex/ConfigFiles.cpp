@@ -291,15 +291,16 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
     return {true, pos_tail};
   };
 
-  bool add_method_profiles_symbols = get_json_config().get(
-      "complement_betamap_with_method_profiles_symbols", false);
+  // Inject MethodProfile coldstart classes
+  const auto& coldstart_stats =
+      get_method_profiles().method_stats(method_profiles::COLD_START);
+  bool add_method_profiles_symbols =
+      get_json_config().get("complement_betamap_with_method_profiles_symbols",
+                            false) &&
+      !coldstart_stats.empty();
   TypeSet coldstart_20pct_classes;
   TypeSet coldstart_1pct_classes;
   if (add_method_profiles_symbols) {
-
-    // Inject MethodProfile coldstart classes
-    const auto& coldstart_stats =
-        get_method_profiles().method_stats(method_profiles::COLD_START);
     always_assert(!coldstart_stats.empty());
     for (const auto& meth_stats : UnorderedIterable(coldstart_stats)) {
       const DexMethodRef* method = meth_stats.first;
