@@ -75,8 +75,8 @@ const DexType* find_common_super_class(const DexType* l, const DexType* r) {
 }
 
 const DexType* find_common_type(const DexType* l, const DexType* r) {
-  const DexClass* l_cls = const_cast<const DexClass*>(type_class(l));
-  const DexClass* r_cls = const_cast<const DexClass*>(type_class(r));
+  const DexClass* l_cls = type_class(l);
+  const DexClass* r_cls = type_class(r);
   if ((l_cls == nullptr) || (r_cls == nullptr)) {
     return nullptr;
   }
