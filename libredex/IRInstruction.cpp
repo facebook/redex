@@ -461,7 +461,7 @@ uint64_t IRInstruction::hash() const {
 void IRInstruction::gather_init_classes(std::vector<DexType*>& ltype) const {
   const auto* type = get_init_class_type_demand(this);
   if (type != nullptr) {
-    ltype.push_back(const_cast<DexType*>(type));
+    ltype.push_back(type->to_mutable());
   }
 }
 
