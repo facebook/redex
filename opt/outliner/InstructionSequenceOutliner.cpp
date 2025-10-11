@@ -1757,14 +1757,13 @@ class OutlinedMethodCreator {
         m_method_name_generator.get_name(c, m_config.obfuscate_method_names);
     DexTypeList::ContainerType arg_types;
     for (const auto* t : c.arg_types) {
-      arg_types.push_back(const_cast<DexType*>(t));
+      arg_types.push_back(t->to_mutable());
     }
     const auto* rtype = c.res_type != nullptr ? c.res_type : type::_void();
     auto* type_list = DexTypeList::make_type_list(std::move(arg_types));
     auto* proto = DexProto::make_proto(rtype, type_list);
-    auto* outlined_method =
-        DexMethod::make_method(const_cast<DexType*>(host_class), name, proto)
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    auto* outlined_method = DexMethod::make_method(host_class, name, proto)
+                                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     // get pattern ids
     *pattern_ids = get_outlined_dbg_positions_patterns(c, ci);
     always_assert(!(*pattern_ids).empty());
@@ -2047,7 +2046,7 @@ class DexState {
     for (auto* type : init_classes) {
       const auto* refined_type = init_classes_with_side_effects.refine(type);
       if (refined_type != nullptr) {
-        m_type_refs.insert(const_cast<DexType*>(refined_type));
+        m_type_refs.insert(refined_type->to_mutable());
       }
     }
     max_type_refs =
@@ -2337,10 +2336,10 @@ bool outline_candidate(const Config& config,
   // type refs can be added to the dex. We collect those type refs.
   UnorderedSet<const DexType*> type_refs_to_insert;
   for (const auto* t : c.arg_types) {
-    type_refs_to_insert.insert(const_cast<DexType*>(t));
+    type_refs_to_insert.insert(t->to_mutable());
   }
   const auto* rtype = c.res_type != nullptr ? c.res_type : type::_void();
-  type_refs_to_insert.insert(const_cast<DexType*>(rtype));
+  type_refs_to_insert.insert(rtype);
 
   DexMethod* outlined_method{
       find_reusable_method(store, store_dependencies, c, ci, *outlined_methods,
