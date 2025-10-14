@@ -129,7 +129,7 @@ MultiMethodInliner::MultiMethodInliner(
     bool cross_dex_penalty,
     const UnorderedSet<const DexString*>& configured_finalish_field_names,
     bool local_only,
-    bool consider_hot_cold,
+    HotColdInliningBehavior hot_cold_inlining_behavior,
     std::optional<baseline_profiles::BaselineProfile> baseline_profile,
     InlinerCostConfig inliner_cost_config,
     const UnorderedSet<const DexMethod*>* unfinalized_init_methods,
@@ -175,7 +175,7 @@ MultiMethodInliner::MultiMethodInliner(
                  /* package_name */ boost::none,
                  /* package_name */ method_override_graph),
       m_local_only(local_only),
-      m_consider_hot_cold(consider_hot_cold),
+      m_hot_cold_inlining_behavior(hot_cold_inlining_behavior),
       m_baseline_profile(std::move(baseline_profile)),
       m_inliner_cost_config(inliner_cost_config),
       m_unfinalized_init_methods(unfinalized_init_methods),
@@ -254,7 +254,8 @@ MultiMethodInliner::MultiMethodInliner(
     }
   }
 
-  if (m_consider_hot_cold || m_config.partial_hot_hot_inline) {
+  if (m_hot_cold_inlining_behavior != HotColdInliningBehavior::None ||
+      m_config.partial_hot_hot_inline) {
     std::vector<const DexMethod*> methods;
     for (auto&& [callee, _] : UnorderedIterable(m_callee_caller)) {
       methods.push_back(callee);
@@ -273,11 +274,14 @@ MultiMethodInliner::MultiMethodInliner(
             return;
           }
           const auto& cfg = code->cfg();
-          if (m_consider_hot_cold) {
+          if (m_hot_cold_inlining_behavior != HotColdInliningBehavior::None) {
             auto blocks = cfg.blocks();
             if (std::any_of(blocks.begin(), blocks.end(),
                             source_blocks::is_not_cold)) {
               m_not_cold_methods.insert(method);
+            }
+            if (source_blocks::method_maybe_hot(method)) {
+              m_maybe_hot_methods.insert(method);
             }
           }
           if (m_config.partial_hot_hot_inline &&
@@ -667,9 +671,12 @@ size_t MultiMethodInliner::inline_inlinables(
   std::vector<Inlinable> ordered_inlinables(inlinables.begin(),
                                             inlinables.end());
 
-  bool consider_not_cold =
-      m_consider_hot_cold &&
-      (m_not_cold_methods.count_unsafe(caller_method) != 0u);
+  const auto* preferred_methods = get_preferred_methods();
+  if (preferred_methods != nullptr &&
+      preferred_methods->count_unsafe(caller_method) != 0u) {
+    preferred_methods = nullptr;
+  }
+
   std::stable_sort(
       ordered_inlinables.begin(),
       ordered_inlinables.end(),
@@ -688,10 +695,10 @@ size_t MultiMethodInliner::inline_inlinables(
         if (a.for_speed != b.for_speed) {
           return a.for_speed < b.for_speed;
         }
-        // Third, if appropriate, prefer inlining not-cold callees
-        if (consider_not_cold) {
-          auto a_not_cold = m_not_cold_methods.count_unsafe(a.callee);
-          auto b_not_cold = m_not_cold_methods.count_unsafe(b.callee);
+        // Third, if appropriate, prefer inlining not-cold / maybe-hot callees
+        if (preferred_methods) {
+          auto a_not_cold = preferred_methods->count_unsafe(a.callee);
+          auto b_not_cold = preferred_methods->count_unsafe(b.callee);
           if (a_not_cold != b_not_cold) {
             return a_not_cold > b_not_cold;
           }
@@ -2551,12 +2558,13 @@ bool MultiMethodInliner::cross_dex_reference(
 bool MultiMethodInliner::cross_hot_cold(const DexMethod* caller,
                                         const DexMethod* callee,
                                         uint64_t estimated_callee_size) {
-  if (!m_consider_hot_cold) {
+  const auto* preferred_methods = get_preferred_methods();
+  if (!preferred_methods) {
     return false;
   }
 
-  if ((m_not_cold_methods.count_unsafe(caller) == 0u) ||
-      (m_not_cold_methods.count_unsafe(callee) != 0u)) {
+  if ((preferred_methods->count_unsafe(caller) == 0u) ||
+      (preferred_methods->count_unsafe(callee) != 0u)) {
     return false;
   }
 

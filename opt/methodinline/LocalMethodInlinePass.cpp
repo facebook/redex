@@ -31,7 +31,7 @@ void LocalMethodInlinePass::run_pass(DexStoresVector& stores,
                                      ConfigFiles& conf,
                                      PassManager& mgr) {
   inliner::run_inliner(stores, mgr, conf, DEFAULT_COST_CONFIG,
-                       /* consider_hot_cold */ false,
+                       HotColdInliningBehavior::None,
                        /* partial_hot_hot */ false,
                        /* intra_dex */ false,
                        /* baseline_profile_guided */ false,

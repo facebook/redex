@@ -2695,7 +2695,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
         /* analyze_and_prune_inits */ true, /* configured_pure_methods */ {},
         /* min_sdk_api */ nullptr, /* cross_dex_penalty */ false,
         /* configured_finalish_field_names */ {}, /* local_only */ false,
-        /* consider_hot_cold */ false, /* baseline_profile */ {},
+        HotColdInliningBehavior::None, /* baseline_profile */ {},
         DEFAULT_COST_CONFIG, &unfinalized_init_methods);
     inliner.inline_methods();
 
@@ -2814,7 +2814,7 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
         /* analyze_and_prune_inits */ true, /* configured_pure_methods */ {},
         /* min_sdk_api */ nullptr, /* cross_dex_penalty */ false,
         /* configured_finalish_field_names */ {}, /* local_only */ false,
-        /* consider_hot_cold */ false, /* baseline_profile */ {},
+        HotColdInliningBehavior::None, /* baseline_profile */ {},
         DEFAULT_COST_CONFIG, /* unfinalized_init_methods */ {});
     inliner.inline_methods();
 
@@ -2936,7 +2936,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
         /* analyze_and_prune_inits */ true, /* configured_pure_methods */ {},
         /* min_sdk_api */ nullptr, /* cross_dex_penalty */ false,
         /* configured_finalish_field_names */ {}, /* local_only */ false,
-        /* consider_hot_cold */ false, /* baseline_profile */ {},
+        HotColdInliningBehavior::None, /* baseline_profile */ {},
         DEFAULT_COST_CONFIG, &unfinalized_init_methods);
     inliner.inline_methods();
 
@@ -3081,17 +3081,17 @@ TEST_F(MethodInlineTest, partially_inline) {
       (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 20 callsite)
       (move-object v3 v1)
       (if-eqz v1 :L1)
-      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))      
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))
       (.pos:callsite "LFoo;.caller:()V" "Foo.java" 10)
       (invoke-static (v3) "LFoo;.callee:(Ljava/lang/Object;)V")
     (:L1)
       (.pos:callsite "LFoo;.caller:()V" "Foo.java" 10)
       (move-object v4 v0)
-      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 1 (1.0 1.0))      
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 1 (1.0 1.0))
       (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 20 callsite)
       (move-object v6 v4)
       (if-eqz v4 :L2)
-      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))      
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))
       (.pos:callsite "LFoo;.caller:()V" "Foo.java" 10)
       (invoke-static (v6) "LFoo;.callee:(Ljava/lang/Object;)V")
     (:L2)

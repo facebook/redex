@@ -250,6 +250,12 @@ struct InlinedCost {
   }
 };
 
+enum class HotColdInliningBehavior {
+  None,
+  RespectNotCold,
+  RespectMaybeHot,
+};
+
 /**
  * Helper class to inline a set of candidates.
  * Take a set of candidates and a scope and walk all instructions in scope
@@ -285,7 +291,8 @@ class MultiMethodInliner {
       const UnorderedSet<const DexString*>& configured_finalish_field_names =
           {},
       bool local_only = false,
-      bool consider_hot_cold = false,
+      HotColdInliningBehavior hot_cold_inlining_behavior =
+          HotColdInliningBehavior::None,
       std::optional<baseline_profiles::BaselineProfile> baseline_profile = {},
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG,
       const UnorderedSet<const DexMethod*>* unfinalized_init_methods = nullptr,
@@ -324,6 +331,8 @@ class MultiMethodInliner {
   }
 
   size_t get_not_cold_methods() const { return m_not_cold_methods.size(); }
+
+  size_t get_maybe_hot_methods() const { return m_maybe_hot_methods.size(); }
 
   bool for_speed() const { return m_inline_for_speed != nullptr; }
 
@@ -707,6 +716,21 @@ class MultiMethodInliner {
 
   InsertOnlyConcurrentSet<const DexMethod*> m_not_cold_methods;
 
+  InsertOnlyConcurrentSet<const DexMethod*> m_maybe_hot_methods;
+
+  const InsertOnlyConcurrentSet<const DexMethod*>* get_preferred_methods()
+      const {
+    if (m_hot_cold_inlining_behavior ==
+        HotColdInliningBehavior::RespectNotCold) {
+      return &m_not_cold_methods;
+    }
+    if (m_hot_cold_inlining_behavior ==
+        HotColdInliningBehavior::RespectMaybeHot) {
+      return &m_maybe_hot_methods;
+    }
+    return nullptr;
+  }
+
   InsertOnlyConcurrentSet<const DexMethod*> m_hot_methods;
 
   ConcurrentSet<const DexMethod*> m_inlined_with_fence;
@@ -891,7 +915,7 @@ class MultiMethodInliner {
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
 
   bool m_local_only;
-  bool m_consider_hot_cold;
+  HotColdInliningBehavior m_hot_cold_inlining_behavior;
 
   std::optional<baseline_profiles::BaselineProfile> m_baseline_profile;
 

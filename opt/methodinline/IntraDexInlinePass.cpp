@@ -10,7 +10,8 @@
 #include "MethodInliner.h"
 
 void IntraDexInlinePass::bind_config() {
-  bind("consider_hot_cold", false, m_consider_hot_cold);
+  std::string hot_cold_inlining_behavior_str;
+  bind("hot_cold_inlining_behavior", "none", hot_cold_inlining_behavior_str);
   bind("partial_hot_hot", false, m_partial_hot_hot);
   bind("profile_guided", false, m_profile_guided);
   bind("profile_guided_heat_threshold", 0.5f, m_profile_guided_heat_threshold);
@@ -18,6 +19,12 @@ void IntraDexInlinePass::bind_config() {
   bind("profile_guided_shrink_bias", 0.0f, m_profile_guided_shrink_bias);
   bind("profile_guided_block_appear_threshold", 0.0f,
        m_profile_guided_block_appear_threshold);
+  after_configuration([this, hot_cold_inlining_behavior_str =
+                                 std::move(hot_cold_inlining_behavior_str)]() {
+    always_assert(!hot_cold_inlining_behavior_str.empty());
+    m_hot_cold_inlining_behavior = inliner::parse_hot_cold_inlining_behavior(
+        hot_cold_inlining_behavior_str);
+  });
 }
 
 void IntraDexInlinePass::run_pass(DexStoresVector& stores,
@@ -36,7 +43,7 @@ void IntraDexInlinePass::run_pass(DexStoresVector& stores,
   }
 
   inliner::run_inliner(stores, mgr, conf, inliner_cost_config,
-                       m_consider_hot_cold, m_partial_hot_hot,
+                       m_hot_cold_inlining_behavior, m_partial_hot_hot,
                        /* intra_dex */ true, m_profile_guided);
   // For partial inlining, we only consider the first time the pass runs, to
   // avoid repeated partial inlining. (This shouldn't be necessary as the
