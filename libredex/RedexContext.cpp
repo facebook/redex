@@ -543,14 +543,13 @@ DexFieldRef* RedexContext::make_field(const DexType* container,
                                       const DexString* name,
                                       const DexType* type) {
   always_assert(container != nullptr && name != nullptr && type != nullptr);
-  DexFieldSpec r(const_cast<DexType*>(container), name,
-                 const_cast<DexType*>(type));
+  DexFieldSpec r(container->to_mutable(), name, type->to_mutable());
   auto* rv = s_field_map.load(r, nullptr);
   if (rv != nullptr) {
     return rv;
   }
-  std::unique_ptr<DexField, DexField::Deleter> field(new DexField(
-      const_cast<DexType*>(container), name, const_cast<DexType*>(type)));
+  std::unique_ptr<DexField, DexField::Deleter> field(
+      new DexField(container->to_mutable(), name, type->to_mutable()));
   return try_insert<DexField, DexFieldRef>(r, std::move(field), &s_field_map);
 }
 
