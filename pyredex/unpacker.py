@@ -186,6 +186,20 @@ class ApplicationModule(object):
             dex_mode.unpackage(extracted_apk_dir, dex_dir, unpackage_metadata)
             return
 
+        dex_mode = RawSubdirDexMode(
+            secondary_dir=self.path,
+            store_name=self.name,
+            dex_prefix=self.name,
+            canary_prefix=self.canary_prefix,
+            store_id=self.name,
+            dependencies=self.dependencies,
+        )
+        if dex_mode.detect(extracted_apk_dir):
+            self.dex_mode = dex_mode
+            log("module " + self.name + " is RawSubdirDexMode")
+            dex_mode.unpackage(extracted_apk_dir, dex_dir, unpackage_metadata)
+            return
+
         # Special case for aab inputs, for which we put .dex files into modulename/dex
         # and our metadata file in a separate location modulename/assets/modulename.
         if self.split_dex_path:
@@ -575,6 +589,98 @@ class SubdirDexMode(BaseDexMode):
         shutil.move(jar_meta_path, join(extracted_apk_dir, self._secondary_dir))
 
 
+class RawSubdirDexMode(SubdirDexMode):
+    def __init__(
+        self,
+        primary_dir: str = "",
+        secondary_dir: str = "assets/secondary-program-dex-jars",
+        store_name: str = "secondary",
+        dex_prefix: str = "classes",
+        canary_prefix: typing.Optional[str] = "secondary",
+        store_id: typing.Optional[str] = None,
+        dependencies: typing.Optional[typing.List[str]] = None,
+    ) -> None:
+        SubdirDexMode.__init__(
+            self,
+            primary_dir,
+            secondary_dir,
+            store_name,
+            dex_prefix,
+            canary_prefix,
+            store_id,
+            dependencies,
+        )
+
+    def detect(self, extracted_apk_dir: str) -> bool:
+        secondary_dex_dir = join(extracted_apk_dir, self._secondary_dir)
+        return isdir(secondary_dex_dir) and any(
+            abs_glob(secondary_dex_dir, "secondary-*.dex")
+        )
+
+    def unpackage(
+        self, extracted_apk_dir: str, dex_dir: str, unpackage_metadata: bool = False
+    ) -> None:
+        raw_dexes = abs_glob(
+            join(extracted_apk_dir, self._secondary_dir), "secondary-*.dex"
+        )
+        for raw_dex in raw_dexes:
+            shutil.move(raw_dex, dex_dir)
+
+        metadata_txt = join(extracted_apk_dir, self._secondary_dir, "metadata.txt")
+        if unpackage_metadata:
+            shutil.copy(metadata_txt, dex_dir)
+        os.remove(metadata_txt)
+        BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
+
+    def repackage(
+        self,
+        extracted_apk_dir: str,
+        dex_dir: str,
+        have_locators: bool,
+        locator_store_id: int = 0,
+        fast_repackage: bool = False,
+        reset_timestamps: bool = True,
+    ) -> None:
+        BaseDexMode.repackage(
+            self,
+            extracted_apk_dir,
+            dex_dir,
+            have_locators,
+            locator_store_id,
+            fast_repackage,
+            reset_timestamps,
+        )
+
+        metadata = DexMetadata(
+            have_locators=have_locators,
+            store=self._store_id,
+            dependencies=self._dependencies,
+            locator_store_id=locator_store_id,
+        )
+
+        for i in itertools.count(1):
+            dex_file = self._store_name + f"-{i}.dex"
+            dexpath = join(dex_dir, dex_file)
+
+            # if store_name is not "secondary" (the default),
+            # we need to rename the dex files
+            if self._store_name != "secondary":
+                # The n in "secondary-n.dex" always starts at 1
+                oldpath = join(dex_dir, f"secondary-{i}.dex")
+                if isfile(oldpath):
+                    shutil.move(oldpath, dexpath)
+
+            if not isfile(dexpath):
+                break
+
+            metadata.add_dex(dexpath, BaseDexMode.get_canary(self, i))
+            shutil.move(dexpath, join(extracted_apk_dir, self._secondary_dir))
+
+        dex_meta_path = join(dex_dir, "metadata.txt")
+        metadata.write(dex_meta_path)
+        shutil.move(dex_meta_path, join(extracted_apk_dir, self._secondary_dir))
+
+
 warned_about_xz = False
 
 
@@ -893,13 +999,22 @@ class XZSDexMode(BaseDexMode):
 
 # These are checked in order from top to bottom. The first one to have detect()
 # return true will be used.
-SECONDARY_DEX_MODES = [XZSDexMode(), SubdirDexMode(), Api21DexMode()]
+SECONDARY_DEX_MODES = [
+    XZSDexMode(),
+    SubdirDexMode(),
+    RawSubdirDexMode(),
+    Api21DexMode(),
+]
 BUNDLE_SECONDARY_DEX_MODES = [
     XZSDexMode(
         primary_dir="base/dex",
         secondary_dir="base/assets/secondary-program-dex-jars",
     ),
     SubdirDexMode(
+        primary_dir="base/dex",
+        secondary_dir="base/assets/secondary-program-dex-jars",
+    ),
+    RawSubdirDexMode(
         primary_dir="base/dex",
         secondary_dir="base/assets/secondary-program-dex-jars",
     ),
