@@ -21,14 +21,14 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexEncoding.h"
-#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "RedundantCheckCastRemover.h"
 #include "Show.h"
+#include "Thread.h"
 #include "Trace.h"
-#include "Walkers.h"
+#include "WorkQueue.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // PeepholeOptimizer implementation
@@ -507,9 +507,9 @@ struct Matcher {
     case OPCODE_THROW:
       redex_assert(replace.kind == DexPattern::Kind::none);
       return new IRInstruction(static_cast<IROpcode>(opcode));
+    default:
+      not_reached_log("Unhandled opcode: 0x%x", opcode);
     }
-
-    not_reached_log("Unhandled opcode: 0x%x", opcode);
   }
 
   // After a successful match, get the replacement instructions. We substitute
@@ -566,13 +566,13 @@ struct Matcher {
           break;
         }
         case String::char_A_to_string: {
-          int a = matched_literals.at(Literal::A);
+          int a = static_cast<int>(matched_literals.at(Literal::A));
           auto achar = encode_utf8_char_to_mutf8_string(a);
           replace->set_string(DexString::make_string(achar));
           break;
         }
         case String::int_A_to_string: {
-          int a = matched_literals.at(Literal::A);
+          int a = static_cast<int>(matched_literals.at(Literal::A));
           replace->set_string(DexString::make_string(std::to_string(a)));
           break;
         }
@@ -608,7 +608,7 @@ struct Matcher {
         }
         case String::concat_string_A_int_A: {
           const auto* a = matched_strings.at(String::A)->c_str();
-          int b = matched_literals.at(Literal::A);
+          int b = static_cast<int>(matched_literals.at(Literal::A));
           replace->set_string(
               DexString::make_string(std::string(a) + std::to_string(b)));
           break;
@@ -629,7 +629,7 @@ struct Matcher {
         }
         case String::concat_string_A_char_A: {
           const auto* a = matched_strings.at(String::A)->c_str();
-          int b = matched_literals.at(Literal::A);
+          int b = static_cast<int>(matched_literals.at(Literal::A));
           auto bchar = encode_utf8_char_to_mutf8_string(b);
           replace->set_string(DexString::make_string(std::string(a) + bchar));
           break;
@@ -671,7 +671,8 @@ struct Matcher {
         case Literal::Mul_Div_To_Shift_Log2: {
           auto a = matched_literals.at(Literal::Mul_Div_To_Shift_Log2);
           redex_assert(a > 0);
-          replace->set_literal(static_cast<uint64_t>(log2(a)));
+          replace->set_literal(
+              static_cast<int64_t>(log2(static_cast<double>(a))));
           break;
         }
         case Literal::Zero: {
@@ -1777,7 +1778,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
             }
             mutator.insert_before(it, replace);
 
-            m_stats_inserted += replace.size();
+            m_stats_inserted += static_cast<int>(replace.size());
           }
 
           // Then remove all the matched instructions.
@@ -1788,7 +1789,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           }
           removed_insns.insert(matcher.matched_instructions.begin(),
                                matcher.matched_instructions.end());
-          m_stats_removed += matcher.match_index;
+          m_stats_removed += static_cast<int>(matcher.match_index);
           matcher.reset();
         }
       }
@@ -1843,6 +1844,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
   auto num_threads = redex_parallel::default_num_threads();
   std::vector<std::unique_ptr<PeepholeOptimizer>> peephole_optimizers;
   const std::vector<std::vector<Pattern>> pats = patterns::get_all_patterns();
+  peephole_optimizers.reserve(num_threads);
   for (size_t i = 0; i < num_threads; ++i) {
     peephole_optimizers.emplace_back(std::make_unique<PeepholeOptimizer>(
         mgr, pats, config.disabled_peepholes));
