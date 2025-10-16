@@ -14,17 +14,17 @@
 namespace obfuscate_utils {
 static inline char get_ident_52(int num) {
   if (num < 26) {
-    return 'A' + num;
+    return static_cast<char>('A' + num);
   }
   num -= 26;
 
   always_assert(num < 26);
-  return 'a' + num;
+  return static_cast<char>('a' + num);
 }
 
 static inline char get_ident_62(int num) {
   if (num < 10) {
-    return '0' + num;
+    return static_cast<char>('0' + num);
   }
   num -= 10;
 

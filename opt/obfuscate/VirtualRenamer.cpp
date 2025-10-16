@@ -47,14 +47,14 @@ void scope_info(const ClassScopes& class_scopes) {
         }
         // class is internal
         if (!can_rename_scope(scope)) {
-          cant_rename_scopes[scope_meth_count]++;
+          cant_rename_scopes[static_cast<int>(scope_meth_count)]++;
           return;
         }
         if (is_impl_scope(scope)) {
-          impl_scopes[scope_meth_count]++;
+          impl_scopes[static_cast<int>(scope_meth_count)]++;
           return;
         }
-        easy_scopes[scope_meth_count]++;
+        easy_scopes[static_cast<int>(scope_meth_count)]++;
       });
 
   const auto scope_count = [](const std::map<int, int>& map) {
