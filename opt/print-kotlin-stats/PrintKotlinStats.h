@@ -9,7 +9,6 @@
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "Pass.h"
 
 class PrintKotlinStats : public Pass {
