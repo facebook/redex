@@ -12,13 +12,13 @@
 #include <string>
 #include <vector>
 
+#include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexLoader.h"
-#include "DexOutput.h"
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "Show.h"
-#include "Walkers.h"
+#include "Trace.h"
 #include "Warning.h"
 
 constexpr const char* METRIC_SHORTENED_STRINGS = "num_shortened_strings";
