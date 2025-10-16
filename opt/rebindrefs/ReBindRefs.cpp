@@ -7,8 +7,7 @@
 
 #include "ReBindRefs.h"
 
-#include <boost/algorithm/string.hpp>
-#include <functional>
+#include <boost/algorithm/string/predicate.hpp>
 #include <string>
 #include <vector>
 
