@@ -700,7 +700,11 @@ class OptimizeEnums {
     }
 
     // return-void is the last instruction
-    return opcode::is_return_void(it->insn->opcode()) && (++it) == ii.end();
+    if (!opcode::is_return_void(it->insn->opcode())) {
+      return false;
+    }
+    ++it;
+    return it == ii.end();
   }
 
   /**

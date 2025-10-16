@@ -1096,9 +1096,7 @@ class CodeTransformer final {
     return m_enum_attributes_map.count(elem_type) != 0u;
   }
 
-  inline reg_t allocate_temp() {
-    return m_method->get_code()->cfg().allocate_temp();
-  }
+  reg_t allocate_temp() { return m_method->get_code()->cfg().allocate_temp(); }
 
   const EnumAttributeMap& m_enum_attributes_map;
   EnumUtil* m_enum_util;
@@ -1144,8 +1142,9 @@ class EnumTransformer final {
                 SHOW(enum_cls), num_enum_constants);
         }
       }
-      m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
-      m_enum_objs += num_enum_constants;
+      m_int_objs = std::max<uint32_t>(
+          m_int_objs, static_cast<uint32_t>(num_enum_constants));
+      m_enum_objs += static_cast<uint32_t>(num_enum_constants);
       m_enum_attributes_map.emplace(enum_type, attributes);
       TRACE(ENUM, 2, "\tcleaning enum %s with num const values %zu",
             SHOW(enum_cls), num_enum_constants);
@@ -1215,9 +1214,7 @@ class EnumTransformer final {
 
   uint32_t get_int_objs_count() { return m_int_objs; }
   uint32_t get_enum_objs_count() { return m_enum_objs; }
-  uint32_t get_enum_attributes_map_size() {
-    return m_enum_attributes_map.size();
-  }
+  size_t get_enum_attributes_map_size() { return m_enum_attributes_map.size(); }
   size_t get_eliminated_kotlin_enum_classes() { return m_kotlin_enum_classes; }
 
  private:
@@ -1441,6 +1438,7 @@ class EnumTransformer final {
     // exhaustive.
     //
     // Arbitrarily choose the first case block.
+    always_assert(!cases.empty());
     cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
                       cases);
     cfg.recompute_registers_size();

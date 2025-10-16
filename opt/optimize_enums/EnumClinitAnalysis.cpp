@@ -42,7 +42,7 @@ namespace cp = constant_propagation;
 namespace {
 
 DexMethod* get_enum_ctor() {
-  return static_cast<DexMethod*>(
+  return dynamic_cast<DexMethod*>(
       DexMethod::get_method("Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V"));
 }
 
@@ -150,12 +150,9 @@ class EnumOrdinalAnalyzer
   static bool analyze_aput(const EnumOrdinalAnalyzerState& /*state*/,
                            const IRInstruction* insn,
                            ConstantEnvironment* /*env*/) {
-    if (insn->opcode() == OPCODE_APUT_OBJECT) {
-      // Simply not do further analysis for the aput-object instructions. Maybe
-      // we can improve the analysis in the future.
-      return true;
-    }
-    return false;
+    // Simply not do further analysis for the aput-object instructions. Maybe
+    // we can improve the analysis in the future.
+    return insn->opcode() == OPCODE_APUT_OBJECT;
   }
 
   static bool analyze_invoke(const EnumOrdinalAnalyzerState& state,
@@ -317,7 +314,8 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls,
       continue;
     }
 
-    attributes.m_constants_map[enum_sfield].ordinal = *ordinal_value;
+    attributes.m_constants_map[enum_sfield].ordinal =
+        static_cast<int32_t>(*ordinal_value);
     attributes.m_constants_map[enum_sfield].name = *name_value;
 
     for (auto* enum_ifield : cls->get_ifields()) {

@@ -494,7 +494,7 @@ class EnumUpcastDetector {
 };
 
 bool is_static_method_on_enum_class(const DexMethodRef* ref) {
-  const auto* method = static_cast<const DexMethod*>(ref);
+  const auto* method = dynamic_cast<const DexMethod*>(ref);
   if ((method == nullptr) || !method->is_def() || !is_static(method)) {
     return false;
   }

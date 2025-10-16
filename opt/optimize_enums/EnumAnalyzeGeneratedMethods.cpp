@@ -7,6 +7,8 @@
 
 #include "EnumAnalyzeGeneratedMethods.h"
 
+#include <array>
+
 #include "Show.h"
 #include "Trace.h"
 
@@ -133,7 +135,7 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
    * to a call to `Enum.valueOf()` or `Enum.values()` directly or reflectively
    * because they are safe and final.
    */
-  static const DexMethodRef* allowlisted_methods[] = {
+  static const std::array allowlisted_methods{
       DexMethod::get_method("Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V"),
       DexMethod::get_method("Ljava/lang/Enum;.compareTo:(Ljava/lang/Enum;)I"),
       DexMethod::get_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"),

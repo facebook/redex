@@ -367,7 +367,7 @@ class OptimizeEnumsUnmapCfg {
       }
 
       const size_t enum_ordinal = *enum_ordinal_maybe;
-      succ->set_case_key(enum_ordinal);
+      succ->set_case_key(static_cast<int>(enum_ordinal));
     }
 
     if (obsolete_zero_edge != nullptr) {
@@ -422,7 +422,7 @@ class OptimizeEnumsUnmapCfg {
           return;
         }
 
-        enum_ordinal = *enum_ordinal_maybe;
+        enum_ordinal = static_cast<int32_t>(*enum_ordinal_maybe);
       }
 
       auto kase_it = m_cfg.find_insn(insn_kase);
