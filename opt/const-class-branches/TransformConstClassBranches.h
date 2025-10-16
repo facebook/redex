@@ -10,7 +10,6 @@
 #include "InterDexPass.h"
 #include "Pass.h"
 #include "PassManager.h"
-#include "PluginRegistry.h"
 
 class TransformConstClassBranchesPass : public Pass {
  public:

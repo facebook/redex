@@ -17,7 +17,6 @@
 #include "DexClass.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
-#include "SourceBlocks.h"
 #include "StringTreeSet.h"
 #include "SwitchEquivFinder.h"
 #include "SwitchEquivPrerequisites.h"
