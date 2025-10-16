@@ -40,14 +40,14 @@ struct Stats {
 };
 
 struct PatcherStats {
-  Stats fix_kt_enum_ctor_param{};
-  Stats patch_lambdas{};
-  Stats patch_parameters_and_returns{};
-  Stats patch_synth_methods_overriding_annotated_methods{};
-  Stats patch_synth_cls_fields_from_ctor_param{};
-  Stats patch_enclosing_lambda_fields{};
-  Stats patch_ctor_params_from_synth_cls_fields{};
-  Stats patch_chained_getters{};
+  Stats fix_kt_enum_ctor_param;
+  Stats patch_lambdas;
+  Stats patch_parameters_and_returns;
+  Stats patch_synth_methods_overriding_annotated_methods;
+  Stats patch_synth_cls_fields_from_ctor_param;
+  Stats patch_enclosing_lambda_fields;
+  Stats patch_ctor_params_from_synth_cls_fields;
+  Stats patch_chained_getters;
 
   PatcherStats() = default;
 
@@ -76,7 +76,7 @@ struct ParamCandidate {
 };
 
 inline size_t hash_value(ParamCandidate pc) {
-  return ((size_t)pc.method) ^ (size_t)(pc.index);
+  return (reinterpret_cast<size_t>(pc.method)) ^ static_cast<size_t>(pc.index);
 }
 
 inline bool operator==(const ParamCandidate& a, const ParamCandidate& b) {

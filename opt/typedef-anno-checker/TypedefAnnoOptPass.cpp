@@ -8,10 +8,8 @@
 #include "TypedefAnnoOptPass.h"
 
 #include "AnnoUtils.h"
-#include "CFGMutation.h"
 #include "MethodReference.h"
 #include "PassManager.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "StringTreeSet.h"
 #include "Walkers.h"
@@ -91,7 +89,8 @@ void TypedefAnnoOptPass::populate_value_of_opt_str(DexClass* cls) {
 
     std::map<std::string, int32_t> string_tree_items;
     for (auto* field : fields) {
-      int32_t field_value = field->get_static_value()->value();
+      int32_t field_value =
+          static_cast<int32_t>(field->get_static_value()->value());
       string_tree_items.emplace(field->get_simple_deobfuscated_name(),
                                 field_value);
     }
