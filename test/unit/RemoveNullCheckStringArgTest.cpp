@@ -89,7 +89,7 @@ TEST_F(RemoveNullcheckStringArgTest, simple) {
     RemoveNullcheckStringArg::TransferMapForExpr transferMapForExpr;
     RemoveNullcheckStringArg::NewMethodSet newMethods;
     pass.setup(transferMapForParam, transferMapForExpr, newMethods);
-    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
+    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, true);
   }
 
   const auto* expected_str = R"(
@@ -129,7 +129,7 @@ TEST_F(RemoveNullcheckStringArgTest, simpleVirtual) {
     RemoveNullcheckStringArg::TransferMapForExpr transferMapForExpr;
     RemoveNullcheckStringArg::NewMethodSet newMethods;
     pass.setup(transferMapForParam, transferMapForExpr, newMethods);
-    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, true);
+    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
   }
 
   const auto* expected_str = R"(
@@ -171,7 +171,7 @@ TEST_F(RemoveNullcheckStringArgTest, simpleiVirtualiCpy) {
     RemoveNullcheckStringArg::TransferMapForExpr transferMapForExpr;
     RemoveNullcheckStringArg::NewMethodSet newMethods;
     pass.setup(transferMapForParam, transferMapForExpr, newMethods);
-    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, true);
+    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
   }
 
   const auto* expected_str = R"(
@@ -213,7 +213,7 @@ TEST_F(RemoveNullcheckStringArgTest, simpleStatic) {
     RemoveNullcheckStringArg::TransferMapForExpr transferMapForExpr;
     RemoveNullcheckStringArg::NewMethodSet newMethods;
     pass.setup(transferMapForParam, transferMapForExpr, newMethods);
-    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
+    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, true);
   }
 
   const auto* expected_str = R"(
@@ -253,7 +253,7 @@ TEST_F(RemoveNullcheckStringArgTest, removeAssertPositive) {
     RemoveNullcheckStringArg::TransferMapForExpr transferMapForExpr;
     RemoveNullcheckStringArg::NewMethodSet newMethods;
     pass.setup(transferMapForParam, transferMapForExpr, newMethods);
-    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
+    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, true);
   }
 
   const auto* expected_str = R"(
@@ -291,7 +291,7 @@ TEST_F(RemoveNullcheckStringArgTest, removeAssertNegative) {
     RemoveNullcheckStringArg::TransferMapForExpr transferMapForExpr;
     RemoveNullcheckStringArg::NewMethodSet newMethods;
     pass.setup(transferMapForParam, transferMapForExpr, newMethods);
-    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, false);
+    pass.change_in_cfg(*cfg, transferMapForParam, transferMapForExpr, true);
   }
 
   const auto* expected_str = R"(

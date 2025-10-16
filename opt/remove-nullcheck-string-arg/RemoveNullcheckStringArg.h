@@ -94,7 +94,7 @@ class RemoveNullcheckStringArg : public Pass {
       cfg::ControlFlowGraph& cfg,
       const TransferMapForParam& transfer_map_param,
       const TransferMapForExpr& transfer_map_expr,
-      bool is_virtual);
+      bool is_static);
 
  private:
   /* If the \p wrapper_signature is already present or if the function being
