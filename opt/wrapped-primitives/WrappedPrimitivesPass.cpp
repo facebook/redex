@@ -120,7 +120,7 @@ void WrappedPrimitivesPass::bind_config() {
           members.size() == 1,
           "Wrong specification: allowed invoke object should be just 1 mapping "
           "of method ref string to method ref string.");
-      auto api = members.at(0);
+      const auto& api = members.at(0);
       TRACE(WP, 2, "Checking for API '%s'", api.c_str());
       auto* wrapped_api = DexMethod::get_method(api);
       if (wrapped_api == nullptr) {
