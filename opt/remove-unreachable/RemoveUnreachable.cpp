@@ -161,10 +161,10 @@ void write_out_removed_symbols_references(
       continue;
     }
 
-    out << *s_ptr << std::endl;
+    out << *s_ptr << '\n';
     for (const auto& ref :
          UnorderedIterable(referenced_to_references.at(*s_ptr))) {
-      out << "\t" << ref << std::endl;
+      out << "\t" << ref << '\n';
     }
   }
 }
@@ -385,7 +385,7 @@ void RemoveUnreachablePassBase::write_out_removed_symbols(
                       std::inserter(sorted, sorted.end()),
                       [](const std::string& s) { return &s; });
   for (const auto* s_ptr : sorted) {
-    out << *s_ptr << std::endl;
+    out << *s_ptr << '\n';
   }
 }
 

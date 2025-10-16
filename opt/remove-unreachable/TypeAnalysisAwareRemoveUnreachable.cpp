@@ -7,8 +7,6 @@
 
 #include "TypeAnalysisAwareRemoveUnreachable.h"
 
-#include <boost/algorithm/string.hpp>
-
 #include "ControlFlow.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
@@ -235,6 +233,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     } else if (opcode::is_invoke_interface(invoke->opcode()) &&
                is_interface(base_cls)) {
       // Why can_rename? To mirror what VirtualRenamer looks at.
+      // NOLINTNEXTLINE(bugprone-branch-clone)
       if (root(resolved_callee) || !can_rename(resolved_callee)) {
         // We cannot rule out that there are dynamically added classes, possibly
         // even created at runtime via Proxy.newProxyInstance, that override
