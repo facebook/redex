@@ -192,7 +192,7 @@ void print_allowed_violations_per_class(
       for (const auto& f : fields->second) {
         fields_detail << "    " << f.first->get_deobfuscated_name_or_empty()
                       << " (" << get_store_name(xstores, f.first->get_type())
-                      << ")" << std::endl;
+                      << ")\n";
       }
     }
     std::ostringstream methods_detail;
@@ -203,8 +203,7 @@ void print_allowed_violations_per_class(
         for (const auto& proto_type : protos->second) {
           method_detail << "      Proto type "
                         << show_deobfuscated(proto_type.first) << " ("
-                        << get_store_name(xstores, proto_type.first) << ")"
-                        << std::endl;
+                        << get_store_name(xstores, proto_type.first) << ")\n";
         }
       }
       auto type_insns = illegal_type.find(method);
@@ -213,7 +212,7 @@ void print_allowed_violations_per_class(
           method_detail << "      Instruction type "
                         << show_deobfuscated(insn.first) << " ("
                         << get_store_name(xstores, insn.first->get_type())
-                        << ")" << std::endl;
+                        << ")\n";
         }
       }
       auto field_type_insns = illegal_field_type.find(method);
@@ -222,7 +221,7 @@ void print_allowed_violations_per_class(
           method_detail
               << "      Field type " << show_deobfuscated(insn.first) << " ("
               << get_store_name(xstores, insn.first->get_field()->get_type())
-              << ")" << std::endl;
+              << ")\n";
         }
       }
       auto field_cls_insns = illegal_field_cls.find(method);
@@ -231,7 +230,7 @@ void print_allowed_violations_per_class(
           method_detail
               << "      Field class " << show_deobfuscated(insn.first) << " ("
               << get_store_name(xstores, insn.first->get_field()->get_class())
-              << ")" << std::endl;
+              << ")\n";
         }
       }
       auto method_calls = illegal_method_call.find(method);
@@ -240,12 +239,12 @@ void print_allowed_violations_per_class(
           method_detail
               << "      Callee class " << show_deobfuscated(insn.first) << " ("
               << get_store_name(xstores, insn.first->get_method()->get_class())
-              << ")" << std::endl;
+              << ")\n";
         }
       }
       auto detail_str = method_detail.str();
       if (!detail_str.empty()) {
-        methods_detail << "    " << show_deobfuscated(method) << std::endl
+        methods_detail << "    " << show_deobfuscated(method) << '\n'
                        << detail_str;
       }
     }
@@ -334,14 +333,14 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
       for (const auto& field : bad_field.second) {
         bad_fields_count++;
         ss << "Reference to deleted type " << SHOW(bad_field.first)
-           << " in field " << SHOW(field) << std::endl;
+           << " in field " << SHOW(field) << '\n';
       }
     }
     for (const auto& bad_meth : m_bad_methods) {
       for (const auto& meth : bad_meth.second) {
         bad_methods_count++;
         ss << "Reference to deleted type " << SHOW(bad_meth.first)
-           << " in method " << SHOW(meth) << std::endl;
+           << " in method " << SHOW(meth) << '\n';
       }
     }
     for (const auto& bad_insns : m_bad_type_insns) {
@@ -350,7 +349,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
           bad_type_insns_count++;
           ss << "Reference to deleted type " << SHOW(bad_insns.first)
              << " in instruction " << SHOW(insn) << " in method "
-             << SHOW(insns.first) << std::endl;
+             << SHOW(insns.first) << '\n';
         }
       }
     }
@@ -360,7 +359,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
           bad_field_insns_count++;
           ss << "Reference to deleted field " << SHOW(bad_insns.first)
              << " in instruction " << SHOW(insn) << " in method "
-             << SHOW(insns.first) << std::endl;
+             << SHOW(insns.first) << '\n';
         }
       }
     }
@@ -370,7 +369,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
           bad_meths_insns_count++;
           ss << "Reference to deleted method " << SHOW(bad_insns.first)
              << " in instruction " << SHOW(insn) << " in method "
-             << SHOW(insns.first) << std::endl;
+             << SHOW(insns.first) << '\n';
         }
       }
     }
@@ -402,22 +401,22 @@ std::string Breadcrumbs::get_methods_with_bad_refs() {
   for (const auto& class_meth : m_bad_methods) {
     const auto* const type = class_meth.first;
     const auto& methods = class_meth.second;
-    ss << "Bad methods in class " << type->get_name()->c_str() << std::endl;
+    ss << "Bad methods in class " << type->get_name()->c_str() << '\n';
     for (const auto* const method : methods) {
-      ss << "\t" << method->get_name()->c_str() << std::endl;
+      ss << "\t" << method->get_name()->c_str() << '\n';
     }
-    ss << std::endl;
+    ss << '\n';
   }
   for (const auto& meth_field : m_bad_fields_refs) {
     auto* const type = meth_field.first->get_class();
     const auto* const method = meth_field.first;
     const auto& fields = meth_field.second;
     ss << "Bad field refs in method " << type->get_name()->c_str() << "."
-       << method->get_name()->c_str() << std::endl;
+       << method->get_name()->c_str() << '\n';
     for (const auto* const field : fields) {
-      ss << "\t" << field->get_name()->c_str() << std::endl;
+      ss << "\t" << field->get_name()->c_str() << '\n';
     }
-    ss << std::endl;
+    ss << '\n';
   }
   return ss.str();
 }
@@ -455,13 +454,13 @@ size_t Breadcrumbs::process_illegal_elements(
     }
     ss << "Illegal " << desc << " in method "
        << method->get_deobfuscated_name_or_empty() << " ("
-       << get_store_name(xstores, method->get_class()) << ")" << std::endl;
+       << get_store_name(xstores, method->get_class()) << ")\n";
     num_illegal_cross_store_refs += insns.size();
     for (const auto& insn : insns) {
       ss << "\t" << show_deobfuscated(insn.first) << " ("
          << get_store_name(xstores, get_type_from_insn(insn.first)) << ")  By  "
          << show_deobfuscated(insn.second) << " ("
-         << get_store_name(xstores, insn.second) << ")" << std::endl;
+         << get_store_name(xstores, insn.second) << ")\n";
     }
   }
 
@@ -487,12 +486,12 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
 
     ss << "Illegal fields in class "
        << type_class(type)->get_deobfuscated_name_or_empty() << " ("
-       << get_store_name(m_xstores, type) << ")" << std::endl;
+       << get_store_name(m_xstores, type) << ")\n";
     for (const auto& field : fields) {
       ss << "\t" << field.first->get_deobfuscated_name_or_empty() << " ("
          << get_store_name(m_xstores, field.first->get_type()) << ")  By  "
          << show_deobfuscated(field.second) << " ("
-         << get_store_name(m_xstores, field.second) << ")" << std::endl;
+         << get_store_name(m_xstores, field.second) << ")\n";
     }
   }
 
@@ -508,12 +507,12 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
     }
     num_illegal_method_defs++;
     ss << "Illegal types in method proto " << show_deobfuscated(method) << " ("
-       << get_store_name(m_xstores, method->get_class()) << ")" << std::endl;
+       << get_store_name(m_xstores, method->get_class()) << ")\n";
     for (const auto& t : types) {
       ss << "\t" << show_deobfuscated(t.first) << " ("
          << get_store_name(m_xstores, t.first) << ")  By  "
          << show_deobfuscated(t.second) << " ("
-         << get_store_name(m_xstores, t.second) << ")" << std::endl;
+         << get_store_name(m_xstores, t.second) << ")\n";
     }
   }
 
@@ -924,7 +923,7 @@ void Breadcrumbs::check_method_opcode(const DexMethod* method,
     // the class of the method is around but the method may have
     // been deleted so let's verify the method exists on the class
     if (referenced_method_is_deleted(meth)) {
-      m_bad_meth_insns[static_cast<DexMethod*>(meth)][method].emplace_back(
+      m_bad_meth_insns[dynamic_cast<DexMethod*>(meth)][method].emplace_back(
           insn);
       return;
     }
