@@ -42,7 +42,7 @@ bool trace_results_if_different(const std::string& prefix,
     return false;
   }
   out << prefix << " global:" << gtype;
-  out << " local:" << ltype << std::endl;
+  out << " local:" << ltype << '\n';
   return true;
 }
 
