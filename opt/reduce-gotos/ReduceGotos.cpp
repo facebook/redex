@@ -185,11 +185,9 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
         // Case 1
         transform_opcode = OPCODE_NOP;
       } else if (!live_out_vars.contains(reg)) {
-        if (reg < 256 && (int8_t)case_key == case_key) {
-          // Case 2
-          transform_opcode = OPCODE_RSUB_INT_LIT;
-        } else if (reg < 16 && (int16_t)case_key == case_key) {
-          // Case 3
+        if ((reg < 256 && (int8_t)case_key == case_key) ||
+            (reg < 16 && (int16_t)case_key == case_key)) {
+          // Case 2 & 3: rsub-int/lit8 or rsub-int
           transform_opcode = OPCODE_RSUB_INT_LIT;
         }
       }
@@ -547,28 +545,29 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
                     conf.get_method_profiles()))
           : std::nullopt;
 
-  Stats stats = walk::parallel::methods<Stats>(
-      scope, [&baseline_profile](DexMethod* method) {
-        auto* const code = method->get_code();
-        if ((code == nullptr) || method->rstate.no_optimizations()) {
-          return Stats{};
-        }
+  Stats stats = walk::parallel::methods<Stats>(scope, [&baseline_profile](
+                                                          DexMethod* method) {
+    auto* const code = method->get_code();
+    if ((code == nullptr) || method->rstate.no_optimizations()) {
+      return Stats{};
+    }
 
-        auto for_performance =
-            baseline_profile && is_compiled(*baseline_profile, method);
+    auto for_performance =
+        baseline_profile && is_compiled(*baseline_profile, method);
 
-        Stats stats = ReduceGotosPass::process_code(code, for_performance);
-        if ((stats.replaced_gotos_with_returns != 0u) ||
-            (stats.inverted_conditional_branches != 0u)) {
-          TRACE(RG, 3,
-                "[reduce gotos] Replaced %zu gotos with returns, "
-                "removed %zu trailing moves, "
-                "inverted %zu conditional branches in {%s}",
-                stats.replaced_gotos_with_returns, stats.removed_trailing_moves,
-                stats.inverted_conditional_branches, SHOW(method));
-        }
-        return stats;
-      });
+    Stats local_stats = ReduceGotosPass::process_code(code, for_performance);
+    if ((local_stats.replaced_gotos_with_returns != 0u) ||
+        (local_stats.inverted_conditional_branches != 0u)) {
+      TRACE(RG, 3,
+            "[reduce gotos] Replaced %zu gotos with returns, "
+            "removed %zu trailing moves, "
+            "inverted %zu conditional branches in {%s}",
+            local_stats.replaced_gotos_with_returns,
+            local_stats.removed_trailing_moves,
+            local_stats.inverted_conditional_branches, SHOW(method));
+    }
+    return local_stats;
+  });
 
   mgr.incr_metric(METRIC_REMOVED_SWITCHES, stats.removed_switches);
   mgr.incr_metric(METRIC_REDUCED_SWITCHES, stats.reduced_switches);
