@@ -7,12 +7,9 @@
 
 #include "ReachableNatives.h"
 
-#include <algorithm>
 #include <fstream>
-#include <iterator>
 #include <string>
 
-#include "BinarySerialization.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "CppUtil.h"
@@ -24,14 +21,11 @@
 #include "IROpcode.h"
 #include "LiveRange.h"
 #include "PassManager.h"
-#include "ProguardConfiguration.h"
 #include "Reachability.h"
-#include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Show.h"
-#include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
