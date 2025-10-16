@@ -512,8 +512,8 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
     TRACE(INTF, 3, "(MITF) interface method %s", SHOW(meth));
     auto* new_meth = resolve_virtual(impl, meth->get_name(), meth->get_proto());
     if (new_meth == nullptr) {
-      new_meth = static_cast<DexMethod*>(DexMethod::make_method(
-          impl->get_type(), meth->get_name(), meth->get_proto()));
+      new_meth = DexMethod::make_method_downcast(
+          impl->get_type(), meth->get_name(), meth->get_proto());
       // new_meth may not be new, because RedexContext keeps methods around
       // after they are deleted. clear all pre-existing method state.
       // TODO: this is horrible. After we remove methods, we shouldn't

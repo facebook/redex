@@ -23,6 +23,8 @@
 #include "Trace.h"
 #include "Walkers.h"
 
+namespace {
+
 struct AnalysisImpl : SingleImplAnalysis {
   AnalysisImpl(const Scope& scope,
                const ProguardMap& pg_map,
@@ -559,6 +561,8 @@ void AnalysisImpl::analyze_opcodes() {
     }
   });
 }
+
+} // namespace
 
 /**
  * Main analysis method
