@@ -431,8 +431,9 @@ HotColdMethodSpecializingPass::analyze_and_specialize(
   };
   uint32_t original_code_units = estimate_adjusted_code_size(code);
   uint32_t hot_code_units = estimate_adjusted_code_size(*hot_code);
-  if (hot_code_units * config.threshold_factor + config.threshold_offset >
-      original_code_units) {
+  if (static_cast<float>(hot_code_units) * config.threshold_factor +
+          config.threshold_offset >
+      static_cast<float>(original_code_units)) {
     stats.methods_with_inefficient_cold_frontier++;
     return stats;
   }
@@ -591,20 +592,19 @@ void HotColdMethodSpecializingPass::run_pass(DexStoresVector& stores,
         (size_t)stats.unspecializable_cold_code);
 
   mgr.set_metric("methods_with_efficient_cold_frontier",
-                 (size_t)stats.methods_with_efficient_cold_frontier);
+                 stats.methods_with_efficient_cold_frontier);
   mgr.set_metric("methods_with_inefficient_cold_frontier",
-                 (size_t)stats.methods_with_inefficient_cold_frontier);
+                 stats.methods_with_inefficient_cold_frontier);
   mgr.set_metric("proposed_cold_frontier_blocks",
-                 (size_t)stats.proposed_cold_frontier_blocks);
+                 stats.proposed_cold_frontier_blocks);
   mgr.set_metric("pruned_cold_frontier_blocks",
-                 (size_t)stats.pruned_cold_frontier_blocks);
+                 stats.pruned_cold_frontier_blocks);
   mgr.set_metric("selected_cold_frontier_blocks",
-                 (size_t)stats.selected_cold_frontier_blocks);
-  mgr.set_metric("original_code_units", (size_t)stats.original_code_units);
-  mgr.set_metric("hot_code_units", (size_t)stats.hot_code_units);
-  mgr.set_metric("cold_code_units", (size_t)stats.cold_code_units);
-  mgr.set_metric("unspecializable_cold_code",
-                 (size_t)stats.unspecializable_cold_code);
+                 stats.selected_cold_frontier_blocks);
+  mgr.set_metric("original_code_units", stats.original_code_units);
+  mgr.set_metric("hot_code_units", stats.hot_code_units);
+  mgr.set_metric("cold_code_units", stats.cold_code_units);
+  mgr.set_metric("unspecializable_cold_code", stats.unspecializable_cold_code);
   m_iteration++;
 }
 
