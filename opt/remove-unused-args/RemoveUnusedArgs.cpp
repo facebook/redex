@@ -20,7 +20,6 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "Liveness.h"
-#include "Match.h"
 #include "OptData.h"
 #include "OptDataDefs.h"
 #include "PassManager.h"
@@ -185,14 +184,12 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
             record_fixed_proto(caller_proto, 0);
           } else {
             const auto& node = override_graph.get_node(caller);
-            if (any_external(node.parents)) {
+            if (any_external(node.parents) ||
+                (is_interface_method && any_external(node.children))) {
               // We can't change the signature of an overriding method when the
-              // overridden method is external
-              record_fixed_proto(caller_proto, 0);
-            } else if (is_interface_method && any_external(node.children)) {
-              // This captures the case where an interface defines a method
-              // whose only implementation is one that is inherited from an
-              // external base class.
+              // overridden method is external, or when an interface defines a
+              // method whose only implementation is one that is inherited from
+              // an external base class.
               record_fixed_proto(caller_proto, 0);
             }
           }
@@ -626,7 +623,7 @@ void RemoveArgs::gather_updated_entries(
         for (const auto* m : UnorderedIterable(kvp->second)) {
           if (m->get_code() != nullptr) {
             auto& dead_insn_map = all_dead_insns.at_unsafe(m);
-            std::erase_if(dead_insn_map, [&](auto e) {
+            std::erase_if(dead_insn_map, [&](const auto& e) {
               return !running_dead_args.count(e.first);
             });
           }
@@ -834,6 +831,7 @@ size_t RemoveArgs::update_callsite(IRInstruction* instr) {
   }
   auto& updated_srcs = kv_pair->second;
   std::vector<reg_t> new_srcs;
+  new_srcs.reserve(updated_srcs.size());
   for (size_t i = 0; i < updated_srcs.size(); ++i) {
     new_srcs.push_back(instr->src(updated_srcs.at(i)));
   }
