@@ -7,8 +7,6 @@
 
 #include "FinalInlineV2.h"
 
-#include <iostream>
-#include <sstream>
 #include <vector>
 
 #include <sparta/WeakTopologicalOrdering.h>
