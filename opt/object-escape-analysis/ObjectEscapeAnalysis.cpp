@@ -116,8 +116,10 @@ ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
       auto [callee, type] = resolve_inlinable(method_summaries, method, insn);
       TRACE(OEA, 3, "[object escape analysis] inline anchor [%s] %s",
             SHOW(method), SHOW(insn));
-      inline_anchors.update(
-          type, [&](auto*, auto& map, bool) { map[method].insert(insn); });
+      inline_anchors.update(type, [&](auto*, auto& map, bool) {
+        // NOLINTNEXTLINE(bugprone-pointer-arithmetic-on-polymorphic-object)
+        map[method].insert(insn);
+      });
     }
   });
   return inline_anchors;
@@ -362,9 +364,8 @@ class InlinedEstimator {
             } else if (opcode::is_an_iget(use.insn->opcode()) ||
                        opcode::is_an_iput(use.insn->opcode()) ||
                        opcode::is_instance_of(use.insn->opcode()) ||
-                       opcode::is_a_monitor(use.insn->opcode())) {
-              delta -= 10 * (int64_t)use.insn->size();
-            } else if (opcode::is_check_cast(use.insn->opcode())) {
+                       opcode::is_a_monitor(use.insn->opcode()) ||
+                       opcode::is_check_cast(use.insn->opcode())) {
               delta -= 10 * (int64_t)use.insn->size();
             }
           }
@@ -793,7 +794,7 @@ struct ReducedMethod {
           });
     }
 
-    for (auto [inlined_type, kind] : UnorderedIterable(types)) {
+    for (const auto& [inlined_type, kind] : UnorderedIterable(types)) {
       if (is_type_kept(inlined_type)) {
         continue;
       }
@@ -900,7 +901,7 @@ class RootMethodReducer {
     insn = find_incomplete_marker_methods();
     auto describe = [&]() {
       std::ostringstream oss;
-      for (auto [type, inlinable_info] : UnorderedIterable(m_types)) {
+      for (const auto& [type, inlinable_info] : UnorderedIterable(m_types)) {
         oss << show(type) << ":"
             << (inlinable_info.kind == InlinableTypeKind::Incomplete
                     ? "incomplete"
@@ -1577,9 +1578,9 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
   CodeSizeCache code_size_cache;
   // Computing root methods is very memory intensive, and "instrumented" builds
   // are doubly so. We limit parallelism to limit maximum memory usage.
-  unsigned int num_threads = redex_parallel::default_num_threads();
+  size_t num_threads = redex_parallel::default_num_threads();
   if (g_redex->instrument_mode && g_redex->slow_invariants_debug) {
-    num_threads = std::min(num_threads, 16u);
+    num_threads = std::min<size_t>(num_threads, 16u);
   }
   workqueue_run<std::pair<DexMethod*, InlinableTypes>>(
       [&](const std::pair<DexMethod*, InlinableTypes>& p) {
@@ -1801,7 +1802,8 @@ void select_reduced_methods(
 
   while (!pq.empty()) {
     auto seed_ref = pq.front();
-    int savings = pq.get_priority(seed_ref) / (int64_t)ref_indices.size();
+    int savings = static_cast<int>(pq.get_priority(seed_ref) /
+                                   static_cast<int64_t>(ref_indices.size()));
     if (savings < config.savings_threshold) {
       // All remaining references are less profitable than this one.
       break;

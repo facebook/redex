@@ -358,7 +358,7 @@ size_t ExpandableMethodParams::flush(
     if (used_expanded_method_refs.count(method) != 0u) {
       method_profiles->derive_stats(method->as_def(), {p.first});
     } else {
-      DexMethod::delete_method_DO_NOT_USE(static_cast<DexMethod*>(method));
+      DexMethod::delete_method_DO_NOT_USE(dynamic_cast<DexMethod*>(method));
     }
   }
   return expanded_methods.size();
