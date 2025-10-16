@@ -648,7 +648,7 @@ ResourceValueMergingPass::get_graph_diffs(
     const bool exists_in_optimized = optimized_it != optimized.styles.end();
 
     always_assert_log(
-        !(exists_in_initial && !exists_in_optimized),
+        !exists_in_initial || exists_in_optimized,
         "Resource 0x%x was deleted in optimized graph but is found in "
         "initial graph which should not be possible",
         resource_id);
@@ -814,9 +814,8 @@ bool ResourceValueMergingPass::should_create_synthetic_resources(
   // If creating a synthetic style is more cost-effective than having multiple
   // copies of each attribute, then proceed with creating the synthetic style
   return synthetic_style_cost <
-         static_cast<uint32_t>(
-             num_resources_with_all_attributes * num_attributes *
-             static_cast<uint32_t>(sizeof(android::ResTable_map)));
+         (num_resources_with_all_attributes * num_attributes *
+          static_cast<uint32_t>(sizeof(android::ResTable_map)));
 }
 
 uint32_t ResourceValueMergingPass::get_config_count(

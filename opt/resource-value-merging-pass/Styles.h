@@ -13,7 +13,6 @@
 #include "GlobalConfig.h"
 #include "ReachableResources.h"
 #include "RedexResources.h"
-#include "Trace.h"
 
 class StyleAnalysis {
  public:

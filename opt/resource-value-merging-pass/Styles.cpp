@@ -7,6 +7,7 @@
 
 #include "Styles.h"
 
+#include "Trace.h"
 #include "utils/Serialize.h"
 
 #define NON_AMBIGUOUS(style_vec) (*(style_vec).begin())
