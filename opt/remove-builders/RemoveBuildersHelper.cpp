@@ -13,7 +13,6 @@
 #include "Dataflow.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "ScopedCFG.h"
 
 namespace {
 
@@ -43,7 +42,7 @@ void fields_mapping(const cfg::ControlFlowGraph& cfg,
 
   // Check if the register that used to hold the field's value is overwritten.
   if (insn->has_dest()) {
-    const int current_dest = insn->dest();
+    const int current_dest = static_cast<int>(insn->dest());
 
     for (const auto& pair : UnorderedIterable(fregs->field_to_reg)) {
       if (pair.second == current_dest ||
@@ -58,7 +57,7 @@ void fields_mapping(const cfg::ControlFlowGraph& cfg,
 
     if (field != nullptr && field->get_class() == builder->get_type()) {
       reg_t current = insn->src(0);
-      fregs->field_to_reg[field] = current;
+      fregs->field_to_reg[field] = static_cast<int>(current);
       fregs->field_to_iput_insns[field].clear();
       fregs->field_to_iput_insns[field].emplace(insn);
     }
@@ -400,20 +399,20 @@ class ZeroRegs {
     case 'S':
     case 'C':
     case 'I':
-      m_zero_reg_int = value;
+      m_zero_reg_int = static_cast<int>(value);
       return;
     case 'J':
-      m_zero_reg_long = value;
+      m_zero_reg_long = static_cast<int>(value);
       return;
     case 'F':
-      m_zero_reg_float = value;
+      m_zero_reg_float = static_cast<int>(value);
       return;
     case 'D':
-      m_zero_reg_double = value;
+      m_zero_reg_double = static_cast<int>(value);
       return;
     case 'L':
     case '[':
-      m_zero_reg_object = value;
+      m_zero_reg_object = static_cast<int>(value);
       return;
     default:
       not_reached();
@@ -499,8 +498,9 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
                 } else {
                   // Adding a move for each of the setters:
                   //   iput v1, object // field -> move new_reg, v1
-                  move_replacements[iput_insn] = construct_move_instr(
-                      new_reg, iput_insn->src(0), move_opcode);
+                  move_replacements[iput_insn] =
+                      construct_move_instr(static_cast<reg_t>(new_reg),
+                                           iput_insn->src(0), move_opcode);
                 }
               } else {
                 // Initializes the register since the field might be
@@ -514,7 +514,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
             move_replacements[insn] = construct_move_instr(
                 cfg.move_result_of(block->to_cfg_instruction_iterator(it))
                     ->insn->dest(),
-                new_reg, move_opcode);
+                static_cast<reg_t>(new_reg), move_opcode);
 
           } else if (fields_in_insn.field_to_reg[field] ==
                      FieldOrRegStatus::UNDEFINED) {
@@ -640,7 +640,7 @@ bool params_change_regs(DexMethod* method) {
           }
         };
 
-    auto tainted = TaintedRegs(regs_size + 1);
+    auto tainted = TaintedRegs(static_cast<int>(regs_size + 1));
     always_assert(param_it != param_insns.end());
     auto arg_reg = (param_it++)->insn->dest();
     tainted.m_reg_set[arg_reg] = true;
@@ -814,7 +814,7 @@ DexMethod* get_fields_constr(DexMethod* method, DexClass* cls) {
     return create_fields_constr(method, cls);
   }
 
-  return static_cast<DexMethod*>(fields_constr);
+  return fields_constr->as_def();
 }
 
 std::vector<cfg::InstructionIterator> get_invokes_for_method(
@@ -1106,7 +1106,7 @@ std::unique_ptr<UnorderedMap<IRInstruction*, TaintedRegs>> get_tainted_regs(
 
   // The extra register is used to keep track of the return values.
   return forwards_dataflow(cfg.entry_block(), blocks,
-                           TaintedRegs(regs_size + 1), trans);
+                           TaintedRegs(static_cast<int>(regs_size + 1)), trans);
 }
 
 //////////////////////////////////////////////

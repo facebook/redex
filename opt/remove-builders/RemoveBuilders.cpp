@@ -7,16 +7,12 @@
 
 #include "RemoveBuilders.h"
 
-#include <boost/regex.hpp>
-#include <tuple>
-
 #include "ConfigFiles.h"
 #include "Dataflow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "PassManager.h"
 #include "RemoveBuildersHelper.h"
-#include "Resolver.h"
 #include "Walkers.h"
 
 namespace {
@@ -60,8 +56,11 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
           transfer_object_reach(this_cls, regs_size, insn, tregs->m_reg_set);
         }
       };
-  auto taint_map = forwards_dataflow(
-      cfg.entry_block(), blocks, TaintedRegs(regs_size + 1), trans);
+  auto taint_map =
+      forwards_dataflow(cfg.entry_block(),
+                        blocks,
+                        TaintedRegs(static_cast<int>(regs_size + 1)),
+                        trans);
   return tainted_reg_escapes(
       this_cls, method, *taint_map, enable_buildee_constr_change);
 }
