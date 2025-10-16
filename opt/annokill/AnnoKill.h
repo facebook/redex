@@ -9,7 +9,6 @@
 
 #include "Pass.h"
 
-#include <map>
 #include <string>
 #include <vector>
 
@@ -25,22 +24,22 @@ class AnnoKill {
   using AnnoNames = std::vector<std::string>;
 
   struct AnnoKillStats {
-    size_t annotations;
-    size_t annotations_killed;
-    size_t class_asets;
-    size_t class_asets_cleared;
-    size_t method_asets;
-    size_t method_asets_cleared;
-    size_t method_param_asets;
-    size_t method_param_asets_cleared;
-    size_t field_asets;
-    size_t field_asets_cleared;
-    size_t visibility_build_count;
-    size_t visibility_runtime_count;
-    size_t visibility_system_count;
-    size_t signatures_killed;
+    size_t annotations{0};
+    size_t annotations_killed{0};
+    size_t class_asets{0};
+    size_t class_asets_cleared{0};
+    size_t method_asets{0};
+    size_t method_asets_cleared{0};
+    size_t method_param_asets{0};
+    size_t method_param_asets_cleared{0};
+    size_t field_asets{0};
+    size_t field_asets_cleared{0};
+    size_t visibility_build_count{0};
+    size_t visibility_runtime_count{0};
+    size_t visibility_system_count{0};
+    size_t signatures_killed{0};
 
-    AnnoKillStats() { memset(this, 0, sizeof(AnnoKillStats)); }
+    AnnoKillStats() = default;
 
     AnnoKillStats& operator+=(const AnnoKillStats& rhs) {
       annotations += rhs.annotations;

@@ -12,8 +12,6 @@
 #include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
-#include "DexLoader.h"
-#include "DexOutput.h"
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "Resolver.h"
@@ -542,8 +540,8 @@ bool AnnoKill::kill_annotations() {
 
   {
     Timer timer{"optimize classes"};
-    m_stats +=
-        walk::parallel::classes<AnnoKillStats>(m_scope, [&](auto* clazz) {
+    m_stats += walk::parallel::classes<AnnoKillStats>(
+        m_scope, [&](auto* clazz) -> AnnoKillStats {
           AnnoKillStats local_stats{};
           DexAnnotationSet* aset = clazz->get_anno_set();
           if (!aset) {
