@@ -103,8 +103,7 @@ class RemoveClasses {
                     init_classes_with_side_effects,
                     inliner_config,
                     stores),
-        m_max_num_inline_iteration(max_num_inline_iteration),
-        m_stores(stores) {
+        m_max_num_inline_iteration(max_num_inline_iteration) {
     gather_classes();
   }
 
@@ -392,7 +391,6 @@ class RemoveClasses {
   size_t m_num_removed_usages{0};
   size_t m_max_num_inline_iteration{0};
   std::map<size_t, size_t> m_num_inline_iterations;
-  const DexStoresVector& m_stores;
 };
 
 } // namespace

@@ -24,6 +24,8 @@ namespace impl {
 
 using namespace ir_analyzer;
 
+namespace {
+
 using NullableConstantValue =
     acd_impl::ConstantAbstractValue<const IRInstruction*>;
 
@@ -71,6 +73,8 @@ class NullableConstantDomain final
     BaseClass::join_with(other);
   }
 };
+
+} // namespace
 
 using IRInstructionConstantDomain = NullableConstantDomain;
 
@@ -366,7 +370,7 @@ BuilderAnalysis::get_vinvokes_to_this_infered_type() {
           always_assert(!result.count(const_cast<IRInstruction*>(insn)) ||
                         result[const_cast<IRInstruction*>(insn)] ==
                             infered_type);
-          result[const_cast<IRInstruction*>(insn)] = infered_type;
+          result[insn] = infered_type;
         };
       }
     }
@@ -386,7 +390,7 @@ UnorderedSet<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
     for (const auto& it : pair.second) {
       auto* insn = it->insn;
       if (opcode::is_an_invoke(insn->opcode())) {
-        result.emplace(const_cast<IRInstruction*>(insn));
+        result.emplace(insn);
       }
     }
   }

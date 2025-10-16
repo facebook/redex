@@ -164,7 +164,7 @@ void initialize_regs(
     } else {
       initialization_insn = new IRInstruction(OPCODE_CONST);
     }
-    initialization_insn->set_dest(reg);
+    initialization_insn->set_dest(static_cast<reg_t>(reg));
     initialization_insn->set_literal(0);
     cfg::Block* first_block_with_insns = cfg.get_first_block_with_insns();
     auto insert_it = first_block_with_insns->get_first_non_param_loading_insn();
@@ -226,13 +226,13 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
         }
 
         if (opcode::is_an_iput(insn->opcode())) {
-          new_insn->set_dest(field_to_reg[field]);
+          new_insn->set_dest(static_cast<reg_t>(field_to_reg[field]));
           new_insn->set_src(0, insn->src(0));
         } else {
           auto move_result = cfg.move_result_of(it);
           always_assert(!move_result.is_end());
           new_insn->set_dest(move_result->insn->dest());
-          new_insn->set_src(0, field_to_reg[field]);
+          new_insn->set_src(0, static_cast<reg_t>(field_to_reg[field]));
         }
         to_replace.emplace_back(it, new_insn);
       } else if (insn->opcode() == OPCODE_MOVE_OBJECT ||
