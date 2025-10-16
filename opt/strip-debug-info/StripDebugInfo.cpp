@@ -8,7 +8,6 @@
 #include "StripDebugInfo.h"
 
 #include <string>
-#include <vector>
 
 #include "DexClass.h"
 #include "DexUtil.h"
