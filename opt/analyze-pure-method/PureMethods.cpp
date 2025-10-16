@@ -9,8 +9,8 @@
 #include "LocalPointersAnalysis.h"
 #include "PassManager.h"
 #include "Purity.h"
+#include "Show.h"
 #include "SideEffectSummary.h"
-#include "SummarySerialization.h"
 #include "Trace.h"
 #include "Walkers.h"
 
