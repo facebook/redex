@@ -12,14 +12,14 @@
 
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
-#include "CppUtil.h"
+#include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
 #include "PassManager.h"
-#include "ScopedCFG.h"
 #include "Trace.h"
 #include "TypeInference.h"
 #include "TypeUtil.h"
@@ -450,8 +450,8 @@ RemoveResult optimize_impl(DexMethod* method,
     instance_of_res = instance_of::analyze_and_evaluate_instance_of(method);
 
     if (instance_of_res.overrides != 0) {
-      instance_of_res.insn_delta =
-          post_process(method, instance_of_res.overrides, shrinker);
+      instance_of_res.insn_delta = static_cast<ssize_t>(
+          post_process(method, instance_of_res.overrides, shrinker));
     }
   }
 
@@ -460,8 +460,8 @@ RemoveResult optimize_impl(DexMethod* method,
     check_cast_res = check_cast::analyze_and_evaluate(method);
 
     if (check_cast_res.overrides != 0) {
-      check_cast_res.insn_delta =
-          post_process(method, check_cast_res.overrides, shrinker);
+      check_cast_res.insn_delta = static_cast<ssize_t>(
+          post_process(method, check_cast_res.overrides, shrinker));
     }
   }
 
