@@ -8,7 +8,7 @@
 #include "ObfuscateResourcesPass.h"
 
 #include <algorithm>
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string.hpp> // NOLINT
 #include <boost/format.hpp>
 #include <cstdio>
 #include <string>
