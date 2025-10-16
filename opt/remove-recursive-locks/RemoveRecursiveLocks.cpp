@@ -8,8 +8,8 @@
 #include "RemoveRecursiveLocks.h"
 
 #include <bitset>
-#include <boost/variant.hpp>
 #include <iostream>
+#include <variant>
 
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
@@ -361,9 +361,6 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
         switch (cur->opcode()) {
         case OPCODE_MONITOR_ENTER:
         case OPCODE_MONITOR_EXIT:
-          next = get_rdef(cur, cur->src(0));
-          break;
-
         // Ignore check-cast, go further.
         case OPCODE_CHECK_CAST:
           next = get_rdef(cur, cur->src(0));
@@ -375,7 +372,7 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
         if (next == nullptr) {
           if (kDebugPass || traceEnabled(LOCKS, 4)) {
             std::cerr << show(cur) << " has non-singleton rdefs "
-                      << print_rdefs(cur, cur->src(0)) << std::endl;
+                      << print_rdefs(cur, cur->src(0)) << '\n';
           }
           return nullptr;
         }
@@ -406,7 +403,7 @@ LockEnvironment create_start(const RDefs& rdefs) {
 } // namespace analysis
 
 // Return `true` if this is an interesting method.
-boost::variant<bool, std::pair<size_t, size_t>> check(
+std::variant<bool, std::pair<size_t, size_t>> check(
     analysis::LocksIterator& iter,
     ControlFlowGraph& cfg,
     size_t sources_count) {
@@ -433,11 +430,11 @@ void print(std::ostream& os,
            const analysis::RDefs& rdefs,
            analysis::LocksIterator& iter,
            ControlFlowGraph& cfg) {
-  os << show(cfg) << std::endl;
+  os << show(cfg) << '\n';
   for (const auto& p : UnorderedIterable(rdefs)) {
-    os << " # " << p.first << " -> " << p.second << std::endl;
+    os << " # " << p.first << " -> " << p.second << '\n';
   }
-  os << std::endl;
+  os << '\n';
   for (auto* b : cfg.blocks()) {
     os << " * B" << b->id() << ": ";
 
@@ -470,10 +467,7 @@ void print(std::ostream& os,
     print_state(entry_state);
     os << " (";
     print_state(iter.get_exit_state_at(b));
-    os << ")";
-
-    os << std::endl;
-    os << "    ";
+    os << ")\n    ";
     {
       analysis::LockEnvironment env(sparta::AbstractValueKind::Bottom);
       print_state(env);
@@ -490,7 +484,7 @@ void print(std::ostream& os,
         print_state(env);
       }
     }
-    os << std::endl;
+    os << '\n';
   }
 }
 
@@ -560,16 +554,16 @@ AnalysisResult analyze(ControlFlowGraph& cfg) {
   // 4) Go over and see.
   auto check_res = check(*ret.iter, cfg, sources_count);
 
-  if (check_res.which() == 0) {
+  if (check_res.index() == 0) {
     ret.method_with_issues = true;
-    if (boost::strict_get<bool>(check_res)) {
+    if (std::get<bool>(check_res)) {
       // Diagnostics.
       print(std::cerr, ret.rdefs, *ret.iter, cfg);
     };
     return ret;
   }
 
-  const auto& p = boost::strict_get<std::pair<size_t, size_t>>(check_res);
+  const auto& p = std::get<std::pair<size_t, size_t>>(check_res);
   ret.max_d = p.first;
   ret.max_same = p.second;
 
@@ -652,7 +646,7 @@ boost::optional<std::string> verify(cfg::ControlFlowGraph& cfg,
       add_cover(old_cover);
       oss << " vs ";
       add_cover(new_cover);
-      oss << std::endl;
+      oss << '\n';
     }
   }
   std::string res = oss.str();
@@ -736,7 +730,7 @@ Stats run_locks_removal(DexMethod* m, IRCode* code) {
     auto verify_res = verify(cfg, analysis, analysis2);
     auto print_err = [&m, &verify_res, &analysis2, &cfg]() {
       std::ostringstream oss;
-      oss << show(m) << ": " << *verify_res << std::endl;
+      oss << show(m) << ": " << *verify_res << '\n';
       print(oss, analysis2.rdefs, *analysis2.iter, cfg);
       return oss.str();
     };
@@ -767,7 +761,7 @@ void run_impl(DexStoresVector& stores,
     mgr.set_metric(stats_prefix == nullptr ? name : stats_prefix + name, stat);
     if (kDebugPass || traceEnabled(LOCKS, 1)) {
       std::cerr << (stats_prefix == nullptr ? "" : stats_prefix) << name
-                << " = " << stat << std::endl;
+                << " = " << stat << '\n';
     }
   };
   const auto& prof = conf.get_method_profiles();
@@ -799,15 +793,15 @@ void run_impl(DexStoresVector& stores,
   print("methods_with_locks", stats.methods_with_locks);
   print("methods_with_issues", stats.methods_with_issues.size());
   if (!stats.methods_with_issues.empty()) {
-    std::cerr << "Lock analysis failed for:" << std::endl;
+    std::cerr << "Lock analysis failed for:\n";
     for (auto* m : sorted(stats.methods_with_issues)) {
-      std::cerr << " * " << show(m) << std::endl;
+      std::cerr << " * " << show(m) << '\n';
     }
   }
   print("non_singleton_rdefs", stats.non_singleton_rdefs.size());
   if (kDebugPass || traceEnabled(LOCKS, 2)) {
     for (auto* m : sorted(stats.non_singleton_rdefs)) {
-      std::cerr << " * " << show(m) << std::endl;
+      std::cerr << " * " << show(m) << '\n';
     }
   }
   print("removed", stats.removed);
@@ -829,7 +823,7 @@ void run_impl(DexStoresVector& stores,
   if (kDebugPass || traceEnabled(LOCKS, 3)) {
     for (size_t i = 3; i < stats.counts_per.size(); ++i) {
       if (!stats.counts_per[i].empty()) {
-        std::cerr << "=== " << i << " ===" << std::endl;
+        std::cerr << "=== " << i << " ===\n";
         for (auto* m : sorted(stats.counts_per[i])) {
           std::cerr << " * " << show(m);
           auto prof_stats =
@@ -838,7 +832,7 @@ void run_impl(DexStoresVector& stores,
             std::cerr << " " << prof_stats->call_count << " / "
                       << prof_stats->appear_percent;
           }
-          std::cerr << std::endl;
+          std::cerr << '\n';
         }
       }
     }
