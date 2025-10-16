@@ -16,10 +16,11 @@
 #pragma once
 
 #include "DeterministicContainers.h"
-#include "DexUtil.h"
+#include "DexClass.h"
+#include "DexStore.h"
+#include "IRInstruction.h"
 #include "Pass.h"
 #include "RedexResources.h"
-#include "androidfw/ResourceTypes.h"
 
 /* Struct to hold all the information about resource values that can be possibly
  * inlined
