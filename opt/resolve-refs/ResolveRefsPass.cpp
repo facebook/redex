@@ -7,12 +7,11 @@
 
 #include "ResolveRefsPass.h"
 
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "ApiLevelChecker.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
-#include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -20,8 +19,6 @@
 #include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
-
-namespace mog = method_override_graph;
 using namespace resolve_refs;
 
 namespace impl {
@@ -248,7 +245,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
 
   TRACE(RESO, 4, "Inferred to %s for type %s", SHOW(resolved),
         SHOW(inferred_type));
-  return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
+  return boost::optional<DexMethod*>(resolved);
 }
 
 } // namespace impl

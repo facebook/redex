@@ -9,7 +9,7 @@
 
 #include "Pass.h"
 
-#include "ApiLevelsUtils.h"
+#include "FrameworkApi.h"
 
 /**
  * Base type of a Pass that refines references like method refs to external

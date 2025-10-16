@@ -10,8 +10,8 @@
 #include <atomic>
 #include <utility>
 
-#include "ApiLevelsUtils.h"
 #include "DexClass.h"
+#include "FrameworkApi.h"
 #include "Resolver.h"
 
 class PassManager;
