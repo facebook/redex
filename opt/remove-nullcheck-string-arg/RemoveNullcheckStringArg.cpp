@@ -42,7 +42,7 @@ void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
     }
     always_assert(code->cfg_built());
     auto local_stats = change_in_cfg(code->cfg(), transfer_map_param,
-                                     transfer_map_expr, method->is_virtual());
+                                     transfer_map_expr, is_static(method));
     return local_stats;
   });
 
@@ -265,12 +265,12 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
     cfg::ControlFlowGraph& cfg,
     const TransferMapForParam& transfer_map_param,
     const TransferMapForExpr& transfer_map_expr,
-    bool is_virtual) {
+    bool is_static) {
   Stats stats{};
   cfg::CFGMutation m(cfg);
   auto params = cfg.get_param_instructions();
   UnorderedMap<size_t, int> param_index;
-  int arg_index = is_virtual ? -1 : 0;
+  int arg_index = is_static ? 0 : -1;
 
   reaching_defs::MoveAwareFixpointIterator reaching_defs_iter(cfg);
   reaching_defs_iter.run({});
