@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "GraphColoring.h"
 #include "Pass.h"
 
 class DexMethod;
