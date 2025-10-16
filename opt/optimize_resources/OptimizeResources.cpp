@@ -73,7 +73,7 @@ UnorderedSet<uint32_t> delete_unvisited_resources(
       if (write_to_file) {
         out << all_types.at(
                    ((p.first & TYPE_MASK_BIT) >> TYPE_INDEX_BIT_SHIFT) - 1)
-            << "/" << p.second << std::endl;
+            << "/" << p.second << '\n';
       }
       const auto& files =
           table->get_files_by_rid(p.first, ResourcePathType::ZipPath);
@@ -111,10 +111,10 @@ std::map<uint32_t, uint32_t> build_remapping(
   Json::Value map_json;
   for (size_t index = 0; index < sorted_res_ids.size(); ++index) {
     uint32_t id = sorted_res_ids[index];
-    constexpr const int PACKAGE_IDENTIFIER_MASK = 0xFF000000;
+    constexpr const uint32_t PACKAGE_IDENTIFIER_MASK = 0xFF000000;
     uint32_t package_id = id & PACKAGE_IDENTIFIER_MASK;
     always_assert(package_id == PACKAGE_RESID_START);
-    constexpr const int TYPE_IDENTIFIER_MASK = 0x00FF0000;
+    constexpr const uint32_t TYPE_IDENTIFIER_MASK = 0x00FF0000;
     uint32_t type_id = id & TYPE_IDENTIFIER_MASK;
     if (type_id != current_type) {
       subtrahend_for_current_type = 0;
@@ -145,9 +145,9 @@ std::map<uint32_t, uint32_t> build_remapping(
 
 void OptimizeResourcesPass::report_metric(TraceModule trace_module,
                                           const std::string& metric_name,
-                                          int metric_value,
+                                          size_t metric_value,
                                           PassManager& mgr) {
-  TRACE(trace_module, 1, "%s: %d", metric_name.c_str(), metric_value);
+  TRACE(trace_module, 1, "%s: %zu", metric_name.c_str(), metric_value);
   mgr.set_metric(metric_name, metric_value);
 }
 
