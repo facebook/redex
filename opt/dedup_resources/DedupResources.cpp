@@ -54,7 +54,8 @@ template <typename ItemType>
 void get_duplicates_impl(
     const UnorderedSet<ItemType>& disallowed,
     const std::map<size_t, std::vector<ItemType>>& item_by_hash,
-    std::function<bool(const ItemType&, const ItemType&)> are_identical_fn,
+    const std::function<bool(const ItemType&, const ItemType&)>&
+        are_identical_fn,
     std::vector<std::vector<ItemType>>* duplicates) {
   // Within hash buckets, compare elements (N^2, but buckets should be small).
   for (const auto& p : item_by_hash) {
@@ -168,7 +169,8 @@ std::map<uint32_t, uint32_t> deduplicate_restable_rows(
     res_table->delete_resource(pair.first);
   }
   OptimizeResourcesPass::report_metric(DEDUP_RES, "num_duplicate_rows_deleted",
-                                       dupe_to_canon.size(), mgr);
+                                       static_cast<int>(dupe_to_canon.size()),
+                                       mgr);
   return dupe_to_canon;
 }
 
@@ -185,10 +187,10 @@ std::map<uint32_t, uint32_t> build_remapping(
   // First build up a map that only takes into account the deleted rows.
   for (size_t index = 0; index < sorted_res_ids.size(); ++index) {
     uint32_t id = sorted_res_ids[index];
-    const int PACKAGE_IDENTIFIER_MASK = 0xFF000000;
+    const uint32_t PACKAGE_IDENTIFIER_MASK = 0xFF000000;
     uint32_t package_id = id & PACKAGE_IDENTIFIER_MASK;
     always_assert(package_id == PACKAGE_RESID_START);
-    const int TYPE_IDENTIFIER_MASK = 0x00FF0000;
+    const uint32_t TYPE_IDENTIFIER_MASK = 0x00FF0000;
     uint32_t type_id = id & TYPE_IDENTIFIER_MASK;
     if (type_id != current_type) {
       subtrahend_for_current_type = 0;
@@ -213,7 +215,7 @@ std::map<uint32_t, uint32_t> build_remapping(
 
     auto p = dupe_to_canon.find(id);
     if (p != dupe_to_canon.end()) {
-      int remapped_canon = old_to_new_ids[p->second];
+      uint32_t remapped_canon = old_to_new_ids[p->second];
       old_to_new_ids[id] = remapped_canon;
     }
 
@@ -342,7 +344,8 @@ void deduplicate_resource_files(PassManager& mgr, const std::string& zip_dir) {
 
   delete_files_absolute(files_to_delete);
   OptimizeResourcesPass::report_metric(DEDUP_RES, "deleted_files",
-                                       files_to_delete.size(), mgr);
+                                       static_cast<int>(files_to_delete.size()),
+                                       mgr);
 }
 
 // Types that when referred to from .xml files are usually just simple values (
