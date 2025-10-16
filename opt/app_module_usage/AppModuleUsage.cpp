@@ -44,7 +44,7 @@ void write_violations_to_file(const app_module_usage::Violations& violations,
     for (const auto& module : modules) {
       ofs << ", " << module;
     }
-    ofs << std::endl;
+    ofs << '\n';
   }
   ofs.close();
 }
@@ -73,7 +73,7 @@ void write_method_module_usages_to_file(
       }
       ofs << store->get_name();
     }
-    ofs << std::endl;
+    ofs << '\n';
   }
   ofs.close();
 }
@@ -105,7 +105,7 @@ void write_app_module_use_stats(
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   for (const auto& [module, use_count] : UnorderedIterable(counts)) {
     ofs << module->get_name() << ", " << use_count.direct_count << ", "
-        << use_count.reflective_count << std::endl;
+        << use_count.reflective_count << '\n';
   }
   ofs.close();
 }
