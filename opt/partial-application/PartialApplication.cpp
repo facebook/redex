@@ -80,7 +80,7 @@
 
 #include <cinttypes>
 
-#include <boost/format.hpp>
+#include <boost/format.hpp> // NOLINT
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
 
@@ -163,7 +163,7 @@ DexField* try_get_enum_utils_f_field(EnumUtilsCache& cache,
   always_assert(c);
   return *cache
               .get_or_create_and_assert_equal(
-                  *c,
+                  static_cast<int32_t>(*c),
                   [&](int32_t key) -> DexField* {
                     auto* cls =
                         type_class(DexType::make_type("Lredex/$EnumUtils;"));
@@ -234,7 +234,7 @@ ArgExclusivityVector get_arg_exclusivity(const UseDefChains& use_def_chains,
       }
       count++;
     }
-    float ownership = other_use ? 0.0 : (1.0 / count);
+    float ownership = other_use ? 0.0f : (1.0f / static_cast<float>(count));
     // TODO: We also likely need a move if there are more than 16 args
     // (including extra wides) live at this point.
     bool needs_move = needs_range && (other_use || count > 1);
@@ -351,13 +351,16 @@ bool filter(const RefChecker& ref_checker,
       always_assert(signed_value2);
       return filter(ref_checker, enum_utils_cache, *signed_value2);
     }
+    // NOLINTNEXTLINE(bugprone-branch-clone)
   } else if (const auto& string_value = value.maybe_get<StringDomain>()) {
     // TODO: Support strings.
     return false;
+    // NOLINTNEXTLINE(bugprone-branch-clone)
   } else if (const auto& class_or_none =
                  value.maybe_get<ConstantClassObjectDomain>()) {
     // TODO: Support class objects.
     return false;
+    // NOLINTNEXTLINE(bugprone-branch-clone)
   } else if (const auto& new_obj_or_none = value.maybe_get<NewObjectDomain>()) {
     return false;
   } else {
@@ -437,38 +440,37 @@ class CalleeInvocationSelector {
       always_assert(c);
       auto lit = *c;
       if (lit < -2147483648 || lit > 2147483647) {
-        return m_cost_config.const_signed_cost_base +
-               m_cost_config.const_signed_cost_addon_1 +
-               m_cost_config.const_signed_cost_addon_2 +
-               m_cost_config.const_signed_cost_addon_3;
-        ;
+        return static_cast<int16_t>(m_cost_config.const_signed_cost_base +
+                                    m_cost_config.const_signed_cost_addon_1 +
+                                    m_cost_config.const_signed_cost_addon_2 +
+                                    m_cost_config.const_signed_cost_addon_3);
       } else if (lit < -32768 || lit > 32767) {
-        return m_cost_config.const_signed_cost_base +
-               m_cost_config.const_signed_cost_addon_1 +
-               m_cost_config.const_signed_cost_addon_2;
+        return static_cast<int16_t>(m_cost_config.const_signed_cost_base +
+                                    m_cost_config.const_signed_cost_addon_1 +
+                                    m_cost_config.const_signed_cost_addon_2);
       } else if (lit < -8 || lit > 7) {
-        return m_cost_config.const_signed_cost_base +
-               m_cost_config.const_signed_cost_addon_1;
+        return static_cast<int16_t>(m_cost_config.const_signed_cost_base +
+                                    m_cost_config.const_signed_cost_addon_1);
       } else {
-        return m_cost_config.const_signed_cost_base;
+        return static_cast<int16_t>(m_cost_config.const_signed_cost_base);
       }
     } else if (const auto& singleton_value =
                    value.maybe_get<SingletonObjectDomain>()) {
-      return m_cost_config.const_singleton_cost;
+      return static_cast<int16_t>(m_cost_config.const_singleton_cost);
     } else if (const auto& obj_or_none =
                    value.maybe_get<ObjectWithImmutAttrDomain>()) {
       auto object = obj_or_none->get_constant();
       always_assert(object);
       if (try_get_enum_utils_f_field(m_enum_utils_cache, *object) != nullptr) {
-        return m_cost_config.const_obj_or_none_cost_1;
+        return static_cast<int16_t>(m_cost_config.const_obj_or_none_cost_1);
       } else {
         always_assert(object->jvm_cached_singleton);
         always_assert(object->attributes.size() == 1);
         const auto& signed_value2 =
             object->attributes.front().value.maybe_get<SignedConstantDomain>();
         always_assert(signed_value2);
-        return m_cost_config.const_obj_or_none_cost_2 +
-               const_value_cost(*signed_value2);
+        return static_cast<int16_t>(m_cost_config.const_obj_or_none_cost_2 +
+                                    const_value_cost(*signed_value2));
       }
     } else {
       not_reached_log("unexpected value: %s", SHOW(value));
@@ -505,15 +507,16 @@ class CalleeInvocationSelector {
     // - the cost of const instructions
     // - some extra potetnail move overhead if we need the range form
     int32_t pa_cross_dex_penalty =
-        2 * std::ceil(std::sqrt(m_callee_caller_classes));
-    int32_t pa_method_cost = m_cost_config.cost_method + pa_cross_dex_penalty +
-                             static_cast<unsigned long>(css->result_used);
+        static_cast<int32_t>(2 * std::ceil(std::sqrt(m_callee_caller_classes)));
+    int32_t pa_method_cost = static_cast<int32_t>(m_cost_config.cost_method) +
+                             pa_cross_dex_penalty +
+                             static_cast<int32_t>(css->result_used);
     const auto& bindings = css->arguments.bindings();
     for (const auto& r : bindings) {
       pa_method_cost += const_value_cost(r.second);
     }
     if (m_needs_range) {
-      pa_method_cost += m_src_regs;
+      pa_method_cost += static_cast<int32_t>(m_src_regs);
     }
 
     auto call_sites_savings =
@@ -618,8 +621,8 @@ class CalleeInvocationSelector {
         const auto src_idx = q.first;
         const auto& value = q.second;
         auto& aae = aaem[src_idx];
-        int32_t cost =
-            const_value_cost(value) * aae.ownership + 2 * aae.needs_move;
+        int32_t cost = static_cast<int32_t>(
+            const_value_cost(value) * aae.ownership + 2 * aae.needs_move);
         ac.emplace(src_idx, cost);
         auto key = get_key(value);
         m_total_argument_costs.at(src_idx)[key] += cost;
