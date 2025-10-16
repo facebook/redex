@@ -14,13 +14,13 @@
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexUtil.h"
+#include "DexStoreUtil.h"
 #include "GlobalConfig.h"
-#include "InterDex.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {
@@ -258,7 +258,8 @@ void SortRemainingClassesPass::run_pass(DexStoresVector& stores,
       always_assert_log(coldstart_method_ordering.count(meth) == 0,
                         "%s already found at position %u", SHOW(meth),
                         coldstart_method_ordering.at(meth));
-      coldstart_method_ordering[meth] = coldstart_method_ordering.size();
+      coldstart_method_ordering[meth] =
+          static_cast<unsigned int>(coldstart_method_ordering.size());
     }
 
     workqueue_run_for<size_t>(0, linear_dexen.size(), [&](size_t i) {

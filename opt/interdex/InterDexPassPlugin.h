@@ -11,7 +11,7 @@
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
-#include "DexStructure.h"
+#include "PassManager.h"
 #include "PluginRegistry.h"
 
 namespace interdex {

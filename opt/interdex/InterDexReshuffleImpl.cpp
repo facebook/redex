@@ -6,8 +6,8 @@
  */
 
 #include "InterDexReshuffleImpl.h"
-#include "ClassMerging.h"
 #include "InterDexPass.h"
+#include "Model.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -210,7 +210,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
       }
     }
     for (const auto& entry : UnorderedIterable(merging_type_method_usage)) {
-      num_new_methods += entry.second.size();
+      num_new_methods += static_cast<int>(entry.second.size());
     }
     mutable_dex.set_merging_type_usage(merging_type_usage);
     mutable_dex.set_merging_type_method_usage(merging_type_method_usage);
@@ -529,7 +529,7 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move,
     for (const auto& method : UnorderedIterable(dedupable_mrefs)) {
       MethodGroup group = method.second;
       // Source_dex updates
-      const int source_old_usage =
+      const size_t source_old_usage =
           source_dex.get_merging_type_method_usage(merging_type, group);
       always_assert(source_old_usage > 0);
       source_dex.decrease_merging_type_method_usage(merging_type, group);
@@ -538,7 +538,7 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move,
       }
       source_dex.decrease_num_deduped_methods();
       // Target_dex updates
-      const int target_old_usage =
+      const size_t target_old_usage =
           target_dex.get_merging_type_method_usage(merging_type, group);
       target_dex.increase_merging_type_method_usage(merging_type, group);
       if (target_old_usage == 0) {

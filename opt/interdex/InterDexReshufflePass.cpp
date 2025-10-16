@@ -7,14 +7,12 @@
 
 #include "InterDexReshufflePass.h"
 #include "ConfigFiles.h"
-#include "DedupStrings.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexStructure.h"
 #include "DexUtil.h"
 #include "InterDexPass.h"
 #include "PassManager.h"
-#include "Show.h"
 #include "Trace.h"
 
 namespace {

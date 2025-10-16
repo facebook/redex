@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "BaselineProfileConfig.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStructure.h"

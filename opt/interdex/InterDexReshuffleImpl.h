@@ -7,12 +7,13 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStructure.h"
 #include "PassManager.h"
-#include "StlUtil.h"
 #include "Walkers.h"
 
 namespace class_merging {
@@ -59,7 +60,7 @@ struct MergingInfo {
 // increase the size gain a little bit, but come with a cost of
 // “non-determinism” (due to rounding errors or space complexity if we compute
 // these differently).
-static constexpr gain_t power_value_for(size_t occurrences) {
+constexpr gain_t power_value_for(size_t occurrences) {
   return occurrences > 11 ? 0 : (((gain_t)1) << 44) >> (occurrences * 4);
 }
 
@@ -157,13 +158,15 @@ class MoveGains {
 
     m_gains_heap_size = m_gains_size;
     if (m_gains_heap.size() < m_gains_heap_size) {
-      m_gains_heap.resize(std::max((size_t)1024, m_gains_heap_size * 2));
+      m_gains_heap.resize(std::max<size_t>(1024, m_gains_heap_size * 2));
     }
-    std::iota(m_gains_heap.begin(), m_gains_heap.begin() + m_gains_heap_size,
+    std::iota(m_gains_heap.begin(),
+              m_gains_heap.begin() + static_cast<ptrdiff_t>(m_gains_heap_size),
               0);
-    std::make_heap(m_gains_heap.begin(),
-                   m_gains_heap.begin() + m_gains_heap_size,
-                   compare_indices_by_gains());
+    std::make_heap(
+        m_gains_heap.begin(),
+        m_gains_heap.begin() + static_cast<ptrdiff_t>(m_gains_heap_size),
+        compare_indices_by_gains());
 
     m_epoch += 1;
     m_moves_last_epoch = m_moves_this_epoch;
@@ -173,9 +176,10 @@ class MoveGains {
 
   std::optional<Move> pop_max_gain() {
     while (m_gains_heap_size > 0) {
-      std::pop_heap(m_gains_heap.begin(),
-                    m_gains_heap.begin() + m_gains_heap_size,
-                    compare_indices_by_gains());
+      std::pop_heap(
+          m_gains_heap.begin(),
+          m_gains_heap.begin() + static_cast<ptrdiff_t>(m_gains_heap_size),
+          compare_indices_by_gains());
       m_gains_heap_size -= 1;
 
       const size_t gain_index = m_gains_heap.at(m_gains_heap_size);
@@ -283,9 +287,9 @@ class MoveGains {
       const auto& refs = m_class_refs.at(cls);
       const auto& source = m_dexen.at(source_index);
       const auto& target = m_dexen.at(target_index);
-      int source_merging_type_usage =
+      auto source_merging_type_usage =
           source.get_merging_type_usage(merging_type);
-      int target_merging_type_usage =
+      auto target_merging_type_usage =
           target.get_merging_type_usage(merging_type);
       for (auto* fref : UnorderedIterable(refs.frefs)) {
         // If fref is not defined in cls, then we compute its corresponding gain
@@ -301,7 +305,8 @@ class MoveGains {
       }
       // We separately compute the gain for frefs *defined in* cls.
       always_assert(m_num_field_defs.count(merging_type));
-      gain += m_deduped_weight * m_num_field_defs.at(merging_type) *
+      gain += static_cast<gain_t>(m_deduped_weight *
+                                  m_num_field_defs.at(merging_type)) *
               compute_gain(source_merging_type_usage, target_merging_type_usage,
                            for_removal);
 
