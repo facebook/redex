@@ -231,7 +231,7 @@ class Concatenator {
         continue;
       case OPCODE_NEW_INSTANCE:
         if (insn->get_type() == m_config.string_builder) {
-          StrBuilderId new_id = builder_str.size();
+          StrBuilderId new_id = static_cast<StrBuilderId>(builder_str.size());
           builder_str[new_id] = "";
           registers.put_builder(RESULT_REGISTER, new_id);
 
@@ -270,7 +270,7 @@ class Concatenator {
         } else if (method == m_config.init_string) {
           const auto& str_search = registers.find_string(insn->src(1));
           if (str_search != boost::none) {
-            StrBuilderId new_id = builder_str.size();
+            StrBuilderId new_id = static_cast<StrBuilderId>(builder_str.size());
             builder_str[new_id] = *str_search;
             registers.put_builder(insn->src(0), new_id);
             continue;
@@ -393,10 +393,10 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
         // cfg.
         code->clear_cfg();
         code->build_cfg();
-        Stats stats =
+        Stats method_stats =
             Concatenator{config}.run(&code->cfg(), m, &methods_to_remove);
 
-        return stats;
+        return method_stats;
       },
       kDebug ? 1 : redex_parallel::default_num_threads());
 
