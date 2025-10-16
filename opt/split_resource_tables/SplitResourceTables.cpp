@@ -14,20 +14,16 @@
 #include <json/value.h>
 #include <map>
 
-#include "ApkResources.h"
 #include "ConfigFiles.h"
-#include "Creators.h"
 #include "DexClass.h"
 #include "IOUtil.h"
 #include "MethodReference.h"
-#include "OptimizeResources.h"
 #include "PassManager.h"
 #include "RClass.h"
 #include "RedexResources.h"
 #include "Resolver.h"
 #include "StaticIds.h"
 #include "Trace.h"
-#include "Walkers.h"
 #include "androidfw/ResourceTypes.h"
 
 #define RES_GET_IDENTIFIER_SIGNATURE \
@@ -64,6 +60,9 @@ void signatures_to_methods(
     auto* first = DexMethod::get_method(pair.first);
     always_assert_log(first != nullptr, "Did not find method %s",
                       pair.first.c_str());
+    auto* first_def = first->as_def();
+    always_assert_log(first_def != nullptr, "Method %s is not def",
+                      pair.first.c_str());
     auto* second = DexMethod::get_method(pair.second);
     always_assert_log(
         second != nullptr,
@@ -76,7 +75,7 @@ void signatures_to_methods(
     always_assert_log(resolved_second != nullptr,
                       "No static method def found for %s",
                       pair.second.c_str());
-    (*methods)[static_cast<DexMethod*>(first)] = resolved_second;
+    (*methods)[first_def] = resolved_second;
   }
 }
 
@@ -235,7 +234,7 @@ void compact_resource_ids(
       continue;
     }
     if (deleted_resources.count(id) == 0) {
-      uint32_t new_id = current_type_count++;
+      uint32_t new_id = static_cast<uint32_t>(current_type_count++);
       if (new_id != id) {
         TRACE(SPLIT_RES, 4, "Compacting %x to %x", id, new_id);
         old_to_remapped_ids->emplace(id, new_id);
@@ -347,7 +346,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
   std::vector<std::string> type_names;
   res_table->get_type_names(&type_names);
   for (size_t i = 0; i < type_names.size(); ++i) {
-    auto name = type_names[i];
+    const auto& name = type_names[i];
     if (!is_type_allowed(name)) {
       continue;
     }
@@ -404,9 +403,9 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
 
     for (size_t i = 0; i < num_ids; i++) {
       uint32_t old_id = t.relocate_ids[i];
-      uint32_t new_id =
-          PACKAGE_RESID_START |
-          static_cast<uint8_t>(t.type_idx) << TYPE_INDEX_BIT_SHIFT | i;
+      uint32_t new_id = PACKAGE_RESID_START |
+                        t.type_idx << TYPE_INDEX_BIT_SHIFT |
+                        static_cast<uint32_t>(i);
       old_to_remapped_ids.emplace(old_id, new_id);
       deleted_resources.emplace(old_id);
       TRACE(SPLIT_RES, 4, "Remapping %x to %x", old_id, new_id);
