@@ -67,7 +67,7 @@ struct TrackedValue {
   const IRInstruction* new_array_insn;
   uint32_t aput_insns_size{0};
   PatriciaTreeMap<uint32_t, const IRInstruction*> aput_insns{};
-  PatriciaTreeSet<const IRInstruction*> aput_insns_range{};
+  PatriciaTreeSet<const IRInstruction*> aput_insns_range;
 };
 
 struct TrackedValueHasher {
@@ -76,9 +76,10 @@ struct TrackedValueHasher {
     case TrackedValueKind::Other:
       return std::numeric_limits<size_t>::max();
     case TrackedValueKind::Literal:
-      return (size_t)tv.literal;
+      return static_cast<size_t>(tv.literal);
     case TrackedValueKind::NewArray:
-      return tv.length + (size_t)tv.new_array_insn ^ tv.aput_insns_size;
+      return tv.length + reinterpret_cast<size_t>(tv.new_array_insn) ^
+             tv.aput_insns_size;
     default:
       not_reached();
     }
@@ -104,7 +105,10 @@ bool operator==(const TrackedValue& a, const TrackedValue& b) {
 }
 
 TrackedValue make_other() {
-  return (TrackedValue){TrackedValueKind::Other, {0}, nullptr};
+  return (TrackedValue){.kind = TrackedValueKind::Other,
+                        .literal = 0,
+                        .new_array_insn = nullptr,
+                        .aput_insns_range = {}};
 }
 
 TrackedValue make_literal(const IRInstruction* instr) {
@@ -112,14 +116,19 @@ TrackedValue make_literal(const IRInstruction* instr) {
   always_assert(instr->has_literal());
   auto lit = instr->get_literal();
   always_assert(lit <= 2147483647 && lit >= -2147483648);
-  return (TrackedValue){
-      TrackedValueKind::Literal, {static_cast<int32_t>(lit)}, nullptr};
+  return (TrackedValue){.kind = TrackedValueKind::Literal,
+                        .literal = static_cast<int32_t>(lit),
+                        .new_array_insn = nullptr,
+                        .aput_insns_range = {}};
 }
 
-TrackedValue make_array(int32_t length, const IRInstruction* instr) {
+TrackedValue make_array(uint32_t length, const IRInstruction* instr) {
   always_assert(length >= 0);
   always_assert(instr->opcode() == OPCODE_NEW_ARRAY);
-  return (TrackedValue){TrackedValueKind::NewArray, {length}, instr};
+  return (TrackedValue){.kind = TrackedValueKind::NewArray,
+                        .length = length,
+                        .new_array_insn = instr,
+                        .aput_insns_range = {}};
 }
 
 bool is_new_array(const TrackedValue& tv) {
@@ -288,7 +297,7 @@ class Analyzer final
         always_assert(length_literal >= 0 && length_literal <= 2147483647);
         current_state->set(RESULT_REGISTER,
                            TrackedDomain(make_array(
-                               static_cast<int32_t>(length_literal), insn)));
+                               static_cast<uint32_t>(length_literal), insn)));
       }
       break;
     }
