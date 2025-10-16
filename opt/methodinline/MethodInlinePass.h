@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include "MethodInliner.h"
 #include "Pass.h"
 

@@ -54,13 +54,13 @@ class MethodContextContext {
     };
     const boost::optional<Vals> m_vals;
 
-    uint32_t m_params{0};
-    uint32_t m_regs{0};
-    uint32_t m_insns{0};
-    uint32_t m_opcodes{0};
-    uint32_t m_blocks{0};
-    uint32_t m_edges{0};
-    uint32_t m_num_loops{0};
+    size_t m_params{0};
+    reg_t m_regs{0};
+    size_t m_insns{0};
+    size_t m_opcodes{0};
+    size_t m_blocks{0};
+    size_t m_edges{0};
+    size_t m_num_loops{0};
     uint32_t m_deepest_loop{0};
 
    private:

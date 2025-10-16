@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include "Pass.h"
 
 class BridgeSynthInlinePass : public Pass {

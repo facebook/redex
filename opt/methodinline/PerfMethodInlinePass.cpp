@@ -134,9 +134,11 @@ void InlineForSpeedMethodProfiles::compute_hot_methods() {
     // Find the lowest score that is within the given percentile
     constexpr size_t MIN_SIZE = 1;
     size_t warm_size = std::max(
-        MIN_SIZE, static_cast<size_t>(popular_set_size * WARM_PERCENTILE));
+        MIN_SIZE, static_cast<size_t>(static_cast<double>(popular_set_size) *
+                                      WARM_PERCENTILE));
     size_t hot_size = std::max(
-        MIN_SIZE, static_cast<size_t>(popular_set_size * HOT_PERCENTILE));
+        MIN_SIZE, static_cast<size_t>(static_cast<double>(popular_set_size) *
+                                      HOT_PERCENTILE));
     // the "top" of the queue is actually the minimum warm/hot score
     using pq =
         std::priority_queue<double, std::vector<double>, std::greater<double>>;
@@ -323,8 +325,9 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
         TRACE(METH_PROF,
               5,
               "[InlineForSpeedDecisionTrees%s] %.3f: "
-              "%s!%u!%u!%u!%1.5f!%1.5f!%u!%u!%u!%u!%u!%s!%u!%u!%u!%1.5f!%1.5f!%"
-              "u!%u!%u!%u!%u!%s",
+              "%s!%zu!%zu!%zu!%1.5f!%1.5f!%zu!%zu!%u!%zu!%u!%s!%zu!%zu!%zu!%1."
+              "5f!%1.5f!%"
+              "zu!%zu!%u!%zu!%u!%s",
               suffix,
               accepted,
               // Caller
@@ -737,8 +740,9 @@ class InlineForSpeedCallerList final : public InlineForSpeedBase {
         TRACE(METH_PROF,
               5,
               "[InlineForSpeedDecisionTrees] %zu: "
-              "%s!%u!%u!%u!%1.5f!%1.5f!%u!%u!%u!%u!%u!%s!%u!%u!%u!%1.5f!%1.5f!%"
-              "u!%u!%u!%u!%u!%s",
+              "%s!%zu!%zu!%zu!%1.5f!%1.5f!%zu!%zu!%u!%zu!%u!%s!%zu!%zu!%zu!%1."
+              "5f!%1.5f!%"
+              "zu!%zu!%u!%zu!%u!%s",
               (size_t)0,
               // Caller
               SHOW(caller_method),
@@ -790,7 +794,7 @@ class InlineForSpeedCallerList final : public InlineForSpeedBase {
         if (mref != nullptr) {
           ret.insert(mref);
         } else {
-          std::cerr << "Warning: Could not find " << str_mref << std::endl;
+          std::cerr << "Warning: Could not find " << str_mref << '\n';
         }
       }
     };
