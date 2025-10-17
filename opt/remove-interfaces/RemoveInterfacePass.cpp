@@ -46,7 +46,7 @@ std::unique_ptr<DexAnnotationSet> get_anno_set(DexType* anno_type) {
       anno_type, DexAnnotationVisibility::DAV_BUILD));
   return anno_set;
 }
-DexMethod* materialized_dispatch(DexType* owner, MethodCreator&& mc) {
+DexMethod* materialized_dispatch(DexType* owner, MethodCreator mc) {
   auto* dispatch = mc.create();
   TRACE(RM_INTF,
         9,
@@ -433,7 +433,7 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
   // If not all implementors are matched, return an empty dispatch set; the
   // caller will bail on the current interface.
   if (!implementors.empty()) {
-    return MethodOrderedSet();
+    targets.clear();
   }
   return targets;
 }
