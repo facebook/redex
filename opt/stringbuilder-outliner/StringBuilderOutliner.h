@@ -5,7 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/optional.hpp>
+#pragma once
+
+#include <boost/optional.hpp> // NOLINT
 
 #include <sparta/AbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
