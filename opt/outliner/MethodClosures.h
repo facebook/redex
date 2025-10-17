@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "DeterministicContainers.h"
-#include "MethodSplittingConfig.h"
 #include "ReducedControlFlow.h"
 
 namespace method_splitting_impl {

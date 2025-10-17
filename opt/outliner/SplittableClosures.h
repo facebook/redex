@@ -7,8 +7,11 @@
 
 #pragma once
 
+#include <optional>
+
 #include "ConcurrentContainers.h"
 #include "MethodClosures.h"
+#include "MethodSplittingConfig.h"
 
 namespace method_splitting_impl {
 
@@ -31,7 +34,7 @@ struct SplittableClosure {
   std::vector<ClosureArgument> args;
   double rank;
   size_t added_code_size;
-  HotSplitKind hot_split_kind;
+  std::optional<HotSplitKind> hot_split_kind;
   bool is_large_packed_switch{false};
   bool creates_large_sparse_switch{false};
   bool destroys_large_packed_switch{false};

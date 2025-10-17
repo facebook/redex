@@ -280,9 +280,9 @@ static size_t hash_value(const Candidate& c) {
   size_t hash = c.size;
   boost::hash_combine(hash, c.root);
   for (const auto* arg_type : c.arg_types) {
-    boost::hash_combine(hash, (size_t)arg_type);
+    boost::hash_combine(hash, reinterpret_cast<size_t>(arg_type));
   }
-  boost::hash_combine(hash, (size_t)c.res_type);
+  boost::hash_combine(hash, reinterpret_cast<size_t>(c.res_type));
   return hash;
 }
 static StableHash stable_hash_value(const Candidate& c) {
@@ -1581,7 +1581,8 @@ static void get_beneficial_candidates(
       const auto& c = *q.second;
       if (candidate_ids.count(c) == 0u) {
         always_assert(candidate_ids.size() < (1ULL << 32));
-        CandidateId candidate_id = candidate_ids.size();
+        CandidateId candidate_id =
+            static_cast<CandidateId>(candidate_ids.size());
         method_candidate_ids.insert(candidate_id);
         candidate_ids.emplace(c, candidate_id);
         candidates_with_infos->push_back(
@@ -1642,7 +1643,8 @@ class MethodNameGenerator {
     if (obfuscated_name) {
       name += OUTLINED_METHOD_SHORT_NAME_PREFIX;
       std::string identifier_name;
-      obfuscate_utils::compute_identifier(short_id_counter++, &identifier_name);
+      obfuscate_utils::compute_identifier(static_cast<int>(short_id_counter++),
+                                          &identifier_name);
       name += identifier_name;
     } else {
       name += OUTLINED_METHOD_NAME_PREFIX;
@@ -2615,8 +2617,8 @@ UnorderedMap<const DexMethodRef*, double> get_methods_global_order(
           interaction_id.c_str(), index);
     for (const auto& q : UnorderedIterable(method_stats)) {
       auto& global_order = methods_global_order[q.first];
-      global_order =
-          std::min(global_order, index * 100 + q.second.order_percent);
+      global_order = std::min(global_order, static_cast<double>(index * 100) +
+                                                q.second.order_percent);
     }
   }
   auto ordered_methods = unordered_to_ordered_keys(
@@ -3295,7 +3297,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
           outline(m_config, mgr, store, store_dependencies, dex_state, min_sdk,
                   &candidates_with_infos, &candidate_ids_by_methods,
                   &outlined_methods, iteration, &num_reused_methods);
-      outlined_methods_to_reorder.push_back({&dex, newly_outlined_methods});
+      outlined_methods_to_reorder.emplace_back(&dex, newly_outlined_methods);
       auto affected_methods = count_affected_methods(newly_outlined_methods);
       auto total_methods = count_methods(dex);
       if (total_methods > 0) {

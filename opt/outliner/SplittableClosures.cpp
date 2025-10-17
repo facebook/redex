@@ -7,6 +7,7 @@
 
 #include "SplittableClosures.h"
 
+#include <optional>
 #include <vector>
 
 #include <sparta/PatriciaTreeSet.h>
@@ -31,16 +32,16 @@ using namespace outliner_impl;
 using namespace uninitialized_objects;
 
 struct ScoredClosure {
-  cfg::Block* switch_block;
+  cfg::Block* switch_block{nullptr};
   std::vector<const Closure*> closures;
-  UnorderedSet<const ReducedBlock*> reduced_components{};
+  UnorderedSet<const ReducedBlock*> reduced_components;
   size_t split_size{};
   size_t remaining_size{};
-  HotSplitKind hot_split_kind{};
+  std::optional<HotSplitKind> hot_split_kind{std::nullopt};
   bool is_large_packed_switch{false};
   bool creates_large_sparse_switch{false};
   bool destroys_large_packed_switch{false};
-  std::vector<ClosureArgument> args{};
+  std::vector<ClosureArgument> args;
 
   int is_switch() const { return switch_block != nullptr ? 1 : 0; }
 
@@ -118,7 +119,12 @@ std::optional<ScoredClosure> score(
     cfg::Block* switch_block,
     bool is_large_packed_switch,
     const std::vector<const Closure*>& closures) {
-  ScoredClosure sc{switch_block, closures};
+  ScoredClosure sc{
+      .switch_block = switch_block,
+      .closures = closures,
+      .reduced_components = {},
+      .args = {},
+  };
   for (const auto* c : closures) {
     insert_unordered_iterable(sc.reduced_components, c->reduced_components);
   }
@@ -166,7 +172,7 @@ std::optional<ScoredClosure> score(
           ? 0
           : estimated_remaining_size - remaining_size_reduction;
 
-  switch (sc.hot_split_kind) {
+  switch (sc.hot_split_kind.value()) {
   case HotSplitKind::Hot:
   case HotSplitKind::HotCold:
     if (estimated_remaining_size < config.min_hot_split_size) {
@@ -205,8 +211,9 @@ std::optional<ScoredClosure> score(
   sc.remaining_size = sc.remaining_size < remaining_size_reduction
                           ? 0
                           : sc.remaining_size - remaining_size_reduction;
-  auto overhead_ratio =
-      (sc.split_size + sc.remaining_size) * 1.0 / mcs.original_size - 1.0;
+  auto overhead_ratio = static_cast<double>(sc.split_size + sc.remaining_size) /
+                            static_cast<double>(mcs.original_size) -
+                        1.0;
   if (overhead_ratio > max_overhead_ratio) {
     return std::nullopt;
   }
@@ -557,8 +564,9 @@ std::vector<SplittableClosure> to_splittable_closures(
       oss << ::show(method->get_code()->cfg());
       TRACE(MS, 2, "%s", oss.str().c_str());
     }
-    auto rank = sc.split_size * mcs->original_size * 1.0 /
-                (sc.split_size + sc.remaining_size);
+    auto rank = static_cast<double>(sc.split_size) *
+                static_cast<double>(mcs->original_size) /
+                static_cast<double>(sc.split_size + sc.remaining_size);
     auto added_code_size =
         sc.split_size + sc.remaining_size - mcs->original_size;
     splittable_closures.push_back((SplittableClosure){
@@ -698,7 +706,12 @@ select_splittable_closures_from_top_level_switch_cases(
         // exception.
         continue;
       }
-      ScoredClosure sc{/* switch_block */ nullptr, {&c}};
+      ScoredClosure sc{
+          .switch_block = nullptr,
+          .closures = {&c},
+          .reduced_components = {},
+          .args = {},
+      };
       insert_unordered_iterable(sc.reduced_components, c.reduced_components);
       scored_closures.emplace_back(std::move(sc));
     }

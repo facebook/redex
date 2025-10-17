@@ -7,10 +7,10 @@
 
 #pragma once
 
+#include <optional>
+
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
-#include "DexClass.h"
-#include "SourceBlocks.h"
 
 namespace method_splitting_impl {
 
@@ -23,14 +23,14 @@ enum class HotSplitKind {
   Cold,
 };
 
-std::string_view describe(HotSplitKind kind);
+std::string_view describe(std::optional<HotSplitKind> kind);
 
 struct ReducedBlock;
 
 struct ReducedEdge {
   const ReducedBlock* src{nullptr};
   const ReducedBlock* target{nullptr};
-  UnorderedSet<const cfg::Edge*> edges{};
+  UnorderedSet<const cfg::Edge*> edges;
 };
 
 struct ReducedBlock {
@@ -65,7 +65,7 @@ class ReducedControlFlowGraph {
  private:
   ReducedEdge* get_edge(ReducedBlock* src, ReducedBlock* target) {
     auto [it, _] =
-        m_reduced_edges[src].emplace(target, ReducedEdge{src, target});
+        m_reduced_edges[src].emplace(target, ReducedEdge{src, target, {}});
     return &it->second;
   }
   cfg::ControlFlowGraph& m_cfg;

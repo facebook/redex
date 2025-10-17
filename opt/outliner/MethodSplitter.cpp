@@ -7,12 +7,12 @@
 
 #include "MethodSplitter.h"
 
-#include "ClosureAggregator.h"
 #include "ConcurrentContainers.h"
 #include "DexLimits.h"
 #include "InitClassesWithSideEffects.h"
 #include "MethodClosures.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -231,7 +231,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
         stats->split_count_switches++;
         stats->split_count_switch_cases += splittable_closure->closures.size();
       }
-      switch (splittable_closure->hot_split_kind) {
+      switch (splittable_closure->hot_split_kind.value()) {
       case HotSplitKind::Hot: {
         stats->hot_split_count++;
         if (concurrent_new_hot_split_methods != nullptr) {
@@ -356,7 +356,7 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   auto make_new_sb = [&](auto* method, auto& template_sb) {
     std::optional<SourceBlock::Val> opt_val;
     // TODO: For the hot case, compute "maximum" val over all closures.
-    if (splittable_closure.hot_split_kind != HotSplitKind::Hot) {
+    if (splittable_closure.hot_split_kind.value() != HotSplitKind::Hot) {
       opt_val = SourceBlock::Val{0, 0};
     }
     return source_blocks::clone_as_synthetic(template_sb, method, opt_val);

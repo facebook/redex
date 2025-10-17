@@ -305,8 +305,6 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
   case OPCODE_FLOAT_TO_INT:
   case OPCODE_DOUBLE_TO_INT:
   case OPCODE_LONG_TO_INT:
-    return type::_int();
-
   case IOPCODE_R_CONST:
     return type::_int();
 

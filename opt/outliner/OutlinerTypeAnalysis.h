@@ -7,9 +7,6 @@
 
 #pragma once
 
-#include <utility>
-#include <vector>
-
 #include "ConstantUses.h"
 #include "DeterministicContainers.h"
 #include "IRInstruction.h"
