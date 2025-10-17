@@ -11,7 +11,6 @@
 #include "InterDexPass.h"
 #include "Pass.h"
 #include "PassManager.h"
-#include "PluginRegistry.h"
 
 namespace method_profiles {
 class MethodProfiles;

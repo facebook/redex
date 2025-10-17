@@ -92,7 +92,7 @@ bool treat_all_blocks_as_hot(size_t dexnr, DexMethod* method) {
 void DedupStrings::run(DexStoresVector& stores) {
   // For now, we are only trying to optimize strings in the first store.
   // (It should be possible to generalize in the future.)
-  DexClassesVector& dexen = stores[0].get_dexen();
+  DexClassesVector& dexen = stores.at(0).get_dexen();
   const auto scope = build_class_scope(dexen);
 
   // For each method, remember which dex it's defined in.
@@ -248,14 +248,14 @@ DexMethod* DedupStrings::make_const_string_loader_method(
   } else {
     std::map<int, MethodBlock*> cases;
     for (size_t idx = 0; idx < strings.size() - 1; ++idx) {
-      cases[idx] = nullptr;
+      cases[static_cast<int>(idx)] = nullptr;
     }
     MethodBlock* default_block = main_block->switch_op(id_arg, cases);
     default_block->load_const(res_var, strings.at(strings.size() - 1));
     main_block->ret(string_type, res_var);
 
     for (size_t idx = 0; idx < strings.size() - 1; ++idx) {
-      auto* case_block = cases.at(idx);
+      auto* case_block = cases.at(static_cast<int>(idx));
       case_block->load_const(res_var, strings.at(idx));
       // Note that a goto instruction at the end of the case block is
       // automatically generated (and then later replaced by a return
@@ -352,7 +352,7 @@ DedupStrings::get_occurrences(
 
     const auto& dexes = it.second;
     for (const auto dexnr : UnorderedIterable(dexes)) {
-      auto& strings = non_load_strings[dexnr];
+      auto& strings = non_load_strings.at(dexnr);
       strings.emplace(str);
     }
   }
@@ -540,7 +540,7 @@ DedupStrings::get_strings_to_dedup(
     dedup_string_info.duplicate_string_loads = duplicate_string_loads;
     dedup_string_info.dexes_to_dedup = dexes_to_dedup;
     strings_to_dedup.emplace(s, std::move(dedup_string_info));
-    strings_in_dexes[hosting_dexnr].push_back(s);
+    strings_in_dexes.at(hosting_dexnr).push_back(s);
 
     TRACE(DS, 3,
           "[dedup strings] non perf sensitive string: {%s} is deduped in %zu "
@@ -554,7 +554,7 @@ DedupStrings::get_strings_to_dedup(
   // Order strings to give more often used strings smaller indices;
   // generate factory methods; remember details in dedup-info data structure
   for (size_t dexnr = 0; dexnr < dexen.size(); ++dexnr) {
-    std::vector<const DexString*>& strings = strings_in_dexes[dexnr];
+    std::vector<const DexString*>& strings = strings_in_dexes.at(dexnr);
     if (strings.empty()) {
       continue;
     }
