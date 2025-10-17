@@ -38,7 +38,6 @@
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "PassManager.h"
-#include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
@@ -204,7 +203,7 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
   // Do the goto-instructions need any src that the branch-instructions
   // destroy?
   for (size_t i = 0; i < ordered_instructions_in_goto_block_index_end; i++) {
-    IRInstruction* insn = ordered_instructions_in_goto_block[i];
+    IRInstruction* insn = ordered_instructions_in_goto_block.at(i);
     for (auto src : insn->srcs()) {
       if (destroyed_dests.count(src) != 0u) {
         TRACE(UCM, 5,
@@ -305,7 +304,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
     for (auto* instruction_to_insert : instructions_to_insert) {
       auto dest = instruction_to_insert->dest();
       const auto& srcs = if_insn->srcs();
-      for (size_t i = 0; i < srcs.size(); i++) {
+      for (reg_t i = 0; i < srcs.size(); i++) {
         if (srcs[i] == dest) {
           uint32_t temp;
           auto temp_it = temps.find(dest);
