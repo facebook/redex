@@ -106,7 +106,7 @@ ssize_t find_matching_package(
     const std::vector<std::string>& allowed_packages) {
   for (size_t i = 0; i < allowed_packages.size(); i++) {
     if (classname.rfind("L" + allowed_packages[i]) == 0) {
-      return i;
+      return static_cast<ssize_t>(i);
     }
   }
   return -1;
@@ -606,9 +606,6 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     }
 
     if (!can_rename_if_also_renaming_xml(clazz)) {
-      const auto& keep_reasons = clazz->rstate.keep_reasons();
-      auto rule =
-          !keep_reasons.empty() ? show(*unordered_any(keep_reasons)) : "";
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
                                       get_keep_rule(clazz)};
@@ -713,7 +710,8 @@ void RenameClassesPassV2::evolve_name_mapping(
     auto* dtype = clazz->get_type();
     const auto* oldname = dtype->get_name();
 
-    uint32_t globalClassIndex = *nextGlobalClassIndex + i;
+    uint32_t globalClassIndex =
+        *nextGlobalClassIndex + static_cast<uint32_t>(i);
     std::array<char, Locator::encoded_global_class_index_max> array;
     char* descriptor = array.data();
     always_assert(globalClassIndex != Locator::invalid_global_class_index);
@@ -856,10 +854,11 @@ bool RenameClassesPassV2::evolve_name_mapping_avoiding_collisions(
   for (auto* clazz : dex) {
     if (unrenamable_classes.count(clazz) != 0u) {
       int32_t java_hash = clazz->get_name()->java_hashcode();
-      initial_hashes.push_back(*(uint32_t*)&java_hash);
+      initial_hashes.push_back(static_cast<uint32_t>(java_hash));
     }
   }
-  ArtTypeLookupTable current_table(dex.size(), initial_hashes);
+  ArtTypeLookupTable current_table(static_cast<uint32_t>(dex.size()),
+                                   initial_hashes);
 
   std::set<uint32_t> collision_indices;
   auto skipped_indices_it = skipped_indices->begin();
@@ -898,7 +897,7 @@ bool RenameClassesPassV2::evolve_name_mapping_avoiding_collisions(
       prefixed_descriptor = prepend_package_prefix(descriptor);
       int32_t java_hash =
           java_hashcode_of_utf8_string(prefixed_descriptor.c_str());
-      uint32_t hash = *(uint32_t*)&java_hash;
+      uint32_t hash = static_cast<uint32_t>(java_hash);
       if (current_table.has_bucket(hash)) {
         TRACE(RENAME, 2, "Avoided collision for '%s'",
               prefixed_descriptor.c_str());
@@ -1080,8 +1079,7 @@ UnorderedSet<DexClass*> RenameClassesPassV2::get_renamable_classes(
                         std::pow(Locator::global_class_index_digits_base,
                                  Locator::global_class_index_digits_max),
                     "scope size %zu too large", scope.size());
-  int total_classes = scope.size();
-  mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
+  mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, scope.size());
 
   return get_renamable_classes(scope);
 }
@@ -1134,7 +1132,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
 
   mgr.incr_metric(METRIC_DIGITS, digits);
 
-  TRACE(RENAME, 1, "String savings, at least %d-%d = %d bytes ",
+  TRACE(RENAME, 1, "String savings, at least %u-%u = %u bytes ",
         m_base_strings_size, m_ren_strings_size,
         m_base_strings_size - m_ren_strings_size);
 }
