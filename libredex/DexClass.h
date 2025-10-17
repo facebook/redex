@@ -273,7 +273,7 @@ class DexFieldRef {
   bool m_concrete;
   bool m_external;
 
-  ~DexFieldRef() {}
+  virtual ~DexFieldRef() = default;
   DexFieldRef(DexType* container, const DexString* name, DexType* type) {
     m_spec.cls = container;
     m_spec.name = name;

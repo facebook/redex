@@ -144,7 +144,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
 
   // Write meta info of the meta file: the type of the meta file and version.
-  ofs << "#,simple-method-tracing,1.0" << std::endl;
+  ofs << "#,simple-method-tracing,1.0\n";
 
   size_t method_id = 0;
   size_t excluded = 0;
@@ -295,9 +295,10 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   for (size_t i = 0; i < kTotalSize; ++i) {
     TRACE(INSTRUMENT, 6, "Sharded %zu => [%zu][%zu] %s", i, (i % NUM_SHARDS),
           (i / NUM_SHARDS), SHOW(to_instrument[i]));
-    instrument_onMethodBegin(to_instrument[i],
-                             (i / NUM_SHARDS) * options.num_stats_per_method,
-                             analysis_method_map.at((i % NUM_SHARDS) + 1));
+    instrument_onMethodBegin(
+        to_instrument[i],
+        static_cast<int>((i / NUM_SHARDS) * options.num_stats_per_method),
+        analysis_method_map.at(static_cast<int>(i % NUM_SHARDS) + 1));
   }
 
   TRACE(INSTRUMENT,
@@ -310,9 +311,11 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   for (size_t i = 0; i < NUM_SHARDS; ++i) {
     size_t n = kTotalSize / NUM_SHARDS + (i < kTotalSize % NUM_SHARDS ? 1 : 0);
     // Get obfuscated name corresponding to each sMethodStat[1-N] field.
-    const auto field_name = array_fields.at(i + 1)->get_name()->str();
-    InstrumentPass::patch_array_size(analysis_cls, field_name,
-                                     options.num_stats_per_method * n);
+    const auto field_name =
+        array_fields.at(static_cast<int>(i) + 1)->get_name()->str();
+    InstrumentPass::patch_array_size(
+        analysis_cls, field_name,
+        static_cast<int>(options.num_stats_per_method) * static_cast<int>(n));
   }
 
   // Patch method count constant.
@@ -321,7 +324,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       "sNumStaticallyInstrumented");
   always_assert(field != nullptr);
   InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
-                                     kTotalSize);
+                                     static_cast<int>(kTotalSize));
 
   field =
       analysis_cls->find_field_from_simple_deobfuscated_name("sProfileType");
@@ -449,9 +452,8 @@ void InstrumentPass::patch_array_size(DexClass* analysis_cls,
       });
 
   if (!patched) {
-    std::cerr << "[InstrumentPass] error: cannot patch array size."
-              << std::endl;
-    std::cerr << show(clinit->get_code()->cfg()) << std::endl;
+    std::cerr << "[InstrumentPass] error: cannot patch array size.\n";
+    std::cerr << show(clinit->get_code()->cfg()) << '\n';
     exit(1);
   }
 
@@ -600,7 +602,7 @@ void maybe_unset_dynamic_analysis(
       // optimizations, e.g., by FinalInline.
       field->set_access(field->get_access() | DexAccessFlags::ACC_FINAL);
 
-      redex_assert(field->get_type() == type::_int());
+      always_assert(field->get_type() == type::_int());
       field->set_value(std::unique_ptr<DexEncodedValue>(
           new DexEncodedValuePrimitive(DexEncodedValueTypes::DEVT_INT, 0)));
 
@@ -813,10 +815,9 @@ InstrumentPass::generate_sharded_analysis_methods(
 
   if (template_method == nullptr) {
     std::cerr << "[InstrumentPass] error: failed to find template method \'"
-              << template_method_full_name << "\' in " << show(*cls)
-              << std::endl;
+              << template_method_full_name << "\' in " << show(*cls) << '\n';
     for (const auto& m : cls->get_dmethods()) {
-      std::cerr << " " << show(m) << std::endl;
+      std::cerr << " " << show(m) << '\n';
     }
     exit(1);
   }
@@ -848,11 +849,11 @@ InstrumentPass::generate_sharded_analysis_methods(
         [&](DexMethod* /*method*/,
             cfg::Block*,
             const std::vector<IRInstruction*>& insts) {
-          DexField* field = static_cast<DexField*>(insts[0]->get_field());
+          DexField* field = dynamic_cast<DexField*>(insts[0]->get_field());
           if (field->get_simple_deobfuscated_name() ==
               InstrumentPass::STATS_FIELD_NAME) {
             // Set the new field created from patch_sharded_arrays.
-            insts[0]->set_field(array_fields.at(i));
+            insts[0]->set_field(array_fields.at(static_cast<int>(i)));
             patched = true;
             return;
           }
@@ -862,7 +863,7 @@ InstrumentPass::generate_sharded_analysis_methods(
                       SHOW(new_method));
     method_names.insert(new_name);
     new_method->get_code()->build_cfg();
-    new_analysis_methods[i] = new_method;
+    new_analysis_methods[static_cast<int>(i)] = new_method;
     TRACE(INSTRUMENT, 2, "Created %s with %s", SHOW(new_method),
           SHOW(array_fields.at(i)));
   }
@@ -906,7 +907,7 @@ InstrumentPass::patch_sharded_arrays(
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
         DexField* template_field =
-            static_cast<DexField*>(insts[2]->get_field());
+            dynamic_cast<DexField*>(insts[2]->get_field());
         if (template_field->get_simple_deobfuscated_name() !=
             InstrumentPass::STATS_FIELD_NAME) {
           return;
@@ -918,14 +919,14 @@ InstrumentPass::patch_sharded_arrays(
         // human-readable names here.
         for (size_t i = 1; i <= num_shards; i++) {
           const auto new_name =
-              suggested_names.count(i) != 0u
-                  ? suggested_names.at(i)
+              suggested_names.count(static_cast<int>(i)) != 0u
+                  ? suggested_names.at(static_cast<int>(i))
                   : InstrumentPass::STATS_FIELD_NAME + std::to_string(i);
           auto deobfuscated_name = template_field->get_deobfuscated_name();
           boost::replace_first(deobfuscated_name,
                                InstrumentPass::STATS_FIELD_NAME, new_name);
 
-          DexField* new_field = static_cast<DexField*>(
+          DexField* new_field = dynamic_cast<DexField*>(
               DexField::make_field(template_field->get_class(),
                                    DexString::make_string(new_name),
                                    template_field->get_type()));
@@ -935,7 +936,7 @@ InstrumentPass::patch_sharded_arrays(
               template_field->get_static_value() == nullptr
                   ? nullptr
                   : template_field->get_static_value()->clone());
-          fields[i] = new_field;
+          fields[static_cast<int>(i)] = new_field;
           TRACE(INSTRUMENT, 2, "Created array: %s", SHOW(new_field));
           cls->add_field(new_field);
         }
@@ -951,7 +952,7 @@ InstrumentPass::patch_sharded_arrays(
                   ->set_dest(insts[1]->dest()),
               (new IRInstruction(OPCODE_SPUT_OBJECT))
                   ->set_src(0, insts[2]->src(0))
-                  ->set_field(fields.at(i))};
+                  ->set_field(fields.at(static_cast<int>(i)))};
           if (i == 1) {
             cfg.replace_insns(pos_it, new_insts);
           } else {
@@ -983,7 +984,8 @@ InstrumentPass::patch_sharded_arrays(
   auto* field =
       cls->find_field_from_simple_deobfuscated_name("sMethodStatsArray");
   always_assert(field != nullptr);
-  InstrumentPass::patch_array_size(cls, field->get_name()->str(), num_shards);
+  InstrumentPass::patch_array_size(cls, field->get_name()->str(),
+                                   static_cast<int>(num_shards));
   patched = false;
   walk::matching_opcodes_in_block(
       *clinit,
@@ -992,8 +994,8 @@ InstrumentPass::patch_sharded_arrays(
       [&](DexMethod* /*method*/,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
-        DexField* field = static_cast<DexField*>(insts[2]->get_field());
-        if (field->get_simple_deobfuscated_name() != "sMethodStatsArray") {
+        DexField* inst_field = dynamic_cast<DexField*>(insts[2]->get_field());
+        if (inst_field->get_simple_deobfuscated_name() != "sMethodStatsArray") {
           return;
         }
 
@@ -1004,11 +1006,12 @@ InstrumentPass::patch_sharded_arrays(
           auto pos_it = cfg.find_insn(insts[2]);
           cfg.insert_after(
               pos_it,
-              {(new IRInstruction(OPCODE_SGET_OBJECT))->set_field(fields.at(i)),
+              {(new IRInstruction(OPCODE_SGET_OBJECT))
+                   ->set_field(fields.at(static_cast<int>(i))),
                (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
                    ->set_dest(vY),
                (new IRInstruction(OPCODE_CONST))
-                   ->set_literal(i - 1)
+                   ->set_literal(static_cast<int64_t>(i - 1))
                    ->set_dest(vN),
                (new IRInstruction(OPCODE_APUT_OBJECT))
                    ->set_srcs_size(3)
@@ -1067,8 +1070,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   pm.set_metric("blocklist_size", m_options.blocklist.size());
 
   if (m_options.analysis_class_name.empty()) {
-    std::cerr << "[InstrumentPass] error: empty analysis class name."
-              << std::endl;
+    std::cerr << "[InstrumentPass] error: empty analysis class name.\n";
     exit(1);
   }
 
@@ -1077,7 +1079,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
       g_redex->get_type(DexString::get_string(m_options.analysis_class_name));
   if (analysis_class_type == nullptr) {
     std::cerr << "[InstrumentPass] error: cannot find analysis class: "
-              << m_options.analysis_class_name << std::endl;
+              << m_options.analysis_class_name << '\n';
     exit(1);
   }
 
@@ -1103,7 +1105,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
       std::cerr
           << "[InstrumentPass] Analysis class must be in the primary dex. "
              "It was in "
-          << dex_loc << std::endl;
+          << dex_loc << '\n';
       exit(1);
     }
   }

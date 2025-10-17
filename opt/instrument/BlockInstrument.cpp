@@ -315,9 +315,9 @@ void write_metadata(const ConfigFiles& cfg,
   // Write a short metadata of this metadata file in the first two lines.
   auto file_name = cfg.metafile(metadata_base_file_name);
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
-  ofs << "profile_type,version,num_methods" << std::endl;
+  ofs << "profile_type,version,num_methods\n";
   ofs << strategy << "," << PROFILING_DATA_VERSION << "," << all_info.size()
-      << std::endl;
+      << '\n';
 
   // The real CSV-style metadata follows.
   if (strategy == "basic_block_hit_count") {
@@ -518,7 +518,7 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
                     [&]() {
                       std::stringstream ss;
                       for (const auto& m : cls.get_dmethods()) {
-                        ss << " " << show(m) << std::endl;
+                        ss << " " << show(m) << '\n';
                       }
                       return ss.str();
                     }()
@@ -547,7 +547,7 @@ DexMethod* load_onMethodBegin(const DexClass& cls,
 
   std::stringstream ss;
   for (const auto& m : cls.get_dmethods()) {
-    ss << " " << show(m) << std::endl;
+    ss << " " << show(m) << '\n';
   }
   always_assert_log(false, "[InstrumentPass] error: cannot find %s in %s:\n%s",
                     method_name.c_str(), SHOW(cls), ss.str().c_str());
@@ -573,13 +573,13 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
   // Do onMethodBegin instrumentation. We allocate a register that holds the
   // method offset, which is used for all onMethodBegin/Exit.
   IRInstruction* method_offset_inst = new IRInstruction(OPCODE_CONST);
-  method_offset_inst->set_literal(method_offset);
+  method_offset_inst->set_literal(static_cast<int64_t>(method_offset));
   const reg_t reg_method_offset = cfg.allocate_temp();
   method_offset_inst->set_dest(reg_method_offset);
   prologues.at(num_vectors) = method_offset_inst;
 
   IRInstruction* hit_offset_inst = new IRInstruction(OPCODE_CONST);
-  hit_offset_inst->set_literal(hit_offset);
+  hit_offset_inst->set_literal(static_cast<int64_t>(hit_offset));
   const reg_t reg_hit_offset = cfg.allocate_temp();
   hit_offset_inst->set_dest(reg_hit_offset);
   prologues.at(num_vectors + 1) = hit_offset_inst;
@@ -607,6 +607,7 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
 
   // If the entry block was to be instrumented, the iterator is invalid now.
   if (eb_insn != nullptr) {
+    always_assert(!blocks.empty());
     auto& b = blocks.front();
     auto it = cfg.find_insn(eb_insn);
     b.block = it.block();
@@ -690,7 +691,8 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
   // number of vectors > 5, generate one or more onMethodExit calls.
   const size_t num_vectors = reg_vectors.size();
   const size_t num_invokes =
-      std::max(1., std::ceil(double(num_vectors) / double(max_vector_arity)));
+      std::max<size_t>(1, static_cast<size_t>(std::ceil(
+                              double(num_vectors) / double(max_vector_arity))));
 
   auto inject_onMethodExit = [&](cfg::Block* block,
                                  const cfg::InstructionIterator& before_it,
@@ -748,7 +750,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       offset += max_vector_arity;
 
       unchecked_block->push_back((new IRInstruction(OPCODE_CONST))
-                                     ->set_literal(offset)
+                                     ->set_literal(static_cast<int64_t>(offset))
                                      ->set_dest(reg_method_offset));
 
       unchecked_block->push_back(create_call(onMethodExitUnchecked_map));
@@ -769,7 +771,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
     for (size_t j = 0; j < num_vectors; ++j) {
       const reg_t& reg = reg_vectors[j];
       short vec = loop_shorts[j];
-      short inv_vec = ~vec;
+      short inv_vec = static_cast<short>(~vec);
       IRInstruction* inst_and = new IRInstruction(OPCODE_AND_INT_LIT);
       TRACE(INSTRUMENT, 8,
             "Normal Vector for Just Loop Blocks (%hu) inverted (%hu)", vec,
@@ -799,7 +801,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
         inst = new IRInstruction(OPCODE_CONST);
         // Move forward the offset.
         offset += max_vector_arity;
-        inst->set_literal(offset);
+        inst->set_literal(static_cast<int64_t>(offset));
         inst->set_dest(reg_method_offset);
         invoke_insts.at(num_vectors + (i * 2 + 1)) = inst;
       }
@@ -1187,7 +1189,7 @@ std::vector<IRInstruction*> insert_hit_count_insts(
     // Do onBlockHit instrumentation. We allocate a register that holds the
     // hit offset, which is used for all onBlockHit.
     IRInstruction* hit_offset_inst = new IRInstruction(OPCODE_CONST);
-    hit_offset_inst->set_literal(offset);
+    hit_offset_inst->set_literal(static_cast<int64_t>(offset));
     hit_offset_inst->set_dest(reg_hit_offset);
     block->insert_before(block->to_cfg_instruction_iterator(insert_pos),
                          hit_offset_inst);
@@ -1288,7 +1290,8 @@ MethodInfo instrument_basic_blocks(
   //
   const size_t origin_num_non_entry_blocks = cfg.num_blocks() - 1;
   const size_t num_vectors =
-      std::ceil(num_to_instrument / double(BIT_VECTOR_SIZE));
+      static_cast<size_t>(std::ceil(static_cast<double>(num_to_instrument) /
+                                    static_cast<double>(BIT_VECTOR_SIZE)));
 
   std::vector<reg_t> reg_vectors;
   std::vector<short> loop_shorts(num_vectors);
@@ -1329,7 +1332,8 @@ MethodInfo instrument_basic_blocks(
           int vec_index = index / 16;
           int bit = index % 16;
 
-          loop_shorts[vec_index] |= (1 << bit);
+          loop_shorts[vec_index] =
+              static_cast<short>(loop_shorts[vec_index] | (1 << bit));
         }
         index += 1;
       }
@@ -1487,8 +1491,11 @@ void print_stats(ScopedMetrics& sm,
     std::stringstream ss;
     accumulate += num;
     ss << std::fixed << std::setprecision(3) << std::setw(6) << num << " ("
-       << std::setw(6) << (num * 100. / total) << "%, " << std::setw(6)
-       << (accumulate * 100. / total) << "%)";
+       << std::setw(6)
+       << (static_cast<double>(num * 100) / static_cast<double>(total)) << "%, "
+       << std::setw(6)
+       << (static_cast<double>(accumulate * 100) / static_cast<double>(total))
+       << "%)";
     return ss.str();
   };
 
@@ -1536,7 +1543,7 @@ void print_stats(ScopedMetrics& sm,
       if (i.too_many_blocks) {
         ++dist[-1];
       } else {
-        ++dist[i.num_vectors];
+        ++dist[static_cast<int>(i.num_vectors)];
         total_bit_vectors += i.num_vectors;
       }
     }
@@ -1559,9 +1566,9 @@ void print_stats(ScopedMetrics& sm,
       if (i.too_many_blocks) {
         ++dist[-1].first;
       } else {
-        ++dist[i.num_instrumented_blocks].first;
+        ++dist[static_cast<int>(i.num_instrumented_blocks)].first;
       }
-      ++dist[i.num_non_entry_blocks].second;
+      ++dist[static_cast<int>(i.num_non_entry_blocks)].second;
     }
     std::array<size_t, 2> accs = {0, 0};
     for (const auto& p : dist) {
@@ -1600,7 +1607,7 @@ void print_stats(ScopedMetrics& sm,
       if (i.too_many_blocks) {
         ++dist[-1];
       } else {
-        ++dist[i.num_loop_blocks];
+        ++dist[static_cast<int>(i.num_loop_blocks)];
         total_num_loop_blocks += i.num_loop_blocks;
       }
     }
@@ -1619,7 +1626,9 @@ void print_stats(ScopedMetrics& sm,
   auto print_ratio = [&total](size_t num) {
     std::stringstream ss;
     ss << num << std::fixed << std::setprecision(2) << " ("
-       << (num * 100. / total.num_non_entry_blocks) << "%)";
+       << (static_cast<double>(num * 100) /
+           static_cast<double>(total.num_non_entry_blocks))
+       << "%)";
     return ss.str();
   };
   auto metric_ratio = [&sm, &total](const std::string& sub_key, size_t num) {
@@ -1694,7 +1703,7 @@ void print_stats(ScopedMetrics& sm,
               show_deobfuscated(i.method).c_str());
         ++no_exit;
       }
-      ++dist[i.num_exit_calls];
+      ++dist[static_cast<int>(i.num_exit_calls)];
       total_exits += i.num_exit_calls;
     }
     for (const auto& p : dist) {
@@ -1714,7 +1723,7 @@ void print_stats(ScopedMetrics& sm,
     size_t acc = 0;
     std::map<int, size_t> dist;
     for (const auto& i : instrumented_methods) {
-      ++dist[i.num_catches];
+      ++dist[static_cast<int>(i.num_catches)];
     }
     for (const auto& p : dist) {
       TRACE(INSTRUMENT, 4, " %4d catches: %s", p.first,
@@ -1738,8 +1747,8 @@ void print_stats(ScopedMetrics& sm,
         ++dist[-1].first;
         ++dist[-1].second;
       } else {
-        ++dist[accessor1(i)].first;
-        ++dist[accessor2(i)].second;
+        ++dist[static_cast<int>(accessor1(i))].first;
+        ++dist[static_cast<int>(accessor2(i))].second;
         total1 += accessor1(i);
         total2 += accessor2(i);
       }
@@ -1914,8 +1923,8 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       } else {
         // We want to collect number of methods that are being excluded.
         for (const auto& cls : build_class_scope({store})) {
-          non_root_store_methods +=
-              cls->get_dmethods().size() + cls->get_vmethods().size();
+          non_root_store_methods += static_cast<int>(
+              cls->get_dmethods().size() + cls->get_vmethods().size());
         }
       }
     }
@@ -2019,13 +2028,15 @@ void BlockInstrumentHelper::do_basic_block_tracing(
 
   // Patch static fields.
   const auto field_name = array_fields.at(1)->get_name()->str();
-  InstrumentPass::patch_array_size(analysis_cls, field_name, method_offset);
+  InstrumentPass::patch_array_size(analysis_cls, field_name,
+                                   static_cast<int>(method_offset));
 
   auto* field = analysis_cls->find_field_from_simple_deobfuscated_name(
       "sNumStaticallyInstrumented");
   always_assert(field != nullptr);
-  InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
-                                     instrumented_methods.size());
+  InstrumentPass::patch_static_field(
+      analysis_cls, field->get_name()->str(),
+      static_cast<int>(instrumented_methods.size()));
 
   field =
       analysis_cls->find_field_from_simple_deobfuscated_name("sProfileType");
@@ -2037,13 +2048,13 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   if (options.instrumentation_strategy == "basic_block_hit_count") {
     field = analysis_cls->find_field_from_simple_deobfuscated_name("sHitStats");
     InstrumentPass::patch_array_size(analysis_cls, field->get_name()->str(),
-                                     hit_offset);
+                                     static_cast<int>(hit_offset));
 
     field = analysis_cls->find_field_from_simple_deobfuscated_name(
         "sNumStaticallyHitsInstrumented");
     always_assert(field != nullptr);
     InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
-                                       hit_offset - 8);
+                                       static_cast<int>(hit_offset - 8));
 
     field =
         analysis_cls->find_field_from_simple_deobfuscated_name("sProfileType");

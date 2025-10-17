@@ -35,7 +35,7 @@ enum class ProfileTypeFlags {
 class InstrumentPass : public Pass {
  public:
   InstrumentPass();
-  ~InstrumentPass();
+  ~InstrumentPass() override;
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
