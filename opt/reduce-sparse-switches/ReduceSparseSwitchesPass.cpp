@@ -13,7 +13,6 @@
 #include <vector>
 
 #include "ConfigFiles.h"
-#include "DexInstruction.h"
 #include "InstructionLowering.h"
 #include "ScopedCFG.h"
 #include "Show.h"
@@ -233,7 +232,7 @@ static void multiplex_sparse_switch_into_packed_and_sparse(
   block->push_back((new IRInstruction(OPCODE_AND_INT_LIT))
                        ->set_dest(tmp_reg)
                        ->set_src(0, shred_reg)
-                       ->set_literal(M - 1));
+                       ->set_literal(static_cast<int64_t>(M) - 1));
   cfg.create_branch(block,
                     (new IRInstruction(OPCODE_SWITCH))->set_src(0, tmp_reg),
                     goto_block, packed_cases);
@@ -291,7 +290,8 @@ static void expand_switch(
     } else {
       IRInstruction* init_insn = [&, case_key_copy = case_key] {
         if (prev_case_key && !fits_16(case_key_copy)) {
-          int32_t diff = (int64_t)case_key_copy - *prev_case_key;
+          int32_t diff = static_cast<int32_t>(
+              static_cast<int64_t>(case_key_copy) - *prev_case_key);
           if (fits_16(diff)) {
             return (new IRInstruction(OPCODE_ADD_INT_LIT))
                 ->set_dest(tmp_reg)
@@ -424,7 +424,7 @@ bool partition(const std::vector<int32_t>& case_keys,
     unpack_last_segment();
   }
 
-  double partitioned_log2_cost = packed_segments->size();
+  double partitioned_log2_cost = static_cast<double>(packed_segments->size());
   if (!sparse_case_keys->empty()) {
     partitioned_log2_cost += std::log2(sparse_case_keys->size());
   }
@@ -578,7 +578,7 @@ ReduceSparseSwitchesPass::multiplexing_transformation(
           *std::max_element(multiplexed_cases.begin(), multiplexed_cases.end());
       if (max < max_cases) {
         max_cases = max;
-        shr_by = i;
+        shr_by = static_cast<int32_t>(i);
       }
     }
     always_assert(shr_by >= 0);
@@ -652,14 +652,16 @@ ReduceSparseSwitchesPass::Stats ReduceSparseSwitchesPass::expand_transformation(
     std::sort(cases.begin(), cases.end(),
               [&](auto& p, auto& q) { return p.first < q.first; });
     uint32_t original_size =
-        (sparse ? 5 : 7) + (2 + 2 * static_cast<int>(sparse)) * cases.size();
+        (sparse ? 5 : 7) + (2 + 2 * static_cast<int>(sparse)) *
+                               static_cast<uint32_t>(cases.size());
     uint32_t expanded_size = 0;
     std::optional<int32_t> prev_case_key;
     for (auto [case_key, _] : cases) {
       if (case_key >= -8 && case_key < 8) {
         expanded_size += 3;
       } else if (!fits_16(case_key) || !prev_case_key ||
-                 !fits_16((int64_t)case_key - *prev_case_key)) {
+                 !fits_16(static_cast<int32_t>(static_cast<int64_t>(case_key) -
+                                               *prev_case_key))) {
         expanded_size += 5;
       } else {
         expanded_size += 4;
