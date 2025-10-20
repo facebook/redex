@@ -28,33 +28,58 @@ class DexStoreTest : public RedexTest {
     return stores;
   }
 
-  void squash_and_check(DexStoresVector stores) {
+  ::testing::AssertionResult squash_and_check(DexStoresVector stores) {
     auto before_scope = build_class_scope(stores);
     squash_into_one_dex(stores);
-    EXPECT_EQ(stores.size(), 1);
-    EXPECT_EQ(stores[0].get_dexen().size(), 1);
+    if (stores.empty()) {
+      return ::testing::AssertionFailure() << "Stores is empty.";
+    }
+
+    std::vector<std::string> issues;
+    if (stores.size() != 1) {
+      issues.emplace_back("Expected stores.size() to be 1, but was " +
+                          std::to_string(stores.size()));
+    }
+    if (stores[0].get_dexen().size() != 1) {
+      issues.emplace_back(
+          "Expected stores[0].get_dexen().size() to be 1, but was " +
+          std::to_string(stores[0].get_dexen().size()));
+    }
     auto after_scope = build_class_scope(stores);
-    EXPECT_THAT(before_scope, ::testing::ContainerEq(after_scope));
+    if (before_scope != after_scope) {
+      issues.emplace_back("Scopes are divergent.");
+      // Better printout.
+      EXPECT_THAT(before_scope, ::testing::ContainerEq(after_scope));
+    }
+
+    if (issues.empty()) {
+      return ::testing::AssertionSuccess();
+    }
+    auto f = ::testing::AssertionFailure();
+    for (auto& issue : issues) {
+      f << issue << "\n";
+    }
+    return f;
   }
 };
 
 TEST_F(DexStoreTest, squash_dexes) {
   auto stores = construct_empty_stores();
-  squash_and_check(stores);
+  EXPECT_TRUE(squash_and_check(stores));
 
   // Add one class to primary dex.
   auto& dexes = stores[0].get_dexen();
   dexes[0].emplace_back(create_class("Ltype0;"));
-  squash_and_check(stores);
+  EXPECT_TRUE(squash_and_check(stores));
 
   // Add a secondary dex.
   stores[0].add_classes({create_class("Lsecond0;")});
-  squash_and_check(stores);
+  EXPECT_TRUE(squash_and_check(stores));
 
   // Add a non-root non_root_store.
   DexStore non_root_store("other");
   non_root_store.add_classes({create_class("Lother1;")});
   non_root_store.add_classes({create_class("Lother2;")});
   stores.emplace_back(std::move(non_root_store));
-  squash_and_check(stores);
+  EXPECT_TRUE(squash_and_check(stores));
 }
