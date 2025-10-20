@@ -7,5 +7,17 @@
 
 #pragma once
 
-// As far as Intel processors are concerned...
-#define CACHE_LINE_SIZE 64
+#include <cstddef>
+
+#if __cpp_lib_hardware_interference_size >= 201603
+
+#include <new>
+
+constexpr size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
+
+#else
+
+// Fall back to something that matches x86 processors.
+constexpr size_t CACHE_LINE_SIZE = 64;
+
+#endif
