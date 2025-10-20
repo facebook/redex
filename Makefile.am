@@ -437,7 +437,6 @@ libopt_la_SOURCES = \
 	opt/kotlin-lambda/KotlinStatelessLambdaSingletonRemovalPass.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDcePass.cpp \
-	opt/merge_interface/MergeInterface.cpp \
 	opt/nopper/Nopper.cpp \
 	opt/nopper/NopperPass.cpp \
 	opt/nullcheck_conversion/IntrinsifyNullChecksPass.cpp \
