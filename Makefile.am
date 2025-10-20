@@ -12,10 +12,12 @@ ACLOCAL_AMFLAGS = -I m4
 # attributes: unsupported CFI attribute warnings.
 # comment: unhappy with use of "\" in comments, which we use for diagrams.
 # unknown-warning-option: Clang doesn't follow GCC's "no-" backwards approach.
+# We explicitly want interference-size to avoid false sharing.
 DISABLED_WARNINGS_HARD = \
   -Wno-attributes \
   -Wno-comment \
-  -Wno-unknown-warning-option
+  -Wno-unknown-warning-option \
+  -Wno-interference-size
 
 # TODO: Minimize this list.
 DISABLED_WARNINGS = \
