@@ -19,7 +19,6 @@ class TestArtifactsGeneration(ArtifactsTestFixture):
         "redex-class-dependencies.txt.xz",
         "redex-opt-decisions.json",
         "iodi-metadata",
-        "redex-merge-interface-mappings.txt",
         "redex-unreachable-removed-symbols.txt",
         "redex-class-method-info-map.txt",
     }
@@ -30,7 +29,6 @@ class TestArtifactsGeneration(ArtifactsTestFixture):
             "redex": {
                 "passes": [
                     "VerifierPass",
-                    "MergeInterfacePass",
                     "RemoveUnreachablePass",
                     "RegAllocPass",
                 ]
