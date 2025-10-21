@@ -14,7 +14,7 @@ import android.app.Instrumentation;
 import android.os.Bundle;
 import android.test.InstrumentationTestCase;
 import org.junit.Test;
-import org.junit.Assert;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class EquivalenceMain extends InstrumentationTestCase {
 
@@ -44,7 +44,7 @@ public class EquivalenceMain extends InstrumentationTestCase {
       writeToAdb(String.format("Running %s\n", entry.getKey()));
       Method before = entry.getValue();
       Method after = afterMethods.get(entry.getKey());
-      Assert.assertEquals(before.invoke(this), after.invoke(this));
+      assertThat(after.invoke(this)).isEqualTo(before.invoke(this));
     }
   }
 
