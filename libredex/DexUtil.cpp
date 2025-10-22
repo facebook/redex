@@ -123,12 +123,33 @@ bool passes_args_through(IRInstruction* insn,
   return insn->srcs_size() + ignore == param_count;
 }
 
+namespace {
+
+size_t count_classes(const DexStoresVector& stores) {
+  return unordered_accumulate(
+      stores, std::size_t{0}, [](size_t acc, const auto& store) {
+        return unordered_accumulate(store.get_dexen(), acc,
+                                    [](auto dex_acc, const auto& classes) {
+                                      return dex_acc + classes.size();
+                                    });
+      });
+}
+
+} // namespace
+
 Scope build_class_scope(const DexStoresVector& stores) {
-  return build_class_scope(DexStoreClassesIterator(stores));
+  Scope v;
+  v.reserve(count_classes(stores));
+  for (const auto& store : stores) {
+    for (const auto& dex : store.get_dexen()) {
+      v.insert(v.end(), dex.begin(), dex.end());
+    }
+  }
+
+  return v;
 }
 
 namespace {
-
 bool starts_with_any_prefix(const DexString* str,
                             const UnorderedSet<std::string>& prefixes) {
   if (str == nullptr) {
