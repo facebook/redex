@@ -89,6 +89,17 @@ class LevelChecker {
         const auto& value = api_elem.encoded_value;
         always_assert(value->evtype() == DEVT_INT);
         int32_t result = static_cast<int32_t>(value->value());
+        if (result >= 100000) {
+          // Possibly a value that corresponds to:
+          // https://developer.android.com/reference/android/os/Build.VERSION_CODES_FULL
+          // According to the docs "the current encoding scheme may change in
+          // the future" but as a first step, try to munge an abnormally high
+          // value that falls in the range of SDK_INT_FULL to what would likely
+          // be the comparable SDK_INT value that would include it, for
+          // compatability purposes with the rest of our logic.
+          auto inc = result % 100000 == 0 ? 0 : 1;
+          result = result / 100000 + inc;
+        }
         return std::max(result, s_min_level);
       }
     }
