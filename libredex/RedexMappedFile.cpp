@@ -8,7 +8,6 @@
 #include "RedexMappedFile.h"
 
 #include <boost/iostreams/device/mapped_file.hpp>
-#include <fstream>
 
 #include "Debug.h"
 
