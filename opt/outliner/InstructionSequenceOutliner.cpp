@@ -482,13 +482,17 @@ static Candidate normalize(
   PartialCandidateAdapter pca(type_analysis, pc);
   if (out_reg) {
     always_assert(!out_reg_assignment_insns.empty());
+    bool unknown_candidate_type_skip{false};
     if (out_reg_assignment_insns.count(nullptr) != 0u) {
       // There is a control-flow path where the out-reg is not assigned;
       // fall-back to type inference at the beginning of the partial candidate.
       c.res_type = type_analysis.get_inferred_type(pca, out_reg->first);
+      // If we still don't know the type after get_inferred_type, we be
+      // conservative and skip this candidate.
+      unknown_candidate_type_skip = (c.res_type == nullptr);
       out_reg_assignment_insns.erase(nullptr);
     }
-    if (!out_reg_assignment_insns.empty()) {
+    if (!unknown_candidate_type_skip && !out_reg_assignment_insns.empty()) {
       c.res_type = type_analysis.get_result_type(&pca, out_reg_assignment_insns,
                                                  c.res_type);
     }
