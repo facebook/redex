@@ -45,13 +45,6 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/exception/all.hpp>
-#ifdef __APPLE__
-#define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
-#endif
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wshadow"
-#include <boost/stacktrace.hpp>
-#pragma GCC diagnostic pop
 
 // By default, run with slow invariant checks in debug mode.
 bool slow_invariants_debug{debug};
