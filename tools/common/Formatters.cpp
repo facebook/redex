@@ -18,8 +18,7 @@ struct type_to_string {
   const char* name;
 };
 
-#define GMAP_TYPE(NAME) \
-  { NAME, #NAME }
+#define GMAP_TYPE(NAME) {NAME, #NAME}
 type_to_string GMapTypes[] = {GMAP_TYPE(TYPE_HEADER_ITEM),
                               GMAP_TYPE(TYPE_STRING_ID_ITEM),
                               GMAP_TYPE(TYPE_TYPE_ID_ITEM),

@@ -124,8 +124,9 @@ class ProgramInterface {
  */
 using LivenessDomain = HashedSetAbstractDomain<std::string>;
 
-template <template <typename GraphInterface, typename Domain, typename NodeHash>
-          class FixpointIteratorBase>
+template <template <typename GraphInterface,
+                    typename Domain,
+                    typename NodeHash> class FixpointIteratorBase>
 class FixpointEngine final
     : public FixpointIteratorBase<
           BackwardsFixpointIterationAdaptor<ProgramInterface>,
@@ -706,8 +707,9 @@ class IntegerSetAbstractDomain final
 using AbstractEnvironmentT =
     PatriciaTreeMapAbstractEnvironment<std::string*, IntegerSetAbstractDomain>;
 
-template <template <typename GraphInterface, typename Domain, typename NodeHash>
-          class FixpointIteratorBase>
+template <template <typename GraphInterface,
+                    typename Domain,
+                    typename NodeHash> class FixpointIteratorBase>
 class FixpointEngine final : public FixpointIteratorBase<
                                  ProgramInterface,
                                  AbstractEnvironmentT,

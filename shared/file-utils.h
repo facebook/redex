@@ -16,7 +16,7 @@
 
 class FileHandle {
  public:
-  explicit FileHandle(FILE* fh) : bytes_written_(0), seek_ref_(0), fh_(fh){};
+  explicit FileHandle(FILE* fh) : bytes_written_(0), seek_ref_(0), fh_(fh) {};
   UNCOPYABLE(FileHandle);
 
   FILE* get() const { return fh_; }
