@@ -658,9 +658,21 @@ class RawSubdirDexMode(SubdirDexMode):
             locator_store_id=locator_store_id,
         )
 
+        # Check which prefix we have for dex files.
+        has_class_prefix_dex = any(abs_glob(dex_dir, f"{self._dex_prefix}?*.dex"))
+        has_secondary_prefix_dex = any(abs_glob(dex_dir, "secondary-?*.dex"))
+        assert not (
+            has_class_prefix_dex and has_secondary_prefix_dex
+        ), "should not have dex files with mixed prefixes"
+
         for i in itertools.count(1):
             dex_file = self._store_name + f"-{i}.dex"
             dexpath = join(dex_dir, dex_file)
+
+            if has_class_prefix_dex:
+                oldpath = join(dex_dir, self._dex_prefix + "%d.dex" % (i + 1))
+                if isfile(oldpath):
+                    shutil.move(oldpath, join(dex_dir, f"secondary-{i}.dex"))
 
             # if store_name is not "secondary" (the default),
             # we need to rename the dex files
