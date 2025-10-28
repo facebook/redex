@@ -35,7 +35,6 @@
 #define O_WRONLY _O_WRONLY
 #endif
 
-#include "CppUtil.h"
 #include "Debug.h"
 #include "DexCallSite.h"
 #include "DexClass.h"
