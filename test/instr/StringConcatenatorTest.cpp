@@ -8,9 +8,8 @@
 #include <gtest/gtest.h>
 #include <string>
 
-#include "ControlFlow.h"
+#include "DexAnnotation.h"
 #include "VerifyUtil.h"
-#include "Walkers.h"
 
 TEST_F(PreVerify, StringConcatenatorTest) {
   DexMethod* clinit = static_cast<DexMethod*>(DexMethod::get_method(
