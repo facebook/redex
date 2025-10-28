@@ -7,7 +7,7 @@
 
 #include "ConstantPropagationAnalysis.h"
 
-#include <boost/functional/hash.hpp>
+#include <boost/container_hash/hash.hpp>
 #include <cinttypes>
 #include <cstring>
 #include <limits>
