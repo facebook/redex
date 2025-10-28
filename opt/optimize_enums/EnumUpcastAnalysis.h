@@ -14,9 +14,9 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
-#include "DexUtil.h"
 #include "EnumConfig.h"
 #include "OptimizeEnumsUnsafeType.h"
+#include "TypeUtil.h"
 
 namespace optimize_enums {
 
