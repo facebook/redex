@@ -14,7 +14,6 @@
 
 #include "ClassHierarchy.h"
 #include "Debug.h"
-#include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "PassManager.h"
