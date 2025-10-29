@@ -15,7 +15,6 @@
 #include "DexClass.h"
 #include "IRList.h"
 #include "IROpcode.h"
-#include "ReachableClasses.h"
 #include "RedexTest.h"
 
 #include "GlobalTypeAnalysisPass.h"
