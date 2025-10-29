@@ -7,7 +7,8 @@
 
 #include <gtest/gtest.h>
 
-#include "Creators.h"
+#include "DexClass.h"
+#include "IRAssembler.h"
 #include "RedexTest.h"
 #include "SingleImpl.h"
 
