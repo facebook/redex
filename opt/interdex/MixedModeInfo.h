@@ -9,7 +9,6 @@
 
 #include "AssetManager.h"
 #include "DeterministicContainers.h"
-#include "DexClass.h"
 
 namespace interdex {
 
