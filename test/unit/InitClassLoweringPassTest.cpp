@@ -11,11 +11,11 @@
 
 #include "Creators.h"
 #include "DexAsm.h"
+#include "DexClass.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InitClassLoweringPass.h"
 #include "RedexTest.h"
-#include "ScopeHelper.h"
 #include "VirtualScope.h"
 
 class InitClassLoweringPassTest : public RedexTest {
