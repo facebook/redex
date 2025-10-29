@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-#include <boost/thread/thread.hpp>
+#include <boost/thread/thread.hpp> // NOLINT
 
 using namespace cc_impl;
 
@@ -76,6 +76,7 @@ TEST_F(ConcurrentHashtableTest, concurrentInsertGet) {
                       std::equal_to<uint32_t>>
       set;
   std::vector<boost::thread> threads;
+  threads.reserve(N_THREADS);
   for (size_t t = 0; t < N_THREADS; ++t) {
     threads.emplace_back([&]() {
       for (size_t i = 0; i < N; ++i) {
