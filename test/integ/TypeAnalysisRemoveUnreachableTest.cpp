@@ -17,7 +17,6 @@
 #include "ReachableClasses.h"
 #include "RedexTest.h"
 
-#include "RemoveUnreachable.h"
 #include "TypeAnalysisAwareRemoveUnreachable.h"
 #include "VirtualScope.h"
 
