@@ -13,12 +13,14 @@
 
 #include "ControlFlow.h"
 #include "DexAsm.h"
-#include "DexUtil.h"
+#include "DexClass.h"
+#include "DexStore.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "PassManager.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "TypeUtil.h"
 
 namespace {
 
