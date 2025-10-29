@@ -8,7 +8,6 @@
 #pragma once
 
 #include "InitClassesWithSideEffects.h"
-#include "LocalDce.h"
 #include "Pass.h"
 
 class AnalyzePureMethodsPass : public Pass {
