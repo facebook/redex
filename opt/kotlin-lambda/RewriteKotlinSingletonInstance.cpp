@@ -13,7 +13,6 @@
 #include "LocalPointersAnalysis.h"
 #include "PassManager.h"
 #include "SideEffectSummary.h"
-#include "SummarySerialization.h"
 
 namespace {
 bool check_inits_has_side_effects(
