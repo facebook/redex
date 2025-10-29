@@ -8,6 +8,7 @@
 #include "TypedefAnnoOptPass.h"
 
 #include "AnnoUtils.h"
+#include "ControlFlow.h"
 #include "MethodReference.h"
 #include "PassManager.h"
 #include "Show.h"

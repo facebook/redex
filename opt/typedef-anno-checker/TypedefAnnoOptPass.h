@@ -9,7 +9,6 @@
 
 #include <mutex>
 
-#include "ControlFlow.h"
 #include "Pass.h"
 #include "TypeInference.h"
 
