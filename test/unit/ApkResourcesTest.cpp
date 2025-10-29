@@ -5,7 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/filesystem.hpp>
+#include <boost/filesystem/directory.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
 #include <gtest/gtest.h>
 
 #include "ApkResources.h"
