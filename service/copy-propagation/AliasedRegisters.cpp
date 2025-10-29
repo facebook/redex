@@ -10,7 +10,6 @@
 
 #include <algorithm>
 #include <boost/functional/hash.hpp>
-#include <boost/graph/adjacency_list.hpp>
 #include <boost/range/algorithm.hpp>
 #include <numeric>
 
