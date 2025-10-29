@@ -13,7 +13,6 @@
 
 #include <sparta/WeakTopologicalOrdering.h>
 
-#include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Show.h"
