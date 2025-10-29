@@ -18,7 +18,6 @@
 
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
-#include "CppUtil.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
