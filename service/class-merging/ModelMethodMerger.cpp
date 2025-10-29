@@ -21,7 +21,6 @@
 #include "Show.h"
 #include "SwitchDispatch.h"
 #include "TypeReference.h"
-#include "Walkers.h"
 
 using namespace class_merging;
 
