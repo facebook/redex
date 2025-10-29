@@ -11,7 +11,7 @@
 #include <iostream>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/range/adaptors.hpp>
+#include <boost/range/adaptor/transformed.hpp>
 
 #include "ControlFlow.h"
 #include "Debug.h"
