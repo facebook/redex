@@ -10,7 +10,6 @@
 #include <sstream>
 
 #include "Creators.h"
-#include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
