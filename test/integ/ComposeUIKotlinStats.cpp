@@ -10,7 +10,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "DexUtil.h"
 #include "PrintKotlinStats.h"
 #include "RedexTest.h"
 #include "Resolver.h"
