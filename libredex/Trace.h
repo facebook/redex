@@ -8,7 +8,6 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
 #include <string>
 
 #include "Macros.h"
