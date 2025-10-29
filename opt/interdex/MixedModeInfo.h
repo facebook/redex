@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "AssetManager.h"
 #include "DeterministicContainers.h"
 
 namespace interdex {
