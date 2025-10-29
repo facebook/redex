@@ -14,7 +14,6 @@
 
 #include "DexClass.h"
 #include "DexInstruction.h"
-#include "ReachableClasses.h"
 #include "RedexTest.h"
 
 #include "TypeAnalysisAwareRemoveUnreachable.h"
