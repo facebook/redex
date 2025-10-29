@@ -19,8 +19,8 @@
 #include <sparta/ReducedProductAbstractDomain.h>
 
 #include "ConstantArrayDomain.h"
-#include "ControlFlow.h"
 #include "DisjointUnionWithSignedConstantDomain.h"
+#include "IRInstruction.h"
 #include "NewObjectDomain.h"
 #include "ObjectDomain.h"
 #include "ObjectWithImmutAttr.h"
