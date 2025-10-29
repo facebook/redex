@@ -7,6 +7,8 @@
 
 #include "RedexTestUtils.h"
 
+#include "Debug.h"
+
 #include <iostream>
 
 namespace redex {

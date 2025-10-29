@@ -12,8 +12,6 @@
 
 #include <fstream>
 
-#include "Debug.h"
-
 namespace redex {
 
 using namespace boost::filesystem;
