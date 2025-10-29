@@ -13,7 +13,7 @@
 
 #include "ArtProfileWriterPass.h"
 
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp>
 #include <fstream>
 #include <string>
