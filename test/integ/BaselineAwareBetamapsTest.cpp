@@ -10,7 +10,6 @@
 #include <json/json.h>
 
 #include "DexClass.h"
-#include "DexLoader.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
 
