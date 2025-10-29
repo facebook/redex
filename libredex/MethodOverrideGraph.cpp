@@ -7,8 +7,6 @@
 
 #include "MethodOverrideGraph.h"
 
-#include <boost/range/adaptor/map.hpp>
-
 #include <iterator>
 #include <sparta/PatriciaTreeMap.h>
 #include <sparta/PatriciaTreeSet.h>
