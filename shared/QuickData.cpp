@@ -12,7 +12,6 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
-#include <sys/mman.h>
 #include <sys/stat.h>
 
 namespace {
