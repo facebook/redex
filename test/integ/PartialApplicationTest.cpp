@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include "ControlFlow.h"
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
