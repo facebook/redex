@@ -8,7 +8,8 @@
 #include "InsertSourceBlocks.h"
 
 #include <algorithm>
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <cstdint>
 #include <deque>
 #include <filesystem>
