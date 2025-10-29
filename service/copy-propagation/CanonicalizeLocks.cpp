@@ -7,7 +7,8 @@
 
 #include "CanonicalizeLocks.h"
 
-#include <boost/optional.hpp>
+#include <boost/none.hpp>
+#include <boost/optional/optional.hpp>
 
 #include "CFGMutation.h"
 #include "ControlFlow.h"
