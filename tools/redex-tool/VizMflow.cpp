@@ -5,10 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <queue>
-#include <unordered_map>
-#include <vector>
-
 #include "ControlFlow.h"
 #include "IRCode.h"
 #include "ScopedCFG.h"
