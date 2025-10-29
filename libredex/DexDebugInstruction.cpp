@@ -7,7 +7,6 @@
 
 #include <sstream>
 
-#include "DexAccess.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexDefs.h"
