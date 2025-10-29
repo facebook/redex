@@ -7,7 +7,9 @@
 
 #pragma once
 
-#include "DexUtil.h"
+#include <vector>
+
+#include "DexClass.h"
 
 class TypeTags;
 
