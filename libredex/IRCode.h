@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <mutex>
 #include <set>
 
