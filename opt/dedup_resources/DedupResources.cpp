@@ -12,7 +12,6 @@
 #include <fstream>
 #include <map>
 
-#include "ApkResources.h"
 #include "ConfigFiles.h"
 #include "DetectBundle.h"
 #include "IOUtil.h"
