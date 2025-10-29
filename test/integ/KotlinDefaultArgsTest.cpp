@@ -10,8 +10,9 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "DexUtil.h"
+#include "DexClass.h"
 #include "IPConstantPropagation.h"
+#include "IRAssembler.h"
 #include "RedexTest.h"
 
 namespace {
