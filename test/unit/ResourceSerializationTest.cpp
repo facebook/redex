@@ -8,7 +8,6 @@
 #include <array>
 #include <boost/process/args.hpp>
 #include <boost/process/child.hpp>
-#include <boost/process/io.hpp>
 #include <boost/regex.hpp>
 #include <fstream>
 #include <gtest/gtest.h>
