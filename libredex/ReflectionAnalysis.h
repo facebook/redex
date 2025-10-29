@@ -20,8 +20,8 @@
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRInstruction.h"
+#include "TypeUtil.h"
 
 namespace reflection {
 
