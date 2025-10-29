@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-#include <boost/regex.hpp>
+#include <boost/regex.hpp> // NOLINT
 
 #include "ProguardRegex.h"
 
