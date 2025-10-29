@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include "ApiLevelChecker.h"
 #include "ConstructorAnalysis.h"
 #include "ControlFlow.h"
 #include "Creators.h"
