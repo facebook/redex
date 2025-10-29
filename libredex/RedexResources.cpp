@@ -15,6 +15,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/regex/pending/unicode_iterator.hpp>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <string>
@@ -27,7 +28,6 @@
 #include "DetectBundle.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
-#include "IOUtil.h"
 #include "ReadMaybeMapped.h"
 #include "Trace.h"
 #include "WorkQueue.h"
@@ -649,11 +649,11 @@ UnorderedSet<std::string> parse_keep_xml_file(
         xml_file, tree, boost::property_tree::xml_parser::trim_whitespace);
   } catch (const std::exception& e) {
     std::cerr << "Error parsing XML file at " << xml_file_path << ": "
-              << e.what() << std::endl;
+              << e.what() << '\n';
     return resource_names;
   } catch (...) {
     std::cerr << "Unknown error occurred while parsing XML file at "
-              << xml_file_path << std::endl;
+              << xml_file_path << '\n';
     return resource_names;
   }
 
@@ -664,7 +664,7 @@ UnorderedSet<std::string> parse_keep_xml_file(
     return resource_names;
   }
 
-  std::string keep_str = keep_value.value();
+  const std::string& keep_str = keep_value.value();
   for (const auto& token : split_string(keep_str, ",")) {
     std::string_view trimmed_token = trim_whitespaces(token);
     size_t pos = trimmed_token.find('/');
@@ -717,7 +717,7 @@ std::string StyleInfo::print_as_dot(
   // NOTE: this should get converted over to use boost graph printing
   // functionality. Only reason for leaving as-is, for now, is to keep the
   // existing API for letting users customize the display of nodes.
-  oss << "digraph {" << std::endl;
+  oss << "digraph {" << '\n';
   for (auto id : ordered_nodes) {
     oss << "  " << "node" << id << " [";
     bool emitted_label{false};
@@ -743,16 +743,16 @@ std::string StyleInfo::print_as_dot(
       auto str = stringify(id);
       oss << "label=\"" << str << "\"";
     }
-    oss << "];" << std::endl;
+    oss << "];" << '\n';
   }
-  oss << "  subgraph parents_edges {" << std::endl;
+  oss << "  subgraph parents_edges {" << '\n';
   for (auto&& [id, set] : ordered_parents) {
     for (auto parent : set) {
-      oss << "    node" << id << " -> node" << parent << ";" << std::endl;
+      oss << "    node" << id << " -> node" << parent << ";" << '\n';
     }
   }
-  oss << "  }" << std::endl;
-  oss << "}" << std::endl;
+  oss << "  }" << '\n';
+  oss << "}" << '\n';
   return oss.str();
 }
 
