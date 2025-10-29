@@ -7,7 +7,7 @@
 
 #include "RemoveBuildersHelper.h"
 
-#include <boost/regex.hpp>
+#include <boost/regex.hpp> // NOLINT
 
 #include "ControlFlow.h"
 #include "Dataflow.h"
