@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-#include "ControlFlow.h"
+#include "IRCode.h"
 
 #include "DexClass.h"
 #include "PureMethods.h"
