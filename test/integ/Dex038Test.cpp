@@ -22,7 +22,6 @@
 // NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
 #include "Show.h"
-#include "Walkers.h"
 
 using namespace std::literals::string_literals;
 
