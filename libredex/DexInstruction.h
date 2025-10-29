@@ -9,13 +9,13 @@
 
 #include <charconv>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
 
 #include "CppUtil.h"
 #include "Debug.h"
-#include "DexDefs.h"
 #include "DexOpcode.h"
 #include "Gatherable.h"
 #include "IROpcode.h"
