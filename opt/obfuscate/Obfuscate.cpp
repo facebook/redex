@@ -15,7 +15,6 @@
 #include "Obfuscate.h"
 #include "ObfuscateUtils.h"
 #include "PassManager.h"
-#include "ProguardMap.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Trace.h"
