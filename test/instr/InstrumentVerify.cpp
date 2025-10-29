@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 #include <string>
 
-#include "ControlFlow.h"
 #include "DexInstruction.h"
 #include "IRCode.h"
 #include "Show.h"
