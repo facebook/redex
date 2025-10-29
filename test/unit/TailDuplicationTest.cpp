@@ -18,7 +18,6 @@
 #include "RedexTest.h"
 #include "Shrinker.h"
 #include "TailDuplicationPass.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 struct TailDuplicationTest : public RedexTest {
