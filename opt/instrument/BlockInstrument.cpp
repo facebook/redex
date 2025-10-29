@@ -28,7 +28,6 @@
 #include "ScopedMetrics.h"
 #include "Show.h"
 #include "SourceBlocks.h"
-#include "TypeSystem.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 
