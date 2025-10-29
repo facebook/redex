@@ -14,7 +14,6 @@
 #include "CheckCastAnalysis.h"
 #include "CheckCastTransform.h"
 #include "ClassHierarchy.h"
-#include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
 #include "Debug.h"
 #include "DexLoader.h"
