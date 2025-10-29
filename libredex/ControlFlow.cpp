@@ -14,9 +14,9 @@
 #include <utility>
 
 #include "CppUtil.h"
+#include "DeterministicContainers.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
-#include "DexUtil.h"
 #include "IRList.h"
 #include "InstructionLowering.h"
 #include "RedexContext.h"
