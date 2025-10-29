@@ -10,7 +10,6 @@
 #include <gtest/gtest.h>
 
 #include "DexClass.h"
-#include "DexLoader.h"
 #include "JarLoader.h"
 #include "RedexTest.h"
 
