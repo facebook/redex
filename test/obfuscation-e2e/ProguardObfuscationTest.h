@@ -20,7 +20,6 @@
 #include "ProguardMatcher.h"
 #include "ProguardParser.h"
 #include "ReachableClasses.h"
-#include "RedexContext.h"
 
 class ProguardObfuscationTest {
  private:
