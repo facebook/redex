@@ -8,7 +8,6 @@
 #pragma once
 
 #include <algorithm>
-#include <boost/optional.hpp>
 #include <boost/optional/optional.hpp>
 #include <fstream>
 #include <functional>
