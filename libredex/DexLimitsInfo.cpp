@@ -7,7 +7,6 @@
 
 #include "DexLimitsInfo.h"
 #include "Show.h"
-#include "Trace.h"
 
 DexLimitsInfo::DexLimitsInfo(
     init_classes::InitClassesWithSideEffects* init_classes_with_side_effects,
