@@ -7,8 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include <boost/filesystem.hpp>
-
 #include "DexCallSite.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
