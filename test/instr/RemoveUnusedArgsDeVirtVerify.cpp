@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Resolver.h"
+#include "DexClass.h"
 #include "Show.h"
 #include "VerifyUtil.h"
 
