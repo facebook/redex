@@ -22,7 +22,6 @@
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Show.h"
-#include "SourceBlocks.h"
 #include "Walkers.h"
 
 using namespace class_merging;
