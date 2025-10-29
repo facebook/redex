@@ -9,7 +9,6 @@
 
 #include "DexClass.h"
 #include "EnumUpcastAnalysis.h"
-#include "Resolver.h"
 #include "Walkers.h"
 
 namespace optimize_enums {
