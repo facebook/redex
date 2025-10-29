@@ -11,7 +11,6 @@
 
 #include "ApkResources.h"
 #include "RedexResources.h"
-#include "ResourcesInliningPass.h"
 #include "verify/VerifyUtil.h"
 
 void resource_inlining_PreVerify(ResourceTableFile* res_table);
