@@ -7,7 +7,9 @@
 
 #pragma once
 
-#include <boost/filesystem.hpp>
+#include <boost/filesystem/directory.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
