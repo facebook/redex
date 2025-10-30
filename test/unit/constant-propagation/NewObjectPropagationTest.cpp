@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ConstantPropagationPass.h"
+#include "ConstantPropagationAnalysis.h"
 
 #include <gtest/gtest.h>
 
