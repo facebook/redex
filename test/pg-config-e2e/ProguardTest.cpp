@@ -16,7 +16,6 @@
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "JarLoader.h"
-#include "Match.h"
 #include "ProguardConfiguration.h"
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
