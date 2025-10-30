@@ -8,7 +8,6 @@
 #include "Instrument.h"
 
 #include <boost/algorithm/string.hpp>
-#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <mutex>
