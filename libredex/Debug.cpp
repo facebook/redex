@@ -43,7 +43,7 @@
 #include <sys/syscall.h>
 #endif
 
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/exception/all.hpp>
 #ifdef __APPLE__
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
