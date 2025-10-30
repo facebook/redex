@@ -11,7 +11,6 @@
 
 #include "DexClass.h"
 #include "Show.h"
-#include "Walkers.h"
 
 namespace {
 
