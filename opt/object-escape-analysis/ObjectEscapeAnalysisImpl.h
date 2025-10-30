@@ -12,7 +12,6 @@
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/PatriciaTreeMap.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
-#include <sparta/PatriciaTreeSet.h>
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
 
 #include "BaseIRAnalyzer.h"
