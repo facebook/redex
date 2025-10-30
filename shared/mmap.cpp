@@ -7,7 +7,7 @@
 
 #include "mmap.h"
 
-#include <inttypes.h>
+#include <cstdint>
 #include <stdlib.h>
 #include <sys/mman.h>
 
