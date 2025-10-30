@@ -9,7 +9,6 @@
 
 #include "DexUtil.h"
 #include "RedexTest.h"
-#include "Resolver.h"
 #include "RewriteKotlinSingletonInstance.h"
 #include "Show.h"
 
