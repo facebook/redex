@@ -12,7 +12,6 @@
 #include "Show.h"
 #include "TypedefAnnoCheckerPass.h"
 #include "TypedefAnnoPatcher.h"
-#include "Walkers.h"
 
 struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
   TypedefAnnoCheckerPass::Config get_config() {
