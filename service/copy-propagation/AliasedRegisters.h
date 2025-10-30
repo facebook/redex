@@ -8,7 +8,6 @@
 #pragma once
 
 #include <boost/optional.hpp>
-#include <limits>
 
 #include <sparta/AbstractDomain.h>
 #include <sparta/PatriciaTreeMap.h>
