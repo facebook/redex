@@ -8,7 +8,6 @@
 #pragma once
 
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "Pass.h"
 
 class KotlinObjectInliner : public Pass {

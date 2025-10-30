@@ -11,6 +11,7 @@
 #include "ConcurrentContainers.h"
 #include "Creators.h"
 #include "DeterministicContainers.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "LiveRange.h"
 #include "Mutators.h"
