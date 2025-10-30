@@ -7,7 +7,8 @@
 
 #include <utility>
 
-#include "ConstantPropagationPass.h"
+#include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationTransform.h"
 #include "RedexTest.h"
 
 namespace cp = constant_propagation;
