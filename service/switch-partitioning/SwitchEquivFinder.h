@@ -8,7 +8,8 @@
 #pragma once
 
 #include <boost/optional.hpp>
-#include <boost/variant.hpp>
+#include <boost/variant/get.hpp>
+#include <boost/variant/variant.hpp>
 #include <map>
 #include <ostream>
 
