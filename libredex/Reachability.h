@@ -15,7 +15,6 @@
 #include "DexClass.h"
 #include "KeepReason.h"
 #include "MethodOverrideGraph.h"
-#include "MethodUtil.h"
 #include "Pass.h"
 #include "RemoveUninstantiablesImpl.h"
 #include "Thread.h"
@@ -367,7 +366,7 @@ struct ReachableAspects {
   InstantiableTypes incomplete_directly_instantiable_types;
   CallableInstanceMethods zombie_implementation_methods;
   std::vector<DexMethod*> zombie_methods;
-  UnorderedSet<const DexClass*> deserializable_types{};
+  UnorderedSet<const DexClass*> deserializable_types;
   uint64_t instructions_unvisited{0};
   const DexType* parcelable_type = DexType::get_type("Landroid/os/Parcelable;");
   void finish(const ConditionallyMarked& cond_marked,

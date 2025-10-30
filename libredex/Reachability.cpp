@@ -15,6 +15,7 @@
 #include "CFGMutation.h"
 #include "DexAnnotation.h"
 #include "DexUtil.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "ProguardConfiguration.h"
 #include "ReachableClasses.h"
@@ -928,12 +929,11 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
         refs->unknown_invoke_virtual_targets = true;
       } else if (opcode::is_invoke_interface(op) && is_interface(base_cls)) {
         // Why can_rename? To mirror what VirtualRenamer looks at.
-        if (root(resolved_callee) || !can_rename(resolved_callee)) {
+        if (root(resolved_callee) || !can_rename(resolved_callee) ||
+            is_annotation(base_cls)) {
           // We cannot rule out that there are dynamically added classes,
           // possibly even created at runtime via Proxy.newProxyInstance, that
           // override this method. So we assume the worst.
-          refs->unknown_invoke_virtual_targets = true;
-        } else if (is_annotation(base_cls)) {
           refs->unknown_invoke_virtual_targets = true;
         }
       }
@@ -1092,7 +1092,8 @@ void MethodReferencesGatherer::advance(const Advance& advance,
       queue.push((CFGNeedle){e->target(), e->target()->begin()});
     }
   };
-  auto visit_throw_succs_if_last_insn = [&visit_succ](auto* block, auto it) {
+  auto visit_throw_succs_if_last_insn = [&visit_succ](auto* block,
+                                                      const auto& it) {
     if (block->get_last_insn() == it) {
       for (auto* e : block->succs()) {
         if (e->type() == cfg::EDGE_THROW) {
