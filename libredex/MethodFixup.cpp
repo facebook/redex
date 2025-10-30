@@ -7,7 +7,6 @@
 
 #include "MethodFixup.h"
 
-#include "DexOpcode.h"
 #include "IRCode.h"
 #include "Show.h"
 #include "Walkers.h"
