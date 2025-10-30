@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <mutex>
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
