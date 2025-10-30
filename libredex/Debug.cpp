@@ -10,7 +10,7 @@
 
 #include <array>
 #include <atomic>
-#include <boost/regex.hpp>
+#include <boost/regex.hpp> // NOLINT
 #include <cstring>
 #include <exception>
 #include <fstream>
