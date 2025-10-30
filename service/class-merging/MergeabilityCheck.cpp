@@ -7,12 +7,12 @@
 
 #include "MergeabilityCheck.h"
 
+#include "IRCode.h"
 #include "LiveRange.h"
 #include "Model.h"
 #include "ReachableClasses.h"
 #include "RefChecker.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
