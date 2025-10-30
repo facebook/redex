@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/graph/adjacency_list.hpp>
