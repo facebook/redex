@@ -11,7 +11,6 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
-#include "DexOutput.h"
 #include "RedexContext.h"
 #include "Show.h"
 
