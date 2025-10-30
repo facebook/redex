@@ -11,7 +11,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/graph/depth_first_search.hpp>
-#include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/regex/pending/unicode_iterator.hpp>
