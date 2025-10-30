@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "DexInstruction.h"
 #include "Show.h"
 #include "verify/OptimizeEnumCommon.h"
 #include "verify/VerifyUtil.h"
