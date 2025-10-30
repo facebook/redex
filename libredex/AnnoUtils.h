@@ -10,7 +10,6 @@
 #include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 
 /**
  * Parses the default value of an annotation given the annotation and the
