@@ -10,7 +10,6 @@
 #include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexStore.h"
 
 // The definition of TypeSet is defined differently in ClassHierarchy, so we
 // need to manually define ClassHierarchy here.
