@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-#include <json/json.h>
+#include <json/value.h>
 
 #include "DexClass.h"
 #include "DexInstruction.h"
