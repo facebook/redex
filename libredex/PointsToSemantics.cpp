@@ -34,7 +34,6 @@
 #include "IROpcode.h"
 #include "Macros.h"
 #include "PointsToSemanticsUtils.h"
-#include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
