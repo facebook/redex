@@ -23,13 +23,13 @@
 #include "DexDebugInstruction.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
-#include "DexUtil.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "InstructionLowering.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Transform.h"
+#include "TypeUtil.h"
 
 #if defined(__clang__)
 #define NO_SIGNED_INT_OVERFLOW \
