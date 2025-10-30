@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include "CFGInliner.h"
 #include "ControlFlow.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
