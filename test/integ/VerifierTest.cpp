@@ -9,7 +9,6 @@
 #include <boost/filesystem/path.hpp>
 #include <fstream>
 #include <gtest/gtest.h>
-#include <json/json.h>
 #include <sstream>
 
 #include "RedexTest.h"
