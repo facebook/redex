@@ -8,11 +8,11 @@
 #include <gtest/gtest.h>
 
 #include "ApiLevelChecker.h"
+#include "ControlFlow.h"
 #include "Creators.h"
 #include "DexAsm.h"
 #include "RedexTest.h"
 #include "StaticReloV2.h"
-#include "Walkers.h"
 
 namespace static_relo_v2 {
 
