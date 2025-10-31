@@ -17,7 +17,6 @@
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "RemoveUninstantiablesImpl.h"
-#include "Thread.h"
 
 class DexAnnotation;
 
