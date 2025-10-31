@@ -11,7 +11,6 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
-#include "DexInstruction.h"
 #include "IRAssembler.h"
 #include "JarLoader.h"
 #include "RedexTest.h"
