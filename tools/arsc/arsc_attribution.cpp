@@ -12,7 +12,8 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
-#include <json/json.h>
+#include <json/reader.h>
+#include <json/value.h>
 #include <memory>
 #include <secure_lib/secure_string.h>
 
@@ -35,7 +36,7 @@ void print_csv(const std::vector<attribution::Result>& results,
                bool hide_uninteresting) {
   std::cout << "ID,Type,Name,Private Size,Shared Size,Proportional Size,Config "
                "Count,Configs"
-            << std::endl;
+            << '\n';
   for (const auto& result : results) {
     if (hide_uninteresting && result.sizes.proportional_size == 0) {
       continue;
@@ -46,7 +47,7 @@ void print_csv(const std::vector<attribution::Result>& results,
               << "," << result.sizes.private_size << ","
               << result.sizes.shared_size << ","
               << result.sizes.proportional_size << "," << result.configs.size()
-              << "," << csv_escape(joined_configs) << std::endl;
+              << "," << csv_escape(joined_configs) << '\n';
   }
 }
 
@@ -56,7 +57,7 @@ bool read_rename_map(const std::string& resid_to_name_path,
   Json::Reader reader;
   Json::Value root;
   if (!reader.parse(deob_file, root)) {
-    std::cerr << reader.getFormatedErrorMessages() << std::endl;
+    std::cerr << reader.getFormatedErrorMessages() << '\n';
     return false;
   }
   for (Json::ValueIterator it = root.begin(); it != root.end(); ++it) {
@@ -94,7 +95,7 @@ void run(int argc, char** argv) {
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
   } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
+    std::cerr << e.what() << '\n' << '\n';
     exit(EXIT_FAILURE);
   }
 
@@ -112,7 +113,7 @@ void run(int argc, char** argv) {
     auto resid_to_name_path = vm["resid"].as<std::string>();
     if (!read_rename_map(resid_to_name_path, &resid_to_name)) {
       std::cerr << "Failed to parse resid to name json file: "
-                << resid_to_name_path << std::endl;
+                << resid_to_name_path << '\n';
       exit(EXIT_FAILURE);
     }
   }
@@ -121,7 +122,7 @@ void run(int argc, char** argv) {
   auto mode = (std::ios_base::openmode)(std::ios_base::in);
   map->open(arsc_path, mode);
   if (!map->is_open()) {
-    std::cerr << "Could not map " << arsc_path << std::endl;
+    std::cerr << "Could not map " << arsc_path << '\n';
     exit(EXIT_FAILURE);
   }
   do_attribution(map->const_data(),
@@ -144,7 +145,7 @@ int main(int argc, char** argv) {
   try {
     run(argc, argv);
   } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
+    std::cerr << e.what() << '\n' << '\n';
     exit(EXIT_FAILURE);
   }
   return 0;
