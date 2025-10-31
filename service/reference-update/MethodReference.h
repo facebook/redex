@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <boost/none.hpp>
+#include <boost/optional/optional.hpp>
 
 #include "DexClass.h"
 #include "DexStore.h"
