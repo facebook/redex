@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/range/any_range.hpp>
+#include <boost/range/iterator_range.hpp>
 #include <limits>
 #include <memory>
 #include <string>
@@ -300,7 +300,7 @@ class IRInstruction final {
 
   int64_t get_literal() const {
     always_assert(has_literal());
-    return m_literal;
+    return static_cast<int64_t>(m_literal);
   }
 
   IRInstruction* set_literal(int64_t literal) {
