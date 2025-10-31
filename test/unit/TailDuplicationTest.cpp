@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include "ApiLevelChecker.h"
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexUtil.h"
