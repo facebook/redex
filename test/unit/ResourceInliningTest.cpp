@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <gtest/gtest.h>
 
-#include "Creators.h"
 #include "IRAssembler.h"
 #include "JarLoader.h"
 #include "RedexTest.h"
