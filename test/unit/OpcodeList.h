@@ -9,7 +9,8 @@
 
 #include <vector>
 
-#include "DexInstruction.h"
+#include "DexOpcode.h"
+#include "IROpcode.h"
 
 extern std::vector<DexOpcode> all_dex_opcodes;
 

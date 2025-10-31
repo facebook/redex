@@ -9,6 +9,7 @@
 
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
@@ -84,14 +85,12 @@ TEST_F(IRInstructionTest, RoundTrip) {
       dynamic_cast<DexOpcodeType*>(insn)->set_type(ty);
     } else if (insn->has_field()) {
       dynamic_cast<DexOpcodeField*>(insn)->set_field(field);
-    } else if (insn->has_method()) {
-      // TODO: We can / should test method-bearing instructions -- just need to
-      // generate a method with a proto that matches the number of registers we
-      // are passing in
-      continue;
-    } else if (insn->has_proto() || insn->has_methodhandle()) {
-      // TODO: We can / should test proto- and methodhandle-bearing instructions
-      // -- just need to generate a proto/methodhandle
+    } else if (insn->has_method() || insn->has_proto() ||
+               insn->has_methodhandle()) {
+      // TODO: We can / should test method-, proto-, and methodhandle-bearing
+      // instructions -- just need to generate a method with a proto that
+      // matches the number of registers we are passing in, or a
+      // proto/methodhandle
       continue;
     }
 
@@ -263,7 +262,7 @@ TEST_F(IRInstructionTest, SelectConst) {
   // const/4 0xf to load the value 0xffffffff into the dest register
   EXPECT_EQ(DOPCODE_CONST_16, select_const_opcode(insn));
 
-  insn->set_literal(0xffffffffffffffff);
+  insn->set_literal(static_cast<int64_t>(0xffffffffffffffff));
   // Conversely, this can use const/4 because of sign extension
   EXPECT_EQ(DOPCODE_CONST_4, select_const_opcode(insn));
 
@@ -278,7 +277,7 @@ TEST_F(IRInstructionTest, SelectConst) {
   insn->set_literal(static_cast<int32_t>(0xffff0001));
   EXPECT_EQ(DOPCODE_CONST, select_const_opcode(insn));
 
-  insn->set_literal(0xf0ffffffffffffff);
+  insn->set_literal(static_cast<int64_t>(0xf0ffffffffffffff));
   EXPECT_THROW(select_const_opcode(insn), RedexException);
 
   delete insn;
@@ -290,10 +289,10 @@ TEST_F(IRInstructionTest, SelectConst) {
   wide_insn->set_literal(static_cast<int32_t>(0xffff0001));
   EXPECT_EQ(DOPCODE_CONST_WIDE_32, select_const_opcode(wide_insn));
 
-  wide_insn->set_literal(0xffff000000000000);
+  wide_insn->set_literal(static_cast<int64_t>(0xffff000000000000));
   EXPECT_EQ(DOPCODE_CONST_WIDE_HIGH16, select_const_opcode(wide_insn));
 
-  wide_insn->set_literal(0xffff000000000001);
+  wide_insn->set_literal(static_cast<int64_t>(0xffff000000000001));
   EXPECT_EQ(DOPCODE_CONST_WIDE, select_const_opcode(wide_insn));
 
   delete wide_insn;
