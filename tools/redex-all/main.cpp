@@ -1952,7 +1952,7 @@ int main(int argc, char* argv[]) {
         args.config.get("record_keep_reasons", false).asBool());
 
     signed_constant_domain::enable_bitset =
-        args.config.get("enable_bitset_constant_propagation", false).asBool();
+        args.config.get("enable_bitset_constant_propagation", true).asBool();
     signed_constant_domain::enable_low6bits =
         args.config.get("enable_low6bits_constant_propagation", false).asBool();
 
