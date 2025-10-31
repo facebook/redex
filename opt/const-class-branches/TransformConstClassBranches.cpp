@@ -15,6 +15,7 @@
 #include "ConstantPropagationAnalysis.h"
 #include "Creators.h"
 #include "DexClass.h"
+#include "DexStructure.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
 #include "StringTreeSet.h"

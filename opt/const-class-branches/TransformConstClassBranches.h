@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "InterDexPass.h"
 #include "Pass.h"
 #include "PassManager.h"
 
