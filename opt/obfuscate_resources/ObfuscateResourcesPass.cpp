@@ -9,7 +9,7 @@
 
 #include <algorithm>
 #include <boost/algorithm/string.hpp> // NOLINT
-#include <boost/format.hpp>
+#include <boost/format.hpp> // NOLINT
 #include <cstdio>
 #include <string>
 
