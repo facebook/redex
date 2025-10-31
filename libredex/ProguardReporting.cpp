@@ -11,7 +11,8 @@
 #include <ostream>
 
 #include "DexClass.h"
-#include "ReachableClasses.h"
+#include "DexUtil.h"
+#include "MethodUtil.h"
 
 std::string_view extract_suffix(std::string_view class_name) {
   auto i = class_name.find_last_of('.');
@@ -58,7 +59,7 @@ std::string type_descriptor_to_java(const std::string& descriptor) {
     return java_names::internal_to_external(descriptor);
   }
   std::cerr << "type_descriptor_to_java: unexpected type descriptor "
-            << descriptor << std::endl;
+            << descriptor << '\n';
   exit(2);
 }
 
@@ -85,7 +86,7 @@ std::string deobfuscate_type_descriptor(const ProguardMap& pg_map,
       auto deob_class = pg_map.deobfuscate_class(class_type);
       if (deob_class.empty()) {
         std::cerr << "Warning: failed to deobfuscate class " << class_type
-                  << std::endl;
+                  << '\n';
         deob_class = class_type;
       }
       deob += deob_class;
@@ -134,8 +135,7 @@ void redex::print_method(std::ostream& output,
   } else {
     const auto deob = method->get_deobfuscated_name_or_empty();
     if (deob.empty()) {
-      std::cerr << "WARNING: method has no deobfu: " << method_name
-                << std::endl;
+      std::cerr << "WARNING: method has no deobfu: " << method_name << '\n';
     } else {
       method_name = extract_member_name(deob);
     }
@@ -150,7 +150,7 @@ void redex::print_method(std::ostream& output,
         deobfuscate_type_descriptor(pg_map, return_type_desc);
     output << type_descriptor_to_java(deobfu_return_type) << " ";
   }
-  output << method_name << java_args(pg_map, args) << std::endl;
+  output << method_name << java_args(pg_map, args) << '\n';
 }
 
 template <class Container>
@@ -172,7 +172,7 @@ void redex::print_field(std::ostream& output,
       deobfuscate_type_descriptor(pg_map, field_type);
   output << class_name << ": " << type_descriptor_to_java(deobfu_field_type)
          << " " << extract_member_name(field->get_deobfuscated_name_or_empty())
-         << std::endl;
+         << '\n';
 }
 
 template <class Container>
@@ -194,11 +194,11 @@ void redex::print_class(std::ostream& output,
       return deob;
     }
     std::cerr << "WARNING: this class has no deobu name: "
-              << cls->get_name()->c_str() << std::endl;
+              << cls->get_name()->c_str() << '\n';
     return cls->get_name()->str();
   }();
   std::string name = java_names::internal_to_external(deob_name);
-  output << name << std::endl;
+  output << name << '\n';
   print_fields(output, pg_map, name, cls->get_ifields());
   print_fields(output, pg_map, name, cls->get_sfields());
   print_methods(output, pg_map, name, cls->get_dmethods());
