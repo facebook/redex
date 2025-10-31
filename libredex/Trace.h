@@ -11,7 +11,6 @@
 #include <string>
 
 #include "Macros.h"
-#include "Util.h"
 
 class DexMethodRef;
 class DexType;
