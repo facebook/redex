@@ -9,7 +9,7 @@
 #include "DeterministicContainers.h"
 
 #include <algorithm>
-#include <boost/functional/hash.hpp>
+#include <boost/container_hash/hash.hpp>
 #include <boost/range/algorithm.hpp>
 #include <numeric>
 
