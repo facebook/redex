@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <limits>
 #include <utility>
 
 #include <sparta/ConstantAbstractDomain.h>
