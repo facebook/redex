@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-#include <boost/thread/thread.hpp>
+#include <boost/thread/thread.hpp> // NOLINT
 
 class AtomicMapTest : public ::testing::Test {};
 
@@ -25,6 +25,7 @@ TEST_F(AtomicMapTest, concurrentFetchAdd) {
   const size_t N = 100000;
   AtomicMap<uint32_t, uint32_t> map;
   std::vector<boost::thread> threads;
+  threads.reserve(N_THREADS);
   for (size_t t = 0; t < N_THREADS; ++t) {
     threads.emplace_back([&]() {
       for (size_t i = 0; i < N; ++i) {
@@ -47,6 +48,7 @@ TEST_F(AtomicMapTest, concurrentStore) {
   const size_t N = 100000;
   AtomicMap<size_t, size_t> map;
   std::vector<boost::thread> threads;
+  threads.reserve(N_THREADS);
   for (size_t t = 0; t < N_THREADS; ++t) {
     threads.emplace_back([&]() {
       for (size_t i = 0; i < N; ++i) {
@@ -85,6 +87,7 @@ TEST_F(AtomicMapTest, concurrentCompareExchange) {
   const size_t N = 100000;
   AtomicMap<size_t, size_t> map;
   std::vector<boost::thread> threads;
+  threads.reserve(N_THREADS);
   for (size_t t = 0; t < N_THREADS; ++t) {
     threads.emplace_back([&]() {
       for (size_t i = 0; i < N; ++i) {
