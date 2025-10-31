@@ -19,7 +19,6 @@
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "Pass.h"
-#include "ProguardMap.h"
 #include "Trace.h"
 
 #include <locator.h>

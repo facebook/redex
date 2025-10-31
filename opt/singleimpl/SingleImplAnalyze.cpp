@@ -15,6 +15,7 @@
 #include "DexOutput.h"
 #include "DexStore.h"
 #include "DexUtil.h"
+#include "ProguardMap.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
