@@ -7,7 +7,7 @@
 
 #include "RemoveBuilderPattern.h"
 
-#include <boost/regex.hpp>
+#include <boost/regex.hpp> // NOLINT
 
 #include "BuilderTransform.h"
 #include "ConfigFiles.h"
