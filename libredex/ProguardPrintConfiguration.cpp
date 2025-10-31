@@ -6,7 +6,6 @@
  */
 
 #include "ProguardPrintConfiguration.h"
-#include "ProguardReporting.h"
 
 #include <ostream>
 #include <sstream>
@@ -85,6 +84,6 @@ void keep_rules::show_configuration(
     const Scope& /*classes*/,
     const keep_rules::ProguardConfiguration& config) {
   for (const auto& keep : config.keep_rules) {
-    output << keep_rules::show_keep(*keep) << std::endl;
+    output << keep_rules::show_keep(*keep) << '\n';
   }
 }
