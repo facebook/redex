@@ -13,7 +13,6 @@
 #include <cstdio>
 #include <string>
 
-#include "ApkResources.h"
 #include "BundleResources.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
