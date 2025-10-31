@@ -6,7 +6,9 @@
  */
 
 #include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
+#include <boost/filesystem/directory.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
 #include <fstream>
 #include <iostream>
 
@@ -29,7 +31,7 @@ void load_store_dexen(DexStore& store,
                       int support_dex_version = 35) {
   for (const auto& file_path : store_metadata.get_files()) {
     if (verbose) {
-      std::cout << "Loading " << file_path << std::endl;
+      std::cout << "Loading " << file_path << '\n';
     }
     DexClasses classes =
         load_classes_from_dex(DexLocation::make_location("", file_path),
@@ -140,7 +142,7 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
     boost::split(system_jars, system_jar_paths, delim);
     for (const auto& system_jar : system_jars) {
       if (m_verbose) {
-        std::cout << "Loading " << system_jar << std::endl;
+        std::cout << "Loading " << system_jar << '\n';
       }
       if (!load_jar_file(DexLocation::make_location("", system_jar))) {
         throw std::runtime_error("Could not load system jar file '" +
@@ -177,7 +179,7 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
 
   // Initialize reachable classes
   if (m_verbose) {
-    std::cout << "Initializing reachable classes" << std::endl;
+    std::cout << "Initializing reachable classes" << '\n';
   }
   Scope scope = build_class_scope(stores);
   JsonWrapper config;
