@@ -6,10 +6,10 @@
  */
 
 #include <cstdlib>
-#include <fstream>
 #include <gtest/gtest.h>
 #include <json/reader.h>
 #include <json/value.h>
+#include <sstream>
 
 #include "ConfigFiles.h"
 #include "RedexTest.h"
