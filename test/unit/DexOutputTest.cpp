@@ -7,7 +7,8 @@
 
 #include "DexOutput.h"
 #include <gtest/gtest.h>
-#include <json/json.h>
+#include <json/reader.h>
+#include <json/value.h>
 
 TEST(DexOutput, checkMethodInstructionSizeLimit) {
 
