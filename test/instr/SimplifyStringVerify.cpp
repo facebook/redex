@@ -14,7 +14,6 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "VerifyUtil.h"
-#include "Walkers.h"
 
 namespace {
 // We use this ugly macro expansion instead of loops for better gtest reporting.
