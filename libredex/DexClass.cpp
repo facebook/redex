@@ -26,7 +26,6 @@
 #include "Show.h"
 #include "StringBuilder.h"
 #include "Util.h"
-#include "Walkers.h"
 #include "Warning.h"
 
 #include <algorithm>
