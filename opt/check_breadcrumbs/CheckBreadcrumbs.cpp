@@ -13,7 +13,7 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem.hpp>
+#include <boost/filesystem/operations.hpp>
 
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
