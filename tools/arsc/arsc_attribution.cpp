@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/program_options.hpp>
 #include <cstdint>
@@ -95,7 +95,7 @@ void run(int argc, char** argv) {
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
   } catch (std::exception& e) {
-    std::cerr << e.what() << '\n' << '\n';
+    std::cerr << e.what() << "\n\n";
     exit(EXIT_FAILURE);
   }
 
@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
   try {
     run(argc, argv);
   } catch (std::exception& e) {
-    std::cerr << e.what() << '\n' << '\n';
+    std::cerr << e.what() << "\n\n";
     exit(EXIT_FAILURE);
   }
   return 0;
