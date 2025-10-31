@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <boost/none.hpp>
+#include <boost/optional/optional.hpp>
 
 #include <sparta/AbstractDomain.h>
 #include <sparta/PatriciaTreeMap.h>
