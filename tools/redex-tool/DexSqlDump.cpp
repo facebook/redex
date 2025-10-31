@@ -27,7 +27,6 @@ $ ./native/redex/tools/redex-tool/DexSqlQuery.py dex.db
 #include <vector>
 
 #include "ClassHierarchy.h"
-#include "ControlFlow.h"
 #include "DexOutput.h"
 #include "IRCode.h"
 #include "Resolver.h"
