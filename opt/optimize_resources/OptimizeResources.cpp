@@ -16,6 +16,7 @@
 #include "IOUtil.h"
 #include "PassManager.h"
 #include "RClass.h"
+#include "ReachableResources.h"
 #include "Show.h"
 
 namespace opt_res {
