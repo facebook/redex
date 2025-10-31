@@ -12,7 +12,6 @@
 
 #include "DexClass.h"
 #include "DexLimits.h"
-#include "DexLoader.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
 
