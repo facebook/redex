@@ -21,7 +21,6 @@
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "IRTypeChecker.h"
-#include "LocalDce.h"
 #include "RedexTest.h"
 #include "Show.h"
 
