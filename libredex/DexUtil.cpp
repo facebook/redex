@@ -20,6 +20,7 @@
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "UnknownVirtuals.h"
 
 const DexType* get_init_class_type_demand(const IRInstruction* insn) {
