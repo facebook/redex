@@ -7,7 +7,6 @@
 
 #pragma once
 
-
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "IRInstruction.h"
