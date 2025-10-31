@@ -9,6 +9,7 @@
 
 #include "CFGMutation.h"
 #include "ControlFlow.h"
+#include "Creators.h"
 #include "Lazy.h"
 #include "LiveRange.h"
 #include "Show.h"

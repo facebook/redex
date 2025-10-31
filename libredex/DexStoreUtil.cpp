@@ -7,6 +7,7 @@
 
 #include "DexStoreUtil.h"
 
+#include "Creators.h"
 #include "DexEncoding.h"
 
 bool is_canary(DexClass* clazz) {
@@ -63,12 +64,8 @@ bool is_in_non_root_store(const DexType* type,
   size_t store_idx = xstores.get_store_idx(type);
   // Hack to go around the fact that the primary dex goes in its own bucket.
   size_t next_store_idx = stores[0].get_dexen().size() == 1 ? 1 : 2;
-  if (!include_primary_dex && store_idx == 0) {
-    return true;
-  } else if (store_idx >= next_store_idx) {
-    return true;
-  }
-  return false;
+  return (!include_primary_dex && store_idx == 0) ||
+         (store_idx >= next_store_idx);
 }
 
 UnorderedSet<const DexType*> get_non_root_store_types(
