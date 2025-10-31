@@ -7,8 +7,8 @@
 
 #include "RefChecker.h"
 
+#include "ControlFlow.h"
 #include "DeterministicContainers.h"
-#include "EditableCfgAdapter.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
@@ -169,21 +169,23 @@ bool RefChecker::check_type_internal(const DexType* type) const {
   while (true) {
     auto* cls = type_class(type);
     if (cls == nullptr) {
-      if (type == type::java_lang_String() || type == type::java_lang_Class() ||
-          type == type::java_lang_Enum() || type == type::java_lang_Object() ||
-          type == type::java_lang_Void() ||
-          type == type::java_lang_Throwable() ||
-          type == type::java_lang_Boolean() || type == type::java_lang_Byte() ||
-          type == type::java_lang_Short() ||
-          type == type::java_lang_Character() ||
-          type == type::java_lang_Integer() || type == type::java_lang_Long() ||
-          type == type::java_lang_Float() || type == type::java_lang_Double()) {
-        // This shouldn't be needed, as ideally we have a min-sdk loaded with
-        // Object in it, but in some tests we don't set up the full
-        // environment and do need this.
-        return true;
-      }
-      return false;
+      // This shouldn't be needed, as ideally we have a min-sdk loaded with
+      // Object in it, but in some tests we don't set up the full
+      // environment and do need this.
+      return type == type::java_lang_String() ||
+             type == type::java_lang_Class() ||
+             type == type::java_lang_Enum() ||
+             type == type::java_lang_Object() ||
+             type == type::java_lang_Void() ||
+             type == type::java_lang_Throwable() ||
+             type == type::java_lang_Boolean() ||
+             type == type::java_lang_Byte() ||
+             type == type::java_lang_Short() ||
+             type == type::java_lang_Character() ||
+             type == type::java_lang_Integer() ||
+             type == type::java_lang_Long() ||
+             type == type::java_lang_Float() ||
+             type == type::java_lang_Double();
     }
     if (cls->is_external()) {
       return (m_min_sdk_api != nullptr) && m_min_sdk_api->has_type(type);
