@@ -11,7 +11,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "DexLoader.h"
 #include "JarLoader.h"
 #include "RedexTest.h"
 #include "Show.h"
