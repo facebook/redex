@@ -13,8 +13,8 @@
 #include "ClassHierarchy.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "Timer.h"
+#include "TypeUtil.h"
 
 /*
  * NOTE: Before using this code, check and see if MethodOverrideGraph.h or

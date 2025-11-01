@@ -14,6 +14,7 @@
 #include "ApproximateShapeMerging.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
+#include "DexStore.h"
 #include "InterDexGrouping.h"
 #include "MergerType.h"
 #include "MergingStrategies.h"
