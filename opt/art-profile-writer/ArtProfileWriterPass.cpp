@@ -14,7 +14,7 @@
 #include "ArtProfileWriterPass.h"
 
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/regex.hpp>
+#include <boost/regex.hpp> // NOLINT
 #include <fstream>
 #include <string>
 
