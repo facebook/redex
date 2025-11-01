@@ -20,7 +20,6 @@
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalDce.h"
-#include "MethodProfiles.h"
 #include "RandomForest.h"
 #include "ShrinkerConfig.h"
 #include "Timer.h"

@@ -90,6 +90,7 @@
 #include "Creators.h"
 #include "DeterministicContainers.h"
 #include "LiveRange.h"
+#include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
 #include "OutliningProfileGuidanceImpl.h"
 #include "PassManager.h"
