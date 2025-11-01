@@ -10,9 +10,9 @@
 #include <map>
 
 #include "ApkResources.h"
+#include "DexClass.h"
 #include "OptimizeResources.h"
 #include "RedexResources.h"
-#include "verify/VerifyUtil.h"
 
 namespace {
 void assert_string_matches(const std::string& actual,
@@ -81,7 +81,7 @@ void postverify_impl(const DexClasses& /* unused */,
   {
     auto string_values = string_value_getter(0x7f090003);
     ASSERT_EQ(string_values.size(), 1);
-    auto val = string_values[0];
+    const auto& val = string_values[0];
     // Seems that aapt sometimes outputs a dummy -v4 suffix on some resources,
     // but not others. May depend on some versioning or flags, but regardless
     // make the checks here flexible for with/without so this doesn't get marked
