@@ -12,8 +12,9 @@
 
 #include "Creators.h"
 #include "IRAssembler.h"
-#include "ObjectSensitiveDcePass.h"
+#include "LocalPointersAnalysis.h"
 #include "RedexTest.h"
+#include "SideEffectSummary.h"
 
 namespace ptrs = local_pointers;
 namespace uv = used_vars;
@@ -270,10 +271,8 @@ TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
     auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
       auto* method = insn->get_method();
-      if (method::is_init(method)) {
-        invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
-        invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
-      } else if (method->get_name()->str() == "nosideeffects") {
+      if (method::is_init(method) ||
+          method->get_name()->str() == "nosideeffects") {
         invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
         invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
       }
