@@ -65,11 +65,11 @@
 #include "FieldOpTracker.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeInference.h"
-#include "Walkers.h"
 
 using namespace sparta;
 using namespace cse_impl;
