@@ -10,11 +10,12 @@
 #include <memory>
 #include <vector>
 
+#include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "TypeUtil.h"
 
 struct MethodCreator;
 struct MethodBlock;
