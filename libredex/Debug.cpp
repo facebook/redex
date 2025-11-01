@@ -49,7 +49,7 @@
 #endif
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
-#include <boost/stacktrace.hpp>
+#include <boost/stacktrace.hpp> // NOLINT
 #pragma GCC diagnostic pop
 
 // By default, run with slow invariant checks in debug mode.
