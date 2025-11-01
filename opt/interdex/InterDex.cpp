@@ -18,7 +18,6 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "DexOutput.h"
 #include "IOUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
@@ -1434,12 +1433,13 @@ DexClass* InterDex::get_canary_cls(EmittingState& emitting_state,
   if (!m_emit_canaries || dex_info.primary) {
     return nullptr;
   }
-  int dexnum = static_cast<int>(emitting_state.dexes_structure.get_num_dexes());
+  size_t dexnum =
+      static_cast<int>(emitting_state.dexes_structure.get_num_dexes());
   DexClass* canary_cls;
   {
     static std::mutex canary_mutex;
     std::lock_guard<std::mutex> lock_guard(canary_mutex);
-    canary_cls = create_canary(dexnum);
+    canary_cls = create_canary(static_cast<int>(dexnum));
   }
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
