@@ -11,7 +11,6 @@
 
 #include "ApkResources.h"
 #include "DexClass.h"
-#include "OptimizeResources.h"
 #include "RedexResources.h"
 
 namespace {
