@@ -7,13 +7,13 @@
 
 #include "DedupResources.h"
 
+#include <boost/filesystem/path.hpp>
 #include <boost/format.hpp>
 #include <boost/functional/hash.hpp>
 #include <fstream>
 #include <map>
 
 #include "ConfigFiles.h"
-#include "DetectBundle.h"
 #include "IOUtil.h"
 #include "OptimizeResources.h"
 #include "RClass.h"
