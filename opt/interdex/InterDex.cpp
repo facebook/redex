@@ -16,7 +16,6 @@
 
 #include "CppUtil.h"
 #include "Debug.h"
-#include "DexAsm.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
@@ -291,19 +290,13 @@ void InterDex::get_movable_coldstart_classes(
       continue;
     }
     auto curr_interaction_freq = freqs.at(curr_idx);
-    if (curr_interaction_freq == 0) {
+    if (curr_interaction_freq == 0 ||
+        move_coldstart_classes.find(cls) != move_coldstart_classes.end() ||
+        (curr_idx == coldstart_idx &&
+         curr_interaction_freq > m_max_betamap_move_threshold)) {
       continue;
     }
-    // if we've already marked the class for moving, don't check it again
-    else if (move_coldstart_classes.find(cls) != move_coldstart_classes.end()) {
-      continue;
-    }
-    // if the class has more than m_max_betamap_move_threshold% freq in
-    // coldstart, do not move it elsewhere
-    else if (curr_idx == coldstart_idx &&
-             curr_interaction_freq > m_max_betamap_move_threshold) {
-      continue;
-    } else if (curr_idx == backgroundset_idx) {
+    if (curr_idx == backgroundset_idx) {
       size_t max_idx = curr_idx;
       bool move_class = false;
 
@@ -1384,7 +1377,7 @@ void InterDex::run() {
       ss << std::get<0>(info) << ",ordinal=" << ordinal++
          << ",coldstart=" << flags.coldstart << ",extended=" << flags.extended
          << ",primary=" << flags.primary << ",scroll=" << flags.scroll
-         << ",background=" << flags.background << std::endl;
+         << ",background=" << flags.background << '\n';
     }
     write_str(mixed_mode_fh, ss.str());
     *mixed_mode_file = nullptr;
@@ -1441,7 +1434,7 @@ DexClass* InterDex::get_canary_cls(EmittingState& emitting_state,
   if (!m_emit_canaries || dex_info.primary) {
     return nullptr;
   }
-  int dexnum = emitting_state.dexes_structure.get_num_dexes();
+  int dexnum = static_cast<int>(emitting_state.dexes_structure.get_num_dexes());
   DexClass* canary_cls;
   {
     static std::mutex canary_mutex;
@@ -1671,8 +1664,10 @@ void InterDex::initialize_baseline_profile_classes() {
 
     const auto& method_stats = method_profiles.method_stats(interaction_id);
     for (const auto& [method, stat] : UnorderedIterable(method_stats)) {
-      if (stat.appear_percent >= interaction_config.threshold &&
-          stat.call_count >= interaction_config.call_threshold) {
+      if (stat.appear_percent >=
+              static_cast<double>(interaction_config.threshold) &&
+          stat.call_count >=
+              static_cast<double>(interaction_config.call_threshold)) {
         auto* dex_type = method->get_class();
         always_assert(dex_type);
         m_baseline_profile_classes->insert(dex_type);
