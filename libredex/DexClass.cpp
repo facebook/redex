@@ -25,6 +25,7 @@
 #include "RedexContext.h"
 #include "Show.h"
 #include "StringBuilder.h"
+#include "Trace.h"
 #include "Util.h"
 #include "Warning.h"
 

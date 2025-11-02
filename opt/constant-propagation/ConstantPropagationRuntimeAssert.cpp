@@ -9,6 +9,7 @@
 
 #include "ControlFlow.h"
 #include "ProguardMap.h"
+#include "Resolver.h"
 
 namespace constant_propagation {
 

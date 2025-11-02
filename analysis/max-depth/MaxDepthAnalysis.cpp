@@ -12,8 +12,10 @@
 #include <sparta/HashedSetAbstractDomain.h>
 
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "Resolver.h"
 #include "SpartaInterprocedural.h"
 
 namespace {
@@ -192,7 +194,9 @@ void MaxDepthAnalysisPass::run_pass(DexStoresVector& stores,
 
   for (const auto& entry : UnorderedIterable(analysis.registry.get_map())) {
     if (entry.second.is_value()) {
-      (*m_result)[entry.first] = static_cast<int>(entry.second.depth());
+      auto depth = entry.second.depth();
+      always_assert(depth <= std::numeric_limits<int>::max());
+      (*m_result)[entry.first] = static_cast<int>(depth);
     }
   }
 }

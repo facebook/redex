@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "Creators.h"
+#include "MethodUtil.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"

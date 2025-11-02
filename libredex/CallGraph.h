@@ -9,9 +9,9 @@
 
 #include <sparta/MonotonicFixpointIterator.h>
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
-#include "Resolver.h"
 
 namespace method_override_graph {
 class Graph;
