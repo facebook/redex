@@ -19,7 +19,6 @@
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "Pass.h"
-#include "Trace.h"
 
 #include <locator.h>
 using facebook::Locator;
