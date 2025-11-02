@@ -10,6 +10,7 @@
 #include "CFGMutation.h"
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
+#include "Creators.h" // NOLINT
 #include "Inliner.h"
 #include "MethodReference.h"
 #include "Resolver.h"
