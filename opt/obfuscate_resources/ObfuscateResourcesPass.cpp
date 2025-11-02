@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <boost/algorithm/string.hpp> // NOLINT
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
 #include <boost/format.hpp> // NOLINT
 #include <cstdio>
 #include <string>
@@ -16,7 +18,6 @@
 #include "BundleResources.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
-#include "DetectBundle.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
