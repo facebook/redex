@@ -27,12 +27,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 class Zeta {
-    private int zValue;
 
     public Zeta() {}
 
     public int doubleZeta() {
-        return 2*zValue;
+        return 2*0;
     }
 }
 
