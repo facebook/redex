@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/algorithm/string.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/program_options.hpp>
 #include <fstream>
@@ -28,7 +27,7 @@ void run(int argc, char** argv) {
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
   } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
+    std::cerr << e.what() << "\n\n";
     exit(EXIT_FAILURE);
   }
 
@@ -50,7 +49,7 @@ void run(int argc, char** argv) {
     auto map = std::make_unique<boost::iostreams::mapped_file>();
     map->open(arsc_path, mode);
     if (!map->is_open()) {
-      std::cerr << "Could not map " << arsc_path << std::endl;
+      std::cerr << "Could not map " << arsc_path << '\n';
       exit(EXIT_FAILURE);
     }
     arsc::ResourceTableVisitor visitor;
@@ -60,7 +59,7 @@ void run(int argc, char** argv) {
     auto map = std::make_unique<boost::iostreams::mapped_file>();
     map->open(xml_path, mode);
     if (!map->is_open()) {
-      std::cerr << "Could not map " << xml_path << std::endl;
+      std::cerr << "Could not map " << xml_path << '\n';
       exit(EXIT_FAILURE);
     }
     arsc::XmlFileVisitor visitor;
@@ -68,7 +67,7 @@ void run(int argc, char** argv) {
   }
 
   if (!success) {
-    std::cerr << "Could not parse file!" << std::endl;
+    std::cerr << "Could not parse file!" << '\n';
     exit(EXIT_FAILURE);
   }
 }
@@ -82,7 +81,7 @@ int main(int argc, char** argv) {
   try {
     run(argc, argv);
   } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
+    std::cerr << e.what() << "\n\n";
     exit(EXIT_FAILURE);
   }
   return 0;
