@@ -16,7 +16,6 @@
 #include "NativeNames.h"
 #include "Show.h"
 #include "Trace.h"
-#include "Walkers.h"
 
 namespace fs = boost::filesystem;
 
