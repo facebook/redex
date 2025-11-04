@@ -102,6 +102,8 @@ class DexString {
   DexString() = delete;
   DexString(DexString&&) = delete;
   DexString(const DexString&) = delete;
+  DexString& operator=(DexString&&) = delete;
+  DexString& operator=(const DexString&) = delete;
 
   uint32_t size() const { return m_repr.length; }
 
@@ -187,6 +189,8 @@ class DexType {
   DexType() = delete;
   DexType(DexType&&) = delete;
   DexType(const DexType&) = delete;
+  DexType& operator=(DexType&&) = delete;
+  DexType& operator=(const DexType&) = delete;
 
   // DexType retrieval/creation
 
@@ -286,6 +290,8 @@ class DexFieldRef {
   DexFieldRef() = delete;
   DexFieldRef(DexFieldRef&&) = delete;
   DexFieldRef(const DexFieldRef&) = delete;
+  DexFieldRef& operator=(DexFieldRef&&) = delete;
+  DexFieldRef& operator=(const DexFieldRef&) = delete;
 
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
@@ -570,6 +576,8 @@ class DexProto {
   DexProto() = delete;
   DexProto(DexProto&&) = delete;
   DexProto(const DexProto&) = delete;
+  DexProto& operator=(DexProto&&) = delete;
+  DexProto& operator=(const DexProto&) = delete;
 
   // DexProto retrieval/creation
 
@@ -855,6 +863,8 @@ class DexMethodRef {
   DexMethodRef() = delete;
   DexMethodRef(DexMethodRef&&) = delete;
   DexMethodRef(const DexMethodRef&) = delete;
+  DexMethodRef& operator=(DexMethodRef&&) = delete;
+  DexMethodRef& operator=(const DexMethodRef&) = delete;
 
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
