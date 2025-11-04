@@ -9,7 +9,6 @@
 import argparse
 import io
 import logging
-import re
 from contextlib import contextmanager
 from typing import (
     Any,
@@ -19,7 +18,6 @@ from typing import (
     Mapping,
     NewType,
     Optional,
-    Pattern,
     Set,
     Tuple,
 )
