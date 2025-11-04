@@ -20,7 +20,6 @@
 #include "PassManager.h"
 #include "RefChecker.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 
 using namespace class_merging;
