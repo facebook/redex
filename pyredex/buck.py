@@ -21,6 +21,8 @@ from pyredex.utils import time_it, time_it_logger
 
 # Data class for a running step.
 class _RunningPart:
+    __slots__ = ("event_id", "name", "desc")
+
     def __init__(self, event_id: int, name: str, desc: str) -> None:
         self.event_id = event_id
         self.name = name
