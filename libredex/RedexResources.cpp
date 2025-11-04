@@ -7,10 +7,10 @@
 
 #include "RedexResources.h"
 
+#include <array>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem/operations.hpp>
-#include <boost/graph/depth_first_search.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/regex/pending/unicode_iterator.hpp>
@@ -25,8 +25,6 @@
 #include "CppUtil.h"
 #include "Debug.h"
 #include "DetectBundle.h"
-#include "DexUtil.h"
-#include "GlobalConfig.h"
 #include "ReadMaybeMapped.h"
 #include "Trace.h"
 #include "WorkQueue.h"
@@ -109,12 +107,13 @@ namespace {
 UnorderedSet<std::string> extract_classes_from_native_lib(const char* data,
                                                           size_t size) {
   UnorderedSet<std::string> classes;
-  char buffer[MAX_CLASSNAME_LENGTH + 2]; // +2 for the trailing ";\0"
+  std::array<char, MAX_CLASSNAME_LENGTH + 2> buffer{}; // +2 for the trailing
+                                                       // ";\0"
   const char* inptr = data;
   const char* end = inptr + size;
 
   while (inptr < end) {
-    char* outptr = buffer;
+    char* outptr = buffer.data();
     size_t length = 0;
     // All classnames start with a package, which starts with a lowercase
     // letter. Some of them are preceded by an 'L' and followed by a ';' in
@@ -138,7 +137,7 @@ UnorderedSet<std::string> extract_classes_from_native_lib(const char* data,
       if (length >= MIN_CLASSNAME_LENGTH) {
         *outptr++ = ';';
         *outptr = '\0';
-        classes.insert(std::string(buffer));
+        classes.insert(std::string(buffer.data()));
       }
     }
     inptr++;
@@ -534,7 +533,8 @@ resources::StyleInfo ResourceTableFile::load_style_info() {
         "Building style graph; style count = %zu",
         style_info.styles.size());
   std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> added_nodes;
-  for (auto&& [id, _] : style_info.styles) {
+  for (const auto& style : style_info.styles) {
+    auto id = style.first;
     max_resource_id = std::max(max_resource_id, id);
     auto v =
         boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
@@ -586,8 +586,8 @@ std::string convert_utf8_to_mutf8(std::string_view input) {
       out << '\xC0' << '\x80';
     } else if (code_point < 0x10000) {
       // Normal UTF-8 encoding.
-      char dest[4] = {0};
-      utf32_to_utf8(&code_point, 1, dest, sizeof(dest));
+      std::array<char, 4> dest{};
+      utf32_to_utf8(&code_point, 1, dest.data(), dest.size());
       for (size_t i = 0; i < (size_t)len; i++) {
         out << dest[i];
       }
