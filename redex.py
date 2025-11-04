@@ -200,34 +200,19 @@ class DexenSnapshot(object):
         return self.files_and_sizes == other.files_and_sizes
 
 
-class State(object):
-    # This structure is only used for passing arguments between prepare_redex,
-    # launch_redex_binary, finalize_redex
-    def __init__(
-        self,
-        args: argparse.Namespace,
-        config_dict: typing.Dict[str, typing.Any],
-        debugger: typing.Optional[str],
-        dex_dir: str,
-        dexen: typing.List[str],
-        extracted_apk_dir: typing.Optional[str],
-        stop_pass_idx: int,
-        lib_manager: typing.Optional[LibraryManager],
-        unpack_manager: typing.Optional[UnpackManager],
-        zip_manager: typing.Optional[ZipManager],
-        dexen_initial_state: typing.Optional[DexenSnapshot],
-    ) -> None:
-        self.args = args
-        self.config_dict = config_dict
-        self.debugger = debugger
-        self.dex_dir = dex_dir
-        self.dexen = dexen
-        self.extracted_apk_dir = extracted_apk_dir
-        self.stop_pass_idx = stop_pass_idx
-        self.lib_manager = lib_manager
-        self.unpack_manager = unpack_manager
-        self.zip_manager = zip_manager
-        self.dexen_initial_state = dexen_initial_state
+@dataclass(slots=True)
+class State:
+    args: argparse.Namespace
+    config_dict: typing.Dict[str, typing.Any]
+    debugger: typing.Optional[str]
+    dex_dir: str
+    dexen: typing.List[str]
+    extracted_apk_dir: typing.Optional[str]
+    stop_pass_idx: int
+    lib_manager: typing.Optional[LibraryManager]
+    unpack_manager: typing.Optional[UnpackManager]
+    zip_manager: typing.Optional[ZipManager]
+    dexen_initial_state: typing.Optional[DexenSnapshot]
 
 
 class RedexRunException(Exception):
