@@ -70,7 +70,7 @@
 #include <string>
 #include <vector>
 
-#include <boost/format.hpp>
+#include <boost/format.hpp> // NOLINT
 
 #include "BigBlocks.h"
 #include "CFGMutation.h"
