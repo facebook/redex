@@ -63,6 +63,8 @@
  */
 #include <zlib.h>
 
+namespace {
+
 template <class T, class U>
 class CustomSort {
  private:
@@ -96,6 +98,8 @@ class CustomSort {
     return false;
   }
 };
+
+} // namespace
 
 GatheredTypes::GatheredTypes(DexClasses* classes) : m_classes(classes) {
   // ensure that the string id table contains the empty string, which is used
@@ -917,7 +921,6 @@ static void sync_all(const Scope& scope) {
     }
     m->sync();
   };
-
   if (serial) {
     walk::code(scope, fn);
   } else {
@@ -2213,7 +2216,8 @@ uint32_t emit_instruction_offset_debug_info(
       redex_assert(after_size < before_size);
     }
   }
-  redex_assert(code_items_tmp.empty());
+  const bool code_items_tmp_is_empty = code_items_tmp.empty();
+  redex_assert(code_items_tmp_is_empty);
 
   // Emit the methods we could not handle.
   for (auto* cie : unsupported_code_items) {
@@ -2296,7 +2300,8 @@ void DexOutput::generate_map() {
   for (auto const& mit : m_map_items) {
     *map++ = mit;
   }
-  inc_offset(((uint8_t*)map) - ((uint8_t*)mapout));
+  inc_offset(static_cast<uint32_t>(reinterpret_cast<uint8_t*>(map) -
+                                   reinterpret_cast<uint8_t*>(mapout)));
 }
 
 /**
@@ -2723,9 +2728,8 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
           return java_names::internal_to_external(deobf_class(cls));
         } else if (type::is_primitive(type)) {
           return std::string(deobf_primitive(type->c_str()[0]));
-        } else {
-          return java_names::internal_to_external(type->str());
         }
+        return java_names::internal_to_external(type->str());
       }
     }
     return show(type);
@@ -2964,6 +2968,8 @@ void DexOutput::write() {
   write_symbol_files();
 }
 
+namespace {
+
 class UniqueReferences {
  public:
   UnorderedSet<const DexString*> strings;
@@ -2979,6 +2985,8 @@ class UniqueReferences {
   int dexes{0};
 };
 UniqueReferences s_unique_references;
+
+} // namespace
 
 void DexOutput::metrics() {
   if (s_unique_references.dexes++ == 1 && !m_normal_primary_dex) {

@@ -45,6 +45,8 @@ void dump_viz(const Scope& scope,
 
 } // namespace
 
+namespace {
+
 class VizMflow : public Tool {
  public:
   VizMflow() : Tool("viz-mflow", "visualize method transforms") {}
@@ -83,5 +85,7 @@ class VizMflow : public Tool {
 
  private:
 };
+
+} // namespace
 
 static VizMflow s_tool;

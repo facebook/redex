@@ -166,6 +166,8 @@ void verify(DexStoresVector& stores) {
 
 } // namespace
 
+namespace {
+
 class Verifier : public Tool {
  public:
   Verifier() : Tool("verify", "verifies references between dexes") {}
@@ -183,5 +185,7 @@ class Verifier : public Tool {
 
  private:
 };
+
+} // namespace
 
 static Verifier s_verifier;
