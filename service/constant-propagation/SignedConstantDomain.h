@@ -809,7 +809,7 @@ class SignedConstantDomain final
   bool is_nez() const { return m_bounds.is_nez; }
   // Is this SignedConstantDomain nez only and nothing more?
   bool is_nez_only() const {
-    return m_bounds.is_nez_only() && m_bitset.is_top();
+    return m_bounds.is_nez_only() && m_bitset.is_top() && m_low6bits.is_top();
   }
 
   bool leq(const SignedConstantDomain& that) const {

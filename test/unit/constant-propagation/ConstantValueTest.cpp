@@ -141,3 +141,19 @@ TEST_F(ConstantValueTest, join) {
   EXPECT_EQ(join(sd_a, sd_b), nez);
   EXPECT_EQ(join(sd_b, sd_a), nez);
 }
+
+TEST_F(ConstantValueTest, nonTopBitsetIsNotNezOnly) {
+  ConstantValue non_top_bitset = meet(
+      SignedConstantDomain(-1, 0xffff), // low6bit is top, but bitset is not.
+      nez);
+  EXPECT_TRUE(non_top_bitset.is_nez());
+  EXPECT_FALSE(non_top_bitset.is_nez_only());
+}
+
+TEST_F(ConstantValueTest, nonTopLow6bitIsNotNezOnly) {
+  ConstantValue non_top_low6bit =
+      meet(SignedConstantDomain(-1, 1), // bitset is top, but low6bit is not.
+           nez);
+  EXPECT_TRUE(non_top_low6bit.is_nez());
+  EXPECT_FALSE(non_top_low6bit.is_nez_only());
+}
