@@ -628,7 +628,7 @@ mod numerical {
                     *self = Self::Top;
                 }
                 (Self::Value(lset), Self::Value(rset)) => {
-                    if rset.is_subset(&lset) {
+                    if rset.is_subset(lset) {
                         return;
                     }
                     *self = Self::Top;
