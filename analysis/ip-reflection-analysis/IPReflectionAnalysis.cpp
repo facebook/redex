@@ -15,8 +15,7 @@
 
 #include "CallGraph.h"
 #include "ConfigFiles.h"
-#include "MethodOverrideGraph.h"
-#include "Resolver.h"
+#include "DexUtil.h"
 #include "Show.h"
 #include "SpartaInterprocedural.h"
 
@@ -233,7 +232,7 @@ void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
 
   Scope scope = build_class_scope(stores);
   AnalysisParameters param;
-  auto analysis = Analysis(scope, m_max_iteration, &param);
+  auto analysis = Analysis(scope, static_cast<int>(m_max_iteration), &param);
   analysis.run();
   const auto& summaries = analysis.registry.get_map();
   m_result = std::make_shared<Result>();
@@ -247,7 +246,7 @@ void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
 
     for (const auto& entry : UnorderedIterable(*m_result)) {
       if (!entry.second.empty()) {
-        file << show(entry.first) << " -> " << entry.second << std::endl;
+        file << show(entry.first) << " -> " << entry.second << '\n';
       }
     }
   }

@@ -17,10 +17,10 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -1150,7 +1150,7 @@ void ReflectionAnalysis::gather_reflection_sites(
       if (cls_src) {
         out << *cls_src;
       }
-      out << std::endl;
+      out << '\n';
       TRACE(REFL, 5, " reflection site: %s", out.str().c_str());
     }
     (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);

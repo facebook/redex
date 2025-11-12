@@ -9,6 +9,7 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ConstantEnvironment.h"
+#include "DexUtil.h"
 #include "EnumClinitAnalysis.h"
 #include "IRCode.h"
 #include "Resolver.h"

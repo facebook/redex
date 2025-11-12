@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "DexClass.h"
+#include "DexStore.h"
 #include "FrameworkApi.h"
 #include "Resolver.h"
 

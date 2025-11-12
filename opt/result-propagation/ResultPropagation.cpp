@@ -14,6 +14,7 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "PassManager.h"

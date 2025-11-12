@@ -13,7 +13,6 @@
 #include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRInstruction.h"
 
 /**

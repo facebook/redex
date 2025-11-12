@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ControlFlow.h"
 #include "DeterministicContainers.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"

@@ -13,6 +13,7 @@
 #include "ConstantPropagationState.h"
 #include "ConstantPropagationWholeProgramState.h"
 #include "DeterministicContainers.h"
+#include "DexStore.h"
 #include "IRCode.h"
 #include "Liveness.h"
 #include "NullPointerExceptionUtil.h"

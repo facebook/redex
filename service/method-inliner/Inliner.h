@@ -13,6 +13,7 @@
 #include "BaselineProfile.h"
 #include "CallSiteSummaries.h"
 #include "DeterministicContainers.h"
+#include "DexUtil.h"
 #include "PriorityThreadPoolDAGScheduler.h"
 #include "RefChecker.h"
 #include "Resolver.h"

@@ -11,12 +11,15 @@
 #include <sstream>
 #include <string>
 
+#include <boost/algorithm/string.hpp>
+
 #include "AnnoUtils.h"
 #include "ApproximateShapeMerging.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "MergeabilityCheck.h"
 #include "MergingStrategies.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "RefChecker.h"
 #include "Resolver.h"
