@@ -8,7 +8,7 @@
 #include "RedexContext.h"
 
 #include <boost/algorithm/string.hpp>
-#include <boost/thread/thread.hpp>
+#include <boost/thread/thread.hpp> // NOLINT
 #include <exception>
 #include <mutex>
 #include <regex>
