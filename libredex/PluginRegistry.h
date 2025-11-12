@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "DeterministicContainers.h"
-#include "Trace.h"
 #include "Util.h"
 
 struct Plugin {

@@ -15,6 +15,7 @@
 #include "JsonWrapper.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "Trace.h"
 #include "WorkQueue.h"
 
 namespace {
