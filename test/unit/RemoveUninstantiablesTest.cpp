@@ -941,7 +941,7 @@ TEST_F(RemoveUninstantiablesTest,
   auto* foo = def_class("LFoo;");
   foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
   auto* method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.root:()Z"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.root:()Z"));
   method->make_concrete(ACC_PUBLIC | ACC_ABSTRACT, /* is_virtual */ true);
   method->rstate.set_root();
   foo->add_method(method);
