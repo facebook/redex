@@ -59,6 +59,7 @@
   X(binop)            \
   X(binop_lit)        \
   X(init_class)       \
+  X(r_const)          \
   X(injection_id)     \
   X(unreachable)      \
   X(write_barrier)
@@ -392,6 +393,9 @@ class InstructionAnalyzerCombiner final {
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_FILLED_NEW_ARRAY:
       return analyze_filled_new_array(
+          std::index_sequence_for<Analyzers...>{}, insn, env);
+    case IOPCODE_R_CONST:
+      return analyze_r_const(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case IOPCODE_INIT_CLASS:
       return analyze_init_class(

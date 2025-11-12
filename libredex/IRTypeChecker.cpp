@@ -1277,6 +1277,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     }
     break;
   }
+  case IOPCODE_R_CONST:
   case OPCODE_CONST: {
     break;
   }

@@ -1414,7 +1414,7 @@ static size_t get_inlined_cost(IRInstruction* insn,
   size_t cost{0};
   if (opcode::is_an_internal(op) || opcode::is_a_move(op) ||
       opcode::is_a_return(op)) {
-    if (op == IOPCODE_INIT_CLASS) {
+    if (op == IOPCODE_INIT_CLASS || op == IOPCODE_R_CONST) {
       cost += cost_config.op_init_class_cost;
     } else if (op == IOPCODE_INJECTION_ID) {
       cost += cost_config.op_injection_id_cost;

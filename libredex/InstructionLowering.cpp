@@ -273,6 +273,9 @@ void check_load_params(DexMethod* method) {
 }
 
 DexInstruction* create_dex_instruction(const IRInstruction* insn) {
+  always_assert_log(insn->opcode() != IOPCODE_R_CONST,
+                    "All IOPCODE_R_CONST should already be lowered by "
+                    "LowerResourceConstantsPass");
   // TODO: Assert that this never happens. IOPCODE_INIT_CLASS should never make
   // it here.
   if (insn->opcode() == IOPCODE_INIT_CLASS) {

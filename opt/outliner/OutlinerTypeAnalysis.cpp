@@ -307,6 +307,9 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
   case OPCODE_LONG_TO_INT:
     return type::_int();
 
+  case IOPCODE_R_CONST:
+    return type::_int();
+
   case OPCODE_INT_TO_BYTE:
     return type::_byte();
   case OPCODE_INT_TO_CHAR:
@@ -647,6 +650,9 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
       return type::_long();
     }
     always_assert(src_index == 1);
+    return type::_int();
+
+  case IOPCODE_R_CONST:
     return type::_int();
 
   case OPCODE_AGET:

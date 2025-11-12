@@ -223,6 +223,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_SHR_INT_LIT:
   case OPCODE_USHR_INT_LIT:
     return RegisterType::NORMAL;
+  case IOPCODE_R_CONST:
   case OPCODE_CONST:
     return const_dest_type(insn);
   case OPCODE_FILL_ARRAY_DATA:
