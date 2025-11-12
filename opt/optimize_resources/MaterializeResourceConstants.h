@@ -42,7 +42,14 @@ Note that this pass also simplifies the clinit of all R$ classes to resolve the 
     )");
   }
 
-  void bind_config() override {}
+  void bind_config() override {
+    bind("replace_const_instructions", false, m_replace_const_instructions,
+         "Whether or not to replace regular sget instructions with an R_CONST "
+         "opcode.");
+  }
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override {}
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  bool m_replace_const_instructions{false};
 };
