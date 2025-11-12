@@ -314,7 +314,8 @@ cp::WholeProgramState analyze_and_simplify_clinits(
     const UnorderedSet<const DexType*>& blocklist_types,
     const UnorderedSet<std::string>& allowed_opaque_callee_names,
     const cp::State& cp_state,
-    size_t& init_cycles) {
+    size_t* init_cycles,
+    size_t* deleted_methods) {
   const UnorderedSet<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps(blocklist_types);
 
@@ -323,7 +324,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
       call_graph::Graph(ClassInitStrategy(*method_override_graph, scope));
   StaticFieldReadAnalysis analysis(graph, allowed_opaque_callee_names);
 
-  for (DexClass* cls : reverse_tsort_by_clinit_deps(scope, init_cycles)) {
+  for (DexClass* cls : reverse_tsort_by_clinit_deps(scope, *init_cycles)) {
     auto* clinit = cls->get_clinit();
     if (clinit != nullptr && clinit->get_code() == nullptr) {
       continue;
@@ -373,6 +374,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
       // If the clinit is empty now, delete it.
       if (method::is_trivial_clinit(*code)) {
         cls->remove_method(clinit);
+        (*deleted_methods)++;
       }
     }
     wps.collect_static_finals(cls, env.get_field_environment());
@@ -564,13 +566,14 @@ FinalInlinePassV2::Stats FinalInlinePassV2::run(
     const Config& config,
     std::optional<DexStoresVector*> stores) {
   size_t clinit_cycles = 0;
+  size_t deleted_clinits = 0;
   auto wps = final_inline::analyze_and_simplify_clinits(
       scope, init_classes_with_side_effects, xstores, config.blocklist_types,
-      {}, cp_state, clinit_cycles);
+      {}, cp_state, &clinit_cycles, &deleted_clinits);
   auto res = inline_final_gets(stores, scope, min_sdk,
                                init_classes_with_side_effects, xstores, wps,
                                config.blocklist_types, cp::FieldType::STATIC);
-  return {res.inlined_count, res.init_classes, clinit_cycles};
+  return {res.inlined_count, res.init_classes, clinit_cycles, deleted_clinits};
 }
 
 FinalInlinePassV2::Stats FinalInlinePassV2::run_inline_ifields(
