@@ -1092,6 +1092,45 @@ TEST_F(ConstantPropagationTest, ForwardBranchesSwitch) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_F(ConstantPropagationTest, ForwardBranchesWithTwoLevelsOfBottom) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L0)
+      (const v0 0)
+      (goto :end-setup)
+      (:L0)
+      (const v0 3)
+      (:end-setup)  ;; v0 is [0,3]{9}
+
+      (const v1 3)
+      (if-eq v0 v1 :end)
+      (if-eqz v0 :end)
+      ;; v0 is [1, 2]{9}. It equals _|_ but is not _|_.
+      (const v1 2)
+      (if-eq v0 v1 :end)  ;; _|_ on both branches.
+      (:end)
+      (return-void)
+    )
+  )");
+
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config(), ConstPropMode::OnlyForwardTargets);
+
+  // The full optimization still takes place because the offending
+  // forward_targets invokation (i.e., with a false only_feasible) only
+  // starts visiting in (const v1 2). See P2034419723 for the full log.
+  const auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (:L1)
+      (return-void)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 TEST_F(ConstantPropagationTest, RedundantNullCheck) {
   auto code = assembler::ircode_from_string(R"(
     (
