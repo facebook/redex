@@ -91,11 +91,15 @@ void MaterializeResourceConstantsPass::run_pass(DexStoresVector& stores,
       cp_state, &clinit_cycles, &deleted_clinits);
   always_assert_log(clinit_cycles == 0,
                     "Should not have clinit cycles in R classes!");
-  size_t instructions_created = walk::parallel::methods<size_t>(
-      scope, [&](DexMethod* m) { return process_method(r_classes, m); });
-  TRACE(OPTRES, 1, "Inserted %zu R_CONST instructions", instructions_created);
-  mgr.incr_metric("instructions_created",
-                  static_cast<int64_t>(instructions_created));
+
+  if (m_replace_const_instructions) {
+    size_t instructions_created = walk::parallel::methods<size_t>(
+        scope, [&](DexMethod* m) { return process_method(r_classes, m); });
+    TRACE(OPTRES, 1, "Inserted %zu R_CONST instructions", instructions_created);
+    mgr.incr_metric("instructions_created",
+                    static_cast<int64_t>(instructions_created));
+  }
+
   TRACE(OPTRES, 1, "final_inline deleted %zu methods", deleted_clinits);
   mgr.incr_metric("deleted_clinits", static_cast<int64_t>(deleted_clinits));
 }
