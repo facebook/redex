@@ -979,7 +979,17 @@ void Transform::forward_targets(
         only_feasible =
             std::make_pair(succ_succ_edge->target(), std::move(succ_succ_env));
       }
-      always_assert(only_feasible);
+      if (!only_feasible) {
+        // We have reached a spot where all further branches are bottom. This is
+        // possible when, right here, a value equals bottom, but is not the
+        // bottom element itself. For example, a SignedConstantDomain x can have
+        // bounds of [1, 2] and bitset of third bit being 1. The existence of x
+        // satisfies the requirement of a lattice: _|_ le x. Meanwhile, x =
+        // _|_, but is not bottom.
+        //
+        // Give up if this happens.
+        return {};
+      }
       unconditional_targets.push_back(
           (TargetAndAssignedRegs){only_feasible->first, assigned_regs});
       succ_env = std::move(only_feasible->second);
