@@ -52,9 +52,9 @@ TEST_F(StripDebugInfoTest, noopWithoutDebugInfo) {
 
 TEST_F(StripDebugInfoTest, dropLineNumbersWithThrowing) {
   auto* method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  auto* field = static_cast<DexField*>(DexField::make_field("LFoo;.baz:I"));
+  auto* field = dynamic_cast<DexField*>(DexField::make_field("LFoo;.baz:I"));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC);
   StripDebugInfoPass::Config config;
   config.drop_line_nrs = true;
@@ -76,7 +76,7 @@ TEST_F(StripDebugInfoTest, dropLineNumbersWithThrowing) {
 
 TEST_F(StripDebugInfoTest, dropLineNumbersWithNonThrowing) {
   auto* method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   StripDebugInfoPass::Config config;
   config.drop_line_nrs = true;
