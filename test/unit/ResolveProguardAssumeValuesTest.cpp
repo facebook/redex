@@ -184,7 +184,7 @@ TEST_F(ResolveProguardAssumeValuesTest, simple_method_not_known) {
 
 TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool) {
   DexClass* classA = create_class_local("LCls;");
-  auto* field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
+  auto* field = dynamic_cast<DexField*>(DexField::make_field("LCls;.f:J"));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC,
                        DexEncodedValue::zero_for_type(field->get_type()));
   classA->add_field(field);
@@ -229,7 +229,7 @@ TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool) {
 
 TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool_with_no_rule) {
   DexClass* classA = create_class_local("LCls;");
-  auto* field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
+  auto* field = dynamic_cast<DexField*>(DexField::make_field("LCls;.f:J"));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC,
                        DexEncodedValue::zero_for_type(field->get_type()));
   classA->add_field(field);
