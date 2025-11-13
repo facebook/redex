@@ -291,15 +291,15 @@ TEST_F(VirtScopeTest, Override) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, f, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
   check_expected_methods(sm, expected_methods);
 
@@ -405,27 +405,27 @@ TEST_F(VirtScopeTest, OverrideOverload) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, eq, bool_obj))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, f, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, eq, bool_obj))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(c_t, g, void_int))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, f, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | FINAL;
   check_expected_methods(sm, expected_methods);
 
@@ -494,7 +494,7 @@ TEST_F(VirtScopeTest, OverrideOverload) {
   const auto& e_scopes = cs.get(e_t);
   ASSERT_EQ(e_scopes.size(), 0);
   const auto& found_scope = cs.find_virtual_scope(
-      static_cast<DexMethod*>(DexMethod::get_method(e_t, g, void_int)));
+      dynamic_cast<DexMethod*>(DexMethod::get_method(e_t, g, void_int)));
   ASSERT_EQ(c_scopes[0]->type, found_scope.type);
 }
 
@@ -549,27 +549,27 @@ TEST_F(VirtScopeTest, Interface) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, eq, bool_obj))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, f, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, eq, bool_obj))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(c_t, g, void_int))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, f, void_void))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | FINAL;
   check_expected_methods_only(sm, expected_methods);
 
@@ -656,37 +656,37 @@ TEST_F(VirtScopeTest, Interface1) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, eq, bool_obj))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, f, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, eq, bool_obj))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(g_t, g, void_int))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(i_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(k_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(l_t, g, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(c_t, g, void_int))] = TOP_DEF | MIRANDA | IMPL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, f, void_void))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
   check_expected_methods(sm, expected_methods);
 
@@ -785,37 +785,37 @@ TEST_F(VirtScopeTest, Interface2) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, eq, bool_obj))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, f, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, eq, bool_obj))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(g_t, g, void_int))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(i_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(k_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(l_t, g, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(c_t, g, void_int))] = TOP_DEF | MIRANDA | IMPL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, f, void_void))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(DexMethod::get_method(
+  expected_methods[dynamic_cast<DexMethod*>(DexMethod::get_method(
       d_t, g, void_int))] = OVERRIDE | IMPL | FINAL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
   check_expected_methods(sm, expected_methods);
 
@@ -913,41 +913,41 @@ TEST_F(VirtScopeTest, Interface3) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, eq, bool_obj))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, f, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, eq, bool_obj))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, g, void_int))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(g_t, g, void_int))] = OVERRIDE;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(i_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(k_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(l_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_int))] = TOP_DEF | IMPL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(c_t, g, void_int))] = TOP_DEF | MIRANDA | IMPL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, f, void_void))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(DexMethod::get_method(
+  expected_methods[dynamic_cast<DexMethod*>(DexMethod::get_method(
       d_t, g, void_int))] = OVERRIDE | IMPL | FINAL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
   check_expected_methods(sm, expected_methods);
 }
@@ -1021,41 +1021,41 @@ TEST_F(VirtScopeTest, Interface3Miranda) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, eq, bool_obj))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, f, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, eq, bool_obj))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, g, void_int))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(g_t, g, void_int))] = OVERRIDE;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(i_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(k_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(l_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_int))] = TOP_DEF | IMPL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(c_t, g, void_int))] = TOP_DEF | MIRANDA | IMPL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(d_t, f, void_void))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(DexMethod::get_method(
+  expected_methods[dynamic_cast<DexMethod*>(DexMethod::get_method(
       d_t, g, void_int))] = OVERRIDE | IMPL | FINAL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
   check_expected_methods(sm, expected_methods);
 }
@@ -1131,41 +1131,41 @@ TEST_F(VirtScopeTest, Interface3MirandaMultiIntf) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, eq, bool_obj))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, f, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, eq, bool_obj))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, g, void_int))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(g_t, g, void_int))] = OVERRIDE;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(i_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(k_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(l_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_int))] = TOP_DEF | IMPL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(c_t, g, void_int))] = TOP_DEF | MIRANDA | IMPL;
-  expected_methods[static_cast<DexMethod*>(DexMethod::get_method(
+  expected_methods[dynamic_cast<DexMethod*>(DexMethod::get_method(
       d_t, f, void_void))] = OVERRIDE | IMPL | FINAL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(DexMethod::get_method(
+  expected_methods[dynamic_cast<DexMethod*>(DexMethod::get_method(
       d_t, g, void_int))] = OVERRIDE | IMPL | FINAL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
   check_expected_methods(sm, expected_methods);
 }
@@ -1244,41 +1244,41 @@ TEST_F(VirtScopeTest, Interface3IntfOverride) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, eq, bool_obj))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, f, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, eq, bool_obj))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, g, void_int))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(g_t, g, void_int))] = OVERRIDE;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(i_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(k_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(l_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_int))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(c_t, g, void_int))] = OVERRIDE | MIRANDA | IMPL;
-  expected_methods[static_cast<DexMethod*>(DexMethod::get_method(
+  expected_methods[dynamic_cast<DexMethod*>(DexMethod::get_method(
       d_t, f, void_void))] = OVERRIDE | IMPL | FINAL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(DexMethod::get_method(
+  expected_methods[dynamic_cast<DexMethod*>(DexMethod::get_method(
       d_t, g, void_int))] = OVERRIDE | IMPL | FINAL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
   check_expected_methods(sm, expected_methods);
 }
@@ -1363,47 +1363,47 @@ TEST_F(VirtScopeTest, Interface3IntfOverEscape) {
 
   // check expected methods
   ExpectedMethod expected_methods;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, eq, bool_obj))] = TOP_DEF | ESCAPED;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, eq, bool_obj))] = OVERRIDE | FINAL | ESCAPED;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(a_t, f, void_void))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, f, void_void))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(DexMethod::get_method(
+  expected_methods[dynamic_cast<DexMethod*>(DexMethod::get_method(
       d_t, f, void_void))] = OVERRIDE | IMPL | FINAL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, f, void_int))] = TOP_DEF | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(m_t, f, void_int))] = TOP_DEF | FINAL | ESCAPED;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_void))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_void))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(f_t, g, void_int))] = TOP_DEF;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(g_t, g, void_int))] = OVERRIDE;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(i_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(k_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(l_t, g, void_int))] = OVERRIDE | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(b_t, g, void_int))] = TOP_DEF | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(c_t, g, void_int))] = OVERRIDE | MIRANDA | IMPL;
-  expected_methods[static_cast<DexMethod*>(DexMethod::get_method(
+  expected_methods[dynamic_cast<DexMethod*>(DexMethod::get_method(
       d_t, g, void_int))] = OVERRIDE | IMPL | FINAL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(m_t, f, void_int))] = TOP_DEF | FINAL | ESCAPED;
-  expected_methods[static_cast<DexMethod*>(
+  expected_methods[dynamic_cast<DexMethod*>(
       DexMethod::get_method(n_t, h, void_int))] = TOP_DEF | FINAL | ESCAPED;
   check_expected_methods(sm, expected_methods, TOP_DEF | FINAL | ESCAPED);
 
@@ -1447,7 +1447,7 @@ TEST_F(VirtScopeTest, Interface3IntfOverEscape) {
     ASSERT_EQ(scopes[0][1]->methods.size(), 6);
   }
   const auto& g_scope = cs.find_virtual_scope(
-      static_cast<DexMethod*>(DexMethod::make_method(h_t, g, void_int)));
+      dynamic_cast<DexMethod*>(DexMethod::make_method(h_t, g, void_int)));
   ASSERT_EQ(g_scope.type, f_t);
   ASSERT_EQ(g_scope.methods.size(), 6);
   const auto methods = select_from(&g_scope, g_t);
@@ -1455,10 +1455,10 @@ TEST_F(VirtScopeTest, Interface3IntfOverEscape) {
   EXPECT_THAT(
       methods,
       ::testing::UnorderedElementsAre(
-          static_cast<DexMethod*>(DexMethod::get_method(g_t, g, void_int)),
-          static_cast<DexMethod*>(DexMethod::get_method(h_t, g, void_int)),
-          static_cast<DexMethod*>(DexMethod::get_method(i_t, g, void_int)),
-          static_cast<DexMethod*>(DexMethod::get_method(k_t, g, void_int))));
+          dynamic_cast<DexMethod*>(DexMethod::get_method(g_t, g, void_int)),
+          dynamic_cast<DexMethod*>(DexMethod::get_method(h_t, g, void_int)),
+          dynamic_cast<DexMethod*>(DexMethod::get_method(i_t, g, void_int)),
+          dynamic_cast<DexMethod*>(DexMethod::get_method(k_t, g, void_int))));
 }
 
 /**
@@ -1499,7 +1499,7 @@ TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
   // Resolve the above call and obtain G.g(int) virtual scope
   // that is where the method is introduced
   auto* i_g_void_int =
-      static_cast<DexMethod*>(DexMethod::get_method(i_t, g, void_int));
+      dynamic_cast<DexMethod*>(DexMethod::get_method(i_t, g, void_int));
   const auto& g_g_virt_scope = type_system.find_virtual_scope(i_g_void_int);
   EXPECT_TRUE(g_g_virt_scope != nullptr);
 
@@ -1519,10 +1519,10 @@ TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
   // Resolve invoke_virtual G.g(int) for J, K
   type_system.select_methods(*g_g_virt_scope, {j_t, k_t}, methods);
   EXPECT_EQ(methods.size(), 2);
-  EXPECT_EQ(methods.count(static_cast<DexMethod*>(
+  EXPECT_EQ(methods.count(dynamic_cast<DexMethod*>(
                 DexMethod::get_method(g_t, g, void_int))),
             1);
-  EXPECT_EQ(methods.count(static_cast<DexMethod*>(
+  EXPECT_EQ(methods.count(dynamic_cast<DexMethod*>(
                 DexMethod::get_method(k_t, g, void_int))),
             1);
   methods.clear();
@@ -1530,7 +1530,7 @@ TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
   // invoke_interface Intf2.g(int)
   // Resolve the above call and obtain Intf2.g(int) interface scope
   auto* intf2_g_void_int =
-      static_cast<DexMethod*>(DexMethod::get_method(intf2_t, g, void_int));
+      dynamic_cast<DexMethod*>(DexMethod::get_method(intf2_t, g, void_int));
   const auto& intf2_g_intf_scope =
       type_system.find_interface_scope(intf2_g_void_int);
   EXPECT_TRUE(intf2_g_intf_scope.size() == 2);
@@ -1546,10 +1546,10 @@ TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
   // Resolve invoke_interface Intf2.g(int) for E, I
   type_system.select_methods(intf2_g_intf_scope, {e_t, i_t}, methods);
   EXPECT_EQ(methods.size(), 2);
-  EXPECT_EQ(methods.count(static_cast<DexMethod*>(
+  EXPECT_EQ(methods.count(dynamic_cast<DexMethod*>(
                 DexMethod::get_method(e_t, g, void_int))),
             1);
-  EXPECT_EQ(methods.count(static_cast<DexMethod*>(
+  EXPECT_EQ(methods.count(dynamic_cast<DexMethod*>(
                 DexMethod::get_method(i_t, g, void_int))),
             1);
   methods.clear();
