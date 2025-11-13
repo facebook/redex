@@ -22,7 +22,7 @@ struct Constants {
   ConstantValue nez{SignedConstantDomain::nez()};
 
   ConstantValue sod{SingletonObjectDomain(
-      (DexField*)DexField::make_field("LFoo;.bar:LFoo;"))};
+      dynamic_cast<DexField*>(DexField::make_field("LFoo;.bar:LFoo;")))};
 
   ConstantValue owia{ObjectWithImmutAttrDomain(
       ObjectWithImmutAttr(DexType::make_type("LFoo;"), 0))};
