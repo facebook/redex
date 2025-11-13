@@ -24,8 +24,8 @@ struct EnumTest : public ConstantPropagationTest {
     creator.set_super(type::java_lang_Enum());
     creator.set_access(ACC_PUBLIC | ACC_FINAL | ACC_ENUM);
 
-    auto* enum_x = static_cast<DexField*>(DexField::make_field("LFoo;.X:I"));
-    auto* enum_y = static_cast<DexField*>(DexField::make_field("LFoo;.Y:I"));
+    auto* enum_x = dynamic_cast<DexField*>(DexField::make_field("LFoo;.X:I"));
+    auto* enum_y = dynamic_cast<DexField*>(DexField::make_field("LFoo;.Y:I"));
     enum_x->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_ENUM);
     enum_y->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_ENUM);
     creator.add_field(enum_x);
