@@ -342,11 +342,11 @@ void TransitiveClosureMarkerWorker::visit(const ReachableObject& obj) {
     visit_method_references_gatherer_instantiable(obj.cls);
     break;
   case ReachableObjectType::RETURNS:
-    visit_returns(static_cast<const DexMethod*>(obj.method));
+    visit_returns(dynamic_cast<const DexMethod*>(obj.method));
     break;
   case ReachableObjectType::METHOD_REFERENCES_GATHERER_RETURNING:
     visit_method_references_gatherer_returning(
-        static_cast<const DexMethod*>(obj.method));
+        dynamic_cast<const DexMethod*>(obj.method));
     break;
   case ReachableObjectType::ANNO:
   case ReachableObjectType::SEED:
