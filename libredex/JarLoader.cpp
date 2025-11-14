@@ -242,7 +242,7 @@ DexField* make_dexfield(std::vector<cp_entry>& cpool,
   const auto* name = DexString::make_string(nbuffer);
   DexType* desc = DexType::make_type(dbuffer);
   DexField* field =
-      static_cast<DexField*>(DexField::make_field(self, name, desc));
+      dynamic_cast<DexField*>(DexField::make_field(self, name, desc));
 
   // We cannot do an existence check because of mixed sources. At least make
   // sure we only add a field here once.
@@ -401,7 +401,7 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
   redex_assert(rtype != nullptr);
   DexProto* proto = DexProto::make_proto(rtype, tlist);
   DexMethod* method =
-      static_cast<DexMethod*>(DexMethod::make_method(self, name, proto));
+      dynamic_cast<DexMethod*>(DexMethod::make_method(self, name, proto));
   auto inserted = added.insert(method).second;
   always_assert_type_log(inserted, INVALID_JAVA, "Duplicate method %s",
                          SHOW(method));
