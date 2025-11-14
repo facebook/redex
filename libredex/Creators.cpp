@@ -687,7 +687,8 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexAccessFlags access,
                              std::unique_ptr<DexAnnotationSet> anno,
                              bool with_debug_item)
-    : method(static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))),
+    : method(
+          dynamic_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))),
       m_with_debug_item(with_debug_item) {
   always_assert_log(!method->is_concrete(), "Method already defined");
   if (anno) {
@@ -761,7 +762,7 @@ DexMethod* MethodCreator::make_static_from(const DexString* name,
                                            DexClass* target_cls) {
   redex_assert(!is_static(meth));
   redex_assert(!method::is_init(meth) && !method::is_clinit(meth));
-  auto* smeth = static_cast<DexMethod*>(
+  auto* smeth = dynamic_cast<DexMethod*>(
       DexMethod::make_method(target_cls->get_type(), name, proto));
   smeth->make_concrete(meth->get_access() | ACC_STATIC, meth->release_code(),
                        false);
