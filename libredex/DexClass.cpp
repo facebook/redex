@@ -270,7 +270,7 @@ DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags) {
 DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
                                      std::unique_ptr<DexEncodedValue> v) {
   // FIXME assert if already concrete
-  auto* that = static_cast<DexField*>(this);
+  auto* that = dynamic_cast<DexField*>(this);
   that->m_access = access_flags;
   that->m_concrete = true;
   if (is_static(access_flags)) {
@@ -300,7 +300,7 @@ dex_member_refs::FieldDescriptorTokens DexFieldRef::get_descriptor_tokens()
 
 void DexFieldRef::delete_field_DO_NOT_USE(DexFieldRef* field) {
   erase_field(field);
-  delete static_cast<DexField*>(field);
+  delete dynamic_cast<DexField*>(field);
 }
 
 DexFieldRef* DexField::get_field(
@@ -930,7 +930,7 @@ DexMethod* DexMethod::make_method_downcast(const DexMethodSpec& spec) {
 DexMethod* DexMethod::make_method_from(DexMethod* that,
                                        DexType* target_cls,
                                        const DexString* name) {
-  auto* m = static_cast<DexMethod*>(
+  auto* m = dynamic_cast<DexMethod*>(
       DexMethod::make_method(target_cls, name, that->get_proto()));
   redex_assert(m != that);
   if (that->m_anno) {
@@ -1193,7 +1193,7 @@ void DexMethod::become_virtual() {
 DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
                                        std::unique_ptr<DexCode> dc,
                                        bool is_virtual) {
-  auto* that = static_cast<DexMethod*>(this);
+  auto* that = dynamic_cast<DexMethod*>(this);
   that->m_access = access;
   that->m_dex_code = std::move(dc);
   that->m_concrete = true;
@@ -1204,7 +1204,7 @@ DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
 DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
                                        std::unique_ptr<IRCode> dc,
                                        bool is_virtual) {
-  auto* that = static_cast<DexMethod*>(this);
+  auto* that = dynamic_cast<DexMethod*>(this);
   that->m_access = access;
   that->m_code = std::move(dc);
   that->m_concrete = true;
@@ -1300,7 +1300,7 @@ void DexClass::load_class_data_item(
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     always_assert_type_log(is_static(access_flags), INVALID_DEX,
                            "Static field not marked static");
-    DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
+    DexField* df = dynamic_cast<DexField*>(idx->get_fieldidx(ndex));
     always_assert_type_log(df->get_class() == get_type(), INVALID_DEX,
                            "Referenced field does not belong to class");
     std::unique_ptr<DexEncodedValue> ev = nullptr;
@@ -1321,7 +1321,7 @@ void DexClass::load_class_data_item(
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     always_assert_type_log(!is_static(access_flags), INVALID_DEX,
                            "Non-Static field marked static");
-    DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
+    DexField* df = dynamic_cast<DexField*>(idx->get_fieldidx(ndex));
     always_assert_type_log(df->get_class() == get_type(), INVALID_DEX,
                            "Referenced field does not belong to class");
     df->make_concrete(access_flags);
@@ -1340,7 +1340,7 @@ void DexClass::load_class_data_item(
     always_assert(encd < idx->end());
     uint32_t code_off = read_uleb128(&encd);
     // Find method in method index, returns same pointer for same method.
-    DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
+    DexMethod* dm = dynamic_cast<DexMethod*>(idx->get_methodidx(ndex));
     always_assert_type_log(dm->get_class() == get_type(), INVALID_DEX,
                            "Referenced method does not belong to class");
     std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
@@ -1565,7 +1565,7 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   for (uint32_t i = 0; i < annodir->fields_size; i++) {
     uint32_t fidx = *annodata++;
     uint32_t off = *annodata++;
-    DexField* field = static_cast<DexField*>(idx->get_fieldidx(fidx));
+    DexField* field = dynamic_cast<DexField*>(idx->get_fieldidx(fidx));
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
     auto res = field->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach annotation set");
@@ -1581,7 +1581,7 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   for (uint32_t i = 0; i < annodir->methods_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t off = *annodata++;
-    DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
+    DexMethod* method = dynamic_cast<DexMethod*>(idx->get_methodidx(midx));
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
     auto res = method->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach method set");
@@ -1598,7 +1598,7 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     uint32_t midx = *annodata++;
     uint32_t xrefoff = *annodata++;
     if (xrefoff != 0) {
-      DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
+      DexMethod* method = dynamic_cast<DexMethod*>(idx->get_methodidx(midx));
       const uint32_t* annoxref = idx->get_uint_data(xrefoff);
       uint32_t count = *annoxref++;
       always_assert_type_log(annoxref <= annoxref + count, INVALID_DEX,
@@ -2043,7 +2043,7 @@ INSTANTIATE(DexClass::gather_methods, DexMethodRef*)
 
 const DexField* DexFieldRef::as_def() const {
   if (is_def()) {
-    return static_cast<const DexField*>(this);
+    return dynamic_cast<const DexField*>(this);
   } else {
     return nullptr;
   }
@@ -2051,7 +2051,7 @@ const DexField* DexFieldRef::as_def() const {
 
 DexField* DexFieldRef::as_def() {
   if (is_def()) {
-    return static_cast<DexField*>(this);
+    return dynamic_cast<DexField*>(this);
   } else {
     return nullptr;
   }
@@ -2320,7 +2320,7 @@ INSTANTIATE(DexMethod::gather_methods_from_annos, DexMethodRef*)
 
 const DexMethod* DexMethodRef::as_def() const {
   if (is_def()) {
-    return static_cast<const DexMethod*>(this);
+    return dynamic_cast<const DexMethod*>(this);
   } else {
     return nullptr;
   }
@@ -2328,7 +2328,7 @@ const DexMethod* DexMethodRef::as_def() const {
 
 DexMethod* DexMethodRef::as_def() {
   if (is_def()) {
-    return static_cast<DexMethod*>(this);
+    return dynamic_cast<DexMethod*>(this);
   } else {
     return nullptr;
   }
@@ -2550,7 +2550,7 @@ void DexMethodRef::erase_method(DexMethodRef* mref) {
 
 void DexMethodRef::delete_method_DO_NOT_USE(DexMethodRef* method) {
   erase_method(method);
-  delete static_cast<DexMethod*>(method);
+  delete dynamic_cast<DexMethod*>(method);
 }
 
 dex_member_refs::MethodDescriptorTokens DexMethodRef::get_descriptor_tokens()
