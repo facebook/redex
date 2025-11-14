@@ -1020,7 +1020,8 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
 
   // Mark Foo.qux as a -keep field -- meaning we cannot determine if its value
   // is truly constant just by looking at Dex bytecode
-  static_cast<DexField*>(DexField::get_field("LFoo;.qux:I"))->rstate.set_root();
+  dynamic_cast<DexField*>(DexField::get_field("LFoo;.qux:I"))
+      ->rstate.set_root();
   auto expected = assembler::to_s_expr(m2->get_code());
 
   Scope scope{creator.create()};
@@ -1375,7 +1376,7 @@ TEST_F(InterproceduralConstantPropagationTest, NativeImplementReturnValue) {
   auto* cls1 = creator.create();
   auto* void_int =
       DexProto::make_proto(type::_int(), DexTypeList::make_type_list({}));
-  auto* method_base = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method_base = dynamic_cast<DexMethod*>(DexMethod::make_method(
       cls1_ty, DexString::make_string("virtualMethod"), void_int));
   method_base->make_concrete(ACC_PUBLIC | ACC_ABSTRACT,
                              std::unique_ptr<IRCode>(nullptr), true);
@@ -1454,7 +1455,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto* cls1 = creator.create();
   auto* void_int =
       DexProto::make_proto(type::_int(), DexTypeList::make_type_list({}));
-  auto* method_base = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method_base = dynamic_cast<DexMethod*>(DexMethod::make_method(
       cls1_ty, DexString::make_string("virtualMethod"), void_int));
   method_base->make_concrete(ACC_PUBLIC | ACC_INTERFACE,
                              std::unique_ptr<IRCode>(nullptr), true);
