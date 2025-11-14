@@ -541,42 +541,42 @@ WELL_KNOWN_METHODS
 #undef FOR_EACH
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"
       "Object;Ljava/lang/String;)V"));
 }
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullParameter() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkNotNullParameter:(Ljava/lang/"
       "Object;Ljava/lang/String;)V"));
 }
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull:(Ljava/"
       "lang/Object;Ljava/lang/String;)V"));
 }
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkNotNullExpressionValue:(Ljava/"
       "lang/Object;Ljava/lang/String;)V"));
 }
 
 DexMethod* redex_internal_checkObjectNotNull() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V"));
 }
 
 DexMethod* java_lang_invoke_MethodHandle_invoke() {
-  return static_cast<DexMethod*>(
+  return dynamic_cast<DexMethod*>(
       DexMethod::get_method("Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/"
                             "lang/Object;)Ljava/lang/Object;"));
 }
 
 DexMethod* java_lang_invoke_MethodHandle_invokeExact() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Ljava/lang/invoke/MethodHandle;.invokeExact:([Ljava/"
       "lang/Object;)Ljava/lang/Object;"));
 }
