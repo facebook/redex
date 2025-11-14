@@ -32,9 +32,9 @@ struct ImmutableTest : public ConstantPropagationTest {
                                            type::java_lang_Character()};
     for (auto& type : boxed_types) {
       auto* valueOf =
-          static_cast<DexMethod*>(type::get_value_of_method_for_type(type));
+          dynamic_cast<DexMethod*>(type::get_value_of_method_for_type(type));
       auto* getter_method =
-          static_cast<DexMethod*>(type::get_unboxing_method_for_type(type));
+          dynamic_cast<DexMethod*>(type::get_unboxing_method_for_type(type));
       // The intValue of integer is initialized through the static invocation.
       m_immut_analyzer_state.add_initializer(valueOf, getter_method)
           .set_src_id_of_attr(0)
@@ -103,11 +103,11 @@ struct ImmutableTest : public ConstantPropagationTest {
       auto it = member_name.find(":(");
       auto attr = [&]() {
         if (it == std::string::npos) {
-          auto* field = static_cast<DexField*>(
+          auto* field = dynamic_cast<DexField*>(
               DexField::make_field(class_name + "." + member_name));
           return ImmutableAttr::Attr(field);
         } else {
-          auto* method = static_cast<DexMethod*>(
+          auto* method = dynamic_cast<DexMethod*>(
               DexMethod::make_method(class_name + "." + member_name));
           return ImmutableAttr::Attr(method);
         }
@@ -442,17 +442,17 @@ TEST_F(ImmutableTest, object) {
   cp::ImmutableAttributeAnalyzerState analyzer_state;
   {
     // Add initializer for Data
-    auto* constructor = static_cast<DexMethod*>(
+    auto* constructor = dynamic_cast<DexMethod*>(
         DexMethod::make_method("LData;.<init>:(Ljava/lang/String;I)V"));
     auto* int_field =
-        static_cast<DexField*>(DexField::make_field("LData;.id:I"));
+        dynamic_cast<DexField*>(DexField::make_field("LData;.id:I"));
     // Assume we do not know the implementation of this method but we know that
     // the method always returns a hidden immutable field.
     auto* method_ref =
         DexMethod::make_method("LData;.toString:()Ljava/lang/String;");
     always_assert(!method_ref->is_def() &&
                   !resolve_method(method_ref, MethodSearch::Virtual));
-    auto* string_getter = static_cast<DexMethod*>(method_ref);
+    auto* string_getter = dynamic_cast<DexMethod*>(method_ref);
     analyzer_state.add_initializer(constructor, int_field)
         .set_src_id_of_attr(2)
         .set_src_id_of_obj(0);
