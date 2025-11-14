@@ -2475,7 +2475,7 @@ void compute_method_to_id_map(
     if (resolved_method == method) {
       // Not recording it if method reference is not referring to
       // concrete method, otherwise will have key overlapped.
-      auto* dexmethod = static_cast<DexMethod*>(resolved_method);
+      auto* dexmethod = dynamic_cast<DexMethod*>(resolved_method);
       (*method_to_id)[dexmethod] = ((uint64_t)idx << 32) | (uint64_t)signature;
     }
   }
