@@ -12,14 +12,14 @@
   for our parsers.
    -->
   <view
-      class="com.facebook.BananaView"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
+      class="com.facebook.BananaView"
       />
   <androidx.fragment.app.FragmentContainerView
-      android:name="com.facebook.SomeFragment"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
+      android:name="com.facebook.SomeFragment"
       android:tag="fragment_container_view"
       />
   <fragment
