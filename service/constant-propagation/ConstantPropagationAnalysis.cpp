@@ -1061,7 +1061,7 @@ bool StaticFinalFieldAnalyzer::analyze_sget(const IRInstruction* insn,
   }
 
   auto* field = insn->get_field();
-  const auto* dex_field = static_cast<const DexField*>(field);
+  const auto* dex_field = dynamic_cast<const DexField*>(field);
   // Only want to set the environment of the variable has a static value
   // and is certainly final and will not be modified
   if ((field != nullptr) && field->is_def() &&
@@ -1588,7 +1588,7 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
   auto* field_ref = insn->get_field();
   DexField* field = resolve_field(field_ref, FieldSearch::Instance);
   if (field == nullptr) {
-    field = static_cast<DexField*>(field_ref);
+    field = dynamic_cast<DexField*>(field_ref);
   }
 
   // Immutable state should not be updated in parallel with analysis.
