@@ -275,7 +275,7 @@ int wrap_instance_call_with_static(
           }
           auto* method_ref = insn->get_method();
           auto it =
-              methods_replacement.find(static_cast<DexMethod*>(method_ref));
+              methods_replacement.find(dynamic_cast<DexMethod*>(method_ref));
           if (it != methods_replacement.end()) {
             always_assert(is_static(it->second));
             insn->set_opcode(OPCODE_INVOKE_STATIC);
@@ -291,7 +291,7 @@ int wrap_instance_call_with_static(
           }
           auto* method_ref = insn->get_method();
           auto it =
-              methods_replacement.find(static_cast<DexMethod*>(method_ref));
+              methods_replacement.find(dynamic_cast<DexMethod*>(method_ref));
           if (it != methods_replacement.end()) {
             always_assert(is_static(it->second));
             insn->set_opcode(OPCODE_INVOKE_STATIC);
