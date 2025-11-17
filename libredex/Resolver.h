@@ -368,7 +368,7 @@ DexField* resolve_field(const DexType*,
 inline DexField* resolve_field(const DexFieldRef* field,
                                FieldSearch search = FieldSearch::Any) {
   if (field->is_def()) {
-    return const_cast<DexField*>(static_cast<const DexField*>(field));
+    return const_cast<DexField*>(dynamic_cast<const DexField*>(field));
   }
   return resolve_field(field->get_class(), field->get_name(), field->get_type(),
                        search);
