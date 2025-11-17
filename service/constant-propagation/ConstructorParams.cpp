@@ -112,7 +112,7 @@ class InitFixpointIterator final
       if (obj_domain.is_value() && *obj_domain.get_constant() == 0) {
         auto* field = resolve_field(insn->get_field(), FieldSearch::Instance);
         if (field == nullptr) {
-          field = static_cast<DexField*>(insn->get_field());
+          field = dynamic_cast<DexField*>(insn->get_field());
         } else if (field->get_class() != m_current_cls &&
                    !field->is_external()) {
           return;
