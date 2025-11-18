@@ -1251,7 +1251,7 @@ bool second_get_non_volatile(const Matcher& m) {
     return false;
   }
 
-  DexField* field = static_cast<DexField*>(field_ref);
+  DexField* field = dynamic_cast<DexField*>(field_ref);
   return (field->get_access() & ACC_VOLATILE) == 0u;
 }
 
