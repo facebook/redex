@@ -52,7 +52,7 @@ DexMethod* get_enum_ctor() {
  */
 DexField* get_fake_field(const std::string& full_descriptor) {
   DexField* field =
-      static_cast<DexField*>(DexField::make_field(full_descriptor));
+      dynamic_cast<DexField*>(DexField::make_field(full_descriptor));
   if (field->is_concrete()) {
     field->make_concrete(ACC_PUBLIC);
   }
