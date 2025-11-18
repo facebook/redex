@@ -282,11 +282,11 @@ TEST_F(PreVerify, InlineInvokeDirect) {
       find_invoke(m, DOPCODE_INVOKE_DIRECT, "hasNoninlinableInvokeDirect");
   ASSERT_TRUE(invoke->get_method()->is_def());
   auto* noninlinable_invoke_direct =
-      find_invoke(static_cast<DexMethod*>(invoke->get_method()),
+      find_invoke(dynamic_cast<DexMethod*>(invoke->get_method()),
                   DOPCODE_INVOKE_DIRECT, "noninlinable");
   ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
   auto* noninlinable =
-      static_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
+      dynamic_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
   ASSERT_EQ(show(noninlinable->get_proto()), "()V");
 
   // verify that there is one inlinable() method in the class.
@@ -308,7 +308,7 @@ TEST_F(PostVerify, InlineInvokeDirect) {
   EXPECT_NE(nullptr, noninlinable_invoke_direct) << show(m->get_dex_code());
   ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
   auto* noninlinable =
-      static_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
+      dynamic_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
   EXPECT_EQ(show(noninlinable->get_proto()), "()V");
 
   // verify that there is (still) one direct "noninlinable" method in the class.
@@ -331,7 +331,7 @@ TEST_F(PreVerify, InlineInvokeDirectCrossClasses) {
       find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "hasNoninlinableInvokeDirect");
   ASSERT_TRUE(invoke->get_method()->is_def());
   auto* noninlinable_invoke_direct =
-      find_invoke(static_cast<DexMethod*>(invoke->get_method()),
+      find_invoke(dynamic_cast<DexMethod*>(invoke->get_method()),
                   DOPCODE_INVOKE_DIRECT, "noninlinable");
   ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
   auto* noninlinable = noninlinable_invoke_direct->get_method()->as_def();
@@ -358,7 +358,7 @@ TEST_F(PostVerify, InlineInvokeDirectCrossClasses) {
   EXPECT_NE(nullptr, noninlinable_invoke_direct) << show(m->get_dex_code());
   ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
   auto* noninlinable =
-      static_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
+      dynamic_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
   EXPECT_EQ(show(noninlinable->get_proto()),
             "(Lcom/facebook/redexinline/MethodInlineTest$OtherClass;)V");
 
