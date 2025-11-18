@@ -889,7 +889,7 @@ void Breadcrumbs::check_field_opcode(const DexMethod* method,
     // the class of the field is around but the field may have
     // been deleted so let's verify the field exists on the class
     if (referenced_field_is_deleted(field)) {
-      m_bad_field_insns[static_cast<DexField*>(field)][method].emplace_back(
+      m_bad_field_insns[dynamic_cast<DexField*>(field)][method].emplace_back(
           insn);
       return;
     }
