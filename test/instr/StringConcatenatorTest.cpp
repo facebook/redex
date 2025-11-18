@@ -12,14 +12,14 @@
 #include "VerifyUtil.h"
 
 TEST_F(PreVerify, StringConcatenatorTest) {
-  DexMethod* clinit = static_cast<DexMethod*>(DexMethod::get_method(
+  DexMethod* clinit = dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lredex/test/instr/StringConcatenatorTest;.<clinit>:()V"));
   ASSERT_NE(nullptr, clinit);
   ASSERT_TRUE(clinit->is_def());
   ASSERT_NE(nullptr, clinit->get_dex_code());
   EXPECT_LT(1, clinit->get_dex_code()->size());
 
-  DexField* field = static_cast<DexField*>(DexField::get_field(
+  DexField* field = dynamic_cast<DexField*>(DexField::get_field(
       "Lredex/test/instr/StringConcatenatorTest;.concatenated:Ljava/lang/"
       "String;"));
   ASSERT_NE(nullptr, field);
@@ -33,11 +33,11 @@ TEST_F(PreVerify, StringConcatenatorTest) {
 }
 
 TEST_F(PostVerify, StringConcatenatorTest) {
-  DexMethod* clinit = static_cast<DexMethod*>(DexMethod::get_method(
+  DexMethod* clinit = dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lredex/test/instr/StringConcatenatorTest;.<clinit>:()V"));
   ASSERT_EQ(nullptr, clinit);
 
-  DexField* field = static_cast<DexField*>(DexField::get_field(
+  DexField* field = dynamic_cast<DexField*>(DexField::get_field(
       "Lredex/test/instr/StringConcatenatorTest;.concatenated:Ljava/lang/"
       "String;"));
   ASSERT_NE(nullptr, field);
