@@ -258,7 +258,7 @@ struct OptimizationImpl {
 void OptimizationImpl::set_field_defs(const SingleImplData& data) {
   for (const auto& field : data.fielddefs) {
     redex_assert(!single_impls->is_escaped(field->get_class()));
-    auto* f = static_cast<DexField*>(
+    auto* f = dynamic_cast<DexField*>(
         DexField::make_field(field->get_class(), field->get_name(), data.cls));
     redex_assert(f != field);
     TRACE(INTF, 3, "(FDEF) %s", SHOW(field));
