@@ -67,7 +67,7 @@ DexField* make_field_def(DexType* cls,
                          DexType* type,
                          DexAccessFlags access = ACC_PUBLIC,
                          bool external = false) {
-  auto* field = static_cast<DexField*>(
+  auto* field = dynamic_cast<DexField*>(
       DexField::make_field(cls, DexString::make_string(name), type));
   if (external) {
     field->set_access(access);
