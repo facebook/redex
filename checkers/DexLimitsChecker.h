@@ -31,10 +31,10 @@ class DexLimitsChecker : public PropertyChecker {
     // and only translate them when we find an issue.
     std::vector<DexFieldRef*> fields;
     std::vector<DexMethodRef*> methods;
-    std::vector<DexType*> types;
+    std::vector<const DexType*> types;
     // These are hopefully small and transitioning is annoying.
-    UnorderedSet<DexType*> pending_init_class_fields;
-    UnorderedSet<DexType*> pending_init_class_types;
+    UnorderedSet<const DexType*> pending_init_class_fields;
+    UnorderedSet<const DexType*> pending_init_class_types;
   };
 
   UnorderedMap<std::string, std::vector<DexData>> m_data;

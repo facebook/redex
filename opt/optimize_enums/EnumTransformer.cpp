@@ -69,7 +69,7 @@
 namespace {
 using namespace optimize_enums;
 using namespace dex_asm;
-using EnumAttributeMap = UnorderedMap<DexType*, EnumAttributes>;
+using EnumAttributeMap = UnorderedMap<const DexType*, EnumAttributes>;
 namespace ptrs = local_pointers;
 
 /**
@@ -1090,9 +1090,8 @@ class CodeTransformer final {
     return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
   }
 
-  bool is_a_candidate(DexType* type) const {
-    auto* elem_type =
-        const_cast<DexType*>(type::get_element_type_if_array(type));
+  bool is_a_candidate(const DexType* type) const {
+    const auto* elem_type = type::get_element_type_if_array(type);
     return m_enum_attributes_map.count(elem_type) != 0u;
   }
 
@@ -1203,7 +1202,8 @@ class EnumTransformer final {
     // types with Integer type.
     UnorderedMap<DexType*, DexType*> type_mapping;
     for (auto& pair : UnorderedIterable(m_enum_attributes_map)) {
-      type_mapping[pair.first] = m_enum_util->INTEGER_TYPE;
+      type_mapping[const_cast<DexType*>(pair.first)] =
+          m_enum_util->INTEGER_TYPE;
     }
     type_reference::TypeRefUpdater updater(type_mapping);
     updater.update_methods_fields(scope);

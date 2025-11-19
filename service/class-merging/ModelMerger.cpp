@@ -585,22 +585,22 @@ std::vector<DexClass*> ModelMerger::merge_model(
     // A set of properties in the MergerType define the operation to
     // perform on the given type.
 
-    DexType* type = const_cast<DexType*>(merger.type);
-    auto* cls = type_class(type);
-    const auto& intfs = model.get_interfaces(type);
+    auto* cls = type_class(merger.type);
+    const auto& intfs = model.get_interfaces(merger.type);
     TRACE(CLMG, 3, "%s", merger_info(merger).c_str());
 
     // MergerType has an existing class, update interfaces,
     // fields and parent
     if (cls != nullptr) {
-      fix_existing_merger_cls(model, merger, cls, type);
+      fix_existing_merger_cls(model, merger, cls,
+                              const_cast<DexType*>(merger.type));
       return;
     }
 
     update_merger_fields(merger);
-    cls = create_merger_class(type,
-                              model.get_parent(type),
-                              m_merger_fields.at(type),
+    cls = create_merger_class(merger.type,
+                              model.get_parent(merger.type),
+                              m_merger_fields.at(merger.type),
                               intfs,
                               model_spec.generate_type_tag(),
                               !merger.has_mergeables());

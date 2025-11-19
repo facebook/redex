@@ -483,7 +483,7 @@ class OptimizeEnums {
     });
 
     // Need to remember to understand what was rejected.
-    UnorderedSet<DexType*> orig_candidates;
+    UnorderedSet<const DexType*> orig_candidates;
     insert_unordered_iterable(orig_candidates, config.candidate_enums);
 
     auto add_unsafe_usage = [&](const DexType* type, UnsafeType u) {
@@ -494,12 +494,12 @@ class OptimizeEnums {
 
     optimize_enums::reject_unsafe_enums(m_scope, &config, add_unsafe_usage);
     if (traceEnabled(ENUM, 4)) {
-      for (auto* cls : UnorderedIterable(config.candidate_enums)) {
+      for (const auto* cls : UnorderedIterable(config.candidate_enums)) {
         TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
       }
     }
 
-    for (auto* t : UnorderedIterable(orig_candidates)) {
+    for (const auto* t : UnorderedIterable(orig_candidates)) {
       if (config.candidate_enums.count_unsafe(t) == 0) {
         unsafe_enums.emplace_unsafe(t, UnsafeTypes{UnsafeType::kUsage});
       }

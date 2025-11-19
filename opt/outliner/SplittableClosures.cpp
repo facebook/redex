@@ -579,11 +579,11 @@ std::vector<SplittableClosure> to_splittable_closures(
 } // namespace
 
 namespace method_splitting_impl {
-std::vector<DexType*> SplittableClosure::get_arg_types() const {
-  std::vector<DexType*> arg_types;
+std::vector<const DexType*> SplittableClosure::get_arg_types() const {
+  std::vector<const DexType*> arg_types;
   for (auto arg : args) {
     if (arg.type != nullptr) {
-      arg_types.push_back(const_cast<DexType*>(arg.type));
+      arg_types.push_back(arg.type);
     }
   }
   return arg_types;

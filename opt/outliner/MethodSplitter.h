@@ -46,7 +46,7 @@ class SplitMethod {
   static SplitMethod create(const SplittableClosure& splittable_closure,
                             DexType* target_type,
                             const DexString* split_name,
-                            std::vector<DexType*> arg_types);
+                            std::vector<const DexType*> arg_types);
 
   // Adds the new method to its parent class.
   void add_to_target();

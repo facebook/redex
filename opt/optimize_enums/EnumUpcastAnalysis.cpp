@@ -21,8 +21,8 @@ using namespace optimize_enums;
 using namespace ir_analyzer;
 
 bool need_analyze(const DexMethod* method,
-                  const ConcurrentSet<DexType*>& candidate_enums,
-                  const ConcurrentSet<DexType*>& rejected_enums) {
+                  const ConcurrentSet<const DexType*>& candidate_enums,
+                  const ConcurrentSet<const DexType*>& rejected_enums) {
   const IRCode* code = method->get_code();
   if (code == nullptr) {
     return false;
@@ -489,7 +489,7 @@ class EnumUpcastDetector {
 
   const DexMethod* m_method;
   Config* m_config;
-  const ConcurrentSet<DexType*>* m_candidate_enums;
+  const ConcurrentSet<const DexType*>* m_candidate_enums;
   const RejectFn& m_reject_fn;
 };
 
@@ -646,7 +646,7 @@ EnumTypeEnvironment EnumFixpointIterator::gen_env(const DexMethod* method) {
  */
 void reject_enums_for_colliding_constructors(
     const std::vector<DexClass*>& classes,
-    ConcurrentSet<DexType*>* candidate_enums) {
+    ConcurrentSet<const DexType*>* candidate_enums) {
   ConcurrentSet<DexType*> rejected_enums;
 
   walk::parallel::classes(classes, [&](DexClass* cls) {
@@ -701,8 +701,9 @@ void reject_enums_for_colliding_constructors(
   }
 }
 
-void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
-                                    ConcurrentSet<DexType*>* candidate_enums) {
+void reject_enums_for_relaxed_inits(
+    const std::vector<DexClass*>& classes,
+    ConcurrentSet<const DexType*>* candidate_enums) {
   ConcurrentSet<DexType*> rejected_enums;
   walk::parallel::code(classes, [&](DexMethod* method, IRCode& code) {
     auto& cfg = code.cfg();
@@ -768,7 +769,7 @@ void reject_unsafe_enums(
     Config* config,
     const std::function<void(const DexType*, UnsafeType u)>& reject_fn) {
   auto* candidate_enums = &config->candidate_enums;
-  ConcurrentSet<DexType*> rejected_enums;
+  ConcurrentSet<const DexType*> rejected_enums;
 
   walk::parallel::fields(
       classes, [candidate_enums, &rejected_enums, &reject_fn](DexField* field) {
@@ -847,7 +848,7 @@ void reject_unsafe_enums(
     detector.run(engine, cfg);
   });
 
-  for (DexType* type : UnorderedIterable(rejected_enums)) {
+  for (const auto* type : UnorderedIterable(rejected_enums)) {
     candidate_enums->erase(type);
   }
 

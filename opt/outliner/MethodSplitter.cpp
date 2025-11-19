@@ -50,7 +50,7 @@ class DexState {
     for (auto* type : init_classes) {
       const auto* refined_type = init_classes_with_side_effects.refine(type);
       if (refined_type != nullptr) {
-        m_type_refs.insert(const_cast<DexType*>(refined_type));
+        m_type_refs.insert(refined_type);
       }
     }
     max_type_refs = get_max_type_refs(min_sdk) - reserved_trefs;
@@ -94,8 +94,8 @@ class DexState {
   }
 };
 
-bool account_for_added_split_method(const std::vector<DexType*>& arg_types,
-                                    DexState* dex_state) {
+bool account_for_added_split_method(
+    const std::vector<const DexType*>& arg_types, DexState* dex_state) {
   if (!dex_state->can_insert_method_ref()) {
     return false;
   }
@@ -272,7 +272,7 @@ namespace method_splitting_impl {
 SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
                                 DexType* target_type,
                                 const DexString* split_name,
-                                std::vector<DexType*> arg_types) {
+                                std::vector<const DexType*> arg_types) {
   auto* method = splittable_closure.method_closures->method;
   auto* code = method->get_code();
   auto& cfg = code->cfg();
@@ -342,7 +342,16 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   split_cfg.add_edge(split_entry_block, split_landingpad, cfg::EDGE_GOTO);
 
   auto* proto = method->get_proto();
-  auto* split_type_list = DexTypeList::make_type_list(std::move(arg_types));
+  auto* split_type_list = DexTypeList::make_type_list(
+      // TODO: Remove overhead.
+      [&]() {
+        std::vector<DexType*> non_const_args;
+        non_const_args.reserve(arg_types.size());
+        std::transform(arg_types.begin(), arg_types.end(),
+                       std::back_inserter(non_const_args),
+                       [](const auto* t) { return const_cast<DexType*>(t); });
+        return non_const_args;
+      }());
   auto* split_proto = DexProto::make_proto(proto->get_rtype(), split_type_list);
   auto* split_method_ref =
       DexMethod::make_method(target_type, split_name, split_proto);

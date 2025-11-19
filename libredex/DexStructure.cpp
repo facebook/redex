@@ -251,14 +251,14 @@ void DexStructure::resolve_init_classes(
   if ((init_classes_with_side_effects == nullptr) || itrefs.empty()) {
     return;
   }
-  UnorderedSet<DexType*> refined_types;
-  for (auto* type : UnorderedIterable(itrefs)) {
+  UnorderedSet<const DexType*> refined_types;
+  for (const auto* type : UnorderedIterable(itrefs)) {
     const auto* refined_type = init_classes_with_side_effects->refine(type);
     if (refined_type != nullptr) {
-      refined_types.insert(const_cast<DexType*>(refined_type));
+      refined_types.insert(refined_type);
     }
   }
-  for (auto* type : UnorderedIterable(refined_types)) {
+  for (const auto* type : UnorderedIterable(refined_types)) {
     auto* cls = type_class(type);
     always_assert(cls);
     if (m_pending_init_class_fields.count(type) != 0u) {
@@ -416,17 +416,17 @@ void DexStructure::add_refs_no_checks(
       m_pending_init_class_fields.erase(it);
     }
   }
-  for (auto* type : UnorderedIterable(clazz_trefs)) {
+  for (const auto* type : UnorderedIterable(clazz_trefs)) {
     if (++m_trefs[type] > 1) {
       continue;
     }
     m_pending_init_class_types.erase(type);
   }
-  for (auto* type : UnorderedIterable(pending_init_class_fields)) {
+  for (const auto* type : UnorderedIterable(pending_init_class_fields)) {
     auto inserted = m_pending_init_class_fields.insert(type).second;
     always_assert(inserted);
   }
-  for (auto* type : UnorderedIterable(pending_init_class_types)) {
+  for (const auto* type : UnorderedIterable(pending_init_class_types)) {
     auto inserted = m_pending_init_class_types.insert(type).second;
     always_assert(inserted);
     always_assert(!m_trefs.count(type));
@@ -480,7 +480,7 @@ void DexStructure::remove_class(const init_classes::InitClassesWithSideEffects*
       m_pending_init_class_types.insert(fref->get_class());
     }
   }
-  for (auto* type : UnorderedIterable(clazz_trefs)) {
+  for (const auto* type : UnorderedIterable(clazz_trefs)) {
     auto it = m_trefs.find(type);
     if (--it->second > 0) {
       continue;

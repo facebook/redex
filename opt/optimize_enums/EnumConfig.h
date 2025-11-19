@@ -47,9 +47,9 @@ struct Config {
    * Will try to optimize the enums in the allowlist without considering
    * reference equality of the enum objects.
    */
-  UnorderedSet<DexType*> breaking_reference_equality_allowlist;
+  UnorderedSet<const DexType*> breaking_reference_equality_allowlist;
   SummaryMap param_summary_map;
-  ConcurrentSet<DexType*> candidate_enums;
+  ConcurrentSet<const DexType*> candidate_enums;
 
   explicit Config(uint32_t max_size) : max_enum_size(max_size) {}
 

@@ -50,7 +50,7 @@ struct SplittableClosure {
     return closures.front()->target->id();
   }
 
-  std::vector<DexType*> get_arg_types() const;
+  std::vector<const DexType*> get_arg_types() const;
 };
 
 // Selects splittable closures for a given set of methods based of configured

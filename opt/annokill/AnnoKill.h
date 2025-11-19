@@ -20,7 +20,7 @@ class DexAnnotationSet;
 
 class AnnoKill {
  public:
-  using AnnoSet = UnorderedSet<DexType*>;
+  using AnnoSet = UnorderedSet<const DexType*>;
   using AnnoNames = std::vector<std::string>;
 
   struct AnnoKillStats {

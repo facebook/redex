@@ -129,7 +129,7 @@ AnnoKill::AnnoKill(Scope& scope,
 namespace {
 void gather_complete_referenced_annos(
     const AnnoKill::AnnoSet& initial_referenced_annos,
-    DexType* type,
+    const DexType* type,
     AnnoKill::AnnoSet* result) {
   auto* cls = type_class(type);
   if (cls == nullptr || !is_annotation(cls) || cls->is_external()) {
@@ -371,7 +371,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
   // For each referenced annotation, make sure any annotations it references are
   // also tracked as referenced, so we don't end up with a dangling ref.
   AnnoKill::AnnoSet gathered;
-  for (auto* referenced : UnorderedIterable(referenced_annos)) {
+  for (const auto* referenced : UnorderedIterable(referenced_annos)) {
     gather_complete_referenced_annos(referenced_annos, referenced, &gathered);
   }
   insert_unordered_iterable(referenced_annos, gathered);
@@ -380,7 +380,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
 
 AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
   // Determine which annotation classes are removable.
-  UnorderedSet<DexType*> bannotations;
+  UnorderedSet<const DexType*> bannotations;
   for (auto* clazz : m_scope) {
     if ((clazz->get_access() & DexAccessFlags::ACC_ANNOTATION) == 0u) {
       continue;
