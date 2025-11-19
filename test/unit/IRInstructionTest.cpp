@@ -35,7 +35,7 @@ TEST_F(IRInstructionTest, RoundTrip) {
   DexType* ty = DexType::make_type("Lfoo;");
   const auto* str = DexString::make_string("foo");
   DexFieldRef* field = DexField::make_field(ty, str, ty);
-  auto* method = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method = dynamic_cast<DexMethod*>(DexMethod::make_method(
       ty, str, DexProto::make_proto(ty, DexTypeList::make_type_list({}))));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
@@ -146,7 +146,7 @@ TEST_F(IRInstructionTest, NormalizeInvoke) {
  */
 IRInstruction* select_instruction(IRInstruction* insn) {
   DexMethod* method =
-      static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_STATIC, false);
   method->set_code(std::make_unique<IRCode>(method, 0));
   auto* code = method->get_code();
@@ -159,7 +159,7 @@ TEST_F(IRInstructionTest, TwoAddr) {
   using namespace dex_asm;
 
   auto* method =
-      static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   auto do_test = [&](IRInstruction* insn, DexInstruction* expected) {
@@ -214,7 +214,7 @@ TEST_F(IRInstructionTest, SelectCheckCast) {
   using namespace dex_asm;
 
   DexMethod* method =
-      static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_STATIC, false);
   method->set_code(std::make_unique<IRCode>(method, 0));
   auto* code = method->get_code();
