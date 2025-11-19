@@ -39,7 +39,7 @@ TEST_F(RedexTest, findNonOverriddenVirtuals) {
   ext_cc.set_external();
 
   auto* ext_final_method =
-      static_cast<DexMethod*>(DexMethod::make_method("LExternal;.final:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LExternal;.final:()V"));
   ext_final_method->set_access(ACC_PUBLIC | ACC_FINAL);
   ext_final_method->set_virtual(true);
   ext_final_method->set_external();
@@ -47,7 +47,7 @@ TEST_F(RedexTest, findNonOverriddenVirtuals) {
 
   // This method should not be included in the non-overridden set since it
   // could be overridden by some method we are not aware of.
-  auto* ext_nonfinal_method = static_cast<DexMethod*>(
+  auto* ext_nonfinal_method = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LExternal;.nonfinal:()V"));
   ext_nonfinal_method->set_access(ACC_PUBLIC);
   ext_nonfinal_method->set_virtual(true);
