@@ -425,14 +425,15 @@ static void sputget_peep_hole_test(const std::string& field_desc,
   ClassCreator creator(DexType::make_type("LFoo;"));
   creator.set_super(type::java_lang_Object());
 
-  auto* field = static_cast<DexField*>(DexField::make_field(field_desc));
+  auto* field = dynamic_cast<DexField*>(DexField::make_field(field_desc));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC);
   if (volatile_field) {
     field->set_access(field->get_access() | ACC_VOLATILE);
   }
   creator.add_field(field);
 
-  auto* method = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
+  auto* method =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(code_str));
   creator.add_method(method);
@@ -797,7 +798,8 @@ static void aputget_peep_hole_test(const std::string& code_str,
   ClassCreator creator(DexType::make_type("LFoo;"));
   creator.set_super(type::java_lang_Object());
 
-  auto* method = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
+  auto* method =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(code_str));
   creator.add_method(method);
