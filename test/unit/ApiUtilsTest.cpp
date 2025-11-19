@@ -142,7 +142,7 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissingButNotTruePrivate) {
   auto* void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
 
   auto* a_release = DexType::make_type("Landroidx/ArrayMap;");
-  auto* method = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method = dynamic_cast<DexMethod*>(DexMethod::make_method(
       a_release, DexString::make_string("foo"), void_object));
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
@@ -171,7 +171,7 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
   auto* void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
 
   auto* a_release = DexType::make_type("Landroidx/ArrayMap;");
-  auto* method = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method = dynamic_cast<DexMethod*>(DexMethod::make_method(
       a_release, DexString::make_string("foo"), void_object));
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
@@ -218,7 +218,7 @@ TEST(ApiUtilsTest, testHasMethod) {
   auto api_file =
       boost::optional<std::string>(get_env("api_utils_easy_input_path"));
   api::AndroidSDK sdk(api_file);
-  auto* method = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method = dynamic_cast<DexMethod*>(DexMethod::make_method(
       android_view, DexString::make_string("clearFocus"), void_empty));
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
