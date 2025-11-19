@@ -27,13 +27,13 @@ class PartialApplicationTest : public RedexIntegrationTest {
     creator.set_super(type::java_lang_Object());
     creator.set_external();
 
-    auto* valueof = static_cast<DexMethod*>(DexMethod::make_method(
+    auto* valueof = dynamic_cast<DexMethod*>(DexMethod::make_method(
         "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;"));
     valueof->set_external();
     valueof->make_concrete(ACC_PUBLIC | ACC_STATIC, true);
     creator.add_method(valueof);
 
-    auto* value = static_cast<DexMethod*>(
+    auto* value = dynamic_cast<DexMethod*>(
         DexMethod::make_method("Ljava/lang/Integer;.intValue:()I"));
     value->set_external();
     value->make_concrete(ACC_PUBLIC, true);
