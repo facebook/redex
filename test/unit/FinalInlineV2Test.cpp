@@ -27,7 +27,7 @@ struct FinalInlineTest : public RedexTest {
                                          ClassCreator* class_creator,
                                          DexAccessFlags access = ACC_PUBLIC |
                                                                  ACC_STATIC) {
-    auto* field = static_cast<DexField*>(DexField::make_field(name));
+    auto* field = dynamic_cast<DexField*>(DexField::make_field(name));
     field->make_concrete(access,
                          DexEncodedValue::zero_for_type(field->get_type()));
     class_creator->add_field(field);
@@ -100,7 +100,7 @@ TEST_F(FinalInlineTest, encodeTypeValues) {
   EXPECT_EQ(cls->get_clinit(), nullptr);
   EXPECT_EQ(field->get_static_value()->evtype(), DEVT_TYPE);
   EXPECT_EQ(
-      static_cast<DexEncodedValueType*>(field->get_static_value())->type(),
+      dynamic_cast<DexEncodedValueType*>(field->get_static_value())->type(),
       cls2->get_type());
 }
 
