@@ -757,7 +757,8 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
   size_t max_analysis_methods;
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
     max_analysis_methods = m_options.num_shards;
-  } else if (m_options.instrumentation_strategy == BASIC_BLOCK_TRACING) {
+  } else if (m_options.instrumentation_strategy == BASIC_BLOCK_TRACING ||
+             m_options.instrumentation_strategy == BASIC_BLOCK_HIT_COUNT) {
     // TODO: Derive this from the source.
     // Our current DynamicAnalysis has 2 * 7 onMethodExits and 1 onMethodBegin.
     max_analysis_methods = 15;
