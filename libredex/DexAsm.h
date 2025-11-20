@@ -29,7 +29,7 @@ inline Operand operator""_v(unsigned long long v) {
   return {VREG, static_cast<int64_t>(v)};
 }
 
-inline Operand operator"" _L(unsigned long long v) {
+inline Operand operator""_L(unsigned long long v) {
   return {LITERAL, static_cast<int64_t>(v)};
 }
 
