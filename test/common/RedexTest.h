@@ -54,8 +54,6 @@ inline std::string get_env(const char* name) {
 }
 
 namespace signed_constant_domain_internal {
-// TODO(T222824773): Remove this.
-extern bool enable_bitset;
 // TODO(T236830337): Remove this.
 extern bool enable_low6bits;
 } // namespace signed_constant_domain_internal
@@ -64,8 +62,6 @@ struct RedexTest : public testing::Test {
  public:
   RedexTest() {
     g_redex = new RedexContext();
-    // TODO(TT222824773): Remove this.
-    signed_constant_domain_internal::enable_bitset = true;
     // TODO(T236830337): Remove this.
     signed_constant_domain_internal::enable_low6bits = true;
   }

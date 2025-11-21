@@ -22,8 +22,6 @@ enum class SignedConstantDomain::BitShiftMask : int32_t {
 };
 
 namespace signed_constant_domain_internal {
-// TODO(T222824773): Remove this.
-bool enable_bitset = true;
 // TODO(T236830337): Remove this.
 bool enable_low6bits = false;
 
