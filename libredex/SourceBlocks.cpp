@@ -7,7 +7,6 @@
 
 #include "SourceBlocks.h"
 
-#include <iostream>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -47,6 +46,58 @@ constexpr SourceBlock::Val kXVal = SourceBlock::Val::none();
 static SourceBlockConsistencyCheck s_sbcc;
 
 const SourceBlock::Val global_default_val = SourceBlock::Val(1, 1);
+
+// Helper function to insert source blocks after throwing instructions
+template <typename ProfileFn>
+void insert_after_exceptions_impl(Block* cur,
+                                  const DexString* method,
+                                  uint32_t& id,
+                                  bool serialize,
+                                  std::ostringstream& oss,
+                                  ProfileFn profile_fn) {
+  if (cur->cfg().get_succ_edge_of_type(cur, EdgeType::EDGE_THROW) != nullptr) {
+    // Nothing to do.
+    return;
+  }
+  for (auto it = cur->begin(); it != cur->end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (!opcode::can_throw(it->insn->opcode())) {
+      continue;
+    }
+    // Exclude throws (explicitly).
+    if (it->insn->opcode() == OPCODE_THROW) {
+      continue;
+    }
+    // Get to the next instruction.
+    auto next_it = std::next(it);
+    while (next_it != cur->end() && next_it->type != MFLOW_OPCODE) {
+      ++next_it;
+    }
+    if (next_it == cur->end()) {
+      break;
+    }
+
+    auto insert_after =
+        opcode::is_move_result_any(next_it->insn->opcode()) ? next_it : it;
+
+    // This is not really what the structure looks like, but easy to
+    // parse and write. Otherwise, we would need to remember that
+    // we had a nesting.
+
+    if (serialize) {
+      oss << "(" << id << ")";
+    }
+
+    auto nested_val = profile_fn();
+    it = source_blocks::impl::BlockAccessor::insert_source_block_after(
+        cur, insert_after,
+        std::make_unique<SourceBlock>(method, id, nested_val));
+
+    ++id;
+  }
+}
 
 static char get_edge_char(const Edge* e) {
   switch (e->type()) {
@@ -200,50 +251,10 @@ struct InsertHelper {
     ++id;
 
     if (insert_after_excs) {
-      if (cur->cfg().get_succ_edge_of_type(cur, EdgeType::EDGE_THROW) !=
-          nullptr) {
-        // Nothing to do.
-        return;
-      }
-      for (auto it = cur->begin(); it != cur->end(); ++it) {
-        if (it->type != MFLOW_OPCODE) {
-          continue;
-        }
-        if (!opcode::can_throw(it->insn->opcode())) {
-          continue;
-        }
-        // Exclude throws (explicitly).
-        if (it->insn->opcode() == OPCODE_THROW) {
-          continue;
-        }
-        // Get to the next instruction.
-        auto next_it = std::next(it);
-        while (next_it != cur->end() && next_it->type != MFLOW_OPCODE) {
-          ++next_it;
-        }
-        if (next_it == cur->end()) {
-          break;
-        }
-
-        auto insert_after =
-            opcode::is_move_result_any(next_it->insn->opcode()) ? next_it : it;
-
-        // This is not really what the structure looks like, but easy to
-        // parse and write. Otherwise, we would need to remember that
-        // we had a nesting.
-
-        if (serialize) {
-          oss << "(" << id << ")";
-        }
-
-        auto nested_val = start_profile(cur,
-                                        /*empty_inner_tail=*/true);
-        it = source_blocks::impl::BlockAccessor::insert_source_block_after(
-            cur, insert_after,
-            std::make_unique<SourceBlock>(method, id, nested_val));
-
-        ++id;
-      }
+      insert_after_exceptions_impl(
+          cur, method, id, serialize, oss, [this, cur]() {
+            return start_profile(cur, /*empty_inner_tail=*/true);
+          });
     }
   }
 
@@ -517,48 +528,9 @@ struct CustomValueInsertHelper {
     ++id;
 
     if (insert_after_excs) {
-      if (cur->cfg().get_succ_edge_of_type(cur, EdgeType::EDGE_THROW) !=
-          nullptr) {
-        // Nothing to do.
-        return;
-      }
-      for (auto it = cur->begin(); it != cur->end(); ++it) {
-        if (it->type != MFLOW_OPCODE) {
-          continue;
-        }
-        if (!opcode::can_throw(it->insn->opcode())) {
-          continue;
-        }
-        // Exclude throws (explicitly).
-        if (it->insn->opcode() == OPCODE_THROW) {
-          continue;
-        }
-        // Get to the next instruction.
-        auto next_it = std::next(it);
-        while (next_it != cur->end() && next_it->type != MFLOW_OPCODE) {
-          ++next_it;
-        }
-        if (next_it == cur->end()) {
-          break;
-        }
-
-        auto insert_after =
-            opcode::is_move_result_any(next_it->insn->opcode()) ? next_it : it;
-
-        // This is not really what the structure looks like, but easy to
-        // parse and write. Otherwise, we would need to remember that
-        // we had a nesting.
-
-        if (serialize) {
-          oss << "(" << id << ")";
-        }
-
-        auto nested_val = start_profile(cur);
-        it = source_blocks::impl::BlockAccessor::insert_source_block_after(
-            cur, insert_after,
-            std::make_unique<SourceBlock>(method, id, nested_val));
-        ++id;
-      }
+      insert_after_exceptions_impl(
+          cur, method, id, serialize, oss,
+          [this, cur]() { return start_profile(cur); });
     }
   }
 
@@ -1055,32 +1027,6 @@ void topo_traverse(CustomValueInsertHelper& helper,
   }
 }
 
-bool is_hot_block(const Block* block) {
-  return has_source_block_positive_val(get_first_source_block(block));
-}
-
-void set_block_appear100(Block* block, float appear100) {
-  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
-  for (auto* source_block : source_blocks) {
-    source_block->foreach_val([&](auto& val) {
-      if (val) {
-        val->appear100 = appear100;
-      }
-    });
-  }
-}
-
-void set_block_value(Block* block, float hit) {
-  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
-  for (auto* source_block : source_blocks) {
-    source_block->foreach_val([&](auto& val) {
-      if (val) {
-        val->val = hit;
-      }
-    });
-  }
-}
-
 /*
 The follow method runs a topo-traversal of the method's CFG, filling out source
 blocks as it goes.
@@ -1570,6 +1516,12 @@ size_t hot_callee_all_cold_callers(call_graph::NodeId node,
   return 1;
 }
 
+// Helper transforms for violation counting
+namespace {
+constexpr auto identity_transform = [](auto val) { return val; };
+constexpr auto binary_transform = [](auto val) { return val > 0 ? 1 : 0; };
+} // namespace
+
 template <typename Fn>
 size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
   size_t sum{0};
@@ -1650,35 +1602,31 @@ size_t hot_all_children_cold_violations_tmpl(Block* block, const Fn& fn) {
 size_t chain_hot_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return chain_hot_violations_tmpl(block, [](auto val) { return val; });
+  return chain_hot_violations_tmpl(block, identity_transform);
 }
 
 size_t chain_hot_one_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return chain_hot_violations_tmpl(block,
-                                   [](auto val) { return val > 0 ? 1 : 0; });
+  return chain_hot_violations_tmpl(block, binary_transform);
 }
 
 size_t hot_method_cold_entry_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return hot_method_cold_entry_violations_tmpl(block,
-                                               [](auto val) { return val; });
+  return hot_method_cold_entry_violations_tmpl(block, identity_transform);
 }
 
 size_t hot_method_cold_entry_block_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return hot_method_cold_entry_violations_tmpl(
-      block, [](auto val) { return val > 0 ? 1 : 0; });
+  return hot_method_cold_entry_violations_tmpl(block, binary_transform);
 }
 
 size_t hot_all_children_cold_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return hot_all_children_cold_violations_tmpl(block,
-                                               [](auto val) { return val; });
+  return hot_all_children_cold_violations_tmpl(block, identity_transform);
 };
 
 struct ChainAndDomState {
@@ -2032,6 +1980,45 @@ struct ViolationsHelper::ViolationsHelperImpl {
   using Violation = ViolationsHelper::Violation;
   const Violation v;
 
+  struct MethodDelta {
+    DexMethod* method;
+    size_t violations_delta;
+    size_t method_size;
+
+    MethodDelta(DexMethod* p1, size_t p2, size_t p3)
+        : method(p1), violations_delta(p2), method_size(p3) {}
+
+    // Comparison operator for sorting by proportional violations
+    static bool compare(const MethodDelta& t1, const MethodDelta& t2) {
+      double t1_proportional_violations =
+          (double)t1.violations_delta / (double)t1.method_size;
+      double t2_proportional_violations =
+          (double)t2.violations_delta / (double)t2.method_size;
+      if (t1_proportional_violations > t2_proportional_violations) {
+        return true;
+      }
+      if (t1_proportional_violations < t2_proportional_violations) {
+        return false;
+      }
+
+      if (t1.violations_delta > t2.violations_delta) {
+        return true;
+      }
+      if (t1.violations_delta < t2.violations_delta) {
+        return false;
+      }
+
+      if (t1.method_size < t2.method_size) {
+        return true;
+      }
+      if (t1.method_size > t2.method_size) {
+        return false;
+      }
+
+      return compare_dexmethods(t1.method, t2.method);
+    }
+  };
+
   ViolationsHelperImpl(Violation v,
                        const Scope& scope,
                        size_t top_n,
@@ -2106,16 +2093,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
     {
       std::mutex lock;
-
-      struct MethodDelta {
-        DexMethod* method;
-        size_t violations_delta;
-        size_t method_size;
-
-        MethodDelta(DexMethod* p1, size_t p2, size_t p3)
-            : method(p1), violations_delta(p2), method_size(p3) {}
-      };
-
       std::vector<MethodDelta> top_changes;
 
       workqueue_run<std::pair<DexMethod*, size_t>>(
@@ -2139,38 +2116,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
               return;
             }
             MethodDelta m_t{m, m_delta, s};
-            auto cmp = [](const auto& t1, const auto& t2) {
-              double t1_proportional_violations =
-                  (double)t1.violations_delta / (double)t1.method_size;
-              double t2_proportional_violations =
-                  (double)t2.violations_delta / (double)t2.method_size;
-              if (t1_proportional_violations > t2_proportional_violations) {
-                return true;
-              }
-              if (t1_proportional_violations < t2_proportional_violations) {
-                return false;
-              }
-
-              if (t1.violations_delta > t2.violations_delta) {
-                return true;
-              }
-              if (t1.violations_delta < t2.violations_delta) {
-                return false;
-              }
-
-              if (t1.method_size < t2.method_size) {
-                return true;
-              }
-              if (t1.method_size > t2.method_size) {
-                return false;
-              }
-
-              return compare_dexmethods(t1.method, t2.method);
-            };
-
-            if (cmp(m_t, top_changes.back())) {
+            if (MethodDelta::compare(m_t, top_changes.back())) {
               top_changes.back() = m_t;
-              std::sort(top_changes.begin(), top_changes.end(), cmp);
+              std::sort(top_changes.begin(), top_changes.end(),
+                        MethodDelta::compare);
             }
           },
           violations_start);
