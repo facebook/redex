@@ -313,17 +313,9 @@ using ResourceAttributeMap =
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
 std::string convert_utf8_to_mutf8(std::string_view input);
-// This line is needed because this header is exposed to dependents, which may
-// be using C++17.
-// This is not 202002L because GCC 10 (shipped in Debian 11) defines __cplusplus
-// to be so with -std=gnu++20 flag.
-// TODO(T233875592): Change this to 202002L when GCC 11 becomes the minimum
-// supported compiler version.
-#if __cplusplus >= 201709L
 // A convenient wrapper to allow convert_utf8_to_mutf8 to be used with u8"foo"
 // string literals.
 std::string convert_utf8_to_mutf8(std::u8string_view input);
-#endif // __cplusplus >= 201709L
 // Given a map of a id which holds a reference value, and the id that the
 // reference points to, along with all the past found inlinable values, for each
 // id in past_refs, if it is inlinable, adds it to inlinable_resources with the
