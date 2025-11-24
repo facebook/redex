@@ -390,6 +390,87 @@ class Bitset final {
   }
 };
 
+class MinimizeSubdomainsBase {
+ public:
+  MinimizeSubdomainsBase() = default;
+  MinimizeSubdomainsBase(const MinimizeSubdomainsBase&) = delete;
+  MinimizeSubdomainsBase& operator=(const MinimizeSubdomainsBase&) = delete;
+  virtual ~MinimizeSubdomainsBase() = default;
+
+  // Minimize the given subdomains based on their interactions as much as
+  // possible.
+  virtual void operator()(Bounds& bounds,
+                          Low6Bits& low6bits,
+                          Bitset& bitset) const = 0;
+
+ protected:
+  static void set_all_to_bottom(Bounds& bounds,
+                                Low6Bits& low6bits,
+                                Bitset& bitset) {
+    bounds.set_to_bottom();
+    low6bits.set_to_bottom();
+    bitset.set_to_bottom();
+  }
+  static bool set_all_to_bottom_if_any(Bounds& bounds,
+                                       Low6Bits& low6bits,
+                                       Bitset& bitset) {
+    if (bounds.is_bottom() || low6bits.is_bottom() || bitset.is_bottom()) {
+      set_all_to_bottom(bounds, low6bits, bitset);
+      return true;
+    }
+    return false;
+  }
+};
+
+class MinimizeSubdomains final : public MinimizeSubdomainsBase {
+ public:
+  MinimizeSubdomains() = default;
+  MinimizeSubdomains(const MinimizeSubdomains&) = delete;
+  MinimizeSubdomains& operator=(const MinimizeSubdomains&) = delete;
+  ~MinimizeSubdomains() override = default;
+
+  void operator()(Bounds& bounds,
+                  Low6Bits& low6bits,
+                  Bitset& bitset) const override {
+    always_assert(bounds.is_normalized());
+
+    if (set_all_to_bottom_if_any(bounds, low6bits, bitset)) {
+      return;
+    }
+
+    // Constant inferences from bounds and bitset.
+    if (bounds.is_constant()) {
+      if (bitset.unequals_constant(bounds.l) ||
+          low6bits.unequals_constant(bounds.l)) {
+        set_all_to_bottom(bounds, low6bits, bitset);
+        return;
+      }
+      low6bits = Low6Bits(bounds.l);
+      bitset = Bitset(bounds.l);
+      return;
+    }
+    if (const auto bitset_constant = bitset.get_constant();
+        bitset_constant.has_value()) {
+      if (bounds.unequals_constant(*bitset_constant) ||
+          low6bits.unequals_constant(*bitset_constant)) {
+        set_all_to_bottom(bounds, low6bits, bitset);
+        return;
+      }
+      bounds = Bounds::from_integer(bitset_constant.value());
+      low6bits = Low6Bits(bitset_constant.value());
+      return;
+    }
+  }
+};
+
+class MinimizeSubdomainsSingleton {
+ protected:
+  static std::unique_ptr<const MinimizeSubdomainsBase> instance;
+
+ public:
+  static const auto& get() { return *instance; }
+};
+
 } // namespace signed_constant_domain_internal
 
 class SignedConstantDomain;
@@ -515,6 +596,8 @@ class SignedConstantDomain final
       }
       return std::numeric_limits<uint64_t>::max();
     }
+
+    std::optional<Low6Bits>& get_low6bits() { return low6bits; }
   };
 
   OptionalLow6Bits m_low6bits;
@@ -680,18 +763,27 @@ class SignedConstantDomain final
       }
       return false;
     }
+
+    std::optional<Bitset>& get_bitset() { return bitset; }
   };
 
   OptionalBitset m_bitset;
 
-  SignedConstantDomain(Bounds bounds, Low6Bits low6bits, Bitset bitset)
-      : m_bounds(bounds), m_low6bits(low6bits), m_bitset(bitset) {}
+  // Cross inference based on interactions between subdomains.
+  void cross_infer() {
+    auto top_low6bits = Low6Bits::top();
+    auto& low6bits =
+        m_low6bits.get_low6bits() ? *m_low6bits.get_low6bits() : top_low6bits;
+    auto top_bitset = Bitset::top();
+    auto& bitset = m_bitset.get_bitset() ? *m_bitset.get_bitset() : top_bitset;
+    signed_constant_domain_internal::MinimizeSubdomainsSingleton::get()(
+        m_bounds, low6bits, bitset);
+  }
 
-  // When any of the domain meets (become narrower), we can possibly
-  // infer the other ones to some extent.
-  inline void cross_infer_meet_from_bounds();
-  inline void cross_infer_meet_from_bitset();
-  inline void cross_infer_meet_from_low6bits();
+  SignedConstantDomain(Bounds bounds, Low6Bits low6bits, Bitset bitset)
+      : m_bounds(bounds), m_low6bits(low6bits), m_bitset(bitset) {
+    cross_infer();
+  }
 
  public:
   SignedConstantDomain()
@@ -706,14 +798,14 @@ class SignedConstantDomain final
       : m_bounds(Bounds::from_interval(interval)),
         m_low6bits(Low6Bits::top()),
         m_bitset(Bitset::top()) {
-    cross_infer_meet_from_bounds();
+    cross_infer();
   }
 
   SignedConstantDomain(int64_t min, int64_t max)
       : m_bounds(Bounds::from_range(min, max)),
         m_low6bits(Low6Bits::top()),
         m_bitset(Bitset::top()) {
-    cross_infer_meet_from_bounds();
+    cross_infer();
   }
 
   // Construct a SignedConstantDomain that is the joint of multiple constants.
@@ -794,11 +886,9 @@ class SignedConstantDomain final
 
   void meet_with(const SignedConstantDomain& that) {
     m_bounds.meet_with(that.m_bounds);
-    cross_infer_meet_from_bounds();
     m_bitset.meet_with(that.m_bitset);
-    cross_infer_meet_from_bitset();
     m_low6bits.meet_with(that.m_low6bits);
-    cross_infer_meet_from_low6bits();
+    cross_infer();
   }
 
   void narrow_with(const SignedConstantDomain&) {
@@ -916,72 +1006,6 @@ class SignedConstantDomain final
   }
 };
 
-void SignedConstantDomain::cross_infer_meet_from_bounds() {
-  if (m_bitset.is_bottom() || m_low6bits.is_bottom()) {
-    always_assert(m_bounds.is_bottom());
-    return;
-  }
-
-  // Constant inference
-  if (m_bounds.is_constant()) {
-    if (m_bitset.unequals_constant(m_bounds.l) ||
-        m_low6bits.unequals_constant(m_bounds.l)) {
-      set_to_bottom();
-      return;
-    }
-    m_low6bits = Low6Bits(m_bounds.l);
-    m_bitset = Bitset(m_bounds.l);
-    return;
-  }
-
-  // One is bottom, then all is bottom.
-  if (m_bounds.is_bottom()) {
-    set_to_bottom();
-    return;
-  }
-}
-
-void SignedConstantDomain::cross_infer_meet_from_bitset() {
-  if (m_bounds.is_bottom() || m_low6bits.is_bottom()) {
-    always_assert(!signed_constant_domain_internal::enable_bitset ||
-                  m_bitset.is_bottom());
-    return;
-  }
-
-  const auto bitset_constant = m_bitset.get_constant();
-
-  if (bitset_constant.has_value()) {
-    if (m_bounds.unequals_constant(*bitset_constant) ||
-        m_low6bits.unequals_constant(*bitset_constant)) {
-      set_to_bottom();
-      return;
-    }
-    m_bounds = Bounds::from_integer(bitset_constant.value());
-    m_low6bits = Low6Bits(bitset_constant.value());
-    return;
-  }
-
-  // One is bottom, then all is bottom.
-  if (m_bitset.is_bottom()) {
-    set_to_bottom();
-    return;
-  }
-}
-
-void SignedConstantDomain::cross_infer_meet_from_low6bits() {
-  if (m_bounds.is_bottom() || m_bitset.is_bottom()) {
-    always_assert(!signed_constant_domain_internal::enable_low6bits ||
-                  m_low6bits.is_bottom());
-    return;
-  }
-
-  // One is bottom, then all is bottom.
-  if (m_low6bits.is_bottom()) {
-    set_to_bottom();
-    return;
-  }
-}
-
 SignedConstantDomain& SignedConstantDomain::set_determined_bits_erasing_bounds(
     std::optional<uint64_t> zeros, std::optional<uint64_t> ones, bool bit32) {
   // No bit can be 1 in both zeros and ones
@@ -1017,7 +1041,7 @@ SignedConstantDomain& SignedConstantDomain::set_determined_bits_erasing_bounds(
 
   m_bounds.set_to_top();
   m_low6bits.set_to_top();
-  cross_infer_meet_from_bitset();
+  cross_infer();
   return *this;
 }
 

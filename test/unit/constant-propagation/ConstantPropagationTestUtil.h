@@ -58,3 +58,26 @@ inline void do_const_prop(
   }
   code->clear_cfg();
 }
+
+// Scoped MinimizeSubdomainsBase instance.
+template <class T>
+class ScopedMinimizeSubdomains
+    : public signed_constant_domain_internal::MinimizeSubdomainsSingleton {
+  static_assert(
+      std::is_base_of_v<signed_constant_domain_internal::MinimizeSubdomainsBase,
+                        T>);
+
+ public:
+  explicit ScopedMinimizeSubdomains(const T* scoped_have_no_intersection) {
+    scoped_instance = scoped_have_no_intersection;
+    old_instance = std::move(instance);
+    instance.reset(scoped_have_no_intersection);
+  }
+  ~ScopedMinimizeSubdomains() { instance = std::move(old_instance); }
+  const T& get() { return *scoped_instance; }
+
+ private:
+  std::unique_ptr<const signed_constant_domain_internal::MinimizeSubdomainsBase>
+      old_instance;
+  const T* scoped_instance;
+};

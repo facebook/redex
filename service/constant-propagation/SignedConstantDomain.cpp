@@ -27,6 +27,10 @@ bool enable_bitset = true;
 // TODO(T236830337): Remove this.
 bool enable_low6bits = false;
 
+std::unique_ptr<const MinimizeSubdomainsBase>
+    MinimizeSubdomainsSingleton::instance{
+        std::make_unique<const MinimizeSubdomains>()};
+
 } // namespace signed_constant_domain_internal
 
 SignedConstantDomain& SignedConstantDomain::left_shift_bits_int(int32_t shift) {

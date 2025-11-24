@@ -326,6 +326,7 @@ instruction_sequence_outliner_test_SOURCES = InstructionSequenceOutlinerTest.cpp
 interprocedural_constant_propagation_test_SOURCES = constant-propagation/IPConstantPropagationTest.cpp
 
 intraprocedural_constant_propagation_test_SOURCES = constant-propagation/ConstantPropagationTest.cpp
+intraprocedural_constant_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 ir_assembler_test_SOURCES = IRAssemblerTest.cpp
 

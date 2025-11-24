@@ -7,11 +7,16 @@
 
 #include "ConstantPropagationPass.h"
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "ConstantPropagationTestUtil.h"
 #include "IRAssembler.h"
 #include "SourceBlocks.h"
+
+using ::testing::AnyNumber;
+using ::testing::AtLeast;
+using ::testing::Return;
 
 TEST_F(ConstantPropagationTest, SourceBlockTargetMutating) {
   auto code = assembler::ircode_from_string(R"(
@@ -1092,6 +1097,38 @@ TEST_F(ConstantPropagationTest, ForwardBranchesSwitch) {
 }
 
 TEST_F(ConstantPropagationTest, ForwardBranchesWithTwoLevelsOfBottom) {
+  using signed_constant_domain_internal::Bitset;
+  using signed_constant_domain_internal::Bounds;
+  using signed_constant_domain_internal::Low6Bits;
+  // This test requires most optimization turned off to be reliably reproduced.
+  // Without this, the test may still succeed in the future but tests nothing.
+  // BottomSettingMinimizeSubdomains only enforces the normality of bottomness
+  // across subdomains.
+  class BottomSettingMinimizeSubdomains
+      : public signed_constant_domain_internal::MinimizeSubdomainsBase {
+   public:
+    MOCK_METHOD(void, call, (Bounds&, Low6Bits&, Bitset&), (const));
+
+    void operator()(Bounds& bounds,
+                    Low6Bits& low6bits,
+                    Bitset& bitset) const override {
+      call(bounds, low6bits, bitset);
+      set_all_to_bottom_if_any(bounds, low6bits, bitset);
+    }
+  };
+  ScopedMinimizeSubdomains scoped_minimize_subdomains(
+      new BottomSettingMinimizeSubdomains());
+
+  // Sanity check: Make sure v0 = [1, 2]{9} (not bottom but equals bottom) has
+  // appeared at least once, so we know there are two levels of bottom.
+  EXPECT_CALL(scoped_minimize_subdomains.get(),
+              call(::testing::_, ::testing::_, ::testing::_))
+      .Times(testing::AnyNumber());
+  Bounds bounds = Bounds::from_range(1, 2);
+  EXPECT_CALL(scoped_minimize_subdomains.get(),
+              call(bounds, Low6Bits(0).join_with(Low6Bits(3)), ::testing::_))
+      .Times(AtLeast(1u));
+
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
