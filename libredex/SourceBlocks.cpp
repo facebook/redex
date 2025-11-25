@@ -2465,6 +2465,18 @@ struct ViolationsHelper::ViolationsHelperImpl {
     void on_end_block(std::ostream&, cfg::Block*) {}
   };
 
+  template <typename ViolationVisitor>
+  static void handle_violation(DexMethod* m,
+                               bool print_violations,
+                               ViolationBlockMap* violation_blocks) {
+    if (print_violations) {
+      print_cfg_with_violations<ViolationVisitor>(m);
+    }
+    if (violation_blocks != nullptr) {
+      gather_cfg_violating_blocks<ViolationVisitor>(m, violation_blocks);
+    }
+  }
+
   // This function can gather information on violating blocks (for all types
   // of violations) for each source block, as well as print out a
   // violation-labeled CFG (only for one violation at a time).
@@ -2538,13 +2550,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           os << "\n";
         }
       };
-      if (print_violations) {
-        print_cfg_with_violations<HotImmediateSpecial>(m);
-      }
-      if (violation_blocks != nullptr) {
-        gather_cfg_violating_blocks<HotImmediateSpecial>(m, violation_blocks);
-      }
-      return;
+      return handle_violation<HotImmediateSpecial>(m, print_violations,
+                                                   violation_blocks);
     }
     case Violation::kChainAndDom: {
       struct ChainAndDom : ViolationVisitorBase<ChainAndDom> {
@@ -2616,13 +2623,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           }
         }
       };
-      if (print_violations) {
-        print_cfg_with_violations<ChainAndDom>(m);
-      }
-      if (violation_blocks != nullptr) {
-        gather_cfg_violating_blocks<ChainAndDom>(m, violation_blocks);
-      }
-      return;
+      return handle_violation<ChainAndDom>(m, print_violations,
+                                           violation_blocks);
     }
     case Violation::kUncoveredSourceBlocks: {
       struct UncoveredSourceBlocks
@@ -2658,10 +2660,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           // Empty - don't call Base::end_block
         }
       };
-      if (print_violations) {
-        print_cfg_with_violations<UncoveredSourceBlocks>(m);
-      }
-      return;
+      return handle_violation<UncoveredSourceBlocks>(m, print_violations,
+                                                     violation_blocks);
     }
     case Violation::kHotMethodColdEntry: {
       struct HotMethodColdEntry : ViolationVisitorBase<HotMethodColdEntry> {
@@ -2727,13 +2727,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           os << "\n";
         }
       };
-      if (print_violations) {
-        print_cfg_with_violations<HotMethodColdEntry>(m);
-      }
-      if (violation_blocks != nullptr) {
-        gather_cfg_violating_blocks<HotMethodColdEntry>(m, violation_blocks);
-      }
-      return;
+      return handle_violation<HotMethodColdEntry>(m, print_violations,
+                                                  violation_blocks);
     }
     case Violation::kHotNoHotPred: {
       struct HotNoHotPred : ViolationVisitorBase<HotNoHotPred> {
@@ -2790,13 +2785,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           }
         }
       };
-      if (print_violations) {
-        print_cfg_with_violations<HotNoHotPred>(m);
-      }
-      if (violation_blocks != nullptr) {
-        gather_cfg_violating_blocks<HotNoHotPred>(m, violation_blocks);
-      }
-      return;
+      return handle_violation<HotNoHotPred>(m, print_violations,
+                                            violation_blocks);
     }
     case Violation::KHotAllChildrenCold: {
       struct HotAllChildrenCold : ViolationVisitorBase<HotAllChildrenCold> {
@@ -2850,13 +2840,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           }
         }
       };
-      if (print_violations) {
-        print_cfg_with_violations<HotAllChildrenCold>(m);
-      }
-      if (violation_blocks != nullptr) {
-        gather_cfg_violating_blocks<HotAllChildrenCold>(m, violation_blocks);
-      }
-      return;
+      return handle_violation<HotAllChildrenCold>(m, print_violations,
+                                                  violation_blocks);
     }
     case Violation::ViolationSize:
       not_reached();
