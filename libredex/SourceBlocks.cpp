@@ -2422,6 +2422,49 @@ struct ViolationsHelper::ViolationsHelperImpl {
     TRACE(MMINL, 0, "%s\n", ss.str().c_str());
   }
 
+  template <typename Derived>
+  class ViolationVisitorBase {
+   private:
+    explicit ViolationVisitorBase(cfg::ControlFlowGraph& cfg)
+        : violating_blocks(nullptr) {
+      static_cast<Derived*>(this)->initialize(cfg);
+    }
+
+    explicit ViolationVisitorBase(cfg::ControlFlowGraph& cfg,
+                                  ViolationBlockMap* violating_blocks)
+        : violating_blocks(violating_blocks) {
+      static_cast<Derived*>(this)->initialize(cfg);
+    }
+
+    friend Derived;
+
+   protected:
+    cfg::Block* cur{nullptr};
+    ViolationBlockMap* violating_blocks{nullptr};
+
+   public:
+    void mie_before(std::ostream&, const MethodItemEntry&) {}
+
+    void start_block(std::ostream& os, cfg::Block* b) {
+      cur = b;
+      static_cast<Derived*>(this)->on_start_block(os, b);
+    }
+
+    void end_block(std::ostream& os, cfg::Block* b) {
+      static_cast<Derived*>(this)->on_end_block(os, b);
+      cur = nullptr;
+    }
+
+    void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+      static_cast<Derived*>(this)->mie_after_impl(os, mie);
+    }
+
+   protected:
+    void initialize(cfg::ControlFlowGraph&) {}
+    void on_start_block(std::ostream&, cfg::Block*) {}
+    void on_end_block(std::ostream&, cfg::Block*) {}
+  };
+
   // This function can gather information on violating blocks (for all types
   // of violations) for each source block, as well as print out a
   // violation-labeled CFG (only for one violation at a time).
@@ -2432,21 +2475,19 @@ struct ViolationsHelper::ViolationsHelperImpl {
       ViolationBlockMap* violation_blocks = nullptr) {
     switch (v) {
     case Violation::kHotImmediateDomNotHot: {
-      struct HotImmediateSpecial {
-        cfg::Block* cur{nullptr};
+      struct HotImmediateSpecial : ViolationVisitorBase<HotImmediateSpecial> {
         dominators::SimpleFastDominators<cfg::GraphInterface> dom;
-        ViolationBlockMap* violating_blocks = nullptr;
+
+        using Base = ViolationVisitorBase<HotImmediateSpecial>;
 
         explicit HotImmediateSpecial(cfg::ControlFlowGraph& cfg)
-            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
+            : Base(cfg), dom(cfg) {}
 
         explicit HotImmediateSpecial(cfg::ControlFlowGraph& cfg,
                                      ViolationBlockMap* violating_blocks)
-            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)),
-              violating_blocks(violating_blocks) {}
+            : Base(cfg, violating_blocks), dom(cfg) {}
 
-        void mie_before(std::ostream&, const MethodItemEntry&) {}
-        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
           if (mie.type != MFLOW_SOURCE_BLOCK) {
             return;
           }
@@ -2496,9 +2537,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
           });
           os << "\n";
         }
-
-        void start_block(std::ostream&, cfg::Block* b) { cur = b; }
-        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
       if (print_violations) {
         print_cfg_with_violations<HotImmediateSpecial>(m);
@@ -2509,25 +2547,27 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return;
     }
     case Violation::kChainAndDom: {
-      struct ChainAndDom {
-        cfg::Block* cur{nullptr};
+      struct ChainAndDom : ViolationVisitorBase<ChainAndDom> {
         ChainAndDomState state{};
         bool first_in_block{false};
         bool prev_insn_can_throw{false};
-
         dominators::SimpleFastDominators<cfg::GraphInterface> dom;
-        ViolationBlockMap* violating_blocks = nullptr;
+
+        using Base = ViolationVisitorBase<ChainAndDom>;
 
         explicit ChainAndDom(cfg::ControlFlowGraph& cfg)
-            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
+            : Base(cfg), dom(cfg) {}
 
         explicit ChainAndDom(cfg::ControlFlowGraph& cfg,
                              ViolationBlockMap* violating_blocks)
-            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)),
-              violating_blocks(violating_blocks) {}
+            : Base(cfg, violating_blocks), dom(cfg) {}
 
-        void mie_before(std::ostream&, const MethodItemEntry&) {}
-        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+        void start_block(std::ostream& os, cfg::Block* b) {
+          Base::start_block(os, b);
+          first_in_block = true;
+        }
+
+        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
           if (mie.type != MFLOW_SOURCE_BLOCK) {
             prev_insn_can_throw =
                 prev_insn_can_throw || (mie.type == MFLOW_OPCODE &&
@@ -2575,12 +2615,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
             os << "\n";
           }
         }
-
-        void start_block(std::ostream&, cfg::Block* b) {
-          cur = b;
-          first_in_block = true;
-        }
-        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
       if (print_violations) {
         print_cfg_with_violations<ChainAndDom>(m);
@@ -2591,19 +2625,21 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return;
     }
     case Violation::kUncoveredSourceBlocks: {
-      struct UncoveredSourceBlocks {
-        ViolationBlockMap* violating_blocks = nullptr;
-        ;
-        explicit UncoveredSourceBlocks(cfg::ControlFlowGraph&) {}
+      struct UncoveredSourceBlocks
+          : ViolationVisitorBase<UncoveredSourceBlocks> {
+        using Base = ViolationVisitorBase<UncoveredSourceBlocks>;
 
-        explicit UncoveredSourceBlocks(cfg::ControlFlowGraph&,
+        explicit UncoveredSourceBlocks(cfg::ControlFlowGraph& cfg)
+            : Base(cfg) {}
+
+        explicit UncoveredSourceBlocks(cfg::ControlFlowGraph& cfg,
                                        ViolationBlockMap* violating_blocks)
-            : violating_blocks(violating_blocks) {}
+            : Base(cfg, violating_blocks) {}
 
-        void mie_before(std::ostream&, const MethodItemEntry&) {}
-        void mie_after(std::ostream&, const MethodItemEntry&) {}
+        void mie_after_impl(std::ostream&, const MethodItemEntry&) {}
 
         void start_block(std::ostream& os, cfg::Block* b) {
+          // Don't call Base::start_block - custom logic only
           if (is_ghost_block(b)) {
             return;
           }
@@ -2617,7 +2653,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
             os << "!!!MISSING SOURCE BLOCK\n";
           }
         }
-        void end_block(std::ostream&, cfg::Block*) {}
+
+        void end_block(std::ostream& os, cfg::Block* b) {
+          // Empty - don't call Base::end_block
+        }
       };
       if (print_violations) {
         print_cfg_with_violations<UncoveredSourceBlocks>(m);
@@ -2625,19 +2664,29 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return;
     }
     case Violation::kHotMethodColdEntry: {
-      struct HotMethodColdEntry {
+      struct HotMethodColdEntry : ViolationVisitorBase<HotMethodColdEntry> {
         bool is_entry_block{false};
         bool first_in_block{false};
-        ViolationBlockMap* violating_blocks = nullptr;
 
-        explicit HotMethodColdEntry(cfg::ControlFlowGraph&) {}
+        using Base = ViolationVisitorBase<HotMethodColdEntry>;
 
-        explicit HotMethodColdEntry(cfg::ControlFlowGraph&,
+        explicit HotMethodColdEntry(cfg::ControlFlowGraph& cfg) : Base(cfg) {}
+
+        explicit HotMethodColdEntry(cfg::ControlFlowGraph& cfg,
                                     ViolationBlockMap* violating_blocks)
-            : violating_blocks(violating_blocks) {}
+            : Base(cfg, violating_blocks) {}
 
-        void mie_before(std::ostream&, const MethodItemEntry&) {}
-        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+        void start_block(std::ostream& os, cfg::Block* b) {
+          Base::start_block(os, b);
+          is_entry_block = b->preds().empty();
+          first_in_block = true;
+        }
+
+        void end_block(std::ostream& os, cfg::Block* b) {
+          Base::end_block(os, b);
+        }
+
+        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
           if (mie.type != MFLOW_SOURCE_BLOCK || !is_entry_block ||
               !first_in_block) {
             return;
@@ -2677,12 +2726,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
           }
           os << "\n";
         }
-
-        void start_block(std::ostream&, cfg::Block* b) {
-          is_entry_block = b->preds().empty();
-          first_in_block = true;
-        }
-        void end_block(std::ostream&, cfg::Block*) {}
       };
       if (print_violations) {
         print_cfg_with_violations<HotMethodColdEntry>(m);
@@ -2693,21 +2736,19 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return;
     }
     case Violation::kHotNoHotPred: {
-      struct HotNoHotPred {
-        cfg::Block* cur{nullptr};
-
+      struct HotNoHotPred : ViolationVisitorBase<HotNoHotPred> {
         dominators::SimpleFastDominators<cfg::GraphInterface> dom;
-        ViolationBlockMap* violating_blocks = nullptr;
-        ;
 
-        explicit HotNoHotPred(cfg::ControlFlowGraph& cfg) : dom(cfg) {}
+        using Base = ViolationVisitorBase<HotNoHotPred>;
+
+        explicit HotNoHotPred(cfg::ControlFlowGraph& cfg)
+            : Base(cfg), dom(cfg) {}
 
         explicit HotNoHotPred(cfg::ControlFlowGraph& cfg,
                               ViolationBlockMap* violating_blocks)
-            : dom(cfg), violating_blocks(violating_blocks) {}
+            : Base(cfg, violating_blocks), dom(cfg) {}
 
-        void mie_before(std::ostream&, const MethodItemEntry&) {}
-        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
           if (mie.type != MFLOW_SOURCE_BLOCK) {
             return;
           }
@@ -2748,9 +2789,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
             os << " !!! HOT BLOCK NO HOT PRED\n";
           }
         }
-
-        void start_block(std::ostream&, cfg::Block* b) { cur = b; }
-        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
       if (print_violations) {
         print_cfg_with_violations<HotNoHotPred>(m);
@@ -2761,19 +2799,16 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return;
     }
     case Violation::KHotAllChildrenCold: {
-      struct HotAllChildrenCold {
-        cfg::Block* cur{nullptr};
-        ViolationBlockMap* violating_blocks = nullptr;
-        ;
+      struct HotAllChildrenCold : ViolationVisitorBase<HotAllChildrenCold> {
+        using Base = ViolationVisitorBase<HotAllChildrenCold>;
 
-        explicit HotAllChildrenCold(cfg::ControlFlowGraph&) {}
+        explicit HotAllChildrenCold(cfg::ControlFlowGraph& cfg) : Base(cfg) {}
 
-        explicit HotAllChildrenCold(cfg::ControlFlowGraph&,
+        explicit HotAllChildrenCold(cfg::ControlFlowGraph& cfg,
                                     ViolationBlockMap* violating_blocks)
-            : violating_blocks(violating_blocks) {}
+            : Base(cfg, violating_blocks) {}
 
-        void mie_before(std::ostream&, const MethodItemEntry&) {}
-        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
           if (mie.type != MFLOW_SOURCE_BLOCK) {
             return;
           }
@@ -2814,9 +2849,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
             os << " !!! HOT ALL CHILDREN COLD\n";
           }
         }
-
-        void start_block(std::ostream&, cfg::Block* b) { cur = b; }
-        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
       if (print_violations) {
         print_cfg_with_violations<HotAllChildrenCold>(m);
