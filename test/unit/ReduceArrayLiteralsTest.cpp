@@ -325,6 +325,33 @@ TEST_F(ReduceArrayLiteralsTest, array_two_different_elements) {
   test(code_str, expected_str, 1, 2);
 }
 
+TEST_F(ReduceArrayLiteralsTest, conditional_def) {
+  DexMethod::make_method("LBar;.get:()[Ljava/lang/String;");
+  const auto* code_str = R"(
+    (
+      (load-param v3)
+      (if-eqz v3 :make_new)
+      (invoke-static () "LBar;.get:()[Ljava/lang/String;")
+      (move-result-object v1)
+      (:fill)
+      (const-string "hello")
+      (move-result-pseudo-object v2)
+      (const v0 0)
+      (aput-object v2 v1 v0)
+      (const v0 1)
+      (aput-object v2 v1 v0)
+
+      (:make_new)
+      (const v0 2)
+      (new-array v0 "[Ljava/lang/String;")
+      (move-result-pseudo-object v1)
+      (goto :fill)
+    )
+  )";
+  const auto& expected_str = code_str;
+  test(code_str, expected_str, 0, 0);
+}
+
 TEST_F(ReduceArrayLiteralsTest, conditional_escape) {
   const auto* code_str = R"(
     (
@@ -338,6 +365,31 @@ TEST_F(ReduceArrayLiteralsTest, conditional_escape) {
       (move-result-pseudo-object v2)
       (aput v2 v1 v0)
       (:skip_aput)
+      (return-object v1)
+    )
+  )";
+  const auto& expected_str = code_str;
+  test(code_str, expected_str, 0, 0);
+}
+
+TEST_F(ReduceArrayLiteralsTest, aputs_with_goto_and_throw_succs) {
+  const auto* code_str = R"(
+    (
+      (const v0 2)
+      (new-array v0 "[I")
+      (move-result-pseudo-object v1)
+      (.try_start c0)
+      (const v2 99)
+      (const v0 0)
+      (aput v2 v1 v0)
+      (.try_end c0)
+      (.try_start c1)
+      (.catch (c0))
+      (const v2 100)
+      (const v0 1)
+      (aput v2 v1 v0)
+      (.try_end c1)
+      (.catch (c1))
       (return-object v1)
     )
   )";
