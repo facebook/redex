@@ -49,7 +49,12 @@ bool is_anonymous(std::string_view name) {
 }
 
 bool is_kotlin_default_arg_method(const DexMethod& method) {
-  return boost::algorithm::ends_with(method.get_name()->str(), "$default");
+  const auto* args = method.get_proto()->get_args();
+  // The last two args are the defaults bitset and an unused Object.
+  return method.get_name()->str().ends_with("$default") && args->size() > 2 &&
+         args->at(args->size() - 1) ==
+             DexType::get_type("Ljava/lang/Object;") &&
+         args->at(args->size() - 2) == DexType::get_type("I");
 }
 
 bool is_composable_method(const DexMethod* method) {
@@ -155,9 +160,31 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
   }
   if (cls->rstate.is_cls_kotlin()) {
     stats.kotlin_class++;
-    for (auto* method : cls->get_all_methods()) {
+    for (const auto* method : cls->get_all_methods()) {
       if (is_kotlin_default_arg_method(*method)) {
         stats.kotlin_default_arg_method++;
+        const auto* args = method->get_proto()->get_args();
+        always_assert(args->size() > 2);
+
+        // This also includes arguments that aren't specified as default args
+        // at the source code level. We can't reliably have this information.
+        switch (args->size() - 2) {
+        case 1:
+          stats.kotlin_default_arg_1_param++;
+          break;
+        case 2:
+          stats.kotlin_default_arg_2_params++;
+          break;
+        case 3:
+          stats.kotlin_default_arg_3_params++;
+          break;
+        case 4:
+          stats.kotlin_default_arg_4_params++;
+          break;
+        default:
+          stats.kotlin_default_arg_5plus_params++;
+          break;
+        }
       }
       if (is_composable_method(method)) {
         stats.kotlin_composable_method++;
@@ -229,6 +256,12 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_null_check_insns", kotlin_null_check_insns);
   mgr.incr_metric("kotlin_default_arg_check_insns",
                   kotlin_default_arg_check_insns);
+  mgr.incr_metric("kotlin_default_arg_1_param", kotlin_default_arg_1_param);
+  mgr.incr_metric("kotlin_default_arg_2_params", kotlin_default_arg_2_params);
+  mgr.incr_metric("kotlin_default_arg_3_params", kotlin_default_arg_3_params);
+  mgr.incr_metric("kotlin_default_arg_4_params", kotlin_default_arg_4_params);
+  mgr.incr_metric("kotlin_default_arg_5plus_params",
+                  kotlin_default_arg_5plus_params);
   mgr.incr_metric("kotlin_composable_and_lit_insns",
                   kotlin_composable_and_lit_insns);
   mgr.incr_metric("kotlin_and_lit_insns", kotlin_and_lit_insns);

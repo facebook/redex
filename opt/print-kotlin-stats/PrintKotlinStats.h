@@ -18,6 +18,11 @@ class PrintKotlinStats : public Pass {
     size_t unknown_null_check_insns{0};
     size_t kotlin_null_check_insns{0};
     size_t kotlin_default_arg_check_insns{0};
+    size_t kotlin_default_arg_1_param{0};
+    size_t kotlin_default_arg_2_params{0};
+    size_t kotlin_default_arg_3_params{0};
+    size_t kotlin_default_arg_4_params{0};
+    size_t kotlin_default_arg_5plus_params{0};
     size_t kotlin_composable_and_lit_insns{0};
     size_t kotlin_and_lit_insns{0};
     size_t java_public_param_objects{0};
@@ -40,6 +45,11 @@ class PrintKotlinStats : public Pass {
       unknown_null_check_insns += that.unknown_null_check_insns;
       kotlin_null_check_insns += that.kotlin_null_check_insns;
       kotlin_default_arg_check_insns += that.kotlin_default_arg_check_insns;
+      kotlin_default_arg_1_param += that.kotlin_default_arg_1_param;
+      kotlin_default_arg_2_params += that.kotlin_default_arg_2_params;
+      kotlin_default_arg_3_params += that.kotlin_default_arg_3_params;
+      kotlin_default_arg_4_params += that.kotlin_default_arg_4_params;
+      kotlin_default_arg_5plus_params += that.kotlin_default_arg_5plus_params;
       kotlin_composable_and_lit_insns += that.kotlin_composable_and_lit_insns;
       kotlin_and_lit_insns += that.kotlin_and_lit_insns;
       java_public_param_objects += that.java_public_param_objects;
