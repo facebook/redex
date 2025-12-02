@@ -185,6 +185,8 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
           stats.kotlin_default_arg_5plus_params++;
           break;
         }
+      } else if (method->get_name()->str().ends_with("$default")) {
+        stats.kotlin_homonym_default_arg_method++;
       }
       if (is_composable_method(method)) {
         stats.kotlin_composable_method++;
@@ -277,6 +279,8 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_companion_class", kotlin_companion_class);
   mgr.incr_metric("di_generated_class", di_generated_class);
   mgr.incr_metric("kotlin_default_arg_method", kotlin_default_arg_method);
+  mgr.incr_metric("kotlin_homonym_default_arg_method",
+                  kotlin_homonym_default_arg_method);
   mgr.incr_metric("kotlin_composable_method", kotlin_composable_method);
   mgr.incr_metric("kotlin_coroutine_continuation_base",
                   kotlin_coroutine_continuation_base);
@@ -306,6 +310,9 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
         di_generated_class);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_default_arg_method = %zu",
         kotlin_default_arg_method);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_homonym_default_arg_method = %zu",
+        kotlin_homonym_default_arg_method);
   TRACE(KOTLIN_STATS, 1,
         "KOTLIN_STATS: kotlin_coroutine_continuation_base = %zu",
         kotlin_coroutine_continuation_base);
