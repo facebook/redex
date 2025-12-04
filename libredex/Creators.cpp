@@ -309,7 +309,7 @@ void MethodBlock::move(Location src, Location& dst) {
   push_instruction(move);
 }
 
-void MethodBlock::move_result(Location& dst, DexType* type) {
+void MethodBlock::move_result(Location& dst, const DexType* type) {
   always_assert(dst.is_compatible(type));
   auto ch = type::type_shorty(type);
   redex_assert(ch != 'V');
@@ -328,7 +328,7 @@ void MethodBlock::move_result(Location& dst, DexType* type) {
   push_instruction(mov_res);
 }
 
-void MethodBlock::check_cast(Location& src_and_dst, DexType* type) {
+void MethodBlock::check_cast(Location& src_and_dst, const DexType* type) {
   IRInstruction* check_cast = new IRInstruction(OPCODE_CHECK_CAST);
   auto reg = src_and_dst.get_reg();
   check_cast->set_type(type)->set_src(0, reg);
@@ -386,7 +386,9 @@ void MethodBlock::load_const(Location& loc, int32_t value) {
   push_instruction(load);
 }
 
-void MethodBlock::load_const(Location& loc, int64_t value, DexType* type) {
+void MethodBlock::load_const(Location& loc,
+                             int64_t value,
+                             const DexType* type) {
   always_assert(type::is_wide_type(type) == loc.is_wide());
   IRInstruction* load =
       new IRInstruction(loc.is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
@@ -551,7 +553,7 @@ void MethodCreator::load_locals(DexMethod* meth) {
   auto* proto = meth->get_proto();
   auto* args = proto->get_args();
   if (args != nullptr) {
-    for (auto* arg : *args) {
+    for (const auto* arg : *args) {
       make_local_at(arg, it->insn->dest());
       ++it;
     }

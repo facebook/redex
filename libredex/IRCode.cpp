@@ -340,7 +340,7 @@ void generate_load_params(const DexMethod* method,
     insn->set_dest(param_reg++);
     code->push_back(insn);
   }
-  for (DexType* arg : *args) {
+  for (const DexType* arg : *args) {
     IROpcode op;
     auto prev_reg = param_reg;
     if (type::is_wide_type(arg)) {
@@ -766,7 +766,7 @@ void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
   if (!is_static(method)) {
     ++ins_size;
   }
-  for (auto* arg : *args_list) {
+  for (const auto* arg : *args_list) {
     if (type::is_wide_type(arg)) {
       ins_size += 2;
     } else {

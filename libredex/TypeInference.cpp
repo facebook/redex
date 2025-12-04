@@ -1239,7 +1239,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         // method is invoked.
         refine_reference(current_state, insn->src(src_idx++));
       }
-      for (DexType* arg_type : *arg_types) {
+      for (const DexType* arg_type : *arg_types) {
         if (type::is_object(arg_type)) {
           refine_reference(current_state, insn->src(src_idx++));
           continue;

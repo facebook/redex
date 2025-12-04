@@ -339,9 +339,10 @@ using CtorSummaries = std::
  * void <init>(LTypeA;I) =>
  *    void <init>Ljava/lang/Object;I)
  */
-DexProto* generalize_proto(const std::vector<DexType*>& normalized_typelist,
-                           const ConstructorSummary& summary,
-                           const DexProto* original_proto) {
+DexProto* generalize_proto(
+    const std::vector<const DexType*>& normalized_typelist,
+    const ConstructorSummary& summary,
+    const DexProto* original_proto) {
   DexTypeList::ContainerType new_type_list{original_proto->get_args()->begin(),
                                            original_proto->get_args()->end()};
   for (size_t field_id = 0; field_id < summary.field_id_to_origin.size();
@@ -376,7 +377,7 @@ DexMethod* get_representative(
     std::set<DexProto*, dexprotos_comparator>& pending_new_protos,
     MethodToType& global_pending_ctor_changes,
     MethodToType& pending_colliding_constructors_changes) {
-  std::vector<DexType*> normalized_typelist;
+  std::vector<const DexType*> normalized_typelist;
   auto* super_ctor_args = super_ctor->get_proto()->get_args();
   normalized_typelist.reserve(fields.size() + super_ctor_args->size());
   for (auto* field : fields) {

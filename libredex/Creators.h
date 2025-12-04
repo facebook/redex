@@ -33,7 +33,9 @@ struct Location {
    * Wide locations (double and long) hold 2 registers and should be used
    * with type of the same kind.
    */
-  bool is_compatible(DexType* t) const { return loc_size(type) == loc_size(t); }
+  bool is_compatible(const DexType* t) const {
+    return loc_size(type) == loc_size(t);
+  }
 
   /**
    * Whether the location is wide.
@@ -48,7 +50,7 @@ struct Location {
   /**
    * Return the type of this location.
    */
-  DexType* get_type() const { return type; }
+  const DexType* get_type() const { return type; }
 
   /**
    * Return the register assigned to this Location.
@@ -70,15 +72,15 @@ struct Location {
   /**
    * Size of this location.
    */
-  static uint16_t loc_size(DexType* type) {
+  static uint16_t loc_size(const DexType* type) {
     char t = type::type_shorty(type);
     always_assert(type != type::_void());
     return t == 'J' || t == 'D' ? 2 : 1;
   }
 
-  Location(DexType* t, reg_t pos) : type(t), reg(pos) {}
+  Location(const DexType* t, reg_t pos) : type(t), reg(pos) {}
 
-  DexType* type;
+  const DexType* type;
   reg_t reg;
 
   friend struct MethodBlock;
@@ -186,12 +188,12 @@ struct MethodBlock {
    * Move the result of an invoke into the given Location.
    * Changes the Location to have the given type.
    */
-  void move_result(Location& dst, DexType* type);
+  void move_result(Location& dst, const DexType* type);
 
   /**
    * Check-cast a location to a given type.
    */
-  void check_cast(Location& src_and_dst, DexType* type);
+  void check_cast(Location& src_and_dst, const DexType* type);
 
   void instance_of(Location& obj, Location& dst, DexType* type);
 
@@ -220,7 +222,7 @@ struct MethodBlock {
    * Load an int32 or int64 constant into the given Location.
    * The Location must be compatible with the given type.
    */
-  void load_const(Location& loc, int64_t value, DexType* type);
+  void load_const(Location& loc, int64_t value, const DexType* type);
 
   /**
    * Load the double value into the given Location.
@@ -423,7 +425,7 @@ struct MethodCreator {
   /**
    * Make a new local of the given type.
    */
-  Location make_local(DexType* type) {
+  Location make_local(const DexType* type) {
     auto next_reg = meth_code->get_registers_size();
     locals.emplace_back(Location{type, next_reg});
     meth_code->set_registers_size(next_reg + Location::loc_size(type));
@@ -479,7 +481,7 @@ struct MethodCreator {
 
   void load_locals(DexMethod* meth);
 
-  Location make_local_at(DexType* type, reg_t i) {
+  Location make_local_at(const DexType* type, reg_t i) {
     always_assert(i < meth_code->get_registers_size());
     locals.emplace_back(Location{type, i});
     return locals.back();

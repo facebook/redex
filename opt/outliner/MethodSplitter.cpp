@@ -345,7 +345,7 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   auto* split_type_list = DexTypeList::make_type_list(
       // TODO: Remove overhead.
       [&]() {
-        std::vector<DexType*> non_const_args;
+        std::vector<const DexType*> non_const_args;
         non_const_args.reserve(arg_types.size());
         std::transform(arg_types.begin(), arg_types.end(),
                        std::back_inserter(non_const_args),

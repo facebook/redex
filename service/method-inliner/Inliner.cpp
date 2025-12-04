@@ -89,7 +89,7 @@ float estimate_cross_dex_penalty(const InlinedCost* inlined_cost,
   return cross_dex_penalty;
 }
 
-bool is_finalizable(DexType* type) {
+bool is_finalizable(const DexType* type) {
   for (const auto* cls = type_class(type);
        (cls != nullptr) && cls->get_type() != type::java_lang_Object();
        cls = type_class(cls->get_super_class())) {
@@ -496,7 +496,7 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
         }
 
         auto it2 = m_inlined_invokes_need_cast.find(insn);
-        auto* needs_receiver_cast =
+        const auto* needs_receiver_cast =
             it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
         inlinables.push_back((Inlinable){callee, insn, no_return, partial,
                                          for_speed, std::move(reduced_code),
@@ -524,7 +524,7 @@ size_t MultiMethodInliner::inline_callees(
       auto* callee = callee_opt->method;
       always_assert(callee->is_concrete());
       auto it2 = m_inlined_invokes_need_cast.find(insn);
-      auto* needs_receiver_cast =
+      const auto* needs_receiver_cast =
           it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
       inlinables.push_back((Inlinable){callee, insn, false, false, false,
                                        nullptr, get_callee_insn_size(callee),

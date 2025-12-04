@@ -40,8 +40,8 @@ namespace mog = method_override_graph;
 
 namespace {
 
-static DexType* get_receiver_type_demand(DexType* callee_rtype,
-                                         const live_range::Use& use) {
+const DexType* get_receiver_type_demand(DexType* callee_rtype,
+                                        const live_range::Use& use) {
   switch (use.insn->opcode()) {
   case OPCODE_RETURN_OBJECT:
     always_assert(use.src_index == 0);
@@ -390,8 +390,8 @@ SameImplementationMap get_same_implementation_map(
   return method_to_implementations;
 }
 
-static DexType* reduce_type_demands(
-    std::unique_ptr<UnorderedSet<DexType*>>& type_demands) {
+const DexType* reduce_type_demands(
+    std::unique_ptr<UnorderedSet<const DexType*>>& type_demands) {
   if (!type_demands) {
     return nullptr;
   }
@@ -656,7 +656,7 @@ void gather_true_virtual_methods(
             }
           }
         }
-        auto type_demands = std::make_unique<UnorderedSet<DexType*>>();
+        auto type_demands = std::make_unique<UnorderedSet<const DexType*>>();
         // Note that the callee-rtype is the same for all methods in a
         // same-implementations cluster.
         auto* callee_rtype = callee->get_proto()->get_rtype();
@@ -664,7 +664,7 @@ void gather_true_virtual_methods(
           if (opcode::is_a_move(use.insn->opcode())) {
             continue;
           }
-          auto* type_demand = get_receiver_type_demand(callee_rtype, use);
+          const auto* type_demand = get_receiver_type_demand(callee_rtype, use);
           if (type_demand == nullptr) {
             formal_callee_types.clear();
             type_demands = nullptr;
@@ -686,7 +686,8 @@ void gather_true_virtual_methods(
               auto it2 = same_implementation_invokes.find(insn);
               if (it2 != same_implementation_invokes.end()) {
                 always_assert(any_same_implementation_invokes);
-                auto* combined_type_demand = reduce_type_demands(type_demands);
+                const auto* combined_type_demand =
+                    reduce_type_demands(type_demands);
                 if (combined_type_demand) {
                   for (auto same_implementation_callee : it2->second->methods) {
                     always_assert_log(

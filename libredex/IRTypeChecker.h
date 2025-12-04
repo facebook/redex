@@ -152,7 +152,7 @@ class IRTypeChecker final {
                         reg_t reg,
                         bool in_move = false) const;
   void assume_assignable(boost::optional<const DexType*> from,
-                         DexType* to) const;
+                         const DexType* to) const;
   void check_instruction(IRInstruction* insn,
                          TypeEnvironment* current_state) const;
 

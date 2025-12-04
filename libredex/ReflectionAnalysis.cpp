@@ -80,7 +80,7 @@ std::ostream& operator<<(std::ostream& out,
 
     if (x.dex_type_array) {
       out << "(";
-      for (auto* type : *x.dex_type_array) {
+      for (const auto* type : *x.dex_type_array) {
         out << (type != nullptr ? type->str() : "?");
       }
       out << ")";
@@ -328,7 +328,7 @@ using ClassObjectSourceEnvironment =
 
 using HeapClassArrayEnvironment = PatriciaTreeMapAbstractEnvironment<
     AbstractHeapAddress,
-    ConstantAbstractDomain<std::vector<DexType*>>>;
+    ConstantAbstractDomain<std::vector<const DexType*>>>;
 
 using ReturnValueDomain = AbstractObjectDomain;
 
@@ -375,14 +375,14 @@ class AbstractObjectEnvironment final
     apply<1>([=](auto env) { env->set(reg, cls_src); }, true);
   }
 
-  const ConstantAbstractDomain<std::vector<DexType*>>& get_heap_class_array(
-      AbstractHeapAddress addr) const {
+  const ConstantAbstractDomain<std::vector<const DexType*>>&
+  get_heap_class_array(AbstractHeapAddress addr) const {
     return get<2>().get(addr);
   }
 
   void set_heap_class_array(
       AbstractHeapAddress addr,
-      const ConstantAbstractDomain<std::vector<DexType*>>& array) {
+      const ConstantAbstractDomain<std::vector<const DexType*>>& array) {
     apply<2>([=](auto env) { env->set(addr, array); }, true);
   }
 
@@ -459,7 +459,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           // `this`.
           update_non_string_input(&init_state, insn, m_dex_method->get_class());
         } else {
-          DexType* type = *sig_it;
+          const DexType* type = *sig_it;
           always_assert(sig_it++ != signature->end());
           auto maybe_value_param =
               maybe_get_value_type_parameter(context, param_position);
@@ -618,7 +618,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           (*class_array)[*offset] = const_cast<DexType*>(type);
           current_state->set_heap_class_array(
               array_object->heap_address,
-              ConstantAbstractDomain<std::vector<DexType*>>(*class_array));
+              ConstantAbstractDomain<std::vector<const DexType*>>(
+                  *class_array));
         }
       }
       if (source_object && source_object->is_known_class_array()) {
@@ -668,8 +669,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         if (aobj && aobj->is_int() && aobj->dex_int) {
           AbstractHeapAddress addr = allocate_heap_address();
           int64_t size = *(aobj->dex_int);
-          std::vector<DexType*> array(size);
-          ConstantAbstractDomain<std::vector<DexType*>> heap_array(array);
+          std::vector<const DexType*> array(size);
+          ConstantAbstractDomain<std::vector<const DexType*>> heap_array(array);
           current_state->set_heap_class_array(addr, heap_array);
           current_state->set_abstract_obj(
               RESULT_REGISTER,
@@ -689,7 +690,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       AbstractObject aobj(AbstractObjectKind::OBJECT, insn->get_type());
       if (component_type == type::java_lang_Class()) {
         auto arg_count = insn->srcs_size();
-        std::vector<DexType*> known_types;
+        std::vector<const DexType*> known_types;
         known_types.reserve(arg_count);
 
         // collect known types from the filled new array
@@ -703,7 +704,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
         if (known_types.size() == arg_count) {
           AbstractHeapAddress addr = allocate_heap_address();
-          ConstantAbstractDomain<std::vector<DexType*>> heap_array(known_types);
+          ConstantAbstractDomain<std::vector<const DexType*>> heap_array(
+              known_types);
           current_state->set_heap_class_array(addr, heap_array);
           aobj = AbstractObject(AbstractObjectKind::OBJECT, addr);
         }
@@ -817,7 +819,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
   void update_non_string_input(AbstractObjectEnvironment* current_state,
                                const IRInstruction* insn,
-                               DexType* type) const {
+                               const DexType* type) const {
     auto dest_reg =
         insn->has_move_result_any() ? RESULT_REGISTER : insn->dest();
     if (type == type::java_lang_Class()) {
@@ -995,7 +997,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case CLASS: {
       AbstractObjectKind element_kind;
       const DexString* element_name = nullptr;
-      boost::optional<std::vector<DexType*>> method_param_types = boost::none;
+      boost::optional<std::vector<const DexType*>> method_param_types =
+          boost::none;
       if (callee == m_cache->get_method ||
           callee == m_cache->get_declared_method) {
         element_kind = METHOD;
@@ -1186,8 +1189,8 @@ AbstractObjectDomain ReflectionAnalysis::get_return_value() const {
   return m_analyzer->get_return_value();
 }
 
-boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
-    IRInstruction* invoke_insn) const {
+boost::optional<std::vector<const DexType*>>
+ReflectionAnalysis::get_method_params(IRInstruction* invoke_insn) const {
   auto* code = const_cast<DexMethod*>(m_dex_method)->get_code();
   always_assert(code->cfg_built());
   auto& cfg = code->cfg();

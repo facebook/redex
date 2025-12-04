@@ -468,9 +468,9 @@ struct dexfields_comparator {
 
 class DexTypeList {
  public:
-  using ContainerType = std::vector<DexType*>;
+  using ContainerType = std::vector<const DexType*>;
 
-  using value_type = DexType*;
+  using value_type = const DexType*;
   using iterator = typename ContainerType::iterator;
   using const_iterator = typename ContainerType::const_iterator;
 
@@ -480,7 +480,7 @@ class DexTypeList {
   size_t size() const { return m_list.size(); }
   bool empty() const { return m_list.empty(); }
 
-  DexType* at(size_t i) const { return m_list.at(i); }
+  const DexType* at(size_t i) const { return m_list.at(i); }
 
   // DexTypeList retrieval/creation
 
@@ -520,19 +520,19 @@ class DexTypeList {
   template <typename C>
   void gather_types(C& ltype) const;
 
-  bool equals(const std::vector<DexType*>& vec) const {
+  bool equals(const std::vector<const DexType*>& vec) const {
     return std::equal(m_list.begin(), m_list.end(), vec.begin(), vec.end());
   }
 
-  DexTypeList* push_front(DexType* t) const;
+  DexTypeList* push_front(const DexType* t) const;
   DexTypeList* pop_front() const;
   DexTypeList* pop_front(size_t n) const;
   DexTypeList* pop_back(size_t n) const;
 
-  DexTypeList* push_back(DexType* t) const;
-  DexTypeList* push_back(const std::vector<DexType*>& t) const;
+  DexTypeList* push_back(const DexType* t) const;
+  DexTypeList* push_back(const std::vector<const DexType*>& t) const;
 
-  DexTypeList* replace_head(DexType* new_head) const;
+  DexTypeList* replace_head(const DexType* new_head) const;
 
  private:
   // See UNIQUENESS above for the rationale for the private constructor pattern.

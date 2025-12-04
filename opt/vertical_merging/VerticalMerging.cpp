@@ -609,7 +609,7 @@ void update_references(const Scope& scope,
 }
 
 void update_implements(DexClass* from_cls, DexClass* to_cls) {
-  std::set<DexType*, dextypes_comparator> new_intfs;
+  std::set<const DexType*, dextypes_comparator> new_intfs;
   TRACE(VMERGE, 5, "interface before : ");
   for (const auto& cls_intf : *to_cls->get_interfaces()) {
     TRACE(VMERGE, 5, "  %s", SHOW(cls_intf));

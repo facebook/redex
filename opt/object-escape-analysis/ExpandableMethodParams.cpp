@@ -27,7 +27,7 @@ std::string show_deobfuscated(const DexType* type,
 }
 } // namespace
 
-std::vector<DexType*> ExpandableMethodParams::get_expanded_args_vector(
+std::vector<const DexType*> ExpandableMethodParams::get_expanded_args_vector(
     DexMethod* method,
     param_index_t param_index,
     const std::vector<DexField*>& fields) {
@@ -35,7 +35,7 @@ std::vector<DexType*> ExpandableMethodParams::get_expanded_args_vector(
   auto is_static_method = is_static(method);
   param_index_t param_count =
       args->size() + static_cast<unsigned long>(!is_static_method);
-  std::vector<DexType*> args_vector;
+  std::vector<const DexType*> args_vector;
   args_vector.reserve(param_count - 1 + fields.size());
   for (param_index_t i = 0; i < param_count; i++) {
     if (i == param_index) {
@@ -44,7 +44,7 @@ std::vector<DexType*> ExpandableMethodParams::get_expanded_args_vector(
       }
       continue;
     }
-    DexType* arg_type;
+    const DexType* arg_type;
     if (i == 0 && !is_static_method) {
       if (method::is_init(method)) {
         continue;
@@ -65,7 +65,7 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
   if (cls == nullptr) {
     return res;
   }
-  std::set<std::vector<DexType*>> args_vectors;
+  std::set<std::vector<const DexType*>> args_vectors;
   // First, for constructors, collect all of the (guaranteed to be distinct)
   // args.
   if (key.name->str() == "<init>") {
@@ -75,7 +75,7 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
         continue;
       }
       auto* args = method->get_proto()->get_args();
-      std::vector<DexType*> args_vector(args->begin(), args->end());
+      std::vector<const DexType*> args_vector(args->begin(), args->end());
       auto inserted = args_vectors.insert(std::move(args_vector)).second;
       always_assert(inserted);
     }
@@ -137,7 +137,7 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
       if (method::is_init(method)) {
         range_size++;
       }
-      for (auto* arg_type : expanded_args_vector) {
+      for (const auto* arg_type : expanded_args_vector) {
         range_size += type::is_wide_type(arg_type) ? 2 : 1;
       }
       if (range_size <= 0xff) {

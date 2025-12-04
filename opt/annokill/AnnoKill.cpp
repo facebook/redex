@@ -245,7 +245,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
       return;
     }
 
-    const auto& has_anno = [&](DexType* type) {
+    const auto& has_anno = [&](const DexType* type) {
       if (all_annos.count(type) > 0) {
         TRACE(ANNO,
               3,

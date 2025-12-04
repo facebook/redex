@@ -464,7 +464,7 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
   }
 
   std::deque<uint16_t> idxs;
-  UnorderedMap<DexType*, std::deque<uint16_t>> idxs_by_type;
+  UnorderedMap<const DexType*, std::deque<uint16_t>> idxs_by_type;
   int idx = 0;
   if (!is_static(method)) {
     idxs.push_back(idx++);
@@ -472,11 +472,11 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
       (*load_param_infos_it)++;
     }
   }
-  for (auto* t : *original_proto->get_args()) {
+  for (const auto* t : *original_proto->get_args()) {
     idxs_by_type[t].push_back(idx++);
   }
 
-  for (auto* t : *reordered_proto->get_args()) {
+  for (const auto* t : *reordered_proto->get_args()) {
     auto& deque = idxs_by_type.find(t)->second;
     auto new_idx = deque.front();
     deque.pop_front();

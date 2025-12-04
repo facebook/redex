@@ -50,7 +50,7 @@ static DexInfo EMPTY_DEX_INFO;
 
 UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
     const Scope& scope,
-    const std::vector<DexType*>& interdex_types,
+    const std::vector<const DexType*>& interdex_types,
     bool static_prune_classes,
     ClassReferencesCache& class_references_cache) {
   int old_no_ref = -1;
@@ -241,7 +241,7 @@ bool is_interaction_id_start_marker(std::string_view betamap_entry) {
 namespace interdex {
 
 void InterDex::get_movable_coldstart_classes(
-    const std::vector<DexType*>& interdex_types,
+    const std::vector<const DexType*>& interdex_types,
     UnorderedMap<const DexClass*, std::string>& move_coldstart_classes) {
   auto class_freqs = m_conf.get_class_frequencies();
   const std::vector<std::string>& interactions = m_conf.get_interactions();
@@ -262,7 +262,7 @@ void InterDex::get_movable_coldstart_classes(
 
   initialize_baseline_profile_classes();
 
-  for (auto* type : interdex_types) {
+  for (const auto* type : interdex_types) {
     DexClass* cls = type_class(type);
     if (cls == nullptr) {
       auto index_it = interactions.end();
@@ -439,7 +439,7 @@ InterDex::EmitResult InterDex::emit_class(
 
 void InterDex::emit_primary_dex(
     const DexClasses& primary_dex,
-    const std::vector<DexType*>& interdex_order,
+    const std::vector<const DexType*>& interdex_order,
     const UnorderedSet<DexClass*>& unreferenced_classes) {
 
   UnorderedSet<DexClass*> primary_dex_set(primary_dex.begin(),
@@ -454,7 +454,7 @@ void InterDex::emit_primary_dex(
   // Sort the primary dex according to interdex order (aka emit first the
   // primary classes that appear in the interdex order, in the order that
   // they appear there).
-  for (DexType* type : interdex_order) {
+  for (const DexType* type : interdex_order) {
     DexClass* cls = type_class(type);
     if (cls == nullptr) {
       continue;
@@ -503,7 +503,7 @@ void InterDex::emit_primary_dex(
 
 void InterDex::emit_interdex_classes(
     DexInfo& dex_info,
-    const std::vector<DexType*>& interdex_types,
+    const std::vector<const DexType*>& interdex_types,
     const UnorderedSet<DexClass*>& unreferenced_classes,
     DexClass** canary_cls) {
   if (interdex_types.empty()) {
@@ -515,7 +515,7 @@ void InterDex::emit_interdex_classes(
     // We still want to mark the interdex classes as perf-sensitive, so that
     // other optimizations such as outlining and sort-remaining-classes treat
     // interdex classes appropriately.
-    for (auto* type : interdex_types) {
+    for (const auto* type : interdex_types) {
       DexClass* cls = type_class(type);
       if ((cls != nullptr) && (unreferenced_classes.count(cls) == 0u)) {
         cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
@@ -540,7 +540,7 @@ void InterDex::emit_interdex_classes(
 
   bool reset_coldstart_on_overflow = false;
   for (auto it = interdex_types.begin(); it != interdex_types.end(); ++it) {
-    DexType* type = *it;
+    const DexType* type = *it;
     DexClass* cls = type_class(type);
     if (cls == nullptr) {
       TRACE(IDEX, 5, "[interdex classes]: No such entry %s.", SHOW(type));
@@ -656,7 +656,7 @@ void InterDex::emit_interdex_classes(
   // Now emit the classes we omitted from the original coldstart set.
   TRACE(IDEX, 2, "Emitting %zu interdex types (reset_coldstart_on_overflow=%d)",
         interdex_types.size(), reset_coldstart_on_overflow);
-  for (DexType* type : interdex_types) {
+  for (const DexType* type : interdex_types) {
     DexClass* cls = type_class(type);
 
     if ((cls != nullptr) && (unreferenced_classes.count(cls) != 0u)) {
@@ -736,7 +736,7 @@ void InterDex::load_interdex_types() {
 
   UnorderedSet<DexClass*> classes(m_scope.begin(), m_scope.end());
 
-  UnorderedSet<DexType*> all_set{};
+  UnorderedSet<const DexType*> all_set{};
 
   if (m_transitively_close_interdex_order && !m_force_single_dex) {
     for (auto* cls : m_dexen[0]) {
@@ -744,8 +744,8 @@ void InterDex::load_interdex_types() {
     }
   }
 
-  UnorderedSet<DexType*> moved_or_double{};
-  UnorderedSet<DexType*> transitive_added{};
+  UnorderedSet<const DexType*> moved_or_double{};
+  UnorderedSet<const DexType*> transitive_added{};
 
   for (const auto& entry : interdexorder) {
     DexType* type = DexType::get_type(entry);
@@ -821,7 +821,7 @@ void InterDex::load_interdex_types() {
 
         // Transitive closure.
         self_recursive_fn(
-            [&](const auto& self, DexType* cur, bool add_self) {
+            [&](const auto& self, const DexType* cur, bool add_self) {
               DexClass* cur_cls = type_class(cur);
               if (!cur_cls || classes.count(cur_cls) == 0 ||
                   all_set.count(cur) != 0 ||
@@ -836,7 +836,7 @@ void InterDex::load_interdex_types() {
               // Superclass first.
               self(self, cur_cls->get_super_class(), true);
               // Then interfaces.
-              for (auto* intf : *cur_cls->get_interfaces()) {
+              for (const auto* intf : *cur_cls->get_interfaces()) {
                 self(self, intf, true);
               }
 
@@ -868,8 +868,8 @@ void InterDex::load_interdex_types() {
   }
 
   if (m_transitively_close_interdex_order) {
-    UnorderedSet<DexType*> transitive_moved;
-    for (auto* t : UnorderedIterable(moved_or_double)) {
+    UnorderedSet<const DexType*> transitive_moved;
+    for (const auto* t : UnorderedIterable(moved_or_double)) {
       if (transitive_added.count(t) != 0) {
         transitive_moved.insert(t);
         transitive_added.erase(t);
@@ -881,8 +881,8 @@ void InterDex::load_interdex_types() {
   }
 }
 
-void InterDex::update_interdexorder(const DexClasses& dex,
-                                    std::vector<DexType*>* interdex_types) {
+void InterDex::update_interdexorder(
+    const DexClasses& dex, std::vector<const DexType*>* interdex_types) {
   std::vector<DexType*> primary_dex;
   for (DexClass* cls : dex) {
     primary_dex.emplace_back(cls->get_type());
@@ -1579,7 +1579,7 @@ void InterDex::exclude_baseline_profile_classes() {
   // Loop through, still setting baseline profile classes to perf sensitive,
   // and erasing them from m_interdex_types.
   for (auto it = m_interdex_types.begin(); it != m_interdex_types.end();) {
-    auto* dex_type = *it;
+    const auto* dex_type = *it;
     if (!this->is_baseline_profile_class(dex_type)) {
       ++it;
       continue;
@@ -1610,7 +1610,7 @@ void InterDex::initialize_baseline_profile_classes() {
     return;
   }
 
-  m_baseline_profile_classes = UnorderedSet<DexType*>();
+  m_baseline_profile_classes = UnorderedSet<const DexType*>();
 
   // If the 20% cold start set from the betamap is included in the baseline
   // profile, read and insert  all classes in the betamap up until the 20% cold
@@ -1619,7 +1619,7 @@ void InterDex::initialize_baseline_profile_classes() {
     auto it = m_interdex_types.begin();
 
     for (; it != m_interdex_types.end(); ++it) {
-      auto* dex_type = *it;
+      const auto* dex_type = *it;
       m_baseline_profile_classes->insert(dex_type);
       if (boost::algorithm::starts_with(dex_type->get_name()->str(),
                                         COLD_START_20PCT_END_FORMAT)) {
@@ -1634,7 +1634,7 @@ void InterDex::initialize_baseline_profile_classes() {
 
     if (m_baseline_profile_config.options.betamap_include_coldstart_1pct) {
       for (; it != m_interdex_types.end(); ++it) {
-        auto* dex_type = *it;
+        const auto* dex_type = *it;
         m_baseline_profile_classes->insert(dex_type);
         if (boost::algorithm::starts_with(dex_type->get_name()->str(),
                                           COLD_START_1PCT_END_FORMAT)) {

@@ -155,7 +155,7 @@ struct CallerInsns {
   // Invoke instructions per caller
   UnorderedMap<const DexMethod*, UnorderedSet<IRInstruction*>> caller_insns;
   // Invoke instructions that need a cast
-  UnorderedMap<IRInstruction*, DexType*> inlined_invokes_need_cast;
+  UnorderedMap<IRInstruction*, const DexType*> inlined_invokes_need_cast;
   // Whether there may be any other unknown call-sites.
   bool other_call_sites{false};
   bool other_call_sites_overriding_methods_added{false};
@@ -208,7 +208,7 @@ struct Inlinable {
   size_t insn_size;
   // Whether the callee is a virtual method different from the one referenced in
   // the invoke instruction.
-  DexType* needs_receiver_cast;
+  const DexType* needs_receiver_cast;
 };
 
 struct CalleeCallerRefs {
@@ -755,7 +755,7 @@ class MultiMethodInliner {
   // Mapping from callers to auxiliary data for contained true virtual callees
   UnorderedMap<const DexMethod*, CallerVirtualCallees> m_caller_virtual_callees;
 
-  UnorderedMap<IRInstruction*, DexType*> m_inlined_invokes_need_cast;
+  UnorderedMap<IRInstruction*, const DexType*> m_inlined_invokes_need_cast;
 
   UnorderedSet<const DexMethod*> m_true_virtual_callees_with_other_call_sites;
 

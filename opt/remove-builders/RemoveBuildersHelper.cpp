@@ -632,7 +632,7 @@ bool params_change_regs(DexMethod* method) {
   // Skip the `this` param
   auto param_it = std::next(param_insns.begin());
 
-  for (DexType* arg : *args) {
+  for (const DexType* arg : *args) {
     std::function<void(cfg::InstructionIterator, TaintedRegs*)> trans =
         [&](const cfg::InstructionIterator& it, TaintedRegs* tregs) {
           if (!opcode::is_a_load_param(it->insn->opcode())) {

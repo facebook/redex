@@ -204,7 +204,7 @@ class WritesAnalyzer {
             if (non_zero_value_defs.empty()) {
               continue;
             }
-            DexType* arg_type;
+            const DexType* arg_type;
             if (src_idx == 0 && is_instance) {
               arg_type = insn->get_method()->get_class();
             } else {

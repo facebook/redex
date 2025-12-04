@@ -135,7 +135,7 @@ class InterDex {
   void run_on_nonroot_store();
   void add_dexes_from_store(const DexStore& store);
 
-  const std::vector<DexType*>& get_interdex_types() const {
+  const std::vector<const DexType*>& get_interdex_types() const {
     return m_interdex_types;
   }
 
@@ -183,11 +183,11 @@ class InterDex {
                         std::optional<FlushOutDexResult>* opt_fodr = nullptr,
                         bool skip_dynamically_dead = false) const;
   void emit_primary_dex(const DexClasses& primary_dex,
-                        const std::vector<DexType*>& interdex_order,
+                        const std::vector<const DexType*>& interdex_order,
                         const UnorderedSet<DexClass*>& unreferenced_classes);
   void emit_interdex_classes(
       DexInfo& dex_info,
-      const std::vector<DexType*>& interdex_types,
+      const std::vector<const DexType*>& interdex_types,
       const UnorderedSet<DexClass*>& unreferenced_classes,
       DexClass** canary_cls);
   void init_cross_dex_ref_minimizer();
@@ -218,7 +218,7 @@ class InterDex {
    * the beginning.
    */
   void update_interdexorder(const DexClasses& dex,
-                            std::vector<DexType*>* interdex_types);
+                            std::vector<const DexType*>* interdex_types);
 
   /*
    * Removes baseline profile classes (based on config specified in refig) from
@@ -226,7 +226,7 @@ class InterDex {
    */
   void exclude_baseline_profile_classes();
 
-  bool is_baseline_profile_class(DexType* dex_type) const {
+  bool is_baseline_profile_class(const DexType* dex_type) const {
     // Assumes m_baseline_profile_classes is set
     return m_baseline_profile_classes->find(dex_type) !=
            m_baseline_profile_classes->end();
@@ -235,7 +235,7 @@ class InterDex {
   void initialize_baseline_profile_classes();
 
   void get_movable_coldstart_classes(
-      const std::vector<DexType*>& interdex_types,
+      const std::vector<const DexType*>& interdex_types,
       UnorderedMap<const DexClass*, std::string>& move_coldstart_classes);
 
   EmittingState m_emitting_state;
@@ -269,7 +269,7 @@ class InterDex {
   cross_dex_ref_minimizer::CrossDexRefMinimizer m_cross_dex_ref_minimizer;
   const Scope& m_original_scope;
   Scope m_scope;
-  std::vector<DexType*> m_interdex_types;
+  std::vector<const DexType*> m_interdex_types;
   const XStoreRefs* m_xstore_refs;
   size_t m_current_classes_when_emitting_remaining{0};
 
@@ -282,7 +282,7 @@ class InterDex {
 
   bool m_exclude_baseline_profile_classes;
   const baseline_profiles::BaselineProfileConfig& m_baseline_profile_config;
-  std::optional<UnorderedSet<DexType*>> m_baseline_profile_classes;
+  std::optional<UnorderedSet<const DexType*>> m_baseline_profile_classes;
   bool m_move_coldstart_classes;
   size_t m_min_betamap_move_threshold;
   size_t m_max_betamap_move_threshold;

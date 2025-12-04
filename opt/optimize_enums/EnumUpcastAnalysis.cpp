@@ -633,7 +633,7 @@ EnumTypeEnvironment EnumFixpointIterator::gen_env(const DexMethod* method) {
     env.set(it->insn->dest(), EnumTypes(method->get_class()));
     ++it;
   }
-  for (DexType* type : *args) {
+  for (const DexType* type : *args) {
     env.set(it->insn->dest(), EnumTypes(type));
     ++it;
   }

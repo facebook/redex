@@ -1131,7 +1131,7 @@ void IRTypeChecker::assume_reference(TypeEnvironment* state,
 }
 
 void IRTypeChecker::assume_assignable(boost::optional<const DexType*> from,
-                                      DexType* to) const {
+                                      const DexType* to) const {
   // There are some cases in type inference where we have to give up
   // and claim we don't know anything about a dex type. See
   // IRTypeCheckerTest.joinCommonBaseWithConflictingInterface, for
@@ -1664,7 +1664,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
                           type::get_array_element_type(arg_types->at(0)));
       }
     } else {
-      for (DexType* arg_type : *arg_types) {
+      for (const DexType* arg_type : *arg_types) {
         if (type::is_object(arg_type)) {
           auto src = insn->src(src_idx++);
           assume_reference(current_state, src);

@@ -2698,7 +2698,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
     return show(cls);
   };
 
-  auto deobf_type = [&](DexType* type) {
+  auto deobf_type = [&](const DexType* type) {
     if (type != nullptr) {
       if (type::is_array(type)) {
         const auto* type_str = type->c_str();
@@ -2771,7 +2771,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
       ss << " " << method->get_simple_deobfuscated_name() << "(";
       auto* args = proto->get_args();
       for (auto iter = args->begin(); iter != args->end(); ++iter) {
-        auto* atype = *iter;
+        const auto* atype = *iter;
         auto atype_str = deobf_type(atype);
         ss << atype_str;
         if (iter + 1 != args->end()) {
@@ -2875,8 +2875,8 @@ void write_bytecode_offset_mapping(
 
 int check_class_order(DexClasses* dex) {
   auto valid_ordering =
-      [](const UnorderedMap<DexType*, uint32_t>& dexes_class_order,
-         DexType* cls_to_check,
+      [](const UnorderedMap<const DexType*, uint32_t>& dexes_class_order,
+         const DexType* cls_to_check,
          uint32_t cur_index) -> bool {
     auto find = dexes_class_order.find(cls_to_check);
     if (find == dexes_class_order.end()) {
@@ -2887,7 +2887,7 @@ int check_class_order(DexClasses* dex) {
     // otherwise, invalid.
     return find->second < cur_index;
   };
-  UnorderedMap<DexType*, uint32_t> dexes_class_order;
+  UnorderedMap<const DexType*, uint32_t> dexes_class_order;
   int violation_count = 0;
   for (uint32_t index = 0; index < dex->size(); ++index) {
     dexes_class_order[dex->at(index)->get_type()] = index;
@@ -2897,7 +2897,7 @@ int check_class_order(DexClasses* dex) {
     if (!valid_ordering(dexes_class_order, cur_cls->get_super_class(), index)) {
       violation_count++;
     }
-    for (auto* intf : *cur_cls->get_interfaces()) {
+    for (const auto* intf : *cur_cls->get_interfaces()) {
       if (!valid_ordering(dexes_class_order, intf, index)) {
         violation_count++;
       }

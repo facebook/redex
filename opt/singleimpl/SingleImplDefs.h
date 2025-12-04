@@ -32,9 +32,9 @@ struct ProguardMap;
 
 using Scope = std::vector<DexClass*>;
 
-using TypeList = std::vector<DexType*>;
-using TypeMap = UnorderedMap<DexType*, DexType*>;
-using TypeToTypes = UnorderedMap<DexType*, TypeList>;
+using TypeList = std::vector<const DexType*>;
+using TypeMap = UnorderedMap<const DexType*, const DexType*>;
+using TypeToTypes = UnorderedMap<const DexType*, TypeList>;
 using FieldList = std::vector<DexField*>;
 using OrderedMethodSet = std::set<DexMethod*, dexmethods_comparator>;
 using OpcodeList = std::vector<IRInstruction*>;
@@ -111,7 +111,7 @@ inline EscapeReason operator&(const EscapeReason a, const EscapeReason b) {
 struct SingleImplData {
   // single concrete class for the single impl interface (entry in the
   // SingleImplInterfaces map)
-  DexType* cls;
+  const DexType* cls;
   // Single impl interface escape
   EscapeReason escape;
   // Direct children of the interface
@@ -173,7 +173,7 @@ struct SingleImplAnalysis {
   /**
    * Return whether a type is single impl.
    */
-  bool is_single_impl(DexType* intf) const {
+  bool is_single_impl(const DexType* intf) const {
     auto single_impl = single_impls.find(intf);
     return single_impl != single_impls.end();
   }
@@ -183,7 +183,7 @@ struct SingleImplAnalysis {
    */
   void get_interfaces(TypeList& to_optimize) const;
 
-  SingleImplData& get_single_impl_data(DexType* intf) {
+  SingleImplData& get_single_impl_data(const DexType* intf) {
     return single_impls.at(intf);
   }
 

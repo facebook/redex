@@ -1360,7 +1360,7 @@ void TransitiveClosureMarkerWorker::visit_cls(const DexClass* cls) {
   }
   push(cls, type_class(cls->get_super_class()));
   if (!m_shared_state->relaxed_keep_interfaces) {
-    for (auto* t : *cls->get_interfaces()) {
+    for (const auto* t : *cls->get_interfaces()) {
       push(cls, t);
     }
   }
@@ -1419,7 +1419,7 @@ void TransitiveClosureMarkerWorker::visit_instantiable(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting instantiable class: %s", SHOW(cls));
 
   instantiable(cls->get_super_class());
-  for (auto* intf : *cls->get_interfaces()) {
+  for (const auto* intf : *cls->get_interfaces()) {
     instantiable(intf);
   }
   auto* cond_marked = m_shared_state->cond_marked;
@@ -2083,8 +2083,8 @@ static void sweep_if_unmarked(const ReachableObjects& reachables,
 }
 
 void sweep_interfaces(const ReachableObjects& reachables, DexClass* cls) {
-  UnorderedSet<DexType*> new_interfaces_set;
-  std::vector<DexType*> new_interfaces_vec;
+  UnorderedSet<const DexType*> new_interfaces_set;
+  std::vector<const DexType*> new_interfaces_vec;
   std::function<void(DexTypeList*)> visit;
   visit = [&](auto* interfaces) {
     for (auto* intf : *interfaces) {

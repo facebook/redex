@@ -190,7 +190,7 @@ std::pair<param_index_t, bool> analyze_args(const DexMethod* callee) {
   }
   param_index_t expanded_src_regs{
       static_cast<param_index_t>(!is_static(callee))};
-  for (auto* t : *args) {
+  for (const auto* t : *args) {
     expanded_src_regs += type::is_wide_type(t) ? 2 : 1;
   }
   auto needs_range = expanded_src_regs > 5;
@@ -1003,7 +1003,7 @@ void rewrite_callers(
 
 // Helper used to build the partial-assignment helper methods.
 void push_callee_arg(EnumUtilsCache& enum_utils_cache,
-                     DexType* type,
+                     const DexType* type,
                      const ConstantValue& value,
                      MethodCreator* method_creator,
                      MethodBlock* main_block,
@@ -1037,7 +1037,7 @@ void push_callee_arg(EnumUtilsCache& enum_utils_cache,
       always_assert(object->jvm_cached_singleton);
       always_assert(object->attributes.size() == 1);
       auto* valueOf = type::get_value_of_method_for_type(object->type);
-      auto* valueOf_arg_type = valueOf->get_proto()->get_args()->at(0);
+      const auto* valueOf_arg_type = valueOf->get_proto()->get_args()->at(0);
       auto tmp = method_creator->make_local(valueOf_arg_type);
       const auto& signed_value2 =
           object->attributes.front().value.maybe_get<SignedConstantDomain>();

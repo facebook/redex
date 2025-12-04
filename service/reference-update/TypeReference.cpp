@@ -58,7 +58,7 @@ size_t hash_signature(const DexMethodRef* method) {
   auto* proto = method->get_proto();
   boost::hash_combine(seed, method->str());
   boost::hash_combine(seed, proto->get_rtype()->str());
-  for (DexType* arg : *proto->get_args()) {
+  for (const DexType* arg : *proto->get_args()) {
     boost::hash_combine(seed, arg->str());
   }
   return seed;
@@ -131,7 +131,7 @@ void add_vmethod_to_groups(
     add_vmethod_to_group(
         rtype, old_to_new.at(rtype), possible_new_name, method, &group);
   }
-  for (auto* const arg_type : *proto->get_args()) {
+  for (const auto* const arg_type : *proto->get_args()) {
     auto* extracted_arg_type =
         const_cast<DexType*>(type::get_element_type_if_array(arg_type));
     if (old_to_new.count(extracted_arg_type) != 0u) {
@@ -331,8 +331,10 @@ class TypeRefUpdaterImpl {
     }
     DexTypeList::ContainerType new_args;
     size_t id = 0;
-    for (DexType* arg : *proto->get_args()) {
-      DexType* new_arg = try_convert_to_new_type(arg);
+    for (const DexType* arg : *proto->get_args()) {
+      // TODO: Remove const-cast when ready.
+      const DexType* new_arg =
+          try_convert_to_new_type(const_cast<DexType*>(arg));
       if (new_arg != nullptr) {
         boost::hash_combine(seed, id);
         boost::hash_combine(seed, arg->str());
@@ -422,7 +424,7 @@ std::string get_method_signature(const DexMethod* method) {
   auto* arg_list = proto->get_args();
   if (!arg_list->empty()) {
     ss << "(";
-    for (auto* t : *arg_list) {
+    for (const auto* t : *arg_list) {
       ss << show(t) << ", ";
     }
     ss.seekp(-2, std::ios_base::end);
@@ -438,7 +440,7 @@ bool proto_has_reference_to(const DexProto* proto,
   if (targets.count(rtype) != 0u) {
     return true;
   }
-  for (auto* const arg_type : *proto->get_args()) {
+  for (const auto* const arg_type : *proto->get_args()) {
     const auto* extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (targets.count(extracted_arg_type) != 0u) {
       return true;
@@ -459,7 +461,7 @@ DexProto* get_new_proto(
     rtype = proto->get_rtype();
   }
   DexTypeList::ContainerType lst;
-  for (auto* const arg_type : *proto->get_args()) {
+  for (const auto* const arg_type : *proto->get_args()) {
     const auto* extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (old_to_new.count(extracted_arg_type) > 0) {
       auto* merger_type = old_to_new.at(extracted_arg_type);

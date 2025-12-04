@@ -210,7 +210,7 @@ int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
   return (int)(((uint8_t*)typep) - (uint8_t*)output);
 }
 
-DexTypeList* DexTypeList::push_front(DexType* t) const {
+DexTypeList* DexTypeList::push_front(const DexType* t) const {
   ContainerType new_list;
   new_list.push_back(t);
   new_list.insert(new_list.end(), m_list.begin(), m_list.end());
@@ -236,18 +236,19 @@ DexTypeList* DexTypeList::pop_back(size_t n) const {
   return make_type_list(std::move(new_list));
 }
 
-DexTypeList* DexTypeList::push_back(DexType* t) const {
+DexTypeList* DexTypeList::push_back(const DexType* t) const {
   ContainerType new_list{m_list};
   new_list.push_back(t);
   return make_type_list(std::move(new_list));
 }
-DexTypeList* DexTypeList::push_back(const std::vector<DexType*>& t) const {
+DexTypeList* DexTypeList::push_back(
+    const std::vector<const DexType*>& t) const {
   ContainerType new_list{m_list};
   new_list.insert(new_list.end(), t.begin(), t.end());
   return make_type_list(std::move(new_list));
 }
 
-DexTypeList* DexTypeList::replace_head(DexType* new_head) const {
+DexTypeList* DexTypeList::replace_head(const DexType* new_head) const {
   redex_assert(!m_list.empty());
   ContainerType new_list{m_list};
   new_list[0] = new_head;
@@ -1737,7 +1738,7 @@ DexClass* DexClass::create(DexIdx* idx,
                            const dex_class_def* cdef,
                            const DexLocation* location) {
   auto cls = [&]() {
-    auto check_type = [](DexType* type) {
+    auto check_type = [](const DexType* type) {
       always_assert_type_log(type != nullptr, INVALID_DEX, "no type");
       always_assert_type_log(type::is_object(type), INVALID_DEX,
                              "Not a reference type: %s", SHOW(type));
@@ -1758,7 +1759,7 @@ DexClass* DexClass::create(DexIdx* idx,
 
     auto* interfaces = idx->get_type_list(cdef->interfaces_off);
     if (interfaces != nullptr) {
-      for (auto* intf : *interfaces) {
+      for (const auto* intf : *interfaces) {
         check_type(intf);
       }
     }
@@ -1832,7 +1833,7 @@ static const DexString* make_shorty(const DexType* rtype,
   std::string s;
   s.push_back(type::type_shorty(rtype));
   if (args != nullptr) {
-    for (auto* arg : *args) {
+    for (const auto* arg : *args) {
       s.push_back(type::type_shorty(arg));
     }
   }
@@ -1948,7 +1949,7 @@ void DexClass::gather_load_types(UnorderedSet<const DexType*>& ltype) const {
     }
   }
   if (m_interfaces != nullptr) {
-    for (auto* itype : *m_interfaces) {
+    for (const auto* itype : *m_interfaces) {
       auto* iclass = type_class_internal(itype);
       if (iclass != nullptr) {
         iclass->gather_load_types(ltype);
@@ -2388,7 +2389,7 @@ DexProto* DexType::get_non_overlapping_proto(const DexString* method_name,
   }
   DexTypeList::ContainerType new_arg_list;
   auto* rtype = orig_proto->get_rtype();
-  for (auto* t : *orig_proto->get_args()) {
+  for (const auto* t : *orig_proto->get_args()) {
     new_arg_list.push_back(t);
   }
   new_arg_list.push_back(type::_int());
@@ -2563,7 +2564,7 @@ dex_member_refs::MethodDescriptorTokens DexMethodRef::get_descriptor_tokens()
   dex_member_refs::MethodDescriptorTokens res;
   res.cls = get_class()->str();
   res.name = get_name()->str();
-  for (auto* t : *get_proto()->get_args()) {
+  for (const auto* t : *get_proto()->get_args()) {
     res.args.push_back(t->str());
   }
   res.rtype = get_proto()->get_rtype()->str();

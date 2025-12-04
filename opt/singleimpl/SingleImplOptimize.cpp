@@ -47,17 +47,17 @@ void set_type_refs(const DexType* intf, const SingleImplData& data) {
  * substituted by an implementation.
  */
 DexProto* get_or_make_proto(const DexType* intf,
-                            DexType* impl,
+                            const DexType* impl,
                             DexProto* proto,
                             bool skip_args = false) {
-  DexType* rtype = proto->get_rtype();
+  const DexType* rtype = proto->get_rtype();
   if (rtype == intf) {
     rtype = impl;
   }
   DexTypeList* new_args = nullptr;
   auto* const args = proto->get_args();
   DexTypeList::ContainerType new_arg_list;
-  for (auto* const arg : *args) {
+  for (const auto* const arg : *args) {
     new_arg_list.push_back(arg == intf ? impl : arg);
   }
   if (skip_args) {
@@ -135,10 +135,10 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   set_public(cls);
   // removing interfaces may bring the same parent interface down to the
   // concrete class, so use a set to guarantee uniqueness
-  UnorderedSet<DexType*> new_intfs;
+  UnorderedSet<const DexType*> new_intfs;
   auto collect_interfaces = [&](DexClass* impl) {
     auto* intfs = impl->get_interfaces();
-    for (auto* type : *intfs) {
+    for (const auto* type : *intfs) {
       if (intf != type) {
         // make interface public if it was not already. It may happen
         // the parent interface is package protected (a type cannot be
@@ -186,7 +186,7 @@ bool must_set_interface_annotations(const SingleImplConfig& config) {
  * method.
  */
 bool update_method_proto(const DexType* old_type_ref,
-                         DexType* new_type_ref,
+                         const DexType* new_type_ref,
                          DexMethodRef* method) {
   auto* proto =
       get_or_make_proto(old_type_ref, new_type_ref, method->get_proto());
@@ -244,7 +244,7 @@ struct OptimizationImpl {
   // map for rewriting method references in annotation.
   NewMethods m_intf_meth_to_impl_meth;
   // list of optimized types
-  UnorderedSet<DexType*> optimized;
+  UnorderedSet<const DexType*> optimized;
   const ClassHierarchy& ch;
   UnorderedMap<std::string_view, size_t> deobfuscated_name_counters;
   const api::AndroidSDK& m_api;
@@ -425,7 +425,7 @@ CheckCastSet OptimizationImpl::fix_instructions(
             // Parameters.
             const auto* arg_list = mref->get_proto()->get_args();
             size_t idx = insn->opcode() == OPCODE_INVOKE_STATIC ? 0 : 1;
-            for (auto* const arg : *arg_list) {
+            for (const auto* const arg : *arg_list) {
               if (arg != intf) {
                 idx++;
                 continue;
@@ -603,7 +603,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
       if (search != optimized.end()) {
         auto& intf_data = single_impls->get_single_impl_data(iface);
         TRACE(INTF, 4, "REWRITE: %s", SHOW(anno));
-        type_value->set_type(intf_data.cls);
+        type_value->set_type(const_cast<DexType*>(intf_data.cls));
         TRACE(INTF, 4, "TO: %s", SHOW(anno));
       }
     }
@@ -718,7 +718,7 @@ EscapeReason OptimizationImpl::check_method_collision(
  */
 void OptimizationImpl::drop_single_impl_collision(const DexType* intf,
                                                   DexMethod* method) {
-  auto check_type = [&](DexType* type) {
+  auto check_type = [&](const DexType* type) {
     if (type != intf && single_impls->is_single_impl(type) &&
         !single_impls->is_escaped(type)) {
       single_impls->escape_interface(type, NEXT_PASS);
@@ -734,7 +734,7 @@ void OptimizationImpl::drop_single_impl_collision(const DexType* intf,
   auto* proto = method->get_proto();
   check_type(proto->get_rtype());
   auto* args_list = proto->get_args();
-  for (auto* arg : *args_list) {
+  for (const auto* arg : *args_list) {
     check_type(arg);
   }
 }
@@ -842,7 +842,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
 
   UnorderedMap<DexMethod*, cfg::CFGMutation> method_mutations;
   std::vector<DexMethod*> mutated_methods;
-  for (auto* intf : to_optimize) {
+  for (const auto* intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
     for (auto&& [method, _] :
          UnorderedIterable(intf_data.referencing_methods)) {
@@ -858,7 +858,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
   }
 
   CheckCastSet inserted_check_casts;
-  for (auto* intf : to_optimize) {
+  for (const auto* intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
     if (intf_data.is_escaped()) {
       continue;

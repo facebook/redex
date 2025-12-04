@@ -326,7 +326,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
       for (auto* m : UnorderedIterable(unreachable_natives)) {
         reachable_objects->mark(m);
         self_recursive_fn(
-            [&](auto self, DexType* type) {
+            [&](auto self, const DexType* type) {
               auto* cls = type_class(type);
               if (!scope_set.count(cls) ||
                   reachable_objects->marked_unsafe(cls)) {
@@ -334,7 +334,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
               }
               reachable_objects->mark(cls);
               self(self, cls->get_super_class());
-              for (auto* intf_type : *cls->get_interfaces()) {
+              for (const auto* intf_type : *cls->get_interfaces()) {
                 self(self, intf_type);
               }
               if (!is_abstract(cls)) {

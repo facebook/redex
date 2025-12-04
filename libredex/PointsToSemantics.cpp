@@ -151,7 +151,7 @@ boost::optional<SpecialPointsToEdge> string_to_special_edge(
 s_expr dex_method_to_s_expr(DexMethodRef* dex_method) {
   DexProto* proto = dex_method->get_proto();
   std::vector<s_expr> signature;
-  for (DexType* arg : *proto->get_args()) {
+  for (const DexType* arg : *proto->get_args()) {
     signature.emplace_back(arg->get_name()->str());
   }
   return s_expr({s_expr(dex_method->get_class()->get_name()->str()),
@@ -1162,7 +1162,7 @@ class PointsToActionGenerator final {
 
     // Process the arguments of the method invocation.
     int32_t arg_pos = 0;
-    for (DexType* dex_type : *signature) {
+    for (const DexType* dex_type : *signature) {
       if (type::is_object(dex_type)) {
         args.emplace_back(
             arg_pos,

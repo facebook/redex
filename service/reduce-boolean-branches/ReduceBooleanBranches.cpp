@@ -58,7 +58,7 @@ class Analyzer {
  public:
   Analyzer(bool is_static, DexTypeList* args, cfg::ControlFlowGraph& cfg)
       : m_is_static(is_static), m_args(args), m_cfg(cfg) {}
-  AnalysisResult analyze(DexType* type) {
+  AnalysisResult analyze(const DexType* type) {
     if (type::is_boolean(type)) {
       return AnalysisResult::Boolean;
     } else if (type::is_object(type)) {

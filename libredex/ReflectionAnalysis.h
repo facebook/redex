@@ -99,7 +99,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   // 1. We need to store information of arrays of Class objects.
   // 2. Associate the parameterType argument of getDeclaredMethod to the Class
   // arrays.
-  boost::optional<std::vector<DexType*>> dex_type_array = boost::none;
+  boost::optional<std::vector<const DexType*>> dex_type_array = boost::none;
 
   // AbstractObject must be default constructible in order to be used as an
   // abstract value.
@@ -361,7 +361,7 @@ class ReflectionAnalysis final {
   /**
    * Return a parameter type array for this invoke method instruction.
    */
-  boost::optional<std::vector<DexType*>> get_method_params(
+  boost::optional<std::vector<const DexType*>> get_method_params(
       IRInstruction* invoke_insn) const;
 
   bool has_found_reflection() const;

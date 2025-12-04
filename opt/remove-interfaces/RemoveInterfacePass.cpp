@@ -177,9 +177,9 @@ void update_interface_calls(
  */
 DexTypeList* get_new_impl_list(const DexType* impl,
                                const DexType* intf_to_remove) {
-  std::set<DexType*, dextypes_comparator> new_intfs;
+  std::set<const DexType*, dextypes_comparator> new_intfs;
   auto* cls = type_class(impl);
-  for (auto* const intf : *cls->get_interfaces()) {
+  for (const auto* const intf : *cls->get_interfaces()) {
     if (intf == intf_to_remove) {
       continue;
     }
@@ -446,7 +446,7 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
 void include_parent_interfaces(const DexType* root, TypeSet& interfaces) {
   TypeSet parent_interfaces;
   for (const auto* const intf : interfaces) {
-    for (auto* const parent_intf : *type_class(intf)->get_interfaces()) {
+    for (const auto* const parent_intf : *type_class(intf)->get_interfaces()) {
       if (parent_intf != root) {
         parent_interfaces.insert(parent_intf);
       }

@@ -120,7 +120,7 @@ void ParamSummary::print(const DexMethodRef* method) const {
 bool params_contain_object_type(const DexMethod* method,
                                 const DexType* object_type) {
   auto* args = method->get_proto()->get_args();
-  for (auto* arg : *args) {
+  for (const auto* arg : *args) {
     if (arg == object_type) {
       return true;
     }
@@ -151,9 +151,10 @@ ParamSummary calculate_param_summary(DexMethod* method,
       auto returned = *unordered_any(returned_elements);
       if (returned != ptrs::FRESH_RETURN &&
           (escaping_params.count(returned) == 0u)) {
-        DexType* cmp = is_static(method) ? *(args->begin() + returned)
-                       : returned == 0 ? method->get_class() // Implicit `this`
-                                       : *(args->begin() + returned - 1);
+        const DexType* cmp = is_static(method) ? *(args->begin() + returned)
+                             : returned == 0
+                                 ? method->get_class() // Implicit `this`
+                                 : *(args->begin() + returned - 1);
         if (method->get_proto()->get_rtype() == cmp) {
           // Set returned_param to the only one returned parameter index.
           summary.returned_param = returned;

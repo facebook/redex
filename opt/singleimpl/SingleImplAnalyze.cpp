@@ -89,13 +89,13 @@ void AnalysisImpl::create_single_impl(const TypeMap& single_impl,
                                       const TypeSet& intfs,
                                       const SingleImplConfig& config) {
   for (auto const& intf_it : UnorderedIterable(single_impl)) {
-    auto* intf = intf_it.first;
+    const auto* intf = intf_it.first;
     auto* intf_cls = type_class(intf);
     always_assert(intf_cls && !intf_cls->is_external());
     if (is_annotation(intf_cls)) {
       continue;
     }
-    auto* impl = intf_it.second;
+    const auto* impl = intf_it.second;
     auto* impl_cls = type_class(impl);
     always_assert(impl_cls && !impl_cls->is_external());
     if (is_annotation(impl_cls)) {
@@ -201,7 +201,7 @@ void AnalysisImpl::filter_do_not_strip() {
   }
   walk::methods(scope, [this](DexMethod* method) {
     if (root(method)) {
-      for (auto* arg_type : *method->get_proto()->get_args()) {
+      for (const auto* arg_type : *method->get_proto()->get_args()) {
         if (single_impls.count(arg_type) != 0u) {
           escape_interface(arg_type, DO_NOT_STRIP);
         }
@@ -228,7 +228,7 @@ void AnalysisImpl::filter_do_not_strip() {
  */
 void AnalysisImpl::collect_children(const TypeSet& intfs) {
   for (const auto& intf : intfs) {
-    for (auto* super : *type_class(intf)->get_interfaces()) {
+    for (const auto* super : *type_class(intf)->get_interfaces()) {
       auto super_it = single_impls.find(super);
       if (super_it != single_impls.end()) {
         super_it->second.children.insert(intf);
@@ -353,7 +353,8 @@ void AnalysisImpl::collect_field_defs() {
  */
 void AnalysisImpl::collect_method_defs() {
 
-  auto check_method_arg = [&](DexType* type, DexMethod* method, bool native) {
+  auto check_method_arg = [&](const DexType* type, DexMethod* method,
+                              bool native) {
     const auto* intf = get_and_check_single_impl(type);
     if (intf == nullptr) {
       return;
@@ -368,7 +369,7 @@ void AnalysisImpl::collect_method_defs() {
     auto* proto = method->get_proto();
     bool native = is_native(method);
     check_method_arg(proto->get_rtype(), method, native);
-    for (auto* const it : *proto->get_args()) {
+    for (const auto* const it : *proto->get_args()) {
       check_method_arg(it, method, native);
     }
   });
@@ -389,7 +390,7 @@ void AnalysisImpl::analyze_opcodes() {
 
   auto check_arg = [&](DexMethod* referrer,
                        const cfg::InstructionIterator& insn_it,
-                       DexType* type,
+                       const DexType* type,
                        DexMethodRef* meth,
                        IRInstruction* insn) {
     const auto* intf = get_and_check_single_impl(type);
@@ -408,7 +409,7 @@ void AnalysisImpl::analyze_opcodes() {
     // check the sig for single implemented interface
     auto* const proto = meth->get_proto();
     check_arg(referrer, insn_it, proto->get_rtype(), meth, insn);
-    for (auto* const arg : *proto->get_args()) {
+    for (const auto* const arg : *proto->get_args()) {
       check_arg(referrer, insn_it, arg, meth, insn);
     }
   };
@@ -459,7 +460,7 @@ void AnalysisImpl::analyze_opcodes() {
     if (search == single_impls.end()) {
       return false;
     }
-    auto* implementor = search->second.cls;
+    const auto* implementor = search->second.cls;
     return const_class_types.find(implementor) != const_class_types.end();
   };
 
@@ -601,7 +602,7 @@ void SingleImplAnalysis::escape_interface(const DexType* intf,
   TRACE(INTF, 5, "(ESC) Escape %s => 0x%X", SHOW(intf), reason);
   auto* const intf_cls = type_class(intf);
   if (intf_cls != nullptr) {
-    for (auto* super_intf : *intf_cls->get_interfaces()) {
+    for (const auto* super_intf : *intf_cls->get_interfaces()) {
       escape_interface(super_intf, reason);
     }
   }

@@ -57,7 +57,7 @@ class ConstantUses {
   }
 
  private:
-  static TypeDemand get_type_demand(DexType* type);
+  static TypeDemand get_type_demand(const DexType* type);
   TypeDemand get_type_demand(IRInstruction* insn, size_t src_index) const;
 
   mutable std::unique_ptr<type_inference::TypeInference> m_type_inference;

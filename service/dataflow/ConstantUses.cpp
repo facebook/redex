@@ -180,7 +180,7 @@ TypeDemand ConstantUses::get_constant_type_demand(IRInstruction* insn) const {
   return type_demand;
 }
 
-TypeDemand ConstantUses::get_type_demand(DexType* type) {
+TypeDemand ConstantUses::get_type_demand(const DexType* type) {
   switch (type->c_str()[0]) {
   case 'V':
     not_reached();

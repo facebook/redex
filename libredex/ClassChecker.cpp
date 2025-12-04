@@ -172,7 +172,7 @@ void ClassChecker::run(const Scope& scope) {
                }) != allowlist_prefixes.end();
   };
 
-  auto check_class_defined = [&](DexType* type) -> bool {
+  auto check_class_defined = [&](const DexType* type) -> bool {
     if (internal_types.count(type) == 0) {
       auto* cls = type_class(type);
       if ((cls == nullptr || !cls->is_external()) &&

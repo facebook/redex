@@ -131,7 +131,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   bool is_eligible_append(const DexMethodRef*) const;
 
   const DexType* m_stringbuilder;
-  UnorderedSet<DexType*> m_immutable_types;
+  UnorderedSet<const DexType*> m_immutable_types;
   const DexMethodRef* m_stringbuilder_no_param_init;
   const DexMethodRef* m_stringbuilder_init_with_string;
   const DexString* m_append_str;

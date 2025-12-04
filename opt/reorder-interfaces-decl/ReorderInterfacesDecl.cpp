@@ -102,9 +102,9 @@ DexTypeList* ReorderInterfacesDeclImpl::sort_interfaces(
     const DexTypeList* unsorted_list) {
   DexTypeList::ContainerType sorted_list;
   // Create list of interfaces and store frequencies
-  std::vector<std::pair<DexType*, int>> list_with_frequencies;
+  std::vector<std::pair<const DexType*, int>> list_with_frequencies;
   list_with_frequencies.reserve(unsorted_list->size());
-  for (auto* interface : *unsorted_list) {
+  for (const auto* interface : *unsorted_list) {
     list_with_frequencies.emplace_back(interface,
                                        m_call_frequency_map[interface]);
   }
@@ -113,8 +113,7 @@ DexTypeList* ReorderInterfacesDeclImpl::sort_interfaces(
   std::sort(
       list_with_frequencies.begin(),
       list_with_frequencies.end(),
-      [](const std::pair<DexType*, int>& a,
-         const std::pair<DexType*, int>& b) -> bool {
+      [](const auto& a, const auto& b) -> bool {
         return ((b.second < a.second) ||
                 ((b.second == a.second) && compare_dextypes(a.first, b.first)));
       });

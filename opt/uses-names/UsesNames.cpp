@@ -159,7 +159,7 @@ class UsesNamesMarker {
               "%s annotation found in method %s",
               show(matched_anno).c_str(),
               vshow(meth).c_str());
-        DexType* type = meth->get_proto()->get_args()->at(num);
+        const DexType* type = meth->get_proto()->get_args()->at(num);
         DexClass* cls = type_class(type);
         if (cls == nullptr) {
           TRACE(USES_NAMES, 2, "Class not found for: %s", show(type).c_str());
