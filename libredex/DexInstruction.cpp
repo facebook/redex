@@ -683,7 +683,7 @@ void DexOpcodeString::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
 size_t DexOpcodeType::size() const { return m_count + 2; }
 
 void DexOpcodeType::gather_types(std::vector<DexType*>& ltype) const {
-  ltype.push_back(m_type);
+  ltype.push_back(const_cast<DexType*>(m_type));
 }
 
 void DexOpcodeType::encode(DexOutputIdx* dodx, uint16_t*& insns) const {

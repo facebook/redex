@@ -81,7 +81,7 @@ class SharedState {
                       clinit_has_no_side_effects);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn,
-      DexType* exact_virtual_scope,
+      const DexType* exact_virtual_scope,
       const CseUnorderedLocationSet& read_locations);
   void log_barrier(const Barrier& barrier);
   bool has_potential_unboxing_method(const IRInstruction* insn) const;
@@ -113,8 +113,10 @@ class SharedState {
  private:
   void init_method_barriers(const Scope& scope);
   void init_finalizable_fields(const Scope& scope);
-  bool may_be_barrier(const IRInstruction* insn, DexType* exact_virtual_scope);
-  bool is_invoke_safe(const IRInstruction* insn, DexType* exact_virtual_scope);
+  bool may_be_barrier(const IRInstruction* insn,
+                      const DexType* exact_virtual_scope);
+  bool is_invoke_safe(const IRInstruction* insn,
+                      const DexType* exact_virtual_scope);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn, const CseUnorderedLocationSet& read_locations);
   // after init_scope, m_pure_methods will include m_conditionally_pure_methods

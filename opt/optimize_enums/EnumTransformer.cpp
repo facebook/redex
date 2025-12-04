@@ -164,7 +164,7 @@ struct EnumUtil {
     dexen.push_back(cls);
   }
 
-  bool is_super_type_of_candidate_enum(DexType* type) {
+  bool is_super_type_of_candidate_enum(const DexType* type) {
     return type == ENUM_TYPE || type == OBJECT_TYPE ||
            type == SERIALIZABLE_TYPE || type == COMPARABLE_TYPE;
   }
@@ -198,10 +198,10 @@ struct EnumUtil {
    *  ...
    * IF it is not a candidate enum, return nullptr.
    */
-  DexType* try_convert_to_int_type(const EnumAttributeMap& enum_attributes_map,
-                                   DexType* type) const {
+  const DexType* try_convert_to_int_type(
+      const EnumAttributeMap& enum_attributes_map, const DexType* type) const {
     uint32_t level = type::get_array_level(type);
-    DexType* elem_type = type;
+    const DexType* elem_type = type;
     if (level != 0u) {
       elem_type = type::get_array_element_type(type);
     }
@@ -221,7 +221,7 @@ struct EnumUtil {
    * The implemmentation of the substitute method depends on the substitute
    * method of LCandidateEnum;.toString:()String.
    */
-  DexMethodRef* add_substitute_of_stringvalueof(DexType* enum_type,
+  DexMethodRef* add_substitute_of_stringvalueof(const DexType* enum_type,
                                                 SourceBlock* prev_sb) {
     add_substitute_of_tostring(enum_type, prev_sb);
     auto* proto = DexProto::make_proto(
@@ -252,7 +252,7 @@ struct EnumUtil {
    * LCandidateEnum;.toString:()String. Otherwise return the overriding method.
    * Store the method ref at the same time.
    */
-  DexMethodRef* add_substitute_of_tostring(DexType* enum_type,
+  DexMethodRef* add_substitute_of_tostring(const DexType* enum_type,
                                            SourceBlock* prev_sb) {
     auto* method_ref = get_user_defined_tostring_method(type_class(enum_type));
     if (method_ref == nullptr) {
@@ -283,7 +283,7 @@ struct EnumUtil {
    * substitute for LCandidateEnum;.name:()String.
    * Store the method ref at the same time.
    */
-  DexMethodRef* add_substitute_of_name(DexType* enum_type,
+  DexMethodRef* add_substitute_of_name(const DexType* enum_type,
                                        SourceBlock* prev_sb) {
     auto* method = get_substitute_of_name(enum_type);
     collect_callsite_source_blocks(method, prev_sb);
@@ -293,7 +293,7 @@ struct EnumUtil {
   /**
    * Return method ref to LCandidateEnum;.redex$OE$name:(Integer)String
    */
-  DexMethodRef* get_substitute_of_name(DexType* enum_type) {
+  DexMethodRef* get_substitute_of_name(const DexType* enum_type) {
     auto* proto = DexProto::make_proto(
         STRING_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
     auto* method = DexMethod::make_method(enum_type, REDEX_NAME, proto);
@@ -305,7 +305,7 @@ struct EnumUtil {
    * substitute for LCandidateEnum;.hashCode:()I.
    * Store the method ref at the same time.
    */
-  DexMethodRef* add_substitute_of_hashcode(DexType* enum_type,
+  DexMethodRef* add_substitute_of_hashcode(const DexType* enum_type,
                                            SourceBlock* prev_sb) {
     // `redex$OE$hashCode()` uses `redex$OE$name()` so we better make sure
     // the method exists.
@@ -318,7 +318,7 @@ struct EnumUtil {
   /**
    * Returns a method ref to LCandidateEnum;.redex$OE$hashCode:(Integer)I
    */
-  DexMethodRef* get_substitute_of_hashcode(DexType* enum_type) {
+  DexMethodRef* get_substitute_of_hashcode(const DexType* enum_type) {
     auto* proto = DexProto::make_proto(
         INT_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
     auto* method = DexMethod::make_method(enum_type, REDEX_HASHCODE, proto);
@@ -705,19 +705,19 @@ class CodeTransformer final {
       }
     } break;
     case OPCODE_NEW_ARRAY: {
-      auto* array_type = insn->get_type();
-      auto* new_type = try_convert_to_int_type(array_type);
+      const auto* array_type = insn->get_type();
+      const auto* new_type = try_convert_to_int_type(array_type);
       if (new_type != nullptr) {
         insn->set_type(new_type);
       }
     } break;
     case OPCODE_CHECK_CAST: {
-      auto* type = insn->get_type();
-      auto* new_type = try_convert_to_int_type(type);
+      const auto* type = insn->get_type();
+      const auto* new_type = try_convert_to_int_type(type);
       if (new_type != nullptr) {
         const auto& possible_src_types = env.get(insn->src(0));
         if (!possible_src_types.empty()) {
-          DexType* candidate_type =
+          const DexType* candidate_type =
               extract_candidate_enum_type(possible_src_types);
           always_assert(candidate_type == type);
         }
@@ -729,7 +729,7 @@ class CodeTransformer final {
     } break;
     default: {
       if (insn->has_type() && insn->opcode() != IOPCODE_INIT_CLASS) {
-        auto* type = insn->get_type();
+        const auto* type = insn->get_type();
         always_assert_log(try_convert_to_int_type(type) == nullptr,
                           "Unhandled type %s in %s method %s\n", SHOW(type),
                           SHOW(insn), SHOW(m_method));
@@ -872,7 +872,7 @@ class CodeTransformer final {
     auto* insn = mie->insn;
     auto* container = insn->get_method()->get_class();
     auto reg = insn->src(0);
-    auto* candidate_type = infer_candidate_type(env.get(reg), container);
+    const auto* candidate_type = infer_candidate_type(env.get(reg), container);
     if (candidate_type == nullptr) {
       return;
     }
@@ -896,7 +896,8 @@ class CodeTransformer final {
     auto* insn = mie->insn;
     auto* container = insn->get_method()->get_class();
     auto src_reg = insn->src(0);
-    auto* candidate_type = infer_candidate_type(env.get(src_reg), container);
+    const auto* candidate_type =
+        infer_candidate_type(env.get(src_reg), container);
     if (candidate_type == nullptr) {
       return;
     }
@@ -920,7 +921,7 @@ class CodeTransformer final {
       MethodItemEntry* mie,
       SourceBlock* prev_sb) {
     auto* insn = mie->insn;
-    DexType* candidate_type =
+    const DexType* candidate_type =
         extract_candidate_enum_type(env.get(insn->src(0)));
     if (candidate_type == nullptr) {
       return;
@@ -947,7 +948,7 @@ class CodeTransformer final {
       MethodItemEntry* mie,
       SourceBlock* prev_sb) {
     auto* insn = mie->insn;
-    DexType* candidate_type =
+    const DexType* candidate_type =
         extract_candidate_enum_type(env.get(insn->src(1)));
     if (candidate_type == nullptr) {
       return;
@@ -985,7 +986,8 @@ class CodeTransformer final {
     auto* insn = mie->insn;
     auto* container = insn->get_method()->get_class();
     auto src_reg = insn->src(0);
-    auto* candidate_type = infer_candidate_type(env.get(src_reg), container);
+    const auto* candidate_type =
+        infer_candidate_type(env.get(src_reg), container);
     if (candidate_type == nullptr) {
       return;
     }
@@ -1008,7 +1010,7 @@ class CodeTransformer final {
     auto* insn = mie->insn;
     auto* method_ref = insn->get_method();
     auto* container_type = method_ref->get_class();
-    auto* candidate_type =
+    const auto* candidate_type =
         infer_candidate_type(env.get(insn->src(0)), container_type);
     if (candidate_type == nullptr) {
       return;
@@ -1048,9 +1050,9 @@ class CodeTransformer final {
    * types are not related to our candidate types. Bail out if the type are
    * mixed (our analysis part should have excluded this case).
    */
-  DexType* infer_candidate_type(const EnumTypes& reg_types,
-                                DexType* target_type) {
-    DexType* candidate_type = nullptr;
+  const DexType* infer_candidate_type(const EnumTypes& reg_types,
+                                      const DexType* target_type) {
+    const DexType* candidate_type = nullptr;
     if (is_a_candidate(target_type)) {
       candidate_type = target_type;
     } else if (!m_enum_util->is_super_type_of_candidate_enum(target_type)) {
@@ -1069,7 +1071,7 @@ class CodeTransformer final {
       candidate_type = *type_set.begin();
       return is_a_candidate(candidate_type) ? candidate_type : nullptr;
     } else {
-      for (auto* t : type_set) {
+      for (const auto* t : type_set) {
         always_assert_log(!is_a_candidate(t), "%s\n", SHOW(t));
       }
       return nullptr;
@@ -1082,11 +1084,11 @@ class CodeTransformer final {
    * not contain other types,
    * or assertion failure when the types are mixed.
    */
-  DexType* extract_candidate_enum_type(const EnumTypes& types) {
+  const DexType* extract_candidate_enum_type(const EnumTypes& types) {
     return infer_candidate_type(types, m_enum_util->OBJECT_TYPE);
   }
 
-  DexType* try_convert_to_int_type(DexType* type) {
+  const DexType* try_convert_to_int_type(const DexType* type) {
     return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
   }
 
@@ -1244,7 +1246,7 @@ class EnumTransformer final {
                               SHOW(insn), SHOW(method));
           }
         } else if (insn->has_type() && insn->opcode() != IOPCODE_INIT_CLASS) {
-          auto* type_ref = insn->get_type();
+          const auto* type_ref = insn->get_type();
           always_assert_log(!try_convert_to_int_type(type_ref),
                             "Invalid insn %s in %s\n", SHOW(insn),
                             SHOW(method));
@@ -1704,7 +1706,7 @@ class EnumTransformer final {
     }
   }
 
-  DexType* try_convert_to_int_type(DexType* type) {
+  const DexType* try_convert_to_int_type(const DexType* type) {
     return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
   }
 

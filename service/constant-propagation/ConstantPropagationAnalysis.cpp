@@ -1334,7 +1334,7 @@ bool StringAnalyzer::analyze_invoke(const StringAnalyzerState* state,
 }
 
 bool NewObjectAnalyzer::ignore_type(
-    const ImmutableAttributeAnalyzerState* state, DexType* type) {
+    const ImmutableAttributeAnalyzerState* state, const DexType* type) {
   // Avoid types that may interact other more specialized object domains.
   if (state->may_be_initialized_type(type) ||
       type == type::java_lang_String() || type == type::java_lang_Boolean()) {
@@ -1531,7 +1531,7 @@ bool ImmutableAttributeAnalyzerState::is_jvm_cached_object(
   return value >= cached_objects.begin && value < cached_objects.end;
 }
 
-DexType* ImmutableAttributeAnalyzerState::initialized_type(
+const DexType* ImmutableAttributeAnalyzerState::initialized_type(
     const DexMethod* initialize_method) {
   auto* res = method::is_init(initialize_method)
                   ? initialize_method->get_class()
@@ -1543,7 +1543,7 @@ DexType* ImmutableAttributeAnalyzerState::initialized_type(
 }
 
 bool ImmutableAttributeAnalyzerState::may_be_initialized_type(
-    DexType* type) const {
+    const DexType* type) const {
   if (type == nullptr || type::is_array(type)) {
     return false;
   }
@@ -1551,14 +1551,14 @@ bool ImmutableAttributeAnalyzerState::may_be_initialized_type(
   return *may_be_initialized_types
               .get_or_create_and_assert_equal(
                   type,
-                  [&](DexType*) {
+                  [&](const DexType*) {
                     return compute_may_be_initialized_type(type);
                   })
               .first;
 }
 
 bool ImmutableAttributeAnalyzerState::compute_may_be_initialized_type(
-    DexType* type) const {
+    const DexType* type) const {
   // Here we effectively check if check_cast(type, x) for any x in
   // initialized_types.
   always_assert(type != nullptr);

@@ -24,7 +24,7 @@ void check_no_builder(DexMethod* method, DexType* builder_type) {
     auto opcode = insn->opcode();
 
     if (opcode == DOPCODE_NEW_INSTANCE) {
-      DexType* cls_type = dynamic_cast<DexOpcodeType*>(insn)->get_type();
+      const DexType* cls_type = dynamic_cast<DexOpcodeType*>(insn)->get_type();
       EXPECT_NE(builder_type, cls_type);
     } else if (dex_opcode::is_iget(opcode) || dex_opcode::is_iput(opcode)) {
       DexFieldRef* field =
@@ -46,7 +46,7 @@ void check_has_builder(DexMethod* method, DexType* builder_type) {
 
     if (opcode == DOPCODE_NEW_INSTANCE ||
         dex_opcode::is_invoke(insn->opcode())) {
-      DexType* cls_type = dynamic_cast<DexOpcodeType*>(insn)->get_type();
+      const DexType* cls_type = dynamic_cast<DexOpcodeType*>(insn)->get_type();
       if (builder_type == cls_type) {
         has_builder = true;
         break;

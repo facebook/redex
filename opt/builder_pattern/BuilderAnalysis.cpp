@@ -268,8 +268,8 @@ void BuilderAnalysis::update_stats() {
 
 namespace {
 
-DexType* get_instantiated_type(const IRInstruction* insn) {
-  DexType* current_instance = nullptr;
+const DexType* get_instantiated_type(const IRInstruction* insn) {
+  const DexType* current_instance = nullptr;
 
   switch (insn->opcode()) {
   case OPCODE_CONST:
@@ -307,7 +307,7 @@ void BuilderAnalysis::populate_usage() {
   // Otherwise, update the excluded instantiation list.
   auto update_usages = [&](const IRInstruction* val,
                            const cfg::InstructionIterator& use) {
-    if (auto* referenced_type = get_instantiated_type(val)) {
+    if (const auto* referenced_type = get_instantiated_type(val)) {
       if (m_excluded_builder_types.count(referenced_type) == 0) {
         m_usage[val].push_back(use);
 
@@ -348,15 +348,15 @@ void BuilderAnalysis::populate_usage() {
   }
 }
 
-UnorderedMap<IRInstruction*, DexType*>
+UnorderedMap<IRInstruction*, const DexType*>
 BuilderAnalysis::get_vinvokes_to_this_infered_type() {
-  UnorderedMap<IRInstruction*, DexType*> result;
+  UnorderedMap<IRInstruction*, const DexType*> result;
 
   for (const auto& pair : UnorderedIterable(m_usage)) {
     if (opcode::is_invoke_virtual(pair.first->opcode())) {
       always_assert(!result.count(const_cast<IRInstruction*>(pair.first)));
 
-      auto* current_instance = get_instantiated_type(pair.first);
+      const auto* current_instance = get_instantiated_type(pair.first);
       result[const_cast<IRInstruction*>(pair.first)] = current_instance;
     }
 
@@ -367,7 +367,7 @@ BuilderAnalysis::get_vinvokes_to_this_infered_type() {
         auto val = m_insn_to_env->at(insn).get(this_reg).get_constant();
 
         if (val) {
-          auto* infered_type = get_instantiated_type(*val);
+          const auto* infered_type = get_instantiated_type(*val);
           always_assert(!result.count(const_cast<IRInstruction*>(insn)) ||
                         result[const_cast<IRInstruction*>(insn)] ==
                             infered_type);
@@ -435,7 +435,7 @@ ConstTypeHashSet BuilderAnalysis::get_instantiated_types() {
   ConstTypeHashSet result;
 
   for (const auto& pair : UnorderedIterable(m_usage)) {
-    auto* type = get_instantiated_type(pair.first);
+    const auto* type = get_instantiated_type(pair.first);
     result.emplace(type);
   }
 
@@ -463,7 +463,7 @@ ConstTypeHashSet BuilderAnalysis::non_removable_types() {
   // Consider other non-removable usages (for example synchronization usage).
   for (const auto& pair : UnorderedIterable(m_usage)) {
     const auto* instantiation = pair.first;
-    auto* current_instance = get_instantiated_type(instantiation);
+    const auto* current_instance = get_instantiated_type(instantiation);
 
     if (non_removable_types.count(current_instance) != 0u) {
       // Already decided it isn't removable.
@@ -502,7 +502,7 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
   ConstTypeHashSet escape_types;
   for (const auto& pair : UnorderedIterable(m_usage)) {
     const auto* instantiation_insn = pair.first;
-    auto* current_instance = get_instantiated_type(instantiation_insn);
+    const auto* current_instance = get_instantiated_type(instantiation_insn);
 
     for (const auto& it : pair.second) {
       auto* insn = it->insn;
@@ -573,7 +573,7 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
           const auto* init_insn = *current_env.get(live_reg).get_constant();
           if (init_insn->opcode() != OPCODE_CONST) {
             // NULL const cannot escape only builder can escape.
-            auto* current_instance = get_instantiated_type(init_insn);
+            const auto* current_instance = get_instantiated_type(init_insn);
             TRACE(BLD_PATTERN, 2,
                   "Excluding type %s since it escapes method %s",
                   SHOW(current_instance), SHOW(m_method));

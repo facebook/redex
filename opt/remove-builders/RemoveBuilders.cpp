@@ -118,12 +118,12 @@ std::vector<DexMethod*> get_static_methods(
  *  - has no static fields
  */
 UnorderedSet<DexClass*> get_trivial_builders(
-    const UnorderedSet<DexType*>& builders,
-    const UnorderedSet<DexType*>& stack_only_builders) {
+    const UnorderedSet<const DexType*>& builders,
+    const UnorderedSet<const DexType*>& stack_only_builders) {
 
   UnorderedSet<DexClass*> trivial_builders;
 
-  for (DexType* builder_type : UnorderedIterable(builders)) {
+  for (const DexType* builder_type : UnorderedIterable(builders)) {
     DexClass* builder_class = type_class(builder_type);
 
     // Filter out builders that escape the stack.
@@ -188,10 +188,10 @@ UnorderedSet<DexClass*> get_builders_with_subclasses(Scope& classes) {
 
 } // namespace
 
-std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
+std::vector<const DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
   always_assert(m != nullptr);
 
-  std::vector<DexType*> builders;
+  std::vector<const DexType*> builders;
   auto* code = m->get_code();
   if (code == nullptr) {
     return builders;
@@ -200,7 +200,7 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
   for (auto& mie : InstructionIterable(cfg)) {
     auto* insn = mie.insn;
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-      DexType* cls = insn->get_type();
+      const DexType* cls = insn->get_type();
       if (m_builders.find(cls) != m_builders.end()) {
         builders.emplace_back(cls);
       }
@@ -212,7 +212,8 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
 // checks if any instances of :builder that get created in the method ever get
 // passed to a method (aside from when its own instance methods get invoked),
 // or if they get stored in a field, or if they escape as a return value.
-bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
+bool RemoveBuildersPass::escapes_stack(const DexType* builder,
+                                       DexMethod* method) {
   always_assert(builder != nullptr);
   always_assert(method != nullptr);
 
@@ -244,10 +245,10 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     }
   }
 
-  UnorderedSet<DexType*> escaped_builders;
+  UnorderedSet<const DexType*> escaped_builders;
   walk::methods(scope, [&](DexMethod* m) {
     auto builders = created_builders(m);
-    for (DexType* builder : builders) {
+    for (const DexType* builder : builders) {
       if (escapes_stack(builder, m)) {
         TRACE(BUILDERS,
               3,
@@ -259,24 +260,24 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     }
   });
 
-  UnorderedSet<DexType*> stack_only_builders;
-  for (DexType* builder : UnorderedIterable(m_builders)) {
+  UnorderedSet<const DexType*> stack_only_builders;
+  for (const DexType* builder : UnorderedIterable(m_builders)) {
     if (escaped_builders.find(builder) == escaped_builders.end()) {
       stack_only_builders.emplace(builder);
     }
   }
 
-  UnorderedSet<DexType*> builders_and_supers;
-  for (DexType* builder : UnorderedIterable(stack_only_builders)) {
-    DexType* cls = builder;
+  UnorderedSet<const DexType*> builders_and_supers;
+  for (const DexType* builder : UnorderedIterable(stack_only_builders)) {
+    const DexType* cls = builder;
     while (cls != nullptr && cls != obj_type) {
       builders_and_supers.emplace(cls);
       cls = type_class(cls)->get_super_class();
     }
   }
 
-  UnorderedSet<DexType*> this_escapes;
-  for (DexType* cls_ty : UnorderedIterable(builders_and_supers)) {
+  UnorderedSet<const DexType*> this_escapes;
+  for (const DexType* cls_ty : UnorderedIterable(builders_and_supers)) {
     DexClass* cls = type_class(cls_ty);
     if (cls->is_external() ||
         this_arg_escapes(cls, m_enable_buildee_constr_change)) {
@@ -286,9 +287,9 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
 
   // set of builders that neither escape the stack nor pass their 'this' arg
   // to another function
-  UnorderedSet<DexType*> no_escapes;
-  for (DexType* builder : UnorderedIterable(stack_only_builders)) {
-    DexType* cls = builder;
+  UnorderedSet<const DexType*> no_escapes;
+  for (const DexType* builder : UnorderedIterable(stack_only_builders)) {
+    const DexType* cls = builder;
     bool hierarchy_has_escape = false;
     while (cls != nullptr) {
       if (this_escapes.find(cls) != this_escapes.end()) {
@@ -305,7 +306,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   size_t dmethod_count = 0;
   size_t vmethod_count = 0;
   size_t build_count = 0;
-  for (DexType* builder : UnorderedIterable(no_escapes)) {
+  for (const DexType* builder : UnorderedIterable(no_escapes)) {
     auto* cls = type_class(builder);
     auto* buildee = get_buildee(builder);
     dmethod_count += cls->get_dmethods().size();
@@ -336,7 +337,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   walk::methods(scope, [&](DexMethod* method) {
     auto builders = created_builders(method);
 
-    for (DexType* builder : builders) {
+    for (const DexType* builder : builders) {
       if (method->get_class() == builder) {
         continue;
       }

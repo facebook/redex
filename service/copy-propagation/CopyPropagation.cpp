@@ -427,7 +427,7 @@ class AliasFixpointIterator final
     }
     case OPCODE_CONST_CLASS: {
       if (m_config.eliminate_const_classes) {
-        DexType* type = insn->get_type();
+        const DexType* type = insn->get_type();
         source.lower = Value{type};
       }
       break;

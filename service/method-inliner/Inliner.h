@@ -32,8 +32,8 @@ struct InlinerConfig;
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
                      IRInstruction* callsite,
-                     DexType* needs_receiver_cast,
-                     DexType* needs_init_class,
+                     const DexType* needs_receiver_cast,
+                     const DexType* needs_init_class,
                      size_t next_caller_reg,
                      const cfg::ControlFlowGraph* reduced_cfg = nullptr,
                      DexMethod* rewrite_invoke_super_callee = nullptr,
@@ -405,7 +405,7 @@ class MultiMethodInliner {
  private:
   void make_partial(const DexMethod* method, InlinedCost* inlined_Cost);
 
-  DexType* get_needs_init_class(DexMethod* callee) const;
+  const DexType* get_needs_init_class(DexMethod* callee) const;
 
   bool get_needs_constructor_fence(const DexMethod* caller,
                                    const DexMethod* callee) const;
@@ -586,7 +586,7 @@ class MultiMethodInliner {
   /**
    * Gets the set of referenced types in a callee.
    */
-  std::shared_ptr<UnorderedBag<DexType*>> get_callee_type_refs(
+  std::shared_ptr<UnorderedBag<const DexType*>> get_callee_type_refs(
       const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg);
 
   /**
@@ -816,7 +816,7 @@ class MultiMethodInliner {
   // Optional cache for get_callee_type_refs function
   std::unique_ptr<
       InsertOnlyConcurrentMap<const DexMethod*,
-                              std::shared_ptr<UnorderedBag<DexType*>>>>
+                              std::shared_ptr<UnorderedBag<const DexType*>>>>
       m_callee_type_refs;
 
   // Optional cache for get_callee_code_refs function

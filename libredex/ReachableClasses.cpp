@@ -66,7 +66,7 @@ struct DexItemIter<DexMethod*, F> {
  * reflection. :reflecting_method is the method containing the reflection site.
  */
 void blocklist_field(DexMethod* reflecting_method,
-                     DexType* type,
+                     const DexType* type,
                      const DexString* name,
                      bool declared) {
   auto* cls = type_class(type);
@@ -93,7 +93,7 @@ void blocklist_field(DexMethod* reflecting_method,
 }
 
 void blocklist_method(DexMethod* reflecting_method,
-                      DexType* type,
+                      const DexType* type,
                       const DexString* name,
                       const boost::optional<std::vector<DexType*>>& params,
                       bool declared) {

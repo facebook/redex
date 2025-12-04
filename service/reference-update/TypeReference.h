@@ -8,6 +8,8 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <functional>
+#include <optional>
 
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
@@ -42,31 +44,17 @@ class TypeRefUpdater final {
    * method.
    */
   explicit TypeRefUpdater(const UnorderedMap<DexType*, DexType*>& old_to_new);
+  explicit TypeRefUpdater(
+      const UnorderedMap<const DexType*, DexType*>& old_to_new);
 
   void update_methods_fields(const Scope& scope);
 
  private:
-  /**
-   * Try to convert "type" to a new type. Return nullptr if it's not found in
-   * the old_to_new mapping. LOld; => LNew; [LOld; => [LNew;
-   * [[LOld; => [[LNew;
-   * ...
-   */
-  DexType* try_convert_to_new_type(DexType* type);
-
-  /**
-   * Change a field to new type if its original type is a candidate.
-   * Return true if the field is updated.
-   */
-  bool mangling(DexFieldRef* field);
-
-  /**
-   * Change proto of a method if its proto contains any candidate.
-   */
-  bool mangling(DexMethodRef* method);
-
-  InsertOnlyConcurrentMap<DexMethod*, DexProto*> m_inits;
-  const UnorderedMap<DexType*, DexType*>& m_old_to_new;
+  std::optional<std::reference_wrapper<const UnorderedMap<DexType*, DexType*>>>
+      m_old_to_new;
+  std::optional<
+      std::reference_wrapper<const UnorderedMap<const DexType*, DexType*>>>
+      m_old_to_new_const;
 };
 
 /**

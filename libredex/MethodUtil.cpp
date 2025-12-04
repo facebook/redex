@@ -22,7 +22,7 @@ class ClInitSideEffectsAnalysis {
   const method::ClInitHasNoSideEffectsPredicate* m_clinit_has_no_side_effects;
   const InsertOnlyConcurrentSet<DexMethod*>* m_non_true_virtuals;
   UnorderedSet<DexMethodRef*> m_active;
-  UnorderedSet<DexType*> m_initialized;
+  UnorderedSet<const DexType*> m_initialized;
 
  public:
   explicit ClInitSideEffectsAnalysis(
@@ -63,12 +63,12 @@ class ClInitSideEffectsAnalysis {
   }
 
  private:
-  bool clinit_has_no_side_effects(DexType* type) {
+  bool clinit_has_no_side_effects(const DexType* type) {
     return (m_clinit_has_no_side_effects != nullptr) &&
            (*m_clinit_has_no_side_effects)(type);
   }
 
-  bool init_class_or_new_instance_may_have_side_effects(DexType* type) {
+  bool init_class_or_new_instance_may_have_side_effects(const DexType* type) {
     return !clinit_has_no_side_effects(type) &&
            type != type::java_lang_Object() &&
            (m_initialized.count(type) == 0u);

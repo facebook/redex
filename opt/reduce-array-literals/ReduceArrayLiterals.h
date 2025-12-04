@@ -52,7 +52,7 @@ class ReduceArrayLiterals {
   void patch_new_array(const IRInstruction* new_array_insn,
                        const std::vector<const IRInstruction*>& aput_insns);
   size_t patch_new_array_chunk(
-      DexType* type,
+      const DexType* type,
       size_t chunk_start,
       const std::vector<const IRInstruction*>& aput_insns,
       boost::optional<reg_t> chunk_dest,

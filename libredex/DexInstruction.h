@@ -176,7 +176,7 @@ class DexOpcodeString : public DexInstruction {
 
 class DexOpcodeType : public DexInstruction {
  private:
-  DexType* m_type;
+  const DexType* m_type;
 
  public:
   size_t size() const override;
@@ -184,20 +184,21 @@ class DexOpcodeType : public DexInstruction {
   void gather_types(std::vector<DexType*>& ltype) const override;
   DexOpcodeType* clone() const override { return new DexOpcodeType(*this); }
 
-  DexOpcodeType(DexOpcode opcode, DexType* type) : DexInstruction(opcode) {
+  DexOpcodeType(DexOpcode opcode, const DexType* type)
+      : DexInstruction(opcode) {
     m_type = type;
     m_ref_type = REF_TYPE;
   }
 
-  DexOpcodeType(DexOpcode opcode, DexType* type, uint16_t arg)
+  DexOpcodeType(DexOpcode opcode, const DexType* type, uint16_t arg)
       : DexInstruction(opcode, arg) {
     m_type = type;
     m_ref_type = REF_TYPE;
   }
 
-  DexType* get_type() const { return m_type; }
+  const DexType* get_type() const { return m_type; }
 
-  void set_type(DexType* type) { m_type = type; }
+  void set_type(const DexType* type) { m_type = type; }
 };
 
 class DexOpcodeField : public DexInstruction {

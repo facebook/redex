@@ -51,7 +51,7 @@ void write_violations_to_file(const app_module_usage::Violations& violations,
 
 void write_method_module_usages_to_file(
     const app_module_usage::MethodStoresReferenced& method_store_refs,
-    const InsertOnlyConcurrentMap<DexType*, DexStore*>& type_store_map,
+    const InsertOnlyConcurrentMap<const DexType*, DexStore*>& type_store_map,
     const std::string& path) {
 
   TRACE(APP_MOD_USE, 4, "Outputting module usages at %s", path.c_str());
@@ -206,7 +206,7 @@ void AppModuleUsagePass::load_preexisting_violations(DexStoresVector& stores) {
 app_module_usage::MethodStoresReferenced
 AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
 
-  auto get_type_ref_for_insn = [](IRInstruction* insn) -> DexType* {
+  auto get_type_ref_for_insn = [](IRInstruction* insn) -> const DexType* {
     if (insn->has_method()) {
       return insn->get_method()->get_class();
     } else if (insn->has_field()) {
@@ -230,7 +230,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
             /* metadata_cache */ &refl_metadata_cache);
 
     auto get_reflective_type_ref_for_insn =
-        [&analysis](IRInstruction* insn) -> DexType* {
+        [&analysis](IRInstruction* insn) -> const DexType* {
       if (!opcode::is_an_invoke(insn->opcode())) {
         // If an object type is from reflection it will be in the
         // RESULT_REGISTER for some instruction.
@@ -248,7 +248,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
       return nullptr;
     };
 
-    auto get_store_if_access_is_xstore = [&](DexType* to) -> DexStore* {
+    auto get_store_if_access_is_xstore = [&](const DexType* to) -> DexStore* {
       // The type may be external.
       auto it = m_type_store_map.find(to);
       if (it == m_type_store_map.end()) {
@@ -265,7 +265,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
     auto& cfg = code.cfg();
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;
-      auto* maybe_type_ref = get_type_ref_for_insn(insn);
+      const auto* maybe_type_ref = get_type_ref_for_insn(insn);
       if (maybe_type_ref != nullptr) {
         auto* maybe_store = get_store_if_access_is_xstore(maybe_type_ref);
         if (maybe_store != nullptr) {
@@ -273,7 +273,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
           stores_referenced[maybe_store] = false /* used_only_reflectively */;
         }
       }
-      auto* maybe_refl_type_ref = get_reflective_type_ref_for_insn(insn);
+      const auto* maybe_refl_type_ref = get_reflective_type_ref_for_insn(insn);
       if (maybe_refl_type_ref != nullptr) {
         auto* maybe_store = get_store_if_access_is_xstore(maybe_refl_type_ref);
         if (maybe_store != nullptr) {

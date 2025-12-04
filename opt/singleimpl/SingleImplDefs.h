@@ -139,7 +139,7 @@ struct SingleImplData {
 };
 
 // map from single implemented interfaces to the data related to that interface
-using SingleImpls = UnorderedMap<DexType*, SingleImplData>;
+using SingleImpls = UnorderedMap<const DexType*, SingleImplData>;
 
 struct SingleImplAnalysis {
   virtual ~SingleImplAnalysis() = default;
@@ -159,12 +159,12 @@ struct SingleImplAnalysis {
   /**
    * Escape an interface and all parent interfaces.
    */
-  void escape_interface(DexType* intf, EscapeReason reason);
+  void escape_interface(const DexType* intf, EscapeReason reason);
 
   /**
    * Return whether a type is escaped. Works with any type.
    */
-  bool is_escaped(DexType* intf) const {
+  bool is_escaped(const DexType* intf) const {
     auto single_impl = single_impls.find(intf);
     return single_impl != single_impls.end() &&
            single_impl->second.is_escaped();

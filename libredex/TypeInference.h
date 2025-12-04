@@ -289,7 +289,7 @@ class TypeInference final
   void run(const DexMethod* dex_method);
 
   void run(bool is_static,
-           DexType* declaring_type,
+           const DexType* declaring_type,
            DexTypeList* args,
            const ParamAnnotations* param_anno = nullptr);
 

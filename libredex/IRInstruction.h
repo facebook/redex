@@ -320,12 +320,12 @@ class IRInstruction final {
     return this;
   }
 
-  DexType* get_type() const {
+  const DexType* get_type() const {
     always_assert(has_type());
     return m_type;
   }
 
-  IRInstruction* set_type(DexType* type) {
+  IRInstruction* set_type(const DexType* type) {
     always_assert(has_type());
     m_type = type;
     return this;
@@ -443,7 +443,7 @@ class IRInstruction final {
     // pointer-type member so that it works properly even on 32-bit machines
     uint64_t m_literal{0};
     const DexString* m_string;
-    DexType* m_type;
+    const DexType* m_type;
     DexFieldRef* m_field;
     DexMethodRef* m_method;
     DexOpcodeData* m_data;

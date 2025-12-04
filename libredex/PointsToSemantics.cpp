@@ -391,7 +391,7 @@ PointsToAction PointsToAction::get_class_operation(PointsToVariable dest,
                         {{dest_key(), dest}, {src_key(), src}});
 }
 
-PointsToAction PointsToAction::check_cast_operation(DexType* dex_type,
+PointsToAction PointsToAction::check_cast_operation(const DexType* dex_type,
                                                     PointsToVariable dest,
                                                     PointsToVariable src) {
   return PointsToAction(PointsToOperation(PTS_CHECK_CAST, dex_type),
@@ -1006,7 +1006,7 @@ class PointsToActionGenerator final {
       break;
     }
     case OPCODE_NEW_INSTANCE: {
-      DexType* dex_type = insn->get_type();
+      const auto* dex_type = insn->get_type();
       if (m_type_system.is_subtype(type::java_lang_Throwable(), dex_type)) {
         // If the object created is an exception (i.e., its type inherits from
         // java.lang.Throwable), we use PTS_GET_EXCEPTION. In our semantic

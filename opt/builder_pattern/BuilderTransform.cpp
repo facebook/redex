@@ -117,11 +117,11 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
  * Bind virtual calls to the actual implementation.
  */
 void BuilderTransform::update_virtual_calls(
-    const UnorderedMap<IRInstruction*, DexType*>& insn_to_type) {
+    const UnorderedMap<IRInstruction*, const DexType*>& insn_to_type) {
 
   for (const auto& pair : UnorderedIterable(insn_to_type)) {
     auto* insn = pair.first;
-    auto* current_instance = pair.second;
+    const auto* current_instance = pair.second;
 
     if (opcode::is_invoke_virtual(insn->opcode())) {
       auto* method = resolve_method(insn->get_method(), MethodSearch::Virtual);

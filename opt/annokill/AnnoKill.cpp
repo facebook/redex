@@ -264,8 +264,8 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
     }
   });
 
-  ConcurrentSet<DexType*> concurrent_referenced_annos;
-  auto add_concurrent_referenced_anno = [&](DexType* t) {
+  ConcurrentSet<const DexType*> concurrent_referenced_annos;
+  auto add_concurrent_referenced_anno = [&](const DexType* t) {
     if (referenced_annos.count(t) == 0u) {
       concurrent_referenced_annos.insert(t);
     }
@@ -288,7 +288,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
         }
 
         if (insn->has_type()) {
-          auto* type = insn->get_type();
+          const auto* type = insn->get_type();
           if (all_annos.count(type) > 0) {
             add_concurrent_referenced_anno(type);
             TRACE(ANNO,

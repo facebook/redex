@@ -43,7 +43,7 @@ constexpr const char* ENUM_ENTRIES_FIELD = "$ENTRIES";
 
 // Store possible types for a register although we only care about Object,
 // Enum and Enum's subtypes.
-using EnumTypes = sparta::PatriciaTreeSetAbstractDomain<DexType*>;
+using EnumTypes = sparta::PatriciaTreeSetAbstractDomain<const DexType*>;
 using EnumTypeEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, EnumTypes>;
 

@@ -115,14 +115,15 @@ DexMethod* resolve_invoke_inlinable_callee(
     const IRInstruction* insn,
     const DexMethod* caller,
     CalleesCache* callees_cache,
-    const std::function<DexType*()>& inlinable_type_at_src_index_0_getter) {
+    const std::function<const DexType*()>&
+        inlinable_type_at_src_index_0_getter) {
   const auto* callees = resolve_invoke_callees(method_override_graph, insn,
                                                caller, callees_cache);
   always_assert(!callees->any_unknown);
   if (callees->with_code.size() == 1) {
     return callees->with_code.front();
   }
-  auto* inlinable_type = inlinable_type_at_src_index_0_getter();
+  const auto* inlinable_type = inlinable_type_at_src_index_0_getter();
   if (inlinable_type == nullptr) {
     return nullptr;
   }
@@ -165,7 +166,7 @@ src_index_t get_param_index(const DexMethod* callee,
 void analyze_scope(
     const Scope& scope,
     const mog::Graph& method_override_graph,
-    ConcurrentMap<DexType*, Locations>* new_instances,
+    ConcurrentMap<const DexType*, Locations>* new_instances,
     ConcurrentMap<DexMethod*, Locations>* single_callee_invokes,
     InsertOnlyConcurrentSet<DexMethod*>* multi_callee_invokes,
     ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>* dependencies,
@@ -362,7 +363,7 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
   };
 
   if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-    auto* type = insn->get_type();
+    const auto* type = insn->get_type();
     auto* cls = type_class(type);
     if ((cls != nullptr) && !cls->is_external() &&
         (m_excluded_classes.count(cls) == 0u)) {
@@ -582,7 +583,7 @@ MethodSummaries compute_method_summaries(
 
 // For an inlinable new-instance or invoke- instruction, determine first
 // resolved callee (if any), and (eventually) allocated type
-std::pair<DexMethod*, DexType*> resolve_inlinable(
+std::pair<DexMethod*, const DexType*> resolve_inlinable(
     const MethodSummaries& method_summaries,
     DexMethod* method,
     const IRInstruction* insn) {

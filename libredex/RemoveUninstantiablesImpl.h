@@ -49,7 +49,7 @@ struct Stats {
 /// Look for mentions of uninstantiable classes in \p cfg and modify them
 /// in-place.
 Stats replace_uninstantiable_refs(
-    const UnorderedSet<DexType*>& scoped_uninstantiable_types,
+    const UnorderedSet<const DexType*>& scoped_uninstantiable_types,
     cfg::ControlFlowGraph& cfg);
 
 /// Replace the instructions in \p cfg with `throw unreachable;`.  Preserves the

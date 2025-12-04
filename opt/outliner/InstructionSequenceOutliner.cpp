@@ -132,7 +132,7 @@ struct CandidateInstructionCore {
     DexMethodRef* method;
     DexFieldRef* field;
     const DexString* string;
-    DexType* type;
+    const DexType* type;
     DexOpcodeData* data;
     int64_t literal{0};
   };

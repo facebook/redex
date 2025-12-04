@@ -251,7 +251,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
 }
 
 UnorderedSet<DexMethod*> get_non_trivial_init_methods(IRCode* code,
-                                                      DexType* type) {
+                                                      const DexType* type) {
   always_assert(code != nullptr);
   always_assert(type != nullptr);
   auto& cfg = code->cfg();
@@ -574,7 +574,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
         }
 
       } else if (opcode == OPCODE_NEW_INSTANCE || opcode == OPCODE_CHECK_CAST) {
-        DexType* cls = insn->get_type();
+        const DexType* cls = insn->get_type();
         if (type_class(cls) == builder) {
           if (opcode == OPCODE_NEW_INSTANCE) {
             num_builders++;
@@ -608,7 +608,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   return true;
 }
 
-bool has_only_argument(DexMethod* method, DexType* type) {
+bool has_only_argument(DexMethod* method, const DexType* type) {
   DexProto* proto = method->get_proto();
   const auto& args = *proto->get_args();
   return args.size() == 1 && args.at(0) == type;
@@ -960,7 +960,7 @@ bool FieldsRegs::operator!=(const FieldsRegs& that) const {
   return !(*this == that);
 }
 
-void transfer_object_reach(DexType* obj,
+void transfer_object_reach(const DexType* obj,
                            uint32_t regs_size,
                            const IRInstruction* insn,
                            RegSet& regs) {
@@ -992,7 +992,7 @@ void transfer_object_reach(DexType* obj,
 }
 
 bool tainted_reg_escapes(
-    DexType* ty,
+    const DexType* ty,
     DexMethod* method,
     const UnorderedMap<IRInstruction*, TaintedRegs>& taint_map,
     bool enable_buildee_constr_change) {
@@ -1081,7 +1081,7 @@ std::unique_ptr<UnorderedMap<IRInstruction*, TaintedRegs>> get_tainted_regs(
     const cfg::ControlFlowGraph& cfg,
     uint32_t regs_size,
     const std::vector<cfg::Block*>& blocks,
-    DexType* type) {
+    const DexType* type) {
 
   std::function<void(cfg::InstructionIterator, TaintedRegs*)> trans =
       [&](const cfg::InstructionIterator& it, TaintedRegs* tregs) {
@@ -1091,7 +1091,7 @@ std::unique_ptr<UnorderedMap<IRInstruction*, TaintedRegs>> get_tainted_regs(
         if (opcode::is_a_move_result_pseudo(op) &&
             cfg.primary_instruction_of_move_result(it)->insn->opcode() ==
                 OPCODE_NEW_INSTANCE) {
-          DexType* cls =
+          const DexType* cls =
               cfg.primary_instruction_of_move_result(it)->insn->get_type();
           auto dest = it->insn->dest();
           if (cls == type) {
@@ -1111,7 +1111,7 @@ std::unique_ptr<UnorderedMap<IRInstruction*, TaintedRegs>> get_tainted_regs(
 
 //////////////////////////////////////////////
 
-bool has_builder_name(DexType* type) {
+bool has_builder_name(const DexType* type) {
   always_assert(type != nullptr);
 
   static boost::regex re{"\\$Builder;$"};
@@ -1124,7 +1124,7 @@ bool has_builder_name(DexType* type) {
   return boost::regex_search(type->c_str(), re);
 }
 
-DexType* get_buildee(DexType* builder) {
+DexType* get_buildee(const DexType* builder) {
   always_assert(builder != nullptr);
 
   const auto deobfuscated_name =
@@ -1137,7 +1137,7 @@ DexType* get_buildee(DexType* builder) {
 }
 
 UnorderedSet<DexMethod*> get_all_methods(cfg::ControlFlowGraph& cfg,
-                                         DexType* type) {
+                                         const DexType* type) {
   always_assert(type != nullptr);
 
   UnorderedSet<DexMethod*> methods;
@@ -1155,7 +1155,8 @@ UnorderedSet<DexMethod*> get_all_methods(cfg::ControlFlowGraph& cfg,
   return methods;
 }
 
-UnorderedSet<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
+UnorderedSet<DexMethod*> get_non_init_methods(IRCode* code,
+                                              const DexType* type) {
   always_assert(code);
   UnorderedSet<DexMethod*> methods = get_all_methods(code->cfg(), type);
   unordered_erase_if(methods, method::is_init);
@@ -1164,8 +1165,8 @@ UnorderedSet<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
 
 bool BuilderTransform::inline_methods(
     DexMethod* method,
-    DexType* type,
-    const std::function<UnorderedSet<DexMethod*>(IRCode*, DexType*)>&
+    const DexType* type,
+    const std::function<UnorderedSet<DexMethod*>(IRCode*, const DexType*)>&
         get_methods_to_inline) {
   always_assert(method != nullptr);
   always_assert(type != nullptr);

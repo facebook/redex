@@ -56,9 +56,9 @@ UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
   int old_no_ref = -1;
   int new_no_ref = 0;
 
-  UnorderedSet<DexType*> coldstart_classes(interdex_types.begin(),
-                                           interdex_types.end());
-  UnorderedSet<DexType*> cold_cold_references;
+  UnorderedSet<const DexType*> coldstart_classes(interdex_types.begin(),
+                                                 interdex_types.end());
+  UnorderedSet<const DexType*> cold_cold_references;
   UnorderedSet<DexClass*> unreferenced_classes;
   Scope input_scope = scope;
 
@@ -81,7 +81,7 @@ UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
           always_assert(meth->get_code()->cfg_built());
           for (auto& mie : cfg::InstructionIterable(meth->get_code()->cfg())) {
             auto* inst = mie.insn;
-            DexType* called_cls = nullptr;
+            const DexType* called_cls = nullptr;
             if (inst->has_method()) {
               called_cls = inst->get_method()->get_class();
             } else if (inst->has_field()) {

@@ -277,7 +277,7 @@ struct Matcher {
   UnorderedMap<Register, reg_t, EnumClassHash> matched_regs;
   UnorderedMap<String, const DexString*, EnumClassHash> matched_strings;
   UnorderedMap<Literal, int64_t, EnumClassHash> matched_literals;
-  UnorderedMap<Type, DexType*, EnumClassHash> matched_types;
+  UnorderedMap<Type, const DexType*, EnumClassHash> matched_types;
   UnorderedMap<Field, DexFieldRef*, EnumClassHash> matched_fields;
 
   explicit Matcher(const Pattern& pattern) : pattern(pattern), match_index(0) {}
@@ -325,7 +325,7 @@ struct Matcher {
       return true;
     };
 
-    auto match_type = [&](Type type_pattern, DexType* insn_type) {
+    auto match_type = [&](Type type_pattern, const DexType* insn_type) {
       if (matched_types.find(type_pattern) != end(matched_types)) {
         return matched_types.at(type_pattern) == insn_type;
       }
@@ -635,7 +635,7 @@ struct Matcher {
           break;
         }
         case String::Type_A_get_simple_name: {
-          DexType* a = matched_types.at(Type::A);
+          const auto* a = matched_types.at(Type::A);
           std::string simple = type::get_simple_name(a);
           replace->set_string(DexString::make_string(simple));
           break;
@@ -1659,7 +1659,7 @@ std::vector<Pattern> get_throw_empty_npe_patterns() {
        [](const Matcher& m) {
          // Check new-instance type..
          if (!m.matched_instructions.empty()) {
-           DexType* type = m.matched_instructions.front()->get_type();
+           const auto* type = m.matched_instructions.front()->get_type();
            return type == DexType::make_type("Ljava/lang/NullPointerException;");
          }
          return true;  // Let it pass.

@@ -29,7 +29,7 @@ class DexCallSite;
 enum class DebugInfoKind : uint32_t;
 
 using dexstring_to_idx = UnorderedMap<const DexString*, uint32_t>;
-using dextype_to_idx = UnorderedMap<DexType*, uint16_t>;
+using dextype_to_idx = UnorderedMap<const DexType*, uint16_t>;
 using dexproto_to_idx = UnorderedMap<DexProto*, uint32_t>;
 using dexfield_to_idx = UnorderedMap<DexFieldRef*, uint32_t>;
 using dexmethod_to_idx = UnorderedMap<DexMethodRef*, uint32_t>;
@@ -96,7 +96,7 @@ class DexOutputIdx {
   }
 
   uint32_t stringidx(const DexString* s) const { return m_string.at(s); }
-  uint16_t typeidx(DexType* t) const { return m_type.at(t); }
+  uint16_t typeidx(const DexType* t) const { return m_type.at(t); }
   uint16_t protoidx(DexProto* p) const { return m_proto.at(p); }
   uint32_t fieldidx(DexFieldRef* f) const { return m_field.at(f); }
   uint32_t methodidx(DexMethodRef* m) const { return m_method.at(m); }

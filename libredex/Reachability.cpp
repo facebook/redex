@@ -1546,7 +1546,7 @@ void TransitiveClosureMarkerWorker::returns(const DexMethod* method) {
       ReachableObject(method, ReachableObjectType::RETURNS));
 }
 
-void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
+void TransitiveClosureMarkerWorker::instantiable(const DexType* type) {
   auto* cls = type_class(type);
   if ((cls == nullptr) || cls->is_external()) {
     return;
@@ -1558,7 +1558,7 @@ void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
       ReachableObject(cls, ReachableObjectType::INSTANTIABLE));
 }
 
-void TransitiveClosureMarkerWorker::directly_instantiable(DexType* type) {
+void TransitiveClosureMarkerWorker::directly_instantiable(const DexType* type) {
   if (!m_shared_state->reachable_aspects->directly_instantiable_types.insert(
           type)) {
     return;
@@ -2349,7 +2349,7 @@ void sweep_code(
     InsertOnlyConcurrentSet<DexMethod*>* affected_methods) {
   Timer t("Sweep Code");
   auto scope = build_class_scope(stores);
-  UnorderedSet<DexType*> uninstantiable_types;
+  UnorderedSet<const DexType*> uninstantiable_types;
   UnorderedSet<DexMethod*> uncallable_instance_methods;
   for (auto* cls : scope) {
     if (reachable_aspects.instantiable_types.count_unsafe(cls) == 0u) {
@@ -2425,8 +2425,8 @@ remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
   // abstract methods, if any, so that we won't make them abstract or remove
   // them.
   ConcurrentSet<const DexMethod*> implementation_methods;
-  workqueue_run<DexType*>(
-      [&](DexType* type) {
+  workqueue_run<const DexType*>(
+      [&](const DexType* type) {
         UnorderedMap<const DexString*, UnorderedSet<const DexProto*>>
             implemented;
         for (auto* cls = type_class(type);

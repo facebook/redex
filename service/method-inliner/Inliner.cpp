@@ -307,7 +307,7 @@ void MultiMethodInliner::inline_methods() {
   m_callee_insn_sizes =
       std::make_unique<InsertOnlyConcurrentMap<const DexMethod*, size_t>>();
   m_callee_type_refs = std::make_unique<InsertOnlyConcurrentMap<
-      const DexMethod*, std::shared_ptr<UnorderedBag<DexType*>>>>();
+      const DexMethod*, std::shared_ptr<UnorderedBag<const DexType*>>>>();
   if (m_ref_checkers) {
     m_callee_code_refs = std::make_unique<
         InsertOnlyConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>();
@@ -627,7 +627,8 @@ void MultiMethodInliner::make_partial(const DexMethod* method,
   inlined_cost->reduced_code.reset();
 }
 
-DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
+const DexType* MultiMethodInliner::get_needs_init_class(
+    DexMethod* callee) const {
   if (!is_static(callee) || assumenosideeffects(callee)) {
     return nullptr;
   }
@@ -637,7 +638,7 @@ DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
   if (insn == nullptr) {
     return nullptr;
   }
-  auto* type = insn->get_type();
+  const auto* type = insn->get_type();
   delete insn;
   return type;
 }
@@ -885,7 +886,7 @@ size_t MultiMethodInliner::inline_inlinables(
       cfg_next_caller_reg = caller->cfg().get_registers_size();
     }
     auto timer2 = m_inline_with_cfg_timer.scope();
-    auto* needs_init_class = get_needs_init_class(callee_method);
+    const auto* needs_init_class = get_needs_init_class(callee_method);
     auto needs_constructor_fence =
         get_needs_constructor_fence(caller_method, callee_method);
     auto callee_has_constructor_fence =
@@ -2412,7 +2413,7 @@ std::shared_ptr<XDexMethodRefs::Refs> MultiMethodInliner::get_callee_x_dex_refs(
   return x_dex_refs;
 }
 
-std::shared_ptr<UnorderedBag<DexType*>>
+std::shared_ptr<UnorderedBag<const DexType*>>
 MultiMethodInliner::get_callee_type_refs(
     const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg) {
   if (m_callee_type_refs && (reduced_cfg == nullptr)) {
@@ -2422,7 +2423,7 @@ MultiMethodInliner::get_callee_type_refs(
     }
   }
 
-  UnorderedSet<DexType*> type_refs_set;
+  UnorderedSet<const DexType*> type_refs_set;
   always_assert(callee->get_code()->cfg_built());
   const auto& callee_cfg =
       reduced_cfg != nullptr ? *reduced_cfg : callee->get_code()->cfg();
@@ -2448,8 +2449,8 @@ MultiMethodInliner::get_callee_type_refs(
     }
   }
 
-  auto type_refs = std::make_shared<UnorderedBag<DexType*>>();
-  for (auto* type : UnorderedIterable(type_refs_set)) {
+  auto type_refs = std::make_shared<UnorderedBag<const DexType*>>();
+  for (const auto* type : UnorderedIterable(type_refs_set)) {
     // filter out what xstores.illegal_ref(...) doesn't care about
     if (type_class_internal(type) == nullptr) {
       continue;
@@ -2524,7 +2525,7 @@ bool MultiMethodInliner::cross_store_reference(
   always_assert(callee_type_refs);
   const auto& xstores = m_shrinker.get_xstores();
   size_t store_idx = xstores.get_store_idx(caller->get_class());
-  for (auto* type : UnorderedIterable(*callee_type_refs)) {
+  for (const auto* type : UnorderedIterable(*callee_type_refs)) {
     if (xstores.illegal_ref(store_idx, type)) {
       info.cross_store++;
       return true;
@@ -2719,8 +2720,8 @@ namespace inliner {
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
                      IRInstruction* callsite,
-                     DexType* needs_receiver_cast,
-                     DexType* needs_init_class,
+                     const DexType* needs_receiver_cast,
+                     const DexType* needs_init_class,
                      size_t next_caller_reg,
                      const cfg::ControlFlowGraph* reduced_cfg,
                      DexMethod* rewrite_invoke_super_callee,

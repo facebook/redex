@@ -37,7 +37,7 @@ class BuilderTransform {
       DexMethod* caller, const UnorderedSet<IRInstruction*>& insns);
 
   void update_virtual_calls(
-      const UnorderedMap<IRInstruction*, DexType*>& insn_to_type);
+      const UnorderedMap<IRInstruction*, const DexType*>& insn_to_type);
 
   void replace_fields(const InstantiationToUsage& usage, DexMethod* method);
 

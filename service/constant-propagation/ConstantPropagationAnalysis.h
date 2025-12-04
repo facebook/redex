@@ -354,8 +354,9 @@ struct ImmutableAttributeAnalyzerState {
   ConcurrentSet<DexMethod*> attribute_methods;
   ConcurrentSet<DexField*> attribute_fields;
   UnorderedMap<DexMethod*, CachedBoxedObjects> cached_boxed_objects;
-  ConcurrentSet<DexType*> initialized_types;
-  mutable InsertOnlyConcurrentMap<DexType*, bool> may_be_initialized_types;
+  ConcurrentSet<const DexType*> initialized_types;
+  mutable InsertOnlyConcurrentMap<const DexType*, bool>
+      may_be_initialized_types;
 
   ImmutableAttributeAnalyzerState();
 
@@ -370,12 +371,12 @@ struct ImmutableAttributeAnalyzerState {
                                 long end);
   bool is_jvm_cached_object(DexMethod* initialize_method, long value) const;
 
-  static DexType* initialized_type(const DexMethod* initialize_method);
+  static const DexType* initialized_type(const DexMethod* initialize_method);
 
-  bool may_be_initialized_type(DexType* type) const;
+  bool may_be_initialized_type(const DexType* type) const;
 
  private:
-  bool compute_may_be_initialized_type(DexType* type) const;
+  bool compute_may_be_initialized_type(const DexType* type) const;
 };
 
 class ImmutableAttributeAnalyzer final
@@ -508,7 +509,7 @@ class NewObjectAnalyzer
                                      ConstantEnvironment,
                                      ImmutableAttributeAnalyzerState*> {
   static bool ignore_type(const ImmutableAttributeAnalyzerState* state,
-                          DexType* type);
+                          const DexType* type);
 
  public:
   static bool analyze_new_instance(const ImmutableAttributeAnalyzerState* state,

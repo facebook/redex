@@ -105,7 +105,7 @@ number of places it's referenced.
   UnorderedMap<std::string, UnorderedSet<DexStore*>> m_preexisting_violations;
 
   // To quickly look up wich DexStore ("module") a DexType is from
-  InsertOnlyConcurrentMap<DexType*, DexStore*> m_type_store_map;
+  InsertOnlyConcurrentMap<const DexType*, DexStore*> m_type_store_map;
 
   bool m_output_module_use;
   bool m_crash_with_violations;

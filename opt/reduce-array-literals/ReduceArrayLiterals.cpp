@@ -484,7 +484,7 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    auto* type = new_array_insn->get_type();
+    const auto* type = new_array_insn->get_type();
     auto* element_type = type::get_array_component_type(type);
 
     if (has_left_out_aputs(du_chains, new_array_insn, aput_insns)) {
@@ -565,7 +565,7 @@ void ReduceArrayLiterals::patch() {
 void ReduceArrayLiterals::patch_new_array(
     const IRInstruction* new_array_insn,
     const std::vector<const IRInstruction*>& aput_insns) {
-  auto* type = new_array_insn->get_type();
+  const auto* type = new_array_insn->get_type();
 
   // prepare for chunking, if needed
 
@@ -609,7 +609,7 @@ void ReduceArrayLiterals::patch_new_array(
 }
 
 size_t ReduceArrayLiterals::patch_new_array_chunk(
-    DexType* type,
+    const DexType* type,
     size_t chunk_start,
     const std::vector<const IRInstruction*>& aput_insns,
     boost::optional<reg_t> chunk_dest,

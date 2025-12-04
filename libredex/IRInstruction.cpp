@@ -477,7 +477,7 @@ void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
     break;
 
   case opcode::Ref::Type:
-    ltype.push_back(m_type);
+    ltype.push_back(const_cast<DexType*>(m_type));
     break;
 
   case opcode::Ref::Field:

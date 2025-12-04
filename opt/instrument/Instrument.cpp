@@ -673,8 +673,8 @@ void set_no_opt_flag_on_analysis_methods(
 
 size_t check_integrity(DexStoresVector& stores, const std::string& prefix) {
   auto scope = build_class_scope(stores);
-  InsertOnlyConcurrentSet<DexType*> checked_types;
-  auto check_type = [&prefix, &checked_types](DexType* type) {
+  InsertOnlyConcurrentSet<const DexType*> checked_types;
+  auto check_type = [&prefix, &checked_types](const DexType* type) {
     if (type->get_name()->str().find(prefix) != 0) {
       return true;
     }

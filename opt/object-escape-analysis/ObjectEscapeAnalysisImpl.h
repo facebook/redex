@@ -55,7 +55,8 @@ DexMethod* resolve_invoke_inlinable_callee(
     const IRInstruction* insn,
     const DexMethod* caller,
     CalleesCache* callees_cache,
-    const std::function<DexType*()>& inlinable_type_at_src_index_0_getter);
+    const std::function<const DexType*()>&
+        inlinable_type_at_src_index_0_getter);
 
 using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 
@@ -64,7 +65,7 @@ using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 void analyze_scope(
     const Scope& scope,
     const method_override_graph::Graph& method_override_graph,
-    ConcurrentMap<DexType*, Locations>* new_instances,
+    ConcurrentMap<const DexType*, Locations>* new_instances,
     ConcurrentMap<DexMethod*, Locations>* single_callee_invokes,
     InsertOnlyConcurrentSet<DexMethod*>* multi_callee_invokes,
     ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>* dependencies,
@@ -187,7 +188,7 @@ MethodSummaries compute_method_summaries(
 
 // For an inlinable new-instance or invoke- instruction, determine first
 // resolved callee (if any), and (eventually) allocated type
-std::pair<DexMethod*, DexType*> resolve_inlinable(
+std::pair<DexMethod*, const DexType*> resolve_inlinable(
     const MethodSummaries& method_summaries,
     DexMethod* method,
     const IRInstruction* insn);

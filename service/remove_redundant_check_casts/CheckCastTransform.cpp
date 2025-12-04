@@ -20,7 +20,7 @@ Stats apply(cfg::ControlFlowGraph& cfg, const CheckCastReplacements& casts) {
       cfg.replace_insn(it, *replacement_insn);
       stats.replaced_casts++;
     } else {
-      std::optional<DexType*> replacement_type = cast.replacement_type;
+      const auto& replacement_type = cast.replacement_type;
       if (replacement_type) {
         cast.insn->set_type(*replacement_type);
         stats.weakened_casts++;

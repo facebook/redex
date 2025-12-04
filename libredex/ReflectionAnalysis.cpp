@@ -26,7 +26,8 @@
 
 using namespace sparta;
 
-std::ostream& operator<<(std::ostream& out, const UnorderedSet<DexType*>& x) {
+std::ostream& operator<<(std::ostream& out,
+                         const UnorderedSet<const DexType*>& x) {
   if (x.empty()) {
     return out;
   }
@@ -567,7 +568,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       // site. It's up to the user of the analysis  how to interpret this
       // information.
       if (obj && (obj->is_object()) && (obj->dex_type != nullptr)) {
-        auto* dex_type = insn->get_type();
+        const auto* dex_type = insn->get_type();
         if (obj->dex_type != dex_type) {
           obj->potential_dex_types.insert(dex_type);
           current_state->set_abstract_obj(
@@ -583,7 +584,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       const auto array_object =
           current_state->get_abstract_obj(insn->src(0)).get_object();
       if (array_object) {
-        auto* type = array_object->dex_type;
+        const auto* type = array_object->dex_type;
         if ((type != nullptr) && type::is_array(type)) {
           auto* const etype = type::get_array_component_type(type);
           update_non_string_input(current_state, insn, etype);
@@ -606,15 +607,15 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           array_object->is_known_class_array() && offset_object &&
           offset_object->is_int()) {
 
-        auto* type = source_object->dex_type;
+        const auto* type = source_object->dex_type;
         boost::optional<int64_t> offset = offset_object->dex_int;
-        boost::optional<std::vector<DexType*>> class_array =
+        auto class_array =
             current_state->get_heap_class_array(array_object->heap_address)
                 .get_constant();
 
         if (offset && class_array && *offset >= 0 &&
             class_array->size() > (size_t)*offset) {
-          (*class_array)[*offset] = type;
+          (*class_array)[*offset] = const_cast<DexType*>(type);
           current_state->set_heap_class_array(
               array_object->heap_address,
               ConstantAbstractDomain<std::vector<DexType*>>(*class_array));
@@ -657,7 +658,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_NEW_ARRAY: {
-      auto* array_type = insn->get_type();
+      const auto* array_type = insn->get_type();
       always_assert(type::is_array(array_type));
       auto* component_type = type::get_array_component_type(array_type);
       if (component_type == type::java_lang_Class()) {
@@ -682,7 +683,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_FILLED_NEW_ARRAY: {
-      auto* array_type = insn->get_type();
+      const auto* array_type = insn->get_type();
       always_assert(type::is_array(array_type));
       auto* component_type = type::get_array_component_type(array_type);
       AbstractObject aobj(AbstractObjectKind::OBJECT, insn->get_type());
@@ -696,7 +697,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           auto reg_obj = current_state->get_abstract_obj(src_reg).get_object();
           if (reg_obj && reg_obj->is_class() &&
               (reg_obj->dex_type != nullptr)) {
-            known_types.push_back(reg_obj->dex_type);
+            known_types.push_back(const_cast<DexType*>(reg_obj->dex_type));
           }
         }
 
@@ -851,7 +852,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
   void set_abstract_obj(const reg_t dest,
                         const AbstractObjectKind kind,
-                        DexType* type,
+                        const DexType* type,
                         AbstractObjectEnvironment* current_state) const {
     current_state->set_abstract_obj(
         dest, AbstractObjectDomain(AbstractObject(kind, type)));

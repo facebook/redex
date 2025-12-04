@@ -642,7 +642,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
 
   CseUnorderedLocationSet get_clobbered_locations(
       const IRInstruction* insn, const CseEnvironment* current_state) const {
-    DexType* exact_virtual_scope = nullptr;
+    const DexType* exact_virtual_scope = nullptr;
     if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
       auto src0 = current_state->get_ref_env().get(insn->src(0)).get_constant();
       if (src0) {
@@ -998,7 +998,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     return mask;
   }
 
-  DexType* get_exact_type(value_id_t value_id) const {
+  const DexType* get_exact_type(value_id_t value_id) const {
     auto it = m_positional_insns.find(value_id);
     if (it == m_positional_insns.end()) {
       return nullptr;
@@ -1294,7 +1294,7 @@ void SharedState::init_scope(
 
 CseUnorderedLocationSet SharedState::get_relevant_written_locations(
     const IRInstruction* insn,
-    DexType* exact_virtual_scope,
+    const DexType* exact_virtual_scope,
     const CseUnorderedLocationSet& read_locations) {
   if (may_be_barrier(insn, exact_virtual_scope)) {
     if (opcode::is_an_invoke(insn->opcode())) {
@@ -1310,7 +1310,7 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
 }
 
 bool SharedState::may_be_barrier(const IRInstruction* insn,
-                                 DexType* exact_virtual_scope) {
+                                 const DexType* exact_virtual_scope) {
   auto opcode = insn->opcode();
   switch (opcode) {
   case OPCODE_MONITOR_ENTER:
@@ -1337,7 +1337,7 @@ bool SharedState::may_be_barrier(const IRInstruction* insn,
 }
 
 bool SharedState::is_invoke_safe(const IRInstruction* insn,
-                                 DexType* exact_virtual_scope) {
+                                 const DexType* exact_virtual_scope) {
   always_assert(opcode::is_an_invoke(insn->opcode()));
   auto* method_ref = insn->get_method();
   auto opcode = insn->opcode();

@@ -67,7 +67,7 @@ class InitClassFields {
   }
 
   std::vector<IRInstruction*> get_replacements(
-      DexType* type,
+      const DexType* type,
       DexMethod* caller,
       const std::function<reg_t(DexField*)>& reg_getter) const {
     std::vector<IRInstruction*> insns;
@@ -89,9 +89,9 @@ class InitClassFields {
 
   size_t get_fields_added() { return m_fields_added; }
 
-  std::vector<std::pair<DexType*, size_t>>
+  std::vector<std::pair<const DexType*, size_t>>
   get_ordered_init_class_reference_counts() {
-    std::vector<std::pair<DexType*, size_t>> res;
+    std::vector<std::pair<const DexType*, size_t>> res;
     for (auto& p : UnorderedIterable(m_init_class_fields)) {
       size_t count = 0;
       for (auto& q : UnorderedIterable(p.second)) {
@@ -124,20 +124,21 @@ class InitClassFields {
     DexField* field{nullptr};
     size_t count{0};
   };
-  mutable ConcurrentMap<DexType*, UnorderedMap<size_t, InitClassField>>
+  mutable ConcurrentMap<const DexType*, UnorderedMap<size_t, InitClassField>>
       m_init_class_fields;
 
-  DexField* get(DexType* type, size_t dex_idx) const {
+  DexField* get(const DexType* type, size_t dex_idx) const {
     DexField* res = nullptr;
-    m_init_class_fields.update(type, [&](DexType* type_, auto& map, bool) {
-      auto& icf = map[dex_idx];
-      if (icf.field == nullptr) {
-        icf.field = make_init_class_field(type_, dex_idx);
-        icf.field->rstate.set_init_class();
-      }
-      icf.count++;
-      res = icf.field;
-    });
+    m_init_class_fields.update(
+        type, [&](const DexType* type_, auto& map, bool) {
+          auto& icf = map[dex_idx];
+          if (icf.field == nullptr) {
+            icf.field = make_init_class_field(type_, dex_idx);
+            icf.field->rstate.set_init_class();
+          }
+          icf.count++;
+          res = icf.field;
+        });
     always_assert(res);
     return res;
   }
@@ -161,7 +162,7 @@ class InitClassFields {
     return sfields.front();
   }
 
-  DexField* make_init_class_field(DexType* type, size_t dex_idx) const {
+  DexField* make_init_class_field(const DexType* type, size_t dex_idx) const {
     auto* cls = type_class(type);
     always_assert(cls);
     const auto& dex_referenced_sfields = m_dex_referenced_sfields.at(dex_idx);
@@ -293,7 +294,7 @@ void log_in_clinits(const LogCreator& log_creator,
 }
 
 std::string get_init_class_message(DexMethod* method,
-                                   DexType* type,
+                                   const DexType* type,
                                    const cfg::InstructionIterator& cfg_it) {
   std::ostringstream oss;
   auto* pos = cfg_it.cfg().get_dbg_pos(cfg_it);
@@ -408,7 +409,7 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
               continue;
             }
             always_assert(create_init_class_insns);
-            auto* type = it->insn->get_type();
+            const auto* type = it->insn->get_type();
             std::vector<IRInstruction*> replacements;
             if (!m_drop) {
               replacements =

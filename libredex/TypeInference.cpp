@@ -523,7 +523,7 @@ void TypeInference::run(const DexMethod* dex_method) {
 }
 
 void TypeInference::run(bool is_static,
-                        DexType* declaring_type,
+                        const DexType* declaring_type,
                         DexTypeList* args,
                         const ParamAnnotations* param_anno) {
   // We need to compute the initial environment by assigning the parameter
@@ -806,7 +806,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CHECK_CAST: {
     refine_reference(current_state, insn->src(0));
-    auto* to_type = insn->get_type();
+    const auto* to_type = insn->get_type();
 
     if (!m_skip_check_cast_upcasting) {
       set_reference(current_state, RESULT_REGISTER, to_type);

@@ -50,7 +50,8 @@ class BuilderAnalysis final {
   void set_num_inline_iterations(size_t num) { m_num_inline_iterations = num; }
   size_t get_num_inline_iterations() const { return m_num_inline_iterations; }
 
-  UnorderedMap<IRInstruction*, DexType*> get_vinvokes_to_this_infered_type();
+  UnorderedMap<IRInstruction*, const DexType*>
+  get_vinvokes_to_this_infered_type();
   UnorderedSet<IRInstruction*> get_all_inlinable_insns();
 
   ConstTypeHashSet get_instantiated_types();

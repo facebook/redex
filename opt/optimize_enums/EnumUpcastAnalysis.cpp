@@ -41,9 +41,9 @@ bool need_analyze(const DexMethod* method,
   return false;
 }
 
-UnorderedSet<DexType*> discard_primitives(const EnumTypes& types) {
-  UnorderedSet<DexType*> res;
-  for (auto* type : types.elements()) {
+UnorderedSet<const DexType*> discard_primitives(const EnumTypes& types) {
+  UnorderedSet<const DexType*> res;
+  for (const auto* type : types.elements()) {
     if (!type::is_primitive(type)) {
       res.insert(type);
     }
@@ -87,7 +87,7 @@ class EnumUpcastDetector {
                            const EnumTypeEnvironment* env) {
     switch (insn->opcode()) {
     case OPCODE_CHECK_CAST: {
-      auto* type = insn->get_type();
+      const auto* type = insn->get_type();
       // Assume the local upcast is safe and we only care about upcasting when
       // the value is escaping.
       if (type != OBJECT_TYPE) {
@@ -194,9 +194,9 @@ class EnumUpcastDetector {
     // array of primitives. Just ignore them.
     EnumTypes array_types = env->get(insn->src(1));
     EnumTypes elem_types = env->get(insn->src(0));
-    UnorderedSet<DexType*> acceptable_elem_types;
-    for (DexType* type : array_types.elements()) {
-      DexType* elem = type::get_array_element_type(type);
+    UnorderedSet<const DexType*> acceptable_elem_types;
+    for (const DexType* type : array_types.elements()) {
+      const DexType* elem = type::get_array_element_type(type);
       if ((elem != nullptr) && !type::is_primitive(elem)) {
         acceptable_elem_types.insert(elem); // An array of one type of objects.
       }
@@ -207,7 +207,7 @@ class EnumUpcastDetector {
       reject(insn, elem_types, UnsafeType::kUsageCastAputObject);
       reject(insn, acceptable_elem_types, UnsafeType::kUsageCastAputObject);
     } else if (acceptable_elem_types.size() == 1) {
-      DexType* acceptable = *unordered_any(acceptable_elem_types);
+      const DexType* acceptable = *unordered_any(acceptable_elem_types);
       reject_if_inconsistent(insn, elem_types, acceptable,
                              UnsafeType::kUsageCastAputObject);
     }
@@ -319,9 +319,9 @@ class EnumUpcastDetector {
           method::signatures_match(method, ENUM_COMPARETO_METHOD)) {
         EnumTypes b_types = env->get(insn->src(1));
         auto that_types = discard_primitives(b_types);
-        DexType* this_type =
+        const DexType* this_type =
             this_types.empty() ? nullptr : *unordered_any(this_types);
-        DexType* that_type =
+        const DexType* that_type =
             that_types.empty() ? nullptr : *unordered_any(that_types);
         // Reject multiple types in the registers.
         if (this_types.size() > 1 || that_types.size() > 1 ||
@@ -378,11 +378,11 @@ class EnumUpcastDetector {
     }
   }
 
-  bool is_candidate(DexType* type) const {
+  bool is_candidate(const DexType* type) const {
     if (type == nullptr) {
       return false;
     }
-    type = const_cast<DexType*>(type::get_element_type_if_array(type));
+    type = type::get_element_type_if_array(type);
     return m_candidate_enums->count_unsafe(type) != 0u;
   }
 
@@ -403,11 +403,11 @@ class EnumUpcastDetector {
    */
   void reject_if_inconsistent(const IRInstruction* insn,
                               const EnumTypes& types,
-                              DexType* required_type,
+                              const DexType* required_type,
                               UnsafeType reason = UnsafeType::kUsage) const {
     if (is_candidate(required_type)) {
       bool need_delete = false;
-      for (auto* possible_type : types.elements()) {
+      for (const auto* possible_type : types.elements()) {
         if (!type::is_primitive(possible_type) &&
             possible_type != required_type) {
           need_delete = true;
@@ -418,7 +418,7 @@ class EnumUpcastDetector {
         reject(insn, required_type, reason);
       }
     } else {
-      for (auto* possible_type : types.elements()) {
+      for (const auto* possible_type : types.elements()) {
         auto* const possible_elem_type =
             type::get_array_component_type(possible_type);
         if (m_config->support_kt_19_enum_entries &&
@@ -438,9 +438,9 @@ class EnumUpcastDetector {
   }
 
   void reject(const IRInstruction* insn,
-              const UnorderedSet<DexType*>& types,
+              const UnorderedSet<const DexType*>& types,
               UnsafeType reason = UnsafeType::kUsage) const {
-    for (DexType* type : UnorderedIterable(types)) {
+    for (const DexType* type : UnorderedIterable(types)) {
       reject(insn, type, reason);
     }
   }
@@ -448,15 +448,15 @@ class EnumUpcastDetector {
   void reject(const IRInstruction* insn,
               const EnumTypes& types,
               UnsafeType reason = UnsafeType::kUsage) const {
-    for (DexType* type : types.elements()) {
+    for (const DexType* type : types.elements()) {
       reject(insn, type, reason);
     }
   }
 
   void reject(const IRInstruction* insn,
-              DexType* type,
+              const DexType* type,
               UnsafeType reason = UnsafeType::kUsage) const {
-    type = const_cast<DexType*>(type::get_element_type_if_array(type));
+    type = type::get_element_type_if_array(type);
     if (m_candidate_enums->count_unsafe(type) != 0u) {
       m_reject_fn(type, reason);
       if (traceEnabled(ENUM, 9)) {
@@ -560,7 +560,7 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
       env->set(dest, EnumTypes(type::java_lang_Class()));
       break;
     case OPCODE_CHECK_CAST: {
-      auto* type = insn->get_type();
+      const auto* type = insn->get_type();
       if (type == OBJECT_TYPE) {
         env->set(dest, env->get(insn->src(0)));
       } else {
@@ -581,7 +581,7 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
     case OPCODE_AGET_OBJECT: {
       EnumTypes types;
       EnumTypes array_types = env->get(insn->src(0));
-      for (auto* const array_type : array_types.elements()) {
+      for (const auto* const array_type : array_types.elements()) {
         auto* const type = type::get_array_element_type(array_type);
         if ((type != nullptr) && !type::is_primitive(type)) {
           types.add(type);
@@ -704,7 +704,7 @@ void reject_enums_for_colliding_constructors(
 void reject_enums_for_relaxed_inits(
     const std::vector<DexClass*>& classes,
     ConcurrentSet<const DexType*>* candidate_enums) {
-  ConcurrentSet<DexType*> rejected_enums;
+  ConcurrentSet<const DexType*> rejected_enums;
   walk::parallel::code(classes, [&](DexMethod* method, IRCode& code) {
     auto& cfg = code.cfg();
     UnorderedSet<const IRInstruction*> new_instances_to_verify;
@@ -725,7 +725,7 @@ void reject_enums_for_relaxed_inits(
     live_range::DefUseChains du_chains = chains.get_def_use_chains();
     for (const auto* new_instance_insn :
          UnorderedIterable(new_instances_to_verify)) {
-      auto* enum_type = new_instance_insn->get_type();
+      const auto* enum_type = new_instance_insn->get_type();
       const auto& use_set =
           du_chains[const_cast<IRInstruction*>(new_instance_insn)];
       for (const auto& use : UnorderedIterable(use_set)) {
@@ -759,7 +759,7 @@ void reject_enums_for_relaxed_inits(
       }
     }
   });
-  for (DexType* type : UnorderedIterable(rejected_enums)) {
+  for (const DexType* type : UnorderedIterable(rejected_enums)) {
     candidate_enums->erase(type);
   }
 }
@@ -839,7 +839,7 @@ void reject_unsafe_enums(
     EnumFixpointIterator engine(cfg, *config);
     engine.run(env);
 
-    auto local_reject_fn = [&](DexType* type, UnsafeType u) {
+    auto local_reject_fn = [&](const DexType* type, UnsafeType u) {
       rejected_enums.insert(type);
       reject_fn(type, u);
     };

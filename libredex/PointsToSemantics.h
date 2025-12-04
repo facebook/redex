@@ -210,7 +210,7 @@ struct PointsToOperation {
     DexMethodRef* dex_method;
     DexFieldRef* dex_field;
     const DexString* dex_string;
-    DexType* dex_type;
+    const DexType* dex_type;
     size_t parameter;
     SpecialPointsToEdge special_edge;
   };
@@ -228,7 +228,7 @@ struct PointsToOperation {
   PointsToOperation(PointsToOperationKind k, const DexString* s)
       : kind(k), dex_string(s) {}
 
-  PointsToOperation(PointsToOperationKind k, DexType* t)
+  PointsToOperation(PointsToOperationKind k, const DexType* t)
       : kind(k), dex_type(t) {}
 
   PointsToOperation(PointsToOperationKind k, size_t p)
@@ -348,7 +348,7 @@ class PointsToAction final {
   /*
    * Used to build a PTS_CHECK_CAST action.
    */
-  static PointsToAction check_cast_operation(DexType* dex_type,
+  static PointsToAction check_cast_operation(const DexType* dex_type,
                                              PointsToVariable dest,
                                              PointsToVariable src);
 

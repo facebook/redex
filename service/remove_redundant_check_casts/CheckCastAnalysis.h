@@ -27,12 +27,12 @@ struct CheckCastReplacementItem {
   cfg::Block* block;
   IRInstruction* insn;
   std::optional<IRInstruction*> replacement_insn;
-  std::optional<DexType*> replacement_type;
+  std::optional<const DexType*> replacement_type;
 
   CheckCastReplacementItem(cfg::Block* block,
                            IRInstruction* insn,
                            std::optional<IRInstruction*> replacement_insn,
-                           std::optional<DexType*> replacement_type)
+                           std::optional<const DexType*> replacement_type)
       : block(block),
         insn(insn),
         replacement_insn(replacement_insn),
@@ -60,23 +60,24 @@ class CheckCastAnalysis {
   CheckCastReplacements collect_redundant_checks_replacement() const;
 
  private:
-  DexType* get_type_demand(IRInstruction* insn, size_t src_index) const;
-  DexType* weaken_to_demand(IRInstruction* insn,
-                            DexType* type,
-                            bool weaken_to_not_interfacy) const;
-  bool is_check_cast_redundant(IRInstruction* insn, DexType* check_type) const;
+  const DexType* get_type_demand(IRInstruction* insn, size_t src_index) const;
+  const DexType* weaken_to_demand(IRInstruction* insn,
+                                  const DexType* type,
+                                  bool weaken_to_not_interfacy) const;
+  bool is_check_cast_redundant(IRInstruction* insn,
+                               const DexType* check_type) const;
   type_inference::TypeInference* get_type_inference() const;
   bool can_catch_class_cast_exception(cfg::Block* block) const;
 
-  DexType* m_class_cast_exception_type;
+  const DexType* m_class_cast_exception_type;
   cfg::ControlFlowGraph& m_cfg;
   bool m_is_static;
-  DexType* m_declaring_type;
+  const DexType* m_declaring_type;
   DexTypeList* m_args;
-  DexType* m_rtype;
+  const DexType* m_rtype;
   const ParamAnnotations* m_param_anno;
   using InstructionTypeDemands =
-      UnorderedMap<IRInstruction*, UnorderedSet<DexType*>>;
+      UnorderedMap<IRInstruction*, UnorderedSet<const DexType*>>;
   std::unique_ptr<InstructionTypeDemands> m_insn_demands;
   std::vector<cfg::InstructionIterator> m_check_cast_its;
   mutable std::unique_ptr<type_inference::TypeInference> m_type_inference;
