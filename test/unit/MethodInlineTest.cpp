@@ -1174,11 +1174,11 @@ TEST_F(MethodInlineTest, boxed_boolean) {
     check_method = make_unboxing_precondition_method(foo_cls, "check");
     candidates.insert(check_method);
     // foo_main calls check_method a few times.
-    auto* FALSE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
+    auto* FALSE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;"));
     always_assert(FALSE_field != nullptr);
-    auto* TRUE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
+    auto* TRUE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"));
     always_assert(TRUE_field != nullptr);
     foo_main =
         make_a_method_calls_others_with_arg(foo_cls,
@@ -1270,11 +1270,11 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
     check_method = make_unboxing_precondition_method(foo_cls, "check");
     candidates.insert(check_method);
     // foo_main calls check_method a few times.
-    auto* FALSE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
+    auto* FALSE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;"));
     always_assert(FALSE_field != nullptr);
-    auto* TRUE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
+    auto* TRUE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"));
     always_assert(TRUE_field != nullptr);
     foo_main =
         make_a_method_calls_others_with_arg(foo_cls,
@@ -2145,11 +2145,11 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
     candidates.insert(check_method);
     candidates.insert(small_method);
     // foo_main calls check_method a few times.
-    auto* FALSE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
+    auto* FALSE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;"));
     always_assert(FALSE_field != nullptr);
-    auto* TRUE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
+    auto* TRUE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"));
     always_assert(TRUE_field != nullptr);
     foo_main =
         make_a_method_calls_others_with_arg(foo_cls,
