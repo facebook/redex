@@ -324,12 +324,12 @@ DexMethod* make_a_method_calls_others_with_arg(
  */
 TEST_F(MethodInlineTest, insertMoves) {
   using namespace dex_asm;
-  auto* callee = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* callee = dynamic_cast<DexMethod*>(DexMethod::make_method(
       "Lfoo;", "testCallee", "V", {"I", "Ljava/lang/Object;"}));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   callee->set_code(std::make_unique<IRCode>(callee, 0));
 
-  auto* caller = static_cast<DexMethod*>(
+  auto* caller = dynamic_cast<DexMethod*>(
       DexMethod::make_method("Lfoo;", "testCaller", "V", {}));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   caller->set_code(std::make_unique<IRCode>(caller, 0));
@@ -375,10 +375,10 @@ TEST_F(MethodInlineTest, insertMoves) {
 
 TEST_F(MethodInlineTest, debugPositionsAfterReturn) {
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
   callee->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   const auto& caller_str = R"(
     (
@@ -569,7 +569,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
     const auto* clinit_name = DexString::make_string("<clinit>");
     auto* void_args = DexTypeList::make_type_list({});
     auto* void_void = DexProto::make_proto(type::_void(), void_args);
-    auto* clinit = static_cast<DexMethod*>(
+    auto* clinit = dynamic_cast<DexMethod*>(
         DexMethod::make_method(bar_cls->get_type(), clinit_name, void_void));
     clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
     clinit->set_code(std::make_unique<IRCode>());
@@ -580,7 +580,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
     bar_cls->add_method(clinit);
 
     const auto* sfield_name = DexString::make_string("existing_field");
-    auto* field = static_cast<DexField*>(
+    auto* field = dynamic_cast<DexField*>(
         DexField::make_field(bar_cls->get_type(), sfield_name, type::_int()));
     field->make_concrete(ACC_PUBLIC | ACC_STATIC);
     type_class(bar_cls->get_type())->add_field(field);
@@ -1335,27 +1335,27 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
-  DexMethod* nested_callee = static_cast<DexMethod*>(
+  DexMethod* nested_callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.nested_callee:()V"));
   nested_callee->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
-  DexMethod* caller_inside = static_cast<DexMethod*>(
+  DexMethod* caller_inside = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.caller_inside:()V"));
   caller_inside->make_concrete(ACC_PRIVATE,
                                /* is_virtual */ false);
 
-  DexMethod* nested_callee_2 = static_cast<DexMethod*>(
+  DexMethod* nested_callee_2 = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.nested_callee_2:()V"));
   nested_callee_2->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -1569,11 +1569,11 @@ TEST_F(MethodInlineTest, unused_result) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:(I)I"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:(I)I"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -1686,16 +1686,16 @@ TEST_F(MethodInlineTest, unused_result) {
 TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
   auto* foo_cls = create_a_class("LFoo;");
 
-  DexMethod* outer_caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.outer_caller:()V"));
+  DexMethod* outer_caller = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.outer_caller:()V"));
   outer_caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* inner_caller = static_cast<DexMethod*>(
+  DexMethod* inner_caller = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.inner_caller:(I)V"));
   inner_caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:(I)I"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:(I)I"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   foo_cls->add_method(outer_caller);
@@ -1840,12 +1840,12 @@ TEST_F(MethodInlineTest,
        dont_inline_callee_with_tries_and_no_catch_all_at_sketchy_call_site) {
   auto* foo_cls = create_a_class("LFoo;");
 
-  DexMethod* caller = static_cast<DexMethod*>(
+  DexMethod* caller = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.sketchyCaller:()V"));
   caller->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
   callee->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
   foo_cls->add_method(caller);
@@ -1923,10 +1923,10 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
   auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.sketchy_callee:()V"));
   callee->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
@@ -2005,10 +2005,10 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
   auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
@@ -2204,11 +2204,11 @@ TEST_F(MethodInlineTest, inline_init_not_relaxed) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -2294,11 +2294,11 @@ TEST_F(MethodInlineTest, inline_init_relaxed) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -2397,14 +2397,14 @@ TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
   DexMethod* finalize =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.finalize:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.finalize:()V"));
   finalize->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
 
   bar_cls->add_method(caller);
@@ -2613,15 +2613,15 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexField* field =
-      static_cast<DexField*>(DexField::make_field("LFoo;.final_field:Z"));
+      dynamic_cast<DexField*>(DexField::make_field("LFoo;.final_field:Z"));
   field->make_concrete(ACC_PUBLIC);
   foo_cls->add_field(field);
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -2733,16 +2733,16 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */
                         false);
 
   DexField* field =
-      static_cast<DexField*>(DexField::make_field("LFoo;.not_final_field:Z"));
+      dynamic_cast<DexField*>(DexField::make_field("LFoo;.not_final_field:Z"));
   field->make_concrete(ACC_PUBLIC);
   foo_cls->add_field(field);
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -2851,19 +2851,19 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexField* field =
-      static_cast<DexField*>(DexField::make_field("LFoo;.final_field:Z"));
+      dynamic_cast<DexField*>(DexField::make_field("LFoo;.final_field:Z"));
   field->make_concrete(ACC_PUBLIC);
   foo_cls->add_field(field);
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   DexMethod* finalize =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.finalize:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.finalize:()V"));
   finalize->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
 
   bar_cls->add_method(caller);
@@ -2973,10 +2973,10 @@ TEST_F(MethodInlineTest, partially_inline) {
   auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
@@ -3115,14 +3115,14 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   auto* foo_cls = foo_cc.create();
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* base_callee = static_cast<DexMethod*>(
+  DexMethod* base_callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LBase;.callee:(Ljava/lang/Object;)V"));
   base_callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
   callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
 
@@ -3246,14 +3246,14 @@ TEST_F(MethodInlineTest,
   auto* foo_cls = foo_cc.create();
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* base_callee = static_cast<DexMethod*>(
+  DexMethod* base_callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LBase;.callee:(Ljava/lang/Object;)V"));
   base_callee->make_concrete(ACC_ABSTRACT, /* is_virtual */ true);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
   callee->make_concrete(ACC_PRIVATE, /* is_virtual */ true);
 
