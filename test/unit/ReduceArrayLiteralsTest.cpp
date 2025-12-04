@@ -372,6 +372,32 @@ TEST_F(ReduceArrayLiteralsTest, conditional_escape) {
   test(code_str, expected_str, 0, 0);
 }
 
+TEST_F(ReduceArrayLiteralsTest, conditional_escape2) {
+  const auto* code_str = R"(
+    (
+      (load-param v3)
+      (const v0 1)
+      (new-array v0 "[Ljava/lang/String;")
+      (move-result-pseudo-object v1)
+      (if-eqz v3 :skip_aput)
+      (const v0 0)
+      (const-string "hello")
+      (move-result-pseudo-object v2)
+      (aput-object v2 v1 v0)
+      (return-object v1)
+      (:skip_aput)
+      (const v0 0)
+      (const-string "www")
+      (move-result-pseudo-object v2)
+      (aput-object v2 v1 v0)
+      (const v3 0)
+      (return-object v3)
+    )
+  )";
+  const auto& expected_str = code_str;
+  test(code_str, expected_str, 0, 0);
+}
+
 TEST_F(ReduceArrayLiteralsTest, aputs_with_goto_and_throw_succs) {
   const auto* code_str = R"(
     (

@@ -22,6 +22,7 @@
 #include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "LiveRange.h"
 #include "InterDexPass.h"
 #include "PassManager.h"
 #include "Resolver.h"
@@ -410,6 +411,20 @@ class Analyzer final
       m_escaped_arrays;
 };
 
+bool has_left_out_aputs(live_range::DefUseChains du_chains,
+                        const IRInstruction* new_array_insn,
+                        const std::vector<const IRInstruction*>& aput_insns) {
+  const auto& use_set = du_chains[const_cast<IRInstruction*>(new_array_insn)];
+  // We don't want to patch an array literal if the array value is consumed by
+  // an APUT that's not tracked by the analysis. Please see the
+  // `conditional_escape2` test case in ReduceArrayLiteralsTest.
+  size_t num_use_aputs = unordered_count_if(use_set, [](const auto& use) {
+    return opcode::is_an_aput(use.insn->opcode());
+  });
+  always_assert(num_use_aputs >= aput_insns.size());
+  return num_use_aputs > aput_insns.size();
+}
+
 } // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -448,6 +463,9 @@ ReduceArrayLiterals::ReduceArrayLiterals(cfg::ControlFlowGraph& cfg,
 }
 
 void ReduceArrayLiterals::patch() {
+  live_range::MoveAwareChains chains(m_cfg);
+  live_range::DefUseChains du_chains = chains.get_def_use_chains();
+
   for (auto& p : m_array_literals) {
     const IRInstruction* new_array_insn = p.first;
     std::vector<const IRInstruction*>& aput_insns = p.second;
@@ -458,6 +476,10 @@ void ReduceArrayLiterals::patch() {
 
     auto* type = new_array_insn->get_type();
     auto* element_type = type::get_array_component_type(type);
+
+    if (has_left_out_aputs(du_chains, new_array_insn, aput_insns)) {
+      continue;
+    }
 
     if (m_min_sdk < 24) {
       // See T45708995.
