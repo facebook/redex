@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include <boost/dynamic_bitset/dynamic_bitset.hpp>
 
 namespace regalloc {

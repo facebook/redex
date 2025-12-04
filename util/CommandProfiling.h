@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include <boost/none.hpp>
 #include <boost/optional/optional.hpp>
 #include <string>
