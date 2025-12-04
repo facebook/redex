@@ -125,28 +125,30 @@ MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
   }
 }
 
-MethodItemEntry::~MethodItemEntry() {
-  switch (type) {
+namespace {
+
+void free_mie_contents(MethodItemEntry& mie) {
+  switch (mie.type) {
   case MFLOW_TRY:
-    delete tentry;
+    delete mie.tentry;
     break;
   case MFLOW_CATCH:
-    delete centry;
+    delete mie.centry;
     break;
   case MFLOW_TARGET:
-    delete target;
+    delete mie.target;
     break;
   case MFLOW_DEBUG:
-    dbgop.~unique_ptr<DexDebugInstruction>();
+    mie.dbgop.~unique_ptr<DexDebugInstruction>();
     break;
   case MFLOW_POSITION:
-    pos.~unique_ptr<DexPosition>();
+    mie.pos.~unique_ptr<DexPosition>();
     break;
   case MFLOW_SOURCE_BLOCK:
-    src_block.~unique_ptr<SourceBlock>();
+    mie.src_block.~unique_ptr<SourceBlock>();
     break;
   case MFLOW_DEX_OPCODE:
-    delete dex_insn;
+    delete mie.dex_insn;
     break;
   case MFLOW_OPCODE:
   case MFLOW_FALLTHROUGH:
@@ -154,6 +156,48 @@ MethodItemEntry::~MethodItemEntry() {
     break;
   }
 }
+
+} // namespace
+
+MethodItemEntry& MethodItemEntry::operator=(const MethodItemEntry& that) {
+  if (this == &that) {
+    return *this;
+  }
+  free_mie_contents(*this);
+  type = that.type;
+  switch (type) {
+  case MFLOW_TRY:
+    tentry = that.tentry;
+    break;
+  case MFLOW_CATCH:
+    centry = that.centry;
+    break;
+  case MFLOW_OPCODE:
+    insn = that.insn;
+    break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn = that.dex_insn;
+    break;
+  case MFLOW_TARGET:
+    target = that.target;
+    break;
+  case MFLOW_DEBUG:
+    new (&dbgop) std::unique_ptr<DexDebugInstruction>(that.dbgop->clone());
+    break;
+  case MFLOW_POSITION:
+    new (&pos) std::unique_ptr<DexPosition>(new DexPosition(*that.pos));
+    break;
+  case MFLOW_SOURCE_BLOCK:
+    new (&src_block)
+        std::unique_ptr<SourceBlock>(new SourceBlock(*that.src_block));
+    break;
+  case MFLOW_FALLTHROUGH:
+    break;
+  }
+  return *this;
+}
+
+MethodItemEntry::~MethodItemEntry() { free_mie_contents(*this); }
 
 void MethodItemEntry::replace_ir_with_dex(DexInstruction* dex_insn) {
   always_assert(type == MFLOW_OPCODE);
@@ -983,6 +1027,19 @@ void IRList::insn_clear_and_dispose() {
     }
     delete mie;
   });
+}
+
+SourceBlock& SourceBlock::operator=(const SourceBlock& other) {
+  if (this == &other) {
+    return *this;
+  }
+  src = other.src;
+  next = std::unique_ptr<SourceBlock>(
+      other.next == nullptr ? nullptr : new SourceBlock(*other.next));
+  id = other.id;
+  always_assert(vals_size == other.vals_size);
+  m_storage = make_storage(other.m_storage.get());
+  return *this;
 }
 
 std::unique_ptr<SourceBlock::Storage, SourceBlock::FreeDeleter>

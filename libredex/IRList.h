@@ -193,6 +193,7 @@ struct SourceBlock {
         id(other.id),
         vals_size(other.vals_size),
         m_storage(make_storage(other.m_storage.get())) {}
+  SourceBlock& operator=(const SourceBlock&);
 
   boost::optional<float> get_val(size_t i) const {
     const auto& val = get_at(i);
@@ -583,6 +584,7 @@ struct MethodItemEntry {
     std::unique_ptr<SourceBlock> src_block;
   };
   MethodItemEntry(const MethodItemEntry&);
+  MethodItemEntry& operator=(const MethodItemEntry&);
   explicit MethodItemEntry(DexInstruction* dex_insn) {
     this->type = MFLOW_DEX_OPCODE;
     this->dex_insn = dex_insn;

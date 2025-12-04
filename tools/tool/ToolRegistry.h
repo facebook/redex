@@ -42,6 +42,7 @@ struct ToolRegistry {
    */
   ToolRegistry() {}
   ToolRegistry(const ToolRegistry&) = delete;
+  ToolRegistry& operator=(const ToolRegistry&) = delete;
 
   std::vector<Tool*> m_registered_tools;
 };

@@ -139,6 +139,7 @@ class IRInstruction final {
  public:
   explicit IRInstruction(IROpcode op);
   IRInstruction(const IRInstruction&);
+  IRInstruction& operator=(const IRInstruction&);
   ~IRInstruction();
 
   /*

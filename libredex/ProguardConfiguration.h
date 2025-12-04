@@ -106,6 +106,7 @@ struct KeepSpec {
   // instance of a KeepSpec in Redex. This makes it efficient and simple to
   // represent these KeepSpecs in the reachability graph.
   KeepSpec(const KeepSpec&) = delete;
+  KeepSpec& operator=(const KeepSpec&) = delete;
 
   friend bool operator==(const KeepSpec& lhs, const KeepSpec& rhs);
   friend std::ostream& operator<<(std::ostream&, const KeepSpec&);
@@ -203,6 +204,7 @@ struct ProguardConfiguration {
 
   ProguardConfiguration() = default;
   ProguardConfiguration(const ProguardConfiguration&) = delete;
+  ProguardConfiguration& operator=(const ProguardConfiguration&) = delete;
 };
 
 namespace impl {

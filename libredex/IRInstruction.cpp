@@ -30,6 +30,7 @@ IRInstruction::IRInstruction(const IRInstruction& other)
     : m_opcode(other.m_opcode),
       m_num_srcs(other.m_num_srcs),
       m_dest(other.m_dest),
+      // TODO: This can trigger undefined behavior.
       m_literal(other.m_literal) {
   if (m_num_srcs <= MAX_NUM_INLINE_SRCS) {
     for (src_index_t i = 0; i < m_num_srcs; ++i) {
@@ -42,6 +43,26 @@ IRInstruction::IRInstruction(const IRInstruction& other)
   if (other.has_data()) {
     m_data = other.m_data->clone();
   }
+}
+
+IRInstruction& IRInstruction::operator=(const IRInstruction& other) {
+  m_opcode = other.m_opcode;
+  m_num_srcs = other.m_num_srcs;
+  m_dest = other.m_dest;
+  // TODO: This can trigger undefined behavior.
+  m_literal = other.m_literal;
+  if (m_num_srcs <= MAX_NUM_INLINE_SRCS) {
+    for (src_index_t i = 0; i < m_num_srcs; ++i) {
+      m_inline_srcs[i] = other.m_inline_srcs[i];
+    }
+  } else {
+    m_srcs = new reg_t[m_num_srcs];
+    std::memcpy(m_srcs, other.m_srcs, m_num_srcs * sizeof(reg_t));
+  }
+  if (other.has_data()) {
+    m_data = other.m_data->clone();
+  }
+  return *this;
 }
 
 IRInstruction::~IRInstruction() {

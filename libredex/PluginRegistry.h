@@ -84,6 +84,7 @@ class PluginRegistry {
    */
   PluginRegistry() {}
   PluginRegistry(const PluginRegistry&) = delete;
+  PluginRegistry& operator=(const PluginRegistry&) = delete;
 
   UnorderedMap<std::string, std::unique_ptr<Plugin>> m_registered_passes;
 };

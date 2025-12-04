@@ -1161,6 +1161,7 @@ class EnumTransformer final {
   }
 
   EnumTransformer(const EnumTransformer&) = delete;
+  EnumTransformer& operator=(const EnumTransformer&) = delete;
 
   void run() {
     auto scope = build_class_scope(m_stores);

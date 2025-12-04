@@ -65,6 +65,8 @@ struct ReachableResourcesPluginRegistry {
   ReachableResourcesPluginRegistry() {}
   ReachableResourcesPluginRegistry(const ReachableResourcesPluginRegistry&) =
       delete;
+  ReachableResourcesPluginRegistry& operator=(
+      const ReachableResourcesPluginRegistry&) = delete;
 
   std::vector<ReachableResourcesPlugin*> m_registered_plugins;
 };
