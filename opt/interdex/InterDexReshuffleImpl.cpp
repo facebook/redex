@@ -113,7 +113,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
     cls->gather_methods(refs.mrefs);
     cls->gather_fields(refs.frefs);
     cls->gather_types(refs.trefs);
-    std::vector<DexType*> itrefs;
+    std::vector<const DexType*> itrefs;
     cls->gather_init_classes(itrefs);
     refs.itrefs.insert(itrefs.begin(), itrefs.end());
     cls->gather_strings(refs.srefs);

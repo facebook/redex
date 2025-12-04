@@ -1218,7 +1218,7 @@ boost::sub_range<IRList> IRCode::get_param_instructions() const {
   }
 }
 
-void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
+void IRCode::gather_catch_types(std::vector<const DexType*>& ltype) const {
   if (cfg_built()) {
     m_cfg->gather_catch_types(ltype);
   } else {
@@ -1240,7 +1240,7 @@ void IRCode::gather_strings(std::vector<const DexString*>& lstring) const {
   }
 }
 
-void IRCode::gather_types(std::vector<DexType*>& ltype) const {
+void IRCode::gather_types(std::vector<const DexType*>& ltype) const {
   if (cfg_built()) {
     m_cfg->gather_types(ltype);
   } else {
@@ -1248,7 +1248,7 @@ void IRCode::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void IRCode::gather_init_classes(std::vector<DexType*>& ltype) const {
+void IRCode::gather_init_classes(std::vector<const DexType*>& ltype) const {
   if (cfg_built()) {
     m_cfg->gather_init_classes(ltype);
   } else {

@@ -181,7 +181,7 @@ class DexOpcodeType : public DexInstruction {
  public:
   size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
-  void gather_types(std::vector<DexType*>& ltype) const override;
+  void gather_types(std::vector<const DexType*>& ltype) const override;
   DexOpcodeType* clone() const override { return new DexOpcodeType(*this); }
 
   DexOpcodeType(DexOpcode opcode, const DexType* type)

@@ -2036,7 +2036,7 @@ class DexState {
            size_t reserved_mrefs)
       : m_mgr(mgr), m_dex(dex), m_dex_id(dex_id) {
     UnorderedSet<DexMethodRef*> method_refs;
-    std::vector<DexType*> init_classes;
+    std::vector<const DexType*> init_classes;
     for (auto* cls : dex) {
       cls->gather_methods(method_refs);
       cls->gather_types(m_type_refs);
@@ -2049,7 +2049,7 @@ class DexState {
     });
 
     UnorderedSet<DexType*> refined_types;
-    for (auto* type : init_classes) {
+    for (const auto* type : init_classes) {
       const auto* refined_type = init_classes_with_side_effects.refine(type);
       if (refined_type != nullptr) {
         m_type_refs.insert(refined_type->to_mutable());

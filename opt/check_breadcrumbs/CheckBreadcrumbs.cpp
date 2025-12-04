@@ -648,7 +648,7 @@ std::pair<bool, const DexType*> Breadcrumbs::is_illegal_cross_store(
   std::set<const DexType*, dextypes_comparator> load_types;
   if (m_verify_type_hierarchies) {
     auto* callee_cls = type_class(callee);
-    UnorderedSet<DexType*> types;
+    UnorderedSet<const DexType*> types;
     callee_cls->gather_load_types(types);
     insert_unordered_iterable(load_types, types);
   } else {
@@ -704,9 +704,9 @@ const DexType* Breadcrumbs::check_type(const DexType* type) {
  * missing, or return null if all the type references are defined or external.
  */
 const DexType* Breadcrumbs::check_method(const DexMethodRef* method) {
-  std::vector<DexType*> type_refs;
+  std::vector<const DexType*> type_refs;
   method->gather_types_shallow(type_refs);
-  for (auto* type : type_refs) {
+  for (const auto* type : type_refs) {
     const auto* bad_ref = check_type(type);
     if (bad_ref != nullptr) {
       return bad_ref;
@@ -719,9 +719,9 @@ const DexType* Breadcrumbs::check_anno(const DexAnnotationSet* anno) {
   if (anno == nullptr) {
     return nullptr;
   }
-  std::vector<DexType*> type_refs;
+  std::vector<const DexType*> type_refs;
   anno->gather_types(type_refs);
-  for (auto* type : type_refs) {
+  for (const auto* type : type_refs) {
     const auto* bad_ref = check_type(type);
     if (bad_ref != nullptr) {
       return bad_ref;
@@ -740,9 +740,9 @@ void Breadcrumbs::bad_type(const DexType* type,
 void Breadcrumbs::check_fields() {
   walk::fields(m_scope_to_walk, [&](DexField* field) {
     bool check_cross_store_ref = true;
-    std::vector<DexType*> type_refs;
+    std::vector<const DexType*> type_refs;
     field->gather_types(type_refs);
-    for (auto* type : type_refs) {
+    for (const auto* type : type_refs) {
       const auto* bad_ref = check_type(type);
       if (bad_ref != nullptr) {
         m_bad_fields[bad_ref].emplace_back(field);
@@ -785,7 +785,7 @@ void Breadcrumbs::check_methods() {
         // Ensure type hierarchies of proto types, which might be meaningful for
         // verification on some OS versions.
         auto* const cls = method->get_class();
-        std::vector<DexType*> proto_types;
+        std::vector<const DexType*> proto_types;
         method->get_proto()->gather_types(proto_types);
         for (const auto& t : proto_types) {
           auto pair = is_illegal_cross_store(cls, t);
@@ -853,9 +853,9 @@ void Breadcrumbs::check_field_opcode(const DexMethod* method,
   bool check_cross_store_ref = true;
 
   auto* field = insn->get_field();
-  std::vector<DexType*> type_refs;
+  std::vector<const DexType*> type_refs;
   field->gather_types_shallow(type_refs);
-  for (auto* type : type_refs) {
+  for (const auto* type : type_refs) {
     const auto* bad_ref = check_type(type);
     if (bad_ref != nullptr) {
       bad_type(bad_ref, method, insn);

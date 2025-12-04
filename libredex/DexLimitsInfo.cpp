@@ -23,7 +23,7 @@ bool DexLimitsInfo::update_refs_by_adding_class(DexClass* cls) {
   FieldRefs field_refs;
   TypeRefs type_refs;
   TypeRefs init_refs;
-  std::vector<DexType*> itrefs;
+  std::vector<const DexType*> itrefs;
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 
@@ -56,7 +56,7 @@ void DexLimitsInfo::update_refs_by_always_adding_class(DexClass* cls) {
   FieldRefs field_refs;
   TypeRefs type_refs;
   TypeRefs init_refs;
-  std::vector<DexType*> itrefs;
+  std::vector<const DexType*> itrefs;
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 
@@ -86,7 +86,7 @@ void DexLimitsInfo::update_refs_by_erasing_class(DexClass* cls) {
   FieldRefs field_refs;
   TypeRefs type_refs;
   TypeRefs init_refs;
-  std::vector<DexType*> itrefs;
+  std::vector<const DexType*> itrefs;
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 

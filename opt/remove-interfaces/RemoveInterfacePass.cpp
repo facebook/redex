@@ -237,7 +237,7 @@ void remove_interface_references(
     if (!insn->has_type()) {
       return;
     }
-    auto* const ref_type = insn->get_type();
+    const auto* const ref_type = insn->get_type();
     const auto* type = type::get_element_type_if_array(ref_type);
     if (interfaces.count(type) == 0) {
       return;
@@ -328,9 +328,9 @@ size_t exclude_unremovables(const Scope& scope,
     }
 
     if (!can_rename(meth)) {
-      std::vector<DexType*> types;
+      std::vector<const DexType*> types;
       meth->get_proto()->gather_types(types);
-      for (auto* type : types) {
+      for (const auto* type : types) {
         if (candidates.count(type) != 0) {
           TRACE(RM_INTF, 5, "Excluding %s cannot rename %s", SHOW(type),
                 SHOW(meth));

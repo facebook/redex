@@ -223,7 +223,7 @@ inline bool compare_dexmethodhandles(const DexMethodHandle* a,
 class GatheredTypes {
  private:
   std::vector<const DexString*> m_lstring;
-  std::vector<DexType*> m_ltype;
+  std::vector<const DexType*> m_ltype;
   std::vector<DexFieldRef*> m_lfield;
   std::vector<DexMethodRef*> m_lmethod;
   std::vector<DexCallSite*> m_lcallsite;

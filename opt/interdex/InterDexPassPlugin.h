@@ -30,8 +30,8 @@ class InterDexPassPlugin {
   virtual void gather_refs(const DexClass*,
                            std::vector<DexMethodRef*>&,
                            std::vector<DexFieldRef*>&,
-                           std::vector<DexType*>&,
-                           std::vector<DexType*>&) {}
+                           std::vector<const DexType*>&,
+                           std::vector<const DexType*>&) {}
 
   // Return any new codegened classes that should be added to the current dex.
   virtual DexClasses additional_classes(size_t /*dex_count*/,

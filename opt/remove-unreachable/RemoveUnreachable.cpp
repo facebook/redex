@@ -100,7 +100,7 @@ void gather_references(const reachability::ReachableObjects& reachables,
     UnorderedSet<DexFieldRef*> frefs;
     (*elem)->gather_fields(frefs);
 
-    UnorderedSet<DexType*> trefs;
+    UnorderedSet<const DexType*> trefs;
     (*elem)->gather_types(trefs);
 
     update_references(mrefs, current_references);

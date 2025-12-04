@@ -40,7 +40,7 @@ void DexDebugOpcodeStartLocal::gather_strings(
 }
 
 void DexDebugOpcodeStartLocal::gather_types(
-    std::vector<DexType*>& ltype) const {
+    std::vector<const DexType*>& ltype) const {
   if (m_type != nullptr) {
     ltype.push_back(m_type);
   }

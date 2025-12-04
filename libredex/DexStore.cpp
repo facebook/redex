@@ -272,9 +272,9 @@ XStoreRefs::XStoreRefs(const DexStoresVector& stores,
 
 bool XStoreRefs::illegal_ref_load_types(const DexType* location,
                                         const DexClass* cls) const {
-  UnorderedSet<DexType*> types;
+  UnorderedSet<const DexType*> types;
   cls->gather_load_types(types);
-  for (auto* t : UnorderedIterable(types)) {
+  for (const auto* t : UnorderedIterable(types)) {
     if (illegal_ref(location, t)) {
       return true;
     }
@@ -352,17 +352,17 @@ XDexMethodRefs::XDexMethodRefs(const DexStoresVector& stores)
 
 XDexMethodRefs::Refs XDexMethodRefs::get_for_callee(
     const cfg::ControlFlowGraph& callee_cfg,
-    UnorderedSet<DexType*> refined_init_class_types) const {
+    UnorderedSet<const DexType*> refined_init_class_types) const {
   std::vector<DexMethodRef*> lmethods;
   std::vector<DexFieldRef*> lfields;
-  std::vector<DexType*> ltypes;
+  std::vector<const DexType*> ltypes;
   callee_cfg.gather_methods(lmethods);
   callee_cfg.gather_fields(lfields);
   callee_cfg.gather_types(ltypes);
 
   return (Refs){UnorderedSet<DexMethodRef*>(lmethods.begin(), lmethods.end()),
                 UnorderedSet<DexFieldRef*>(lfields.begin(), lfields.end()),
-                UnorderedSet<DexType*>(ltypes.begin(), ltypes.end()),
+                UnorderedSet<const DexType*>(ltypes.begin(), ltypes.end()),
                 std::move(refined_init_class_types)};
 }
 
@@ -374,7 +374,7 @@ bool XDexMethodRefs::has_cross_dex_refs(const Refs& callee_refs,
   // result in an sget instruction to a field unreferenced in the caller dex.
   // This init-class logic mimics (the second part of) what
   // DexStructure::resolve_init_classes does.
-  for (auto* refined_type :
+  for (const auto* refined_type :
        UnorderedIterable(callee_refs.refined_init_class_types)) {
     if (caller_refs.types.count(refined_type) == 0) {
       return true;

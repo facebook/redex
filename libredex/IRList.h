@@ -619,8 +619,8 @@ struct MethodItemEntry {
   void replace_ir_with_dex(DexInstruction* dex_insn);
 
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
@@ -837,10 +837,10 @@ class IRList {
   IRList::const_reverse_iterator rbegin() const { return m_list.rbegin(); }
   IRList::const_reverse_iterator rend() const { return m_list.rend(); }
 
-  void gather_catch_types(std::vector<DexType*>& ltype) const;
+  void gather_catch_types(std::vector<const DexType*>& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
@@ -920,7 +920,8 @@ class InstructionIteratorImpl {
   using iterator_category = std::bidirectional_iterator_tag;
 
   InstructionIteratorImpl() {}
-  InstructionIteratorImpl(Iterator it, Iterator end) : m_it(it), m_end(end) {
+  InstructionIteratorImpl(const Iterator& it, const Iterator& end)
+      : m_it(it), m_end(end) {
     to_next_instruction();
   }
 

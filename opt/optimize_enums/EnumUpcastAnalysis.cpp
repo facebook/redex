@@ -27,9 +27,9 @@ bool need_analyze(const DexMethod* method,
   if (code == nullptr) {
     return false;
   }
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   method->gather_types(types);
-  for (DexType* t : types) {
+  for (const DexType* t : types) {
     if (type::is_array(t)) {
       t = type::get_array_element_type(t);
     }
@@ -802,9 +802,9 @@ void reject_unsafe_enums(
     }
 
     auto reject_proto_types = [&](DexMethod* method, UnsafeType u) {
-      std::vector<DexType*> types;
+      std::vector<const DexType*> types;
       method->get_proto()->gather_types(types);
-      for (auto* type : types) {
+      for (const auto* type : types) {
         auto* elem_type =
             const_cast<DexType*>(type::get_element_type_if_array(type));
         if (candidate_enums->count_unsafe(elem_type) != 0u) {

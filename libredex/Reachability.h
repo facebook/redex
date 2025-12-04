@@ -374,7 +374,7 @@ struct ReachableAspects {
 
 struct References {
   std::vector<const DexString*> strings;
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   std::vector<DexFieldRef*> fields;
   std::vector<DexMethodRef*> methods;
   // Conditional virtual method references. They are already resolved DexMethods

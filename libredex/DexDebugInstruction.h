@@ -108,7 +108,7 @@ class DexDebugOpcodeStartLocal : public DexDebugInstruction {
 
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
   void gather_strings(std::vector<const DexString*>& lstring) const override;
-  void gather_types(std::vector<DexType*>& ltype) const override;
+  void gather_types(std::vector<const DexType*>& ltype) const override;
 
   std::unique_ptr<DexDebugInstruction> clone() const override {
     return std::make_unique<DexDebugOpcodeStartLocal>(*this);

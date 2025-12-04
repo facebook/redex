@@ -287,7 +287,7 @@ void MethodItemEntry::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   }
 }
 
-void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
+void MethodItemEntry::gather_types(std::vector<const DexType*>& ltype) const {
   switch (type) {
   case MFLOW_TRY:
     break;
@@ -316,7 +316,8 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void MethodItemEntry::gather_init_classes(std::vector<DexType*>& ltype) const {
+void MethodItemEntry::gather_init_classes(
+    std::vector<const DexType*>& ltype) const {
   if (type == MFLOW_OPCODE) {
     insn->gather_init_classes(ltype);
   }
@@ -816,7 +817,7 @@ boost::sub_range<IRList> IRList::get_param_instructions() {
   return boost::sub_range<IRList>(m_list.begin(), params_end);
 }
 
-void IRList::gather_catch_types(std::vector<DexType*>& ltype) const {
+void IRList::gather_catch_types(std::vector<const DexType*>& ltype) const {
   for (const auto& mie : m_list) {
     if (mie.type != MFLOW_CATCH) {
       continue;
@@ -827,13 +828,13 @@ void IRList::gather_catch_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void IRList::gather_types(std::vector<DexType*>& ltype) const {
+void IRList::gather_types(std::vector<const DexType*>& ltype) const {
   for (const auto& mie : m_list) {
     mie.gather_types(ltype);
   }
 }
 
-void IRList::gather_init_classes(std::vector<DexType*>& ltype) const {
+void IRList::gather_init_classes(std::vector<const DexType*>& ltype) const {
   for (const auto& mie : m_list) {
     mie.gather_init_classes(ltype);
   }

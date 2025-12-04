@@ -399,9 +399,9 @@ class IRInstruction final {
     }
   }
 
-  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
 
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
 
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
 

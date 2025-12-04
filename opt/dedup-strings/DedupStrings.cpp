@@ -273,7 +273,7 @@ void DedupStrings::gather_non_load_strings(
   // Let's figure out the set of "non-load" strings, i.e. the strings which
   // are referenced by some metadata (and not just const-string instructions)
   std::vector<const DexString*> lstring;
-  std::vector<DexType*> ltype;
+  std::vector<const DexType*> ltype;
   std::vector<DexFieldRef*> lfield;
   std::vector<DexMethodRef*> lmethod;
   std::vector<DexCallSite*> lcallsite;

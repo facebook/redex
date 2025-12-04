@@ -48,9 +48,9 @@ bool is_resolvable(const DexMethodRef* mref) {
   if (method::is_init(mref)) {
     return false;
   }
-  std::vector<DexType*> type_refs;
+  std::vector<const DexType*> type_refs;
   mref->gather_types_shallow(type_refs);
-  for (auto* type : type_refs) {
+  for (const auto* type : type_refs) {
     if (!is_type_defined(type)) {
       return false;
     }
@@ -59,9 +59,9 @@ bool is_resolvable(const DexMethodRef* mref) {
 }
 
 bool is_resolvable(const DexFieldRef* fref) {
-  std::vector<DexType*> type_refs;
+  std::vector<const DexType*> type_refs;
   fref->gather_types_shallow(type_refs);
-  for (auto* type : type_refs) {
+  for (const auto* type : type_refs) {
     if (!is_type_defined(type)) {
       return false;
     }

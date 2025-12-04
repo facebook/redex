@@ -623,12 +623,12 @@ void gather_dynamic_references_impl(const DexAnnotation* anno,
   //    @JsonDeserialize(using=MyJsonDeserializer.class)
   if (anno->runtime_visible()) {
     const auto& elems = anno->anno_elems();
-    std::vector<DexType*> ltype;
+    std::vector<const DexType*> ltype;
     for (auto const& dae : elems) {
       const auto& evalue = dae.encoded_value;
       evalue->gather_types(ltype);
     }
-    for (auto* dextype : ltype) {
+    for (const auto* dextype : ltype) {
       auto* cls = type_class(dextype);
       if (cls != nullptr) {
         references->classes_dynamically_referenced.insert(cls);

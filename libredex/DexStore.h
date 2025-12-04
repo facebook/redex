@@ -420,12 +420,13 @@ class XDexMethodRefs : public XDexRefs {
   struct Refs {
     UnorderedSet<DexMethodRef*> methods;
     UnorderedSet<DexFieldRef*> fields;
-    UnorderedSet<DexType*> types;
-    UnorderedSet<DexType*> refined_init_class_types;
+    UnorderedSet<const DexType*> types;
+    UnorderedSet<const DexType*> refined_init_class_types;
   };
 
-  Refs get_for_callee(const cfg::ControlFlowGraph& callee_cfg,
-                      UnorderedSet<DexType*> refined_init_class_types) const;
+  Refs get_for_callee(
+      const cfg::ControlFlowGraph& callee_cfg,
+      UnorderedSet<const DexType*> refined_init_class_types) const;
 
   bool has_cross_dex_refs(const Refs& callee_refs, DexType* caller_class) const;
 

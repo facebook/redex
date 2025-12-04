@@ -1517,7 +1517,8 @@ boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
   return block->m_entries.get_param_instructions();
 }
 
-void ControlFlowGraph::gather_catch_types(std::vector<DexType*>& types) const {
+void ControlFlowGraph::gather_catch_types(
+    std::vector<const DexType*>& types) const {
   UnorderedSet<DexType*> seen;
   // get the catch types of all the incoming edges to all the catch blocks
   for (const auto& entry : m_blocks) {
@@ -1546,14 +1547,15 @@ void ControlFlowGraph::gather_strings(
   }
 }
 
-void ControlFlowGraph::gather_types(std::vector<DexType*>& types) const {
+void ControlFlowGraph::gather_types(std::vector<const DexType*>& types) const {
   gather_catch_types(types);
   for (const auto& entry : m_blocks) {
     entry.second->m_entries.gather_types(types);
   }
 }
 
-void ControlFlowGraph::gather_init_classes(std::vector<DexType*>& types) const {
+void ControlFlowGraph::gather_init_classes(
+    std::vector<const DexType*>& types) const {
   for (const auto& entry : m_blocks) {
     entry.second->m_entries.gather_init_classes(types);
   }

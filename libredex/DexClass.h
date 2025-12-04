@@ -658,7 +658,7 @@ struct DexDebugEntry final {
   DexDebugEntry(DexDebugEntry&& other) noexcept;
   ~DexDebugEntry();
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
 };
 
 class DexDebugItem {
@@ -697,7 +697,7 @@ class DexDebugItem {
       uint32_t num_params,
       const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops);
 
-  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring) const;
 };
 
@@ -1147,7 +1147,7 @@ class DexMethod : public DexMethodRef {
   template <typename C>
   void gather_methodhandles(C& lmethodhandle) const;
 
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
 
   /*
    * DexCode <-> IRCode conversion methods.
@@ -1399,8 +1399,8 @@ class DexClass {
   template <typename C>
   void gather_methodhandles(C& lmethodhandle) const;
 
-  void gather_load_types(UnorderedSet<DexType*>& ltype) const;
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_load_types(UnorderedSet<const DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
 
   // Whether to optimize for perf, instead of space.
   // This bit is only set by the InterDex pass and not available earlier.
@@ -1494,7 +1494,7 @@ inline DexClass* type_class_internal(const DexType* t) {
  * methods, such that components are sorted and unique.
  */
 void gather_components(std::vector<const DexString*>& lstring,
-                       std::vector<DexType*>& ltype,
+                       std::vector<const DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,
                        std::vector<DexCallSite*>& lcallsite,

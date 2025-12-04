@@ -34,6 +34,11 @@
 #include <memory>
 #include <unordered_set>
 
+#define INSTANTIATE1(METHOD, TYPE)                       \
+  template void METHOD(std::vector<TYPE>&) const;        \
+  template void METHOD(std::unordered_set<TYPE>&) const; \
+  template void METHOD(UnorderedSet<TYPE>&) const;
+
 #define INSTANTIATE(METHOD, TYPE)                              \
   template void METHOD(std::vector<TYPE>&) const;              \
   template void METHOD(std::unordered_set<TYPE>&) const;       \
@@ -408,7 +413,7 @@ void DexDebugEntry::gather_strings(
     insn->gather_strings(lstring);
   }
 }
-void DexDebugEntry::gather_types(std::vector<DexType*>& ltype) const {
+void DexDebugEntry::gather_types(std::vector<const DexType*>& ltype) const {
   if (type == DexDebugEntryType::Instruction) {
     insn->gather_types(ltype);
   }
@@ -651,7 +656,7 @@ void DexDebugItem::bind_positions(DexMethod* method, const DexString* file) {
   }
 }
 
-void DexDebugItem::gather_types(std::vector<DexType*>& ltype) const {
+void DexDebugItem::gather_types(std::vector<const DexType*>& ltype) const {
   for (const auto& entry : m_dbg_entries) {
     entry.gather_types(ltype);
   }
@@ -1820,7 +1825,7 @@ template <typename C>
 void DexTypeList::gather_types(C& ltype) const {
   c_append_all(ltype, m_list.begin(), m_list.end());
 }
-INSTANTIATE(DexTypeList::gather_types, DexType*)
+INSTANTIATE1(DexTypeList::gather_types, const DexType*)
 
 static const DexString* make_shorty(const DexType* rtype,
                                     const DexTypeList* args) {
@@ -1860,7 +1865,7 @@ void DexProto::gather_types(C& ltype) const {
     c_append(ltype, m_rtype);
   }
 }
-INSTANTIATE(DexProto::gather_types, DexType*)
+INSTANTIATE1(DexProto::gather_types, const DexType*)
 
 void DexProto::gather_strings(std::vector<const DexString*>& lstring) const {
   if (m_shorty != nullptr) {
@@ -1878,7 +1883,7 @@ namespace {
 template <typename C>
 void maybe_sort_unique(C&) {}
 template <>
-void maybe_sort_unique(std::vector<DexType*>& vec) {
+void maybe_sort_unique(std::vector<const DexType*>& vec) {
   sort_unique(vec);
 }
 
@@ -1905,7 +1910,7 @@ void DexClass::gather_types(C& ltype) const {
     m_interfaces->gather_types(ltype);
   }
   if (m_anno) {
-    std::vector<DexType*> type_vec;
+    std::vector<const DexType*> type_vec;
     m_anno->gather_types(type_vec);
     c_append_all(ltype, type_vec.begin(), type_vec.end());
   }
@@ -1926,9 +1931,9 @@ void DexClass::gather_types(C& ltype) const {
   // Remove duplicates.
   maybe_sort_unique(ltype);
 }
-INSTANTIATE(DexClass::gather_types, DexType*)
+INSTANTIATE1(DexClass::gather_types, const DexType*)
 
-void DexClass::gather_load_types(UnorderedSet<DexType*>& ltype) const {
+void DexClass::gather_load_types(UnorderedSet<const DexType*>& ltype) const {
   if (is_external()) {
     return;
   }
@@ -1952,7 +1957,7 @@ void DexClass::gather_load_types(UnorderedSet<DexType*>& ltype) const {
   }
 }
 
-void DexClass::gather_init_classes(std::vector<DexType*>& ltype) const {
+void DexClass::gather_init_classes(std::vector<const DexType*>& ltype) const {
   for (auto const& m : m_dmethods) {
     m->gather_init_classes(ltype);
   }
@@ -2115,7 +2120,7 @@ void DexFieldRef::gather_types_shallow(C& ltype) const {
   ltype.insert(ltype.end(), m_spec.cls);
   ltype.insert(ltype.end(), m_spec.type);
 }
-INSTANTIATE(DexFieldRef::gather_types_shallow, DexType*)
+INSTANTIATE1(DexFieldRef::gather_types_shallow, const DexType*)
 
 void DexFieldRef::gather_strings_shallow(
     std::vector<const DexString*>& lstring) const {
@@ -2128,7 +2133,7 @@ void DexFieldRef::gather_strings_shallow(
 
 template <typename C>
 void DexField::gather_types(C& ltype) const {
-  std::vector<DexType*> type_vec;
+  std::vector<const DexType*> type_vec;
   if (m_value) {
     m_value->gather_types(type_vec);
   }
@@ -2137,7 +2142,7 @@ void DexField::gather_types(C& ltype) const {
   }
   c_append_all(ltype, type_vec.begin(), type_vec.end());
 }
-INSTANTIATE(DexField::gather_types, DexType*)
+INSTANTIATE1(DexField::gather_types, const DexType*)
 
 template <typename C>
 void DexField::gather_strings_internal(C& lstring) const {
@@ -2197,7 +2202,7 @@ void DexMethod::set_external() {
 template <typename C>
 void DexMethod::gather_types(C& ltype) const {
   gather_types_shallow(ltype); // Handle DexMethodRef parts.
-  std::vector<DexType*> type_vec; // Simplify refactor.
+  std::vector<const DexType*> type_vec; // Simplify refactor.
   if (m_code) {
     m_code->gather_types(type_vec);
   }
@@ -2213,9 +2218,9 @@ void DexMethod::gather_types(C& ltype) const {
   }
   c_append_all(ltype, type_vec.begin(), type_vec.end());
 }
-INSTANTIATE(DexMethod::gather_types, DexType*)
+INSTANTIATE1(DexMethod::gather_types, const DexType*)
 
-void DexMethod::gather_init_classes(std::vector<DexType*>& ltype) const {
+void DexMethod::gather_init_classes(std::vector<const DexType*>& ltype) const {
   if (m_code) {
     m_code->gather_init_classes(ltype);
   }
@@ -2339,7 +2344,7 @@ void DexMethodRef::gather_types_shallow(C& ltype) const {
   ltype.insert(ltype.end(), m_spec.cls);
   m_spec.proto->gather_types(ltype);
 }
-INSTANTIATE(DexMethodRef::gather_types_shallow, DexType*)
+INSTANTIATE1(DexMethodRef::gather_types_shallow, const DexType*)
 
 void DexMethodRef::gather_strings_shallow(
     std::vector<const DexString*>& lstring) const {
@@ -2427,7 +2432,7 @@ void DexMethod::add_load_params(size_t num_add_loads) {
 }
 
 void gather_components(std::vector<const DexString*>& lstring,
-                       std::vector<DexType*>& ltype,
+                       std::vector<const DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,
                        std::vector<DexCallSite*>& lcallsite,
@@ -2436,7 +2441,7 @@ void gather_components(std::vector<const DexString*>& lstring,
                        bool exclude_loads) {
   // Gather references reachable from each class.
   UnorderedSet<const DexString*> strings;
-  UnorderedSet<DexType*> types;
+  UnorderedSet<const DexType*> types;
   UnorderedSet<DexFieldRef*> fields;
   UnorderedSet<DexMethodRef*> methods;
   UnorderedSet<DexCallSite*> callsites;
@@ -2465,7 +2470,7 @@ void gather_components(std::vector<const DexString*>& lstring,
     }
 
     // Gather strings needed for each type.
-    for (auto* type : UnorderedIterable(types)) {
+    for (const auto* type : UnorderedIterable(types)) {
       if (type != nullptr) {
         strings.insert(type->get_name());
       }

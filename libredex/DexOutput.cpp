@@ -464,7 +464,7 @@ void GatheredTypes::build_cls_load_map() {
   for (const auto& cls : *m_classes) {
     // gather type first, assuming class load will check all components of a
     // class first
-    std::vector<DexType*> cls_types;
+    std::vector<const DexType*> cls_types;
     cls->gather_types(cls_types);
     std::sort(cls_types.begin(), cls_types.end(), compare_dextypes);
     for (const auto& t : cls_types) {
@@ -790,7 +790,7 @@ void DexOutput::generate_type_data() {
 
   dex_type_id* typeids = (dex_type_id*)(m_output.get() + hdr.type_ids_off);
   for (const auto& p : UnorderedIterable(m_dodx.type_to_idx())) {
-    auto* t = p.first;
+    const auto* t = p.first;
     auto idx = p.second;
     typeids[idx].string_idx = m_dodx.stringidx(t->get_name());
     m_stats.num_types++;

@@ -323,7 +323,7 @@ void record_annotation(
   // Remove class if it is the type of an annotation.
   // TODO(suree404): Merge the classes even though it appears in annotation?
   walk::annotations(scope, [&](DexAnnotation* anno) {
-    std::vector<DexType*> types_in_anno;
+    std::vector<const DexType*> types_in_anno;
     anno->gather_types(types_in_anno);
     for (const auto& type : types_in_anno) {
       record_dont_merge_state(type, kStrict, dont_merge_status);
@@ -568,7 +568,7 @@ void update_references(const Scope& scope,
       },
       [&](DexMethod* method, IRInstruction* insn) {
         if (insn->has_type()) {
-          auto* ref_type = insn->get_type();
+          const auto* ref_type = insn->get_type();
           DexType* type =
               const_cast<DexType*>(type::get_element_type_if_array(ref_type));
           auto find_mergeable = update_map.find(type);

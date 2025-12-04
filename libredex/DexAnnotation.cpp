@@ -26,7 +26,8 @@ void DexEncodedValueString::gather_strings(
   lstring.push_back(string());
 }
 
-void DexEncodedValueType::gather_types(std::vector<DexType*>& ltype) const {
+void DexEncodedValueType::gather_types(
+    std::vector<const DexType*>& ltype) const {
   ltype.push_back(type());
 }
 
@@ -62,7 +63,8 @@ void DexEncodedValueArray::gather_strings(
   }
 }
 
-void DexEncodedValueArray::gather_types(std::vector<DexType*>& ltype) const {
+void DexEncodedValueArray::gather_types(
+    std::vector<const DexType*>& ltype) const {
   for (auto& ev : *evalues()) {
     ev->gather_types(ltype);
   }
@@ -91,7 +93,7 @@ void DexEncodedValueAnnotation::gather_strings(
 }
 
 void DexEncodedValueAnnotation::gather_types(
-    std::vector<DexType*>& ltype) const {
+    std::vector<const DexType*>& ltype) const {
   ltype.push_back(m_type);
   for (auto const& anno : m_annotations) {
     anno.encoded_value->gather_types(ltype);
@@ -120,7 +122,7 @@ void DexAnnotation::gather_strings(
   }
 }
 
-void DexAnnotation::gather_types(std::vector<DexType*>& ltype) const {
+void DexAnnotation::gather_types(std::vector<const DexType*>& ltype) const {
   ltype.push_back(m_type);
   for (auto const& anno : m_anno_elems) {
     anno.encoded_value->gather_types(ltype);
@@ -159,7 +161,7 @@ void DexAnnotationSet::gather_strings(
   }
 }
 
-void DexAnnotationSet::gather_types(std::vector<DexType*>& ltype) const {
+void DexAnnotationSet::gather_types(std::vector<const DexType*>& ltype) const {
   for (auto const& anno : m_annotations) {
     anno->gather_types(ltype);
   }

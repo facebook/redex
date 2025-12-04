@@ -192,7 +192,7 @@ void BaselineProfile::transitively_close_classes(const Scope& scope) {
   // This may not be the most efficient implementation but it is simple and
   // uses common functionality.
 
-  UnorderedSet<DexType*> closed_types;
+  UnorderedSet<const DexType*> closed_types;
 
   unordered_for_each(classes, [&](auto* cls_def) {
     if (cls_def->is_external()) {

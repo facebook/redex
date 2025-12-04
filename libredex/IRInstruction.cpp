@@ -458,14 +458,15 @@ uint64_t IRInstruction::hash() const {
   return result;
 }
 
-void IRInstruction::gather_init_classes(std::vector<DexType*>& ltype) const {
+void IRInstruction::gather_init_classes(
+    std::vector<const DexType*>& ltype) const {
   const auto* type = get_init_class_type_demand(this);
   if (type != nullptr) {
     ltype.push_back(type->to_mutable());
   }
 }
 
-void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
+void IRInstruction::gather_types(std::vector<const DexType*>& ltype) const {
   switch (opcode::ref(opcode())) {
   case opcode::Ref::None:
   case opcode::Ref::String:

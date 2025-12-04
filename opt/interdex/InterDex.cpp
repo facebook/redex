@@ -147,8 +147,8 @@ void gather_refs(
 
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
-  std::vector<DexType*> type_refs;
-  std::vector<DexType*> init_type_refs;
+  std::vector<const DexType*> type_refs;
+  std::vector<const DexType*> init_type_refs;
   for (const auto& plugin : plugins) {
     plugin->gather_refs(cls, method_refs, field_refs, type_refs,
                         init_type_refs);
@@ -1444,7 +1444,7 @@ DexClass* InterDex::get_canary_cls(EmittingState& emitting_state,
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
-  std::vector<DexType*> clazz_itrefs;
+  std::vector<const DexType*> clazz_itrefs;
   canary_cls->gather_methods(clazz_mrefs);
   canary_cls->gather_fields(clazz_frefs);
   canary_cls->gather_types(clazz_trefs);

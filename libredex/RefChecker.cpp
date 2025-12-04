@@ -58,9 +58,9 @@ CodeRefs::CodeRefs(const DexMethod* method,
     return;
   }
 
-  std::vector<DexType*> catch_types;
+  std::vector<const DexType*> catch_types;
   cfg.gather_catch_types(catch_types);
-  for (auto* type : catch_types) {
+  for (const auto* type : catch_types) {
     if (type != nullptr) {
       types_set.insert(type);
     }

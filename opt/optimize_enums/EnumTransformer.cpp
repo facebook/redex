@@ -1172,11 +1172,12 @@ class EnumTransformer final {
               is_generated_enum_method(method)) {
             return false;
           }
-          std::vector<DexType*> types;
+          std::vector<const DexType*> types;
           method->gather_types(types);
-          return std::any_of(types.begin(), types.end(), [this](DexType* type) {
-            return (bool)try_convert_to_int_type(type);
-          });
+          return std::any_of(types.begin(), types.end(),
+                             [this](const DexType* type) {
+                               return (bool)try_convert_to_int_type(type);
+                             });
         },
         [&](DexMethod* method, IRCode& /*code*/) {
           if ((m_enum_attributes_map.count(method->get_class()) != 0u) &&

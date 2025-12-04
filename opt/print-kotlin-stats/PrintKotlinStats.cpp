@@ -62,7 +62,7 @@ bool is_composable_method(const DexMethod* method) {
   if (anno_set == nullptr) {
     return false;
   }
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   anno_set->gather_types(types);
   return std::find(types.begin(), types.end(),
                    DexType::get_type(

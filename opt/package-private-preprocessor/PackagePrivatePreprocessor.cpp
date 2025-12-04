@@ -326,9 +326,9 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
         }
       });
   walk::annotations(std::vector<DexClass*>{cls}, [&](DexAnnotation* anno) {
-    std::vector<DexType*> types;
+    std::vector<const DexType*> types;
     anno->gather_types(types);
-    for (auto* type : types) {
+    for (const auto* type : types) {
       visit_type(type);
     }
     std::vector<DexFieldRef*> fields;

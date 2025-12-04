@@ -370,7 +370,7 @@ struct VisibilityChangeGetter {
         }
       }
     } else if (insn->has_type()) {
-      auto* type = insn->get_type();
+      const auto* type = insn->get_type();
       auto* cls = type_class(type);
       if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
         changes.classes.insert(cls);
@@ -378,8 +378,8 @@ struct VisibilityChangeGetter {
     }
   }
 
-  void process_catch_types(const std::vector<DexType*>& types) {
-    for (auto* type : types) {
+  void process_catch_types(const std::vector<const DexType*>& types) {
+    for (const auto* type : types) {
       auto* cls = type_class(type);
       if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
         changes.classes.insert(cls);
@@ -402,7 +402,7 @@ VisibilityChanges get_visibility_changes(
     return cfg_adapter::LOOP_CONTINUE;
   });
 
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   code->gather_catch_types(types);
   getter.process_catch_types(types);
   return changes;
@@ -417,7 +417,7 @@ VisibilityChanges get_visibility_changes(
   for (const auto& mie : InstructionIterable(cfg)) {
     getter.process_insn(mie.insn);
   }
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   cfg.gather_catch_types(types);
   getter.process_catch_types(types);
   return changes;

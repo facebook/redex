@@ -252,7 +252,7 @@ class CrossDexRefMinimizer {
   };
   JsonRefIndices<DexMethodRef*> m_json_methods{"M"};
   JsonRefIndices<DexFieldRef*> m_json_fields{"F"};
-  JsonRefIndices<DexType*> m_json_types{"T"};
+  JsonRefIndices<const DexType*> m_json_types{"T"};
   JsonRefIndices<const DexString*> m_json_strings{"S"};
 
  public:
