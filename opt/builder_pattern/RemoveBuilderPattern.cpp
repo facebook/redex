@@ -88,7 +88,7 @@ class RemoveClasses {
                 const init_classes::InitClassesWithSideEffects&
                     init_classes_with_side_effects,
                 const inliner::InlinerConfig& inliner_config,
-                const std::vector<DexType*>& blocklist,
+                const std::vector<const DexType*>& blocklist,
                 const size_t max_num_inline_iteration,
                 DexStoresVector& stores)
       : m_root(super_cls),
@@ -263,7 +263,7 @@ class RemoveClasses {
       }
     });
 
-    for (DexType* type : m_blocklist) {
+    for (const DexType* type : m_blocklist) {
       if (m_classes.count(type) != 0u) {
         TRACE(BLD_PATTERN, 2,
               "Excluding type since it was in the blocklist: %s", SHOW(type));
@@ -380,7 +380,7 @@ class RemoveClasses {
 
   const DexType* m_root;
   const Scope& m_scope;
-  const std::vector<DexType*>& m_blocklist;
+  const std::vector<const DexType*>& m_blocklist;
   TypeSystem m_type_system;
   BuilderTransform m_transform;
   UnorderedSet<const DexType*> m_classes;
@@ -395,7 +395,7 @@ class RemoveClasses {
 } // namespace
 
 void RemoveBuilderPatternPass::bind_config() {
-  std::vector<DexType*> roots;
+  std::vector<const DexType*> roots;
   bind("roots", {}, roots, Configurable::default_doc(),
        Configurable::bindflags::types::warn_if_unresolvable);
   bind("blocklist", {}, m_blocklist, Configurable::default_doc(),

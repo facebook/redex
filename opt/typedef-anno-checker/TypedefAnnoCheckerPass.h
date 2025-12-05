@@ -36,10 +36,10 @@ class TypedefAnnoCheckerPass : public Pass {
   }
 
   struct Config {
-    DexType* int_typedef{nullptr};
-    DexType* str_typedef{nullptr};
+    const DexType* int_typedef{nullptr};
+    const DexType* str_typedef{nullptr};
     size_t max_patcher_iteration{10};
-    UnorderedSet<DexType*> generated_type_annos;
+    UnorderedSet<const DexType*> generated_type_annos;
     UnorderedSet<std::string> do_not_check_list;
     bool skip_anonymous_classes{true};
   };

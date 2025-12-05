@@ -383,7 +383,7 @@ class OptimizeEnums {
                              int max_enum_size,
                              bool skip_sanity_check,
                              const bool support_kt_19_enum_entries,
-                             const std::vector<DexType*>& allowlist,
+                             const std::vector<const DexType*>& allowlist,
                              ConfigFiles& conf,
                              UnorderedMap<UnsafeType, size_t>& unsafe_counts) {
     if (max_enum_size <= 0) {

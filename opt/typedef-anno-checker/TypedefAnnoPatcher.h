@@ -166,7 +166,7 @@ class TypedefAnnoPatcher {
   void populate_chained_getters(DexClass* cls);
   void patch_chained_getters(PatchingCandidates& candidates);
 
-  UnorderedSet<TypedefAnnoType*> m_typedef_annos;
+  UnorderedSet<const TypedefAnnoType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
   const size_t m_max_iteration;
   ConcurrentMap<std::string, std::vector<const DexField*>> m_lambda_anno_map;

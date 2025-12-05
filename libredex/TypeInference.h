@@ -157,12 +157,12 @@ namespace type_inference {
 // annotation, return it
 boost::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
-    const UnorderedSet<DexType*>& typedef_annotations);
+    const UnorderedSet<const DexType*>& typedef_annotations);
 
 template <typename DexMember>
 boost::optional<const DexType*> get_typedef_anno_from_member(
     const DexMember* member,
-    const UnorderedSet<DexType*>& typedef_annotations) {
+    const UnorderedSet<const DexType*>& typedef_annotations) {
   if (!typedef_annotations.empty() && member->is_def()) {
     auto member_def = member->as_def();
     auto anno_set = member_def->get_anno_set();
@@ -278,7 +278,7 @@ class TypeInference final
   explicit TypeInference(
       const cfg::ControlFlowGraph& cfg,
       bool skip_check_cast_upcasting = false,
-      UnorderedSet<DexType*> annotations = UnorderedSet<DexType*>(),
+      UnorderedSet<const DexType*> annotations = UnorderedSet<const DexType*>(),
       const method_override_graph::Graph* method_override_graph = nullptr)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
@@ -323,7 +323,7 @@ class TypeInference final
     return m_type_envs;
   }
 
-  const UnorderedSet<DexType*>& get_annotations() const {
+  const UnorderedSet<const DexType*>& get_annotations() const {
     return m_annotations;
   }
 
@@ -333,7 +333,7 @@ class TypeInference final
   const cfg::ControlFlowGraph& m_cfg;
   UnorderedMap<const IRInstruction*, TypeEnvironment> m_type_envs;
   const bool m_skip_check_cast_upcasting;
-  const UnorderedSet<DexType*> m_annotations;
+  const UnorderedSet<const DexType*> m_annotations;
   const method_override_graph::Graph* m_method_override_graph;
   const DexMethod* m;
 

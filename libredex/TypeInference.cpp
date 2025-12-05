@@ -341,14 +341,14 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
 
 boost::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
-    const UnorderedSet<DexType*>& typedef_annotations) {
+    const UnorderedSet<const DexType*>& typedef_annotations) {
   for (auto const& anno : annotations) {
     auto* const anno_class = type_class(anno->type());
     if (anno_class == nullptr) {
       continue;
     }
     bool has_typedef = false;
-    for (auto* annotation : UnorderedIterable(typedef_annotations)) {
+    for (const auto* annotation : UnorderedIterable(typedef_annotations)) {
       if (get_annotation(anno_class, annotation) != nullptr) {
         if (has_typedef) {
           always_assert_log(

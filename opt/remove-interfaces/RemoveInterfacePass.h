@@ -50,9 +50,9 @@ class RemoveInterfacePass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  std::vector<DexType*> m_interface_roots;
-  std::vector<DexType*> m_excluded_interfaces;
-  DexType* m_interface_dispatch_anno;
+  std::vector<const DexType*> m_interface_roots;
+  std::vector<const DexType*> m_excluded_interfaces;
+  const DexType* m_interface_dispatch_anno;
   size_t m_total_num_interface = 0;
   size_t m_num_interface_removed = 0;
   size_t m_num_interface_excluded = 0;

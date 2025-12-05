@@ -24,8 +24,8 @@ struct Base : public Configurable {
   uint64_t m_uint64_param;
   std::string m_string_param;
   Json::Value m_json_param;
-  DexType* m_type_param;
-  DexType* m_unresolvable_type_param;
+  const DexType* m_type_param;
+  const DexType* m_unresolvable_type_param;
   std::vector<std::string> m_vector_of_string_param;
   std::vector<uint32_t> m_vector_of_uint_param;
   std::optional<uint32_t> m_optional_uint32;
@@ -263,7 +263,7 @@ struct TypesBindFlags : public Base {
     bind("types_param", {}, m_types_param, "", m_bindflags);
   }
   bindflags_t m_bindflags;
-  UnorderedSet<DexType*> m_types_param;
+  UnorderedSet<const DexType*> m_types_param;
 };
 
 TEST_F(ConfigurableTest, TypesBindFlags) {
@@ -279,8 +279,8 @@ TEST_F(ConfigurableTest, TypesBindFlags) {
 
   json["types_param"] = array;
 
-  UnorderedSet<DexType*> resolved_types = {DexType::get_type("Ltype1;"),
-                                           DexType::get_type("Ltype3;")};
+  UnorderedSet<const DexType*> resolved_types = {DexType::get_type("Ltype1;"),
+                                                 DexType::get_type("Ltype3;")};
 
   {
     // Check reflection

@@ -78,7 +78,7 @@ number of places it's referenced.
   // Returns the names of the modules annotated as used by the given entrypoint
   template <typename T>
   static UnorderedSet<std::string_view> get_modules_used(
-      T* entrypoint, DexType* annotation_type);
+      T* entrypoint, const DexType* annotation_type);
 
  private:
   void load_preexisting_violations(DexStoresVector&);
@@ -111,6 +111,6 @@ number of places it's referenced.
 
   bool m_output_module_use;
   bool m_crash_with_violations;
-  DexType* m_uses_app_module_annotation;
+  const DexType* m_uses_app_module_annotation;
   std::string m_preexisting_violations_filepath;
 };

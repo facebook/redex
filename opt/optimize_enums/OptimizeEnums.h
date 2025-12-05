@@ -32,7 +32,7 @@ class OptimizeEnumsPass : public Pass {
   int m_max_enum_size;
   bool m_skip_sanity_check;
   bool m_support_kt_19_enum_entries;
-  std::vector<DexType*> m_enum_to_integer_allowlist;
+  std::vector<const DexType*> m_enum_to_integer_allowlist;
 };
 
 } // namespace optimize_enums

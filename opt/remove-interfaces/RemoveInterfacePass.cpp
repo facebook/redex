@@ -40,10 +40,10 @@ std::vector<Location> get_args_for(DexProto* proto, MethodCreator& mc) {
   return args;
 }
 
-std::unique_ptr<DexAnnotationSet> get_anno_set(DexType* anno_type) {
+std::unique_ptr<DexAnnotationSet> get_anno_set(const DexType* anno_type) {
   auto anno_set = std::make_unique<DexAnnotationSet>();
   anno_set->add_annotation(std::make_unique<DexAnnotation>(
-      anno_type, DexAnnotationVisibility::DAV_BUILD));
+      const_cast<DexType*>(anno_type), DexAnnotationVisibility::DAV_BUILD));
   return anno_set;
 }
 DexMethod* materialized_dispatch(DexType* owner, MethodCreator mc) {
@@ -81,7 +81,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
                              const std::vector<DexMethod*>& targets,
                              const DexMethod* intf_method,
                              const bool keep_debug_info,
-                             DexType* dispatch_anno) {
+                             const DexType* dispatch_anno) {
   DexType* dispatch_owner = targets.front()->get_class();
   // Owner and proto
   auto orig_name = std::string(intf_method->c_str());
@@ -275,19 +275,20 @@ void remove_interface_references(
   update_field_type_references(scope, old_to_new);
 }
 
-size_t exclude_unremovables(const Scope& scope,
-                            const DexStoresVector& stores,
-                            const ConfigFiles& conf,
-                            const TypeSystem& type_system,
-                            bool include_primary_dex,
-                            const std::vector<DexType*>& excluded_interfaces,
-                            TypeSet& candidates) {
+size_t exclude_unremovables(
+    const Scope& scope,
+    const DexStoresVector& stores,
+    const ConfigFiles& conf,
+    const TypeSystem& type_system,
+    bool include_primary_dex,
+    const std::vector<const DexType*>& excluded_interfaces,
+    TypeSet& candidates) {
   size_t count = 0;
   always_assert(!stores.empty());
   XStoreRefs xstores(stores, conf.normal_primary_dex());
 
   // Excluded by config
-  for (auto* ex : excluded_interfaces) {
+  for (const auto* ex : excluded_interfaces) {
     if (candidates.count(ex) != 0) {
       candidates.erase(ex);
       count++;
@@ -609,7 +610,7 @@ void RemoveInterfacePass::run_pass(DexStoresVector& stores,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
   TypeSystem type_system(scope);
-  for (auto* const root : m_interface_roots) {
+  for (const auto* const root : m_interface_roots) {
     remove_interfaces_for_root(scope, stores, conf, root, type_system);
   }
   mgr.incr_metric("num_total_interface", m_total_num_interface);

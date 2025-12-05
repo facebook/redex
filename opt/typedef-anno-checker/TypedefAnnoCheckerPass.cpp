@@ -169,7 +169,7 @@ bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
         } else {
           // find methods that delegate without $$delegate_ P1698648093
           // the field type must match one of the interfaces
-          for (auto* interface : *interfaces) {
+          for (const auto* interface : *interfaces) {
             if (interface->get_name() == field->get_type()->get_name()) {
               delegate = field;
             }
@@ -209,7 +209,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   redex_assert(m_config.str_typedef != nullptr);
   type_inference::TypeInference inference(
       cfg, false,
-      UnorderedSet<DexType*>{m_config.int_typedef, m_config.str_typedef},
+      UnorderedSet<const DexType*>{m_config.int_typedef, m_config.str_typedef},
       &m_method_override_graph);
   inference.run(m);
 

@@ -45,6 +45,6 @@ class ProcessUsesNamesAnnoPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  DexType* m_uses_names_annotation;
-  DexType* m_uses_names_trans_annotation;
+  const DexType* m_uses_names_annotation;
+  const DexType* m_uses_names_trans_annotation;
 };
