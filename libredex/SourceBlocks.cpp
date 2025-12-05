@@ -1187,6 +1187,29 @@ void scale_source_blocks(cfg::Block* block) {
                                       [&](auto* sb) { sb->min(limit_sb); });
 }
 
+static void process_source_blocks_for_violations(SourceBlock* first_sb,
+                                                 std::vector<bool>& hit_tracker,
+                                                 bool update_hit_before_fix) {
+  for (auto* sb = first_sb; sb != nullptr; sb = sb->next.get()) {
+    for (size_t i = 0; i < sb->vals_size; i++) {
+      always_assert(i < hit_tracker.size());
+      bool is_hit = sb->get_val(i).value_or(0) > 0;
+
+      if (update_hit_before_fix && is_hit) {
+        hit_tracker[i] = true;
+      }
+
+      if (hit_tracker[i] && sb->get_val(i).value_or(0) <= 0) {
+        sb->set_at(i, SourceBlock::Val(1, sb->get_appear100(i).value_or(1)));
+      }
+
+      if (!update_hit_before_fix && is_hit) {
+        hit_tracker[i] = true;
+      }
+    }
+  }
+}
+
 void fix_chain_violations(ControlFlowGraph* cfg) {
   impl::visit_in_order(
       cfg,
@@ -1199,25 +1222,10 @@ void fix_chain_violations(ControlFlowGraph* cfg) {
         std::vector<bool> any_hit_rev(vals_size, false);
         for (auto mie_it = cur->rbegin(); mie_it != cur->rend(); mie_it++) {
           auto& mie = *mie_it;
-          switch (mie.type) {
-          case MFLOW_SOURCE_BLOCK:
-            for (auto* sb = mie.src_block.get(); sb != nullptr;
-                 sb = sb->next.get()) {
-              for (size_t i = 0; i < sb->vals_size; i++) {
-                if (sb->get_val(i).value_or(0) > 0) {
-                  any_hit_rev[i] = true;
-                }
-              }
-              for (size_t i = 0; i < sb->vals_size; i++) {
-                if (any_hit_rev[i] && sb->get_val(i).value_or(0) <= 0) {
-                  sb->set_at(
-                      i, SourceBlock::Val(1, sb->get_appear100(i).value_or(1)));
-                }
-              }
-            }
-            break;
-          default:
-            break;
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            process_source_blocks_for_violations(
+                mie.src_block.get(), any_hit_rev,
+                /* update_hit_before_fix= */ false);
           }
         }
         // Iterate over the source blocks in forward order
@@ -1226,27 +1234,13 @@ void fix_chain_violations(ControlFlowGraph* cfg) {
         // unless it is separated by a throwing instruction
         std::vector<bool> any_hit_for(vals_size, false);
         for (auto& mie : *cur) {
-          switch (mie.type) {
-          case MFLOW_OPCODE:
-            if (opcode::can_throw(mie.insn->opcode())) {
-              any_hit_for = std::vector<bool>(vals_size, false);
-            }
-            break;
-          case MFLOW_SOURCE_BLOCK:
-            for (auto* sb = mie.src_block.get(); sb != nullptr;
-                 sb = sb->next.get()) {
-              for (size_t i = 0; i < sb->vals_size; i++) {
-                if (sb->get_val(i).value_or(0) > 0) {
-                  any_hit_for[i] = true;
-                } else if (any_hit_for[i]) {
-                  sb->set_at(
-                      i, SourceBlock::Val(1, sb->get_appear100(i).value_or(1)));
-                }
-              }
-            }
-            break;
-          default:
-            break;
+          if (mie.type == MFLOW_OPCODE &&
+              opcode::can_throw(mie.insn->opcode())) {
+            std::fill(any_hit_for.begin(), any_hit_for.end(), false);
+          } else if (mie.type == MFLOW_SOURCE_BLOCK) {
+            process_source_blocks_for_violations(
+                mie.src_block.get(), any_hit_for,
+                /* update_hit_before_fix= */ true);
           }
         }
       },
