@@ -141,6 +141,7 @@ RedexContext::~RedexContext() {
             // Delete DexMethods. Use set to prevent double freeing aliases
             UnorderedSet<DexMethod*> delete_methods;
             for (auto&& [_, loc] : UnorderedIterable(s_method_map)) {
+              // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
               auto* method = static_cast<DexMethod*>(loc.load());
               if ((reinterpret_cast<size_t>(method) >> 16) %
                           method_buckets_count ==
@@ -165,6 +166,7 @@ RedexContext::~RedexContext() {
             // Delete DexFields. Use set to prevent double freeing aliases
             UnorderedSet<DexField*> delete_fields;
             for (auto&& [_, loc] : UnorderedIterable(s_field_map)) {
+              // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
               auto* field = static_cast<DexField*>(loc.load());
               if ((reinterpret_cast<size_t>(field) >> 16) %
                           field_buckets_count ==
