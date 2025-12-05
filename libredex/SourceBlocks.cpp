@@ -1982,34 +1982,34 @@ struct ViolationsHelper::ViolationsHelperImpl {
     MethodDelta(DexMethod* p1, size_t p2, size_t p3)
         : method(p1), violations_delta(p2), method_size(p3) {}
 
-    // Comparison operator for sorting by proportional violations
-    static bool compare(const MethodDelta& t1, const MethodDelta& t2) {
-      double t1_proportional_violations =
-          (double)t1.violations_delta / (double)t1.method_size;
-      double t2_proportional_violations =
-          (double)t2.violations_delta / (double)t2.method_size;
-      if (t1_proportional_violations > t2_proportional_violations) {
+    // Comparison operator for sorting by proportional violations (descending)
+    bool operator<(const MethodDelta& other) const {
+      double this_proportional_violations =
+          (double)violations_delta / (double)method_size;
+      double other_proportional_violations =
+          (double)other.violations_delta / (double)other.method_size;
+      if (this_proportional_violations > other_proportional_violations) {
         return true;
       }
-      if (t1_proportional_violations < t2_proportional_violations) {
+      if (this_proportional_violations < other_proportional_violations) {
         return false;
       }
 
-      if (t1.violations_delta > t2.violations_delta) {
+      if (violations_delta > other.violations_delta) {
         return true;
       }
-      if (t1.violations_delta < t2.violations_delta) {
+      if (violations_delta < other.violations_delta) {
         return false;
       }
 
-      if (t1.method_size < t2.method_size) {
+      if (method_size < other.method_size) {
         return true;
       }
-      if (t1.method_size > t2.method_size) {
+      if (method_size > other.method_size) {
         return false;
       }
 
-      return compare_dexmethods(t1.method, t2.method);
+      return compare_dexmethods(method, other.method);
     }
   };
 
@@ -2110,10 +2110,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
               return;
             }
             MethodDelta m_t{m, m_delta, s};
-            if (MethodDelta::compare(m_t, top_changes.back())) {
+            if (m_t < top_changes.back()) {
               top_changes.back() = m_t;
-              std::sort(top_changes.begin(), top_changes.end(),
-                        MethodDelta::compare);
+              std::sort(top_changes.begin(), top_changes.end());
             }
           },
           violations_start);
