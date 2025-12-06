@@ -12,13 +12,14 @@
 
 #include <boost/regex.hpp>
 
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexLimits.h"
 #include "DexStore.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "InterDexPass.h"
+#include "InterDexPassMetrics.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
 #include "MethodUtil.h"

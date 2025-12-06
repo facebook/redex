@@ -11,9 +11,11 @@
 
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
+#include "ConfigFiles.h"
 #include "Creators.h"
 #include "DexAccess.h"
 #include "DexClass.h"
+#include "DexStructure.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"

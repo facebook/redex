@@ -8,7 +8,6 @@
 #pragma once
 
 #include "BaselineProfile.h"
-#include "InterDexPass.h"
 #include "Pass.h"
 #include "PassManager.h"
 
