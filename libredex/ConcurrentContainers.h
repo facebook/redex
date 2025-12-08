@@ -908,7 +908,7 @@ class ConcurrentHashtableIterator final {
     return *this;
   }
 
-  ConcurrentHashtableIterator& operator++(int) {
+  ConcurrentHashtableIterator operator++(int) {
     ConcurrentHashtableIterator retval = *this;
     ++(*this);
     return retval;

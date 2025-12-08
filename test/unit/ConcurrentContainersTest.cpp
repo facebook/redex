@@ -426,3 +426,17 @@ TEST_F(ConcurrentContainersTest, atThrows) {
   }
   EXPECT_TRUE(threw);
 }
+
+TEST_F(ConcurrentContainersTest, iteratorPostIncrementReturnsIndependentCopy) {
+  using Hashtable = cc_impl::
+      ConcurrentHashtable<int, int, std::hash<int>, std::equal_to<int>>;
+  Hashtable table;
+
+  table.try_insert(100);
+  table.try_insert(200);
+
+  auto it = table.begin();
+  auto old = it++;
+
+  EXPECT_NE(it, old);
+}
