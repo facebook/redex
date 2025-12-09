@@ -86,7 +86,8 @@ void loosen_access_modifier(const DexClasses& classes) {
   });
   loosen_access_modifier_for_vmethods(classes);
 
-  DexType* dalvikinner = DexType::get_type("Ldalvik/annotation/InnerClass;");
+  const DexType* dalvikinner =
+      DexType::get_type("Ldalvik/annotation/InnerClass;");
   if (dalvikinner == nullptr) {
     return;
   }

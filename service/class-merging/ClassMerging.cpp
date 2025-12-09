@@ -57,7 +57,7 @@ std::unique_ptr<RefChecker> create_ref_checker(const bool per_dex_grouping,
 void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
                                             ModelSpec* spec) {
   TypeSet merging_targets_set;
-  UnorderedSet<DexType*> new_roots;
+  UnorderedSet<const DexType*> new_roots;
   for (auto root = spec->roots.begin(); root != spec->roots.end();) {
     if (is_interface(type_class(*root))) {
       const auto& implementors = type_system.get_implementors(*root);

@@ -99,7 +99,7 @@ struct InlinerConfig {
    */
   void populate(const Scope& scope);
 
-  const UnorderedSet<DexType*>& get_blocklist() const {
+  const UnorderedSet<const DexType*>& get_blocklist() const {
     always_assert_log(m_populated, "Should populate blocklist\n");
     return m_blocklist;
   }
@@ -109,7 +109,7 @@ struct InlinerConfig {
     m_blocklist.clear();
   }
 
-  const UnorderedSet<DexType*>& get_caller_blocklist() const {
+  const UnorderedSet<const DexType*>& get_caller_blocklist() const {
     always_assert_log(m_populated, "Should populate blocklist\n");
     return m_caller_blocklist;
   }
@@ -121,7 +121,7 @@ struct InlinerConfig {
 
   void apply_intradex_allowlist() {
     always_assert_log(m_populated, "Should populate allowlist\n");
-    for (DexType* type : UnorderedIterable(m_intradex_allowlist)) {
+    for (const DexType* type : UnorderedIterable(m_intradex_allowlist)) {
       m_blocklist.erase(type);
       m_caller_blocklist.erase(type);
     }
@@ -130,8 +130,8 @@ struct InlinerConfig {
  private:
   bool m_populated{false};
   // The populated black lists.
-  UnorderedSet<DexType*> m_blocklist;
-  UnorderedSet<DexType*> m_caller_blocklist;
-  UnorderedSet<DexType*> m_intradex_allowlist;
+  UnorderedSet<const DexType*> m_blocklist;
+  UnorderedSet<const DexType*> m_caller_blocklist;
+  UnorderedSet<const DexType*> m_intradex_allowlist;
 };
 } // namespace inliner

@@ -297,8 +297,8 @@ RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
     name.pop_back();
 
     // Look for a class that matches one of the two deserializer patterns
-    DexType* deser = cls_serdes.get_deser();
-    DexType* flatbuf_deser = cls_serdes.get_flatbuf_deser();
+    const auto* deser = cls_serdes.get_deser();
+    const auto* flatbuf_deser = cls_serdes.get_flatbuf_deser();
     bool has_deser_finder = false;
 
     if ((deser != nullptr) || (flatbuf_deser != nullptr)) {
@@ -312,8 +312,8 @@ RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
     }
 
     // Look for a class that matches one of the two serializer patterns
-    DexType* ser = cls_serdes.get_ser();
-    DexType* flatbuf_ser = cls_serdes.get_flatbuf_ser();
+    const auto* ser = cls_serdes.get_ser();
+    const auto* flatbuf_ser = cls_serdes.get_flatbuf_ser();
     bool has_ser_finder = false;
 
     if ((ser != nullptr) || (flatbuf_ser != nullptr)) {
@@ -362,7 +362,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
         auto* proto = meth->get_proto();
         auto* rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
-        for (auto* ptype : *proto->get_args()) {
+        for (const auto* ptype : *proto->get_args()) {
           dont_rename_native_bindings.insert(
               type::get_element_type_if_array(ptype));
         }
@@ -374,7 +374,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
         auto* proto = meth->get_proto();
         auto* rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
-        for (auto* ptype : *proto->get_args()) {
+        for (const auto* ptype : *proto->get_args()) {
           dont_rename_native_bindings.insert(
               type::get_element_type_if_array(ptype));
         }

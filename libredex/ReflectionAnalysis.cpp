@@ -641,7 +641,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case OPCODE_SGET_OBJECT: {
       always_assert(insn->has_field());
       auto* const field = insn->get_field();
-      DexType* primitive_type = check_primitive_type_class(field);
+      const DexType* primitive_type = check_primitive_type_class(field);
       if (primitive_type != nullptr) {
         // The field being accessed is a Class object to a primitive type
         // likely being used for reflection
@@ -835,7 +835,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
   }
 
-  DexType* check_primitive_type_class(const DexFieldRef* field) const {
+  const DexType* check_primitive_type_class(const DexFieldRef* field) const {
 
     auto type = m_cache->primitive_field_to_type.find(field);
     if (type != m_cache->primitive_field_to_type.end()) {

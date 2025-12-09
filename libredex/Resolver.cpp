@@ -62,12 +62,12 @@ DexMethod* resolve_method(const DexClass* cls,
     if (caller != nullptr) {
       // caller must be provided. This condition is here to be compatible with
       // old behavior.
-      DexType* containing_type = caller->get_class();
+      const DexType* containing_type = caller->get_class();
       DexClass* containing_class = type_class(containing_type);
       if (containing_class == nullptr) {
         return nullptr;
       }
-      DexType* super_class = containing_class->get_super_class();
+      const DexType* super_class = containing_class->get_super_class();
       if (super_class == nullptr) {
         return nullptr;
       }

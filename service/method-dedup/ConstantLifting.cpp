@@ -28,7 +28,7 @@ constexpr const char* METHOD_META =
 constexpr const char* CONST_TYPE_ANNO_ATTR_NAME = "constantTypes";
 constexpr const char* CONST_VALUE_ANNO_ATTR_NAME = "constantValues";
 
-bool overlaps_with_an_existing_virtual_scope(DexType* type,
+bool overlaps_with_an_existing_virtual_scope(const DexType* type,
                                              const DexString* name,
                                              DexProto* proto) {
   if (DexMethod::get_method(type, name, proto) != nullptr) {

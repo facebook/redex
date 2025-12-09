@@ -150,7 +150,10 @@ void add_vmethod_to_groups(
 DexProto* get_new_proto(const DexProto* proto,
                         const DexType* old_type_ref,
                         DexType* new_type_ref) {
-  return type_reference::get_new_proto(proto, {{old_type_ref, new_type_ref}});
+  return type_reference::get_new_proto(
+      proto,
+      UnorderedMap<const DexType*, const DexType*>{
+          {old_type_ref, new_type_ref}});
 }
 
 /**
@@ -465,6 +468,34 @@ DexProto* get_new_proto(
     const auto* extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (old_to_new.count(extracted_arg_type) > 0) {
       auto* merger_type = old_to_new.at(extracted_arg_type);
+      auto level = type::get_array_level(arg_type);
+      auto* new_arg_type = type::make_array_type(merger_type, level);
+      lst.push_back(new_arg_type);
+    } else {
+      lst.push_back(arg_type);
+    }
+  }
+
+  return DexProto::make_proto(const_cast<DexType*>(rtype),
+                              DexTypeList::make_type_list(std::move(lst)));
+}
+
+DexProto* get_new_proto(
+    const DexProto* proto,
+    const UnorderedMap<const DexType*, const DexType*>& old_to_new) {
+  const auto* rtype = type::get_element_type_if_array(proto->get_rtype());
+  if (old_to_new.count(rtype) > 0) {
+    const auto* merger_type = old_to_new.at(rtype);
+    auto level = type::get_array_level(proto->get_rtype());
+    rtype = type::make_array_type(merger_type, level);
+  } else {
+    rtype = proto->get_rtype();
+  }
+  DexTypeList::ContainerType lst;
+  for (const auto* const arg_type : *proto->get_args()) {
+    const auto* extracted_arg_type = type::get_element_type_if_array(arg_type);
+    if (old_to_new.count(extracted_arg_type) > 0) {
+      const auto* merger_type = old_to_new.at(extracted_arg_type);
       auto level = type::get_array_level(arg_type);
       auto* new_arg_type = type::make_array_type(merger_type, level);
       lst.push_back(new_arg_type);

@@ -12,20 +12,20 @@
 namespace klass {
 
 struct Serdes {
-  std::vector<DexType*> serdes;
+  std::vector<const DexType*> serdes;
 
-  Serdes(DexType* deser,
-         DexType* flatbuf_deser,
-         DexType* ser,
-         DexType* flatbuf_ser)
+  Serdes(const DexType* deser,
+         const DexType* flatbuf_deser,
+         const DexType* ser,
+         const DexType* flatbuf_ser)
       : serdes{deser, flatbuf_deser, ser, flatbuf_ser} {}
 
-  std::vector<DexType*> get_all_serdes() { return serdes; }
+  std::vector<const DexType*> get_all_serdes() { return serdes; }
 
-  DexType* get_deser() { return serdes[0]; }
-  DexType* get_flatbuf_deser() { return serdes[1]; }
-  DexType* get_ser() { return serdes[2]; }
-  DexType* get_flatbuf_ser() { return serdes[3]; }
+  const DexType* get_deser() { return serdes[0]; }
+  const DexType* get_flatbuf_deser() { return serdes[1]; }
+  const DexType* get_ser() { return serdes[2]; }
+  const DexType* get_flatbuf_ser() { return serdes[3]; }
 };
 
 /**

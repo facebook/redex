@@ -2706,7 +2706,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
         while (type_str[dim] == '[') {
           dim++;
         }
-        DexType* inner_type = DexType::get_type(&type_str[dim]);
+        const DexType* inner_type = DexType::get_type(&type_str[dim]);
         DexClass* inner_cls =
             inner_type != nullptr ? type_class(inner_type) : nullptr;
         std::string result;

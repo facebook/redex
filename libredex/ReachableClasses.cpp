@@ -330,7 +330,7 @@ void mark_reachable_by_string(DexMethod* method) {
   }
 }
 
-void mark_reachable_by_classname(DexType* dtype) {
+void mark_reachable_by_classname(const DexType* dtype) {
   mark_reachable_by_classname(type_class_internal(dtype));
 }
 
@@ -601,7 +601,7 @@ bool in_reflected_pkg(DexClass* dclass,
  * as root.
  */
 void analyze_serializable(const Scope& scope) {
-  DexType* serializable = DexType::get_type("Ljava/io/Serializable;");
+  const DexType* serializable = DexType::get_type("Ljava/io/Serializable;");
   if (serializable == nullptr) {
     return;
   }
@@ -610,7 +610,7 @@ void analyze_serializable(const Scope& scope) {
 
   for (const auto* child : children) {
     DexClass* child_cls = type_class(child);
-    DexType* child_super_type = child_cls->get_super_class();
+    const DexType* child_super_type = child_cls->get_super_class();
     DexClass* child_supercls = type_class(child_super_type);
     if ((child_supercls == nullptr) || child_supercls->is_external()) {
       continue;

@@ -19,9 +19,9 @@ namespace api {
 // these values until g_redex exists and the classes have been loaded from the
 // dex file
 int32_t LevelChecker::s_min_level = 0;
-DexType* LevelChecker::s_requires_api_old = nullptr;
-DexType* LevelChecker::s_requires_api_new = nullptr;
-DexType* LevelChecker::s_target_api = nullptr;
+const DexType* LevelChecker::s_requires_api_old = nullptr;
+const DexType* LevelChecker::s_requires_api_new = nullptr;
+const DexType* LevelChecker::s_target_api = nullptr;
 bool LevelChecker::s_has_been_init = false;
 
 void LevelChecker::init(int32_t min_level, const Scope& scope) {
@@ -112,7 +112,7 @@ DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
   if (slash_idx == std::string::npos || slash_idx < cash_idx) {
     // there's a $ in the class name
     const std::string& outer_name = cls_name.substr(0, cash_idx) + ';';
-    DexType* outer = DexType::get_type(outer_name);
+    const DexType* outer = DexType::get_type(outer_name);
     if (outer == nullptr) {
       TRACE(MMINL, 4, "Can't find outer class! %.*s -> %s",
             static_cast<int>(cls_name.length()), cls_name.data(),
@@ -163,7 +163,7 @@ void propagate_levels(const ClassHierarchy& ch,
 
   auto* intfs = cls->get_interfaces();
   if (intfs != nullptr) {
-    for (auto* intf : *intfs) {
+    for (const auto* intf : *intfs) {
       auto* intf_cls = type_class(intf);
       if (intf_cls != nullptr) {
         min_level = std::max(

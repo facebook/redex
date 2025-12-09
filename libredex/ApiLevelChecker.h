@@ -117,9 +117,9 @@ class LevelChecker {
    * initialization, these are read-only and safe to use in parallel
    */
   static int32_t s_min_level;
-  static DexType* s_requires_api_old;
-  static DexType* s_requires_api_new;
-  static DexType* s_target_api;
+  static const DexType* s_requires_api_old;
+  static const DexType* s_requires_api_new;
+  static const DexType* s_target_api;
   static bool s_has_been_init;
 };
 

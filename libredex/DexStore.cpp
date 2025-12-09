@@ -306,7 +306,7 @@ size_t XDexRefs::get_dex_idx(const DexType* type) const {
 
 bool XDexRefs::cross_dex_ref_override(const DexMethod* overridden,
                                       const DexMethod* overriding) const {
-  auto* type = overriding->get_class();
+  const auto* type = overriding->get_class();
   auto idx = get_dex_idx(type);
   do {
     type = type_class(type)->get_super_class();

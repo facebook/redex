@@ -307,7 +307,7 @@ struct MetadataCache {
                                                       {"Ljava/lang/String;"},
                                                       "Ljava/lang/Class;")};
 
-  const std::map<const DexFieldRef*, DexType*, dexfields_comparator>
+  const std::map<const DexFieldRef*, const DexType*, dexfields_comparator>
       primitive_field_to_type = {
           {type::pseudo::Void_TYPE(), type::_void()},
           {type::pseudo::Boolean_TYPE(), type::_boolean()},

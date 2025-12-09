@@ -109,7 +109,7 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
       unordered_any(fields_map)->second;
   size_t cnt = 0;
   for (const DexField* f : mergeable_fields) {
-    auto* type = f->get_type();
+    const auto* type = f->get_type();
     std::string name;
     if (type == type::_byte() || type == type::_char() ||
         type == type::_short() || type == type::_int()) {
@@ -128,7 +128,8 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
       type = type::_double();
       name = "d";
     } else {
-      static DexType* string_type = DexType::make_type("Ljava/lang/String;");
+      static const DexType* string_type =
+          DexType::make_type("Ljava/lang/String;");
       if (type == string_type) {
         type = string_type;
         name = "s";

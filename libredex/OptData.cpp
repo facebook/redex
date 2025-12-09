@@ -164,7 +164,7 @@ std::shared_ptr<MethodOptData> ClassOptData::get_meth_opt_data(
 }
 
 std::shared_ptr<ClassOptData> OptDataMapper::get_cls_opt_data(
-    DexType* cls_type) {
+    const DexType* cls_type) {
   auto* cls = type_class(cls_type);
   const auto& kv_pair = m_cls_opt_map.find(cls);
   if (kv_pair == m_cls_opt_map.end()) {

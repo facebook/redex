@@ -27,16 +27,16 @@ Serdes get_serdes(const DexClass* cls) {
   std::replace(flatbuf_name.begin(), flatbuf_name.end(), '$', '_');
 
   std::string desername = name + "$Deserializer;";
-  DexType* deser = DexType::get_type(desername);
+  const DexType* deser = DexType::get_type(desername);
 
   std::string flatbuf_desername = flatbuf_name + "Deserializer;";
-  DexType* flatbuf_deser = DexType::get_type(flatbuf_desername);
+  const DexType* flatbuf_deser = DexType::get_type(flatbuf_desername);
 
   std::string sername = name + "$Serializer;";
-  DexType* ser = DexType::get_type(sername);
+  const DexType* ser = DexType::get_type(sername);
 
   std::string flatbuf_sername = flatbuf_name + "Serializer;";
-  DexType* flatbuf_ser = DexType::get_type(flatbuf_sername);
+  const DexType* flatbuf_ser = DexType::get_type(flatbuf_sername);
 
   return Serdes(deser, flatbuf_deser, ser, flatbuf_ser);
 }
@@ -72,7 +72,7 @@ DexMethod* get_or_create_clinit(DexClass* cls, bool need_cfg) {
 }
 
 bool has_hierarchy_in_scope(DexClass* cls) {
-  DexType* super = nullptr;
+  const DexType* super = nullptr;
   const DexClass* super_cls = cls;
   while (super_cls != nullptr) {
     super = super_cls->get_super_class();

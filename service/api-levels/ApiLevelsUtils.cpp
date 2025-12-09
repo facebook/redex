@@ -86,7 +86,7 @@ namespace {
 bool check_methods(
     const std::vector<DexMethod*>& methods,
     const api::FrameworkAPI& framework_api,
-    const UnorderedMap<const DexType*, DexType*>& release_to_framework,
+    const UnorderedMap<const DexType*, const DexType*>& release_to_framework,
     const UnorderedSet<DexMethodRef*>& methods_non_private) {
   if (methods.empty()) {
     return true;
@@ -115,7 +115,7 @@ bool check_methods(
 
 bool find_field(const std::string& simple_deobfuscated_name,
                 const std::vector<FRefInfo>& frefs_info,
-                DexType* field_type,
+                const DexType* field_type,
                 DexAccessFlags access_flags) {
   for (const FRefInfo& fref_info : frefs_info) {
     auto* fref = fref_info.fref;
@@ -137,7 +137,7 @@ bool find_field(const std::string& simple_deobfuscated_name,
 bool check_fields(
     const std::vector<DexField*>& fields,
     const api::FrameworkAPI& framework_api,
-    const UnorderedMap<const DexType*, DexType*>& release_to_framework,
+    const UnorderedMap<const DexType*, const DexType*>& release_to_framework,
     const UnorderedSet<DexFieldRef*>& fields_non_private) {
   if (fields.empty()) {
     return true;
@@ -151,7 +151,7 @@ bool check_fields(
     auto* field_type = field->get_type();
     auto it = release_to_framework.find(field_type);
 
-    auto* new_field_type = field_type;
+    const auto* new_field_type = field_type;
     if (it != release_to_framework.end()) {
       new_field_type = it->second;
     }
@@ -176,7 +176,7 @@ bool check_fields(
 bool check_members(
     DexClass* cls,
     const api::FrameworkAPI& framework_api,
-    const UnorderedMap<const DexType*, DexType*>& release_to_framework,
+    const UnorderedMap<const DexType*, const DexType*>& release_to_framework,
     const UnorderedSet<DexMethodRef*>& methods_non_private,
     const UnorderedSet<DexFieldRef*>& fields_non_private) {
   if (!check_methods(cls->get_dmethods(), framework_api, release_to_framework,
@@ -202,7 +202,7 @@ bool check_members(
 
 bool check_if_present(
     const TypeSet& types,
-    const UnorderedMap<const DexType*, DexType*>& release_to_framework) {
+    const UnorderedMap<const DexType*, const DexType*>& release_to_framework) {
   for (const DexType* type : types) {
     DexClass* cls = type_class(type);
     if ((cls == nullptr) || cls->is_external()) {
@@ -221,10 +221,10 @@ bool check_if_present(
 bool check_hierarchy(
     DexClass* cls,
     const api::FrameworkAPI& framework_api,
-    const UnorderedMap<const DexType*, DexType*>& release_to_framework,
+    const UnorderedMap<const DexType*, const DexType*>& release_to_framework,
     const TypeSystem& type_system,
     const UnorderedSet<const DexType*>& framework_classes) {
-  DexType* type = cls->get_type();
+  const DexType* type = cls->get_type();
   if (!is_interface(cls)) {
     // We don't need to worry about subclasses, as those we just need to update
     // the superclass for.
@@ -296,7 +296,7 @@ void ApiLevelsUtils::check_and_update_release_to_framework(const Scope& scope) {
 
     // We need an up to date pairing from release library to framework classes,
     // for later use. So computing this on the fly, once.
-    UnorderedMap<const DexType*, DexType*> release_to_framework;
+    UnorderedMap<const DexType*, const DexType*> release_to_framework;
     for (const auto& pair : UnorderedIterable(m_types_to_framework_api)) {
       release_to_framework[pair.first] = pair.second.cls;
     }

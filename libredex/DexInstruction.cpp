@@ -1111,14 +1111,14 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
   case DOPCODE_NEW_INSTANCE:
   case DOPCODE_NEW_ARRAY: {
     uint16_t tidx = *insns++;
-    DexType* type = idx->get_typeidx(tidx);
+    const DexType* type = idx->get_typeidx(tidx);
     return new DexOpcodeType(fopcode, type);
   }
   case DOPCODE_FILLED_NEW_ARRAY:
   case DOPCODE_FILLED_NEW_ARRAY_RANGE: {
     uint16_t tidx = *insns++;
     uint16_t arg = *insns++;
-    DexType* type = idx->get_typeidx(tidx);
+    const DexType* type = idx->get_typeidx(tidx);
     return new DexOpcodeType(fopcode, type, arg);
   }
   case DOPCODE_CONST_METHOD_HANDLE: {

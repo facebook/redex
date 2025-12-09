@@ -78,6 +78,10 @@ DexProto* get_new_proto(
     const DexProto* proto,
     const UnorderedMap<const DexType*, DexType*>& old_to_new);
 
+DexProto* get_new_proto(
+    const DexProto* proto,
+    const UnorderedMap<const DexType*, const DexType*>& old_to_new);
+
 /**
  * Update all method signature type references in-place using the old_to_new
  * map. We update all references to an old type to the provided new type.
