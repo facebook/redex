@@ -163,6 +163,25 @@ class CheckerConfig {
     if (m_disabled) {
       return boost::none;
     }
+
+    if (m_config.check_classes) {
+      TRACE(PM, 1, "Running ClassChecker...");
+      Timer t1("ClassChecker");
+
+      ClassChecker class_checker;
+      class_checker.init_setting(
+          m_config.definition_check, m_config.definition_check_allowlist,
+          m_config.definition_check_allowlist_prefixes, m_config.external_check,
+          m_config.external_check_allowlist,
+          m_config.external_check_allowlist_prefixes);
+      class_checker.run(scope);
+      if (class_checker.fail()) {
+        std::ostringstream oss = class_checker.print_failed_classes();
+        always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
+        return oss.str();
+      }
+    }
+
     TRACE(PM, 1, "Running IRTypeChecker...");
     Timer t("IRTypeChecker");
 
@@ -246,26 +265,6 @@ class CheckerConfig {
         oss << "\n(" << (res.errors - 1) << " more issues!)";
       }
 
-      always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
-      return oss.str();
-    }
-
-    if (!m_config.check_classes) {
-      return boost::none;
-    }
-
-    TRACE(PM, 1, "Running NonAbstractClassChecker...");
-    Timer t1("NonAbstractClassChecker");
-
-    ClassChecker class_checker;
-    class_checker.init_setting(
-        m_config.definition_check, m_config.definition_check_allowlist,
-        m_config.definition_check_allowlist_prefixes, m_config.external_check,
-        m_config.external_check_allowlist,
-        m_config.external_check_allowlist_prefixes);
-    class_checker.run(scope);
-    if (class_checker.fail()) {
-      std::ostringstream oss = class_checker.print_failed_classes();
       always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
       return oss.str();
     }

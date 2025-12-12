@@ -25,9 +25,13 @@ template <typename Collection>
 void print_failed_things(const Collection& items, std::ostringstream* oss) {
   size_t counter = 0;
   for (auto& fail : UnorderedIterable(items)) {
-    *oss << show(fail)
-         << " (deobfuscated: " << fail->get_deobfuscated_name_or_empty_copy()
-         << ")\n";
+    auto cls_name = show(fail);
+    *oss << cls_name;
+    if (cls_name != fail->get_deobfuscated_name_or_empty_copy()) {
+      *oss << " (deobfuscated: " << fail->get_deobfuscated_name_or_empty_copy()
+           << ')';
+    }
+    *oss << '\n';
     counter++;
     if (counter == MAX_ITEMS_TO_PRINT) {
       if (items.size() > MAX_ITEMS_TO_PRINT) {
@@ -45,11 +49,15 @@ void print_failed_external_check(
     std::ostringstream* oss) {
   size_t counter = 0;
   for (const auto& pair : UnorderedIterable(failed_classes_external_check)) {
-    *oss << "Internal class " << show(pair.first) << " (deobfuscated: "
-         << pair.first->get_deobfuscated_name_or_empty_copy() << ")\n"
-         << "  has external children:\n";
+    auto cls_name = show(pair.first);
+    *oss << "Internal class " << cls_name;
+    if (cls_name != pair.first->get_deobfuscated_name_or_empty_copy()) {
+      *oss << " (deobfuscated: "
+           << pair.first->get_deobfuscated_name_or_empty_copy() << ')';
+    }
+    *oss << "\n  has external children:\n";
     for (const auto* type : UnorderedIterable(pair.second)) {
-      *oss << INDENTATION << show(type) << std::endl;
+      *oss << INDENTATION << show(type) << '\n';
     }
     counter++;
     if (counter == MAX_ITEMS_TO_PRINT) {
@@ -68,9 +76,13 @@ void print_failed_definition_check(
     std::ostringstream* oss) {
   size_t counter = 0;
   for (const auto& pair : UnorderedIterable(failed_classes_definition_check)) {
-    *oss << "Internal class " << show(pair.first) << " (deobfuscated: "
-         << pair.first->get_deobfuscated_name_or_empty_copy() << ")\n"
-         << "  references type not defined internally or externally:\n";
+    auto cls_name = show(pair.first);
+    *oss << "Internal class " << cls_name;
+    if (cls_name != pair.first->get_deobfuscated_name_or_empty_copy()) {
+      *oss << " (deobfuscated: "
+           << pair.first->get_deobfuscated_name_or_empty_copy() << ')';
+    }
+    *oss << "\n  references type not defined internally or externally:\n";
     for (const auto* type : UnorderedIterable(pair.second)) {
       *oss << INDENTATION << show(type) << std::endl;
     }
