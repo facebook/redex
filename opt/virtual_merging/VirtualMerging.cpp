@@ -323,14 +323,14 @@ class MergePairsBuilder {
         m_ordering_provider(ordering_provider),
         m_perf_config(perf_config) {}
 
-  boost::optional<std::pair<LocalStats, PairSeq>> build(
+  std::optional<std::pair<LocalStats, PairSeq>> build(
       const UnorderedSet<const DexMethod*>& mergeable_methods,
       const XStoreRefs& xstores,
       const XDexRefs& xdexes,
       const method_profiles::MethodProfiles& profiles,
       VirtualMerging::Strategy strategy) {
     if (!init()) {
-      return boost::none;
+      return std::nullopt;
     }
 
     MergablesMap mergeable_pairs_map =

@@ -540,7 +540,7 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
         if (it != m_config.param_summary_map.end()) {
           const auto& summary = it->second;
           if (summary.returned_param) {
-            auto returned = summary.returned_param.get();
+            auto returned = *summary.returned_param;
             if (summary.safe_params.count(returned) != 0u) {
               env->set(dest, env->get(insn->src(returned)));
               return;

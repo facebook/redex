@@ -12,6 +12,7 @@
 #include <boost/none_t.hpp>
 #include <boost/optional/optional.hpp>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
 
@@ -182,7 +183,7 @@ void AppModuleUsagePass::load_preexisting_violations(DexStoresVector& stores) {
 
   std::string line;
   while (getline(ifs, line)) {
-    boost::optional<std::string> entrypoint;
+    std::optional<std::string> entrypoint;
     for (std::string_view csv_component : split_string(line, ",")) {
       csv_component = trim_whitespaces(csv_component);
       if (!entrypoint) {

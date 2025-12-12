@@ -8,6 +8,7 @@
 #include "ResolveRefsPass.h"
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <optional>
 
 #include "ApiLevelChecker.h"
 #include "ConfigFiles.h"
@@ -194,7 +195,7 @@ bool is_excluded_external(const std::vector<std::string>& excluded_externals,
   return false;
 }
 
-boost::optional<DexMethod*> get_inferred_method_def(
+std::optional<DexMethod*> get_inferred_method_def(
     const DexMethod* caller,
     const std::vector<std::string>& excluded_externals,
     const bool /*is_support_lib*/,
@@ -212,7 +213,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
     TRACE(RESO, 4, "Bailed resolved upon inferred_cls %s for %s",
           SHOW(inferred_cls), SHOW(callee));
     stats.num_failed_infer_resolver_fail++;
-    return boost::none;
+    return std::nullopt;
   }
   auto* resolved_cls = type_class(resolved->get_class());
   bool is_external = (resolved_cls != nullptr) && resolved_cls->is_external();
@@ -220,7 +221,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
   if (is_external && is_excluded_external(excluded_externals, show(resolved))) {
     TRACE(RESO, 4, "Bailed on excluded external%s", SHOW(resolved));
     stats.num_failed_infer_to_external++;
-    return boost::none;
+    return std::nullopt;
   }
 
   // 3. Accessibility check.
@@ -229,7 +230,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
     TRACE(RESO, 4, "Bailed on inaccessible %s from %s", SHOW(resolved),
           SHOW(caller));
     stats.num_failed_infer_cannot_access++;
-    return boost::none;
+    return std::nullopt;
   }
   if (!is_external && !is_public(resolved_cls)) {
     set_public(resolved_cls);
@@ -240,12 +241,12 @@ boost::optional<DexMethod*> get_inferred_method_def(
     TRACE(RESO, 4, "Bailed on incompatible invoke opcode: %s is an interface",
           SHOW(inferred_cls));
     stats.num_failed_infer_callee_target_type++;
-    return boost::none;
+    return std::nullopt;
   }
 
   TRACE(RESO, 4, "Inferred to %s for type %s", SHOW(resolved),
         SHOW(inferred_type));
-  return boost::optional<DexMethod*>(resolved);
+  return std::optional<DexMethod*>(resolved);
 }
 
 } // namespace impl

@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
+
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
 #include "MethodOverrideGraph.h"

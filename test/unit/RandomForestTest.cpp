@@ -17,11 +17,11 @@ namespace random_forest {
 struct RandomForestTestHelper {
   MethodContextContext context{};
   MethodContext caller{
-      context, MethodContext::Vals{{3.5, boost::none, 7},
-                                   {boost::none, boost::none, boost::none}}};
+      context, MethodContext::Vals{{3.5, std::nullopt, 7},
+                                   {std::nullopt, std::nullopt, std::nullopt}}};
   MethodContext callee{
-      context, MethodContext::Vals{{2.5, boost::none, 5},
-                                   {boost::none, boost::none, boost::none}}};
+      context, MethodContext::Vals{{2.5, std::nullopt, 5},
+                                   {std::nullopt, std::nullopt, std::nullopt}}};
 };
 
 struct RandomForestTest : public testing::Test {};

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp> // NOLINT
+#include <optional>
 
 #include <sparta/AbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
@@ -86,10 +86,10 @@ class BuilderDomain final
     }
   }
 
-  boost::optional<BuilderState> state() const {
+  std::optional<BuilderState> state() const {
     return (kind() == sparta::AbstractValueKind::Value)
-               ? boost::optional<BuilderState>(get_value()->state())
-               : boost::none;
+               ? std::optional<BuilderState>(get_value()->state())
+               : std::nullopt;
   }
 };
 

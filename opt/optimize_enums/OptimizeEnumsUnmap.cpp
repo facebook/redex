@@ -291,20 +291,20 @@ class OptimizeEnumsUnmapCfg {
     m_mutation.insert_after(ordi_move_result_it, {move_ordinal_result});
   }
 
-  boost::optional<size_t> get_ordinal_for_case(
+  std::optional<size_t> get_ordinal_for_case(
       const GeneratedSwitchCasetoField& case_to_enum, int64_t case_value) {
     // Turn the case value back into the enum ordinal.
     const auto case_enum_it = case_to_enum.find(case_value);
     if (case_enum_it == case_to_enum.end()) {
       // We don't actually have a full inverse mapping.
-      return boost::none;
+      return std::nullopt;
     }
     auto* const case_enum = case_enum_it->second;
 
     const auto enum_ordinal_it = m_enum_field_to_ordinal.find(case_enum);
     if (enum_ordinal_it == m_enum_field_to_ordinal.end()) {
       // We don't actually have a full ordinal mapping.
-      return boost::none;
+      return std::nullopt;
     }
     const auto enum_ordinal = enum_ordinal_it->second;
 

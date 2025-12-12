@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <queue>
 #include <utility>
 
@@ -259,15 +260,15 @@ using namespace random_forest;
 class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
  public:
   struct DecisionTreesConfig {
-    boost::optional<float> min_method_hits = boost::none;
-    boost::optional<float> min_method_appear = boost::none;
-    boost::optional<float> min_block_hits = boost::none;
-    boost::optional<float> min_block_appear = boost::none;
-    boost::optional<std::vector<size_t>> interaction_indices = boost::none;
-    boost::optional<size_t> exp_force_top_x_entries = boost::none;
-    boost::optional<size_t> exp_force_top_x_entries_min_callee_size =
-        boost::none;
-    boost::optional<float> exp_force_top_x_entries_min_appear100 = boost::none;
+    std::optional<float> min_method_hits = std::nullopt;
+    std::optional<float> min_method_appear = std::nullopt;
+    std::optional<float> min_block_hits = std::nullopt;
+    std::optional<float> min_block_appear = std::nullopt;
+    std::optional<std::vector<size_t>> interaction_indices = std::nullopt;
+    std::optional<size_t> exp_force_top_x_entries = std::nullopt;
+    std::optional<size_t> exp_force_top_x_entries_min_callee_size =
+        std::nullopt;
+    std::optional<float> exp_force_top_x_entries_min_appear100 = std::nullopt;
     float accept_threshold{0};
     bool accept_over{true};
     bool break_chains{false};
@@ -489,9 +490,9 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     }
 
     auto compute_res = [&](const auto& threshold,
-                           const auto& feature_fn) -> boost::optional<bool> {
+                           const auto& feature_fn) -> std::optional<bool> {
       if (!threshold) {
-        return boost::none;
+        return std::nullopt;
       }
       auto min_hits = *threshold;
       auto sb_vec = source_blocks::gather_source_blocks(caller_block);
@@ -834,12 +835,12 @@ class InlineForSpeedCallerList final : public InlineForSpeedBase {
 
         // OK, seem to have a good class, now look for the method.
         auto method_name = str.substr(pos + 1);
-        boost::optional<const DexMethod*> found{boost::none};
+        std::optional<const DexMethod*> found{std::nullopt};
         for (auto* m : cls->get_all_methods()) {
           if (m->get_name()->str() == method_name) {
             if (found) {
               std::cerr << "Ambiguous method " << method_name << std::endl;
-              found = boost::none;
+              found = std::nullopt;
               break;
             }
             found = m;
@@ -891,19 +892,18 @@ PerfMethodInlinePass::PerfMethodInlinePass() : Pass("PerfMethodInlinePass") {}
 PerfMethodInlinePass::~PerfMethodInlinePass() {}
 
 struct PerfMethodInlinePass::Config {
-  boost::optional<random_forest::PGIForest> forest = boost::none;
+  std::optional<random_forest::PGIForest> forest = std::nullopt;
   InlineForSpeedDecisionTrees::DecisionTreesConfig dec_trees_config;
   std::string interactions_str;
-  boost::optional<std::vector<std::string>> caller_list = boost::none;
+  std::optional<std::vector<std::string>> caller_list = std::nullopt;
   bool caller_list_prefix{false};
   float caller_list_callee_min_hits{0};
   float caller_list_callee_min_appear{0};
   IFSMode ifs{IFSMode::kMethodProfiles};
 
-  boost::optional<std::vector<size_t>> get_interactions(
-      const RedexContext& ctx) {
+  std::optional<std::vector<size_t>> get_interactions(const RedexContext& ctx) {
     if (interactions_str.empty()) {
-      return boost::none;
+      return std::nullopt;
     }
     const auto& map = ctx.get_sb_interaction_indices();
     std::vector<std::string> split;
@@ -1004,8 +1004,8 @@ void PerfMethodInlinePass::bind_config() {
               this->m_config->forest->size());
       }
     }
-    auto assign_opt = [](float v) -> boost::optional<float> {
-      return v < 0 ? boost::none : boost::optional<float>(v);
+    auto assign_opt = [](float v) -> std::optional<float> {
+      return v < 0 ? std::nullopt : std::optional<float>(v);
     };
     auto& dec_trees_config = this->m_config->dec_trees_config;
     dec_trees_config.accept_threshold = accept_threshold;
@@ -1017,8 +1017,8 @@ void PerfMethodInlinePass::bind_config() {
     dec_trees_config.break_chains = break_chains;
     this->m_config->interactions_str = interactions_str;
 
-    auto assign_opt_size_t = [](size_t v) -> boost::optional<size_t> {
-      return v == 0 ? boost::none : boost::optional<size_t>(v);
+    auto assign_opt_size_t = [](size_t v) -> std::optional<size_t> {
+      return v == 0 ? std::nullopt : std::optional<size_t>(v);
     };
     dec_trees_config.exp_force_top_x_entries =
         assign_opt_size_t(exp_force_top_x_entries);

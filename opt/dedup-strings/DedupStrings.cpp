@@ -428,7 +428,7 @@ DedupStrings::get_strings_to_dedup(
       size_t dexnr;
       size_t size_reduction;
     };
-    boost::optional<HostInfo> host_info;
+    std::optional<HostInfo> host_info;
     for (size_t dexnr = 0; dexnr < dexen.size(); ++dexnr) {
       // There's a configurable limit of how many factory methods / hosts we
       // can have in total

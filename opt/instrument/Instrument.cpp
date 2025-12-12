@@ -364,7 +364,7 @@ void count_source_block_chain_length(DexStoresVector& stores, PassManager& pm) {
     if (code == nullptr) {
       return;
     }
-    boost::optional<size_t> last_known = boost::none;
+    std::optional<size_t> last_known = std::nullopt;
     always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     for (const auto* b : cfg.blocks()) {

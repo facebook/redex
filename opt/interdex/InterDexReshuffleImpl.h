@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
@@ -417,14 +418,14 @@ class MoveGains {
 
 class InterDexReshuffleImpl {
  public:
-  InterDexReshuffleImpl(ConfigFiles& conf,
-                        PassManager& mgr,
-                        ReshuffleConfig& config,
-                        DexClasses& original_scope,
-                        DexClassesVector& dexen,
-                        const UnorderedSet<size_t>& dynamically_dead_dexes,
-                        const boost::optional<class_merging::Model&>&
-                            merging_model = boost::none);
+  InterDexReshuffleImpl(
+      ConfigFiles& conf,
+      PassManager& mgr,
+      ReshuffleConfig& config,
+      DexClasses& original_scope,
+      DexClassesVector& dexen,
+      const UnorderedSet<size_t>& dynamically_dead_dexes,
+      const std::optional<class_merging::Model*>& merging_model = std::nullopt);
 
   void compute_plan();
 
@@ -448,7 +449,7 @@ class InterDexReshuffleImpl {
   init_classes::InitClassesWithSideEffects m_init_classes_with_side_effects;
   DexClassesVector& m_dexen;
   const UnorderedSet<size_t>& m_dynamically_dead_dexes;
-  boost::optional<class_merging::Model&> m_merging_model;
+  std::optional<class_merging::Model*> m_merging_model;
   size_t m_linear_alloc_limit;
   DexesStructure m_dexes_structure;
   std::vector<DexClass*> m_movable_classes;

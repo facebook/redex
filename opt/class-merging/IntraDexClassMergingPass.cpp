@@ -144,7 +144,7 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
               scope, mgr, conf, stores, m_merging_spec, m_global_min_count);
       InterDexReshuffleImpl impl(
           conf, mgr, m_reshuffle_config, scope, root_dexen,
-          interdex_pass->get_dynamically_dead_dexes(), merging_model);
+          interdex_pass->get_dynamically_dead_dexes(), &merging_model);
       impl.compute_plan();
       impl.apply_plan();
     } else {

@@ -481,7 +481,7 @@ class CalleeInvocationSelector {
   std::pair<param_index_t, uint32_t> find_argument_with_least_cost(
       const CallSiteSummary* css) const {
     const auto& bindings = css->arguments.bindings();
-    boost::optional<int32_t> least_cost;
+    std::optional<int32_t> least_cost;
     param_index_t least_cost_src_idx = 0;
     for (const auto& p : bindings) {
       const auto& arguments_cost = m_total_argument_costs.at(p.first);

@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
 
@@ -19,12 +21,12 @@ struct ParamSummary {
   // as return value.
   UnorderedSet<uint16_t> safe_params;
   // Index of parameter if it's exactly the return value.
-  boost::optional<uint16_t> returned_param;
+  std::optional<uint16_t> returned_param;
 
-  ParamSummary() : returned_param(boost::none) {}
+  ParamSummary() : returned_param(std::nullopt) {}
 
   ParamSummary(UnorderedSet<uint16_t>&& safe_params,
-               boost::optional<uint16_t> returned_param)
+               std::optional<uint16_t> returned_param)
       : safe_params(std::move(safe_params)), returned_param(returned_param) {}
 
   void print(const DexMethodRef* method) const;

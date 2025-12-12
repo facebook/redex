@@ -606,9 +606,9 @@ size_t remove(ControlFlowGraph& cfg, AnalysisResult& analysis) {
 
 // Verification computes the "cover" (set of all locked objects)
 // for all blocks and compares.
-boost::optional<std::string> verify(cfg::ControlFlowGraph& cfg,
-                                    const AnalysisResult& orig,
-                                    const AnalysisResult& removed) {
+std::optional<std::string> verify(cfg::ControlFlowGraph& cfg,
+                                  const AnalysisResult& orig,
+                                  const AnalysisResult& removed) {
   std::ostringstream oss;
   for (auto* b : cfg.blocks()) {
     auto new_state = removed.iter->get_entry_state_at(b);
@@ -653,7 +653,7 @@ boost::optional<std::string> verify(cfg::ControlFlowGraph& cfg,
   if (!res.empty()) {
     return std::move(res);
   }
-  return boost::none;
+  return std::nullopt;
 }
 
 struct Stats {

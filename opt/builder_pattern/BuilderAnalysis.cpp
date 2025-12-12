@@ -46,10 +46,9 @@ class NullableConstantDomain final
 
   explicit NullableConstantDomain(AbstractValueKind kind) : BaseClass(kind) {}
 
-  boost::optional<ConstantType> get_constant() const {
-    return is_value()
-               ? boost::optional<ConstantType>(get_value()->get_constant())
-               : boost::none;
+  std::optional<ConstantType> get_constant() const {
+    return is_value() ? std::optional<ConstantType>(get_value()->get_constant())
+                      : std::nullopt;
   }
 
   void join_with(const NullableConstantDomain& other) {
@@ -529,7 +528,7 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
         auto src = insn->src(0);
 
         auto escaped = m_insn_to_env->at(insn).get(src).get_constant();
-        if (escaped && escaped.get() == instantiation_insn) {
+        if (escaped && *escaped == instantiation_insn) {
           TRACE(BLD_PATTERN, 2,
                 "Excluding type %s since it is stored or returned in %s",
                 SHOW(current_instance), SHOW(insn));

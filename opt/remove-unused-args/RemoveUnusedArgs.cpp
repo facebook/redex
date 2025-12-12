@@ -453,7 +453,7 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
     IRInstruction* insn;
   };
   std::vector<LoadParamInfo> load_param_infos;
-  boost::optional<std::vector<LoadParamInfo>::iterator> load_param_infos_it;
+  std::optional<std::vector<LoadParamInfo>::iterator> load_param_infos_it;
   if (method->get_code() != nullptr) {
     auto param_insns = method->get_code()->cfg().get_param_instructions();
     for (const auto& mie : InstructionIterable(param_insns)) {

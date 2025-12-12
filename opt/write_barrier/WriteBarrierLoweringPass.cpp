@@ -112,7 +112,7 @@ void WriteBarrierLoweringPass::run_pass(DexStoresVector& stores,
     }
     auto ii = InstructionIterable(cfg);
     std::unique_ptr<cfg::CFGMutation> mutation;
-    boost::optional<reg_t> tmp_reg = boost::none;
+    std::optional<reg_t> tmp_reg = std::nullopt;
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto& mie = *it;
       if (!opcode::is_write_barrier(mie.insn->opcode())) {
@@ -126,11 +126,11 @@ void WriteBarrierLoweringPass::run_pass(DexStoresVector& stores,
       if (!tmp_reg) {
         tmp_reg = cfg.allocate_temp();
       }
-      const_insn->set_literal(0)->set_dest(tmp_reg.get());
+      const_insn->set_literal(0)->set_dest(*tmp_reg);
       IRInstruction* sput_insn = new IRInstruction(OPCODE_SPUT);
       sput_insn->set_field(nullptr);
       sput_insn->set_srcs_size(1);
-      sput_insn->set_src(0, tmp_reg.get());
+      sput_insn->set_src(0, *tmp_reg);
       volatile_field_writes.insert(sput_insn);
       mutation->replace(it, {const_insn, sput_insn});
     }

@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <optional>
 
 #include <boost/regex.hpp>
 
@@ -134,7 +135,7 @@ class MoveResultAwareFixpointIterator final
   }
 };
 
-boost::optional<IRInstruction*> find_def(
+std::optional<IRInstruction*> find_def(
     const MoveResultAwareFixpointIterator& rdefs,
     const cfg::InstructionIterator& src_it,
     size_t src_index = 0) {
@@ -148,16 +149,16 @@ boost::optional<IRInstruction*> find_def(
 
   auto defs_expr = defs.get(src_it->insn->src(src_index));
   if (defs_expr.is_top() || defs_expr.is_bottom()) {
-    return boost::none;
+    return std::nullopt;
   }
   if (defs_expr.elements().size() != 1) {
-    return boost::none;
+    return std::nullopt;
   }
 
   return *defs_expr.elements().begin();
 }
 
-using ParamChain = boost::optional<std::vector<IRInstruction*>>;
+using ParamChain = std::optional<std::vector<IRInstruction*>>;
 
 ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
                             cfg::InstructionIterator cur) {
@@ -173,13 +174,13 @@ ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
   for (;;) {
     auto src = find_def(rdefs, cur);
     if (!src) {
-      return boost::none;
+      return std::nullopt;
     }
     auto* src_insn = *src;
 
     val.push_back(src_insn);
     if (seen.count(src_insn) != 0) {
-      return boost::none;
+      return std::nullopt;
     }
     seen.insert(src_insn);
 
@@ -192,7 +193,7 @@ ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
       return val;
     }
     if (src_insn->srcs_size() >= 2) {
-      return boost::none;
+      return std::nullopt;
     }
 
     cur = cfg.find_insn(src_insn, cur.block());
@@ -434,10 +435,10 @@ void insert_dispatches(
 }
 
 struct AnalysisData {
-  boost::optional<cfg::ScopedCFG> scoped_cfg = boost::none;
-  boost::optional<cfg::InstructionIterator> switch_it = boost::none;
-  boost::optional<ParamChain> param_chain = boost::none;
-  boost::optional<SwitchRange> switch_range = boost::none;
+  std::optional<cfg::ScopedCFG> scoped_cfg = std::nullopt;
+  std::optional<cfg::InstructionIterator> switch_it = std::nullopt;
+  std::optional<ParamChain> param_chain = std::nullopt;
+  std::optional<SwitchRange> switch_range = std::nullopt;
 
   DexMethod* m{nullptr};
   bool no_code{false};

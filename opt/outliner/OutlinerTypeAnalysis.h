@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "ConstantUses.h"
 #include "DeterministicContainers.h"
 #include "IRInstruction.h"
@@ -87,7 +89,7 @@ class OutlinerTypeAnalysis {
 
   const DexType* get_type_demand(IRInstruction* insn, size_t src_index);
 
-  boost::optional<UnorderedSet<const IRInstruction*>> get_defs(
+  std::optional<UnorderedSet<const IRInstruction*>> get_defs(
       const UnorderedSet<const IRInstruction*>& insns);
 
   void get_type_demand_helper(const CandidateAdapter& ca,

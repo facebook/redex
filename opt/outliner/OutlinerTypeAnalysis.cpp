@@ -768,7 +768,7 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   }
 }
 
-boost::optional<UnorderedSet<const IRInstruction*>>
+std::optional<UnorderedSet<const IRInstruction*>>
 OutlinerTypeAnalysis::get_defs(
     const UnorderedSet<const IRInstruction*>& insns) {
   UnorderedSet<const IRInstruction*> res;
@@ -779,7 +779,7 @@ OutlinerTypeAnalysis::get_defs(
       auto reg = insn->srcs_size() != 0u ? insn->src(0) : RESULT_REGISTER;
       auto defs = m_reaching_defs_environments->at(insn).get(reg);
       if (defs.is_bottom() || defs.is_top()) {
-        return boost::none;
+        return std::nullopt;
       }
       res.insert(defs.elements().begin(), defs.elements().end());
       continue;
@@ -921,7 +921,7 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
 
 static const DexType* compute_joined_type(
     const UnorderedSet<const DexType*>& types) {
-  boost::optional<dtv_impl::DexTypeValue> joined_type_value;
+  std::optional<dtv_impl::DexTypeValue> joined_type_value;
   for (const auto* t : UnorderedIterable(types)) {
     if (!type::is_object(t)) {
       return nullptr;

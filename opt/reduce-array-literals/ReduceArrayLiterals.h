@@ -55,7 +55,7 @@ class ReduceArrayLiterals {
       const DexType* type,
       size_t chunk_start,
       const std::vector<const IRInstruction*>& aput_insns,
-      boost::optional<reg_t> chunk_dest,
+      std::optional<reg_t> chunk_dest,
       reg_t overall_dest,
       std::vector<reg_t>* temp_regs);
   cfg::ControlFlowGraph& m_cfg;

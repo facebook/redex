@@ -108,7 +108,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
 
   std::unique_ptr<LivenessFixpointIterator> liveness_iter;
 
-  boost::optional<reg_t> const_reg;
+  std::optional<reg_t> const_reg;
 
   // Optimization #0: Remove switches...
   // - turning them into gotos when all cases branch to the same block
@@ -180,7 +180,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
       //      const creg, case_key
       //      if-eq creg, reg, branch_target
 
-      boost::optional<IROpcode> transform_opcode;
+      std::optional<IROpcode> transform_opcode;
       if (case_key == 0) {
         // Case 1
         transform_opcode = OPCODE_NOP;

@@ -21,10 +21,10 @@ namespace {
 // The structure is used for hardcoding external method param summaries.
 struct ExternalMethodData {
   std::string method_name;
-  boost::optional<uint16_t> returned_param;
+  std::optional<uint16_t> returned_param;
   UnorderedSet<uint16_t> safe_params;
   ExternalMethodData(std::string name,
-                     boost::optional<uint16_t> returned,
+                     std::optional<uint16_t> returned,
                      std::initializer_list<uint16_t> params)
       : method_name(std::move(name)),
         returned_param(returned),
@@ -66,7 +66,7 @@ void load_external_method_summaries(
       {ExternalMethodData("Lcom/google/common/base/Objects;.equal:(Ljava/lang/"
                           "Object;Ljava/lang/"
                           "Object;)Z",
-                          boost::none, {0, 1})});
+                          std::nullopt, {0, 1})});
   for (auto& item : methods) {
     auto* method = DexMethod::get_method(item.method_name);
     if (method == nullptr) {
@@ -89,7 +89,7 @@ void load_external_method_summaries(
     }
     // Assume that kotlin assertions only check nullity of the first argument
     // and return void.
-    optimize_enums::ParamSummary summary({0}, boost::none);
+    optimize_enums::ParamSummary summary({0}, std::nullopt);
     always_assert(method->get_proto()->get_rtype() == type::_void());
     sanity_check_method_summary(method, summary, object_type);
     param_summary_map->emplace(method, summary);
@@ -108,7 +108,7 @@ void ParamSummary::print(const DexMethodRef* method) const {
     TRACE_NO_LINE(ENUM, 9, "%d ", param);
   }
   if (returned_param) {
-    TRACE(ENUM, 9, "returned: %d", returned_param.get());
+    TRACE(ENUM, 9, "returned: %d", *returned_param);
   } else {
     TRACE(ENUM, 9, "returned: none");
   }

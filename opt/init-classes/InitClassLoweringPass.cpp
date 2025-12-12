@@ -386,8 +386,8 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
               local_stats.init_class_instructions,
               SHOW(cfg));
         methods_with_init_class++;
-        boost::optional<reg_t> tmp_reg;
-        boost::optional<reg_t> wide_tmp_reg;
+        std::optional<reg_t> tmp_reg;
+        std::optional<reg_t> wide_tmp_reg;
         auto get_reg = [&](DexField* field) {
           if (type::is_wide_type(field->get_type())) {
             if (!wide_tmp_reg) {

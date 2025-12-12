@@ -33,7 +33,7 @@ TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
       )
     )
   )");
-  EXPECT_EQ(summary.returned_param, boost::none);
+  EXPECT_EQ(summary.returned_param, std::nullopt);
   EXPECT_TRUE(summary.safe_params.empty());
 
   auto summary2 = get_summary(R"(
@@ -46,7 +46,7 @@ TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
       )
     )
   )");
-  EXPECT_EQ(summary2.returned_param, boost::none);
+  EXPECT_EQ(summary2.returned_param, std::nullopt);
   EXPECT_THAT(unordered_unsafe_unwrap(summary2.safe_params),
               UnorderedElementsAre(2));
 
@@ -59,7 +59,7 @@ TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
       )
     )
   )");
-  EXPECT_EQ(summary2_static.returned_param, boost::none);
+  EXPECT_EQ(summary2_static.returned_param, std::nullopt);
   EXPECT_THAT(unordered_unsafe_unwrap(summary2_static.safe_params),
               UnorderedElementsAre(1));
 
@@ -74,7 +74,7 @@ TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
       )
     )
   )");
-  EXPECT_EQ(summary3.returned_param, boost::none);
+  EXPECT_EQ(summary3.returned_param, std::nullopt);
   EXPECT_TRUE(summary3.safe_params.empty());
 
   auto summary4 = get_summary(R"(
@@ -87,6 +87,6 @@ TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
       )
     )
   )");
-  EXPECT_EQ(summary4.returned_param, boost::none);
+  EXPECT_EQ(summary4.returned_param, std::nullopt);
   EXPECT_TRUE(summary4.safe_params.empty());
 }

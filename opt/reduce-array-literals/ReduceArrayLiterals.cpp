@@ -350,8 +350,8 @@ class Analyzer final
 
  private:
   bool is_array_construction_in_progress(
-      const boost::optional<TrackedValue>& array,
-      const boost::optional<TrackedValue>& index) const {
+      const std::optional<TrackedValue>& array,
+      const std::optional<TrackedValue>& index) const {
     return array && is_new_array(*array) && !is_array_literal(*array) &&
            index && is_literal(*index);
   }
@@ -366,16 +366,15 @@ class Analyzer final
     }
   }
 
-  boost::optional<TrackedValue> get_singleton(
-      const TrackedDomain& domain) const {
+  std::optional<TrackedValue> get_singleton(const TrackedDomain& domain) const {
     if (domain.kind() != AbstractValueKind::Value) {
-      return boost::none;
+      return std::nullopt;
     }
     const auto& elements = domain.elements();
     if (elements.size() != 1) {
-      return boost::none;
+      return std::nullopt;
     }
-    return boost::optional<TrackedValue>(*elements.begin());
+    return std::optional<TrackedValue>(*elements.begin());
   }
 
   void escape_new_arrays(uint32_t reg,
@@ -569,7 +568,7 @@ void ReduceArrayLiterals::patch_new_array(
 
   // prepare for chunking, if needed
 
-  boost::optional<reg_t> chunk_dest;
+  std::optional<reg_t> chunk_dest;
   if (aput_insns.size() > m_max_filled_elements) {
     // we are going to chunk
     chunk_dest = m_cfg.allocate_temp();
@@ -612,7 +611,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
     const DexType* type,
     size_t chunk_start,
     const std::vector<const IRInstruction*>& aput_insns,
-    boost::optional<reg_t> chunk_dest,
+    std::optional<reg_t> chunk_dest,
     reg_t overall_dest,
     std::vector<reg_t>* temp_regs) {
   cfg::CFGMutation mutation(m_cfg);

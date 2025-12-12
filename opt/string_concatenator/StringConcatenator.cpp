@@ -65,18 +65,18 @@ class RegMap {
     m_builders[r] = b;
   }
 
-  boost::optional<std::string> find_string(reg_t r) {
+  std::optional<std::string> find_string(reg_t r) {
     const auto& search = m_strings.find(r);
     return (search == m_strings.end())
-               ? boost::none
-               : boost::optional<std::string>(search->second);
+               ? std::nullopt
+               : std::optional<std::string>(search->second);
   }
 
-  boost::optional<StrBuilderId> find_builder(reg_t r) {
+  std::optional<StrBuilderId> find_builder(reg_t r) {
     const auto& search = m_builders.find(r);
     return (search == m_builders.end())
-               ? boost::none
-               : boost::optional<StrBuilderId>(search->second);
+               ? std::nullopt
+               : std::optional<StrBuilderId>(search->second);
   }
 };
 
@@ -192,12 +192,12 @@ class Concatenator {
       const auto& move = [&registers](reg_t dest, reg_t source) {
         const auto& str_search = registers.find_string(source);
         const auto& builder_search = registers.find_builder(source);
-        if (str_search != boost::none) {
-          always_assert(builder_search == boost::none);
+        if (str_search != std::nullopt) {
+          always_assert(builder_search == std::nullopt);
           registers.put_string(dest, *str_search);
           return true;
-        } else if (builder_search != boost::none) {
-          always_assert(str_search == boost::none);
+        } else if (builder_search != std::nullopt) {
+          always_assert(str_search == std::nullopt);
           registers.put_builder(dest, *builder_search);
           return true;
         }
@@ -254,7 +254,7 @@ class Concatenator {
           const auto& field_def = resolve_field(field_ref, FieldSearch::Static);
           if (field_def != nullptr && is_final(field_def)) {
             const auto& str_search = registers.find_string(insn->src(0));
-            if (str_search != boost::none) {
+            if (str_search != std::nullopt) {
               fields[field_ref] = *str_search;
               continue;
             }
@@ -269,7 +269,7 @@ class Concatenator {
           continue;
         } else if (method == m_config.init_string) {
           const auto& str_search = registers.find_string(insn->src(1));
-          if (str_search != boost::none) {
+          if (str_search != std::nullopt) {
             StrBuilderId new_id = static_cast<StrBuilderId>(builder_str.size());
             builder_str[new_id] = *str_search;
             registers.put_builder(insn->src(0), new_id);
@@ -278,14 +278,14 @@ class Concatenator {
         } else if (method == m_config.append) {
           auto builder_search = registers.find_builder(insn->src(0));
           const auto& string_search = registers.find_string(insn->src(1));
-          if (builder_search != boost::none && string_search != boost::none) {
+          if (builder_search != std::nullopt && string_search != std::nullopt) {
             builder_str[*builder_search] += *string_search;
             registers.put_builder(RESULT_REGISTER, *builder_search);
             continue;
           }
         } else if (method == m_config.to_string) {
           const auto& builder_search = registers.find_builder(insn->src(0));
-          if (builder_search != boost::none) {
+          if (builder_search != std::nullopt) {
             registers.put_string(RESULT_REGISTER, builder_str[*builder_search]);
 
             has_to_string = true;
