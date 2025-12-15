@@ -169,10 +169,10 @@ void try_desuperify(const DexMethod* caller,
   if ((callee_cls == nullptr) || is_interface(callee_cls)) {
     return;
   }
-  // resolve_method_ref will start its search in the superclass of :cls.
-  auto* callee = resolve_method_ref(cls, insn->get_method()->get_name(),
-                                    insn->get_method()->get_proto(),
-                                    MethodSearch::Virtual);
+  // start resolve_method search in the superclass of :cls.
+  auto* callee = resolve_method(
+      type_class(cls->get_super_class()), insn->get_method()->get_name(),
+      insn->get_method()->get_proto(), MethodSearch::Virtual);
   // External methods may not always be final across runtime versions
   if (callee == nullptr || callee->is_external() || !is_final(callee)) {
     return;

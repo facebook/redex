@@ -168,17 +168,6 @@ inline DexMethod* resolve_interface_method(const DexClass* cls,
 }
 
 /**
- * Resolve a method ref to its definition.
- * The search starts from the super for a non interface search and from
- * the super interfaces for interfaces.
- * If the type the method belongs to is unknown return nullptr.
- */
-DexMethod* resolve_method_ref(const DexClass* cls,
-                              const DexString* name,
-                              const DexProto* proto,
-                              MethodSearch search);
-
-/**
  * Resolve a method to its definition. When searching for a definition of a
  * virtual callsite, we return one of the possible callees.
  *
@@ -218,8 +207,7 @@ inline DexMethod* resolve_method(DexMethodRef* method,
   if (cls == nullptr) {
     return nullptr;
   }
-  return resolve_method_ref(cls, method->get_name(), method->get_proto(),
-                            search);
+  return resolve_method(cls, method->get_name(), method->get_proto(), search);
 }
 
 /**

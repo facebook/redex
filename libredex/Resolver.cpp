@@ -105,35 +105,6 @@ DexMethod* resolve_method(const DexClass* cls,
   return nullptr;
 }
 
-DexMethod* resolve_method_ref(const DexClass* cls,
-                              const DexString* name,
-                              const DexProto* proto,
-                              MethodSearch search) {
-  always_assert(search != MethodSearch::Super);
-  if (search != MethodSearch::Interface) {
-    const auto& super = cls->get_super_class();
-    if (super == nullptr) {
-      return nullptr;
-    }
-    const auto& super_cls = type_class(super);
-    auto* resolved = resolve_method(super_cls, name, proto, search);
-    if ((resolved != nullptr) || search != MethodSearch::InterfaceVirtual) {
-      return resolved;
-    }
-  }
-  for (const auto& super_intf : *cls->get_interfaces()) {
-    const auto& super_intf_cls = type_class(super_intf);
-    if (super_intf_cls == nullptr) {
-      continue;
-    }
-    auto* method = resolve_intf_method_ref(super_intf_cls, name, proto);
-    if (method != nullptr) {
-      return method;
-    }
-  }
-  return nullptr;
-}
-
 DexField* resolve_field(const DexType* owner,
                         const DexString* name,
                         const DexType* type,
