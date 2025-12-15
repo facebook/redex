@@ -290,11 +290,15 @@ inline DexMethod* resolve_invoke_method(
   auto* callee = resolve_method(callee_ref, search, caller);
   if ((callee == nullptr) && search == MethodSearch::Virtual) {
     callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual, caller);
-    if (resolved_virtual_to_interface != nullptr) {
-      *resolved_virtual_to_interface = callee != nullptr;
-    }
-  } else if (resolved_virtual_to_interface != nullptr) {
+  }
+  if (resolved_virtual_to_interface != nullptr) {
     *resolved_virtual_to_interface = false;
+    if (search == MethodSearch::Virtual && callee != nullptr) {
+      auto* callee_cls = type_class(callee->get_class());
+      always_assert_log(callee_cls != nullptr,
+                        "Resolved method %s has undefined class", SHOW(callee));
+      *resolved_virtual_to_interface = is_interface(callee_cls);
+    }
   }
   return callee;
 }
@@ -310,11 +314,15 @@ inline DexMethod* resolve_invoke_method(
   if ((callee == nullptr) && search == MethodSearch::Virtual) {
     callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual,
                             ref_cache, caller);
-    if (resolved_virtual_to_interface != nullptr) {
-      *resolved_virtual_to_interface = callee != nullptr;
-    }
-  } else if (resolved_virtual_to_interface != nullptr) {
+  }
+  if (resolved_virtual_to_interface != nullptr) {
     *resolved_virtual_to_interface = false;
+    if (search == MethodSearch::Virtual && callee != nullptr) {
+      auto* callee_cls = type_class(callee->get_class());
+      always_assert_log(callee_cls != nullptr,
+                        "Resolved method %s has undefined class", SHOW(callee));
+      *resolved_virtual_to_interface = is_interface(callee_cls);
+    }
   }
   return callee;
 }
