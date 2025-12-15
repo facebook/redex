@@ -6,6 +6,7 @@
  */
 
 #include "Resolver.h"
+#include "Show.h"
 
 namespace {
 
@@ -55,6 +56,8 @@ DexMethod* resolve_method(const DexClass* cls,
                           const DexMethod* caller) {
   if (search == MethodSearch::Interface) {
     if (cls != nullptr) {
+      always_assert_log(
+          is_interface(cls), "Class %s is not an interface\n", SHOW(cls));
       return resolve_intf_method_ref(cls, name, proto);
     }
   }

@@ -205,9 +205,18 @@ std::optional<DexMethod*> get_inferred_method_def(
     RefStats& stats) {
 
   auto* inferred_cls = type_class(inferred_type);
-  auto* resolved =
-      resolve_method(inferred_cls, callee->get_name(), callee->get_proto(),
-                     opcode_to_search(invoke_op));
+  auto method_search = opcode_to_search(invoke_op);
+  if (inferred_cls != nullptr && !is_interface(inferred_cls) &&
+      method_search == MethodSearch::Interface) {
+    // If the inferred type is a non-interface class, we should use
+    // Virtual search instead of Interface search.
+    // Interface search will walk through interface hierarchy of inferred_cls
+    // it won't check on interface hierarchy along inferred_cls's super
+    // class hierarchy
+    method_search = MethodSearch::Virtual;
+  }
+  auto* resolved = resolve_method(inferred_cls, callee->get_name(),
+                                  callee->get_proto(), method_search);
   // 1. If we cannot resolve the callee based on the inferred_cls, we bail.
   if ((resolved == nullptr) || !resolved->is_def()) {
     TRACE(RESO, 4, "Bailed resolved upon inferred_cls %s for %s",

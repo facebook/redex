@@ -348,7 +348,6 @@ TEST_F(ResolverTest, ResolveMethod) {
   EXPECT_TRUE(resolve_method(c_method, MethodSearch::Static) == nullptr);
   EXPECT_TRUE(resolve_method(c_method, MethodSearch::Virtual) == b_method);
   EXPECT_TRUE(resolve_method(c_method, MethodSearch::Any) == b_method);
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Interface) == a_method);
 
   EXPECT_TRUE(resolve_method(d_method, MethodSearch::Direct) == d_method);
   EXPECT_TRUE(resolve_method(d_method, MethodSearch::Static) == d_method);
@@ -397,8 +396,6 @@ TEST_F(ResolverTest, ResolveMethod) {
               b_method);
   EXPECT_TRUE(resolve_method(c_method, MethodSearch::Any, ref_cache) ==
               b_method);
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Interface, ref_cache) ==
-              a_method);
 
   auto* e_method = DexMethod::get_method("E.method:()V");
   EXPECT_TRUE(e_method != nullptr && e_method->is_def());
@@ -415,10 +412,8 @@ TEST_F(ResolverTest, ResolveMethod) {
   EXPECT_TRUE(resolve_method(e_method, MethodSearch::Direct) == e_method);
   EXPECT_TRUE(resolve_method(h_method, MethodSearch::Virtual) == h_method);
   EXPECT_TRUE(resolve_method(h_method, MethodSearch::Any) == h_method);
-  EXPECT_TRUE(resolve_method(f_method, MethodSearch::Interface) == e_method);
   EXPECT_TRUE(resolve_method(f_method, MethodSearch::Virtual) == nullptr);
   EXPECT_TRUE(resolve_method(g_method, MethodSearch::Virtual) == nullptr);
-  EXPECT_TRUE(resolve_method(g_method, MethodSearch::Interface) == nullptr);
   EXPECT_TRUE(resolve_method(f_method, MethodSearch::InterfaceVirtual) ==
               e_method);
   EXPECT_TRUE(resolve_method(g_method, MethodSearch::InterfaceVirtual) ==
