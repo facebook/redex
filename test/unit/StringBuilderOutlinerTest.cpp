@@ -11,7 +11,6 @@
 
 #include "IRAssembler.h"
 #include "JarLoader.h"
-#include "ObjectSensitiveDcePass.h"
 #include "RedexTest.h"
 #include "UsedVarsAnalysis.h"
 
