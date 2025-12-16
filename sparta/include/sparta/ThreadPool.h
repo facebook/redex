@@ -23,13 +23,19 @@ namespace sparta {
 // blocked.
 class AsyncRunner {
  public:
+  AsyncRunner() = default;
+
   template <class Function, class... Args>
   void run_async(Function&& f, Args&&... args) {
     run_async_bound(
         std::bind(std::forward<Function>(f), std::forward<Args>(args)...));
   }
 
-  virtual ~AsyncRunner() {}
+  virtual ~AsyncRunner() = default;
+  AsyncRunner(const AsyncRunner&) = delete;
+  AsyncRunner& operator=(const AsyncRunner&) = delete;
+  AsyncRunner(AsyncRunner&&) = delete;
+  AsyncRunner& operator=(AsyncRunner&&) = delete;
 
  protected:
   virtual void run_async_bound(std::function<void()> bound_f) = 0;
@@ -42,6 +48,8 @@ class AsyncRunner {
 template <class Thread = std::thread>
 class ThreadPool : public AsyncRunner {
  public:
+  ThreadPool() = default;
+
   // Number of spawned unjoined threads.
   size_t size() {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -75,6 +83,11 @@ class ThreadPool : public AsyncRunner {
 
   // Destruction joins.
   ~ThreadPool() override { join(); }
+
+  ThreadPool(const ThreadPool&) = delete;
+  ThreadPool& operator=(const ThreadPool&) = delete;
+  ThreadPool(ThreadPool&&) = delete;
+  ThreadPool& operator=(ThreadPool&&) = delete;
 
  protected:
   void run_async_bound(std::function<void()> bound_f) override {
