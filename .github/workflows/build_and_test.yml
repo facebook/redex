@@ -31,7 +31,7 @@ jobs:
       run: cat /etc/os-release
     - name: Install prerequisites for checking out the repo
       run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git-core
-    - uses: actions/checkout@v4.1.1
+    - uses: actions/checkout@v6
     - uses: "./.github/actions/prepare_debian"
     - uses: ./.github/actions/setup-build-and-test-w-make
       with:
@@ -57,7 +57,7 @@ jobs:
         - 19
         - 18
     steps:
-    - uses: actions/checkout@v4.1.1
+    - uses: actions/checkout@v6
     - uses: "./.github/actions/prepare_debian"
       with:
         install_clang_llvm_org: "${{ matrix.clang_version }}"
@@ -70,5 +70,5 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v4.1.1
+    - uses: actions/checkout@v6
     - uses: "./.github/actions/setup-build-and-test-windows"

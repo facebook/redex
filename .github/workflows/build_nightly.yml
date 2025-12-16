@@ -11,9 +11,9 @@ jobs:
   build-windows-artifacts:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v4.1.1
+    - uses: actions/checkout@v6
     - uses: "./.github/actions/setup-build-and-test-windows"
-    - uses: actions/upload-artifact@v4.0.0
+    - uses: actions/upload-artifact@v6
       with:
         name: redex-windows
         retention-days: 7
