@@ -70,13 +70,14 @@ class Dex037Test : public ::testing::Test {
     return nullptr;
   }
 
-  void verify_TestIGreeterHasCorrectStructure() {
+  void verify_TestIGreeterHasCorrectStructure(bool is_kotlin = false) {
     // Test that the Greeter interface is loaded and has default methods
     auto* igreeter_cls = find_class("Lcom/facebook/redextest/Dex037$IGreeter;");
     ASSERT_NE(nullptr, igreeter_cls);
     EXPECT_TRUE(is_interface(igreeter_cls));
     EXPECT_EQ(igreeter_cls->get_vmethods().size(), 5);
-    EXPECT_EQ(igreeter_cls->get_dmethods().size(), 2);
+    // Kotlin has an additional clinit
+    EXPECT_EQ(igreeter_cls->get_dmethods().size(), is_kotlin ? 3 : 2);
 
     auto* emptystring_method = find_method(igreeter_cls, "emptyString");
     ASSERT_NE(nullptr, emptystring_method);
@@ -984,7 +985,7 @@ class Dex037Test : public ::testing::Test {
     EXPECT_TRUE(layer_method->get_code() != nullptr);
   }
 
-  void verify_TestMidLayer4HasCorrectStructure() {
+  void verify_TestMidLayer4HasCorrectStructure(bool is_kotlin = false) {
     auto* midlayer4_cls =
         find_class("Lcom/facebook/redextest/Dex037$MidLayer4;");
     ASSERT_NE(nullptr, midlayer4_cls);
@@ -999,11 +1000,48 @@ class Dex037Test : public ::testing::Test {
     ASSERT_NE(nullptr, ilayer_cls);
     EXPECT_THAT(*(midlayer4_cls->get_interfaces()),
                 ::testing::UnorderedElementsAre(ilayer_cls->get_type()));
-
-    EXPECT_EQ(midlayer4_cls->get_vmethods().size(), 0);
+    if (is_kotlin) {
+      // We need to add a layer override to fulfill kotlin compilation request
+      EXPECT_EQ(midlayer4_cls->get_vmethods().size(), 1);
+      auto* layer_method = find_method(midlayer4_cls, "layer");
+      EXPECT_TRUE(is_public(layer_method));
+      EXPECT_FALSE(is_static(layer_method));
+      EXPECT_TRUE(layer_method->is_concrete());
+      EXPECT_TRUE(layer_method->get_code() != nullptr);
+      for (auto& mie : InstructionIterable(layer_method->get_code())) {
+        auto* insn = mie.insn;
+        if (insn->has_method()) {
+          auto* callee_ref = insn->get_method();
+          if (strcmp(callee_ref->get_name()->c_str(), "layer") == 0) {
+            EXPECT_EQ(insn->opcode(), OPCODE_INVOKE_SUPER);
+            auto* resolved = resolve_invoke_method(insn);
+            EXPECT_EQ(callee_ref->get_class(), toplayer_cls->get_type());
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+            resolved = resolve_super(toplayer_cls, callee_ref->get_name(),
+                                     callee_ref->get_proto(), layer_method);
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+            resolved = resolve_super(toplayer_cls, callee_ref->get_name(),
+                                     callee_ref->get_proto(), nullptr);
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+            resolved =
+                resolve_method(callee_ref, MethodSearch::Super, layer_method);
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+            resolved = resolve_method(callee_ref, MethodSearch::Super);
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+          }
+        }
+      }
+    } else {
+      EXPECT_EQ(midlayer4_cls->get_vmethods().size(), 0);
+    }
   }
 
-  void verify_TestFinalLayer4_3HasCorrectStructure() {
+  void verify_TestFinalLayer4_3HasCorrectStructure(bool is_kotlin = false) {
     auto* finallayer4_3_cls =
         find_class("Lcom/facebook/redextest/Dex037$FinalLayer4_3;");
     ASSERT_NE(nullptr, finallayer4_3_cls);
@@ -1022,7 +1060,18 @@ class Dex037Test : public ::testing::Test {
         *(finallayer4_3_cls->get_interfaces()),
         ::testing::UnorderedElementsAre(ilayer_conflict_cls->get_type()));
 
-    EXPECT_EQ(finallayer4_3_cls->get_vmethods().size(), 1);
+    if (is_kotlin) {
+      // Need to override layer in FinalLayer4_3 in kotlin to compile
+      EXPECT_EQ(finallayer4_3_cls->get_vmethods().size(), 2);
+      auto* layer_method = find_method(finallayer4_3_cls, "layer");
+      ASSERT_NE(nullptr, layer_method);
+      EXPECT_TRUE(is_public(layer_method));
+      EXPECT_FALSE(is_static(layer_method));
+      EXPECT_TRUE(layer_method->is_concrete());
+      EXPECT_TRUE(layer_method->get_code() != nullptr);
+    } else {
+      EXPECT_EQ(finallayer4_3_cls->get_vmethods().size(), 1);
+    }
     auto* get_layer_method = find_method(finallayer4_3_cls, "getLayer");
     ASSERT_NE(nullptr, get_layer_method);
     EXPECT_TRUE(is_public(get_layer_method));
@@ -1031,6 +1080,16 @@ class Dex037Test : public ::testing::Test {
     EXPECT_TRUE(get_layer_method->get_code() != nullptr);
     auto* toplayer_cls = find_class("Lcom/facebook/redextest/Dex037$TopLayer;");
     ASSERT_NE(nullptr, toplayer_cls);
+
+    const auto expect_class_type = [is_kotlin, midlayer4_cls,
+                                    toplayer_cls](const DexMethod* resolved) {
+      if (is_kotlin) {
+        // We also override layer in MidLayer4 to compile
+        EXPECT_EQ(resolved->get_class(), midlayer4_cls->get_type());
+      } else {
+        EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+      }
+    };
     for (auto& mie : InstructionIterable(get_layer_method->get_code())) {
       auto* insn = mie.insn;
       if (insn->has_method()) {
@@ -1040,22 +1099,22 @@ class Dex037Test : public ::testing::Test {
           auto* resolved = resolve_invoke_method(insn);
           EXPECT_EQ(callee_ref->get_class(), midlayer4_cls->get_type());
           ASSERT_NE(nullptr, resolved);
-          EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+          expect_class_type(resolved);
           resolved = resolve_super(midlayer4_cls, callee_ref->get_name(),
                                    callee_ref->get_proto(), get_layer_method);
           ASSERT_NE(nullptr, resolved);
-          EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+          expect_class_type(resolved);
           resolved = resolve_super(midlayer4_cls, callee_ref->get_name(),
                                    callee_ref->get_proto(), nullptr);
           ASSERT_NE(nullptr, resolved);
-          EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+          expect_class_type(resolved);
           resolved =
               resolve_method(callee_ref, MethodSearch::Super, get_layer_method);
           ASSERT_NE(nullptr, resolved);
-          EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+          expect_class_type(resolved);
           resolved = resolve_method(callee_ref, MethodSearch::Super);
           ASSERT_NE(nullptr, resolved);
-          EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+          expect_class_type(resolved);
         }
       }
     }
@@ -1114,7 +1173,7 @@ class Dex037Test : public ::testing::Test {
     }
   }
 
-  void verify_TestFinalLayer6HasCorrectStructure() {
+  void verify_TestFinalLayer6HasCorrectStructure(bool is_kotlin = false) {
     auto* finallayer6_cls =
         find_class("Lcom/facebook/redextest/Dex037$FinalLayer6;");
     ASSERT_NE(nullptr, finallayer6_cls);
@@ -1134,8 +1193,47 @@ class Dex037Test : public ::testing::Test {
     EXPECT_THAT(*(finallayer6_cls->get_interfaces()),
                 ::testing::ElementsAre(ilayer_cls->get_type(),
                                        ilayer_conflict_cls->get_type()));
-
-    EXPECT_EQ(finallayer6_cls->get_vmethods().size(), 1);
+    if (is_kotlin) {
+      // We need to override layer method to fulfill kotlin compilation
+      // requirement
+      EXPECT_EQ(finallayer6_cls->get_vmethods().size(), 2);
+      auto* layer_method = find_method(finallayer6_cls, "layer");
+      ASSERT_NE(nullptr, layer_method);
+      EXPECT_TRUE(is_public(layer_method));
+      EXPECT_FALSE(is_static(layer_method));
+      EXPECT_TRUE(layer_method->is_concrete());
+      EXPECT_TRUE(layer_method->get_code() != nullptr);
+      for (auto& mie : InstructionIterable(layer_method->get_code())) {
+        auto* insn = mie.insn;
+        if (insn->has_method()) {
+          auto* callee_ref = insn->get_method();
+          if (strcmp(callee_ref->get_name()->c_str(), "layer") == 0) {
+            EXPECT_EQ(insn->opcode(), OPCODE_INVOKE_SUPER);
+            auto* resolved = resolve_invoke_method(insn);
+            EXPECT_EQ(callee_ref->get_class(), midlayer3_cls->get_type());
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), midlayer3_cls->get_type());
+            resolved = resolve_super(midlayer3_cls, callee_ref->get_name(),
+                                     callee_ref->get_proto(), layer_method);
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), midlayer3_cls->get_type());
+            resolved = resolve_super(midlayer3_cls, callee_ref->get_name(),
+                                     callee_ref->get_proto(), nullptr);
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), midlayer3_cls->get_type());
+            resolved =
+                resolve_method(callee_ref, MethodSearch::Super, layer_method);
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), midlayer3_cls->get_type());
+            resolved = resolve_method(callee_ref, MethodSearch::Super);
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), midlayer3_cls->get_type());
+          }
+        }
+      }
+    } else {
+      EXPECT_EQ(finallayer6_cls->get_vmethods().size(), 1);
+    }
     auto* get_layer_method = find_method(finallayer6_cls, "getLayer");
     ASSERT_NE(nullptr, get_layer_method);
     EXPECT_TRUE(is_public(get_layer_method));
@@ -1901,7 +1999,7 @@ class Dex037Test : public ::testing::Test {
     }
   }
 
-  void verify_TestResolveMethodInvokeStaticInterface() {
+  void verify_TestResolveMethodInvokeStaticInterface(bool is_kotlin = false) {
     auto* dex037_cls = find_class("Lcom/facebook/redextest/Dex037;");
     ASSERT_NE(nullptr, dex037_cls);
 
@@ -1919,11 +2017,14 @@ class Dex037Test : public ::testing::Test {
       if (insn->has_method()) {
         auto* callee_ref = insn->get_method();
         auto* resolved = resolve_invoke_method(insn);
-        if (strcmp(callee_ref->get_name()->c_str(), "staticGreet") == 0) {
-          EXPECT_EQ(insn->opcode(), OPCODE_INVOKE_STATIC);
-          EXPECT_EQ(callee_ref->get_class(), igreeter_cls->get_type());
-          ASSERT_NE(nullptr, resolved);
-          EXPECT_EQ(resolved->get_class(), igreeter_cls->get_type());
+        if (!is_kotlin) {
+          // Kotlin generate invoke-virtual on companion method
+          if (strcmp(callee_ref->get_name()->c_str(), "staticGreet") == 0) {
+            EXPECT_EQ(insn->opcode(), OPCODE_INVOKE_STATIC);
+            EXPECT_EQ(callee_ref->get_class(), igreeter_cls->get_type());
+            ASSERT_NE(nullptr, resolved);
+            EXPECT_EQ(resolved->get_class(), igreeter_cls->get_type());
+          }
         }
       }
     }
@@ -2348,7 +2449,8 @@ class Dex037Test : public ::testing::Test {
     }
   }
 
-  void verify_TestResolveMethodLayeredInvokeClassAndInterface3() {
+  void verify_TestResolveMethodLayeredInvokeClassAndInterface3(
+      bool is_kotlin = false) {
     auto* dex037_cls = find_class("Lcom/facebook/redextest/Dex037;");
     ASSERT_NE(nullptr, dex037_cls);
 
@@ -2379,7 +2481,12 @@ class Dex037Test : public ::testing::Test {
           EXPECT_EQ(insn->opcode(), OPCODE_INVOKE_VIRTUAL);
           EXPECT_EQ(callee_ref->get_class(), finallayer4_3_cls->get_type());
           ASSERT_NE(nullptr, resolved);
-          EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+          if (is_kotlin) {
+            // We override layer in FinalLayer4_3 in kotlin to compile
+            EXPECT_EQ(resolved->get_class(), finallayer4_3_cls->get_type());
+          } else {
+            EXPECT_EQ(resolved->get_class(), toplayer_cls->get_type());
+          }
         }
       }
     }
@@ -2453,7 +2560,8 @@ class Dex037Test : public ::testing::Test {
     }
   }
 
-  void verify_TestResolveMethodLayeredInvokeWithClassMultipleInterface() {
+  void verify_TestResolveMethodLayeredInvokeWithClassMultipleInterface(
+      bool is_kotlin = false) {
     auto* dex037_cls = find_class("Lcom/facebook/redextest/Dex037;");
     ASSERT_NE(nullptr, dex037_cls);
 
@@ -2485,7 +2593,12 @@ class Dex037Test : public ::testing::Test {
           EXPECT_EQ(insn->opcode(), OPCODE_INVOKE_VIRTUAL);
           EXPECT_EQ(callee_ref->get_class(), finallayer6_cls->get_type());
           ASSERT_NE(nullptr, resolved);
-          EXPECT_EQ(resolved->get_class(), midlayer3_cls->get_type());
+          if (is_kotlin) {
+            // We override layer for FinalLayer6 in kotlin to compile
+            EXPECT_EQ(resolved->get_class(), finallayer6_cls->get_type());
+          } else {
+            EXPECT_EQ(resolved->get_class(), midlayer3_cls->get_type());
+          }
         }
       }
     }
