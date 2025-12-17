@@ -103,6 +103,7 @@ bool is_less_than_for_any_value(
     const SourceBlock* lhs,
     const SourceBlock* rhs,
     uint32_t max_interaction = std::numeric_limits<uint32_t>::max()) {
+  always_assert(lhs != nullptr && rhs != nullptr);
   auto limit =
       std::min(std::min(lhs->vals_size, rhs->vals_size), max_interaction);
   for (size_t i = 0; i != limit; ++i) {
@@ -1407,9 +1408,6 @@ size_t hot_immediate_dom_not_hot(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
-  if (!has_source_block_positive_val(first_sb_current_b)) {
-    return 0;
-  }
 
   auto* immediate_dominator = dominators.get_idom(block);
   if (immediate_dominator == nullptr) {
@@ -1417,9 +1415,12 @@ size_t hot_immediate_dom_not_hot(
   }
   auto* first_sb_immediate_dominator =
       source_blocks::get_first_source_block(immediate_dominator);
-  bool is_idom_hot =
-      has_source_block_positive_val(first_sb_immediate_dominator);
-  return is_idom_hot ? 0 : 1;
+  return (first_sb_current_b != nullptr) &&
+                 (first_sb_immediate_dominator != nullptr) &&
+                 is_less_than_for_any_value(first_sb_immediate_dominator,
+                                            first_sb_current_b)
+             ? 1
+             : 0;
 }
 
 // TODO: This needs to be adapted to sum up the predecessors.
