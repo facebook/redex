@@ -99,6 +99,20 @@ void insert_after_exceptions_impl(Block* cur,
   }
 }
 
+bool is_less_than_for_any_value(
+    const SourceBlock* lhs,
+    const SourceBlock* rhs,
+    uint32_t max_interaction = std::numeric_limits<uint32_t>::max()) {
+  auto limit =
+      std::min(std::min(lhs->vals_size, rhs->vals_size), max_interaction);
+  for (size_t i = 0; i != limit; ++i) {
+    if (lhs->get_val(i).get_value_or(0) < rhs->get_val(i).get_value_or(0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static char get_edge_char(const Edge* e) {
   switch (e->type()) {
   case EDGE_BRANCH:
@@ -1655,29 +1669,14 @@ void chain_and_dom_update(
     state.dom_block = nullptr;
   }
 
-  auto limit = std::min(sb->vals_size, kMaxInteraction);
-
   if (state.last != nullptr) {
-    for (size_t i = 0; i != limit; ++i) {
-      auto last_val = state.last->get_val(i);
-      auto sb_val = sb->get_val(i);
-      if (last_val) {
-        // Within and across basic blocks, we want to make sure that no cold
-        // value precedes a hot value
-        bool cold_precedes_hot = sb_val && *last_val < *sb_val;
-        // Within a basic block, we want to make sure that no hot value
-        // precedes a cold value
-        bool hot_precedes_cold = *last_val > sb_val.get_value_or(0) &&
-                                 !first_in_block && !prev_insn_can_throw;
-        if (cold_precedes_hot || hot_precedes_cold) {
-          state.violations++;
-          break;
-        }
-      } else if (sb_val && *sb_val > 0) {
-        // Treat 'x' and '0' the same for violations for now.
-        state.violations++;
-        break;
-      }
+    bool cold_precedes_hot =
+        is_less_than_for_any_value(state.last, sb, kMaxInteraction);
+    bool hot_precedes_cold =
+        is_less_than_for_any_value(sb, state.last, kMaxInteraction) &&
+        !first_in_block && !prev_insn_can_throw;
+    if (cold_precedes_hot || hot_precedes_cold) {
+      state.violations++;
     }
   }
 
