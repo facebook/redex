@@ -1667,7 +1667,7 @@ void chain_and_dom_update(
         bool cold_precedes_hot = sb_val && *last_val < *sb_val;
         // Within a basic block, we want to make sure that no hot value
         // precedes a cold value
-        bool hot_precedes_cold = sb_val && *last_val > *sb_val &&
+        bool hot_precedes_cold = *last_val > sb_val.get_value_or(0) &&
                                  !first_in_block && !prev_insn_can_throw;
         if (cold_precedes_hot || hot_precedes_cold) {
           state.violations++;
