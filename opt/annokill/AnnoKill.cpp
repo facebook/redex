@@ -332,7 +332,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
         } else if (insn->has_method()) {
           auto* method = insn->get_method();
           DexMethod* methdef =
-              resolve_method(method, opcode_to_search(insn), meth);
+              resolve_method_deprecated(method, opcode_to_search(insn), meth);
           if (methdef != nullptr) {
             method = methdef;
           }

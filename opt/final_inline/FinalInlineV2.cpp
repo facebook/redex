@@ -255,8 +255,8 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
   cfg_adapter::iterate_with_iterator(code, [&](const IRList::iterator& it) {
     auto* insn = it->insn;
     if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee_method_def =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
+      auto* callee_method_def = resolve_method_deprecated(
+          insn->get_method(), opcode_to_search(insn), method);
       if ((callee_method_def == nullptr) || callee_method_def->is_external() ||
           !callee_method_def->is_concrete() ||
           (m_allowed_opaque_callees.count(callee_method_def) != 0u)) {

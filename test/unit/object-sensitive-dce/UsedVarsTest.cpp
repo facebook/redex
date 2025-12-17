@@ -48,8 +48,9 @@ void optimize(const uv::FixpointIterator& fp_iter, cfg::ControlFlowGraph& cfg) {
 }
 
 // We need to construct the classes in our tests because the used vars analysis
-// will call resolve_method() during its analysis. resolve_method() needs the
-// method to reside in a class hierarchy in order to work correctly.
+// will call resolve_method_deprecated() during its analysis.
+// resolve_method_deprecated() needs the method to reside in a class hierarchy
+// in order to work correctly.
 DexClass* create_simple_class(const std::string& name) {
   ClassCreator cc(DexType::make_type(name));
   cc.set_super(type::java_lang_Object());

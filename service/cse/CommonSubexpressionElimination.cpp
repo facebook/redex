@@ -225,7 +225,8 @@ static Barrier make_barrier(const IRInstruction* insn) {
                                              ? FieldSearch::Static
                                              : FieldSearch::Instance);
   } else if (insn->has_method()) {
-    b.method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    b.method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   }
   return b;
 }
@@ -1347,7 +1348,7 @@ bool SharedState::is_invoke_safe(const IRInstruction* insn,
     return true;
   }
 
-  auto* method = resolve_method(method_ref, opcode_to_search(insn));
+  auto* method = resolve_method_deprecated(method_ref, opcode_to_search(insn));
   if (method == nullptr) {
     return false;
   }
@@ -1388,7 +1389,8 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
   }
 
   auto* method_ref = insn->get_method();
-  DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
+  DexMethod* method =
+      resolve_method_deprecated(method_ref, opcode_to_search(insn));
   CseUnorderedLocationSet written_locations;
   if (!process_base_and_overriding_methods(
           m_method_override_graph.get(), method, &m_safe_method_defs,
@@ -1421,8 +1423,8 @@ void SharedState::log_barrier(const Barrier& barrier) {
 const CseUnorderedLocationSet&
 SharedState::get_read_locations_of_conditionally_pure_method(
     const DexMethodRef* method_ref, IROpcode opcode) const {
-  auto* method = resolve_method(const_cast<DexMethodRef*>(method_ref),
-                                opcode_to_search(opcode));
+  auto* method = resolve_method_deprecated(
+      const_cast<DexMethodRef*>(method_ref), opcode_to_search(opcode));
   if (method == nullptr) {
     return no_locations;
   }
@@ -1458,7 +1460,8 @@ bool SharedState::has_pure_method(const IRInstruction* insn) const {
     return true;
   }
 
-  auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* method =
+      resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   if (method != nullptr &&
       m_pure_methods.find(method) != m_pure_methods.end()) {
     TRACE(CSE, 4, "[CSE] resolved %spure for %s",

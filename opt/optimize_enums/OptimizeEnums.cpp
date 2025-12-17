@@ -135,8 +135,8 @@ bool analyze_enum_ctors(
   for (; !delegating_calls.empty(); delegating_calls.pop()) {
     auto dc = delegating_calls.front();
 
-    auto* delegate =
-        resolve_method(dc.invoke->get_method(), MethodSearch::Direct);
+    auto* delegate = resolve_method_deprecated(dc.invoke->get_method(),
+                                               MethodSearch::Direct);
 
     uint32_t delegate_ordinal;
     { // Only proceed if the delegate constructor has already been processed.
@@ -215,9 +215,9 @@ void collect_generated_switch_cases(
     GeneratedSwitchCases& generated_switch_cases) {
   mf::flow_t f;
 
-  DexMethod* Enum_ordinal =
-      resolve_method(DexMethod::get_method("Ljava/lang/Enum;.ordinal:()I"),
-                     MethodSearch::Virtual);
+  DexMethod* Enum_ordinal = resolve_method_deprecated(
+      DexMethod::get_method("Ljava/lang/Enum;.ordinal:()I"),
+      MethodSearch::Virtual);
   always_assert(Enum_ordinal);
 
   auto m_generated_field = m::has_field(

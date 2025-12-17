@@ -776,8 +776,8 @@ MethodReferencesGatherer::get_returning_dependency(
   };
   if (opcode::is_invoke_static(op) || opcode::is_invoke_direct(op)) {
     always_assert(refs->methods.size() == 1);
-    const auto* resolved_callee =
-        resolve_method(insn->get_method(), opcode_to_search(insn), m_method);
+    const auto* resolved_callee = resolve_method_deprecated(
+        insn->get_method(), opcode_to_search(insn), m_method);
     if (resolved_callee != nullptr) {
       always_assert(!resolved_callee->is_virtual());
       always_assert(!is_abstract(resolved_callee));
@@ -897,8 +897,8 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
     if (opcode::is_new_instance(op)) {
       refs->new_instances.push_back(insn->get_type());
     } else if (gather_methods && opcode::is_invoke_super(op)) {
-      auto* callee =
-          resolve_method(insn->get_method(), MethodSearch::Super, m_method);
+      auto* callee = resolve_method_deprecated(insn->get_method(),
+                                               MethodSearch::Super, m_method);
       if ((callee != nullptr) && !callee->is_external()) {
         always_assert(callee->is_virtual());
         if (is_abstract(callee)) {
@@ -911,7 +911,7 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
       }
     } else if (gather_methods && (opcode::is_invoke_virtual(op) ||
                                   opcode::is_invoke_interface(op))) {
-      auto* resolved_callee = resolve_invoke_method(insn, m_method);
+      auto* resolved_callee = resolve_invoke_method_deprecated(insn, m_method);
       if (resolved_callee == nullptr) {
         // Typically clone() on an array, or other obscure external references
         TRACE(REACH, 2, "Unresolved virtual callee at %s", SHOW(insn));

@@ -235,7 +235,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
     return false;
   } else {
     auto* invoked =
-        resolve_method(it->insn->get_method(), MethodSearch::Direct);
+        resolve_method_deprecated(it->insn->get_method(), MethodSearch::Direct);
     if (invoked == nullptr || !method::is_constructor(invoked)) {
       return false;
     }
@@ -261,7 +261,7 @@ UnorderedSet<DexMethod*> get_non_trivial_init_methods(IRCode* code,
     auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
       auto* invoked =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
+          resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
       if (invoked != nullptr && invoked->get_class() == type) {
         if (method::is_constructor(invoked) &&
             !is_trivial_builder_constructor(invoked)) {
@@ -290,7 +290,7 @@ UnorderedSet<IRInstruction*> get_super_class_initializations(
     auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
       auto* invoked =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
+          resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
       if (invoked != nullptr && invoked->get_class() == parent_type &&
           method::is_init(invoked)) {
         insns.emplace(insn);
@@ -825,7 +825,7 @@ std::vector<cfg::InstructionIterator> get_invokes_for_method(
     auto* insn = it->insn;
     if (opcode::is_an_invoke(insn->opcode())) {
       auto* invoked = insn->get_method();
-      auto* def = resolve_method(invoked, MethodSearch::Any);
+      auto* def = resolve_method_deprecated(invoked, MethodSearch::Any);
       if (def != nullptr) {
         invoked = def;
       }
@@ -975,7 +975,7 @@ void transfer_object_reach(const DexType* obj,
   } else if (opcode::writes_result_register(op)) {
     if (opcode::is_an_invoke(op)) {
       auto* invoked = insn->get_method();
-      auto* def = resolve_method(invoked, MethodSearch::Any);
+      auto* def = resolve_method_deprecated(invoked, MethodSearch::Any);
       if (def != nullptr) {
         invoked = def;
       }
@@ -1004,7 +1004,7 @@ bool tainted_reg_escapes(
     auto op = insn->opcode();
     if (opcode::is_an_invoke(op)) {
       auto* invoked =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
+          resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
       size_t args_reg_start{0};
       if (invoked == nullptr) {
         TRACE(BUILDERS, 5, "Unable to resolve %s", SHOW(insn));
@@ -1145,7 +1145,7 @@ UnorderedSet<DexMethod*> get_all_methods(cfg::ControlFlowGraph& cfg,
     auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
       auto* invoked =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
+          resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
       if (invoked != nullptr && invoked->get_class() == type) {
         methods.insert(invoked);
       }

@@ -136,7 +136,8 @@ void update_code_type_refs(
         }
         bool resolved_virtual_to_interface;
         /*const auto meth_def =*/
-        resolve_invoke_method(insn, meth, &resolved_virtual_to_interface);
+        resolve_invoke_method_deprecated(insn, meth,
+                                         &resolved_virtual_to_interface);
         // This is a very tricky case where ResolveRefs cannot resolve a
         // MethodRef to MethodDef. It is a invoke-virtual with a MethodRef
         // referencing an interface method implmentation defined in a subclass
@@ -357,7 +358,7 @@ void update_instance_of(
     }
     for (auto* invoke : instance_of_invokes) {
       // Inline the invoke to INSTANCE_OF method.
-      auto* callee = resolve_invoke_method(invoke, caller);
+      auto* callee = resolve_invoke_method_deprecated(invoke, caller);
       bool is_inlined = inliner::inline_with_cfg(
           caller, callee, invoke, nullptr, nullptr, cfg.get_registers_size());
       TRACE(CLMG, 9, " inlined (%d) INSTANCE_OF in \n%s", is_inlined,

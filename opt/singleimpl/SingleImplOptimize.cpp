@@ -509,7 +509,8 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
     // get the new method if one was created (interface method with a single
     // impl in signature)
     TRACE(INTF, 3, "(MITF) interface method %s", SHOW(meth));
-    auto* new_meth = resolve_virtual(impl, meth->get_name(), meth->get_proto());
+    auto* new_meth =
+        resolve_virtual_deprecated(impl, meth->get_name(), meth->get_proto());
     if (new_meth == nullptr) {
       new_meth = DexMethod::make_method_downcast(
           impl->get_type(), meth->get_name(), meth->get_proto());

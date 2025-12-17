@@ -85,7 +85,8 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
         inlinable_insns.emplace(insn);
       } else if (opcode::is_invoke_direct(insn->opcode())) {
-        auto* callee = resolve_method(insn->get_method(), MethodSearch::Direct);
+        auto* callee =
+            resolve_method_deprecated(insn->get_method(), MethodSearch::Direct);
         if (super_ctors.count(callee) != 0u) {
           inlinable_insns.emplace(insn);
         }
@@ -124,7 +125,8 @@ void BuilderTransform::update_virtual_calls(
     const auto* current_instance = pair.second;
 
     if (opcode::is_invoke_virtual(insn->opcode())) {
-      auto* method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+      auto* method =
+          resolve_method_deprecated(insn->get_method(), MethodSearch::Virtual);
       if (method == nullptr) {
         continue;
       }
@@ -247,8 +249,8 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
                               insn->opcode() == OPCODE_CHECK_CAST,
                           "Different insn %s", SHOW(insn));
         if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
-          auto* invoked =
-              resolve_method(insn->get_method(), MethodSearch::Direct);
+          auto* invoked = resolve_method_deprecated(insn->get_method(),
+                                                    MethodSearch::Direct);
 
           // We only accept `Object.<init>()` here, since we can't inline it
           // any further. Keep Object.<init> in place to avoid confusing

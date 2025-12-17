@@ -249,7 +249,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
         continue;
       }
       const auto* resolved_callee =
-          resolve_method(callee, opcode_to_search(use_insn), method);
+          resolve_method_deprecated(callee, opcode_to_search(use_insn), method);
       if ((resolved_callee == nullptr) ||
           resolved_callee->get_class() != type) {
         TRACE(CLMG, 5,

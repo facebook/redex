@@ -56,7 +56,8 @@ void ResolveMethodRefs::analyze_method(
         continue;
       }
       auto* insn_method = insn->get_method();
-      auto* intf = resolve_method(insn_method, opcode_to_search(insn), method);
+      auto* intf = resolve_method_deprecated(insn_method,
+                                             opcode_to_search(insn), method);
       if (intf == nullptr) {
         continue;
       }
@@ -73,8 +74,8 @@ void ResolveMethodRefs::analyze_method(
       if (ms == MethodSearch::Interface && !is_interface(*analysis_cls)) {
         ms = MethodSearch::Virtual;
       }
-      DexMethod* impl = resolve_method(*analysis_cls, intf->get_name(),
-                                       intf->get_proto(), ms);
+      DexMethod* impl = resolve_method_deprecated(
+          *analysis_cls, intf->get_name(), intf->get_proto(), ms);
       // Step2.  if this calle can be resolved, replace invoke-interface to
       // invoke-virtual.
       if ((impl == nullptr) || xstores.cross_store_ref(method, impl)) {

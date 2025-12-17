@@ -126,7 +126,7 @@ class BuilderTransform {
  private:
   std::unique_ptr<MultiMethodInliner> m_inliner;
   inliner::InlinerConfig m_inliner_config;
-  ConcurrentMethodResolver m_concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated m_concurrent_method_resolver;
 };
 
 UnorderedSet<DexMethod*> get_all_methods(IRCode* code, const DexType* type);

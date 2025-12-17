@@ -501,7 +501,7 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
         }
         DexMethod* top = nullptr;
         if (is_interface(cls)) {
-          top = resolve_method(callee, MethodSearch::Interface);
+          top = resolve_method_deprecated(callee, MethodSearch::Interface);
         } else {
           top = find_top_impl(cls, callee->get_name(), callee->get_proto());
           if (top == nullptr) {

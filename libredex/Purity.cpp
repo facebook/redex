@@ -916,7 +916,7 @@ static size_t analyze_read_locations(
                     }
                   }
                 } else if (opcode::is_an_invoke(opcode)) {
-                  auto* invoke_method = resolve_method(
+                  auto* invoke_method = resolve_method_deprecated(
                       insn->get_method(), opcode_to_search(opcode), method);
                   if (((invoke_method != nullptr) &&
                        opcode::is_invoke_static(opcode) &&

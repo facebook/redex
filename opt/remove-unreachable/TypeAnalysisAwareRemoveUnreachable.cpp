@@ -152,8 +152,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
           }
           auto method_search = get_method_search(analysis_cls, invoke);
           auto* analysis_resolved_callee =
-              resolve_method(analysis_cls, callee_ref->get_name(),
-                             callee_ref->get_proto(), method_search);
+              resolve_method_deprecated(analysis_cls, callee_ref->get_name(),
+                                        callee_ref->get_proto(), method_search);
           if (analysis_resolved_callee == nullptr) {
             break;
           }
@@ -196,8 +196,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
       }
       auto method_search = get_method_search(*analysis_cls, invoke);
       analysis_resolved_callee =
-          resolve_method(*analysis_cls, callee_ref->get_name(),
-                         callee_ref->get_proto(), method_search);
+          resolve_method_deprecated(*analysis_cls, callee_ref->get_name(),
+                                    callee_ref->get_proto(), method_search);
       TRACE(TRMU, 5, "Analysis type %s", SHOW(*analysis_cls));
       if (analysis_resolved_callee != nullptr) {
         TRACE(TRMU, 5, "Push analysis resolved callee %s",
@@ -266,7 +266,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
           continue;
         }
         auto* method_ref = insn->get_method();
-        auto* resolved_callee = resolve_method(
+        auto* resolved_callee = resolve_method_deprecated(
             method_ref, opcode_to_search(insn), resolved_refs, method);
         auto& refs = insns_refs[insn];
         if (!is_potentially_true_virtual(resolved_callee, insn)) {

@@ -75,8 +75,8 @@ void scan_any_init_reachables(
     if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }
-    auto* callee_method_def =
-        resolve_method(insn->get_method(), opcode_to_search(insn), method);
+    auto* callee_method_def = resolve_method_deprecated(
+        insn->get_method(), opcode_to_search(insn), method);
     if ((callee_method_def == nullptr) || callee_method_def->is_external() ||
         !callee_method_def->is_concrete()) {
       continue;
@@ -394,8 +394,8 @@ void GlobalTypeAnalysis::find_any_init_reachables(
       if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
-      auto* callee_method_def =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
+      auto* callee_method_def = resolve_method_deprecated(
+          insn->get_method(), opcode_to_search(insn), method);
       if ((callee_method_def == nullptr) || callee_method_def->is_external() ||
           !callee_method_def->is_concrete()) {
         continue;

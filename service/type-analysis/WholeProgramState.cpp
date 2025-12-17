@@ -515,7 +515,8 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
     return true;
   }
 
-  auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* method =
+      resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr || !returns_reference(method)) {
     // Reset RESULT_REGISTER
     env->set(RESULT_REGISTER, DexTypeDomain::top());

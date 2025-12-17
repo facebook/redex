@@ -188,8 +188,8 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
     if (m_may_allocate_registers && (m_method_override_graph != nullptr) &&
         (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
          insn->opcode() == OPCODE_INVOKE_INTERFACE) &&
-        has_no_implementors(
-            resolve_method(insn->get_method(), opcode_to_search(insn)))) {
+        has_no_implementors(resolve_method_deprecated(
+            insn->get_method(), opcode_to_search(insn)))) {
       TRACE(DCE, 2, "DEAD NPE: %s", SHOW(insn));
       if (!npe_creator) {
         npe_creator = std::make_unique<npe::NullPointerExceptionCreator>(&cfg);
@@ -249,7 +249,7 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
   if (opcode::has_side_effects(inst->opcode())) {
     if (opcode::is_an_invoke(inst->opcode())) {
       auto* const meth =
-          resolve_method(inst->get_method(), opcode_to_search(inst));
+          resolve_method_deprecated(inst->get_method(), opcode_to_search(inst));
       if (meth == nullptr) {
         return true;
       }

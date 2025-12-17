@@ -235,7 +235,7 @@ class InlinedEstimator {
                   opcode::is_an_invoke(allocation_insn->opcode()) ||
                   opcode::is_load_param_object(allocation_insn->opcode()));
     if (opcode::is_an_invoke(allocation_insn->opcode())) {
-      auto* callee = resolve_invoke_method(allocation_insn, method);
+      auto* callee = resolve_invoke_method_deprecated(allocation_insn, method);
       always_assert(callee);
       const auto* callee_allocation_insn =
           m_method_summaries.at(callee).allocation_insn();
@@ -318,7 +318,8 @@ class InlinedEstimator {
               opcode::is_load_param_object(allocation_insn->opcode()));
           int64_t delta = 0;
           if (opcode::is_an_invoke(allocation_insn->opcode())) {
-            auto* callee = resolve_invoke_method(allocation_insn, method);
+            auto* callee =
+                resolve_invoke_method_deprecated(allocation_insn, method);
             always_assert(callee);
             const auto* callee_allocation_insn =
                 m_method_summaries.at(callee).allocation_insn();
@@ -654,7 +655,8 @@ size_t shrink_root_methods(
       const auto* allocation_insn = it2->second.allocation_insn();
       if ((allocation_insn != nullptr) &&
           opcode::is_an_invoke(allocation_insn->opcode())) {
-        auto* callee = resolve_invoke_method(allocation_insn, caller);
+        auto* callee =
+            resolve_invoke_method_deprecated(allocation_insn, caller);
         always_assert(callee);
         if (callee == method) {
           lose(caller);
@@ -2052,7 +2054,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       inline_anchors, &inlinable_methods_kept, &callees_cache,
       &method_summary_cache);
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
   UnorderedSet<DexMethod*> no_default_inlinables;
   // customize shrinking options
   auto inliner_config = conf.get_inliner_config();

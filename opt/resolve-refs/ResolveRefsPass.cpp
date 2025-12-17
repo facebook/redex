@@ -170,7 +170,7 @@ void try_desuperify(const DexMethod* caller,
     return;
   }
   // start resolve_method search in the superclass of :cls.
-  auto* callee = resolve_method(
+  auto* callee = resolve_method_deprecated(
       type_class(cls->get_super_class()), insn->get_method()->get_name(),
       insn->get_method()->get_proto(), MethodSearch::Virtual);
   // External methods may not always be final across runtime versions
@@ -215,8 +215,8 @@ std::optional<DexMethod*> get_inferred_method_def(
     // class hierarchy
     method_search = MethodSearch::Virtual;
   }
-  auto* resolved = resolve_method(inferred_cls, callee->get_name(),
-                                  callee->get_proto(), method_search);
+  auto* resolved = resolve_method_deprecated(
+      inferred_cls, callee->get_name(), callee->get_proto(), method_search);
   // 1. If we cannot resolve the callee based on the inferred_cls, we bail.
   if ((resolved == nullptr) || !resolved->is_def()) {
     TRACE(RESO, 4, "Bailed resolved upon inferred_cls %s for %s",
@@ -268,8 +268,8 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
   always_assert(insn->has_method());
   auto* mref = insn->get_method();
   bool resolved_virtual_to_interface;
-  auto* mdef =
-      resolve_invoke_method(insn, caller, &resolved_virtual_to_interface);
+  auto* mdef = resolve_invoke_method_deprecated(insn, caller,
+                                                &resolved_virtual_to_interface);
   if ((mdef == nullptr) && is_array_clone(insn)) {
     auto* object_array_clone = method::java_lang_Objects_clone();
     TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref),
@@ -438,7 +438,8 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
     }
 
     auto* mref = insn->get_method();
-    auto* callee = resolve_method(mref, opcode_to_search(insn), method);
+    auto* callee =
+        resolve_method_deprecated(mref, opcode_to_search(insn), method);
     if (callee == nullptr) {
       if (mref != method::java_lang_Objects_clone()) {
         stats.num_unresolvable_mrefs++;

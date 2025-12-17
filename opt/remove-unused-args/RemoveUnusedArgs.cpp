@@ -83,31 +83,31 @@ RemoveArgs::PassStats RemoveArgs::run(ConfigFiles& config) {
  * move-result instructions, and record this information for each method.
  */
 void RemoveArgs::gather_results_used() {
-  walk::parallel::code(m_scope, [&result_used = m_result_used](DexMethod*,
-                                                               IRCode& code) {
-    always_assert(code.cfg_built());
-    auto& cfg = code.cfg();
-    auto ii = InstructionIterable(cfg);
-    for (auto it = ii.begin(); it != ii.end(); ++it) {
-      auto* insn = it->insn;
-      if (!opcode::is_an_invoke(insn->opcode())) {
-        continue;
-      }
-      auto move_result = cfg.move_result_of(it);
-      if (move_result.is_end()) {
-        continue;
-      }
-      auto* method =
-          resolve_method(insn->get_method(), opcode_to_search(insn->opcode()));
-      // The above should return any callee for a virtual callsite. Because we
-      // only remove results for groups of related methods where every result
-      // can be removed, the logic works for true virtuals.
-      if (method == nullptr) {
-        continue;
-      }
-      result_used.insert(method);
-    }
-  });
+  walk::parallel::code(
+      m_scope, [&result_used = m_result_used](DexMethod*, IRCode& code) {
+        always_assert(code.cfg_built());
+        auto& cfg = code.cfg();
+        auto ii = InstructionIterable(cfg);
+        for (auto it = ii.begin(); it != ii.end(); ++it) {
+          auto* insn = it->insn;
+          if (!opcode::is_an_invoke(insn->opcode())) {
+            continue;
+          }
+          auto move_result = cfg.move_result_of(it);
+          if (move_result.is_end()) {
+            continue;
+          }
+          auto* method = resolve_method_deprecated(
+              insn->get_method(), opcode_to_search(insn->opcode()));
+          // The above should return any callee for a virtual callsite. Because
+          // we only remove results for groups of related methods where every
+          // result can be removed, the logic works for true virtuals.
+          if (method == nullptr) {
+            continue;
+          }
+          result_used.insert(method);
+        }
+      });
 }
 
 // For normalization, we put primitive types last and thus all reference types

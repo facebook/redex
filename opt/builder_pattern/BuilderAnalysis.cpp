@@ -163,7 +163,8 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_STATIC: {
-      auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+      auto* method =
+          resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
       if (method == nullptr) {
         default_case();
         break;
@@ -281,7 +282,8 @@ const DexType* get_instantiated_type(const IRInstruction* insn) {
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_DIRECT: {
-    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     current_instance = method->get_proto()->get_rtype();
     break;
   }
@@ -399,7 +401,8 @@ UnorderedSet<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
   unordered_erase_if(result, [&](auto* insn) {
     always_assert(insn->has_method());
 
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     if (!method || !method->get_code()) {
       return true;
     }
@@ -471,8 +474,8 @@ ConstTypeHashSet BuilderAnalysis::non_removable_types() {
 
     // Check if the instantiation is an invoke and non-inlinable.
     if (opcode::is_an_invoke(instantiation->opcode())) {
-      auto* method = resolve_method(instantiation->get_method(),
-                                    opcode_to_search(instantiation));
+      auto* method = resolve_method_deprecated(instantiation->get_method(),
+                                               opcode_to_search(instantiation));
       if ((method == nullptr) || (method->get_code() == nullptr)) {
         non_removable_types.emplace(current_instance);
         TRACE(BLD_PATTERN, 3, "non removal instantiation %s",
@@ -512,7 +515,8 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
           continue;
         }
 
-        auto* method = resolve_method(insn->get_method(), MethodSearch::Any);
+        auto* method =
+            resolve_method_deprecated(insn->get_method(), MethodSearch::Any);
 
         TRACE(BLD_PATTERN, 2, "Excluding type %s since we couldn't inline %s",
               SHOW(current_instance), SHOW(method));

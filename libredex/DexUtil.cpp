@@ -27,7 +27,8 @@ const DexType* get_init_class_type_demand(const IRInstruction* insn) {
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     // It's the resolved method that counts
-    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     return ((method != nullptr) && !assumenosideeffects(method))
                ? method->get_class()
                : nullptr;
@@ -357,8 +358,8 @@ struct VisibilityChangeGetter {
         changes.classes.insert(cls);
       }
       auto* current_method =
-          resolve_method(insn->get_method(), opcode_to_search(insn),
-                         effective_caller_resolved_from);
+          resolve_method_deprecated(insn->get_method(), opcode_to_search(insn),
+                                    effective_caller_resolved_from);
       if (current_method != nullptr && current_method->is_concrete() &&
           (scope == nullptr || current_method->get_class() != scope)) {
         if (!is_public(current_method)) {
@@ -437,8 +438,8 @@ bool gather_invoked_methods_that_prevent_relocation(
     auto* insn = mie.insn;
     auto opcode = insn->opcode();
     if (opcode::is_an_invoke(opcode)) {
-      auto* meth =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
+      auto* meth = resolve_method_deprecated(insn->get_method(),
+                                             opcode_to_search(insn), method);
       if ((meth == nullptr) && opcode == OPCODE_INVOKE_VIRTUAL &&
           unknown_virtuals::is_method_known_to_be_public(insn->get_method())) {
         continue;

@@ -76,7 +76,8 @@ void fix_visibility_helper(DexMethod* method, T& vmethods_created) {
     if (!opcode::is_invoke_direct(opcode)) {
       continue;
     }
-    auto* callee = resolve_method(insn->get_method(), MethodSearch::Direct);
+    auto* callee =
+        resolve_method_deprecated(insn->get_method(), MethodSearch::Direct);
     if (callee == nullptr || !callee->is_concrete() ||
         method::is_any_init(callee) || is_public(callee)) {
       continue;
@@ -166,8 +167,8 @@ static void find_common_ctor_invocations(
       return;
     }
 
-    auto* meth = resolve_method(last_non_goto_insn->insn->get_method(),
-                                MethodSearch::Direct);
+    auto* meth = resolve_method_deprecated(
+        last_non_goto_insn->insn->get_method(), MethodSearch::Direct);
     // Make sure we found the same init method
     if ((meth == nullptr) || !method::is_init(meth) ||
         ((common_ctor != nullptr) && common_ctor != meth)) {
@@ -515,7 +516,8 @@ void ModelMethodMerger::inline_dispatch_entries(
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       continue;
     }
-    DexMethod* meth = resolve_method(insn->get_method(), MethodSearch::Static);
+    DexMethod* meth =
+        resolve_method_deprecated(insn->get_method(), MethodSearch::Static);
     if (meth != nullptr) {
       callsites.emplace_back(meth, insn);
     }

@@ -125,7 +125,8 @@ class InitFixpointIterator final
       // Another construction invocation on `this` pointer.
       const auto& obj_domain = env->get(insn->src(0));
       if (obj_domain.is_value() && *obj_domain.get_constant() == 0) {
-        auto* method = resolve_method(insn->get_method(), MethodSearch::Direct);
+        auto* method =
+            resolve_method_deprecated(insn->get_method(), MethodSearch::Direct);
         if (method == nullptr) {
           method = dynamic_cast<DexMethod*>(insn->get_method());
         } else if (method->get_class() != m_current_cls &&

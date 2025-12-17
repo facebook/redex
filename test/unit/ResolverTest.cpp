@@ -332,70 +332,94 @@ TEST_F(ResolverTest, ResolveMethod) {
   auto* c_surprise_def = c_surprise->as_def();
   auto* d_method_def = d_method->as_def();
 
-  EXPECT_TRUE(resolve_method(a_method, MethodSearch::Direct) == a_method);
-  EXPECT_TRUE(resolve_method(a_method, MethodSearch::Static) == a_method);
-  EXPECT_TRUE(resolve_method(a_method, MethodSearch::Virtual) == a_method);
-  EXPECT_TRUE(resolve_method(a_method, MethodSearch::Any) == a_method);
-  EXPECT_TRUE(resolve_method(a_method, MethodSearch::Interface) == a_method);
+  EXPECT_TRUE(resolve_method_deprecated(a_method, MethodSearch::Direct) ==
+              a_method);
+  EXPECT_TRUE(resolve_method_deprecated(a_method, MethodSearch::Static) ==
+              a_method);
+  EXPECT_TRUE(resolve_method_deprecated(a_method, MethodSearch::Virtual) ==
+              a_method);
+  EXPECT_TRUE(resolve_method_deprecated(a_method, MethodSearch::Any) ==
+              a_method);
+  EXPECT_TRUE(resolve_method_deprecated(a_method, MethodSearch::Interface) ==
+              a_method);
 
-  EXPECT_TRUE(resolve_method(b_method, MethodSearch::Direct) == b_method);
-  EXPECT_TRUE(resolve_method(b_method, MethodSearch::Static) == b_method);
-  EXPECT_TRUE(resolve_method(b_method, MethodSearch::Virtual) == b_method);
-  EXPECT_TRUE(resolve_method(b_method, MethodSearch::Any) == b_method);
-  EXPECT_TRUE(resolve_method(b_method, MethodSearch::Interface) == b_method);
+  EXPECT_TRUE(resolve_method_deprecated(b_method, MethodSearch::Direct) ==
+              b_method);
+  EXPECT_TRUE(resolve_method_deprecated(b_method, MethodSearch::Static) ==
+              b_method);
+  EXPECT_TRUE(resolve_method_deprecated(b_method, MethodSearch::Virtual) ==
+              b_method);
+  EXPECT_TRUE(resolve_method_deprecated(b_method, MethodSearch::Any) ==
+              b_method);
+  EXPECT_TRUE(resolve_method_deprecated(b_method, MethodSearch::Interface) ==
+              b_method);
 
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Direct) == nullptr);
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Static) == nullptr);
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Virtual) == b_method);
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Any) == b_method);
+  EXPECT_TRUE(resolve_method_deprecated(c_method, MethodSearch::Direct) ==
+              nullptr);
+  EXPECT_TRUE(resolve_method_deprecated(c_method, MethodSearch::Static) ==
+              nullptr);
+  EXPECT_TRUE(resolve_method_deprecated(c_method, MethodSearch::Virtual) ==
+              b_method);
+  EXPECT_TRUE(resolve_method_deprecated(c_method, MethodSearch::Any) ==
+              b_method);
 
-  EXPECT_TRUE(resolve_method(d_method, MethodSearch::Direct) == d_method);
-  EXPECT_TRUE(resolve_method(d_method, MethodSearch::Static) == d_method);
-  EXPECT_TRUE(resolve_method(d_method, MethodSearch::Virtual) == d_method);
-  EXPECT_TRUE(resolve_method(d_method, MethodSearch::Any) == d_method);
-  EXPECT_TRUE(resolve_method(d_method, MethodSearch::Interface) == d_method);
+  EXPECT_TRUE(resolve_method_deprecated(d_method, MethodSearch::Direct) ==
+              d_method);
+  EXPECT_TRUE(resolve_method_deprecated(d_method, MethodSearch::Static) ==
+              d_method);
+  EXPECT_TRUE(resolve_method_deprecated(d_method, MethodSearch::Virtual) ==
+              d_method);
+  EXPECT_TRUE(resolve_method_deprecated(d_method, MethodSearch::Any) ==
+              d_method);
+  EXPECT_TRUE(resolve_method_deprecated(d_method, MethodSearch::Interface) ==
+              d_method);
 
   // Super class of A doesn't have such method.
-  EXPECT_TRUE(resolve_method(a_method, MethodSearch::Super, a_method_def) ==
-              nullptr);
-  EXPECT_TRUE(resolve_method(type_class(a_method->get_class()),
-                             a_method->get_name(), a_method->get_proto(),
-                             MethodSearch::Super, a_method_def) == nullptr);
+  EXPECT_TRUE(resolve_method_deprecated(a_method, MethodSearch::Super,
+                                        a_method_def) == nullptr);
+  EXPECT_TRUE(
+      resolve_method_deprecated(type_class(a_method->get_class()),
+                                a_method->get_name(), a_method->get_proto(),
+                                MethodSearch::Super, a_method_def) == nullptr);
   // A is an interface, B cannot use invoke-super on method def in A.
-  EXPECT_TRUE(resolve_method(b_method, MethodSearch::Super, b_method_def) ==
-              nullptr);
-  EXPECT_TRUE(resolve_method(type_class(b_method->get_class()),
-                             b_method->get_name(), b_method->get_proto(),
-                             MethodSearch::Super, b_method_def) == nullptr);
+  EXPECT_TRUE(resolve_method_deprecated(b_method, MethodSearch::Super,
+                                        b_method_def) == nullptr);
+  EXPECT_TRUE(
+      resolve_method_deprecated(type_class(b_method->get_class()),
+                                b_method->get_name(), b_method->get_proto(),
+                                MethodSearch::Super, b_method_def) == nullptr);
   // Generally class in the method ref doesn't matter.
-  EXPECT_TRUE(resolve_method(a_method, MethodSearch::Super, d_method_def) ==
-              b_method);
-  EXPECT_TRUE(resolve_method(type_class(a_method->get_class()),
-                             a_method->get_name(), a_method->get_proto(),
-                             MethodSearch::Super, d_method_def) == b_method);
-  EXPECT_TRUE(resolve_method(b_method, MethodSearch::Super, d_method_def) ==
-              b_method);
-  EXPECT_TRUE(resolve_method(type_class(b_method->get_class()),
-                             b_method->get_name(), b_method->get_proto(),
-                             MethodSearch::Super, d_method_def) == b_method);
-  EXPECT_TRUE(resolve_method(d_method, MethodSearch::Super, d_method_def) ==
-              b_method);
-  EXPECT_TRUE(resolve_method(type_class(d_method->get_class()),
-                             d_method->get_name(), d_method->get_proto(),
-                             MethodSearch::Super, d_method_def) == b_method);
+  EXPECT_TRUE(resolve_method_deprecated(a_method, MethodSearch::Super,
+                                        d_method_def) == b_method);
+  EXPECT_TRUE(
+      resolve_method_deprecated(type_class(a_method->get_class()),
+                                a_method->get_name(), a_method->get_proto(),
+                                MethodSearch::Super, d_method_def) == b_method);
+  EXPECT_TRUE(resolve_method_deprecated(b_method, MethodSearch::Super,
+                                        d_method_def) == b_method);
+  EXPECT_TRUE(
+      resolve_method_deprecated(type_class(b_method->get_class()),
+                                b_method->get_name(), b_method->get_proto(),
+                                MethodSearch::Super, d_method_def) == b_method);
+  EXPECT_TRUE(resolve_method_deprecated(d_method, MethodSearch::Super,
+                                        d_method_def) == b_method);
+  EXPECT_TRUE(
+      resolve_method_deprecated(type_class(d_method->get_class()),
+                                d_method->get_name(), d_method->get_proto(),
+                                MethodSearch::Super, d_method_def) == b_method);
   // Super search doesn't consider static methods
-  EXPECT_TRUE(resolve_method(c_surprise, MethodSearch::Super, c_surprise_def) ==
-              nullptr);
+  EXPECT_TRUE(resolve_method_deprecated(c_surprise, MethodSearch::Super,
+                                        c_surprise_def) == nullptr);
 
   MethodRefCache ref_cache;
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Direct, ref_cache) ==
-              nullptr);
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Static, ref_cache) ==
-              nullptr);
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Virtual, ref_cache) ==
-              b_method);
-  EXPECT_TRUE(resolve_method(c_method, MethodSearch::Any, ref_cache) ==
-              b_method);
+  EXPECT_TRUE(resolve_method_deprecated(c_method, MethodSearch::Direct,
+                                        ref_cache) == nullptr);
+  EXPECT_TRUE(resolve_method_deprecated(c_method, MethodSearch::Static,
+                                        ref_cache) == nullptr);
+  EXPECT_TRUE(resolve_method_deprecated(c_method, MethodSearch::Virtual,
+                                        ref_cache) == b_method);
+  EXPECT_TRUE(resolve_method_deprecated(c_method, MethodSearch::Any,
+                                        ref_cache) == b_method);
 
   auto* e_method = DexMethod::get_method("E.method:()V");
   EXPECT_TRUE(e_method != nullptr && e_method->is_def());
@@ -409,13 +433,18 @@ TEST_F(ResolverTest, ResolveMethod) {
   auto* h_method = DexMethod::get_method("H.method:()V");
   EXPECT_TRUE(h_method != nullptr && h_method->is_def());
 
-  EXPECT_TRUE(resolve_method(e_method, MethodSearch::Direct) == e_method);
-  EXPECT_TRUE(resolve_method(h_method, MethodSearch::Virtual) == h_method);
-  EXPECT_TRUE(resolve_method(h_method, MethodSearch::Any) == h_method);
-  EXPECT_TRUE(resolve_method(f_method, MethodSearch::Virtual) == nullptr);
-  EXPECT_TRUE(resolve_method(g_method, MethodSearch::Virtual) == nullptr);
-  EXPECT_TRUE(resolve_method(f_method, MethodSearch::InterfaceVirtual) ==
+  EXPECT_TRUE(resolve_method_deprecated(e_method, MethodSearch::Direct) ==
               e_method);
-  EXPECT_TRUE(resolve_method(g_method, MethodSearch::InterfaceVirtual) ==
-              e_method);
+  EXPECT_TRUE(resolve_method_deprecated(h_method, MethodSearch::Virtual) ==
+              h_method);
+  EXPECT_TRUE(resolve_method_deprecated(h_method, MethodSearch::Any) ==
+              h_method);
+  EXPECT_TRUE(resolve_method_deprecated(f_method, MethodSearch::Virtual) ==
+              nullptr);
+  EXPECT_TRUE(resolve_method_deprecated(g_method, MethodSearch::Virtual) ==
+              nullptr);
+  EXPECT_TRUE(resolve_method_deprecated(
+                  f_method, MethodSearch::InterfaceVirtual) == e_method);
+  EXPECT_TRUE(resolve_method_deprecated(
+                  g_method, MethodSearch::InterfaceVirtual) == e_method);
 }

@@ -1170,7 +1170,8 @@ bool EnumFieldAnalyzer::analyze_invoke(const EnumFieldAnalyzerState& state,
                                        ConstantEnvironment* env) {
   auto op = insn->opcode();
   if (op == OPCODE_INVOKE_VIRTUAL) {
-    auto* method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+    auto* method =
+        resolve_method_deprecated(insn->get_method(), MethodSearch::Virtual);
     if (method == nullptr) {
       return false;
     }
@@ -1293,7 +1294,7 @@ bool StringAnalyzer::analyze_invoke(const StringAnalyzerState* state,
                                     const IRInstruction* insn,
                                     ConstantEnvironment* env) {
   DexMethod* method =
-      resolve_method(insn->get_method(), opcode_to_search(insn));
+      resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr) {
     return false;
   }
@@ -1625,7 +1626,8 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   auto* method_ref = insn->get_method();
-  DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
+  DexMethod* method =
+      resolve_method_deprecated(method_ref, opcode_to_search(insn));
   if (method == nullptr) {
     // Redex may run without sdk as input, so the method resolving may fail.
     // Example: Integer.valueOf(I) is an external method.

@@ -229,7 +229,8 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
       } else if (opcode == OPCODE_INVOKE_DIRECT && src_idx == 0) {
         auto* method_ref = insn->get_method();
         if (method::is_init(method_ref)) {
-          DexMethod* method = resolve_method(method_ref, MethodSearch::Direct);
+          DexMethod* method =
+              resolve_method_deprecated(method_ref, MethodSearch::Direct);
           if (method != nullptr) {
             auto* method_class = method->get_class();
             if (method_class == m_declaring_type ||
@@ -339,8 +340,8 @@ UnorderedSet<const DexField*> get_definitely_assigned_ifields(
       for (const auto& use : UnorderedIterable(uses)) {
         if (opcode::is_invoke_direct(use.insn->opcode()) &&
             use.src_index == 0 && method::is_init(use.insn->get_method())) {
-          auto* resolved =
-              resolve_method(use.insn->get_method(), MethodSearch::Direct);
+          auto* resolved = resolve_method_deprecated(use.insn->get_method(),
+                                                     MethodSearch::Direct);
           if (resolved == nullptr || resolved->get_class() != def->get_type()) {
             classes_with_relaxed_invoke_init.insert(def->get_type());
           }

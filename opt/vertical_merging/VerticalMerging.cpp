@@ -402,7 +402,8 @@ void record_code_reference(
             deferred_record_dont_merge_state(callee_ref->get_class(), kStrict);
             TRACE(VMERGE, 9, "dont_merge %s for pure ref %s",
                   SHOW(callee_ref->get_class()), SHOW(callee_ref));
-            DexMethod* callee = resolve_method(callee_ref, MethodSearch::Any);
+            DexMethod* callee =
+                resolve_method_deprecated(callee_ref, MethodSearch::Any);
             if (callee != nullptr) {
               deferred_record_dont_merge_state(callee->get_class(), kStrict);
               TRACE(VMERGE, 9,
@@ -683,9 +684,10 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
               resolved_virtual_calls.emplace(insn, merger_method_ref);
             }
           } else { // Merger is the superclass.
-            if (resolve_virtual(find_merger->second,
-                                mergeable_method_ref->get_name(),
-                                mergeable_method_ref->get_proto()) != nullptr) {
+            if (resolve_virtual_deprecated(find_merger->second,
+                                           mergeable_method_ref->get_name(),
+                                           mergeable_method_ref->get_proto()) !=
+                nullptr) {
               merger_method_ref =
                   DexMethod::make_method(find_merger->second->get_type(),
                                          mergeable_method_ref->get_name(),

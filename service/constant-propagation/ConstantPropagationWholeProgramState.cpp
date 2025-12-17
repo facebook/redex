@@ -370,7 +370,8 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
       op != OPCODE_INVOKE_VIRTUAL) {
     return false;
   }
-  auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* method =
+      resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr) {
     return false;
   }

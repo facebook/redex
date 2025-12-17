@@ -874,59 +874,59 @@ void Model::add_virtual_scope(MergerType& merger,
 void Model::add_interface_scope(MergerType& merger,
                                 const VirtualScope& intf_scope) {
 
-  const auto& insert_to = [&merger, &intf_scope](
-                              MergerType::InterfaceMethod& intf_meth) {
-    bool inserted = false;
-    intf_meth.interfaces.insert(intf_scope.interfaces.begin(),
-                                intf_scope.interfaces.end());
-    for (const auto& vmeth : intf_scope.methods) {
-      // Only insert method defs
-      if (!vmeth.first->is_def()) {
-        continue;
-      }
-      // Only collect intf methods on mergeable types
-      if (merger.mergeables.count(vmeth.first->get_class()) == 0) {
-        continue;
-      }
-      TRACE(CLMG,
-            8,
-            "add interface method %s (%s)",
-            vmeth.first->get_deobfuscated_name_or_empty_copy().c_str(),
-            SHOW(vmeth.first->get_name()));
-      intf_meth.methods.emplace_back(vmeth.first);
-      inserted = true;
-    }
-
-    if (!inserted) {
-      return;
-    }
-
-    // An interface VirtualScope rooted from a mergeable needs to consider
-    // the interface method it implements. The interface method can be a
-    // default method or even an external default method.
-    // In the default method case, if it's not overridden by all mergeables,
-    // we need to identify the default method as the fall back.
-    // Here we check if the overridden interface is an external non-abstract
-    // class. If it is, we assume it's an external default method, and
-    // update MergerType.InterfaceMethod.overridden_method accordingly.
-    if (intf_meth.overridden_meth == nullptr) {
-      const auto& intfs = intf_scope.interfaces;
-      always_assert(!intfs.empty());
-      for (const auto* intf : intfs) {
-        const auto* intf_cls = type_class(intf);
-        always_assert(intf_cls);
-        const auto* meth = intf_meth.methods.front();
-        auto* intf_method = resolve_interface_method(intf_cls, meth->get_name(),
-                                                     meth->get_proto());
-        if ((intf_method != nullptr) && !is_abstract(intf_method)) {
-          intf_meth.overridden_meth = intf_method;
-          TRACE(CLMG, 8, "Update InterfaceMethod.overridden_meth %s",
-                SHOW(intf_method));
-          break;
+  const auto& insert_to =
+      [&merger, &intf_scope](MergerType::InterfaceMethod& intf_meth) {
+        bool inserted = false;
+        intf_meth.interfaces.insert(intf_scope.interfaces.begin(),
+                                    intf_scope.interfaces.end());
+        for (const auto& vmeth : intf_scope.methods) {
+          // Only insert method defs
+          if (!vmeth.first->is_def()) {
+            continue;
+          }
+          // Only collect intf methods on mergeable types
+          if (merger.mergeables.count(vmeth.first->get_class()) == 0) {
+            continue;
+          }
+          TRACE(CLMG,
+                8,
+                "add interface method %s (%s)",
+                vmeth.first->get_deobfuscated_name_or_empty_copy().c_str(),
+                SHOW(vmeth.first->get_name()));
+          intf_meth.methods.emplace_back(vmeth.first);
+          inserted = true;
         }
-      }
-    }
-  };
+
+        if (!inserted) {
+          return;
+        }
+
+        // An interface VirtualScope rooted from a mergeable needs to consider
+        // the interface method it implements. The interface method can be a
+        // default method or even an external default method.
+        // In the default method case, if it's not overridden by all mergeables,
+        // we need to identify the default method as the fall back.
+        // Here we check if the overridden interface is an external non-abstract
+        // class. If it is, we assume it's an external default method, and
+        // update MergerType.InterfaceMethod.overridden_method accordingly.
+        if (intf_meth.overridden_meth == nullptr) {
+          const auto& intfs = intf_scope.interfaces;
+          always_assert(!intfs.empty());
+          for (const auto* intf : intfs) {
+            const auto* intf_cls = type_class(intf);
+            always_assert(intf_cls);
+            const auto* meth = intf_meth.methods.front();
+            auto* intf_method = resolve_interface_method_deprecated(
+                intf_cls, meth->get_name(), meth->get_proto());
+            if ((intf_method != nullptr) && !is_abstract(intf_method)) {
+              intf_meth.overridden_meth = intf_method;
+              TRACE(CLMG, 8, "Update InterfaceMethod.overridden_meth %s",
+                    SHOW(intf_method));
+              break;
+            }
+          }
+        }
+      };
 
   always_assert(!intf_scope.methods.empty());
   const auto& vmethod = intf_scope.methods[0];

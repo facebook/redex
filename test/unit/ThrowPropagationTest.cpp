@@ -70,7 +70,8 @@ void run_throw_propagation(const ConcurrentSet<DexMethod*>& no_return_methods,
       return false;
     }
     auto* method_ref = insn->get_method();
-    DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
+    DexMethod* method =
+        resolve_method_deprecated(method_ref, opcode_to_search(insn));
     if (method == nullptr) {
       return false;
     }

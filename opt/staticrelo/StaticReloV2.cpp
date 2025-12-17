@@ -113,8 +113,8 @@ void build_call_graph(const std::vector<DexClass*>& candidate_classes,
         if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
           continue;
         }
-        DexMethod* callee =
-            resolve_method(mie.insn->get_method(), MethodSearch::Static);
+        DexMethod* callee = resolve_method_deprecated(mie.insn->get_method(),
+                                                      MethodSearch::Static);
         if (graph.method_id_map.find(callee) != graph.method_id_map.end()) {
           int callee_id = graph.method_id_map[callee];
           graph.callers[callee_id].insert(caller_id);
@@ -172,8 +172,8 @@ void color_from_a_class(StaticCallGraph& graph, DexClass* cls, int color) {
         if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
           continue;
         }
-        DexMethod* callee =
-            resolve_method(mie.insn->get_method(), MethodSearch::Static);
+        DexMethod* callee = resolve_method_deprecated(mie.insn->get_method(),
+                                                      MethodSearch::Static);
         if (graph.method_id_map.find(callee) != graph.method_id_map.end()) {
           color_vertex(graph, callee, color);
         }

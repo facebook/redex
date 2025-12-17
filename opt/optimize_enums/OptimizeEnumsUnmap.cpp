@@ -454,9 +454,9 @@ OptimizeEnumsUnmapMatchFlow::OptimizeEnumsUnmapMatchFlow(
     const GeneratedSwitchCases& generated_switch_cases) {
   // The flow is: an ordinal into any switchmap lookup that we have
   // the mapping for, which then goes to a comparison with a constant.
-  DexMethod* java_enum_ordinal =
-      resolve_method(DexMethod::get_method("Ljava/lang/Enum;.ordinal:()I"),
-                     MethodSearch::Virtual);
+  DexMethod* java_enum_ordinal = resolve_method_deprecated(
+      DexMethod::get_method("Ljava/lang/Enum;.ordinal:()I"),
+      MethodSearch::Virtual);
   always_assert(java_enum_ordinal);
 
   auto m_invoke_ordinal = m::invoke_virtual_(m::has_method(

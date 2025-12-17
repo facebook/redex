@@ -132,8 +132,8 @@ ConcurrentSet<DexMethod*> find_private_methods(
         if (!inst->has_method()) {
           return;
         }
-        auto* callee =
-            resolve_method(inst->get_method(), opcode_to_search(inst), caller);
+        auto* callee = resolve_method_deprecated(
+            inst->get_method(), opcode_to_search(inst), caller);
         if (callee == nullptr || callee->get_class() == caller->get_class()) {
           return;
         }
@@ -153,8 +153,8 @@ void fix_call_sites_private(const std::vector<DexClass*>& scope,
       if (!insn->has_method()) {
         continue;
       }
-      auto* callee =
-          resolve_method(insn->get_method(), opcode_to_search(insn), caller);
+      auto* callee = resolve_method_deprecated(insn->get_method(),
+                                               opcode_to_search(insn), caller);
       // should be safe to read `privates` here because there are no writers
       if (callee != nullptr && (privates.count_unsafe(callee) != 0u)) {
         insn->set_method(callee);

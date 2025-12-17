@@ -61,7 +61,7 @@ bool ReachableNativesPass::gather_load_library(
     if (!opcode::is_invoke_static(insn->opcode())) {
       continue;
     }
-    auto* callee = resolve_invoke_method(insn, caller);
+    auto* callee = resolve_invoke_method_deprecated(insn, caller);
     if (callee == nullptr) {
       continue;
     }

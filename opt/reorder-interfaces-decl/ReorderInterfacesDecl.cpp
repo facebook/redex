@@ -76,7 +76,8 @@ void ReorderInterfacesDeclImpl::compute_call_frequencies(IRInstruction* insn) {
   // Process only call instructions
   if (opcode::is_an_invoke(insn->opcode())) {
     auto* callee = insn->get_method();
-    auto* def_callee = resolve_method(callee, opcode_to_search(insn));
+    auto* def_callee =
+        resolve_method_deprecated(callee, opcode_to_search(insn));
     if (def_callee != nullptr) {
       callee = def_callee;
     }

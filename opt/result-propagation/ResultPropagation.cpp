@@ -252,7 +252,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     return 0;
   }
 
-  auto* callee = resolve_invoke_method(insn, resolved_refs);
+  auto* callee = resolve_invoke_method_deprecated(insn, resolved_refs);
   if (callee == nullptr) {
     return boost::none;
   }
@@ -479,9 +479,10 @@ void ResultPropagation::patch(PassManager& mgr, cfg::ControlFlowGraph& cfg) {
       }
     }
 
-    if (m_callee_blocklist.count(resolve_method(primary_insn->get_method(),
-                                                opcode_to_search(primary_insn),
-                                                m_resolved_refs)) != 0u) {
+    if (m_callee_blocklist.count(
+            resolve_method_deprecated(primary_insn->get_method(),
+                                      opcode_to_search(primary_insn),
+                                      m_resolved_refs)) != 0u) {
       continue;
     }
 

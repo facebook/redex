@@ -275,7 +275,8 @@ bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
   // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
   // method?
   if (opcode::is_invoke_virtual(op)) {
-    resolved_method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+    resolved_method =
+        resolve_method_deprecated(insn->get_method(), MethodSearch::Virtual);
     if (resolved_method == method::java_lang_Throwable_fillInStackTrace()) {
       return true;
     }
@@ -296,7 +297,7 @@ bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
         return true;
       }
       resolved_method =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
+          resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     }
     if ((resolved_method != nullptr) && resolved_method->rstate.dont_inline()) {
       return true;

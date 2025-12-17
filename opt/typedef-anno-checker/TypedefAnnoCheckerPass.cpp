@@ -22,11 +22,11 @@ constexpr const char* DEFAULT_SUFFIX = "$default";
 namespace {
 
 DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
-  auto* def_method =
-      resolve_method(insn->get_method(), opcode_to_search(insn), caller);
+  auto* def_method = resolve_method_deprecated(insn->get_method(),
+                                               opcode_to_search(insn), caller);
   if (def_method == nullptr && insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
-    def_method =
-        resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+    def_method = resolve_method_deprecated(insn->get_method(),
+                                           MethodSearch::InterfaceVirtual);
   }
   return def_method;
 }

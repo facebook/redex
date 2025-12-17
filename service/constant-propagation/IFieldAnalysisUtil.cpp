@@ -65,8 +65,8 @@ class ThisObjectAnalysis final
           }
           if (use_this) {
             auto* insn_method = insn->get_method();
-            auto* callee =
-                resolve_method(insn_method, opcode_to_search(insn), m_method);
+            auto* callee = resolve_method_deprecated(
+                insn_method, opcode_to_search(insn), m_method);
             if (insn->opcode() == OPCODE_INVOKE_STATIC ||
                 insn->opcode() == OPCODE_INVOKE_DIRECT) {
               if (callee != nullptr && callee->get_code() != nullptr) {
@@ -189,8 +189,8 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
           }
         } else if (opcode::is_an_invoke(insn->opcode())) {
           auto* insn_method = insn->get_method();
-          auto* callee =
-              resolve_method(insn_method, opcode_to_search(insn), method);
+          auto* callee = resolve_method_deprecated(
+              insn_method, opcode_to_search(insn), method);
           if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
               insn->opcode() == OPCODE_INVOKE_STATIC) {
             // For invoke on a direct/static method, if we can't resolve them or

@@ -59,7 +59,7 @@ CallSites SingleCalleeStrategy::get_callsites(const DexMethod* method) const {
       code, [&](const IRList::const_iterator& it) {
         auto* insn = it->insn;
         if (opcode::is_an_invoke(insn->opcode())) {
-          auto* callee = resolve_invoke_method(insn, method);
+          auto* callee = resolve_invoke_method_deprecated(insn, method);
           if (callee == nullptr || is_definitely_virtual(callee)) {
             return cfg_adapter::LOOP_CONTINUE;
           }
@@ -209,7 +209,7 @@ CallSites CompleteCallGraphStrategy::get_callsites(
       code, [&](const IRList::const_iterator& it) {
         auto* insn = it->insn;
         if (opcode::is_an_invoke(insn->opcode())) {
-          auto* callee = resolve_invoke_method(insn, method);
+          auto* callee = resolve_invoke_method_deprecated(insn, method);
           if (callee == nullptr) {
             return cfg_adapter::LOOP_CONTINUE;
           }
@@ -284,7 +284,7 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
   walk::parallel::opcodes(scope, [&](const DexMethod* method,
                                      IRInstruction* insn) {
     if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
+      auto* callee = resolve_invoke_method_deprecated(insn, method);
       if (callee == nullptr) {
         return;
       }
@@ -324,7 +324,7 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
       code, [&](const IRList::const_iterator& it) {
         auto* insn = it->insn;
         if (opcode::is_an_invoke(insn->opcode())) {
-          auto* callee = resolve_invoke_method(insn, method);
+          auto* callee = resolve_invoke_method_deprecated(insn, method);
           if (callee == nullptr) {
             return cfg_adapter::LOOP_CONTINUE;
           }
@@ -540,7 +540,7 @@ const MethodSet& resolve_callees_in_graph(const Graph& graph,
 }
 
 bool invoke_is_dynamic(const Graph& graph, const IRInstruction* insn) {
-  auto* callee = resolve_invoke_method(insn);
+  auto* callee = resolve_invoke_method_deprecated(insn);
   if (callee == nullptr) {
     return true;
   }

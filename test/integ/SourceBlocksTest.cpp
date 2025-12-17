@@ -205,7 +205,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
 
-    ConcurrentMethodResolver concurrent_method_resolver;
+    ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
     auto* baz_ref = DexMethod::get_method(
         "Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
@@ -441,7 +441,7 @@ TEST_F(SourceBlocksTest, scaling) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
 
-    ConcurrentMethodResolver concurrent_method_resolver;
+    ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
     UnorderedSet<DexMethod*> def_inlinables{hot_source_blocks_inlined_method};
 

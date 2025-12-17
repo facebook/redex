@@ -258,7 +258,8 @@ struct EnumUtil {
     if (method_ref == nullptr) {
       return add_substitute_of_name(enum_type, prev_sb);
     } else {
-      auto* method = resolve_method(method_ref, MethodSearch::Virtual);
+      auto* method =
+          resolve_method_deprecated(method_ref, MethodSearch::Virtual);
       always_assert(method);
       return method_ref;
     }
@@ -1029,7 +1030,7 @@ class CodeTransformer final {
       }
     }
     if (method == nullptr) {
-      method = resolve_method(method_ref, opcode_to_search(insn));
+      method = resolve_method_deprecated(method_ref, opcode_to_search(insn));
     }
     always_assert(method);
     always_assert_log(

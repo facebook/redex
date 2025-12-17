@@ -107,7 +107,8 @@ class ClInitSideEffectsAnalysis {
     always_assert(opcode::is_invoke_direct(insn->opcode()) ||
                   opcode::is_invoke_virtual(insn->opcode()) ||
                   opcode::is_invoke_static(insn->opcode()));
-    auto* method = resolve_method(method_ref, opcode_to_search(insn));
+    auto* method =
+        resolve_method_deprecated(method_ref, opcode_to_search(insn));
     if (method == nullptr) {
       return true;
     }

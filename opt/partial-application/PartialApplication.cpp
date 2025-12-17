@@ -1256,8 +1256,8 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
         (excluded_classes.count(caller->get_class()) != 0u)) {
       return nullptr;
     }
-    auto* callee =
-        resolve_method(insn->get_method(), opcode_to_search(insn), caller);
+    auto* callee = resolve_method_deprecated(insn->get_method(),
+                                             opcode_to_search(insn), caller);
     if ((callee == nullptr) || callee->is_external()) {
       return nullptr;
     }

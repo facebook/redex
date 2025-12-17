@@ -240,7 +240,7 @@ void CFGInliner::rewrite_invoke_supers(ControlFlowGraph* cfg,
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
     auto* insn = mie.insn;
     if (opcode::is_invoke_super(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
+      auto* callee = resolve_invoke_method_deprecated(insn, method);
       always_assert(callee);
       // Illegal combination; someone needs to clean this up.
       insn->set_opcode(OPCODE_INVOKE_DIRECT);

@@ -132,8 +132,8 @@ static void filter_candidates_bridge_synth_only(
         }
       } else if (insn->has_method()) {
         if (opcode::is_invoke_static(op) || opcode::is_invoke_direct(op)) {
-          auto* callee = resolve_method(insn->get_method(),
-                                        opcode_to_search(insn), method);
+          auto* callee = resolve_method_deprecated(
+              insn->get_method(), opcode_to_search(insn), method);
           if (callee != nullptr) {
             invoked_methods.insert(callee);
             continue;
@@ -207,8 +207,8 @@ static void filter_candidates_local_only(
       if (!opcode::is_an_invoke(mie.insn->opcode())) {
         continue;
       }
-      auto* callee = resolve_method(mie.insn->get_method(),
-                                    opcode_to_search(mie.insn), caller);
+      auto* callee = resolve_method_deprecated(
+          mie.insn->get_method(), opcode_to_search(mie.insn), caller);
       if (candidates.count(callee) != 0u) {
         relevant_invokes++;
       }
@@ -545,7 +545,7 @@ void gather_true_virtual_methods(
           continue;
         }
         auto* insn_method = insn->get_method();
-        auto* callee = resolve_invoke_method(insn, method);
+        auto* callee = resolve_invoke_method_deprecated(insn, method);
         if (callee == nullptr) {
           continue;
         }
@@ -987,7 +987,7 @@ void run_inliner(
                 conf.get_method_profiles()))
           : std::nullopt;
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
   // inline candidates
   MultiMethodInliner inliner(
       scope, init_classes_with_side_effects, stores, conf, candidates,

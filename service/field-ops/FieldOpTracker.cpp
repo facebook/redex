@@ -218,7 +218,7 @@ class WritesAnalyzer {
             bool other =
                 src_idx != 0 || op != OPCODE_INVOKE_DIRECT ||
                 !method::is_init(insn->get_method()) ||
-                ((invoked_ctor = resolve_method(
+                ((invoked_ctor = resolve_method_deprecated(
                       insn->get_method(), MethodSearch::Direct)) == nullptr);
             escape(non_zero_value_defs, nullptr, invoked_ctor, other);
           }

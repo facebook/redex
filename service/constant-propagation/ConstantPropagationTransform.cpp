@@ -565,8 +565,8 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     if (!opcode::is_an_invoke(primary_insn->opcode())) {
       break;
     }
-    auto* invoked = resolve_method(primary_insn->get_method(),
-                                   opcode_to_search(primary_insn));
+    auto* invoked = resolve_method_deprecated(primary_insn->get_method(),
+                                              opcode_to_search(primary_insn));
     if (invoked == nullptr) {
       break;
     }

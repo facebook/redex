@@ -157,8 +157,8 @@ void update_interface_calls(
     if (!insn->has_method()) {
       return;
     }
-    auto* const method =
-        resolve_method(insn->get_method(), opcode_to_search(insn), meth);
+    auto* const method = resolve_method_deprecated(
+        insn->get_method(), opcode_to_search(insn), meth);
     if (method == nullptr || old_to_new_callee.count(method) == 0) {
       return;
     }

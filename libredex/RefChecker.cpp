@@ -31,7 +31,7 @@ CodeRefs::CodeRefs(const DexMethod* method,
       always_assert(insn->get_type());
       types_set.insert(insn->get_type());
     } else if (insn->has_method()) {
-      auto* callee = resolve_invoke_method(insn, method);
+      auto* callee = resolve_invoke_method_deprecated(insn, method);
       if (callee == nullptr) {
         invalid_refs = true;
         break;

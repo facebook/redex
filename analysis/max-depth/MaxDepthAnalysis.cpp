@@ -144,7 +144,7 @@ class MaxDepthFunctionAnalyzer : public Base {
   void analyze_invoke(IRInstruction* insn) {
     auto* callee = insn->get_method();
     auto* callee_method =
-        resolve_method(callee, opcode_to_search(insn), m_method);
+        resolve_method_deprecated(callee, opcode_to_search(insn), m_method);
     if (callee_method != nullptr) {
       auto summary =
           this->get_summaries()->get(callee_method, DepthDomain::top());

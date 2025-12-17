@@ -97,7 +97,8 @@ void NoResolvablePureRefsChecker::run_checker(DexStoresVector& stores,
       if (mref->is_def()) {
         return;
       }
-      auto* mdef = resolve_method(mref, opcode_to_search(insn), method);
+      auto* mdef =
+          resolve_method_deprecated(mref, opcode_to_search(insn), method);
       if (!is_resolvable(mref)) {
         // Method ref references type w/ no definition in scope.
         TRACE(RESO,

@@ -194,7 +194,7 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
     }
   } break;
   case OPCODE_INVOKE_STATIC: {
-    auto* callee = resolve_method(callee_ref, MethodSearch::Static);
+    auto* callee = resolve_method_deprecated(callee_ref, MethodSearch::Static);
     if (m_candidate_methods.count(callee) != 0u) {
       if (is_enum_valueof(callee)) {
         // Enum.valueOf() calls Enum.values() and so we reject the whole type

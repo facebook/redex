@@ -652,7 +652,8 @@ static bool can_outline_insn(const RefChecker& ref_checker,
     return false;
   }
   if (insn->has_method()) {
-    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     if (method == nullptr || method != insn->get_method()) {
       return false;
     }

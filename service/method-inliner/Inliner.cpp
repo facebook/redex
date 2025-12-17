@@ -2271,7 +2271,7 @@ bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
                                                      const DexMethod* callee) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER) {
     if (m_config.rewrite_invoke_super) {
-      auto* resolved_method = resolve_invoke_method(insn, callee);
+      auto* resolved_method = resolve_invoke_method_deprecated(insn, callee);
       if ((resolved_method != nullptr) && resolved_method->is_def() &&
           (resolved_method->as_def()->get_code() != nullptr)) {
         return false;

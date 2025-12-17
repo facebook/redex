@@ -55,7 +55,8 @@ class InitClassForwardFixpointIterator final
                               field->get_class());
       }
     } else if (opcode::is_invoke_virtual(op)) {
-      auto* method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+      auto* method =
+          resolve_method_deprecated(insn->get_method(), MethodSearch::Virtual);
       if (method != nullptr) {
         current_state->insert(m_init_classes_with_side_effects,
                               method->get_class());

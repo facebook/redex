@@ -119,8 +119,8 @@ void update_call_refs_simple(
         if (!insn->has_method()) {
           continue;
         }
-        auto* const method =
-            resolve_method(insn->get_method(), opcode_to_search(insn), meth);
+        auto* const method = resolve_method_deprecated(
+            insn->get_method(), opcode_to_search(insn), meth);
         if (method == nullptr || old_to_new_callee.count(method) == 0) {
           continue;
         }
@@ -147,8 +147,8 @@ void update_call_refs_simple(
         if (!insn->has_method()) {
           continue;
         }
-        auto* const method =
-            resolve_method(insn->get_method(), opcode_to_search(insn), meth);
+        auto* const method = resolve_method_deprecated(
+            insn->get_method(), opcode_to_search(insn), meth);
         if (method == nullptr || old_to_new_callee.count(method) == 0) {
           continue;
         }
@@ -194,8 +194,8 @@ CallSites collect_call_refs(const Scope& scope, const T& callees) {
           continue;
         }
 
-        auto* const callee =
-            resolve_method(insn->get_method(), opcode_to_search(insn), caller);
+        auto* const callee = resolve_method_deprecated(
+            insn->get_method(), opcode_to_search(insn), caller);
         if (callee == nullptr || callees.count(callee) == 0) {
           continue;
         }
@@ -210,8 +210,8 @@ CallSites collect_call_refs(const Scope& scope, const T& callees) {
           continue;
         }
 
-        auto* const callee =
-            resolve_method(insn->get_method(), opcode_to_search(insn), caller);
+        auto* const callee = resolve_method_deprecated(
+            insn->get_method(), opcode_to_search(insn), caller);
         if (callee == nullptr || callees.count(callee) == 0) {
           continue;
         }

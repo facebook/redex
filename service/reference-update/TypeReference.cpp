@@ -728,8 +728,8 @@ void fix_colliding_dmethods(
         if (!insn->has_method()) {
           continue;
         }
-        auto* const callee =
-            resolve_method(insn->get_method(), opcode_to_search(insn), meth);
+        auto* const callee = resolve_method_deprecated(
+            insn->get_method(), opcode_to_search(insn), meth);
         if (callee == nullptr ||
             num_additional_args.find(callee) == num_additional_args.end()) {
           continue;
@@ -742,8 +742,8 @@ void fix_colliding_dmethods(
         if (!insn->has_method()) {
           continue;
         }
-        auto* const callee =
-            resolve_method(insn->get_method(), opcode_to_search(insn), meth);
+        auto* const callee = resolve_method_deprecated(
+            insn->get_method(), opcode_to_search(insn), meth);
         if (callee == nullptr ||
             num_additional_args.find(callee) == num_additional_args.end()) {
           continue;

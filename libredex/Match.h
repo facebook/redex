@@ -457,7 +457,8 @@ inline auto resolve_method(MethodSearch ms, match_t<DexMethod*, P> p) {
     // resolve_method accepts a non-const DexMethodRef* to return a non-const
     // DexMethod*.  const_cast is safe to get around that as the return value
     // is treated as const.
-    const auto* m = resolve_method(const_cast<DexMethodRef*>(mr), ms);
+    const auto* m =
+        resolve_method_deprecated(const_cast<DexMethodRef*>(mr), ms);
     return m && p.matches(m);
   });
 }

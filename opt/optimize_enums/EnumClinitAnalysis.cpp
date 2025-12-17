@@ -158,7 +158,8 @@ class EnumOrdinalAnalyzer
   static bool analyze_invoke(const EnumOrdinalAnalyzerState& state,
                              const IRInstruction* insn,
                              ConstantEnvironment* env) {
-    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     if (method == nullptr) {
       return false;
     }

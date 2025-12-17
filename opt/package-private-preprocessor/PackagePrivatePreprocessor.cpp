@@ -255,9 +255,10 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
         method->get_name()->str() == "clone") {
       return;
     }
-    auto* resolved = resolve_method(method, ms, caller);
+    auto* resolved = resolve_method_deprecated(method, ms, caller);
     if ((resolved == nullptr) && ms == MethodSearch::Virtual) {
-      resolved = resolve_method(method, MethodSearch::InterfaceVirtual, caller);
+      resolved = resolve_method_deprecated(
+          method, MethodSearch::InterfaceVirtual, caller);
       if (resolved != nullptr) {
         // We resolved to an interface method. Interface methods are always
         // public, and we don't have a visibility problem. Just log.
@@ -556,7 +557,7 @@ PackagePrivatePreprocessorPass::Stats transform(
       return;
     }
     auto* method = insn->get_method();
-    auto* resolved = resolve_method(method, opcode_to_search(insn));
+    auto* resolved = resolve_method_deprecated(method, opcode_to_search(insn));
     auto it = new_names.find(resolved);
     if (it == new_names.end()) {
       return;

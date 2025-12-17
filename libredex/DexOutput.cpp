@@ -2457,9 +2457,9 @@ void compute_method_to_id_map(
 
     auto* resolved_method = [&]() -> DexMethodRef* {
       if (cls != nullptr) {
-        auto* resm = resolve_method(method,
-                                    is_interface(cls) ? MethodSearch::Interface
-                                                      : MethodSearch::Any);
+        auto* resm = resolve_method_deprecated(
+            method,
+            is_interface(cls) ? MethodSearch::Interface : MethodSearch::Any);
         if (resm != nullptr) {
           return resm;
         }
@@ -2519,9 +2519,9 @@ void write_method_mapping(const std::string& filename,
     // concrete names, so resolve this ref to an actual definition.
     auto* resolved_method = [&]() -> DexMethodRef* {
       if (cls != nullptr) {
-        auto* resm = resolve_method(method,
-                                    is_interface(cls) ? MethodSearch::Interface
-                                                      : MethodSearch::Any);
+        auto* resm = resolve_method_deprecated(
+            method,
+            is_interface(cls) ? MethodSearch::Interface : MethodSearch::Any);
         if (resm != nullptr) {
           return resm;
         }

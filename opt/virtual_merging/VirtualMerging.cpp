@@ -141,7 +141,8 @@ void VirtualMerging::find_unsupported_virtual_scopes() {
       [&](const DexMethod*, IRInstruction* insn) {
         if (insn->opcode() == OPCODE_INVOKE_SUPER) {
           auto* method_ref = insn->get_method();
-          auto* method = resolve_method(method_ref, MethodSearch::Virtual);
+          auto* method =
+              resolve_method_deprecated(method_ref, MethodSearch::Virtual);
           if (method == nullptr) {
             invoke_super_unresolved_method_refs.insert(method_ref);
           } else {
@@ -1416,7 +1417,8 @@ void VirtualMerging::remap_invoke_virtuals() {
       [&](const DexMethod*, IRInstruction* insn) {
         if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
           auto* method_ref = insn->get_method();
-          auto* method = resolve_method(method_ref, MethodSearch::Virtual);
+          auto* method =
+              resolve_method_deprecated(method_ref, MethodSearch::Virtual);
           auto it = m_virtual_methods_to_remap.find(method);
           if (it != m_virtual_methods_to_remap.end()) {
             insn->set_method(it->second);

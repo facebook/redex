@@ -179,7 +179,8 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
     } else if (opcode == OPCODE_INVOKE_DIRECT) {
       auto* method_ref = insn->get_method();
       if (method::is_init(method_ref)) {
-        DexMethod* method = resolve_method(method_ref, MethodSearch::Direct);
+        DexMethod* method =
+            resolve_method_deprecated(method_ref, MethodSearch::Direct);
         if (method == nullptr) {
           current_state->set_uninlinable(BoolDomain(true));
           return;

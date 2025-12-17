@@ -108,6 +108,12 @@ inline MethodSearch opcode_to_search(const IRInstruction* insn) {
  * The lookup is performed according to the search rules specified via
  * MethodSearch.
  */
+DexMethod* resolve_method_deprecated(const DexClass*,
+                                     const DexString*,
+                                     const DexProto*,
+                                     MethodSearch search = MethodSearch::Any,
+                                     const DexMethod* caller = nullptr);
+
 DexMethod* resolve_method(const DexClass*,
                           const DexString*,
                           const DexProto*,
@@ -118,6 +124,12 @@ DexMethod* resolve_method(const DexClass*,
  * Given a scope defined by DexClass, a name and a proto look for a vmethod
  * definition in scope.
  */
+inline DexMethod* resolve_virtual_deprecated(const DexClass* cls,
+                                             const DexString* name,
+                                             const DexProto* proto) {
+  return resolve_method_deprecated(cls, name, proto, MethodSearch::Virtual);
+}
+
 inline DexMethod* resolve_virtual(const DexClass* cls,
                                   const DexString* name,
                                   const DexProto* proto) {
@@ -128,6 +140,14 @@ inline DexMethod* resolve_virtual(const DexClass* cls,
  * Given a scope defined by DexClass, a name and a proto look for a vmethod
  * definition in scope.
  */
+inline DexMethod* resolve_super_deprecated(const DexClass* cls,
+                                           const DexString* name,
+                                           const DexProto* proto,
+                                           const DexMethod* caller) {
+  return resolve_method_deprecated(cls, name, proto, MethodSearch::Super,
+                                   caller);
+}
+
 inline DexMethod* resolve_super(const DexClass* cls,
                                 const DexString* name,
                                 const DexProto* proto,
@@ -139,6 +159,12 @@ inline DexMethod* resolve_super(const DexClass* cls,
  * Given a scope defined by DexClass, a name and a proto look for a dmethod
  * definition in class only.
  */
+inline DexMethod* resolve_direct_deprecated(const DexClass* cls,
+                                            const DexString* name,
+                                            const DexProto* proto) {
+  return resolve_method_deprecated(cls, name, proto, MethodSearch::Direct);
+}
+
 inline DexMethod* resolve_direct(const DexClass* cls,
                                  const DexString* name,
                                  const DexProto* proto) {
@@ -149,6 +175,12 @@ inline DexMethod* resolve_direct(const DexClass* cls,
  * Given a scope defined by DexClass, a name and a proto look for a dmethod
  * definition in scope.
  */
+inline DexMethod* resolve_static_deprecated(const DexClass* cls,
+                                            const DexString* name,
+                                            const DexProto* proto) {
+  return resolve_method_deprecated(cls, name, proto, MethodSearch::Static);
+}
+
 inline DexMethod* resolve_static(const DexClass* cls,
                                  const DexString* name,
                                  const DexProto* proto) {
@@ -159,6 +191,17 @@ inline DexMethod* resolve_static(const DexClass* cls,
  * Given a scope defined by DexClass, a name and a proto look for a vmethod
  * definition in the scope defined by the interface.
  */
+inline DexMethod* resolve_interface_method_deprecated(const DexClass* cls,
+                                                      const DexString* name,
+                                                      const DexProto* proto) {
+  if (cls == nullptr) {
+    return nullptr;
+  }
+  always_assert_log(is_interface(cls), "Class %s is not an interface\n",
+                    SHOW(cls));
+  return resolve_method_deprecated(cls, name, proto, MethodSearch::Interface);
+}
+
 inline DexMethod* resolve_interface_method(const DexClass* cls,
                                            const DexString* name,
                                            const DexProto* proto) {
@@ -181,37 +224,12 @@ inline DexMethod* resolve_interface_method(const DexClass* cls,
  *
  * - If the type the method belongs to is unknown return nullptr.
  */
-inline DexMethod* resolve_method(DexMethodRef* method,
-                                 MethodSearch search,
-                                 const DexMethod* caller = nullptr) {
-  if (search == MethodSearch::Super) {
-    if (caller != nullptr) {
-      auto* cls = type_class(method->get_class());
-      if (cls == nullptr) {
-        return nullptr;
-      }
-      return resolve_super(cls, method->get_name(), method->get_proto(),
-                           caller);
-    }
-    // According to the JLS and Dalvik bytecode spec, a ::Super search requires
-    // knowing the "current class" (of the caller). However, when we get here,
-    // we don't have that. So, as a best effort, we are effectively going to do
-    // a ::Virtual search starting from the super class.
-    // TODO T132919742: Rewrite all callsites of resolve_method(..., ::Super::,
-    // ) to always provide the "current class" (given by a caller).
-    search = MethodSearch::Virtual;
-  }
-
-  auto* m = method->as_def();
-  if (m != nullptr) {
-    return m;
-  }
-  auto* cls = type_class(method->get_class());
-  if (cls == nullptr) {
-    return nullptr;
-  }
-  return resolve_method(cls, method->get_name(), method->get_proto(), search);
-}
+DexMethod* resolve_method_deprecated(DexMethodRef* method,
+                                     MethodSearch search,
+                                     const DexMethod* caller = nullptr);
+DexMethod* resolve_method(DexMethodRef* method,
+                          MethodSearch search,
+                          const DexMethod* caller = nullptr);
 
 /**
  * Resolve a method and cache the mapping.
@@ -225,55 +243,28 @@ inline DexMethod* resolve_method(DexMethodRef* method,
  *
  * Note that the cache is not thread-safe.
  */
-inline DexMethod* resolve_method(DexMethodRef* method,
-                                 MethodSearch search,
-                                 MethodRefCache& ref_cache,
-                                 const DexMethod* caller = nullptr) {
-  if (search == MethodSearch::Super) {
-    // We don't have cache for that since caller might be different.
-    return resolve_method(method, search, caller);
-  }
-  auto* m = method->as_def();
-  if (m != nullptr) {
-    return m;
-  }
-  auto def = ref_cache.find(MethodRefCacheKey{method, search});
-  if (def != ref_cache.end()) {
-    return def->second;
-  }
-  auto* mdef = resolve_method(method, search, caller);
-  if (mdef != nullptr) {
-    ref_cache.emplace(MethodRefCacheKey{method, search}, mdef);
-  }
-  return mdef;
-}
-
+DexMethod* resolve_method_deprecated(DexMethodRef* method,
+                                     MethodSearch search,
+                                     MethodRefCache& ref_cache,
+                                     const DexMethod* caller = nullptr);
+DexMethod* resolve_method(DexMethodRef* method,
+                          MethodSearch search,
+                          MethodRefCache& ref_cache,
+                          const DexMethod* caller = nullptr);
 /**
  * Resolve a method and cache the mapping. This method has the same behavior as
  * the other resolve_method with a cache, but this method is thread-safe.
  */
-inline DexMethod* resolve_method(DexMethodRef* method,
-                                 MethodSearch search,
-                                 ConcurrentMethodRefCache& concurrent_ref_cache,
-                                 const DexMethod* caller = nullptr) {
-  if (search == MethodSearch::Super) {
-    // We don't have cache for that since caller might be different.
-    return resolve_method(method, search, caller);
-  }
-  auto* m = method->as_def();
-  if (m != nullptr) {
-    return m;
-  }
-  const auto* res = concurrent_ref_cache.get(MethodRefCacheKey{method, search});
-  if (res != nullptr) {
-    return *res;
-  }
-  auto* mdef = resolve_method(method, search, caller);
-  if (mdef != nullptr) {
-    concurrent_ref_cache.emplace(MethodRefCacheKey{method, search}, mdef);
-  }
-  return mdef;
-}
+DexMethod* resolve_method_deprecated(
+    DexMethodRef* method,
+    MethodSearch search,
+    ConcurrentMethodRefCache& concurrent_ref_cache,
+    const DexMethod* caller = nullptr);
+
+DexMethod* resolve_method(DexMethodRef* method,
+                          MethodSearch search,
+                          ConcurrentMethodRefCache& concurrent_ref_cache,
+                          const DexMethod* caller = nullptr);
 
 /**
  * Resolve the method of an invoke instruction. Note that there are some
@@ -281,51 +272,25 @@ inline DexMethod* resolve_method(DexMethodRef* method,
  * an invoke-virtual, it first tries MethodSearch::Virtual, and then
  * MethodSearch::InterfaceVirtual.
  */
-inline DexMethod* resolve_invoke_method(
+DexMethod* resolve_invoke_method_deprecated(
     const IRInstruction* insn,
     const DexMethod* caller = nullptr,
-    bool* resolved_virtual_to_interface = nullptr) {
-  auto* callee_ref = insn->get_method();
-  auto search = opcode_to_search(insn);
-  auto* callee = resolve_method(callee_ref, search, caller);
-  if ((callee == nullptr) && search == MethodSearch::Virtual) {
-    callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual, caller);
-  }
-  if (resolved_virtual_to_interface != nullptr) {
-    *resolved_virtual_to_interface = false;
-    if (search == MethodSearch::Virtual && callee != nullptr) {
-      auto* callee_cls = type_class(callee->get_class());
-      always_assert_log(callee_cls != nullptr,
-                        "Resolved method %s has undefined class", SHOW(callee));
-      *resolved_virtual_to_interface = is_interface(callee_cls);
-    }
-  }
-  return callee;
-}
+    bool* resolved_virtual_to_interface = nullptr);
 
-inline DexMethod* resolve_invoke_method(
+DexMethod* resolve_invoke_method(const IRInstruction* insn,
+                                 const DexMethod* caller = nullptr,
+                                 bool* resolved_virtual_to_interface = nullptr);
+
+DexMethod* resolve_invoke_method_deprecated(
     const IRInstruction* insn,
     MethodRefCache& ref_cache,
     const DexMethod* caller = nullptr,
-    bool* resolved_virtual_to_interface = nullptr) {
-  auto* callee_ref = insn->get_method();
-  auto search = opcode_to_search(insn);
-  auto* callee = resolve_method(callee_ref, search, ref_cache, caller);
-  if ((callee == nullptr) && search == MethodSearch::Virtual) {
-    callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual,
-                            ref_cache, caller);
-  }
-  if (resolved_virtual_to_interface != nullptr) {
-    *resolved_virtual_to_interface = false;
-    if (search == MethodSearch::Virtual && callee != nullptr) {
-      auto* callee_cls = type_class(callee->get_class());
-      always_assert_log(callee_cls != nullptr,
-                        "Resolved method %s has undefined class", SHOW(callee));
-      *resolved_virtual_to_interface = is_interface(callee_cls);
-    }
-  }
-  return callee;
-}
+    bool* resolved_virtual_to_interface = nullptr);
+
+DexMethod* resolve_invoke_method(const IRInstruction* insn,
+                                 MethodRefCache& ref_cache,
+                                 const DexMethod* caller = nullptr,
+                                 bool* resolved_virtual_to_interface = nullptr);
 
 /**
  * Given a scope defined by DexClass, a name and a proto look for the vmethod
@@ -372,6 +337,16 @@ inline DexField* resolve_field(const DexFieldRef* field,
   return resolve_field(field->get_class(), field->get_name(), field->get_type(),
                        search);
 }
+
+struct ConcurrentMethodResolverDeprecated {
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  DexMethod* operator()(DexMethodRef* method,
+                        MethodSearch search,
+                        const DexMethod* caller) {
+    return resolve_method_deprecated(method, search, concurrent_resolve_cache,
+                                     caller);
+  }
+};
 
 struct ConcurrentMethodResolver {
   ConcurrentMethodRefCache concurrent_resolve_cache;

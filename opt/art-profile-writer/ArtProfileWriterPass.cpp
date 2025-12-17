@@ -160,13 +160,14 @@ void never_inline(bool attach_annotations,
           auto* receiver_cls = type_class(receiver_type);
           if ((receiver_cls != nullptr) && !is_interface(receiver_cls)) {
             auto* invoke_method = invoke_insn->get_method();
-            callee = resolve_virtual(receiver_cls, invoke_method->get_name(),
-                                     invoke_method->get_proto());
+            callee = resolve_virtual_deprecated(receiver_cls,
+                                                invoke_method->get_name(),
+                                                invoke_method->get_proto());
           }
         }
       }
       if (callee == nullptr) {
-        callee = resolve_invoke_method(invoke_insn, caller);
+        callee = resolve_invoke_method_deprecated(invoke_insn, caller);
       }
       if (!consider_callee(callee)) {
         return nullptr;

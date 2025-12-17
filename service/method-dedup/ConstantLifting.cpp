@@ -194,7 +194,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     auto* meth = callsite.caller;
     auto* insn = callsite.insn;
     auto* const callee =
-        resolve_method(insn->get_method(), opcode_to_search(insn));
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     always_assert(callee != nullptr);
     auto const_vals = lifted_constants.at(callee);
     auto& meth_cfg = meth->get_code()->cfg();

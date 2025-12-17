@@ -227,7 +227,7 @@ DexMethod* find_collision_excepting(const ClassHierarchy& ch,
 
   auto* super = type_class(cls->get_super_class());
   if (super != nullptr) {
-    auto* method = resolve_virtual(super, name, proto);
+    auto* method = resolve_virtual_deprecated(super, name, proto);
     if ((method != nullptr) && method != except) {
       return method;
     }

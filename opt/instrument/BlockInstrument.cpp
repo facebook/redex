@@ -1938,7 +1938,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, cfg.create_init_class_insns(), method_override_graph.get());
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   UnorderedSet<DexMethod*> no_default_inlinables;
   auto inliner_config = cfg.get_inliner_config();

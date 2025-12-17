@@ -450,8 +450,9 @@ TEST_F(ImmutableTest, object) {
     // the method always returns a hidden immutable field.
     auto* method_ref =
         DexMethod::make_method("LData;.toString:()Ljava/lang/String;");
-    always_assert(!method_ref->is_def() &&
-                  !resolve_method(method_ref, MethodSearch::Virtual));
+    always_assert(
+        !method_ref->is_def() &&
+        !resolve_method_deprecated(method_ref, MethodSearch::Virtual));
     auto* string_getter = dynamic_cast<DexMethod*>(method_ref);
     analyzer_state.add_initializer(constructor, int_field)
         .set_src_id_of_attr(2)

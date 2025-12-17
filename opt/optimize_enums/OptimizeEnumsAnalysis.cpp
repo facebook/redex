@@ -101,7 +101,8 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
     }
 
     case OPCODE_INVOKE_DIRECT: {
-      auto* invoked = resolve_method(insn->get_method(), MethodSearch::Direct);
+      auto* invoked =
+          resolve_method_deprecated(insn->get_method(), MethodSearch::Direct);
       if (invoked == nullptr) {
         default_case();
         break;

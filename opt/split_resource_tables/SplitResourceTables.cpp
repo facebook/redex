@@ -70,7 +70,8 @@ void signatures_to_methods(
         "so edit the config to use a different "
         "wrapper method, or add this method to the app's dependencies.",
         pair.second.c_str());
-    auto* resolved_second = resolve_method(second, MethodSearch::Static);
+    auto* resolved_second =
+        resolve_method_deprecated(second, MethodSearch::Static);
     always_assert_log(resolved_second != nullptr,
                       "No static method def found for %s",
                       pair.second.c_str());

@@ -139,8 +139,8 @@ class OverriddenVirtualScopesAnalysis {
         }
         if (insn->opcode() == OPCODE_INVOKE_SUPER) {
           auto* callee_ref = insn->get_method();
-          auto* callee =
-              resolve_method(callee_ref, MethodSearch::Super, method);
+          auto* callee = resolve_method_deprecated(callee_ref,
+                                                   MethodSearch::Super, method);
           if (callee == nullptr) {
             m_unresolved_super_invoked_virtual_scopes.insert(
                 VirtualScopeId::make(callee_ref));

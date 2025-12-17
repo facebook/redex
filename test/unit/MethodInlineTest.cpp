@@ -431,7 +431,7 @@ TEST_F(MethodInlineTest, debugPositionsAfterReturn) {
 }
 
 TEST_F(MethodInlineTest, test_intra_dex_inlining) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   // Only inline methods within dex.
   bool intra_dex = true;
@@ -491,7 +491,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
 }
 
 TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   // Only inline methods within dex.
   bool intra_dex = true;
@@ -552,7 +552,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
 }
 
 TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   virt_scope::get_vmethods(type::java_lang_Object());
 
@@ -639,7 +639,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
 
 // Don't inline when it would exceed (configured) size
 TEST_F(MethodInlineTest, size_limit) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   DexStoresVector stores;
   UnorderedSet<DexMethod*> canidates;
@@ -685,7 +685,7 @@ TEST_F(MethodInlineTest, size_limit) {
 }
 
 TEST_F(MethodInlineTest, minimal_self_loop_regression) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -727,7 +727,7 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
 }
 
 TEST_F(MethodInlineTest, non_unique_inlined_registers) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -789,7 +789,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
 }
 
 TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -857,7 +857,7 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
 
 TEST_F(MethodInlineTest,
        inline_beneficial_for_particular_instance_after_constant_prop) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -934,7 +934,7 @@ TEST_F(MethodInlineTest,
 }
 
 TEST_F(MethodInlineTest, intradex_legal_after_constant_prop) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = true;
 
@@ -1015,7 +1015,7 @@ TEST_F(MethodInlineTest, intradex_legal_after_constant_prop) {
 TEST_F(
     MethodInlineTest,
     inline_beneficial_for_particular_instance_after_constant_prop_and_local_dce) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1092,7 +1092,7 @@ TEST_F(
 }
 
 TEST_F(MethodInlineTest, throw_after_no_return) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1154,7 +1154,7 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
 }
 
 TEST_F(MethodInlineTest, boxed_boolean) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1250,7 +1250,7 @@ TEST_F(MethodInlineTest, boxed_boolean) {
 }
 
 TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1437,7 +1437,7 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   nested_callee_2->set_code(assembler::ircode_from_string(nested_callee_2_str));
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1618,7 +1618,7 @@ TEST_F(MethodInlineTest, unused_result) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1761,7 +1761,7 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1884,7 +1884,7 @@ TEST_F(MethodInlineTest,
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   DexStoresVector stores;
   {
@@ -1966,7 +1966,7 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   DexStoresVector stores;
   {
@@ -2052,7 +2052,7 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2125,7 +2125,7 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
 
 /// testing parameter max_cost_for_constant_propagation
 TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
   DexStoresVector stores;
@@ -2236,7 +2236,7 @@ TEST_F(MethodInlineTest, inline_init_not_relaxed) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2326,7 +2326,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2433,7 +2433,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2531,7 +2531,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
   )");
   auto* caller = use->get_all_methods().at(0);
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2653,7 +2653,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2774,7 +2774,7 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2896,7 +2896,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -3019,7 +3019,7 @@ TEST_F(MethodInlineTest, partially_inline) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -3169,7 +3169,7 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   base_callee->set_code(assembler::ircode_from_string(callee_str));
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -3299,7 +3299,7 @@ TEST_F(MethodInlineTest,
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 

@@ -288,10 +288,11 @@ bool RuntimeAssertTransform::insert_return_value_assert(
     if (wps.invoke_is_dynamic(insn)) {
       return false;
     }
-    callee = resolve_invoke_method(insn);
+    callee = resolve_invoke_method_deprecated(insn);
     domain = wps.get_return_type_from_cg(insn);
   } else {
-    callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+    callee =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     if (callee == nullptr) {
       return false;
     }

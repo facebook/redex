@@ -1688,8 +1688,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       }
     }
     if (m_validate_access) {
-      auto* resolved =
-          resolve_method(dex_method, opcode_to_search(insn), m_dex_method);
+      auto* resolved = resolve_method_deprecated(
+          dex_method, opcode_to_search(insn), m_dex_method);
       ::validate_access(m_dex_method, resolved);
     }
     if (m_validate_invoke_super && insn->opcode() == OPCODE_INVOKE_SUPER) {

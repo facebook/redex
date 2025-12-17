@@ -254,7 +254,7 @@ class EnumUpcastDetector {
         return;
       }
     }
-    auto* method = resolve_method(method_ref, MethodSearch::Static);
+    auto* method = resolve_method_deprecated(method_ref, MethodSearch::Static);
     if ((method == nullptr) ||
         !params_contain_object_type(method, OBJECT_TYPE)) {
       process_general_invocation(insn, env);
@@ -534,7 +534,8 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
       env->set(dest, env->get(insn->src(0)));
       break;
     case OPCODE_INVOKE_STATIC: {
-      auto* method = resolve_method(insn->get_method(), MethodSearch::Static);
+      auto* method =
+          resolve_method_deprecated(insn->get_method(), MethodSearch::Static);
       if (method != nullptr) {
         auto it = m_config.param_summary_map.find(method);
         if (it != m_config.param_summary_map.end()) {
@@ -744,8 +745,8 @@ void reject_enums_for_relaxed_inits(
         if (!method::is_init(callee)) {
           continue;
         }
-        const auto* resolved_callee =
-            resolve_method(callee, opcode_to_search(use_insn), method);
+        const auto* resolved_callee = resolve_method_deprecated(
+            callee, opcode_to_search(use_insn), method);
         if ((resolved_callee == nullptr) ||
             resolved_callee->get_class() != enum_type) {
           TRACE(ENUM, 4,
