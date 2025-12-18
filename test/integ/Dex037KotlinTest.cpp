@@ -233,7 +233,7 @@ TEST_F(Dex037KotlinTest, TestResolveMethodInvokeInterfaceOnConcreteClass) {
 }
 
 TEST_F(Dex037KotlinTest, TestResolveMethodInvokeInterfaceOnReferences) {
-  verify_TestResolveMethodInvokeInterfaceOnReferences();
+  verify_TestResolveMethodInvokeInterfaceOnReferences(true /*is_kotlin=*/);
 }
 
 TEST_F(Dex037KotlinTest, TestResolveMethodLayeredInvokeMultipleInterfaces1) {

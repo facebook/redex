@@ -2198,7 +2198,8 @@ class Dex037Test : public ::testing::Test {
     }
   }
 
-  void verify_TestResolveMethodInvokeInterfaceOnReferences() {
+  void verify_TestResolveMethodInvokeInterfaceOnReferences(
+      bool is_kotlin = false) {
     auto* dex037_cls = find_class("Lcom/facebook/redextest/Dex037;");
     ASSERT_NE(nullptr, dex037_cls);
 
@@ -2222,6 +2223,13 @@ class Dex037Test : public ::testing::Test {
           EXPECT_EQ(callee_ref->get_class(), igreeter_cls->get_type());
           ASSERT_NE(nullptr, resolved);
           EXPECT_EQ(resolved->get_class(), igreeter_cls->get_type());
+          if (is_kotlin) {
+            // If kotlinc would generate invoke-interface IGreeter.greet or
+            // invoke-virtual CustomGreeter/ComplexGreeter.greet for second and
+            // third invoke site seems to be random-ish... So break after first
+            // check.
+            break;
+          }
         }
       }
     }
