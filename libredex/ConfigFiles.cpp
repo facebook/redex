@@ -306,6 +306,11 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
       const DexMethodRef* method = meth_stats.first;
 
       const auto* clz = type_class(method->get_class());
+      if (clz == nullptr) {
+        TRACE(CF, 2, "Skipping method from class not in scope: %s",
+              method->get_class()->c_str());
+        continue;
+      }
       if (!klass::maybe_anonymous_class(clz)) {
         continue;
       }
