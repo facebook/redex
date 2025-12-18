@@ -469,6 +469,22 @@ void parse_manual_files(
                       baseline_manual_interactions, manual_profile_interactions,
                       method_stats, unresolved_manual_lines);
   }
+  constexpr int DUMP_LEVEL = 1;
+  if (traceEnabled(METH_PROF, DUMP_LEVEL)) {
+    auto print_manual = [](const auto& map, const char* prefix) {
+      auto num = [&map](const char* key) -> ssize_t {
+        auto it = map.find(key);
+        return it != map.end() ? it->second.size() : -1;
+      };
+      TRACE(METH_PROF, DUMP_LEVEL, "%s %zd/%zd/%zd/%zd", prefix, num("manual"),
+            num("manual_hot"), num("manual_startup"),
+            num("manual_post_startup"));
+    };
+    for (auto& [file, interactions] : manual_profile_interactions) {
+      print_manual(interactions, file.c_str());
+    }
+    print_manual(method_stats, "MethodStats: ");
+  }
 }
 
 } // namespace manual_profile
