@@ -22,7 +22,7 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   PrintKotlinStats::Stats stats = klr->get_stats();
 
   EXPECT_EQ(stats.kotlin_null_check_insns, 9);
-  EXPECT_EQ(stats.kotlin_public_param_objects, 21);
+  EXPECT_EQ(stats.kotlin_public_param_objects, 29);
 
   // LExample;.$$delegatedProperties:[Lkotlin/reflect/KProperty;
   // LFooDelagates;.lazyValue$delegate:Lkotlin/Lazy;
@@ -31,17 +31,30 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   EXPECT_EQ(stats.kotlin_lazy_delegates, 2);
 
   // LKotlinLambdaInline$foo$1;
+  // LKotlinLambdaInline$bar$1;
+  // LKotlinLambdaInline$baz$1;
   // LFooDelagates$lazyValue$2;
-  EXPECT_EQ(stats.kotlin_lambdas, 2);
+  EXPECT_EQ(stats.kotlin_lambdas, 4);
 
   // LKotlinLambdaInline$foo$1;
-  EXPECT_EQ(stats.kotlin_class_with_instance, 1);
+  // LKotlinLambdaInline$bar$1;
+  // LKotlinLambdaInline$baz$1;
+  EXPECT_EQ(stats.kotlin_class_with_instance, 3);
 
   // LKotlinLambdaInline$foo$1;
-  EXPECT_EQ(stats.kotlin_non_capturing_lambda, 1);
+  // LKotlinLambdaInline$bar$1;
+  // LKotlinLambdaInline$baz$1;
+  EXPECT_EQ(stats.kotlin_non_capturing_lambda, 3);
+
+  // All three lambdas in LKotlinLambdaInline are trivial
+  EXPECT_EQ(stats.kotlin_trivial_non_capturing_lambdas, 3u);
+  // foo$1 and bar$1 have same body (a+b), baz$1 has different body (a-b)
+  EXPECT_EQ(stats.kotlin_unique_trivial_non_capturing_lambdas, 2u);
 
   // LDelegate1;
   // LKotlinLambdaInline$foo$1;
+  // LKotlinLambdaInline$bar$1;
+  // LKotlinLambdaInline$baz$1;
   // LKotlinLayzyKt;
   // LCompanionClass$Companion;
   // LKotlinLambdaInline;
@@ -55,15 +68,17 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LKotlinCompanionObjKt;
   // Lfoo;
   // LAnotherCompanionClass;
-  EXPECT_EQ(stats.kotlin_class, 15);
+  EXPECT_EQ(stats.kotlin_class, 17);
 
   // Named companion object is not counted yet
   // LCompanionClass$Companion;
   EXPECT_EQ(stats.kotlin_companion_class, 1);
 
   // LKotlinLambdaInline$foo$1;
+  // LKotlinLambdaInline$bar$1;
+  // LKotlinLambdaInline$baz$1;
   // LFooDelagates$lazyValue$2;
-  EXPECT_EQ(stats.kotlin_anonymous_class, 2);
+  EXPECT_EQ(stats.kotlin_anonymous_class, 4);
 
   // LKotlinDefaultArgs.greet$default, with 2 default args
   EXPECT_EQ(stats.kotlin_default_arg_method, 1);
