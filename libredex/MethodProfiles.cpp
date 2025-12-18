@@ -255,6 +255,103 @@ void apply_manual_profile(
   }
 }
 
+bool parse_manual_file_line_complex(
+    const MethodProfiles::ManualProfileLine& manual_profile_line,
+    const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
+        baseline_profile_method_map,
+    std::map<std::string, AllInteractions>& manual_profile_interactions,
+    AllInteractions& method_stats) {
+  const auto& config_names = manual_profile_line.config_names;
+  const auto& manual_filename = manual_profile_line.manual_filename;
+  const auto& method_and_class = manual_profile_line.method_and_class;
+  const auto& flags = manual_profile_line.flags;
+
+  const auto& klass = method_and_class[0];
+  const auto& method = method_and_class[1];
+
+  // Regexes can be slow. See if parts are simple.
+
+  auto apply_class =
+      [&](const UnorderedMap<std::string, DexMethodRef*>& method_name_to_method,
+          const auto& method_filter_fn) {
+        for (const auto& [method_name, method_ref] :
+             UnorderedIterable(method_name_to_method)) {
+          if (!method_filter_fn(method_name)) {
+            continue;
+          }
+          apply_manual_profile(method_ref, flags, manual_filename, config_names,
+                               manual_profile_interactions, method_stats);
+        }
+      };
+  auto apply = [&](const auto& class_filter_fn, const auto& method_filter_fn) {
+    for (const auto& [classname, method_name_to_method] :
+         UnorderedIterable(baseline_profile_method_map)) {
+      if (!class_filter_fn(classname)) {
+        continue;
+      }
+      apply_class(method_name_to_method, method_filter_fn);
+    }
+  };
+
+  // A value that ends with '**' and contains no other '*' or '?' is a prefix
+  // match.
+  auto maybe_prefix = [](const auto& str) -> std::optional<std::string_view> {
+    if (str.size() > 2 && str.back() == '*' &&
+        str.find('*') == str.size() - 2 && str.find('?') == std::string::npos) {
+      return std::string_view(str.data(), str.size() - 2);
+    }
+    return std::nullopt;
+  };
+
+  bool exact_klass = klass.find('*') == std::string::npos &&
+                     klass.find('?') == std::string::npos;
+  std::optional<std::string_view> klass_prefix_opt =
+      exact_klass ? std::nullopt : maybe_prefix(klass);
+  bool all_methods = method == "**(**)**";
+
+  struct RegexMatch {
+    const boost::regex regex;
+    explicit RegexMatch(const std::string& filter_str)
+        : regex(wildcard_to_regex(filter_str)) {}
+    bool operator()(const std::string& name) const {
+      boost::smatch matches;
+      return boost::regex_search(name, matches, regex);
+    }
+  };
+
+  // Fastest.
+  if (exact_klass) {
+    auto it = baseline_profile_method_map.find(klass);
+    if (it != baseline_profile_method_map.end()) {
+      if (all_methods) {
+        apply_class(it->second, [](const auto&) { return true; });
+      } else {
+        apply_class(it->second, RegexMatch{method});
+      }
+    }
+  } else if (klass_prefix_opt) {
+    auto& klass_prefix = *klass_prefix_opt;
+    auto klass_prefix_fn = [&klass_prefix](const auto& classname) {
+      return classname.starts_with(klass_prefix);
+    };
+    if (all_methods) {
+      apply(klass_prefix_fn, [](const auto&) { return true; });
+    } else {
+      apply(klass_prefix_fn, RegexMatch{method});
+    }
+  } else {
+    RegexMatch class_regex{klass};
+    if (all_methods) {
+      apply(class_regex, [](const auto&) { return true; });
+    } else {
+      apply(class_regex, RegexMatch{method});
+    }
+  }
+
+  // We need to add wildcard lines regardless
+  return true;
+}
+
 // Returns true if the line was unresolved
 bool parse_manual_file_line(
     const MethodProfiles::ManualProfileLine& manual_profile_line,
@@ -285,28 +382,11 @@ bool parse_manual_file_line(
       }
     }
     return true;
-  } else {
-    // Otherwise, do a regex search
-    auto classregex = boost::regex(wildcard_to_regex(method_and_class[0]));
-    auto methodregex = boost::regex(wildcard_to_regex(method_and_class[1]));
-    for (const auto& [classname, method_name_to_method] :
-         UnorderedIterable(baseline_profile_method_map)) {
-      boost::smatch class_matches;
-      if (!boost::regex_search(classname, class_matches, classregex)) {
-        continue;
-      }
-      for (const auto& [method_name, method_ref] :
-           UnorderedIterable(method_name_to_method)) {
-        boost::smatch method_matches;
-        if (boost::regex_search(method_name, method_matches, methodregex)) {
-          apply_manual_profile(method_ref, flags, manual_filename, config_names,
-                               manual_profile_interactions, method_stats);
-        }
-      }
-    }
-    // We need to add wildcard lines regardless
-    return true;
   }
+  return parse_manual_file_line_complex(manual_profile_line,
+                                        baseline_profile_method_map,
+                                        manual_profile_interactions,
+                                        method_stats);
 }
 
 void parse_manual_file(
