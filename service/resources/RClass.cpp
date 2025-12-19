@@ -25,7 +25,6 @@
 #include "MethodOverrideGraph.h"
 #include "ObjectSensitiveDce.h"
 #include "RedexResources.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "SideEffectSummary.h"
 #include "Timer.h"
