@@ -14,7 +14,6 @@
 #include "DexUtil.h"
 #include "IPConstantPropagation.h"
 #include "RedexTest.h"
-#include "Resolver.h"
 
 namespace {
 
