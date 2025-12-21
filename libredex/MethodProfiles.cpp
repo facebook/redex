@@ -195,11 +195,16 @@ std::string wildcard_to_regex(const std::string& wildcard_string) {
          suffix;
 }
 
-void MethodProfiles::apply_manual_profile(
+namespace {
+namespace manual_profile {
+
+void apply_manual_profile(
     DexMethodRef* ref,
     const std::string& flags,
     const std::string& manual_filename,
-    const std::vector<std::string>& config_names) {
+    const std::vector<std::string>& config_names,
+    std::map<std::string, AllInteractions>& manual_profile_interactions,
+    AllInteractions& method_stats) {
   // These are just randomly selected stats that seemed reasonable
   const struct Stats stats = {100.0, 100, 50, 0};
   always_assert_log(!config_names.empty(),
@@ -208,7 +213,7 @@ void MethodProfiles::apply_manual_profile(
       config_names.front() !=
           baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
     auto& manual_all_interactions =
-        m_manual_profile_interactions[manual_filename];
+        manual_profile_interactions[manual_filename];
     manual_all_interactions["manual"].emplace(ref, stats);
     if (flags.find('H') != std::string::npos) {
       manual_all_interactions["manual_hot"].emplace(ref, stats);
@@ -225,22 +230,26 @@ void MethodProfiles::apply_manual_profile(
   if (std::find(config_names.begin(), config_names.end(),
                 baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME) !=
       config_names.end()) {
-    m_method_stats["manual"].emplace(ref, stats);
+    method_stats["manual"].emplace(ref, stats);
     if (flags.find('H') != std::string::npos) {
-      m_method_stats["manual_hot"].emplace(ref, stats);
+      method_stats["manual_hot"].emplace(ref, stats);
     }
     if (flags.find('S') != std::string::npos) {
-      m_method_stats["manual_startup"].emplace(ref, stats);
+      method_stats["manual_startup"].emplace(ref, stats);
     }
     if (flags.find('P') != std::string::npos) {
-      m_method_stats["manual_post_startup"].emplace(ref, stats);
+      method_stats["manual_post_startup"].emplace(ref, stats);
     }
   }
 }
 
 // Returns true if the line was unresolved
-bool MethodProfiles::parse_manual_file_line(
-    const ManualProfileLine& manual_profile_line) {
+bool parse_manual_file_line(
+    const MethodProfiles::ManualProfileLine& manual_profile_line,
+    const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
+        baseline_profile_method_map,
+    std::map<std::string, AllInteractions>& manual_profile_interactions,
+    AllInteractions& method_stats) {
   const auto& current_line = manual_profile_line.current_line;
   const auto& config_names = manual_profile_line.config_names;
   const auto& manual_filename = manual_profile_line.manual_filename;
@@ -250,8 +259,6 @@ bool MethodProfiles::parse_manual_file_line(
   if (method_and_class.size() != 2) {
     return false;
   }
-  const auto& baseline_profile_method_map =
-      get_baseline_profile_method_map(false);
   // If the line does not contains wildcard characters, do a map look up
   if (current_line.find('*') == std::string::npos &&
       current_line.find('?') == std::string::npos) {
@@ -260,7 +267,8 @@ bool MethodProfiles::parse_manual_file_line(
       auto method_it = class_it->second.find(method_and_class[1]);
       if (method_it != class_it->second.end()) {
         apply_manual_profile(method_it->second, flags, manual_filename,
-                             config_names);
+                             config_names, manual_profile_interactions,
+                             method_stats);
         return false;
       }
     }
@@ -279,8 +287,8 @@ bool MethodProfiles::parse_manual_file_line(
            UnorderedIterable(method_name_to_method)) {
         boost::smatch method_matches;
         if (boost::regex_search(method_name, method_matches, methodregex)) {
-          apply_manual_profile(method_ref, flags, manual_filename,
-                               config_names);
+          apply_manual_profile(method_ref, flags, manual_filename, config_names,
+                               manual_profile_interactions, method_stats);
         }
       }
     }
@@ -289,19 +297,25 @@ bool MethodProfiles::parse_manual_file_line(
   }
 }
 
-void MethodProfiles::parse_manual_file(
+void parse_manual_file(
     const std::string& manual_filename,
-    const std::vector<std::string>& config_names) {
+    const std::vector<std::string>& config_names,
+    const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
+        baseline_profile_method_map,
+    std::map<std::string, AllInteractions*>& baseline_manual_interactions,
+    std::map<std::string, AllInteractions>& manual_profile_interactions,
+    AllInteractions& method_stats,
+    std::vector<MethodProfiles::ManualProfileLine>& unresolved_manual_lines) {
   Timer t("Parsing Manual File " + manual_filename);
   std::ifstream manual_file(manual_filename);
   always_assert_log(manual_file.good(),
                     "Could not open manual profile at %s",
                     manual_filename.c_str());
   std::string current_line;
-  m_manual_profile_interactions[manual_filename] = AllInteractions();
+  manual_profile_interactions[manual_filename] = AllInteractions();
   for (const auto& config_name : config_names) {
-    m_baseline_manual_interactions[config_name] =
-        &(m_manual_profile_interactions.at(manual_filename));
+    baseline_manual_interactions[config_name] =
+        &(manual_profile_interactions.at(manual_filename));
   }
   while (std::getline(manual_file, current_line)) {
     if (current_line.empty() || current_line[0] == '#' ||
@@ -326,13 +340,35 @@ void MethodProfiles::parse_manual_file(
     boost::split_regex(method_and_class, method_and_class_string,
                        boost::regex("->"));
     always_assert(method_and_class.size() == 1 || method_and_class.size() == 2);
-    ManualProfileLine manual_profile_line = {
+    MethodProfiles::ManualProfileLine manual_profile_line = {
         current_line, flags, method_and_class, config_names, manual_filename};
-    if (parse_manual_file_line(manual_profile_line)) {
-      m_unresolved_manual_lines.emplace_back(std::move(manual_profile_line));
+    if (parse_manual_file_line(manual_profile_line, baseline_profile_method_map,
+                               manual_profile_interactions, method_stats)) {
+      unresolved_manual_lines.emplace_back(std::move(manual_profile_line));
     }
   }
 }
+
+void parse_manual_files(
+    const UnorderedMap<std::string, std::vector<std::string>>&
+        manual_file_to_config_names,
+    const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
+        baseline_profile_method_map,
+    std::map<std::string, AllInteractions*>& baseline_manual_interactions,
+    std::map<std::string, AllInteractions>& manual_profile_interactions,
+    AllInteractions& method_stats,
+    std::vector<MethodProfiles::ManualProfileLine>& unresolved_manual_lines) {
+  Timer t("parse_manual_files");
+  for (const auto& [manual_file, config_name] :
+       UnorderedIterable(manual_file_to_config_names)) {
+    parse_manual_file(manual_file, config_name, baseline_profile_method_map,
+                      baseline_manual_interactions, manual_profile_interactions,
+                      method_stats, unresolved_manual_lines);
+  }
+}
+
+} // namespace manual_profile
+} // namespace
 
 const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
 MethodProfiles::get_baseline_profile_method_map(bool recompute) {
@@ -344,16 +380,6 @@ MethodProfiles::get_baseline_profile_method_map(bool recompute) {
         g_redex->get_baseline_profile_method_map(m_parsed_manual_methods);
   }
   return m_baseline_profile_method_map;
-}
-
-void MethodProfiles::parse_manual_files(
-    const UnorderedMap<std::string, std::vector<std::string>>&
-        manual_file_to_config_names) {
-  Timer t("parse_manual_files");
-  for (const auto& [manual_file, config_name] :
-       UnorderedIterable(manual_file_to_config_names)) {
-    parse_manual_file(manual_file, config_name);
-  }
 }
 
 bool MethodProfiles::parse_stats_file(const std::string& csv_filename,
@@ -692,11 +718,6 @@ boost::optional<uint32_t> MethodProfiles::get_interaction_count(
   }
 }
 
-const std::vector<MethodProfiles::ManualProfileLine>&
-MethodProfiles::get_unresolved_manual_profile_lines() const {
-  return m_unresolved_manual_lines;
-}
-
 void MethodProfiles::process_unresolved_lines() {
   {
     Timer t("Processing unresolved profile lines");
@@ -709,7 +730,9 @@ void MethodProfiles::process_unresolved_lines() {
     for (auto it = m_unresolved_manual_lines.begin();
          it < m_unresolved_manual_lines.end();) {
       const auto& manual_profile_line = *it;
-      if (parse_manual_file_line(manual_profile_line)) {
+      if (manual_profile::parse_manual_file_line(
+              manual_profile_line, get_baseline_profile_method_map(false),
+              m_manual_profile_interactions, m_method_stats)) {
         ++it;
       } else {
         it = m_unresolved_manual_lines.erase(it);
@@ -1069,4 +1092,56 @@ bool dexmethods_profiled_comparator::operator()(DexMethod* a, DexMethod* b) {
   }
 
   return m_initial_order.at(a) < m_initial_order.at(b);
+}
+
+void MethodProfiles::initialize(
+    const std::vector<std::string>& csv_filenames,
+    const std::vector<std::string>& baseline_profile_csv_filenames,
+    const UnorderedMap<std::string, baseline_profiles::BaselineProfileConfig>&
+        baseline_profile_configs) {
+  m_initialized = true;
+  Timer t("Parsing agg_method_stats_files");
+  for (const std::string& csv_filename : csv_filenames) {
+    m_interaction_id = "";
+    m_mode = NONE;
+    bool success = parse_stats_file(csv_filename, false);
+    always_assert_log(success,
+                      "Failed to parse %s. See stderr for more details",
+                      csv_filename.c_str());
+    always_assert_log(!m_method_stats.empty(),
+                      "No valid data found in the profile %s. See stderr "
+                      "for more details.",
+                      csv_filename.c_str());
+  }
+  // Parse csv files that are only used in baseline profile variants
+  for (const std::string& csv_filename : baseline_profile_csv_filenames) {
+    m_interaction_id = "";
+    m_mode = NONE;
+    bool success = parse_stats_file(csv_filename, true);
+    always_assert_log(success,
+                      "Failed to parse %s. See stderr for more details",
+                      csv_filename.c_str());
+    always_assert_log(!m_method_stats.empty(),
+                      "No valid data found in the profile %s. See stderr "
+                      "for more details.",
+                      csv_filename.c_str());
+  }
+  // Parse manual interactions
+  UnorderedMap<std::string, std::vector<std::string>>
+      manual_file_to_config_names;
+  // Create a mapping of manual_file to config names
+  // this way we can only parse each manual_file exactly once
+  for (const auto& [baseline_config_name, baseline_profile_config] :
+       UnorderedIterable(baseline_profile_configs)) {
+    for (const auto& manual_file : baseline_profile_config.manual_files) {
+      manual_file_to_config_names[manual_file].emplace_back(
+          baseline_config_name);
+    }
+  }
+  manual_profile::parse_manual_files(manual_file_to_config_names,
+                                     get_baseline_profile_method_map(false),
+                                     m_baseline_manual_interactions,
+                                     m_manual_profile_interactions,
+                                     m_method_stats,
+                                     m_unresolved_manual_lines);
 }

@@ -75,48 +75,7 @@ class MethodProfiles {
       const std::vector<std::string>& csv_filenames,
       const std::vector<std::string>& baseline_profile_csv_filenames,
       const UnorderedMap<std::string, baseline_profiles::BaselineProfileConfig>&
-          baseline_profile_configs) {
-    m_initialized = true;
-    Timer t("Parsing agg_method_stats_files");
-    for (const std::string& csv_filename : csv_filenames) {
-      m_interaction_id = "";
-      m_mode = NONE;
-      bool success = parse_stats_file(csv_filename, false);
-      always_assert_log(success,
-                        "Failed to parse %s. See stderr for more details",
-                        csv_filename.c_str());
-      always_assert_log(!m_method_stats.empty(),
-                        "No valid data found in the profile %s. See stderr "
-                        "for more details.",
-                        csv_filename.c_str());
-    }
-    // Parse csv files that are only used in baseline profile variants
-    for (const std::string& csv_filename : baseline_profile_csv_filenames) {
-      m_interaction_id = "";
-      m_mode = NONE;
-      bool success = parse_stats_file(csv_filename, true);
-      always_assert_log(success,
-                        "Failed to parse %s. See stderr for more details",
-                        csv_filename.c_str());
-      always_assert_log(!m_method_stats.empty(),
-                        "No valid data found in the profile %s. See stderr "
-                        "for more details.",
-                        csv_filename.c_str());
-    }
-    // Parse manual interactions
-    UnorderedMap<std::string, std::vector<std::string>>
-        manual_file_to_config_names;
-    // Create a mapping of manual_file to config names
-    // this way we can only parse each manual_file exactly once
-    for (const auto& [baseline_config_name, baseline_profile_config] :
-         UnorderedIterable(baseline_profile_configs)) {
-      for (const auto& manual_file : baseline_profile_config.manual_files) {
-        manual_file_to_config_names[manual_file].emplace_back(
-            baseline_config_name);
-      }
-    }
-    parse_manual_files(manual_file_to_config_names);
-  }
+          baseline_profile_configs);
 
   // For testing purposes.
   static MethodProfiles initialize(
@@ -180,9 +139,6 @@ class MethodProfiles {
     std::string manual_filename;
   };
 
-  const std::vector<ManualProfileLine>& get_unresolved_manual_profile_lines()
-      const;
-
   UnorderedSet<dex_member_refs::MethodDescriptorTokens>
   get_unresolved_method_descriptor_tokens() const;
 
@@ -237,15 +193,8 @@ class MethodProfiles {
   bool parse_stats_file(const std::string& csv_filename,
                         bool baseline_profile_variant);
 
-  // Read a list of manual profiles and populate m_baseline_manual_interactions
-  void parse_manual_files(
-      const UnorderedMap<std::string, std::vector<std::string>>&
-          manual_file_to_config_names);
-  void parse_manual_file(const std::string& manual_filename,
-                         const std::vector<std::string>& config_names);
   const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
   get_baseline_profile_method_map(bool recompute);
-  bool parse_manual_file_line(const ManualProfileLine& manual_profile_line);
 
   // Read a line of data (not a header)
   bool parse_line(const std::string& line, bool baseline_profile_variant);
@@ -258,10 +207,6 @@ class MethodProfiles {
   bool apply_main_internal_result(ParsedMain v,
                                   std::string* interaction_id,
                                   bool baseline_profile_variant);
-  void apply_manual_profile(DexMethodRef* ref,
-                            const std::string& flags,
-                            const std::string& manual_filename,
-                            const std::vector<std::string>& config_names);
   // Read a line of data from the metadata section (at the top of the file)
   bool parse_metadata(std::string_view line);
 
