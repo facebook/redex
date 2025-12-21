@@ -212,6 +212,10 @@ void apply_manual_profile(
   if (config_names.size() > 1 ||
       config_names.front() !=
           baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
+    static std::mutex manual_all_interactions_mutex = {};
+    std::lock_guard<std::mutex> manual_all_interactions_lock{
+        manual_all_interactions_mutex};
+
     auto& manual_all_interactions =
         manual_profile_interactions[manual_filename];
     manual_all_interactions["manual"].emplace(ref, stats);
@@ -230,6 +234,9 @@ void apply_manual_profile(
   if (std::find(config_names.begin(), config_names.end(),
                 baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME) !=
       config_names.end()) {
+    static std::mutex method_stats_mutex = {};
+    std::lock_guard<std::mutex> method_stats_lock{method_stats_mutex};
+
     method_stats["manual"].emplace(ref, stats);
     if (flags.find('H') != std::string::npos) {
       method_stats["manual_hot"].emplace(ref, stats);
@@ -317,6 +324,12 @@ void parse_manual_file(
     baseline_manual_interactions[config_name] =
         &(manual_profile_interactions.at(manual_filename));
   }
+  // Wildcard rules are kinda expensive, so we want to parallelize them. To
+  // simplify first capture all data from the file, then process. It is
+  // assumed that manual profiles are not humongous and can fit into memory.
+  std::vector<MethodProfiles::ManualProfileLine> manual_profile_lines;
+  manual_profile_lines.reserve(10000);
+
   while (std::getline(manual_file, current_line)) {
     if (current_line.empty() || current_line[0] == '#' ||
         current_line[0] == '[') {
@@ -340,13 +353,19 @@ void parse_manual_file(
     boost::split_regex(method_and_class, method_and_class_string,
                        boost::regex("->"));
     always_assert(method_and_class.size() == 1 || method_and_class.size() == 2);
-    MethodProfiles::ManualProfileLine manual_profile_line = {
-        current_line, flags, method_and_class, config_names, manual_filename};
+    manual_profile_lines.emplace_back(current_line, flags, method_and_class,
+                                      config_names, manual_filename);
+  }
+
+  std::mutex unresolved_mutex;
+  workqueue_run_for<size_t>(0, manual_profile_lines.size(), [&](size_t index) {
+    auto& manual_profile_line = manual_profile_lines.at(index);
     if (parse_manual_file_line(manual_profile_line, baseline_profile_method_map,
                                manual_profile_interactions, method_stats)) {
+      std::lock_guard<std::mutex> unresolved_lock{unresolved_mutex};
       unresolved_manual_lines.emplace_back(std::move(manual_profile_line));
     }
-  }
+  });
 }
 
 void parse_manual_files(
