@@ -29,7 +29,6 @@
 #include "MethodProfiles.h"
 #include "PGIForest.h"
 #include "RedexContext.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
