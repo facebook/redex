@@ -1387,3 +1387,72 @@ TEST_F(SwitchEquivFinderTest,
   verify_const_at_block(2, 2);
   verify_const_at_block(3, 3);
 }
+
+TEST_F(SwitchEquivFinderTest, test_with_eq_not_constant) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v4) "Ljava/lang/Object;.hashCode:()I")
+      (move-result v2)
+
+      (const v1 1)
+      (if-eq v0 v1 :one)
+
+      (if-eq v0 v2 :two)
+
+      (if-eqz v0 :zero)
+
+      (const v3 999)
+      (return v3)
+
+      (:two)
+      (const v3 200)
+      (return v3)
+
+      (:one)
+      (const v3 100)
+      (return v3)
+
+      (:zero)
+      (const v3 0)
+      (return v3)
+    )
+)");
+  // TODO (T219644020): improve logic and verify this is handled correctly.
+}
+
+TEST_F(SwitchEquivFinderTest, ends_with_less_than) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (if-eq v0 v1 :one)
+      (const v2 2)
+      (if-eq v0 v2 :two)
+      (if-lez v0 :maybe_zero)
+
+      (const v3 999)
+      (return v3)
+
+      (:two)
+      (const v3 200)
+      (return v3)
+
+      (:one)
+      (const v3 100)
+      (return v3)
+
+      (:maybe_zero)
+      (const v3 0)
+      (return v3)
+    )
+)");
+  // TODO (T219644020): improve logic and verify this is handled correctly.
+}
