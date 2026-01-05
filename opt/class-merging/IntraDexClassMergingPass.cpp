@@ -164,6 +164,11 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
     }
   }
 
+  mgr.set_metric("num_spec_merging_targets",
+                 m_merging_spec.merging_targets.size());
+  mgr.set_metric("num_spec_excluded_types",
+                 m_merging_spec.exclude_types.size());
+
   class_merging::merge_model(type_system, scope, conf, mgr, stores,
                              m_merging_spec, true /* is_intra_dex */);
 
