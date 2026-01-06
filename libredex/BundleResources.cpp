@@ -34,6 +34,11 @@
 #include "androidfw/ResourceTypes.h"
 #include "utils/Serialize.h"
 
+struct ResourcesPbFile::Data {
+  std::map<uint32_t, const aapt::pb::Entry> m_res_id_to_entry;
+  std::map<uint32_t, const ConfigValues> m_res_id_to_configvalue;
+};
+
 namespace {
 
 #define MAKE_RES_ID(package, type, entry)                        \
@@ -1482,7 +1487,7 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
                 for (const auto& source_id : type_def.source_res_ids) {
                   auto& source_name = id_to_name.at(source_id);
                   const auto& source_config_values =
-                      m_res_id_to_configvalue.at(source_id);
+                      m_internals->m_res_id_to_configvalue.at(source_id);
 
                   auto source_entry = std::make_shared<aapt::pb::Entry>();
                   // Entry id needs to really just be the entry id, i.e. YYYY
@@ -1491,7 +1496,8 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
                   source_entry->set_name(source_name);
                   source_entry->set_allocated_visibility(
                       new aapt::pb::Visibility(
-                          m_res_id_to_entry.at(source_id).visibility()));
+                          m_internals->m_res_id_to_entry.at(source_id)
+                              .visibility()));
                   for (const auto& source_cv : source_config_values) {
                     auto* new_config_value = source_entry->add_config_value();
                     new_config_value->set_allocated_config(
@@ -1915,9 +1921,10 @@ void ResourcesPbFile::collect_resource_data_for_file(
               m_existed_res_ids.emplace(current_resource_id);
               id_to_name.emplace(current_resource_id, name_string);
               name_to_ids[name_string].push_back(current_resource_id);
-              m_res_id_to_entry.emplace(current_resource_id, pb_entry);
-              m_res_id_to_configvalue.emplace(current_resource_id,
-                                              pb_entry.config_value());
+              m_internals->m_res_id_to_entry.emplace(current_resource_id,
+                                                     pb_entry);
+              m_internals->m_res_id_to_configvalue.emplace(
+                  current_resource_id, pb_entry.config_value());
             }
             if (current_package_id == APPLICATION_PACKAGE) {
               m_application_type_ids_to_names.emplace(
@@ -2006,7 +2013,7 @@ std::vector<std::string> ResourcesPbFile::get_files_by_rid(
       }
     }
   };
-  const auto& out_values = m_res_id_to_configvalue.at(res_id);
+  const auto& out_values = m_internals->m_res_id_to_configvalue.at(res_id);
   for (auto i = 0; i < out_values.size(); i++) {
     const auto& value = out_values[i].value();
     if (value.has_item() && value.item().has_file()) {
@@ -2034,7 +2041,7 @@ void ResourcesPbFile::walk_references_for_resource(
     UnorderedSet<uint32_t>* nodes_visited,
     UnorderedSet<std::string>* potential_file_paths) {
   if (nodes_visited->find(resID) != nodes_visited->end() ||
-      m_res_id_to_configvalue.count(resID) == 0) {
+      m_internals->m_res_id_to_configvalue.count(resID) == 0) {
     // Return directly if a node is visited.
     return;
   }
@@ -2055,8 +2062,8 @@ void ResourcesPbFile::walk_references_for_resource(
   // For a given ID, collect any file paths and emit reachable Reference data
   // structures.
   auto collect_impl = [&](uint32_t id, std::stack<aapt::pb::Reference>* out) {
-    auto res_id_search = m_res_id_to_configvalue.find(id);
-    if (res_id_search == m_res_id_to_configvalue.end()) {
+    auto res_id_search = m_internals->m_res_id_to_configvalue.find(id);
+    if (res_id_search == m_internals->m_res_id_to_configvalue.end()) {
       // We might have some potential resource ID that does not actually exist.
       return;
     }
@@ -2070,8 +2077,8 @@ void ResourcesPbFile::walk_references_for_resource(
         std::vector<aapt::pb::Style::Entry> style_entries;
         // Resolve Style Entries up the parent hierarchy, without emitting a
         // reference to the parent itself (to disambiguate).
-        union_style_and_parent_attribute_values(id, m_res_id_to_configvalue,
-                                                &style_entries);
+        union_style_and_parent_attribute_values(
+            id, m_internals->m_res_id_to_configvalue, &style_entries);
         for (auto& entry : style_entries) {
           if (entry.has_item()) {
             items.push_back(entry.item());
@@ -2132,7 +2139,7 @@ void ResourcesPbFile::walk_references_for_resource(
 }
 
 uint64_t ResourcesPbFile::resource_value_count(uint32_t res_id) {
-  const auto& config_values = m_res_id_to_configvalue.at(res_id);
+  const auto& config_values = m_internals->m_res_id_to_configvalue.at(res_id);
   return config_values.size();
 }
 
@@ -2166,7 +2173,7 @@ void ResourcesPbFile::get_configurations(
   for (const auto& pair : m_type_id_to_names) {
     if (pair.second == name) {
       auto type_id = pair.first;
-      for (const auto& cv_pair : m_res_id_to_configvalue) {
+      for (const auto& cv_pair : m_internals->m_res_id_to_configvalue) {
         auto res_id = cv_pair.first;
         if (type_id == (res_id >> TYPE_INDEX_BIT_SHIFT & 0xFF) &&
             package_id == (res_id >> PACKAGE_INDEX_BIT_SHIFT & 0xFF)) {
@@ -2195,7 +2202,7 @@ void ResourcesPbFile::get_configurations(
 std::set<android::ResTable_config> ResourcesPbFile::get_configs_with_values(
     uint32_t id) {
   std::set<android::ResTable_config> config_set;
-  const auto& config_values = m_res_id_to_configvalue.at(id);
+  const auto& config_values = m_internals->m_res_id_to_configvalue.at(id);
   for (const auto& cv : config_values) {
     if (cv.has_value()) {
       const auto& pb_value = cv.value();
@@ -2211,7 +2218,7 @@ std::set<android::ResTable_config> ResourcesPbFile::get_configs_with_values(
 
 std::unique_ptr<ResourceTableFile> BundleResources::load_res_table() {
   const auto& res_pb_file_paths = find_resources_files();
-  auto to_return = std::make_unique<ResourcesPbFile>(ResourcesPbFile());
+  auto to_return = std::make_unique<ResourcesPbFile>();
   for (const auto& res_pb_file_path : res_pb_file_paths) {
     to_return->collect_resource_data_for_file(res_pb_file_path);
   }
@@ -2219,6 +2226,11 @@ std::unique_ptr<ResourceTableFile> BundleResources::load_res_table() {
 }
 
 BundleResources::~BundleResources() {}
+
+const std::map<uint32_t, const ConfigValues>&
+ResourcesPbFile::get_res_id_to_configvalue() const {
+  return m_internals->m_res_id_to_configvalue;
+}
 
 size_t ResourcesPbFile::get_hash_from_values(
     const ConfigValues& config_values) {
@@ -2242,7 +2254,7 @@ void ResourcesPbFile::collect_resid_values_and_hashes(
     const std::vector<uint32_t>& ids,
     std::map<size_t, std::vector<uint32_t>>* res_by_hash) {
   for (uint32_t id : ids) {
-    const auto& config_values = m_res_id_to_configvalue.at(id);
+    const auto& config_values = m_internals->m_res_id_to_configvalue.at(id);
     (*res_by_hash)[get_hash_from_values(config_values)].push_back(id);
   }
 }
@@ -2252,8 +2264,8 @@ bool ResourcesPbFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
       (a_id & TYPE_MASK_BIT) != (b_id & TYPE_MASK_BIT)) {
     return false;
   }
-  const auto& config_values_a = m_res_id_to_configvalue.at(a_id);
-  const auto& config_values_b = m_res_id_to_configvalue.at(b_id);
+  const auto& config_values_a = m_internals->m_res_id_to_configvalue.at(a_id);
+  const auto& config_values_b = m_internals->m_res_id_to_configvalue.at(b_id);
   if (config_values_a.size() != config_values_b.size()) {
     return false;
   }
@@ -2449,7 +2461,7 @@ void ResourcesPbFile::resolve_string_values_for_resource_reference(
 
 UnorderedMap<uint32_t, resources::InlinableValue>
 ResourcesPbFile::get_inlinable_resource_values() {
-  auto& res_id_to_configvalue = m_res_id_to_configvalue;
+  auto& res_id_to_configvalue = m_internals->m_res_id_to_configvalue;
   UnorderedMap<uint32_t, resources::InlinableValue> inlinable_resources;
   UnorderedMap<uint32_t, uint32_t> past_refs;
 
@@ -2530,7 +2542,7 @@ ResourcesPbFile::get_inlinable_resource_values() {
 
 UnorderedSet<uint32_t> ResourcesPbFile::get_overlayable_id_roots() {
   UnorderedSet<uint32_t> overlayable_ids;
-  for (auto&& [id, entry] : m_res_id_to_entry) {
+  for (auto&& [id, entry] : m_internals->m_res_id_to_entry) {
     if (entry.has_overlayable_item()) {
       overlayable_ids.emplace(id);
     }
@@ -2647,7 +2659,8 @@ resources::StyleMap ResourcesPbFile::get_style_map() {
     }
   }
 
-  for (const auto& [res_id, config_values] : m_res_id_to_configvalue) {
+  for (const auto& [res_id, config_values] :
+       m_internals->m_res_id_to_configvalue) {
     uint8_t type_id = (res_id >> TYPE_INDEX_BIT_SHIFT) & 0xFF;
 
     if (style_type_ids.find(type_id) == style_type_ids.end()) {
@@ -3153,6 +3166,8 @@ void ResourcesPbFile::add_styles(
     add_styles_to_resource_file(id_to_mods, resource_path);
   }
 }
+
+ResourcesPbFile::ResourcesPbFile() : m_internals(std::make_unique<Data>()) {}
 
 ResourcesPbFile::~ResourcesPbFile() {}
 

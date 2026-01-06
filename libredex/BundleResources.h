@@ -26,6 +26,7 @@ using ConfigValues = google::protobuf::RepeatedPtrField<aapt::pb::ConfigValue>;
 
 class ResourcesPbFile : public ResourceTableFile {
  public:
+  ResourcesPbFile();
   ~ResourcesPbFile() override;
   size_t package_count() override;
   void collect_resid_values_and_hashes(
@@ -93,19 +94,17 @@ class ResourcesPbFile : public ResourceTableFile {
       const std::vector<std::string>& resources_pb_paths) override;
 
   const std::map<uint32_t, const ConfigValues>& get_res_id_to_configvalue()
-      const {
-    return m_res_id_to_configvalue;
-  }
+      const;
   std::string resolve_module_name_for_resource_id(uint32_t res_id);
   std::string resolve_module_name_for_package_id(uint32_t package_id);
 
  private:
   std::map<uint32_t, std::string> m_type_id_to_names;
   UnorderedSet<uint32_t> m_existed_res_ids;
-  std::map<uint32_t, const aapt::pb::Entry> m_res_id_to_entry;
-  std::map<uint32_t, const ConfigValues> m_res_id_to_configvalue;
   std::map<uint32_t, std::string> m_package_id_to_module_name;
   std::set<uint32_t> m_package_ids;
+  struct Data;
+  std::unique_ptr<Data> m_internals;
 };
 
 class BundleResources : public AndroidResources {
