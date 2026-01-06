@@ -19,7 +19,6 @@
 #include "DeterministicContainers.h"
 #include "GlobalConfig.h"
 #include "androidfw/ResourceTypes.h"
-#include "protocfg/config.pb.h"
 #include "protores/Resources.pb.h"
 #include <google/protobuf/repeated_field.h>
 

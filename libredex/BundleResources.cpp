@@ -23,6 +23,8 @@
 #include <google/protobuf/message.h>
 #include <google/protobuf/text_format.h>
 
+#include "protocfg/config.pb.h"
+
 #include "Debug.h"
 #include "DetectBundle.h"
 #include "ReadMaybeMapped.h"
