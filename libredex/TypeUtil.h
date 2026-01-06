@@ -291,6 +291,8 @@ bool is_kotlin_class(DexClass* cls);
 
 bool is_kotlin_function_interface(const DexType* type);
 
+bool is_kotlin_internal_type(const DexType* type);
+
 /*
  * Return true if the cls is kotlin non capturing lambda.
  */
