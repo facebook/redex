@@ -598,6 +598,14 @@ bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
   return false;
 }
 
+bool is_kotlin_internal_type(const DexType* type) {
+  return type == type::kotlin_jvm_internal_Lambda() ||
+         type == type::kotlin_coroutines_jvm_internal_ContinuationImpl() ||
+         type ==
+             type::kotlin_coroutines_jvm_internal_RestrictedSuspendLambda() ||
+         type == type::kotlin_coroutines_jvm_internal_SuspendLambda();
+}
+
 bool is_min_sdk_acceptable_impl(const DexType* source_type,
                                 const DexType* cur_type,
                                 const DexType* target_type,

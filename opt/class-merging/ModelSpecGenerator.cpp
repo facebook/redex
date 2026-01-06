@@ -28,7 +28,9 @@ namespace {
  * overly-conservative rules. So we loose the checking for the constructors of
  * anonymous classes.
  */
-bool can_delete_class(const DexClass* cls, bool is_anonymous_class) {
+bool can_delete_class(const DexClass* cls,
+                      bool is_anonymous_class,
+                      bool is_kotlin_internal_subtype) {
   if (!can_delete(cls)) {
     return false;
   }
@@ -38,15 +40,15 @@ bool can_delete_class(const DexClass* cls, bool is_anonymous_class) {
     return false;
   }
   const auto& dmethods = cls->get_dmethods();
-  if (std::any_of(dmethods.begin(), dmethods.end(),
-                  [&is_anonymous_class](const DexMethod* m) {
-                    return (!is_anonymous_class || !is_constructor(m)) &&
-                           !can_delete(m);
-                  })) {
+  if (!is_anonymous_class &&
+      std::any_of(dmethods.begin(), dmethods.end(), [](const DexMethod* m) {
+        return (!is_constructor(m)) && !can_delete(m);
+      })) {
     return false;
   }
   const auto& ifields = cls->get_ifields();
-  if (std::any_of(ifields.begin(), ifields.end(),
+  if (!is_kotlin_internal_subtype &&
+      std::any_of(ifields.begin(), ifields.end(),
                   [](const DexField* f) { return !can_delete(f); })) {
     return false;
   }
@@ -156,11 +158,12 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
     if (!children.empty()) {
       continue;
     }
-    if (!can_delete_class(cls, is_anonymous_class)) {
+    auto* super_cls = cls->get_super_class();
+    bool is_kotlin_internal_type = type::is_kotlin_internal_type(super_cls);
+    if (!can_delete_class(cls, is_anonymous_class, is_kotlin_internal_type)) {
       continue;
     }
     auto* intfs = cls->get_interfaces();
-    auto* super_cls = cls->get_super_class();
     if (super_cls != type::java_lang_Object()) {
       parent_children[super_cls].push_back(cur_type);
     } else if (!intfs->empty()) {

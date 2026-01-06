@@ -41,7 +41,13 @@
            "Ldalvik/annotation/optimization/NeverCompile;")              \
   FOR_EACH(dalvik_annotation_optimization_NeverInline,                   \
            "Ldalvik/annotation/optimization/NeverInline;")               \
-  FOR_EACH(kotlin_jvm_internal_Lambda, "Lkotlin/jvm/internal/Lambda;")
+  FOR_EACH(kotlin_jvm_internal_Lambda, "Lkotlin/jvm/internal/Lambda;")   \
+  FOR_EACH(kotlin_coroutines_jvm_internal_ContinuationImpl,              \
+           "Lkotlin/coroutines/jvm/internal/ContinuationImpl;")          \
+  FOR_EACH(kotlin_coroutines_jvm_internal_RestrictedSuspendLambda,       \
+           "Lkotlin/coroutines/jvm/internal/RestrictedSuspendLambda;")   \
+  FOR_EACH(kotlin_coroutines_jvm_internal_SuspendLambda,                 \
+           "Lkotlin/coroutines/jvm/internal/SuspendLambda;")
 
 #define PRIMITIVE_PSEUDO_TYPE_FIELDS                                       \
   FOR_EACH(Void_TYPE, "Ljava/lang/Void;.TYPE:Ljava/lang/Class;")           \
