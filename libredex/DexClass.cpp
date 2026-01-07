@@ -32,7 +32,6 @@
 #include "Warning.h"
 
 #include <algorithm>
-#include <boost/functional/hash.hpp>
 #include <memory>
 #include <unordered_set>
 
