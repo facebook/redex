@@ -12,6 +12,7 @@
 #include "EnumConfig.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
+#include "TypeUtil.h"
 
 using namespace testing;
 

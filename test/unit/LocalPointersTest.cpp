@@ -13,6 +13,7 @@
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 namespace ptrs = local_pointers;
 

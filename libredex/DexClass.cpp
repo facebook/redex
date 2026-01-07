@@ -26,6 +26,7 @@
 #include "Show.h"
 #include "StringBuilder.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Util.h"
 #include "Warning.h"
 

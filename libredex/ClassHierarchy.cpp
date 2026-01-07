@@ -7,10 +7,10 @@
 
 #include "ClassHierarchy.h"
 
-#include "DexUtil.h"
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 namespace {
 

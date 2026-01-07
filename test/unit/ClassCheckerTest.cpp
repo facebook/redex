@@ -9,6 +9,7 @@
 #include "DexClass.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "TypeUtil.h"
 
 class ClassVCheckerTest : public RedexTest {};
 

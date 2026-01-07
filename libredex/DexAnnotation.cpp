@@ -15,6 +15,7 @@
 #include "DexIdx.h"
 #include "DexOutput.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 void DexEncodedValueMethodType::gather_strings(
     std::vector<const DexString*>& lstring) const {

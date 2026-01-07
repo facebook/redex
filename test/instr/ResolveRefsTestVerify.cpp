@@ -9,6 +9,7 @@
 #include <string>
 
 #include "DexInstruction.h"
+#include "TypeUtil.h"
 #include "VerifyUtil.h"
 
 TEST_F(PreVerify, SimpleInvokeVirtual) {

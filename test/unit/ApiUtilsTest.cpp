@@ -9,12 +9,12 @@
 
 #include "ApiLevelsUtils.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "RedexContext.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 namespace {
 

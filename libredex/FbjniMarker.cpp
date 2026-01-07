@@ -12,6 +12,7 @@
 #include "DexUtil.h"
 #include "JavaParserUtil.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 #include <fstream>
 #include <json/reader.h>

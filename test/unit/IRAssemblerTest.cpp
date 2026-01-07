@@ -15,6 +15,7 @@
 #include "DexPosition.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 struct IRAssemblerTest : public RedexTest {};
 

@@ -28,6 +28,7 @@
 #include "Show.h"
 #include "Thread.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "WorkQueue.h"
 
 ////////////////////////////////////////////////////////////////////////////////

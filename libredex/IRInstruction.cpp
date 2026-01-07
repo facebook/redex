@@ -13,6 +13,7 @@
 #include "DexMethodHandle.h"
 #include "DexUtil.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 #include <cstring>
 #include <iterator>

@@ -18,6 +18,7 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
+#include "TypeUtil.h"
 
 #include "InstructionSequenceOutliner.h"
 #include "RedexContext.h"

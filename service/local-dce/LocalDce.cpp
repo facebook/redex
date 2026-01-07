@@ -27,6 +27,7 @@
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 
 namespace {
 
