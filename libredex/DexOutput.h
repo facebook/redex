@@ -20,9 +20,6 @@
 #include "GlobalConfig.h"
 #include "Pass.h"
 
-#include <locator.h>
-using facebook::Locator;
-
 class DexAnnotation;
 class DexCallSite;
 
