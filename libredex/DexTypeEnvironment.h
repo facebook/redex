@@ -18,7 +18,7 @@
 #include <sparta/PatriciaTreeSet.h>
 #include <sparta/ReducedProductAbstractDomain.h>
 
-#include "DexUtil.h"
+#include "IRInstruction.h"
 #include "NullnessDomain.h"
 #include "TypeUtil.h"
 

@@ -12,6 +12,7 @@
 #include "ConstantValue.h"
 #include "ControlFlow.h"
 #include "DexAsm.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "MethodReference.h"
 #include "Resolver.h"
