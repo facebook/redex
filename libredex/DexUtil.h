@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/optional.hpp>
 #include <cctype>
 #include <functional>
 #include <string_view>
@@ -16,11 +17,19 @@
 
 #include "Debug.h"
 #include "DeterministicContainers.h"
-#include "DexClass.h"
+#include "DexAccess.h"
 
+class DexClass;
+class DexField;
 class DexStore;
 using DexStoresVector = std::vector<DexStore>;
+class DexMethod;
+class DexMethodRef;
+class DexString;
+class DexType;
+class IRCode;
 class IRInstruction;
+using Scope = std::vector<DexClass*>;
 
 namespace cfg {
 class ControlFlowGraph;
