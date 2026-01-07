@@ -11,6 +11,7 @@
 #include "KotlinNullCheckMethods.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Walkers.h"
 
 namespace {
@@ -167,6 +168,16 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
       if (is_lambda) {
         stats.kotlin_non_capturing_lambda++;
         is_non_capturing_lambda = true;
+        // Check if the invoke method is hot
+        for (const auto* method : cls->get_vmethods()) {
+          if (method->get_name()->str() == "invoke" &&
+              method->get_code() != nullptr) {
+            if (source_blocks::method_is_hot(method)) {
+              stats.kotlin_hot_non_capturing_lambda++;
+            }
+            break;
+          }
+        }
       }
       stats.kotlin_class_with_instance++;
     }
@@ -300,6 +311,8 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("no_of_lazy_delegates", kotlin_lazy_delegates);
   mgr.incr_metric("kotlin_lambdas", kotlin_lambdas);
   mgr.incr_metric("kotlin_non_capturing_lambda", kotlin_non_capturing_lambda);
+  mgr.incr_metric("kotlin_hot_non_capturing_lambda",
+                  kotlin_hot_non_capturing_lambda);
   mgr.incr_metric("kotlin_classes_with_instance", kotlin_class_with_instance);
   mgr.incr_metric("kotlin_class", kotlin_class);
   mgr.incr_metric("Kotlin_anonymous_classes", kotlin_anonymous_class);
@@ -330,6 +343,8 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_lambdas = %zu", kotlin_lambdas);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_non_capturing_lambda = %zu",
         kotlin_non_capturing_lambda);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_non_capturing_lambda = %zu",
+        kotlin_hot_non_capturing_lambda);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class_with_instance = %zuu",
         kotlin_class_with_instance);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class = %zu", kotlin_class);
