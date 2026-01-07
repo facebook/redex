@@ -132,18 +132,20 @@ std::string_view DexIdx::get_string_data(uint32_t stridx,
   // Bounds check is conservative. May incorrectly reject short strings
   // at the end of the file.
   always_assert_type_log(
-      stroff < reinterpret_cast<const dex_header*>(m_dexbase)->file_size - 6,
+      stroff < reinterpret_cast<const dex_header*>(m_dexbase)->file_size - 5,
       INVALID_DEX, "String data offset out of range");
   const uint8_t* dstr = m_dexbase + stroff;
   /* Strip off uleb128 size encoding */
 
   uint32_t utfsize_local = read_uleb128(&dstr);
+  // Just double-check that we really read 5B max.
+  redex_assert(dstr <= m_dexbase + get_file_size());
   if (utfsize != nullptr) {
     *utfsize = utfsize_local;
   }
   // Find null terminator.
   const auto* null_cur = dstr;
-  while (*null_cur != '\0' && null_cur < m_dexbase + get_file_size()) {
+  while (null_cur < m_dexbase + get_file_size() && *null_cur != '\0') {
     ++null_cur;
   }
   always_assert_type_log(null_cur < m_dexbase + get_file_size(), INVALID_DEX,
