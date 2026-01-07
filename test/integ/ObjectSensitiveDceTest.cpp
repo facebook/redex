@@ -11,8 +11,8 @@
 
 #include "ControlFlow.h"
 #include "DexInstruction.h"
-#include "DexUtil.h"
 #include "IRCode.h"
+#include "MethodUtil.h"
 #include "RedexTest.h"
 
 #include "ObjectSensitiveDcePass.h"

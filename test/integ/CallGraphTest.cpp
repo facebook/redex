@@ -13,6 +13,7 @@
 #include "CallGraph.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
+#include "MethodUtil.h"
 #include "RedexTest.h"
 
 struct CallGraphTest : public RedexIntegrationTest {

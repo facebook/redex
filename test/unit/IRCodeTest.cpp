@@ -9,6 +9,7 @@
 
 #include <iostream>
 
+#include "ControlFlow.h"
 #include "DexAsm.h"
 #include "DexInstruction.h"
 #include "IRAssembler.h"

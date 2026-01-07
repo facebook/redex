@@ -1772,8 +1772,7 @@ ConstInstructionIterator ControlFlowGraph::find_insn(const IRInstruction* insn,
 }
 
 std::vector<Block*> ControlFlowGraph::order(
-    const std::unique_ptr<LinearizationStrategy>& custom_strategy,
-    bool assume_no_unreachable_blocks) {
+    LinearizationStrategy* custom_strategy, bool assume_no_unreachable_blocks) {
   if (!assume_no_unreachable_blocks) {
     // We must simplify first to remove any unreachable blocks
     simplify();
@@ -1793,8 +1792,9 @@ std::vector<Block*> ControlFlowGraph::order(
 
   build_chains(&chains, &block_to_chain);
   auto wto = build_wto(block_to_chain);
-  auto result = custom_strategy ? custom_strategy->order(*this, std::move(wto))
-                                : wto_chains(std::move(wto));
+  auto result = custom_strategy != nullptr
+                    ? custom_strategy->order(*this, std::move(wto))
+                    : wto_chains(std::move(wto));
 
   always_assert_log(result.size() == m_blocks.size(),
                     "result has %zu blocks, m_blocks has %zu", result.size(),
@@ -2019,7 +2019,7 @@ void ControlFlowGraph::remove_try_catch_markers() {
 }
 
 std::unique_ptr<IRList> ControlFlowGraph::linearize(
-    const std::unique_ptr<LinearizationStrategy>& custom_strategy) {
+    LinearizationStrategy* custom_strategy) {
   sanity_check();
   auto result = std::make_unique<IRList>();
 

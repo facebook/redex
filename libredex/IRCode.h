@@ -167,8 +167,7 @@ class IRCode {
   // The CFG may have stored instructions that were removed. If deleted_insns is
   // not null, the instructions are moved into the given vector. It is then the
   // caller's responsibility to free them.
-  void clear_cfg(const std::unique_ptr<cfg::LinearizationStrategy>&
-                     custom_strategy = nullptr,
+  void clear_cfg(cfg::LinearizationStrategy* custom_strategy = nullptr,
                  std::vector<IRInstruction*>* deleted_insns = nullptr);
 
   bool cfg_built() const { return m_cfg != nullptr; }

@@ -490,7 +490,7 @@ class ControlFlowGraph {
    * Using custom_strategy allows custom order linearization of the CFG.
    */
   std::unique_ptr<IRList> linearize(
-      const std::unique_ptr<LinearizationStrategy>& custom_strategy = nullptr);
+      LinearizationStrategy* custom_strategy = nullptr);
 
   // Return the blocks of this CFG in an arbitrary order.
   //
@@ -1021,9 +1021,8 @@ class ControlFlowGraph {
   // choose an order of blocks for output; note that unless
   // assume_no_unreachable_blocks is set to true, this function may mutate the
   // cfg by simplifying it
-  std::vector<Block*> order(
-      const std::unique_ptr<LinearizationStrategy>& custom_strategy = nullptr,
-      bool assume_no_unreachable_blocks = false);
+  std::vector<Block*> order(LinearizationStrategy* custom_strategy = nullptr,
+                            bool assume_no_unreachable_blocks = false);
 
   /*
    * Find the first debug position preceding an instruction

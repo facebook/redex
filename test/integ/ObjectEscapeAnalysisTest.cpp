@@ -21,6 +21,7 @@
 #include "IRCode.h"
 #include "IRList.h"
 #include "IROpcode.h"
+#include "MethodUtil.h"
 #include "ObjectEscapeAnalysis.h"
 #include "RedexTest.h"
 #include "VirtualScope.h"

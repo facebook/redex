@@ -8,6 +8,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "ControlFlow.h"
 #include "RedexResources.h"
 #include "ResourcesInliningPass.h"
 #include "verify/VerifyUtil.h"

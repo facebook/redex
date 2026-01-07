@@ -13,10 +13,11 @@
 
 #include <sparta/S_Expression.h>
 
+#include "IRCode.h"
+
 class DexClass;
 class DexField;
 class DexMethod;
-class IRCode;
 
 /*
  * This module provides an easy way to create / serialize Dex elements using

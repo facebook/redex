@@ -9,6 +9,7 @@
 
 #include "AnnoUtils.h"
 #include "MethodOverrideGraph.h"
+#include "MethodUtil.h"
 #include "Mutators.h"
 #include "Resolver.h"
 #include "Show.h"

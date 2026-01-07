@@ -17,6 +17,7 @@
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
+#include "MethodUtil.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 

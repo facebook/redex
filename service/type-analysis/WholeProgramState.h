@@ -13,6 +13,7 @@
 #include "ConcurrentContainers.h"
 #include "DexTypeEnvironment.h"
 #include "InstructionAnalyzer.h"
+#include "MethodUtil.h"
 #include "Trace.h"
 
 std::ostream& operator<<(std::ostream& out, const DexField& field);

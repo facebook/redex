@@ -19,7 +19,6 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IRInstruction.h"
-#include "MethodUtil.h"
 
 /**
  * Given an instruction, determine which class' would get initialized, if any.

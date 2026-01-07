@@ -12,6 +12,7 @@
 
 #include "Creators.h"
 #include "DexAccess.h"
+#include "MethodUtil.h"
 #include "ReachableClasses.h"
 #include "Show.h"
 #include "Trace.h"

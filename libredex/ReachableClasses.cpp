@@ -17,6 +17,7 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "FbjniMarker.h"
+#include "MethodUtil.h"
 #include "RedexResources.h"
 #include "ReflectionAnalysis.h"
 #include "Show.h"

@@ -703,15 +703,14 @@ void IRCode::build_cfg(bool rebuild_even_if_already_built) {
   m_ir_list.reset();
 }
 
-void IRCode::clear_cfg(
-    const std::unique_ptr<cfg::LinearizationStrategy>& custom_strategy,
-    std::vector<IRInstruction*>* deleted_insns) {
+void IRCode::clear_cfg(cfg::LinearizationStrategy* custom_strategy,
+                       std::vector<IRInstruction*>* deleted_insns) {
   if (!m_cfg) {
     always_assert(m_ir_list != nullptr);
     return;
   }
 
-  if (custom_strategy) {
+  if (custom_strategy != nullptr) {
     m_cfg_serialized_with_custom_strategy = true;
   }
 

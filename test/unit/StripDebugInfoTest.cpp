@@ -9,6 +9,7 @@
 
 #include "DexClass.h"
 #include "IRAssembler.h"
+#include "IRCode.h"
 #include "RedexTest.h"
 #include "StripDebugInfo.h"
 

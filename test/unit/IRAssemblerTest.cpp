@@ -11,8 +11,10 @@
 #include <gtest/gtest.h>
 
 #include "DexAnnotation.h"
+#include "DexDebugInstruction.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
+#include "IRCode.h"
 #include "RedexTest.h"
 #include "Show.h"
 #include "TypeUtil.h"
