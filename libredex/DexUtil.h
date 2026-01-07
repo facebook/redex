@@ -20,7 +20,6 @@
 #include "DexStore.h"
 #include "IRInstruction.h"
 #include "MethodUtil.h"
-#include "StringUtil.h"
 #include "TypeUtil.h"
 
 /**
