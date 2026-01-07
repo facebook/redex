@@ -7,6 +7,7 @@
 
 #include "MergeabilityCheck.h"
 
+#include "ClassUtil.h"
 #include "IRCode.h"
 #include "LiveRange.h"
 #include "Model.h"

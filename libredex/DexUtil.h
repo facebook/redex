@@ -14,7 +14,6 @@
 #include <string_view>
 #include <vector>
 
-#include "ClassUtil.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"

@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "ClassUtil.h"
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexEncoding.h"

@@ -7,6 +7,7 @@
 
 #include "TypeUtil.h"
 
+#include "ClassUtil.h"
 #include "DexUtil.h"
 #include "Lazy.h"
 #include "RedexContext.h"

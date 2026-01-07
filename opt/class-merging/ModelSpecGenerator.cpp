@@ -8,6 +8,7 @@
 #include "ModelSpecGenerator.h"
 
 #include "ClassMerging.h"
+#include "ClassUtil.h"
 #include "LiveRange.h"
 #include "Model.h"
 #include "PassManager.h"

@@ -10,6 +10,7 @@
 
 #include <vector>
 
+#include "ClassUtil.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexOutput.h"
