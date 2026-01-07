@@ -12,6 +12,7 @@
 #include <boost/optional.hpp>
 #include <cctype>
 #include <functional>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -245,30 +246,55 @@ bool is_valid_identifier(std::string_view s);
 
 namespace java_names {
 
-inline const std::string* primitive_desc_to_name(char desc) {
-  const static UnorderedMap<char, std::string> conversion_table{
-      {'V', "void"},    {'B', "byte"},  {'C', "char"},
-      {'S', "short"},   {'I', "int"},   {'J', "long"},
-      {'Z', "boolean"}, {'F', "float"}, {'D', "double"},
-  };
-  auto it = conversion_table.find(desc);
-  if (it != conversion_table.end()) {
-    return &it->second;
-  } else {
-    return nullptr;
+inline std::optional<std::string_view> primitive_desc_to_name(char desc) {
+  switch (desc) {
+  case 'B':
+    return "byte";
+  case 'C':
+    return "char";
+  case 'D':
+    return "double";
+  case 'F':
+    return "float";
+  case 'I':
+    return "int";
+  case 'J':
+    return "long";
+  case 'S':
+    return "short";
+  case 'V':
+    return "void";
+  case 'Z':
+    return "boolean";
+  default:
+    return std::nullopt;
   }
 }
 
 inline boost::optional<char> primitive_name_to_desc(std::string_view name) {
-  const static UnorderedMap<std::string_view, char> conversion_table{
-      {"void", 'V'},    {"byte", 'B'},  {"char", 'C'},
-      {"short", 'S'},   {"int", 'I'},   {"long", 'J'},
-      {"boolean", 'Z'}, {"float", 'F'}, {"double", 'D'},
-  };
-  auto it = conversion_table.find(name);
-  if (it != conversion_table.end()) {
-    return it->second;
-  } else {
+  if (name.empty()) {
+    return boost::none;
+  }
+  switch (name[0]) {
+  case 'b':
+    return name == "byte"      ? boost::optional<char>('B')
+           : name == "boolean" ? boost::optional<char>('Z')
+                               : boost::none;
+  case 'c':
+    return name == "char" ? boost::optional<char>('C') : boost::none;
+  case 'd':
+    return name == "double" ? boost::optional<char>('D') : boost::none;
+  case 'f':
+    return name == "float" ? boost::optional<char>('F') : boost::none;
+  case 'i':
+    return name == "int" ? boost::optional<char>('I') : boost::none;
+  case 'l':
+    return name == "long" ? boost::optional<char>('J') : boost::none;
+  case 's':
+    return name == "short" ? boost::optional<char>('S') : boost::none;
+  case 'v':
+    return name == "void" ? boost::optional<char>('V') : boost::none;
+  default:
     return boost::none;
   }
 }
@@ -301,10 +327,10 @@ inline std::string internal_to_external(std::string_view internal_name) {
     // as internal.
     return std::string(internal_name);
   } else {
-    const auto* maybe_external_name = primitive_desc_to_name(type);
+    const auto maybe_external_name = primitive_desc_to_name(type);
     always_assert_log(
         maybe_external_name, "%c is not a valid primitive type.", type);
-    return *maybe_external_name;
+    return std::string(*maybe_external_name);
   }
 }
 
