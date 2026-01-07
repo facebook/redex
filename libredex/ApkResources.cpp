@@ -13,6 +13,7 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <cstdint>
 #include <map>
+#include <stack>
 #include <string>
 #include <string_view>
 

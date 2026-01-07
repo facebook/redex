@@ -17,9 +17,14 @@
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexStore.h"
 
+class DexStore;
+using DexStoresVector = std::vector<DexStore>;
 class IRInstruction;
+
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
 
 /**
  * Given an instruction, determine which class' would get initialized, if any.

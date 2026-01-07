@@ -15,6 +15,7 @@
 #include <fstream>
 #include <map>
 #include <queue>
+#include <stack>
 #include <stdexcept>
 #include <string>
 

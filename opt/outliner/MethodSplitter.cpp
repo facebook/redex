@@ -9,6 +9,7 @@
 
 #include "ConcurrentContainers.h"
 #include "DexLimits.h"
+#include "DexStore.h"
 #include "InitClassesWithSideEffects.h"
 #include "MethodClosures.h"
 #include "Show.h"

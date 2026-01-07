@@ -16,6 +16,7 @@
 
 #include "DexClass.h"
 #include "DexLoader.h"
+#include "DexStore.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IRList.h"

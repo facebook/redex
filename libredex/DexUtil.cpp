@@ -13,9 +13,11 @@
 #include <boost/regex.hpp> // NOLINT
 #include <string_view>
 
+#include "ControlFlow.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
+#include "DexStore.h"
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
 #include "MethodUtil.h"
