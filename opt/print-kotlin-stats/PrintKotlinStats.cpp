@@ -24,6 +24,17 @@ constexpr const char* KOTLIN_LAMBDA = "Lkotlin/jvm/internal/Lambda;";
 constexpr const char* DI_BASE = "Lcom/facebook/inject/AbstractLibraryModule;";
 constexpr const char* CONTINUATION_IMPL =
     "Lkotlin/coroutines/jvm/internal/ContinuationImpl;";
+// A lambda like { true } has 4 instructions.
+constexpr size_t TRIVIAL_LAMBDA_NUM_INSTRUCTIONS_THRESHOLD = 4u;
+
+// Serialize cfg code to a string.
+std::string serialize_cfg_code(const cfg::ControlFlowGraph& cfg) {
+  std::ostringstream ss;
+  for (const auto& mie : cfg::ConstInstructionIterable(cfg)) {
+    ss << show(mie.insn) << '\n';
+  }
+  return ss.str();
+}
 
 // Check if cls is from Kotlin source
 bool is_kotlin_class(DexClass* cls) {
@@ -132,6 +143,7 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
 PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
   Stats stats;
   bool is_lambda = false;
+  bool is_non_capturing_lambda = false;
   if (cls->get_super_class() == m_kotlin_lambdas_base) {
     stats.kotlin_lambdas++;
     is_lambda = true;
@@ -149,6 +161,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
         field->get_type() == cls->get_type()) {
       if (is_lambda) {
         stats.kotlin_non_capturing_lambda++;
+        is_non_capturing_lambda = true;
       }
       stats.kotlin_class_with_instance++;
     }
@@ -161,6 +174,20 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
       }
       if (is_composable_method(method)) {
         stats.kotlin_composable_method++;
+      }
+      if (is_non_capturing_lambda && method->get_name()->str() == "invoke" &&
+          !is_synthetic(method) && method->get_code() != nullptr &&
+          method->get_code()->count_opcodes() <=
+              TRIVIAL_LAMBDA_NUM_INSTRUCTIONS_THRESHOLD) {
+        stats.kotlin_trivial_non_capturing_lambdas++;
+        always_assert(method->get_code()->cfg_built());
+        bool inserted;
+        std::tie(std::ignore, inserted) =
+            m_kotlin_unique_trivial_non_capturing_lambdas.insert(
+                serialize_cfg_code(method->get_code()->cfg()));
+        if (inserted) {
+          stats.kotlin_unique_trivial_non_capturing_lambdas++;
+        }
       }
     }
     if (is_anonymous(cls->get_name()->str())) {
@@ -248,6 +275,10 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_coroutine_continuation_base",
                   kotlin_coroutine_continuation_base);
   mgr.incr_metric("kotlin_enum_class", kotlin_enum_class);
+  mgr.incr_metric("kotlin_trivial_non_capturing_lambdas",
+                  kotlin_trivial_non_capturing_lambdas);
+  mgr.incr_metric("kotlin_unique_trivial_non_capturing_lambdas",
+                  kotlin_unique_trivial_non_capturing_lambdas);
 
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_insns = %zu",
         kotlin_null_check_insns);
@@ -278,6 +309,12 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
         kotlin_coroutine_continuation_base);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_enum_class = %zu",
         kotlin_enum_class);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_trivial_non_capturing_lambdas = %zu",
+        kotlin_trivial_non_capturing_lambdas);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_unique_trivial_non_capturing_lambdas = %zu",
+        kotlin_unique_trivial_non_capturing_lambdas);
 }
 
 static PrintKotlinStats s_pass;

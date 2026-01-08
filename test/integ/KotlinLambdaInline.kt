@@ -15,4 +15,14 @@ class KotlinLambdaInline {
   fun foo() {
     sink = doCalc { a: Long, b: Long -> a + b }
   }
+
+  fun bar() {
+    // Same lambda body as foo - will be a duplicate trivial lambda
+    sink = doCalc { a: Long, b: Long -> a + b }
+  }
+
+  fun baz() {
+    // Different lambda body - will be a unique trivial lambda
+    sink = doCalc { a: Long, b: Long -> a - b }
+  }
 }

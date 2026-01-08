@@ -36,6 +36,8 @@ class PrintKotlinStats : public Pass {
     size_t kotlin_composable_method{0};
     size_t kotlin_coroutine_continuation_base{0};
     size_t kotlin_enum_class{0};
+    size_t kotlin_trivial_non_capturing_lambdas{0};
+    size_t kotlin_unique_trivial_non_capturing_lambdas{0};
 
     Stats& operator+=(const Stats& that) {
       unknown_null_check_insns += that.unknown_null_check_insns;
@@ -59,6 +61,10 @@ class PrintKotlinStats : public Pass {
       kotlin_coroutine_continuation_base +=
           that.kotlin_coroutine_continuation_base;
       kotlin_enum_class += that.kotlin_enum_class;
+      kotlin_trivial_non_capturing_lambdas +=
+          that.kotlin_trivial_non_capturing_lambdas;
+      kotlin_unique_trivial_non_capturing_lambdas +=
+          that.kotlin_unique_trivial_non_capturing_lambdas;
       return *this;
     }
 
@@ -88,6 +94,8 @@ class PrintKotlinStats : public Pass {
 
  private:
   UnorderedSet<DexMethodRef*> m_kotlin_null_assertions;
+  InsertOnlyConcurrentSet<std::string>
+      m_kotlin_unique_trivial_non_capturing_lambdas;
   DexType* m_kotlin_lambdas_base = nullptr;
   DexType* m_kotlin_coroutin_continuation_base = nullptr;
   const DexString* m_instance = nullptr;
