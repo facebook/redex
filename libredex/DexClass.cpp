@@ -1573,6 +1573,8 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     uint32_t fidx = *annodata++;
     uint32_t off = *annodata++;
     DexField* field = dynamic_cast<DexField*>(idx->get_fieldidx(fidx));
+    always_assert_type_log(field->get_class() == get_type(), INVALID_DEX,
+                           "Wrong field");
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
     auto res = field->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach annotation set");
@@ -1589,6 +1591,8 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     uint32_t midx = *annodata++;
     uint32_t off = *annodata++;
     DexMethod* method = dynamic_cast<DexMethod*>(idx->get_methodidx(midx));
+    always_assert_type_log(method->get_class() == get_type(), INVALID_DEX,
+                           "Wrong method");
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
     auto res = method->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach method set");
@@ -1606,6 +1610,8 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     uint32_t xrefoff = *annodata++;
     if (xrefoff != 0) {
       DexMethod* method = dynamic_cast<DexMethod*>(idx->get_methodidx(midx));
+      always_assert_type_log(method->get_class() == get_type(), INVALID_DEX,
+                             "Wrong method");
       const uint32_t* annoxref = idx->get_uint_data(xrefoff);
       uint32_t count = *annoxref++;
       always_assert_type_log(annoxref <= annoxref + count, INVALID_DEX,
