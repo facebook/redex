@@ -27,6 +27,7 @@ class PrintKotlinStats : public Pass {
     size_t kotlin_lazy_delegates{0};
     size_t kotlin_lambdas{0};
     size_t kotlin_non_capturing_lambda{0};
+    size_t kotlin_hot_non_capturing_lambda{0};
     size_t kotlin_class_with_instance{0};
     size_t kotlin_class{0};
     size_t kotlin_anonymous_class{0};
@@ -51,6 +52,7 @@ class PrintKotlinStats : public Pass {
       kotlin_lazy_delegates += that.kotlin_lazy_delegates;
       kotlin_lambdas += that.kotlin_lambdas;
       kotlin_non_capturing_lambda += that.kotlin_non_capturing_lambda;
+      kotlin_hot_non_capturing_lambda += that.kotlin_hot_non_capturing_lambda;
       kotlin_class_with_instance += that.kotlin_class_with_instance;
       kotlin_class += that.kotlin_class;
       kotlin_anonymous_class += that.kotlin_anonymous_class;
