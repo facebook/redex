@@ -8,6 +8,7 @@
 #include "DexClass.h"
 
 #include "ControlFlow.h"
+#include "CppUtil.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAccess.h"
@@ -1558,17 +1559,22 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   }
   const dex_annotations_directory_item* annodir =
       idx->get_data<dex_annotations_directory_item>(anno_off);
+  always_assert_type_log(align_ptr<sizeof(uint32_t)>(annodir) == annodir,
+                         INVALID_DEX, "Alignment issue");
   m_anno =
       DexAnnotationSet::get_annotation_set(idx, annodir->class_annotations_off);
   const uint32_t* annodata = (uint32_t*)(annodir + 1);
-  always_assert_type_log(
-      annodata <= annodata + static_cast<size_t>(annodir->fields_size) * 2,
-      INVALID_DEX, "Dex overflow");
-  always_assert_type_log(
-      reinterpret_cast<const uint8_t*>(
-          annodata + static_cast<size_t>(annodir->methods_size) * 2) <=
-          idx->end(),
-      INVALID_DEX, "Dex overflow");
+
+  auto assert_no_overflow = [&](uint64_t size) {
+    const uint64_t file_size = idx->get_file_size();
+    always_assert_type_log(size * 2 * sizeof(uint32_t) <= file_size,
+                           INVALID_DEX, "Dex overflow");
+    always_assert_type_log(idx->end() - size * 2 * sizeof(uint32_t) >=
+                               reinterpret_cast<const uint8_t*>(annodata),
+                           INVALID_DEX, "Dex overflow");
+  };
+
+  assert_no_overflow(annodir->fields_size);
   for (uint32_t i = 0; i < annodir->fields_size; i++) {
     uint32_t fidx = *annodata++;
     uint32_t off = *annodata++;
@@ -1579,14 +1585,8 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     auto res = field->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach annotation set");
   }
-  always_assert_type_log(
-      annodata <= annodata + static_cast<size_t>(annodir->methods_size) * 2,
-      INVALID_DEX, "Dex overflow");
-  always_assert_type_log(
-      reinterpret_cast<const uint8_t*>(
-          annodata + static_cast<size_t>(annodir->methods_size) * 2) <=
-          idx->end(),
-      INVALID_DEX, "Dex overflow");
+
+  assert_no_overflow(annodir->methods_size);
   for (uint32_t i = 0; i < annodir->methods_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t off = *annodata++;
@@ -1597,14 +1597,8 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     auto res = method->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach method set");
   }
-  always_assert_type_log(
-      annodata <= annodata + static_cast<size_t>(annodir->parameters_size) * 2,
-      INVALID_DEX, "Dex overflow");
-  always_assert_type_log(
-      reinterpret_cast<const uint8_t*>(
-          annodata + static_cast<size_t>(annodir->parameters_size) * 2) <=
-          idx->end(),
-      INVALID_DEX, "Dex overflow");
+
+  assert_no_overflow(annodir->parameters_size);
   for (uint32_t i = 0; i < annodir->parameters_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t xrefoff = *annodata++;
