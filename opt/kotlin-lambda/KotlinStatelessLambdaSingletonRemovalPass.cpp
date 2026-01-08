@@ -9,12 +9,26 @@
 
 #include "DexUtil.h"
 #include "KotlinInstanceRewriter.h"
+#include "SourceBlocks.h"
 #include "TypeUtil.h"
 
 namespace {
 
 bool is_kotlin_stateless_lambda(const DexClass* cls) {
   return type::is_kotlin_non_capturing_lambda(cls);
+}
+
+bool is_hot_lambda(const DexClass* cls) {
+  for (const auto* method : cls->get_vmethods()) {
+    if (method->get_name()->str() == "invoke" &&
+        method->get_code() != nullptr) {
+      if (source_blocks::method_is_hot(method)) {
+        return true;
+      }
+      break;
+    }
+  }
+  return false;
 }
 
 } // namespace
@@ -26,8 +40,9 @@ void KotlinStatelessLambdaSingletonRemovalPass::run_pass(
   ConcurrentMap<DexFieldRef*, std::set<std::pair<IRInstruction*, DexMethod*>>>
       concurrentLambdaMap;
 
-  auto do_not_consider_type = [](DexClass* cls) -> bool {
-    return !is_kotlin_stateless_lambda(cls);
+  auto do_not_consider_type = [this](DexClass* cls) -> bool {
+    return !is_kotlin_stateless_lambda(cls) ||
+           (m_exclude_hot && is_hot_lambda(cls));
   };
 
   // TODO: Update the rewriter logic
