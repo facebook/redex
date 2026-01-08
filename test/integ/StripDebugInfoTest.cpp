@@ -14,7 +14,6 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 
-#include "LocalDce.h"
 #include "StripDebugInfo.h"
 
 /*
