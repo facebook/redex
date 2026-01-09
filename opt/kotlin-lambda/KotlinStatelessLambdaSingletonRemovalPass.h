@@ -39,5 +39,15 @@ This godbolt [example](https://godbolt.org/z/Mznrzs8T4) shows the singleton patt
     )");
   }
 
+  void bind_config() override {
+    bind("exclude_hot",
+         false,
+         m_exclude_hot,
+         "Exclude hot lambdas from singleton removal");
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  bool m_exclude_hot{false};
 };
