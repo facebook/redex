@@ -12,6 +12,8 @@
 class KotlinStatelessLambdaSingletonRemovalPass : public Pass {
 
  public:
+  static constexpr float kDefaultExcludeHotCallCountThreshold = 5.0f;
+
   KotlinStatelessLambdaSingletonRemovalPass()
       : Pass("KotlinStatelessLambdaSingletonRemovalPass") {}
 
@@ -44,10 +46,17 @@ This godbolt [example](https://godbolt.org/z/Mznrzs8T4) shows the singleton patt
          false,
          m_exclude_hot,
          "Exclude hot lambdas from singleton removal");
+    bind("exclude_hot_call_count_threshold",
+         kDefaultExcludeHotCallCountThreshold,
+         m_exclude_hot_call_count_threshold,
+         "Call count threshold for determining hot lambdas (used when "
+         "exclude_hot is true)");
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_exclude_hot{false};
+  float m_exclude_hot_call_count_threshold{
+      kDefaultExcludeHotCallCountThreshold};
 };
