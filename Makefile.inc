@@ -37,6 +37,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/instrument \
 	-I$(top_srcdir)/opt/int_type_patcher \
 	-I$(top_srcdir)/opt/interdex \
+	-I$(top_srcdir)/opt/kotlin-lambda \
 	-I$(top_srcdir)/opt/layout-reachability \
 	-I$(top_srcdir)/opt/local-dce \
 	-I$(top_srcdir)/opt/make-public \

@@ -6,9 +6,12 @@
  */
 
 #include "PrintKotlinStats.h"
+#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "KotlinNullCheckMethods.h"
+#include "KotlinStatelessLambdaSingletonRemovalPass.h"
+#include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -76,6 +79,33 @@ bool is_composable_method(const DexMethod* method) {
                        "Landroidx/compose/runtime/Composable;")) != types.end();
 }
 
+// Check if a method is hot based on call_count threshold from
+// KotlinStatelessLambdaSingletonRemovalPass config.
+// Returns false if method_profiles is null or has no stats.
+bool is_hot_lambda_for_singleton_removal(
+    const DexMethod* method,
+    const method_profiles::MethodProfiles* method_profiles,
+    const JsonWrapper& json_config) {
+  if (method_profiles == nullptr || !method_profiles->has_stats()) {
+    return false;
+  }
+  float call_count_threshold = static_cast<float>(
+      json_config
+          .get("KotlinStatelessLambdaSingletonRemovalPass", Json::Value())
+          .get("exclude_hot_call_count_threshold",
+               KotlinStatelessLambdaSingletonRemovalPass::
+                   kDefaultExcludeHotCallCountThreshold)
+          .asDouble());
+  for (const auto& [interaction_id, stats_map] :
+       method_profiles->all_interactions()) {
+    auto it = stats_map.find(method);
+    if (it != stats_map.end() && it->second.call_count > call_count_threshold) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace
 
 // Setup types/strings needed for the pass
@@ -102,7 +132,7 @@ void PrintKotlinStats::eval_pass(DexStoresVector& stores,
 }
 
 void PrintKotlinStats::run_pass(DexStoresVector& stores,
-                                ConfigFiles&,
+                                ConfigFiles& conf,
                                 PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   UnorderedSet<DexType*> delegate_types{
@@ -132,16 +162,24 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
   });
 
   // Handle classes
+  // Get method profiles for hot lambda detection
+  auto& method_profiles = conf.get_method_profiles();
+  const method_profiles::MethodProfiles* method_profiles_ptr =
+      method_profiles.is_initialized() ? &method_profiles : nullptr;
+  const auto& json_config = conf.get_json_config();
   std::mutex mtx;
   walk::parallel::classes(scope, [&](DexClass* cls) {
-    auto local_stats = handle_class(cls);
+    auto local_stats = handle_class(cls, method_profiles_ptr, json_config);
     std::lock_guard g(mtx);
     m_stats += local_stats;
   });
   m_stats.report(mgr);
 }
 
-PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
+PrintKotlinStats::Stats PrintKotlinStats::handle_class(
+    DexClass* cls,
+    const method_profiles::MethodProfiles* method_profiles,
+    const JsonWrapper& json_config) {
   Stats stats;
   bool is_lambda = false;
   bool is_non_capturing_lambda = false;
@@ -167,7 +205,8 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
         for (const auto* method : cls->get_vmethods()) {
           if (method->get_name()->str() == "invoke" &&
               method->get_code() != nullptr) {
-            if (source_blocks::method_is_hot(method)) {
+            if (is_hot_lambda_for_singleton_removal(method, method_profiles,
+                                                    json_config)) {
               stats.kotlin_hot_non_capturing_lambda++;
             }
             break;
