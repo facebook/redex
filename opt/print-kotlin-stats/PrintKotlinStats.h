@@ -9,6 +9,8 @@
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
+#include "JsonWrapper.h"
+#include "MethodProfiles.h"
 #include "Pass.h"
 
 class PrintKotlinStats : public Pass {
@@ -115,7 +117,9 @@ class PrintKotlinStats : public Pass {
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   Stats handle_method(DexMethod* method);
-  Stats handle_class(DexClass* cls);
+  Stats handle_class(DexClass* cls,
+                     const method_profiles::MethodProfiles* method_profiles,
+                     const JsonWrapper& json_config);
   Stats get_stats() { return m_stats; }
 
  private:
