@@ -8,7 +8,6 @@
 #include "DexLoader.h"
 #include "RedexTest.h"
 #include <gtest/gtest.h>
-#include <stdint.h>
 
 class DexLoaderTest : public RedexTest {};
 
