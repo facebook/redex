@@ -262,7 +262,7 @@ def run_and_stream_stderr(
         )
 
     def stream_and_return(
-        line_handler: typing.Optional[typing.Callable[[str], str]] = None
+        line_handler: typing.Optional[typing.Callable[[str], str]] = None,
     ) -> typing.Tuple[int, typing.List[str]]:
         err_out: typing.List[str] = []
         # Copy and stash the output.

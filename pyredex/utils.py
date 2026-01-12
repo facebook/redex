@@ -28,7 +28,6 @@ from contextlib import contextmanager
 from os.path import basename, dirname, isfile, join
 
 import packaging.version
-
 from pyredex.logger import log
 
 

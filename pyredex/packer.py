@@ -297,7 +297,7 @@ def _warning_timer(name: str, threshold: float) -> typing.Generator[int, None, N
 
 
 def _compress(
-    data: typing.Tuple[CompressionEntry, str, str, argparse.Namespace]
+    data: typing.Tuple[CompressionEntry, str, str, argparse.Namespace],
 ) -> None:
     item, src_dir, trg_dir, args = data
     LOGGER.debug("Checking %s for compression...", item.name)
