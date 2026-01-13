@@ -14,7 +14,6 @@
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
-#include "SourceBlocks.h"
 #include "Walkers.h"
 
 namespace {
@@ -84,23 +83,15 @@ bool is_composable_method(const DexMethod* method) {
                        "Landroidx/compose/runtime/Composable;")) != types.end();
 }
 
-// Check if a method is hot based on call_count threshold from
-// KotlinStatelessLambdaSingletonRemovalPass config.
+// Check if a method is hot based on call_count threshold.
 // Returns false if method_profiles is null or has no stats.
-bool is_hot_lambda_for_singleton_removal(
+bool is_method_hot_by_call_count(
     const DexMethod* method,
     const method_profiles::MethodProfiles* method_profiles,
-    const JsonWrapper& json_config) {
+    float call_count_threshold) {
   if (method_profiles == nullptr || !method_profiles->has_stats()) {
     return false;
   }
-  float call_count_threshold = static_cast<float>(
-      json_config
-          .get("KotlinStatelessLambdaSingletonRemovalPass", Json::Value())
-          .get("exclude_hot_call_count_threshold",
-               KotlinStatelessLambdaSingletonRemovalPass::
-                   kDefaultExcludeHotCallCountThreshold)
-          .asDouble());
   for (const auto& [interaction_id, stats_map] :
        method_profiles->all_interactions()) {
     auto it = stats_map.find(method);
@@ -109,6 +100,37 @@ bool is_hot_lambda_for_singleton_removal(
     }
   }
   return false;
+}
+
+// Get the hot call_count threshold for lambda singleton removal from config.
+float get_hot_lambda_call_count_threshold(const JsonWrapper& json_config) {
+  return static_cast<float>(
+      json_config
+          .get("KotlinStatelessLambdaSingletonRemovalPass", Json::Value())
+          .get("exclude_hot_call_count_threshold",
+               KotlinStatelessLambdaSingletonRemovalPass::
+                   kDefaultExcludeHotCallCountThreshold)
+          .asDouble());
+}
+
+// Wrapper for hot lambda detection using config-based threshold.
+bool is_hot_lambda_by_call_count(
+    const DexMethod* method,
+    const method_profiles::MethodProfiles* method_profiles,
+    const JsonWrapper& json_config) {
+  return is_method_hot_by_call_count(
+      method, method_profiles,
+      get_hot_lambda_call_count_threshold(json_config));
+}
+
+constexpr float kHotDefaultArgCallCountThreshold = 5.0f;
+
+// Wrapper for hot default arg detection using fixed threshold.
+bool is_hot_default_arg_by_call_count(
+    const DexMethod* method,
+    const method_profiles::MethodProfiles* method_profiles) {
+  return is_method_hot_by_call_count(method, method_profiles,
+                                     kHotDefaultArgCallCountThreshold);
 }
 
 } // namespace
@@ -210,8 +232,8 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
         for (const auto* method : cls->get_vmethods()) {
           if (method->get_name()->str() == "invoke" &&
               method->get_code() != nullptr) {
-            if (is_hot_lambda_for_singleton_removal(method, method_profiles,
-                                                    json_config)) {
+            if (is_hot_lambda_by_call_count(method, method_profiles,
+                                            json_config)) {
               stats.kotlin_hot_non_capturing_lambda++;
             }
             break;
@@ -229,8 +251,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
         const auto* args = method->get_proto()->get_args();
         always_assert(args->size() > 2);
 
-        bool is_hot = method->get_code() != nullptr &&
-                      source_blocks::method_is_hot(method);
+        bool is_hot = is_hot_default_arg_by_call_count(method, method_profiles);
 
         // This also includes arguments that aren't specified as default args
         // at the source code level. We can't reliably have this information.
