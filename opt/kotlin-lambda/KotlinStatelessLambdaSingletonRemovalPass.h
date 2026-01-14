@@ -7,13 +7,12 @@
 
 #pragma once
 
+#include "MethodProfiles.h"
 #include "Pass.h"
 
 class KotlinStatelessLambdaSingletonRemovalPass : public Pass {
 
  public:
-  static constexpr float kDefaultExcludeHotCallCountThreshold = 5.0f;
-
   KotlinStatelessLambdaSingletonRemovalPass()
       : Pass("KotlinStatelessLambdaSingletonRemovalPass") {}
 
@@ -56,6 +55,12 @@ This godbolt [example](https://godbolt.org/z/Mznrzs8T4) shows the singleton patt
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
+  static constexpr float kDefaultExcludeHotCallCountThreshold = 5.0f;
+
+  bool is_hot_lambda(
+      const DexClass* cls,
+      const method_profiles::MethodProfiles& method_profiles) const;
+
   bool m_exclude_hot{false};
   float m_exclude_hot_call_count_threshold{
       kDefaultExcludeHotCallCountThreshold};
