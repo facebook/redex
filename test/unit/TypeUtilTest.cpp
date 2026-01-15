@@ -8,6 +8,7 @@
 #include "TypeUtil.h"
 
 #include "Creators.h"
+#include "IRCode.h"
 #include "RedexTest.h"
 
 class TypeUtilTest : public RedexTest {
@@ -15,6 +16,47 @@ class TypeUtilTest : public RedexTest {
  protected:
   const std::array<char, 9> PRIMS{
       {'Z', 'B', 'S', 'C', 'I', 'J', 'F', 'D', 'V'}};
+
+  // Helper to create a well-formed Lambda-based non-capturing Kotlin lambda
+  // class with a proper invoke method. This creates lambdas that extend
+  // kotlin.jvm.internal.Lambda (as opposed to Object-based lambdas that extend
+  // java.lang.Object).
+  // @param name The type name for the lambda class.
+  // @param arity The number of parameters for the invoke method (default 0).
+  static DexClass* create_non_capturing_lambda(std::string_view name,
+                                               size_t arity = 0) {
+    auto* lambda_type = DexType::make_type(name);
+    const auto function_type_name =
+        "Lkotlin/jvm/functions/Function" + std::to_string(arity) + ";";
+    auto* kotlin_function_type = DexType::make_type(function_type_name);
+
+    ClassCreator creator(lambda_type);
+    creator.set_super(type::kotlin_jvm_internal_Lambda());
+    creator.add_interface(kotlin_function_type);
+
+    // Build parameter type list based on arity
+    DexTypeList::ContainerType param_types;
+    for (size_t i = 0; i < arity; ++i) {
+      param_types.push_back(type::java_lang_Object());
+    }
+
+    // Add a proper public invoke method with code
+    auto* invoke_proto = DexProto::make_proto(
+        type::java_lang_Object(),
+        DexTypeList::make_type_list(std::move(param_types)));
+    auto* invoke_method =
+        DexMethod::make_method(lambda_type, DexString::make_string("invoke"),
+                               invoke_proto)
+            ->make_concrete(ACC_PUBLIC, true);
+    // Register count: 1 for 'this' + arity for parameters
+    auto code = std::make_unique<IRCode>(invoke_method, 1 + arity);
+    code->push_back(new IRInstruction(OPCODE_CONST));
+    code->push_back(new IRInstruction(OPCODE_RETURN_OBJECT));
+    invoke_method->set_code(std::move(code));
+    creator.add_method(invoke_method);
+
+    return creator.create();
+  }
 };
 
 TEST_F(TypeUtilTest, test_reference_type_wrappers) {
@@ -189,14 +231,7 @@ class LambdaBasedFunction1LambdaTest
 
 TEST_P(LambdaBasedFunction1LambdaTest, main) {
   using namespace type;
-  // Create a Kotlin lambda class with kotlin.jvm.internal.Lambda as super class
-  // and implementing a Kotlin function interface
-  auto* lambda_type = DexType::make_type(GetParam());
-
-  ClassCreator lambda_creator(lambda_type);
-  lambda_creator.set_super(kotlin_jvm_internal_Lambda());
-  lambda_creator.add_interface(kotlin_function_type);
-  auto* kotlin_lambda_class = lambda_creator.create();
+  const auto* kotlin_lambda_class = create_non_capturing_lambda(GetParam(), 1);
   EXPECT_TRUE(is_kotlin_lambda(kotlin_lambda_class));
 }
 
