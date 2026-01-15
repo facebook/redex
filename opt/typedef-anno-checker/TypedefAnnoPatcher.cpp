@@ -170,13 +170,11 @@ DexMethodRef* get_enclosing_method(DexClass* cls) {
 
 // make the methods and fields temporarily synthetic to add annotations
 template <typename DexMember>
-bool add_annotation_set(DexMember* member,
-                        DexAnnotationSet* anno_set,
-                        std::mutex& anno_patching_mutex,
-                        Stats& class_stats) {
+bool add_annotation_set_impl(DexMember* member,
+                             DexAnnotationSet* anno_set,
+                             Stats& class_stats) {
   if (member && member->is_def()) {
     auto* def_member = member->as_def();
-    std::lock_guard<std::mutex> lock(anno_patching_mutex);
     auto existing_annos = def_member->get_anno_set();
     if (existing_annos) {
       size_t anno_size = existing_annos->get_annotations().size();
@@ -200,6 +198,28 @@ bool add_annotation_set(DexMember* member,
     return true;
   }
   return false;
+}
+
+template <typename DexMember>
+bool add_annotation_set(DexMember* member,
+                        DexAnnotationSet* anno_set,
+                        std::mutex& anno_patching_mutex,
+                        Stats& class_stats) {
+  if (member && member->is_def()) {
+    std::lock_guard<std::mutex> lock(anno_patching_mutex);
+    return add_annotation_set_impl(member, anno_set, class_stats);
+  }
+  return false;
+}
+
+template <typename DexMember>
+bool add_annotation_impl(DexMember* member,
+                         const TypedefAnnoType* anno,
+                         Stats& class_stats) {
+  DexAnnotationSet anno_set = DexAnnotationSet();
+  anno_set.add_annotation(std::make_unique<DexAnnotation>(
+      const_cast<TypedefAnnoType*>(anno), DAV_RUNTIME));
+  return add_annotation_set_impl(member, &anno_set, class_stats);
 }
 
 template <typename DexMember>
@@ -351,16 +371,16 @@ void collect_setter_missing_param_annos(
 
 } // namespace
 
-void PatchingCandidates::apply_patching(std::mutex& mutex, Stats& class_stats) {
+void PatchingCandidates::apply_patching(Stats& class_stats) {
   for (auto* field :
        unordered_to_ordered_keys(m_field_candidates, compare_dexfields)) {
     auto* anno = m_field_candidates.at(field);
-    add_annotation(field, anno, mutex, class_stats);
+    add_annotation_impl(field, anno, class_stats);
   }
   for (auto* method :
        unordered_to_ordered_keys(m_method_candidates, compare_dexmethods)) {
     auto* anno = m_method_candidates.at(method);
-    add_annotation(method, anno, mutex, class_stats);
+    add_annotation_impl(method, anno, class_stats);
   }
   for (auto& pc :
        unordered_to_ordered_keys(m_param_candidates, compare_param_candidate)) {
@@ -476,7 +496,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
       return false;
     }
     Stats new_stats = {};
-    candidates.apply_patching(m_anno_patching_mutex, new_stats);
+    candidates.apply_patching(new_stats);
     TRACE(TAC, 2,
           "[patcher] Phase 1: Patches %zu candidates; patched params %zu; "
           "patched field/methods %zu",
@@ -557,8 +577,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
         }
         return class_stats;
       });
-  candidates.apply_patching(m_anno_patching_mutex,
-                            m_patcher_stats.patch_lambdas);
+  candidates.apply_patching(m_patcher_stats.patch_lambdas);
 
   m_patcher_stats +=
       walk::parallel::classes<PatcherStats>(scope, [&](DexClass* cls) {
@@ -576,8 +595,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
 
   candidates = {};
   patch_chained_getters(candidates);
-  candidates.apply_patching(m_anno_patching_mutex,
-                            m_patcher_stats.patch_chained_getters);
+  candidates.apply_patching(m_patcher_stats.patch_chained_getters);
 }
 
 void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {

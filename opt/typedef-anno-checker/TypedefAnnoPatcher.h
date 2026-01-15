@@ -112,7 +112,7 @@ class PatchingCandidates {
     return m_field_candidates.size() + m_method_candidates.size() +
            m_param_candidates.size();
   }
-  void apply_patching(std::mutex& mutex, Stats& class_stats);
+  void apply_patching(Stats& class_stats);
 
  private:
   InsertOnlyConcurrentMap<DexField*, TypedefAnnoType*> m_field_candidates;
