@@ -208,8 +208,7 @@ SwitchEquivFinder::SwitchEquivFinder(
     std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
         fixpoint_iterator,
     DuplicateCaseStrategy duplicates_strategy,
-    std::shared_ptr<DefUseBlocks> def_use_blocks,
-    BlockPredicate may_be_nonleaf)
+    std::shared_ptr<DefUseBlocks> def_use_blocks)
     : m_cfg(cfg),
       m_root_branch(root_branch),
       m_switching_reg(switching_reg),
@@ -225,7 +224,7 @@ SwitchEquivFinder::SwitchEquivFinder(
     always_assert(has_src(insn, m_switching_reg));
   }
 
-  const auto& leaves = find_leaves(std::move(may_be_nonleaf));
+  const auto& leaves = find_leaves();
   if (leaves.empty()) {
     m_extra_loads.clear();
     m_success = false;
@@ -241,8 +240,7 @@ SwitchEquivFinder::SwitchEquivFinder(
 // While we're searching for the leaf blocks, keep track of any constant loads
 // that occur between the root branch and the leaf block. Put those in
 // `m_extra_loads`.
-std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
-    BlockPredicate may_be_nonleaf) {
+std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
   std::vector<cfg::Edge*> leaves;
 
   // Traverse the tree in an depth first order so that the extra loads are
@@ -253,7 +251,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
     if (search != block_to_is_leaf.end()) {
       return search->second;
     }
-    auto ret = is_leaf(m_cfg, b, m_switching_reg) || !may_be_nonleaf(b);
+    auto ret = is_leaf(m_cfg, b, m_switching_reg);
     block_to_is_leaf[b] = ret;
     return ret;
   };
@@ -586,6 +584,13 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
         TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
         return false;
       } else if (m_duplicates_strategy == EXECUTION_ORDER) {
+        // Disallow Multiple default cases, even with EXECUTION_ORDER
+        if (is_default_case(key)) {
+          TRACE(SWITCH_EQUIV, 2,
+                "Failure Reason: Multiple Default cases detected.");
+          TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
+          return false;
+        }
         if (pred_creates_extra_loads(m_extra_loads, it->second)) {
           TRACE(SWITCH_EQUIV, 2,
                 "Failure Reason: Divergent key to block mapping with extra "

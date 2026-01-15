@@ -560,19 +560,8 @@ TEST_F(SwitchEquivFinderTest, goto_default_stops_at_unsupported) {
   auto& cfg = code->cfg();
   SwitchEquivFinder finder(
       &cfg, get_first_branch(cfg), 0, SwitchEquivFinder::NO_LEAF_DUPLICATION,
-      nullptr, SwitchEquivFinder::DuplicateCaseStrategy::EXECUTION_ORDER, {},
-      [&](cfg::Block* block) {
-        auto last_insn = block->get_last_insn();
-        return last_insn != block->end() &&
-               last_insn->insn->opcode() != OPCODE_IF_LE;
-      });
-  ASSERT_TRUE(finder.success());
-  ASSERT_EQ(2, finder.key_to_case().size());
-  auto default_case = finder.default_case();
-  ASSERT_TRUE(default_case);
-  auto first_insn = default_case.value()->get_first_insn();
-  ASSERT_NE(default_case.value()->end(), first_insn);
-  ASSERT_EQ(OPCODE_IF_LE, first_insn->insn->opcode());
+      nullptr, SwitchEquivFinder::DuplicateCaseStrategy::EXECUTION_ORDER, {});
+  EXPECT_FALSE(finder.success());
   code->clear_cfg();
 }
 
@@ -1423,7 +1412,16 @@ TEST_F(SwitchEquivFinderTest, test_with_eq_not_constant) {
       (return v3)
     )
 )");
-  // TODO (T219644020): improve logic and verify this is handled correctly.
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+
+  SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 0,
+                           SwitchEquivFinder::NO_LEAF_DUPLICATION, {},
+                           SwitchEquivFinder::EXECUTION_ORDER);
+  EXPECT_FALSE(finder.success());
+
+  code->clear_cfg();
 }
 
 TEST_F(SwitchEquivFinderTest, ends_with_less_than) {
@@ -1454,5 +1452,14 @@ TEST_F(SwitchEquivFinderTest, ends_with_less_than) {
       (return v3)
     )
 )");
-  // TODO (T219644020): improve logic and verify this is handled correctly.
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+
+  SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 0,
+                           SwitchEquivFinder::NO_LEAF_DUPLICATION, {},
+                           SwitchEquivFinder::EXECUTION_ORDER);
+  EXPECT_FALSE(finder.success());
+
+  code->clear_cfg();
 }
