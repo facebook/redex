@@ -625,7 +625,7 @@ impl<V> PatriciaTree<V> {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        matches!(self.root, None)
+        self.root.is_none()
     }
 
     // Not a very fast operation.
