@@ -660,7 +660,7 @@ mod numerical {
                     env.set(
                         result,
                         IntegerSetAbstractDomain::add(
-                            &env.get(&lhs).into_owned(),
+                            &env.get(&lhs),
                             &IntegerSetAbstractDomain::Value([rhs].into()),
                         ),
                     );
