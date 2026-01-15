@@ -16,10 +16,6 @@
 #include "Trace.h"
 #include "TypeUtil.h"
 
-constexpr const char* KT_INT_REF = "Lkotlin/jvm/internal/Ref$IntRef;.element:I";
-constexpr const char* KT_OBJ_REF =
-    "Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;";
-
 std::ostream& operator<<(std::ostream& output, const IRType& type) {
   switch (type) {
   case IRType::BOTTOM: {
@@ -1027,7 +1023,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         current_state->get_annotation(insn->src(0));
     DexField* field_def = field->as_def();
     if ((field_def != nullptr) &&
-        field_def->get_deobfuscated_name_or_empty() == KT_INT_REF) {
+        field_def == type::pseudo::kotlin_jvm_internal_RefIntRef_element()) {
       annotation = src_anno;
     }
     if (type::is_float(type)) {
@@ -1077,7 +1073,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         current_state->get_annotation(insn->src(0));
     DexField* field_def = field->as_def();
     if ((field_def != nullptr) &&
-        field_def->get_deobfuscated_name_or_empty() == KT_OBJ_REF) {
+        field_def == type::pseudo::kotlin_jvm_internal_RefObjectRef_element()) {
       annotation = src_anno;
     }
     set_reference_with_anno(current_state, RESULT_REGISTER, field->get_type(),

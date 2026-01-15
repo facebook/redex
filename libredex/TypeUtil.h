@@ -35,6 +35,7 @@ namespace type {
 
 #define FOR_EACH DECLARE_TYPE
 WELL_KNOWN_TYPES
+KOTLIN_JVM_INTERNAL_TYPES
 #undef FOR_EACH
 #undef DECLARE_TYPE
 
@@ -43,6 +44,7 @@ namespace pseudo {
 
 #define FOR_EACH DECLARE_PSEUDO_TYPE_FIELD
 PRIMITIVE_PSEUDO_TYPE_FIELDS
+KOTLIN_JVM_INTERNAL_FIELDS
 #undef FOR_EACH
 } // namespace pseudo
 

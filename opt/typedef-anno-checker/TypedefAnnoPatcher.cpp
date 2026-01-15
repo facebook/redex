@@ -17,13 +17,6 @@
 #include "TypeUtil.h"
 #include "Walkers.h"
 
-constexpr const char* INT_REF_CLS = "Lkotlin/jvm/internal/Ref$IntRef;";
-constexpr const char* INT_REF_FIELD =
-    "Lkotlin/jvm/internal/Ref$IntRef;.element:I";
-constexpr const char* OBJ_REF_CLS = "Lkotlin/jvm/internal/Ref$ObjectRef;";
-constexpr const char* OBJ_REF_FIELD =
-    "Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;";
-
 namespace typedef_anno {
 bool is_int(const type_inference::TypeEnvironment& env, reg_t reg) {
   return env.get_dex_type(reg) != boost::none &&
@@ -44,8 +37,10 @@ bool is_not_str_nor_int(const type_inference::TypeEnvironment& env, reg_t reg) {
 
 bool is_int_or_obj_ref(const type_inference::TypeEnvironment& env, reg_t reg) {
   return env.get_dex_type(reg) != boost::none
-             ? (*env.get_dex_type(reg) == DexType::make_type(INT_REF_CLS) ||
-                *env.get_dex_type(reg) == DexType::make_type(OBJ_REF_CLS))
+             ? (*env.get_dex_type(reg) ==
+                    type::kotlin_jvm_internal_Ref_IntRef() ||
+                *env.get_dex_type(reg) ==
+                    type::kotlin_jvm_internal_Ref_ObjectRef())
              : true;
 }
 } // namespace typedef_anno
@@ -717,8 +712,10 @@ void patch_synthetic_field_from_local_var_lambda(
       continue;
     }
 
-    if (field->get_deobfuscated_name_or_empty() == INT_REF_FIELD ||
-        field->get_deobfuscated_name_or_empty() == OBJ_REF_FIELD) {
+    if (field->get_deobfuscated_name_or_empty() ==
+            show(type::pseudo::kotlin_jvm_internal_RefIntRef_element()) ||
+        field->get_deobfuscated_name_or_empty() ==
+            show(type::pseudo::kotlin_jvm_internal_RefObjectRef_element())) {
       live_range::Use ref_use_of_id{def, 0};
       auto ref_udchains_it = ud_chains.find(ref_use_of_id);
       auto ref_defs_set = ref_udchains_it->second;

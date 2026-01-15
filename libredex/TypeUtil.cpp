@@ -28,6 +28,7 @@ namespace type {
 
 #define FOR_EACH DEFINE_CACHED_TYPE
 WELL_KNOWN_TYPES
+KOTLIN_JVM_INTERNAL_TYPES
 #undef FOR_EACH
 
 namespace pseudo {
@@ -39,6 +40,7 @@ namespace pseudo {
 
 #define FOR_EACH DEFINE_CACHED_PSEUDO_TYPE
 PRIMITIVE_PSEUDO_TYPE_FIELDS
+KOTLIN_JVM_INTERNAL_FIELDS
 #undef FOR_EACH
 
 } // namespace pseudo
