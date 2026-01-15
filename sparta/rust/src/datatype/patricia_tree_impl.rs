@@ -653,7 +653,7 @@ impl<V> PatriciaTree<V> {
     }
 
     pub(crate) fn contains_key(&self, key: &BitVec) -> bool {
-        !matches!(self.get(key), None)
+        !self.get(key).is_none()
     }
 
     pub(crate) fn get(&self, key: &BitVec) -> Option<&V> {
