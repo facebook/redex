@@ -22,6 +22,7 @@ class KotlinInstanceRewriter {
     size_t kotlin_instances_with_single_use{0};
     size_t kotlin_instance_fields_removed{0};
     size_t kotlin_new_inserted{0};
+    size_t excludable_kotlin_lambda{0};
     Stats& operator+=(const Stats& that) {
       kotlin_new_instance += that.kotlin_new_instance;
       kotlin_new_instance_which_escapes +=
@@ -29,6 +30,7 @@ class KotlinInstanceRewriter {
       kotlin_instances_with_single_use += that.kotlin_instances_with_single_use;
       kotlin_instance_fields_removed += that.kotlin_instance_fields_removed;
       kotlin_new_inserted += that.kotlin_new_inserted;
+      excludable_kotlin_lambda += that.excludable_kotlin_lambda;
       return *this;
     }
     // Updates metrics tracked by \p mgr corresponding to these statistics.
@@ -45,12 +47,15 @@ class KotlinInstanceRewriter {
   // the same type and is initilized in <clinit>. Collect all such Lambda. Map
   // contains the field (that contains INSTANCE) and {insn, method} where it is
   // read (or used).
+  // - is_excludable: returns true if the class is excludable (e.g., hot lambda)
+  // - exclude_excludable: if true, excludable classes are skipped
   Stats collect_instance_usage(
       const Scope& scope,
       ConcurrentMap<DexFieldRef*,
                     std::set<std::pair<IRInstruction*, DexMethod*>>>&
           concurrent_instance_map,
-      std::function<bool(DexClass*)> do_not_consider_type);
+      std::function<bool(DexClass*)> is_excludable,
+      bool exclude_excludable);
 
   // Filter out any INSTANCE that might escape and whose use we might not be
   // able to track

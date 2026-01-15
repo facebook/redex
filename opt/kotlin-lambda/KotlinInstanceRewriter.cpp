@@ -6,9 +6,11 @@
  */
 
 #include "KotlinInstanceRewriter.h"
+#include "AtomicStatCounter.h"
 #include "CFGMutation.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {
@@ -29,12 +31,14 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
                   std::set<std::pair<IRInstruction*, DexMethod*>>>&
         concurrent_instance_map,
 
-    std::function<bool(DexClass*)> do_not_consider_type) {
+    std::function<bool(DexClass*)> is_excludable,
+    bool exclude_excludable) {
   // Collect all the types which are of Kotlin classes which sets INSTANCE
   // variable.
   // Get all the uses of the INSTANCE variables whose <init> does not have
   // sideeffets
   KotlinInstanceRewriter::Stats stats{};
+  AtomicStatCounter<size_t> excludable_count{0};
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (!can_rename(cls) || !can_delete(cls)) {
       return;
@@ -43,8 +47,15 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
     if (instance == nullptr) {
       return;
     }
-    if (do_not_consider_type(cls)) {
+    if (!type::is_kotlin_non_capturing_lambda(cls)) {
       return;
+    }
+    // Count excludable classes (e.g., hot lambdas)
+    if (is_excludable(cls)) {
+      excludable_count++;
+      if (exclude_excludable) {
+        return;
+      }
     }
     if (concurrent_instance_map.count(instance) != 0u) {
       return;
@@ -53,6 +64,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
     concurrent_instance_map.emplace(instance, insns);
   });
   stats.kotlin_new_instance = concurrent_instance_map.size();
+  stats.excludable_kotlin_lambda = excludable_count;
   return stats;
 }
 
@@ -219,6 +231,7 @@ void KotlinInstanceRewriter::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_instance_fields_removed",
                   kotlin_instance_fields_removed);
   mgr.incr_metric("kotlin_new_inserted", kotlin_new_inserted);
+  mgr.incr_metric("excludable_kotlin_lambda", excludable_kotlin_lambda);
 
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_new_instance = %zu", kotlin_new_instance);
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_new_instance_which_escapes = %zu",
@@ -228,4 +241,6 @@ void KotlinInstanceRewriter::Stats::report(PassManager& mgr) const {
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_instance_fields_removed = %zu",
         kotlin_instance_fields_removed);
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_new_inserted = %zu", kotlin_new_inserted);
+  TRACE(KOTLIN_INSTANCE, 1, "excludable_kotlin_lambda = %zu",
+        excludable_kotlin_lambda);
 }
