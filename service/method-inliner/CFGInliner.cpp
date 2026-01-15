@@ -55,6 +55,26 @@ void normalize_source_blocks(const InstructionIterator& inline_site,
       source_blocks::normalize::num_interactions(callee_cfg, caller_sb));
 }
 
+void remove_dangling_partial_inline_dex_positions(
+    const std::map<BlockId, Block*>& blocks) {
+  const auto* partial_inline_source = get_partial_inline_source();
+
+  for (const auto& entry : blocks) {
+    Block* b = entry.second;
+    auto it = b->begin();
+    while (it != b->end()) {
+      auto& mie = *it;
+      if (mie.type == MFLOW_POSITION &&
+          mie.pos->file == partial_inline_source) {
+        TRACE(CFG, 1, "Found would-be-dangling partial-inline dex position!");
+        it = b->remove_mie(it);
+        continue;
+      }
+      ++it;
+    }
+  }
+}
+
 } // namespace
 
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
@@ -159,6 +179,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
       split_on_inline->m_entries.push_front(*(new MethodItemEntry(
           std::make_unique<DexPosition>(*inline_site_dbg_pos))));
     }
+  } else {
+    remove_dangling_partial_inline_dex_positions(callee.m_blocks);
   }
 
   // make sure the callee's registers don't overlap with the caller's
