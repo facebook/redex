@@ -22,6 +22,7 @@
 #include <vector>
 
 class DexClass;
+class DexMethod;
 
 using Scope = std::vector<DexClass*>;
 
@@ -52,6 +53,20 @@ class DexClassHasher final {
   void print(std::ostream&);
 
   ~DexClassHasher();
+
+ private:
+  struct Fwd;
+  std::unique_ptr<Fwd> m_fwd;
+};
+
+// Hashes just the method's code (IRCode), excluding method signature/class.
+// Useful for comparing method bodies across different classes.
+class DexMethodHasher final {
+ public:
+  explicit DexMethodHasher(const DexMethod* method);
+  DexHash run();
+
+  ~DexMethodHasher();
 
  private:
   struct Fwd;

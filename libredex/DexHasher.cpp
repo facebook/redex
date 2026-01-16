@@ -27,18 +27,17 @@
 namespace hashing {
 
 // A local implementation. Avoids heap allocation for the scope version.
+// Impl is an abstract base class with shared hashing infrastructure.
 
 namespace {
 
-class Impl final {
+class Impl {
  public:
-  explicit Impl(DexClass* cls) : m_cls(cls) {}
-  DexHash run();
-  void print(std::ostream&);
+  virtual ~Impl() = default;
+  virtual DexHash run() = 0;
 
- private:
+ protected:
   DexHash get_hash() const;
-  void hash_metadata();
   void hash(const std::string_view str);
   void hash(const std::string& str);
   void hash(int value);
@@ -124,11 +123,32 @@ class Impl final {
     }
   }
 
-  DexClass* m_cls;
   size_t m_hash{0};
   size_t m_code_hash{0};
   size_t m_registers_hash{0};
   size_t m_positions_hash{0};
+};
+
+// Hashes a DexClass including all its methods and fields.
+class DexClassImpl final : public Impl {
+ public:
+  explicit DexClassImpl(DexClass* cls) : m_cls(cls) {}
+  DexHash run() override;
+  void print(std::ostream&);
+
+ private:
+  void hash_metadata();
+  DexClass* const m_cls;
+};
+
+// Hashes only the code of a method, excluding method signature/class.
+class DexMethodImpl final : public Impl {
+ public:
+  explicit DexMethodImpl(const DexMethod* method) : m_method(method) {}
+  DexHash run() override;
+
+ private:
+  const DexMethod* const m_method;
 };
 
 void Impl::hash(const std::string_view str) {
@@ -506,7 +526,7 @@ void Impl::hash(const DexField* f) {
   hash(f->get_deobfuscated_name_or_empty());
 }
 
-void Impl::hash_metadata() {
+void DexClassImpl::hash_metadata() {
   hash(m_cls->get_access());
   hash(m_cls->get_type());
   if (m_cls->get_super_class() != nullptr) {
@@ -520,7 +540,7 @@ DexHash Impl::get_hash() const {
   return DexHash{m_positions_hash, m_registers_hash, m_code_hash, m_hash};
 }
 
-DexHash Impl::run() {
+DexHash DexClassImpl::run() {
   TRACE(HASHER, 2, "[hasher] ==== hashing class %s", SHOW(m_cls->get_type()));
 
   hash_metadata();
@@ -540,7 +560,7 @@ DexHash Impl::run() {
   return get_hash();
 }
 
-void Impl::print(std::ostream& ofs) {
+void DexClassImpl::print(std::ostream& ofs) {
   hash_metadata();
   ofs << "type " << show(m_cls) << " #" << hash_to_string(m_hash) << '\n';
   for (auto* field : m_cls->get_ifields()) {
@@ -566,6 +586,14 @@ void Impl::print(std::ostream& ofs) {
   }
 }
 
+DexHash DexMethodImpl::run() {
+  const auto* code = m_method->get_code();
+  if (code != nullptr) {
+    hash(code);
+  }
+  return DexHash{m_positions_hash, m_registers_hash, m_code_hash, 0};
+}
+
 } // namespace
 
 std::string hash_to_string(size_t hash) {
@@ -585,7 +613,7 @@ DexHash DexScopeHasher::run() {
   std::vector<size_t> class_code_hashes(class_indices.size());
   std::vector<size_t> class_signature_hashes(class_indices.size());
   walk::parallel::classes(m_scope, [&](DexClass* cls) {
-    Impl class_hasher(cls);
+    DexClassImpl class_hasher(cls);
     DexHash class_hash = class_hasher.run();
     auto index = class_indices.at(cls);
     class_positions_hashes.at(index) = class_hash.positions_hash;
@@ -601,7 +629,7 @@ DexHash DexScopeHasher::run() {
 }
 
 struct DexClassHasher::Fwd final {
-  Impl impl;
+  DexClassImpl impl;
 
   explicit Fwd(DexClass* cls) : impl(cls) {}
 
@@ -628,6 +656,20 @@ void print_classes(std::ostream& output, const Scope& classes) {
   walk::classes(classes,
                 [&](DexClass* cls) { output << class_strs.at(cls).rdbuf(); });
 }
+
+struct DexMethodHasher::Fwd final {
+  DexMethodImpl impl;
+
+  explicit Fwd(const DexMethod* m) : impl(m) {}
+
+  DexHash run() { return impl.run(); }
+};
+
+DexMethodHasher::DexMethodHasher(const DexMethod* method)
+    : m_fwd(std::make_unique<Fwd>(method)) {}
+DexMethodHasher::~DexMethodHasher() = default;
+
+DexHash DexMethodHasher::run() { return m_fwd->run(); }
 
 } // namespace hashing
 

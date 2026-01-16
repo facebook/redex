@@ -71,6 +71,7 @@ check_PROGRAMS = \
     deterministic_containers_test \
     dex_annotation_test \
     dex_class_test \
+    dex_hasher_test \
     dex_instruction_test \
     dex_loader_test \
     dex_mutate_test \
@@ -269,6 +270,8 @@ deterministic_containers_test_LDADD = $(COMMON_MOCK_TEST_LIBS) -lpthread
 dex_annotation_test_SOURCES = DexAnnotationTest.cpp
 
 dex_class_test_SOURCES = DexClassTest.cpp
+
+dex_hasher_test_SOURCES = DexHasherTest.cpp
 
 dex_instruction_test_SOURCES = DexInstructionTest.cpp
 
