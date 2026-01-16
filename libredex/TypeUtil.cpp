@@ -601,6 +601,22 @@ bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
   return false;
 }
 
+DexMethod* get_kotlin_lambda_invoke_method(const DexClass* cls) {
+  always_assert(is_kotlin_lambda(cls));
+  DexMethod* result = nullptr;
+  for (auto* method : cls->get_vmethods()) {
+    if (method->get_name()->str() == "invoke" && is_public(method) &&
+        !is_synthetic(method) && method->get_code() != nullptr) {
+      if (result != nullptr) {
+        // Multiple invoke methods found, ill-formed lambda.
+        return nullptr;
+      }
+      result = method;
+    }
+  }
+  return result;
+}
+
 bool is_kotlin_internal_type(const DexType* type) {
   return type == type::kotlin_jvm_internal_Lambda() ||
          type == type::kotlin_coroutines_jvm_internal_ContinuationImpl() ||
