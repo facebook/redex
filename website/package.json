@@ -36,7 +36,8 @@
     "estree-util-value-to-estree": "^3.3.3",
     "@babel/helpers": "^7.26.10",
     "@babel/runtime-corejs3": "^7.26.10",
-    "@babel/runtime": "^7.26.10"
+    "@babel/runtime": "^7.26.10",
+    "@docusaurus/**/diff": ">=8.0.3"
   },
   "browserslist": {
     "production": [
