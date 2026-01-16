@@ -5,16 +5,32 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "DexUtil.h"
 #include "PrintKotlinStats.h"
 #include "RedexTest.h"
 
+using ::testing::NotNull;
+
 class KotlinStatsTest : public RedexIntegrationTest {};
 
 namespace {
 TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
+  // Set deobfuscated names for lambda classes so is_kotlin_lambda works.
+  // Integration tests don't set deobfuscated names by default.
+  const std::vector<const char*> lambda_class_names = {
+      "LKotlinLambdaInline$foo$1;",
+      "LKotlinLambdaInline$bar$1;",
+      "LKotlinLambdaInline$baz$1;",
+  };
+  for (const auto* name : lambda_class_names) {
+    auto* cls = type_class(DexType::get_type(name));
+    ASSERT_THAT(cls, NotNull()) << "Lambda class not found: " << name;
+    cls->set_deobfuscated_name(name);
+  }
+
   auto* klr = new PrintKotlinStats();
   std::vector<Pass*> passes{klr};
   run_passes(passes);

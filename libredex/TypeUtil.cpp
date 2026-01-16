@@ -9,6 +9,7 @@
 
 #include "ClassUtil.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "Lazy.h"
 #include "RedexContext.h"
 #include "Show.h"
@@ -599,6 +600,16 @@ bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
   }
 
   return false;
+}
+
+bool is_trivial_kotlin_lambda(const DexClass* cls, size_t max_instructions) {
+  if (!is_kotlin_non_capturing_lambda(cls)) {
+    return false;
+  }
+
+  const DexMethod* const invoke = get_kotlin_lambda_invoke_method(cls);
+  return invoke != nullptr &&
+         invoke->get_code()->count_opcodes() <= max_instructions;
 }
 
 DexMethod* get_kotlin_lambda_invoke_method(const DexClass* cls) {

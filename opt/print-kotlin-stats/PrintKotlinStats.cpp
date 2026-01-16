@@ -13,6 +13,7 @@
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {
@@ -26,8 +27,6 @@ constexpr const char* KOTLIN_LAMBDA = "Lkotlin/jvm/internal/Lambda;";
 constexpr const char* DI_BASE = "Lcom/facebook/inject/AbstractLibraryModule;";
 constexpr const char* CONTINUATION_IMPL =
     "Lkotlin/coroutines/jvm/internal/ContinuationImpl;";
-// A lambda like { true } has 4 instructions.
-constexpr size_t TRIVIAL_LAMBDA_NUM_INSTRUCTIONS_THRESHOLD = 4u;
 
 // Serialize cfg code to a string.
 std::string serialize_cfg_code(const cfg::ControlFlowGraph& cfg) {
@@ -183,7 +182,6 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
     DexClass* cls, const method_profiles::MethodProfiles* method_profiles) {
   Stats stats;
   bool is_lambda = false;
-  bool is_non_capturing_lambda = false;
   if (cls->get_super_class() == m_kotlin_lambdas_base) {
     stats.kotlin_lambdas++;
     is_lambda = true;
@@ -201,7 +199,6 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
         field->get_type() == cls->get_type()) {
       if (is_lambda) {
         stats.kotlin_non_capturing_lambda++;
-        is_non_capturing_lambda = true;
       }
       stats.kotlin_class_with_instance++;
     }
@@ -256,19 +253,18 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
       if (is_composable_method(method)) {
         stats.kotlin_composable_method++;
       }
-      if (is_non_capturing_lambda && method->get_name()->str() == "invoke" &&
-          !is_synthetic(method) && method->get_code() != nullptr &&
-          method->get_code()->count_opcodes() <=
-              TRIVIAL_LAMBDA_NUM_INSTRUCTIONS_THRESHOLD) {
-        stats.kotlin_trivial_non_capturing_lambdas++;
-        always_assert(method->get_code()->cfg_built());
-        bool inserted;
-        std::tie(std::ignore, inserted) =
-            m_kotlin_unique_trivial_non_capturing_lambdas.insert(
-                serialize_cfg_code(method->get_code()->cfg()));
-        if (inserted) {
-          stats.kotlin_unique_trivial_non_capturing_lambdas++;
-        }
+    }
+    if (type::is_trivial_kotlin_lambda(cls)) {
+      stats.kotlin_trivial_non_capturing_lambdas++;
+      DexMethod* invoke = type::get_kotlin_lambda_invoke_method(cls);
+      always_assert(invoke != nullptr);
+      always_assert(invoke->get_code()->cfg_built());
+      bool inserted;
+      std::tie(std::ignore, inserted) =
+          m_kotlin_unique_trivial_non_capturing_lambdas.insert(
+              serialize_cfg_code(invoke->get_code()->cfg()));
+      if (inserted) {
+        stats.kotlin_unique_trivial_non_capturing_lambdas++;
       }
     }
     if (is_anonymous(cls->get_name()->str())) {
