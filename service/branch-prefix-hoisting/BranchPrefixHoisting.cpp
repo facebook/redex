@@ -437,6 +437,44 @@ size_t hoist_insns_for_block(
     }
   }
 
+  // For each succ block, we need to omit extraneous Source Blocks
+  // For example, consider the following
+  // SB1 - T1 | SB2 - NT1
+  // It will be transformed into
+  // SB1 - SB2 - NT1
+  // If T1 throws, we will have created an impossible state because
+  // we have a hot source block flowing into a cold source block
+  // In order to fix this, we should change adjacent source blocks
+  // and hoisted source blocks only separated from another source blocks by a
+  // non-throwing instruction to have the values of the other source block.
+  // In the case above, SB1 would have the value of SB2
+  for (const auto& p : succs) {
+    const auto& end = p.second;
+    std::unique_ptr<SourceBlock> last_sb_before_throw = nullptr;
+    bool after_hoist = true;
+    for (auto it = std::prev(p.first->end()); it != p.first->begin(); --it) {
+      if (it->type == MFLOW_SOURCE_BLOCK) {
+        always_assert(it->src_block != nullptr);
+        if (last_sb_before_throw == nullptr) {
+          last_sb_before_throw = std::make_unique<SourceBlock>(*it->src_block);
+        } else if (!after_hoist) {
+          for (uint32_t i = 0; i < last_sb_before_throw->vals_size; i++) {
+            const auto& val = last_sb_before_throw->get_at(i);
+            it->src_block->set_at(i, val);
+          }
+        }
+      } else if (it->type == MFLOW_OPCODE) {
+        always_assert(it->insn != nullptr);
+        if (opcode::may_throw(it->insn->opcode())) {
+          last_sb_before_throw = nullptr;
+        }
+      }
+      if (it == end) {
+        after_hoist = false;
+      }
+    }
+  }
+
   return insns_to_hoist.size();
 }
 
@@ -468,7 +506,8 @@ size_t process_hoisting_for_block(
     return true;
   };
 
-  // make sure every successor has same predecessor and none will have to throw.
+  // make sure every successor has same predecessor and none will have to
+  // throw.
   auto get_succ_blocks_if_same_preds_and_no_throw =
       [&cfg, &all_preds_are_same](
           cfg::Block* block) -> std::optional<std::vector<cfg::Block*>> {
@@ -479,7 +518,8 @@ size_t process_hoisting_for_block(
       auto* succ_block = edge->target();
       const auto& preds_of_succ_block = succ_block->preds();
       if (!all_preds_are_same(preds_of_succ_block)) {
-        // we can only hoist the prefix if the block has only one incoming edge
+        // we can only hoist the prefix if the block has only one incoming
+        // edge
         return std::nullopt;
       }
 
