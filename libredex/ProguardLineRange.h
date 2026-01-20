@@ -25,7 +25,7 @@ struct ProguardLineRange final {
   ProguardLineRange() = default;
   ProguardLineRange(
       uint32_t s, uint32_t e, uint32_t os, uint32_t oe, std::string ogn);
-  virtual ~ProguardLineRange() = default;
+  ~ProguardLineRange() = default;
 
   bool operator==(const ProguardLineRange& other) const;
 
