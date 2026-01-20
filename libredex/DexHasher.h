@@ -60,7 +60,9 @@ class DexClassHasher final {
 };
 
 // Hashes just the method's code (IRCode), excluding method signature/class.
+// Debug info and source blocks are excluded.
 // Useful for comparing method bodies across different classes.
+// This is a hashing utility and not invoked after every pass.
 class DexMethodHasher final {
  public:
   explicit DexMethodHasher(const DexMethod* method);

@@ -104,3 +104,69 @@ TEST_F(DexHasherTest, MethodHashDiffersForDifferentOpcodes) {
 
   EXPECT_NE(hash1.code_hash, hash2.code_hash);
 }
+
+TEST_F(DexHasherTest, MethodHashIgnoresDebugInfo) {
+  // Methods with identical instructions but different debug info should have
+  // the same code_hash.
+  auto* const method1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.withDebug:()I"
+      (
+        (.pos "LFoo;.withDebug:()I" "Foo.java" 10)
+        (const v0 42)
+        (.pos "LFoo;.withDebug:()I" "Foo.java" 11)
+        (return v0)
+      )
+    )
+  )");
+
+  auto* const method2 = assembler::method_from_string(R"(
+    (method (public static) "LBar;.noDebug:()I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  method1->get_code()->build_cfg();
+  method2->get_code()->build_cfg();
+
+  const auto hash1 = hashing::DexMethodHasher(method1).run();
+  const auto hash2 = hashing::DexMethodHasher(method2).run();
+
+  EXPECT_EQ(hash1.code_hash, hash2.code_hash)
+      << "Debug info should not affect code_hash";
+}
+
+TEST_F(DexHasherTest, MethodHashIgnoresSourceBlocks) {
+  // Methods with identical instructions but different source blocks should have
+  // the same code_hash.
+  auto* const method1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.withSourceBlock:()I"
+      (
+        (.src_block "LFoo;.withSourceBlock:()I" 0)
+        (const v0 42)
+        (.src_block "LFoo;.withSourceBlock:()I" 1)
+        (return v0)
+      )
+    )
+  )");
+
+  auto* const method2 = assembler::method_from_string(R"(
+    (method (public static) "LBar;.noSourceBlock:()I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  method1->get_code()->build_cfg();
+  method2->get_code()->build_cfg();
+
+  const auto hash1 = hashing::DexMethodHasher(method1).run();
+  const auto hash2 = hashing::DexMethodHasher(method2).run();
+
+  EXPECT_EQ(hash1.code_hash, hash2.code_hash)
+      << "Source blocks should not affect code_hash";
+}
