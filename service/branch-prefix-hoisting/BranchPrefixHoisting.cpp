@@ -10,6 +10,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "GraphUtil.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -93,6 +94,62 @@ bool is_block_eligible(IRInstruction* last_insn) {
 
 bool is_insn_eligible(const IRInstruction* insn) {
   auto op = insn->opcode();
+  // In the case of instrumented builds, we cannot hoist
+  // any instruction that may throw.
+  // For example consider the following
+  //                  SB1
+  //                   |
+  //                -------
+  //               |       |
+  //               SB2     SB3
+  //               T1      T1
+  //               SB4     SB5
+  //               NT1     NT1
+  //               ...     ...
+  // If we were to hoist up to NT1, there is no way to arrange the sourceblocks
+  // such that we could distinguish the difference one branch being hot and the
+  // other cold
+  //
+  // For example, pulling/copying any source blocks up as in
+  //                  SB1
+  //                  SB2
+  //                  SB3
+  //                  T1
+  //                  SB4
+  //                  SB5
+  //                  NT1
+  //                   |
+  //                -------
+  //               |       |
+  //               ...     ...
+  // or
+  //                  SB1
+  //                  SB2
+  //                  SB3
+  //                   |
+  //                -------
+  //               |       |
+  //               T1      T1
+  //               SB4     SB5
+  //               NT1     NT1
+  //               ...     ...
+  // Would completely eliminate being able to have profiling information
+  // per-branch if the instruction throws.
+  //
+  // The other alternative of not copying source blocks at all
+  //                  SB1
+  //                  T1
+  //                  NT1
+  //                   |
+  //                -------
+  //               |       |
+  //               SB2     SB3
+  //               SB4     SB5
+  //               ...     ...
+  // Would lose the ability to tell if T1 throws or not.
+  if (g_redex->instrument_mode && opcode::may_throw(op)) {
+    return false;
+  }
   return !opcode::is_branch(op) && !opcode::is_throw(op);
 }
 
@@ -376,7 +433,14 @@ size_t hoist_insns_for_block(
             // instructions. It is safe to do so, as no "additional" control
             // flow is being introduced, such that the SBs in the old block will
             // give the precise information.
-            if (any_throw) {
+            //
+            // In the case of instrumented builds, we do not hoist any
+            // instructions that may throw. Thus, we shouldn't copy any source
+            // blocks because they wouldn't correctly track the branching
+            // behavior that ultimately happens. As long as none of the hoisted
+            // instructions throw, we can be sure that one of the successor
+            // blocks will be hit and the profiling will work correctly.
+            if (any_throw && !g_redex->instrument_mode) {
               cfg.insert_before(insert_it,
                                 std::make_unique<SourceBlock>(*it->src_block));
             }
