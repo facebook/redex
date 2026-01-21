@@ -384,10 +384,25 @@ void PatchingCandidates::apply_patching(Stats& class_stats) {
   }
 }
 
+// Kotlin enum constructors have two synthetic parameters prepended by the
+// compiler: (String name, int ordinal). User-defined parameters start at
+// index 2. This function propagates typedef annotations from the logical
+// user-param position to the actual bytecode position (offset by 2).
+//
+// Example:
+//   Source:   enum class MyEnum(@TypedefAnno val value: Int)
+//   Bytecode: <init>(String name, int ordinal, int value)
+//                    ^0           ^1           ^2
+//
+// The annotation found at logical index 0 needs to be copied to bytecode
+// index 2.
 void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
                                                 Stats& class_stats) {
-  const auto& ctors = cls->get_ctors();
-  for (auto* ctor : ctors) {
+  // Kotlin enum constructors prepend (String name, int ordinal) before
+  // user-defined parameters.
+  constexpr size_t kKotlinEnumSyntheticParamCount = 2;
+
+  for (auto* ctor : cls->get_ctors()) {
     if (is_synthetic(ctor)) {
       continue;
     }
@@ -396,25 +411,31 @@ void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
     if (param_annos == nullptr) {
       continue;
     }
+
     const DexTypeList* args = ctor->get_proto()->get_args();
-    for (const auto& panno : *param_annos) {
+    for (const auto& [param_idx, anno_set] : *param_annos) {
       auto annotation = type_inference::get_typedef_annotation(
-          panno.second->get_annotations(), m_typedef_annos);
+          anno_set->get_annotations(), m_typedef_annos);
       if (annotation == boost::none) {
         continue;
       }
-      size_t patch_idx = panno.first + 2;
+
+      // Offset by synthetic param count to get the actual bytecode position.
+      size_t patch_idx = param_idx + kKotlinEnumSyntheticParamCount;
       if (patch_idx >= args->size()) {
         continue;
       }
-      if (!type::is_int(args->at(patch_idx)) &&
-          args->at(patch_idx) != type::java_lang_String()) {
+
+      // Only patch parameters that are valid typedef targets (int or String).
+      const DexType* param_type = args->at(patch_idx);
+      if (!type::is_int(param_type) && param_type != type::java_lang_String()) {
         continue;
       }
+
       if (add_param_annotation(ctor, *annotation, patch_idx, class_stats)) {
         TRACE(TAC, 2,
               "[patcher] Fixed Kotlin enum ctor param w/ %s at %zu on %s",
-              SHOW(panno.second), patch_idx, SHOW(ctor));
+              SHOW(anno_set), patch_idx, SHOW(ctor));
       }
     }
   }
