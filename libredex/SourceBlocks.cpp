@@ -1465,19 +1465,31 @@ size_t hot_all_children_cold(Block* block) {
   }
 
   bool has_successor = false;
+  std::vector<float> summed_values(last_sb_before_throw->vals_size);
   for (auto* successor : block->succs()) {
     auto* first_sb_succ =
         source_blocks::get_first_source_block(successor->src());
     has_successor = true;
-    // This means that for this current hot block (with respect to the last
-    // source block of the hot block), there exists at least one successor
-    // that is hot, therefore this not a violation
-    if (has_source_block_positive_val(first_sb_succ)) {
-      return 0;
+    if (first_sb_succ != nullptr) {
+      for (uint32_t i = 0; i < std::min(last_sb_before_throw->vals_size,
+                                        first_sb_succ->vals_size);
+           i++) {
+        summed_values[i] += first_sb_succ->get_val(i).get_value_or(0);
+      }
     }
   }
-  // Only blocks with successors should have this count as a violation
-  return has_successor ? 1 : 0;
+  if (!has_successor) {
+    return 0;
+  }
+  for (uint32_t i = 0; i < last_sb_before_throw->vals_size; i++) {
+    // This means that for this current hot block (with respect to the last
+    // source block of the hot block), the sum of the hit values of its children
+    // must be greater or equal to its hit values
+    if (summed_values[i] < last_sb_before_throw->get_val(i).get_value_or(0)) {
+      return 1;
+    }
+  }
+  return 0;
 }
 
 size_t hot_callee_all_cold_callers(call_graph::NodeId node,
