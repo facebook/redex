@@ -1,0 +1,4 @@
+interaction,appear#
+ColdStart,4
+name,profiled_srcblks_exprs
+Lcom/facebook/redextest/SourceBlocksTest$IDomBlockCounting;.idom:(I)V,(1:0.0 g(2:0.0 g(1:0.0)) b(1:0.0 g))

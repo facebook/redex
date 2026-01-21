@@ -874,6 +874,15 @@ TEST_F(SourceBlocksTest, fix_hot_method_cold_entry_violations_test) {
     set_fix_violations(isbp);
   });
 
+  {
+    for (auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      m->get_code()->build_cfg();
+    }
+  }
+
   UnorderedMap<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/"
        "SourceBlocksTest$ViolationsFixTest;.hot_method:()V",
@@ -1091,6 +1100,33 @@ TEST_F(SourceBlocksTest, chain_and_dom_fix_thrower_test) {
       }
     }
   }
+}
+
+TEST_F(SourceBlocksTest, test_counting_with_idom_violations) {
+  auto* profile_path = std::getenv("idom-counting-violations");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto* type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$IDomBlockCounting;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+  });
+
+  auto* method = cls->find_method_from_simple_deobfuscated_name("idom");
+  method->get_code()->build_cfg();
+  auto violations = source_blocks::compute(
+      source_blocks::ViolationsHelper::Violation::kChainAndDom,
+      method->get_code()->cfg());
+
+  ASSERT_EQ(violations, 1);
 }
 
 TEST_F(SourceBlocksTest, test_methods_with_intermethod_violations) {

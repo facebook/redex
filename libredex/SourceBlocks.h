@@ -671,6 +671,8 @@ struct ViolationsHelper {
   ViolationsHelper& operator=(ViolationsHelper&& rhs) noexcept;
 };
 
+size_t compute(ViolationsHelper::Violation v, cfg::ControlFlowGraph& cfg);
+
 SourceBlock* get_first_source_block_of_method(const DexMethod* m);
 
 SourceBlock* get_any_first_source_block_of_methods(

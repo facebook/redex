@@ -2897,6 +2897,10 @@ ViolationsHelper& ViolationsHelper::operator=(ViolationsHelper&& rhs) noexcept {
   return *this;
 }
 
+size_t compute(ViolationsHelper::Violation v, cfg::ControlFlowGraph& cfg) {
+  return ViolationsHelper::ViolationsHelperImpl::compute(v, cfg);
+}
+
 SourceBlock* get_first_source_block_of_method(const DexMethod* m) {
   const auto* code = m->get_code();
   if (code->cfg_built()) {
