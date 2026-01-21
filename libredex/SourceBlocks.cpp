@@ -1402,37 +1402,50 @@ size_t count_all_sbs(
   return ret;
 }
 
+struct ViolationsAndPotentialViolations {
+  size_t violations{0};
+  size_t possible_violations{0};
+};
+
 // TODO: Per-interaction stats.
 
-size_t hot_immediate_dom_not_hot(
+ViolationsAndPotentialViolations hot_immediate_dom_not_hot_impl(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
 
   auto* immediate_dominator = dominators.get_idom(block);
   if (immediate_dominator == nullptr) {
-    return 0;
+    return {0, 0};
   }
   auto* first_sb_immediate_dominator =
       source_blocks::get_first_source_block(immediate_dominator);
-  return (first_sb_current_b != nullptr) &&
-                 (first_sb_immediate_dominator != nullptr) &&
-                 is_less_than_for_any_value(first_sb_immediate_dominator,
-                                            first_sb_current_b)
-             ? 1
-             : 0;
+  if ((first_sb_current_b != nullptr) &&
+      (first_sb_immediate_dominator != nullptr) &&
+      is_less_than_for_any_value(first_sb_immediate_dominator,
+                                 first_sb_current_b)) {
+    return {1, 1};
+  } else {
+    return {0, 1};
+  }
 }
 
-size_t hot_no_hot_pred(
+ViolationsAndPotentialViolations hot_immediate_dom_not_hot(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators) {
+  return hot_immediate_dom_not_hot_impl(block, dominators);
+}
+
+ViolationsAndPotentialViolations hot_no_hot_pred(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
   if (!has_source_block_positive_val(first_sb_current_b)) {
-    return 0;
+    return {0, 0};
   }
 
   if (block->preds().empty()) {
-    return 0;
+    return {0, 0};
   }
 
   std::vector<float> summed_values(first_sb_current_b->vals_size);
@@ -1449,19 +1462,19 @@ size_t hot_no_hot_pred(
   }
   for (uint32_t i = 0; i < first_sb_current_b->vals_size; i++) {
     if (summed_values[i] < first_sb_current_b->get_val(i).get_value_or(0)) {
-      return 1;
+      return {1, 1};
     }
   }
-  return 0;
+  return {0, 1};
 }
 
-size_t hot_all_children_cold(Block* block) {
+ViolationsAndPotentialViolations hot_all_children_cold(Block* block) {
   auto* last_sb_before_throw =
       source_blocks::get_last_source_block_if_after_throw(block);
 
   if ((last_sb_before_throw == nullptr) ||
       !has_source_block_positive_val(last_sb_before_throw)) {
-    return 0;
+    return {0, 0};
   }
 
   bool has_successor = false;
@@ -1479,17 +1492,17 @@ size_t hot_all_children_cold(Block* block) {
     }
   }
   if (!has_successor) {
-    return 0;
+    return {0, 0};
   }
   for (uint32_t i = 0; i < last_sb_before_throw->vals_size; i++) {
     // This means that for this current hot block (with respect to the last
     // source block of the hot block), the sum of the hit values of its children
     // must be greater or equal to its hit values
     if (summed_values[i] < last_sb_before_throw->get_val(i).get_value_or(0)) {
-      return 1;
+      return {1, 1};
     }
   }
-  return 0;
+  return {0, 1};
 }
 
 size_t hot_callee_all_cold_callers(call_graph::NodeId node,
@@ -1553,8 +1566,10 @@ constexpr auto binary_transform = [](auto val) { return val > 0 ? 1 : 0; };
 } // namespace
 
 template <typename Fn>
-size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
+ViolationsAndPotentialViolations chain_hot_violations_tmpl(Block* block,
+                                                           const Fn& fn) {
   size_t sum{0};
+  size_t possible_violations{0};
   for (auto& mie : *block) {
     if (mie.type != MFLOW_SOURCE_BLOCK) {
       continue;
@@ -1566,6 +1581,7 @@ size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
       // next SourceBlock.
       auto* next = sb->next.get();
       size_t local_sum{0};
+      size_t local_possible_violations{0};
       for (size_t i = 0; i != sb->vals_size; ++i) {
         auto sb_val = sb->get_val(i);
         auto next_val = next->get_val(i);
@@ -1576,93 +1592,72 @@ size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
         } else if (next_val) {
           ++local_sum;
         }
+        ++local_possible_violations;
       }
       sum += fn(local_sum);
+      possible_violations += fn(local_possible_violations);
     }
   }
 
-  return sum;
+  return {sum, possible_violations};
 }
 
 template <typename Fn>
-size_t hot_method_cold_entry_violations_tmpl(Block* block, const Fn& fn) {
+ViolationsAndPotentialViolations hot_method_cold_entry_violations_tmpl(
+    Block* block, const Fn& fn) {
   size_t sum{0};
+  size_t possible_violations{0};
   if (block->preds().empty()) {
     auto* sb = get_first_source_block(block);
     if (sb != nullptr) {
-      sb->foreach_val([&sum](const auto& val) {
+      sb->foreach_val([&sum, &possible_violations](const auto& val) {
         if (val && val->appear100 != 0 && val->val == 0) {
           sum++;
         }
+        possible_violations++;
       });
     }
   }
   sum = fn(sum);
-  return sum;
+  possible_violations = fn(possible_violations);
+  return {sum, possible_violations};
 }
 
-template <typename Fn>
-size_t hot_all_children_cold_violations_tmpl(Block* block, const Fn& fn) {
-  size_t sum{0};
-
-  auto* last_sb_before_throw =
-      source_blocks::get_last_source_block_if_after_throw(block);
-
-  if (last_sb_before_throw &&
-      has_source_block_positive_val(last_sb_before_throw)) {
-    bool has_successor = false;
-    bool has_cold_child = true;
-    for (auto* successor : block->succs()) {
-      auto* first_sb_succ =
-          source_blocks::get_first_source_block(successor->src());
-      has_successor = true;
-      if (has_source_block_positive_val(first_sb_succ)) {
-        has_cold_child = false;
-        break;
-      }
-    }
-    if (has_successor && has_cold_child) {
-      sum++;
-    }
-  }
-  sum = fn(sum);
-  return sum;
-}
-
-size_t chain_hot_violations(
+ViolationsAndPotentialViolations chain_hot_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   return chain_hot_violations_tmpl(block, identity_transform);
 }
 
-size_t chain_hot_one_violations(
+ViolationsAndPotentialViolations chain_hot_one_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   return chain_hot_violations_tmpl(block, binary_transform);
 }
 
-size_t hot_method_cold_entry_violations(
+ViolationsAndPotentialViolations hot_method_cold_entry_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   return hot_method_cold_entry_violations_tmpl(block, identity_transform);
 }
 
-size_t hot_method_cold_entry_block_violations(
+ViolationsAndPotentialViolations hot_method_cold_entry_block_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   return hot_method_cold_entry_violations_tmpl(block, binary_transform);
 }
 
-size_t hot_all_children_cold_violations(
+ViolationsAndPotentialViolations hot_all_children_cold_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return hot_all_children_cold_violations_tmpl(block, identity_transform);
+  return hot_all_children_cold(block);
 };
 
 struct ChainAndDomState {
   const SourceBlock* last{nullptr};
   cfg::Block* dom_block{nullptr};
   size_t violations{0};
+  size_t possible_violations{0};
 };
 
 template <uint32_t kMaxInteraction>
@@ -1700,13 +1695,14 @@ void chain_and_dom_update(
     if (cold_precedes_hot || hot_precedes_cold) {
       state.violations++;
     }
+    state.possible_violations++;
   }
 
   state.last = sb;
 }
 
 template <uint32_t kMaxInteraction>
-size_t chain_and_dom_violations_impl(
+ViolationsAndPotentialViolations chain_and_dom_violations_impl(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
   ChainAndDomState state{};
@@ -1733,17 +1729,17 @@ size_t chain_and_dom_violations_impl(
     }
   }
 
-  return state.violations;
+  return {state.violations, state.possible_violations};
 }
 
-size_t chain_and_dom_violations(
+ViolationsAndPotentialViolations chain_and_dom_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
   return chain_and_dom_violations_impl<std::numeric_limits<uint32_t>::max()>(
       block, dom);
 }
 
-size_t chain_and_dom_violations_coldstart(
+ViolationsAndPotentialViolations chain_and_dom_violations_coldstart(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
   return chain_and_dom_violations_impl<1>(block, dom);
@@ -1752,27 +1748,31 @@ size_t chain_and_dom_violations_coldstart(
 // Ugly but necessary for constexpr below.
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
+using ViolationCounterFnPtr = ViolationsAndPotentialViolations (*)(
+    Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 11> gCounters =
-    {{{"~blocks~count", &count_blocks},
-      {"~blocks~with~source~blocks", &count_block_has_sbs},
-      {"~blocks~with~incomplete-source~blocks",
-       &count_block_has_incomplete_sbs},
-      {"~assessment~source~blocks~total", &count_all_sbs},
-      {"~flow~violation~in~chain", &chain_hot_violations},
-      {"~flow~violation~in~chain~one", &chain_hot_one_violations},
-      {"~flow~violation~chain~and~dom", &chain_and_dom_violations},
-      {"~flow~violation~chain~and~dom.cold_start",
-       &chain_and_dom_violations_coldstart},
-      {"~flow~violation~seen~method~cold~entry",
-       &hot_method_cold_entry_violations},
-      {"~flow~violation~seen~method~cold~entry~blocks",
-       &hot_method_cold_entry_block_violations},
-      {"~flow~violation~hot~all~children~cold",
-       &hot_all_children_cold_violations}}};
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 4> gCounters = {
+    {{"~blocks~count", &count_blocks},
+     {"~blocks~with~source~blocks", &count_block_has_sbs},
+     {"~blocks~with~incomplete-source~blocks", &count_block_has_incomplete_sbs},
+     {"~assessment~source~blocks~total", &count_all_sbs}}};
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 2>
-    gCountersNonEntry = {{
+constexpr std::array<std::pair<std::string_view, ViolationCounterFnPtr>, 7>
+    gViolationCounters = {
+        {{"~flow~violation~in~chain", &chain_hot_violations},
+         {"~flow~violation~in~chain~one", &chain_hot_one_violations},
+         {"~flow~violation~chain~and~dom", &chain_and_dom_violations},
+         {"~flow~violation~chain~and~dom.cold_start",
+          &chain_and_dom_violations_coldstart},
+         {"~flow~violation~seen~method~cold~entry",
+          &hot_method_cold_entry_violations},
+         {"~flow~violation~seen~method~cold~entry~blocks",
+          &hot_method_cold_entry_block_violations},
+         {"~flow~violation~hot~all~children~cold",
+          &hot_all_children_cold_violations}}};
+
+constexpr std::array<std::pair<std::string_view, ViolationCounterFnPtr>, 2>
+    gViolationCountersNonEntry = {{
         {"~flow~violation~idom", &hot_immediate_dom_not_hot},
         {"~flow~violation~direct~predecessors", &hot_no_hot_pred},
     }};
@@ -1782,6 +1782,7 @@ struct SourceBlocksStats {
 
   struct Data {
     size_t count{0};
+    size_t possible{0};
     size_t methods{0};
     size_t min{std::numeric_limits<size_t>::max()};
     size_t max{0};
@@ -1794,6 +1795,7 @@ struct SourceBlocksStats {
 
     Data& operator+=(const Data& rhs) {
       count += rhs.count;
+      possible += rhs.possible;
       methods += rhs.methods;
 
       min = std::min(min, rhs.min);
@@ -1835,7 +1837,8 @@ struct SourceBlocksStats {
   };
 
   std::array<Data, gCounters.size()> global{};
-  std::array<Data, gCountersNonEntry.size()> non_entry{};
+  std::array<Data, gViolationCounters.size()> global_violations{};
+  std::array<Data, gViolationCountersNonEntry.size()> non_entry_violations{};
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
     methods_with_sbs += that.methods_with_sbs;
@@ -1844,8 +1847,12 @@ struct SourceBlocksStats {
       global[i] += that.global[i];
     }
 
-    for (size_t i = 0; i != non_entry.size(); ++i) {
-      non_entry[i] += that.non_entry[i];
+    for (size_t i = 0; i != global_violations.size(); ++i) {
+      global_violations[i] += that.global_violations[i];
+    }
+
+    for (size_t i = 0; i != non_entry_violations.size(); ++i) {
+      non_entry_violations[i] += that.non_entry_violations[i];
     }
 
     return *this;
@@ -1859,7 +1866,11 @@ struct SourceBlocksStats {
       data.fill_derived(m);
     }
 
-    for (auto& data : non_entry) {
+    for (auto& data : global_violations) {
+      data.fill_derived(m);
+    }
+
+    for (auto& data : non_entry_violations) {
       data.fill_derived(m);
     }
   }
@@ -1886,10 +1897,18 @@ void track_source_block_coverage(ScopedMetrics& sm,
           for (size_t i = 0; i != gCounters.size(); ++i) {
             ret.global[i].count += (*gCounters[i].second)(block, dominators);
           }
+          for (size_t i = 0; i != gViolationCounters.size(); ++i) {
+            auto [violations, possible_violations] =
+                (*gViolationCounters[i].second)(block, dominators);
+            ret.global_violations[i].count += violations;
+            ret.global_violations[i].possible += possible_violations;
+          }
           if (block != cfg.entry_block()) {
-            for (size_t i = 0; i != gCountersNonEntry.size(); ++i) {
-              ret.non_entry[i].count +=
-                  (*gCountersNonEntry[i].second)(block, dominators);
+            for (size_t i = 0; i != gViolationCountersNonEntry.size(); ++i) {
+              auto [violations, possible_violations] =
+                  (*gViolationCountersNonEntry[i].second)(block, dominators);
+              ret.non_entry_violations[i].count += violations;
+              ret.non_entry_violations[i].possible += possible_violations;
             }
           }
         }
@@ -1908,13 +1927,17 @@ void track_source_block_coverage(ScopedMetrics& sm,
 
   sm.set_metric("~assessment~methods~with~sbs", stats.methods_with_sbs);
 
-  auto data_metric = [&sm](const std::string_view& name, const auto& data) {
+  auto data_metric = [&sm](const std::string_view& name, const auto& data,
+                           bool violation) {
     sm.set_metric(name, data.count);
 
     auto scope = sm.scope(std::string(name));
     sm.set_metric("methods", data.methods);
     sm.set_metric("min", data.min);
     sm.set_metric("max", data.max);
+    if (violation) {
+      sm.set_metric("possible", data.possible);
+    }
 
     auto min_max = [&](const auto& m, const char* name) {
       if (m) {
@@ -1926,10 +1949,14 @@ void track_source_block_coverage(ScopedMetrics& sm,
     min_max(data.max_method, "max_method");
   };
   for (size_t i = 0; i != gCounters.size(); ++i) {
-    data_metric(gCounters[i].first, stats.global[i]);
+    data_metric(gCounters[i].first, stats.global[i], false);
   }
-  for (size_t i = 0; i != gCountersNonEntry.size(); ++i) {
-    data_metric(gCountersNonEntry[i].first, stats.non_entry[i]);
+  for (size_t i = 0; i != gViolationCounters.size(); ++i) {
+    data_metric(gViolationCounters[i].first, stats.global_violations[i], true);
+  }
+  for (size_t i = 0; i != gViolationCountersNonEntry.size(); ++i) {
+    data_metric(gViolationCountersNonEntry[i].first,
+                stats.non_entry_violations[i], true);
   }
 }
 
@@ -2204,7 +2231,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
 
     for (auto* b : cfg.blocks()) {
-      sum += hot_immediate_dom_not_hot(b, dom);
+      sum += hot_immediate_dom_not_hot(b, dom).violations;
     }
     return sum;
   }
@@ -2218,7 +2245,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
 
     for (auto* b : cfg.blocks()) {
-      sum += chain_and_dom_violations(b, dom);
+      sum += chain_and_dom_violations(b, dom).violations;
     }
     return sum;
   }
@@ -2265,7 +2292,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
 
     for (auto* b : cfg.blocks()) {
-      sum += hot_no_hot_pred(b, dom);
+      sum += hot_no_hot_pred(b, dom).violations;
     }
     return sum;
   }
@@ -2276,7 +2303,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
     cfg.remove_unreachable_blocks();
 
     for (auto* b : cfg.blocks()) {
-      sum += hot_all_children_cold(b);
+      sum += hot_all_children_cold(b).violations;
     }
     return sum;
   }
