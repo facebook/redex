@@ -1156,6 +1156,33 @@ TEST_F(SourceBlocksTest, test_counting_with_hot_no_hot_pred_violations) {
   ASSERT_EQ(violations, 2);
 }
 
+TEST_F(SourceBlocksTest, test_hot_all_children_cold_counting_violations) {
+  auto* profile_path = std::getenv("hot-all-children-cold-counting-violations");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto* type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$IDomBlockCounting;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+  });
+
+  auto* method = cls->find_method_from_simple_deobfuscated_name("idom");
+  method->get_code()->build_cfg();
+  auto violations = source_blocks::compute(
+      source_blocks::ViolationsHelper::Violation::KHotAllChildrenCold,
+      method->get_code()->cfg());
+
+  ASSERT_EQ(violations, 1);
+}
+
 TEST_F(SourceBlocksTest, test_methods_with_intermethod_violations) {
   auto* profile_path = std::getenv("intermethod-violations");
   ASSERT_NE(profile_path, nullptr) << "Missing profile path.";

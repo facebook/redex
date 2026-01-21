@@ -139,7 +139,6 @@ public class SourceBlocksTest {
     static class IDomBlockCounting {
 
     public void idom(int x) {
-      System.out.println("start");
       if (x == 1) {
         System.out.println("x = 1");
       } else {

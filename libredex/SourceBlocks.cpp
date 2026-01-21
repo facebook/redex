@@ -1468,7 +1468,7 @@ size_t hot_all_children_cold(Block* block) {
   std::vector<float> summed_values(last_sb_before_throw->vals_size);
   for (auto* successor : block->succs()) {
     auto* first_sb_succ =
-        source_blocks::get_first_source_block(successor->src());
+        source_blocks::get_first_source_block(successor->target());
     has_successor = true;
     if (first_sb_succ != nullptr) {
       for (uint32_t i = 0; i < std::min(last_sb_before_throw->vals_size,
