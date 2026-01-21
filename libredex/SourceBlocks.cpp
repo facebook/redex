@@ -1423,7 +1423,6 @@ size_t hot_immediate_dom_not_hot(
              : 0;
 }
 
-// TODO: This needs to be adapted to sum up the predecessors.
 size_t hot_no_hot_pred(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
@@ -1436,14 +1435,24 @@ size_t hot_no_hot_pred(
     return 0;
   }
 
+  std::vector<float> summed_values(first_sb_current_b->vals_size);
   for (auto* predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
-    if (has_source_block_positive_val(first_sb_pred)) {
-      return 0;
+    if (first_sb_pred != nullptr) {
+      for (uint32_t i = 0; i < std::min(first_sb_current_b->vals_size,
+                                        first_sb_pred->vals_size);
+           i++) {
+        summed_values[i] += first_sb_pred->get_val(i).get_value_or(0);
+      }
     }
   }
-  return 1;
+  for (uint32_t i = 0; i < first_sb_current_b->vals_size; i++) {
+    if (summed_values[i] < first_sb_current_b->get_val(i).get_value_or(0)) {
+      return 1;
+    }
+  }
+  return 0;
 }
 
 size_t hot_all_children_cold(Block* block) {
