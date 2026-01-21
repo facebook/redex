@@ -7,10 +7,13 @@
 
 #pragma once
 
+#include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "MethodProfiles.h"
 #include "Pass.h"
+
+class UniqueMethodTracker;
 
 class PrintKotlinStats : public Pass {
 
@@ -115,13 +118,12 @@ class PrintKotlinStats : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   Stats handle_method(DexMethod* method);
   Stats handle_class(DexClass* cls,
-                     const method_profiles::MethodProfiles* method_profiles);
+                     const method_profiles::MethodProfiles* method_profiles,
+                     UniqueMethodTracker& unique_lambda_tracker);
   Stats get_stats() { return m_stats; }
 
  private:
   UnorderedSet<DexMethodRef*> m_kotlin_null_assertions;
-  InsertOnlyConcurrentSet<std::string>
-      m_kotlin_unique_trivial_non_capturing_lambdas;
   DexType* m_kotlin_lambdas_base = nullptr;
   DexType* m_kotlin_coroutin_continuation_base = nullptr;
   const DexString* m_instance = nullptr;

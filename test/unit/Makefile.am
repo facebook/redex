@@ -178,6 +178,7 @@ check_PROGRAMS = \
     type_reference_test \
     type_system_test \
     type_util_test \
+    unique_method_tracker_test \
     up_code_motion_test \
     used_vars_test \
     virt_scope_test \
@@ -528,6 +529,8 @@ type_system_test_SOURCES = TypeSystemTest.cpp ScopeHelper.cpp
 type_system_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 type_util_test_SOURCES = TypeUtilTest.cpp
+
+unique_method_tracker_test_SOURCES = UniqueMethodTrackerTest.cpp
 
 up_code_motion_test_SOURCES = UpCodeMotionTest.cpp
 up_code_motion_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

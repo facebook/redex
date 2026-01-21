@@ -14,6 +14,7 @@
 #include "PassManager.h"
 #include "Show.h"
 #include "TypeUtil.h"
+#include "UniqueMethodTracker.h"
 #include "Walkers.h"
 
 namespace {
@@ -27,15 +28,6 @@ constexpr const char* KOTLIN_LAMBDA = "Lkotlin/jvm/internal/Lambda;";
 constexpr const char* DI_BASE = "Lcom/facebook/inject/AbstractLibraryModule;";
 constexpr const char* CONTINUATION_IMPL =
     "Lkotlin/coroutines/jvm/internal/ContinuationImpl;";
-
-// Serialize cfg code to a string.
-std::string serialize_cfg_code(const cfg::ControlFlowGraph& cfg) {
-  std::ostringstream ss;
-  for (const auto& mie : cfg::ConstInstructionIterable(cfg)) {
-    ss << show(mie.insn) << '\n';
-  }
-  return ss.str();
-}
 
 // Check if cls is from Kotlin source
 bool is_kotlin_class(DexClass* cls) {
@@ -169,17 +161,23 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
   auto& method_profiles = conf.get_method_profiles();
   const method_profiles::MethodProfiles* method_profiles_ptr =
       method_profiles.has_stats() ? &method_profiles : nullptr;
+  UniqueMethodTracker unique_lambda_tracker;
   std::mutex mtx;
   walk::parallel::classes(scope, [&](DexClass* cls) {
-    auto local_stats = handle_class(cls, method_profiles_ptr);
+    auto local_stats =
+        handle_class(cls, method_profiles_ptr, unique_lambda_tracker);
     std::lock_guard g(mtx);
     m_stats += local_stats;
   });
+  m_stats.kotlin_unique_trivial_non_capturing_lambdas =
+      unique_lambda_tracker.size();
   m_stats.report(mgr);
 }
 
 PrintKotlinStats::Stats PrintKotlinStats::handle_class(
-    DexClass* cls, const method_profiles::MethodProfiles* method_profiles) {
+    DexClass* cls,
+    const method_profiles::MethodProfiles* method_profiles,
+    UniqueMethodTracker& unique_lambda_tracker) {
   Stats stats;
   bool is_lambda = false;
   if (cls->get_super_class() == m_kotlin_lambdas_base) {
@@ -259,13 +257,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
       DexMethod* invoke = type::get_kotlin_lambda_invoke_method(cls);
       always_assert(invoke != nullptr);
       always_assert(invoke->get_code()->cfg_built());
-      bool inserted;
-      std::tie(std::ignore, inserted) =
-          m_kotlin_unique_trivial_non_capturing_lambdas.insert(
-              serialize_cfg_code(invoke->get_code()->cfg()));
-      if (inserted) {
-        stats.kotlin_unique_trivial_non_capturing_lambdas++;
-      }
+      unique_lambda_tracker.insert(invoke);
     }
     if (is_anonymous(cls->get_name()->str())) {
       stats.kotlin_anonymous_class++;
