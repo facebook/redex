@@ -442,39 +442,39 @@ void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
 }
 
 // https://kotlinlang.org/docs/fun-interfaces.html#sam-conversions
-// sam conversions appear in Kotlin and provide a more concise way to override
-// methods. This method handles sam conversiona and all synthetic methods that
-// override methods with return or parameter annotations
-bool TypedefAnnoPatcher::patch_if_overriding_annotated_methods(
-    DexMethod* m, Stats& class_stats) {
+// SAM conversions appear in Kotlin and provide a more concise way to override
+// methods. This function collects annotation candidates for synthetic methods
+// that override methods with return or parameter annotations.
+void TypedefAnnoPatcher::collect_overriding_method_candidates(
+    DexMethod* m, PatchingCandidates& candidates) {
   DexClass* cls = type_class(m->get_class());
   if (!klass::maybe_anonymous_class(cls)) {
-    return false;
+    return;
   }
 
   auto overriddens = mog::get_overridden_methods(m_method_override_graph, m,
                                                  true /*include_interfaces*/);
   for (const auto* overridden : UnorderedIterable(overriddens)) {
+    // Collect return annotation candidate.
     auto return_anno = type_inference::get_typedef_anno_from_member(
         overridden, m_typedef_annos);
-
     if (return_anno != boost::none) {
-      add_annotation(m, *return_anno, m_anno_patching_mutex, class_stats);
+      candidates.add_method_candidate(m, *return_anno);
     }
 
+    // Collect parameter annotation candidates.
     if (overridden->get_param_anno() == nullptr) {
       continue;
     }
-    for (auto const& param_anno : *overridden->get_param_anno()) {
+    for (const auto& [param_idx, anno_set] : *overridden->get_param_anno()) {
       auto annotation = type_inference::get_typedef_annotation(
-          param_anno.second->get_annotations(), m_typedef_annos);
+          anno_set->get_annotations(), m_typedef_annos);
       if (annotation == boost::none) {
         continue;
       }
-      add_param_annotation(m, *annotation, param_anno.first, class_stats);
+      candidates.add_param_candidate(m, *annotation, param_idx);
     }
   }
-  return false;
 }
 
 void TypedefAnnoPatcher::run(const Scope& scope) {
@@ -492,9 +492,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
           for (auto* m : cls->get_all_methods()) {
             collect_param_candidates(m, candidates);
             collect_return_candidates(m, candidates);
-            patch_if_overriding_annotated_methods(
-                m,
-                class_stats.patch_synth_methods_overriding_annotated_methods);
+            collect_overriding_method_candidates(m, candidates);
             if (is_constructor(m) &&
                 has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
               patch_synth_cls_fields_from_ctor_param(
@@ -1098,30 +1096,6 @@ void TypedefAnnoPatcher::print_stats(PassManager& mgr) {
                               .num_patched_fields_and_methods;
   total_param_patched +=
       m_patcher_stats.patch_parameters_and_returns.num_patched_parameters;
-
-  mgr.set_metric(
-      "patch_synth_methods_overriding_annotated_methods field/methods",
-      m_patcher_stats.patch_synth_methods_overriding_annotated_methods
-          .num_patched_fields_and_methods);
-  mgr.set_metric(
-      "patch_synth_methods_overriding_annotated_methods params",
-      m_patcher_stats.patch_synth_methods_overriding_annotated_methods
-          .num_patched_parameters);
-  TRACE(TAC, 1,
-        "[patcher] patch_synth_methods_overriding_annotated_methods "
-        "field/methods %zu",
-        m_patcher_stats.patch_synth_methods_overriding_annotated_methods
-            .num_patched_fields_and_methods);
-  TRACE(TAC, 1,
-        "[patcher] patch_synth_methods_overriding_annotated_methods params %zu",
-        m_patcher_stats.patch_synth_methods_overriding_annotated_methods
-            .num_patched_parameters);
-  total_member_patched +=
-      m_patcher_stats.patch_synth_methods_overriding_annotated_methods
-          .num_patched_fields_and_methods;
-  total_param_patched +=
-      m_patcher_stats.patch_synth_methods_overriding_annotated_methods
-          .num_patched_parameters;
 
   mgr.set_metric("patch_synth_cls_fields_from_ctor_param field/methods",
                  m_patcher_stats.patch_synth_cls_fields_from_ctor_param

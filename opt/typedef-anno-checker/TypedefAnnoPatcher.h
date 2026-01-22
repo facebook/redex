@@ -43,7 +43,6 @@ struct PatcherStats {
   Stats fix_kt_enum_ctor_param;
   Stats patch_lambdas;
   Stats patch_parameters_and_returns;
-  Stats patch_synth_methods_overriding_annotated_methods;
   Stats patch_synth_cls_fields_from_ctor_param;
   Stats patch_enclosing_lambda_fields;
   Stats patch_ctor_params_from_synth_cls_fields;
@@ -55,8 +54,6 @@ struct PatcherStats {
     fix_kt_enum_ctor_param += other.fix_kt_enum_ctor_param;
     patch_lambdas += other.patch_lambdas;
     patch_parameters_and_returns += other.patch_parameters_and_returns;
-    patch_synth_methods_overriding_annotated_methods +=
-        other.patch_synth_methods_overriding_annotated_methods;
     patch_synth_cls_fields_from_ctor_param +=
         other.patch_synth_cls_fields_from_ctor_param;
     patch_enclosing_lambda_fields += other.patch_enclosing_lambda_fields;
@@ -139,7 +136,8 @@ class TypedefAnnoPatcher {
   void print_stats(PassManager& mgr);
 
  private:
-  bool patch_if_overriding_annotated_methods(DexMethod* m, Stats& class_stats);
+  void collect_overriding_method_candidates(DexMethod* m,
+                                            PatchingCandidates& candidates);
 
   void collect_param_candidates(DexMethod* method,
                                 PatchingCandidates& candidates);
