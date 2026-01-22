@@ -10,7 +10,6 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "KotlinNullCheckMethods.h"
-#include "KotlinStatelessLambdaSingletonRemovalPass.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
@@ -102,27 +101,6 @@ bool is_method_hot_by_call_count(
   return false;
 }
 
-// Get the hot call_count threshold for lambda singleton removal from config.
-float get_hot_lambda_call_count_threshold(const JsonWrapper& json_config) {
-  return static_cast<float>(
-      json_config
-          .get("KotlinStatelessLambdaSingletonRemovalPass", Json::Value())
-          .get("exclude_hot_call_count_threshold",
-               KotlinStatelessLambdaSingletonRemovalPass::
-                   kDefaultExcludeHotCallCountThreshold)
-          .asDouble());
-}
-
-// Wrapper for hot lambda detection using config-based threshold.
-bool is_hot_lambda_by_call_count(
-    const DexMethod* method,
-    const method_profiles::MethodProfiles* method_profiles,
-    const JsonWrapper& json_config) {
-  return is_method_hot_by_call_count(
-      method, method_profiles,
-      get_hot_lambda_call_count_threshold(json_config));
-}
-
 constexpr float kHotDefaultArgCallCountThreshold = 5.0f;
 
 // Wrapper for hot default arg detection using fixed threshold.
@@ -189,14 +167,12 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
   });
 
   // Handle classes
-  // Get method profiles for hot lambda detection
   auto& method_profiles = conf.get_method_profiles();
   const method_profiles::MethodProfiles* method_profiles_ptr =
-      method_profiles.is_initialized() ? &method_profiles : nullptr;
-  const auto& json_config = conf.get_json_config();
+      method_profiles.has_stats() ? &method_profiles : nullptr;
   std::mutex mtx;
   walk::parallel::classes(scope, [&](DexClass* cls) {
-    auto local_stats = handle_class(cls, method_profiles_ptr, json_config);
+    auto local_stats = handle_class(cls, method_profiles_ptr);
     std::lock_guard g(mtx);
     m_stats += local_stats;
   });
@@ -204,9 +180,7 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
 }
 
 PrintKotlinStats::Stats PrintKotlinStats::handle_class(
-    DexClass* cls,
-    const method_profiles::MethodProfiles* method_profiles,
-    const JsonWrapper& json_config) {
+    DexClass* cls, const method_profiles::MethodProfiles* method_profiles) {
   Stats stats;
   bool is_lambda = false;
   bool is_non_capturing_lambda = false;
@@ -228,17 +202,6 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
       if (is_lambda) {
         stats.kotlin_non_capturing_lambda++;
         is_non_capturing_lambda = true;
-        // Check if the invoke method is hot
-        for (const auto* method : cls->get_vmethods()) {
-          if (method->get_name()->str() == "invoke" &&
-              method->get_code() != nullptr) {
-            if (is_hot_lambda_by_call_count(method, method_profiles,
-                                            json_config)) {
-              stats.kotlin_hot_non_capturing_lambda++;
-            }
-            break;
-          }
-        }
       }
       stats.kotlin_class_with_instance++;
     }
@@ -399,8 +362,6 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("no_of_lazy_delegates", kotlin_lazy_delegates);
   mgr.incr_metric("kotlin_lambdas", kotlin_lambdas);
   mgr.incr_metric("kotlin_non_capturing_lambda", kotlin_non_capturing_lambda);
-  mgr.incr_metric("kotlin_hot_non_capturing_lambda",
-                  kotlin_hot_non_capturing_lambda);
   mgr.incr_metric("kotlin_classes_with_instance", kotlin_class_with_instance);
   mgr.incr_metric("kotlin_class", kotlin_class);
   mgr.incr_metric("Kotlin_anonymous_classes", kotlin_anonymous_class);
@@ -442,8 +403,6 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_lambdas = %zu", kotlin_lambdas);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_non_capturing_lambda = %zu",
         kotlin_non_capturing_lambda);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_non_capturing_lambda = %zu",
-        kotlin_hot_non_capturing_lambda);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class_with_instance = %zuu",
         kotlin_class_with_instance);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class = %zu", kotlin_class);
