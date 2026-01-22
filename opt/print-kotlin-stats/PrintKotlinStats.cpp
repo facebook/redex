@@ -229,23 +229,41 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
         const auto* args = method->get_proto()->get_args();
         always_assert(args->size() > 2);
 
+        bool is_hot = method->get_code() != nullptr &&
+                      source_blocks::method_is_hot(method);
+
         // This also includes arguments that aren't specified as default args
         // at the source code level. We can't reliably have this information.
         switch (args->size() - 2) {
         case 1:
           stats.kotlin_default_arg_1_param++;
+          if (is_hot) {
+            stats.kotlin_hot_default_arg_1_param++;
+          }
           break;
         case 2:
           stats.kotlin_default_arg_2_params++;
+          if (is_hot) {
+            stats.kotlin_hot_default_arg_2_params++;
+          }
           break;
         case 3:
           stats.kotlin_default_arg_3_params++;
+          if (is_hot) {
+            stats.kotlin_hot_default_arg_3_params++;
+          }
           break;
         case 4:
           stats.kotlin_default_arg_4_params++;
+          if (is_hot) {
+            stats.kotlin_hot_default_arg_4_params++;
+          }
           break;
         default:
           stats.kotlin_default_arg_5plus_params++;
+          if (is_hot) {
+            stats.kotlin_hot_default_arg_5plus_params++;
+          }
           break;
         }
       } else if (method->get_name()->str().ends_with("$default")) {
@@ -341,6 +359,16 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_default_arg_4_params", kotlin_default_arg_4_params);
   mgr.incr_metric("kotlin_default_arg_5plus_params",
                   kotlin_default_arg_5plus_params);
+  mgr.incr_metric("kotlin_hot_default_arg_1_param",
+                  kotlin_hot_default_arg_1_param);
+  mgr.incr_metric("kotlin_hot_default_arg_2_params",
+                  kotlin_hot_default_arg_2_params);
+  mgr.incr_metric("kotlin_hot_default_arg_3_params",
+                  kotlin_hot_default_arg_3_params);
+  mgr.incr_metric("kotlin_hot_default_arg_4_params",
+                  kotlin_hot_default_arg_4_params);
+  mgr.incr_metric("kotlin_hot_default_arg_5plus_params",
+                  kotlin_hot_default_arg_5plus_params);
   mgr.incr_metric("kotlin_composable_and_lit_insns",
                   kotlin_composable_and_lit_insns);
   mgr.incr_metric("kotlin_and_lit_insns", kotlin_and_lit_insns);
@@ -371,6 +399,17 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
 
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_insns = %zu",
         kotlin_null_check_insns);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_default_arg_1_param = %zu",
+        kotlin_hot_default_arg_1_param);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_default_arg_2_params = %zu",
+        kotlin_hot_default_arg_2_params);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_default_arg_3_params = %zu",
+        kotlin_hot_default_arg_3_params);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_default_arg_4_params = %zu",
+        kotlin_hot_default_arg_4_params);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_hot_default_arg_5plus_params = %zu",
+        kotlin_hot_default_arg_5plus_params);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: java_public_param_objects = %zu",
         java_public_param_objects);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_public_param_objects = %zu",
