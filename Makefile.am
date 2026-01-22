@@ -297,7 +297,7 @@ libredex_la_SOURCES = \
 	service/field-ops/FieldOpTracker.cpp \
 	service/init-classes/InitClassPruner.cpp \
 	service/init-deps/InitDeps.cpp \
-	service/kotlin-instance-rewrite/KotlinInstanceRewriter.cpp \
+	opt/kotlin-lambda/KotlinInstanceRewriter.cpp \
 	service/local-dce/LocalDce.cpp \
 	service/loop-info/LoopInfo.cpp \
 	service/method-dedup/ConstantLifting.cpp \

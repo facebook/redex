@@ -124,7 +124,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/method-outliner \
 	-I$(top_srcdir)/service/method-merger \
 	-I$(top_srcdir)/service/object-sensitive-dce \
-	-I$(top_srcdir)/service/kotlin-instance-rewrite \
 	-I$(top_srcdir)/service/reduce-boolean-branches \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/regalloc \
