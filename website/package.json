@@ -37,7 +37,9 @@
     "@babel/helpers": "^7.26.10",
     "@babel/runtime-corejs3": "^7.26.10",
     "@babel/runtime": "^7.26.10",
-    "@docusaurus/**/diff": ">=8.0.3"
+    "@docusaurus/**/diff": ">=8.0.3",
+    "lodash": ">=4.17.23",
+    "lodash-es": ">=4.17.23"
   },
   "browserslist": {
     "production": [
