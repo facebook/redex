@@ -63,6 +63,8 @@ namespace {
 class AnalyzerGenerator {
   ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
   ApiLevelAnalyzerState* m_api_level_analyzer_state;
+  BoxedBooleanAnalyzerState m_boxed_boolean_analyzer_state{};
+  EnumFieldAnalyzerState m_enum_field_analyzer_state;
   StringAnalyzerState* m_string_analyzer_state;
   PackageNameState* m_package_name_state;
   const State& m_cp_state;
@@ -78,13 +80,7 @@ class AnalyzerGenerator {
         m_api_level_analyzer_state(api_level_analyzer_state),
         m_string_analyzer_state(string_analyzer_state),
         m_package_name_state(package_name_state),
-        m_cp_state(cp_state) {
-    // Initialize the singletons that `operator()` needs ahead of time to
-    // avoid a data race.
-    static_cast<void>(EnumFieldAnalyzerState::get());
-    static_cast<void>(BoxedBooleanAnalyzerState::get());
-    static_cast<void>(ApiLevelAnalyzerState::get());
-  }
+        m_cp_state(cp_state) {}
 
   std::unique_ptr<IntraproceduralAnalysis> operator()(
       const DexMethod* method,
@@ -115,7 +111,7 @@ class AnalyzerGenerator {
         &m_cp_state, std::move(wps_accessor), code.cfg(),
         CombinedAnalyzer(
             class_under_init, m_immut_analyzer_state, wps_accessor_ptr,
-            EnumFieldAnalyzerState::get(), BoxedBooleanAnalyzerState::get(),
+            m_enum_field_analyzer_state, m_boxed_boolean_analyzer_state,
             m_string_analyzer_state, nullptr, *m_api_level_analyzer_state,
             m_package_name_state, m_immut_analyzer_state, nullptr),
         std::move(env));
@@ -302,10 +298,9 @@ void PassImpl::run(const DexStoresVector& stores,
   // Hold the analyzer state of ImmutableAttributeAnalyzer.
   ImmutableAttributeAnalyzerState immut_analyzer_state;
   immutable_state::analyze_constructors(scope, &immut_analyzer_state);
-  ApiLevelAnalyzerState api_level_analyzer_state =
-      ApiLevelAnalyzerState::get(min_sdk);
-  auto string_analyzer_state = StringAnalyzerState::get();
-  auto package_name_state = PackageNameState::get(package_name);
+  ApiLevelAnalyzerState api_level_analyzer_state{min_sdk};
+  auto string_analyzer_state = StringAnalyzerState::make_default();
+  auto package_name_state = PackageNameState::make(package_name);
   State cp_state;
   auto fp_iter =
       analyze(scope, &immut_analyzer_state, &api_level_analyzer_state,
@@ -319,8 +314,7 @@ void PassImpl::run(const DexStoresVector& stores,
 void PassImpl::eval_pass(DexStoresVector& /*stores*/,
                          ConfigFiles& /*conf*/,
                          PassManager&) {
-  auto string_analyzer_state = StringAnalyzerState::get();
-  string_analyzer_state.set_methods_as_root();
+  StringAnalyzerState::make_default().set_methods_as_root();
 }
 
 void PassImpl::run_pass(DexStoresVector& stores,

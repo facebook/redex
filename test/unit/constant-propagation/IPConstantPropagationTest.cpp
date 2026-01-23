@@ -40,19 +40,23 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
     object_ctor->set_external();
     type_class(type::java_lang_Object())->add_method(object_ctor);
     type_class(type::java_lang_Object())->set_external();
+  }
 
+  static ApiLevelAnalyzerState make_api_level_analyzer_state(int32_t min_sdk) {
     // EnumFieldAnalyzer requires that this method exists
     method::java_lang_Enum_equals();
     DexField::make_field("Landroid/os/Build$VERSION;.SDK_INT:I");
-    m_api_level_analyzer_state = ApiLevelAnalyzerState::get(min_sdk);
+    return ApiLevelAnalyzerState(min_sdk);
   }
 
-  const int min_sdk = 42;
+  static constexpr int MIN_SDK = 42;
   const std::string package_name = "com.facebook.redextest";
   ImmutableAttributeAnalyzerState m_immut_analyzer_state;
-  ApiLevelAnalyzerState m_api_level_analyzer_state;
-  StringAnalyzerState m_string_analyzer_state = StringAnalyzerState::get();
-  PackageNameState m_package_name_state = PackageNameState::get(package_name);
+  ApiLevelAnalyzerState m_api_level_analyzer_state{
+      make_api_level_analyzer_state(MIN_SDK)};
+  StringAnalyzerState m_string_analyzer_state{
+      constant_propagation::StringAnalyzerState::make_default()};
+  PackageNameState m_package_name_state{PackageNameState::make(package_name)};
   State m_cp_state;
   ConfigFiles conf = ConfigFiles(Json::nullValue);
 };
@@ -1734,7 +1738,7 @@ TEST_F(InterproceduralConstantPropagationTest, min_sdk) {
   // And for a method that has no implementation in dex we also want its
   // return value be Top but not Bottom.
   EXPECT_EQ(wps.get_return_value(returns_min_sdk),
-            SignedConstantDomain(min_sdk, std::numeric_limits<int32_t>::max()));
+            SignedConstantDomain(MIN_SDK, std::numeric_limits<int32_t>::max()));
 }
 
 TEST_F(InterproceduralConstantPropagationTest, ghost_edges) {

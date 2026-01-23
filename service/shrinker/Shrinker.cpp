@@ -96,14 +96,12 @@ Shrinker::Shrinker(
       m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names),
       m_finalish_fields(configured_finalish_fields),
-      m_string_analyzer_state(constant_propagation::StringAnalyzerState::get()),
+      m_api_level_analyzer_state(m_min_sdk),
+      m_boxed_boolean_analyzer_state(),
+      m_string_analyzer_state(
+          constant_propagation::StringAnalyzerState::make_default()),
       m_package_name_state(
-          constant_propagation::PackageNameState::get(package_name)) {
-  // Initialize the singletons that `operator()` needs ahead of time to
-  // avoid a data race.
-  static_cast<void>(constant_propagation::EnumFieldAnalyzerState::get());
-  static_cast<void>(constant_propagation::BoxedBooleanAnalyzerState::get());
-  static_cast<void>(constant_propagation::ApiLevelAnalyzerState::get());
+          constant_propagation::PackageNameState::make(package_name)) {
   if (config.run_cse || config.run_local_dce) {
     if (config.compute_pure_methods) {
       const auto& pure_methods = ::get_pure_methods();
@@ -161,10 +159,8 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
       code->cfg(),
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           &m_immut_analyzer_state, &m_immut_analyzer_state,
-          constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(),
-          &m_string_analyzer_state,
-          constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk),
+          m_enum_analyzer_state, m_boxed_boolean_analyzer_state,
+          &m_string_analyzer_state, m_api_level_analyzer_state,
           &m_package_name_state, nullptr, &m_immut_analyzer_state, nullptr),
       /* imprecise_switches */ true);
   fp_iter.run(initial_env);

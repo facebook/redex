@@ -111,16 +111,6 @@ class CallSiteSummarizer {
   InsertOnlyConcurrentSet<CallSiteSummary, CallSiteSummaryHasher>
       m_call_site_summaries;
 
-  /**
-   * For all (reachable) invoke instructions in a given method, collect
-   * information about their arguments, i.e. whether particular arguments
-   * are constants.
-   */
-  InvokeCallSiteSummariesAndDeadBlocks get_invoke_call_site_summaries(
-      DexMethod* caller,
-      const UnorderedMap<DexMethod*, size_t>& callees,
-      const ConstantEnvironment& initial_env);
-
  public:
   CallSiteSummarizer(
       shrinker::Shrinker& shrinker,
@@ -144,6 +134,19 @@ class CallSiteSummarizer {
 
   const CallSiteSummary* get_instruction_call_site_summary(
       const IRInstruction* invoke_insn) const;
+
+  struct InvokeCallSiteSummariesContext;
+
+  /**
+   * For all (reachable) invoke instructions in a given method, collect
+   * information about their arguments, i.e. whether particular arguments
+   * are constants.
+   */
+  InvokeCallSiteSummariesAndDeadBlocks get_invoke_call_site_summaries(
+      DexMethod* caller,
+      const UnorderedMap<DexMethod*, size_t>& callees,
+      const ConstantEnvironment& initial_env,
+      const InvokeCallSiteSummariesContext& context);
 };
 
 } // namespace inliner

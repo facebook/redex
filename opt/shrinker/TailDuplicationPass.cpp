@@ -228,8 +228,8 @@ void TailDuplicationPass::bind_config() {
 void TailDuplicationPass::eval_pass(DexStoresVector&,
                                     ConfigFiles&,
                                     PassManager&) {
-  auto string_analyzer_state = constant_propagation::StringAnalyzerState::get();
-  string_analyzer_state.set_methods_as_root();
+  constant_propagation::StringAnalyzerState::make_default()
+      .set_methods_as_root();
 }
 
 void TailDuplicationPass::run_pass(DexStoresVector& stores,

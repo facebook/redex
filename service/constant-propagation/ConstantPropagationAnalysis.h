@@ -279,11 +279,9 @@ class InitFieldAnalyzer final
                              ConstantEnvironment* env);
 };
 
+// Construction of this object is expensive because get_method acquires a
+// global lock. Make sure to cache it!
 struct EnumFieldAnalyzerState {
-  // Construction of this object is expensive because get_method acquires a
-  // global lock. `get` creates a singleton once and reuses it.
-  static const EnumFieldAnalyzerState& get();
-
   const DexMethod* enum_equals;
 
   EnumFieldAnalyzerState()
@@ -402,11 +400,9 @@ class ImmutableAttributeAnalyzer final
                            ConstantEnvironment* env);
 };
 
+// Construction of this object is expensive because get_type/field/method
+// acquires a global lock. Make sure to cache it.
 struct BoxedBooleanAnalyzerState {
-  // Construction of this object is expensive because get_type/field/method
-  // acquires a global lock. `get` creates a singleton once and reuses it.
-  static const BoxedBooleanAnalyzerState& get();
-
   const DexType* boolean_class{DexType::get_type("Ljava/lang/Boolean;")};
   const DexField* boolean_true{dynamic_cast<DexField*>(
       DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"))};
@@ -433,9 +429,11 @@ class BoxedBooleanAnalyzer final
 };
 
 struct StringAnalyzerState {
-  static StringAnalyzerState get();
   explicit StringAnalyzerState(const UnorderedSet<DexMethod*>& methods)
       : string_equality_methods(methods) {}
+
+  static StringAnalyzerState make_default();
+
   void set_methods_as_root();
   UnorderedSet<DexMethod*> string_equality_methods;
 };
@@ -467,10 +465,10 @@ class ConstantClassObjectAnalyzer
   }
 };
 
+// Construction of this object is expensive because get_method acquires a
+// global lock. Make sure to cache it!
 struct ApiLevelAnalyzerState {
-  // Construction of this object is expensive because get_method acquires a
-  // global lock. `get` caches those lookups.
-  static ApiLevelAnalyzerState get(int32_t min_sdk = 0);
+  explicit ApiLevelAnalyzerState(int32_t min_sdk);
 
   const DexFieldRef* sdk_int_field;
   int32_t min_sdk;
@@ -487,11 +485,11 @@ class ApiLevelAnalyzer final
 };
 
 struct PackageNameState {
-  static PackageNameState get(const std::string& package_name);
-  static PackageNameState get(const boost::optional<std::string>& package_name);
-
   const UnorderedSet<DexMethodRef*> getter_methods;
   const DexString* package_name;
+
+  static PackageNameState make(
+      const boost::optional<std::string>& package_name);
 };
 
 class PackageNameAnalyzer final

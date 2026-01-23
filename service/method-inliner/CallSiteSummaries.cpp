@@ -178,6 +178,13 @@ const CallSiteSummary* CallSiteSummarizer::internalize_call_site_summary(
   return m_call_site_summaries.insert(call_site_summary).first;
 }
 
+struct CallSiteSummarizer::InvokeCallSiteSummariesContext {
+  constant_propagation::ApiLevelAnalyzerState api_level_analyzer_state{0};
+  constant_propagation::BoxedBooleanAnalyzerState
+      boxed_boolean_analyzer_state{};
+  constant_propagation::EnumFieldAnalyzerState enum_field_analyzer_state;
+};
+
 void CallSiteSummarizer::summarize() {
   Timer t("compute_call_site_summaries");
 
@@ -203,6 +210,8 @@ void CallSiteSummarizer::summarize() {
     // they reside in the known list of callers.
     return ptr;
   };
+
+  InvokeCallSiteSummariesContext context{};
 
   summaries_scheduler.set_executor([&](DexMethod* method) {
     CallSiteArguments arguments;
@@ -243,7 +252,8 @@ void CallSiteSummarizer::summarize() {
     ConstantEnvironment initial_env =
         constant_propagation::interprocedural::env_with_params(
             is_static(method), method->get_code(), arguments);
-    auto res = get_invoke_call_site_summaries(method, callees, initial_env);
+    auto res =
+        get_invoke_call_site_summaries(method, callees, initial_env, context);
     for (auto& p : res.invoke_call_site_summaries) {
       auto* insn = p.first;
       auto* callee = m_get_callee_fn(method, insn);
@@ -287,7 +297,8 @@ InvokeCallSiteSummariesAndDeadBlocks
 CallSiteSummarizer::get_invoke_call_site_summaries(
     DexMethod* caller,
     const UnorderedMap<DexMethod*, size_t>& callees,
-    const ConstantEnvironment& initial_env) {
+    const ConstantEnvironment& initial_env,
+    const InvokeCallSiteSummariesContext& context) {
   IRCode* code = caller->get_code();
 
   InvokeCallSiteSummariesAndDeadBlocks res;
@@ -298,12 +309,11 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           m_shrinker.get_immut_analyzer_state(),
           m_shrinker.get_immut_analyzer_state(),
-          constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(),
+          context.enum_field_analyzer_state,
+          context.boxed_boolean_analyzer_state,
           m_shrinker.get_string_analyzer_state(),
-          constant_propagation::ApiLevelAnalyzerState::get(),
-          m_shrinker.get_package_name_state(), nullptr,
-          m_shrinker.get_immut_analyzer_state(), nullptr));
+          context.api_level_analyzer_state, m_shrinker.get_package_name_state(),
+          nullptr, m_shrinker.get_immut_analyzer_state(), nullptr));
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);

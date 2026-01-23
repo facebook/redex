@@ -1117,31 +1117,6 @@ bool InitFieldAnalyzer::analyze_invoke(const DexType* class_under_init,
   return false;
 }
 
-boost::optional<EnumFieldAnalyzerState> enum_field_singleton{boost::none};
-const EnumFieldAnalyzerState& EnumFieldAnalyzerState::get() {
-  if (!enum_field_singleton) {
-    // Be careful, there could be a data race here if this is called in parallel
-    enum_field_singleton = EnumFieldAnalyzerState();
-    // In tests, we create and destroy g_redex repeatedly. So we need to reset
-    // the singleton.
-    g_redex->add_destruction_task([]() { enum_field_singleton = boost::none; });
-  }
-  return *enum_field_singleton;
-}
-
-boost::optional<BoxedBooleanAnalyzerState> boxed_boolean_singleton{boost::none};
-const BoxedBooleanAnalyzerState& BoxedBooleanAnalyzerState::get() {
-  if (!boxed_boolean_singleton) {
-    // Be careful, there could be a data race here if this is called in parallel
-    boxed_boolean_singleton = BoxedBooleanAnalyzerState();
-    // In tests, we create and destroy g_redex repeatedly. So we need to reset
-    // the singleton.
-    g_redex->add_destruction_task(
-        []() { boxed_boolean_singleton = boost::none; });
-  }
-  return *boxed_boolean_singleton;
-}
-
 bool EnumFieldAnalyzer::analyze_sget(const EnumFieldAnalyzerState&,
                                      const IRInstruction* insn,
                                      ConstantEnvironment* env) {
@@ -1259,27 +1234,15 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
   }
 }
 
-static boost::optional<StringAnalyzerState> s_string_analyzer_state{
-    boost::none};
-static std::mutex s_string_analyzer_state_mtx;
-StringAnalyzerState StringAnalyzerState::get() {
-  std::lock_guard<std::mutex> lock(s_string_analyzer_state_mtx);
-  if (s_string_analyzer_state == boost::none) {
-    UnorderedSet<DexMethod*> methods;
-    auto* kotlin_are_equal = DexMethod::get_method(
-        "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
-        "lang/Object;)Z");
-    if (kotlin_are_equal != nullptr && kotlin_are_equal->as_def() != nullptr) {
-      methods.emplace(kotlin_are_equal->as_def());
-    }
-    s_string_analyzer_state = StringAnalyzerState(methods);
-    // For tests.
-    g_redex->add_destruction_task([]() {
-      std::lock_guard<std::mutex> task_lock(s_string_analyzer_state_mtx);
-      s_string_analyzer_state = boost::none;
-    });
+StringAnalyzerState StringAnalyzerState::make_default() {
+  UnorderedSet<DexMethod*> methods;
+  auto* kotlin_are_equal = DexMethod::get_method(
+      "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
+      "lang/Object;)Z");
+  if (kotlin_are_equal != nullptr && kotlin_are_equal->as_def() != nullptr) {
+    methods.emplace(kotlin_are_equal->as_def());
   }
-  return *s_string_analyzer_state;
+  return StringAnalyzerState(methods);
 }
 
 void StringAnalyzerState::set_methods_as_root() {
@@ -1826,17 +1789,9 @@ bool EnumUtilsFieldAnalyzer::analyze_sget(
   return true;
 }
 
-boost::optional<DexFieldRef*> g_sdk_int_field{boost::none};
-ApiLevelAnalyzerState ApiLevelAnalyzerState::get(int32_t min_sdk) {
-  if (!g_sdk_int_field) {
-    // Be careful, there could be a data race here if this is called in parallel
-    g_sdk_int_field =
-        DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
-    // In tests, we create and destroy g_redex repeatedly. So we need to reset
-    // the singleton.
-    g_redex->add_destruction_task([]() { g_sdk_int_field = boost::none; });
-  }
-  return {*g_sdk_int_field, min_sdk};
+ApiLevelAnalyzerState::ApiLevelAnalyzerState(int32_t min_sdk)
+    : min_sdk(min_sdk) {
+  sdk_int_field = DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
 }
 
 bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
@@ -1853,35 +1808,18 @@ bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
   return false;
 }
 
-boost::optional<UnorderedSet<DexMethodRef*>> g_get_package_name_refs{
-    boost::none};
-static std::mutex s_package_name_mutex;
-PackageNameState PackageNameState::get(const std::string& package_name) {
-  return PackageNameState::get(boost::optional<std::string>(package_name));
-}
-
-PackageNameState PackageNameState::get(
+PackageNameState PackageNameState::make(
     const boost::optional<std::string>& package_name) {
-  std::lock_guard<std::mutex> lock(s_package_name_mutex);
-  if (!g_get_package_name_refs) {
-    UnorderedSet<DexMethodRef*> refs{
-        DexMethod::get_method(
-            "Landroid/content/Context;.getPackageName:()Ljava/lang/String;"),
-        DexMethod::get_method(
-            "Landroid/content/ContextWrapper;.getPackageName:()Ljava/lang/"
-            "String;")};
-    g_get_package_name_refs = refs;
-    // In tests, we create and destroy g_redex repeatedly. So we need to reset
-    // the singleton.
-    g_redex->add_destruction_task([]() {
-      std::lock_guard<std::mutex> task_lock(s_package_name_mutex);
-      g_get_package_name_refs = boost::none;
-    });
-  }
+  UnorderedSet<DexMethodRef*> refs{
+      DexMethod::get_method(
+          "Landroid/content/Context;.getPackageName:()Ljava/lang/String;"),
+      DexMethod::get_method(
+          "Landroid/content/ContextWrapper;.getPackageName:()Ljava/lang/"
+          "String;")};
   const DexString* dex_string = package_name != boost::none
                                     ? DexString::make_string(*package_name)
                                     : nullptr;
-  return {*g_get_package_name_refs, dex_string};
+  return {std::move(refs), dex_string};
 }
 
 bool PackageNameAnalyzer::analyze_invoke(const PackageNameState* state,
