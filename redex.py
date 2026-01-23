@@ -318,6 +318,13 @@ def run_redex_binary(
             state.args.output_ir,
         ]
 
+    if state.args.redex_extra_args:
+        args += [
+            extra_arg
+            for extra_arg_unsplit in state.args.redex_extra_args
+            for extra_arg in shlex.split(extra_arg_unsplit)
+        ]
+
     debugger = state.debugger
     prefix: typing.List[str] = (
         dbg_prefix(debugger, state.args.debug_source_root)
@@ -909,6 +916,9 @@ Given an APK, produce a better APK!
     parser.add_argument("--trace-class-name", type=str)
     parser.add_argument("--trace-method-name", type=str)
     parser.add_argument("--after-pass-trace-file", type=str)
+
+    # Extra args for redex binary.
+    parser.add_argument("--redex-extra-args", action="append", default=[])
 
     return parser
 
