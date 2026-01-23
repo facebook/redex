@@ -53,6 +53,7 @@
 #include "IRInstruction.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
+#include "LinearScan.h"
 #include "MutablePriorityQueue.h"
 #include "ObjectEscapeAnalysisImpl.h"
 #include "ObjectEscapeAnalysisPlugin.h"
@@ -720,6 +721,7 @@ struct Stats {
   std::atomic<size_t> new_instances_eliminated{0};
   size_t inlined_methods_removed{0};
   size_t inlinable_methods_kept{0};
+  std::atomic<size_t> reg_allocs{0};
 };
 
 struct ReducedMethodVariant {
@@ -892,6 +894,18 @@ class RootMethodReducer {
     if (insn != nullptr) {
       m_stats->invoke_supers++;
       return std::nullopt;
+    }
+
+    {
+      // Possibly reduce complexity of CFG for DU chain computation.
+      m_method->get_code()->cfg().recompute_registers_size();
+      auto num_regs = m_method->get_code()->cfg().get_registers_size();
+      constexpr size_t kRegAllocThreshold = 256;
+      if (num_regs >= kRegAllocThreshold) {
+        fastregalloc::LinearScanAllocator allocator(m_method);
+        allocator.allocate();
+        m_stats->reg_allocs.fetch_add(1, std::memory_order_relaxed);
+      }
     }
 
     while (auto opt_p = find_inlinable_new_instance()) {
@@ -1554,22 +1568,25 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
   // with N inlinable types, there will be N variants.
   std::vector<std::pair<DexMethod*, InlinableTypes>>
       ordered_root_methods_variants;
-  for (auto&& [method, types] : UnorderedIterable(root_methods)) {
-    auto ordered_types = unordered_to_ordered(types, [&](auto& p, auto& q) {
-      return inlinable_type_index.at(p.first) <
-             inlinable_type_index.at(q.first);
-    });
-    for (auto it = ordered_types.begin(); it != ordered_types.end(); it++) {
-      ordered_root_methods_variants.emplace_back(
-          method, InlinableTypes(it, ordered_types.end()));
+  {
+    Timer sub_t{"ordered_root_methods_variants"};
+    for (auto&& [method, types] : UnorderedIterable(root_methods)) {
+      auto ordered_types = unordered_to_ordered(types, [&](auto& p, auto& q) {
+        return inlinable_type_index.at(p.first) <
+               inlinable_type_index.at(q.first);
+      });
+      for (auto it = ordered_types.begin(); it != ordered_types.end(); it++) {
+        ordered_root_methods_variants.emplace_back(
+            method, InlinableTypes(it, ordered_types.end()));
+      }
     }
+    // Order such that items with many types to process go first, which improves
+    // workqueue efficiency.
+    std::stable_sort(ordered_root_methods_variants.begin(),
+                     ordered_root_methods_variants.end(), [](auto& a, auto& b) {
+                       return a.second.size() > b.second.size();
+                     });
   }
-  // Order such that items with many types to process go first, which improves
-  // workqueue efficiency.
-  std::stable_sort(ordered_root_methods_variants.begin(),
-                   ordered_root_methods_variants.end(), [](auto& a, auto& b) {
-                     return a.second.size() > b.second.size();
-                   });
 
   // Special marker method, used to identify which newly created objects of only
   // incompletely inlinable types should get inlined.
@@ -1587,71 +1604,82 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
   if (g_redex->instrument_mode && g_redex->slow_invariants_debug) {
     num_threads = std::min<size_t>(num_threads, 16u);
   }
-  workqueue_run<std::pair<DexMethod*, InlinableTypes>>(
-      [&](const std::pair<DexMethod*, InlinableTypes>& p) {
-        auto* method = p.first;
-        const auto& types = p.second;
-        auto copy_name_str = method->get_name()->str() + "$oea$internal$" +
-                             std::to_string(types.size());
-        auto* copy = DexMethod::make_method_from(
-            method, method->get_class(), DexString::make_string(copy_name_str));
-        RootMethodReducer root_method_reducer{config,
-                                              apply_shrinking_plugins,
-                                              code_size_cache,
-                                              method_override_graph,
-                                              expandable_method_params,
-                                              incomplete_marker_method,
-                                              inliner,
-                                              method_summaries,
-                                              excluded_classes,
-                                              stats,
-                                              method::is_init(method) ||
-                                                  method::is_clinit(method),
-                                              copy,
-                                              types,
-                                              callees_cache,
-                                              method_summary_cache};
-        auto reduced_method = root_method_reducer.reduce();
-        if (reduced_method) {
-          concurrent_reduced_methods.update(
-              method, [&](auto*, auto& reduced_methods_variants, bool) {
-                reduced_methods_variants.emplace_back(
-                    std::move(*reduced_method));
-              });
-          return;
-        }
-        DexMethod::delete_method_DO_NOT_USE(copy);
-      },
-      ordered_root_methods_variants, num_threads);
+
+  {
+    Timer sub_t{"reduce"};
+    workqueue_run<std::pair<DexMethod*, InlinableTypes>>(
+        [&](const std::pair<DexMethod*, InlinableTypes>& p) {
+          auto* method = p.first;
+          const auto& types = p.second;
+          auto copy_name_str = method->get_name()->str() + "$oea$internal$" +
+                               std::to_string(types.size());
+          auto* copy = DexMethod::make_method_from(
+              method, method->get_class(),
+              DexString::make_string(copy_name_str));
+          RootMethodReducer root_method_reducer{config,
+                                                apply_shrinking_plugins,
+                                                code_size_cache,
+                                                method_override_graph,
+                                                expandable_method_params,
+                                                incomplete_marker_method,
+                                                inliner,
+                                                method_summaries,
+                                                excluded_classes,
+                                                stats,
+                                                method::is_init(method) ||
+                                                    method::is_clinit(method),
+                                                copy,
+                                                types,
+                                                callees_cache,
+                                                method_summary_cache};
+          auto reduced_method = root_method_reducer.reduce();
+          if (reduced_method) {
+            concurrent_reduced_methods.update(
+                method, [&](auto*, auto& reduced_methods_variants, bool) {
+                  reduced_methods_variants.emplace_back(
+                      std::move(*reduced_method));
+                });
+            return;
+          }
+          DexMethod::delete_method_DO_NOT_USE(copy);
+        },
+        ordered_root_methods_variants, num_threads);
+  }
 
   // For each root method, we order the reduced methods (if any) by how many
   // types were inlined, with the largest number of inlined types going first.
   UnorderedMap<DexMethod*, std::vector<ReducedMethod>> reduced_methods;
-  for (auto& [method, reduced_methods_variants] :
-       UnorderedIterable(concurrent_reduced_methods)) {
-    std::sort(
-        reduced_methods_variants.begin(), reduced_methods_variants.end(),
-        [&](auto& a, auto& b) { return a.types.size() > b.types.size(); });
-    reduced_methods.emplace(method, std::move(reduced_methods_variants));
+  {
+    Timer sub_t{"reduced_methods"};
+    for (auto& [method, reduced_methods_variants] :
+         UnorderedIterable(concurrent_reduced_methods)) {
+      std::sort(
+          reduced_methods_variants.begin(), reduced_methods_variants.end(),
+          [&](auto& a, auto& b) { return a.types.size() > b.types.size(); });
+      reduced_methods.emplace(method, std::move(reduced_methods_variants));
+    }
   }
 
   // All types which could not be accomodated by any reduced method variants are
   // marked as "irreducible", which is later used when doing a global cost
   // analysis.
   static const InlinableTypes no_types;
-  for (auto&& [method, types] : UnorderedIterable(root_methods)) {
-    auto it = reduced_methods.find(method);
-    const auto& largest_types =
-        it == reduced_methods.end() ? no_types : it->second.front().types;
-    for (auto&& [type, inlinable_info] : UnorderedIterable(types)) {
-      if (largest_types.count(type) == 0u) {
-        for (auto* cls = type_class(type);
-             (cls != nullptr) && !cls->is_external();
-             cls = type_class(cls->get_super_class())) {
-          irreducible_types->insert(cls->get_type());
+  {
+    Timer sub_t{"irreducible"};
+    for (auto&& [method, types] : UnorderedIterable(root_methods)) {
+      auto it = reduced_methods.find(method);
+      const auto& largest_types =
+          it == reduced_methods.end() ? no_types : it->second.front().types;
+      for (auto&& [type, inlinable_info] : UnorderedIterable(types)) {
+        if (largest_types.count(type) == 0u) {
+          for (auto* cls = type_class(type);
+               (cls != nullptr) && !cls->is_external();
+               cls = type_class(cls->get_super_class())) {
+            irreducible_types->insert(cls->get_type());
+          }
+          insert_unordered_iterable(*inlinable_methods_kept,
+                                    inlinable_info.inlinable_methods);
         }
-        insert_unordered_iterable(*inlinable_methods_kept,
-                                  inlinable_info.inlinable_methods);
       }
     }
   }
@@ -2155,6 +2183,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("lost_returns_through_shrinking",
                   lost_returns_through_shrinking);
   mgr.incr_metric("method_summaries", method_summaries.size());
+  mgr.incr_metric("reg_allocs", stats.reg_allocs);
 }
 
 static ObjectEscapeAnalysisPass s_pass;
