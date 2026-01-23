@@ -435,6 +435,7 @@ libopt_la_SOURCES = \
 	opt/interdex/SortRemainingClassesPass.cpp \
 	opt/kotlin-lambda/KotlinObjectInliner.cpp \
 	opt/kotlin-lambda/KotlinStatelessLambdaSingletonRemovalPass.cpp \
+	opt/kotlin-lambda/KotlinTrivialLambdaDeduplicationPass.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDcePass.cpp \
 	opt/nopper/Nopper.cpp \
