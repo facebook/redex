@@ -322,6 +322,145 @@ void MergeabilityChecker::exclude_unsafe_sdk_and_store_refs(
   }
 }
 
+// Helper to recursively extract all types referenced by an encoded value
+// that are in the merging_targets set, and insert them into non_mergeables.
+void MergeabilityChecker::collect_referenced_mergeable_types(
+    const DexEncodedValue* ev,
+    TypeSet& non_mergeables,
+    const DexType* anno_type,
+    const char* context) {
+  if (ev == nullptr) {
+    return;
+  }
+
+  auto maybe_insert = [&](const DexType* type) {
+    if (type != nullptr && m_spec.merging_targets.count(type) > 0) {
+      auto [it, inserted] = non_mergeables.insert(type);
+      if (inserted) {
+        TRACE(CLMG,
+              5,
+              "[non mergeable] %s referenced by unhandled annotation %s in %s",
+              SHOW(type),
+              SHOW(anno_type),
+              context);
+      }
+    }
+  };
+
+  switch (ev->evtype()) {
+  case DEVT_TYPE: {
+    const auto* type_ev = dynamic_cast<const DexEncodedValueType*>(ev);
+    const auto* type = type::get_element_type_if_array(type_ev->type());
+    maybe_insert(type);
+    break;
+  }
+  case DEVT_METHOD: {
+    const auto* method_ev = dynamic_cast<const DexEncodedValueMethod*>(ev);
+    auto* method = method_ev->method();
+    if (method != nullptr) {
+      // Check containing class
+      maybe_insert(type::get_element_type_if_array(method->get_class()));
+      // Check return type and parameter types
+      auto* proto = method->get_proto();
+      if (proto != nullptr) {
+        maybe_insert(type::get_element_type_if_array(proto->get_rtype()));
+        if (auto* args = proto->get_args()) {
+          for (const auto* arg_type : *args) {
+            maybe_insert(type::get_element_type_if_array(arg_type));
+          }
+        }
+      }
+    }
+    break;
+  }
+  case DEVT_FIELD: {
+    const auto* field_ev = dynamic_cast<const DexEncodedValueField*>(ev);
+    auto* field = field_ev->field();
+    if (field != nullptr) {
+      // Check containing class
+      maybe_insert(type::get_element_type_if_array(field->get_class()));
+      // Check field type
+      maybe_insert(type::get_element_type_if_array(field->get_type()));
+    }
+    break;
+  }
+  case DEVT_ARRAY: {
+    const auto* array_ev = dynamic_cast<const DexEncodedValueArray*>(ev);
+    if (array_ev->evalues() != nullptr) {
+      for (const auto& elem : *array_ev->evalues()) {
+        collect_referenced_mergeable_types(elem.get(), non_mergeables,
+                                           anno_type, context);
+      }
+    }
+    break;
+  }
+  case DEVT_ANNOTATION: {
+    const auto* anno_ev = dynamic_cast<const DexEncodedValueAnnotation*>(ev);
+    for (const auto& elem : anno_ev->annotations()) {
+      collect_referenced_mergeable_types(elem.encoded_value.get(),
+                                         non_mergeables, anno_type, context);
+    }
+    break;
+  }
+  default:
+    break;
+  }
+}
+
+// We perform the check here mostly for Android system annotations. Since types
+// referenced in the Android annotations if kept in the release app are likely
+// to be retained for reflection purposes.
+void MergeabilityChecker::exclude_unhandled_anno_refs(TypeSet& non_mergeables) {
+  if (m_spec.merging_targets.empty()) {
+    return;
+  }
+
+  // dalvik.annotation.Signature is handled by TypeStringRewriter, so we skip
+  // it. Other annotations that contain type/method/field references to merging
+  // targets will cause those targets to be excluded from merging.
+  auto* dalvik_sig = type::dalvik_annotation_Signature();
+
+  auto check_anno_set = [&](const DexAnnotationSet* anno_set,
+                            const std::string& context) {
+    if (anno_set == nullptr) {
+      return;
+    }
+    for (const auto& anno : anno_set->get_annotations()) {
+      // Skip Signature annotations - TypeStringRewriter handles them.
+      if (anno->type() == dalvik_sig) {
+        continue;
+      }
+      for (const auto& elem : anno->anno_elems()) {
+        collect_referenced_mergeable_types(elem.encoded_value.get(),
+                                           non_mergeables,
+                                           anno->type(),
+                                           context.c_str());
+      }
+    }
+  };
+
+  for (const auto* cls : m_scope) {
+    std::string cls_name = show(cls);
+    check_anno_set(cls->get_anno_set(), cls_name);
+
+    for (const auto* field : cls->get_all_fields()) {
+      check_anno_set(field->get_anno_set(), show(field));
+    }
+
+    for (const auto* method : cls->get_all_methods()) {
+      std::string method_name = show(method);
+      check_anno_set(method->get_anno_set(), method_name);
+      // Also check parameter annotations
+      const auto* param_annos = method->get_param_anno();
+      if (param_annos != nullptr) {
+        for (const auto& param_anno : *param_annos) {
+          check_anno_set(param_anno.second.get(), method_name);
+        }
+      }
+    }
+  }
+}
+
 TypeSet MergeabilityChecker::get_non_mergeables() {
   TypeSet non_mergeables;
   size_t prev_size = 0;
@@ -348,6 +487,13 @@ TypeSet MergeabilityChecker::get_non_mergeables() {
   TRACE(CLMG,
         4,
         "Non mergeables (unsafe refs) %zu",
+        non_mergeables.size() - prev_size);
+  prev_size = non_mergeables.size();
+
+  exclude_unhandled_anno_refs(non_mergeables);
+  TRACE(CLMG,
+        4,
+        "Non mergeables (unhandled anno refs) %zu",
         non_mergeables.size() - prev_size);
   prev_size = non_mergeables.size();
 

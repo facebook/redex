@@ -46,6 +46,11 @@ class MergeabilityChecker {
   void exclude_unsupported_bytecode(TypeSet& non_mergeables);
   void exclude_static_fields(TypeSet& non_mergeables);
   void exclude_unsafe_sdk_and_store_refs(TypeSet& non_mergeables);
+  void exclude_unhandled_anno_refs(TypeSet& non_mergeables);
+  void collect_referenced_mergeable_types(const DexEncodedValue* ev,
+                                          TypeSet& non_mergeables,
+                                          const DexType* anno_type,
+                                          const char* context);
 
   TypeSet exclude_unsupported_bytecode_refs_for(DexMethod* method);
 };
