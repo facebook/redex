@@ -59,6 +59,7 @@
 #include "ObjectEscapeAnalysisPlugin.h"
 #include "PassManager.h"
 #include "RedexContext.h"
+#include "Thread.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -699,29 +700,35 @@ size_t shrink_root_methods(
 }
 
 struct Stats {
-  std::atomic<size_t> total_savings{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> total_savings{0};
   size_t reduced_methods{0};
-  std::atomic<size_t> reduced_methods_variants{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> reduced_methods_variants{0};
   size_t selected_reduced_methods{0};
   size_t reprioritizations{0};
-  std::atomic<size_t> invokes_not_inlinable_callee_unexpandable{0};
-  std::atomic<size_t> invokes_not_inlinable_callee_inconcrete{0};
-  std::atomic<size_t> invokes_not_inlinable_callee_too_many_params_to_expand{0};
-  std::atomic<size_t>
-      invokes_not_inlinable_callee_expansion_needs_receiver_cast{0};
-  std::atomic<size_t> throwing_check_cast{0};
-  std::atomic<size_t> invokes_not_inlinable_inlining{0};
-  std::atomic<size_t> invokes_not_inlinable_too_many_iterations{0};
-  std::atomic<size_t> anchors_not_inlinable_inlining{0};
-  std::atomic<size_t> invoke_supers{0};
-  std::atomic<size_t> stackify_returns_objects{0};
-  std::atomic<size_t> too_costly_globally{0};
-  std::atomic<size_t> expanded_methods{0};
-  std::atomic<size_t> calls_inlined{0};
-  std::atomic<size_t> new_instances_eliminated{0};
+  alignas(CACHE_LINE_SIZE)
+      std::atomic<size_t> invokes_not_inlinable_callee_unexpandable{0};
+  alignas(CACHE_LINE_SIZE)
+      std::atomic<size_t> invokes_not_inlinable_callee_inconcrete{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<
+      size_t> invokes_not_inlinable_callee_too_many_params_to_expand{0};
+  alignas(CACHE_LINE_SIZE) alignas(CACHE_LINE_SIZE) std::atomic<
+      size_t> invokes_not_inlinable_callee_expansion_needs_receiver_cast{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> throwing_check_cast{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> invokes_not_inlinable_inlining{
+      0};
+  alignas(CACHE_LINE_SIZE)
+      std::atomic<size_t> invokes_not_inlinable_too_many_iterations{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> anchors_not_inlinable_inlining{
+      0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> invoke_supers{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> stackify_returns_objects{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> too_costly_globally{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> expanded_methods{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> calls_inlined{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> new_instances_eliminated{0};
   size_t inlined_methods_removed{0};
   size_t inlinable_methods_kept{0};
-  std::atomic<size_t> reg_allocs{0};
+  alignas(CACHE_LINE_SIZE) std::atomic<size_t> reg_allocs{0};
 };
 
 struct ReducedMethodVariant {
