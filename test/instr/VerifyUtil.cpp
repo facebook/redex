@@ -10,11 +10,11 @@
 #include <boost/algorithm/string/replace.hpp>
 // NOLINTNEXTLINE(facebook-unused-include-check)
 #include <boost/regex.hpp>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <sstream>
+#include <string_view>
 
 #include "ControlFlow.h"
 #include "Debug.h"
@@ -26,20 +26,19 @@
 #include "VerifyUtil.h"
 #include "Walkers.h"
 
-int find_class_idx(const DexClasses& classes, const char* name) {
+int find_class_idx(const DexClasses& classes, std::string_view name) {
   for (size_t i = 0; i < classes.size(); ++i) {
-    if (strcmp(name, classes[i]->get_name()->c_str()) == 0) {
+    if (name == classes[i]->str()) {
       return static_cast<int>(i);
     }
   }
   return -1;
 }
 
-DexClass* find_class_named(const DexClasses& classes, const char* name) {
-  auto it =
-      std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls) {
-        return strcmp(name, cls->get_name()->c_str()) == 0;
-      });
+DexClass* find_class_named(const DexClasses& classes, std::string_view name) {
+  auto it = std::find_if(classes.begin(),
+                         classes.end(),
+                         [&name](DexClass* cls) { return name == cls->str(); });
   return it == classes.end() ? nullptr : *it;
 }
 
@@ -52,25 +51,25 @@ DexClass* find_class_named(const DexClasses& classes,
   return it == classes.end() ? nullptr : *it;
 }
 
-DexField* find_ifield_named(const DexClass& cls, const char* name) {
+DexField* find_ifield_named(const DexClass& cls, std::string_view name) {
   auto fields = cls.get_ifields();
   auto it =
       std::find_if(fields.begin(), fields.end(), [&name](const DexField* f) {
-        return strcmp(name, f->get_name()->c_str()) == 0;
+        return name == f->str();
       });
   return it == fields.end() ? nullptr : *it;
 }
 
-DexField* find_sfield_named(const DexClass& cls, const char* name) {
+DexField* find_sfield_named(const DexClass& cls, std::string_view name) {
   auto fields = cls.get_sfields();
   auto it =
       std::find_if(fields.begin(), fields.end(), [&name](const DexField* f) {
-        return strcmp(name, f->get_name()->c_str()) == 0;
+        return name == f->str();
       });
   return it == fields.end() ? nullptr : *it;
 }
 
-DexField* find_field_named(const DexClass& cls, const char* name) {
+DexField* find_field_named(const DexClass& cls, std::string_view name) {
   auto* ret = find_ifield_named(cls, name);
   if (ret != nullptr) {
     return ret;
@@ -78,35 +77,33 @@ DexField* find_field_named(const DexClass& cls, const char* name) {
   return find_sfield_named(cls, name);
 }
 
-DexMethod* find_vmethod_named(const DexClass& cls, const char* name) {
+DexMethod* find_vmethod_named(const DexClass& cls, std::string_view name) {
   auto vmethods = cls.get_vmethods();
-  auto it =
-      std::find_if(vmethods.begin(), vmethods.end(), [&name](DexMethod* m) {
-        return strcmp(name, m->get_name()->c_str()) == 0;
-      });
+  auto it = std::find_if(vmethods.begin(),
+                         vmethods.end(),
+                         [&name](DexMethod* m) { return name == m->str(); });
   return it == vmethods.end() ? nullptr : *it;
 }
 
 DexMethod* find_vmethod(const DexClass& cls,
-                        const char* name,
+                        std::string_view name,
                         const DexProto* proto) {
   auto vmethods = cls.get_vmethods();
   auto it = std::find_if(vmethods.begin(), vmethods.end(), [&](DexMethod* m) {
-    return strcmp(name, m->get_name()->c_str()) == 0 && m->get_proto() == proto;
+    return name == m->str() && m->get_proto() == proto;
   });
   return it == vmethods.end() ? nullptr : *it;
 }
 
-DexMethod* find_dmethod_named(const DexClass& cls, const char* name) {
+DexMethod* find_dmethod_named(const DexClass& cls, std::string_view name) {
   auto dmethods = cls.get_dmethods();
-  auto it =
-      std::find_if(dmethods.begin(), dmethods.end(), [&name](DexMethod* m) {
-        return strcmp(name, m->get_name()->c_str()) == 0;
-      });
+  auto it = std::find_if(dmethods.begin(),
+                         dmethods.end(),
+                         [&name](DexMethod* m) { return name == m->str(); });
   return it == dmethods.end() ? nullptr : *it;
 }
 
-DexMethod* find_method_named(const DexClass& cls, const char* name) {
+DexMethod* find_method_named(const DexClass& cls, std::string_view name) {
   auto* ret = find_dmethod_named(cls, name);
   if (ret != nullptr) {
     return ret;
@@ -116,7 +113,7 @@ DexMethod* find_method_named(const DexClass& cls, const char* name) {
 
 DexOpcodeMethod* find_invoke(const DexMethod* m,
                              DexOpcode opcode,
-                             const char* target_mname,
+                             std::string_view target_mname,
                              DexType* receiver) {
   auto insns = m->get_dex_code()->get_instructions();
   return find_invoke(
@@ -126,7 +123,7 @@ DexOpcodeMethod* find_invoke(const DexMethod* m,
 DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
                              std::vector<DexInstruction*>::iterator end,
                              DexOpcode opcode,
-                             const char* target_mname,
+                             std::string_view target_mname,
                              DexType* receiver) {
   auto it = std::find_if(
       begin, end, [opcode, target_mname, receiver](DexInstruction* insn) {
@@ -146,7 +143,7 @@ DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
 
 size_t find_num_invoke(const DexMethod* m,
                        DexOpcode opcode,
-                       const char* target_mname,
+                       std::string_view target_mname,
                        DexType* receiver) {
   size_t num = 0;
   for (const auto& insn : m->get_dex_code()->get_instructions()) {
