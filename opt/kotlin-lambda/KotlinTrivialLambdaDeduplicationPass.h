@@ -58,7 +58,10 @@ This optimization reduces code size by eliminating redundant lambda classes.
 
  private:
   static constexpr size_t kDefaultTrivialLambdaMaxInstructions = 4;
-  static constexpr size_t kDefaultMinDuplicateGroupSize = 2;
+  // If a lambda is not deduped, KotlinStatelessLambdaSingletonRemovalPass
+  // rewrites each of its usages with 3 instructions. Slightly more than 4 (5
+  // here) may be a good default to start with.
+  static constexpr size_t kDefaultMinDuplicateGroupSize = 5;
 
   size_t m_trivial_lambda_max_instructions{
       kDefaultTrivialLambdaMaxInstructions};
