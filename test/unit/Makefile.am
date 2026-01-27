@@ -531,6 +531,7 @@ type_system_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 type_util_test_SOURCES = TypeUtilTest.cpp
 
 unique_method_tracker_test_SOURCES = UniqueMethodTrackerTest.cpp
+unique_method_tracker_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 up_code_motion_test_SOURCES = UpCodeMotionTest.cpp
 up_code_motion_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

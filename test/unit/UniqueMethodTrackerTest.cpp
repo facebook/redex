@@ -9,10 +9,12 @@
 
 #include <gmock/gmock.h>
 
+#include "DexHasher.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
 
 using ::testing::IsNull;
+using ::testing::NotNull;
 using ::testing::SizeIs;
 
 class UniqueMethodTrackerTest : public RedexTest, public UniqueMethodTracker {
@@ -50,6 +52,22 @@ class UniqueMethodTrackerTest : public RedexTest, public UniqueMethodTracker {
     ASSERT_EQ(rep2, baseline2);
 
     ASSERT_THAT(*this, SizeIs(2u));
+  }
+
+  // Helper to find a group by its representative method.
+  const UnorderedSet<const DexMethod*>* find_group(
+      const DexMethod* representative) const {
+    const auto* code = representative->get_code();
+    if (code == nullptr || !code->cfg_built()) {
+      return nullptr;
+    }
+    size_t hash = hashing::DexMethodHasher(representative).run().code_hash;
+    Key key{hash, representative};
+    auto it = this->groups().find(key);
+    if (it == this->groups().end()) {
+      return nullptr;
+    }
+    return &it->second;
   }
 };
 
@@ -195,4 +213,118 @@ TEST_F(UniqueMethodTrackerTest, UniqueMethodTrackerHashCollision) {
   EXPECT_EQ(rep2, method2);
 
   EXPECT_THAT(*this, SizeIs(4u));
+}
+
+TEST_F(UniqueMethodTrackerTest, GroupsTracksDuplicates) {
+  // Verify that groups() correctly tracks methods with identical code.
+  auto* method1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.dup1:()I"
+      (
+        (const v0 100)
+        (return v0)
+      )
+    )
+  )");
+
+  auto* method2 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.dup2:()I"
+      (
+        (const v0 100)
+        (return v0)
+      )
+    )
+  )");
+
+  auto* method3 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.dup3:()I"
+      (
+        (const v0 100)
+        (return v0)
+      )
+    )
+  )");
+
+  method1->get_code()->build_cfg();
+  method2->get_code()->build_cfg();
+  method3->get_code()->build_cfg();
+
+  this->insert(method1);
+  this->insert(method2);
+  this->insert(method3);
+
+  // Find the group for method1 (the representative).
+  const auto* group = find_group(method1);
+  ASSERT_THAT(group, NotNull()) << "Expected group for method1 to exist";
+
+  EXPECT_THAT(*group, SizeIs(3u)) << "Expected all 3 methods in the same group";
+  EXPECT_NE(group->find(method1), group->end());
+  EXPECT_NE(group->find(method2), group->end());
+  EXPECT_NE(group->find(method3), group->end());
+}
+
+TEST_F(UniqueMethodTrackerTest, GroupsDistinctForDifferentCode) {
+  // Verify that methods with different code are in separate groups.
+  auto* method1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.unique1:()I"
+      (
+        (const v0 200)
+        (return v0)
+      )
+    )
+  )");
+
+  auto* method2 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.unique2:()I"
+      (
+        (const v0 201)
+        (return v0)
+      )
+    )
+  )");
+
+  method1->get_code()->build_cfg();
+  method2->get_code()->build_cfg();
+
+  this->insert(method1);
+  this->insert(method2);
+
+  // Each method should be in its own group.
+  const auto* group1 = find_group(method1);
+  ASSERT_THAT(group1, NotNull());
+  EXPECT_THAT(*group1, SizeIs(1u));
+  EXPECT_NE(group1->find(method1), group1->end());
+
+  const auto* group2 = find_group(method2);
+  ASSERT_THAT(group2, NotNull());
+  EXPECT_THAT(*group2, SizeIs(1u));
+  EXPECT_NE(group2->find(method2), group2->end());
+}
+
+TEST_F(UniqueMethodTrackerTest, DuplicateInsertionIgnored) {
+  // Verify that inserting the same method twice does not add duplicates.
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.duplicate:()I"
+      (
+        (const v0 999)
+        (return v0)
+      )
+    )
+  )");
+
+  method->get_code()->build_cfg();
+
+  const auto [rep1, inserted1] = this->insert(method);
+  ASSERT_TRUE(inserted1);
+  ASSERT_EQ(rep1, method);
+
+  // Insert same method again.
+  const auto [rep2, inserted2] = this->insert(method);
+  EXPECT_FALSE(inserted2) << "Re-inserting same method should return false";
+  EXPECT_EQ(rep2, method) << "Representative should still be the same method";
+
+  // The group should contain exactly one entry.
+  const auto* group = find_group(method);
+  ASSERT_THAT(group, NotNull());
+  EXPECT_THAT(*group, SizeIs(1u))
+      << "Group should have exactly 1 method, not duplicates";
 }

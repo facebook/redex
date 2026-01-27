@@ -19,6 +19,19 @@ std::pair<const DexMethod*, bool> UniqueMethodTracker::insert(
 
 std::pair<const DexMethod*, bool> UniqueMethodTracker::insert(
     const DexMethod* method, size_t code_hash) {
-  const auto [ptr, inserted] = m_unique_methods.insert(Key{code_hash, method});
-  return {ptr->method, inserted};
+  const DexMethod* representative = nullptr;
+  bool was_new = false;
+
+  // The third parameter to the updater is true if the entry already existed,
+  // false if it was newly created.
+  m_groups.update(
+      Key{code_hash, method},
+      [method, &representative, &was_new](
+          const Key& key, UnorderedSet<const DexMethod*>& group, bool existed) {
+        was_new = !existed;
+        representative = existed ? key.method : method;
+        group.insert(method);
+      });
+
+  return {representative, was_new};
 }
