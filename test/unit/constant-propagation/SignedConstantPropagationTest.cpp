@@ -127,7 +127,7 @@ TEST_F(SignedConstantDomainOperationsTest, binaryOperations) {
   EXPECT_EQ(not_zero.meet(min_val), min_val);
 }
 
-class ConstantNezTest : public RedexTest {};
+class ConstantNezTest : public ConstantPropagationTest {};
 
 TEST_F(ConstantNezTest, DeterminableNezTrue) {
   auto code = assembler::ircode_from_string(R"(
@@ -301,7 +301,7 @@ TEST_F(ConstantPropagationTest, IfToGoto) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-class ConstantBitwiseTest : public RedexTest {
+class ConstantBitwiseTest : public ConstantPropagationTest {
  public:
   struct Case {
     std::string name;
