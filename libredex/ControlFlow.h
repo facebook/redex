@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <ranges>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -1039,6 +1040,11 @@ class ControlFlowGraph {
 
   bool structural_equals(const ControlFlowGraph& other,
                          const InstructionEquality& instruction_equals) const;
+
+  auto blocks_view() const {
+    return std::ranges::views::transform(m_blocks,
+                                         [](auto& p) { return p.second; });
+  }
 
  private:
   friend class Block;
