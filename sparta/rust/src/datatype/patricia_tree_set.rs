@@ -203,14 +203,14 @@ mod tests {
 
     #[test]
     fn test_robustness_with_rng() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let mut items: HashSet<u32> = HashSet::new();
         let mut set: PatriciaTreeSet<u32> = PatriciaTreeSet::new();
 
         let num_vals = 10000;
         for _ in 0..num_vals {
-            let i: u32 = rng.r#gen();
+            let i: u32 = rng.random();
             items.insert(i);
             set.insert(i);
         }
