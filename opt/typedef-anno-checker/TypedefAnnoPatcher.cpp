@@ -857,9 +857,18 @@ void TypedefAnnoPatcher::patch_lambdas(
   }
 }
 
-// Given a constructor of a synthetic class, check if it has typedef annotated
-// parameters. If it does, find the field that the parameter got put into and
-// annotate it.
+// Propagates typedef annotations from constructor parameters to class fields.
+//
+// In Kotlin synthetic classes (lambdas, anonymous classes), annotation applied
+// to the properties is only applied to the ctor parameter at bytecode level. We
+// need to propagate the annotation to the backing field to close the data flow
+// loop. This function:
+// 1. Analyzes the constructor's CFG to find field writes (iput instructions)
+// 2. If the written value has a typedef annotation, patches the field
+// 3. Collects the corresponding Kotlin getter/setter as candidates
+//
+// Note: Field patching is done in-place (not deferred) because the getter/
+// setter candidate collection depends on the field already being annotated.
 void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
     DexMethod* ctor, Stats& class_stats, PatchingCandidates& candidates) {
   IRCode* code = ctor->get_code();
@@ -867,54 +876,76 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
     return;
   }
   always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(ctor));
-  auto& cfg = code->cfg();
 
+  auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
                                           &m_method_override_graph);
   inference.run(ctor);
   TypeEnvironments& envs = inference.get_type_environments();
-  auto class_name_dot = ctor->get_class()->get_name()->str() + ".";
+
+  const auto class_name_dot = ctor->get_class()->get_name()->str() + ".";
+
+  // Helper to collect Kotlin-generated getter and setter as candidates.
+  // Kotlin generates accessor methods like: getFoo() and setFoo(value).
+  auto collect_kotlin_accessor_candidates = [&class_name_dot, &candidates,
+                                             this](DexField* field) {
+    auto field_name = field->get_simple_deobfuscated_name();
+    if (field_name.empty()) {
+      return;
+    }
+    field_name.at(0) = static_cast<char>(
+        std::toupper(static_cast<unsigned char>(field_name.at(0))));
+    const auto type_desc = type::is_int(field->get_type())
+                               ? "I"
+                               : type::java_lang_String()->get_name()->str();
+
+    if (auto* getter = DexMethod::get_method(class_name_dot + "get" +
+                                             field_name + ":()" + type_desc);
+        getter != nullptr && getter->is_def()) {
+      collect_return_candidates(getter->as_def(), candidates);
+    }
+    if (auto* setter = DexMethod::get_method(
+            class_name_dot + "set" + field_name + ":(" + type_desc + ")V");
+        setter != nullptr && setter->is_def()) {
+      collect_param_candidates(setter->as_def(), candidates);
+    }
+  };
 
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
+
+      // Only process iput and iput-object instructions.
+      // Typedef annotations only apply to int and String types, so we skip
+      // iput-wide, iput-boolean, iput-byte, iput-char, and iput-short.
       if (insn->opcode() != OPCODE_IPUT &&
           insn->opcode() != OPCODE_IPUT_OBJECT) {
         continue;
       }
+
       DexField* field = insn->get_field()->as_def();
       if (field == nullptr) {
         continue;
       }
+
+      // Only consider int or String values (valid typedef targets).
       auto& env = envs.at(insn);
-      if (!typedef_anno::is_int(env, insn->src(0)) &&
-          !typedef_anno::is_string(env, insn->src(0))) {
+      reg_t src_reg = insn->src(0);
+      if (!typedef_anno::is_int(env, src_reg) &&
+          !typedef_anno::is_string(env, src_reg)) {
         continue;
       }
-      auto annotation = env.get_annotation(insn->src(0));
-      if (annotation != boost::none) {
-        // We have to patch the field here now. Otherwise, the getter won't be
-        // considered as candidate by the collection logic down below.
-        add_annotation(field, *annotation, m_anno_patching_mutex, class_stats);
 
-        auto field_name = field->get_simple_deobfuscated_name();
-        field_name.at(0) = static_cast<char>(std::toupper(field_name.at(0)));
-        const auto int_or_string =
-            type::is_int(field->get_type())
-                ? "I"
-                : type::java_lang_String()->get_name()->str();
-        // add annotations to the Kotlin getter and setter methods
-        auto* getter = DexMethod::get_method(
-            class_name_dot + "get" + field_name + ":()" + int_or_string);
-        if ((getter != nullptr) && getter->is_def()) {
-          collect_return_candidates(getter->as_def(), candidates);
-        }
-        auto* setter = DexMethod::get_method(
-            class_name_dot + "set" + field_name + ":(" + int_or_string + ")V");
-        if ((setter != nullptr) && setter->is_def()) {
-          collect_param_candidates(setter->as_def(), candidates);
-        }
+      auto annotation = env.get_annotation(src_reg);
+      if (annotation == boost::none) {
+        continue;
       }
+
+      // Patch the field in-place. This must happen before collecting getter/
+      // setter candidates, as they depend on the field being annotated.
+      add_annotation(field, *annotation, m_anno_patching_mutex, class_stats);
+
+      collect_kotlin_accessor_candidates(field);
     }
   }
 }
