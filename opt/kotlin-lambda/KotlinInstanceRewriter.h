@@ -23,6 +23,7 @@ class KotlinInstanceRewriter {
     size_t kotlin_instance_fields_removed{0};
     size_t kotlin_new_inserted{0};
     size_t excludable_kotlin_lambda{0};
+    size_t kotlin_lambda_without_instance{0};
     Stats& operator+=(const Stats& that) {
       kotlin_new_instance += that.kotlin_new_instance;
       kotlin_new_instance_which_escapes +=
@@ -31,6 +32,7 @@ class KotlinInstanceRewriter {
       kotlin_instance_fields_removed += that.kotlin_instance_fields_removed;
       kotlin_new_inserted += that.kotlin_new_inserted;
       excludable_kotlin_lambda += that.excludable_kotlin_lambda;
+      kotlin_lambda_without_instance += that.kotlin_lambda_without_instance;
       return *this;
     }
     // Updates metrics tracked by \p mgr corresponding to these statistics.

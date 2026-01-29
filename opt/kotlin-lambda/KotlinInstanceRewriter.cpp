@@ -39,15 +39,17 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
   // sideeffets
   KotlinInstanceRewriter::Stats stats{};
   AtomicStatCounter<size_t> excludable_count{0};
+  AtomicStatCounter<size_t> lambda_without_instance_count{0};
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (!can_rename(cls) || !can_delete(cls)) {
       return;
     }
-    auto* instance = has_instance_field(cls, m_instance);
-    if (instance == nullptr) {
+    if (!type::is_kotlin_non_capturing_lambda(cls)) {
       return;
     }
-    if (!type::is_kotlin_non_capturing_lambda(cls)) {
+    auto* instance = has_instance_field(cls, m_instance);
+    if (instance == nullptr) {
+      lambda_without_instance_count++;
       return;
     }
     // Count excludable classes (e.g., hot lambdas)
@@ -65,6 +67,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
   });
   stats.kotlin_new_instance = concurrent_instance_map.size();
   stats.excludable_kotlin_lambda = excludable_count;
+  stats.kotlin_lambda_without_instance = lambda_without_instance_count;
   return stats;
 }
 
@@ -232,6 +235,8 @@ void KotlinInstanceRewriter::Stats::report(PassManager& mgr) const {
                   kotlin_instance_fields_removed);
   mgr.incr_metric("kotlin_new_inserted", kotlin_new_inserted);
   mgr.incr_metric("excludable_kotlin_lambda", excludable_kotlin_lambda);
+  mgr.incr_metric("kotlin_lambda_without_instance",
+                  kotlin_lambda_without_instance);
 
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_new_instance = %zu", kotlin_new_instance);
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_new_instance_which_escapes = %zu",
@@ -243,4 +248,6 @@ void KotlinInstanceRewriter::Stats::report(PassManager& mgr) const {
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_new_inserted = %zu", kotlin_new_inserted);
   TRACE(KOTLIN_INSTANCE, 1, "excludable_kotlin_lambda = %zu",
         excludable_kotlin_lambda);
+  TRACE(KOTLIN_INSTANCE, 1, "kotlin_lambda_without_instance = %zu",
+        kotlin_lambda_without_instance);
 }
