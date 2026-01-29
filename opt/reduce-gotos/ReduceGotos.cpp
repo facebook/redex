@@ -32,6 +32,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "Dominators.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
@@ -411,6 +412,25 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
       cfg::Block* src = pair.first;
       IRInstruction* cloned_insn = pair.second;
       src->push_back(cloned_insn);
+    }
+
+    // After removing edges by adding return instructions to predecessors,
+    // we need to normalize the source blocks in the destination block `b`.
+    // The profiling data in `b` was valid when `b` had more predecessors,
+    // but becomes inconsistent after predecessor paths are eliminated.
+    // Only normalize if `b` still has predecessors (is still reachable).
+    if (!insns_to_add.empty() && !b->preds().empty()) {
+      auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
+      auto* idom = doms.get_idom(b);
+      if (idom != nullptr) {
+        auto* idom_sb = source_blocks::get_last_source_block(idom);
+        if (idom_sb != nullptr) {
+          source_blocks::foreach_source_block(b, [&](auto* sb) {
+            source_blocks::normalize::normalize(
+                idom_sb, sb, std::min(idom_sb->vals_size, sb->vals_size));
+          });
+        }
+      }
     }
   }
 

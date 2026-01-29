@@ -558,3 +558,43 @@ TEST_F(ReduceGotosTest, no_join_throw) {
   )";
   test(code_str, expected_str, 0, 0, 0);
 }
+
+TEST_F(ReduceGotosTest, replace_return_src_blk) {
+  const auto& code_str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1 1))
+      (if-eqz v0 :true)
+
+      (.src_block "LFoo;.bar:()V" 1 (0 0))
+      (const v2 0)
+      (move v1 v2)
+      (goto :end)
+
+      (:true)
+      (.src_block "LFoo;.bar:()V" 2 (1 1))
+      (const v2 1)
+      
+      (:end)
+      (.src_block "LFoo;.bar:()V" 3 (1 1))
+      (return v2)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1 1))
+      (if-eqz v0 :true)
+
+      (.src_block "LFoo;.bar:()V" 1 (0 0))
+      (const v2 0)
+      (move v1 v2)
+      (.src_block "LFoo;.bar:()V" 3 (0 1))
+      (return v2)
+
+      (:true)
+      (.src_block "LFoo;.bar:()V" 2 (1 1))
+      (const v2 1)
+      (return v2)      
+    )
+  )";
+  test(code_str, expected_str, 1, 0, 0);
+}
