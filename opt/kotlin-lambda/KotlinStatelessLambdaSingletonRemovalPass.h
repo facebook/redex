@@ -37,6 +37,8 @@ The rationale is that the singleton pattern was inherited from the old javac beh
 On Android devices, peak performance throughput is less relevant than initial startup latency. Therefore, the singleton pattern is not no longer desirable.
 
 This godbolt [example](https://godbolt.org/z/Mznrzs8T4) shows the singleton pattern produced by our current kotlinc setup. This pass removes the singleton pattern shown in the example.
+
+This pass replaces references to the singleton `INSTANCE` field (via `sget-object`) with inline instantiation (`new-instance` + `move-result-pseudo-object` + `invoke-direct <init>`), and removes the static `INSTANCE` field and its initialization in `<clinit>`.
     )");
   }
 
