@@ -301,22 +301,6 @@ bool is_kotlin_internal_type(const DexType* type);
 bool is_kotlin_non_capturing_lambda(const DexClass* cls);
 
 /*
- * Return true if the cls is a trivial kotlin non-capturing lambda.
- * A trivial lambda is a non-capturing lambda whose invoke method has
- * at most max_instructions instructions.
- *
- * The default of 4 instructions corresponds to a lambda with a single
- * statement, e.g., { true } compiles to:
- *
- *     const/4 v0, 0x1
- *     invoke-static {v0}, Ljava/lang/Boolean;->valueOf(Z)Ljava/lang/Boolean;
- *     move-result-object v0
- *     return-object v0
- */
-bool is_trivial_kotlin_lambda(const DexClass* cls,
-                              size_t max_instructions = 4u);
-
-/*
  * Return the invoke method of a kotlin lambda class.
  * Returns nullptr if no suitable invoke method is found.
  */

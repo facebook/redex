@@ -106,6 +106,7 @@ check_PROGRAMS = \
     ir_list_test \
     ir_typechecker_test \
     java_parser_util_test \
+    kotlin_lambda_analyzer_test \
     literals_test \
     live_range_test \
     local_dce_test \
@@ -352,6 +353,9 @@ ir_typechecker_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 java_parser_util_test_SOURCES = JavaParserUtilTest.cpp
 java_parser_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+kotlin_lambda_analyzer_test_SOURCES = KotlinLambdaAnalyzerTest.cpp
+kotlin_lambda_analyzer_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 literals_test_SOURCES = LiteralsTest.cpp
 

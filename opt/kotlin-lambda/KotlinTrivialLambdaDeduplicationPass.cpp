@@ -17,6 +17,7 @@
 #include "DexMemberRefs.h"
 #include "DexStore.h"
 #include "DexUtil.h"
+#include "KotlinLambdaAnalyzer.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
@@ -92,8 +93,9 @@ void KotlinTrivialLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
       return;
     }
 
-    if (!type::is_trivial_kotlin_lambda(cls,
-                                        m_trivial_lambda_max_instructions)) {
+    auto analyzer = KotlinLambdaAnalyzer::analyze(cls);
+    if (!analyzer.has_value() ||
+        !analyzer->is_trivial(m_trivial_lambda_max_instructions)) {
       return;
     }
 

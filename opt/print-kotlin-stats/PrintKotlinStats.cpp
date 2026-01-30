@@ -9,6 +9,7 @@
 #include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "KotlinLambdaAnalyzer.h"
 #include "KotlinNullCheckMethods.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
@@ -252,7 +253,8 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
         stats.kotlin_composable_method++;
       }
     }
-    if (type::is_trivial_kotlin_lambda(cls)) {
+    if (auto analyzer = KotlinLambdaAnalyzer::analyze(cls);
+        analyzer.has_value() && analyzer->is_trivial()) {
       stats.kotlin_trivial_non_capturing_lambdas++;
       DexMethod* invoke = type::get_kotlin_lambda_invoke_method(cls);
       always_assert(invoke != nullptr);

@@ -596,11 +596,6 @@ bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
   return analyzer.has_value() && analyzer->is_non_capturing();
 }
 
-bool is_trivial_kotlin_lambda(const DexClass* cls, size_t max_instructions) {
-  auto analyzer = ::KotlinLambdaAnalyzer::analyze(cls);
-  return analyzer.has_value() && analyzer->is_trivial(max_instructions);
-}
-
 DexMethod* get_kotlin_lambda_invoke_method(const DexClass* cls) {
   auto analyzer = ::KotlinLambdaAnalyzer::analyze(cls);
   always_assert(analyzer.has_value());
