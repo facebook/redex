@@ -10,6 +10,7 @@
 #include "ClassUtil.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "KotlinLambdaAnalyzer.h"
 #include "Lazy.h"
 #include "RedexContext.h"
 #include "Show.h"
@@ -591,41 +592,19 @@ bool is_kotlin_class(DexClass* cls) {
 }
 
 bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
-  if (!is_kotlin_lambda(cls)) {
-    return false;
-  }
-
-  if (cls->get_ifields().empty()) {
-    return true;
-  }
-
-  return false;
+  auto analyzer = ::KotlinLambdaAnalyzer::analyze(cls);
+  return analyzer.has_value() && analyzer->is_non_capturing();
 }
 
 bool is_trivial_kotlin_lambda(const DexClass* cls, size_t max_instructions) {
-  if (!is_kotlin_non_capturing_lambda(cls)) {
-    return false;
-  }
-
-  const DexMethod* const invoke = get_kotlin_lambda_invoke_method(cls);
-  return invoke != nullptr &&
-         invoke->get_code()->count_opcodes() <= max_instructions;
+  auto analyzer = ::KotlinLambdaAnalyzer::analyze(cls);
+  return analyzer.has_value() && analyzer->is_trivial(max_instructions);
 }
 
 DexMethod* get_kotlin_lambda_invoke_method(const DexClass* cls) {
-  always_assert(is_kotlin_lambda(cls));
-  DexMethod* result = nullptr;
-  for (auto* method : cls->get_vmethods()) {
-    if (method->get_name()->str() == "invoke" && is_public(method) &&
-        !is_synthetic(method) && method->get_code() != nullptr) {
-      if (result != nullptr) {
-        // Multiple invoke methods found, ill-formed lambda.
-        return nullptr;
-      }
-      result = method;
-    }
-  }
-  return result;
+  auto analyzer = ::KotlinLambdaAnalyzer::analyze(cls);
+  always_assert(analyzer.has_value());
+  return analyzer->get_invoke_method();
 }
 
 bool is_kotlin_internal_type(const DexType* type) {

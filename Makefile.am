@@ -175,6 +175,7 @@ libredex_la_SOURCES = \
 	libredex/JavaParserUtil.cpp \
 	libredex/JsonWrapper.cpp \
 	libredex/KeepReason.cpp \
+	libredex/KotlinLambdaAnalyzer.cpp \
 	libredex/Match.cpp \
 	libredex/MatchFlow.cpp \
 	libredex/MatchFlowDetail.cpp \
