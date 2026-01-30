@@ -103,11 +103,16 @@ void insert_after_exceptions_impl(Block* cur,
 bool is_less_than_for_any_value(
     const SourceBlock* lhs,
     const SourceBlock* rhs,
-    uint32_t max_interaction = std::numeric_limits<uint32_t>::max()) {
+    uint32_t max_interaction = std::numeric_limits<uint32_t>::max(),
+    bool ignore_undefined = false) {
   always_assert(lhs != nullptr && rhs != nullptr);
   auto limit =
       std::min(std::min(lhs->vals_size, rhs->vals_size), max_interaction);
   for (size_t i = 0; i != limit; ++i) {
+    if (ignore_undefined && (lhs->get_at(i) == SourceBlock::Val::none() ||
+                             rhs->get_at(i) == SourceBlock::Val::none())) {
+      return false;
+    }
     if (lhs->get_val(i).get_value_or(0) < rhs->get_val(i).get_value_or(0)) {
       return true;
     }
@@ -448,7 +453,6 @@ struct InsertHelper {
 };
 
 struct CustomValueInsertHelper {
-
   enum class CustomInsertionType { DEFAULT_VALUES = 0, FUZZING_VALUES = 1 };
 
   std::ostringstream oss;
@@ -667,7 +671,6 @@ void set_source_block_value(SourceBlock* source_block, float hit) {
 }
 
 struct TopoTraversalHelper {
-
   CustomValueInsertHelper* value_insert_helper;
   RandomGenerator* generator;
   dominators::SimpleFastDominators<cfg::GraphInterface>* doms;
@@ -1334,6 +1337,17 @@ bool has_source_block_positive_val(const SourceBlock* sb) {
   return any_positive_val;
 }
 
+bool has_source_block_undefined_val(const SourceBlock* sb) {
+  bool any_undefined_val = false;
+  if (sb != nullptr) {
+    sb->foreach_val_early([&any_undefined_val](const auto& val) {
+      any_undefined_val = !val;
+      return any_undefined_val;
+    });
+  }
+  return any_undefined_val;
+}
+
 IRList::iterator find_first_block_insert_point(cfg::Block* b) {
   // Do not put source blocks before a (pseudo) move result or load-param-* at
   // the head of a block.
@@ -1412,7 +1426,8 @@ struct ViolationsAndPotentialViolations {
 
 ViolationsAndPotentialViolations hot_immediate_dom_not_hot_impl(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators) {
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators,
+    bool ignore_undefined) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
 
   auto* immediate_dominator = dominators.get_idom(block);
@@ -1424,7 +1439,9 @@ ViolationsAndPotentialViolations hot_immediate_dom_not_hot_impl(
   if ((first_sb_current_b != nullptr) &&
       (first_sb_immediate_dominator != nullptr) &&
       is_less_than_for_any_value(first_sb_immediate_dominator,
-                                 first_sb_current_b)) {
+                                 first_sb_current_b,
+                                 std::numeric_limits<uint32_t>::max(),
+                                 ignore_undefined)) {
     return {1, 1};
   } else {
     return {0, 1};
@@ -1433,13 +1450,15 @@ ViolationsAndPotentialViolations hot_immediate_dom_not_hot_impl(
 
 ViolationsAndPotentialViolations hot_immediate_dom_not_hot(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators) {
-  return hot_immediate_dom_not_hot_impl(block, dominators);
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators,
+    bool ignore_undefined) {
+  return hot_immediate_dom_not_hot_impl(block, dominators, ignore_undefined);
 }
 
 ViolationsAndPotentialViolations hot_no_hot_pred(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&,
+    bool ignore_undefined) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
   if (!has_source_block_positive_val(first_sb_current_b)) {
     return {0, 0};
@@ -1457,11 +1476,19 @@ ViolationsAndPotentialViolations hot_no_hot_pred(
       for (uint32_t i = 0; i < std::min(first_sb_current_b->vals_size,
                                         first_sb_pred->vals_size);
            i++) {
+        if (ignore_undefined &&
+            first_sb_pred->get_at(i) == SourceBlock::Val::none()) {
+          return {0, 1};
+        }
         summed_values[i] += first_sb_pred->get_val(i).get_value_or(0);
       }
     }
   }
   for (uint32_t i = 0; i < first_sb_current_b->vals_size; i++) {
+    if (ignore_undefined &&
+        first_sb_current_b->get_at(i) == SourceBlock::Val::none()) {
+      return {0, 1};
+    }
     if (summed_values[i] < first_sb_current_b->get_val(i).get_value_or(0)) {
       return {1, 1};
     }
@@ -1469,7 +1496,8 @@ ViolationsAndPotentialViolations hot_no_hot_pred(
   return {0, 1};
 }
 
-ViolationsAndPotentialViolations hot_all_children_cold(Block* block) {
+ViolationsAndPotentialViolations hot_all_children_cold(Block* block,
+                                                       bool ignore_undefined) {
   auto* last_sb_before_throw =
       source_blocks::get_last_source_block_if_after_throw(block);
 
@@ -1488,6 +1516,10 @@ ViolationsAndPotentialViolations hot_all_children_cold(Block* block) {
       for (uint32_t i = 0; i < std::min(last_sb_before_throw->vals_size,
                                         first_sb_succ->vals_size);
            i++) {
+        if (ignore_undefined &&
+            first_sb_succ->get_at(i) == SourceBlock::Val::none()) {
+          return {0, 1};
+        }
         summed_values[i] += first_sb_succ->get_val(i).get_value_or(0);
       }
     }
@@ -1496,6 +1528,10 @@ ViolationsAndPotentialViolations hot_all_children_cold(Block* block) {
     return {0, 0};
   }
   for (uint32_t i = 0; i < last_sb_before_throw->vals_size; i++) {
+    if (ignore_undefined &&
+        last_sb_before_throw->get_at(i) == SourceBlock::Val::none()) {
+      return {0, 1};
+    }
     // This means that for this current hot block (with respect to the last
     // source block of the hot block), the sum of the hit values of its children
     // must be greater or equal to its hit values
@@ -1627,32 +1663,37 @@ ViolationsAndPotentialViolations hot_method_cold_entry_violations_tmpl(
 
 ViolationsAndPotentialViolations chain_hot_violations(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&,
+    bool ignore_undefined) {
   return chain_hot_violations_tmpl(block, identity_transform);
 }
 
 ViolationsAndPotentialViolations chain_hot_one_violations(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&,
+    bool ignore_undefined) {
   return chain_hot_violations_tmpl(block, binary_transform);
 }
 
 ViolationsAndPotentialViolations hot_method_cold_entry_violations(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&,
+    bool ignore_undefined) {
   return hot_method_cold_entry_violations_tmpl(block, identity_transform);
 }
 
 ViolationsAndPotentialViolations hot_method_cold_entry_block_violations(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&,
+    bool ignore_undefined) {
   return hot_method_cold_entry_violations_tmpl(block, binary_transform);
 }
 
 ViolationsAndPotentialViolations hot_all_children_cold_violations(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return hot_all_children_cold(block);
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&,
+    bool ignore_undefined) {
+  return hot_all_children_cold(block, ignore_undefined);
 };
 
 struct ChainAndDomState {
@@ -1669,7 +1710,8 @@ void chain_and_dom_update(
     bool first_in_block,
     bool prev_insn_can_throw,
     ChainAndDomState& state,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom,
+    bool ignore_undefined) {
   if (first_in_block) {
     state.last = nullptr;
     for (auto* b = dom.get_idom(block); state.last == nullptr && b != nullptr;
@@ -1689,10 +1731,11 @@ void chain_and_dom_update(
   }
 
   if (state.last != nullptr) {
-    bool cold_precedes_hot =
-        is_less_than_for_any_value(state.last, sb, kMaxInteraction);
+    bool cold_precedes_hot = is_less_than_for_any_value(
+        state.last, sb, kMaxInteraction, ignore_undefined);
     bool hot_precedes_cold =
-        is_less_than_for_any_value(sb, state.last, kMaxInteraction) &&
+        is_less_than_for_any_value(sb, state.last, kMaxInteraction,
+                                   ignore_undefined) &&
         !first_in_block && !prev_insn_can_throw;
     if (cold_precedes_hot || hot_precedes_cold) {
       state.violations++;
@@ -1706,7 +1749,8 @@ void chain_and_dom_update(
 template <uint32_t kMaxInteraction>
 ViolationsAndPotentialViolations chain_and_dom_violations_impl(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom,
+    bool ignore_undefined) {
   ChainAndDomState state{};
   bool first = true;
   // True if any instruction that we've encountered since the last source
@@ -1721,7 +1765,8 @@ ViolationsAndPotentialViolations chain_and_dom_violations_impl(
     case MFLOW_SOURCE_BLOCK:
       for (auto* sb = mie.src_block.get(); sb != nullptr; sb = sb->next.get()) {
         chain_and_dom_update<kMaxInteraction>(block, sb, first,
-                                              prev_insn_can_throw, state, dom);
+                                              prev_insn_can_throw, state, dom,
+                                              ignore_undefined);
         first = false;
         prev_insn_can_throw = false;
       }
@@ -1736,22 +1781,26 @@ ViolationsAndPotentialViolations chain_and_dom_violations_impl(
 
 ViolationsAndPotentialViolations chain_and_dom_violations(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom,
+    bool ignore_undefined) {
   return chain_and_dom_violations_impl<std::numeric_limits<uint32_t>::max()>(
-      block, dom);
+      block, dom, ignore_undefined);
 }
 
 ViolationsAndPotentialViolations chain_and_dom_violations_coldstart(
     Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
-  return chain_and_dom_violations_impl<1>(block, dom);
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom,
+    bool ignore_undefined) {
+  return chain_and_dom_violations_impl<1>(block, dom, ignore_undefined);
 }
 
 // Ugly but necessary for constexpr below.
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 using ViolationCounterFnPtr = ViolationsAndPotentialViolations (*)(
-    Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
+    Block*,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&,
+    bool ignore_undefined);
 
 constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 4> gCounters = {
     {{"~blocks~count", &count_blocks},
@@ -1901,14 +1950,15 @@ void track_source_block_coverage(ScopedMetrics& sm,
           }
           for (size_t i = 0; i != gViolationCounters.size(); ++i) {
             auto [violations, possible_violations] =
-                (*gViolationCounters[i].second)(block, dominators);
+                (*gViolationCounters[i].second)(block, dominators, false);
             ret.global_violations[i].count += violations;
             ret.global_violations[i].possible += possible_violations;
           }
           if (block != cfg.entry_block()) {
             for (size_t i = 0; i != gViolationCountersNonEntry.size(); ++i) {
               auto [violations, possible_violations] =
-                  (*gViolationCountersNonEntry[i].second)(block, dominators);
+                  (*gViolationCountersNonEntry[i].second)(block, dominators,
+                                                          false);
               ret.non_entry_violations[i].count += violations;
               ret.non_entry_violations[i].possible += possible_violations;
             }
@@ -2026,6 +2076,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
   bool processed{false};
   bool track_intermethod_violations{false};
   bool print_all_violations{false};
+  bool ignore_undefined{false};
 
   using Violation = ViolationsHelper::Violation;
   const Violation v;
@@ -2074,26 +2125,29 @@ struct ViolationsHelper::ViolationsHelperImpl {
                        size_t top_n,
                        std::vector<std::string> to_vis,
                        bool track_intermethod_violations,
-                       bool print_all_violations)
+                       bool print_all_violations,
+                       bool ignore_undefined)
       : top_n(top_n),
         print(std::move(to_vis)),
         scope(scope),
         track_intermethod_violations(track_intermethod_violations),
         print_all_violations(print_all_violations),
+        ignore_undefined(ignore_undefined),
         v(v) {
     {
       std::mutex lock;
-      walk::parallel::methods(scope, [this, &lock, v](DexMethod* m) {
-        if (m->get_code() == nullptr) {
-          return;
-        }
-        cfg::ScopedCFG cfg(m->get_code());
-        auto val = compute(v, *cfg);
-        {
-          std::unique_lock<std::mutex> ulock{lock};
-          violations_start[m] = val;
-        }
-      });
+      walk::parallel::methods(scope,
+                              [this, &lock, v, ignore_undefined](DexMethod* m) {
+                                if (m->get_code() == nullptr) {
+                                  return;
+                                }
+                                cfg::ScopedCFG cfg(m->get_code());
+                                auto val = compute(v, *cfg, ignore_undefined);
+                                {
+                                  std::unique_lock<std::mutex> ulock{lock};
+                                  violations_start[m] = val;
+                                }
+                              });
     }
 
     if (track_intermethod_violations) {
@@ -2108,20 +2162,22 @@ struct ViolationsHelper::ViolationsHelperImpl {
     print_all();
   }
 
-  static size_t compute(Violation v, cfg::ControlFlowGraph& cfg) {
+  static size_t compute(Violation v,
+                        cfg::ControlFlowGraph& cfg,
+                        bool ignore_undefined) {
     switch (v) {
     case Violation::kHotImmediateDomNotHot:
-      return hot_immediate_dom_not_hot_cfg(cfg);
+      return hot_immediate_dom_not_hot_cfg(cfg, ignore_undefined);
     case Violation::kChainAndDom:
-      return chain_and_dom_violations_cfg(cfg);
+      return chain_and_dom_violations_cfg(cfg, ignore_undefined);
     case Violation::kUncoveredSourceBlocks:
       return uncovered_source_blocks_violations_cfg(cfg);
     case Violation::kHotMethodColdEntry:
-      return hot_method_cold_entry_violations_cfg(cfg);
+      return hot_method_cold_entry_violations_cfg(cfg, ignore_undefined);
     case Violation::kHotNoHotPred:
-      return hot_no_hot_pred_cfg(cfg);
+      return hot_no_hot_pred_cfg(cfg, ignore_undefined);
     case Violation::KHotAllChildrenCold:
-      return hot_all_children_cold_cfg(cfg);
+      return hot_all_children_cold_cfg(cfg, ignore_undefined);
     case Violation::ViolationSize:
       not_reached();
     }
@@ -2152,7 +2208,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
               return;
             }
             cfg::ScopedCFG cfg(m->get_code());
-            auto val = compute(v, *cfg);
+            auto val = compute(v, *cfg, ignore_undefined);
             if (val <= p.second) {
               return;
             }
@@ -2230,7 +2286,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
   }
 
-  static size_t hot_immediate_dom_not_hot_cfg(cfg::ControlFlowGraph& cfg) {
+  static size_t hot_immediate_dom_not_hot_cfg(cfg::ControlFlowGraph& cfg,
+                                              bool ignore_undefined) {
     size_t sum{0};
 
     // Some passes may leave around unreachable blocks which the fast-dom
@@ -2239,12 +2296,13 @@ struct ViolationsHelper::ViolationsHelperImpl {
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
 
     for (auto* b : cfg.blocks()) {
-      sum += hot_immediate_dom_not_hot(b, dom).violations;
+      sum += hot_immediate_dom_not_hot(b, dom, ignore_undefined).violations;
     }
     return sum;
   }
 
-  static size_t chain_and_dom_violations_cfg(cfg::ControlFlowGraph& cfg) {
+  static size_t chain_and_dom_violations_cfg(cfg::ControlFlowGraph& cfg,
+                                             bool ignore_undefined) {
     size_t sum{0};
 
     // Some passes may leave around unreachable blocks which the fast-dom
@@ -2253,7 +2311,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
 
     for (auto* b : cfg.blocks()) {
-      sum += chain_and_dom_violations(b, dom).violations;
+      sum += chain_and_dom_violations(b, dom, ignore_undefined).violations;
     }
     return sum;
   }
@@ -2274,8 +2332,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
     return sum;
   }
 
-  static size_t hot_method_cold_entry_violations_cfg(
-      cfg::ControlFlowGraph& cfg) {
+  static size_t hot_method_cold_entry_violations_cfg(cfg::ControlFlowGraph& cfg,
+                                                     bool ignore_undefined) {
     size_t sum{0};
     auto* entry_block = cfg.entry_block();
     if (entry_block == nullptr) {
@@ -2285,7 +2343,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
     if (sb == nullptr) {
       return 0;
     }
-    sb->foreach_val([&sum](const auto& val) {
+    sb->foreach_val([&sum, ignore_undefined](const auto& val) {
+      if (!ignore_undefined and !val) {
+        sum++;
+      }
       if (val && val->appear100 != 0 && val->val == 0) {
         sum++;
       }
@@ -2293,25 +2354,27 @@ struct ViolationsHelper::ViolationsHelperImpl {
     return sum;
   }
 
-  static size_t hot_no_hot_pred_cfg(cfg::ControlFlowGraph& cfg) {
+  static size_t hot_no_hot_pred_cfg(cfg::ControlFlowGraph& cfg,
+                                    bool ignore_undefined) {
     size_t sum{0};
 
     cfg.remove_unreachable_blocks();
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
 
     for (auto* b : cfg.blocks()) {
-      sum += hot_no_hot_pred(b, dom).violations;
+      sum += hot_no_hot_pred(b, dom, ignore_undefined).violations;
     }
     return sum;
   }
 
-  static size_t hot_all_children_cold_cfg(cfg::ControlFlowGraph& cfg) {
+  static size_t hot_all_children_cold_cfg(cfg::ControlFlowGraph& cfg,
+                                          bool ignore_undefined) {
     size_t sum{0};
 
     cfg.remove_unreachable_blocks();
 
     for (auto* b : cfg.blocks()) {
-      sum += hot_all_children_cold(b).violations;
+      sum += hot_all_children_cold(b, ignore_undefined).violations;
     }
     return sum;
   }
@@ -2322,9 +2385,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
       if (m != nullptr) {
         redex_assert(m != nullptr && m->is_def());
         auto* m_def = m->as_def();
-        log_cfg_violations(v, m_def);
+        log_cfg_violations(v, m_def, ignore_undefined);
         if (print_all_violations) {
-          print_cfg_with_all_violating_blocks(m_def);
+          print_cfg_with_all_violating_blocks(m_def, ignore_undefined);
         }
       }
     }
@@ -2343,7 +2406,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           if (it != std::end(print) && *it != cur_method_name) {
             TRACE(MMINL, 0, "### METHOD %s HAS SOURCE BLOCKS FROM %s ###",
                   cur_method_name.c_str(), (*it).c_str());
-            log_cfg_violations(v, m->as_def());
+            log_cfg_violations(v, m->as_def(), ignore_undefined);
             return;
           }
         }
@@ -2352,9 +2415,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
   }
 
   template <typename SpecialT>
-  static void print_cfg_with_violations(DexMethod* m) {
+  static void print_cfg_with_violations(DexMethod* m, bool ignore_undefined) {
     cfg::ScopedCFG cfg(m->get_code());
-    SpecialT special{*cfg};
+    SpecialT special{*cfg, ignore_undefined};
     TRACE(MMINL, 0, "=== %s ===\n%s\n", SHOW(m),
           show<SpecialT>(*cfg, special).c_str());
   }
@@ -2368,9 +2431,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
   template <typename SpecialT>
   static void gather_cfg_violating_blocks(DexMethod* m,
-                                          ViolationBlockMap* violating_blocks) {
+                                          ViolationBlockMap* violating_blocks,
+                                          bool ignore_undefined) {
     cfg::ScopedCFG cfg(m->get_code());
-    SpecialT special{*cfg, violating_blocks};
+    SpecialT special{*cfg, violating_blocks, ignore_undefined};
 
     const auto& blocks = cfg->blocks();
     // This needs a no-op stringstream to pass into the functions below
@@ -2412,7 +2476,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
     not_reached();
   }
 
-  static void print_cfg_with_all_violating_blocks(DexMethod* m) {
+  static void print_cfg_with_all_violating_blocks(DexMethod* m,
+                                                  bool ignore_undefined) {
     cfg::ScopedCFG cfg(m->get_code());
     ViolationBlockMap violation_blocks;
     for (Violation v = Violation::kHotImmediateDomNotHot;
@@ -2421,7 +2486,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
       // This is set so it does not actually print and clutter the output,
       // this is just used to call gather_cfg_violating_blocks
 
-      log_cfg_violations(v, m, false, &violation_blocks);
+      log_cfg_violations(v, m, ignore_undefined, false, &violation_blocks);
     }
 
     std::stringstream ss;
@@ -2474,14 +2539,17 @@ struct ViolationsHelper::ViolationsHelperImpl {
   template <typename Derived>
   class ViolationVisitorBase {
    private:
-    explicit ViolationVisitorBase(cfg::ControlFlowGraph& cfg)
-        : violating_blocks(nullptr) {
+    explicit ViolationVisitorBase(cfg::ControlFlowGraph& cfg,
+                                  bool ignore_undefined)
+        : violating_blocks(nullptr), ignore_undefined(ignore_undefined) {
       static_cast<Derived*>(this)->initialize(cfg);
     }
 
     explicit ViolationVisitorBase(cfg::ControlFlowGraph& cfg,
-                                  ViolationBlockMap* violating_blocks)
-        : violating_blocks(violating_blocks) {
+                                  ViolationBlockMap* violating_blocks,
+                                  bool ignore_undefined)
+        : violating_blocks(violating_blocks),
+          ignore_undefined(ignore_undefined) {
       static_cast<Derived*>(this)->initialize(cfg);
     }
 
@@ -2490,6 +2558,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
    protected:
     cfg::Block* cur{nullptr};
     ViolationBlockMap* violating_blocks{nullptr};
+    bool ignore_undefined{false};
 
    public:
     void mie_before(std::ostream&, const MethodItemEntry&) {}
@@ -2505,7 +2574,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
 
     void mie_after(std::ostream& os, const MethodItemEntry& mie) {
-      static_cast<Derived*>(this)->mie_after_impl(os, mie);
+      static_cast<Derived*>(this)->mie_after_impl(os, mie, ignore_undefined);
     }
 
    protected:
@@ -2517,12 +2586,14 @@ struct ViolationsHelper::ViolationsHelperImpl {
   template <typename ViolationVisitor>
   static void handle_violation(DexMethod* m,
                                bool print_violations,
-                               ViolationBlockMap* violation_blocks) {
+                               ViolationBlockMap* violation_blocks,
+                               bool ignore_undefined) {
     if (print_violations) {
-      print_cfg_with_violations<ViolationVisitor>(m);
+      print_cfg_with_violations<ViolationVisitor>(m, ignore_undefined);
     }
     if (violation_blocks != nullptr) {
-      gather_cfg_violating_blocks<ViolationVisitor>(m, violation_blocks);
+      gather_cfg_violating_blocks<ViolationVisitor>(m, violation_blocks,
+                                                    ignore_undefined);
     }
   }
 
@@ -2532,6 +2603,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
   static void log_cfg_violations(
       Violation v,
       DexMethod* m,
+      bool ignore_undefined,
       bool print_violations = true,
       ViolationBlockMap* violation_blocks = nullptr) {
     switch (v) {
@@ -2541,14 +2613,18 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
         using Base = ViolationVisitorBase<HotImmediateSpecial>;
 
-        explicit HotImmediateSpecial(cfg::ControlFlowGraph& cfg)
-            : Base(cfg), dom(cfg) {}
+        explicit HotImmediateSpecial(cfg::ControlFlowGraph& cfg,
+                                     bool ignore_undefined)
+            : Base(cfg, ignore_undefined), dom(cfg) {}
 
         explicit HotImmediateSpecial(cfg::ControlFlowGraph& cfg,
-                                     ViolationBlockMap* violating_blocks)
-            : Base(cfg, violating_blocks), dom(cfg) {}
+                                     ViolationBlockMap* violating_blocks,
+                                     bool ignore_undefined)
+            : Base(cfg, violating_blocks, ignore_undefined), dom(cfg) {}
 
-        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
+        void mie_after_impl(std::ostream& os,
+                            const MethodItemEntry& mie,
+                            bool ignore_undefined) {
           if (mie.type != MFLOW_SOURCE_BLOCK) {
             return;
           }
@@ -2580,6 +2656,12 @@ struct ViolationsHelper::ViolationsHelperImpl {
             return;
           }
 
+          if (ignore_undefined && source_blocks::has_source_block_undefined_val(
+                                      first_sb_immediate_dominator)) {
+            os << " IGNORING UNDEFINED\n";
+            return;
+          }
+
           if (violating_blocks != nullptr) {
             auto& map = (*violating_blocks)[mie.src_block.get()];
             map[Violation::kHotImmediateDomNotHot].emplace_back(
@@ -2599,8 +2681,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           os << "\n";
         }
       };
-      return handle_violation<HotImmediateSpecial>(m, print_violations,
-                                                   violation_blocks);
+      return handle_violation<HotImmediateSpecial>(
+          m, print_violations, violation_blocks, ignore_undefined);
     }
     case Violation::kChainAndDom: {
       struct ChainAndDom : ViolationVisitorBase<ChainAndDom> {
@@ -2611,19 +2693,22 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
         using Base = ViolationVisitorBase<ChainAndDom>;
 
-        explicit ChainAndDom(cfg::ControlFlowGraph& cfg)
-            : Base(cfg), dom(cfg) {}
+        explicit ChainAndDom(cfg::ControlFlowGraph& cfg, bool ignore_undefined)
+            : Base(cfg, ignore_undefined), dom(cfg) {}
 
         explicit ChainAndDom(cfg::ControlFlowGraph& cfg,
-                             ViolationBlockMap* violating_blocks)
-            : Base(cfg, violating_blocks), dom(cfg) {}
+                             ViolationBlockMap* violating_blocks,
+                             bool ignore_undefined)
+            : Base(cfg, violating_blocks, ignore_undefined), dom(cfg) {}
 
         void start_block(std::ostream& os, cfg::Block* b) {
           Base::start_block(os, b);
           first_in_block = true;
         }
 
-        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
+        void mie_after_impl(std::ostream& os,
+                            const MethodItemEntry& mie,
+                            bool ignore_undefined) {
           if (mie.type != MFLOW_SOURCE_BLOCK) {
             prev_insn_can_throw =
                 prev_insn_can_throw || (mie.type == MFLOW_OPCODE &&
@@ -2636,7 +2721,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           auto* sb = mie.src_block.get();
 
           chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(
-              cur, sb, first_in_block, prev_insn_can_throw, state, dom);
+              cur, sb, first_in_block, prev_insn_can_throw, state, dom,
+              ignore_undefined);
 
           const bool head_error = state.violations > old_count;
           const auto* dom_block = state.dom_block;
@@ -2646,7 +2732,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           for (auto* cur_sb = sb->next.get(); cur_sb != nullptr;
                cur_sb = cur_sb->next.get()) {
             chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(
-                cur, cur_sb, first_in_block, prev_insn_can_throw, state, dom);
+                cur, cur_sb, first_in_block, prev_insn_can_throw, state, dom,
+                ignore_undefined);
           }
 
           prev_insn_can_throw = false;
@@ -2673,21 +2760,25 @@ struct ViolationsHelper::ViolationsHelperImpl {
         }
       };
       return handle_violation<ChainAndDom>(m, print_violations,
-                                           violation_blocks);
+                                           violation_blocks, ignore_undefined);
     }
     case Violation::kUncoveredSourceBlocks: {
       struct UncoveredSourceBlocks
           : ViolationVisitorBase<UncoveredSourceBlocks> {
         using Base = ViolationVisitorBase<UncoveredSourceBlocks>;
 
-        explicit UncoveredSourceBlocks(cfg::ControlFlowGraph& cfg)
-            : Base(cfg) {}
+        explicit UncoveredSourceBlocks(cfg::ControlFlowGraph& cfg,
+                                       bool ignore_undefined)
+            : Base(cfg, ignore_undefined) {}
 
         explicit UncoveredSourceBlocks(cfg::ControlFlowGraph& cfg,
-                                       ViolationBlockMap* violating_blocks)
-            : Base(cfg, violating_blocks) {}
+                                       ViolationBlockMap* violating_blocks,
+                                       bool ignore_undefined)
+            : Base(cfg, violating_blocks, ignore_undefined) {}
 
-        void mie_after_impl(std::ostream&, const MethodItemEntry&) {}
+        void mie_after_impl(std::ostream&,
+                            const MethodItemEntry&,
+                            bool ignore_undefined) {}
 
         void start_block(std::ostream& os, cfg::Block* b) {
           // Don't call Base::start_block - custom logic only
@@ -2709,8 +2800,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           // Empty - don't call Base::end_block
         }
       };
-      return handle_violation<UncoveredSourceBlocks>(m, print_violations,
-                                                     violation_blocks);
+      return handle_violation<UncoveredSourceBlocks>(
+          m, print_violations, violation_blocks, ignore_undefined);
     }
     case Violation::kHotMethodColdEntry: {
       struct HotMethodColdEntry : ViolationVisitorBase<HotMethodColdEntry> {
@@ -2719,11 +2810,14 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
         using Base = ViolationVisitorBase<HotMethodColdEntry>;
 
-        explicit HotMethodColdEntry(cfg::ControlFlowGraph& cfg) : Base(cfg) {}
+        explicit HotMethodColdEntry(cfg::ControlFlowGraph& cfg,
+                                    bool ignore_undefined)
+            : Base(cfg, ignore_undefined) {}
 
         explicit HotMethodColdEntry(cfg::ControlFlowGraph& cfg,
-                                    ViolationBlockMap* violating_blocks)
-            : Base(cfg, violating_blocks) {}
+                                    ViolationBlockMap* violating_blocks,
+                                    bool ignore_undefined)
+            : Base(cfg, violating_blocks, ignore_undefined) {}
 
         void start_block(std::ostream& os, cfg::Block* b) {
           Base::start_block(os, b);
@@ -2735,7 +2829,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
           Base::end_block(os, b);
         }
 
-        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
+        void mie_after_impl(std::ostream& os,
+                            const MethodItemEntry& mie,
+                            bool ignore_undefined) {
           if (mie.type != MFLOW_SOURCE_BLOCK || !is_entry_block ||
               !first_in_block) {
             return;
@@ -2744,11 +2840,15 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
           auto* sb = mie.src_block.get();
           bool violation_found_in_head{false};
-          sb->foreach_val([&violation_found_in_head](const auto& val) {
-            if (val && val->appear100 != 0 && val->val == 0) {
-              violation_found_in_head = true;
-            }
-          });
+          sb->foreach_val(
+              [&violation_found_in_head, ignore_undefined](const auto& val) {
+                if (!ignore_undefined && !val) {
+                  violation_found_in_head = true;
+                }
+                if (!val || (val->appear100 != 0 && val->val == 0)) {
+                  violation_found_in_head = true;
+                }
+              });
           if (violation_found_in_head) {
             if (violating_blocks != nullptr) {
               auto& map = (*violating_blocks)[sb];
@@ -2776,8 +2876,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           os << "\n";
         }
       };
-      return handle_violation<HotMethodColdEntry>(m, print_violations,
-                                                  violation_blocks);
+      return handle_violation<HotMethodColdEntry>(
+          m, print_violations, violation_blocks, ignore_undefined);
     }
     case Violation::kHotNoHotPred: {
       struct HotNoHotPred : ViolationVisitorBase<HotNoHotPred> {
@@ -2785,15 +2885,25 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
         using Base = ViolationVisitorBase<HotNoHotPred>;
 
-        explicit HotNoHotPred(cfg::ControlFlowGraph& cfg)
-            : Base(cfg), dom(cfg) {}
+        explicit HotNoHotPred(cfg::ControlFlowGraph& cfg, bool ignore_undefined)
+            : Base(cfg, ignore_undefined), dom(cfg) {}
 
         explicit HotNoHotPred(cfg::ControlFlowGraph& cfg,
-                              ViolationBlockMap* violating_blocks)
-            : Base(cfg, violating_blocks), dom(cfg) {}
+                              ViolationBlockMap* violating_blocks,
+                              bool ignore_undefined)
+            : Base(cfg, violating_blocks, ignore_undefined), dom(cfg) {}
 
-        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
+        void mie_after_impl(std::ostream& os,
+                            const MethodItemEntry& mie,
+                            bool ignore_undefined) {
           if (mie.type != MFLOW_SOURCE_BLOCK) {
+            return;
+          }
+
+          if (source_blocks::has_source_block_undefined_val(
+                  mie.src_block.get()) &&
+              ignore_undefined) {
+            os << " IGNORE UNDEFINED\n";
             return;
           }
 
@@ -2813,7 +2923,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
           for (auto* predecessor : cur->preds()) {
             auto* first_sb_pred =
                 source_blocks::get_first_source_block(predecessor->src());
-            if (source_blocks::has_source_block_positive_val(first_sb_pred)) {
+            if (source_blocks::has_source_block_positive_val(first_sb_pred) ||
+                (ignore_undefined &&
+                 source_blocks::has_source_block_undefined_val(
+                     first_sb_pred))) {
               violation_found = false;
               break;
             } else {
@@ -2835,19 +2948,24 @@ struct ViolationsHelper::ViolationsHelperImpl {
         }
       };
       return handle_violation<HotNoHotPred>(m, print_violations,
-                                            violation_blocks);
+                                            violation_blocks, ignore_undefined);
     }
     case Violation::KHotAllChildrenCold: {
       struct HotAllChildrenCold : ViolationVisitorBase<HotAllChildrenCold> {
         using Base = ViolationVisitorBase<HotAllChildrenCold>;
 
-        explicit HotAllChildrenCold(cfg::ControlFlowGraph& cfg) : Base(cfg) {}
+        explicit HotAllChildrenCold(cfg::ControlFlowGraph& cfg,
+                                    bool ignore_undefined)
+            : Base(cfg, ignore_undefined) {}
 
         explicit HotAllChildrenCold(cfg::ControlFlowGraph& cfg,
-                                    ViolationBlockMap* violating_blocks)
-            : Base(cfg, violating_blocks) {}
+                                    ViolationBlockMap* violating_blocks,
+                                    bool ignore_undefined)
+            : Base(cfg, violating_blocks, ignore_undefined) {}
 
-        void mie_after_impl(std::ostream& os, const MethodItemEntry& mie) {
+        void mie_after_impl(std::ostream& os,
+                            const MethodItemEntry& mie,
+                            bool ignore_undefined) {
           if (mie.type != MFLOW_SOURCE_BLOCK) {
             return;
           }
@@ -2864,6 +2982,11 @@ struct ViolationsHelper::ViolationsHelperImpl {
             return;
           }
 
+          if (ignore_undefined &&
+              has_source_block_undefined_val(last_sb_before_throw)) {
+            return;
+          }
+
           os << " HOT\n";
 
           bool has_successor = false;
@@ -2873,6 +2996,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
                 source_blocks::get_first_source_block(successor->src());
             has_successor = true;
             if (has_source_block_positive_val(first_sb_succ)) {
+              return;
+            }
+            if (ignore_undefined &&
+                has_source_block_undefined_val(first_sb_succ)) {
               return;
             }
             if (violating_blocks != nullptr) {
@@ -2889,8 +3016,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           }
         }
       };
-      return handle_violation<HotAllChildrenCold>(m, print_violations,
-                                                  violation_blocks);
+      return handle_violation<HotAllChildrenCold>(
+          m, print_violations, violation_blocks, ignore_undefined);
     }
     case Violation::ViolationSize:
       not_reached();
@@ -2904,13 +3031,15 @@ ViolationsHelper::ViolationsHelper(Violation v,
                                    size_t top_n,
                                    std::vector<std::string> to_vis,
                                    bool track_intermethod_violations,
-                                   bool print_all_violations)
+                                   bool print_all_violations,
+                                   bool ignore_undefined)
     : impl(std::make_unique<ViolationsHelperImpl>(v,
                                                   scope,
                                                   top_n,
                                                   std::move(to_vis),
                                                   track_intermethod_violations,
-                                                  print_all_violations)) {}
+                                                  print_all_violations,
+                                                  ignore_undefined)) {}
 ViolationsHelper::~ViolationsHelper() {}
 
 void ViolationsHelper::process(ScopedMetrics* sm) {
@@ -2932,8 +3061,11 @@ ViolationsHelper& ViolationsHelper::operator=(ViolationsHelper&& rhs) noexcept {
   return *this;
 }
 
-size_t compute(ViolationsHelper::Violation v, cfg::ControlFlowGraph& cfg) {
-  return ViolationsHelper::ViolationsHelperImpl::compute(v, cfg);
+size_t compute(ViolationsHelper::Violation v,
+               cfg::ControlFlowGraph& cfg,
+               bool ignore_undefined) {
+  return ViolationsHelper::ViolationsHelperImpl::compute(v, cfg,
+                                                         ignore_undefined);
 }
 
 SourceBlock* get_first_source_block_of_method(const DexMethod* m) {

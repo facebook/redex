@@ -1081,7 +1081,8 @@ struct ViolationsTracking {
               /*to_vis=*/
               std::vector<std::string>{},
               /*track_intermethod_violations=*/false,
-              /*print_all_violations=*/false)) {}
+              /*print_all_violations=*/false,
+              /*ignore_undefined*/ false)) {}
     ~Handler() {
       if (vh != nullptr) {
         ScopedMetrics sm(*pm);

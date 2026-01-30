@@ -273,6 +273,8 @@ void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg);
 
 bool has_source_block_positive_val(const SourceBlock* sb);
 
+bool has_source_block_undefined_val(const SourceBlock* sb);
+
 size_t compute_method_violations(const call_graph::Graph& call_graph,
                                  const Scope& scope);
 
@@ -617,6 +619,7 @@ struct ViolationsHelper {
   std::unique_ptr<ViolationsHelperImpl> impl;
   bool track_intermethod_violations{false};
   bool print_all_violations{false};
+  bool ignore_undefined{false};
 
   enum class Violation {
     kHotImmediateDomNotHot = 0,
@@ -633,7 +636,8 @@ struct ViolationsHelper {
                    size_t top_n,
                    std::vector<std::string> to_vis,
                    bool track_intermethod_violations,
-                   bool print_all_violations);
+                   bool print_all_violations,
+                   bool ignore_undefined);
   ~ViolationsHelper();
 
   void process(ScopedMetrics* sm);
@@ -643,7 +647,9 @@ struct ViolationsHelper {
   ViolationsHelper& operator=(ViolationsHelper&& rhs) noexcept;
 };
 
-size_t compute(ViolationsHelper::Violation v, cfg::ControlFlowGraph& cfg);
+size_t compute(ViolationsHelper::Violation v,
+               cfg::ControlFlowGraph& cfg,
+               bool ignore_undefined = false);
 
 SourceBlock* get_first_source_block_of_method(const DexMethod* m);
 
