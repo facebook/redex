@@ -287,10 +287,6 @@ struct SourceBlockMetric {
   size_t hot_throw_cold_count{0};
 };
 
-using SourceBlockInvokeMap =
-    ConcurrentMap<const DexMethod*,
-                  UnorderedMap<IRInstruction*, std::vector<bool>>>;
-
 SourceBlockMetric gather_source_block_metrics(ControlFlowGraph* cfg);
 
 void fix_chain_violations(ControlFlowGraph* cfg);

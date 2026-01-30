@@ -1505,8 +1505,11 @@ ViolationsAndPotentialViolations hot_all_children_cold(Block* block) {
   return {0, 1};
 }
 
-size_t hot_callee_all_cold_callers(call_graph::NodeId node,
-                                   SourceBlockInvokeMap& src_block_invoke_map) {
+using SourceBlockHotInvokeMap =
+    ConcurrentMap<const DexMethod*, UnorderedSet<IRInstruction*>>;
+
+size_t hot_callee_all_cold_callers(
+    call_graph::NodeId node, SourceBlockHotInvokeMap& src_block_invoke_map) {
   // Ignore Ghost Nodes
   if (node->is_entry() || node->is_exit()) {
     return 0;
@@ -1548,12 +1551,10 @@ size_t hot_callee_all_cold_callers(call_graph::NodeId node,
     if (src_block_invoke_map.count(caller_method) == 0) {
       continue;
     }
-    const auto& source_block_bools_before_invoke =
-        src_block_invoke_map.at_unsafe(caller_method)[invoke_insn];
-    for (auto b : source_block_bools_before_invoke) {
-      if (b) {
-        return 0;
-      }
+    const auto& insn_map = src_block_invoke_map.at_unsafe(caller_method);
+    const auto& source_block_bools_before_invoke = insn_map.find(invoke_insn);
+    if (source_block_bools_before_invoke != insn_map.end()) {
+      return 0;
     }
   }
   return 1;
@@ -1964,7 +1965,7 @@ size_t compute_method_violations(const call_graph::Graph& call_graph,
                                  const Scope& scope) {
   size_t count{0};
 
-  SourceBlockInvokeMap src_block_invoke_map;
+  SourceBlockHotInvokeMap src_block_hot_invoke_map;
   // Builds a graph of method -> invoke insn -> vector<bool> each bool
   // representing if the coldstart interaction of the source block right
   // before that invoke is hot or not
@@ -1977,6 +1978,7 @@ size_t compute_method_violations(const call_graph::Graph& call_graph,
     cfg->remove_unreachable_blocks();
 
     IRInstruction* current_invoke_insn = nullptr;
+    UnorderedSet<IRInstruction*> hot_set;
     for (auto* block : cfg->blocks()) {
       for (auto it = block->rbegin(); it != block->rend(); ++it) {
         if (it->type == MFLOW_OPCODE) {
@@ -1991,19 +1993,24 @@ size_t compute_method_violations(const call_graph::Graph& call_graph,
               continue;
             }
             bool is_hot = (sb != nullptr) && sb->get_val(0).value_or(0) > 0;
-            src_block_invoke_map.update(
-                current_method, [&](const DexMethod*, auto& method_map, bool) {
-                  method_map[current_invoke_insn].push_back(is_hot);
-                });
+            if (is_hot) {
+              hot_set.insert(current_invoke_insn);
+            }
             current_invoke_insn = nullptr;
           }
         }
       }
     }
+    if (!hot_set.empty()) {
+      src_block_hot_invoke_map.update(
+          current_method, [&](const DexMethod*, auto& method_hot_set, bool) {
+            method_hot_set = std::move(hot_set);
+          });
+    }
   });
 
   impl::visit_by_levels(&call_graph, [&](call_graph::NodeId node) {
-    count += hot_callee_all_cold_callers(node, src_block_invoke_map);
+    count += hot_callee_all_cold_callers(node, src_block_hot_invoke_map);
   });
 
   return count;
