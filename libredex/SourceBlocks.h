@@ -11,7 +11,6 @@
 #include <memory>
 #include <vector>
 
-#include "CallGraph.h"
 #include "ControlFlow.h"
 #include "CppUtil.h"
 #include "Debug.h"
@@ -26,6 +25,10 @@ class ScopedMetrics;
 
 // Must match DexStore.
 using DexStoresVector = std::vector<DexStore>;
+
+namespace call_graph {
+class Graph;
+} // namespace call_graph
 
 namespace source_blocks {
 
@@ -200,33 +203,6 @@ void visit_in_order(const ControlFlowGraph* cfg,
              "%zu vs %zu",
              visited.size(),
              cfg->num_blocks());
-}
-
-// This is an implementation of Breadth-First Search for call-graphs.
-template <typename MethodStartFn>
-void visit_by_levels(const call_graph::Graph* cg,
-                     const MethodStartFn& method_start_fn) {
-  UnorderedSet<call_graph::NodeId> visited;
-  std::queue<call_graph::NodeId> queue;
-  queue.push(cg->entry());
-  visited.insert(cg->entry());
-
-  while (!queue.empty()) {
-    const auto* cur = queue.front();
-    queue.pop();
-
-    method_start_fn(cur);
-
-    auto callees = cur->callees();
-    for (const auto& edge : callees) {
-      const auto* callee = edge->callee();
-      if (visited.count(callee)) {
-        continue;
-      }
-      visited.insert(callee);
-      queue.push(callee);
-    }
-  }
 }
 
 } // namespace impl

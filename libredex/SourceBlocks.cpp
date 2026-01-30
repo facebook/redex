@@ -15,6 +15,7 @@
 
 #include <sparta/S_Expression.h>
 
+#include "CallGraph.h"
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -2009,7 +2010,7 @@ size_t compute_method_violations(const call_graph::Graph& call_graph,
     }
   });
 
-  impl::visit_by_levels(&call_graph, [&](call_graph::NodeId node) {
+  call_graph.visit_by_levels([&](call_graph::NodeId node) {
     count += hot_callee_all_cold_callers(node, src_block_hot_invoke_map);
   });
 

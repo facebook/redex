@@ -7,9 +7,12 @@
 
 #pragma once
 
+#include <queue>
+
 #include <sparta/MonotonicFixpointIterator.h>
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
 
@@ -218,6 +221,32 @@ class Graph final {
   }
 
   const MethodBag& get_callers(const DexMethod* callee) const;
+
+  // This is an implementation of Breadth-First Search for call-graphs.
+  template <typename MethodStartFn>
+  void visit_by_levels(const MethodStartFn& method_start_fn) const {
+    UnorderedSet<NodeId> visited;
+    std::queue<NodeId> queue;
+    queue.push(entry());
+    visited.insert(entry());
+
+    while (!queue.empty()) {
+      const auto* cur = queue.front();
+      queue.pop();
+
+      method_start_fn(cur);
+
+      auto callees = cur->callees();
+      for (const auto& edge : callees) {
+        const auto* callee = edge->callee();
+        if (visited.count(callee)) {
+          continue;
+        }
+        visited.insert(callee);
+        queue.push(callee);
+      }
+    }
+  }
 
  private:
   std::unique_ptr<Node> m_entry;

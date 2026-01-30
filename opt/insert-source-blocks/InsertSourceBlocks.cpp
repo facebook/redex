@@ -829,13 +829,12 @@ struct Injector {
     UnorderedMap<call_graph::NodeId, MethodFuzzingMetadata> method_metadata;
     UnorderedMap<IRInstruction*, bool> caller_hit_lookup;
     // Set up and count indegrees
-    source_blocks::impl::visit_by_levels(
-        &*call_graph, [&](call_graph::NodeId node) {
-          if (method_metadata.find(node) == method_metadata.end()) {
-            method_metadata.insert({node, MethodFuzzingMetadata(0, 0)});
-          }
-          method_metadata.at(node).indegrees = node->callers().size();
-        });
+    call_graph->visit_by_levels([&](call_graph::NodeId node) {
+      if (method_metadata.find(node) == method_metadata.end()) {
+        method_metadata.insert({node, MethodFuzzingMetadata(0, 0)});
+      }
+      method_metadata.at(node).indegrees = node->callers().size();
+    });
 
     InsertOnlyConcurrentSet<DexMethod*> seen_methods;
     InsertResult res;
