@@ -406,6 +406,7 @@ libopt_la_SOURCES = \
 	opt/class-merging/ClassMergingPass.cpp \
 	opt/class-merging/IntraDexClassMergingPass.cpp \
 	opt/class-merging/ModelSpecGenerator.cpp \
+	opt/class-reordering/ClassReorderingPass.cpp \
 	opt/class-splitting/ClassSplittingPass.cpp \
 	opt/clinit-outliner/ClinitOutlinePass.cpp \
 	opt/const-class-branches/TransformConstClassBranches.cpp \
