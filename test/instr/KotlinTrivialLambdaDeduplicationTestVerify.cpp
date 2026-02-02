@@ -72,7 +72,7 @@ DexFieldRef* get_sget_field(const DexMethod* m) {
   }
   for (const auto& insn : code->get_instructions()) {
     if (insn->opcode() == DOPCODE_SGET_OBJECT) {
-      return static_cast<const DexOpcodeField*>(insn)->get_field();
+      return dynamic_cast<const DexOpcodeField*>(insn)->get_field();
     }
   }
   return nullptr;
