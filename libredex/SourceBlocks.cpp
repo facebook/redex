@@ -1664,28 +1664,28 @@ ViolationsAndPotentialViolations hot_method_cold_entry_violations_tmpl(
 ViolationsAndPotentialViolations chain_hot_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&,
-    bool ignore_undefined) {
+    bool /*ignore_undefined*/) {
   return chain_hot_violations_tmpl(block, identity_transform);
 }
 
 ViolationsAndPotentialViolations chain_hot_one_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&,
-    bool ignore_undefined) {
+    bool /*ignore_undefined*/) {
   return chain_hot_violations_tmpl(block, binary_transform);
 }
 
 ViolationsAndPotentialViolations hot_method_cold_entry_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&,
-    bool ignore_undefined) {
+    bool /*ignore_undefined*/) {
   return hot_method_cold_entry_violations_tmpl(block, identity_transform);
 }
 
 ViolationsAndPotentialViolations hot_method_cold_entry_block_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&,
-    bool ignore_undefined) {
+    bool /*ignore_undefined*/) {
   return hot_method_cold_entry_violations_tmpl(block, binary_transform);
 }
 
