@@ -93,7 +93,7 @@ void KotlinTrivialLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
       return;
     }
 
-    auto analyzer = KotlinLambdaAnalyzer::analyze(cls);
+    auto analyzer = KotlinLambdaAnalyzer::for_class(cls);
     if (!analyzer.has_value() ||
         !analyzer->is_trivial(m_trivial_lambda_max_instructions)) {
       return;

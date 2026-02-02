@@ -47,7 +47,7 @@ void KotlinStatelessLambdaSingletonRemovalPass::run_pass(
 
   auto is_excludable =
       [this, &method_profiles, has_method_profiles](DexClass* cls) -> bool {
-    auto analyzer = KotlinLambdaAnalyzer::analyze(cls);
+    auto analyzer = KotlinLambdaAnalyzer::for_class(cls);
     redex_assert(analyzer && analyzer->is_non_capturing());
     return has_method_profiles && is_hot_lambda(cls, method_profiles);
   };

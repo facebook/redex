@@ -253,7 +253,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
         stats.kotlin_composable_method++;
       }
     }
-    if (auto analyzer = KotlinLambdaAnalyzer::analyze(cls);
+    if (auto analyzer = KotlinLambdaAnalyzer::for_class(cls);
         analyzer.has_value() && analyzer->is_trivial()) {
       stats.kotlin_trivial_non_capturing_lambdas++;
       DexMethod* invoke = analyzer->get_invoke_method();

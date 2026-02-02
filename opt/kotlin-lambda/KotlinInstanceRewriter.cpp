@@ -45,7 +45,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
     if (!can_rename(cls) || !can_delete(cls)) {
       return;
     }
-    if (auto analyzer = KotlinLambdaAnalyzer::analyze(cls);
+    if (auto analyzer = KotlinLambdaAnalyzer::for_class(cls);
         !analyzer || !analyzer->is_non_capturing()) {
       return;
     }

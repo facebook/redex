@@ -15,11 +15,17 @@
  * Analyzer for Kotlin lambda classes that provides efficient access to
  * lambda properties without redundant is_kotlin_lambda checks.
  *
- * Use the static analyze() factory to create an instance. Returns nullopt
- * if the class is not a Kotlin lambda.
+ * Use the static for_class() factory to create an instance. Returns nullopt
+ * if the class is not a Kotlin lambda. This makes for_class() suitable for
+ * checking whether a class is a Kotlin lambda:
  *
- * Usage:
- *   if (auto analyzer = KotlinLambdaAnalyzer::analyze(cls)) {
+ *   if (KotlinLambdaAnalyzer::for_class(cls)) {
+ *     // cls is a Kotlin lambda
+ *   }
+ *
+ * If you need to access lambda properties, capture the analyzer:
+ *
+ *   if (auto analyzer = KotlinLambdaAnalyzer::for_class(cls)) {
  *     if (analyzer->is_non_capturing()) {
  *       auto* invoke = analyzer->get_invoke_method();
  *       ...
@@ -30,10 +36,11 @@ class KotlinLambdaAnalyzer final {
  public:
   KotlinLambdaAnalyzer() = delete;
   /**
-   * Analyzes a class and returns a KotlinLambdaAnalyzer if it's a Kotlin
-   * lambda, or nullopt otherwise.
+   * Creates a KotlinLambdaAnalyzer if the class is a Kotlin lambda, or returns
+   * nullopt otherwise. Can be used both to check if a class is a Kotlin lambda
+   * and to analyze its properties.
    */
-  [[nodiscard]] static std::optional<KotlinLambdaAnalyzer> analyze(
+  [[nodiscard]] static std::optional<KotlinLambdaAnalyzer> for_class(
       const DexClass* cls);
 
   /**

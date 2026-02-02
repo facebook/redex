@@ -83,7 +83,7 @@ void ResolveMethodRefs::analyze_method(
       }
 
       // We first focus on Kotlin lambda code.
-      if (auto analyzer = KotlinLambdaAnalyzer::analyze(*analysis_cls);
+      if (auto analyzer = KotlinLambdaAnalyzer::for_class(*analysis_cls);
           !analyzer || !analyzer->is_non_capturing()) {
         continue;
       }

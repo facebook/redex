@@ -192,7 +192,7 @@ TEST_F(KotlinLambdaAnalyzerTest, IsTrivial_RespectsMaxInstructions) {
   creator.add_method(invoke_method);
 
   const auto* lambda_class = creator.create();
-  auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
   ASSERT_TRUE(analyzer.has_value());
 
   EXPECT_FALSE(analyzer->is_trivial()); // 5 > default max (4)
@@ -232,7 +232,7 @@ TEST_F(KotlinLambdaAnalyzerTest, NonTrivialLambda_Capturing) {
 
   const auto* capturing_lambda_class = creator.create();
 
-  auto analyzer = KotlinLambdaAnalyzer::analyze(capturing_lambda_class);
+  auto analyzer = KotlinLambdaAnalyzer::for_class(capturing_lambda_class);
   ASSERT_TRUE(analyzer.has_value());
   // Capturing lambdas are never trivial, even with few instructions
   EXPECT_FALSE(analyzer->is_trivial());
@@ -241,7 +241,7 @@ TEST_F(KotlinLambdaAnalyzerTest, NonTrivialLambda_Capturing) {
 TEST_F(KotlinLambdaAnalyzerTest, NonTrivialLambda_NoInvokeMethod) {
   const auto* lambda_class = create_lambda_without_invoke();
 
-  auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
   ASSERT_TRUE(analyzer.has_value());
   EXPECT_FALSE(analyzer->is_trivial());
 }
@@ -252,7 +252,7 @@ TEST_F(KotlinLambdaAnalyzerTest, NonLambdaClass) {
   creator.set_super(type::java_lang_Object());
   const auto* non_lambda_class = creator.create();
 
-  auto analyzer = KotlinLambdaAnalyzer::analyze(non_lambda_class);
+  auto analyzer = KotlinLambdaAnalyzer::for_class(non_lambda_class);
   EXPECT_FALSE(analyzer.has_value());
 }
 
@@ -268,7 +268,7 @@ TEST_F(KotlinLambdaAnalyzerTest, IsNonCapturing) {
     creator.add_interface(kotlin_function_type);
 
     const auto* lambda_class = creator.create();
-    auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+    auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
     ASSERT_TRUE(analyzer.has_value());
     EXPECT_TRUE(analyzer->is_non_capturing());
   }
@@ -287,7 +287,7 @@ TEST_F(KotlinLambdaAnalyzerTest, IsNonCapturing) {
     creator.add_field(field);
 
     const auto* lambda_class = creator.create();
-    auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+    auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
     ASSERT_TRUE(analyzer.has_value());
     EXPECT_FALSE(analyzer->is_non_capturing());
   }
@@ -295,7 +295,7 @@ TEST_F(KotlinLambdaAnalyzerTest, IsNonCapturing) {
 
 TEST_F(KotlinLambdaAnalyzerTest, GetInvokeMethod_ProperLambda) {
   const auto* lambda_class = create_lambda_with_invoke();
-  auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
   ASSERT_TRUE(analyzer.has_value());
   DexMethod* invoke = analyzer->get_invoke_method();
   ASSERT_THAT(invoke, NotNull());
@@ -304,28 +304,28 @@ TEST_F(KotlinLambdaAnalyzerTest, GetInvokeMethod_ProperLambda) {
 
 TEST_F(KotlinLambdaAnalyzerTest, GetInvokeMethod_WithoutInvoke) {
   const auto* lambda_class = create_lambda_without_invoke();
-  auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
   ASSERT_TRUE(analyzer.has_value());
   EXPECT_THAT(analyzer->get_invoke_method(), IsNull());
 }
 
 TEST_F(KotlinLambdaAnalyzerTest, GetInvokeMethod_MultipleInvokes) {
   const auto* lambda_class = create_lambda_with_multiple_invokes();
-  auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
   ASSERT_TRUE(analyzer.has_value());
   EXPECT_THAT(analyzer->get_invoke_method(), IsNull());
 }
 
 TEST_F(KotlinLambdaAnalyzerTest, GetInvokeMethod_NonPublicInvoke) {
   const auto* lambda_class = create_lambda_with_non_public_invoke();
-  auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
   ASSERT_TRUE(analyzer.has_value());
   EXPECT_THAT(analyzer->get_invoke_method(), IsNull());
 }
 
 TEST_F(KotlinLambdaAnalyzerTest, GetInvokeMethod_SyntheticInvoke) {
   const auto* lambda_class = create_lambda_with_synthetic_invoke();
-  auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
   ASSERT_TRUE(analyzer.has_value());
   EXPECT_THAT(analyzer->get_invoke_method(), IsNull());
 }

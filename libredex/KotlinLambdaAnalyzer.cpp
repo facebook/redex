@@ -11,7 +11,7 @@
 #include "IRCode.h"
 #include "TypeUtil.h"
 
-std::optional<KotlinLambdaAnalyzer> KotlinLambdaAnalyzer::analyze(
+std::optional<KotlinLambdaAnalyzer> KotlinLambdaAnalyzer::for_class(
     const DexClass* cls) {
   return type::is_kotlin_lambda(cls) ? std::optional(KotlinLambdaAnalyzer(cls))
                                      : std::nullopt;
