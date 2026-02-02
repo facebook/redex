@@ -19,6 +19,55 @@ using ::testing::NotNull;
 
 class KotlinLambdaAnalyzerTest : public RedexTest {
  protected:
+  // Helper to create a well-formed Lambda-based non-capturing Kotlin lambda
+  // class with a proper invoke method. This creates lambdas that extend
+  // kotlin.jvm.internal.Lambda (as opposed to Object-based lambdas that extend
+  // java.lang.Object).
+  // @param name The type name for the lambda class.
+  // @param arity The number of parameters for the invoke method (default 0).
+  static DexClass* create_non_capturing_lambda(std::string_view name,
+                                               size_t arity = 0) {
+    auto* lambda_type = DexType::make_type(name);
+    const auto function_type_name =
+        "Lkotlin/jvm/functions/Function" + std::to_string(arity) + ";";
+    auto* kotlin_function_type = DexType::make_type(function_type_name);
+
+    ClassCreator creator(lambda_type);
+    creator.set_super(type::kotlin_jvm_internal_Lambda());
+    creator.add_interface(kotlin_function_type);
+
+    // Build parameter type list based on arity
+    DexTypeList::ContainerType param_types;
+    for (size_t i = 0; i < arity; ++i) {
+      param_types.push_back(type::java_lang_Object());
+    }
+
+    // Add a proper public invoke method with code
+    auto* invoke_proto = DexProto::make_proto(
+        type::java_lang_Object(),
+        DexTypeList::make_type_list(std::move(param_types)));
+    auto* invoke_method =
+        DexMethod::make_method(lambda_type, DexString::make_string("invoke"),
+                               invoke_proto)
+            ->make_concrete(ACC_PUBLIC, true);
+    // Register count: 1 for 'this' + arity for parameters
+    auto code = std::make_unique<IRCode>(invoke_method, 1 + arity);
+    code->push_back(new IRInstruction(OPCODE_CONST));
+    code->push_back(new IRInstruction(OPCODE_RETURN_OBJECT));
+    invoke_method->set_code(std::move(code));
+    creator.add_method(invoke_method);
+
+    return creator.create();
+  }
+
+  static DexType* kotlin_function_type() {
+    return DexType::make_type("Lkotlin/jvm/functions/Function1;");
+  }
+
+  static DexType* non_kotlin_function_interface_type() {
+    return DexType::make_type("Ljava/lang/Runnable;");
+  }
+
   // Helper to create an ill-formed Kotlin lambda class without an invoke
   // method.
   static DexClass* create_lambda_without_invoke() {
@@ -328,4 +377,177 @@ TEST_F(KotlinLambdaAnalyzerTest, GetInvokeMethod_SyntheticInvoke) {
   auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
   ASSERT_TRUE(analyzer.has_value());
   EXPECT_THAT(analyzer->get_invoke_method(), IsNull());
+}
+
+// Tests for lambda detection (KotlinLambdaAnalyzer::for_class)
+
+class LambdaBasedFunction1LambdaTest
+    : public KotlinLambdaAnalyzerTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(LambdaBasedFunction1LambdaTest, main) {
+  const auto* kotlin_lambda_class = create_non_capturing_lambda(GetParam(), 1);
+  EXPECT_TRUE(KotlinLambdaAnalyzer::for_class(kotlin_lambda_class));
+}
+
+INSTANTIATE_TEST_SUITE_P(LambdaBasedFunction1LambdaTests,
+                         LambdaBasedFunction1LambdaTest,
+                         ::testing::Values("LKotlinLambda$0;",
+                                           "LKotlinLambda$1;",
+                                           "LKotlinLambda$12;",
+                                           "LKotlinLambda$123;"));
+
+TEST_F(KotlinLambdaAnalyzerTest, LambdaBasedFunctionNLambda) {
+  // Create a Kotlin lambda class with kotlin.jvm.internal.Lambda as super class
+  // and implementing a Kotlin function interface for more than 22 arguments
+  auto* lambda_n_type = DexType::make_type("LKotlinLambda$3;");
+  auto* kotlin_function_n_type =
+      DexType::make_type("Lkotlin/jvm/functions/FunctionN;");
+
+  ClassCreator lambda_n_creator(lambda_n_type);
+  lambda_n_creator.set_super(type::kotlin_jvm_internal_Lambda());
+  lambda_n_creator.add_interface(kotlin_function_n_type);
+  auto* kotlin_lambda_n_class = lambda_n_creator.create();
+  EXPECT_TRUE(KotlinLambdaAnalyzer::for_class(kotlin_lambda_n_class));
+}
+
+class LambdaBasedFunction1NotLambdaTest
+    : public KotlinLambdaAnalyzerTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(LambdaBasedFunction1NotLambdaTest, main) {
+  // Create a Kotlin lambda class with kotlin.jvm.internal.Lambda as super class
+  // and implementing a Kotlin function interface
+  auto* lambda_type = DexType::make_type(GetParam());
+
+  ClassCreator lambda_creator(lambda_type);
+  lambda_creator.set_super(type::kotlin_jvm_internal_Lambda());
+  lambda_creator.add_interface(kotlin_function_type());
+  auto* kotlin_lambda_class = lambda_creator.create();
+  EXPECT_FALSE(KotlinLambdaAnalyzer::for_class(kotlin_lambda_class));
+}
+
+INSTANTIATE_TEST_SUITE_P(LambdaBasedFunction1NotLambdaTests,
+                         LambdaBasedFunction1NotLambdaTest,
+                         ::testing::Values("LNothingAfterDollar$;",
+                                           "LNodigitAfterDollar$a;",
+                                           "LNamedClass;"));
+
+class ObjectBasedLambdaTest
+    : public KotlinLambdaAnalyzerTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(ObjectBasedLambdaTest, main) {
+  // Create a class with java.lang.Object as super class and implementing a
+  // Kotlin function interface (also valid for Kotlin lambdas)
+  auto* obj_lambda_type = DexType::make_type(GetParam());
+
+  ClassCreator obj_lambda_creator(obj_lambda_type);
+  obj_lambda_creator.set_super(type::java_lang_Object());
+  obj_lambda_creator.add_interface(kotlin_function_type());
+  auto* obj_lambda_class = obj_lambda_creator.create();
+  EXPECT_TRUE(KotlinLambdaAnalyzer::for_class(obj_lambda_class));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ObjectBasedLambdaTests,
+    ObjectBasedLambdaTest,
+    ::testing::Values("LObjectLambda$$ExternalSyntheticLambda0;",
+                      "LObjectLambda$$ExternalSyntheticLambda1;",
+                      "LObjectLambda$$ExternalSyntheticLambda10;",
+                      "LObjectLambda$$ExternalSyntheticLambda112;",
+                      "LObjectLambda$$Lambda$0;",
+                      "LObjectLambda$$Lambda$1;",
+                      "LObjectLambda$$Lambda$10;",
+                      "LObjectLambda$$Lambda$112;"));
+
+class ObjectBasedNonLambdaTest
+    : public KotlinLambdaAnalyzerTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(ObjectBasedNonLambdaTest, main) {
+  // Create a class with java.lang.Object as super class and implementing a
+  // Kotlin function interface (also valid for Kotlin lambdas)
+  auto* obj_lambda_type = DexType::make_type(GetParam());
+
+  ClassCreator obj_lambda_creator(obj_lambda_type);
+  obj_lambda_creator.set_super(type::java_lang_Object());
+  obj_lambda_creator.add_interface(kotlin_function_type());
+  auto* obj_lambda_class = obj_lambda_creator.create();
+  EXPECT_FALSE(KotlinLambdaAnalyzer::for_class(obj_lambda_class));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ObjectBasedNonLambdaTests,
+    ObjectBasedNonLambdaTest,
+    ::testing::Values("LObjectLambdaWithEmptyEnd$$ExternalSyntheticLambda;",
+                      "LObjectLambdaWithEmptyEnd$$Lambda$;",
+                      "LObjectLambdaWithLetterEnd$$ExternalSyntheticLambdax;",
+                      "LObjectLambdaWithLetterEnd$$Lambda$x;",
+                      "LNonD8DesugaredAnonymous$1;",
+                      "LNamedClass2;"));
+
+TEST_F(KotlinLambdaAnalyzerTest, WrongInterface) {
+  // Create a class with kotlin.jvm.internal.Lambda as super class but
+  // implementing a non-Kotlin function interface
+  auto* wrong_interface_type = DexType::make_type("LWrongInterface$1;");
+
+  ClassCreator wrong_interface_creator(wrong_interface_type);
+  wrong_interface_creator.set_super(type::kotlin_jvm_internal_Lambda());
+  wrong_interface_creator.add_interface(non_kotlin_function_interface_type());
+  auto* wrong_interface_class = wrong_interface_creator.create();
+  EXPECT_FALSE(KotlinLambdaAnalyzer::for_class(wrong_interface_class));
+}
+
+TEST_F(KotlinLambdaAnalyzerTest, MultiInterface) {
+  // Create a class with kotlin.jvm.internal.Lambda as super class but
+  // implementing multiple interfaces
+  auto* multi_interface_type = DexType::make_type("LMultiInterface$1;");
+
+  ClassCreator multi_interface_creator(multi_interface_type);
+  multi_interface_creator.set_super(type::kotlin_jvm_internal_Lambda());
+  multi_interface_creator.add_interface(kotlin_function_type());
+  multi_interface_creator.add_interface(non_kotlin_function_interface_type());
+  auto* multi_interface_class = multi_interface_creator.create();
+  EXPECT_FALSE(KotlinLambdaAnalyzer::for_class(multi_interface_class));
+}
+
+TEST_F(KotlinLambdaAnalyzerTest, WrongSuper) {
+  // Create a class with wrong super class
+  auto* wrong_super_type = DexType::make_type("LWrongSuper$1;");
+
+  ClassCreator wrong_super_creator(wrong_super_type);
+  wrong_super_creator.set_super(type::java_lang_String());
+  wrong_super_creator.add_interface(kotlin_function_type());
+  auto* wrong_super_class = wrong_super_creator.create();
+  EXPECT_FALSE(KotlinLambdaAnalyzer::for_class(wrong_super_class));
+}
+
+TEST_F(KotlinLambdaAnalyzerTest, NoInterface) {
+  // Create a class with no interfaces
+  auto* no_interface_type = DexType::make_type("LNoInterface$1;");
+
+  ClassCreator no_interface_creator(no_interface_type);
+  no_interface_creator.set_super(type::kotlin_jvm_internal_Lambda());
+  auto* no_interface_class = no_interface_creator.create();
+  EXPECT_FALSE(KotlinLambdaAnalyzer::for_class(no_interface_class));
+}
+
+TEST_F(KotlinLambdaAnalyzerTest, UnnumberedFunction) {
+  // Create an otherwise Kotlin lambda class that implements an otherwise Kotlin
+  // function interface without a number.
+  auto* unnumbered_function_class_type =
+      DexType::make_type("LUnnumberedFunction$1;");
+  auto* const unnumbered_kotlin_function_type =
+      DexType::make_type("Lkotlin/jvm/functions/Function;");
+  ClassCreator unnumbered_kotlin_function_creator(
+      unnumbered_function_class_type);
+  unnumbered_kotlin_function_creator.set_super(
+      type::kotlin_jvm_internal_Lambda());
+  unnumbered_kotlin_function_creator.add_interface(
+      unnumbered_kotlin_function_type);
+  auto* unnumbered_kotlin_function_class =
+      unnumbered_kotlin_function_creator.create();
+  EXPECT_FALSE(
+      KotlinLambdaAnalyzer::for_class(unnumbered_kotlin_function_class));
 }

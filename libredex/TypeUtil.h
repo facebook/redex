@@ -284,14 +284,18 @@ inline bool can_access(const DexMethod* accessor, const DexClass* accessee) {
   return true;
 }
 
-/**
- * Return true if the cls is derived from Kotlin lambda.
- */
-bool is_kotlin_lambda(const DexClass* cls);
-
 bool is_kotlin_class(DexClass* cls);
 
 bool is_kotlin_function_interface(const DexType* type);
+
+/**
+ * Returns true if the class is a Kotlin lambda.
+ *
+ * If you need to analyze lambda properties (e.g., determining if a lambda is
+ * non-capturing or trivial), use KotlinLambdaAnalyzer instead to avoid
+ * redundant computation.
+ */
+bool is_kotlin_lambda(const DexClass* cls);
 
 bool is_kotlin_internal_type(const DexType* type);
 

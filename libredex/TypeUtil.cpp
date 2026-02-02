@@ -7,9 +7,9 @@
 
 #include "TypeUtil.h"
 
-#include "ClassUtil.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "KotlinLambdaAnalyzer.h"
 #include "Lazy.h"
 #include "RedexContext.h"
 #include "Show.h"
@@ -564,24 +564,7 @@ bool is_kotlin_function_interface(const DexType* type) {
 }
 
 bool is_kotlin_lambda(const DexClass* cls) {
-  if (const auto* super_cls = cls->get_super_class();
-      super_cls == type::kotlin_jvm_internal_Lambda()) {
-    if (!klass::maybe_non_d8_desugared_anonymous_class(cls)) {
-      return false;
-    }
-  } else if (super_cls == type::java_lang_Object()) {
-    if (!klass::maybe_d8_desugared_anonymous_class(cls)) {
-      return false;
-    }
-  } else {
-    return false;
-  }
-  const auto* intfs = cls->get_interfaces();
-  if (intfs->size() != 1) {
-    return false;
-  }
-  const auto* intf = intfs->at(0);
-  return is_kotlin_function_interface(intf);
+  return KotlinLambdaAnalyzer::for_class(cls).has_value();
 }
 
 bool is_kotlin_class(DexClass* cls) {
