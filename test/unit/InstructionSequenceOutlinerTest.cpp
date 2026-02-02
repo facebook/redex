@@ -36,7 +36,6 @@ void run_passes(const std::vector<Pass*>& passes,
   store.add_classes(std::move(classes));
   stores.emplace_back(std::move(store));
   PassManager manager(passes);
-  manager.set_testing_mode();
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_config(conf_obj);

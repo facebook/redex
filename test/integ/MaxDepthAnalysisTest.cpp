@@ -66,7 +66,6 @@ struct MaxDepthAnalysisTest : public RedexIntegrationTest {
     conf.parse_global_config();
     std::vector<Pass*> passes{analysis_pass.get(), consumer_pass.get()};
     pass_manager = std::make_unique<PassManager>(passes, conf);
-    pass_manager->set_testing_mode();
     pass_manager->run_passes(stores, conf);
   }
 };

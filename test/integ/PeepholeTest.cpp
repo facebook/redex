@@ -130,7 +130,6 @@ class PeepholeTest : public ::testing::Test {
  public:
   PeepholeTest() : config(Json::nullValue), manager({&peephole_pass}) {
     config.parse_global_config();
-    manager.set_testing_mode();
   }
 
   void SetUp() override {
