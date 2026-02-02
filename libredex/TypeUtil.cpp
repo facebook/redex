@@ -591,11 +591,6 @@ bool is_kotlin_class(DexClass* cls) {
          boost::algorithm::ends_with(src_string->str(), ".kt");
 }
 
-bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
-  auto analyzer = ::KotlinLambdaAnalyzer::analyze(cls);
-  return analyzer.has_value() && analyzer->is_non_capturing();
-}
-
 DexMethod* get_kotlin_lambda_invoke_method(const DexClass* cls) {
   auto analyzer = ::KotlinLambdaAnalyzer::analyze(cls);
   always_assert(analyzer.has_value());

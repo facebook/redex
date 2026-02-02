@@ -8,6 +8,7 @@
 #include "KotlinInstanceRewriter.h"
 #include "AtomicStatCounter.h"
 #include "CFGMutation.h"
+#include "KotlinLambdaAnalyzer.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "TypeUtil.h"
@@ -44,7 +45,8 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
     if (!can_rename(cls) || !can_delete(cls)) {
       return;
     }
-    if (!type::is_kotlin_non_capturing_lambda(cls)) {
+    if (auto analyzer = KotlinLambdaAnalyzer::analyze(cls);
+        !analyzer || !analyzer->is_non_capturing()) {
       return;
     }
     auto* instance = has_instance_field(cls, m_instance);

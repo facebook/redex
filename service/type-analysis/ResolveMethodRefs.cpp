@@ -8,10 +8,10 @@
 #include "ResolveMethodRefs.h"
 
 #include "CFGMutation.h"
+#include "KotlinLambdaAnalyzer.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
-#include "TypeUtil.h"
 #include "Walkers.h"
 
 ResolveMethodRefs::ResolveMethodRefs(
@@ -82,8 +82,9 @@ void ResolveMethodRefs::analyze_method(
         continue;
       }
 
-      // We first focuse on Kotlin lambda code.
-      if (!type::is_kotlin_non_capturing_lambda(*analysis_cls)) {
+      // We first focus on Kotlin lambda code.
+      if (auto analyzer = KotlinLambdaAnalyzer::analyze(*analysis_cls);
+          !analyzer || !analyzer->is_non_capturing()) {
         continue;
       }
 

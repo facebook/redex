@@ -296,11 +296,6 @@ bool is_kotlin_function_interface(const DexType* type);
 bool is_kotlin_internal_type(const DexType* type);
 
 /*
- * Return true if the cls is kotlin non capturing lambda.
- */
-bool is_kotlin_non_capturing_lambda(const DexClass* cls);
-
-/*
  * Return the invoke method of a kotlin lambda class.
  * Returns nullptr if no suitable invoke method is found.
  */

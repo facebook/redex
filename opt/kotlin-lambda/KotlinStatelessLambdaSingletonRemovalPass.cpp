@@ -10,6 +10,7 @@
 #include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "KotlinInstanceRewriter.h"
+#include "KotlinLambdaAnalyzer.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "TypeUtil.h"
@@ -46,7 +47,8 @@ void KotlinStatelessLambdaSingletonRemovalPass::run_pass(
 
   auto is_excludable =
       [this, &method_profiles, has_method_profiles](DexClass* cls) -> bool {
-    redex_assert(type::is_kotlin_non_capturing_lambda(cls));
+    auto analyzer = KotlinLambdaAnalyzer::analyze(cls);
+    redex_assert(analyzer && analyzer->is_non_capturing());
     return has_method_profiles && is_hot_lambda(cls, method_profiles);
   };
 

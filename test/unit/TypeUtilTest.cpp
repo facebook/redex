@@ -526,51 +526,6 @@ TEST_F(IsKotlinLambdaTest, UnnumberedFunction) {
   EXPECT_FALSE(is_kotlin_lambda(unnumbered_kotlin_function_class));
 }
 
-TEST_F(TypeUtilTest, is_kotlin_non_capturing_lambda) {
-  using namespace type;
-
-  // Create a non-capturing Kotlin lambda class (no instance fields)
-  auto* non_capturing_lambda_type =
-      DexType::make_type("LNonCapturingLambda$1;");
-  auto* kotlin_function_type =
-      DexType::make_type("Lkotlin/jvm/functions/Function1;");
-
-  ClassCreator non_capturing_creator(non_capturing_lambda_type);
-  non_capturing_creator.set_super(kotlin_jvm_internal_Lambda());
-  non_capturing_creator.add_interface(kotlin_function_type);
-
-  // No fields added
-  auto* non_capturing_lambda_class = non_capturing_creator.create();
-
-  // Create a capturing Kotlin lambda class (with instance fields)
-  auto* capturing_lambda_type = DexType::make_type("LCapturingLambda$1;");
-  ClassCreator capturing_creator(capturing_lambda_type);
-  capturing_creator.set_super(kotlin_jvm_internal_Lambda());
-  capturing_creator.add_interface(kotlin_function_type);
-
-  // Add an instance field to represent a captured variable
-  auto* field_type = DexType::make_type("Ljava/lang/String;");
-  const auto* field_name = DexString::make_string("captured$0");
-  auto* field =
-      DexField::make_field(capturing_lambda_type, field_name, field_type)
-          ->make_concrete(ACC_PRIVATE | ACC_FINAL);
-  capturing_creator.add_field(field);
-
-  auto* capturing_lambda_class = capturing_creator.create();
-
-  // Create a non-lambda class for comparison
-  auto* non_lambda_type = DexType::make_type("LNonLambda$1;");
-
-  ClassCreator non_lambda_creator(non_lambda_type);
-  non_lambda_creator.set_super(java_lang_Object());
-  auto* non_lambda_class = non_lambda_creator.create();
-
-  // Test the function with our mock classes
-  EXPECT_TRUE(is_kotlin_non_capturing_lambda(non_capturing_lambda_class));
-  EXPECT_FALSE(is_kotlin_non_capturing_lambda(capturing_lambda_class));
-  EXPECT_FALSE(is_kotlin_non_capturing_lambda(non_lambda_class));
-}
-
 TEST_F(TypeUtilTest, get_kotlin_lambda_invoke_method_ProperLambda) {
   using namespace type;
 

@@ -121,3 +121,40 @@ TEST_F(KotlinLambdaAnalyzerTest, NonLambdaClass) {
   auto analyzer = KotlinLambdaAnalyzer::analyze(non_lambda_class);
   EXPECT_FALSE(analyzer.has_value());
 }
+
+TEST_F(KotlinLambdaAnalyzerTest, IsNonCapturing) {
+  auto* kotlin_function_type =
+      DexType::make_type("Lkotlin/jvm/functions/Function0;");
+
+  // Non-capturing lambda (no instance fields)
+  {
+    auto* lambda_type = DexType::make_type("LAnalyzerTestNonCapturing$1;");
+    ClassCreator creator(lambda_type);
+    creator.set_super(type::kotlin_jvm_internal_Lambda());
+    creator.add_interface(kotlin_function_type);
+
+    const auto* lambda_class = creator.create();
+    auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+    ASSERT_TRUE(analyzer.has_value());
+    EXPECT_TRUE(analyzer->is_non_capturing());
+  }
+
+  // Capturing lambda (has instance field)
+  {
+    auto* lambda_type = DexType::make_type("LAnalyzerTestCapturing$2;");
+    ClassCreator creator(lambda_type);
+    creator.set_super(type::kotlin_jvm_internal_Lambda());
+    creator.add_interface(kotlin_function_type);
+
+    auto* field_type = DexType::make_type("Ljava/lang/String;");
+    const auto* field_name = DexString::make_string("captured$0");
+    auto* field = DexField::make_field(lambda_type, field_name, field_type)
+                      ->make_concrete(ACC_PRIVATE | ACC_FINAL);
+    creator.add_field(field);
+
+    const auto* lambda_class = creator.create();
+    auto analyzer = KotlinLambdaAnalyzer::analyze(lambda_class);
+    ASSERT_TRUE(analyzer.has_value());
+    EXPECT_FALSE(analyzer->is_non_capturing());
+  }
+}
