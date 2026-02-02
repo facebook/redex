@@ -94,10 +94,6 @@ class PassManager {
     return *m_pg_config;
   }
 
-  // Call set_testing_mode() in tests that need passes to run which
-  // do not use ProGuard configuration keep rules.
-  void set_testing_mode() { m_testing_mode = true; }
-
   const PassInfo* get_current_pass_info() const { return m_current_pass_info; }
 
   AssetManager& asset_manager() { return m_asset_mgr; }
@@ -184,7 +180,6 @@ class PassManager {
 
   std::unique_ptr<const keep_rules::ProguardConfiguration> m_pg_config;
   const RedexOptions m_redex_options;
-  bool m_testing_mode{false};
   bool m_regalloc_has_run{false};
   bool m_nopper_has_run{false};
   bool m_init_class_lowering_has_run{false};

@@ -232,7 +232,6 @@ int main(int argc, char* argv[]) {
 
   const auto& passes = PassRegistry::get().get_passes();
   PassManager manager(passes, conf, args.redex_options);
-  manager.set_testing_mode();
   manager.run_passes(stores, conf);
 
   redex::write_all_intermediate(conf, args.output_ir_dir, args.redex_options,

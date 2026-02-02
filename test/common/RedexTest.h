@@ -159,7 +159,6 @@ struct RedexIntegrationTest : public RedexTest {
 
     mgr_fn(*pass_manager);
 
-    pass_manager->set_testing_mode();
     conf->set_outdir(configfiles_out_dir.path);
     pass_manager->run_passes(stores, *conf);
   }

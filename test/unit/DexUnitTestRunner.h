@@ -81,7 +81,6 @@ class DexUnitTestRunner {
   void run(Pass* pass) {
     std::vector<Pass*> passes = {pass};
     PassManager manager(passes);
-    manager.set_testing_mode();
     Json::Value conf_obj = Json::nullValue;
     ConfigFiles dummy_cfg(conf_obj);
     manager.run_passes(m_stores, dummy_cfg);

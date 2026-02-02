@@ -1138,7 +1138,6 @@ PassManager::PassManager(
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),
       m_redex_options(std::move(options)),
-      m_testing_mode(false),
       m_internal_fields(new InternalFields()),
       m_properties_manager(properties_manager) {
   init(config);
