@@ -7,138 +7,15 @@
 
 #include "TypeUtil.h"
 
-#include <gmock/gmock.h>
-
 #include "Creators.h"
 #include "IRCode.h"
 #include "RedexTest.h"
-
-using ::testing::IsNull;
-using ::testing::NotNull;
 
 class TypeUtilTest : public RedexTest {
 
  protected:
   const std::array<char, 9> PRIMS{
       {'Z', 'B', 'S', 'C', 'I', 'J', 'F', 'D', 'V'}};
-
-  // Helper to create an ill-formed Kotlin lambda class without an invoke
-  // method.
-  static DexClass* create_lambda_without_invoke() {
-    static unsigned counter = 0;
-    const auto type_name =
-        "LLambdaWithoutInvoke$" + std::to_string(counter++) + ";";
-    auto* lambda_type = DexType::make_type(type_name);
-    auto* kotlin_function_type =
-        DexType::make_type("Lkotlin/jvm/functions/Function0;");
-
-    ClassCreator creator(lambda_type);
-    creator.set_super(type::kotlin_jvm_internal_Lambda());
-    creator.add_interface(kotlin_function_type);
-    return creator.create();
-  }
-
-  // Helper to create an ill-formed Kotlin lambda class with multiple invoke
-  // methods.
-  static DexClass* create_lambda_with_multiple_invokes() {
-    static unsigned counter = 0;
-    const auto type_name =
-        "LLambdaWithMultipleInvokes$" + std::to_string(counter++) + ";";
-    auto* lambda_type = DexType::make_type(type_name);
-    auto* kotlin_function_type =
-        DexType::make_type("Lkotlin/jvm/functions/Function1;");
-
-    ClassCreator creator(lambda_type);
-    creator.set_super(type::kotlin_jvm_internal_Lambda());
-    creator.add_interface(kotlin_function_type);
-
-    // Add first invoke method
-    auto* invoke_proto1 = DexProto::make_proto(
-        type::java_lang_Object(),
-        DexTypeList::make_type_list({type::java_lang_Object()}));
-    auto* invoke_method1 =
-        DexMethod::make_method(lambda_type, DexString::make_string("invoke"),
-                               invoke_proto1)
-            ->make_concrete(ACC_PUBLIC, true);
-    auto code1 = std::make_unique<IRCode>(invoke_method1, 2);
-    code1->push_back(new IRInstruction(OPCODE_RETURN_OBJECT));
-    invoke_method1->set_code(std::move(code1));
-    creator.add_method(invoke_method1);
-
-    // Add second invoke method with different signature
-    auto* invoke_proto2 = DexProto::make_proto(
-        type::java_lang_Object(),
-        DexTypeList::make_type_list(
-            {type::java_lang_Object(), type::java_lang_Object()}));
-    auto* invoke_method2 =
-        DexMethod::make_method(lambda_type, DexString::make_string("invoke"),
-                               invoke_proto2)
-            ->make_concrete(ACC_PUBLIC, true);
-    auto code2 = std::make_unique<IRCode>(invoke_method2, 3);
-    code2->push_back(new IRInstruction(OPCODE_RETURN_OBJECT));
-    invoke_method2->set_code(std::move(code2));
-    creator.add_method(invoke_method2);
-
-    return creator.create();
-  }
-
-  // Helper to create an ill-formed Kotlin lambda class with a non-public invoke
-  // method.
-  static DexClass* create_lambda_with_non_public_invoke() {
-    static unsigned counter = 0;
-    const auto type_name =
-        "LLambdaWithNonPublicInvoke$" + std::to_string(counter++) + ";";
-    auto* lambda_type = DexType::make_type(type_name);
-    auto* kotlin_function_type =
-        DexType::make_type("Lkotlin/jvm/functions/Function0;");
-
-    ClassCreator creator(lambda_type);
-    creator.set_super(type::kotlin_jvm_internal_Lambda());
-    creator.add_interface(kotlin_function_type);
-
-    // Add a non-public invoke method (private)
-    auto* invoke_proto = DexProto::make_proto(type::java_lang_Object(),
-                                              DexTypeList::make_type_list({}));
-    auto* invoke_method =
-        DexMethod::make_method(lambda_type, DexString::make_string("invoke"),
-                               invoke_proto)
-            ->make_concrete(ACC_PRIVATE, true);
-    auto code = std::make_unique<IRCode>(invoke_method, 1);
-    code->push_back(new IRInstruction(OPCODE_RETURN_OBJECT));
-    invoke_method->set_code(std::move(code));
-    creator.add_method(invoke_method);
-
-    return creator.create();
-  }
-
-  // Helper to create an ill-formed Kotlin lambda class with a synthetic invoke
-  // method.
-  static DexClass* create_lambda_with_synthetic_invoke() {
-    static unsigned counter = 0;
-    const auto type_name =
-        "LLambdaWithSyntheticInvoke$" + std::to_string(counter++) + ";";
-    auto* lambda_type = DexType::make_type(type_name);
-    auto* kotlin_function_type =
-        DexType::make_type("Lkotlin/jvm/functions/Function0;");
-
-    ClassCreator creator(lambda_type);
-    creator.set_super(type::kotlin_jvm_internal_Lambda());
-    creator.add_interface(kotlin_function_type);
-
-    // Add a synthetic invoke method
-    auto* invoke_proto = DexProto::make_proto(type::java_lang_Object(),
-                                              DexTypeList::make_type_list({}));
-    auto* invoke_method =
-        DexMethod::make_method(lambda_type, DexString::make_string("invoke"),
-                               invoke_proto)
-            ->make_concrete(ACC_PUBLIC | ACC_SYNTHETIC, true);
-    auto code = std::make_unique<IRCode>(invoke_method, 1);
-    code->push_back(new IRInstruction(OPCODE_RETURN_OBJECT));
-    invoke_method->set_code(std::move(code));
-    creator.add_method(invoke_method);
-
-    return creator.create();
-  }
 
   // Helper to create a well-formed Lambda-based non-capturing Kotlin lambda
   // class with a proper invoke method. This creates lambdas that extend
@@ -524,52 +401,4 @@ TEST_F(IsKotlinLambdaTest, UnnumberedFunction) {
   auto* unnumbered_kotlin_function_class =
       unnumbered_kotlin_function_creator.create();
   EXPECT_FALSE(is_kotlin_lambda(unnumbered_kotlin_function_class));
-}
-
-TEST_F(TypeUtilTest, get_kotlin_lambda_invoke_method_ProperLambda) {
-  using namespace type;
-
-  const auto* lambda_class = create_non_capturing_lambda("LProperLambda$1;");
-
-  // Test get_kotlin_lambda_invoke_method
-  DexMethod* found_invoke = get_kotlin_lambda_invoke_method(lambda_class);
-  ASSERT_THAT(found_invoke, NotNull());
-  EXPECT_EQ(found_invoke->get_name()->str(), "invoke");
-}
-
-TEST_F(TypeUtilTest, get_kotlin_lambda_invoke_method_WithoutInvoke) {
-  using namespace type;
-
-  const auto* no_invoke_class = create_lambda_without_invoke();
-
-  EXPECT_THAT(get_kotlin_lambda_invoke_method(no_invoke_class), IsNull());
-}
-
-TEST_F(TypeUtilTest, get_kotlin_lambda_invoke_method_MultipleInvokes) {
-  using namespace type;
-
-  const auto* multi_invoke_class = create_lambda_with_multiple_invokes();
-
-  // Should return nullptr for ill-formed lambda with multiple invokes
-  EXPECT_THAT(get_kotlin_lambda_invoke_method(multi_invoke_class), IsNull());
-}
-
-TEST_F(TypeUtilTest, get_kotlin_lambda_invoke_method_NonPublicInvoke) {
-  using namespace type;
-
-  const auto* non_public_invoke_class = create_lambda_with_non_public_invoke();
-
-  // Should return nullptr when invoke method is not public
-  EXPECT_THAT(get_kotlin_lambda_invoke_method(non_public_invoke_class),
-              IsNull());
-}
-
-TEST_F(TypeUtilTest, get_kotlin_lambda_invoke_method_SyntheticInvoke) {
-  using namespace type;
-
-  const auto* synthetic_invoke_class = create_lambda_with_synthetic_invoke();
-
-  // Should return nullptr when invoke method is synthetic
-  EXPECT_THAT(get_kotlin_lambda_invoke_method(synthetic_invoke_class),
-              IsNull());
 }

@@ -256,7 +256,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
     if (auto analyzer = KotlinLambdaAnalyzer::analyze(cls);
         analyzer.has_value() && analyzer->is_trivial()) {
       stats.kotlin_trivial_non_capturing_lambdas++;
-      DexMethod* invoke = type::get_kotlin_lambda_invoke_method(cls);
+      DexMethod* invoke = analyzer->get_invoke_method();
       always_assert(invoke != nullptr);
       always_assert(invoke->get_code()->cfg_built());
       unique_lambda_tracker.insert(invoke);

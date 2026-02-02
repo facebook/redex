@@ -104,7 +104,7 @@ void KotlinTrivialLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
       return;
     }
 
-    DexMethod* invoke = type::get_kotlin_lambda_invoke_method(cls);
+    DexMethod* invoke = analyzer->get_invoke_method();
     always_assert(invoke != nullptr);
 
     tracker.insert(invoke);

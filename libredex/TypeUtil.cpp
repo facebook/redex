@@ -10,7 +10,6 @@
 #include "ClassUtil.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "KotlinLambdaAnalyzer.h"
 #include "Lazy.h"
 #include "RedexContext.h"
 #include "Show.h"
@@ -589,12 +588,6 @@ bool is_kotlin_class(DexClass* cls) {
   const auto* src_string = cls->get_source_file();
   return (src_string != nullptr) &&
          boost::algorithm::ends_with(src_string->str(), ".kt");
-}
-
-DexMethod* get_kotlin_lambda_invoke_method(const DexClass* cls) {
-  auto analyzer = ::KotlinLambdaAnalyzer::analyze(cls);
-  always_assert(analyzer.has_value());
-  return analyzer->get_invoke_method();
 }
 
 bool is_kotlin_internal_type(const DexType* type) {

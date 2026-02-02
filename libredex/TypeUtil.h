@@ -295,12 +295,6 @@ bool is_kotlin_function_interface(const DexType* type);
 
 bool is_kotlin_internal_type(const DexType* type);
 
-/*
- * Return the invoke method of a kotlin lambda class.
- * Returns nullptr if no suitable invoke method is found.
- */
-DexMethod* get_kotlin_lambda_invoke_method(const DexClass* cls);
-
 bool is_min_sdk_acceptable(const DexType* source_type,
                            const DexType* target_type,
                            const api::AndroidSDK& api);
