@@ -1046,6 +1046,12 @@ class ControlFlowGraph {
                                          [](auto& p) { return p.second; });
   }
 
+  template <class ForwardIt>
+  bool insert(const InstructionIterator& position,
+              const ForwardIt& begin_index,
+              const ForwardIt& end_index,
+              bool before);
+
  private:
   friend class Block;
 
@@ -1138,12 +1144,6 @@ class ControlFlowGraph {
   // NOTE: this will result in an empty CFG, same as if the default
   // constructor has been called.
   void clear();
-
-  template <class ForwardIt>
-  bool insert(const InstructionIterator& position,
-              const ForwardIt& begin_index,
-              const ForwardIt& end_index,
-              bool before);
 
   // remove_..._edge:
   //   * These functions remove edges from the graph.
