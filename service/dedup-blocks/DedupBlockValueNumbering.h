@@ -41,8 +41,8 @@ const IROpcode IOPCODE_OPERATION_RESULT = IROpcode(0xFFFE);
 // implementation.
 
 struct IROperationSourceBlock {
-  uint32_t src_blk_id;
   const DexString* src_blk_name;
+  uint32_t src_blk_id;
 };
 
 inline std::size_t hash_value(IROperationSourceBlock const& sb) {
