@@ -16,20 +16,18 @@
 #include "TypeUtil.h"
 
 bool KotlinStatelessLambdaSingletonRemovalPass::is_hot_lambda(
-    const DexClass* cls,
+    const KotlinLambdaAnalyzer& analyzer,
     const method_profiles::MethodProfiles& method_profiles) const {
-  for (const auto* method : cls->get_vmethods()) {
-    if (method->get_name()->str() == "invoke" &&
-        method->get_code() != nullptr) {
-      for (const auto& [interaction_id, stats_map] :
-           method_profiles.all_interactions()) {
-        auto it = stats_map.find(method);
-        if (it != stats_map.end() &&
-            it->second.call_count > m_exclude_hot_call_count_threshold) {
-          return true;
-        }
-      }
-      break;
+  const auto* invoke = analyzer.get_invoke_method();
+  if (invoke == nullptr) {
+    return false;
+  }
+  for (const auto& [interaction_id, stats_map] :
+       method_profiles.all_interactions()) {
+    auto it = stats_map.find(invoke);
+    if (it != stats_map.end() &&
+        it->second.call_count > m_exclude_hot_call_count_threshold) {
+      return true;
     }
   }
   return false;
@@ -48,8 +46,8 @@ void KotlinStatelessLambdaSingletonRemovalPass::run_pass(
   auto is_excludable =
       [this, &method_profiles, has_method_profiles](DexClass* cls) -> bool {
     auto analyzer = KotlinLambdaAnalyzer::for_class(cls);
-    redex_assert(analyzer && analyzer->is_non_capturing());
-    return has_method_profiles && is_hot_lambda(cls, method_profiles);
+    always_assert(analyzer && analyzer->is_non_capturing());
+    return has_method_profiles && is_hot_lambda(*analyzer, method_profiles);
   };
 
   KotlinInstanceRewriter::Stats stats = rewriter.collect_instance_usage(

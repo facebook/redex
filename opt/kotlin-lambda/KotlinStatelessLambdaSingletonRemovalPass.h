@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "KotlinLambdaAnalyzer.h"
 #include "MethodProfiles.h"
 #include "Pass.h"
 
@@ -60,7 +61,7 @@ This pass replaces references to the singleton `INSTANCE` field (via `sget-objec
   static constexpr float kDefaultExcludeHotCallCountThreshold = 5.0f;
 
   bool is_hot_lambda(
-      const DexClass* cls,
+      const KotlinLambdaAnalyzer& analyzer,
       const method_profiles::MethodProfiles& method_profiles) const;
 
   bool m_exclude_hot{false};
