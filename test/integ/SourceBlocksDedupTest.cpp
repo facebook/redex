@@ -43,36 +43,49 @@ class SourceBlocksDedupTest : public RedexIntegrationTest {
   void set_insert_after_excs(InsertSourceBlocksPass& isbp, bool val) {
     isbp.m_insert_after_excs = val;
   }
-};
 
-TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
-  g_redex->instrument_mode = true;
-  IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
-  auto* type =
-      DexType::get_type("Lcom/facebook/redextest/SourceBlocksDedupTest;");
-  ASSERT_NE(type, nullptr);
-  auto* cls = type_class(type);
-  ASSERT_NE(cls, nullptr);
+  testing::AssertionResult prepare() {
+    g_redex->instrument_mode = true;
+    IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
+    auto* type =
+        DexType::get_type("Lcom/facebook/redextest/SourceBlocksDedupTest;");
+    if (type == nullptr) {
+      return testing::AssertionFailure() << "type not found";
+    }
+    auto* cls = type_class(type);
+    if (cls == nullptr) {
+      return testing::AssertionFailure() << "class not found";
+    }
 
-  // Check that no code has source blocks so far.
-  {
-    for (const auto* m : cls->get_all_methods()) {
-      if (m->get_code() == nullptr) {
-        continue;
-      }
-      for (const auto& mie : *m->get_code()) {
-        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+    // Check that no code has source blocks so far.
+    {
+      for (const auto* m : cls->get_all_methods()) {
+        if (m->get_code() == nullptr) {
+          continue;
+        }
+        for (const auto& mie : *m->get_code()) {
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            return testing::AssertionFailure() << "source block found";
+          }
+        }
       }
     }
-  }
 
-  InsertSourceBlocksPass isbp{};
-  run_passes({&isbp, new DedupBlocksPass()}, nullptr, Json::nullValue,
-             [&](const auto&) {
-               enable_pass(isbp);
-               enable_always_inject(isbp);
-               set_insert_after_excs(isbp, false);
-             });
+    InsertSourceBlocksPass isbp{};
+    run_passes({&isbp, new DedupBlocksPass()}, nullptr, Json::nullValue,
+               [&](const auto&) {
+                 enable_pass(isbp);
+                 enable_always_inject(isbp);
+                 set_insert_after_excs(isbp, false);
+               });
+
+    return testing::AssertionSuccess();
+  }
+};
+
+TEST_F(SourceBlocksDedupTest, source_blocks_dedup_useSwitch) {
+  auto res = prepare();
+  ASSERT_TRUE(res);
 
   auto* switch_method =
       DexMethod::get_method(
@@ -130,6 +143,11 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    OPCODE: INVOKE_VIRTUAL v4, Lcom/facebook/redextest/SourceBlocksDedupTest;.someFunc:()V\n\
    POSITION: Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I(SourceBlocksDedupTest.java:23)\n\
    succs: (goto B2)\n");
+}
+
+TEST_F(SourceBlocksDedupTest, source_blocks_dedup_deepestIsNotTheBestCase) {
+  auto res = prepare();
+  ASSERT_TRUE(res);
 
   auto* deepest_not_best =
       DexMethod::get_method(
@@ -249,6 +267,11 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    preds: (branch B12)\n\
    SOURCE-BLOCKS: Lcom/facebook/redextest/SourceBlocksDedupTest;.deepestIsNotTheBestCase:()I@12()\n\
    succs: (goto B2)\n");
+}
+
+TEST_F(SourceBlocksDedupTest, source_blocks_dedup_dedupThrows) {
+  auto res = prepare();
+  ASSERT_TRUE(res);
 
   auto* dedup_throws = DexMethod::get_method(
                            "Lcom/facebook/redextest/"
@@ -289,6 +312,11 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    preds: (branch B0)\n\
    SOURCE-BLOCKS: Lcom/facebook/redextest/SourceBlocksDedupTest;.dedupThrows:()V@2()\n\
    succs: (goto B2)\n");
+}
+
+TEST_F(SourceBlocksDedupTest, source_blocks_dedup_simplestCase) {
+  auto res = prepare();
+  ASSERT_TRUE(res);
 
   auto* simplest_case =
       DexMethod::get_method(
@@ -331,6 +359,11 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    SOURCE-BLOCKS: Lcom/facebook/redextest/SourceBlocksDedupTest;.simplestCase:()V@3()\n\
    OPCODE: MUL_INT v0, v0, v0\n\
    succs: (goto B2)\n");
+}
+
+TEST_F(SourceBlocksDedupTest, source_blocks_dedup_postfixDiscardingOne) {
+  auto res = prepare();
+  ASSERT_TRUE(res);
 
   auto* postfix_discarding_one =
       DexMethod::get_method(
@@ -399,6 +432,11 @@ TEST_F(SourceBlocksDedupTest, source_blocks_dedup) {
    POSITION: Lcom/facebook/redextest/SourceBlocksDedupTest;.postfixDiscardingOne:()V(SourceBlocksDedupTest.java:105)\n\
    OPCODE: ADD_INT v0, v0, v0\n\
    succs: (goto B3)\n");
+}
+
+TEST_F(SourceBlocksDedupTest, source_blocks_dedup_identicalSelfLoops) {
+  auto res = prepare();
+  ASSERT_TRUE(res);
 
   auto* self_loops = DexMethod::get_method(
                          "Lcom/facebook/redextest/"
