@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// NOLINT: trigger OSS rebuild
+
 #include "KotlinLambdaAnalyzer.h"
 
 #include "ClassUtil.h"
