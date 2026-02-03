@@ -170,7 +170,6 @@ libredex_la_SOURCES = \
 	libredex/IRMetaIO.cpp \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
-	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
 	libredex/JavaParserUtil.cpp \
 	libredex/JsonWrapper.cpp \
