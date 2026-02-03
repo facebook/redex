@@ -13,7 +13,7 @@ class TestRGBA {
   }
 
   // Test >>>, |, & on int.
-  public fun mainExtractGreen(baseColor: Int) {
+  fun mainExtractGreen(baseColor: Int) {
     var rgba256 = baseColor or 0x00F10000
     rgba256 = extractGreenFromRGBA256(rgba256)
     if ((rgba256 and 0xF0) != 0) {
@@ -30,7 +30,7 @@ class TestRGBA {
   }
 
   // Test >>>, |, & on long.
-  public fun mainExtractGreen(baseColor: Long) {
+  fun mainExtractGreen(baseColor: Long) {
     var rgba512: Long = baseColor or 0x0000010000000000L
     rgba512 = extractGreenFromRGBA512(rgba512)
     if ((rgba512 and 0xFF00L) != 0L) {
@@ -47,7 +47,7 @@ class TestRGBA {
   }
 
   // Test <<, & on int.
-  public fun mainHasNonRed(baseColor: Int) {
+  fun mainHasNonRed(baseColor: Int) {
     val onlyLowerRed = baseColor and 0x0F000000
     if (hasNonRed(onlyLowerRed)) {
       // This branch should be optimized out.
@@ -71,7 +71,7 @@ class TestRGBA {
   }
 
   // Test <<, & on long.
-  public fun mainHasNonRed(baseColor: Long) {
+  fun mainHasNonRed(baseColor: Long) {
     val onlyLowerRed = baseColor and 0x00FF000000000000L
     if (hasNonRed(onlyLowerRed)) {
       // This branch should be optimized out.
@@ -98,7 +98,7 @@ class TestRGBA {
   }
 
   // Test ~, ^, & on int
-  public fun mainInvert(baseColor: Int) {
+  fun mainInvert(baseColor: Int) {
     val alphaless = baseColor and 0xFF.inv()
     var inverted = invert(alphaless) // inverted lowest 8 bits are 1s
     if (inverted == 0) {
@@ -140,7 +140,7 @@ class TestRGBA {
   }
 
   // Test ~, & on long
-  public fun mainInvert(baseColor: Long) {
+  fun mainInvert(baseColor: Long) {
     val alphaless = baseColor and 0xFFFFL.inv()
     var inverted = invert(alphaless) // inverted lowest 16 bits are 1s
     if (inverted == 0L) {

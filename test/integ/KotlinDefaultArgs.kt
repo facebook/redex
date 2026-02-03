@@ -10,7 +10,7 @@ class KotlinDefaultArgs {
     print("$greeting, $name!")
   }
 
-  public fun main() {
+  fun main() {
     // Never called greet with the default greeting
     greet(greeting = "Hi") // Uses default name: "Hi, Guest!"
     greet("Bob", "Welcome") // Uses provided arguments: "Welcome, Bob!"

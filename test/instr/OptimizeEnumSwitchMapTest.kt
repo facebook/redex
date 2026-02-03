@@ -49,28 +49,28 @@ enum class Big {
   BIG20,
 }
 
-public fun useA(elem: A): Int =
+fun useA(elem: A): Int =
     when (elem) {
       A.A0 -> 40
       A.A2 -> 42
       else -> 41
     }
 
-public fun useB(elem: B): Int =
+fun useB(elem: B): Int =
     when (elem) {
       B.B0 -> 43
       B.B2 -> 45
       else -> 44
     }
 
-public fun useAAgain(elem: A): Int =
+fun useAAgain(elem: A): Int =
     when (elem) {
       A.A0 -> 46
       A.A1 -> 47
       else -> 48
     }
 
-public fun useBAgain(elem: B?): Int =
+fun useBAgain(elem: B?): Int =
     when (elem) {
       B.B0 -> 49
       B.B2 -> 51
@@ -78,7 +78,7 @@ public fun useBAgain(elem: B?): Int =
       else -> 50
     }
 
-public fun withOtherCode(elem: B, b: Boolean, o: Any?): Int =
+fun withOtherCode(elem: B, b: Boolean, o: Any?): Int =
     try {
       if (b) {
         when (elem) {
@@ -94,7 +94,7 @@ public fun withOtherCode(elem: B, b: Boolean, o: Any?): Int =
       404
     }
 
-public fun useBig(elem: Big): Int =
+fun useBig(elem: Big): Int =
     when (elem) {
       Big.BIG01 -> 1
       Big.BIG02 -> 2
@@ -119,7 +119,7 @@ public fun useBig(elem: Big): Int =
       else -> throw IllegalArgumentException()
     }
 
-public fun useBigAgain(elem: Big?): Int =
+fun useBigAgain(elem: Big?): Int =
     when (elem) {
       Big.BIG01 -> 21
       Big.BIG02 -> 22
