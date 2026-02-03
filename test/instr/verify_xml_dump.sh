@@ -19,5 +19,8 @@ EXPECTED=$4
 TMP_FILE=$(mktemp)
 trap 'rm -r $TMP_FILE' EXIT
 
+# Use DIFF env var if set, otherwise fall back to system diff
+DIFF="${DIFF:-diff}"
+
 $AAPT d --values xmltree "$APK" "$XML_PATH" > "$TMP_FILE"
-diff -u "$EXPECTED" "$TMP_FILE"
+$DIFF -u "$EXPECTED" "$TMP_FILE"
