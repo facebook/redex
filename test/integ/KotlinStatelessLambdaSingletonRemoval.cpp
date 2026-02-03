@@ -25,7 +25,7 @@ using ::testing::IsNull;
 using ::testing::Not;
 using ::testing::NotNull;
 
-class KotlinLambdaSingletonRemovalTest : public RedexIntegrationTest {
+class KotlinStatelessLambdaSingletonRemovalTest : public RedexIntegrationTest {
  protected:
   void set_root_method(std::string_view full_name) {
     auto* method = DexMethod::get_method(full_name)->as_def();
@@ -98,17 +98,17 @@ class KotlinLambdaSingletonRemovalTest : public RedexIntegrationTest {
   }
 };
 
-TEST_F(KotlinLambdaSingletonRemovalTest, LambdaSingletonIsRemoved) {
+TEST_F(KotlinStatelessLambdaSingletonRemovalTest, LambdaSingletonIsRemoved) {
   auto scope = build_class_scope(stores);
   constexpr std::string_view lambda_class_name =
-      "LKotlinLambdaSingletonRemoval$foo$1;";
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;";
   constexpr std::string_view root_method_name =
-      "LKotlinLambdaSingletonRemoval;.foo:()V";
+      "LKotlinStatelessLambdaSingletonRemoval;.foo:()V";
   constexpr std::string_view clinit_method_name =
-      "LKotlinLambdaSingletonRemoval$foo$1;.<clinit>:()V";
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;.<clinit>:()V";
   constexpr std::string_view singleton_field_name =
-      "LKotlinLambdaSingletonRemoval$foo$1;.INSTANCE:"
-      "LKotlinLambdaSingletonRemoval$foo$1;";
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;.INSTANCE:"
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;";
   set_root_method(root_method_name);
 
   auto* lambda_class = type_class(DexType::make_type(lambda_class_name));
@@ -148,7 +148,7 @@ TEST_F(KotlinLambdaSingletonRemovalTest, LambdaSingletonIsRemoved) {
   check_opcode_absent(code_clinit, OPCODE_SPUT_OBJECT);
 }
 
-TEST_F(KotlinLambdaSingletonRemovalTest, NoEffectOnNamedClass) {
+TEST_F(KotlinStatelessLambdaSingletonRemovalTest, NoEffectOnNamedClass) {
   auto scope = build_class_scope(stores);
   constexpr std::string_view class_name = "LKotlinInstanceRemovalNamedEquiv;";
   constexpr std::string_view root_method =
@@ -194,12 +194,12 @@ TEST_F(KotlinLambdaSingletonRemovalTest, NoEffectOnNamedClass) {
   check_opcode_present(code_clinit, OPCODE_SPUT_OBJECT);
 }
 
-class KotlinLambdaSingletonNoopTest
-    : public KotlinLambdaSingletonRemovalTest,
+class KotlinStatelessLambdaSingletonNoopTest
+    : public KotlinStatelessLambdaSingletonRemovalTest,
       public ::testing::WithParamInterface<
           std::tuple<std::string_view, std::string_view>> {};
 
-TEST_P(KotlinLambdaSingletonNoopTest, main) {
+TEST_P(KotlinStatelessLambdaSingletonNoopTest, main) {
   auto scope = build_class_scope(stores);
   const auto& class_name = std::get<0>(GetParam());
   const auto& root_method_name = std::get<1>(GetParam());
@@ -242,8 +242,8 @@ TEST_P(KotlinLambdaSingletonNoopTest, main) {
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    KotlinLambdaSingletonNoopTests,
-    KotlinLambdaSingletonNoopTest,
+    KotlinStatelessLambdaSingletonNoopTests,
+    KotlinStatelessLambdaSingletonNoopTest,
     ::testing::ValuesIn(
         std::initializer_list<std::tuple<std::string_view, std::string_view>>{
             {"LKotlinStatefulLambda;", "LKotlinStatefulLambda;.foo:()V"},
