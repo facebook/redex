@@ -54,7 +54,7 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
           if (is_ordered) {
             operation.opcode = IOPCODE_OPERATION_RESULT;
             operation.srcs.clear();
-            operation.operation_index = ordered_operations.size() - 1;
+            operation.op_data.operation_index = ordered_operations.size() - 1;
           }
           auto value = opcode::is_a_move(operation.opcode)
                            ? operation.srcs.at(0)
@@ -68,7 +68,7 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
         SourceBlock* cur_src_blk = block_it->src_block.get();
         while (cur_src_blk != nullptr) {
           IROperation operation;
-          operation.src_blk = {cur_src_blk->src, cur_src_blk->id};
+          operation.op_data.src_blk = {cur_src_blk->src, cur_src_blk->id};
           ordered_operations.push_back(operation);
           cur_src_blk = cur_src_blk->next.get();
         }
@@ -99,7 +99,7 @@ value_id_t BlockValues::prepare_and_get_reg(std::map<reg_t, value_id_t>& regs,
   }
   IROperation operation;
   operation.opcode = IOPCODE_LOAD_REG;
-  operation.in_reg = reg;
+  operation.op_data.in_reg = reg;
   auto value = get_value_id(operation);
   regs.emplace(reg, value);
   return value;
@@ -117,17 +117,17 @@ IROperation BlockValues::get_operation(std::map<reg_t, value_id_t>& regs,
     std::sort(operation.srcs.begin(), operation.srcs.end());
   }
   if (insn->has_literal()) {
-    operation.literal = insn->get_literal();
+    operation.op_data.literal = insn->get_literal();
   } else if (insn->has_type()) {
-    operation.type = insn->get_type();
+    operation.op_data.type = insn->get_type();
   } else if (insn->has_field()) {
-    operation.field = insn->get_field();
+    operation.op_data.field = insn->get_field();
   } else if (insn->has_method()) {
-    operation.method = insn->get_method();
+    operation.op_data.method = insn->get_method();
   } else if (insn->has_string()) {
-    operation.string = insn->get_string();
+    operation.op_data.string = insn->get_string();
   } else if (insn->has_data()) {
-    operation.data = insn->get_data();
+    operation.op_data.data = insn->get_data();
   }
   return operation;
 }
