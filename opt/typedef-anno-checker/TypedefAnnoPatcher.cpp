@@ -75,6 +75,69 @@ DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
 }
 
 /**
+ * Helper class that encapsulates type inference and use-def/def-use chain
+ * creation for a method. Provides lazy initialization of chains to avoid
+ * unnecessary computation when they're not needed.
+ */
+class MethodAnalysis {
+ public:
+  /**
+   * Factory method that creates a MethodAnalysis if the method has code and
+   * a built CFG. Returns nullptr otherwise.
+   */
+  static std::unique_ptr<MethodAnalysis> create(
+      DexMethod* m,
+      const UnorderedSet<const TypedefAnnoType*>& typedef_annos,
+      const method_override_graph::Graph& method_override_graph) {
+    IRCode* code = m->get_code();
+    if (code == nullptr) {
+      return nullptr;
+    }
+    always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(m));
+    return std::unique_ptr<MethodAnalysis>(new MethodAnalysis(
+        code->cfg(), m, typedef_annos, method_override_graph));
+  }
+
+  cfg::ControlFlowGraph& cfg() { return m_cfg; }
+  TypeEnvironments& envs() { return m_inference.get_type_environments(); }
+  type_inference::TypeInference& inference() { return m_inference; }
+
+  live_range::UseDefChains& use_def_chains() {
+    ensure_chains();
+    return *m_ud_chains;
+  }
+
+  live_range::DefUseChains& def_use_chains() {
+    ensure_chains();
+    return *m_du_chains;
+  }
+
+ private:
+  MethodAnalysis(cfg::ControlFlowGraph& cfg,
+                 DexMethod* m,
+                 const UnorderedSet<const TypedefAnnoType*>& typedef_annos,
+                 const method_override_graph::Graph& method_override_graph)
+      : m_cfg(cfg),
+        m_inference(cfg, false, typedef_annos, &method_override_graph) {
+    m_inference.run(m);
+  }
+
+  void ensure_chains() {
+    if (!m_chains.has_value()) {
+      m_chains.emplace(m_cfg);
+      m_ud_chains.emplace(m_chains->get_use_def_chains());
+      m_du_chains.emplace(m_chains->get_def_use_chains());
+    }
+  }
+
+  cfg::ControlFlowGraph& m_cfg;
+  type_inference::TypeInference m_inference;
+  std::optional<live_range::MoveAwareChains> m_chains;
+  std::optional<live_range::UseDefChains> m_ud_chains;
+  std::optional<live_range::DefUseChains> m_du_chains;
+};
+
+/**
  * A class that resembles a fun interface class like the ones in P1720288509 and
  * P1720292631.
  */
@@ -648,18 +711,16 @@ void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
   }
 
   for (auto* ctor : cls->get_ctors()) {
-    IRCode* ctor_code = ctor->get_code();
-    auto& ctor_cfg = ctor_code->cfg();
-    type_inference::TypeInference ctor_inference(
-        ctor_cfg, /*skip_check_cast_upcasting*/ false, m_typedef_annos,
-        &m_method_override_graph);
-    ctor_inference.run(ctor);
-    TypeEnvironments& ctor_envs = ctor_inference.get_type_environments();
+    auto analysis =
+        MethodAnalysis::create(ctor, m_typedef_annos, m_method_override_graph);
+    if (!analysis) {
+      continue;
+    }
 
-    live_range::MoveAwareChains ctor_chains(ctor_cfg);
-    live_range::DefUseChains ctor_du_chains = ctor_chains.get_def_use_chains();
+    auto& ctor_envs = analysis->envs();
+    auto& ctor_du_chains = analysis->def_use_chains();
     size_t param_idx = 0;
-    for (cfg::Block* b : ctor_cfg.blocks()) {
+    for (cfg::Block* b : analysis->cfg().blocks()) {
       for (auto& mie : InstructionIterable(b)) {
         auto* insn = mie.insn;
         if (!opcode::is_a_load_param(insn->opcode())) {
@@ -687,7 +748,7 @@ void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
             continue;
           }
           auto field_anno = type_inference::get_typedef_anno_from_member(
-              use_insn->get_field(), ctor_inference.get_annotations());
+              use_insn->get_field(), analysis->inference().get_annotations());
           if (field_anno == boost::none) {
             continue;
           }
@@ -793,20 +854,14 @@ void TypedefAnnoPatcher::patch_lambdas(
     std::vector<const DexField*>* patched_fields,
     PatchingCandidates& candidates,
     Stats& class_stats) {
-  IRCode* code = method->get_code();
-  if (code == nullptr) {
+  auto analysis =
+      MethodAnalysis::create(method, m_typedef_annos, m_method_override_graph);
+  if (!analysis) {
     return;
   }
 
-  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(method));
-  auto& cfg = code->cfg();
-
-  type_inference::TypeInference inference(cfg, false, m_typedef_annos,
-                                          &m_method_override_graph);
-  inference.run(method);
-  live_range::MoveAwareChains chains(cfg);
-  live_range::UseDefChains ud_chains = chains.get_use_def_chains();
-  for (cfg::Block* b : cfg.blocks()) {
+  auto& ud_chains = analysis->use_def_chains();
+  for (cfg::Block* b : analysis->cfg().blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       if (opcode::is_invoke_static(insn->opcode())) {
@@ -839,8 +894,8 @@ void TypedefAnnoPatcher::patch_lambdas(
             mog::get_overriding_methods(m_method_override_graph, callee_def);
         for (const auto* callee : UnorderedIterable(callees)) {
           annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, inference, patched_fields, candidates,
-              m_anno_patching_mutex, class_stats);
+              callee, insn, ud_chains, analysis->inference(), patched_fields,
+              candidates, m_anno_patching_mutex, class_stats);
         }
       } else if (opcode::is_an_invoke(insn->opcode())) {
         auto* callee_def = resolve_method(method, insn);
@@ -849,8 +904,8 @@ void TypedefAnnoPatcher::patch_lambdas(
         callees.insert(callee_def);
         for (const auto* callee : UnorderedIterable(callees)) {
           annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, inference, patched_fields, candidates,
-              m_anno_patching_mutex, class_stats);
+              callee, insn, ud_chains, analysis->inference(), patched_fields,
+              candidates, m_anno_patching_mutex, class_stats);
         }
       }
     }
@@ -871,18 +926,13 @@ void TypedefAnnoPatcher::patch_lambdas(
 // setter candidate collection depends on the field already being annotated.
 void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
     DexMethod* ctor, Stats& class_stats, PatchingCandidates& candidates) {
-  IRCode* code = ctor->get_code();
-  if (code == nullptr) {
+  auto analysis =
+      MethodAnalysis::create(ctor, m_typedef_annos, m_method_override_graph);
+  if (!analysis) {
     return;
   }
-  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(ctor));
 
-  auto& cfg = code->cfg();
-  type_inference::TypeInference inference(cfg, false, m_typedef_annos,
-                                          &m_method_override_graph);
-  inference.run(ctor);
-  TypeEnvironments& envs = inference.get_type_environments();
-
+  auto& envs = analysis->envs();
   const auto class_name_dot = ctor->get_class()->get_name()->str() + ".";
 
   // Helper to collect Kotlin-generated getter and setter as candidates.
@@ -911,7 +961,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
     }
   };
 
-  for (cfg::Block* b : cfg.blocks()) {
+  for (cfg::Block* b : analysis->cfg().blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
 
@@ -1013,31 +1063,25 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(const DexClass* anon_cls,
 // the parameter annotations, just add them to missing_param_annos
 void TypedefAnnoPatcher::collect_param_candidates(
     DexMethod* m, PatchingCandidates& candidates) {
-  IRCode* code = m->get_code();
-  if (code == nullptr) {
+  auto analysis =
+      MethodAnalysis::create(m, m_typedef_annos, m_method_override_graph);
+  if (!analysis) {
     return;
   }
 
-  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(m));
-  auto& cfg = code->cfg();
-  type_inference::TypeInference inference(cfg, false, m_typedef_annos,
-                                          &m_method_override_graph);
-  inference.run(m);
+  auto& envs = analysis->envs();
+  auto& ud_chains = analysis->use_def_chains();
 
-  TypeEnvironments& envs = inference.get_type_environments();
-  live_range::MoveAwareChains chains(m->get_code()->cfg());
-  live_range::UseDefChains ud_chains = chains.get_use_def_chains();
-
-  for (cfg::Block* b : cfg.blocks()) {
+  for (cfg::Block* b : analysis->cfg().blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       IROpcode opcode = insn->opcode();
       if (opcode::is_an_invoke(opcode)) {
-        patch_param_from_method_invoke(envs, inference, m, insn, &ud_chains,
-                                       candidates);
+        patch_param_from_method_invoke(envs, analysis->inference(), m, insn,
+                                       &ud_chains, candidates);
       } else if (opcode::is_an_iput(opcode) || opcode::is_an_sput(opcode)) {
-        collect_setter_missing_param_annos(inference, m, insn, &ud_chains,
-                                           candidates);
+        collect_setter_missing_param_annos(analysis->inference(), m, insn,
+                                           &ud_chains, candidates);
       }
     }
   }
@@ -1045,21 +1089,16 @@ void TypedefAnnoPatcher::collect_param_candidates(
 
 void TypedefAnnoPatcher::collect_return_candidates(
     DexMethod* m, PatchingCandidates& candidates) {
-  IRCode* code = m->get_code();
-  if (code == nullptr) {
+  auto analysis =
+      MethodAnalysis::create(m, m_typedef_annos, m_method_override_graph);
+  if (!analysis) {
     return;
   }
 
-  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(m));
-  auto& cfg = code->cfg();
-  type_inference::TypeInference inference(cfg, false, m_typedef_annos,
-                                          &m_method_override_graph);
-  inference.run(m);
-
-  TypeEnvironments& envs = inference.get_type_environments();
+  auto& envs = analysis->envs();
   boost::optional<const TypedefAnnoType*> anno = boost::none;
   bool patch_return = true;
-  for (cfg::Block* b : cfg.blocks()) {
+  for (cfg::Block* b : analysis->cfg().blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       IROpcode opcode = insn->opcode();
