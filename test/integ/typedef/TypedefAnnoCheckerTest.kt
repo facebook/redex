@@ -14,11 +14,11 @@ fun interface SAMInterface {
   fun setString(@TestStringDef sam_string: String)
 }
 
-public class ClassWithParams(@TestIntDef var int_field: Int) {}
+class ClassWithParams(@TestIntDef var int_field: Int) {}
 
-public class ClassWithDefaultParams(@TestIntDef var int_field: Int = TestIntDef.THREE) {}
+class ClassWithDefaultParams(@TestIntDef var int_field: Int = TestIntDef.THREE) {}
 
-public class TypedefAnnoCheckerKtTest {
+class TypedefAnnoCheckerKtTest {
 
   @TestStringDef val field_str: String = TestStringDef.TWO
   @TestStringDef var var_field: String = TestStringDef.THREE
@@ -334,7 +334,7 @@ public class TypedefAnnoCheckerKtTest {
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////
-  public class ClassWithPrivateProperty(@TestIntDef private var int_field: Int) {
+  class ClassWithPrivateProperty(@TestIntDef private var int_field: Int) {
 
     fun printInt(@TestIntDef param: Int) {
       print(param)
