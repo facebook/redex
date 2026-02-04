@@ -5,11 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// Test for KotlinTrivialLambdaDeduplicationPass.
-// This test creates multiple trivial lambdas with identical invoke code that
+// Test for KotlinLambdaDeduplicationPass.
+// This test creates multiple lambdas with identical invoke code that
 // should be deduplicated by the pass.
 
-class KotlinTrivialLambdaDeduplicationTest {
+class KotlinLambdaDeduplicationTest {
   var result1: Int = 0
   var result2: Int = 0
   var result3: Int = 0

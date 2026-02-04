@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "KotlinTrivialLambdaDeduplicationPass.h"
+#include "KotlinLambdaDeduplicationPass.h"
 
 #include <algorithm>
 #include <limits>
@@ -77,15 +77,15 @@ std::unordered_map<const DexType*, size_t> build_class_to_dex_idx_map(
 
 } // namespace
 
-void KotlinTrivialLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
-                                                    ConfigFiles& /* conf */,
-                                                    PassManager& mgr) {
+void KotlinLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
+                                             ConfigFiles& /* conf */,
+                                             PassManager& mgr) {
   Scope scope = build_class_scope(stores);
 
   // Cache string lookups to avoid repeated hash table lookups.
   const auto* const instance_name = DexString::make_string("INSTANCE");
 
-  // Step 1: Collect all trivial lambdas and insert their invoke methods.
+  // Step 1: Collect all lambdas and insert their invoke methods.
   UniqueMethodTracker tracker;
 
   walk::parallel::classes(scope, [&](DexClass* cls) {
@@ -94,8 +94,7 @@ void KotlinTrivialLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
     }
 
     auto analyzer = KotlinLambdaAnalyzer::for_class(cls);
-    if (!analyzer.has_value() ||
-        !analyzer->is_trivial(m_trivial_lambda_max_instructions)) {
+    if (!analyzer.has_value()) {
       return;
     }
 
@@ -122,9 +121,9 @@ void KotlinTrivialLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
     if (!has_duplicates) {
       mgr.incr_metric("unique_signatures", unique_signatures);
       mgr.incr_metric("duplicate_groups", 0);
-      mgr.incr_metric("trivial_lambdas_deduped", 0);
+      mgr.incr_metric("lambdas_deduped", 0);
       TRACE(KOTLIN_INSTANCE, 1,
-            "KotlinTrivialLambdaDeduplication: No duplicate trivial lambdas "
+            "KotlinLambdaDeduplication: No duplicate lambdas "
             "found.");
       return;
     }
@@ -198,7 +197,8 @@ void KotlinTrivialLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
     }
 
     TRACE(KOTLIN_INSTANCE, 2,
-          "KotlinTrivialLambdaDeduplication: Group with %zu lambdas, canonical "
+          "KotlinLambdaDeduplication: Group with %zu lambdas, "
+          "canonical "
           "= %s",
           methods.size(), SHOW(canonical));
   }
@@ -240,17 +240,17 @@ void KotlinTrivialLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
   // Report metrics.
   mgr.incr_metric("unique_signatures", unique_signatures);
   mgr.incr_metric("duplicate_groups", duplicate_group_count);
-  mgr.incr_metric("trivial_lambdas_deduped", lambdas_deduplicated);
+  mgr.incr_metric("lambdas_deduped", lambdas_deduplicated);
   mgr.incr_metric("instance_usages_rewritten", total_rewrites);
 
-  TRACE(
-      KOTLIN_INSTANCE, 1,
-      "KotlinTrivialLambdaDeduplication: %zu unique signatures, %zu duplicate "
-      "groups, %zu lambdas deduped",
-      unique_signatures, duplicate_group_count, lambdas_deduplicated);
   TRACE(KOTLIN_INSTANCE, 1,
-        "KotlinTrivialLambdaDeduplication: %zu instance usages rewritten",
+        "KotlinLambdaDeduplication: %zu unique signatures, %zu "
+        "duplicate "
+        "groups, %zu lambdas deduped",
+        unique_signatures, duplicate_group_count, lambdas_deduplicated);
+  TRACE(KOTLIN_INSTANCE, 1,
+        "KotlinLambdaDeduplication: %zu instance usages rewritten",
         total_rewrites);
 }
 
-static KotlinTrivialLambdaDeduplicationPass s_pass;
+static KotlinLambdaDeduplicationPass s_pass;
