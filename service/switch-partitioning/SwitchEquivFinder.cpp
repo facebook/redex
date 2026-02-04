@@ -16,6 +16,7 @@
 #include "IRList.h"
 #include "LiveRange.h"
 #include "ReachingDefinitions.h"
+#include "RedexContext.h"
 #include "ScopedCFG.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
@@ -413,12 +414,65 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
     return bail();
   }
 
-  for (auto& [blk, source_blocks] : UnorderedIterable(source_blocks_to_move)) {
-    auto it_insert = source_blocks::find_first_block_insert_point(blk);
+  // This code would transform the source blocks as so
+  //
+  // <source-block 1>
+  // x = ...
+  // if (x == 2) {
+  //   <source-block 2>
+  //   goto A;
+  // } else {
+  //   <source-block 3>
+  //   if (x = 4) {
+  //     <source-block 4>
+  //     goto B;
+  //   } else {
+  //     <source-block 5>
+  //     if (x == 6) {
+  //       <source-block 6>
+  //       goto C;
+  //     }
+  //   }
+  // }
+  //
+  // to
+  //
+  // <source-block 1>
+  // x = ...
+  // switch (x) {
+  //   case 2:
+  //   A:
+  //     <source-block 2>
+  //     break;
+  //   case 4:
+  //   B:
+  //     <source-block 3>
+  //     <source-block 4>
+  //     break;
+  //   case 6:
+  //   C:
+  //     <source-block 3>
+  //     <source-block 5>
+  //     <source-block 6>
+  //     break;
+  // }
+  //
+  // In instrumented builds, this behavior ensures we log hits correctly in a
+  // way that is faithful to the original code structure.
+  //
+  // However, for non-instrumented builds, if B is always hit, we would have
+  // non-sensical data in C where @3 (hot) goes directly to @5 (cold). Thus, we
+  // want to disable this behavior for everything except for instrumented
+  // builds.
+  if (g_redex->instrument_mode) {
+    for (auto& [blk, source_blocks] :
+         UnorderedIterable(source_blocks_to_move)) {
+      auto it_insert = source_blocks::find_first_block_insert_point(blk);
 
-    for (auto* source_block : source_blocks) {
-      blk->insert_before(it_insert,
-                         std::make_unique<SourceBlock>(*source_block));
+      for (auto* source_block : source_blocks) {
+        blk->insert_before(it_insert,
+                           std::make_unique<SourceBlock>(*source_block));
+      }
     }
   }
 

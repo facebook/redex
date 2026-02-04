@@ -1463,3 +1463,120 @@ TEST_F(SwitchEquivFinderTest, ends_with_less_than) {
 
   code->clear_cfg();
 }
+
+namespace {
+// Count source blocks in a block.
+size_t count_source_blocks(cfg::Block* b) {
+  size_t count = 0;
+  for (const auto& mie : *b) {
+    if (mie.type == MFLOW_SOURCE_BLOCK) {
+      count++;
+    }
+  }
+  return count;
+}
+
+// Helper to test source block duplication behavior based on instrument_mode.
+// Creates an if-else chain, inserts source blocks, runs SwitchEquivFinder,
+// and returns the number of source blocks in the default case block.
+size_t get_default_case_source_block_count(const char* method_name,
+                                           bool instrument_mode) {
+  constexpr uint32_t DEFAULT_LEAF_DUP_THRESHOLD = 50;
+  auto* method = DexMethod::make_method(method_name)
+                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  method->set_deobfuscated_name(method_name);
+
+  // Create an if-else chain that will be transformed into a switch.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (const v1 0)
+      (if-eq v1 v0 :case0)
+
+      (const v1 1)
+      (if-eq v1 v0 :case1)
+
+      (const v1 2)
+      (if-eq v1 v0 :case2)
+
+      (const v3 99)
+      (return v3)
+
+      (:case0)
+      (const v3 100)
+      (return v3)
+
+      (:case1)
+      (const v3 101)
+      (return v3)
+
+      (:case2)
+      (const v3 102)
+      (return v3)
+    )
+)");
+  method->set_code(std::move(code));
+
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  // Insert source blocks - each block gets a source block.
+  source_blocks::insert_source_blocks(method, &cfg);
+
+  // Set instrument mode for this test.
+  g_redex->instrument_mode = instrument_mode;
+
+  SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 0,
+                           DEFAULT_LEAF_DUP_THRESHOLD);
+  always_assert(finder.success());
+
+  // Find the default case block.
+  cfg::Block* default_case = nullptr;
+  for (const auto& [key, block] : finder.key_to_case()) {
+    if (SwitchEquivFinder::is_default_case(key)) {
+      default_case = block;
+      break;
+    }
+  }
+  always_assert(default_case != nullptr);
+
+  return count_source_blocks(default_case);
+}
+} // namespace
+
+// Test that source blocks are duplicated to leaf blocks when instrument_mode is
+// enabled. This ensures that instrumented builds correctly log hits in a way
+// that is faithful to the original if-else chain structure.
+TEST_F(SwitchEquivFinderTest, source_blocks_duplicated_in_instrument_mode) {
+  setup();
+
+  size_t source_block_count = get_default_case_source_block_count(
+      "LTesting;.source_blocks_instrument_mode:(I)I",
+      /* instrument_mode */ true);
+
+  // In instrument mode, the default case should have source blocks duplicated
+  // from the non-leaf blocks it passes through. It should have more than 1
+  // source block (its own plus duplicates from the if-else chain).
+  EXPECT_GT(source_block_count, 1)
+      << "In instrument mode, source blocks should be duplicated to leaf "
+         "blocks";
+}
+
+// Test that source blocks are NOT duplicated to leaf blocks when
+// instrument_mode is disabled. In production builds, duplicating source blocks
+// would create nonsensical data where a hot block appears to flow directly to a
+// cold block.
+TEST_F(SwitchEquivFinderTest,
+       source_blocks_not_duplicated_in_non_instrument_mode) {
+  setup();
+
+  size_t source_block_count = get_default_case_source_block_count(
+      "LTesting;.source_blocks_non_instrument_mode:(I)I",
+      /* instrument_mode */ false);
+
+  // In non-instrument mode, the default case should only have its original
+  // source block (1), not duplicates from the non-leaf blocks.
+  EXPECT_EQ(source_block_count, 1)
+      << "In non-instrument mode, source blocks should NOT be duplicated to "
+         "leaf blocks";
+}
