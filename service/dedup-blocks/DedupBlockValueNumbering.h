@@ -10,6 +10,7 @@
 #include "DexClass.h"
 #include "Liveness.h"
 #include "StlUtil.h"
+#include "Util.h"
 
 namespace DedupBlkValueNumbering {
 using value_id_t = uint64_t;
@@ -41,10 +42,10 @@ const IROpcode IOPCODE_OPERATION_RESULT = IROpcode(0xFFFE);
 // CommonSubexpressionElimination that can be consolidated into single reusable
 // implementation.
 
-struct IROperationSourceBlock {
+PACKED(struct IROperationSourceBlock {
   const DexString* src_blk_name;
   uint32_t src_blk_id;
-};
+});
 
 inline std::size_t hash_value(IROperationSourceBlock const& sb) {
   size_t hash = sb.src_blk_id;
@@ -57,23 +58,25 @@ inline bool operator==(const IROperationSourceBlock& a,
   return a.src_blk_id == b.src_blk_id && a.src_blk_name == b.src_blk_name;
 }
 
+PACKED(union OpData {
+  // Zero-initialize this union with the struct member instead of a
+  // any other member since it will always be the largest
+  IROperationSourceBlock src_blk;
+  uint64_t literal;
+  const DexString* string;
+  const DexType* type;
+  const DexFieldRef* field;
+  const DexMethodRef* method;
+  const DexOpcodeData* data;
+  reg_t in_reg;
+  size_t operation_index;
+});
+
 struct IROperation {
-  IROpcode opcode{0};
   std::vector<value_id_t> srcs;
-  union OpData {
-    // Zero-initialize this union with the struct member instead of a
-    // any other member since it will always be the largest
-    IROperationSourceBlock src_blk;
-    uint64_t literal;
-    const DexString* string;
-    const DexType* type;
-    const DexFieldRef* field;
-    const DexMethodRef* method;
-    const DexOpcodeData* data;
-    reg_t in_reg;
-    size_t operation_index;
-  } op_data;
-  IROperation() { op_data.src_blk = IROperationSourceBlock{nullptr, 0}; }
+  OpData op_data{.src_blk = {nullptr, 0}};
+  IROpcode opcode{0};
+
   // To avoid UB.
   IROperationSourceBlock type_punned_src_blk() const {
     return std20::bit_cast<IROperationSourceBlock>(op_data);
