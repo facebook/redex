@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <bit>
 #include <boost/intrusive/list.hpp>
 #include <boost/optional.hpp>
 #include <boost/range/sub_range.hpp>
@@ -466,14 +467,14 @@ struct SourceBlock {
 
     size_t first_index() const { return std20::countr_zero(m_bits); }
 
-    size_t count() const { return std20::popcount(m_bits); }
+    size_t count() const { return std::popcount(m_bits); }
 
     size_t count_before_index(size_t i) const {
       return count_before(from_index(i));
     }
 
     size_t count_before(InteractionBitSet other) const {
-      return std20::popcount(m_bits & (other.m_bits - 1));
+      return std::popcount(m_bits & (other.m_bits - 1));
     }
 
     void add(InteractionBitSet other) { m_bits |= other.m_bits; }
