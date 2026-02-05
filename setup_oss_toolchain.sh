@@ -79,22 +79,6 @@ function install_googletest_from_source {
     popd
 }
 
-function install_kotlin_from_source {
-    pushd "$TOOLCHAIN_TMP"
-    mkdir -p dl_cache/kotlin
-    KOTLIN_VERSION=1.3.31
-    if [ ! -f "dl_cache/kotlin/kotlin-compiler-${KOTLIN_VERSION}.zip" ] ; then
-        wget "https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip" -O "dl_cache/kotlin/kotlin-compiler-${KOTLIN_VERSION}.zip"
-    fi
-    mkdir -p toolchain_install/kotlin
-    pushd toolchain_install/kotlin
-    unzip "../../dl_cache/kotlin/kotlin-compiler-${KOTLIN_VERSION}.zip"
-    cp -v kotlinc/bin/* /usr/local/bin
-    cp -v kotlinc/lib/* /usr/local/lib
-    popd
-    popd
-}
-
 function install_from_apt {
   PKGS="autoconf
         autoconf-archive
@@ -125,11 +109,6 @@ function handle_debian {
             ;;
         12)
             install_from_apt kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
-            install_googletest_from_source
-            ;;
-        11)
-            install_from_apt ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
-            install_kotlin_from_source
             install_googletest_from_source
             ;;
         *)
