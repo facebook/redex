@@ -17,7 +17,7 @@
 
 #include "RedexContext.h"
 
-#include "StlUtil.h"
+#include <bit>
 
 // Note: MSVC STL doesn't implement std::isnan(Integral arg). We need to provide
 // an override of fpclassify for integral types.
@@ -595,9 +595,9 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     SignedConstantDomain result;
     if constexpr (sizeof(val) == 4) {
       result = SignedConstantDomain(
-          (int32_t)((std20::bit_cast<int32_t>(val)) & 0xFFFFFFFF));
+          (int32_t)((std::bit_cast<int32_t>(val)) & 0xFFFFFFFF));
     } else if constexpr (sizeof(val) == 8) {
-      result = SignedConstantDomain(std20::bit_cast<int64_t>(val));
+      result = SignedConstantDomain(std::bit_cast<int64_t>(val));
     } else {
       // floating point number is either 32 bit or 64 bit
       // so we must have intergral value here
@@ -623,9 +623,9 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     case OPCODE_NEG_LONG:
       return apply(-val);
     case OPCODE_NEG_FLOAT:
-      return apply(-std20::bit_cast<float>((int32_t)val));
+      return apply(-std::bit_cast<float>((int32_t)val));
     case OPCODE_NEG_DOUBLE:
-      return apply(-std20::bit_cast<double>(val));
+      return apply(-std::bit_cast<double>(val));
     case OPCODE_LONG_TO_INT:
       return apply((int32_t)val);
     case OPCODE_INT_TO_LONG:
@@ -639,7 +639,7 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     case OPCODE_INT_TO_FLOAT:
       return apply((float)(val));
     case OPCODE_DOUBLE_TO_FLOAT:
-      return apply((float)(std20::bit_cast<double>(val)));
+      return apply((float)(std::bit_cast<double>(val)));
     case OPCODE_LONG_TO_FLOAT:
       return apply((float)val);
     case OPCODE_INT_TO_DOUBLE:
@@ -647,19 +647,19 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     case OPCODE_LONG_TO_DOUBLE:
       return apply((double)val);
     case OPCODE_FLOAT_TO_DOUBLE:
-      return apply((double)(std20::bit_cast<float>((int32_t)val)));
+      return apply((double)(std::bit_cast<float>((int32_t)val)));
     case OPCODE_FLOAT_TO_INT:
       return apply(art_float_to_integral<int32_t, float>(
-          std20::bit_cast<float>((int32_t)val)));
+          std::bit_cast<float>((int32_t)val)));
     case OPCODE_DOUBLE_TO_INT:
       return apply(
-          art_float_to_integral<int32_t, double>(std20::bit_cast<double>(val)));
+          art_float_to_integral<int32_t, double>(std::bit_cast<double>(val)));
     case OPCODE_FLOAT_TO_LONG:
       return apply(art_float_to_integral<int64_t, float>(
-          std20::bit_cast<float>((int32_t)val)));
+          std::bit_cast<float>((int32_t)val)));
     case OPCODE_DOUBLE_TO_LONG:
       return apply(
-          art_float_to_integral<int64_t, double>(std20::bit_cast<double>(val)));
+          art_float_to_integral<int64_t, double>(std::bit_cast<double>(val)));
     default:
       break;
     }

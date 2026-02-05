@@ -7,28 +7,11 @@
 
 #pragma once
 
-#include <cstring>
 #include <type_traits>
 
 namespace std20 {
 
 // Functionality that will be in C++20 STL.
-
-// TODO(T233875592): Remove this once we drop GCC 10 support.
-template <class To, class From>
-constexpr std::enable_if_t<sizeof(To) == sizeof(From) &&
-                               std::is_trivially_copyable_v<From> &&
-                               std::is_trivially_copyable_v<To>,
-                           To>
-bit_cast(const From& src) noexcept {
-  static_assert(std::is_trivially_constructible_v<To>,
-                "This implementation additionally requires destination type to "
-                "be trivially constructible");
-  To dst;
-  std::memcpy(&dst, &src, sizeof(To));
-  return dst;
-}
-
 // The following still remains here because IRList.h, used by dependents, needs
 // it.
 

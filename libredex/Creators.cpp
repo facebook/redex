@@ -7,6 +7,8 @@
 
 #include "Creators.h"
 
+#include <bit>
+
 #include <boost/range/adaptor/reversed.hpp>
 
 #include "DexPosition.h"
@@ -14,7 +16,6 @@
 #include "MethodUtil.h"
 #include "RedexContext.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Transform.h"
 
 namespace {
@@ -402,7 +403,7 @@ void MethodBlock::load_const(Location& loc, double value) {
   always_assert(loc.is_wide());
   IRInstruction* load = new IRInstruction(OPCODE_CONST_WIDE);
   load->set_dest(loc.get_reg());
-  load->set_literal(std20::bit_cast<int64_t>(value));
+  load->set_literal(std::bit_cast<int64_t>(value));
   loc.type = type::_double();
   push_instruction(load);
 }

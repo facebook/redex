@@ -9,8 +9,7 @@
 
 #include "DexClass.h"
 #include "Liveness.h"
-#include "StlUtil.h"
-#include "Util.h"
+#include <bit>
 
 namespace DedupBlkValueNumbering {
 using value_id_t = uint64_t;
@@ -79,7 +78,7 @@ struct IROperation {
 
   // To avoid UB.
   IROperationSourceBlock type_punned_src_blk() const {
-    return std20::bit_cast<IROperationSourceBlock>(op_data);
+    return std::bit_cast<IROperationSourceBlock>(op_data);
   }
 };
 
