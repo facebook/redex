@@ -1125,120 +1125,33 @@ void TypedefAnnoPatcher::collect_return_candidates(
 void TypedefAnnoPatcher::print_stats(PassManager& mgr) {
   size_t total_member_patched = 0;
   size_t total_param_patched = 0;
-  mgr.set_metric(
-      "fix_kt_enum_ctor_param field/methods",
-      m_patcher_stats.fix_kt_enum_ctor_param.num_patched_fields_and_methods);
-  mgr.set_metric("fix_kt_enum_ctor_param params",
-                 m_patcher_stats.fix_kt_enum_ctor_param.num_patched_parameters);
-  TRACE(TAC, 1, "[patcher] fix_kt_enum_ctor_param field/methods %zu",
-        m_patcher_stats.fix_kt_enum_ctor_param.num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] fix_kt_enum_ctor_param params %zu",
-        m_patcher_stats.fix_kt_enum_ctor_param.num_patched_parameters);
-  total_member_patched +=
-      m_patcher_stats.fix_kt_enum_ctor_param.num_patched_fields_and_methods;
-  total_param_patched +=
-      m_patcher_stats.fix_kt_enum_ctor_param.num_patched_parameters;
 
-  mgr.set_metric("patch_lambdas field/methods",
-                 m_patcher_stats.patch_lambdas.num_patched_fields_and_methods);
-  mgr.set_metric("patch_lambdas params",
-                 m_patcher_stats.patch_lambdas.num_patched_parameters);
-  TRACE(TAC, 1, "[patcher] patch_lambdas field/methods %zu",
-        m_patcher_stats.patch_lambdas.num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] patch_lambdas params %zu",
-        m_patcher_stats.patch_lambdas.num_patched_parameters);
-  total_member_patched +=
-      m_patcher_stats.patch_lambdas.num_patched_fields_and_methods;
-  total_param_patched += m_patcher_stats.patch_lambdas.num_patched_parameters;
+  // Helper to report metrics and traces for a Stats object, and accumulate
+  // totals.
+  auto report_stats = [&](const std::string& name, const Stats& stats) {
+    mgr.set_metric(name + " field/methods",
+                   stats.num_patched_fields_and_methods);
+    mgr.set_metric(name + " params", stats.num_patched_parameters);
+    TRACE(TAC, 1, "[patcher] %s field/methods %zu", name.c_str(),
+          stats.num_patched_fields_and_methods);
+    TRACE(TAC, 1, "[patcher] %s params %zu", name.c_str(),
+          stats.num_patched_parameters);
+    total_member_patched += stats.num_patched_fields_and_methods;
+    total_param_patched += stats.num_patched_parameters;
+  };
 
-  mgr.set_metric("patch_parameters_and_returns field/methods",
-                 m_patcher_stats.patch_parameters_and_returns
-                     .num_patched_fields_and_methods);
-  mgr.set_metric(
-      "patch_parameters_and_returns params",
-      m_patcher_stats.patch_parameters_and_returns.num_patched_parameters);
-  TRACE(TAC, 1, "[patcher] patch_parameters_and_returns field/methods %zu",
-        m_patcher_stats.patch_parameters_and_returns
-            .num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] patch_parameters_and_returns params %zu",
-        m_patcher_stats.patch_parameters_and_returns.num_patched_parameters);
-  total_member_patched += m_patcher_stats.patch_parameters_and_returns
-                              .num_patched_fields_and_methods;
-  total_param_patched +=
-      m_patcher_stats.patch_parameters_and_returns.num_patched_parameters;
-
-  mgr.set_metric("patch_synth_cls_fields_from_ctor_param field/methods",
-                 m_patcher_stats.patch_synth_cls_fields_from_ctor_param
-                     .num_patched_fields_and_methods);
-  mgr.set_metric("patch_synth_cls_fields_from_ctor_param params",
-                 m_patcher_stats.patch_synth_cls_fields_from_ctor_param
-                     .num_patched_parameters);
-  TRACE(TAC, 1,
-        "[patcher] patch_synth_cls_fields_from_ctor_param "
-        "field/methods %zu",
-        m_patcher_stats.patch_synth_cls_fields_from_ctor_param
-            .num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] patch_synth_cls_fields_from_ctor_param params %zu",
-        m_patcher_stats.patch_synth_cls_fields_from_ctor_param
-            .num_patched_parameters);
-  total_member_patched += m_patcher_stats.patch_synth_cls_fields_from_ctor_param
-                              .num_patched_fields_and_methods;
-  total_param_patched += m_patcher_stats.patch_synth_cls_fields_from_ctor_param
-                             .num_patched_parameters;
-
-  mgr.set_metric("patch_enclosing_lambda_fields field/methods",
-                 m_patcher_stats.patch_enclosing_lambda_fields
-                     .num_patched_fields_and_methods);
-  mgr.set_metric(
-      "patch_enclosing_lambda_fields params",
-      m_patcher_stats.patch_enclosing_lambda_fields.num_patched_parameters);
-  TRACE(TAC, 1,
-        "[patcher] patch_enclosing_lambda_fields "
-        "field/methods %zu",
-        m_patcher_stats.patch_enclosing_lambda_fields
-            .num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] patch_enclosing_lambda_fields params %zu",
-        m_patcher_stats.patch_enclosing_lambda_fields.num_patched_parameters);
-  total_member_patched += m_patcher_stats.patch_enclosing_lambda_fields
-                              .num_patched_fields_and_methods;
-  total_param_patched +=
-      m_patcher_stats.patch_enclosing_lambda_fields.num_patched_parameters;
-
-  mgr.set_metric("patch_ctor_params_from_synth_cls_fields field/methods",
-                 m_patcher_stats.patch_ctor_params_from_synth_cls_fields
-                     .num_patched_fields_and_methods);
-  mgr.set_metric("patch_ctor_params_from_synth_cls_fields params",
-                 m_patcher_stats.patch_ctor_params_from_synth_cls_fields
-                     .num_patched_parameters);
-  TRACE(TAC, 1,
-        "[patcher] patch_ctor_params_from_synth_cls_fields "
-        "field/methods %zu",
-        m_patcher_stats.patch_ctor_params_from_synth_cls_fields
-            .num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] patch_ctor_params_from_synth_cls_fields params %zu",
-        m_patcher_stats.patch_ctor_params_from_synth_cls_fields
-            .num_patched_parameters);
-  total_member_patched +=
-      m_patcher_stats.patch_ctor_params_from_synth_cls_fields
-          .num_patched_fields_and_methods;
-  total_param_patched += m_patcher_stats.patch_ctor_params_from_synth_cls_fields
-                             .num_patched_parameters;
-
-  mgr.set_metric(
-      "patch_chained_getters field/methods",
-      m_patcher_stats.patch_chained_getters.num_patched_fields_and_methods);
-  mgr.set_metric("patch_chained_getters params",
-                 m_patcher_stats.patch_chained_getters.num_patched_parameters);
-  TRACE(TAC, 1,
-        "[patcher] patch_chained_getters "
-        "field/methods %zu",
-        m_patcher_stats.patch_chained_getters.num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] patch_chained_getters params %zu",
-        m_patcher_stats.patch_chained_getters.num_patched_parameters);
-  total_member_patched +=
-      m_patcher_stats.patch_chained_getters.num_patched_fields_and_methods;
-  total_param_patched +=
-      m_patcher_stats.patch_chained_getters.num_patched_parameters;
+  report_stats("fix_kt_enum_ctor_param",
+               m_patcher_stats.fix_kt_enum_ctor_param);
+  report_stats("patch_lambdas", m_patcher_stats.patch_lambdas);
+  report_stats("patch_parameters_and_returns",
+               m_patcher_stats.patch_parameters_and_returns);
+  report_stats("patch_synth_cls_fields_from_ctor_param",
+               m_patcher_stats.patch_synth_cls_fields_from_ctor_param);
+  report_stats("patch_enclosing_lambda_fields",
+               m_patcher_stats.patch_enclosing_lambda_fields);
+  report_stats("patch_ctor_params_from_synth_cls_fields",
+               m_patcher_stats.patch_ctor_params_from_synth_cls_fields);
+  report_stats("patch_chained_getters", m_patcher_stats.patch_chained_getters);
 
   mgr.set_metric("patched_returns", m_patched_returns.size());
   TRACE(TAC, 1, "[patcher] patched returns %zu", m_patched_returns.size());
