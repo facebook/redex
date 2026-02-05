@@ -11,10 +11,6 @@ jobs:
     strategy:
       matrix:
         config:
-        # Extra flags for problematic early verisons of # jsoncpp < 1.9.5
-        # (https://github.com/open-source-parsers/jsoncpp/issues/1193).  This
-        # currently only affects Debian 11.
-        - {os: "debian:11", configure_extra: "CXXFLAGS=-Wno-volatile"}
         # Extra flags for false positives from GCC 12:
         # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105651
         - {os: "debian:12", configure_extra: "CXXFLAGS=-Wno-restrict"}
