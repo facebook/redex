@@ -8,6 +8,8 @@
 #include "verify/VerifyUtil.h"
 
 #include <algorithm>
+#include <initializer_list>
+#include <ranges>
 #include <string_view>
 
 #include <gmock/gmock.h>
@@ -18,48 +20,48 @@ using ::testing::IsNull;
 using ::testing::NotNull;
 
 namespace {
-constexpr std::string_view test_class = "LKotlinLambdaDeduplicationTest;";
+constexpr std::string_view test_class = "LKotlinLambdaDedupSingletonTest;";
 
 // Lambda classes for the first group of trivial lambdas (3 - meets threshold).
 // These should be deduplicated.
 constexpr std::string_view trivial_lambda1 =
-    "LKotlinLambdaDeduplicationTest$useTrivialLambda1$1;";
+    "LKotlinLambdaDedupSingletonTest$useTrivialLambda1$1;";
 constexpr std::string_view trivial_lambda2 =
-    "LKotlinLambdaDeduplicationTest$useTrivialLambda2$1;";
+    "LKotlinLambdaDedupSingletonTest$useTrivialLambda2$1;";
 constexpr std::string_view trivial_lambda3 =
-    "LKotlinLambdaDeduplicationTest$useTrivialLambda3$1;";
+    "LKotlinLambdaDedupSingletonTest$useTrivialLambda3$1;";
 
 // Lambda classes for the second group of trivial lambdas (4 - above threshold).
 // These should be deduplicated to a DIFFERENT canonical lambda.
 constexpr std::string_view second_group_lambda1 =
-    "LKotlinLambdaDeduplicationTest$useSecondGroupLambda1$1;";
+    "LKotlinLambdaDedupSingletonTest$useSecondGroupLambda1$1;";
 constexpr std::string_view second_group_lambda2 =
-    "LKotlinLambdaDeduplicationTest$useSecondGroupLambda2$1;";
+    "LKotlinLambdaDedupSingletonTest$useSecondGroupLambda2$1;";
 constexpr std::string_view second_group_lambda3 =
-    "LKotlinLambdaDeduplicationTest$useSecondGroupLambda3$1;";
+    "LKotlinLambdaDedupSingletonTest$useSecondGroupLambda3$1;";
 constexpr std::string_view second_group_lambda4 =
-    "LKotlinLambdaDeduplicationTest$useSecondGroupLambda4$1;";
+    "LKotlinLambdaDedupSingletonTest$useSecondGroupLambda4$1;";
 
 // Lambda class for the unique lambda (only 1 instance).
 // Should NOT be deduplicated.
 constexpr std::string_view unique_lambda =
-    "LKotlinLambdaDeduplicationTest$useUniqueLambda$1;";
+    "LKotlinLambdaDedupSingletonTest$useUniqueLambda$1;";
 
 // Lambda classes for the below-threshold group (2 - below
 // min_duplicate_group_size). Should NOT be deduplicated.
 constexpr std::string_view below_threshold_lambda1 =
-    "LKotlinLambdaDeduplicationTest$useBelowThresholdLambda1$1;";
+    "LKotlinLambdaDedupSingletonTest$useBelowThresholdLambda1$1;";
 constexpr std::string_view below_threshold_lambda2 =
-    "LKotlinLambdaDeduplicationTest$useBelowThresholdLambda2$1;";
+    "LKotlinLambdaDedupSingletonTest$useBelowThresholdLambda2$1;";
 
 // Lambda classes for the third group of lambdas (3 - meets threshold).
 // These should be deduplicated.
 constexpr std::string_view third_group_lambda1 =
-    "LKotlinLambdaDeduplicationTest$useNonTrivialLambda1$1;";
+    "LKotlinLambdaDedupSingletonTest$useNonTrivialLambda1$1;";
 constexpr std::string_view third_group_lambda2 =
-    "LKotlinLambdaDeduplicationTest$useNonTrivialLambda2$1;";
+    "LKotlinLambdaDedupSingletonTest$useNonTrivialLambda2$1;";
 constexpr std::string_view third_group_lambda3 =
-    "LKotlinLambdaDeduplicationTest$useNonTrivialLambda3$1;";
+    "LKotlinLambdaDedupSingletonTest$useNonTrivialLambda3$1;";
 
 // Extract the sget-object field referenced by a method.
 // Returns nullptr if no sget-object instruction is found.
@@ -99,11 +101,9 @@ const DexCode* get_invoke_code(const Scope& classes,
 bool codes_equal(const DexCode* a, const DexCode* b) {
   always_assert(a != nullptr);
   always_assert(b != nullptr);
-  const auto& insns_a = a->get_instructions();
-  const auto& insns_b = b->get_instructions();
-  return std::equal(insns_a.begin(), insns_a.end(), insns_b.begin(),
-                    insns_b.end(),
-                    [](const auto& x, const auto& y) { return *x == *y; });
+  return std::ranges::equal(
+      a->get_instructions(), b->get_instructions(),
+      [](const auto& x, const auto& y) { return *x == *y; });
 }
 
 // Check if a field is a deduplicated INSTANCE field.
@@ -112,20 +112,16 @@ bool is_deduped_instance_field(const DexFieldRef* field) {
          field->str() == KotlinLambdaDeduplicationPass::kDedupedInstanceName;
 }
 
-// Check if a field is a canonical lambda's INSTANCE field (deduplicated).
-// After deduplication, the canonical lambda's INSTANCE is renamed to
-// INSTANCE$redex$dedup.
-bool is_canonical_instance(const DexFieldRef* field,
-                           const std::vector<std::string_view>& group_lambdas) {
+// Check if a field's class belongs to a duplicate group and is deduplicated.
+bool is_deduped_group_member_instance(
+    const DexFieldRef* field,
+    std::initializer_list<std::string_view> group_lambdas) {
   if (!is_deduped_instance_field(field)) {
     return false;
   }
-  for (const auto& lambda : group_lambdas) {
-    if (field->get_class() == DexType::get_type(lambda)) {
-      return true;
-    }
-  }
-  return false;
+  return std::ranges::any_of(group_lambdas, [field](std::string_view lambda) {
+    return field->get_class() == DexType::get_type(lambda);
+  });
 }
 } // namespace
 
@@ -214,9 +210,8 @@ TEST_F(PostVerify, LambdasDeduplicated) {
   EXPECT_EQ(field1, field3);
 
   // The field should be one of the group's lambdas' INSTANCE$redex$dedup
-  std::vector<std::string_view> first_group = {trivial_lambda1, trivial_lambda2,
-                                               trivial_lambda3};
-  EXPECT_TRUE(is_canonical_instance(field1, first_group));
+  EXPECT_TRUE(is_deduped_group_member_instance(
+      field1, {trivial_lambda1, trivial_lambda2, trivial_lambda3}));
 
   // Second group (4 lambdas) - all should reference the same canonical field
   const auto* sg1 = find_vmethod_named(*cls, "useSecondGroupLambda1");
@@ -241,10 +236,9 @@ TEST_F(PostVerify, LambdasDeduplicated) {
   EXPECT_EQ(sg_field1, sg_field3);
   EXPECT_EQ(sg_field1, sg_field4);
 
-  std::vector<std::string_view> second_group = {
-      second_group_lambda1, second_group_lambda2, second_group_lambda3,
-      second_group_lambda4};
-  EXPECT_TRUE(is_canonical_instance(sg_field1, second_group));
+  EXPECT_TRUE(is_deduped_group_member_instance(
+      sg_field1, {second_group_lambda1, second_group_lambda2,
+                  second_group_lambda3, second_group_lambda4}));
 
   // Third group (3 lambdas) - all should reference the same canonical field
   const auto* tg1 = find_vmethod_named(*cls, "useNonTrivialLambda1");
@@ -264,9 +258,9 @@ TEST_F(PostVerify, LambdasDeduplicated) {
   EXPECT_EQ(tg_field1, tg_field2);
   EXPECT_EQ(tg_field1, tg_field3);
 
-  std::vector<std::string_view> third_group = {
-      third_group_lambda1, third_group_lambda2, third_group_lambda3};
-  EXPECT_TRUE(is_canonical_instance(tg_field1, third_group));
+  EXPECT_TRUE(is_deduped_group_member_instance(
+      tg_field1,
+      {third_group_lambda1, third_group_lambda2, third_group_lambda3}));
 }
 
 TEST_F(PostVerify, DifferentGroupsUseDifferentCanonicals) {
