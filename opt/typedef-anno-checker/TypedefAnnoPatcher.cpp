@@ -765,9 +765,7 @@ void patch_synthetic_field_from_local_var_lambda(
     const src_index_t src,
     const TypedefAnnoType* anno,
     std::vector<const DexField*>* patched_fields,
-    PatchingCandidates& candidates,
-    std::mutex& /*anno_patching_mutex*/,
-    Stats& /*class_stats*/) {
+    PatchingCandidates& candidates) {
   live_range::Use use_of_id{insn, src};
   auto udchains_it = ud_chains.find(use_of_id);
   auto defs_set = udchains_it->second;
@@ -827,9 +825,7 @@ void annotate_local_var_field_from_callee(
     const live_range::UseDefChains& ud_chains,
     const type_inference::TypeInference& inference,
     std::vector<const DexField*>* patched_fields,
-    PatchingCandidates& candidates,
-    std::mutex& anno_patching_mutex,
-    Stats& class_stats) {
+    PatchingCandidates& candidates) {
   if (callee == nullptr) {
     return;
   }
@@ -842,7 +838,7 @@ void annotate_local_var_field_from_callee(
     if (annotation != boost::none) {
       patch_synthetic_field_from_local_var_lambda(
           ud_chains, insn, param_anno.first + 1, *annotation, patched_fields,
-          candidates, anno_patching_mutex, class_stats);
+          candidates);
     }
   }
 }
@@ -853,7 +849,7 @@ void TypedefAnnoPatcher::patch_lambdas(
     DexMethod* method,
     std::vector<const DexField*>* patched_fields,
     PatchingCandidates& candidates,
-    Stats& class_stats) {
+    Stats& /*class_stats*/) {
   auto analysis =
       MethodAnalysis::create(method, m_typedef_annos, m_method_override_graph);
   if (!analysis) {
@@ -883,8 +879,7 @@ void TypedefAnnoPatcher::patch_lambdas(
             if (annotation != boost::none) {
               patch_synthetic_field_from_local_var_lambda(
                   ud_chains, insn, param_anno.first, *annotation,
-                  patched_fields, candidates, m_anno_patching_mutex,
-                  class_stats);
+                  patched_fields, candidates);
             }
           }
         }
@@ -893,9 +888,9 @@ void TypedefAnnoPatcher::patch_lambdas(
         auto callees =
             mog::get_overriding_methods(m_method_override_graph, callee_def);
         for (const auto* callee : UnorderedIterable(callees)) {
-          annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, analysis->inference(), patched_fields,
-              candidates, m_anno_patching_mutex, class_stats);
+          annotate_local_var_field_from_callee(callee, insn, ud_chains,
+                                               analysis->inference(),
+                                               patched_fields, candidates);
         }
       } else if (opcode::is_an_invoke(insn->opcode())) {
         auto* callee_def = resolve_method(method, insn);
@@ -903,9 +898,9 @@ void TypedefAnnoPatcher::patch_lambdas(
             mog::get_overriding_methods(m_method_override_graph, callee_def);
         callees.insert(callee_def);
         for (const auto* callee : UnorderedIterable(callees)) {
-          annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, analysis->inference(), patched_fields,
-              candidates, m_anno_patching_mutex, class_stats);
+          annotate_local_var_field_from_callee(callee, insn, ud_chains,
+                                               analysis->inference(),
+                                               patched_fields, candidates);
         }
       }
     }
@@ -993,7 +988,8 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
 
       // Patch the field in-place. This must happen before collecting getter/
       // setter candidates, as they depend on the field being annotated.
-      add_annotation(field, *annotation, m_anno_patching_mutex, class_stats);
+      // No lock needed: updates are local to the current class being processed.
+      add_annotation_impl(field, *annotation, class_stats);
 
       collect_kotlin_accessor_candidates(field);
     }
