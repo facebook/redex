@@ -38,6 +38,7 @@
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "PassManager.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
@@ -347,6 +348,21 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
     // to point to the goto target of the branch edge target block.
 
     cfg::Block* branch_block = branch_edge->target();
+
+    // In instrumented builds, removing a block that contains source blocks
+    // would lose profiling data, leading to violations where paths appear
+    // impossible (e.g., reaching a join block without hitting any predecessor
+    // block's source block). Skip this optimization in such cases.
+    if (g_redex->instrument_mode) {
+      const auto* sb = source_blocks::get_first_source_block(branch_block);
+      if (sb != nullptr) {
+        TRACE(UCM, 5,
+              "[up code motion] skipping in instrument mode: branch block has "
+              "source blocks");
+        continue;
+      }
+    }
+
     for (IRInstruction* insn : instructions_to_insert) {
       auto it = b->to_cfg_instruction_iterator(last_insn_it);
       cfg.insert_before(it, insn);

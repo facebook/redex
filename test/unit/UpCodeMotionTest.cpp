@@ -10,6 +10,7 @@
 #include "ControlFlow.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "RedexContext.h"
 #include "RedexTest.h"
 #include "UpCodeMotion.h"
 
@@ -436,4 +437,92 @@ TEST_F(UpCodeMotionTest, hot_branch_2) {
 )";
 
   test(code_str, expected_str, 0, 0, 0, 0);
+}
+
+/*
+ * In instrumented builds, we should NOT remove blocks that contain source
+ * blocks because this would lose profiling data and create violations.
+ */
+TEST_F(UpCodeMotionTest, skip_transformation_in_instrument_mode) {
+  // Enable instrument mode
+  g_redex->instrument_mode = true;
+
+  const auto& code_str = R"(
+    (
+      (if-eqz v0 :true)
+
+      (const v1 0)
+
+      (:end)
+      (return v1)
+
+      (:true)
+      (.src_block "LFoo;.m:()V" 1 (0.5 0.5))
+      (const v1 1)
+      (goto :end)
+    )
+  )";
+
+  // In instrument mode, the transformation should be skipped because
+  // the branch block contains source blocks. The code should remain unchanged.
+  const auto& expected_str = R"(
+    (
+      (if-eqz v0 :true)
+
+      (const v1 0)
+
+      (:end)
+      (return v1)
+
+      (:true)
+      (.src_block "LFoo;.m:()V" 1 (0.5 0.5))
+      (const v1 1)
+      (goto :end)
+    )
+  )";
+
+  test(code_str, expected_str, 0, 0, 0, 0);
+
+  // Reset instrument mode
+  g_redex->instrument_mode = false;
+}
+
+/*
+ * When NOT in instrument mode, the transformation should still proceed
+ * normally even if source blocks are present.
+ */
+TEST_F(UpCodeMotionTest, transformation_proceeds_without_instrument_mode) {
+  // Make sure instrument mode is off
+  g_redex->instrument_mode = false;
+
+  const auto& code_str = R"(
+    (
+      (if-eqz v0 :true)
+
+      (const v1 0)
+
+      (:end)
+      (return v1)
+
+      (:true)
+      (.src_block "LFoo;.m:()V" 1 (0.5 0.5))
+      (const v1 1)
+      (goto :end)
+    )
+  )";
+
+  // Without instrument mode, the transformation should proceed
+  const auto& expected_str = R"(
+    (
+      (const v1 1)
+      (if-eqz v0 :end)
+
+      (const v1 0)
+
+      (:end)
+      (return v1)
+    )
+  )";
+
+  test(code_str, expected_str, 1, 1, 0, 0);
 }
