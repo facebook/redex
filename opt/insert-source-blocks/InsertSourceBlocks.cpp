@@ -318,25 +318,32 @@ struct ProfileFile {
         pos = newline_pos + 1;
         return ret;
       };
-      auto check_components = [](const auto& line, size_t num = 0,
-                                 const std::vector<std::string>& exp = {}) {
+      auto check_components = [](const auto& line,
+                                 const std::vector<std::string>& exp,
+                                 bool exact) {
         std::vector<std::string> split_vec;
         boost::split(split_vec, line, [](const auto& c) { return c == ','; });
-        always_assert_log(num == 0 ? split_vec == exp : split_vec.size() == num,
-                          "Unexpected line: %s (%s). Expected %s/%zu.",
-                          std::string(line).c_str(),
-                          boost::join(split_vec, "'").c_str(),
-                          boost::join(exp, ",").c_str(), num);
+        if (exact) {
+          always_assert_log(split_vec == exp, "Unexpected line: %s.",
+                            std::string(line).c_str());
+        } else {
+          always_assert_log(
+              split_vec.size() >= exp.size() &&
+                  std::equal(exp.begin(), exp.end(), split_vec.begin()),
+              "Unexpected line: %s.", std::string(line).c_str());
+        }
       };
-      check_components(next_line_fn(), 0, {"interaction", "appear#"});
+      check_components(next_line_fn(), {"interaction", "appear#"},
+                       /*exact=*/false);
       {
         auto line = next_line_fn();
         std::vector<std::string> split_vec;
         boost::split(split_vec, line, [](const auto& c) { return c == ','; });
-        always_assert(split_vec.size() == 2);
+        always_assert(split_vec.size() >= 2);
         interaction = std::move(split_vec[0]);
       }
-      check_components(next_line_fn(), 0, {"name", "profiled_srcblks_exprs"});
+      check_components(next_line_fn(), {"name", "profiled_srcblks_exprs"},
+                       /*exact=*/true);
     }
 
     while (pos < data.length()) {
