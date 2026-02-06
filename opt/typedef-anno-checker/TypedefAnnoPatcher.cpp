@@ -164,50 +164,6 @@ bool is_fun_interface_class(const DexClass* cls) {
   return !vmethods.empty();
 }
 
-/**
- * Kotlinc style synthesized lambda class (not D8 desugared style). An example
- * is shared in P1690836921.
- */
-bool is_synthesized_lambda_class(const DexClass* cls) {
-  if (!klass::maybe_anonymous_class(cls)) {
-    return false;
-  }
-  if (cls->get_super_class() !=
-      DexType::make_type("Lkotlin/jvm/internal/Lambda;")) {
-    return false;
-  }
-  if (cls->get_interfaces()->size() != 1) {
-    return false;
-  }
-  const auto* intf = cls->get_interfaces()->at(0);
-  if (!boost::starts_with(intf->get_name()->str(),
-                          "Lkotlin/jvm/functions/Function")) {
-    return false;
-  }
-  if (!cls->get_sfields().empty()) {
-    return false;
-  }
-  for (const auto* f : cls->get_ifields()) {
-    if (!is_synthetic(f)) {
-      return false;
-    }
-  }
-  if (cls->get_ctors().size() != 1) {
-    return false;
-  }
-  const auto& vmethods = cls->get_vmethods();
-  if (vmethods.empty()) {
-    return false;
-  }
-  for (const auto* m : vmethods) {
-    const auto name = m->get_simple_deobfuscated_name();
-    if (name != "invoke") {
-      return false;
-    }
-  }
-  return true;
-}
-
 DexMethodRef* get_enclosing_method(DexClass* cls) {
   auto* anno_set = cls->get_anno_set();
   if (anno_set == nullptr) {
@@ -605,7 +561,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
       scope, [this, &candidates](DexClass* cls) {
         auto class_stats = PatcherStats();
 
-        if (!is_synthesized_lambda_class(cls) && !is_fun_interface_class(cls)) {
+        if (!type::is_kotlin_lambda(cls) && !is_fun_interface_class(cls)) {
           return class_stats;
         }
 
