@@ -465,7 +465,7 @@ struct SourceBlock {
     // NOLINTNEXTLINE
     /* implicit */ operator bool() const { return m_bits != 0; }
 
-    size_t first_index() const { return std20::countr_zero(m_bits); }
+    size_t first_index() const { return std::countr_zero(m_bits); }
 
     size_t count() const { return std::popcount(m_bits); }
 
