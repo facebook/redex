@@ -433,8 +433,8 @@ void parse_manual_file(
     boost::split_regex(method_and_class, method_and_class_string,
                        boost::regex("->"));
     always_assert(method_and_class.size() == 1 || method_and_class.size() == 2);
-    manual_profile_lines.emplace_back(current_line, flags, method_and_class,
-                                      config_names, manual_filename);
+    manual_profile_lines.push_back({current_line, flags, method_and_class,
+                                     config_names, manual_filename});
   }
 
   std::mutex unresolved_mutex;
