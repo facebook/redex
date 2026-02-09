@@ -36,16 +36,21 @@ class KotlinLambdaDeduplicationPass : public Pass {
 
   std::string get_config_doc() override {
     return R"(
-This pass deduplicates Kotlin lambdas with singleton INSTANCE fields that have
-identical code.
+This pass deduplicates Kotlin lambdas that have identical code.
 
-For lambdas with identical invoke code, this pass:
+For singleton lambdas (with INSTANCE fields):
 1. Picks the canonical lambda from the lowest-indexed dex file (e.g.,
    classes.dex < classes2.dex) so higher-indexed dexes can reference it
 2. Renames the canonical's INSTANCE field to prevent later passes from
    inlining it
 3. Rewrites all usages of duplicate lambda INSTANCEs to use the canonical's
    INSTANCE
+
+For non-singleton, non-capturing lambdas (without INSTANCE fields, with no-arg
+constructors):
+1. Picks the canonical lambda from the lowest-indexed dex file
+2. Rewrites all new-instance and constructor calls of duplicate lambdas to
+   use the canonical's type and constructor
     )";
   }
 

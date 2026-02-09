@@ -18,17 +18,17 @@
 #include "DexStore.h"
 #include "DexUtil.h"
 #include "KotlinLambdaAnalyzer.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
-#include "TypeUtil.h"
 #include "UniqueMethodTracker.h"
 #include "Walkers.h"
 
 namespace {
 
 // Get the INSTANCE field from a lambda class.
-DexField* get_instance_field(DexClass* cls, const DexString* instance_name) {
+DexField* get_singleton_field(DexClass* cls, const DexString* instance_name) {
   const auto& sfields = cls->get_sfields();
   auto it =
       std::ranges::find_if(sfields, [cls, instance_name](DexField* field) {
@@ -36,6 +36,43 @@ DexField* get_instance_field(DexClass* cls, const DexString* instance_name) {
                field->get_type() == cls->get_type();
       });
   return it != sfields.end() ? *it : nullptr;
+}
+
+// Get the no-arg constructor of a lambda class. Returns nullptr if there's not
+// exactly one constructor, or if the constructor has parameters (capturing
+// lambda).
+// TODO(T251573078): Support capturing lambdas with matching constructor
+// signatures.
+DexMethod* get_no_arg_constructor(DexClass* cls) {
+  const auto& dmethods = cls->get_dmethods();
+  auto it = std::ranges::find_if(dmethods, method::is_init);
+  if (it == dmethods.end()) {
+    return nullptr;
+  }
+  DexMethod* ctor = *it;
+  // Ensure there's only one constructor.
+  if (std::ranges::any_of(it + 1, dmethods.end(), method::is_init)) {
+    return nullptr;
+  }
+  // Check that the constructor has no parameters (non-capturing lambda).
+  if (!ctor->get_proto()->get_args()->empty()) {
+    return nullptr;
+  }
+  return ctor;
+}
+
+// Collect lambda types from a tracker's duplicate groups.
+void collect_lambda_types_from_tracker(
+    const UniqueMethodTracker& tracker,
+    size_t min_duplicate_group_size,
+    std::unordered_set<const DexType*>& lambda_types) {
+  for (const auto& [key, methods] : UnorderedIterable(tracker.groups())) {
+    if (methods.size() >= min_duplicate_group_size) {
+      for (const auto* method : UnorderedIterable(methods)) {
+        lambda_types.insert(method->get_class());
+      }
+    }
+  }
 }
 
 // Build a map from lambda class types to their dex indices.
@@ -47,31 +84,173 @@ DexField* get_instance_field(DexClass* cls, const DexString* instance_name) {
 // we only need entries for lambda types in duplicate groups.
 std::unordered_map<const DexType*, size_t> build_class_to_dex_idx_map(
     const DexStoresVector& stores,
-    const UniqueMethodTracker& tracker,
+    const UniqueMethodTracker& singleton_tracker,
+    const UniqueMethodTracker& non_singleton_tracker,
     size_t min_duplicate_group_size) {
-  // First, collect the lambda types we care about.
+  // Collect the lambda types we care about from both trackers.
   std::unordered_set<const DexType*> lambda_types;
-  for (const auto& [key, methods] : UnorderedIterable(tracker.groups())) {
-    if (methods.size() >= min_duplicate_group_size) {
-      for (const auto* method : UnorderedIterable(methods)) {
-        lambda_types.insert(method->get_class());
-      }
-    }
-  }
+  collect_lambda_types_from_tracker(singleton_tracker, min_duplicate_group_size,
+                                    lambda_types);
+  collect_lambda_types_from_tracker(non_singleton_tracker,
+                                    min_duplicate_group_size, lambda_types);
 
-  // Then, find the dex index for each lambda type.
+  // Find the dex index for each lambda type.
   std::unordered_map<const DexType*, size_t> result;
   size_t global_dex_idx = 0;
   for (const auto& store : stores) {
     for (const auto& dex : store.get_dexen()) {
       for (const auto* cls : dex) {
         if (lambda_types.contains(cls->get_type())) {
-          result[cls->get_type()] = global_dex_idx;
+          result.emplace(cls->get_type(), global_dex_idx);
         }
       }
       global_dex_idx++;
     }
   }
+  return result;
+}
+
+// Find the canonical lambda class from a group of methods.
+// The canonical is the one in the lowest-indexed dex file.
+DexClass* find_canonical_class(
+    const UnorderedSet<const DexMethod*>& methods,
+    const std::unordered_map<const DexType*, size_t>& class_to_dex_idx) {
+  DexClass* canonical = nullptr;
+  size_t min_dex_idx = std::numeric_limits<size_t>::max();
+  for (const auto* method : UnorderedIterable(methods)) {
+    auto* lambda_cls = type_class(method->get_class());
+    auto it = class_to_dex_idx.find(lambda_cls->get_type());
+    size_t dex_idx = (it != class_to_dex_idx.end())
+                         ? it->second
+                         : std::numeric_limits<size_t>::max();
+    if (dex_idx < min_dex_idx) {
+      min_dex_idx = dex_idx;
+      canonical = lambda_cls;
+    }
+  }
+  return canonical;
+}
+
+// Result of processing singleton duplicate groups.
+struct SingletonDeduplicationResult {
+  // Map from original INSTANCE field to the canonical's renamed field.
+  std::unordered_map<DexFieldRef*, DexFieldRef*> field_redirect_map;
+  size_t lambdas_deduplicated = 0;
+  size_t duplicate_group_count = 0;
+};
+
+// Process singleton duplicate groups. For each group, redirect all usages to
+// the canonical lambda's INSTANCE field. We rename the canonical's INSTANCE
+// field to prevent KotlinStatelessLambdaSingletonRemovalPass from processing
+// it.
+SingletonDeduplicationResult process_singleton_duplicates(
+    const UniqueMethodTracker& tracker,
+    const std::unordered_map<const DexType*, size_t>& class_to_dex_idx,
+    size_t min_group_size) {
+  SingletonDeduplicationResult result;
+
+  const auto* const instance_name = DexString::make_string("INSTANCE");
+  const auto* const deduped_instance_name = DexString::make_string(
+      KotlinLambdaDeduplicationPass::kDedupedInstanceName);
+
+  for (const auto& [key, methods] : UnorderedIterable(tracker.groups())) {
+    if (methods.size() < min_group_size) {
+      continue;
+    }
+    result.duplicate_group_count++;
+
+    // Find the lambda in the lowest-indexed dex to use as canonical.
+    DexClass* canonical = find_canonical_class(methods, class_to_dex_idx);
+    always_assert(canonical != nullptr);
+
+    DexField* canonical_instance =
+        get_singleton_field(canonical, instance_name);
+    always_assert(canonical_instance != nullptr);
+
+    // Rename the canonical's INSTANCE field to prevent
+    // KotlinStatelessLambdaSingletonRemovalPass (if ever run after this pass)
+    // from processing it.
+    DexFieldSpec new_spec{canonical_instance->get_class(),
+                          deduped_instance_name,
+                          canonical_instance->get_type()};
+    canonical_instance->change(new_spec);
+
+    // Map non-canonical lambdas in this group to use the canonical's field.
+    // The canonical's field is renamed in place, so no redirect is needed for
+    // code that already references it.
+    for (const auto* method : UnorderedIterable(methods)) {
+      auto* lambda_cls = type_class(method->get_class());
+      if (lambda_cls == canonical) {
+        continue;
+      }
+      DexField* instance_field = get_singleton_field(lambda_cls, instance_name);
+      always_assert(instance_field != nullptr);
+      result.field_redirect_map[instance_field] = canonical_instance;
+      result.lambdas_deduplicated++;
+    }
+
+    TRACE(KOTLIN_INSTANCE, 2,
+          "KotlinLambdaDeduplication: Singleton group with %zu lambdas, "
+          "canonical = %s",
+          methods.size(), SHOW(canonical));
+  }
+
+  return result;
+}
+
+// Result of processing non-singleton duplicate groups.
+struct NonSingletonDeduplicationResult {
+  // Map from original lambda type to the canonical's type.
+  std::unordered_map<const DexType*, DexType*> type_redirect_map;
+  // Map from original constructor to the canonical's constructor.
+  std::unordered_map<DexMethodRef*, DexMethodRef*> ctor_redirect_map;
+  size_t lambdas_deduplicated = 0;
+  size_t duplicate_group_count = 0;
+};
+
+// Process non-singleton duplicate groups. For each group, redirect all usages
+// to the canonical lambda's type.
+NonSingletonDeduplicationResult process_non_singleton_duplicates(
+    const UniqueMethodTracker& tracker,
+    const std::unordered_map<const DexType*, size_t>& class_to_dex_idx,
+    size_t min_group_size) {
+  NonSingletonDeduplicationResult result;
+
+  for (const auto& [key, methods] : UnorderedIterable(tracker.groups())) {
+    if (methods.size() < min_group_size) {
+      continue;
+    }
+    result.duplicate_group_count++;
+
+    // Find the lambda in the lowest-indexed dex to use as canonical.
+    DexClass* canonical = find_canonical_class(methods, class_to_dex_idx);
+    always_assert(canonical != nullptr);
+
+    DexMethod* canonical_ctor = get_no_arg_constructor(canonical);
+    always_assert(canonical_ctor != nullptr);
+
+    // Map non-canonical lambdas in this group to use the canonical's type.
+    // All lambdas in this group have no-arg constructors (verified during
+    // collection), so they all have the same constructor signature.
+    for (const auto* method : UnorderedIterable(methods)) {
+      auto* lambda_cls = type_class(method->get_class());
+      if (lambda_cls == canonical) {
+        continue;
+      }
+      DexMethod* ctor = get_no_arg_constructor(lambda_cls);
+      always_assert(ctor != nullptr);
+
+      result.type_redirect_map[lambda_cls->get_type()] = canonical->get_type();
+      result.ctor_redirect_map[ctor] = canonical_ctor;
+      result.lambdas_deduplicated++;
+    }
+
+    TRACE(KOTLIN_INSTANCE, 2,
+          "KotlinLambdaDeduplication: Non-singleton group with %zu lambdas, "
+          "canonical = %s",
+          methods.size(), SHOW(canonical));
+  }
+
   return result;
 }
 
@@ -86,7 +265,10 @@ void KotlinLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
   const auto* const instance_name = DexString::make_string("INSTANCE");
 
   // Step 1: Collect all lambdas and insert their invoke methods.
-  UniqueMethodTracker tracker;
+  // We track singleton lambdas (with INSTANCE field) and non-singleton lambdas
+  // (without INSTANCE field) separately.
+  UniqueMethodTracker singleton_tracker;
+  UniqueMethodTracker non_singleton_tracker;
 
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (!can_rename(cls) || !can_delete(cls)) {
@@ -98,121 +280,92 @@ void KotlinLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
       return;
     }
 
-    if (get_instance_field(cls, instance_name) == nullptr) {
-      // TODO(T251573078): Handle non-singleton (anonymous class) lambdas.
+    DexMethod* invoke = analyzer->get_invoke_method();
+    if (invoke == nullptr) {
       return;
     }
 
-    DexMethod* invoke = analyzer->get_invoke_method();
-    always_assert(invoke != nullptr);
-
-    tracker.insert(invoke);
+    if (get_singleton_field(cls, instance_name) != nullptr) {
+      // Singleton lambda with INSTANCE field.
+      singleton_tracker.insert(invoke);
+    } else {
+      // Non-singleton lambda without INSTANCE field.
+      // Only track non-capturing lambdas (no-arg constructor).
+      if (get_no_arg_constructor(cls) != nullptr) {
+        non_singleton_tracker.insert(invoke);
+      }
+    }
   });
 
   // Step 2: Check if any duplicate groups exist.
-  size_t unique_signatures = tracker.size();
-  {
-    bool has_duplicates =
-        std::any_of(UnorderedIterable(tracker.groups()).begin(),
-                    UnorderedIterable(tracker.groups()).end(),
-                    [this](const auto& entry) {
-                      return entry.second.size() >= m_min_duplicate_group_size;
-                    });
-    if (!has_duplicates) {
-      mgr.incr_metric("unique_signatures", unique_signatures);
-      mgr.incr_metric("duplicate_groups", 0);
-      mgr.incr_metric("lambdas_deduped", 0);
-      TRACE(KOTLIN_INSTANCE, 1,
-            "KotlinLambdaDeduplication: No duplicate lambdas "
-            "found.");
-      return;
-    }
+  size_t singleton_distinct_code = singleton_tracker.size();
+  size_t non_singleton_distinct_code = non_singleton_tracker.size();
+
+  auto has_duplicates_in_tracker = [min_duplicate_group_size =
+                                        m_min_duplicate_group_size](
+                                       const UniqueMethodTracker& tracker) {
+    return std::any_of(UnorderedIterable(tracker.groups()).begin(),
+                       UnorderedIterable(tracker.groups()).end(),
+                       [min_duplicate_group_size](const auto& entry) {
+                         return entry.second.size() >= min_duplicate_group_size;
+                       });
+  };
+
+  bool has_singleton_duplicates = has_duplicates_in_tracker(singleton_tracker);
+  bool has_non_singleton_duplicates =
+      has_duplicates_in_tracker(non_singleton_tracker);
+
+  if (!has_singleton_duplicates && !has_non_singleton_duplicates) {
+    mgr.incr_metric("singleton_distinct_code", singleton_distinct_code);
+    mgr.incr_metric("non_singleton_distinct_code", non_singleton_distinct_code);
+    mgr.incr_metric("duplicate_groups", 0);
+    mgr.incr_metric("lambdas_deduped", 0);
+    TRACE(KOTLIN_INSTANCE, 1,
+          "KotlinLambdaDeduplication: No duplicate lambdas found.");
+    return;
   }
 
   // Step 3: Build a map from lambda types to their dex indices. We pick the
   // canonical lambda from the lowest-indexed dex (e.g., classes.dex <
   // classes2.dex) because higher-indexed dexes can reference lower-indexed
   // ones but not vice versa.
-  const auto class_to_dex_idx =
-      build_class_to_dex_idx_map(stores, tracker, m_min_duplicate_group_size);
+  const auto class_to_dex_idx = build_class_to_dex_idx_map(
+      stores, singleton_tracker, non_singleton_tracker,
+      m_min_duplicate_group_size);
 
-  // Step 4: For each duplicate group, redirect all usages to the canonical
-  // lambda's INSTANCE field. We rename the canonical's INSTANCE field to
-  // prevent KotlinStatelessLambdaSingletonRemovalPass from processing it.
-  size_t lambdas_deduplicated = 0;
-  size_t duplicate_group_count = 0;
+  // Step 4: Process duplicate groups.
+  const auto singleton_result = process_singleton_duplicates(
+      singleton_tracker, class_to_dex_idx, m_min_duplicate_group_size);
+  const auto non_singleton_result = process_non_singleton_duplicates(
+      non_singleton_tracker, class_to_dex_idx, m_min_duplicate_group_size);
 
-  // Map from original INSTANCE field to the canonical's renamed field.
-  std::unordered_map<DexFieldRef*, DexFieldRef*> field_redirect_map;
-
-  const auto* deduped_instance_name =
-      DexString::make_string(kDedupedInstanceName);
-
-  for (const auto& [key, methods] : UnorderedIterable(tracker.groups())) {
-    if (methods.size() < m_min_duplicate_group_size) {
-      continue;
+  // Step 5: Rewrite all usages.
+  // - For singleton lambdas: redirect sget on INSTANCE fields.
+  // - For non-singleton lambdas: redirect new-instance and invoke-direct
+  //   <init>.
+  // We count singleton and non-singleton rewrites separately. For non-singleton
+  // lambdas, each usage consists of new-instance + invoke-direct, so we only
+  // count new-instance rewrites to get the usage count.
+  struct RewriteCounts {
+    size_t singleton = 0;
+    size_t non_singleton = 0;
+    RewriteCounts& operator+=(const RewriteCounts& other) {
+      singleton += other.singleton;
+      non_singleton += other.non_singleton;
+      return *this;
     }
-    duplicate_group_count++;
-
-    // Find the lambda in the lowest-indexed dex to use as canonical.
-    // Higher-indexed dexes can reference lower-indexed ones, so placing the
-    // canonical in the lowest dex ensures all duplicates can reference it.
-    DexClass* canonical = nullptr;
-    size_t min_dex_idx = std::numeric_limits<size_t>::max();
-    for (const auto* method : UnorderedIterable(methods)) {
-      auto* lambda_cls = type_class(method->get_class());
-      auto it = class_to_dex_idx.find(lambda_cls->get_type());
-      size_t dex_idx = (it != class_to_dex_idx.end())
-                           ? it->second
-                           : std::numeric_limits<size_t>::max();
-      if (dex_idx < min_dex_idx) {
-        min_dex_idx = dex_idx;
-        canonical = lambda_cls;
-      }
-    }
-    always_assert(canonical != nullptr);
-
-    DexField* canonical_instance = get_instance_field(canonical, instance_name);
-    always_assert(canonical_instance != nullptr);
-
-    // Rename the canonical's INSTANCE field to prevent
-    // KotlinStatelessLambdaSingletonRemovalPass from processing it.
-    DexFieldSpec new_spec{canonical_instance->get_class(),
-                          deduped_instance_name,
-                          canonical_instance->get_type()};
-    canonical_instance->change(new_spec);
-
-    // Map non-canonical lambdas in this group to use the canonical's field.
-    // The canonical's field is renamed in place, so no redirect is needed for
-    // code that already references it.
-    for (const auto* method : UnorderedIterable(methods)) {
-      auto* lambda_cls = type_class(method->get_class());
-      if (lambda_cls == canonical) {
-        continue;
-      }
-      DexField* instance_field = get_instance_field(lambda_cls, instance_name);
-      always_assert(instance_field != nullptr);
-      field_redirect_map[instance_field] = canonical_instance;
-      lambdas_deduplicated++;
-    }
-
-    TRACE(KOTLIN_INSTANCE, 2,
-          "KotlinLambdaDeduplication: Group with %zu lambdas, "
-          "canonical "
-          "= %s",
-          methods.size(), SHOW(canonical));
-  }
-
-  // Step 5: Rewrite all usages of the original INSTANCE fields to use the
-  // canonical's renamed field.
-  const auto total_rewrites = walk::parallel::methods<size_t>(
+  };
+  const auto rewrite_counts = walk::parallel::methods<RewriteCounts>(
       scope,
-      [&field_redirect_map =
-           std::as_const(field_redirect_map)](DexMethod* method) {
-        size_t rewrites = 0;
-        auto* code = method->get_code();
+      [&field_redirect_map = std::as_const(singleton_result.field_redirect_map),
+       &type_redirect_map =
+           std::as_const(non_singleton_result.type_redirect_map),
+       &ctor_redirect_map = std::as_const(
+           non_singleton_result.ctor_redirect_map)](DexMethod* meth) {
+        RewriteCounts counts;
+        auto* code = meth->get_code();
         if (code == nullptr) {
-          return rewrites;
+          return counts;
         }
 
         always_assert(code->cfg_built());
@@ -220,37 +373,77 @@ void KotlinLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
 
         for (auto& mie : cfg::InstructionIterable(cfg)) {
           auto* insn = mie.insn;
-          if (!opcode::is_an_sget(insn->opcode())) {
-            continue;
-          }
+          auto opcode = insn->opcode();
 
-          auto* field = insn->get_field();
-          auto it = field_redirect_map.find(field);
-          if (it == field_redirect_map.end()) {
-            continue;
+          // Redirect sget on INSTANCE fields (singleton lambdas).
+          if (opcode::is_an_sget(opcode)) {
+            auto* field = insn->get_field();
+            if (const auto it = field_redirect_map.find(field);
+                it != field_redirect_map.end()) {
+              insn->set_field(it->second);
+              counts.singleton++;
+            }
+          } else if (opcode == OPCODE_NEW_INSTANCE) {
+            // Redirect new-instance (non-singleton lambdas).
+            const auto* type = insn->get_type();
+            if (const auto it = type_redirect_map.find(type);
+                it != type_redirect_map.end()) {
+              insn->set_type(it->second);
+              counts.non_singleton++;
+            }
+          } else if (opcode == OPCODE_INVOKE_DIRECT) {
+            // Redirect invoke-direct <init> (non-singleton lambdas).
+            // Don't count this - new-instance already counted the usage.
+            auto* method_ref = insn->get_method();
+            if (const auto it = ctor_redirect_map.find(method_ref);
+                it != ctor_redirect_map.end()) {
+              insn->set_method(it->second);
+            }
           }
-
-          // Redirect to the canonical's field.
-          insn->set_field(it->second);
-          rewrites++;
         }
-        return rewrites;
+        return counts;
       });
 
   // Report metrics.
-  mgr.incr_metric("unique_signatures", unique_signatures);
-  mgr.incr_metric("duplicate_groups", duplicate_group_count);
-  mgr.incr_metric("lambdas_deduped", lambdas_deduplicated);
-  mgr.incr_metric("instance_usages_rewritten", total_rewrites);
+  size_t total_duplicate_groups = singleton_result.duplicate_group_count +
+                                  non_singleton_result.duplicate_group_count;
+  size_t total_lambdas_deduped = singleton_result.lambdas_deduplicated +
+                                 non_singleton_result.lambdas_deduplicated;
+
+  mgr.incr_metric("singleton_distinct_code", singleton_distinct_code);
+  mgr.incr_metric("non_singleton_distinct_code", non_singleton_distinct_code);
+  mgr.incr_metric("singleton_duplicate_groups",
+                  singleton_result.duplicate_group_count);
+  mgr.incr_metric("non_singleton_duplicate_groups",
+                  non_singleton_result.duplicate_group_count);
+  mgr.incr_metric("duplicate_groups", total_duplicate_groups);
+  mgr.incr_metric("singleton_lambdas_deduped",
+                  singleton_result.lambdas_deduplicated);
+  mgr.incr_metric("non_singleton_lambdas_deduped",
+                  non_singleton_result.lambdas_deduplicated);
+  mgr.incr_metric("lambdas_deduped", total_lambdas_deduped);
+  mgr.incr_metric("singleton_usages_rewritten", rewrite_counts.singleton);
+  mgr.incr_metric("non_singleton_usages_rewritten",
+                  rewrite_counts.non_singleton);
 
   TRACE(KOTLIN_INSTANCE, 1,
-        "KotlinLambdaDeduplication: %zu unique signatures, %zu "
-        "duplicate "
-        "groups, %zu lambdas deduped",
-        unique_signatures, duplicate_group_count, lambdas_deduplicated);
+        "KotlinLambdaDeduplication: %zu singleton + %zu non-singleton distinct "
+        "signatures",
+        singleton_distinct_code, non_singleton_distinct_code);
   TRACE(KOTLIN_INSTANCE, 1,
-        "KotlinLambdaDeduplication: %zu instance usages rewritten",
-        total_rewrites);
+        "KotlinLambdaDeduplication: %zu duplicate groups (%zu singleton, %zu "
+        "non-singleton)",
+        total_duplicate_groups, singleton_result.duplicate_group_count,
+        non_singleton_result.duplicate_group_count);
+  TRACE(KOTLIN_INSTANCE, 1,
+        "KotlinLambdaDeduplication: %zu lambdas deduped (%zu singleton, %zu "
+        "non-singleton)",
+        total_lambdas_deduped, singleton_result.lambdas_deduplicated,
+        non_singleton_result.lambdas_deduplicated);
+  TRACE(KOTLIN_INSTANCE, 1,
+        "KotlinLambdaDeduplication: usages rewritten (%zu singleton, %zu "
+        "non-singleton)",
+        rewrite_counts.singleton, rewrite_counts.non_singleton);
 }
 
 static KotlinLambdaDeduplicationPass s_pass;
