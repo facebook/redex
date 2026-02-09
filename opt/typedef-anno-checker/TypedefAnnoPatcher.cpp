@@ -629,8 +629,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
 
         std::vector<const DexField*> patched_fields;
         for (auto* m : cls->get_all_methods()) {
-          patch_lambdas(m, &patched_fields, candidates,
-                        class_stats.patch_lambdas);
+          patch_lambdas(m, &patched_fields, candidates);
         }
         if (!patched_fields.empty()) {
           auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
@@ -866,8 +865,7 @@ void annotate_local_var_field_from_callee(
 void TypedefAnnoPatcher::patch_lambdas(
     DexMethod* method,
     std::vector<const DexField*>* patched_fields,
-    PatchingCandidates& candidates,
-    Stats& /*class_stats*/) {
+    PatchingCandidates& candidates) {
   auto analysis =
       MethodAnalysis::create(method, m_typedef_annos, m_method_override_graph);
   if (!analysis) {
