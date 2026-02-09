@@ -383,6 +383,63 @@ void collect_setter_missing_param_annos(
                             candidates);
 }
 
+// Core logic of collect_param_candidates, operating on a pre-built
+// MethodAnalysis to allow sharing with collect_return_candidates_impl.
+void collect_param_candidates_impl(DexMethod* m,
+                                   PatchingCandidates& candidates,
+                                   MethodAnalysis& analysis) {
+  auto& envs = analysis.envs();
+  auto& ud_chains = analysis.use_def_chains();
+
+  for (cfg::Block* b : analysis.cfg().blocks()) {
+    for (auto& mie : InstructionIterable(b)) {
+      auto* insn = mie.insn;
+      IROpcode opcode = insn->opcode();
+      if (opcode::is_an_invoke(opcode)) {
+        patch_param_from_method_invoke(envs, analysis.inference(), m, insn,
+                                       &ud_chains, candidates);
+      } else if (opcode::is_an_iput(opcode) || opcode::is_an_sput(opcode)) {
+        collect_setter_missing_param_annos(analysis.inference(), m, insn,
+                                           &ud_chains, candidates);
+      }
+    }
+  }
+}
+
+// Core logic of collect_return_candidates, operating on a pre-built
+// MethodAnalysis to allow sharing with collect_param_candidates_impl.
+void collect_return_candidates_impl(
+    DexMethod* m,
+    PatchingCandidates& candidates,
+    MethodAnalysis& analysis,
+    InsertOnlyConcurrentSet<std::string_view>& patched_returns) {
+  auto& envs = analysis.envs();
+  boost::optional<const TypedefAnnoType*> anno = boost::none;
+  bool patch_return = true;
+  for (cfg::Block* b : analysis.cfg().blocks()) {
+    for (auto& mie : InstructionIterable(b)) {
+      auto* insn = mie.insn;
+      IROpcode opcode = insn->opcode();
+      if ((opcode == OPCODE_RETURN_OBJECT || opcode == OPCODE_RETURN)) {
+        auto return_anno = envs.at(insn).get_annotation(insn->src(0));
+        if (return_anno == boost::none ||
+            (anno != boost::none && return_anno != anno)) {
+          patch_return = false;
+        } else {
+          anno = return_anno;
+        }
+      }
+    }
+  }
+
+  if (patch_return && anno != boost::none) {
+    candidates.add_method_candidate(m, *anno);
+    auto class_name = type_class(m->get_class())->str();
+    auto class_name_prefix = class_name.substr(0, class_name.size() - 1);
+    patched_returns.insert(class_name_prefix);
+  }
+}
+
 } // namespace
 
 void PatchingCandidates::apply_patching(Stats& class_stats) {
@@ -509,8 +566,13 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
             fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
           }
           for (auto* m : cls->get_all_methods()) {
-            collect_param_candidates(m, candidates);
-            collect_return_candidates(m, candidates);
+            auto analysis = MethodAnalysis::create(m, m_typedef_annos,
+                                                   m_method_override_graph);
+            if (analysis) {
+              collect_param_candidates_impl(m, candidates, *analysis);
+              collect_return_candidates_impl(m, candidates, *analysis,
+                                             m_patched_returns);
+            }
             collect_overriding_method_candidates(m, candidates);
             if (is_constructor(m) &&
                 has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
@@ -1020,23 +1082,7 @@ void TypedefAnnoPatcher::collect_param_candidates(
   if (!analysis) {
     return;
   }
-
-  auto& envs = analysis->envs();
-  auto& ud_chains = analysis->use_def_chains();
-
-  for (cfg::Block* b : analysis->cfg().blocks()) {
-    for (auto& mie : InstructionIterable(b)) {
-      auto* insn = mie.insn;
-      IROpcode opcode = insn->opcode();
-      if (opcode::is_an_invoke(opcode)) {
-        patch_param_from_method_invoke(envs, analysis->inference(), m, insn,
-                                       &ud_chains, candidates);
-      } else if (opcode::is_an_iput(opcode) || opcode::is_an_sput(opcode)) {
-        collect_setter_missing_param_annos(analysis->inference(), m, insn,
-                                           &ud_chains, candidates);
-      }
-    }
-  }
+  collect_param_candidates_impl(m, candidates, *analysis);
 }
 
 void TypedefAnnoPatcher::collect_return_candidates(
@@ -1046,32 +1092,7 @@ void TypedefAnnoPatcher::collect_return_candidates(
   if (!analysis) {
     return;
   }
-
-  auto& envs = analysis->envs();
-  boost::optional<const TypedefAnnoType*> anno = boost::none;
-  bool patch_return = true;
-  for (cfg::Block* b : analysis->cfg().blocks()) {
-    for (auto& mie : InstructionIterable(b)) {
-      auto* insn = mie.insn;
-      IROpcode opcode = insn->opcode();
-      if ((opcode == OPCODE_RETURN_OBJECT || opcode == OPCODE_RETURN)) {
-        auto return_anno = envs.at(insn).get_annotation(insn->src(0));
-        if (return_anno == boost::none ||
-            (anno != boost::none && return_anno != anno)) {
-          patch_return = false;
-        } else {
-          anno = return_anno;
-        }
-      }
-    }
-  }
-
-  if (patch_return && anno != boost::none) {
-    candidates.add_method_candidate(m, *anno);
-    auto class_name = type_class(m->get_class())->str();
-    auto class_name_prefix = class_name.substr(0, class_name.size() - 1);
-    m_patched_returns.insert(class_name_prefix);
-  }
+  collect_return_candidates_impl(m, candidates, *analysis, m_patched_returns);
 }
 
 void TypedefAnnoPatcher::print_stats(PassManager& mgr) {
