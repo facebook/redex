@@ -583,118 +583,6 @@ void ConfigFiles::ensure_agg_method_stats_loaded() {
                                 get_baseline_profile_configs());
 }
 
-void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
-  Json::Value config;
-  m_json.get("inliner", Json::nullValue, config);
-  if (config.empty()) {
-    m_json.get("MethodInlinePass", Json::nullValue, config);
-    always_assert_log(
-        config.empty(),
-        "MethodInlinePass is no longer used for inliner config, use "
-        "\"inliner\"");
-    fprintf(stderr, "WARNING: No inliner config\n");
-    return;
-  }
-  std::string unfinalize_perf_mode_str;
-  JsonWrapper jw(config);
-  jw.get("delete_non_virtuals", true, inliner_config->delete_non_virtuals);
-  jw.get("virtual", true, inliner_config->virtual_inline);
-  jw.get("true_virtual_inline", false, inliner_config->true_virtual_inline);
-  jw.get("relaxed_init_inline", false, inliner_config->relaxed_init_inline);
-  jw.get("unfinalize_relaxed_init_inline", false,
-         inliner_config->unfinalize_relaxed_init_inline);
-  jw.get("unfinalize_perf_mode", "not-cold", unfinalize_perf_mode_str);
-  jw.get("strict_throwable_init_inline", false,
-         inliner_config->strict_throwable_init_inline);
-  jw.get("throws", false, inliner_config->throws_inline);
-  jw.get("throw_after_no_return", false, inliner_config->throw_after_no_return);
-  jw.get("max_cost_for_constant_propagation",
-         MAX_COST_FOR_CONSTANT_PROPAGATION,
-         inliner_config->max_cost_for_constant_propagation);
-  jw.get("max_reduced_size", MAX_REDUCED_SIZE,
-         inliner_config->max_reduced_size);
-  jw.get("enforce_method_size_limit",
-         true,
-         inliner_config->enforce_method_size_limit);
-  jw.get("use_call_site_summaries", true,
-         inliner_config->use_call_site_summaries);
-  jw.get("intermediate_shrinking", false,
-         inliner_config->intermediate_shrinking);
-  jw.get("multiple_callers", false, inliner_config->multiple_callers);
-  auto& shrinker_config = inliner_config->shrinker;
-  jw.get("run_const_prop", false, shrinker_config.run_const_prop);
-  jw.get("run_cse", false, shrinker_config.run_cse);
-  jw.get("run_copy_prop", false, shrinker_config.run_copy_prop);
-  jw.get("run_local_dce", false, shrinker_config.run_local_dce);
-  jw.get("run_reg_alloc", false, shrinker_config.run_reg_alloc);
-  jw.get("run_fast_reg_alloc", false, shrinker_config.run_fast_reg_alloc);
-  jw.get("run_dedup_blocks", false, shrinker_config.run_dedup_blocks);
-  jw.get("run_branch_prefix_hoisting", false,
-         shrinker_config.run_branch_prefix_hoisting);
-  jw.get("debug", false, inliner_config->debug);
-  jw.get("blocklist", {}, inliner_config->blocklist);
-  jw.get("caller_blocklist", {}, inliner_config->caller_blocklist);
-  jw.get("no_inline_blocklist", {}, inliner_config->no_inline_blocklist);
-  jw.get("intradex_allowlist", {}, inliner_config->intradex_allowlist);
-  jw.get("reg_alloc_random_forest", "",
-         shrinker_config.reg_alloc_random_forest);
-  jw.get("respect_sketchy_methods", true,
-         inliner_config->respect_sketchy_methods);
-  jw.get("check_min_sdk_refs", true, inliner_config->check_min_sdk_refs);
-  size_t max_relevant_invokes_when_local_only;
-  jw.get("max_relevant_invokes_when_local_only", 10,
-         max_relevant_invokes_when_local_only);
-  inliner_config->max_relevant_invokes_when_local_only =
-      max_relevant_invokes_when_local_only;
-
-  std::vector<std::string> no_inline_annos;
-  jw.get("no_inline_annos", {}, no_inline_annos);
-  for (const auto& type_s : no_inline_annos) {
-    auto* type = DexType::get_type(type_s);
-    if (type != nullptr) {
-      inliner_config->no_inline_annos.emplace(type);
-    } else {
-      fprintf(stderr, "WARNING: Cannot find no_inline annotation %s\n",
-              type_s.c_str());
-    }
-  }
-
-  std::vector<std::string> force_inline_annos;
-  jw.get("force_inline_annos", {}, force_inline_annos);
-  for (const auto& type_s : force_inline_annos) {
-    auto* type = DexType::get_type(type_s);
-    if (type != nullptr) {
-      inliner_config->force_inline_annos.emplace(type);
-    } else {
-      fprintf(stderr, "WARNING: Cannot find force_inline annotation %s\n",
-              type_s.c_str());
-    }
-  }
-
-  const static UnorderedMap<std::string, inliner::UnfinalizePerfMode>
-      unfinalize_perf_mode_mapping = {
-          {"none", inliner::UnfinalizePerfMode::NONE},
-          {"not-cold", inliner::UnfinalizePerfMode::NOT_COLD},
-          {"maybe-hot", inliner::UnfinalizePerfMode::MAYBE_HOT},
-          {"hot", inliner::UnfinalizePerfMode::HOT}};
-  always_assert_log(
-      unfinalize_perf_mode_mapping.count(unfinalize_perf_mode_str) > 0,
-      "Unexpected unfinalize perf mode input provided %s",
-      unfinalize_perf_mode_str.c_str());
-  inliner_config->unfinalize_perf_mode =
-      unfinalize_perf_mode_mapping.at(unfinalize_perf_mode_str);
-  inliner_config->unfinalize_perf_mode_str =
-      std::move(unfinalize_perf_mode_str);
-}
-
-const inliner::InlinerConfig& ConfigFiles::get_inliner_config() {
-  if (m_inliner_config == nullptr) {
-    m_inliner_config = std::make_unique<inliner::InlinerConfig>();
-    load_inliner_config(m_inliner_config.get());
-  }
-  return *m_inliner_config;
-}
-
 bool ConfigFiles::get_did_use_bzl_baseline_profile_config() {
   return !m_baseline_profile_config_file_name.empty();
 }
@@ -853,8 +741,8 @@ void ConfigFiles::parse_global_config() {
 }
 
 void ConfigFiles::load(const Scope& scope) {
-  get_inliner_config();
-  m_inliner_config->populate(scope);
+  get_global_config().get_config_by_name<InlinerConfig>("inliner")->populate(
+      scope);
 }
 
 void ConfigFiles::process_unresolved_method_profile_lines() {

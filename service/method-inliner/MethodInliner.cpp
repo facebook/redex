@@ -21,6 +21,7 @@
 #include "Deleter.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
@@ -854,7 +855,8 @@ void run_inliner(
       "init-class instructions.");
   auto scope = build_class_scope(stores);
 
-  auto inliner_config = conf.get_inliner_config();
+  auto inliner_config =
+      *conf.get_global_config().get_config_by_name<::InlinerConfig>("inliner");
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   const api::AndroidSDK* min_sdk_api{nullptr};
   if (inliner_config.check_min_sdk_refs) {

@@ -48,6 +48,7 @@
 #include "ControlFlow.h"
 #include "CppUtil.h"
 #include "DedupVirtualMethods.h"
+#include "GlobalConfig.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "Inliner.h"
@@ -1524,7 +1525,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
     min_sdk_api = &conf.get_android_sdk_api(min_sdk);
   }
 
-  auto inliner_config = conf.get_inliner_config();
+  auto inliner_config =
+      *conf.get_global_config().get_config_by_name<InlinerConfig>("inliner");
   // We don't need to worry about inlining synchronized code, as we always
   // inline at the top-level outside of other try-catch regions.
   inliner_config.respect_sketchy_methods = false;
