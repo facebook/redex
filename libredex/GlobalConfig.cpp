@@ -78,6 +78,21 @@ void InlinerConfig::bind_config() {
        "black-list entries that avoid inlining conditional control-flow and "
        "catchers that cause issues with the SwitchMethodPartitioning analysis "
        "that tends to be used by passes that run before or during InterDex.)");
+
+  after_configuration([&]() {
+    const static UnorderedMap<std::string, inliner::UnfinalizePerfMode>
+        unfinalize_perf_mode_mapping = {
+            {"none", inliner::UnfinalizePerfMode::NONE},
+            {"not-cold", inliner::UnfinalizePerfMode::NOT_COLD},
+            {"maybe-hot", inliner::UnfinalizePerfMode::MAYBE_HOT},
+            {"hot", inliner::UnfinalizePerfMode::HOT}};
+    always_assert_log(
+        unfinalize_perf_mode_mapping.count(unfinalize_perf_mode_str) > 0,
+        "Unexpected unfinalize perf mode input provided %s",
+        unfinalize_perf_mode_str.c_str());
+    unfinalize_perf_mode =
+        unfinalize_perf_mode_mapping.at(unfinalize_perf_mode_str);
+  });
 }
 
 void OptDecisionsConfig::bind_config() {
