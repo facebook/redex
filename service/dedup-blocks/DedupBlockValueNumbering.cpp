@@ -12,6 +12,19 @@
 
 using namespace DedupBlkValueNumbering;
 
+// Make sure there is no padding in IROperationSourceBlock.
+static_assert(sizeof(IROperationSourceBlock) ==
+                  sizeof(uint32_t) + sizeof(DexString*),
+              "IROperationSourceBlock has padding!");
+
+// Make sure that looking at IROperationSourceBlock is OK.
+static_assert(sizeof(IROperationSourceBlock) >= sizeof(uint64_t),
+              "IROperationSourceBlock is not largest member!");
+
+// Make sure IROperation is small without too much padding.
+static_assert(sizeof(size_t) != 8 || sizeof(IROperation) == 40,
+              "IROperationSourceBlock has unexpected size");
+
 void next_opcode_or_srcblk(IRList::iterator& block_it, cfg::Block* block) {
   if (g_redex->instrument_mode) {
     while (block_it != block->end() && block_it->type != MFLOW_OPCODE &&
