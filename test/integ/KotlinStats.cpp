@@ -60,7 +60,8 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LKotlinLambdaInline$foo$1;
   // LKotlinLambdaInline$bar$1;
   // LKotlinLambdaInline$baz$1;
-  EXPECT_EQ(stats.kotlin_non_capturing_lambda, 3);
+  EXPECT_EQ(stats.kotlin_non_capturing_lambda_with_singleton, 3);
+  EXPECT_EQ(stats.kotlin_non_capturing_lambda_without_singleton, 0);
 
   // All three lambdas in LKotlinLambdaInline are trivial
   EXPECT_EQ(stats.kotlin_trivial_non_capturing_lambdas, 3u);

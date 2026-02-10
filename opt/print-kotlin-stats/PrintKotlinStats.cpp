@@ -180,10 +180,8 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
     const method_profiles::MethodProfiles* method_profiles,
     UniqueMethodTracker& unique_lambda_tracker) {
   Stats stats;
-  bool is_lambda = false;
   if (cls->get_super_class() == m_kotlin_lambdas_base) {
     stats.kotlin_lambdas++;
-    is_lambda = true;
   }
   if (cls->get_super_class() == m_kotlin_coroutin_continuation_base) {
     stats.kotlin_coroutine_continuation_base++;
@@ -196,9 +194,6 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
   for (auto* field : cls->get_sfields()) {
     if (field->get_name() == m_instance &&
         field->get_type() == cls->get_type()) {
-      if (is_lambda) {
-        stats.kotlin_non_capturing_lambda++;
-      }
       stats.kotlin_class_with_instance++;
     }
   }
@@ -254,12 +249,21 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
       }
     }
     if (auto analyzer = KotlinLambdaAnalyzer::for_class(cls);
-        analyzer.has_value() && analyzer->is_trivial()) {
-      stats.kotlin_trivial_non_capturing_lambdas++;
-      DexMethod* invoke = analyzer->get_invoke_method();
-      always_assert(invoke != nullptr);
-      always_assert(invoke->get_code()->cfg_built());
-      unique_lambda_tracker.insert(invoke);
+        analyzer.has_value()) {
+      if (analyzer->is_non_capturing()) {
+        if (analyzer->get_singleton_field() != nullptr) {
+          stats.kotlin_non_capturing_lambda_with_singleton++;
+        } else {
+          stats.kotlin_non_capturing_lambda_without_singleton++;
+        }
+      }
+      if (analyzer->is_trivial()) {
+        stats.kotlin_trivial_non_capturing_lambdas++;
+        DexMethod* invoke = analyzer->get_invoke_method();
+        always_assert(invoke != nullptr);
+        always_assert(invoke->get_code()->cfg_built());
+        unique_lambda_tracker.insert(invoke);
+      }
     }
     if (is_anonymous(cls->get_name()->str())) {
       stats.kotlin_anonymous_class++;
@@ -351,7 +355,10 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("no_of_delegates", kotlin_delegates);
   mgr.incr_metric("no_of_lazy_delegates", kotlin_lazy_delegates);
   mgr.incr_metric("kotlin_lambdas", kotlin_lambdas);
-  mgr.incr_metric("kotlin_non_capturing_lambda", kotlin_non_capturing_lambda);
+  mgr.incr_metric("kotlin_non_capturing_lambda_with_singleton",
+                  kotlin_non_capturing_lambda_with_singleton);
+  mgr.incr_metric("kotlin_non_capturing_lambda_without_singleton",
+                  kotlin_non_capturing_lambda_without_singleton);
   mgr.incr_metric("kotlin_classes_with_instance", kotlin_class_with_instance);
   mgr.incr_metric("kotlin_class", kotlin_class);
   mgr.incr_metric("Kotlin_anonymous_classes", kotlin_anonymous_class);
@@ -391,8 +398,12 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: no_of_lazy_delegates = %zu",
         kotlin_lazy_delegates);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_lambdas = %zu", kotlin_lambdas);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_non_capturing_lambda = %zu",
-        kotlin_non_capturing_lambda);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_non_capturing_lambda_with_singleton = %zu",
+        kotlin_non_capturing_lambda_with_singleton);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_non_capturing_lambda_without_singleton = %zu",
+        kotlin_non_capturing_lambda_without_singleton);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class_with_instance = %zuu",
         kotlin_class_with_instance);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class = %zu", kotlin_class);
