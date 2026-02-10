@@ -77,7 +77,9 @@
            "[Ljava/lang/Object;.clone:()Ljava/lang/Object;")                  \
   FOR_EACH(java_lang_Class_forName,                                           \
            "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/"             \
-           "lang/Class;")
+           "lang/Class;")                                                     \
+  FOR_EACH(java_lang_Class_isInstance,                                        \
+           "Ljava/lang/Class;.isInstance:(Ljava/lang/Object;)Z")
 
 #define KOTLIN_JVM_INTERNAL_TYPES                                              \
   FOR_EACH(kotlin_jvm_internal_Lambda, "Lkotlin/jvm/internal/Lambda;")         \

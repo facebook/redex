@@ -56,6 +56,7 @@ class Transform final {
     size_t null_checks_method_calls{0};
     size_t unreachable_instructions_removed{0};
     size_t redundant_puts_removed{0};
+    size_t class_isinstance_replaced{0};
 
     Stats& operator+=(const Stats& that) {
       branches_removed += that.branches_removed;
@@ -67,6 +68,7 @@ class Transform final {
       null_checks_method_calls += that.null_checks_method_calls;
       unreachable_instructions_removed += that.unreachable_instructions_removed;
       redundant_puts_removed += that.redundant_puts_removed;
+      class_isinstance_replaced += that.class_isinstance_replaced;
       return *this;
     }
 
@@ -107,6 +109,8 @@ class Transform final {
 
   const Stats& get_stats() const { return m_stats; }
 
+  struct Context;
+
  private:
   /*
    * The methods in this class queue up their transformations. After they are
@@ -118,7 +122,8 @@ class Transform final {
                             const WholeProgramState& wps,
                             const cfg::InstructionIterator& cfg_it,
                             const XStoreRefs*,
-                            const DexType*);
+                            const DexType*,
+                            Context&);
 
   bool replace_with_const(const ConstantEnvironment&,
                           const cfg::InstructionIterator& cfg_it,

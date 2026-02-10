@@ -21,6 +21,26 @@
 
 namespace constant_propagation {
 
+namespace {
+
+struct ClassLiteralMethodsReplacerContext {
+  const DexMethodRef* class_isinstance{nullptr};
+  std::optional<reg_t> class_isinstance_temp_reg{std::nullopt};
+
+  reg_t get_class_isinstance_temp_reg(cfg::ControlFlowGraph& cfg) {
+    if (!class_isinstance_temp_reg) {
+      class_isinstance_temp_reg = cfg.allocate_temp();
+    }
+    return *class_isinstance_temp_reg;
+  }
+};
+
+} // namespace
+
+struct Transform::Context {
+  ClassLiteralMethodsReplacerContext clmr;
+};
+
 /*
  * Replace an instruction that has a single destination register with a `const`
  * load. `env` holds the state of the registers after `insn` has been
@@ -498,6 +518,80 @@ void try_simplify(const ConstantEnvironment& env,
   }
 }
 
+struct ClassLiteralMethodsReplacer {
+
+  static bool matches(const DexMethodRef* ref,
+                      const Transform::Context& context) {
+    return ref == context.clmr.class_isinstance;
+  }
+
+  static const DexType* maybe_get_class(const IRInstruction* insn,
+                                        const ConstantEnvironment& env) {
+    const auto& val = env.get(insn->src(0));
+    if (val.is_top() || val.is_bottom()) {
+      return nullptr;
+    }
+    const auto* class_val =
+        boost::get<ConstantClassObjectDomain>(&val.variant());
+    if (class_val == nullptr) {
+      return nullptr;
+    }
+    redex_assert(!class_val->is_top());
+    if (class_val->is_bottom()) {
+      return nullptr;
+    }
+    redex_assert(class_val->get_constant());
+    return *class_val->get_constant();
+  }
+
+  static void replace_class_isinstance(const IRInstruction* insn,
+                                       const ConstantEnvironment& env,
+                                       const cfg::InstructionIterator& cfg_it,
+                                       cfg::CFGMutation& mutation,
+                                       Transform::Stats& stats,
+                                       Transform::Context& context) {
+    const auto* class_type = maybe_get_class(insn, env);
+    if (class_type == nullptr) {
+      return;
+    }
+
+    // Replace with direct instance-of.
+    auto* repl = new IRInstruction(OPCODE_INSTANCE_OF);
+    repl->set_src(0, insn->src(1));
+    repl->set_type(class_type);
+
+    auto* move = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+    // Find move-result.
+    auto& cfg = cfg_it.cfg();
+    auto move_result_it = cfg.move_result_of(cfg_it);
+    move->set_dest(move_result_it.is_end()
+                       ? context.clmr.get_class_isinstance_temp_reg(cfg)
+                       : move_result_it->insn->dest());
+
+    mutation.replace(cfg_it, {repl, move});
+    ++stats.class_isinstance_replaced;
+  }
+
+  static void replace(const IRInstruction* insn,
+                      const DexMethodRef* ref,
+                      const ConstantEnvironment& env,
+                      const cfg::InstructionIterator& cfg_it,
+                      cfg::CFGMutation& mutation,
+                      Transform::Stats& stats,
+                      Transform::Context& context) {
+    if (ref == context.clmr.class_isinstance) {
+      replace_class_isinstance(insn, env, cfg_it, mutation, stats, context);
+      return;
+    }
+  }
+
+  static ClassLiteralMethodsReplacerContext create_context() {
+    return ClassLiteralMethodsReplacerContext{
+        .class_isinstance = method::java_lang_Class_isInstance(),
+    };
+  }
+};
+
 } // namespace
 
 bool Transform::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) const {
@@ -511,7 +605,8 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& /*wps*/,
                                      const cfg::InstructionIterator& cfg_it,
                                      const XStoreRefs* xstores,
-                                     const DexType* declaring_type) {
+                                     const DexType* declaring_type,
+                                     Context& context) {
   auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
@@ -630,6 +725,19 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
       break;
     }
     try_simplify(env, cfg_it, m_config, *m_mutation);
+    break;
+  }
+
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_STATIC:
+  case OPCODE_INVOKE_DIRECT: {
+    // It is OK not to resolve the method, as these are core Java classes.
+    if (ClassLiteralMethodsReplacer::matches(insn->get_method(), context)) {
+      ClassLiteralMethodsReplacer::replace(
+          insn, insn->get_method(), env, cfg_it, *m_mutation, m_stats, context);
+      break;
+    }
+
     break;
   }
 
@@ -873,6 +981,10 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
     cfg::ControlFlowGraph& cfg,
     const XStoreRefs* xstores,
     const DexType* declaring_type) {
+  Context context{
+      .clmr = ClassLiteralMethodsReplacer::create_context(),
+  };
+
   always_assert(m_mutation == nullptr);
   m_mutation = std::make_unique<cfg::CFGMutation>(cfg);
   npe::NullPointerExceptionCreator npe_creator(&cfg);
@@ -893,7 +1005,8 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
       auto* insn = cfg_it->insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (!any_changes && (m_redundant_move_results.count(insn) == 0u)) {
-        simplify_instruction(env, wps, cfg_it, xstores, declaring_type);
+        simplify_instruction(env, wps, cfg_it, xstores, declaring_type,
+                             context);
       }
     }
     eliminate_dead_branch(intra_cp, env, cfg, block);
@@ -1265,6 +1378,7 @@ void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
   TRACE(CONSTP, 3, "Null checks removed: %zu(%zu)", null_checks,
         null_checks_method_calls);
   sm.set_metric("added_param_const", added_param_const);
+  sm.set_metric("class_isinstance_replaced", class_isinstance_replaced);
 }
 
 } // namespace constant_propagation
