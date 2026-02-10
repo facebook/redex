@@ -1042,8 +1042,8 @@ class ControlFlowGraph {
                          const InstructionEquality& instruction_equals) const;
 
   auto blocks_view() const {
-    return std::ranges::views::transform(m_blocks,
-                                         [](auto& p) { return p.second; });
+    return std::ranges::subrange(m_blocks.begin(), m_blocks.end()) |
+           std::views::transform([](const auto& p) { return p.second; });
   }
 
   template <class ForwardIt>
