@@ -67,7 +67,7 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
         SourceBlock* cur_src_blk = block_it->src_block.get();
         while (cur_src_blk != nullptr) {
           IROperation operation;
-          operation.src_blk = {cur_src_blk->id, cur_src_blk->src};
+          operation.src_blk = {cur_src_blk->src, cur_src_blk->id};
           ordered_operations.push_back(operation);
           cur_src_blk = cur_src_blk->next.get();
         }
