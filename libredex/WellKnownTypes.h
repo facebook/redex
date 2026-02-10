@@ -75,6 +75,8 @@
   FOR_EACH(java_lang_String_hashCode, "Ljava/lang/String;.hashCode:()I")      \
   FOR_EACH(java_lang_Objects_clone,                                           \
            "[Ljava/lang/Object;.clone:()Ljava/lang/Object;")                  \
+  FOR_EACH(java_lang_Class_cast,                                              \
+           "Ljava/lang/Class;.cast:(Ljava/lang/Object;)Ljava/lang/Object;")   \
   FOR_EACH(java_lang_Class_forName,                                           \
            "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/"             \
            "lang/Class;")                                                     \

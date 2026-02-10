@@ -27,11 +27,21 @@ struct ClassLiteralMethodsReplacerContext {
   const DexMethodRef* class_isinstance{nullptr};
   std::optional<reg_t> class_isinstance_temp_reg{std::nullopt};
 
+  const DexMethodRef* class_cast{nullptr};
+  std::optional<reg_t> class_cast_temp_reg{std::nullopt};
+
   reg_t get_class_isinstance_temp_reg(cfg::ControlFlowGraph& cfg) {
     if (!class_isinstance_temp_reg) {
       class_isinstance_temp_reg = cfg.allocate_temp();
     }
     return *class_isinstance_temp_reg;
+  }
+
+  reg_t get_class_cast_temp_reg(cfg::ControlFlowGraph& cfg) {
+    if (!class_cast_temp_reg) {
+      class_cast_temp_reg = cfg.allocate_temp();
+    }
+    return *class_cast_temp_reg;
   }
 };
 
@@ -522,7 +532,8 @@ struct ClassLiteralMethodsReplacer {
 
   static bool matches(const DexMethodRef* ref,
                       const Transform::Context& context) {
-    return ref == context.clmr.class_isinstance;
+    return ref == context.clmr.class_isinstance ||
+           ref == context.clmr.class_cast;
   }
 
   static const DexType* maybe_get_class(const IRInstruction* insn,
@@ -572,6 +583,34 @@ struct ClassLiteralMethodsReplacer {
     ++stats.class_isinstance_replaced;
   }
 
+  static void replace_class_cast(const IRInstruction* insn,
+                                 const ConstantEnvironment& env,
+                                 const cfg::InstructionIterator& cfg_it,
+                                 cfg::CFGMutation& mutation,
+                                 Transform::Stats& stats,
+                                 Transform::Context& context) {
+    const auto* class_type = maybe_get_class(insn, env);
+    if (class_type == nullptr) {
+      return;
+    }
+
+    // Replace with direct checkcast.
+    auto* repl = new IRInstruction(OPCODE_CHECK_CAST);
+    repl->set_src(0, insn->src(1));
+    repl->set_type(class_type);
+
+    auto* move = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+    // Find move-result.
+    auto& cfg = cfg_it.cfg();
+    auto move_result_it = cfg.move_result_of(cfg_it);
+    move->set_dest(move_result_it.is_end()
+                       ? context.clmr.get_class_cast_temp_reg(cfg)
+                       : move_result_it->insn->dest());
+
+    mutation.replace(cfg_it, {repl, move});
+    ++stats.class_cast_replaced;
+  }
+
   static void replace(const IRInstruction* insn,
                       const DexMethodRef* ref,
                       const ConstantEnvironment& env,
@@ -583,11 +622,16 @@ struct ClassLiteralMethodsReplacer {
       replace_class_isinstance(insn, env, cfg_it, mutation, stats, context);
       return;
     }
+    if (ref == context.clmr.class_cast) {
+      replace_class_cast(insn, env, cfg_it, mutation, stats, context);
+      return;
+    }
   }
 
   static ClassLiteralMethodsReplacerContext create_context() {
     return ClassLiteralMethodsReplacerContext{
         .class_isinstance = method::java_lang_Class_isInstance(),
+        .class_cast = method::java_lang_Class_cast(),
     };
   }
 };
@@ -1379,6 +1423,7 @@ void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
         null_checks_method_calls);
   sm.set_metric("added_param_const", added_param_const);
   sm.set_metric("class_isinstance_replaced", class_isinstance_replaced);
+  sm.set_metric("class_cast_replaced", class_cast_replaced);
 }
 
 } // namespace constant_propagation

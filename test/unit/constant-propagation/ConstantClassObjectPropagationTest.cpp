@@ -27,6 +27,12 @@ struct ConstantClassObjectPropagationTest : public ConstantPropagationTest {
               ->make_concrete(ACC_PUBLIC, true);
       creator.add_method(isInstance);
 
+      auto* cast =
+          DexMethod::make_method(
+              "Ljava/lang/Class;.cast:(Ljava/lang/Object;)Ljava/lang/Object;")
+              ->make_concrete(ACC_PUBLIC, true);
+      creator.add_method(cast);
+
       creator.create();
     }
 
@@ -92,6 +98,63 @@ TEST_F(ConstantClassObjectPropagationTest, isInstanceNonConst) {
       (invoke-direct (v1) "LA;.<init>:(LA;)V")
       (invoke-virtual (v0 v1) "Ljava/lang/Class;.isInstance:(Ljava/lang/Object;)Z")
       (move-result v2)
+      (return v2)
+    )
+)";
+
+  auto code = assembler::ircode_from_string(code_str);
+
+  // auto state = ConstantClassObjectDomain();
+  do_const_prop(code.get(), ConstantClassObjectAnalyzer(nullptr, nullptr));
+
+  auto expected_code = assembler::ircode_from_string(code_str);
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantClassObjectPropagationTest, castConst) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-class "LA;")
+      (move-result-pseudo-object v0)
+      (new-instance "LA;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LA;.<init>:(LA;)V")
+      (invoke-virtual (v0 v1) "Ljava/lang/Class;.cast:(Ljava/lang/Object;)Ljava/lang/Object;")
+      (move-result-object v2)
+      (return v2)
+    )
+)");
+
+  // auto state = ConstantClassObjectDomain();
+  do_const_prop(code.get(), ConstantClassObjectAnalyzer(nullptr, nullptr));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const-class "LA;")
+      (move-result-pseudo-object v0)
+      (new-instance "LA;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LA;.<init>:(LA;)V")
+      (check-cast v1 "LA;")
+      (move-result-pseudo-object v2)
+      (return v2)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantClassObjectPropagationTest, castNonConst) {
+  const auto* code_str = R"(
+    (
+      (invoke-static () "LA;.klass:()Ljava/lang/Class;")
+      (move-result-object v0)
+      (new-instance "LA;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LA;.<init>:(LA;)V")
+      (invoke-virtual (v0 v1) "Ljava/lang/Class;.cast:(Ljava/lang/Object;)Ljava/lang/Object;")
+      (move-result-object v2)
       (return v2)
     )
 )";
