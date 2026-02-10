@@ -11,6 +11,7 @@
 
 void InlinerConfig::bind_config() {
   bind("delete_non_virtuals", delete_non_virtuals, delete_non_virtuals);
+  bind("virtual", virtual_inline, virtual_inline);
   bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
   bind("relaxed_init_inline", relaxed_init_inline, relaxed_init_inline);
   bind("unfinalize_relaxed_init_inline", unfinalize_relaxed_init_inline,
@@ -29,6 +30,15 @@ void InlinerConfig::bind_config() {
        max_cost_for_constant_propagation);
   bind("max_reduced_size", max_reduced_size, max_reduced_size);
   bind("multiple_callers", multiple_callers, multiple_callers);
+  bind("use_call_site_summaries", use_call_site_summaries,
+       use_call_site_summaries);
+  bind("respect_sketchy_methods", respect_sketchy_methods,
+       respect_sketchy_methods);
+  bind("debug", debug, debug);
+  bind("check_min_sdk_refs", check_min_sdk_refs, check_min_sdk_refs);
+  bind("max_relevant_invokes_when_local_only",
+       max_relevant_invokes_when_local_only,
+       max_relevant_invokes_when_local_only);
   bind("run_const_prop", shrinker.run_const_prop, shrinker.run_const_prop);
   bind("run_cse", shrinker.run_cse, shrinker.run_cse);
   bind("run_dedup_blocks", shrinker.run_dedup_blocks,
@@ -40,6 +50,8 @@ void InlinerConfig::bind_config() {
   bind("run_fast_reg_alloc", shrinker.run_fast_reg_alloc,
        shrinker.run_fast_reg_alloc);
   bind("run_local_dce", shrinker.run_local_dce, shrinker.run_local_dce);
+  bind("reg_alloc_random_forest", shrinker.reg_alloc_random_forest,
+       shrinker.reg_alloc_random_forest);
   bind("no_inline_annos", {}, no_inline_annos,
        "When any of these annotations is present on a method or class, then "
        "this method or all methods of this class will not get inlined at any "
