@@ -9,6 +9,7 @@
 
 #include "DexClass.h"
 #include "Liveness.h"
+#include "StlUtil.h"
 
 namespace DedupBlkValueNumbering {
 using value_id_t = uint64_t;
@@ -59,7 +60,7 @@ inline bool operator==(const IROperationSourceBlock& a,
 struct IROperation {
   IROpcode opcode{0};
   std::vector<value_id_t> srcs;
-  union {
+  union OpData {
     // Zero-initialize this union with the struct member instead of a
     // any other member since it will always be the largest
     IROperationSourceBlock src_blk;
@@ -71,23 +72,27 @@ struct IROperation {
     const DexOpcodeData* data;
     reg_t in_reg;
     size_t operation_index;
-  };
-  IROperation() { memset(&src_blk, 0, sizeof(src_blk)); }
+  } op_data;
+  IROperation() { op_data.src_blk = IROperationSourceBlock{nullptr, 0}; }
+  // To avoid UB.
+  IROperationSourceBlock type_punned_src_blk() const {
+    return std20::bit_cast<IROperationSourceBlock>(op_data);
+  }
 };
 
 struct IROperationHasher {
   size_t operator()(const IROperation& tv) const {
     size_t hash = tv.opcode;
     boost::hash_combine(hash, tv.srcs);
-    boost::hash_combine(hash, (size_t)tv.literal);
-    boost::hash_combine(hash, tv.src_blk);
+    // Avoid UB.
+    boost::hash_combine(hash, tv.type_punned_src_blk());
     return hash;
   }
 };
 
 inline bool operator==(const IROperation& a, const IROperation& b) {
-  return a.opcode == b.opcode && a.srcs == b.srcs && a.literal == b.literal &&
-         a.src_blk == b.src_blk;
+  return a.opcode == b.opcode && a.srcs == b.srcs &&
+         a.type_punned_src_blk() == b.type_punned_src_blk();
 }
 
 struct BlockValue {
