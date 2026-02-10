@@ -13,6 +13,7 @@
 #include "ConfigFiles.h"
 #include "Dataflow.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "IRCode.h"
 #include "PassManager.h"
 #include "RemoveBuildersHelper.h"
@@ -325,11 +326,12 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
 
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
-  BuilderTransform b_transform(init_classes_with_side_effects,
-                               conf.get_inliner_config(),
-                               scope,
-                               stores,
-                               false);
+  BuilderTransform b_transform(
+      init_classes_with_side_effects,
+      *conf.get_global_config().get_config_by_name<InlinerConfig>("inliner"),
+      scope,
+      stores,
+      false);
 
   // Inline non init methods.
   UnorderedSet<DexClass*> removed_builders;

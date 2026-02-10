@@ -21,6 +21,7 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
 #include "LoopInfo.h"
@@ -1933,7 +1934,8 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   ConcurrentMethodResolver concurrent_method_resolver;
 
   UnorderedSet<DexMethod*> no_default_inlinables;
-  auto inliner_config = cfg.get_inliner_config();
+  auto inliner_config =
+      *cfg.get_global_config().get_config_by_name<InlinerConfig>("inliner");
   int min_sdk = pm.get_redex_options().min_sdk;
   MultiMethodInliner inliner(
       scope, init_classes_with_side_effects, stores, no_default_inlinables,

@@ -14,6 +14,7 @@
 #include "CppUtil.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
@@ -439,7 +440,8 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
           m_max_num_inline_iteration);
     Timer t("root_iteration");
     RemoveClasses rm_builder_pattern(
-        root, scope, init_classes_with_side_effects, conf.get_inliner_config(),
+        root, scope, init_classes_with_side_effects,
+        *conf.get_global_config().get_config_by_name<InlinerConfig>("inliner"),
         m_blocklist, m_max_num_inline_iteration, stores);
     rm_builder_pattern.optimize();
     rm_builder_pattern.print_stats(mgr);

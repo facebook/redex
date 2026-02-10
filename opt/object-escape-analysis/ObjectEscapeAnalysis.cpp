@@ -50,6 +50,7 @@
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "ExpandableMethodParams.h"
+#include "GlobalConfig.h"
 #include "IRInstruction.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
@@ -2084,7 +2085,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   ConcurrentMethodResolver concurrent_method_resolver;
   UnorderedSet<DexMethod*> no_default_inlinables;
   // customize shrinking options
-  auto inliner_config = conf.get_inliner_config();
+  auto inliner_config =
+      *conf.get_global_config().get_config_by_name<InlinerConfig>("inliner");
   inliner_config.shrinker = shrinker::ShrinkerConfig();
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.run_cse = true;

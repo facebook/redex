@@ -182,13 +182,6 @@ struct ConfigFiles {
   const JsonWrapper& get_json_config() const { return m_json; }
   const GlobalConfig& get_global_config() const;
 
-  /**
-   * Get the global inliner config from the "inliner" section. If there is not
-   * such section, will also look up "MethodInlinePass" section for backward
-   * compatibility.
-   */
-  const inliner::InlinerConfig& get_inliner_config();
-
   void init_baseline_profile_configs();
 
   const baseline_profiles::BaselineProfileConfigMap&
@@ -272,7 +265,6 @@ struct ConfigFiles {
   UnorderedMap<std::string, std::vector<std::string>> load_class_lists();
   void ensure_agg_method_stats_loaded();
   void ensure_secondary_method_stats_loaded() const;
-  void load_inliner_config(inliner::InlinerConfig*);
   void build_dead_class_and_live_class_split_lists();
   void build_halfnosis_block_list();
   bool is_relocated_class(std::string_view name) const;
@@ -319,8 +311,6 @@ struct ConfigFiles {
   // names of fields that behave similar to final fields, i.e. written once
   // before use
   UnorderedSet<const DexString*> m_finalish_field_names;
-  // Global inliner config.
-  std::unique_ptr<inliner::InlinerConfig> m_inliner_config;
   // min_sdk AndroidAPI
   int32_t m_min_sdk_api_level = 0;
   std::unique_ptr<api::AndroidSDK> m_android_min_sdk_api;
