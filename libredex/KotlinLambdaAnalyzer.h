@@ -69,6 +69,13 @@ class KotlinLambdaAnalyzer final {
   DexMethod* get_invoke_method() const;
 
   /**
+   * Returns the static INSTANCE singleton field if present, or nullptr
+   * otherwise. kotlinc generates a singleton INSTANCE field for non-capturing
+   * lambdas.
+   */
+  DexField* get_singleton_field() const;
+
+  /**
    * Returns the underlying class.
    */
   const DexClass* get_class() const { return m_cls; }

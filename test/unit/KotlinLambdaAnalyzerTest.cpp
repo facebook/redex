@@ -551,3 +551,84 @@ TEST_F(KotlinLambdaAnalyzerTest, UnnumberedFunction) {
   EXPECT_FALSE(
       KotlinLambdaAnalyzer::for_class(unnumbered_kotlin_function_class));
 }
+
+TEST_F(KotlinLambdaAnalyzerTest, GetSingletonField_WithSingleton) {
+  auto* lambda_type = DexType::make_type("LSingletonTest$1;");
+  auto* kotlin_function_type =
+      DexType::make_type("Lkotlin/jvm/functions/Function0;");
+
+  ClassCreator creator(lambda_type);
+  creator.set_super(type::kotlin_jvm_internal_Lambda());
+  creator.add_interface(kotlin_function_type);
+
+  // Add INSTANCE static field of the lambda's own type
+  auto* instance_field =
+      DexField::make_field(lambda_type, DexString::make_string("INSTANCE"),
+                           lambda_type)
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+  creator.add_field(instance_field);
+
+  const auto* lambda_class = creator.create();
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
+  ASSERT_TRUE(analyzer.has_value());
+  EXPECT_EQ(analyzer->get_singleton_field(), instance_field);
+}
+
+TEST_F(KotlinLambdaAnalyzerTest, GetSingletonField_WithoutSingleton) {
+  auto* lambda_type = DexType::make_type("LNoSingletonTest$1;");
+  auto* kotlin_function_type =
+      DexType::make_type("Lkotlin/jvm/functions/Function0;");
+
+  ClassCreator creator(lambda_type);
+  creator.set_super(type::kotlin_jvm_internal_Lambda());
+  creator.add_interface(kotlin_function_type);
+
+  const auto* lambda_class = creator.create();
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
+  ASSERT_TRUE(analyzer.has_value());
+  EXPECT_THAT(analyzer->get_singleton_field(), IsNull());
+}
+
+TEST_F(KotlinLambdaAnalyzerTest, GetSingletonField_WrongType) {
+  auto* lambda_type = DexType::make_type("LWrongTypeSingletonTest$1;");
+  auto* kotlin_function_type =
+      DexType::make_type("Lkotlin/jvm/functions/Function0;");
+
+  ClassCreator creator(lambda_type);
+  creator.set_super(type::kotlin_jvm_internal_Lambda());
+  creator.add_interface(kotlin_function_type);
+
+  // Add INSTANCE field with wrong type (Object instead of lambda's own type)
+  auto* instance_field =
+      DexField::make_field(lambda_type, DexString::make_string("INSTANCE"),
+                           type::java_lang_Object())
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+  creator.add_field(instance_field);
+
+  const auto* lambda_class = creator.create();
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
+  ASSERT_TRUE(analyzer.has_value());
+  EXPECT_THAT(analyzer->get_singleton_field(), IsNull());
+}
+
+TEST_F(KotlinLambdaAnalyzerTest, GetSingletonField_WrongName) {
+  auto* lambda_type = DexType::make_type("LWrongNameSingletonTest$1;");
+  auto* kotlin_function_type =
+      DexType::make_type("Lkotlin/jvm/functions/Function0;");
+
+  ClassCreator creator(lambda_type);
+  creator.set_super(type::kotlin_jvm_internal_Lambda());
+  creator.add_interface(kotlin_function_type);
+
+  // Add static field of the lambda's own type but named "NOT_INSTANCE"
+  auto* field =
+      DexField::make_field(lambda_type, DexString::make_string("NOT_INSTANCE"),
+                           lambda_type)
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+  creator.add_field(field);
+
+  const auto* lambda_class = creator.create();
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
+  ASSERT_TRUE(analyzer.has_value());
+  EXPECT_THAT(analyzer->get_singleton_field(), IsNull());
+}

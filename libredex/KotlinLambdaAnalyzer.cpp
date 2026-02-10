@@ -7,6 +7,8 @@
 
 #include "KotlinLambdaAnalyzer.h"
 
+#include <algorithm>
+
 #include "ClassUtil.h"
 #include "DexAccess.h"
 #include "IRCode.h"
@@ -72,4 +74,14 @@ DexMethod* KotlinLambdaAnalyzer::get_invoke_method() const {
     }
   }
   return result;
+}
+
+DexField* KotlinLambdaAnalyzer::get_singleton_field() const {
+  const auto* cls = m_cls;
+  const auto& sfields = cls->get_sfields();
+  auto it = std::ranges::find_if(sfields, [cls](const DexField* field) {
+    return field->get_name()->str() == "INSTANCE" &&
+           field->get_type() == cls->get_type();
+  });
+  return it != sfields.end() ? *it : nullptr;
 }
