@@ -21,7 +21,6 @@
 #include "DexClass.h"
 #include "FrameworkApi.h"
 #include "GlobalConfig.h"
-#include "InlinerConfig.h"
 #include "MethodProfiles.h"
 #include "ProguardMap.h"
 
