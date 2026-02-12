@@ -593,6 +593,20 @@ bool Block::cannot_throw() const {
   return true;
 }
 
+bool block_eventually_throws(Block* block) {
+  UnorderedSet<Block*> visited{block};
+  for (; block->goes_to_only_edge() != nullptr;
+       block = block->goes_to_only_edge()) {
+    if (!visited.insert(block->goes_to_only_edge()).second) {
+      // non-terminating loop
+      return false;
+    }
+  }
+  auto last_insn_it = block->get_last_insn();
+  return last_insn_it != block->end() &&
+         last_insn_it->insn->opcode() == OPCODE_THROW;
+}
+
 std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
   std::vector<Edge*> result =
       m_parent->get_succ_edges_of_type(this, EDGE_THROW);

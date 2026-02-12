@@ -1814,6 +1814,12 @@ bool Block::push_back(const ForwardIt& begin, const ForwardIt& end) {
   return m_parent->push_back(this, begin, end);
 }
 
+/**
+ * Check whether, possibly at the end of a chain of gotos, the block will
+ * unconditionally throw.
+ */
+bool block_eventually_throws(Block* block);
+
 } // namespace cfg
 
 inline cfg::InstructionIterable InstructionIterable(

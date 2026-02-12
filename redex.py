@@ -1488,6 +1488,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             CompressionLevel.BETTER,  # Usually small enough.
         ),
         CompressionEntry(
+            "Redex Unconditionally Throwing Classes",
+            lambda args: True,
+            True,
+            [],
+            ["redex-unconditionally-throwing-classes.txt"],
+            None,
+            None,
+            CompressionLevel.BETTER,  # Usually small enough.
+        ),
+        CompressionEntry(
             "Redex Accessed Proguard Rules",
             lambda args: True,
             True,

@@ -536,6 +536,7 @@ libopt_la_SOURCES = \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
 	opt/type-analysis/TypeAnalysisCallGraphGenerationPass.cpp \
+	opt/unconditionally-throwing-classes/UnconditionallyThrowingClassesPass.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \
 	opt/uses-names/UsesNames.cpp \

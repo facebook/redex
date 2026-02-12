@@ -2856,3 +2856,64 @@ TEST_F(ControlFlowTest, insert_block_switch) {
   EXPECT_TRUE(branch_edges[2]->target() == nb0);
   EXPECT_TRUE(nb0->goes_to() != nullptr && nb0->goes_to() == branch_block);
 }
+
+TEST_F(ControlFlowTest, blockUnconditionallyThrowsDirectThrow) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/RuntimeException;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/RuntimeException;.<init>:()V")
+      (throw v0)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  EXPECT_TRUE(cfg::block_eventually_throws(cfg.entry_block()))
+      << "Entry block that directly throws should be flagged";
+}
+
+TEST_F(ControlFlowTest, blockUnconditionallyThrowsReturnNotFlagged) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (return v0)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  EXPECT_FALSE(cfg::block_eventually_throws(cfg.entry_block()))
+      << "Entry block that returns should NOT be flagged";
+}
+
+TEST_F(ControlFlowTest, blockUnconditionallyThrowsConditionalNotFlagged) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :throw)
+      (const v1 1)
+      (return v1)
+      (:throw)
+      (new-instance "Ljava/lang/RuntimeException;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/lang/RuntimeException;.<init>:()V")
+      (throw v2)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  EXPECT_FALSE(cfg::block_eventually_throws(cfg.entry_block()))
+      << "Entry block with conditional path should NOT be flagged";
+}
+
+TEST_F(ControlFlowTest, blockUnconditionallyThrowsInfiniteLoopNotFlagged) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (:loop)
+      (goto :loop)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  EXPECT_FALSE(cfg::block_eventually_throws(cfg.entry_block()))
+      << "Infinite loop should NOT be flagged as unconditionally throwing";
+}
