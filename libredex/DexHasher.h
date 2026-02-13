@@ -59,8 +59,8 @@ class DexClassHasher final {
   std::unique_ptr<Fwd> m_fwd;
 };
 
-// Hashes just the method's code (IRCode), excluding method signature/class.
-// Debug info and source blocks are excluded.
+// Hashes a method's code (IRCode) and prototype (argument/return types),
+// excluding method name, class, access flags, debug info, and source blocks.
 // Useful for comparing method bodies across different classes.
 // This is a hashing utility and not invoked after every pass.
 class DexMethodHasher final {

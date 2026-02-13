@@ -105,6 +105,68 @@ TEST_F(DexHasherTest, MethodHashDiffersForDifferentOpcodes) {
   EXPECT_NE(hash1.code_hash, hash2.code_hash);
 }
 
+TEST_F(DexHasherTest, MethodHashDiffersForDifferentPrototypes) {
+  // Methods with identical code but different prototypes should have different
+  // code_hash values.
+  auto* method1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.noArg:()I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  auto* method2 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.oneArg:(I)I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  method1->get_code()->build_cfg();
+  method2->get_code()->build_cfg();
+
+  auto hash1 = hashing::DexMethodHasher(method1).run();
+  auto hash2 = hashing::DexMethodHasher(method2).run();
+
+  EXPECT_NE(hash1.code_hash, hash2.code_hash)
+      << "Different prototypes should produce different code_hash";
+}
+
+TEST_F(DexHasherTest, MethodHashIgnoresAccessFlags) {
+  // Methods with identical code and prototype but different access flags should
+  // have the same code_hash.
+  auto* method1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.publicMethod:()I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  auto* method2 = assembler::method_from_string(R"(
+    (method (private static) "LFoo;.privateMethod:()I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  method1->get_code()->build_cfg();
+  method2->get_code()->build_cfg();
+
+  auto hash1 = hashing::DexMethodHasher(method1).run();
+  auto hash2 = hashing::DexMethodHasher(method2).run();
+
+  EXPECT_EQ(hash1.code_hash, hash2.code_hash)
+      << "Access flags should not affect code_hash";
+}
+
 TEST_F(DexHasherTest, MethodHashIgnoresDebugInfo) {
   // Methods with identical instructions but different debug info should have
   // the same code_hash.

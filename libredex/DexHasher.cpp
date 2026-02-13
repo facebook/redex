@@ -607,6 +607,11 @@ DexHash DexMethodImpl::run() {
   if (code != nullptr) {
     hash(code);
   }
+  // Include the method prototype in code_hash so that methods with different
+  // signatures are never considered identical.
+  // m_hash is 0 here: it starts at 0 and hash(IRCode*) saves/restores it.
+  hash(m_method->get_proto());
+  boost::hash_combine(m_code_hash, m_hash);
   return DexHash{m_positions_hash, m_registers_hash, m_code_hash, 0};
 }
 

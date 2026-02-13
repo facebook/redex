@@ -176,7 +176,7 @@ TEST_F(UniqueMethodTrackerTest, UniqueMethodTrackerNoCfg) {
   EXPECT_THAT(*this, SizeIs(2u));
 }
 
-TEST_F(UniqueMethodTrackerTest, UniqueMethodTrackerHashCollision) {
+TEST_F(UniqueMethodTrackerTest, HandlesHashCollisionWithDifferentCode) {
   // Two methods with different code but forced to have the same hash.
   auto* method1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.collision1:()I"
@@ -210,6 +210,44 @@ TEST_F(UniqueMethodTrackerTest, UniqueMethodTrackerHashCollision) {
   const auto [rep2, inserted2] = this->insert(method2, kForcedHash);
   EXPECT_TRUE(inserted2)
       << "Different code should be inserted even with same hash";
+  EXPECT_EQ(rep2, method2);
+
+  EXPECT_THAT(*this, SizeIs(4u));
+}
+
+TEST_F(UniqueMethodTrackerTest, HandlesHashCollisionWithDifferentPrototypes) {
+  // Two methods with different prototypes but forced to have the same hash
+  // should still be in separate groups.
+  auto* method1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.collisionProtoA:()I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  auto* method2 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.collisionProtoB:(I)I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  method1->get_code()->build_cfg();
+  method2->get_code()->build_cfg();
+
+  constexpr size_t kForcedHash = 99;
+
+  const auto [rep1, inserted1] = this->insert(method1, kForcedHash);
+  EXPECT_TRUE(inserted1);
+  EXPECT_EQ(rep1, method1);
+
+  const auto [rep2, inserted2] = this->insert(method2, kForcedHash);
+  EXPECT_TRUE(inserted2)
+      << "Different prototype should be inserted even with same hash";
   EXPECT_EQ(rep2, method2);
 
   EXPECT_THAT(*this, SizeIs(4u));
@@ -298,6 +336,51 @@ TEST_F(UniqueMethodTrackerTest, GroupsDistinctForDifferentCode) {
   ASSERT_THAT(group2, NotNull());
   EXPECT_THAT(*group2, SizeIs(1u));
   EXPECT_NE(group2->find(method2), group2->end());
+}
+
+TEST_F(UniqueMethodTrackerTest,
+       UniqueMethodTrackerDifferentPrototypesSeparated) {
+  // Methods with identical code but different prototypes should be in separate
+  // groups. This prevents incorrect deduplication across different lambda
+  // shapes (e.g., Function0 vs Function1).
+  auto* method1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.protoA:()I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  auto* method2 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.protoB:(I)I"
+      (
+        (const v0 42)
+        (return v0)
+      )
+    )
+  )");
+
+  method1->get_code()->build_cfg();
+  method2->get_code()->build_cfg();
+
+  const auto [rep1, inserted1] = this->insert(method1);
+  EXPECT_TRUE(inserted1);
+
+  const auto [rep2, inserted2] = this->insert(method2);
+  EXPECT_TRUE(inserted2)
+      << "Different prototype should be inserted as separate group";
+  EXPECT_EQ(rep2, method2)
+      << "Expected different representative for different prototype";
+
+  // Each should be in its own group.
+  const auto* group1 = find_group(method1);
+  ASSERT_THAT(group1, NotNull());
+  EXPECT_THAT(*group1, SizeIs(1u));
+
+  const auto* group2 = find_group(method2);
+  ASSERT_THAT(group2, NotNull());
+  EXPECT_THAT(*group2, SizeIs(1u));
 }
 
 TEST_F(UniqueMethodTrackerTest, DuplicateInsertionIgnored) {
