@@ -1417,7 +1417,7 @@ static size_t get_inlined_cost(IRInstruction* insn,
   size_t cost{0};
   if (opcode::is_an_internal(op) || opcode::is_a_move(op) ||
       opcode::is_a_return(op)) {
-    if (op == IOPCODE_INIT_CLASS || op == IOPCODE_R_CONST) {
+    if (op == IOPCODE_INIT_CLASS) {
       cost += cost_config.op_init_class_cost;
     } else if (op == IOPCODE_INJECTION_ID) {
       cost += cost_config.op_injection_id_cost;
@@ -1425,6 +1425,9 @@ static size_t get_inlined_cost(IRInstruction* insn,
       cost += cost_config.op_unreachable_cost;
     } else if (op == IOPCODE_WRITE_BARRIER) {
       cost += static_cast<size_t>(cost_config.cost_invoke);
+    } else if (op == IOPCODE_R_CONST) {
+      // A resource ID is always in [0x01000000, 0x7FFFFFFF]
+      cost += 1 + cost_config.insn_has_lit_cost_2;
     }
   } else {
     cost++;
