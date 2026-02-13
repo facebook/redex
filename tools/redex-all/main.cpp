@@ -117,7 +117,7 @@ struct Arguments {
   std::optional<std::string> crash_file;
 };
 
-UNUSED void dump_args(const Arguments& args) {
+DEBUG_ONLY void dump_args(const Arguments& args) {
   std::cout << "out_dir: " << args.out_dir << '\n';
   std::cout << "verify_none_mode: " << args.redex_options.verify_none_enabled
             << '\n';
