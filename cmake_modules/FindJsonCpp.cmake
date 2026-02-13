@@ -1,3 +1,4 @@
+# @lint-ignore-every LICENSELINT
 # - Find jsoncpp - Overarching find module
 # This is a over-arching find module to find older jsoncpp versions and those sadly built
 # without JSONCPP_WITH_CMAKE_PACKAGE=ON, as well as those built with the cmake config file.

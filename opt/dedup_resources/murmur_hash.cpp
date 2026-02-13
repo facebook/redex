@@ -1,3 +1,4 @@
+// @lint-ignore-every LICENSELINT
 /*
  *
  * Copyright 2015 gRPC authors.
