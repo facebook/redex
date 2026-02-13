@@ -29,9 +29,12 @@ struct EnumConstant {
   const DexString* name;
 };
 
-union EnumFieldValue {
-  int64_t primitive_value;
-  const DexString* string_value;
+struct EnumFieldValue {
+  union {
+    int64_t primitive_value;
+    const DexString* string_value;
+  };
+  bool is_resource_id = false;
 };
 /**
  * Maps enum ordinals to values for a particular instance field.
