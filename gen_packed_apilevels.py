@@ -88,6 +88,7 @@ def compress_and_base_64(inputs, tar_xz):
         return base64.b64encode(buf.getbuffer())
 
 
+# @lint-ignore-every LICENSELINT
 _FILE_TEMPLATE = """
 #!/usr/bin/env python3
 # Copyright (c) Meta Platforms, Inc. and affiliates.
