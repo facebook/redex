@@ -290,8 +290,8 @@ void KotlinLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
       singleton_tracker.insert(invoke);
     } else {
       // Non-singleton lambda without INSTANCE field.
-      // Only track non-capturing lambdas (no-arg constructor).
-      if (get_no_arg_constructor(cls) != nullptr) {
+      // Only track non-capturing lambdas.
+      if (analyzer->is_non_capturing()) {
         non_singleton_tracker.insert(invoke);
       }
     }
