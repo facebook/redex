@@ -63,7 +63,7 @@ AM_CPPFLAGS = $(COMMON_INCLUDES)
 AM_CPPFLAGS += $(BOOST_CPPFLAGS)
 AM_LDFLAGS = $(BOOST_LDFLAGS)
 
-noinst_LTLIBRARIES = libredex.la libopt.la
+noinst_LTLIBRARIES = libredex.la libopt.la libresource.la
 
 BUILT_SOURCES =
 
@@ -243,17 +243,6 @@ libredex_la_SOURCES = \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
 	libredex/WorkQueue.cpp \
-	libresource/LocaleValue.cpp \
-	libresource/LocaleData.cpp \
-	libresource/ResourceTypes.cpp \
-	libresource/Serialize.cpp \
-	libresource/SharedBuffer.cpp \
-	libresource/String16.cpp \
-	libresource/String8.cpp \
-	libresource/TypeWrappers.cpp \
-	libresource/Unicode.cpp \
-	libresource/VectorImpl.cpp \
-	libresource/Visitor.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \
 	service/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
 	service/class-merging/ApproximateShapeMerging.cpp \
@@ -354,7 +343,26 @@ libredex_la_SOURCES = \
 	util/JemallocUtil.cpp \
 	util/Sha1.cpp
 
+#
+# libresource: third-party Android resource library
+#
+
+libresource_la_CXXFLAGS = $(AM_CXXFLAGS) -Wno-format-signedness
+libresource_la_SOURCES = \
+	libresource/LocaleValue.cpp \
+	libresource/LocaleData.cpp \
+	libresource/ResourceTypes.cpp \
+	libresource/Serialize.cpp \
+	libresource/SharedBuffer.cpp \
+	libresource/String16.cpp \
+	libresource/String8.cpp \
+	libresource/TypeWrappers.cpp \
+	libresource/Unicode.cpp \
+	libresource/VectorImpl.cpp \
+	libresource/Visitor.cpp
+
 libredex_la_LIBADD = \
+	libresource.la \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
