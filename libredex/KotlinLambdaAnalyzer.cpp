@@ -62,18 +62,31 @@ bool KotlinLambdaAnalyzer::is_trivial(size_t max_instructions) const {
 }
 
 DexMethod* KotlinLambdaAnalyzer::get_invoke_method() const {
-  DexMethod* result = nullptr;
+  DexMethod* non_synthetic = nullptr;
+  DexMethod* synthetic = nullptr;
   for (auto* method : m_cls->get_vmethods()) {
-    if (method->get_name()->str() == "invoke" && is_public(method) &&
-        !is_synthetic(method) && method->get_code() != nullptr) {
-      if (result != nullptr) {
-        // Multiple invoke methods found, ill-formed lambda.
+    if (method->get_name()->str() != "invoke" || !is_public(method) ||
+        method->get_code() == nullptr) {
+      continue;
+    }
+    if (is_synthetic(method)) {
+      if (synthetic != nullptr) {
+        // Multiple synthetic invoke methods found, ill-formed lambda.
         return nullptr;
       }
-      result = method;
+      synthetic = method;
+    } else {
+      if (non_synthetic != nullptr) {
+        // Multiple non-synthetic invoke methods found, ill-formed lambda.
+        return nullptr;
+      }
+      non_synthetic = method;
     }
   }
-  return result;
+  // Prefer the non-synthetic (typed) invoke when available. Fall back to the
+  // synthetic bridge invoke when earlier passes have inlined the typed invoke
+  // into the bridge, leaving the bridge as the sole invoke method.
+  return non_synthetic != nullptr ? non_synthetic : synthetic;
 }
 
 DexField* KotlinLambdaAnalyzer::get_singleton_field() const {

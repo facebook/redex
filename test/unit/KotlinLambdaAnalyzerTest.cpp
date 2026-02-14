@@ -7,10 +7,12 @@
 
 #include "KotlinLambdaAnalyzer.h"
 
+#include <algorithm>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "Creators.h"
+#include "Debug.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 
@@ -157,33 +159,46 @@ class KotlinLambdaAnalyzerTest : public RedexTest {
     return creator.create();
   }
 
-  // Helper to create an ill-formed Kotlin lambda class with a synthetic invoke
-  // method.
+  // Helper to create a Kotlin lambda class whose only invoke method is a
+  // synthetic bridge. Simulates what happens when earlier passes inline the
+  // typed invoke into the bridge.
   static DexClass* create_lambda_with_synthetic_invoke() {
     static unsigned counter = 0;
     const auto type_name =
         "LLambdaAnalyzerSyntheticInvoke$" + std::to_string(counter++) + ";";
-    auto* lambda_type = DexType::make_type(type_name);
-    auto* kotlin_function_type =
-        DexType::make_type("Lkotlin/jvm/functions/Function0;");
+    auto* cls = create_non_capturing_lambda(type_name, /*arity=*/0);
+    // Remove the non-synthetic invoke that create_non_capturing_lambda added,
+    // then add a synthetic bridge invoke in its place.
+    auto vmethods = cls->get_vmethods();
+    for (auto* m : vmethods) {
+      cls->remove_method(m);
+    }
+    add_synthetic_bridge_invoke(cls, /*arity=*/0);
+    // Verify: no non-synthetic invoke should remain.
+    always_assert(
+        std::ranges::none_of(cls->get_vmethods(), [](const DexMethod* m) {
+          return m->get_name()->str() == "invoke" && !is_synthetic(m);
+        }));
+    return cls;
+  }
 
-    ClassCreator creator(lambda_type);
-    creator.set_super(type::kotlin_jvm_internal_Lambda());
-    creator.add_interface(kotlin_function_type);
-
-    // Add a synthetic invoke method
-    auto* invoke_proto = DexProto::make_proto(type::java_lang_Object(),
-                                              DexTypeList::make_type_list({}));
-    auto* invoke_method =
-        DexMethod::make_method(lambda_type, DexString::make_string("invoke"),
-                               invoke_proto)
+  // Add a synthetic bridge invoke method (type-erased) to a lambda class.
+  static void add_synthetic_bridge_invoke(DexClass* cls, size_t arity) {
+    DexTypeList::ContainerType param_types;
+    for (size_t i = 0; i < arity; ++i) {
+      param_types.push_back(type::java_lang_Object());
+    }
+    auto* bridge_proto = DexProto::make_proto(
+        type::java_lang_Object(),
+        DexTypeList::make_type_list(std::move(param_types)));
+    auto* bridge_method =
+        DexMethod::make_method(cls->get_type(),
+                               DexString::make_string("invoke"), bridge_proto)
             ->make_concrete(ACC_PUBLIC | ACC_SYNTHETIC, true);
-    auto code = std::make_unique<IRCode>(invoke_method, 1);
+    auto code = std::make_unique<IRCode>(bridge_method, 1 + arity);
     code->push_back(new IRInstruction(OPCODE_RETURN_OBJECT));
-    invoke_method->set_code(std::move(code));
-    creator.add_method(invoke_method);
-
-    return creator.create();
+    bridge_method->set_code(std::move(code));
+    cls->add_method(bridge_method);
   }
 
   // Helper to create a well-formed Kotlin lambda class with a proper invoke
@@ -372,11 +387,34 @@ TEST_F(KotlinLambdaAnalyzerTest, GetInvokeMethod_NonPublicInvoke) {
   EXPECT_THAT(analyzer->get_invoke_method(), IsNull());
 }
 
-TEST_F(KotlinLambdaAnalyzerTest, GetInvokeMethod_SyntheticInvoke) {
+TEST_F(KotlinLambdaAnalyzerTest,
+       GetInvokeMethod_ReturnsSyntheticInvokeWhenNoNonSynthetic) {
+  // When earlier passes inline the typed invoke into the synthetic bridge,
+  // the bridge becomes the sole invoke method. get_invoke_method() should
+  // fall back to it.
   const auto* lambda_class = create_lambda_with_synthetic_invoke();
   auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
   ASSERT_TRUE(analyzer.has_value());
-  EXPECT_THAT(analyzer->get_invoke_method(), IsNull());
+  DexMethod* invoke = analyzer->get_invoke_method();
+  ASSERT_THAT(invoke, NotNull());
+  EXPECT_EQ(invoke->str(), "invoke");
+  EXPECT_TRUE(is_synthetic(invoke));
+}
+
+TEST_F(KotlinLambdaAnalyzerTest,
+       GetInvokeMethod_PrefersNonSyntheticOverSynthetic) {
+  // When both a typed (non-synthetic) invoke and a synthetic bridge exist,
+  // the typed one should be preferred.
+  auto* lambda_class =
+      create_non_capturing_lambda("LLambdaAnalyzerBothInvoke$0;", /*arity=*/1);
+  add_synthetic_bridge_invoke(lambda_class, /*arity=*/0);
+
+  auto analyzer = KotlinLambdaAnalyzer::for_class(lambda_class);
+  ASSERT_TRUE(analyzer.has_value());
+  DexMethod* invoke = analyzer->get_invoke_method();
+  ASSERT_THAT(invoke, NotNull());
+  EXPECT_FALSE(is_synthetic(invoke))
+      << "Should prefer the non-synthetic invoke method";
 }
 
 // Tests for lambda detection (KotlinLambdaAnalyzer::for_class)
