@@ -27,8 +27,8 @@ static void TRACE_live_intervals(const LiveIntervals& live_intervals) {
   if (traceEnabled(FREG, 9)) {
     for (auto interval_info : live_intervals) {
       TRACE(FREG, 9, "VReg name %d: ", interval_info.vreg);
-      TRACE(FREG, 9, "Start point: %d", interval_info.start_point);
-      TRACE(FREG, 9, "End point: %d", interval_info.end_point);
+      TRACE(FREG, 9, "Start point: %u", interval_info.start_point);
+      TRACE(FREG, 9, "End point: %u", interval_info.end_point);
     }
   }
   TRACE(FREG, 9, "\n");

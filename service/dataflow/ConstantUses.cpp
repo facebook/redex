@@ -142,7 +142,7 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
     }
   }
 
-  TRACE(CU, 2, "[CU] ConstantUses(%s) need_type_inference:%u",
+  TRACE(CU, 2, "[CU] ConstantUses(%s) need_type_inference:%d",
         method_describer().c_str(), need_type_inference);
   if ((need_type_inference && (args != nullptr)) || force_type_inference) {
     m_type_inference.reset(new type_inference::TypeInference(cfg));

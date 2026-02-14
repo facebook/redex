@@ -196,7 +196,7 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
       }
     }
   }
-  TRACE(IDEX, 3, "IDEX: Ordered around %d classes at the beginning", priority);
+  TRACE(IDEX, 3, "IDEX: Ordered around %u classes at the beginning", priority);
   std::stable_sort(
       scope->begin(), scope->end(),
       [&class_to_priority](const DexClass* left, const DexClass* right) {
@@ -553,7 +553,7 @@ void InterDex::emit_interdex_classes(
             !m_emitting_bg_set,
             "Scroll start marker discovered between background set markers");
         m_emitting_scroll_set = true;
-        TRACE(IDEX, 2, "Marking dex as scroll at betamap entry %zu",
+        TRACE(IDEX, 2, "Marking dex as scroll at betamap entry %td",
               std::distance(interdex_types.begin(), it));
         dex_info.scroll = true;
       } else if (boost::algorithm::starts_with(type->get_name()->str(),
@@ -570,7 +570,7 @@ void InterDex::emit_interdex_classes(
         always_assert_log(
             !m_emitting_scroll_set,
             "Background start marker discovered between scroll set markers");
-        TRACE(IDEX, 2, "Marking dex as background at betamap entry %zu",
+        TRACE(IDEX, 2, "Marking dex as background at betamap entry %td",
               std::distance(interdex_types.begin(), it));
         m_emitting_bg_set = true;
         dex_info.background = true;

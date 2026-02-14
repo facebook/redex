@@ -174,7 +174,7 @@ uint32_t dedup(const DexStoresVector& stores) {
   collect_all_invoke_super_called(scope, &super_invoked_methods);
   auto deduplicated_vmethods =
       remove_duplicated_vmethods(scope, super_invoked_methods);
-  TRACE(VM, 2, "deduplicated_vmethods %d\n", deduplicated_vmethods);
+  TRACE(VM, 2, "deduplicated_vmethods %u\n", deduplicated_vmethods);
   return deduplicated_vmethods;
 }
 

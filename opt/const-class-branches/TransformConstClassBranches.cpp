@@ -202,7 +202,7 @@ void gather_possible_transformations(
     if (ends_in_if_statment(b) &&
         find_determining_reg(*fixpoint, b, &determining_reg)) {
       // Keep going, maybe this block is a useful starting point.
-      TRACE(CCB, 2, "determining_reg is %d for B%zu", determining_reg, b->id());
+      TRACE(CCB, 2, "determining_reg is %u for B%zu", determining_reg, b->id());
       auto* last_insn = b->get_last_insn()->insn;
       auto root_branch = cfg.find_insn(last_insn);
       auto finder = std::make_unique<SwitchEquivFinder>(

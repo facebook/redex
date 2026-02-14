@@ -154,7 +154,7 @@ Stats merge_methods(const MethodGroups& method_groups,
     }
     auto& new_callee = old_to_new.at(old_callee);
     method_reference::patch_callsite(callsite, new_callee);
-    TRACE(METH_MERGER, 9, "\t%s => %d %s", SHOW(old_callee),
+    TRACE(METH_MERGER, 9, "\t%s => %u %s", SHOW(old_callee),
           new_callee.additional_args.get()[0], SHOW(new_callee.method));
   }
   if (traceEnabled(METH_MERGER, 3)) {

@@ -440,7 +440,7 @@ bool ResourceIdAnalyzer::is_src_known(const IRInstruction* insn,
 bool ResourceIdAnalyzer::analyze_r_const(const IRInstruction* insn,
                                          ConstantEnvironment* env) {
   auto id = static_cast<uint32_t>(insn->get_literal());
-  TRACE(CONSTP, 5, "Discovered new resource id for reg: %d value: %d",
+  TRACE(CONSTP, 5, "Discovered new resource id for reg: %u value: %u",
         insn->dest(), id);
   env->set(insn->dest(), ConstantResourceIdDomain({.id = id}));
   return true;
@@ -510,7 +510,7 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
     break;
   }
   if (insn->has_dest()) {
-    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d] %s", insn->dest(),
+    TRACE(CONSTP, 5, "Marking value unknown [Reg: %u] %s", insn->dest(),
           SHOW(insn));
     env->set(insn->dest(), ConstantValue::top());
   } else if (insn->has_move_result_any()) {
@@ -522,7 +522,7 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
                                       ConstantEnvironment* env) {
-  TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %" PRIu64,
+  TRACE(CONSTP, 5, "Discovered new constant for reg: %u value: %" PRId64,
         insn->dest(), insn->get_literal());
   env->set(insn->dest(), SignedConstantDomain(insn->get_literal()));
   return true;
@@ -1002,7 +1002,7 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
 bool InjectionIdAnalyzer::analyze_injection_id(const IRInstruction* insn,
                                                ConstantEnvironment* env) {
   auto id = static_cast<int32_t>(insn->get_literal());
-  TRACE(CONSTP, 5, "Discovered new injection id for reg: %d value: %d",
+  TRACE(CONSTP, 5, "Discovered new injection id for reg: %u value: %d",
         insn->dest(), id);
   env->set(insn->dest(), ConstantInjectionIdDomain(id));
   return true;

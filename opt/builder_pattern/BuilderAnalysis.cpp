@@ -563,7 +563,7 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
                 current_env.get(live_reg))) {
           // It escapes here, since we couldn't follow it anymore.
           TRACE(BLD_PATTERN, 5,
-                "Liveness missmatch for register v%d\nPRED:\n%sSUCC:\n%s",
+                "Liveness missmatch for register v%u\nPRED:\n%sSUCC:\n%s",
                 live_reg, SHOW(block), SHOW(block_succ));
           TRACE(BLD_PATTERN, 5, "Register value in PRED: %s",
                 SHOW(*current_env.get(live_reg).get_constant()));

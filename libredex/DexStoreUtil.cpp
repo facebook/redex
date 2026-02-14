@@ -28,7 +28,8 @@ std::string get_canary_name(int dexnum, const char* store_name) {
   if (store_name != nullptr) {
     char buf[STORE_CANARY_CLASS_BUFSIZE];
     int store_id = get_unique_store_id(store_name);
-    snprintf(buf, sizeof(buf), STORE_CANARY_CLASS_FORMAT, store_id, dexnum + 1);
+    snprintf(buf, sizeof(buf), STORE_CANARY_CLASS_FORMAT,
+             static_cast<unsigned int>(store_id), dexnum + 1);
     return std::string(buf);
   } else {
     char buf[SECONDARY_CANARY_CLASS_BUFSIZE];

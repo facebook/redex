@@ -55,7 +55,8 @@ void assemble(IRInstruction* insn, Iterator begin, Iterator end) {
       break;
     case VREG:
     default:
-      not_reached_log("Encountered unexpected tag 0x%x", arg->tag);
+      not_reached_log("Encountered unexpected tag 0x%x",
+                      static_cast<unsigned int>(arg->tag));
     }
     arg = std::next(arg);
   }

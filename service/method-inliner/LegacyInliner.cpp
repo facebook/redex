@@ -249,7 +249,7 @@ void inline_method_unsafe(const DexMethod* caller_method,
   // find the last position entry before the invoke.
   auto* const invoke_position = last_position_before(pos, caller_code);
   if (invoke_position != nullptr) {
-    TRACE(INL, 3, "Inlining call at %s:%d", invoke_position->file->c_str(),
+    TRACE(INL, 3, "Inlining call at %s:%u", invoke_position->file->c_str(),
           invoke_position->line);
   }
 

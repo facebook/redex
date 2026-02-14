@@ -31,7 +31,7 @@ struct Timer {
  private:
   static std::mutex& get_s_lock();
   static times_t& get_s_times();
-  static unsigned s_indent;
+  static int s_indent;
   std::string m_msg;
   std::chrono::high_resolution_clock::time_point m_start;
   bool m_indent;

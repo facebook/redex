@@ -316,7 +316,7 @@ void WrappedPrimitives::optimize_method(
 
         for (size_t i = 0; i < srcs_size; i++) {
           auto current_reg = insn->src(i);
-          TRACE(WP, 2, "  Checking v%d", current_reg);
+          TRACE(WP, 2, "  Checking v%u", current_reg);
           const auto& value = reg_env.get(current_reg);
           auto maybe_pair = extract_object_with_attr_value(value);
           if (maybe_pair != boost::none) {
@@ -346,7 +346,7 @@ void WrappedPrimitives::optimize_method(
             // fallback to check if N known ObjectWithImmutAttr instances are
             // flowing into this call.
             TRACE(WP, 2,
-                  "  v%d is not a known object (i = %zu); will fall back and "
+                  "  v%u is not a known object (i = %zu); will fall back and "
                   "look for "
                   "multiple incoming definitions",
                   current_reg, i);

@@ -1519,7 +1519,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
     }
     auto res = param_to_sizes[param_size].emplace(MethodKey{method, dex_size},
                                                   debug_size);
-    always_assert_log(res.second, "Failed to insert %s, %d pair", SHOW(method),
+    always_assert_log(res.second, "Failed to insert %s, %u pair", SHOW(method),
                       dc->size());
     if (iodi_metadata.is_in_global_cluster(method)) {
       clustered_methods[iodi_metadata.get_canonical_method(method)].push_back(
@@ -1756,7 +1756,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       size_t total_ignored = std::distance(sizes.begin(), best_iter);
       if (!dry_run) {
         TRACE(IODI, 3,
-              "[IODI] (%u) Ignored %zu methods because they inflated too much",
+              "[IODI] (%d) Ignored %zu methods because they inflated too much",
               param_size, total_ignored);
       }
 
@@ -1876,7 +1876,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
           best_iter = end;
           if (!dry_run) {
             TRACE(IODI, 3,
-                  "[IODI] Opting out of IODI for %u arity methods entirely",
+                  "[IODI] Opting out of IODI for %d arity methods entirely",
                   param_size);
           }
         }
@@ -1910,7 +1910,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       // 2.2) Emit IODI programs (other debug programs will be emitted below)
       if (requires_iodi_programs) {
         TRACE(IODI, 2,
-              "[IODI] @%u(%u): Of %zu methods %zu were too big, %zu at biggest "
+              "[IODI] @%u(%d): Of %zu methods %zu were too big, %zu at biggest "
               "%zu",
               offset, param_size, sizes.size(), num_big, num_small_enough,
               insns_size);
@@ -1921,7 +1921,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
         auto& buckets = bucket_res.first;
         total_inflated_size = bucket_res.second;
         TRACE(IODI, 3,
-              "[IODI][Buckets] Bucketed %u arity methods into %zu buckets with "
+              "[IODI][Buckets] Bucketed %d arity methods into %zu buckets with "
               "total"
               " inflated size %zu:\n",
               param_size, buckets.size(), total_inflated_size);
@@ -2064,7 +2064,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
   }
 
   auto post_iodi_offset = offset;
-  TRACE(IODI, 2, "[IODI] IODI programs took up %d bytes\n",
+  TRACE(IODI, 2, "[IODI] IODI programs took up %u bytes\n",
         post_iodi_offset - initial_offset);
   // 3)
   auto size_offset_end = param_size_to_oset.end();
@@ -2131,7 +2131,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
                                     return to_remove.count(cie->method) > 0;
                                   }),
                    code_items.end());
-  TRACE(IODI, 2, "[IODI] Non-IODI programs took up %d bytes\n",
+  TRACE(IODI, 2, "[IODI] Non-IODI programs took up %u bytes\n",
         offset - post_iodi_offset);
   // Return how much data we've encoded
   return offset - initial_offset;

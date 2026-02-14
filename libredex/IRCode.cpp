@@ -872,7 +872,7 @@ void IRCode::split_and_insert_try_regions(
         valid_addr += insn_size;
       }
     }
-    not_reached_log("no valid address for %d", requested_addr);
+    not_reached_log("no valid address for %u", requested_addr);
   };
 
   constexpr uint32_t max = std::numeric_limits<uint16_t>::max();
