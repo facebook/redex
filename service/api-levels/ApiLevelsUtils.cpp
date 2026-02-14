@@ -308,7 +308,7 @@ void ApiLevelsUtils::check_and_update_release_to_framework(const Scope& scope) {
       if (cls->get_access() != pair.second.access_flags) {
         TRACE(API_UTILS, 5,
               "Excluding %s since it has different access flags "
-              "than the framework class: %d vs %d",
+              "than the framework class: %u vs %u",
               show_deobfuscated(cls).c_str(), cls->get_access(),
               pair.second.access_flags);
         to_remove.emplace(pair.first);

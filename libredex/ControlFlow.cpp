@@ -1396,7 +1396,7 @@ void ControlFlowGraph::sanity_check() const {
 
   auto used_regs = compute_registers_size();
   always_assert_log(used_regs <= m_registers_size,
-                    "used regs %d > registers size %d. %s", used_regs,
+                    "used regs %u > registers size %u. %s", used_regs,
                     m_registers_size, SHOW(*this));
 
   no_dangling_dex_positions();

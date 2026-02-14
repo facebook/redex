@@ -113,7 +113,7 @@ void breakup_by_package(SingleImpls& single_impls) {
       no_package_types++;
     }
   }
-  fprintf(stderr, "no package types %d\n", no_package_types);
+  fprintf(stderr, "no package types %u\n", no_package_types);
   fprintf(stderr, "break up by package, %zu packages:\n", by_package.size());
   std::sort(by_package.begin(),
             by_package.end(),
@@ -125,7 +125,7 @@ void breakup_by_package(SingleImpls& single_impls) {
             });
   for (const auto& package_info : by_package) {
     fprintf(stderr,
-            "%s (%d) => %d\n",
+            "%s (%d) => %u\n",
             package_info.package.c_str(),
             package_info.package_num,
             package_info.count);

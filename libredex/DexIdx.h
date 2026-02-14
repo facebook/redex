@@ -69,7 +69,7 @@ class DexIdx {
   const DexString* get_stringidx(uint32_t stridx) {
     always_assert_type_log(
         stridx < m_string_ids_size, RedexError::INVALID_DEX,
-        "String index is out of bound. index: %d, cache size: %d", stridx,
+        "String index is out of bound. index: %u, cache size: %u", stridx,
         m_string_ids_size);
 
     if (m_string_cache[stridx] == nullptr) {
@@ -90,7 +90,7 @@ class DexIdx {
     always_assert_type_log(
         typeidx < m_type_ids_size && typeidx != DEX_NO_INDEX,
         RedexError::INVALID_DEX,
-        "Type index is out of bound. index: %d, cache size: %d", typeidx,
+        "Type index is out of bound. index: %u, cache size: %u", typeidx,
         m_type_ids_size);
 
     if (m_type_cache[typeidx] == nullptr) {
@@ -110,7 +110,7 @@ class DexIdx {
   DexFieldRef* get_fieldidx(uint32_t fidx) {
     always_assert_type_log(
         fidx < m_field_ids_size, RedexError::INVALID_DEX,
-        "Field index is out of bound. index: %d, cache size: %d", fidx,
+        "Field index is out of bound. index: %u, cache size: %u", fidx,
         m_field_ids_size);
 
     if (m_field_cache[fidx] == nullptr) {
@@ -125,7 +125,7 @@ class DexIdx {
   DexMethodRef* get_methodidx(uint32_t midx) {
     always_assert_type_log(
         midx < m_method_ids_size, RedexError::INVALID_DEX,
-        "Method index is out of bound. index: %d, cache size: %d", midx,
+        "Method index is out of bound. index: %u, cache size: %u", midx,
         m_method_ids_size);
 
     if (m_method_cache[midx] == nullptr) {
@@ -140,7 +140,7 @@ class DexIdx {
   DexCallSite* get_callsiteidx(uint32_t csidx) {
     always_assert_type_log(
         csidx < m_callsite_ids_size, RedexError::INVALID_DEX,
-        "CallSite index is out of bound. index: %d, cache size: %d", csidx,
+        "CallSite index is out of bound. index: %u, cache size: %u", csidx,
         m_callsite_ids_size);
 
     if (m_callsite_cache[csidx] == nullptr) {
@@ -155,7 +155,7 @@ class DexIdx {
   DexMethodHandle* get_methodhandleidx(uint32_t mhidx) {
     always_assert_type_log(
         mhidx < m_methodhandle_ids_size, RedexError::INVALID_DEX,
-        "Methodhandle index is out of bound. index: %d, cache size: %d", mhidx,
+        "Methodhandle index is out of bound. index: %u, cache size: %u", mhidx,
         m_methodhandle_ids_size);
 
     if (m_methodhandle_cache[mhidx] == nullptr) {
@@ -170,7 +170,7 @@ class DexIdx {
   DexProto* get_protoidx(uint32_t pidx) {
     always_assert_type_log(
         pidx < m_proto_ids_size, RedexError::INVALID_DEX,
-        "Prototype index is out of bound. index: %d, cache size: %d", pidx,
+        "Prototype index is out of bound. index: %u, cache size: %u", pidx,
         m_proto_ids_size);
 
     if (m_proto_cache[pidx] == nullptr) {

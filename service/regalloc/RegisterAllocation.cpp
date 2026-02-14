@@ -40,7 +40,7 @@ Allocator::Stats allocate(
     return Stats();
   }
 
-  TRACE(REG, 5, "regs:%d code:\n%s", code->get_registers_size(), SHOW(code));
+  TRACE(REG, 5, "regs:%u code:\n%s", code->get_registers_size(), SHOW(code));
   try {
     live_range::renumber_registers(code, /* width_aware */ true);
     // The transformations below all require a CFG.
@@ -49,7 +49,7 @@ Allocator::Stats allocate(
     Allocator allocator(allocator_config);
     allocator.allocate(cfg, is_static);
     cfg.recompute_registers_size();
-    TRACE(REG, 5, "After alloc: regs:%d code:\n%s", cfg.get_registers_size(),
+    TRACE(REG, 5, "After alloc: regs:%u code:\n%s", cfg.get_registers_size(),
           ::SHOW(cfg));
     return allocator.get_stats();
   } catch (const std::exception& e) {

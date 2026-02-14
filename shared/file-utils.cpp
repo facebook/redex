@@ -45,7 +45,7 @@ void FileHandle::set_seek_reference(long offset) { seek_ref_ = offset; }
 void write_word(FileHandle& fh, uint32_t value) {
   auto bytes_written = fh.fwrite(&value, sizeof(value), 1) * sizeof(value);
   if (bytes_written != sizeof(value)) {
-    fprintf(stderr, "fwrite wrote %zd, not %zd\n", bytes_written,
+    fprintf(stderr, "fwrite wrote %zu, not %zu\n", bytes_written,
             sizeof(value));
   }
   CHECK(bytes_written == sizeof(value));
@@ -54,7 +54,7 @@ void write_word(FileHandle& fh, uint32_t value) {
 void write_short(FileHandle& fh, uint16_t value) {
   auto bytes_written = fh.fwrite(&value, sizeof(value), 1) * sizeof(value);
   if (bytes_written != sizeof(value)) {
-    fprintf(stderr, "fwrite wrote %zd, not %zd\n", bytes_written,
+    fprintf(stderr, "fwrite wrote %zu, not %zu\n", bytes_written,
             sizeof(value));
   }
   CHECK(bytes_written == sizeof(value));

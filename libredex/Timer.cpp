@@ -12,7 +12,7 @@
 
 #include "Trace.h"
 
-unsigned Timer::s_indent = 0;
+int Timer::s_indent = 0;
 AccumulatingTimer::times_impl_t* AccumulatingTimer::s_times{nullptr};
 
 std::mutex& Timer::get_s_lock() {

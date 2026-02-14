@@ -538,7 +538,7 @@ DexMethodRef* create_dispatch_method_ref(
   auto method_type = possible_type(first_method);
   if (method_type != dispatch::STATIC && method_type != dispatch::VIRTUAL &&
       method_type != dispatch::DIRECT) {
-    LOG_AND_RETURN("Unsuported method type %u(%x) for %s\n", method_type,
+    LOG_AND_RETURN("Unsuported method type %d(%x) for %s\n", method_type,
                    first_method->get_access(), SHOW(first_method));
   }
 
@@ -547,7 +547,7 @@ DexMethodRef* create_dispatch_method_ref(
     auto cur_meth_type = possible_type(meth);
     if (cur_meth_type != method_type) {
       LOG_AND_RETURN(
-          "Different method type: %u(%x) for %s v.s. %u(%x) for %s\n",
+          "Different method type: %d(%x) for %s v.s. %d(%x) for %s\n",
           method_type, first_method->get_access(), SHOW(first_method),
           cur_meth_type, meth->get_access(), SHOW(meth));
     }

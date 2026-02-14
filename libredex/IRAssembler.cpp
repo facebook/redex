@@ -368,7 +368,7 @@ std::unique_ptr<DexDebugInstruction> debug_info_from_s_expr(const s_expr& e) {
       .must_match(e, "Expecting at least one opcode for .dbg instruction");
   auto check_arg_num = [&](const s_expr& tail, uint32_t n) {
     always_assert_log(tail.size() == n,
-                      "Expecting %d arguments for opcode %s",
+                      "Expecting %u arguments for opcode %s",
                       n,
                       opcode.c_str());
   };
@@ -424,7 +424,7 @@ std::unique_ptr<DexDebugInstruction> debug_info_from_s_expr(const s_expr& e) {
     uint32_t special_opcode = integer_from_s_expr<uint32_t>(tail[0]);
     always_assert_log(special_opcode >= DBG_FIRST_SPECIAL &&
                           special_opcode <= DBG_LAST_SPECIAL,
-                      "Special opcode value (%d) is out of range.",
+                      "Special opcode value (%u) is out of range.",
                       special_opcode);
     return std::make_unique<DexDebugInstruction>(special_opcode);
   }
@@ -691,7 +691,7 @@ s_expr create_dbg_expr(const MethodItemEntry* mie) {
   }
   default:
     always_assert_log(DBG_FIRST_SPECIAL <= op && op <= DBG_LAST_SPECIAL,
-                      "Special opcode (%d) is out of range", op);
+                      "Special opcode (%u) is out of range", op);
     result.emplace_back("EMIT");
     result.emplace_back(std::to_string(dbg->opcode()));
     break;
