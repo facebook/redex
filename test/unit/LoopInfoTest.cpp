@@ -59,10 +59,7 @@ TEST_F(LoopInfoTest, visit_depth_first) {
   }
 
   std::ostringstream check;
-  check << 1 << "\n"
-        << 2 << "\n"
-        << 34567 << "\n"
-        << 8 << "\n";
+  check << 1 << "\n" << 2 << "\n" << 34567 << "\n" << 8 << "\n";
   EXPECT_EQ(s.str(), check.str());
 }
 

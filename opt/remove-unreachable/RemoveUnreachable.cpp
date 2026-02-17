@@ -320,7 +320,8 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     auto uninstantiables_stats = reachability::sweep_uncallable_virtual_methods(
         stores, reachable_aspects);
     uninstantiables_stats.report(pm);
-    {}
+    {
+    }
   }
   if (should_sweep_annotation_elements()) {
     pm.incr_metric(

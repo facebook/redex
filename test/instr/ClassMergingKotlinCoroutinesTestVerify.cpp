@@ -23,12 +23,13 @@ TEST_F(PostVerify, SinkCommonCtorInvocation) {
 
   auto* cls_coroutine_2 =
       is_kotlin_2_2_or_later
-          ? find_class_named(
-                classes,
-                "Lkotlin/sequences/SequencesKt___SequencesKt$runningFoldIndexed$1;")
+          ? find_class_named(classes,
+                             "Lkotlin/sequences/"
+                             "SequencesKt___SequencesKt$runningFoldIndexed$1;")
           : find_class_named(
                 classes,
-                "Lkotlin/sequences/SequencesKt___SequencesKt$runningReduceIndexed$1;");
+                "Lkotlin/sequences/"
+                "SequencesKt___SequencesKt$runningReduceIndexed$1;");
 
   verify_class_merged(cls_coroutine_1);
   verify_class_merged(cls_coroutine_2);

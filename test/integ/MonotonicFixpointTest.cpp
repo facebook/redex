@@ -116,8 +116,7 @@ TEST_F(MonotonicFixpointTest, livenessAnalysis) {
           code->build_cfg();
           cfg::ControlFlowGraph& cfg = code->cfg();
           cfg.calculate_exit_block();
-          std::cout << "CFG of function_1:" << "\n"
-                    << SHOW(cfg) << "\n";
+          std::cout << "CFG of function_1:" << "\n" << SHOW(cfg) << "\n";
           ASSERT_EQ(cfg.exit_block()->id(), 2);
           IRFixpointIterator fixpoint_iterator(cfg);
           fixpoint_iterator.run(LivenessDomain());

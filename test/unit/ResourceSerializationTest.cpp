@@ -179,8 +179,7 @@ struct ParsedAaptOutput {
     }
     std::cerr << "\n"
               << "Dumping parsed package: " << package_name << "\n"
-              << "IDs (" << id_fully_qualified_names.size()
-              << "):" << "\n";
+              << "IDs (" << id_fully_qualified_names.size() << "):" << "\n";
     for (auto& pair : id_fully_qualified_names) {
       std::cerr << "  0x" << std::hex << pair.first << std::dec << " ("
                 << pair.second << ")" << "\n";

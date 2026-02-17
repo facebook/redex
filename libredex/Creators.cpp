@@ -677,7 +677,7 @@ MethodCreator::MethodCreator(DexMethodRef* ref,
                     ref->get_proto(),
                     access,
                     std::move(anno),
-                    with_debug_item){};
+                    with_debug_item) {};
 
 MethodCreator::MethodCreator(DexType* cls,
                              const DexString* name,
