@@ -88,7 +88,6 @@ function install_from_apt {
         ca-certificates
         cmake
         g++
-        libiberty-dev$BITNESS_SUFFIX
         libjemalloc-dev$BITNESS_SUFFIX
         libjsoncpp-dev$BITNESS_SUFFIX
         liblz4-dev$BITNESS_SUFFIX
