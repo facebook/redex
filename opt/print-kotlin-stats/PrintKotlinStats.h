@@ -45,6 +45,11 @@ class PrintKotlinStats : public Pass {
     size_t kotlin_class{0};
     size_t kotlin_anonymous_class{0};
     size_t kotlin_companion_class{0};
+    size_t kotlin_companion_empty{0};
+    size_t kotlin_companion_all_static{0};
+    size_t kotlin_companion_has_virtual{0};
+    size_t kotlin_companion_virtual_uses_this{0};
+    size_t kotlin_companion_with_interfaces{0};
     size_t di_generated_class{0};
     size_t kotlin_default_arg_method{0};
     // Methods that end with $default but are not Kotlin default arg methods.
@@ -85,6 +90,12 @@ class PrintKotlinStats : public Pass {
       kotlin_class += that.kotlin_class;
       kotlin_anonymous_class += that.kotlin_anonymous_class;
       kotlin_companion_class += that.kotlin_companion_class;
+      kotlin_companion_empty += that.kotlin_companion_empty;
+      kotlin_companion_all_static += that.kotlin_companion_all_static;
+      kotlin_companion_has_virtual += that.kotlin_companion_has_virtual;
+      kotlin_companion_virtual_uses_this +=
+          that.kotlin_companion_virtual_uses_this;
+      kotlin_companion_with_interfaces += that.kotlin_companion_with_interfaces;
       di_generated_class += that.di_generated_class;
       kotlin_default_arg_method += that.kotlin_default_arg_method;
       kotlin_homonym_default_arg_method +=

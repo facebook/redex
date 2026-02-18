@@ -103,6 +103,32 @@ bool is_hot_default_arg_by_call_count(
                                      kHotDefaultArgCallCountThreshold);
 }
 
+// Check if a virtual method references its 'this' parameter in any
+// instruction source register.
+bool virtual_method_uses_this(const DexMethod* method) {
+  const auto* code = method->get_code();
+  if (code == nullptr || !code->cfg_built()) {
+    return false;
+  }
+  const auto& cfg = code->cfg();
+  auto first = cfg.entry_block()->get_first_insn();
+  if (first == cfg.entry_block()->end()) {
+    return false;
+  }
+  if (first->insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+    return false;
+  }
+  auto this_reg = first->insn->dest();
+  for (const auto& mie : cfg::ConstInstructionIterable(cfg)) {
+    for (unsigned i = 0; i < mie.insn->srcs_size(); i++) {
+      if (this_reg == mie.insn->src(i)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 } // namespace
 
 // Setup types/strings needed for the pass
@@ -270,6 +296,40 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
     }
     if (boost::algorithm::ends_with(cls->get_name()->str(), "$Companion;")) {
       stats.kotlin_companion_class++;
+
+      if (!cls->get_interfaces()->empty()) {
+        stats.kotlin_companion_with_interfaces++;
+      }
+
+      bool has_non_ctor_methods = false;
+      bool has_virtual_methods = false;
+      bool has_virtual_using_this = false;
+
+      for (const auto* method : cls->get_vmethods()) {
+        has_virtual_methods = true;
+        has_non_ctor_methods = true;
+        if (!has_virtual_using_this && virtual_method_uses_this(method)) {
+          has_virtual_using_this = true;
+        }
+      }
+
+      for (const auto* method : cls->get_dmethods()) {
+        if (!method::is_init(method) && !method::is_clinit(method)) {
+          has_non_ctor_methods = true;
+        }
+      }
+
+      if (!has_non_ctor_methods) {
+        stats.kotlin_companion_empty++;
+      }
+      if (has_virtual_methods) {
+        stats.kotlin_companion_has_virtual++;
+        if (has_virtual_using_this) {
+          stats.kotlin_companion_virtual_uses_this++;
+        }
+      } else {
+        stats.kotlin_companion_all_static++;
+      }
     }
     if (is_enum(cls)) {
       stats.kotlin_enum_class++;
@@ -363,6 +423,13 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_class", kotlin_class);
   mgr.incr_metric("Kotlin_anonymous_classes", kotlin_anonymous_class);
   mgr.incr_metric("kotlin_companion_class", kotlin_companion_class);
+  mgr.incr_metric("kotlin_companion_empty", kotlin_companion_empty);
+  mgr.incr_metric("kotlin_companion_all_static", kotlin_companion_all_static);
+  mgr.incr_metric("kotlin_companion_has_virtual", kotlin_companion_has_virtual);
+  mgr.incr_metric("kotlin_companion_virtual_uses_this",
+                  kotlin_companion_virtual_uses_this);
+  mgr.incr_metric("kotlin_companion_with_interfaces",
+                  kotlin_companion_with_interfaces);
   mgr.incr_metric("di_generated_class", di_generated_class);
   mgr.incr_metric("kotlin_default_arg_method", kotlin_default_arg_method);
   mgr.incr_metric("kotlin_homonym_default_arg_method",
@@ -411,6 +478,17 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
         kotlin_anonymous_class);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_companion_class = %zu",
         kotlin_companion_class);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_companion_empty = %zu",
+        kotlin_companion_empty);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_companion_all_static = %zu",
+        kotlin_companion_all_static);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_companion_has_virtual = %zu",
+        kotlin_companion_has_virtual);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_companion_virtual_uses_this = %zu",
+        kotlin_companion_virtual_uses_this);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_companion_with_interfaces = %zu",
+        kotlin_companion_with_interfaces);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: di_generated_class = %zu",
         di_generated_class);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_default_arg_method = %zu",
