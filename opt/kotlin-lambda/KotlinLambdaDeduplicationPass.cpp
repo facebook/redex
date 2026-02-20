@@ -135,6 +135,9 @@ DexClass* find_canonical_class(
 struct SingletonDeduplicationResult {
   // Map from original INSTANCE field to the canonical's renamed field.
   std::unordered_map<DexFieldRef*, DexFieldRef*> field_redirect_map;
+  // Map from non-canonical lambda type to the canonical's type.
+  // Used to redirect type references (invoke-virtual, check-cast, etc.).
+  std::unordered_map<const DexType*, DexType*> type_redirect_map;
   size_t lambdas_deduplicated = 0;
   size_t duplicate_group_count = 0;
 };
@@ -186,6 +189,7 @@ SingletonDeduplicationResult process_singleton_duplicates(
       DexField* instance_field = get_singleton_field(lambda_cls, instance_name);
       always_assert(instance_field != nullptr);
       result.field_redirect_map[instance_field] = canonical_instance;
+      result.type_redirect_map[lambda_cls->get_type()] = canonical->get_type();
       result.lambdas_deduplicated++;
     }
 
@@ -334,18 +338,30 @@ void KotlinLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
       m_min_duplicate_group_size);
 
   // Step 4: Process duplicate groups.
-  const auto singleton_result = process_singleton_duplicates(
+  auto singleton_result = process_singleton_duplicates(
       singleton_tracker, class_to_dex_idx, m_min_duplicate_group_size);
-  const auto non_singleton_result = process_non_singleton_duplicates(
+  auto non_singleton_result = process_non_singleton_duplicates(
       non_singleton_tracker, class_to_dex_idx, m_min_duplicate_group_size);
 
   // Step 5: Rewrite all usages.
+  // - For both singleton and non-singleton lambdas: redirect all type
+  //   references (new-instance, check-cast, etc.) and method references
+  //   (invoke-virtual, invoke-interface, etc.) on non-canonical lambda types
+  //   to the canonical. This is necessary because IntraDexClassMergingPass
+  //   runs after this pass and may merge the canonical and non-canonical
+  //   lambdas into different shape types. Any unrewritten reference to a
+  //   non-canonical type would then point to the wrong shape.
   // - For singleton lambdas: redirect sget on INSTANCE fields.
-  // - For non-singleton lambdas: redirect new-instance and invoke-direct
-  //   <init>.
+  // - For non-singleton lambdas: additionally redirect invoke-direct <init>.
   // We count singleton and non-singleton rewrites separately. For non-singleton
   // lambdas, each usage consists of new-instance + invoke-direct, so we only
   // count new-instance rewrites to get the usage count.
+
+  // Build a combined type redirect map covering both singleton and
+  // non-singleton non-canonical lambda types.
+  auto type_redirect_map = std::move(singleton_result.type_redirect_map);
+  type_redirect_map.merge(non_singleton_result.type_redirect_map);
+
   struct RewriteCounts {
     size_t singleton = 0;
     size_t non_singleton = 0;
@@ -358,13 +374,20 @@ void KotlinLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
   const auto rewrite_counts = walk::parallel::methods<RewriteCounts>(
       scope,
       [&field_redirect_map = std::as_const(singleton_result.field_redirect_map),
-       &type_redirect_map =
-           std::as_const(non_singleton_result.type_redirect_map),
+       &type_redirect_map = std::as_const(type_redirect_map),
        &ctor_redirect_map = std::as_const(
            non_singleton_result.ctor_redirect_map)](DexMethod* meth) {
         RewriteCounts counts;
         auto* code = meth->get_code();
         if (code == nullptr) {
+          return counts;
+        }
+
+        // Skip methods belonging to non-canonical lambda classes. Their code
+        // is dead after dedup (all usage sites have been redirected), and
+        // rewriting self-referencing method calls (e.g., the bridge invoke
+        // calling this.invoke()) would create type inconsistencies.
+        if (type_redirect_map.contains(meth->get_class())) {
           return counts;
         }
 
@@ -383,21 +406,42 @@ void KotlinLambdaDeduplicationPass::run_pass(DexStoresVector& stores,
               insn->set_field(it->second);
               counts.singleton++;
             }
-          } else if (opcode == OPCODE_NEW_INSTANCE) {
-            // Redirect new-instance (non-singleton lambdas).
+            continue;
+          }
+
+          // Redirect type operands: new-instance, check-cast, instance-of,
+          // const-class, new-array (non-singleton lambdas).
+          if (insn->has_type()) {
             const auto* type = insn->get_type();
             if (const auto it = type_redirect_map.find(type);
                 it != type_redirect_map.end()) {
               insn->set_type(it->second);
-              counts.non_singleton++;
+              if (opcode == OPCODE_NEW_INSTANCE) {
+                counts.non_singleton++;
+              }
             }
-          } else if (opcode == OPCODE_INVOKE_DIRECT) {
-            // Redirect invoke-direct <init> (non-singleton lambdas).
-            // Don't count this - new-instance already counted the usage.
+          }
+
+          // Redirect method ref operands.
+          if (insn->has_method()) {
             auto* method_ref = insn->get_method();
-            if (const auto it = ctor_redirect_map.find(method_ref);
-                it != ctor_redirect_map.end()) {
-              insn->set_method(it->second);
+            // For invoke-direct, first try the constructor redirect map.
+            if (opcode == OPCODE_INVOKE_DIRECT) {
+              if (const auto it = ctor_redirect_map.find(method_ref);
+                  it != ctor_redirect_map.end()) {
+                insn->set_method(it->second);
+                continue;
+              }
+            }
+            // Redirect by declaring type (covers invoke-virtual,
+            // invoke-interface, invoke-direct on private methods, etc.).
+            const auto* declaring_type = method_ref->get_class();
+            if (const auto it = type_redirect_map.find(declaring_type);
+                it != type_redirect_map.end()) {
+              auto* redirected = DexMethod::get_method(
+                  it->second, method_ref->get_name(), method_ref->get_proto());
+              always_assert(redirected != nullptr);
+              insn->set_method(redirected);
             }
           }
         }

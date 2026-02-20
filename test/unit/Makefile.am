@@ -107,6 +107,7 @@ check_PROGRAMS = \
     ir_typechecker_test \
     java_parser_util_test \
     kotlin_lambda_analyzer_test \
+    kotlin_lambda_dedup_pass_test \
     literals_test \
     live_range_test \
     local_dce_test \
@@ -356,6 +357,9 @@ java_parser_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 kotlin_lambda_analyzer_test_SOURCES = KotlinLambdaAnalyzerTest.cpp
 kotlin_lambda_analyzer_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+kotlin_lambda_dedup_pass_test_SOURCES = KotlinLambdaDeduplicationPassTest.cpp
+kotlin_lambda_dedup_pass_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 literals_test_SOURCES = LiteralsTest.cpp
 
