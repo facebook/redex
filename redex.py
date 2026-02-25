@@ -7,6 +7,7 @@
 # pyre-strict
 
 import argparse
+import enum
 import errno
 import glob
 import json
@@ -435,22 +436,35 @@ def run_redex_binary(
             raise err
 
 
+class PageAlignment(enum.Enum):
+    NONE = ()
+    PAGE_4KB = ("-p",)
+    PAGE_16KB = ("-P", "16")
+
+    @classmethod
+    def from_args(cls, page_align: bool, page_align_16kb: bool) -> "PageAlignment":
+        if page_align_16kb:
+            return cls.PAGE_16KB
+        if page_align:
+            return cls.PAGE_4KB
+        return cls.NONE
+
+
 def zipalign(
     unaligned_apk_path: str,
     output_apk_path: str,
     ignore_zipalign: bool,
-    page_align: bool,
+    page_align: PageAlignment = PageAlignment.NONE,
 ) -> None:
     # Align zip and optionally perform good compression.
     try:
         zipalign = [
             find_zipalign(),
+            *page_align.value,
             "4",
             unaligned_apk_path,
             output_apk_path,
         ]
-        if page_align:
-            zipalign.insert(1, "-p")
 
         p = subprocess.Popen(zipalign, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         out, _ = p.communicate()
@@ -550,7 +564,7 @@ def align_and_sign_output_apk(
     signing_config: typing.Optional[SigningConfig],
     ignore_zipalign: bool,
     ignore_apksigner: bool,
-    page_align: bool,
+    page_align: PageAlignment = PageAlignment.NONE,
 ) -> None:
     if isfile(output_apk_path):
         os.remove(output_apk_path)
@@ -769,6 +783,11 @@ Given an APK, produce a better APK!
         "--page-align-libs",
         action="store_true",
         help="Preserve 4k page alignment for uncompressed libs",
+    )
+    parser.add_argument(
+        "--page-align-libs-16kb",
+        action="store_true",
+        help="Use 16KB page alignment for uncompressed libs (required for Android 15+ devices)",
     )
 
     parser.add_argument(
@@ -1635,6 +1654,10 @@ def finalize_redex(state: State) -> None:
             _assert_val(state.zip_manager).__exit__(*sys.exc_info())
 
         with BuckPartScope("Redex::AlignAndSign", "Aligning and signing"):
+            page_align = PageAlignment.from_args(
+                state.args.page_align_libs,
+                state.args.page_align_libs_16kb,
+            )
             align_and_sign_output_apk(
                 _assert_val(state.zip_manager).output_apk,
                 state.args.out,
@@ -1645,7 +1668,7 @@ def finalize_redex(state: State) -> None:
                 extract_signing_args(state.args, fail_on_error=False),
                 state.args.ignore_zipalign,
                 state.args.ignore_apksigner,
-                state.args.page_align_libs,
+                page_align,
             )
 
     with BuckPartScope("Redex::OutputDir", "Arranging output dir"):
