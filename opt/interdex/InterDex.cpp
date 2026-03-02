@@ -169,8 +169,6 @@ void print_stats(DexesStructure* dexes_structure) {
         dexes_structure->get_num_coldstart_dexes());
   TRACE(IDEX, 2, "\t extendex dex count: %zu",
         dexes_structure->get_num_extended_dexes());
-  TRACE(IDEX, 2, "\t scroll dex count: %zu",
-        dexes_structure->get_num_scroll_dexes());
 
   TRACE(IDEX, 2, "Global stats:");
   TRACE(IDEX, 2, "\t %zu classes", dexes_structure->get_num_classes());
