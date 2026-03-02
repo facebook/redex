@@ -116,10 +116,6 @@ class InterDex {
     return m_emitting_state.dexes_structure.get_num_coldstart_dexes();
   }
 
-  size_t get_num_scroll_dexes() const {
-    return m_emitting_state.dexes_structure.get_num_scroll_dexes();
-  }
-
   const cross_dex_ref_minimizer::CrossDexRefMinimizerStats&
   get_cross_dex_ref_minimizer_stats() const {
     return m_cross_dex_ref_minimizer.stats();

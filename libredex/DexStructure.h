@@ -309,8 +309,6 @@ class DexesStructure {
     return m_info.num_extended_set_dexes;
   }
 
-  size_t get_num_scroll_dexes() const { return m_info.num_scroll_dexes; }
-
   size_t get_num_dexes() const { return m_info.num_dexes; }
 
   size_t get_num_mixedmode_dexes() const { return m_info.num_mixed_mode_dexes; }
@@ -427,9 +425,6 @@ class DexesStructure {
 
     // Number of coldstart extended set dexes emitted.
     size_t num_extended_set_dexes{0};
-
-    // Number of dexes containing scroll classes.
-    size_t num_scroll_dexes{0};
 
     // Number of mixed mode dexes;
     size_t num_mixed_mode_dexes{0};

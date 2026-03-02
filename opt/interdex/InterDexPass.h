@@ -22,7 +22,6 @@ constexpr const char* INTERDEX_PASS_NAME = "InterDexPass";
 constexpr const char* INTERDEX_PLUGIN = "InterDexPlugin";
 constexpr const char* METRIC_COLD_START_SET_DEX_COUNT =
     "cold_start_set_dex_count";
-constexpr const char* METRIC_SCROLL_SET_DEX_COUNT = "scroll_set_dex_count";
 
 constexpr const char* METRIC_REORDER_CLASSES = "num_reorder_classes";
 constexpr const char* METRIC_REORDER_RESETS = "num_reorder_resets";

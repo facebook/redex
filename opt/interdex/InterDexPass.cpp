@@ -237,7 +237,6 @@ void InterDexPass::run_pass(
   }
   mgr.set_metric(METRIC_COLD_START_SET_DEX_COUNT,
                  interdex.get_num_cold_start_set_dexes());
-  mgr.set_metric(METRIC_SCROLL_SET_DEX_COUNT, interdex.get_num_scroll_dexes());
 
   mgr.set_metric("transitive_added", interdex.get_transitive_closure_added());
   mgr.set_metric("transitive_moved", interdex.get_transitive_closure_moved());
