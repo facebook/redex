@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <ranges>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -24,6 +23,7 @@
 #include "IRCode.h"
 #include "SingletonIterable.h"
 #include "SourceBlocksUtils.h"
+#include "StlUtil.h"
 
 /**
  * A Control Flow Graph is a directed graph of Basic Blocks.
@@ -506,7 +506,7 @@ class ControlFlowGraph {
   // elements.
   std::vector<Block*> blocks() const;
 
-  auto blocks_view() const { return std::views::values(m_blocks); }
+  auto blocks_view() const { return std23::map_values(m_blocks); }
 
   // Return vector of blocks in reverse post order (RPO). If there is a path
   // from Block A to Block B, then A appears before B in this vector.
