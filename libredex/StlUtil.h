@@ -13,6 +13,8 @@
 #include <type_traits>
 #include <vector>
 
+#include <boost/range/adaptor/map.hpp>
+
 namespace std20 {
 
 // Functionality that will be in C++20 STL.
@@ -68,6 +70,14 @@ namespace std23 {
 template <class Enum>
 constexpr std::underlying_type_t<Enum> to_underlying(Enum e) noexcept {
   return static_cast<std::underlying_type_t<Enum>>(e);
+}
+
+// std::views::values has const-correctness issues in C++20 with some
+// toolchains. Use boost::adaptors::map_values as a workaround until C++23
+// ranges fixes are available.
+template <typename Map>
+auto map_values(const Map& m) {
+  return m | boost::adaptors::map_values;
 }
 
 } // namespace std23

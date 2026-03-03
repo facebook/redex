@@ -22,6 +22,7 @@
 #include "IRCode.h"
 #include "SingletonIterable.h"
 #include "SourceBlocksUtils.h"
+#include "StlUtil.h"
 
 /**
  * A Control Flow Graph is a directed graph of Basic Blocks.
@@ -501,6 +502,8 @@ class ControlFlowGraph {
   // stored in std::map will not invalidate the iterators referencing other
   // elements.
   std::vector<Block*> blocks() const;
+
+  auto blocks_view() const { return std23::map_values(m_blocks); }
 
   // Return vector of blocks in reverse post order (RPO). If there is a path
   // from Block A to Block B, then A appears before B in this vector.
