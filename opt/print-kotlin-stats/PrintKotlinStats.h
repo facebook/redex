@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "AnalysisUsage.h"
 #include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
@@ -118,6 +119,12 @@ class PrintKotlinStats : public Pass {
   };
 
   PrintKotlinStats() : Pass("PrintKotlinStatsPass") {}
+
+  // This pass is read-only (gathers statistics without modifying code),
+  // so preserve all existing analysis results.
+  void set_analysis_usage(AnalysisUsage& au) const override {
+    au.set_preserve_all();
+  }
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
