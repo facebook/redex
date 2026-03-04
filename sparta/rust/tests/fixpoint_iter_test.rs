@@ -603,7 +603,7 @@ mod numerical {
         fn join_with(&mut self, rhs: Self) {
             match (self, rhs) {
                 (Self::Top, _) => {}
-                (lhs @ _, Self::Top) => {
+                (lhs, Self::Top) => {
                     *lhs = Self::Top;
                 }
                 (Self::Value(lset), Self::Value(rset)) => {
