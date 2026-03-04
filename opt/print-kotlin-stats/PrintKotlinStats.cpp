@@ -135,6 +135,9 @@ bool virtual_method_uses_this(const DexMethod* method) {
 void PrintKotlinStats::setup() {
   m_kotlin_null_assertions =
       kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
+  m_kotlin_areequal = DexMethod::get_method(
+      "Lkotlin/jvm/internal/Intrinsics;.areEqual:"
+      "(Ljava/lang/Object;Ljava/lang/Object;)Z");
   m_kotlin_lambdas_base = DexType::get_type(KOTLIN_LAMBDA);
   m_kotlin_coroutin_continuation_base = DexType::get_type(CONTINUATION_IMPL);
   m_di_base = DexType::get_type(DI_BASE);
@@ -370,6 +373,9 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
       if (m_kotlin_null_assertions.count(called_method) != 0u) {
         stats.kotlin_null_check_insns++;
       }
+      if (m_kotlin_areequal != nullptr && called_method == m_kotlin_areequal) {
+        stats.kotlin_areequal_insns++;
+      }
     } break;
     case OPCODE_AND_INT_LIT: {
       if (is_kotlin_default_arg_method(*method)) {
@@ -389,6 +395,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
 
 void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_null_check_insns", kotlin_null_check_insns);
+  mgr.incr_metric("kotlin_areequal_insns", kotlin_areequal_insns);
   mgr.incr_metric("kotlin_default_arg_check_insns",
                   kotlin_default_arg_check_insns);
   mgr.incr_metric("kotlin_default_arg_1_param", kotlin_default_arg_1_param);
@@ -445,6 +452,8 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
 
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_insns = %zu",
         kotlin_null_check_insns);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_areequal_insns = %zu",
+        kotlin_areequal_insns);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_default_arg_1_param = %zu",
         kotlin_hot_default_arg_1_param);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_default_arg_2_params = %zu",
