@@ -222,3 +222,21 @@ TEST_F(PostVerify, CompanionWithClinit) {
   // After opt, the Companion sfield is removed.
   EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
 }
+
+// Named object declaration — must not be touched by the pass
+TEST_F(PostVerify, NamedObjectDeclaration) {
+  auto* cls = find_class_named(classes, "LNamedObjectDeclaration;");
+  EXPECT_NE(nullptr, cls);
+  auto* field = find_sfield_named(*cls, "INSTANCE");
+  EXPECT_NE(nullptr, field);
+}
+
+// Nested named object declaration — must not be touched by the pass
+TEST_F(PostVerify, NestedObjectDeclaration) {
+  auto* outer_cls = find_class_named(classes, "LOuterWithObject;");
+  auto* nested_cls = find_class_named(classes, "LOuterWithObject$NestedObj;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, nested_cls);
+  auto* field = find_sfield_named(*nested_cls, "INSTANCE");
+  EXPECT_NE(nullptr, field);
+}

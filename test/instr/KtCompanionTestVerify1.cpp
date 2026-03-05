@@ -109,3 +109,21 @@ TEST_F(PostVerify, CompanionWithClinit) {
   EXPECT_EQ(nullptr, companion_cls);
   EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
 }
+
+// Named object declaration — not touched by KotlinCompanionOptimizationPass.
+// With the aggressive pipeline, the class survives (holds live static fields)
+// but INSTANCE may be removed after method inlining.
+TEST_F(PostVerify, NamedObjectDeclaration) {
+  auto* cls = find_class_named(classes, "LNamedObjectDeclaration;");
+  EXPECT_NE(nullptr, cls);
+}
+
+// Nested named object declaration — not touched by
+// KotlinCompanionOptimizationPass. With the aggressive pipeline, the class
+// survives (holds live static fields).
+TEST_F(PostVerify, NestedObjectDeclaration) {
+  auto* outer_cls = find_class_named(classes, "LOuterWithObject;");
+  auto* nested_cls = find_class_named(classes, "LOuterWithObject$NestedObj;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, nested_cls);
+}
