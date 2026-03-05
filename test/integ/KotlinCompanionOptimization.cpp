@@ -11,11 +11,10 @@
 #include "KotlinCompanionOptimizationPass.h"
 #include "LocalDcePass.h"
 #include "RedexTest.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
 
-class KotlinLambdaOptTest : public RedexIntegrationTest {
+class KotlinCompanionOptimizationTest : public RedexIntegrationTest {
  protected:
   void dump_cls(DexClass* cls) {
     TRACE(KOTLIN_OBJ_INLINE, 5, "Class %s", SHOW(cls));
@@ -38,7 +37,18 @@ class KotlinLambdaOptTest : public RedexIntegrationTest {
 };
 namespace {
 
-TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
+// Test basic companion optimization: companion object methods are relocated
+// to the outer class as static methods and virtual calls are rewritten to
+// static calls.
+//
+// Input (KotlinCompanionOptimization.kt):
+//   CompanionClass has a companion with getSomeStr (property accessor)
+//   AnotherCompanionClass has a named companion "Test" with @JvmStatic
+//     getSomeOtherStr and funX
+//
+// After optimization, Foo.main() should contain only static calls into
+// the outer classes (no virtual calls through the companion instance).
+TEST_F(KotlinCompanionOptimizationTest, CompanionMethodsRelocatedToStatic) {
   auto scope = build_class_scope(stores);
   set_root_method("Lcom/facebook/redextest/objtest/Foo;.main:()V");
   auto* main_method =
@@ -75,21 +85,31 @@ TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
       ASSERT_EQ(outer_classes.count(cls), 1);
     }
   }
-  // invoke-static {v2},
-  // Lcom/facebook/redextest/objtest/CompanionClass;.getSomeStr invoke-static
-  // {v2},
-  // Lcom/facebook/redextest/objtest/AnotherCompanionClass;.getSomeOtherStr
-  //  invoke-static {v2},
-  //  Lcom/facebook/redextest/objtest/AnotherCompanionClass;.funX
+  // After optimization, there should be exactly 3 static calls in Foo.main():
+  //   1. CompanionClass.getSomeStr (property accessor for someStr)
+  //   2. AnotherCompanionClass.getSomeOtherStr (property accessor)
+  //   3. AnotherCompanionClass.funX
   ASSERT_EQ(static_calls, 3);
 }
 
-TEST_F(KotlinLambdaOptTest, MethodCollideTest) {
+// Test method name collision: when the outer class and its companion both
+// define a method with the same name (get()), the pass must rename the
+// relocated companion method to avoid a conflict.
+//
+// Input (KotlinCompanionOptimization.kt — CompanionWithMethodCollision):
+//   CompanionWithMethodCollision.get() returns "test1"  (outer class method)
+//   CompanionWithMethodCollision.Companion.get() returns "test2"  (companion)
+//
+// After optimization, the companion's get() is relocated to the outer class
+// as a static method renamed to "get$CompanionWithMethodCollision$Companion"
+// to avoid colliding with the outer class's existing get().
+TEST_F(KotlinCompanionOptimizationTest, MethodNameCollisionRenaming) {
   auto scope = build_class_scope(stores);
-  set_root_method("Lcom/facebook/redextest/objtestjava/FooJava;.main:()V");
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/CollisionTestCaller;.main:()V");
   auto* main_method =
       DexMethod::get_method(
-          "Lcom/facebook/redextest/objtestjava/FooJava;.main:()V")
+          "Lcom/facebook/redextest/objtest/CollisionTestCaller;.main:()V")
           ->as_def();
   auto* codex = main_method->get_code();
   ASSERT_NE(nullptr, codex);
@@ -99,9 +119,9 @@ TEST_F(KotlinLambdaOptTest, MethodCollideTest) {
   std::vector<Pass*> passes{klr.get(), dce.get()};
   run_passes(passes);
   DexType* main =
-      DexType::get_type("Lcom/facebook/redextest/objtestjava/FooJava;");
+      DexType::get_type("Lcom/facebook/redextest/objtest/CollisionTestCaller;");
   DexType* outer1 = DexType::get_type(
-      "Lcom/facebook/redextest/objtestjava/KotlinCompanionObj;");
+      "Lcom/facebook/redextest/objtest/CompanionWithMethodCollision;");
   dump_cls(type_class(main));
   dump_cls(type_class(outer1));
   auto iterable = InstructionIterable(codex);
@@ -116,12 +136,15 @@ TEST_F(KotlinLambdaOptTest, MethodCollideTest) {
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
       static_calls++;
       DexType* cls = insn->get_method()->get_class();
-      // Name get() is renamed
+      // The relocated method is renamed to avoid colliding with the outer
+      // class's own get() method.
       ASSERT_EQ(insn->get_method()->get_name()->str(),
-                "get$KotlinCompanionObj$Companion");
+                "get$CompanionWithMethodCollision$Companion");
       ASSERT_EQ(outer_classes.count(cls), 1);
     }
   }
+  // Exactly one static call: the renamed companion get().
+  // The outer class's own get() is called via invoke-virtual, not static.
   ASSERT_EQ(static_calls, 1);
 }
 } // namespace
