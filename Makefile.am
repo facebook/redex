@@ -443,7 +443,7 @@ libopt_la_SOURCES = \
 	opt/interdex/InterDexReshuffleImpl.cpp \
 	opt/interdex/InterDexReshufflePass.cpp \
 	opt/interdex/SortRemainingClassesPass.cpp \
-	opt/kotlin-lambda/KotlinObjectInliner.cpp \
+	opt/kotlin-lambda/KotlinCompanionOptimizationPass.cpp \
 	opt/kotlin-lambda/KotlinStatelessLambdaSingletonRemovalPass.cpp \
 	opt/kotlin-lambda/KotlinLambdaDeduplicationPass.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \

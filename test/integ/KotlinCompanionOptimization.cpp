@@ -8,7 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "DexUtil.h"
-#include "KotlinObjectInliner.h"
+#include "KotlinCompanionOptimizationPass.h"
 #include "LocalDcePass.h"
 #include "RedexTest.h"
 #include "Resolver.h"
@@ -47,7 +47,7 @@ TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
   auto* codex = main_method->get_code();
   ASSERT_NE(nullptr, codex);
 
-  auto klr = std::make_unique<KotlinObjectInliner>();
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
   auto dce = std::make_unique<LocalDcePass>();
   std::vector<Pass*> passes{klr.get(), dce.get()};
   run_passes(passes);
@@ -94,7 +94,7 @@ TEST_F(KotlinLambdaOptTest, MethodCollideTest) {
   auto* codex = main_method->get_code();
   ASSERT_NE(nullptr, codex);
 
-  auto klr = std::make_unique<KotlinObjectInliner>();
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
   auto dce = std::make_unique<LocalDcePass>();
   std::vector<Pass*> passes{klr.get(), dce.get()};
   run_passes(passes);

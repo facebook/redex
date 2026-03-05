@@ -46,8 +46,8 @@ TEST_F(PostVerify, CompanionClass) {
   auto* outer_cls = find_class_named(classes, "LCompanionClass;");
   auto* companion_cls = find_class_named(classes, "LCompanionClass$Companion;");
   auto* foo_cls = find_class_named(classes, class_foo);
-  // KotlinObjectInliner Pass only relocate method from companion object to its
-  // outer class. Therefore, the companion cls is still there.
+  // KotlinCompanionOptimizationPass only relocates methods from companion
+  // object to its outer class. Therefore, the companion cls is still there.
   EXPECT_NE(nullptr, outer_cls);
   EXPECT_NE(nullptr, companion_cls);
   EXPECT_NE(nullptr, foo_cls);
@@ -177,7 +177,7 @@ TEST_F(PostVerify, ThirdCompanionClass) {
 }
 
 // Test AnnoClass. This type of Companion class contains static field, so won't
-// be handled by current KotlinObjectInliner pass. However, this type of
+// be handled by current KotlinCompanionOptimizationPass. However, this type of
 // companion object can be opted by AnnoKill+RUM pass. Once static fields are
 // supported, this test should be updated.
 TEST_F(PostVerify, AnnoClass) {

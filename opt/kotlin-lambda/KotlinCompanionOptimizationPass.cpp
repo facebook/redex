@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "KotlinObjectInliner.h"
+#include "KotlinCompanionOptimizationPass.h"
 
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
@@ -353,9 +353,9 @@ bool is_def_trackable(IRInstruction* insn,
 
 } // namespace
 
-void KotlinObjectInliner::run_pass(DexStoresVector& stores,
-                                   ConfigFiles&,
-                                   PassManager& mgr) {
+void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
+                                               ConfigFiles&,
+                                               PassManager& mgr) {
 
   const auto scope = build_class_scope(stores);
 
@@ -617,14 +617,14 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
   stats.report(mgr);
 }
 
-void KotlinObjectInliner::Stats::report(PassManager& mgr) const {
+void KotlinCompanionOptimizationPass::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_candidate_companion_objects",
                   kotlin_candidate_companion_objects);
   mgr.incr_metric("kotlin_untrackable_companion_objects",
                   kotlin_untrackable_companion_objects);
   mgr.incr_metric("kotlin_companion_objects_inlined",
                   kotlin_companion_objects_inlined);
-  TRACE(KOTLIN_OBJ_INLINE, 2, "KotlinObjectInliner Stats:");
+  TRACE(KOTLIN_OBJ_INLINE, 2, "KotlinCompanionOptimizationPass Stats:");
   TRACE(KOTLIN_OBJ_INLINE,
         2,
         "kotlin_candidate_companion_objects = %zu",
@@ -639,4 +639,4 @@ void KotlinObjectInliner::Stats::report(PassManager& mgr) const {
         kotlin_companion_objects_inlined);
 }
 
-static KotlinObjectInliner s_pass;
+static KotlinCompanionOptimizationPass s_pass;
