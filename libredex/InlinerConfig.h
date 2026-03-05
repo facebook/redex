@@ -87,6 +87,8 @@ struct InlinerConfig {
   std::vector<std::string> caller_blocklist;
   std::vector<std::string> intradex_allowlist;
   std::vector<std::string> no_inline_blocklist;
+  // Prefixes of methods to force inline.
+  std::vector<std::string> force_inline_prefixes;
 
   // Limit on number of relevant invokes to speed up local-only pass.
   uint64_t max_relevant_invokes_when_local_only{10};

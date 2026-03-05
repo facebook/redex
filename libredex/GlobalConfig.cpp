@@ -63,6 +63,9 @@ void InlinerConfig::bind_config() {
        "When any of these annotations is present on a method or class, then "
        "this method or all methods of this class will get inlined at all "
        "callsites if possible.");
+  bind("force_inline_prefixes", {}, force_inline_prefixes,
+       "When a prefix matches a method then this method will get inlined at "
+       "all callsites if possible.");
   bind("blocklist", {}, blocklist,
        "Any method defined in a class matching any given prefix will not get "
        "inlined at any callsite. This is problematic as Redex may move methods "
