@@ -69,4 +69,9 @@ public class InlineMainV2 {
   public void testOutlinedInlined() throws Exception {
     itc.testOutlinedInlined();
   }
+
+  @Test
+  public void testKotlinPrecondition() throws Exception {
+    itc.testKotlinPrecondition();
+  }
 }

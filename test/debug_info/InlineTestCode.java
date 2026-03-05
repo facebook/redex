@@ -397,4 +397,21 @@ public class InlineTestCode {
                   "com.facebook.redexlinemap.InlineTestCode.testOutlinedInlined(InlineTestCode.java:387)"));
     }
   }
+
+  @NoInline
+  @SuppressWarnings("CatchGeneralException")
+  public void testKotlinPrecondition() throws Exception {
+    try {
+      InlineTestCodeKt.withPrecond(null);
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 4))
+          .isEqualTo(
+              Arrays.asList(
+                  "kotlin.jvm.internal.Intrinsics.checkNotNullParameter(Intrinsics.java:131)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.withPrecond(InlineTestCodeKt.kt:15)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt.withPrecond(InlineTestCodeKt.kt:16)",
+                  "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:405)"));
+    }
+  }
 }

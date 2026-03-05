@@ -189,4 +189,9 @@ public class InlineMainV2Outlining {
                   "com.facebook.redexlinemap.InlineMainV2Outlining.testOutlinedInlined(InlineMainV2Outlining.java:179)"));
     }
   }
+
+  @Test
+  public void testKotlinPrecondition() throws Exception {
+    itc.testKotlinPrecondition();
+  }
 }
