@@ -11,8 +11,6 @@
 #include <sstream>
 #include <string>
 
-#include <boost/algorithm/string.hpp>
-
 #include "AnnoUtils.h"
 #include "ApproximateShapeMerging.h"
 #include "ConfigFiles.h"
@@ -405,7 +403,7 @@ bool Model::is_excluded(const DexType* type) const {
     return true;
   }
   for (const auto& prefix : UnorderedIterable(m_spec.exclude_prefixes)) {
-    if (boost::starts_with(type->get_name()->str(), prefix)) {
+    if (type->get_name()->str().starts_with(prefix)) {
       return true;
     }
   }

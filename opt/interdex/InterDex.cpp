@@ -230,7 +230,7 @@ void exclude_extra_dynamically_dead_class(
 }
 
 bool is_interaction_id_start_marker(std::string_view betamap_entry) {
-  return boost::algorithm::starts_with(betamap_entry, INTERACTION_ID_FORMAT) &&
+  return betamap_entry.starts_with(INTERACTION_ID_FORMAT) &&
          boost::algorithm::ends_with(betamap_entry, START_FORMAT);
 }
 
@@ -542,8 +542,7 @@ void InterDex::emit_interdex_classes(
     DexClass* cls = type_class(type);
     if (cls == nullptr) {
       TRACE(IDEX, 5, "[interdex classes]: No such entry %s.", SHOW(type));
-      if (boost::algorithm::starts_with(type->get_name()->str(),
-                                        SCROLL_SET_START_FORMAT)) {
+      if (type->get_name()->str().starts_with(SCROLL_SET_START_FORMAT)) {
         always_assert_log(
             !m_emitting_scroll_set,
             "Scroll start marker discovered after another scroll start marker");
@@ -554,14 +553,12 @@ void InterDex::emit_interdex_classes(
         TRACE(IDEX, 2, "Marking dex as scroll at betamap entry %td",
               std::distance(interdex_types.begin(), it));
         dex_info.scroll = true;
-      } else if (boost::algorithm::starts_with(type->get_name()->str(),
-                                               SCROLL_SET_END_FORMAT)) {
+      } else if (type->get_name()->str().starts_with(SCROLL_SET_END_FORMAT)) {
         always_assert_log(
             m_emitting_scroll_set,
             "Scroll end marker discovered without scroll start marker");
         m_emitting_scroll_set = false;
-      } else if (boost::algorithm::starts_with(type->get_name()->str(),
-                                               BG_SET_START_FORMAT)) {
+      } else if (type->get_name()->str().starts_with(BG_SET_START_FORMAT)) {
         always_assert_log(!m_emitting_bg_set,
                           "Background start marker discovered after another "
                           "background start marker");
@@ -572,8 +569,7 @@ void InterDex::emit_interdex_classes(
               std::distance(interdex_types.begin(), it));
         m_emitting_bg_set = true;
         dex_info.background = true;
-      } else if (boost::algorithm::starts_with(type->get_name()->str(),
-                                               BG_SET_END_FORMAT)) {
+      } else if (type->get_name()->str().starts_with(BG_SET_END_FORMAT)) {
         always_assert_log(
             m_emitting_bg_set,
             "Background end marker discovered without background start marker");
@@ -629,8 +625,8 @@ void InterDex::emit_interdex_classes(
       if (m_move_coldstart_classes &&
           (move_coldstart_classes.count(cls) != 0u)) {
         auto interaction = move_coldstart_classes.at(cls);
-        if (!boost::starts_with(curr_interaction,
-                                INTERACTION_ID_FORMAT + interaction)) {
+        if (!curr_interaction.starts_with(INTERACTION_ID_FORMAT +
+                                          interaction)) {
           continue;
         } else {
           TRACE(IDEX, 3, "moving %s into %s", SHOW(cls),
@@ -748,7 +744,7 @@ void InterDex::load_interdex_types() {
   for (const auto& entry : interdexorder) {
     DexType* type = DexType::get_type(entry);
     if (type == nullptr) {
-      if (boost::algorithm::starts_with(entry, END_MARKER_FORMAT)) {
+      if (entry.starts_with(END_MARKER_FORMAT)) {
         type = DexType::make_type(entry);
         m_end_markers.emplace_back(type);
 
@@ -762,33 +758,30 @@ void InterDex::load_interdex_types() {
 
         TRACE(IDEX, 4, "[interdex order]: Found class end marker %s.",
               entry.c_str());
-      } else if (boost::algorithm::starts_with(entry,
-                                               SCROLL_SET_START_FORMAT)) {
+      } else if (entry.starts_with(SCROLL_SET_START_FORMAT)) {
         type = DexType::make_type(entry);
         TRACE(IDEX, 4,
               "[interdex order]: Found scroll set start class marker %s.",
               entry.c_str());
-      } else if (boost::algorithm::starts_with(entry, SCROLL_SET_END_FORMAT)) {
+      } else if (entry.starts_with(SCROLL_SET_END_FORMAT)) {
         type = DexType::make_type(entry);
         TRACE(IDEX, 4,
               "[interdex order]: Found scroll set end class marker %s.",
               entry.c_str());
-      } else if (boost::algorithm::starts_with(entry, BG_SET_START_FORMAT)) {
+      } else if (entry.starts_with(BG_SET_START_FORMAT)) {
         type = DexType::make_type(entry);
         TRACE(IDEX, 4, "[interdex order]: Found bg set start class marker %s.",
               entry.c_str());
-      } else if (boost::algorithm::starts_with(entry, BG_SET_END_FORMAT)) {
+      } else if (entry.starts_with(BG_SET_END_FORMAT)) {
         type = DexType::make_type(entry);
         TRACE(IDEX, 4, "[interdex order]: Found bg set end class marker %s.",
               entry.c_str());
-      } else if (boost::algorithm::starts_with(entry,
-                                               COLD_START_20PCT_END_FORMAT)) {
+      } else if (entry.starts_with(COLD_START_20PCT_END_FORMAT)) {
         type = DexType::make_type(entry);
         TRACE(IDEX, 4,
               "[interdex order]: Found 20pct cold start end class marker %s.",
               entry.c_str());
-      } else if (boost::algorithm::starts_with(entry,
-                                               COLD_START_1PCT_END_FORMAT)) {
+      } else if (entry.starts_with(COLD_START_1PCT_END_FORMAT)) {
         type = DexType::make_type(entry);
         TRACE(IDEX, 4,
               "[interdex order]: Found 1pct cold start end class marker %s.",
@@ -1596,8 +1589,7 @@ void InterDex::exclude_baseline_profile_classes() {
   // profile.
   auto it = m_interdex_types.begin();
   while (it != m_interdex_types.end() &&
-         boost::algorithm::starts_with((*it)->get_name()->str(),
-                                       END_MARKER_FORMAT)) {
+         (*it)->get_name()->str().starts_with(END_MARKER_FORMAT)) {
     it = m_interdex_types.erase(it);
   }
 }
@@ -1619,8 +1611,8 @@ void InterDex::initialize_baseline_profile_classes() {
     for (; it != m_interdex_types.end(); ++it) {
       const auto* dex_type = *it;
       m_baseline_profile_classes->insert(dex_type);
-      if (boost::algorithm::starts_with(dex_type->get_name()->str(),
-                                        COLD_START_20PCT_END_FORMAT)) {
+      if (dex_type->get_name()->str().starts_with(
+              COLD_START_20PCT_END_FORMAT)) {
         break;
       }
     }
@@ -1634,8 +1626,8 @@ void InterDex::initialize_baseline_profile_classes() {
       for (; it != m_interdex_types.end(); ++it) {
         const auto* dex_type = *it;
         m_baseline_profile_classes->insert(dex_type);
-        if (boost::algorithm::starts_with(dex_type->get_name()->str(),
-                                          COLD_START_1PCT_END_FORMAT)) {
+        if (dex_type->get_name()->str().starts_with(
+                COLD_START_1PCT_END_FORMAT)) {
           break;
         }
       }

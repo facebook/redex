@@ -183,7 +183,7 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
     }
     auto* resolved = type_class(type);
     if (resolved == nullptr) {
-      if (!boost::starts_with(type->str(), "Ldalvik/annotation/")) {
+      if (!type->str().starts_with("Ldalvik/annotation/")) {
         TRACE(PPP, 5, "[%s] unresolved type: %s", SHOW(cls), SHOW(resolved));
         stats.unresolved_types++;
       }

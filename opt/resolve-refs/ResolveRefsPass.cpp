@@ -7,7 +7,6 @@
 
 #include "ResolveRefsPass.h"
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <optional>
 
 #include "ApiLevelChecker.h"
@@ -187,7 +186,7 @@ void try_desuperify(const DexMethod* caller,
 bool is_excluded_external(const std::vector<std::string>& excluded_externals,
                           const std::string& name) {
   for (const auto& excluded : excluded_externals) {
-    if (boost::starts_with(name, excluded)) {
+    if (name.starts_with(excluded)) {
       return true;
     }
   }

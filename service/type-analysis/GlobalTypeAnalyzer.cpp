@@ -312,7 +312,7 @@ bool extends_android_sdk(const DexClass* cls) {
   auto* super_type = cls->get_super_class();
   auto* super_cls = type_class(cls->get_super_class());
   while ((super_cls != nullptr) && super_type != type::java_lang_Object()) {
-    if (boost::starts_with(show(super_type), "Landroid/")) {
+    if (show(super_type).starts_with("Landroid/")) {
       return true;
     }
     super_type = super_cls->get_super_class();

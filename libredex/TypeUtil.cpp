@@ -548,7 +548,7 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
 bool is_kotlin_function_interface(const DexType* type) {
   auto name = type->get_name()->str();
   std::string_view prefix{"Lkotlin/jvm/functions/Function"};
-  if (!boost::starts_with(name, prefix)) {
+  if (!name.starts_with(prefix)) {
     return false;
   }
   auto suffix = name.substr(prefix.length());

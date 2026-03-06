@@ -7,7 +7,6 @@
 
 #include "ReachableClasses.h"
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -712,7 +711,7 @@ void init_reachable_classes(const Scope& scope,
     for (auto* clazz : scope) {
       const auto name = clazz->get_type()->get_name()->str();
       for (const auto& pkg : config.reflected_package_names) {
-        if (boost::starts_with(name, pkg)) {
+        if (name.starts_with(pkg)) {
           reflected_package_classes.insert(clazz);
           continue;
         }

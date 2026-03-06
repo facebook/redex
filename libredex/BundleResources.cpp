@@ -1997,7 +1997,7 @@ namespace {
 const std::string KNOWN_RES_DIR = std::string(RES_DIRECTORY) + "/";
 
 bool is_resource_file(const std::string& str) {
-  return boost::algorithm::starts_with(str, KNOWN_RES_DIR);
+  return str.starts_with(KNOWN_RES_DIR);
 }
 } // namespace
 

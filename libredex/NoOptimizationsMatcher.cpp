@@ -19,7 +19,7 @@ void process_no_optimizations_rules(
   auto is_blocklisted = [&](DexClass* cls) {
     while (cls != nullptr) {
       for (const auto& type_s : UnorderedIterable(no_optimizations_blocklist)) {
-        if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
+        if (cls->get_name()->str().starts_with(type_s)) {
           return true;
         }
       }

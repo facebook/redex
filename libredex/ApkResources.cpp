@@ -7,8 +7,6 @@
 
 #include "ApkResources.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <cstdint>
@@ -2235,7 +2233,7 @@ const std::array<std::string, 2> KNOWN_RES_DIRS = {
 // (supporting obfuscation).
 bool is_resource_file(const std::string& str) {
   for (const auto& dir : KNOWN_RES_DIRS) {
-    if (boost::algorithm::starts_with(str, dir)) {
+    if (str.starts_with(dir)) {
       return true;
     }
   }

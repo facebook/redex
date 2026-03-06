@@ -987,7 +987,7 @@ bool MethodProfiles::parse_header(std::string_view line) {
     }
     return true;
   };
-  if (boost::starts_with(line, "interaction")) {
+  if (line.starts_with("interaction")) {
     m_mode = METADATA;
     // Extra metadata at the top of the file that we want to parse
     auto parse_cell = [&](std::string_view cell, uint32_t col) -> bool {

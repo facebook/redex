@@ -154,7 +154,7 @@ bool should_check_for_strings(const UnorderedSet<std::string>& code_to_skip,
   }
   auto item_name = show_deobfuscated(item);
   return unordered_none_of(code_to_skip, [&](const std::string& prefix) {
-    return boost::algorithm::starts_with(item_name, prefix);
+    return item_name.starts_with(prefix);
   });
 }
 

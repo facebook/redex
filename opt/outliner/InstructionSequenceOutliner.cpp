@@ -3208,8 +3208,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
     walk::parallel::classes(scope, [&](DexClass* cls) {
       if (unordered_find_if(m_config.outline_blocklist_prefixes,
                             [cls](const std::string& prefix) {
-                              return boost::starts_with(cls->get_name()->str(),
-                                                        prefix);
+                              return cls->get_name()->str().starts_with(prefix);
                             }) != m_config.outline_blocklist_prefixes.end()) {
         for (auto* m : cls->get_all_methods()) {
           m->rstate.set_no_outlining();

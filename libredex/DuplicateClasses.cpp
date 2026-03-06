@@ -8,7 +8,6 @@
 #include "DuplicateClasses.h"
 
 #include "Trace.h"
-#include <boost/algorithm/string/predicate.hpp>
 #include <vector>
 
 namespace dup_classes {
@@ -46,7 +45,7 @@ bool is_known_dup(DexClass* cls) {
   return std::find_if(g_dup_class_allowlist.begin(),
                       g_dup_class_allowlist.end(),
                       [cls](const std::string& name) {
-                        return boost::starts_with(cls->get_name()->str(), name);
+                        return cls->get_name()->str().starts_with(name);
                       }) != g_dup_class_allowlist.end() ||
          cls->get_name()->str().find(lambda_class_prefix) != std::string::npos;
 }

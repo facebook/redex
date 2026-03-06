@@ -7,8 +7,6 @@
 
 #include "ApiLevelsUtils.h"
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
@@ -390,7 +388,7 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
     // NOTE: We are currently excluding classes outside of
     //       android package. We might reconsider.
     const auto framework_cls_str = framework_cls->str();
-    if (!boost::starts_with(framework_cls_str, "Landroid")) {
+    if (!framework_cls_str.starts_with("Landroid")) {
       TRACE(API_UTILS, 5, "Excluding %s from possible replacement.",
             str_copy(framework_cls_str).c_str());
       return true;
@@ -417,7 +415,7 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
     const auto cls_str = cls->get_deobfuscated_name_or_empty();
 
     // TODO(emmasevastian): Better way of detecting release libraries ...
-    if (boost::starts_with(cls_str, "Landroidx")) {
+    if (cls_str.starts_with("Landroidx")) {
       std::string simple_name = get_simple_deobfuscated_name(cls->get_type());
       auto simple_cls_it = simple_cls_name_to_type.find(simple_name);
       if (simple_cls_it == simple_cls_name_to_type.end()) {

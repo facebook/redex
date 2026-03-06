@@ -159,7 +159,7 @@ bool starts_with_any_prefix(const DexString* str,
     return false;
   }
   for (const auto& prefix : UnorderedIterable(prefixes)) {
-    if (boost::algorithm::starts_with(str->str(), prefix)) {
+    if (str->str().starts_with(prefix)) {
       return true;
     }
   }

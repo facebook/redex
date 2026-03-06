@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 
 #include <array>
@@ -939,7 +938,7 @@ void process_jar_impl(const uint8_t* mapping,
 namespace jar_loader {
 
 bool default_duplicate_allow_fn(const DexClass* c, const std::string&) {
-  return !boost::starts_with(c->str(), "Landroid");
+  return !c->str().starts_with("Landroid");
 }
 
 } // namespace jar_loader

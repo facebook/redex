@@ -65,7 +65,7 @@ UnorderedSet<uint32_t> get_resources_by_prefix_and_name(
     }
 
     for (const auto& prefix : UnorderedIterable(prefixes)) {
-      if (boost::algorithm::starts_with(pair.first, prefix)) {
+      if (pair.first.starts_with(prefix)) {
         found_resources.insert(pair.second.begin(), pair.second.end());
       }
     }
