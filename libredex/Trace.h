@@ -181,7 +181,7 @@ class DexType;
   TM(WP)                       \
   TM(KOTLIN_INSTANCE)          \
   TM(KOTLIN_STATS)             \
-  TM(KOTLIN_OBJ_INLINE)        \
+  TM(KOTLIN_COMPANION)         \
   TM(ACC)                      \
   /* End of list */
 
