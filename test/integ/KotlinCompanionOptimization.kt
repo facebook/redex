@@ -20,11 +20,11 @@ class CompanionClass {
   }
 }
 
-// Named companion object with @JvmStatic: the pass relocates getSomeOtherStr
-// and funX from AnotherCompanionClass$Test to AnotherCompanionClass as static
-// methods.
+// Second companion object with @JvmStatic: the pass relocates getSomeOtherStr
+// and funX from AnotherCompanionClass$Companion to AnotherCompanionClass as
+// static methods.
 class AnotherCompanionClass {
-  companion object Test {
+  companion object {
     @JvmStatic var someOtherStr: String = "Bar"
 
     @JvmStatic
@@ -61,5 +61,24 @@ class CollisionTestCaller {
     val obj = CompanionWithMethodCollision()
     print(obj.get())
     print(CompanionWithMethodCollision.get())
+  }
+}
+
+// Named companion object: the pass should NOT relocate methods from
+// NamedCompanionClass$Custom because it does not end with $Companion.
+class NamedCompanionClass {
+  companion object Custom {
+    var someStr: String = "Baz"
+
+    fun funY(): String {
+      return someStr
+    }
+  }
+}
+
+class NamedCompanionCaller {
+  fun main() {
+    print(NamedCompanionClass.someStr)
+    print(NamedCompanionClass.funY())
   }
 }

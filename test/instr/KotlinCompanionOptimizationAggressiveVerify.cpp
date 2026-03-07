@@ -41,7 +41,7 @@ TEST_F(PostVerify, CompanionClass) {
 TEST_F(PostVerify, AnotherCompanionClass) {
   auto* outer_cls = find_class_named(classes, "LAnotherCompanionClass;");
   auto* companion_cls =
-      find_class_named(classes, "LAnotherCompanionClass$Test;");
+      find_class_named(classes, "LAnotherCompanionClass$Companion;");
   auto* foo_cls = find_class_named(classes, class_foo);
   EXPECT_NE(nullptr, outer_cls);
   EXPECT_EQ(nullptr, companion_cls);
@@ -56,8 +56,8 @@ TEST_F(PostVerify, AnotherCompanionClass) {
   EXPECT_NE(nullptr, meth_main);
   EXPECT_EQ(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_VIRTUAL, "funX"));
   EXPECT_EQ(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_STATIC, "funX"));
-  // After opt, there is no sfield "Test" in outer class.
-  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Test"));
+  // After opt, there is no sfield "Companion" in outer class.
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
   // After opt, method "funX" is relocated and removed.
   EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "funX"));
 }
@@ -65,7 +65,8 @@ TEST_F(PostVerify, AnotherCompanionClass) {
 // Test cls LThirdCompanionClass;
 TEST_F(PostVerify, ThirdCompanionClass) {
   auto* outer_cls = find_class_named(classes, "LThirdCompanionClass;");
-  auto* companion_cls = find_class_named(classes, "LThirdCompanionClass$Test;");
+  auto* companion_cls =
+      find_class_named(classes, "LThirdCompanionClass$Companion;");
   auto* foo_cls = find_class_named(classes, class_foo);
   EXPECT_NE(nullptr, outer_cls);
   EXPECT_EQ(nullptr, companion_cls);
@@ -75,8 +76,8 @@ TEST_F(PostVerify, ThirdCompanionClass) {
   // After opt, there is no new-instance in LThirdCompanionClass clinit, and in
   // fact the now trivial clinit is removed
   ASSERT_EQ(nullptr, meth_clinit);
-  // After opt, in LThirdCompanionClass; sfield "Test" should be removed.
-  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Test"));
+  // After opt, in LThirdCompanionClass; sfield "Companion" should be removed.
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
   // After opt, method "access$funY" and "funY" should be relocated from
   // companion class to outer class and then removed.
   EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "access$funY"));
@@ -124,4 +125,17 @@ TEST_F(PostVerify, NestedObjectDeclaration) {
   auto* nested_cls = find_class_named(classes, "LOuterWithObject$NestedObj;");
   EXPECT_NE(nullptr, outer_cls);
   EXPECT_NE(nullptr, nested_cls);
+}
+
+// Named companion object — not relocated by KotlinCompanionOptimizationPass
+// because the inner class name (NamedCompanionClass$Custom) does not end with
+// $Companion. The companion class should survive the aggressive pipeline.
+TEST_F(PostVerify, NamedCompanionNotRelocated) {
+  auto* outer_cls = find_class_named(classes, "LNamedCompanionClass;");
+  auto* companion_cls =
+      find_class_named(classes, "LNamedCompanionClass$Custom;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  // funZ should not have been relocated to the outer class.
+  EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "funZ"));
 }

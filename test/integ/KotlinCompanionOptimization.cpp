@@ -43,7 +43,7 @@ namespace {
 //
 // Input (KotlinCompanionOptimization.kt):
 //   CompanionClass has a companion with getSomeStr (property accessor)
-//   AnotherCompanionClass has a named companion "Test" with @JvmStatic
+//   AnotherCompanionClass has a companion with @JvmStatic
 //     getSomeOtherStr and funX
 //
 // After optimization, Foo.main() should contain only static calls into
@@ -146,5 +146,47 @@ TEST_F(KotlinCompanionOptimizationTest, MethodNameCollisionRenaming) {
   // Exactly one static call: the renamed companion get().
   // The outer class's own get() is called via invoke-virtual, not static.
   ASSERT_EQ(static_calls, 1);
+}
+
+// Test that named companion objects are not relocated.
+// The pass only handles default-named $Companion inner classes.
+//
+// Input (KotlinCompanionOptimization.kt — NamedCompanionClass):
+//   NamedCompanionClass has "companion object Custom" which compiles to
+//   NamedCompanionClass$Custom — not $Companion.
+//
+// After running the pass, NamedCompanionCaller.main() should still contain
+// virtual calls through the companion instance, not static calls into the
+// outer class.
+TEST_F(KotlinCompanionOptimizationTest, NamedCompanionNotRelocated) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/NamedCompanionCaller;.main:()V");
+  auto* main_method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/objtest/NamedCompanionCaller;.main:()V")
+          ->as_def();
+  auto* codex = main_method->get_code();
+  ASSERT_NE(nullptr, codex);
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  auto iterable = InstructionIterable(codex);
+  unsigned static_calls_to_outer = 0;
+  DexType* outer =
+      DexType::get_type("Lcom/facebook/redextest/objtest/NamedCompanionClass;");
+  for (const auto& mie : iterable) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == OPCODE_INVOKE_STATIC &&
+        insn->get_method()->get_class() == outer) {
+      static_calls_to_outer++;
+    }
+  }
+  // Named companion (NamedCompanionClass$Custom) should NOT be relocated,
+  // so there should be no static calls into NamedCompanionClass from the pass.
+  ASSERT_EQ(static_calls_to_outer, 0);
 }
 } // namespace
