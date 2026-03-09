@@ -37,32 +37,6 @@ void dump_cls(DexClass* cls) {
   }
 }
 
-// check if CLS is an inner class and return the outer class. Return nullptr if
-// this is not an inner class.
-DexClass* get_outer_class(const DexClass* cls) {
-  const auto cls_name = cls->get_name()->str();
-  auto cash_idx = cls_name.find_last_of('$');
-  if (cash_idx == std::string::npos) {
-    // this is not an inner class
-    return nullptr;
-  }
-  auto slash_idx = cls_name.find_last_of('/');
-  if (slash_idx == std::string::npos || slash_idx < cash_idx) {
-    // there's a $ in the class name
-    const std::string& outer_name = cls_name.substr(0, cash_idx) + ';';
-    DexType* outer = DexType::get_type(outer_name);
-    if (outer == nullptr) {
-      return nullptr;
-    }
-    DexClass* outer_cls = type_class(outer);
-    if (outer_cls == nullptr || outer_cls->is_external()) {
-      return nullptr;
-    }
-    return outer_cls;
-  }
-  return nullptr;
-}
-
 // Check if the method uses the first argument (i.e this pointer) in a
 // meaningful way.  Uses of `this` solely to invoke virtual or direct methods on
 // the same class are not considered meaningful because those call sites will be
@@ -216,7 +190,7 @@ bool is_valid_init(DexMethod* meth) {
     return false;
   }
 
-  TRACE(KOTLIN_COMPANION, 1, "the init is %s!\n", SHOW(meth));
+  TRACE(KOTLIN_COMPANION, 5, "Valid init: %s", SHOW(meth));
   // ()V
   if (args->empty()) {
     return true;
@@ -308,10 +282,14 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
   if (cls->get_super_class() != type::java_lang_Object()) {
     return {RejectionReason::kNonObjectSuper, nullptr};
   }
-  DexClass* outer_cls = get_outer_class(cls);
-
-  // Currently, we don't support companion class is in an abstract class.
-  if (outer_cls == nullptr) {
+  // Derive the outer class by stripping the "$Companion;" suffix.
+  auto outer_name = cls_name.substr(0, cls_name.rfind('$')) + ";";
+  DexType* outer_type = DexType::get_type(outer_name);
+  if (outer_type == nullptr) {
+    return {RejectionReason::kNoOuterClass, nullptr};
+  }
+  DexClass* outer_cls = type_class(outer_type);
+  if (outer_cls == nullptr || outer_cls->is_external()) {
     return {RejectionReason::kNoOuterClass, nullptr};
   }
   if (is_abstract(outer_cls)) {
@@ -334,7 +312,7 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
   for (auto* meth : cls->get_vmethods()) {
     if (meth->rstate.no_optimizations() || !is_final(meth) ||
         (meth->get_code() == nullptr) || uses_this(meth)) {
-      TRACE(KOTLIN_COMPANION, 5, "Failed due to method = %s", SHOW(meth));
+      TRACE(KOTLIN_COMPANION, 5, "Method not relocatable: %s", SHOW(meth));
       return {RejectionReason::kMethodUsesThis, nullptr};
     }
   }
@@ -350,7 +328,7 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
       }
     } else if (meth->rstate.no_optimizations() ||
                (meth->get_code() == nullptr) || uses_this(meth)) {
-      TRACE(KOTLIN_COMPANION, 5, "Failed due to method = %s", SHOW(meth));
+      TRACE(KOTLIN_COMPANION, 5, "Method not relocatable: %s", SHOW(meth));
       return {RejectionReason::kMethodUsesThis, nullptr};
     }
   }
@@ -778,39 +756,31 @@ void rewrite_call_sites(const Scope& scope,
     if (code == nullptr) {
       return;
     }
-    bool changed = false;
-    auto& cfg = method->get_code()->cfg();
-    cfg::CFGMutation m(cfg);
-    live_range::MoveAwareChains move_aware_chains(cfg);
+    auto& cfg = code->cfg();
     auto iterable = cfg::InstructionIterable(cfg);
+    bool changed = false;
 
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto* insn = it->insn;
-      if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
-          insn->opcode() == OPCODE_INVOKE_DIRECT) {
-        if (relocated_methods.count(insn->get_method()) == 0u) {
-          continue;
-        }
-        // When the method in Companion object is relocated to outer class,
-        // it is changed to dmethod, and "this_pointer", may be removed.
-        // Therefore, we need to remove the first this_pointer if necessary.
-        insn->set_opcode(OPCODE_INVOKE_STATIC);
-        size_t arg_count = insn->get_method()->get_proto()->get_args()->size();
-        auto nargs = insn->srcs_size();
-        if (arg_count != nargs) {
-          for (uint16_t i = 0; i < nargs - 1; i++) {
-            insn->set_src(i, insn->src(i + 1));
-          }
-          insn->set_srcs_size(nargs - 1);
-        }
-        always_assert(arg_count == insn->srcs_size());
-        changed = true;
+      if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
+          insn->opcode() != OPCODE_INVOKE_DIRECT) {
+        continue;
       }
+      if (relocated_methods.count(insn->get_method()) == 0u) {
+        continue;
+      }
+      // Rewrite to static dispatch and strip the companion `this` argument.
+      insn->set_opcode(OPCODE_INVOKE_STATIC);
+      auto nargs = insn->srcs_size();
+      for (uint16_t i = 0; i < nargs - 1; i++) {
+        insn->set_src(i, insn->src(i + 1));
+      }
+      insn->set_srcs_size(nargs - 1);
+      changed = true;
     }
     if (changed) {
-      m.flush();
-      TRACE(KOTLIN_COMPANION, 5, "After : %s\n", SHOW(method));
-      TRACE(KOTLIN_COMPANION, 5, "%s\n", SHOW(cfg));
+      TRACE(KOTLIN_COMPANION, 5, "After : %s", SHOW(method));
+      TRACE(KOTLIN_COMPANION, 5, "%s", SHOW(cfg));
     }
   });
 }
@@ -868,86 +838,28 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
 }
 
 void KotlinCompanionOptimizationPass::Stats::report(PassManager& mgr) const {
-  mgr.incr_metric("kotlin_candidate_companion_objects",
-                  kotlin_candidate_companion_objects);
-  mgr.incr_metric("kotlin_untrackable_companion_objects",
-                  kotlin_untrackable_companion_objects);
-  mgr.incr_metric("kotlin_companion_objects_relocated",
-                  kotlin_companion_objects_relocated);
-  mgr.incr_metric("kotlin_rejected_not_final", kotlin_rejected_not_final);
-  mgr.incr_metric("kotlin_rejected_not_companion",
-                  kotlin_rejected_not_companion);
-  mgr.incr_metric("kotlin_rejected_has_sfields", kotlin_rejected_has_sfields);
-  mgr.incr_metric("kotlin_rejected_has_clinit", kotlin_rejected_has_clinit);
-  mgr.incr_metric("kotlin_rejected_has_interfaces",
-                  kotlin_rejected_has_interfaces);
-  mgr.incr_metric("kotlin_rejected_has_ifields", kotlin_rejected_has_ifields);
-  mgr.incr_metric("kotlin_rejected_non_object_super",
-                  kotlin_rejected_non_object_super);
-  mgr.incr_metric("kotlin_rejected_no_outer_class",
-                  kotlin_rejected_no_outer_class);
-  mgr.incr_metric("kotlin_rejected_abstract_outer",
-                  kotlin_rejected_abstract_outer);
-  mgr.incr_metric("kotlin_rejected_invalid_init", kotlin_rejected_invalid_init);
-  mgr.incr_metric("kotlin_rejected_method_uses_this",
-                  kotlin_rejected_method_uses_this);
+  auto emit = [&](const std::string& name, size_t value) {
+    mgr.incr_metric(name, value);
+    TRACE(KOTLIN_COMPANION, 2, "%s = %zu", name.c_str(), value);
+  };
   TRACE(KOTLIN_COMPANION, 2, "KotlinCompanionOptimizationPass Stats:");
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_candidate_companion_objects = %zu",
-        kotlin_candidate_companion_objects);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_untrackable_companion_objects = %zu",
-        kotlin_untrackable_companion_objects);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_companion_objects_relocated = %zu",
-        kotlin_companion_objects_relocated);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_not_final = %zu",
-        kotlin_rejected_not_final);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_not_companion = %zu",
-        kotlin_rejected_not_companion);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_has_sfields = %zu",
-        kotlin_rejected_has_sfields);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_has_clinit = %zu",
-        kotlin_rejected_has_clinit);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_has_interfaces = %zu",
-        kotlin_rejected_has_interfaces);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_has_ifields = %zu",
-        kotlin_rejected_has_ifields);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_non_object_super = %zu",
-        kotlin_rejected_non_object_super);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_no_outer_class = %zu",
-        kotlin_rejected_no_outer_class);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_abstract_outer = %zu",
-        kotlin_rejected_abstract_outer);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_invalid_init = %zu",
-        kotlin_rejected_invalid_init);
-  TRACE(KOTLIN_COMPANION,
-        2,
-        "kotlin_rejected_method_uses_this = %zu",
-        kotlin_rejected_method_uses_this);
+  emit("kotlin_candidate_companion_objects",
+       kotlin_candidate_companion_objects);
+  emit("kotlin_untrackable_companion_objects",
+       kotlin_untrackable_companion_objects);
+  emit("kotlin_companion_objects_relocated",
+       kotlin_companion_objects_relocated);
+  emit("kotlin_rejected_not_final", kotlin_rejected_not_final);
+  emit("kotlin_rejected_not_companion", kotlin_rejected_not_companion);
+  emit("kotlin_rejected_has_sfields", kotlin_rejected_has_sfields);
+  emit("kotlin_rejected_has_clinit", kotlin_rejected_has_clinit);
+  emit("kotlin_rejected_has_interfaces", kotlin_rejected_has_interfaces);
+  emit("kotlin_rejected_has_ifields", kotlin_rejected_has_ifields);
+  emit("kotlin_rejected_non_object_super", kotlin_rejected_non_object_super);
+  emit("kotlin_rejected_no_outer_class", kotlin_rejected_no_outer_class);
+  emit("kotlin_rejected_abstract_outer", kotlin_rejected_abstract_outer);
+  emit("kotlin_rejected_invalid_init", kotlin_rejected_invalid_init);
+  emit("kotlin_rejected_method_uses_this", kotlin_rejected_method_uses_this);
 }
 
 static KotlinCompanionOptimizationPass s_pass;
