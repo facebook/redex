@@ -19,6 +19,10 @@
 #include "Transform.h"
 #include "TypeInference.h"
 
+namespace constant_propagation_transform_internal {
+bool enable_object_domain_null_check_elim = false;
+} // namespace constant_propagation_transform_internal
+
 namespace constant_propagation {
 
 namespace {
@@ -117,6 +121,19 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
   ++m_stats.added_param_const;
 }
 
+namespace {
+
+bool is_known_non_null(const ConstantValue& val) {
+  if (constant_propagation_transform_internal::
+          enable_object_domain_null_check_elim) {
+    return val.is_object() || val.is_nez();
+  }
+  auto scd = val.maybe_get<SignedConstantDomain>();
+  return scd && scd->interval() == sign_domain::Interval::NEZ;
+}
+
+} // namespace
+
 bool Transform::eliminate_redundant_null_check(
     const ConstantEnvironment& env,
     const WholeProgramState& /* unused */,
@@ -127,8 +144,7 @@ bool Transform::eliminate_redundant_null_check(
     // Kotlin null check.
     if (auto index = get_null_check_object_index(insn, m_state)) {
       ++m_stats.null_checks_method_calls;
-      auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
-      if (val && val->interval() == sign_domain::Interval::NEZ) {
+      if (is_known_non_null(env.get(insn->src(*index)))) {
         m_mutation->remove(cfg_it);
         ++m_stats.null_checks;
         return true;
@@ -137,8 +153,7 @@ bool Transform::eliminate_redundant_null_check(
     // Redex null check.
     if (insn->get_method() == m_state.redex_null_check_assertion()) {
       ++m_stats.null_checks_method_calls;
-      auto val = env.get(insn->src(0)).maybe_get<SignedConstantDomain>();
-      if (val && val->interval() == sign_domain::Interval::NEZ) {
+      if (is_known_non_null(env.get(insn->src(0)))) {
         m_mutation->remove(cfg_it);
         ++m_stats.null_checks;
         return true;

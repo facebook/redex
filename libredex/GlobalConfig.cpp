@@ -277,6 +277,9 @@ void GlobalConfig::bind_config() {
   bind("emit_outgoing_hashes", false, bool_param);
   bind("enable_low6bits_constant_propagation", false, bool_param,
        "When true, enable low 6 bit constant propagation");
+  bind("enable_object_domain_null_check_elim", false, bool_param,
+       "When true, enable null check elimination for object domains "
+       "(NewObjectDomain, SingletonObjectDomain, ObjectWithImmutAttrDomain)");
   bind("ignore_no_keep_rules", {}, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("json_serde_supercls", {}, string_vector_param);

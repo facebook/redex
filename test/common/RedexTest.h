@@ -58,12 +58,18 @@ namespace signed_constant_domain_internal {
 extern bool enable_low6bits;
 } // namespace signed_constant_domain_internal
 
+namespace constant_propagation_transform_internal {
+extern bool enable_object_domain_null_check_elim;
+} // namespace constant_propagation_transform_internal
+
 struct RedexTest : public testing::Test {
  public:
   RedexTest() {
     g_redex = new RedexContext();
     // TODO(T236830337): Remove this.
     signed_constant_domain_internal::enable_low6bits = true;
+    constant_propagation_transform_internal::
+        enable_object_domain_null_check_elim = true;
   }
 
   ~RedexTest() { delete g_redex; }
