@@ -82,3 +82,41 @@ class NamedCompanionCaller {
     print(NamedCompanionClass.funY())
   }
 }
+
+// Companion methods calling each other: exercises rewrite_this_calls_to_static
+// and two-pass relocation. methodA calls methodB via `this`, and methodB calls
+// methodA via `this`. Both should be relocated as static methods.
+class CompanionWithInterCalls {
+  companion object {
+    fun methodA(x: Int): Int {
+      return if (x > 0) methodB(x - 1) else x
+    }
+
+    fun methodB(x: Int): Int {
+      return if (x > 1) methodA(x - 2) else x
+    }
+  }
+}
+
+class InterCallsCaller {
+  fun main() {
+    print(CompanionWithInterCalls.methodA(5))
+    print(CompanionWithInterCalls.methodB(3))
+  }
+}
+
+// @JvmStatic bridge rename: the companion method compute() has @JvmStatic,
+// which generates a static bridge on the outer class. After KeepThis::No
+// drops the this parameter, the companion method's proto matches the bridge.
+// The pass must rename the bridge to compute$companion_bridge to free the name.
+class CompanionWithJvmStaticBridge {
+  companion object {
+    @JvmStatic fun compute(x: Int): Int = x * 2
+  }
+}
+
+class JvmStaticBridgeCaller {
+  fun main() {
+    print(CompanionWithJvmStaticBridge.compute(42))
+  }
+}

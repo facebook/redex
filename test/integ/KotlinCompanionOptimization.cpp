@@ -189,4 +189,127 @@ TEST_F(KotlinCompanionOptimizationTest, NamedCompanionNotRelocated) {
   // so there should be no static calls into NamedCompanionClass from the pass.
   ASSERT_EQ(static_calls_to_outer, 0);
 }
+
+// Test companion methods calling each other: exercises the simplified
+// uses_this() check, rewrite_this_calls_to_static(), and two-pass relocation.
+//
+// Input: CompanionWithInterCalls has a companion with methodA and methodB
+// that call each other via `this`.  The old uses_this() would reject these
+// methods; the new one accepts them because the only uses of `this` are
+// same-class invoke-virtual calls.
+//
+// After optimization:
+//   - Both methodA and methodB are relocated to CompanionWithInterCalls
+//     as static methods
+//   - InterCallsCaller.main() calls them via invoke-static
+//   - The intra-companion calls (methodA->methodB, methodB->methodA) are
+//     also rewritten to invoke-static
+TEST_F(KotlinCompanionOptimizationTest, CompanionInterCalls) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/objtest/InterCallsCaller;.main:()V");
+  auto* main_method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/objtest/InterCallsCaller;.main:()V")
+          ->as_def();
+  auto* codex = main_method->get_code();
+  ASSERT_NE(nullptr, codex);
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  DexType* outer = DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithInterCalls;");
+  ASSERT_NE(nullptr, outer);
+  dump_cls(type_class(outer));
+
+  // Both methods should be relocated to the outer class as static methods.
+  auto* methodA = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithInterCalls;.methodA:(I)I");
+  auto* methodB = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithInterCalls;.methodB:(I)I");
+  ASSERT_NE(nullptr, methodA);
+  ASSERT_NE(nullptr, methodB);
+  ASSERT_TRUE(methodA->is_def());
+  ASSERT_TRUE(methodB->is_def());
+  ASSERT_TRUE(is_static(methodA->as_def()));
+  ASSERT_TRUE(is_static(methodB->as_def()));
+
+  // The inter-calls inside methodA/methodB should now be invoke-static.
+  auto check_internal_calls = [](DexMethodRef* m) {
+    auto* code = m->as_def()->get_code();
+    auto iterable = InstructionIterable(code);
+    for (const auto& mie : iterable) {
+      if (opcode::is_an_invoke(mie.insn->opcode())) {
+        ASSERT_EQ(mie.insn->opcode(), OPCODE_INVOKE_STATIC)
+            << "Expected invoke-static in " << show(m) << " but found "
+            << show(mie.insn);
+      }
+    }
+  };
+  check_internal_calls(methodA);
+  check_internal_calls(methodB);
+
+  // InterCallsCaller.main() should have only static calls into the outer class.
+  auto iterable = InstructionIterable(codex);
+  unsigned static_calls = 0;
+  for (const auto& mie : iterable) {
+    auto* insn = mie.insn;
+    if (!opcode::is_an_invoke(insn->opcode())) {
+      continue;
+    }
+    if (insn->opcode() == OPCODE_INVOKE_STATIC) {
+      static_calls++;
+      ASSERT_EQ(insn->get_method()->get_class(), outer);
+    }
+  }
+  // methodA and methodB
+  ASSERT_EQ(static_calls, 2);
+}
+
+// Test @JvmStatic bridge rename: when KeepThis::No makes the companion
+// method's proto match the existing @JvmStatic bridge on the outer class,
+// the bridge is renamed to "$companion_bridge" to free the name for the
+// relocated companion method.
+//
+// Input: CompanionWithJvmStaticBridge has a companion with @JvmStatic
+// compute(Int):Int.  Kotlin generates a static bridge on the outer class
+// with the same name/proto.
+//
+// After optimization:
+//   - The bridge is renamed to "compute$companion_bridge"
+//   - The companion method takes the name "compute" on the outer class
+//   - JvmStaticBridgeCaller.main() calls via invoke-static "compute"
+TEST_F(KotlinCompanionOptimizationTest, JvmStaticBridgeRename) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/JvmStaticBridgeCaller;.main:()V");
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  DexType* outer = DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithJvmStaticBridge;");
+  ASSERT_NE(nullptr, outer);
+  dump_cls(type_class(outer));
+
+  // The companion's compute() should now be on the outer class.
+  auto* compute = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithJvmStaticBridge;"
+      ".compute:(I)I");
+  ASSERT_NE(nullptr, compute);
+  ASSERT_TRUE(compute->is_def());
+  ASSERT_TRUE(is_static(compute->as_def()));
+
+  // The old @JvmStatic bridge should be renamed to $companion_bridge.
+  auto* bridge = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithJvmStaticBridge;"
+      ".compute$companion_bridge:(I)I");
+  ASSERT_NE(nullptr, bridge);
+  ASSERT_TRUE(bridge->is_def());
+  ASSERT_TRUE(is_static(bridge->as_def()));
+}
 } // namespace
