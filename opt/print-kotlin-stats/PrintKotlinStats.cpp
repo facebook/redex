@@ -33,8 +33,7 @@ constexpr const char* CONTINUATION_IMPL =
 // Check if cls is from Kotlin source
 bool is_kotlin_class(DexClass* cls) {
   const auto* src_string = cls->get_source_file();
-  return (src_string != nullptr) &&
-         boost::algorithm::ends_with(src_string->str(), ".kt");
+  return (src_string != nullptr) && src_string->str().ends_with(".kt");
 }
 
 // Check cls name is in anonymous format
@@ -297,7 +296,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
     if (is_anonymous(cls->get_name()->str())) {
       stats.kotlin_anonymous_class++;
     }
-    if (boost::algorithm::ends_with(cls->get_name()->str(), "$Companion;")) {
+    if (cls->get_name()->str().ends_with("$Companion;")) {
       stats.kotlin_companion_class++;
 
       if (!cls->get_interfaces()->empty()) {

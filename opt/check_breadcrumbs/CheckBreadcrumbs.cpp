@@ -12,7 +12,6 @@
 #include <iosfwd>
 
 #include <boost/algorithm/string/join.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem/operations.hpp>
 
 #include "ConfigFiles.h"
@@ -151,7 +150,7 @@ void build_allowed_violations(const Scope& scope,
     if (line.empty() || line.starts_with("#")) {
       continue;
     }
-    if (boost::algorithm::ends_with(line, ";")) {
+    if (line.ends_with(";")) {
       allowed_class_names.emplace(line, false);
     } else {
       type_prefixes->emplace(line);

@@ -30,8 +30,8 @@ TEST_F(PostVerify, SinkCommonCtorInvocation) {
       });
 
   for (auto* dm : cls->get_dmethods()) {
-    if (!boost::algorithm::ends_with(dm->get_deobfuscated_name_or_empty(),
-                                     ".<init>:(Ljava/lang/String;I)V")) {
+    if (!dm->get_deobfuscated_name_or_empty().ends_with(
+            ".<init>:(Ljava/lang/String;I)V")) {
       continue;
     }
 

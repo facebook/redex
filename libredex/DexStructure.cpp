@@ -7,7 +7,7 @@
 
 #include "DexStructure.h"
 
-#include <boost/algorithm/string/predicate.hpp>
+#include <string_view>
 #include <vector>
 
 #include "DexClass.h"
@@ -43,7 +43,7 @@ inline size_t MAX_TYPE_REFS(int min_sdk) {
 
 bool matches_penalty(const char* str, unsigned* penalty) {
   for (auto const& pattern : PENALTY_PATTERNS) {
-    if (boost::algorithm::ends_with(str, pattern.suffix)) {
+    if (std::string_view(str).ends_with(pattern.suffix)) {
       *penalty = pattern.penalty;
       return true;
     }

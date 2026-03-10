@@ -24,7 +24,6 @@
 
 #include "ClassSplittingPass.h"
 
-#include <boost/algorithm/string.hpp>
 #include <vector>
 
 #include "ClassSplitting.h"
@@ -90,8 +89,7 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
     DexType* type = DexType::get_type(str);
     if (type != nullptr) {
       coldstart_types.insert(type);
-    } else if (boost::algorithm::ends_with(
-                   str, CLASS_SPLITTING_RELOCATED_SUFFIX_SEMI)) {
+    } else if (str.ends_with(CLASS_SPLITTING_RELOCATED_SUFFIX_SEMI)) {
       previously_relocated_types.emplace_back(str);
     }
   }

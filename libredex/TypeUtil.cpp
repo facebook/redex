@@ -552,7 +552,7 @@ bool is_kotlin_function_interface(const DexType* type) {
     return false;
   }
   auto suffix = name.substr(prefix.length());
-  const auto ends_with_semicolon = boost::ends_with(suffix, ";");
+  const auto ends_with_semicolon = suffix.ends_with(";");
   redex_assert(ends_with_semicolon);
   suffix = suffix.substr(0, suffix.length() - 1);
   return !suffix.empty() &&
@@ -569,8 +569,7 @@ bool is_kotlin_lambda(const DexClass* cls) {
 
 bool is_kotlin_class(DexClass* cls) {
   const auto* src_string = cls->get_source_file();
-  return (src_string != nullptr) &&
-         boost::algorithm::ends_with(src_string->str(), ".kt");
+  return (src_string != nullptr) && src_string->str().ends_with(".kt");
 }
 
 bool is_kotlin_internal_type(const DexType* type) {

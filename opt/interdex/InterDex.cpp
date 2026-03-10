@@ -7,8 +7,6 @@
 
 #include "InterDex.h"
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include <algorithm>
 #include <cinttypes>
 #include <string>
@@ -231,7 +229,7 @@ void exclude_extra_dynamically_dead_class(
 
 bool is_interaction_id_start_marker(std::string_view betamap_entry) {
   return betamap_entry.starts_with(INTERACTION_ID_FORMAT) &&
-         boost::algorithm::ends_with(betamap_entry, START_FORMAT);
+         betamap_entry.ends_with(START_FORMAT);
 }
 
 } // namespace

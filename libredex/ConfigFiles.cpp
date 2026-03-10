@@ -464,7 +464,7 @@ const UnorderedSet<std::string>& ConfigFiles::get_live_class_split_list() {
 }
 
 bool ConfigFiles::is_relocated_class(std::string_view name) const {
-  return boost::algorithm::ends_with(name, CLASS_SPLITTING_RELOCATED_SUFFIX);
+  return name.ends_with(CLASS_SPLITTING_RELOCATED_SUFFIX);
 }
 
 void ConfigFiles::remove_relocated_part(std::string_view* name) {

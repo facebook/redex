@@ -8,7 +8,6 @@
 #pragma once
 
 #include <algorithm>
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/optional.hpp>
 #include <cctype>
 #include <functional>
@@ -370,7 +369,7 @@ inline std::string external_to_internal(std::string_view external_name) {
   internal_name.append(component_external_name);
 
   std::replace(internal_name.begin(), internal_name.end(), '.', '/');
-  if (!boost::algorithm::ends_with(internal_name, ";")) {
+  if (!internal_name.ends_with(";")) {
     internal_name.append(1, ';');
   }
   return internal_name;

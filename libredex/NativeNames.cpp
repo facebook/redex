@@ -7,7 +7,6 @@
 
 #include "NativeNames.h"
 
-#include <boost/algorithm/string.hpp>
 #include <cctype>
 #include <sstream>
 
@@ -46,7 +45,7 @@ void escape_single_identifier(std::ostringstream& out, std::string_view name) {
 
 void mangle_class_name(std::ostringstream& out, std::string_view cls_name) {
   always_assert(cls_name.starts_with("L"));
-  always_assert(boost::ends_with(cls_name, ";"));
+  always_assert(cls_name.ends_with(";"));
   cls_name.remove_prefix(1);
   cls_name.remove_suffix(1);
 

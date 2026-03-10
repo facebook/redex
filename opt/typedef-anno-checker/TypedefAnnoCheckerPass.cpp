@@ -79,7 +79,7 @@ bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
 
   // the util class
   auto* cls = type_class(m->get_class());
-  if (!boost::ends_with(cls->get_deobfuscated_name_or_empty_copy(), "$Util;")) {
+  if (!cls->get_deobfuscated_name_or_empty_copy().ends_with("$Util;")) {
     return false;
   }
 
@@ -515,8 +515,8 @@ bool TypedefAnnoChecker::check_typedef_value(
         if (const_value == 0 && opcode::is_an_invoke(insn->opcode())) {
           DexMethodRef* callee = insn->get_method();
           if (callee->is_def() &&
-              boost::ends_with(callee->as_def()->get_simple_deobfuscated_name(),
-                               DEFAULT_SUFFIX)) {
+              callee->as_def()->get_simple_deobfuscated_name().ends_with(
+                  DEFAULT_SUFFIX)) {
             break;
           }
         }

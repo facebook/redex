@@ -7,7 +7,6 @@
 
 #include "ReachableResources.h"
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/regex.hpp>
 
 #include "DexClass.h"
@@ -22,7 +21,7 @@ namespace {
 // Return true if the given string is a relative file path, has .xml extension
 // and can refer to the res directory of an .apk or .aab file.
 bool is_resource_xml(const std::string& str) {
-  if (boost::algorithm::ends_with(str, ".xml")) {
+  if (str.ends_with(".xml")) {
     boost::filesystem::path p(str);
     if (p.is_relative()) {
       auto it = p.begin();
