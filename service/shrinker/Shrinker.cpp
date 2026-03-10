@@ -161,7 +161,8 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
           &m_immut_analyzer_state, &m_immut_analyzer_state,
           m_enum_analyzer_state, m_boxed_boolean_analyzer_state,
           &m_string_analyzer_state, m_api_level_analyzer_state,
-          &m_package_name_state, nullptr, &m_immut_analyzer_state, nullptr),
+          &m_package_name_state, nullptr, &m_immut_analyzer_state, nullptr,
+          nullptr),
       /* imprecise_switches */ true);
   fp_iter.run(initial_env);
   constant_propagation::Transform tf(config, m_cp_state);

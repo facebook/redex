@@ -280,6 +280,10 @@ void GlobalConfig::bind_config() {
   bind("enable_object_domain_null_check_elim", false, bool_param,
        "When true, enable null check elimination for object domains "
        "(NewObjectDomain, SingletonObjectDomain, ObjectWithImmutAttrDomain)");
+  bind("enable_known_non_null_returns", false, bool_param,
+       "When true, mark return values of well-known external methods as "
+       "non-null in constant propagation, enabling removal of redundant "
+       "Kotlin null-check intrinsics");
   bind("ignore_no_keep_rules", {}, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("json_serde_supercls", {}, string_vector_param);

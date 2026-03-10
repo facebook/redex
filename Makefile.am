@@ -268,6 +268,7 @@ libredex_la_SOURCES = \
 	service/constant-propagation/DefinitelyAssignedIFields.cpp \
 	service/constant-propagation/IFieldAnalysisUtil.cpp \
 	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
+	service/constant-propagation/KnownNonNullReturnsAnalyzer.cpp \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
 	service/constant-propagation/SignedConstantDomain.cpp \

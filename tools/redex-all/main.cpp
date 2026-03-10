@@ -72,6 +72,7 @@
 #include "RedexResources.h"
 #include "Sanitizers.h"
 // NOLINTNEXTLINE(facebook-unused-include-check)
+#include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
 #include "SanitizersConfig.h"
 #include "ScopedMemStats.h"
@@ -1972,6 +1973,10 @@ int main(int argc, char* argv[]) {
         enable_object_domain_null_check_elim =
             args.config.get("enable_object_domain_null_check_elim", false)
                 .asBool();
+
+    // TODO(T257927964): Remove this.
+    constant_propagation::known_non_null_returns_enable =
+        args.config.get("enable_known_non_null_returns", false).asBool();
 
     // For convenience.
     g_redex->instrument_mode = args.redex_options.instrument_pass_enabled;
