@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <string>
+#include <string_view>
 
 #include "DexAnnotation.h"
 #include "Show.h"
@@ -25,7 +26,7 @@ bool is_alpha(char c) {
 bool is_word(char c) { return is_digit(c) || is_alpha(c) || c == '_'; }
 
 // ".*\\$\\d+;"
-bool is_anonymous(std::string name) {
+bool is_anonymous(std::string_view name) {
   for (uint32_t i = 0; i < name.length(); ++i) {
     if (name[i] != '$') {
       continue;
@@ -42,7 +43,7 @@ bool is_anonymous(std::string name) {
       continue;
     }
     if (name[j] == ';') {
-      fprintf(stderr, "'%s' is anonymous\n", name.c_str());
+      fprintf(stderr, "'%.*s' is anonymous\n", (int)name.size(), name.data());
       return true;
     }
   }
@@ -51,7 +52,7 @@ bool is_anonymous(std::string name) {
 }
 
 // ".*\\$\\w+;"
-bool is_nested(std::string name) {
+bool is_nested(std::string_view name) {
   for (uint32_t i = 0; i < name.length(); ++i) {
     if (name[i] != '$') {
       continue;
@@ -68,7 +69,7 @@ bool is_nested(std::string name) {
       continue;
     }
     if (name[j] == ';') {
-      fprintf(stderr, "'%s' is nested\n", name.c_str());
+      fprintf(stderr, "'%.*s' is nested\n", (int)name.size(), name.data());
       return true;
     }
   }
