@@ -375,7 +375,7 @@ Stats apply_transform(const PassState& pass_state,
     constexpr int16_t STRING_TREE_NO_ENTRY = 0;
     int16_t counter = STRING_TREE_NO_ENTRY + 1;
     for (const auto& type : ordered_types) {
-      auto string_name = java_names::internal_to_external(type->str_copy());
+      auto string_name = java_names::internal_to_external(type->str());
       int16_t ordinal = counter++;
       string_tree_items.emplace(string_name, ordinal);
       auto* block = key_to_case.at(type);
