@@ -74,7 +74,6 @@
 // NOLINTNEXTLINE(facebook-unused-include-check)
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
-#include "SanitizersConfig.h"
 #include "ScopedMemStats.h"
 #include "Show.h"
 #include "SignedConstantDomain.h"
