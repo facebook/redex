@@ -692,10 +692,12 @@ DexCode::DexCode(const DexCode& that)
       m_insns(that.m_insns ? std::make_optional<std::vector<DexInstruction*>>()
                            : std::nullopt) {
   if (that.m_insns) {
+    m_insns->reserve(that.m_insns->size());
     for (const auto& insn : *that.m_insns) {
       m_insns->emplace_back(insn->clone());
     }
   }
+  m_tries.reserve(that.m_tries.size());
   for (const auto& try_ : that.m_tries) {
     m_tries.emplace_back(new DexTryItem(*try_));
   }

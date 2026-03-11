@@ -1436,6 +1436,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   if (pm_config->check_pass_order_properties) {
     std::vector<std::pair<std::string, redex_properties::PropertyInteractions>>
         pass_interactions;
+    pass_interactions.reserve(m_activated_passes.size());
     for (size_t i = 0; i < m_activated_passes.size(); ++i) {
       Pass* pass = m_activated_passes[i];
       auto* pass_info = &m_pass_info[i];

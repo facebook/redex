@@ -357,6 +357,9 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
     TRACE(CF, 1, "coldstart class: 1 pct %zu", coldstart_1pct_classes.size());
 
     std::vector<std::string> coldstart_classes_with_method_profile_symbols;
+    coldstart_classes_with_method_profile_symbols.reserve(
+        coldstart_classes.size() + coldstart_20pct_classes.size() +
+        coldstart_1pct_classes.size());
 
     for (auto& cls_name : coldstart_classes) {
       if (cls_name.find(COLD_START_20PCT_END) != std::string::npos) {

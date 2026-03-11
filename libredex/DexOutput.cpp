@@ -236,6 +236,7 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
 
   std::vector<DexMethod*> perf_sensitive_methods;
   std::vector<DexMethod*> remaining_methods;
+  remaining_methods.reserve(lmeth.size());
   for (auto* meth : lmeth) {
     if (perf_sensitive_classes.count(meth->get_class()) != 0u) {
       perf_sensitive_methods.push_back(meth);
@@ -1274,6 +1275,7 @@ void DexOutput::generate_annotations() {
    * 5) Attach annotation_directories to the classdefs
    */
   std::vector<DexAnnotationDirectory*> lad;
+  lad.reserve(hdr.class_defs_size);
   std::map<DexAnnotationDirectory*, int> ad_to_classnum;
   annomap_t annomap;
   asetmap_t asetmap;
@@ -1932,6 +1934,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
                 bucket_size, offset);
           size_to_offset.emplace(bucket_size, offset);
           std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
+          dbgops.reserve(bucket_size);
           if (bucket_size > 0) {
             // First emit an entry for pc = 0 -> line = start
             dbgops.push_back(DexDebugInstruction::create_line_entry(0, 0));
