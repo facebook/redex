@@ -72,6 +72,7 @@
 #include "RedexResources.h"
 #include "Sanitizers.h"
 // NOLINTNEXTLINE(facebook-unused-include-check)
+#include "ConstantPropagationTransform.h"
 #include "SanitizersConfig.h"
 #include "ScopedMemStats.h"
 #include "Show.h"
@@ -1953,6 +1954,11 @@ int main(int argc, char* argv[]) {
 
     signed_constant_domain_internal::enable_low6bits =
         args.config.get("enable_low6bits_constant_propagation", false).asBool();
+
+    constant_propagation_transform_internal::
+        enable_object_domain_null_check_elim =
+            args.config.get("enable_object_domain_null_check_elim", false)
+                .asBool();
 
     // For convenience.
     g_redex->instrument_mode = args.redex_options.instrument_pass_enabled;

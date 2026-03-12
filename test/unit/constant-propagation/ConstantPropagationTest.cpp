@@ -1770,3 +1770,55 @@ TEST_F(ConstantPropagationTest,
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
+
+// Verify that null checks on new-instance results are eliminated when
+// NewObjectAnalyzer runs (as in ConstantPrimitiveAndBoxedAnalyzer). The
+// NewObjectAnalyzer sets RESULT_REGISTER to NewObjectDomain and short-circuits
+// PrimitiveAnalyzer, so the value is not a SignedConstantDomain(NEZ). The
+// transform must recognize object domains as non-null.
+TEST_F(ConstantPropagationTest, NewInstanceNullCheckElimination) {
+  // Create the Kotlin null check method so cp::State picks it up.
+  auto* null_check = DexMethod::make_method(
+      "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:"
+      "(Ljava/lang/Object;Ljava/lang/String;)V");
+  null_check->make_concrete(ACC_PUBLIC | ACC_STATIC, true);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LFoo;.<init>:()V")
+      (const-string "param")
+      (move-result-pseudo-object v1)
+      (invoke-static (v0 v1) "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/Object;Ljava/lang/String;)V")
+      (return-void)
+    )
+  )");
+
+  // do_const_prop's default analyzer is ConstantPrimitiveAnalyzer (just
+  // PrimitiveAnalyzer), which handles new-instance by setting RESULT_REGISTER
+  // to SignedConstantDomain(NEZ). That would make the null check elimination
+  // succeed via is_nez() alone, never exercising the is_object() path. We
+  // include NewObjectAnalyzer in the combiner so it short-circuits
+  // PrimitiveAnalyzer and produces a NewObjectDomain value instead, verifying
+  // that even without PrimitiveAnalyzer's NEZ fallback, is_object() recognizes
+  // object domains as non-null and eliminates the null check.
+  cp::ImmutableAttributeAnalyzerState immut_analyzer_state;
+  using Analyzer =
+      InstructionAnalyzerCombiner<cp::NewObjectAnalyzer, cp::PrimitiveAnalyzer>;
+  Analyzer analyzer(&immut_analyzer_state, nullptr);
+
+  do_const_prop(code.get(), analyzer);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LFoo;.<init>:()V")
+      (const-string "param")
+      (move-result-pseudo-object v1)
+      (return-void)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}

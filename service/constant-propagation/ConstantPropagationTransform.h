@@ -19,6 +19,10 @@
 
 class ScopedMetrics;
 
+namespace constant_propagation_transform_internal {
+extern bool enable_object_domain_null_check_elim;
+} // namespace constant_propagation_transform_internal
+
 namespace constant_propagation {
 
 /**
