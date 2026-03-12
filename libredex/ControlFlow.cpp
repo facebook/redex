@@ -47,7 +47,7 @@ bool edge_type_structural_equals(const cfg::CompactEdgeVector& e1,
   }
 
   return std::all_of(edge_types.begin(), edge_types.end(),
-                     [](const size_t& count) { return count == 0; });
+                     [](const ssize_t& count) { return count == 0; });
 }
 
 // return true if `it` should be the last instruction of this block
