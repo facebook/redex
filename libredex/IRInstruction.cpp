@@ -47,6 +47,16 @@ IRInstruction::IRInstruction(const IRInstruction& other)
 }
 
 IRInstruction& IRInstruction::operator=(const IRInstruction& other) {
+  if (this == &other) {
+    return *this;
+  }
+  // Free old resources before overwriting.
+  if (m_num_srcs > MAX_NUM_INLINE_SRCS) {
+    delete[] m_srcs;
+  }
+  if (has_data()) {
+    delete m_data;
+  }
   m_opcode = other.m_opcode;
   m_num_srcs = other.m_num_srcs;
   m_dest = other.m_dest;
