@@ -74,9 +74,8 @@ bool uses_this(const DexMethod* method) {
 }
 
 // Rewrite same-class invoke-virtual/invoke-direct calls on `this` to
-// invoke-static dispatch, stripping the `this` argument.  After rewriting,
-// remove any dead move instructions that still reference the raw `this`
-// register (e.g., `move-object vX, this_reg` that was part of the use chain).
+// invoke-static dispatch, stripping the `this` argument.  Dead move-object
+// copies of `this` are left in place for LocalDcePass to clean up.
 //
 // Must be called for ALL companion methods BEFORE any are relocated, so that
 // callee method refs still belong to the companion class.
@@ -94,7 +93,6 @@ void rewrite_this_calls_to_static(DexMethod* method) {
     return;
   }
   auto* first_load_param = param_insns.begin()->insn;
-  auto this_reg = first_load_param->dest();
 
   // Find all end-uses of `this` through move chains and rewrite same-class
   // invokes to static dispatch.
@@ -118,23 +116,8 @@ void rewrite_this_calls_to_static(DexMethod* method) {
     insn->set_srcs_size(nargs - 1);
   }
 
-  // Remove dead instructions that still directly reference `this_reg` as a
-  // source (e.g., move-object copies that were part of the `this` use chain).
-  cfg::CFGMutation m(cfg);
-  auto iterable = cfg::InstructionIterable(cfg);
-  for (auto it = iterable.begin(); it != iterable.end(); it++) {
-    auto* insn = it->insn;
-    if (opcode::is_a_load_param(insn->opcode())) {
-      continue;
-    }
-    for (size_t i = 0; i < insn->srcs_size(); i++) {
-      if (insn->src(i) == this_reg) {
-        m.remove(it);
-        break;
-      }
-    }
-  }
-  m.flush();
+  // Any dead move-object copies of `this` are left in place — they are
+  // harmless and will be cleaned up by LocalDcePass.
 }
 
 // Make method static (if necessary) and relocate to TO_TYPE.

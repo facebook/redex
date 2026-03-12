@@ -312,4 +312,70 @@ TEST_F(KotlinCompanionOptimizationTest, JvmStaticBridgeRename) {
   ASSERT_TRUE(bridge->is_def());
   ASSERT_TRUE(is_static(bridge->as_def()));
 }
+
+// Test companion method with default arguments: Kotlin generates a static
+// $default method on the companion class whose first parameter is the
+// companion instance (not VM-managed `this`).  The compiler reuses this
+// register for the AND_INT_LIT bitmask check.
+//
+// This exercises the fix for CFG corruption: the old dead-instruction removal
+// in rewrite_this_calls_to_static used raw register numbers and would
+// incorrectly delete branch instructions that reused the first-param register,
+// leaving a block with no successors.
+//
+// Input: CompanionWithDefaults has a companion with greet(String, String)
+// where the second parameter has a default value.  Kotlin generates:
+//   - greet(String, String):String              (virtual, on companion)
+//   - greet$default(Companion, String, String, int, Object):String  (static)
+//
+// After optimization:
+//   - Both greet and greet$default are relocated to CompanionWithDefaults
+//   - DefaultArgsCaller.main() calls them via invoke-static
+//   - The $default method's CFG remains valid (no crash)
+TEST_F(KotlinCompanionOptimizationTest, CompanionWithDefaultArgs) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/DefaultArgsCaller;.main:()V");
+  auto* main_method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/objtest/DefaultArgsCaller;.main:()V")
+          ->as_def();
+  auto* codex = main_method->get_code();
+  ASSERT_NE(nullptr, codex);
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  // This would crash before the fix with:
+  //   assertion 'num_succs > 0' failed in cfg::ControlFlowGraph::sanity_check()
+  run_passes(passes);
+
+  DexType* outer = DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithDefaults;");
+  ASSERT_NE(nullptr, outer);
+  dump_cls(type_class(outer));
+
+  // The companion's greet() should be relocated to the outer class.
+  auto* greet = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithDefaults;"
+      ".greet:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+  ASSERT_NE(nullptr, greet) << "greet not found on outer class";
+  ASSERT_TRUE(greet->is_def());
+  ASSERT_TRUE(is_static(greet->as_def()));
+
+  // The $default method should also be relocated and its CFG should be valid.
+  // We verify it exists on the outer class and has code (not corrupted).
+  auto* outer_cls = type_class(outer);
+  DexMethod* default_method = nullptr;
+  for (auto* m : outer_cls->get_dmethods()) {
+    if (m->get_name()->str().find("greet$default") != std::string::npos) {
+      default_method = m;
+      break;
+    }
+  }
+  ASSERT_NE(nullptr, default_method)
+      << "greet$default not found on outer class";
+  ASSERT_TRUE(is_static(default_method));
+  ASSERT_NE(nullptr, default_method->get_code()) << "greet$default has no code";
+}
 } // namespace

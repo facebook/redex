@@ -37,8 +37,8 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
 
   PrintKotlinStats::Stats stats = klr->get_stats();
 
-  EXPECT_EQ(stats.kotlin_null_check_insns, 10);
-  EXPECT_EQ(stats.kotlin_public_param_objects, 39);
+  EXPECT_EQ(stats.kotlin_null_check_insns, 12);
+  EXPECT_EQ(stats.kotlin_public_param_objects, 47);
 
   // LExample;.$$delegatedProperties:[Lkotlin/reflect/KProperty;
   // LFooDelagates;.lazyValue$delegate:Lkotlin/Lazy;
@@ -97,14 +97,18 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LCompanionWithJvmStaticBridge;
   // LCompanionWithJvmStaticBridge$Companion;
   // LJvmStaticBridgeCaller;
-  EXPECT_EQ(stats.kotlin_class, 29);
+  // LCompanionWithDefaults;
+  // LCompanionWithDefaults$Companion;
+  // LDefaultArgsCaller;
+  EXPECT_EQ(stats.kotlin_class, 32);
 
   // LCompanionClass$Companion;
   // LCompanionWithMethodCollision$Companion;
   // LNamedCompanionClass$Custom;
   // LCompanionWithInterCalls$Companion;
   // LCompanionWithJvmStaticBridge$Companion;
-  EXPECT_EQ(stats.kotlin_companion_class, 5);
+  // LCompanionWithDefaults$Companion;
+  EXPECT_EQ(stats.kotlin_companion_class, 6);
 
   // LKotlinLambdaInline$foo$1;
   // LKotlinLambdaInline$bar$1;
@@ -113,8 +117,9 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   EXPECT_EQ(stats.kotlin_anonymous_class, 4);
 
   // LKotlinDefaultArgs.greet$default, with 2 default args
-  EXPECT_EQ(stats.kotlin_default_arg_method, 1);
-  EXPECT_EQ(stats.kotlin_default_arg_check_insns, 2);
-  EXPECT_EQ(stats.kotlin_and_lit_insns, 2);
+  // LCompanionWithDefaults$Companion.greet$default, with 1 default arg
+  EXPECT_EQ(stats.kotlin_default_arg_method, 2);
+  EXPECT_EQ(stats.kotlin_default_arg_check_insns, 3);
+  EXPECT_EQ(stats.kotlin_and_lit_insns, 3);
 }
 } // namespace
