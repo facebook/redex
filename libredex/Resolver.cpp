@@ -87,7 +87,7 @@ DexMethod* find_most_specific_interface_method(const DexClass* cls,
         // double check later
         auto* parent_intf_cls = type_class(parent_intf);
         always_assert_log(parent_intf_cls, "%s has no definition in dex",
-                          SHOW(parent_intf_cls));
+                          SHOW(parent_intf));
         intf_queue.push_back(parent_intf_cls);
       }
     }
@@ -111,7 +111,7 @@ DexMethod* find_most_specific_interface_method(const DexClass* cls,
           for (const auto& parent_intf : *current_intf->get_interfaces()) {
             auto* intf_cls = type_class(parent_intf);
             always_assert_log(intf_cls, "%s has no definition in dex",
-                              SHOW(intf_cls));
+                              SHOW(parent_intf));
             intf_queue.push_back(intf_cls);
           }
         }
