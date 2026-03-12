@@ -26,7 +26,6 @@ constexpr const char* RW_PROP_SIGNATURE =
     "Lkotlin/properties/ReadWriteProperty;";
 constexpr const char* KPROPERTY_ARRAY = "[Lkotlin/reflect/KProperty;";
 constexpr const char* KOTLIN_LAMBDA = "Lkotlin/jvm/internal/Lambda;";
-constexpr const char* DI_BASE = "Lcom/facebook/inject/AbstractLibraryModule;";
 constexpr const char* CONTINUATION_IMPL =
     "Lkotlin/coroutines/jvm/internal/ContinuationImpl;";
 
@@ -139,7 +138,6 @@ void PrintKotlinStats::setup() {
       "(Ljava/lang/Object;Ljava/lang/Object;)Z");
   m_kotlin_lambdas_base = DexType::get_type(KOTLIN_LAMBDA);
   m_kotlin_coroutin_continuation_base = DexType::get_type(CONTINUATION_IMPL);
-  m_di_base = DexType::get_type(DI_BASE);
   m_instance = DexString::make_string("INSTANCE");
 }
 
@@ -213,10 +211,6 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(
   }
   if (cls->get_super_class() == m_kotlin_coroutin_continuation_base) {
     stats.kotlin_coroutine_continuation_base++;
-  }
-
-  if (cls->get_super_class() == m_di_base) {
-    stats.di_generated_class++;
   }
 
   for (auto* field : cls->get_sfields()) {
@@ -436,7 +430,6 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
                   kotlin_companion_virtual_uses_this);
   mgr.incr_metric("kotlin_companion_with_interfaces",
                   kotlin_companion_with_interfaces);
-  mgr.incr_metric("di_generated_class", di_generated_class);
   mgr.incr_metric("kotlin_default_arg_method", kotlin_default_arg_method);
   mgr.incr_metric("kotlin_homonym_default_arg_method",
                   kotlin_homonym_default_arg_method);
@@ -497,8 +490,6 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
         kotlin_companion_virtual_uses_this);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_companion_with_interfaces = %zu",
         kotlin_companion_with_interfaces);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: di_generated_class = %zu",
-        di_generated_class);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_default_arg_method = %zu",
         kotlin_default_arg_method);
   TRACE(KOTLIN_STATS, 1,
