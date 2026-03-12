@@ -62,6 +62,11 @@ namespace constant_propagation_transform_internal {
 extern bool enable_object_domain_null_check_elim;
 } // namespace constant_propagation_transform_internal
 
+namespace constant_propagation {
+// TODO(T257927964): Remove this.
+extern bool known_non_null_returns_enable;
+} // namespace constant_propagation
+
 struct RedexTest : public testing::Test {
  public:
   RedexTest() {
@@ -70,6 +75,8 @@ struct RedexTest : public testing::Test {
     signed_constant_domain_internal::enable_low6bits = true;
     constant_propagation_transform_internal::
         enable_object_domain_null_check_elim = true;
+    // TODO(T257927964): Remove this.
+    constant_propagation::known_non_null_returns_enable = true;
   }
 
   ~RedexTest() { delete g_redex; }

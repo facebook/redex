@@ -445,6 +445,23 @@ class ConstantClassObjectAnalyzer
   }
 };
 
+/*
+ * Marks return values of well-known external methods as non-null (NEZ).
+ * This enables elimination of redundant Kotlin null-check intrinsics
+ * (e.g. checkNotNullExpressionValue) after calls to these methods.
+ * Gated by enable_known_non_null_returns.
+ */
+// TODO(T257927964): Remove this.
+extern bool known_non_null_returns_enable;
+
+class KnownNonNullReturnsAnalyzer
+    : public InstructionAnalyzerBase<KnownNonNullReturnsAnalyzer,
+                                     ConstantEnvironment> {
+ public:
+  static bool analyze_invoke(const IRInstruction* insn,
+                             ConstantEnvironment* env);
+};
+
 struct ApiLevelAnalyzerState {
   // Construction of this object is expensive because get_method acquires a
   // global lock. `get` caches those lookups.
@@ -654,6 +671,7 @@ using ConstantPrimitiveAndBoxedAnalyzer =
                                 PackageNameAnalyzer,
                                 ConstantClassObjectAnalyzer,
                                 NewObjectAnalyzer,
+                                KnownNonNullReturnsAnalyzer,
                                 PrimitiveAnalyzer>;
 
 } // namespace constant_propagation
