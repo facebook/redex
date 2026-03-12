@@ -24,7 +24,7 @@ import typing
 import zipfile
 from dataclasses import dataclass
 from os.path import abspath, dirname, exists, getsize, isdir, isfile, join
-from pipes import quote
+from shlex import quote
 
 import pyredex.bintools as bintools
 import pyredex.logger as logger
