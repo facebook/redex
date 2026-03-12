@@ -56,6 +56,7 @@ using CombinedAnalyzer =
                                 ApiLevelAnalyzer,
                                 PackageNameAnalyzer,
                                 NewObjectAnalyzer,
+                                ResourceIdAnalyzer,
                                 PrimitiveAnalyzer>;
 
 namespace {
@@ -113,7 +114,7 @@ class AnalyzerGenerator {
             class_under_init, m_immut_analyzer_state, wps_accessor_ptr,
             m_enum_field_analyzer_state, m_boxed_boolean_analyzer_state,
             m_string_analyzer_state, nullptr, *m_api_level_analyzer_state,
-            m_package_name_state, m_immut_analyzer_state, nullptr),
+            m_package_name_state, m_immut_analyzer_state, nullptr, nullptr),
         std::move(env));
   }
 };

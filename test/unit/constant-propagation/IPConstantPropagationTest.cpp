@@ -2225,3 +2225,131 @@ TEST_F(InterproceduralConstantPropagationTest,
   m->get_code()->clear_cfg();
   EXPECT_CODE_EQ(m->get_code(), expected_code.get());
 }
+
+TEST_F(InterproceduralConstantPropagationTest, rConstStaticFieldPropagation) {
+  // Verify that IPCP propagates resource ID constants (IOPCODE_R_CONST) through
+  // static fields. A <clinit> stores a resource ID via r-const + sput, and a
+  // caller reads it via sget. After IPCP, the sget should be replaced with
+  // r-const.
+
+  Scope scope;
+  auto* cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  // Create a static field with an initial zero value.
+  auto* field = dynamic_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       DexEncodedValue::zero_for_type(field->get_type()));
+  creator.add_field(field);
+
+  // <clinit> stores a resource ID constant into the static field.
+  auto* clinit = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.<clinit>:()V"
+     (
+      (r-const v0 2131230721)
+      (sput v0 "LFoo;.bar:I")
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(clinit);
+  clinit->get_code()->build_cfg();
+
+  // A caller in a different class reads the field via sget.
+  auto* cls2_ty = DexType::make_type("LBar;");
+  ClassCreator creator2(cls2_ty);
+  creator2.set_super(type::java_lang_Object());
+
+  auto* getter = assembler::method_from_string(R"(
+    (method (public static) "LBar;.getBar:()I"
+     (
+      (sget "LFoo;.bar:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )");
+  getter->rstate.set_root();
+  creator2.add_method(getter);
+  getter->get_code()->build_cfg();
+
+  scope.push_back(creator.create());
+  scope.push_back(creator2.create());
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 1;
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope),
+                                                     conf);
+
+  // The sget should be replaced with r-const carrying the resource ID.
+  auto expected_code2 = assembler::ircode_from_string(R"(
+    (
+      (r-const v0 2131230721)
+      (return v0)
+    )
+  )");
+  getter->get_code()->clear_cfg();
+  EXPECT_CODE_EQ(getter->get_code(), expected_code2.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest, rConstArgumentPropagation) {
+  // Verify that IPCP propagates resource ID constants (IOPCODE_R_CONST) through
+  // method arguments. A caller passes a resource ID loaded via r-const to a
+  // callee. IPCP should propagate the value into the callee, allowing branch
+  // folding.
+
+  Scope scope;
+  auto* cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  // Caller passes a resource ID constant to the callee.
+  auto* m1 = assembler::method_from_string(R"(
+    (method (public) "LFoo;.caller:()V"
+     (
+      (load-param v0)
+      (r-const v1 2131230721)
+      (invoke-direct (v0 v1) "LFoo;.callee:(I)V")
+      (return-void)
+     )
+    )
+  )");
+  m1->rstate.set_root();
+  creator.add_method(m1);
+  m1->get_code()->build_cfg();
+
+  // Callee uses the parameter in a conditional. Since the resource ID is
+  // non-zero, the branch should be folded away.
+  auto* m2 = assembler::method_from_string(R"(
+    (method (private) "LFoo;.callee:(I)V"
+     (
+      (load-param v0)
+      (load-param v1)
+      (if-eqz v1 :label)
+      (const v0 0)
+      (:label)
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(m2);
+  m2->get_code()->build_cfg();
+
+  scope.push_back(creator.create());
+
+  InterproceduralConstantPropagationPass().run(make_simple_stores(scope), conf);
+
+  // The branch should be removed since the resource ID is known to be non-zero.
+  auto expected_code2 = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (r-const v1 2131230721)
+      (const v0 0)
+      (return-void)
+    )
+  )");
+  m2->get_code()->clear_cfg();
+  EXPECT_CODE_EQ(m2->get_code(), expected_code2.get());
+}
