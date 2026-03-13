@@ -313,6 +313,44 @@ TEST_F(KotlinCompanionOptimizationTest, JvmStaticBridgeRename) {
   ASSERT_TRUE(is_static(bridge->as_def()));
 }
 
+// Test abstract outer class: the companion's methods should still be relocated
+// to the abstract outer class as static methods.  Abstract classes can have
+// static methods, so this is valid.
+//
+// Input: AbstractOuterClass is abstract and has a companion with helperFunc().
+//
+// After optimization:
+//   - helperFunc is relocated to AbstractOuterClass as a static method
+//   - AbstractOuterCaller.main() calls it via invoke-static
+TEST_F(KotlinCompanionOptimizationTest, AbstractOuterClassCompanion) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/AbstractOuterCaller;.main:()V");
+  auto* main_method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/objtest/AbstractOuterCaller;.main:()V")
+          ->as_def();
+  auto* codex = main_method->get_code();
+  ASSERT_NE(nullptr, codex);
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  DexType* outer =
+      DexType::get_type("Lcom/facebook/redextest/objtest/AbstractOuterClass;");
+  ASSERT_NE(nullptr, outer);
+
+  // The companion's helperFunc() should be relocated to the outer class.
+  auto* helperFunc = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/AbstractOuterClass;"
+      ".helperFunc:()Ljava/lang/String;");
+  ASSERT_NE(nullptr, helperFunc);
+  ASSERT_TRUE(helperFunc->is_def());
+  ASSERT_TRUE(is_static(helperFunc->as_def()));
+}
+
 // Test companion method with default arguments: Kotlin generates a static
 // $default method on the companion class whose first parameter is the
 // companion instance (not VM-managed `this`).  The compiler reuses this

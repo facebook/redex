@@ -22,7 +22,6 @@ class KotlinCompanionOptimizationPass : public Pass {
     size_t kotlin_rejected_has_ifields{0};
     size_t kotlin_rejected_non_object_super{0};
     size_t kotlin_rejected_no_outer_class{0};
-    size_t kotlin_rejected_abstract_outer{0};
     size_t kotlin_rejected_invalid_init{0};
     size_t kotlin_rejected_method_uses_this{0};
     Stats& operator+=(const Stats& that) {
@@ -40,7 +39,6 @@ class KotlinCompanionOptimizationPass : public Pass {
       kotlin_rejected_has_ifields += that.kotlin_rejected_has_ifields;
       kotlin_rejected_non_object_super += that.kotlin_rejected_non_object_super;
       kotlin_rejected_no_outer_class += that.kotlin_rejected_no_outer_class;
-      kotlin_rejected_abstract_outer += that.kotlin_rejected_abstract_outer;
       kotlin_rejected_invalid_init += that.kotlin_rejected_invalid_init;
       kotlin_rejected_method_uses_this += that.kotlin_rejected_method_uses_this;
       return *this;

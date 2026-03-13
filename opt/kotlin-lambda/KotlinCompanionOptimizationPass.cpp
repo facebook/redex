@@ -243,7 +243,6 @@ enum class RejectionReason {
   kHasSfields,
   kNonObjectSuper,
   kNoOuterClass,
-  kAbstractOuter,
   kMultipleCompanionSfields,
   kInvalidInit,
   kMethodUsesThis,
@@ -256,8 +255,7 @@ enum class RejectionReason {
 //    singleton) with no other static fields
 // 3. No instance fields; properties are lifted to the outer class
 // 4. CLS is final and extends java.lang.Object
-// 5. Outer class exists, is non-abstract, and has at most one sfield of
-//    the companion type
+// 5. Outer class exists and has at most one sfield of the companion type
 // If eligible, return {kAccepted, outer_cls}; otherwise the rejection reason.
 std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
     DexClass* cls) {
@@ -309,9 +307,6 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
   DexClass* outer_cls = type_class(outer_type);
   if (outer_cls == nullptr || outer_cls->is_external()) {
     return {RejectionReason::kNoOuterClass, nullptr};
-  }
-  if (is_abstract(outer_cls)) {
-    return {RejectionReason::kAbstractOuter, nullptr};
   }
 
   bool found = false;
@@ -505,7 +500,6 @@ struct RejectionCounts {
   AtomicStatCounter<size_t> has_ifields{0};
   AtomicStatCounter<size_t> non_object_super{0};
   AtomicStatCounter<size_t> no_outer_class{0};
-  AtomicStatCounter<size_t> abstract_outer{0};
   AtomicStatCounter<size_t> invalid_init{0};
   AtomicStatCounter<size_t> method_uses_this{0};
 };
@@ -549,9 +543,6 @@ void collect_candidates(
       return;
     case RejectionReason::kNoOuterClass:
       ++counts.no_outer_class;
-      return;
-    case RejectionReason::kAbstractOuter:
-      ++counts.abstract_outer;
       return;
     case RejectionReason::kInvalidInit:
       ++counts.invalid_init;
@@ -855,7 +846,6 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
   stats.kotlin_rejected_has_ifields = counts.has_ifields;
   stats.kotlin_rejected_non_object_super = counts.non_object_super;
   stats.kotlin_rejected_no_outer_class = counts.no_outer_class;
-  stats.kotlin_rejected_abstract_outer = counts.abstract_outer;
   stats.kotlin_rejected_invalid_init = counts.invalid_init;
   stats.kotlin_rejected_method_uses_this = counts.method_uses_this;
   stats.report(mgr);
@@ -881,7 +871,6 @@ void KotlinCompanionOptimizationPass::Stats::report(PassManager& mgr) const {
   emit("kotlin_rejected_has_ifields", kotlin_rejected_has_ifields);
   emit("kotlin_rejected_non_object_super", kotlin_rejected_non_object_super);
   emit("kotlin_rejected_no_outer_class", kotlin_rejected_no_outer_class);
-  emit("kotlin_rejected_abstract_outer", kotlin_rejected_abstract_outer);
   emit("kotlin_rejected_invalid_init", kotlin_rejected_invalid_init);
   emit("kotlin_rejected_method_uses_this", kotlin_rejected_method_uses_this);
 }

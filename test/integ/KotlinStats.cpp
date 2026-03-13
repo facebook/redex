@@ -38,7 +38,7 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   PrintKotlinStats::Stats stats = klr->get_stats();
 
   EXPECT_EQ(stats.kotlin_null_check_insns, 12);
-  EXPECT_EQ(stats.kotlin_public_param_objects, 47);
+  EXPECT_EQ(stats.kotlin_public_param_objects, 48);
 
   // LExample;.$$delegatedProperties:[Lkotlin/reflect/KProperty;
   // LFooDelagates;.lazyValue$delegate:Lkotlin/Lazy;
@@ -100,7 +100,11 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LCompanionWithDefaults;
   // LCompanionWithDefaults$Companion;
   // LDefaultArgsCaller;
-  EXPECT_EQ(stats.kotlin_class, 32);
+  // LAbstractOuterClass;
+  // LAbstractOuterClass$Companion;
+  // LConcreteSubclass;
+  // LAbstractOuterCaller;
+  EXPECT_EQ(stats.kotlin_class, 36);
 
   // LCompanionClass$Companion;
   // LCompanionWithMethodCollision$Companion;
@@ -108,7 +112,8 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LCompanionWithInterCalls$Companion;
   // LCompanionWithJvmStaticBridge$Companion;
   // LCompanionWithDefaults$Companion;
-  EXPECT_EQ(stats.kotlin_companion_class, 6);
+  // LAbstractOuterClass$Companion;
+  EXPECT_EQ(stats.kotlin_companion_class, 7);
 
   // LKotlinLambdaInline$foo$1;
   // LKotlinLambdaInline$bar$1;

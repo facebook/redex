@@ -121,6 +121,28 @@ class JvmStaticBridgeCaller {
   }
 }
 
+// Abstract outer class with a companion object: the pass should still relocate
+// the companion's methods to the abstract outer class as static methods.
+// Abstract classes can have static methods, so this is valid.
+abstract class AbstractOuterClass {
+  companion object {
+    fun helperFunc(): String = "abstract_helper"
+  }
+
+  abstract fun doWork(): String
+}
+
+class ConcreteSubclass : AbstractOuterClass() {
+  override fun doWork(): String = helperFunc()
+}
+
+class AbstractOuterCaller {
+  fun main() {
+    print(AbstractOuterClass.helperFunc())
+    print(ConcreteSubclass().doWork())
+  }
+}
+
 // Companion method with default arguments: Kotlin generates a static $default
 // method on the companion class. This method takes the companion instance as
 // its first parameter (it's already static), and the compiler reuses that
