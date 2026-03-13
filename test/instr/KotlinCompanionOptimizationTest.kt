@@ -122,6 +122,17 @@ class NamedCompanionClass {
   }
 }
 
+// Companion with const val: the companion has a <clinit> that initializes
+// $$INSTANCE.  The clinit produces sget-object/sput-object which must be
+// allowlisted in is_def_trackable.
+class CompanionWithConstVal {
+  companion object {
+    const val MAGIC = 42
+
+    fun getMagic(): Int = MAGIC
+  }
+}
+
 class Foo {
   fun main() {
 
@@ -147,5 +158,7 @@ class Foo {
     println(OuterWithObject().useNested())
 
     println(NamedCompanionClass.funZ())
+
+    println(CompanionWithConstVal.getMagic())
   }
 }

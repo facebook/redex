@@ -351,6 +351,69 @@ TEST_F(KotlinCompanionOptimizationTest, AbstractOuterClassCompanion) {
   ASSERT_TRUE(is_static(helperFunc->as_def()));
 }
 
+// Test companion with const val: the companion has a <clinit> that initializes
+// $$INSTANCE, producing the sget-object/sput-object pattern that
+// is_def_trackable must allowlist.
+//
+// Input: CompanionWithConstVal has a companion with `const val MAGIC = 42`
+// and getMagic().  The companion has a clinit for $$INSTANCE.
+//
+// After optimization:
+//   - getMagic is relocated to CompanionWithConstVal as a static method
+//   - ConstValCaller.main() calls it via invoke-static
+TEST_F(KotlinCompanionOptimizationTest, CompanionWithConstVal) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/objtest/ConstValCaller;.main:()V");
+  auto* main_method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/objtest/ConstValCaller;.main:()V")
+          ->as_def();
+  auto* codex = main_method->get_code();
+  ASSERT_NE(nullptr, codex);
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  DexType* outer = DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithConstVal;");
+  ASSERT_NE(nullptr, outer);
+
+  // The companion's getMagic() should be relocated to the outer class.
+  auto* getMagic = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithConstVal;"
+      ".getMagic:()I");
+  ASSERT_NE(nullptr, getMagic);
+  ASSERT_TRUE(getMagic->is_def());
+  ASSERT_TRUE(is_static(getMagic->as_def()));
+}
+
+// Test companion whose instance escapes: a function returns the companion
+// instance, which is an untrackable usage.  The companion should NOT be
+// relocated.
+TEST_F(KotlinCompanionOptimizationTest, CompanionEscapesNotRelocated) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/objtest/EscapesCaller;.main:()V");
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  // doWork should NOT be relocated to the outer class because the companion
+  // instance escapes via getCompanion().
+  auto* companion_doWork = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionEscapes$Companion;"
+      ".doWork:()Ljava/lang/String;");
+  // doWork should still be on the companion class, not relocated.
+  ASSERT_NE(nullptr, companion_doWork);
+  ASSERT_TRUE(companion_doWork->is_def());
+  ASSERT_EQ(companion_doWork->as_def()->get_class(),
+            DexType::get_type(
+                "Lcom/facebook/redextest/objtest/CompanionEscapes$Companion;"));
+}
+
 // Test companion method with default arguments: Kotlin generates a static
 // $default method on the companion class whose first parameter is the
 // companion instance (not VM-managed `this`).  The compiler reuses this

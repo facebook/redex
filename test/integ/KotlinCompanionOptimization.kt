@@ -143,6 +143,41 @@ class AbstractOuterCaller {
   }
 }
 
+// Companion with a const val property: the companion has a <clinit> that
+// initializes $$INSTANCE, and the standard clinit pattern includes
+// sget-object $$INSTANCE followed by sput-object OuterClass.Companion.
+// This exercises the SPUT_OBJECT allowlist in is_def_trackable.
+class CompanionWithConstVal {
+  companion object {
+    const val MAGIC = 42
+
+    fun getMagic(): Int = MAGIC
+  }
+}
+
+class ConstValCaller {
+  fun main() {
+    print(CompanionWithConstVal.getMagic())
+  }
+}
+
+// Companion whose instance escapes: the companion is returned from a method,
+// which is an untrackable usage that should prevent optimization.
+class CompanionEscapes {
+  companion object {
+    fun doWork(): String = "work"
+  }
+}
+
+fun getCompanion(): CompanionEscapes.Companion = CompanionEscapes.Companion
+
+class EscapesCaller {
+  fun main() {
+    print(CompanionEscapes.doWork())
+    print(getCompanion())
+  }
+}
+
 // Companion method with default arguments: Kotlin generates a static $default
 // method on the companion class. This method takes the companion instance as
 // its first parameter (it's already static), and the compiler reuses that

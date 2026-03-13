@@ -453,6 +453,7 @@ void relocate(DexClass* comp_cls,
 
 bool is_def_trackable(IRInstruction* insn,
                       const DexClass* from,
+                      const DexClass* outer,
                       live_range::MoveAwareChains& move_aware_chains) {
   auto du_chains_move_aware = move_aware_chains.get_def_use_chains();
   if (du_chains_move_aware.count(insn) == 0u) {
@@ -478,6 +479,25 @@ bool is_def_trackable(IRInstruction* insn,
         return false;
       }
       break;
+    case OPCODE_SPUT_OBJECT: {
+      // Standard Kotlin clinit initialization pattern:
+      //   sget-object v0, Companion.$INSTANCE
+      //   sput-object v0, OuterClass.Companion
+      // The companion instance is loaded and stored to the outer class's
+      // Companion field.  This is safe — the SPUT_OBJECT case in
+      // filter_untrackable_usages already validates clinit stores.
+      auto* field = use_insn->get_field();
+      if (type_class(field->get_class()) == outer &&
+          field->get_type() == from->get_type()) {
+        break;
+      }
+      TRACE(KOTLIN_COMPANION,
+            2,
+            "Adding cls %s to bad list due to insn %s",
+            SHOW(from),
+            SHOW(use_insn));
+      return false;
+    }
     default:
       TRACE(KOTLIN_COMPANION,
             2,
@@ -647,7 +667,8 @@ void filter_untrackable_usages(
         }
         // Check we can track the uses of the Companion object instance.
         // i.e. Companion object is only used to invoke methods
-        if (!is_def_trackable(insn, from, move_aware_chains)) {
+        auto* outer = candidates.find(from)->second;
+        if (!is_def_trackable(insn, from, outer, move_aware_chains)) {
           rejected.insert(from);
         }
         break;
