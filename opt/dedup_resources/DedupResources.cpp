@@ -414,6 +414,22 @@ void DedupResourcesPass::prepare_disallowed_ids(
   // Overlayable ids, keep as-is.
   auto overlayable_ids = res_table->get_overlayable_id_roots();
   insert_unordered_iterable(*disallowed_ids, overlayable_ids);
+
+  auto& plugin_registery = opt_res::ReachableResourcesPluginRegistry::get();
+  for (const auto& p : plugin_registery.get_plugins()) {
+    auto ids = p->get_reachable_resources(resources->get_base_assets_dir(),
+                                          res_table->name_to_ids);
+    TRACE(DEDUP_RES, 2, "Plugin %s disallowing %zu root(s)",
+          p->get_name().c_str(), ids.size());
+    insert_unordered_iterable(*disallowed_ids, ids);
+  }
+}
+
+void DedupResourcesPass::eval_pass(DexStoresVector& stores,
+                                   ConfigFiles& conf,
+                                   PassManager&) {
+  auto& plugin_registery = opt_res::ReachableResourcesPluginRegistry::get();
+  plugin_registery.configure_plugins(conf);
 }
 
 void DedupResourcesPass::run_pass(DexStoresVector& stores,

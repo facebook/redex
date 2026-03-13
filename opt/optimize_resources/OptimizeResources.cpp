@@ -38,9 +38,25 @@ void ReachableResourcesPluginRegistry::register_plugin(
   m_registered_plugins.push_back(plugin);
 }
 
-const std::vector<ReachableResourcesPlugin*>&
+struct compare_plugins {
+  bool operator()(const ReachableResourcesPlugin* a,
+                  const ReachableResourcesPlugin* b) const {
+    return strcmp(a->get_name().c_str(), b->get_name().c_str()) < 0;
+  }
+};
+
+std::vector<ReachableResourcesPlugin*>
 ReachableResourcesPluginRegistry::get_plugins() const {
-  return m_registered_plugins;
+  std::vector<ReachableResourcesPlugin*> result(m_registered_plugins);
+  std::sort(result.begin(), result.end(), compare_plugins());
+  return result;
+}
+
+void ReachableResourcesPluginRegistry::configure_plugins(ConfigFiles& conf) {
+  auto plugins = get_plugins();
+  for (const auto& p : plugins) {
+    p->configure(conf);
+  }
 }
 } // namespace opt_res
 
@@ -157,10 +173,7 @@ void OptimizeResourcesPass::eval_pass(DexStoresVector& stores,
                                       PassManager&) {
   resources::prepare_r_classes(stores, conf.get_global_config());
   auto& plugin_registery = opt_res::ReachableResourcesPluginRegistry::get();
-  plugin_registery.sort();
-  for (const auto& p : plugin_registery.get_plugins()) {
-    p->configure(conf);
-  }
+  plugin_registery.configure_plugins(conf);
 }
 
 void OptimizeResourcesPass::run_pass(DexStoresVector& stores,

@@ -66,6 +66,7 @@ class DedupResourcesPass : public Pass {
     bind("disallowed_resources", {}, m_disallowed_resources);
   }
 
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
