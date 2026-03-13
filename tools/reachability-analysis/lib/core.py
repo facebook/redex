@@ -92,12 +92,12 @@ class ReachableMethod(ReachableObject):
         self.preds = ro.preds
         self.succs = ro.succs
         self.overriding = []
-        self.overriden_by = []
+        self.overridden_by = []
 
         if self.name in list(mog.nodes.keys()):
             n = mog.nodes[self.name]
             self.overriding = n.parents
-            self.overriden_by = n.children
+            self.overridden_by = n.children
 
     def __repr__(self):
         ret = super(ReachableMethod, self).__repr__()
@@ -105,9 +105,9 @@ class ReachableMethod(ReachableObject):
             ret += "Overriding %s methods:\n" % len(self.overriding)
             ret += show_list_with_idx(list([n.name for n in self.overriding]))
 
-        if len(self.overriden_by) != 0:
-            ret += "Overriden by %s methods:\n" % len(self.overriden_by)
-            ret += show_list_with_idx(list([n.name for n in self.overriden_by]))
+        if len(self.overridden_by) != 0:
+            ret += "Overridden by %s methods:\n" % len(self.overridden_by)
+            ret += show_list_with_idx(list([n.name for n in self.overridden_by]))
         return ret
 
 
@@ -269,7 +269,7 @@ class CombinedGraph(object):
 
         for method in list(self.method_override_graph.nodes.keys()):
             method_node = self.reachability_graph.get_node(method)
-            for child in method_node.overriden_by:
+            for child in method_node.overridden_by:
                 # find child in reachability graph, then build edge
                 method_child = self.reachability_graph.get_node(child.name)
                 for pred in method_node.preds:
