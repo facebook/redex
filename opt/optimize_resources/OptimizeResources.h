@@ -44,20 +44,10 @@ class ReachableResourcesPlugin {
 };
 
 struct ReachableResourcesPluginRegistry {
-  struct compare_plugins {
-    bool operator()(const ReachableResourcesPlugin* a,
-                    const ReachableResourcesPlugin* b) const {
-      return strcmp(a->get_name().c_str(), b->get_name().c_str()) < 0;
-    }
-  };
   static ReachableResourcesPluginRegistry& get();
   void register_plugin(ReachableResourcesPlugin* plugin);
-  void sort() {
-    std::sort(m_registered_plugins.begin(),
-              m_registered_plugins.end(),
-              compare_plugins());
-  }
-  const std::vector<ReachableResourcesPlugin*>& get_plugins() const;
+  void configure_plugins(ConfigFiles& conf);
+  std::vector<ReachableResourcesPlugin*> get_plugins() const;
 
  private:
   /**
