@@ -207,6 +207,31 @@ bool is_valid_init(DexMethod* meth) {
   return true;
 }
 
+// Check whether a companion's <clinit> only does field initialization.
+// A "field-init-only" clinit contains only sput-*, const-*, new-instance,
+// invoke-direct <init>, load-param, move-*, and return-void — the pattern
+// Kotlin generates for `const val` properties.
+bool is_clinit_field_init_only(DexMethod* clinit) {
+  auto* code = clinit->get_code();
+  if (code == nullptr) {
+    return false;
+  }
+  auto& cfg = code->cfg();
+  for (const auto& mie : cfg::InstructionIterable(cfg)) {
+    auto op = mie.insn->opcode();
+    if (opcode::is_a_load_param(op) || opcode::is_a_move(op) ||
+        opcode::is_a_const(op) || opcode::is_an_sput(op) ||
+        op == OPCODE_NEW_INSTANCE || op == OPCODE_RETURN_VOID ||
+        op == OPCODE_INVOKE_DIRECT || op == OPCODE_NEW_ARRAY ||
+        op == OPCODE_FILLED_NEW_ARRAY || op == OPCODE_CHECK_CAST ||
+        op == OPCODE_SGET_OBJECT || op == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
 enum class RejectionReason {
   kAccepted,
   kRootedOrExternal,
@@ -224,17 +249,16 @@ enum class RejectionReason {
   kMethodUsesThis,
 };
 
-// Check if CLS is a companion object
-// Companion object is:
-// 1. Inner Object class
-// 2. Will not have <clinit>
-// 3. Will not have any fields (val and var is lifted to outer class if there is
-// any).
-// 4. Outer (or parent) class may have <clinit> which create instance of this
-// (parent has sfield of inner class)
-// 5. CLS is final and extends J_L_O
-// If this is a candidate, return outer class via OUT and kAccepted.
-// Otherwise return the rejection reason.
+// Check if CLS is a companion object eligible for relocation.
+// Requirements:
+// 1. Inner Object class ending with "$Companion"
+// 2. No <clinit>, OR clinit only initializes $$INSTANCE (the companion
+//    singleton) with no other static fields
+// 3. No instance fields; properties are lifted to the outer class
+// 4. CLS is final and extends java.lang.Object
+// 5. Outer class exists, is non-abstract, and has at most one sfield of
+//    the companion type
+// If eligible, return {kAccepted, outer_cls}; otherwise the rejection reason.
 std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
     DexClass* cls) {
   if (root(cls) || !can_rename(cls) || !can_delete(cls) ||
@@ -256,10 +280,21 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
   if (!cls->get_interfaces()->empty()) {
     return {RejectionReason::kHasInterfaces, nullptr};
   }
+  // Accept companions whose only static field is $$INSTANCE (the companion
+  // singleton) and whose clinit only initializes it.  After all methods are
+  // relocated and call sites rewritten, $$INSTANCE and the clinit become
+  // dead code and are cleaned up by later passes.
   if (cls->get_clinit() != nullptr) {
-    return {RejectionReason::kHasClinit, nullptr};
-  }
-  if (!cls->get_sfields().empty()) {
+    const auto& sfields = cls->get_sfields();
+    bool instance_only = sfields.size() == 1 &&
+                         sfields[0]->get_type() == cls->get_type() &&
+                         is_clinit_field_init_only(cls->get_clinit());
+    if (!instance_only) {
+      TRACE(KOTLIN_COMPANION, 3, "Rejected (has_clinit):");
+      dump_cls(cls, 3);
+      return {RejectionReason::kHasClinit, nullptr};
+    }
+  } else if (!cls->get_sfields().empty()) {
     return {RejectionReason::kHasSfields, nullptr};
   }
   if (cls->get_super_class() != type::java_lang_Object()) {
@@ -302,7 +337,7 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
 
   for (auto* meth : cls->get_dmethods()) {
     if (method::is_clinit(meth)) {
-      return {RejectionReason::kHasClinit, nullptr};
+      continue; // Already handled above.
     }
     if (method::is_init(meth)) {
       if (!is_valid_init(meth)) {
@@ -325,9 +360,12 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
 void relocate(DexClass* comp_cls,
               DexClass* outer_cls,
               UnorderedSet<DexMethodRef*>& relocated_methods) {
-  // There should not be any sfields or ifieds in companion object class.
-  always_assert(comp_cls->get_sfields().empty());
   always_assert(comp_cls->get_ifields().empty());
+  // Companion may have $$INSTANCE sfield (its own singleton); all other
+  // sfields should have been rejected by candidate_for_companion_relocation.
+  for (auto* sf : comp_cls->get_sfields()) {
+    always_assert(sf->get_type() == comp_cls->get_type());
+  }
 
   // Remove the instance from outer_cls class
   DexField* field = nullptr;
@@ -393,13 +431,13 @@ void relocate(DexClass* comp_cls,
   // causing the check to fail.
   std::vector<DexMethod*> methods = comp_cls->get_all_methods();
   for (auto* method : methods) {
-    if (method::is_init(method)) {
+    if (method::is_init(method) || method::is_clinit(method)) {
       continue;
     }
     rewrite_this_calls_to_static(method);
   }
   for (auto* method : methods) {
-    if (method::is_init(method)) {
+    if (method::is_init(method) || method::is_clinit(method)) {
       continue;
     }
     TRACE(KOTLIN_COMPANION,
@@ -587,10 +625,11 @@ void filter_untrackable_usages(
             (rejected.count(from) != 0u)) {
           break;
         }
-        // Should only be set from parent's <clinit>
-        // Otherwise add it to bad list.
+        // Allow from the outer class's <clinit> (stores companion field) or
+        // the companion's own <clinit> (initializes $$INSTANCE).
         if (method::is_clinit(method) &&
-            type_class(method->get_class()) == candidates.find(from)->second) {
+            (type_class(method->get_class()) == candidates.find(from)->second ||
+             type_class(method->get_class()) == from)) {
           break;
         }
         rejected.insert(from);
@@ -631,7 +670,8 @@ void filter_untrackable_usages(
           break;
         }
         if (method::is_clinit(method) &&
-            type_class(method->get_class()) == candidates.find(from)->second) {
+            (type_class(method->get_class()) == candidates.find(from)->second ||
+             type_class(method->get_class()) == from)) {
           break;
         }
         rejected.insert(from);
@@ -646,9 +686,10 @@ void filter_untrackable_usages(
         }
         if ((type_class(method->get_class()) == from &&
              method::is_init(method)) ||
-            ((type_class(method->get_class()) ==
-              candidates.find(from)->second) &&
-             method::is_clinit(method))) {
+            (method::is_clinit(method) &&
+             (type_class(method->get_class()) ==
+                  candidates.find(from)->second ||
+              type_class(method->get_class()) == from))) {
           break;
         }
         rejected.insert(from);
