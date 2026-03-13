@@ -66,6 +66,19 @@
 
 namespace {
 
+// Hash functor for std::vector<T> to enable use as keys in UnorderedMap.
+// Uses FNV-1a-inspired hash combining over the raw element values.
+template <typename T>
+struct VectorHash {
+  size_t operator()(const std::vector<T>& v) const {
+    size_t seed = v.size();
+    for (const auto& elem : v) {
+      seed ^= std::hash<T>{}(elem) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+    return seed;
+  }
+};
+
 template <class T, class U>
 class CustomSort {
  private:
@@ -1135,7 +1148,8 @@ void DexOutput::unique_annotations(annomap_t& annomap,
                                    std::vector<DexAnnotation*>& annolist) {
   int annocnt = 0;
   uint32_t mentry_offset = m_offset;
-  std::map<std::vector<uint8_t>, uint32_t> annotation_byte_offsets;
+  UnorderedMap<std::vector<uint8_t>, uint32_t, VectorHash<uint8_t>>
+      annotation_byte_offsets;
   for (auto* anno : annolist) {
     if (annomap.count(anno) != 0u) {
       continue;
@@ -1167,7 +1181,8 @@ void DexOutput::unique_asets(annomap_t& annomap,
                              std::vector<DexAnnotationSet*>& asetlist) {
   int asetcnt = 0;
   uint32_t mentry_offset = align(m_offset);
-  std::map<std::vector<uint32_t>, uint32_t> aset_offsets;
+  UnorderedMap<std::vector<uint32_t>, uint32_t, VectorHash<uint32_t>>
+      aset_offsets;
   for (auto* aset : asetlist) {
     if (asetmap.count(aset) != 0u) {
       continue;
@@ -1199,7 +1214,8 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
                              std::vector<ParamAnnotations*>& xreflist) {
   int xrefcnt = 0;
   uint32_t mentry_offset = align(m_offset);
-  std::map<std::vector<uint32_t>, uint32_t> xref_offsets;
+  UnorderedMap<std::vector<uint32_t>, uint32_t, VectorHash<uint32_t>>
+      xref_offsets;
   for (auto* xref : xreflist) {
     if (xrefmap.count(xref) != 0u) {
       continue;
@@ -1238,7 +1254,8 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
                              std::vector<DexAnnotationDirectory*>& adirlist) {
   int adircnt = 0;
   uint32_t mentry_offset = align(m_offset);
-  std::map<std::vector<uint32_t>, uint32_t> adir_offsets;
+  UnorderedMap<std::vector<uint32_t>, uint32_t, VectorHash<uint32_t>>
+      adir_offsets;
   for (auto* adir : adirlist) {
     if (adirmap.count(adir) != 0u) {
       continue;
