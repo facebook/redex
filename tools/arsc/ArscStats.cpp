@@ -387,11 +387,11 @@ size_t compute_string_character_size(const android::ResStringPool& pool,
   if (pool.isUTF8()) {
     const auto* ptr = pool.string8At(idx, &len);
     if (ptr != nullptr) {
-      // UTF-8 length of this string will be either 1 or two bytes preceeding
+      // UTF-8 length of this string will be either 1 or two bytes preceding
       // the string.
       auto utf8_units = length_units<char>(len);
       // UTF-16 length is also stored, same way as above (one or two bytes)
-      // preceeding the encoded UTF-8 length.
+      // preceding the encoded UTF-8 length.
       auto utf16_length = utf8_to_utf16_length((const uint8_t*)ptr, len);
       auto utf16_units = length_units<char>(utf16_length);
       return utf16_units + utf8_units + len + 1;
