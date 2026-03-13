@@ -22,17 +22,17 @@
 #include "Walkers.h"
 
 namespace {
-void dump_cls(DexClass* cls) {
-  TRACE(KOTLIN_COMPANION, 5, "Class %s", SHOW(cls));
+void dump_cls(DexClass* cls, int trace_level = 5) {
+  TRACE(KOTLIN_COMPANION, trace_level, "Class %s", SHOW(cls));
   std::vector<DexMethod*> methods = cls->get_all_methods();
   std::vector<DexField*> fields = cls->get_all_fields();
   for (auto* v : fields) {
-    TRACE(KOTLIN_COMPANION, 5, "Field %s", SHOW(v));
+    TRACE(KOTLIN_COMPANION, trace_level, "  Field %s", SHOW(v));
   }
   for (auto* v : methods) {
-    TRACE(KOTLIN_COMPANION, 5, "Method %s", SHOW(v));
+    TRACE(KOTLIN_COMPANION, trace_level, "  Method %s", SHOW(v));
     if (v->get_code() != nullptr) {
-      TRACE(KOTLIN_COMPANION, 5, "%s", SHOW(v->get_code()));
+      TRACE(KOTLIN_COMPANION, trace_level, "  %s", SHOW(v->get_code()));
     }
   }
 }
