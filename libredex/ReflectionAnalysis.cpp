@@ -372,7 +372,7 @@ class AbstractObjectEnvironment final
   }
 
   void set_class_source(reg_t reg, const ClassObjectSourceDomain& cls_src) {
-    apply<1>([=](auto env) { env->set(reg, cls_src); }, true);
+    apply<1>([&](auto env) { env->set(reg, cls_src); }, true);
   }
 
   const ConstantAbstractDomain<std::vector<const DexType*>>&
@@ -383,7 +383,7 @@ class AbstractObjectEnvironment final
   void set_heap_class_array(
       AbstractHeapAddress addr,
       const ConstantAbstractDomain<std::vector<const DexType*>>& array) {
-    apply<2>([=](auto env) { env->set(addr, array); }, true);
+    apply<2>([&](auto env) { env->set(addr, array); }, true);
   }
 
   void set_heap_addr_to_top(AbstractHeapAddress addr) {
@@ -395,14 +395,14 @@ class AbstractObjectEnvironment final
   const ReturnValueDomain& get_return_value() const { return get<3>(); }
 
   void join_return_value(const ReturnValueDomain& domain) {
-    apply<3>([=](auto original) { original->join_with(domain); }, true);
+    apply<3>([&](auto original) { original->join_with(domain); }, true);
   }
 
   CallingContextMap get_calling_context_partition() const { return get<4>(); }
 
   void set_calling_context(const IRInstruction* insn,
                            const CallingContext& context) {
-    apply<4>([=](auto partition) { partition->set(insn, context); }, true);
+    apply<4>([&](auto partition) { partition->set(insn, context); }, true);
   }
 };
 
