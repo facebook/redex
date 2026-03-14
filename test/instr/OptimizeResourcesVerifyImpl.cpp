@@ -108,6 +108,7 @@ const std::unordered_set<std::string> UNUSED_RESOURCES = {
     "dimen/unused_dimen_1",
     "dimen/unused_dimen_2",
     "dimen/foo",
+    "drawable/js_referenced_icon",
     "drawable/x_icon",
     "drawable/x_prickly",
     "string/_an_unused_string",
@@ -130,6 +131,7 @@ const std::unordered_set<std::string> KEPT_FILE_PATHS = {
 const std::unordered_set<std::string> REMOVED_FILE_PATHS = {
     "res/color/hex_or_file2.xml",
     "res/color-night-v8/hex_or_file.xml",
+    "res/drawable-mdpi-v4/js_referenced_icon.png",
     "res/drawable-mdpi-v4/x_icon.png",
     "res/drawable-mdpi-v4/x_prickly.png",
 };
@@ -314,7 +316,7 @@ void postverify_nullify_impl(const DexClasses& classes,
   assert_type_nullified(modified_kept_resources, "dimen", 15, 15, res_table);
   assert_type_nullified(modified_kept_resources, "array", 2, 1, res_table);
   assert_type_nullified(modified_kept_resources, "style", 16, 13, res_table);
-  assert_type_nullified(modified_kept_resources, "drawable", 4, 2, res_table);
+  assert_type_nullified(modified_kept_resources, "drawable", 5, 3, res_table);
 }
 
 void apk_postverify_impl(ResourcesArscFile* res_table) {

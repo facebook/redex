@@ -33,7 +33,7 @@ TEST_F(PostVerify, BundleObfuscateResourceTest) {
   EXPECT_EQ(themed_ids.size(), 1);
   files = res_table.get_files_by_rid(themed_ids[0]);
   EXPECT_EQ(files.size(), 1);
-  EXPECT_EQ(*files.begin(), "res/h.xml");
+  EXPECT_EQ(*files.begin(), "res/i.xml");
 
   auto hex_or_file_ids = res_table.get_res_ids_by_name("hex_or_file");
   EXPECT_EQ(hex_or_file_ids.size(), 1);
