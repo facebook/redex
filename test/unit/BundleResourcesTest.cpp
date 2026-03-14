@@ -309,8 +309,9 @@ TEST_F(BundleResourcesTest, ReadResource) {
       drawable_res_names.emplace(pair.second);
     }
   }
-  EXPECT_EQ(drawable_res_names.size(), 4);
+  EXPECT_EQ(drawable_res_names.size(), 5);
   EXPECT_EQ(drawable_res_names.count("icon"), 1);
+  EXPECT_EQ(drawable_res_names.count("js_referenced_icon"), 1);
   EXPECT_EQ(drawable_res_names.count("prickly"), 1);
   EXPECT_EQ(drawable_res_names.count("x_icon"), 1);
   EXPECT_EQ(drawable_res_names.count("x_prickly"), 1);
