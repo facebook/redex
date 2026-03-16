@@ -389,6 +389,74 @@ TEST_F(KotlinCompanionOptimizationTest, CompanionWithConstVal) {
   ASSERT_TRUE(is_static(getMagic->as_def()));
 }
 
+// Test non-final companion with no subclasses: strip ACC_FINAL from the
+// companion class before running the pass.  The pass should still accept it
+// via the class hierarchy check (no subclasses).
+TEST_F(KotlinCompanionOptimizationTest, NonFinalCompanionNoSubclasses) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/objtest/InterCallsCaller;.main:()V");
+
+  // Strip ACC_FINAL from CompanionWithInterCalls$Companion before running.
+  auto* companion_cls = type_class(DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithInterCalls$Companion;"));
+  ASSERT_NE(nullptr, companion_cls);
+  ASSERT_TRUE(is_final(companion_cls));
+  companion_cls->set_access(companion_cls->get_access() & ~ACC_FINAL);
+  ASSERT_FALSE(is_final(companion_cls));
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  // Despite not being final, the companion should still be relocated
+  // because it has no subclasses.
+  auto* methodA = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithInterCalls;.methodA:(I)I");
+  ASSERT_NE(nullptr, methodA);
+  ASSERT_TRUE(methodA->is_def());
+  ASSERT_TRUE(is_static(methodA->as_def()));
+}
+
+// Test cross-store rejection: move the companion to a secondary store while
+// keeping the outer class in the root store.  The pass should reject the
+// companion because relocating methods across stores is unsafe.
+TEST_F(KotlinCompanionOptimizationTest, CrossStoreCompanionNotRelocated) {
+  set_root_method("Lcom/facebook/redextest/objtest/ConstValCaller;.main:()V");
+
+  // Move CompanionWithConstVal$Companion to a secondary store.
+  auto* companion_cls = type_class(DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithConstVal$Companion;"));
+  ASSERT_NE(nullptr, companion_cls);
+
+  auto& root_store = stores.at(0);
+  auto& root_dex_classes = root_store.get_dexen().at(0);
+  root_dex_classes.erase(std::find(
+      root_dex_classes.begin(), root_dex_classes.end(), companion_cls));
+
+  DexMetadata secondary_metadata;
+  secondary_metadata.set_id("SecondaryModule");
+  DexStore secondary_store(secondary_metadata);
+  secondary_store.add_classes(std::vector<DexClass*>{companion_cls});
+  stores.emplace_back(secondary_store);
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  // getMagic should NOT be relocated — companion is in a different store.
+  auto* companion_getMagic = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithConstVal$Companion;"
+      ".getMagic:()I");
+  ASSERT_NE(nullptr, companion_getMagic);
+  ASSERT_TRUE(companion_getMagic->is_def());
+  ASSERT_EQ(
+      companion_getMagic->as_def()->get_class(),
+      DexType::get_type(
+          "Lcom/facebook/redextest/objtest/CompanionWithConstVal$Companion;"));
+}
+
 // Test companion whose instance escapes: a function returns the companion
 // instance, which is an untrackable usage.  The companion should NOT be
 // relocated.

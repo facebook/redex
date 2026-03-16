@@ -9,6 +9,7 @@
 
 #include "AtomicStatCounter.h"
 #include "CFGMutation.h"
+#include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
 #include "Creators.h"
 #include "DeterministicContainers.h"
@@ -254,11 +255,11 @@ enum class RejectionReason {
 // 2. No <clinit>, OR clinit only initializes $$INSTANCE (the companion
 //    singleton) with no other static fields
 // 3. No instance fields; properties are lifted to the outer class
-// 4. CLS is final and extends java.lang.Object
+// 4. CLS has no subclasses (or is final) and extends java.lang.Object
 // 5. Outer class exists and has at most one sfield of the companion type
 // If eligible, return {kAccepted, outer_cls}; otherwise the rejection reason.
 std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
-    DexClass* cls) {
+    DexClass* cls, const ClassHierarchy& ch) {
   if (root(cls) || !can_rename(cls) || !can_delete(cls) ||
       cls->rstate.is_referenced_by_resource_xml() || cls->is_external()) {
     return {RejectionReason::kRootedOrExternal, nullptr};
@@ -269,7 +270,7 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
   if (!cls_name.ends_with("$Companion;")) {
     return {RejectionReason::kNotCompanion, nullptr};
   }
-  if (!is_final(cls)) {
+  if (!is_final(cls) && !get_children(ch, cls->get_type()).empty()) {
     return {RejectionReason::kNotFinal, nullptr};
   }
   if (!cls->get_ifields().empty()) {
@@ -530,15 +531,26 @@ struct RejectionCounts {
 // `counts` with per-reason rejection tallies.
 void collect_candidates(
     const Scope& scope,
+    const DexStoresVector& stores,
     const UnorderedSet<DexType*>& do_not_relocate_set,
     InsertOnlyConcurrentMap<DexClass*, DexClass*>& candidates,
     ConcurrentSet<DexClass*>& rejected,
     RejectionCounts& counts) {
+  ClassHierarchy ch = build_type_hierarchy(scope);
+  // Build a type→store index map for cross-store checks.
+  UnorderedMap<const DexType*, size_t> store_indices;
+  for (size_t i = 0; i < stores.size(); ++i) {
+    for (const auto& dex : stores[i].get_dexen()) {
+      for (auto* cls : dex) {
+        store_indices.emplace(cls->get_type(), i);
+      }
+    }
+  }
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (do_not_relocate_set.count(cls->get_type()) != 0u) {
       return;
     }
-    auto [reason, outer_cls] = candidate_for_companion_relocation(cls);
+    auto [reason, outer_cls] = candidate_for_companion_relocation(cls, ch);
     switch (reason) {
     case RejectionReason::kNotCompanion:
       ++counts.not_companion;
@@ -577,6 +589,16 @@ void collect_candidates(
       break;
     }
     if (do_not_relocate_set.count(outer_cls->get_type()) == 0u) {
+      // Reject if companion and outer are in different stores — relocating
+      // methods across stores would break OptimizeStores assumptions.
+      auto cls_it = store_indices.find(cls->get_type());
+      auto outer_it = store_indices.find(outer_cls->get_type());
+      if (cls_it == store_indices.end() || outer_it == store_indices.end() ||
+          cls_it->second != outer_it->second) {
+        TRACE(KOTLIN_COMPANION, 2, "Rejected (cross_store): %s -> %s",
+              SHOW(cls), SHOW(outer_cls));
+        return;
+      }
       // This is a candidate for relocation
       candidates.insert(std::make_pair(cls, outer_cls));
       TRACE(KOTLIN_COMPANION, 2, "Candidate cls : %s", SHOW(cls));
@@ -842,7 +864,8 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
 
   // Phase 1: Collect structurally eligible companion objects.
   RejectionCounts counts;
-  collect_candidates(scope, do_not_relocate_set, candidates, rejected, counts);
+  collect_candidates(scope, stores, do_not_relocate_set, candidates, rejected,
+                     counts);
 
   // Phase 2: Filter out companions with untrackable usages.
   filter_untrackable_usages(scope, candidates, rejected);
