@@ -324,8 +324,10 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
   }
 
   for (auto* meth : cls->get_vmethods()) {
-    if (meth->rstate.no_optimizations() || !is_final(meth) ||
-        (meth->get_code() == nullptr) || uses_this(meth)) {
+    // No need to check is_final(meth) — the class-level hierarchy check
+    // already guarantees no subclasses, so no virtual method can be overridden.
+    if (meth->rstate.no_optimizations() || (meth->get_code() == nullptr) ||
+        uses_this(meth)) {
       TRACE(KOTLIN_COMPANION, 5, "Method not relocatable: %s", SHOW(meth));
       return {RejectionReason::kMethodUsesThis, nullptr};
     }

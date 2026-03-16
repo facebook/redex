@@ -418,6 +418,45 @@ TEST_F(KotlinCompanionOptimizationTest, NonFinalCompanionNoSubclasses) {
   ASSERT_TRUE(is_static(methodA->as_def()));
 }
 
+// Test non-final companion with a parameterized method: strip ACC_FINAL from
+// both the class and its virtual method.  The method-level is_final check
+// is redundant when the class has no subclasses — the method should still
+// be relocated.
+TEST_F(KotlinCompanionOptimizationTest, NonFinalMethodNoSubclasses) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/JvmStaticBridgeCaller;.main:()V");
+
+  // Strip ACC_FINAL from the companion class AND its compute method.
+  auto* companion_cls =
+      type_class(DexType::get_type("Lcom/facebook/redextest/objtest/"
+                                   "CompanionWithJvmStaticBridge$Companion;"));
+  ASSERT_NE(nullptr, companion_cls);
+  companion_cls->set_access(companion_cls->get_access() & ~ACC_FINAL);
+
+  for (auto* m : companion_cls->get_vmethods()) {
+    if (m->get_name()->str() == "compute") {
+      ASSERT_TRUE(is_final(m));
+      m->set_access(m->get_access() & ~ACC_FINAL);
+      ASSERT_FALSE(is_final(m));
+    }
+  }
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  // compute should be relocated despite the class and method not being final.
+  auto* outerCompute = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithJvmStaticBridge;"
+      ".compute:(I)I");
+  ASSERT_NE(nullptr, outerCompute)
+      << "compute should be relocated even with non-final class and method";
+  ASSERT_TRUE(outerCompute->is_def());
+  ASSERT_TRUE(is_static(outerCompute->as_def()));
+}
+
 // Test cross-store rejection: move the companion to a secondary store while
 // keeping the outer class in the root store.  The pass should reject the
 // companion because relocating methods across stores is unsafe.
