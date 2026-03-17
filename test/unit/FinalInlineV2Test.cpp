@@ -10,6 +10,7 @@
 #include "Creators.h"
 #include "DexAccess.h"
 #include "FinalInlineV2.h"
+#include "IFieldAnalysisUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
@@ -34,19 +35,25 @@ struct FinalInlineTest : public RedexTest {
     return field;
   }
 
-  static FinalInlinePassV2::Stats run(const Scope& scope,
-                                      const XStoreRefs* xstores,
-                                      bool create_init_class_insns = false) {
+  static void run(const Scope& scope,
+                  const XStoreRefs* xstores,
+                  bool create_init_class_insns = false) {
     ConfigFiles conf = ConfigFiles(Json::nullValue);
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, create_init_class_insns);
     walk::code(scope, [&](DexMethod*, IRCode& code) { code.build_cfg(); });
     int min_sdk = 0;
     constant_propagation::State state;
-    auto res = FinalInlinePassV2::run(
-        scope, conf, min_sdk, init_classes_with_side_effects, xstores, state);
+    FinalInlinePassV2::run(scope, conf, min_sdk, init_classes_with_side_effects,
+                           xstores, state);
+
+    auto eligible_ifields =
+        constant_propagation::gather_safely_inferable_ifield_candidates(scope,
+                                                                        {});
+    FinalInlinePassV2::run_inline_ifields(scope, conf, min_sdk,
+                                          init_classes_with_side_effects,
+                                          xstores, eligible_ifields, state);
     walk::code(scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
-    return res;
   }
 
   std::unique_ptr<ClassCreator> m_cc;
@@ -363,8 +370,8 @@ TEST_F(FinalInlineTest, encodeRConst) {
   cc2.set_super(type::java_lang_Object());
   auto* bar = cc2.create();
 
-  create_field_with_zero_value(
-      "LFoo;.app_name:I", m_cc.get(), ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+  create_field_with_zero_value("LFoo;.app_name:I", m_cc.get(),
+                               ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
   m_cc->add_method(assembler::method_from_string(R"(
     (method (public static) "LFoo;.<clinit>:()V"
      (
@@ -391,4 +398,55 @@ TEST_F(FinalInlineTest, encodeRConst) {
   )");
   EXPECT_EQ(bar->get_all_methods().size(), 1);
   EXPECT_CODE_EQ(bar->get_all_methods()[0]->get_code(), expected.get());
+}
+
+TEST_F(FinalInlineTest, rConstInstanceFieldInlining) {
+  // Create a class with a final instance field
+  auto* field = dynamic_cast<DexField*>(DexField::make_field("LFoo;.resId:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_FINAL);
+  m_cc->add_field(field);
+
+  // Constructor stores an r-const value into the instance field
+  m_cc->add_method(assembler::method_from_string(R"(
+    (method (public constructor) "LFoo;.<init>:()V"
+     (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (r-const v1 2131230721)
+      (iput v1 v0 "LFoo;.resId:I")
+      (return-void)
+     )
+    )
+  )"));
+
+  // Reader method that gets the field
+  auto* reader = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.getResId:(LFoo;)I"
+     (
+      (load-param-object v0)
+      (iget v0 "LFoo;.resId:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )");
+  m_cc->add_method(reader);
+  auto* cls = m_cc->create();
+
+  auto store = DexStore("store");
+  store.add_classes({cls});
+  DexStoresVector stores{store};
+  auto scope = build_class_scope(stores);
+  XStoreRefs xstores(stores, true);
+  run(scope, &xstores);
+
+  // The iget should be replaced with r-const
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (r-const v0 2131230721)
+      (return v0)
+    )
+  )");
+  EXPECT_CODE_EQ(reader->get_code(), expected.get());
 }
