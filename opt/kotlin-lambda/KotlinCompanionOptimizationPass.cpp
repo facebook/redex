@@ -638,6 +638,12 @@ void filter_untrackable_usages(
     const Scope& scope,
     const InsertOnlyConcurrentMap<DexClass*, DexClass*>& candidates,
     ConcurrentSet<DexClass*>& rejected) {
+  // Returns true if `from` is not a candidate or is already rejected.
+  auto skip = [&](DexClass* from) {
+    return from == nullptr || candidates.count(from) == 0u ||
+           rejected.count(from) != 0u;
+  };
+
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto* code = method->get_code();
     if (code == nullptr) {
@@ -659,17 +665,22 @@ void filter_untrackable_usages(
     auto& cfg = code->cfg();
     auto iterable = cfg::InstructionIterable(cfg);
     live_range::MoveAwareChains move_aware_chains(cfg);
-    type_inference::TypeInference type_inference(cfg);
-    type_inference.run(method);
-    auto& type_environments = type_inference.get_type_environments();
+    // TypeInference is expensive — only construct it lazily for APUT/AGET.
+    std::unique_ptr<type_inference::TypeInference> type_inference;
+    auto get_type_environments = [&]() -> const auto& {
+      if (!type_inference) {
+        type_inference = std::make_unique<type_inference::TypeInference>(cfg);
+        type_inference->run(method);
+      }
+      return type_inference->get_type_environments();
+    };
 
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto* insn = it->insn;
       switch (insn->opcode()) {
       case OPCODE_SPUT_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if ((from == nullptr) || (candidates.count(from) == 0u) ||
-            (rejected.count(from) != 0u)) {
+        if (skip(from)) {
           break;
         }
         // Allow from the outer class's <clinit> (stores companion field) or
@@ -687,8 +698,7 @@ void filter_untrackable_usages(
       case OPCODE_IPUT_OBJECT:
       case OPCODE_IGET_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if ((from == nullptr) || (candidates.count(from) == 0u) ||
-            (rejected.count(from) != 0u)) {
+        if (skip(from)) {
           break;
         }
         rejected.insert(from);
@@ -697,8 +707,7 @@ void filter_untrackable_usages(
 
       case OPCODE_SGET_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if ((from == nullptr) || (candidates.count(from) == 0u) ||
-            (rejected.count(from) != 0u)) {
+        if (skip(from)) {
           break;
         }
         // Check we can track the uses of the Companion object instance.
@@ -713,8 +722,7 @@ void filter_untrackable_usages(
       case OPCODE_INSTANCE_OF:
       case OPCODE_NEW_INSTANCE: {
         auto* from = type_class(insn->get_type());
-        if ((from == nullptr) || (candidates.count(from) == 0u) ||
-            (rejected.count(from) != 0u)) {
+        if (skip(from)) {
           break;
         }
         if (method::is_clinit(method) &&
@@ -728,8 +736,7 @@ void filter_untrackable_usages(
 
       case OPCODE_INVOKE_DIRECT: {
         auto* from = type_class(insn->get_method()->get_class());
-        if (!method::is_init(insn->get_method()) || (from == nullptr) ||
-            (candidates.count(from) == 0u) || (rejected.count(from) != 0u)) {
+        if (!method::is_init(insn->get_method()) || skip(from)) {
           break;
         }
         if ((type_class(method->get_class()) == from &&
@@ -746,7 +753,7 @@ void filter_untrackable_usages(
 
       case OPCODE_APUT_OBJECT:
       case OPCODE_AGET_OBJECT: {
-        auto& env = type_environments.at(insn);
+        const auto& env = get_type_environments().at(insn);
         auto dex_type = env.get_dex_type(insn->src(0));
         if (!dex_type) {
           break;
@@ -762,8 +769,7 @@ void filter_untrackable_usages(
         }
         // Currently, we don't supporting tracking companion object usage in
         // aget/aput_object. Instead, simply insert it into bad list.
-        if ((from == nullptr) || (candidates.count(from) == 0u) ||
-            (rejected.count(from) != 0u)) {
+        if (skip(from)) {
           break;
         }
         rejected.insert(from);
@@ -777,8 +783,7 @@ void filter_untrackable_usages(
       default:
         if (insn->has_type()) {
           auto* from = type_class(insn->get_type());
-          if ((from == nullptr) || (candidates.count(from) == 0u) ||
-              (rejected.count(from) != 0u)) {
+          if (skip(from)) {
             break;
           }
           rejected.insert(from);
