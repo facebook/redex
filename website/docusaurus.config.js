@@ -58,14 +58,6 @@ const darkCodeTheme = require('prism-react-renderer').themes.dracula;
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      announcementBar: {
-        id: 'support_ukraine',
-        content:
-          'Support Ukraine 🇺🇦 <a target="_blank" rel="noopener noreferrer" href="https://opensource.facebook.com/support-ukraine"> Help Provide Humanitarian Aid to Ukraine</a>.',
-        backgroundColor: '#20232a',
-        textColor: '#fff',
-        isCloseable: false,
-      },
       navbar: {
         title: 'Redex',
         logo: {
