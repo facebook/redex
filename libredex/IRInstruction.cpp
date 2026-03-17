@@ -238,7 +238,14 @@ uint16_t IRInstruction::size() const {
     op = OPCODE_INVOKE_STATIC;
   }
   if (opcode::is_an_internal(op)) {
-    return opcode::is_injection_id(op) ? 2 : opcode::is_unreachable(op) ? 1 : 0;
+    if (opcode::is_r_const(op)) {
+      return 3;
+    } else if (opcode::is_injection_id(op)) {
+      return 2;
+    } else if (opcode::is_unreachable(op)) {
+      return 1;
+    }
+    return 0;
   }
   static int args[] = {
       0, /* FMT_f00x   */
