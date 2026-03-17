@@ -256,6 +256,99 @@ TEST_F(PostVerify, CompanionWithConstVal) {
   EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "getMagic"));
 }
 
+// Method name collision: the companion's get() is relocated to the outer class.
+// Since the outer class already has a virtual get(), the relocated companion
+// get() is renamed to avoid collision.
+TEST_F(PostVerify, CompanionWithMethodCollision) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithMethodCollision;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithMethodCollision$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  // The companion's get() should no longer be on the companion class.
+  EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "get"));
+}
+
+// Companion inter-calls: methodA and methodB call each other.
+// Both should be relocated as static methods.
+TEST_F(PostVerify, CompanionWithInterCalls) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithInterCalls;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithInterCalls$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "methodA"));
+  EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "methodA"));
+  EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "methodB"));
+  EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "methodB"));
+}
+
+// @JvmStatic bridge: the companion's compute() is relocated, and the
+// existing @JvmStatic bridge on the outer class is renamed.
+TEST_F(PostVerify, CompanionWithJvmStaticBridge) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithJvmStaticBridge;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithJvmStaticBridge$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  // The companion's compute() should now be on the outer class.
+  EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "compute"));
+  EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "compute"));
+  // The old @JvmStatic bridge should be renamed.
+  EXPECT_NE(nullptr,
+            find_dmethod_named(*outer_cls, "compute$companion_bridge"));
+}
+
+// Companion with default arguments: both greet and greet$default are relocated.
+TEST_F(PostVerify, CompanionWithDefaults) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithDefaults;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithDefaults$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "greet"));
+  EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "greet"));
+}
+
+// Abstract outer class: companion methods are still relocated as static
+// methods.
+TEST_F(PostVerify, AbstractOuterClass) {
+  auto* outer_cls = find_class_named(classes, "LAbstractOuterClass;");
+  auto* companion_cls =
+      find_class_named(classes, "LAbstractOuterClass$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "helperFunc"));
+  EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "helperFunc"));
+}
+
+// Pure function companion: double(int) is relocated.
+TEST_F(PostVerify, CompanionWithPureFunction) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithPureFunction;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithPureFunction$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "double"));
+  EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "double"));
+}
+
+// Companion whose instance escapes: doWork should NOT be relocated because
+// getCompanion() returns the companion instance.
+TEST_F(PostVerify, CompanionEscapes) {
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionEscapes$Companion;");
+  EXPECT_NE(nullptr, companion_cls);
+  // doWork should still be on the companion class.
+  EXPECT_NE(nullptr, find_vmethod_named(*companion_cls, "doWork"));
+}
+
 // Named companion object — must not be relocated by the pass because the inner
 // class name (NamedCompanionClass$Custom) does not end with $Companion.
 TEST_F(PostVerify, NamedCompanionNotRelocated) {
