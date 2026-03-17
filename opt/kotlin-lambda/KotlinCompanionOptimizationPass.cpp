@@ -383,37 +383,36 @@ void relocate(DexClass* comp_cls,
   TRACE(KOTLIN_COMPANION, 5, "Before Relocating, the outer_cls is:");
   dump_cls(outer_cls);
 
-  // Remove the <init> in the <clinit>
+  // Clean up the outer class's <clinit>: remove the companion initialization
+  // sequence.  Kotlin generates this pattern:
+  //   new-instance      vN, Companion
+  //   invoke-direct     vN, Companion.<init>:()V
+  //   sput-object       vN, OuterClass.Companion
+  // We replace new-instance with const/0 (to avoid dangling register uses),
+  // and remove the invoke-direct and sput-object.
   if (outer_cls->get_clinit() != nullptr) {
-    auto* clinit_method = outer_cls->get_clinit();
-    auto* code = clinit_method->get_code();
-    auto& clinit_cfg = code->cfg();
+    auto& clinit_cfg = outer_cls->get_clinit()->get_code()->cfg();
     cfg::CFGMutation m(clinit_cfg);
-    auto iterable = cfg::InstructionIterable(clinit_cfg);
-    for (auto it = iterable.begin(); it != iterable.end(); it++) {
+    auto* comp_type = comp_cls->get_type();
+    for (auto it = cfg::InstructionIterable(clinit_cfg).begin();
+         it != cfg::InstructionIterable(clinit_cfg).end();
+         it++) {
       auto* insn = it->insn;
-      if (opcode::is_new_instance(insn->opcode())) {
-        auto* host_typ = insn->get_type();
-        if (host_typ == comp_cls->get_type()) {
-          auto mov_result_it = clinit_cfg.move_result_of(it);
-          auto* init_null = new IRInstruction(OPCODE_CONST);
-          init_null->set_literal(0);
-          init_null->set_dest(mov_result_it->insn->dest());
-          m.replace(it, {init_null});
-          TRACE(KOTLIN_COMPANION, 5, "Remove insn %s", SHOW(insn));
-        }
-      }
-      if (opcode::is_an_invoke(insn->opcode()) &&
-          method::is_init(insn->get_method())) {
-        auto* host_typ = insn->get_method()->get_class();
-        if (host_typ == comp_cls->get_type()) {
-          m.remove(it);
-          TRACE(KOTLIN_COMPANION, 5, "Remove insn %s", SHOW(insn));
-        }
-      }
-      if (opcode::is_an_sput(insn->opcode()) && insn->get_field() == field) {
-        TRACE(KOTLIN_COMPANION, 5, "Remove insn %s", SHOW(insn));
+      if (opcode::is_new_instance(insn->opcode()) &&
+          insn->get_type() == comp_type) {
+        auto mov_result_it = clinit_cfg.move_result_of(it);
+        auto* init_null = new IRInstruction(OPCODE_CONST);
+        init_null->set_literal(0);
+        init_null->set_dest(mov_result_it->insn->dest());
+        m.replace(it, {init_null});
+        TRACE(KOTLIN_COMPANION, 5, "Nullify insn %s", SHOW(insn));
+      } else if ((opcode::is_an_invoke(insn->opcode()) &&
+                  method::is_init(insn->get_method()) &&
+                  insn->get_method()->get_class() == comp_type) ||
+                 (opcode::is_an_sput(insn->opcode()) &&
+                  insn->get_field() == field)) {
         m.remove(it);
+        TRACE(KOTLIN_COMPANION, 5, "Remove insn %s", SHOW(insn));
       }
     }
     m.flush();
