@@ -43,13 +43,17 @@ void dump_cls(DexClass* cls, int trace_level = 5) {
 // the same class are not considered meaningful because those call sites will be
 // rewritten to static dispatch after relocation.
 bool uses_this(const DexMethod* method) {
+  if (is_static(method)) {
+    // Static methods have no `this` — the first load-param is the first real
+    // parameter.  This matters after MethodDevirtualizationPass, which makes
+    // companion methods static (removing `this`) while keeping them in
+    // vmethods.
+    return false;
+  }
   const auto* code = method->get_code();
   always_assert(code->cfg_built());
   const auto& cfg = code->cfg();
   auto iterable = InstructionIterable(cfg.get_param_instructions());
-  if (iterable.empty() && is_static(method)) {
-    return false;
-  }
   always_assert(!iterable.empty());
   live_range::MoveAwareChains chains(cfg);
   live_range::Uses first_load_param_uses;
@@ -429,7 +433,8 @@ void relocate(DexClass* comp_cls,
   // causing the check to fail.
   std::vector<DexMethod*> methods = comp_cls->get_all_methods();
   for (auto* method : methods) {
-    if (method::is_init(method) || method::is_clinit(method)) {
+    if (method::is_init(method) || method::is_clinit(method) ||
+        is_static(method)) {
       continue;
     }
     rewrite_this_calls_to_static(method);

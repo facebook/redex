@@ -10,6 +10,7 @@
 #include "DexUtil.h"
 #include "KotlinCompanionOptimizationPass.h"
 #include "LocalDcePass.h"
+#include "MethodDevirtualizationPass.h"
 #include "RedexTest.h"
 #include "Show.h"
 #include "Trace.h"
@@ -494,6 +495,128 @@ TEST_F(KotlinCompanionOptimizationTest, CrossStoreCompanionNotRelocated) {
       companion_getMagic->as_def()->get_class(),
       DexType::get_type(
           "Lcom/facebook/redextest/objtest/CompanionWithConstVal$Companion;"));
+}
+
+// Test companion method after MethodDevirtualizationPass: run devirtualization
+// first, then the companion pass.  MethodDevirtualizationPass makes companion
+// methods static (removing `this`) when they don't use `this`, but leaves them
+// in vmethods.  The companion pass should still accept these devirtualized
+// methods.
+TEST_F(KotlinCompanionOptimizationTest, DevirtualizedCompanionMethod) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/objtest/ConstValCaller;.main:()V");
+
+  // First, verify getMagic is virtual.
+  auto* companion_cls = type_class(DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithConstVal$Companion;"));
+  ASSERT_NE(nullptr, companion_cls);
+  bool found_virtual = false;
+  for (auto* m : companion_cls->get_vmethods()) {
+    if (m->get_name()->str() == "getMagic") {
+      found_virtual = true;
+      ASSERT_FALSE(is_static(m));
+    }
+  }
+  ASSERT_TRUE(found_virtual);
+
+  // Run MethodDevirtualizationPass first — it will devirtualize getMagic
+  // since it doesn't use `this`.
+  auto devirt = std::make_unique<MethodDevirtualizationPass>();
+  std::vector<Pass*> devirt_passes{devirt.get()};
+  run_passes(devirt_passes);
+
+  // Verify getMagic was actually devirtualized (made static).
+  bool found_static = false;
+  for (auto* m : companion_cls->get_vmethods()) {
+    if (m->get_name()->str() == "getMagic") {
+      found_static = is_static(m);
+    }
+  }
+  // If devirt didn't touch it, check dmethods too.
+  for (auto* m : companion_cls->get_dmethods()) {
+    if (m->get_name()->str() == "getMagic") {
+      found_static = is_static(m);
+    }
+  }
+  ASSERT_TRUE(found_static)
+      << "MethodDevirtualizationPass should have made getMagic static";
+
+  // Now run the companion pass.
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  // getMagic should be relocated to the outer class.
+  auto* outerGetMagic = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithConstVal;"
+      ".getMagic:()I");
+  ASSERT_NE(nullptr, outerGetMagic)
+      << "getMagic should be relocated to outer class after devirtualization";
+  ASSERT_TRUE(outerGetMagic->is_def());
+  ASSERT_TRUE(is_static(outerGetMagic->as_def()));
+}
+
+// Test devirtualized companion method WITH parameters: run devirtualization
+// first, then the companion pass.  `double(x: Int)` doesn't use `this`, so
+// MethodDevirtualizationPass makes it static, removing `this` but keeping
+// the `int` param.  The companion pass must not mistake the `int` param for
+// `this` in its `uses_this` analysis.
+TEST_F(KotlinCompanionOptimizationTest, DevirtualizedMethodWithParams) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/PureFunctionCaller;.main:()V");
+
+  auto* companion_cls =
+      type_class(DexType::get_type("Lcom/facebook/redextest/objtest/"
+                                   "CompanionWithPureFunction$Companion;"));
+  ASSERT_NE(nullptr, companion_cls);
+
+  // Verify `double` is initially virtual.
+  bool found_virtual = false;
+  for (auto* m : companion_cls->get_vmethods()) {
+    if (m->get_name()->str() == "double") {
+      ASSERT_FALSE(is_static(m));
+      found_virtual = true;
+    }
+  }
+  ASSERT_TRUE(found_virtual);
+
+  // Run MethodDevirtualizationPass — it will devirtualize `double` since
+  // it doesn't use `this`.  The method becomes static with one int param.
+  auto devirt = std::make_unique<MethodDevirtualizationPass>();
+  std::vector<Pass*> devirt_passes{devirt.get()};
+  run_passes(devirt_passes);
+
+  // Verify `double` was devirtualized.
+  bool is_now_static = false;
+  for (auto* m : companion_cls->get_vmethods()) {
+    if (m->get_name()->str() == "double") {
+      is_now_static = is_static(m);
+    }
+  }
+  for (auto* m : companion_cls->get_dmethods()) {
+    if (m->get_name()->str() == "double") {
+      is_now_static = is_static(m);
+    }
+  }
+  ASSERT_TRUE(is_now_static)
+      << "MethodDevirtualizationPass should have made double() static";
+
+  // Now run the companion pass.
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  // double should be relocated to the outer class.
+  auto* outerDouble = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithPureFunction;"
+      ".double:(I)I");
+  ASSERT_NE(nullptr, outerDouble) << "double(int) should be relocated to outer "
+                                     "class after devirtualization";
+  ASSERT_TRUE(outerDouble->is_def());
+  ASSERT_TRUE(is_static(outerDouble->as_def()));
 }
 
 // Test companion whose instance escapes: a function returns the companion

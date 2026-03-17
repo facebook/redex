@@ -178,6 +178,20 @@ class EscapesCaller {
   }
 }
 
+// Companion with a pure function that takes a parameter but doesn't use `this`.
+// After MethodDevirtualizationPass, this method becomes static with one param.
+class CompanionWithPureFunction {
+  companion object {
+    fun double(x: Int): Int = x * 2
+  }
+}
+
+class PureFunctionCaller {
+  fun main() {
+    print(CompanionWithPureFunction.double(21))
+  }
+}
+
 // Companion method with default arguments: Kotlin generates a static $default
 // method on the companion class. This method takes the companion instance as
 // its first parameter (it's already static), and the compiler reuses that
