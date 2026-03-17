@@ -241,7 +241,7 @@ enum class RejectionReason {
   kAccepted,
   kRootedOrExternal,
   kNotCompanion,
-  kNotFinal,
+  kHasSubclasses,
   kHasIfields,
   kHasInterfaces,
   kHasClinit,
@@ -250,7 +250,7 @@ enum class RejectionReason {
   kNoOuterClass,
   kMultipleCompanionSfields,
   kInvalidInit,
-  kMethodUsesThis,
+  kMethodNotRelocatable,
 };
 
 // Check if CLS is a companion object eligible for relocation.
@@ -275,7 +275,7 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
     return {RejectionReason::kNotCompanion, nullptr};
   }
   if (!is_final(cls) && !get_children(ch, cls->get_type()).empty()) {
-    return {RejectionReason::kNotFinal, nullptr};
+    return {RejectionReason::kHasSubclasses, nullptr};
   }
   if (!cls->get_ifields().empty()) {
     return {RejectionReason::kHasIfields, nullptr};
@@ -333,7 +333,7 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
     if (meth->rstate.no_optimizations() || (meth->get_code() == nullptr) ||
         uses_this(meth)) {
       TRACE(KOTLIN_COMPANION, 5, "Method not relocatable: %s", SHOW(meth));
-      return {RejectionReason::kMethodUsesThis, nullptr};
+      return {RejectionReason::kMethodNotRelocatable, nullptr};
     }
   }
 
@@ -349,7 +349,7 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
     } else if (meth->rstate.no_optimizations() ||
                (meth->get_code() == nullptr) || uses_this(meth)) {
       TRACE(KOTLIN_COMPANION, 5, "Method not relocatable: %s", SHOW(meth));
-      return {RejectionReason::kMethodUsesThis, nullptr};
+      return {RejectionReason::kMethodNotRelocatable, nullptr};
     }
   }
 
@@ -520,16 +520,19 @@ bool is_def_trackable(IRInstruction* insn,
 
 // Per-reason rejection counts from structural candidate checks.
 struct RejectionCounts {
+  AtomicStatCounter<size_t> rooted_or_external{0};
   AtomicStatCounter<size_t> not_companion{0};
-  AtomicStatCounter<size_t> not_final{0};
+  AtomicStatCounter<size_t> has_subclasses{0};
   AtomicStatCounter<size_t> has_sfields{0};
   AtomicStatCounter<size_t> has_clinit{0};
   AtomicStatCounter<size_t> has_interfaces{0};
   AtomicStatCounter<size_t> has_ifields{0};
   AtomicStatCounter<size_t> non_object_super{0};
   AtomicStatCounter<size_t> no_outer_class{0};
+  AtomicStatCounter<size_t> multiple_companion_sfields{0};
   AtomicStatCounter<size_t> invalid_init{0};
-  AtomicStatCounter<size_t> method_uses_this{0};
+  AtomicStatCounter<size_t> method_not_relocatable{0};
+  AtomicStatCounter<size_t> cross_store{0};
 };
 
 // Phase 1: Structural candidate collection + duplicate outer class filtering.
@@ -562,8 +565,8 @@ void collect_candidates(
     case RejectionReason::kNotCompanion:
       ++counts.not_companion;
       return;
-    case RejectionReason::kNotFinal:
-      ++counts.not_final;
+    case RejectionReason::kHasSubclasses:
+      ++counts.has_subclasses;
       return;
     case RejectionReason::kHasSfields:
       ++counts.has_sfields;
@@ -586,11 +589,14 @@ void collect_candidates(
     case RejectionReason::kInvalidInit:
       ++counts.invalid_init;
       return;
-    case RejectionReason::kMethodUsesThis:
-      ++counts.method_uses_this;
+    case RejectionReason::kMethodNotRelocatable:
+      ++counts.method_not_relocatable;
       return;
     case RejectionReason::kRootedOrExternal:
+      ++counts.rooted_or_external;
+      return;
     case RejectionReason::kMultipleCompanionSfields:
+      ++counts.multiple_companion_sfields;
       return;
     case RejectionReason::kAccepted:
       break;
@@ -602,6 +608,7 @@ void collect_candidates(
       auto outer_it = store_indices.find(outer_cls->get_type());
       if (cls_it == store_indices.end() || outer_it == store_indices.end() ||
           cls_it->second != outer_it->second) {
+        ++counts.cross_store;
         TRACE(KOTLIN_COMPANION, 2, "Rejected (cross_store): %s -> %s",
               SHOW(cls), SHOW(outer_cls));
         return;
@@ -889,7 +896,8 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
   stats.kotlin_candidate_companion_objects = candidates.size();
   stats.kotlin_untrackable_companion_objects = rejected.size();
   stats.kotlin_companion_objects_relocated = relocated_count;
-  stats.kotlin_rejected_not_final = counts.not_final;
+  stats.kotlin_rejected_rooted_or_external = counts.rooted_or_external;
+  stats.kotlin_rejected_has_subclasses = counts.has_subclasses;
   stats.kotlin_rejected_not_companion = counts.not_companion;
   stats.kotlin_rejected_has_sfields = counts.has_sfields;
   stats.kotlin_rejected_has_clinit = counts.has_clinit;
@@ -897,8 +905,11 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
   stats.kotlin_rejected_has_ifields = counts.has_ifields;
   stats.kotlin_rejected_non_object_super = counts.non_object_super;
   stats.kotlin_rejected_no_outer_class = counts.no_outer_class;
+  stats.kotlin_rejected_multiple_companion_sfields =
+      counts.multiple_companion_sfields;
   stats.kotlin_rejected_invalid_init = counts.invalid_init;
-  stats.kotlin_rejected_method_uses_this = counts.method_uses_this;
+  stats.kotlin_rejected_method_not_relocatable = counts.method_not_relocatable;
+  stats.kotlin_rejected_cross_store = counts.cross_store;
   stats.report(mgr);
 }
 
@@ -914,7 +925,9 @@ void KotlinCompanionOptimizationPass::Stats::report(PassManager& mgr) const {
        kotlin_untrackable_companion_objects);
   emit("kotlin_companion_objects_relocated",
        kotlin_companion_objects_relocated);
-  emit("kotlin_rejected_not_final", kotlin_rejected_not_final);
+  emit("kotlin_rejected_rooted_or_external",
+       kotlin_rejected_rooted_or_external);
+  emit("kotlin_rejected_has_subclasses", kotlin_rejected_has_subclasses);
   emit("kotlin_rejected_not_companion", kotlin_rejected_not_companion);
   emit("kotlin_rejected_has_sfields", kotlin_rejected_has_sfields);
   emit("kotlin_rejected_has_clinit", kotlin_rejected_has_clinit);
@@ -922,8 +935,12 @@ void KotlinCompanionOptimizationPass::Stats::report(PassManager& mgr) const {
   emit("kotlin_rejected_has_ifields", kotlin_rejected_has_ifields);
   emit("kotlin_rejected_non_object_super", kotlin_rejected_non_object_super);
   emit("kotlin_rejected_no_outer_class", kotlin_rejected_no_outer_class);
+  emit("kotlin_rejected_multiple_companion_sfields",
+       kotlin_rejected_multiple_companion_sfields);
   emit("kotlin_rejected_invalid_init", kotlin_rejected_invalid_init);
-  emit("kotlin_rejected_method_uses_this", kotlin_rejected_method_uses_this);
+  emit("kotlin_rejected_method_not_relocatable",
+       kotlin_rejected_method_not_relocatable);
+  emit("kotlin_rejected_cross_store", kotlin_rejected_cross_store);
 }
 
 static KotlinCompanionOptimizationPass s_pass;
