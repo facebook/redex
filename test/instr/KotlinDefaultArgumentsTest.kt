@@ -23,7 +23,7 @@ private fun greet(name: String = "Guest", greeting: String = "Hello") {
 }
 
 // CHECK: method: direct redex.KotlinDefaultArgumentsTestKt.hi
-public fun hi() {
+fun hi() {
   // CHECK: invoke-static {{.*}} redex.KotlinDefaultArgumentsTestKt.greet$default
   greet(greeting = "Hi") // Uses default name: "Hi, Guest!"
   // CHECK: invoke-static {{.*}} redex.KotlinDefaultArgumentsTestKt.greet
@@ -31,7 +31,7 @@ public fun hi() {
 }
 
 // CHECK: method: direct redex.KotlinDefaultArgumentsTestKt.bonjour
-public fun bonjour() {
+fun bonjour() {
   // CHECK: invoke-static {{.*}} redex.KotlinDefaultArgumentsTestKt.greet$default
   greet(greeting = "Bonjour") // Uses default name: "Bonjour, Guest!"
   // CHECK: invoke-static {{.*}} redex.KotlinDefaultArgumentsTestKt.greet
