@@ -131,8 +131,10 @@ bool virtual_method_uses_this(const DexMethod* method) {
 
 // Setup types/strings needed for the pass
 void PrintKotlinStats::setup() {
-  m_kotlin_null_assertions =
-      kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
+  kotlin_nullcheck_wrapper::get_kotlin_param_null_assertions(
+      m_kotlin_param_null_assertions);
+  kotlin_nullcheck_wrapper::get_kotlin_expr_null_assertions(
+      m_kotlin_expr_null_assertions);
   m_kotlin_areequal = DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.areEqual:"
       "(Ljava/lang/Object;Ljava/lang/Object;)Z");
@@ -368,8 +370,10 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
     switch (insn->opcode()) {
     case OPCODE_INVOKE_STATIC: {
       auto* called_method = insn->get_method();
-      if (m_kotlin_null_assertions.count(called_method) != 0u) {
-        stats.kotlin_null_check_insns++;
+      if (m_kotlin_param_null_assertions.count(called_method) != 0u) {
+        stats.kotlin_null_check_param_insns++;
+      } else if (m_kotlin_expr_null_assertions.count(called_method) != 0u) {
+        stats.kotlin_null_check_expr_insns++;
       }
       if (m_kotlin_areequal != nullptr && called_method == m_kotlin_areequal) {
         stats.kotlin_areequal_insns++;
@@ -392,7 +396,9 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
 }
 
 void PrintKotlinStats::Stats::report(PassManager& mgr) const {
-  mgr.incr_metric("kotlin_null_check_insns", kotlin_null_check_insns);
+  mgr.incr_metric("kotlin_null_check_param_insns",
+                  kotlin_null_check_param_insns);
+  mgr.incr_metric("kotlin_null_check_expr_insns", kotlin_null_check_expr_insns);
   mgr.incr_metric("kotlin_areequal_insns", kotlin_areequal_insns);
   mgr.incr_metric("kotlin_default_arg_check_insns",
                   kotlin_default_arg_check_insns);
@@ -447,8 +453,10 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_unique_trivial_non_capturing_lambdas",
                   kotlin_unique_trivial_non_capturing_lambdas);
 
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_insns = %zu",
-        kotlin_null_check_insns);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_param_insns = %zu",
+        kotlin_null_check_param_insns);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_expr_insns = %zu",
+        kotlin_null_check_expr_insns);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_areequal_insns = %zu",
         kotlin_areequal_insns);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_default_arg_1_param = %zu",

@@ -93,5 +93,6 @@ TEST_F(PrintKotlinStatsTest, SimpleArgumentPassingTest) {
             return pass.handle_method(meth);
           });
 
-  ASSERT_EQ(stats.kotlin_null_check_insns, 2);
+  ASSERT_EQ(stats.kotlin_null_check_param_insns, 1);
+  ASSERT_EQ(stats.kotlin_null_check_expr_insns, 1);
 }
