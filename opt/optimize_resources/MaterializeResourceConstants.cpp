@@ -12,7 +12,6 @@
 #include "FinalInlineV2.h"
 #include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
-#include "RClass.h"
 #include "RedexResources.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
@@ -66,15 +65,17 @@ size_t process_method(const UnorderedSet<DexType*>& r_classes,
 }
 } // namespace
 
-void MaterializeResourceConstantsPass::run_pass(DexStoresVector& stores,
-                                                ConfigFiles& conf,
-                                                PassManager& mgr) {
-  Scope scope = build_class_scope(stores);
+MaterializeResourceConstantsPass::Stats
+MaterializeResourceConstantsPass::run_impl(
+    const resources::RClassReader& r_class_reader,
+    Scope& scope,
+    bool replace_const_instructions,
+    bool create_init_class_insns) {
+  MaterializeResourceConstantsPass::Stats stats;
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
+      scope, create_init_class_insns);
   Scope apply_scope;
   UnorderedSet<DexType*> r_classes;
-  resources::RClassReader r_class_reader(conf.get_global_config());
   for (auto* cls : scope) {
     if (r_class_reader.is_r_class(cls)) {
       apply_scope.emplace_back(cls);
@@ -82,26 +83,40 @@ void MaterializeResourceConstantsPass::run_pass(DexStoresVector& stores,
     }
   }
   size_t clinit_cycles = 0;
-  size_t deleted_clinits = 0;
   auto cp_state = constant_propagation::State();
   final_inline::analyze_and_simplify_clinits(
       apply_scope, init_classes_with_side_effects,
       /* xstores= */ nullptr,
       /* blocklist_types= */ {}, /* allowed_opaque_callee_names= */ {},
-      cp_state, &clinit_cycles, &deleted_clinits);
+      cp_state, &clinit_cycles, &stats.deleted_clinits);
   always_assert_log(clinit_cycles == 0,
                     "Should not have clinit cycles in R classes!");
 
-  if (m_replace_const_instructions) {
-    size_t instructions_created = walk::parallel::methods<size_t>(
+  if (replace_const_instructions) {
+    stats.instructions_created = walk::parallel::methods<size_t>(
         scope, [&](DexMethod* m) { return process_method(r_classes, m); });
-    TRACE(OPTRES, 1, "Inserted %zu R_CONST instructions", instructions_created);
+  }
+  return stats;
+}
+
+void MaterializeResourceConstantsPass::run_pass(DexStoresVector& stores,
+                                                ConfigFiles& conf,
+                                                PassManager& mgr) {
+  Scope scope = build_class_scope(stores);
+  resources::RClassReader r_class_reader(conf.get_global_config());
+  Scope apply_scope;
+  auto stats = run_impl(r_class_reader, scope, m_replace_const_instructions,
+                        conf.create_init_class_insns());
+  if (m_replace_const_instructions) {
+    TRACE(OPTRES, 1, "Inserted %zu R_CONST instructions",
+          stats.instructions_created);
     mgr.incr_metric("instructions_created",
-                    static_cast<int64_t>(instructions_created));
+                    static_cast<int64_t>(stats.instructions_created));
   }
 
-  TRACE(OPTRES, 1, "final_inline deleted %zu methods", deleted_clinits);
-  mgr.incr_metric("deleted_clinits", static_cast<int64_t>(deleted_clinits));
+  TRACE(OPTRES, 1, "final_inline deleted %zu methods", stats.deleted_clinits);
+  mgr.incr_metric("deleted_clinits",
+                  static_cast<int64_t>(stats.deleted_clinits));
 }
 
 static MaterializeResourceConstantsPass s_pass;

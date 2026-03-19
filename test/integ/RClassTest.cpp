@@ -5,22 +5,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <algorithm>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "GlobalConfig.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "LiveRange.h"
+#include "MaterializeResourceConstants.h"
 #include "RClass.h"
 #include "RedexContext.h"
-#include "RedexResources.h"
 #include "RedexTest.h"
 #include "Show.h"
 #include "ShowCFG.h"
+#include "TypeUtil.h"
 
 namespace {
 // SHOW on the code/cfg by default does not print out payloads; use the special
@@ -122,6 +123,59 @@ class RClassTest : public RedexIntegrationTest {
     base_r_class = get_r_class(*classes, base_r_class_name);
   }
 };
+
+TEST_F(RClassTest, materializeScalarsAndRemap) {
+  auto print_fn = [](DexClass* c) {
+    std::cerr << show(c) << " has " << c->get_all_methods().size()
+              << " method(s), " << c->get_all_fields().size() << " field(s)\n";
+    for (auto& m : c->get_all_methods()) {
+      std::cerr << "Method " << show(m);
+      if (m->get_code() != nullptr) {
+        std::cerr << " " << show(m->get_code()->cfg());
+      }
+      std::cerr << "\n";
+    }
+    for (auto& f : c->get_all_fields()) {
+      std::cerr << "Field " << show(f);
+      if (is_static(f) && f->get_static_value() != nullptr) {
+        std::cerr << " value: " << show(f->get_static_value());
+      }
+      std::cerr << "\n";
+    }
+  };
+  auto verify_sfield_value = [](DexClass* c, uint32_t value) {
+    size_t int_fields = 0;
+    for (auto& s : c->get_sfields()) {
+      if (type::is_primitive(s->get_type())) {
+        int_fields++;
+        EXPECT_EQ(s->get_static_value()->value(), value);
+      }
+    }
+    EXPECT_EQ(int_fields, 1) << "Should have only 1 int field";
+  };
+  auto* c = find_class(*classes, "Lcom/redextest/R$drawable_c;");
+  print_fn(c);
+  auto* d = find_class(*classes, "Lcom/redextest/R$drawable_d;");
+  print_fn(d);
+  // Read the stuff and remap it.
+  Scope scope = {c, d};
+  resources::RClassReader r_class_reader(global_resources_config);
+  MaterializeResourceConstantsPass::run_impl(r_class_reader, scope, true);
+  std::cerr << "*** AFTER MaterializeResourceConstantsPass ***\n";
+  print_fn(c);
+  print_fn(d);
+  auto OLD_ID = 0x7f090004;
+  auto NEW_ID = 0x7f090014;
+  verify_sfield_value(c, OLD_ID);
+  verify_sfield_value(d, OLD_ID);
+
+  std::map<uint32_t, uint32_t> old_to_remapped_ids;
+  old_to_remapped_ids.emplace(OLD_ID, NEW_ID);
+  resources::RClassWriter r_class_writer(global_resources_config);
+  r_class_writer.remap_resource_class_scalars(stores, old_to_remapped_ids);
+  verify_sfield_value(c, NEW_ID);
+  verify_sfield_value(d, NEW_ID);
+}
 
 TEST_F(RClassTest, extractStaticArrayValues) {
   resources::RClassReader r_class_reader(global_resources_config);
