@@ -34,6 +34,28 @@ constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
 constexpr const char* COLD_START_20PCT_END = "LColdStart20PctEnd";
 constexpr const char* COLD_START_1PCT_END = "LColdStart1PctEnd";
 
+enum class ComplementBetamapMode {
+  kDisabled,
+  kAnon,
+  kAll,
+};
+
+ComplementBetamapMode parse_complement_betamap_mode(const std::string& mode) {
+  if (mode.empty() || mode == "disabled") {
+    return ComplementBetamapMode::kDisabled;
+  }
+  if (mode == "anon") {
+    return ComplementBetamapMode::kAnon;
+  }
+  if (mode == "all") {
+    return ComplementBetamapMode::kAll;
+  }
+  always_assert_log(false,
+                    "Unknown complement_betamap_with_method_profiles_symbols "
+                    "mode: %s. Expected \"disabled\", \"anon\", or \"all\".",
+                    mode.c_str());
+}
+
 class StringTabSplitter {
  private:
   std::string_view m_line;
@@ -294,9 +316,10 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   // Inject MethodProfile coldstart classes
   const auto& coldstart_stats =
       get_method_profiles().method_stats(method_profiles::COLD_START);
+  auto complement_mode = parse_complement_betamap_mode(get_json_config().get(
+      "complement_betamap_with_method_profiles_symbols", std::string("")));
   bool add_method_profiles_symbols =
-      get_json_config().get("complement_betamap_with_method_profiles_symbols",
-                            false) &&
+      complement_mode != ComplementBetamapMode::kDisabled &&
       !coldstart_stats.empty();
   TypeSet coldstart_20pct_classes;
   TypeSet coldstart_1pct_classes;
@@ -311,7 +334,8 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
               method->get_class()->c_str());
         continue;
       }
-      if (!klass::maybe_anonymous_class(clz)) {
+      if (complement_mode == ComplementBetamapMode::kAnon &&
+          !klass::maybe_anonymous_class(clz)) {
         continue;
       }
 
