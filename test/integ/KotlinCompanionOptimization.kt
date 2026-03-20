@@ -192,6 +192,31 @@ class PureFunctionCaller {
   }
 }
 
+// Companion with @Synchronized method: Kotlin generates MONITOR_ENTER on the
+// companion instance.  After devirtualization, the companion instance becomes
+// an explicit first parameter, but the MONITOR_ENTER still references it.
+// This companion must NOT be relocated.
+class CompanionWithSynchronized {
+  var data = mutableListOf<String>()
+
+  companion object {
+    @Synchronized
+    fun addItem(outer: CompanionWithSynchronized, item: String) {
+      outer.data.add(item)
+    }
+
+    @Synchronized fun getSize(outer: CompanionWithSynchronized): Int = outer.data.size
+  }
+}
+
+class SynchronizedCaller {
+  fun main() {
+    val obj = CompanionWithSynchronized()
+    CompanionWithSynchronized.addItem(obj, "hello")
+    print(CompanionWithSynchronized.getSize(obj))
+  }
+}
+
 // Companion method with default arguments: Kotlin generates a static $default
 // method on the companion class. This method takes the companion instance as
 // its first parameter (it's already static), and the compiler reuses that

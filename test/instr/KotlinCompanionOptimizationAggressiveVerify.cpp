@@ -138,14 +138,15 @@ TEST_F(PostVerify, CompanionWithMethodCollision) {
   EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
 }
 
-// Companion inter-calls: after aggressive pipeline, companion class is removed.
+// Companion inter-calls: with staticize_vmethods_using_this enabled,
+// MethodDevirtualizationPass keeps `this` as explicit first parameter
+// (KeepThis::Yes) because the methods use `this` for inter-calls.
+// The companion pass detects the kept companion instance and does NOT
+// relocate the companion.
 TEST_F(PostVerify, CompanionWithInterCalls) {
-  auto* outer_cls = find_class_named(classes, "LCompanionWithInterCalls;");
   auto* companion_cls =
       find_class_named(classes, "LCompanionWithInterCalls$Companion;");
-  EXPECT_NE(nullptr, outer_cls);
-  EXPECT_EQ(nullptr, companion_cls);
-  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  EXPECT_NE(nullptr, companion_cls);
 }
 
 // @JvmStatic bridge: after aggressive pipeline, companion class is removed.
@@ -204,6 +205,14 @@ TEST_F(PostVerify, CompanionWithKeptMethodNotRelocated) {
     EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "keptMethod"))
         << "keptMethod should NOT be relocated to outer class";
   }
+}
+
+// @Synchronized companion: not relocated by KotlinCompanionOptimizationPass.
+// The companion should survive even with the aggressive pipeline.
+TEST_F(PostVerify, CompanionWithSynchronizedNotRelocated) {
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithSynchronized$Companion;");
+  EXPECT_NE(nullptr, companion_cls);
 }
 
 // Named companion object — not relocated by KotlinCompanionOptimizationPass

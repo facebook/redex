@@ -209,6 +209,22 @@ class CompanionWithKeptMethod {
   }
 }
 
+// @Synchronized companion: MONITOR_ENTER on companion instance.
+// Must NOT be relocated — after devirtualization the companion instance
+// becomes an explicit parameter, and MONITOR_ENTER still references it.
+class CompanionWithSynchronized {
+  var data = mutableListOf<String>()
+
+  companion object {
+    @Synchronized
+    fun addItem(outer: CompanionWithSynchronized, item: String) {
+      outer.data.add(item)
+    }
+
+    @Synchronized fun getSize(outer: CompanionWithSynchronized): Int = outer.data.size
+  }
+}
+
 class Foo {
   fun main() {
 
@@ -260,5 +276,8 @@ class Foo {
 
     println(CompanionWithKeptMethod.keptMethod())
     println(CompanionWithKeptMethod.normalMethod())
+    val syncObj = CompanionWithSynchronized()
+    CompanionWithSynchronized.addItem(syncObj, "test")
+    println(CompanionWithSynchronized.getSize(syncObj))
   }
 }
