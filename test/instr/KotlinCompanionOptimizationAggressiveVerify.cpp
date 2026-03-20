@@ -195,6 +195,17 @@ TEST_F(PostVerify, CompanionWithConstVal) {
   EXPECT_EQ(nullptr, companion_cls);
 }
 
+// Companion with @DoNotStrip method: keptMethod should NOT be relocated to
+// the outer class.  The companion class itself may or may not survive the
+// aggressive pipeline (inlining + RMU), but the method must not move.
+TEST_F(PostVerify, CompanionWithKeptMethodNotRelocated) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithKeptMethod;");
+  if (outer_cls != nullptr) {
+    EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "keptMethod"))
+        << "keptMethod should NOT be relocated to outer class";
+  }
+}
+
 // Named companion object — not relocated by KotlinCompanionOptimizationPass
 // because the inner class name (NamedCompanionClass$Custom) does not end with
 // $Companion. The companion class should survive the aggressive pipeline.

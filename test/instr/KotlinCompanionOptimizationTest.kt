@@ -198,6 +198,17 @@ class CompanionEscapes {
 
 fun getCompanion(): CompanionEscapes.Companion = CompanionEscapes.Companion
 
+// Companion with a @DoNotStrip method: the annotation prevents renaming.
+// The companion must NOT be relocated because relocating would change the
+// method's class, breaking JNI or reflection bindings.
+class CompanionWithKeptMethod {
+  companion object {
+    @com.facebook.proguard.annotations.DoNotStrip fun keptMethod(): String = "kept"
+
+    fun normalMethod(): String = "normal"
+  }
+}
+
 class Foo {
   fun main() {
 
@@ -246,5 +257,8 @@ class Foo {
 
     println(CompanionEscapes.doWork())
     println(getCompanion())
+
+    println(CompanionWithKeptMethod.keptMethod())
+    println(CompanionWithKeptMethod.normalMethod())
   }
 }

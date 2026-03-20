@@ -327,11 +327,16 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
     }
   }
 
+  // Check each method for relocatability.  In addition to the class-level
+  // root/can_rename/can_delete checks, individual methods may have keep rules
+  // (e.g., @DoNotStrip) that prevent relocation.  Methods involved in JNI
+  // bindings (fbjni HybridData pattern) are annotated @DoNotStrip, which makes
+  // can_rename return false.
   for (auto* meth : cls->get_vmethods()) {
     // No need to check is_final(meth) — the class-level hierarchy check
     // already guarantees no subclasses, so no virtual method can be overridden.
-    if (meth->rstate.no_optimizations() || (meth->get_code() == nullptr) ||
-        uses_this(meth)) {
+    if (root(meth) || !can_rename(meth) || meth->rstate.no_optimizations() ||
+        (meth->get_code() == nullptr) || uses_this(meth)) {
       TRACE(KOTLIN_COMPANION, 5, "Method not relocatable: %s", SHOW(meth));
       return {RejectionReason::kMethodNotRelocatable, nullptr};
     }
@@ -346,7 +351,8 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
         TRACE(KOTLIN_COMPANION, 5, "invalid init = %s", SHOW(meth));
         return {RejectionReason::kInvalidInit, nullptr};
       }
-    } else if (meth->rstate.no_optimizations() ||
+    } else if (root(meth) || !can_rename(meth) ||
+               meth->rstate.no_optimizations() ||
                (meth->get_code() == nullptr) || uses_this(meth)) {
       TRACE(KOTLIN_COMPANION, 5, "Method not relocatable: %s", SHOW(meth));
       return {RejectionReason::kMethodNotRelocatable, nullptr};
