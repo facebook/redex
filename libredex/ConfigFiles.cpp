@@ -316,13 +316,16 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   // Inject MethodProfile coldstart classes
   const auto& coldstart_stats =
       get_method_profiles().method_stats(method_profiles::COLD_START);
-  auto complement_mode = parse_complement_betamap_mode(get_json_config().get(
-      "complement_betamap_with_method_profiles_symbols", std::string("")));
+  auto complement_mode_str = get_json_config().get(
+      "complement_betamap_with_method_profiles_symbols", std::string(""));
+  auto complement_mode = parse_complement_betamap_mode(complement_mode_str);
+  TRACE(CF, 1, "complement_betamap mode: \"%s\"", complement_mode_str.c_str());
   bool add_method_profiles_symbols =
       complement_mode != ComplementBetamapMode::kDisabled &&
       !coldstart_stats.empty();
   TypeSet coldstart_20pct_classes;
   TypeSet coldstart_1pct_classes;
+  TypeSet non_anon_classes;
   if (add_method_profiles_symbols) {
     always_assert(!coldstart_stats.empty());
     for (const auto& meth_stats : UnorderedIterable(coldstart_stats)) {
@@ -338,6 +341,9 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
           !klass::maybe_anonymous_class(clz)) {
         continue;
       }
+      if (!klass::maybe_anonymous_class(clz)) {
+        non_anon_classes.insert(method->get_class());
+      }
 
       if (meth_stats.second.appear_percent >= 20.0) {
         coldstart_20pct_classes.insert(method->get_class());
@@ -348,6 +354,7 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
 
     TRACE(CF, 1, "coldstart class: 20 pct %zu", coldstart_20pct_classes.size());
     TRACE(CF, 1, "coldstart class: 1 pct %zu", coldstart_1pct_classes.size());
+    TRACE(CF, 1, "coldstart class: non-anon %zu", non_anon_classes.size());
   }
 
   std::string clzname;
