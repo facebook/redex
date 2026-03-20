@@ -169,6 +169,31 @@ inline void get_kotlin_expr_null_assertions(UnorderedSet<DexMethodRef*>& out) {
   }
 }
 
+// Inserts methods used in Kotlin not-null assertions
+// (Intrinsics.checkNotNull). The Kotlin compiler emits these for:
+// - !! operator:
+// https://github.com/JetBrains/kotlin/blob/340be3a860a7/compiler/ir/backend.jvm/codegen/src/org/jetbrains/kotlin/backend/jvm/intrinsics/IrIntrinsicMethods.kt#L69
+// https://github.com/JetBrains/kotlin/blob/340be3a860a7/compiler/ir/backend.jvm/codegen/src/org/jetbrains/kotlin/backend/jvm/intrinsics/IrCheckNotNull.kt#L35
+// - as cast to non-null type:
+// https://github.com/JetBrains/kotlin/blob/340be3a860a7/compiler/ir/backend.jvm/lower/src/org/jetbrains/kotlin/backend/jvm/lower/TypeOperatorLowering.kt#L170
+// https://github.com/JetBrains/kotlin/blob/340be3a860a7/compiler/ir/backend.jvm/lower/src/org/jetbrains/kotlin/backend/jvm/lower/TypeOperatorLowering.kt#L95
+// - IMPLICIT_NOTNULL fallback (seems like a fallback that kotlinc enforces when
+// it can't safely invoke checkExpressionValueIsNotNull, should be rare):
+// https://github.com/JetBrains/kotlin/blob/340be3a860a7/compiler/ir/backend.jvm/lower/src/org/jetbrains/kotlin/backend/jvm/lower/TypeOperatorLowering.kt#L203
+// https://github.com/JetBrains/kotlin/blob/340be3a860a7/compiler/ir/backend.jvm/lower/src/org/jetbrains/kotlin/backend/jvm/lower/TypeOperatorLowering.kt#L214
+inline void get_kotlin_notnull_assertions(UnorderedSet<DexMethodRef*>& out) {
+  if (auto* m =
+          DexMethod::get_method("Lkotlin/jvm/internal/Intrinsics;.checkNotNull:"
+                                "(Ljava/lang/Object;)V")) {
+    out.emplace(m);
+  }
+  if (auto* m =
+          DexMethod::get_method("Lkotlin/jvm/internal/Intrinsics;.checkNotNull:"
+                                "(Ljava/lang/Object;Ljava/lang/String;)V")) {
+    out.emplace(m);
+  }
+}
+
 // This returns methods that are used in Kotlin null assertion.
 // These null assertions will take the object that they are checking for
 // nullness as first argument and returns void. The value of the object will
