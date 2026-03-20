@@ -36,11 +36,10 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 #include "Trace.h"
 #include "Transform.h"
 
-// While undefined behavior C++-wise, the two's complement implementation of
-// modern processors matches the required Java semantics. So silence ubsan.
+// Signed integer overflow is undefined behavior in C++20, but the two's
+// complement wrapping matches the required Java semantics. So silence ubsan.
 #if defined(__clang__)
-#define NO_UBSAN_ARITH \
-  __attribute__((no_sanitize("signed-integer-overflow", "shift")))
+#define NO_UBSAN_ARITH __attribute__((no_sanitize("signed-integer-overflow")))
 #else
 #define NO_UBSAN_ARITH
 #endif
