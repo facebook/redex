@@ -425,7 +425,7 @@ void DedupResourcesPass::prepare_disallowed_ids(
   }
 }
 
-void DedupResourcesPass::eval_pass(DexStoresVector& stores,
+void DedupResourcesPass::eval_pass(DexStoresVector& /*stores*/,
                                    ConfigFiles& conf,
                                    PassManager&) {
   auto& plugin_registery = opt_res::ReachableResourcesPluginRegistry::get();
