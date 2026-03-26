@@ -159,21 +159,31 @@ get_string_or_reference_from_attribute(const aapt::pb::XmlAttribute& pb_attr) {
   }
 }
 
-// Apply callback to element and its descendants, stopping if/when callback
-// returns false
+enum class TraversalAction {
+  Continue, // Process children and continue traversal
+  SkipChildren, // Skip children of this element but continue traversal
+  Stop, // Stop the entire traversal
+};
+
+// Apply callback to element and its descendants. The callback returns a
+// TraversalAction to control traversal behavior.
 void traverse_element_and_children(
     const aapt::pb::XmlElement& start,
-    const std::function<bool(const aapt::pb::XmlElement&)>& callback) {
+    const std::function<TraversalAction(const aapt::pb::XmlElement&)>&
+        callback) {
   std::queue<aapt::pb::XmlElement> q;
   q.push(start);
   while (!q.empty()) {
     const auto& front = q.front();
-    if (!callback(front)) {
+    auto action = callback(front);
+    if (action == TraversalAction::Stop) {
       return;
     }
-    for (const aapt::pb::XmlNode& pb_child : front.child()) {
-      if (pb_child.node_case() == aapt::pb::XmlNode::NodeCase::kElement) {
-        q.push(pb_child.element());
+    if (action == TraversalAction::Continue) {
+      for (const aapt::pb::XmlNode& pb_child : front.child()) {
+        if (pb_child.node_case() == aapt::pb::XmlNode::NodeCase::kElement) {
+          q.push(pb_child.element());
+        }
       }
     }
     q.pop();
@@ -186,12 +196,11 @@ bool find_nested_tag(const std::string& search_tag,
   bool find_result = false;
   traverse_element_and_children(
       start, [&](const aapt::pb::XmlElement& element) {
-        bool keep_going = true;
         if (&start != &element && element.name() == search_tag) {
           find_result = true;
-          keep_going = false;
+          return TraversalAction::Stop;
         }
-        return keep_going;
+        return TraversalAction::Continue;
       });
   return find_result;
 }
@@ -359,6 +368,11 @@ void read_single_manifest(const std::string& manifest,
                   manifest_classes->instrumentation_classes.emplace(
                       resources::fully_qualified_external_name(package_name,
                                                                classname));
+                } else if (tag == "queries") {
+                  // queries break the logic to find providers below because
+                  // they don't declare a name. Follow same logic as
+                  // ApkResources.
+                  return TraversalAction::SkipChildren;
                 } else if (string_to_tag.count(tag) != 0u) {
                   std::string classname = get_string_attribute_value(
                       element,
@@ -417,7 +431,7 @@ void read_single_manifest(const std::string& manifest,
                   }
                   manifest_classes->component_tags.emplace_back(tag_info);
                 }
-                return true;
+                return TraversalAction::Continue;
               });
         }
       });
@@ -1318,7 +1332,7 @@ void BundleResources::collect_layout_classes_and_attributes_for_file(
                 collect_layout_classes_and_attributes_for_element(
                     element, ns_uri_to_prefix, attributes_to_read, out_classes,
                     out_attributes);
-                return true;
+                return TraversalAction::Continue;
               });
         }
       });
@@ -1361,7 +1375,7 @@ void BundleResources::collect_xml_attribute_string_values_for_file(
                     out->emplace(pb_attr.value());
                   }
                 }
-                return true;
+                return TraversalAction::Continue;
               });
         }
       });
@@ -1442,7 +1456,7 @@ UnorderedSet<uint32_t> BundleResources::get_xml_reference_attributes(
           traverse_element_and_children(
               start, [&](const aapt::pb::XmlElement& element) {
                 collect_rids_for_element(element, result);
-                return true;
+                return TraversalAction::Continue;
               });
         }
       });
