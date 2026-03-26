@@ -1298,6 +1298,23 @@ bool StringAnalyzer::analyze_invoke(const StringAnalyzerState* state,
       env->set(RESULT_REGISTER, SignedConstantDomain(res));
       return true;
     }
+  } else if (method == method::java_lang_String_charAt()) {
+    always_assert(insn->srcs_size() == 2);
+    if (const auto* arg0 = maybe_string(0)) {
+      auto idx_const =
+          env->get<SignedConstantDomain>(insn->src(1)).get_constant();
+      if (idx_const) {
+        int64_t i = *idx_const;
+        // Only fold for ASCII-only strings where MUTF-8 byte index
+        // equals UTF-16 code unit index.
+        if (arg0->is_simple() && i >= 0 &&
+            i < static_cast<int64_t>(arg0->length())) {
+          int64_t ch = static_cast<uint8_t>(arg0->c_str()[i]);
+          env->set(RESULT_REGISTER, SignedConstantDomain(ch));
+          return true;
+        }
+      }
+    }
   }
 
   return false;

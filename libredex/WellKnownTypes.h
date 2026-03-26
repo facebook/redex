@@ -74,6 +74,7 @@
            "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")                 \
   FOR_EACH(java_lang_String_hashCode, "Ljava/lang/String;.hashCode:()I")      \
   FOR_EACH(java_lang_String_isEmpty, "Ljava/lang/String;.isEmpty:()Z")        \
+  FOR_EACH(java_lang_String_charAt, "Ljava/lang/String;.charAt:(I)C")         \
   FOR_EACH(java_lang_Objects_clone,                                           \
            "[Ljava/lang/Object;.clone:()Ljava/lang/Object;")                  \
   FOR_EACH(java_lang_Class_cast,                                              \
