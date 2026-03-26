@@ -5,6 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// NOLINTBEGIN(performance-avoid-endl)
+// Flushing output is important here.
+
 #include "Debug.h"
 #include "DebugUtils.h"
 
@@ -256,10 +259,11 @@ void assert_fail(const char* expr,
 
   if (!do_throw && g_block_multi_asserts) {
     // Another thread already threw. Avoid "terminate called recursively."
-    // Infinite loop.
-    for (;;) {
-      sleep(1000);
-    }
+    // Sleep some amount, then fast-exit to just kill the process.
+    sleep(30);
+    std::cerr << "Expected Redex to die from racing thread's assert."
+              << std::endl;
+    _exit(1);
   }
 
   if (redex_debug::abort_for_type[type]) {
@@ -384,3 +388,5 @@ bool try_reset_hwm_mem_stat() {
   return false;
 #endif // __linux__
 }
+
+// NOLINTEND(performance-avoid-endl)
