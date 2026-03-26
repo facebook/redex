@@ -65,4 +65,8 @@
     </activity>
   </application>
 
+  <queries>
+    <provider android:authorities="com.android.contacts" />
+  </queries>
+
 </manifest>
