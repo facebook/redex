@@ -26,12 +26,15 @@ struct StringTest : public ConstantPropagationTest {
                        ->make_concrete(ACC_PUBLIC, true);
     auto* hashCode = DexMethod::make_method("Ljava/lang/String;.hashCode:()I")
                          ->make_concrete(ACC_PUBLIC, true);
+    auto* length = DexMethod::make_method("Ljava/lang/String;.length:()I")
+                       ->make_concrete(ACC_PUBLIC, true);
     auto* isEmpty = DexMethod::make_method("Ljava/lang/String;.isEmpty:()Z")
                         ->make_concrete(ACC_PUBLIC, true);
     auto* charAt = DexMethod::make_method("Ljava/lang/String;.charAt:(I)C")
                        ->make_concrete(ACC_PUBLIC, true);
     creator.add_method(equals);
     creator.add_method(hashCode);
+    creator.add_method(length);
     creator.add_method(isEmpty);
     creator.add_method(charAt);
 
@@ -172,6 +175,135 @@ TEST_F(StringTest, hashCode) {
 )");
 
   EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StringTest, length_nonempty) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-string "hello")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.length:()I")
+      (move-result v0)
+      (return v0)
+    )
+)");
+
+  cp::Transform::Config config;
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_length()};
+  config.pure_methods = &pure_methods;
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const-string "hello")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.length:()I")
+      (const v0 5)
+      (return v0)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StringTest, length_empty) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-string "")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.length:()I")
+      (move-result v0)
+      (return v0)
+    )
+)");
+
+  cp::Transform::Config config;
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_length()};
+  config.pure_methods = &pure_methods;
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const-string "")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.length:()I")
+      (const v0 0)
+      (return v0)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StringTest, length_unknown_receiver) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.length:()I")
+      (move-result v0)
+      (return v0)
+    )
+)");
+
+  cp::Transform::Config config;
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_length()};
+  config.pure_methods = &pure_methods;
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.length:()I")
+      (move-result v0)
+      (return v0)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StringTest, length_non_ascii) {
+  // "é" (U+00E9) is 2 bytes in MUTF-8 but 1 UTF-16 code unit.
+  // String.length() must return 1 (UTF-16 count), not 2 (byte count).
+  const auto* non_ascii = DexString::make_string("\xc3\xa9");
+  ASSERT_EQ(non_ascii->length(), 1);
+  ASSERT_EQ(non_ascii->size(), 2);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-string "placeholder")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.length:()I")
+      (move-result v0)
+      (return v0)
+    )
+)");
+
+  for (auto& mie : InstructionIterable(code.get())) {
+    if (mie.insn->opcode() == OPCODE_CONST_STRING) {
+      mie.insn->set_string(non_ascii);
+      break;
+    }
+  }
+
+  cp::Transform::Config config;
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_length()};
+  config.pure_methods = &pure_methods;
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
+
+  // Must fold to 1 (UTF-16 code unit count), not 2 (MUTF-8 byte count).
+  bool found_const_1 = false;
+  for (const auto& mie : InstructionIterable(code.get())) {
+    if (mie.insn->opcode() == OPCODE_CONST && mie.insn->get_literal() == 1) {
+      found_const_1 = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_const_1);
 }
 
 TEST_F(StringTest, package_equals_false) {
