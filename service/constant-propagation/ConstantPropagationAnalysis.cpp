@@ -1291,6 +1291,13 @@ bool StringAnalyzer::analyze_invoke(const StringAnalyzerState* state,
       env->set(RESULT_REGISTER, SignedConstantDomain(res));
       return true;
     }
+  } else if (method == method::java_lang_String_isEmpty()) {
+    always_assert(insn->srcs_size() == 1);
+    if (const auto* arg0 = maybe_string(0)) {
+      int64_t res = arg0->length() == 0 ? 1 : 0;
+      env->set(RESULT_REGISTER, SignedConstantDomain(res));
+      return true;
+    }
   }
 
   return false;

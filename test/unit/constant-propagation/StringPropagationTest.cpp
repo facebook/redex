@@ -25,8 +25,11 @@ struct StringTest : public ConstantPropagationTest {
                        ->make_concrete(ACC_PUBLIC, true);
     auto* hashCode = DexMethod::make_method("Ljava/lang/String;.hashCode:()I")
                          ->make_concrete(ACC_PUBLIC, true);
+    auto* isEmpty = DexMethod::make_method("Ljava/lang/String;.isEmpty:()Z")
+                        ->make_concrete(ACC_PUBLIC, true);
     creator.add_method(equals);
     creator.add_method(hashCode);
+    creator.add_method(isEmpty);
 
     creator.create();
   }
@@ -252,5 +255,93 @@ TEST_F(StringTest, package_equals_true) {
       (return v2)
     )
 )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StringTest, isEmpty_true) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-string "")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.isEmpty:()Z")
+      (move-result v0)
+      (return v0)
+    )
+)");
+
+  cp::Transform::Config config;
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_isEmpty()};
+  config.pure_methods = &pure_methods;
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const-string "")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.isEmpty:()Z")
+      (const v0 1)
+      (return v0)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StringTest, isEmpty_false) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-string "abc")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.isEmpty:()Z")
+      (move-result v0)
+      (return v0)
+    )
+)");
+
+  cp::Transform::Config config;
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_isEmpty()};
+  config.pure_methods = &pure_methods;
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const-string "abc")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.isEmpty:()Z")
+      (const v0 0)
+      (return v0)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StringTest, isEmpty_unknown_receiver) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.isEmpty:()Z")
+      (move-result v0)
+      (return v0)
+    )
+)");
+
+  cp::Transform::Config config;
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_isEmpty()};
+  config.pure_methods = &pure_methods;
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (invoke-virtual (v0) "Ljava/lang/String;.isEmpty:()Z")
+      (move-result v0)
+      (return v0)
+    )
+)");
+
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
