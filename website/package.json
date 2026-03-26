@@ -42,7 +42,8 @@
     "lodash": ">=4.17.23",
     "lodash-es": ">=4.17.23",
     "qs": "^6.14.2",
-    "**/url-loader/schema-utils/ajv": "^6.14.0"
+    "**/url-loader/schema-utils/ajv": "^6.14.0",
+    "picomatch": ">=2.3.2"
   },
   "browserslist": {
     "production": [
