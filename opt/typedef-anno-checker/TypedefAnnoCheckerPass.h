@@ -147,10 +147,12 @@ class TypedefAnnoChecker {
 
  private:
   void add_error(const std::string& error, bool double_newline = true);
+  std::string format_source_loc(const IRInstruction* insn) const;
 
   bool m_good{true};
   std::string m_error;
   TypedefAnnoCheckerPass::Config m_config;
+  UnorderedMap<const IRInstruction*, const DexPosition*> m_insn_positions;
 
   const StrDefConstants& m_strdef_constants;
   const IntDefConstants& m_intdef_constants;
