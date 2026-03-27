@@ -393,59 +393,15 @@ void relocate(DexClass* comp_cls,
     always_assert(sf->get_type() == comp_cls->get_type());
   }
 
-  // Remove the instance from outer_cls class
-  DexField* field = nullptr;
-  for (auto* sfield : outer_cls->get_sfields()) {
-    if (type_class(sfield->get_type()) == comp_cls) {
-      always_assert(field == nullptr);
-      field = sfield;
-    }
-  }
-
   TRACE(KOTLIN_COMPANION, 5, "Before Relocating, the comp_cls is:");
   dump_cls(comp_cls);
   TRACE(KOTLIN_COMPANION, 5, "Before Relocating, the outer_cls is:");
   dump_cls(outer_cls);
 
-  // Clean up the outer class's <clinit>: remove the companion initialization
-  // sequence.  Kotlin generates this pattern:
-  //   new-instance      vN, Companion
-  //   invoke-direct     vN, Companion.<init>:()V
-  //   sput-object       vN, OuterClass.Companion
-  // We replace new-instance with const/0 (to avoid dangling register uses),
-  // and remove the invoke-direct and sput-object.
-  if (outer_cls->get_clinit() != nullptr) {
-    auto& clinit_cfg = outer_cls->get_clinit()->get_code()->cfg();
-    cfg::CFGMutation m(clinit_cfg);
-    auto* comp_type = comp_cls->get_type();
-    for (auto it = cfg::InstructionIterable(clinit_cfg).begin();
-         it != cfg::InstructionIterable(clinit_cfg).end();
-         it++) {
-      auto* insn = it->insn;
-      if (opcode::is_new_instance(insn->opcode()) &&
-          insn->get_type() == comp_type) {
-        auto mov_result_it = clinit_cfg.move_result_of(it);
-        auto* init_null = new IRInstruction(OPCODE_CONST);
-        init_null->set_literal(0);
-        init_null->set_dest(mov_result_it->insn->dest());
-        m.replace(it, {init_null});
-        TRACE(KOTLIN_COMPANION, 5, "Nullify insn %s", SHOW(insn));
-      } else if ((opcode::is_an_invoke(insn->opcode()) &&
-                  method::is_init(insn->get_method()) &&
-                  insn->get_method()->get_class() == comp_type) ||
-                 (opcode::is_an_sput(insn->opcode()) &&
-                  insn->get_field() == field)) {
-        m.remove(it);
-        TRACE(KOTLIN_COMPANION, 5, "Remove insn %s", SHOW(insn));
-      }
-    }
-    m.flush();
-  }
-
-  if (field != nullptr) {
-    TRACE(KOTLIN_COMPANION, 5, "Remove field %s", SHOW(field));
-    outer_cls->remove_field(field);
-  }
+  // NOTE: We intentionally do NOT remove the Companion sfield or clean up
+  // the clinit here in Phase 3.  The renamed @JvmStatic bridge body still
+  // references the field.  Phase 4 nullifies all sget-object reads first,
+  // then Phase 5 safely removes the field and clinit construction.
 
   // Relocate methods from comp_cls to outer_cls.
   // Two passes are needed: first rewrite intra-companion `this` calls to static
@@ -824,13 +780,22 @@ void filter_untrackable_usages(
 }
 
 // Phase 3: Relocate companion methods to outer classes.
-// Returns the set of relocated method refs and the count of relocated
-// companions.
-std::pair<UnorderedSet<DexMethodRef*>, size_t> relocate_companions(
+// Returns the set of relocated method refs, the set of companion types, and
+// the count of relocated companions.
+struct RelocationResult {
+  UnorderedSet<DexMethodRef*> relocated_methods;
+  UnorderedSet<DexFieldRef*> companion_fields;
+  // Map from outer class to its relocated companion type, used for clinit
+  // cleanup.
+  UnorderedMap<DexClass*, DexType*> outer_to_companion;
+  size_t relocated_count;
+};
+
+RelocationResult relocate_companions(
     const InsertOnlyConcurrentMap<DexClass*, DexClass*>& candidates,
     const ConcurrentSet<DexClass*>& rejected) {
-  UnorderedSet<DexMethodRef*> relocated_methods;
-  size_t relocated_count = 0;
+  RelocationResult result;
+  result.relocated_count = 0;
   for (const auto& p : UnorderedIterable(candidates)) {
     auto* comp_cls = p.first;
     auto* outer_cls = p.second;
@@ -842,15 +807,25 @@ std::pair<UnorderedSet<DexMethodRef*>, size_t> relocate_companions(
           "Relocate : %s -> %s",
           SHOW(comp_cls),
           SHOW(outer_cls));
-    relocate(comp_cls, outer_cls, relocated_methods);
-    relocated_count++;
+    relocate(comp_cls, outer_cls, result.relocated_methods);
+    // Collect the Companion sfield on the outer class so Phase 4 can
+    // nullify dead sget-object loads and clean up the clinit.
+    for (auto* sfield : outer_cls->get_sfields()) {
+      if (type_class(sfield->get_type()) == comp_cls) {
+        result.companion_fields.insert(sfield);
+      }
+    }
+    result.outer_to_companion.emplace(outer_cls, comp_cls->get_type());
+    result.relocated_count++;
   }
-  return {std::move(relocated_methods), relocated_count};
+  return result;
 }
 
-// Phase 4: Rewrite call sites from invoke-virtual/direct to invoke-static.
+// Phase 4: Rewrite call sites from invoke-virtual/direct to invoke-static,
+// then remove dead sget-object instructions that loaded companion instances.
 void rewrite_call_sites(const Scope& scope,
-                        const UnorderedSet<DexMethodRef*>& relocated_methods) {
+                        const UnorderedSet<DexMethodRef*>& relocated_methods,
+                        const UnorderedSet<DexFieldRef*>& companion_fields) {
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto* code = method->get_code();
     if (code == nullptr) {
@@ -860,29 +835,116 @@ void rewrite_call_sites(const Scope& scope,
     auto iterable = cfg::InstructionIterable(cfg);
     bool changed = false;
 
+    // Single pass: rewrite invoke-virtual/direct to invoke-static, and
+    // nullify sget-object instructions that load relocated companion
+    // instances.  The sget-object has a class-init side effect that prevents
+    // LocalDcePass from removing it, so we replace it with const/0 to keep
+    // the register defined while making the companion field unread.
+    std::unique_ptr<cfg::CFGMutation> mutation;
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto* insn = it->insn;
-      if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
-          insn->opcode() != OPCODE_INVOKE_DIRECT) {
-        continue;
+      if ((insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
+           insn->opcode() == OPCODE_INVOKE_DIRECT) &&
+          relocated_methods.count(insn->get_method()) != 0u) {
+        // Rewrite to static dispatch and strip the companion `this` argument.
+        insn->set_opcode(OPCODE_INVOKE_STATIC);
+        auto nargs = insn->srcs_size();
+        for (uint16_t i = 0; i < nargs - 1; i++) {
+          insn->set_src(i, insn->src(i + 1));
+        }
+        insn->set_srcs_size(nargs - 1);
+        changed = true;
+      } else if (insn->opcode() == OPCODE_SGET_OBJECT &&
+                 companion_fields.count(insn->get_field()) != 0u) {
+        auto mov_it = cfg.move_result_of(it);
+        if (!mov_it.is_end()) {
+          if (!mutation) {
+            mutation = std::make_unique<cfg::CFGMutation>(cfg);
+          }
+          auto* init_null = new IRInstruction(OPCODE_CONST);
+          init_null->set_literal(0);
+          init_null->set_dest(mov_it->insn->dest());
+          TRACE(KOTLIN_COMPANION, 5, "Nullify sget-object %s", SHOW(insn));
+          mutation->replace(it, {init_null});
+        }
       }
-      if (relocated_methods.count(insn->get_method()) == 0u) {
-        continue;
-      }
-      // Rewrite to static dispatch and strip the companion `this` argument.
-      insn->set_opcode(OPCODE_INVOKE_STATIC);
-      auto nargs = insn->srcs_size();
-      for (uint16_t i = 0; i < nargs - 1; i++) {
-        insn->set_src(i, insn->src(i + 1));
-      }
-      insn->set_srcs_size(nargs - 1);
-      changed = true;
+    }
+    if (mutation) {
+      mutation->flush();
     }
     if (changed) {
       TRACE(KOTLIN_COMPANION, 5, "After : %s", SHOW(method));
       TRACE(KOTLIN_COMPANION, 5, "%s", SHOW(cfg));
     }
   });
+}
+
+// Phase 5: Clean up companion initialization in outer class clinits and remove
+// the Companion sfield.  After Phase 4 nullified all sget-object reads of the
+// companion field, the only remaining references are in the outer class's
+// <clinit> (new-instance + invoke-direct <init> + sput-object).  Constructors
+// are opaque to LocalDcePass, so we must clean them up explicitly.
+void cleanup_clinits_and_fields(
+    const UnorderedMap<DexClass*, DexType*>& outer_to_companion,
+    const UnorderedSet<DexFieldRef*>& companion_fields) {
+  for (const auto& [outer_cls, comp_type] :
+       UnorderedIterable(outer_to_companion)) {
+    // Clean up the outer class's <clinit>: remove the companion initialization
+    // sequence.  Kotlin generates this pattern:
+    //   new-instance      vN, Companion
+    //   invoke-direct     vN, Companion.<init>:()V
+    //   sput-object       vN, OuterClass.Companion
+    // We replace new-instance with const/0 (to avoid dangling register uses),
+    // and remove the invoke-direct and sput-object.
+    if (outer_cls->get_clinit() != nullptr) {
+      auto& clinit_cfg = outer_cls->get_clinit()->get_code()->cfg();
+      cfg::CFGMutation m(clinit_cfg);
+
+      auto is_companion_new_instance = [&](IRInstruction* insn) {
+        return opcode::is_new_instance(insn->opcode()) &&
+               insn->get_type() == comp_type;
+      };
+      auto is_companion_init = [&](IRInstruction* insn) {
+        return opcode::is_an_invoke(insn->opcode()) &&
+               method::is_init(insn->get_method()) &&
+               insn->get_method()->get_class() == comp_type;
+      };
+      auto is_companion_sput = [&](IRInstruction* insn) {
+        return opcode::is_an_sput(insn->opcode()) &&
+               companion_fields.count(insn->get_field()) != 0u;
+      };
+
+      for (auto it = cfg::InstructionIterable(clinit_cfg).begin();
+           it != cfg::InstructionIterable(clinit_cfg).end();
+           it++) {
+        auto* insn = it->insn;
+        if (is_companion_new_instance(insn)) {
+          auto mov_result_it = clinit_cfg.move_result_of(it);
+          auto* init_null = new IRInstruction(OPCODE_CONST);
+          init_null->set_literal(0);
+          init_null->set_dest(mov_result_it->insn->dest());
+          m.replace(it, {init_null});
+          TRACE(KOTLIN_COMPANION, 5, "Nullify insn %s", SHOW(insn));
+        } else if (is_companion_init(insn) || is_companion_sput(insn)) {
+          m.remove(it);
+          TRACE(KOTLIN_COMPANION, 5, "Remove insn %s", SHOW(insn));
+        }
+      }
+      m.flush();
+    }
+
+    // Remove the Companion sfield from the outer class.
+    std::vector<DexField*> to_remove;
+    for (auto* sfield : outer_cls->get_sfields()) {
+      if (companion_fields.count(sfield) != 0u) {
+        to_remove.push_back(sfield);
+      }
+    }
+    for (auto* f : to_remove) {
+      TRACE(KOTLIN_COMPANION, 5, "Remove field %s", SHOW(f));
+      outer_cls->remove_field(f);
+    }
+  }
 }
 
 } // namespace
@@ -913,17 +975,25 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
   filter_untrackable_usages(scope, candidates, rejected);
 
   // Phase 3: Relocate accepted companion methods to outer classes.
-  auto [relocated_methods, relocated_count] =
-      relocate_companions(candidates, rejected);
+  auto relocation = relocate_companions(candidates, rejected);
 
-  // Phase 4: Rewrite call sites to use static dispatch.
-  rewrite_call_sites(scope, relocated_methods);
+  // Phase 4: Rewrite call sites to use static dispatch and nullify dead
+  // sget-object instructions that loaded companion instances.
+  rewrite_call_sites(scope, relocation.relocated_methods,
+                     relocation.companion_fields);
+
+  // Phase 5: Clean up companion initialization in outer class clinits and
+  // remove the Companion sfield.  This runs after Phase 4 has nullified all
+  // external sget-object reads, so the only remaining references are the
+  // clinit construction sequence.
+  cleanup_clinits_and_fields(relocation.outer_to_companion,
+                             relocation.companion_fields);
 
   // Report stats.
   Stats stats;
   stats.kotlin_candidate_companion_objects = candidates.size();
   stats.kotlin_untrackable_companion_objects = rejected.size();
-  stats.kotlin_companion_objects_relocated = relocated_count;
+  stats.kotlin_companion_objects_relocated = relocation.relocated_count;
   stats.kotlin_rejected_rooted_or_external = counts.rooted_or_external;
   stats.kotlin_rejected_has_subclasses = counts.has_subclasses;
   stats.kotlin_rejected_not_companion = counts.not_companion;
