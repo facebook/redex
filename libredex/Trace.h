@@ -174,6 +174,7 @@ class DexType;
   TM(UNREF_INTF)        \
   TM(UNREACHABLE)       \
   TM(USES_NAMES)        \
+  TM(USI)               \
   TM(VERIFY)            \
   TM(VIRT)              \
   TM(VM)                \
