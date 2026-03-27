@@ -81,11 +81,12 @@ bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
 
   // the util class
   auto* cls = type_class(m->get_class());
-  if (!cls->get_deobfuscated_name_or_empty_copy().ends_with("$Util;")) {
+  if (cls == nullptr ||
+      !cls->get_deobfuscated_name_or_empty_copy().ends_with("$Util;")) {
     return false;
   }
 
-  if ((cls == nullptr) || (cls->get_anno_set() == nullptr)) {
+  if (cls->get_anno_set() == nullptr) {
     return false;
   }
 
@@ -148,6 +149,9 @@ bool TypedefAnnoChecker::should_not_check(const DexMethod* m) const {
 
 bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
   auto* cls = type_class(m->get_class());
+  if (cls == nullptr) {
+    return false;
+  }
   DexTypeList* interfaces = cls->get_interfaces();
 
   if (interfaces->empty()) {
@@ -365,7 +369,7 @@ void TypedefAnnoChecker::check_instruction(
               type::is_kotlin_class(cls)) {
             // Kotlin enums ctors param annotations are off by two because of
             // the artificially injected two params at the beginning.
-            m_good = true;
+            continue;
           } else {
             std::ostringstream out;
             out << "TypedefAnnoCheckerPass: the annotation " << show(annotation)
@@ -577,12 +581,12 @@ bool TypedefAnnoChecker::check_typedef_value(
           (IntType::BOOLEAN)) {
         if (int_value_set->count(0) == 0 || int_value_set->count(1) == 0) {
           std::ostringstream out;
-          out << "TypedefAnnoCheckerPass: the method" << show(m)
+          out << "TypedefAnnoCheckerPass: the method " << show(m)
               << "\n assigns a int with typedef annotation " << show(annotation)
               << "\n to either 0 or 1, which is invalid because the typedef "
                  "annotation class does not contain both the values 0 and 1.\n"
-              << " failed instruction: " << show(def) << "\n";
-          m_good = false;
+              << " failed instruction: " << show(def);
+          add_error(out.str());
           return false;
         }
         break;
@@ -668,12 +672,12 @@ bool TypedefAnnoChecker::check_typedef_value(
       // 1 which gets optimized to an XOR by the compiler
       if (int_value_set->count(0) == 0 || int_value_set->count(1) == 0) {
         std::ostringstream out;
-        out << "TypedefAnnoCheckerPass: the method" << show(m)
+        out << "TypedefAnnoCheckerPass: the method " << show(m)
             << "\n assigns a int with typedef annotation " << show(annotation)
             << "\n to either 0 or 1, which is invalid because the typedef "
                "annotation class does not contain both the values 0 and 1.\n"
-            << " failed instruction: " << show(def) << "\n";
-        m_good = false;
+            << " failed instruction: " << show(def);
+        add_error(out.str());
         return false;
       }
       break;
