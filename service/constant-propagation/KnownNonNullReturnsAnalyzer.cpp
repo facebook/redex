@@ -118,14 +118,10 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
              ("Ljava/util/EnumSet;.of:(Ljava/lang/Enum;"
               "[Ljava/lang/Enum;)Ljava/util/EnumSet;"),
 
-             // Android SDK: final methods that return non-null. Safe even
-             // though the classes themselves are not final, because final
-             // methods cannot be overridden.
+             // Android SDK: documented @NonNull ("This value cannot be null").
              "Landroid/view/View;.requireViewById:(I)Landroid/view/View;",
              "Landroid/app/Activity;.requireViewById:(I)Landroid/view/View;",
              "Landroid/app/Dialog;.requireViewById:(I)Landroid/view/View;",
-             ("Landroid/view/View;.getContext:"
-              "()Landroid/content/Context;"),
              "Landroid/content/Context;.getString:(I)Ljava/lang/String;",
              ("Landroid/content/Context;.getString:"
               "(I[Ljava/lang/Object;)Ljava/lang/String;"),
