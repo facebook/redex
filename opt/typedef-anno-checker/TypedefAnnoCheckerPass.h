@@ -132,6 +132,9 @@ class TypedefAnnoChecker {
 
   void check_instruction(IRInstruction* insn);
 
+  // Resolve a method and collect its overrides into a set.
+  UnorderedBag<const DexMethod*> resolve_callees(const DexMethod* method);
+
   // Returns nullopt if the value is safe, or the error message string if not.
   // Self-contained errors (field reads) are reported directly via add_error().
   std::optional<std::string> check_typedef_value(

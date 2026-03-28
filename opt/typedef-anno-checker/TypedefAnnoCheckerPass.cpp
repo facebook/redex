@@ -311,6 +311,17 @@ void TypedefAnnoChecker::add_error(const std::string& error) {
   m_good = false;
 }
 
+UnorderedBag<const DexMethod*> TypedefAnnoChecker::resolve_callees(
+    const DexMethod* method) {
+  UnorderedBag<const DexMethod*> callees;
+  if (mog::is_true_virtual(m_method_override_graph, method) &&
+      (method->get_code() == nullptr)) {
+    callees = mog::get_overriding_methods(m_method_override_graph, method);
+  }
+  callees.insert(method);
+  return callees;
+}
+
 void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
   // if the invoked method's arguments have annotations with the
   // @SafeStringDef or @SafeIntDef annotation, check that TypeInference
@@ -327,13 +338,7 @@ void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
     if (callee_def == nullptr) {
       return;
     }
-    UnorderedBag<const DexMethod*> callees;
-    if (mog::is_true_virtual(m_method_override_graph, callee_def) &&
-        (callee_def->get_code() == nullptr)) {
-      callees =
-          mog::get_overriding_methods(m_method_override_graph, callee_def);
-    }
-    callees.insert(callee_def);
+    auto callees = resolve_callees(callee_def);
     for (const DexMethod* callee : UnorderedIterable(callees)) {
       if (callee->get_param_anno() == nullptr) {
         // Callee does not expect any Typedef value. Nothing to do.
@@ -619,13 +624,7 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
       if (is_model_gen(m_method) || should_not_check(def_method)) {
         break;
       }
-      UnorderedBag<const DexMethod*> callees;
-      if (mog::is_true_virtual(m_method_override_graph, def_method) &&
-          (def_method->get_code() == nullptr)) {
-        callees =
-            mog::get_overriding_methods(m_method_override_graph, def_method);
-      }
-      callees.insert(def_method);
+      auto callees = resolve_callees(def_method);
       for (const DexMethod* callee : UnorderedIterable(callees)) {
         boost::optional<const DexType*> anno =
             type_inference::get_typedef_anno_from_member(
