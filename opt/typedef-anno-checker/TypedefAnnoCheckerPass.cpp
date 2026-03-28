@@ -303,14 +303,9 @@ std::string TypedefAnnoChecker::format_source_loc(
   return oss.str();
 }
 
-void TypedefAnnoChecker::add_error(const std::string& error,
-                                   bool double_newline) {
+void TypedefAnnoChecker::add_error(const std::string& error) {
   if (!m_error.empty()) {
-    if (double_newline) {
-      m_error.append("\n\n");
-    } else {
-      m_error.append("\n");
-    }
+    m_error.append("\n\n");
   }
   m_error.append(error);
   m_good = false;
@@ -404,13 +399,12 @@ void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
           }
         } else if (!anno_type) {
           // TypeInference didn't infer anything
-          bool good = check_typedef_value(annotation, insn, param_index);
-          if (!good) {
-            std::ostringstream out;
-            out << "  Calling: " << show(callee) << "\n";
-            out << "  Incorrect parameter: index " << param_anno.first
+          if (auto err = check_typedef_value(annotation, insn, param_index)) {
+            std::ostringstream ctx;
+            ctx << "\n  Calling: " << show(callee) << "\n";
+            ctx << "  Incorrect parameter: index " << param_anno.first
                 << MaybeParamName(callee, param_anno.first);
-            add_error(out.str(), /*double_newline=*/false);
+            add_error(*err + ctx.str());
             TRACE(TAC, 1, "invoke method: %s", SHOW(callee));
           }
         }
@@ -435,12 +429,11 @@ void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
                     .failed_instruction(insn)
                     .str());
     } else if (env_anno == boost::none && field_anno != boost::none) {
-      bool good = check_typedef_value(field_anno, insn, 0);
-      if (!good) {
-        std::ostringstream out;
-        out << " Error writing to field " << show(insn->get_field())
+      if (auto err = check_typedef_value(field_anno, insn, 0)) {
+        std::ostringstream ctx;
+        ctx << "\n Error writing to field " << show(insn->get_field())
             << "in method" << SHOW(m_method);
-        add_error(out.str(), /*double_newline=*/false);
+        add_error(*err + ctx.str());
         TRACE(TAC, 1, "writing to field: %s", SHOW(insn->get_field()));
       }
     }
@@ -481,11 +474,8 @@ void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
                 .failed_instruction(insn)
                 .str());
       } else if (!anno_type) {
-        bool good = check_typedef_value(m_return_annotation, insn, 0);
-        if (!good) {
-          std::ostringstream out;
-          out << " Error caught when returning the faulty value";
-          add_error(out.str(), /*double_newline=*/false);
+        if (auto err = check_typedef_value(m_return_annotation, insn, 0)) {
+          add_error(*err + "\n Error caught when returning the faulty value");
         }
       }
     }
@@ -496,7 +486,7 @@ void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
   }
 }
 
-bool TypedefAnnoChecker::check_typedef_value(
+std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
     const boost::optional<const DexType*>& annotation,
     IRInstruction* insn,
     const src_index_t src) {
@@ -511,12 +501,12 @@ bool TypedefAnnoChecker::check_typedef_value(
                     "%s has both str and int const values", SHOW(anno_class));
   if (!has_str_vals && !has_int_vals) {
     TRACE(TAC, 1, "%s contains no annotation constants", SHOW(anno_class));
-    return true;
+    return std::nullopt;
   }
 
   auto* cls = type_class(m_method->get_class());
   if (m_config.skip_anonymous_classes && klass::maybe_anonymous_class(cls)) {
-    return true;
+    return std::nullopt;
   }
 
   live_range::Use use_of_id{insn, src};
@@ -531,16 +521,15 @@ bool TypedefAnnoChecker::check_typedef_value(
         break;
       }
       if (str_value_set->count(const_value) == 0) {
-        add_error(
-            ErrorBuilder(m_method, format_source_loc(insn))
-                .detail("the string value ", show(const_value),
-                        " does not have the typedef annotation ",
-                        show(annotation), " attached to it.")
-                .detail("Check that the value is annotated and exists in the "
-                        "typedef annotation class.")
-                .failed_instruction(def)
-                .str());
-        return false;
+        return ErrorBuilder(m_method, format_source_loc(insn))
+            .detail("the string value ", show(const_value),
+                    " does not have the typedef annotation ", show(annotation),
+                    " attached to it.")
+            .detail(
+                "Check that the value is annotated and exists in the "
+                "typedef annotation class.")
+            .failed_instruction(def)
+            .str();
       }
       break;
     }
@@ -566,16 +555,15 @@ bool TypedefAnnoChecker::check_typedef_value(
             break;
           }
         }
-        add_error(
-            ErrorBuilder(m_method, format_source_loc(insn))
-                .detail("the int value ", show(const_value),
-                        " does not have the typedef annotation ",
-                        show(annotation), " attached to it.")
-                .detail("Check that the value is annotated and exists in the "
-                        "typedef annotation class.")
-                .failed_instruction(def)
-                .str());
-        return false;
+        return ErrorBuilder(m_method, format_source_loc(insn))
+            .detail("the int value ", show(const_value),
+                    " does not have the typedef annotation ", show(annotation),
+                    " attached to it.")
+            .detail(
+                "Check that the value is annotated and exists in the "
+                "typedef annotation class.")
+            .failed_instruction(def)
+            .str();
       }
       break;
     }
@@ -588,32 +576,28 @@ bool TypedefAnnoChecker::check_typedef_value(
       if (env->second.get_int_type(def->dest()).element() ==
           (IntType::BOOLEAN)) {
         if (int_value_set->count(0) == 0 || int_value_set->count(1) == 0) {
-          add_error(
-              ErrorBuilder(m_method, format_source_loc(insn))
-                  .detail("assigns a int with typedef annotation ",
-                          show(annotation),
-                          " to either 0 or 1, which is invalid because the "
-                          "typedef annotation class does not contain both the "
-                          "values 0 and 1.")
-                  .failed_instruction(def)
-                  .str());
-          return false;
+          return ErrorBuilder(m_method, format_source_loc(insn))
+              .detail("assigns a int with typedef annotation ",
+                      show(annotation),
+                      " to either 0 or 1, which is invalid because the "
+                      "typedef annotation class does not contain both the "
+                      "values 0 and 1.")
+              .failed_instruction(def)
+              .str();
         }
         break;
       }
       auto anno = env->second.get_annotation(def->dest());
       if (anno == boost::none || anno != annotation) {
-        add_error(
-            ErrorBuilder(m_method, format_source_loc(insn))
-                .detail(
-                    "one of the parameters needs to have the typedef "
-                    "annotation ",
-                    show(annotation),
-                    " attached to it. Check that the value is annotated and "
-                    "exists in the typedef annotation class.")
-                .failed_instruction(def)
-                .str());
-        return false;
+        return ErrorBuilder(m_method, format_source_loc(insn))
+            .detail(
+                "one of the parameters needs to have the typedef "
+                "annotation ",
+                show(annotation),
+                " attached to it. Check that the value is annotated and "
+                "exists in the typedef annotation class.")
+            .failed_instruction(def)
+            .str();
       }
       break;
     }
@@ -624,16 +608,13 @@ bool TypedefAnnoChecker::check_typedef_value(
     case OPCODE_INVOKE_INTERFACE: {
       auto* def_method = resolve_method(m_method, def);
       if (def_method == nullptr) {
-        add_error(
-            ErrorBuilder(m_method, format_source_loc(insn))
-                .detail(
-                    "the source of the value with annotation ",
+        return ErrorBuilder(m_method, format_source_loc(insn))
+            .detail("the source of the value with annotation ",
                     show(annotation),
                     " is produced by invoking an unresolvable callee, so the "
                     "value safety is not guaranteed.")
-                .failed_instruction(def)
-                .str());
-        return false;
+            .failed_instruction(def)
+            .str();
       }
       if (is_model_gen(m_method) || should_not_check(def_method)) {
         break;
@@ -657,19 +638,17 @@ bool TypedefAnnoChecker::check_typedef_value(
               int_value_set->count(1) == 1) {
             break;
           }
-          add_error(
-              ErrorBuilder(m_method, format_source_loc(insn))
-                  .detail("the return value of ",
-                          show(def->get_method()->as_def()))
-                  .detail("is used where annotation ", show(annotation),
-                          " is required,")
-                  .detail("but that method does not have the annotation in its "
-                          "return type.")
-                  .detail("To fix: use a constant from ", show(annotation),
-                          ", or validate the value before passing it.")
-                  .failed_instruction(def)
-                  .str());
-          return false;
+          return ErrorBuilder(m_method, format_source_loc(insn))
+              .detail("the return value of ", show(def->get_method()->as_def()))
+              .detail("is used where annotation ", show(annotation),
+                      " is required,")
+              .detail(
+                  "but that method does not have the annotation in its "
+                  "return type.")
+              .detail("To fix: use a constant from ", show(annotation),
+                      ", or validate the value before passing it.")
+              .failed_instruction(def)
+              .str();
         }
       }
       break;
@@ -683,17 +662,14 @@ bool TypedefAnnoChecker::check_typedef_value(
       // mNotificationsSharedPrefsHelper.get().getAppBadgeEnabledStatus() ? 0 :
       // 1 which gets optimized to an XOR by the compiler
       if (int_value_set->count(0) == 0 || int_value_set->count(1) == 0) {
-        add_error(
-            ErrorBuilder(m_method, format_source_loc(insn))
-                .detail(
-                    "assigns a int with typedef annotation ",
+        return ErrorBuilder(m_method, format_source_loc(insn))
+            .detail("assigns a int with typedef annotation ",
                     show(annotation),
                     " to either 0 or 1, which is invalid because the typedef "
                     "annotation class does not contain both the values 0 "
                     "and 1.")
-                .failed_instruction(def)
-                .str());
-        return false;
+            .failed_instruction(def)
+            .str();
       }
       break;
     }
@@ -720,34 +696,37 @@ bool TypedefAnnoChecker::check_typedef_value(
         IRInstruction* use_insn = use.insn;
         if (opcode::is_an_iput(use_insn->opcode()) ||
             opcode::is_an_sput(use_insn->opcode())) {
-          check_typedef_value(annotation, use_insn, 0);
+          if (auto err = check_typedef_value(annotation, use_insn, 0)) {
+            add_error(*err);
+          }
         }
       }
       break;
     }
     case OPCODE_CHECK_CAST: {
-      check_typedef_value(annotation, def, 0);
+      if (auto err = check_typedef_value(annotation, def, 0)) {
+        add_error(*err);
+      }
       break;
     }
     case OPCODE_MOVE_EXCEPTION: {
       break;
     }
     default: {
-      add_error(
-          ErrorBuilder(m_method, format_source_loc(insn))
-              .detail(show(m_method->get_code()->cfg(), true))
-              .detail("does not guarantee value safety for the value with "
-                      "typedef annotation ",
-                      show(annotation),
-                      ". Check that this value does not change within the "
-                      "method.")
-              .failed_instruction(def)
-              .str());
-      return false;
+      return ErrorBuilder(m_method, format_source_loc(insn))
+          .detail(show(m_method->get_code()->cfg(), true))
+          .detail(
+              "does not guarantee value safety for the value with "
+              "typedef annotation ",
+              show(annotation),
+              ". Check that this value does not change within the "
+              "method.")
+          .failed_instruction(def)
+          .str();
     }
     }
   }
-  return true;
+  return std::nullopt;
 }
 
 void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,

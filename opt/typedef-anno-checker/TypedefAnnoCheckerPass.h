@@ -132,11 +132,14 @@ class TypedefAnnoChecker {
 
   void check_instruction(IRInstruction* insn);
 
-  bool check_typedef_value(const boost::optional<const DexType*>& annotation,
-                           IRInstruction* insn,
-                           src_index_t src);
+  // Returns nullopt if the value is safe, or the error message string if not.
+  // Self-contained errors (field reads) are reported directly via add_error().
+  std::optional<std::string> check_typedef_value(
+      const boost::optional<const DexType*>& annotation,
+      IRInstruction* insn,
+      src_index_t src);
 
-  void add_error(const std::string& error, bool double_newline = true);
+  void add_error(const std::string& error);
   std::string format_source_loc(const IRInstruction* insn) const;
 
   bool m_good{true};
