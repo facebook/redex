@@ -3879,3 +3879,231 @@ INSTANTIATE_TEST_SUITE_P(
         IRTypeCheckerAputWideMismatchTest::ParamType>& info) {
       return format_param(info.param);
     });
+
+class IRTypeCheckerFinalFieldTest : public RedexTest {};
+
+// IPUT to a final field in the correct <init> method should pass.
+TEST_F(IRTypeCheckerFinalFieldTest, iput_final_field_in_own_init) {
+  using namespace dex_asm;
+
+  auto* owner_type = DexType::make_type("LFinalFieldOwner;");
+  auto* field = DexField::make_field("LFinalFieldOwner;.val:I")
+                    ->make_concrete(ACC_PUBLIC | ACC_FINAL);
+
+  auto* init_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto* init_method =
+      DexMethod::make_method(owner_type, DexString::make_string("<init>"),
+                             init_proto)
+          ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
+  init_method->set_deobfuscated_name("LFinalFieldOwner;.<init>:()V");
+  init_method->set_code(
+      std::make_unique<IRCode>(init_method, /* temp_regs */ 2));
+
+  ClassCreator cc(owner_type);
+  cc.set_super(type::java_lang_Object());
+  cc.add_method(init_method);
+  cc.add_field(field);
+  cc.create();
+
+  // temp_regs=2 means: v0, v1 are temps; v2 is 'this'
+  IRCode* code = init_method->get_code();
+  code->push_back(dasm(OPCODE_CONST, {0_v, 42_L}));
+  code->push_back(dasm(OPCODE_IPUT, field, {0_v, 2_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+
+  IRTypeChecker checker(init_method);
+  checker.validate_access();
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what();
+}
+
+// IPUT to a final field in a non-constructor method should fail.
+TEST_F(IRTypeCheckerFinalFieldTest, iput_final_field_in_non_init) {
+  using namespace dex_asm;
+
+  auto* owner_type = DexType::make_type("LFinalFieldOwner2;");
+  auto* field = DexField::make_field("LFinalFieldOwner2;.val:I")
+                    ->make_concrete(ACC_PUBLIC | ACC_FINAL);
+
+  auto* init_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto* init_method =
+      DexMethod::make_method(owner_type, DexString::make_string("<init>"),
+                             init_proto)
+          ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
+
+  auto* regular_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto* regular_method =
+      DexMethod::make_method(owner_type, DexString::make_string("setVal"),
+                             regular_proto)
+          ->make_concrete(ACC_PUBLIC, false);
+  regular_method->set_deobfuscated_name("LFinalFieldOwner2;.setVal:()V");
+  regular_method->set_code(
+      std::make_unique<IRCode>(regular_method, /* temp_regs */ 2));
+
+  ClassCreator cc(owner_type);
+  cc.set_super(type::java_lang_Object());
+  cc.add_method(init_method);
+  cc.add_method(regular_method);
+  cc.add_field(field);
+  cc.create();
+
+  // temp_regs=2 means: v0, v1 are temps; v2 is 'this'
+  IRCode* code = regular_method->get_code();
+  code->push_back(dasm(OPCODE_CONST, {0_v, 42_L}));
+  code->push_back(dasm(OPCODE_IPUT, field, {0_v, 2_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+
+  IRTypeChecker checker(regular_method);
+  checker.validate_access();
+  checker.run();
+  EXPECT_TRUE(checker.fail());
+  EXPECT_THAT(checker.what(), HasSubstr("final instance field"));
+}
+
+// IPUT to a final field in a constructor of a different class should fail.
+TEST_F(IRTypeCheckerFinalFieldTest, iput_final_field_in_other_class_init) {
+  using namespace dex_asm;
+
+  auto* owner_type = DexType::make_type("LFinalFieldOwner3;");
+  auto* field = DexField::make_field("LFinalFieldOwner3;.val:I")
+                    ->make_concrete(ACC_PUBLIC | ACC_FINAL);
+
+  auto* owner_init_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto* owner_init =
+      DexMethod::make_method(owner_type, DexString::make_string("<init>"),
+                             owner_init_proto)
+          ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
+
+  ClassCreator cc_owner(owner_type);
+  cc_owner.set_super(type::java_lang_Object());
+  cc_owner.add_method(owner_init);
+  cc_owner.add_field(field);
+  cc_owner.create();
+
+  auto* other_type = DexType::make_type("LOtherClass3;");
+  auto* other_init_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto* other_init =
+      DexMethod::make_method(other_type, DexString::make_string("<init>"),
+                             other_init_proto)
+          ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
+  other_init->set_deobfuscated_name("LOtherClass3;.<init>:()V");
+  other_init->set_code(std::make_unique<IRCode>(other_init, /* temp_regs */ 2));
+
+  ClassCreator cc_other(other_type);
+  cc_other.set_super(type::java_lang_Object());
+  cc_other.add_method(other_init);
+  cc_other.create();
+
+  // temp_regs=2 means: v0, v1 are temps; v2 is 'this'
+  IRCode* code = other_init->get_code();
+  // Create an instance of the owner class and write to its final field
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, owner_type));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+  code->push_back(dasm(OPCODE_INVOKE_DIRECT, owner_init, {0_v}));
+  code->push_back(dasm(OPCODE_CONST, {1_v, 42_L}));
+  code->push_back(dasm(OPCODE_IPUT, field, {1_v, 0_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+
+  IRTypeChecker checker(other_init);
+  checker.validate_access();
+  checker.run();
+  EXPECT_TRUE(checker.fail());
+  EXPECT_THAT(checker.what(), HasSubstr("final instance field"));
+}
+
+// IPUT to a non-final field in a regular method should pass (regression test).
+TEST_F(IRTypeCheckerFinalFieldTest, iput_non_final_field_in_regular_method) {
+  using namespace dex_asm;
+
+  auto* owner_type = DexType::make_type("LNonFinalFieldOwner;");
+  auto* field = DexField::make_field("LNonFinalFieldOwner;.val:I")
+                    ->make_concrete(ACC_PUBLIC);
+
+  auto* init_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto* init_method =
+      DexMethod::make_method(owner_type, DexString::make_string("<init>"),
+                             init_proto)
+          ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
+
+  auto* regular_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto* regular_method =
+      DexMethod::make_method(owner_type, DexString::make_string("setVal"),
+                             regular_proto)
+          ->make_concrete(ACC_PUBLIC, false);
+  regular_method->set_deobfuscated_name("LNonFinalFieldOwner;.setVal:()V");
+  regular_method->set_code(
+      std::make_unique<IRCode>(regular_method, /* temp_regs */ 2));
+
+  ClassCreator cc(owner_type);
+  cc.set_super(type::java_lang_Object());
+  cc.add_method(init_method);
+  cc.add_method(regular_method);
+  cc.add_field(field);
+  cc.create();
+
+  // temp_regs=2 means: v0, v1 are temps; v2 is 'this'
+  IRCode* code = regular_method->get_code();
+  code->push_back(dasm(OPCODE_CONST, {0_v, 42_L}));
+  code->push_back(dasm(OPCODE_IPUT, field, {0_v, 2_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+
+  IRTypeChecker checker(regular_method);
+  checker.validate_access();
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what();
+}
+
+// IPUT to an unresolvable (external) final field should pass gracefully.
+TEST_F(IRTypeCheckerFinalFieldTest, iput_unresolvable_final_field) {
+  using namespace dex_asm;
+
+  auto* owner_type = DexType::make_type("LExternalFinalField;");
+  // Create a field ref that won't resolve (no concrete class)
+  auto* field_ref = DexField::make_field("LExternalFinalField;.val:I");
+
+  auto* caller_type = DexType::make_type("LCallerOfExternal;");
+  auto* init_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto* init_method =
+      DexMethod::make_method(caller_type, DexString::make_string("<init>"),
+                             init_proto)
+          ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
+
+  auto* regular_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto* regular_method =
+      DexMethod::make_method(caller_type, DexString::make_string("doStuff"),
+                             regular_proto)
+          ->make_concrete(ACC_PUBLIC, false);
+  regular_method->set_deobfuscated_name("LCallerOfExternal;.doStuff:()V");
+  regular_method->set_code(
+      std::make_unique<IRCode>(regular_method, /* temp_regs */ 2));
+
+  ClassCreator cc(caller_type);
+  cc.set_super(type::java_lang_Object());
+  cc.add_method(init_method);
+  cc.add_method(regular_method);
+  cc.create();
+
+  // Note: we don't create a class for LExternalFinalField, so resolve_field
+  // will return nullptr, and the check should be skipped.
+  // temp_regs=2 means: v0, v1 are temps; v2 is 'this'
+  IRCode* code = regular_method->get_code();
+  code->push_back(dasm(OPCODE_CHECK_CAST, owner_type, {2_v}));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+  code->push_back(dasm(OPCODE_CONST, {1_v, 42_L}));
+  code->push_back(dasm(OPCODE_IPUT, field_ref, {1_v, 0_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+
+  IRTypeChecker checker(regular_method);
+  checker.validate_access();
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what();
+}

@@ -1859,6 +1859,17 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
                       : FieldSearch::Instance;
     auto* resolved = resolve_field(insn->get_field(), search);
     ::validate_access(m_dex_method, resolved);
+    if (resolved != nullptr && opcode::is_an_iput(insn->opcode()) &&
+        is_final(resolved)) {
+      if (!method::is_init(m_dex_method) ||
+          m_dex_method->get_class() != resolved->get_class()) {
+        std::ostringstream out;
+        out << "final instance field " << show_deobfuscated(resolved)
+            << " may only be assigned in an <init> method of "
+            << show_deobfuscated(resolved->get_class());
+        throw TypeCheckingException(out.str());
+      }
+    }
   }
 }
 
