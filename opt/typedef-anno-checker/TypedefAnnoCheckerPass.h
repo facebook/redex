@@ -118,12 +118,17 @@ class TypedefAnnoChecker {
         m_intdef_constants(intdef_constants),
         m_method_override_graph(method_override_graph) {}
 
+  void run(DexMethod* m);
+
+  bool complete() { return m_good; }
+
+  std::string error() { return m_error; }
+
+ private:
   bool is_value_of_opt(const DexMethod* m);
   bool is_delegate(const DexMethod* m);
   bool is_generated(const DexMethod* m) const;
   bool should_not_check(const DexMethod* m) const;
-
-  void run(DexMethod* m);
 
   void check_instruction(
       DexMethod* m,
@@ -141,11 +146,6 @@ class TypedefAnnoChecker {
                            const type_inference::TypeInference* inference,
                            TypeEnvironments& envs);
 
-  bool complete() { return m_good; }
-
-  std::string error() { return m_error; }
-
- private:
   void add_error(const std::string& error, bool double_newline = true);
   std::string format_source_loc(const IRInstruction* insn) const;
 

@@ -348,7 +348,7 @@ void TypedefAnnoChecker::check_instruction(
                 << annotation.value()->get_name()->c_str()
                 << "\n but it instead contains an ambiguous annotation, "
                    "implying that the parameter was joined with another "
-                   "typedef annotation \n before the method invokation. The "
+                   "typedef annotation \n before the method invocation. The "
                    "ambiguous annotation is unsafe, and typedef annotations "
                    "should not be mixed.\n"
                 << " failed instruction: " << show(insn);
@@ -430,7 +430,7 @@ void TypedefAnnoChecker::check_instruction(
   }
   // if there's an annotation that has a string typedef or an int typedef
   // annotation in the method's signature, check that TypeInference
-  // inferred that annotation in the retured value
+  // inferred that annotation in the returned value
   case OPCODE_RETURN:
   case OPCODE_RETURN_OBJECT: {
     if (return_annotation) {
