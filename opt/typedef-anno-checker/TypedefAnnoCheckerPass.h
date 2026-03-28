@@ -130,23 +130,11 @@ class TypedefAnnoChecker {
   bool is_generated(const DexMethod* m) const;
   bool should_not_check(const DexMethod* m) const;
 
-  void check_instruction(
-      DexMethod* m,
-      const type_inference::TypeInference* inference,
-      IRInstruction* insn,
-      const boost::optional<const DexType*>& return_annotation,
-      live_range::UseDefChains* ud_chains,
-      live_range::DefUseChains* du_chains,
-      TypeEnvironments& envs);
+  void check_instruction(IRInstruction* insn);
 
-  bool check_typedef_value(DexMethod* m,
-                           const boost::optional<const DexType*>& annotation,
-                           live_range::UseDefChains* ud_chains,
-                           live_range::DefUseChains* du_chains,
+  bool check_typedef_value(const boost::optional<const DexType*>& annotation,
                            IRInstruction* insn,
-                           const src_index_t src,
-                           const type_inference::TypeInference* inference,
-                           TypeEnvironments& envs);
+                           src_index_t src);
 
   void add_error(const std::string& error, bool double_newline = true);
   std::string format_source_loc(const IRInstruction* insn) const;
@@ -155,6 +143,14 @@ class TypedefAnnoChecker {
   std::string m_error;
   TypedefAnnoCheckerPass::Config m_config;
   UnorderedMap<const IRInstruction*, const DexPosition*> m_insn_positions;
+
+  // Per-method state, set in run()
+  DexMethod* m_method{nullptr};
+  const type_inference::TypeInference* m_inference{nullptr};
+  const live_range::UseDefChains* m_ud_chains{nullptr};
+  const live_range::DefUseChains* m_du_chains{nullptr};
+  const TypeEnvironments* m_envs{nullptr};
+  boost::optional<const DexType*> m_return_annotation;
 
   const StrDefConstants& m_strdef_constants;
   const IntDefConstants& m_intdef_constants;

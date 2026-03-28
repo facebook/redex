@@ -238,6 +238,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   auto& cfg = code->cfg();
   redex_assert(m_config.int_typedef != nullptr);
   redex_assert(m_config.str_typedef != nullptr);
+  m_method = m;
   type_inference::TypeInference inference(
       cfg, false,
       UnorderedSet<const DexType*>{m_config.int_typedef, m_config.str_typedef},
@@ -247,14 +248,17 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   live_range::MoveAwareChains chains(cfg);
   live_range::UseDefChains ud_chains = chains.get_use_def_chains();
   live_range::DefUseChains du_chains = chains.get_def_use_chains();
+  m_inference = &inference;
+  m_ud_chains = &ud_chains;
+  m_du_chains = &du_chains;
 
-  boost::optional<const DexType*> return_annotation = boost::none;
+  m_return_annotation = boost::none;
   DexAnnotationSet* return_annos = m->get_anno_set();
   if (return_annos != nullptr) {
-    return_annotation = type_inference::get_typedef_annotation(
+    m_return_annotation = type_inference::get_typedef_annotation(
         return_annos->get_annotations(), inference.get_annotations());
   }
-  TypeEnvironments& envs = inference.get_type_environments();
+  m_envs = &inference.get_type_environments();
   TRACE(TAC, 5, "Start checking %s", SHOW(m));
   TRACE(TAC, 5, "%s", SHOW(cfg));
   for (cfg::Block* b : cfg.blocks()) {
@@ -269,10 +273,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   }
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
-      auto* insn = mie.insn;
-
-      check_instruction(m, &inference, insn, return_annotation, &ud_chains,
-                        &du_chains, envs);
+      check_instruction(mie.insn);
     }
   }
   if (!m_good) {
@@ -315,18 +316,11 @@ void TypedefAnnoChecker::add_error(const std::string& error,
   m_good = false;
 }
 
-void TypedefAnnoChecker::check_instruction(
-    DexMethod* m,
-    const type_inference::TypeInference* inference,
-    IRInstruction* insn,
-    const boost::optional<const DexType*>& return_annotation,
-    live_range::UseDefChains* ud_chains,
-    live_range::DefUseChains* du_chains,
-    TypeEnvironments& envs) {
+void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
   // if the invoked method's arguments have annotations with the
   // @SafeStringDef or @SafeIntDef annotation, check that TypeInference
   // inferred the correct annotation for the values being passed in
-  auto& env = envs.find(insn)->second;
+  const auto& env = m_envs->find(insn)->second;
   IROpcode opcode = insn->opcode();
   switch (opcode) {
   case OPCODE_INVOKE_VIRTUAL:
@@ -334,7 +328,7 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
-    auto* callee_def = resolve_method(m, insn);
+    auto* callee_def = resolve_method(m_method, insn);
     if (callee_def == nullptr) {
       return;
     }
@@ -352,7 +346,8 @@ void TypedefAnnoChecker::check_instruction(
       }
       for (auto const& param_anno : *callee->get_param_anno()) {
         auto annotation = type_inference::get_typedef_annotation(
-            param_anno.second->get_annotations(), inference->get_annotations());
+            param_anno.second->get_annotations(),
+            m_inference->get_annotations());
         if (annotation == boost::none) {
           continue;
         }
@@ -365,7 +360,7 @@ void TypedefAnnoChecker::check_instruction(
 
         // TypeInference inferred a different annotation
         if (anno_type && anno_type != annotation) {
-          ErrorBuilder err(m, format_source_loc(insn));
+          ErrorBuilder err(m_method, format_source_loc(insn));
           if (anno_type.value() == type::java_lang_Object()) {
             err.detail("while invoking ", show(callee), ", parameter ",
                        param_anno.first,
@@ -398,7 +393,7 @@ void TypedefAnnoChecker::check_instruction(
             continue;
           } else {
             add_error(
-                ErrorBuilder(m, format_source_loc(insn))
+                ErrorBuilder(m_method, format_source_loc(insn))
                     .detail("annotation ", show(annotation),
                             " annotates a parameter with an incompatible type ",
                             show(type),
@@ -409,8 +404,7 @@ void TypedefAnnoChecker::check_instruction(
           }
         } else if (!anno_type) {
           // TypeInference didn't infer anything
-          bool good = check_typedef_value(m, annotation, ud_chains, du_chains,
-                                          insn, param_index, inference, envs);
+          bool good = check_typedef_value(annotation, insn, param_index);
           if (!good) {
             std::ostringstream out;
             out << "  Calling: " << show(callee) << "\n";
@@ -431,22 +425,21 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_IPUT_OBJECT: {
     auto env_anno = env.get_annotation(insn->src(0));
     auto field_anno = type_inference::get_typedef_anno_from_member(
-        insn->get_field(), inference->get_annotations());
+        insn->get_field(), m_inference->get_annotations());
     if (env_anno != boost::none && field_anno != boost::none &&
         env_anno.value() != field_anno.value()) {
-      add_error(ErrorBuilder(m, format_source_loc(insn))
+      add_error(ErrorBuilder(m_method, format_source_loc(insn))
                     .detail("assigned field ", insn->get_field()->c_str(),
                             " with annotation ", show(field_anno),
                             " to a value with annotation ", show(env_anno), ".")
                     .failed_instruction(insn)
                     .str());
     } else if (env_anno == boost::none && field_anno != boost::none) {
-      bool good = check_typedef_value(m, field_anno, ud_chains, du_chains, insn,
-                                      0, inference, envs);
+      bool good = check_typedef_value(field_anno, insn, 0);
       if (!good) {
         std::ostringstream out;
         out << " Error writing to field " << show(insn->get_field())
-            << "in method" << SHOW(m);
+            << "in method" << SHOW(m_method);
         add_error(out.str(), /*double_newline=*/false);
         TRACE(TAC, 1, "writing to field: %s", SHOW(insn->get_field()));
       }
@@ -458,14 +451,14 @@ void TypedefAnnoChecker::check_instruction(
   // inferred that annotation in the returned value
   case OPCODE_RETURN:
   case OPCODE_RETURN_OBJECT: {
-    if (return_annotation) {
+    if (m_return_annotation) {
       reg_t reg = insn->src(0);
       auto anno_type = env.get_annotation(reg);
-      if (anno_type && anno_type != return_annotation) {
-        ErrorBuilder err(m, format_source_loc(insn));
+      if (anno_type && anno_type != m_return_annotation) {
+        ErrorBuilder err(m_method, format_source_loc(insn));
         if (anno_type.value() == type::java_lang_Object()) {
           err.detail("has return annotation ",
-                     return_annotation.value()->get_name()->c_str(),
+                     m_return_annotation.value()->get_name()->c_str(),
                      " but the returned value has an ambiguous annotation, "
                      "implying that the value was joined with another typedef "
                      "annotation within the method. The ambiguous annotation "
@@ -473,7 +466,7 @@ void TypedefAnnoChecker::check_instruction(
               .failed_instruction(insn);
         } else {
           err.detail("has return annotation ",
-                     return_annotation.value()->get_name()->c_str(),
+                     m_return_annotation.value()->get_name()->c_str(),
                      " but the returned value has annotation ", show(anno_type),
                      " instead.")
               .failed_instruction(insn);
@@ -481,15 +474,14 @@ void TypedefAnnoChecker::check_instruction(
         add_error(err.str());
       } else if (typedef_anno::is_not_str_nor_int(env, reg)) {
         add_error(
-            ErrorBuilder(m, format_source_loc(insn))
-                .detail("annotation ", show(return_annotation),
+            ErrorBuilder(m_method, format_source_loc(insn))
+                .detail("annotation ", show(m_return_annotation),
                         " annotates a value with an incompatible type or a "
                         "non-constant value.")
                 .failed_instruction(insn)
                 .str());
       } else if (!anno_type) {
-        bool good = check_typedef_value(m, return_annotation, ud_chains,
-                                        du_chains, insn, 0, inference, envs);
+        bool good = check_typedef_value(m_return_annotation, insn, 0);
         if (!good) {
           std::ostringstream out;
           out << " Error caught when returning the faulty value";
@@ -505,14 +497,9 @@ void TypedefAnnoChecker::check_instruction(
 }
 
 bool TypedefAnnoChecker::check_typedef_value(
-    DexMethod* m,
     const boost::optional<const DexType*>& annotation,
-    live_range::UseDefChains* ud_chains,
-    live_range::DefUseChains* du_chains,
     IRInstruction* insn,
-    const src_index_t src,
-    const type_inference::TypeInference* inference,
-    TypeEnvironments& envs) {
+    const src_index_t src) {
 
   auto* anno_class = type_class(annotation.value());
   const auto* str_value_set = m_strdef_constants.get_unsafe(anno_class);
@@ -527,25 +514,25 @@ bool TypedefAnnoChecker::check_typedef_value(
     return true;
   }
 
-  auto* cls = type_class(m->get_class());
+  auto* cls = type_class(m_method->get_class());
   if (m_config.skip_anonymous_classes && klass::maybe_anonymous_class(cls)) {
     return true;
   }
 
   live_range::Use use_of_id{insn, src};
-  auto udchains_it = ud_chains->find(use_of_id);
+  auto udchains_it = m_ud_chains->find(use_of_id);
   auto defs_set = udchains_it->second;
 
   for (IRInstruction* def : defs_set) {
     switch (def->opcode()) {
     case OPCODE_CONST_STRING: {
       const auto* const const_value = def->get_string();
-      if (const_value->str().empty() && is_generated(m)) {
+      if (const_value->str().empty() && is_generated(m_method)) {
         break;
       }
       if (str_value_set->count(const_value) == 0) {
         add_error(
-            ErrorBuilder(m, format_source_loc(insn))
+            ErrorBuilder(m_method, format_source_loc(insn))
                 .detail("the string value ", show(const_value),
                         " does not have the typedef annotation ",
                         show(annotation), " attached to it.")
@@ -580,7 +567,7 @@ bool TypedefAnnoChecker::check_typedef_value(
           }
         }
         add_error(
-            ErrorBuilder(m, format_source_loc(insn))
+            ErrorBuilder(m_method, format_source_loc(insn))
                 .detail("the int value ", show(const_value),
                         " does not have the typedef annotation ",
                         show(annotation), " attached to it.")
@@ -597,12 +584,12 @@ bool TypedefAnnoChecker::check_typedef_value(
       // this is for cases similar to testIfElseParam in the integ tests
       // where the boolean parameter undergoes an OPCODE_MOVE and
       // gets returned instead of one of the two ints
-      auto env = envs.find(def);
+      auto env = m_envs->find(def);
       if (env->second.get_int_type(def->dest()).element() ==
           (IntType::BOOLEAN)) {
         if (int_value_set->count(0) == 0 || int_value_set->count(1) == 0) {
           add_error(
-              ErrorBuilder(m, format_source_loc(insn))
+              ErrorBuilder(m_method, format_source_loc(insn))
                   .detail("assigns a int with typedef annotation ",
                           show(annotation),
                           " to either 0 or 1, which is invalid because the "
@@ -617,7 +604,7 @@ bool TypedefAnnoChecker::check_typedef_value(
       auto anno = env->second.get_annotation(def->dest());
       if (anno == boost::none || anno != annotation) {
         add_error(
-            ErrorBuilder(m, format_source_loc(insn))
+            ErrorBuilder(m_method, format_source_loc(insn))
                 .detail(
                     "one of the parameters needs to have the typedef "
                     "annotation ",
@@ -635,10 +622,10 @@ bool TypedefAnnoChecker::check_typedef_value(
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_INTERFACE: {
-      auto* def_method = resolve_method(m, def);
+      auto* def_method = resolve_method(m_method, def);
       if (def_method == nullptr) {
         add_error(
-            ErrorBuilder(m, format_source_loc(insn))
+            ErrorBuilder(m_method, format_source_loc(insn))
                 .detail(
                     "the source of the value with annotation ",
                     show(annotation),
@@ -648,7 +635,7 @@ bool TypedefAnnoChecker::check_typedef_value(
                 .str());
         return false;
       }
-      if (is_model_gen(m) || should_not_check(def_method)) {
+      if (is_model_gen(m_method) || should_not_check(def_method)) {
         break;
       }
       UnorderedBag<const DexMethod*> callees;
@@ -661,7 +648,7 @@ bool TypedefAnnoChecker::check_typedef_value(
       for (const DexMethod* callee : UnorderedIterable(callees)) {
         boost::optional<const DexType*> anno =
             type_inference::get_typedef_anno_from_member(
-                callee, inference->get_annotations());
+                callee, m_inference->get_annotations());
         if (anno == boost::none || anno != annotation) {
           DexType* return_type = callee->get_proto()->get_rtype();
           // constant folding might cause the source to be the invoked boolean
@@ -671,7 +658,7 @@ bool TypedefAnnoChecker::check_typedef_value(
             break;
           }
           add_error(
-              ErrorBuilder(m, format_source_loc(insn))
+              ErrorBuilder(m_method, format_source_loc(insn))
                   .detail("the return value of ",
                           show(def->get_method()->as_def()))
                   .detail("is used where annotation ", show(annotation),
@@ -697,7 +684,7 @@ bool TypedefAnnoChecker::check_typedef_value(
       // 1 which gets optimized to an XOR by the compiler
       if (int_value_set->count(0) == 0 || int_value_set->count(1) == 0) {
         add_error(
-            ErrorBuilder(m, format_source_loc(insn))
+            ErrorBuilder(m_method, format_source_loc(insn))
                 .detail(
                     "assigns a int with typedef annotation ",
                     show(annotation),
@@ -715,9 +702,9 @@ bool TypedefAnnoChecker::check_typedef_value(
     case OPCODE_IGET_OBJECT:
     case OPCODE_SGET_OBJECT: {
       auto field_anno = type_inference::get_typedef_anno_from_member(
-          def->get_field(), inference->get_annotations());
+          def->get_field(), m_inference->get_annotations());
       if (!field_anno || field_anno != annotation) {
-        add_error(ErrorBuilder(m, format_source_loc(insn))
+        add_error(ErrorBuilder(m_method, format_source_loc(insn))
                       .detail("the field ", def->get_field()->str(),
                               " needs to have the annotation ",
                               show(annotation), ".")
@@ -727,21 +714,19 @@ bool TypedefAnnoChecker::check_typedef_value(
       break;
     }
     case OPCODE_NEW_INSTANCE: {
-      auto duchains_it = du_chains->find(def);
+      auto duchains_it = m_du_chains->find(def);
       const auto& uses_set = duchains_it->second;
       for (live_range::Use use : UnorderedIterable(uses_set)) {
         IRInstruction* use_insn = use.insn;
         if (opcode::is_an_iput(use_insn->opcode()) ||
             opcode::is_an_sput(use_insn->opcode())) {
-          check_typedef_value(m, annotation, ud_chains, du_chains, use_insn, 0,
-                              inference, envs);
+          check_typedef_value(annotation, use_insn, 0);
         }
       }
       break;
     }
     case OPCODE_CHECK_CAST: {
-      check_typedef_value(m, annotation, ud_chains, du_chains, def, 0,
-                          inference, envs);
+      check_typedef_value(annotation, def, 0);
       break;
     }
     case OPCODE_MOVE_EXCEPTION: {
@@ -749,8 +734,8 @@ bool TypedefAnnoChecker::check_typedef_value(
     }
     default: {
       add_error(
-          ErrorBuilder(m, format_source_loc(insn))
-              .detail(show(m->get_code()->cfg(), true))
+          ErrorBuilder(m_method, format_source_loc(insn))
+              .detail(show(m_method->get_code()->cfg(), true))
               .detail("does not guarantee value safety for the value with "
                       "typedef annotation ",
                       show(annotation),
