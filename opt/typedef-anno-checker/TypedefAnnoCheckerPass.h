@@ -136,11 +136,13 @@ class TypedefAnnoChecker {
       IRInstruction* insn,
       const boost::optional<const DexType*>& return_annotation,
       live_range::UseDefChains* ud_chains,
+      live_range::DefUseChains* du_chains,
       TypeEnvironments& envs);
 
   bool check_typedef_value(DexMethod* m,
                            const boost::optional<const DexType*>& annotation,
                            live_range::UseDefChains* ud_chains,
+                           live_range::DefUseChains* du_chains,
                            IRInstruction* insn,
                            const src_index_t src,
                            const type_inference::TypeInference* inference,

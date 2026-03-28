@@ -246,6 +246,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
 
   live_range::MoveAwareChains chains(cfg);
   live_range::UseDefChains ud_chains = chains.get_use_def_chains();
+  live_range::DefUseChains du_chains = chains.get_def_use_chains();
 
   boost::optional<const DexType*> return_annotation = boost::none;
   DexAnnotationSet* return_annos = m->get_anno_set();
@@ -271,7 +272,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
       auto* insn = mie.insn;
 
       check_instruction(m, &inference, insn, return_annotation, &ud_chains,
-                        envs);
+                        &du_chains, envs);
     }
   }
   if (!m_good) {
@@ -320,6 +321,7 @@ void TypedefAnnoChecker::check_instruction(
     IRInstruction* insn,
     const boost::optional<const DexType*>& return_annotation,
     live_range::UseDefChains* ud_chains,
+    live_range::DefUseChains* du_chains,
     TypeEnvironments& envs) {
   // if the invoked method's arguments have annotations with the
   // @SafeStringDef or @SafeIntDef annotation, check that TypeInference
@@ -407,8 +409,8 @@ void TypedefAnnoChecker::check_instruction(
           }
         } else if (!anno_type) {
           // TypeInference didn't infer anything
-          bool good = check_typedef_value(m, annotation, ud_chains, insn,
-                                          param_index, inference, envs);
+          bool good = check_typedef_value(m, annotation, ud_chains, du_chains,
+                                          insn, param_index, inference, envs);
           if (!good) {
             std::ostringstream out;
             out << "  Calling: " << show(callee) << "\n";
@@ -439,8 +441,8 @@ void TypedefAnnoChecker::check_instruction(
                     .failed_instruction(insn)
                     .str());
     } else if (env_anno == boost::none && field_anno != boost::none) {
-      bool good = check_typedef_value(m, field_anno, ud_chains, insn, 0,
-                                      inference, envs);
+      bool good = check_typedef_value(m, field_anno, ud_chains, du_chains, insn,
+                                      0, inference, envs);
       if (!good) {
         std::ostringstream out;
         out << " Error writing to field " << show(insn->get_field())
@@ -486,8 +488,8 @@ void TypedefAnnoChecker::check_instruction(
                 .failed_instruction(insn)
                 .str());
       } else if (!anno_type) {
-        bool good = check_typedef_value(m, return_annotation, ud_chains, insn,
-                                        0, inference, envs);
+        bool good = check_typedef_value(m, return_annotation, ud_chains,
+                                        du_chains, insn, 0, inference, envs);
         if (!good) {
           std::ostringstream out;
           out << " Error caught when returning the faulty value";
@@ -506,6 +508,7 @@ bool TypedefAnnoChecker::check_typedef_value(
     DexMethod* m,
     const boost::optional<const DexType*>& annotation,
     live_range::UseDefChains* ud_chains,
+    live_range::DefUseChains* du_chains,
     IRInstruction* insn,
     const src_index_t src,
     const type_inference::TypeInference* inference,
@@ -724,22 +727,21 @@ bool TypedefAnnoChecker::check_typedef_value(
       break;
     }
     case OPCODE_NEW_INSTANCE: {
-      live_range::MoveAwareChains chains(m->get_code()->cfg());
-      live_range::DefUseChains du_chains = chains.get_def_use_chains();
-      auto duchains_it = du_chains.find(def);
+      auto duchains_it = du_chains->find(def);
       const auto& uses_set = duchains_it->second;
       for (live_range::Use use : UnorderedIterable(uses_set)) {
         IRInstruction* use_insn = use.insn;
         if (opcode::is_an_iput(use_insn->opcode()) ||
             opcode::is_an_sput(use_insn->opcode())) {
-          check_typedef_value(m, annotation, ud_chains, use_insn, 0, inference,
-                              envs);
+          check_typedef_value(m, annotation, ud_chains, du_chains, use_insn, 0,
+                              inference, envs);
         }
       }
       break;
     }
     case OPCODE_CHECK_CAST: {
-      check_typedef_value(m, annotation, ud_chains, def, 0, inference, envs);
+      check_typedef_value(m, annotation, ud_chains, du_chains, def, 0,
+                          inference, envs);
       break;
     }
     case OPCODE_MOVE_EXCEPTION: {
