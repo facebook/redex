@@ -376,7 +376,8 @@ EligibleIfields gather_safely_inferable_ifield_candidates(
                           "field been changed outside of its class's <init> "
                           "file, for temporary solution set "
                           "\"inline_instance_field\" in \"FinalInlinePassV2\" "
-                          "to be false.");
+                          "to be false. Field: %s",
+                          SHOW(field));
         invalid_candidates.insert(field);
       }
       return cfg_adapter::LOOP_CONTINUE;
