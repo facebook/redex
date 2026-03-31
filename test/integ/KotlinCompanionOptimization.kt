@@ -121,6 +121,43 @@ class JvmStaticBridgeCaller {
   }
 }
 
+// @JvmStatic bridge with a keep rule: the outer class bridge is kept by a
+// proguard rule (simulating reflection via Class.getMethod("parseData", ...)).
+// The pass must NOT rename the kept bridge.
+class CompanionWithKeptBridge {
+  companion object {
+    @JvmStatic fun parseData(x: Int): String = "parsed:$x"
+  }
+}
+
+class KeptBridgeCaller {
+  fun main() {
+    print(CompanionWithKeptBridge.parseData(42))
+  }
+}
+
+// @JvmStatic on a private external fun: kotlinc places the actual native method
+// on the outer class and a delegating wrapper on the companion. The pass must
+// NOT rename the outer class's native method — JNI registration depends on the
+// exact name. The companion's non-native methods should still be relocated.
+class CompanionWithNativeMethod {
+  companion object {
+    @JvmStatic private external fun initNative(x: Int): Long
+
+    fun helper(): String = "helper"
+  }
+
+  fun create(x: Int): Long = initNative(x)
+}
+
+class NativeMethodCaller {
+  fun main() {
+    val obj = CompanionWithNativeMethod()
+    print(obj.create(42))
+    print(CompanionWithNativeMethod.helper())
+  }
+}
+
 // Abstract outer class with a companion object: the pass should still relocate
 // the companion's methods to the abstract outer class as static methods.
 // Abstract classes can have static methods, so this is valid.

@@ -171,14 +171,29 @@ void make_static_and_relocate_method(DexMethod* method, DexType* to_type) {
       DexMethod::get_method(to_type, method->get_name(), method->get_proto());
   if (existing != nullptr && existing->is_def() &&
       is_static(existing->as_def())) {
-    TRACE(KOTLIN_COMPANION,
-          5,
-          "Renaming colliding @JvmStatic bridge %s",
-          SHOW(existing));
-    DexMethodSpec rename_spec;
-    rename_spec.name = DexString::make_string(
-        existing->as_def()->get_name()->str() + "$companion_bridge");
-    existing->as_def()->change(rename_spec, true /* rename_on_collision */);
+    auto* existing_def = existing->as_def();
+    // Do not rename the bridge if it's native (JNI depends on the exact name)
+    // or if it can't be renamed (e.g., kept by a proguard rule for reflection
+    // like `-keepclassmembers ... parseFromJson`).
+    if (is_native(existing_def) || !can_rename(existing_def)) {
+      TRACE(KOTLIN_COMPANION,
+            5,
+            "Skip renaming bridge %s (native=%d, can_rename=%d)",
+            SHOW(existing),
+            is_native(existing_def),
+            can_rename(existing_def));
+      // Fall through to relocate_method which will rename the companion
+      // method on collision instead.
+    } else {
+      TRACE(KOTLIN_COMPANION,
+            5,
+            "Renaming colliding @JvmStatic bridge %s",
+            SHOW(existing));
+      DexMethodSpec rename_spec;
+      rename_spec.name = DexString::make_string(
+          existing_def->get_name()->str() + "$companion_bridge");
+      existing_def->change(rename_spec, true /* rename_on_collision */);
+    }
   }
 
   relocate_method(method, to_type);
