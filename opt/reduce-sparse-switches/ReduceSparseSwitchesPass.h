@@ -61,6 +61,11 @@ class ReduceSparseSwitchesPass : public Pass {
 
     bool expand_remaining{true};
 
+    // When true, expanded if-else chains are sorted by target-block appearance
+    // percentage (appear100) so the most frequently appearing cases are checked
+    // first.
+    bool expand_sort_by_appear100{false};
+
     uint64_t write_sparse_switches{std::numeric_limits<uint64_t>::max()};
   };
 
@@ -136,7 +141,8 @@ expand the remaining small sparse switches to a sequence of if-eq instructions.
                                            cfg::ControlFlowGraph& cfg);
 
   static Stats expand_transformation(cfg::ControlFlowGraph& cfg,
-                                     bool disable_violation_fixes = false);
+                                     bool disable_violation_fixes = false,
+                                     bool sort_by_appear100 = false);
 
  private:
   Config m_config;

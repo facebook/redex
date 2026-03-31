@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <numeric>
 #include <system_error>
 #include <vector>
 
@@ -616,7 +617,9 @@ ReduceSparseSwitchesPass::multiplexing_transformation(
 
 // Expanding remaining sparse switches, and also very small packed switches.
 ReduceSparseSwitchesPass::Stats ReduceSparseSwitchesPass::expand_transformation(
-    cfg::ControlFlowGraph& cfg, bool disable_violation_fixes) {
+    cfg::ControlFlowGraph& cfg,
+    bool disable_violation_fixes,
+    bool sort_by_appear100) {
   ReduceSparseSwitchesPass::Stats stats;
   std::optional<reg_t> tmp_reg;
   for (auto* block : cfg.blocks()) {
@@ -648,25 +651,79 @@ ReduceSparseSwitchesPass::Stats ReduceSparseSwitchesPass::expand_transformation(
     always_assert(default_target != nullptr);
     always_assert(!cases.empty());
 
-    // TODO: Consider sorting cases by target-hotness (for speed)
-    std::sort(cases.begin(), cases.end(),
-              [&](auto& p, auto& q) { return p.first < q.first; });
     uint32_t original_size =
         (sparse ? 5 : 7) + (2 + 2 * static_cast<int>(sparse)) *
                                static_cast<uint32_t>(cases.size());
-    uint32_t expanded_size = 0;
-    std::optional<int32_t> prev_case_key;
-    for (auto [case_key, _] : cases) {
-      if (case_key >= -8 && case_key < 8) {
-        expanded_size += 3;
-      } else if (!fits_16(case_key) || !prev_case_key ||
-                 !fits_16(static_cast<int32_t>(static_cast<int64_t>(case_key) -
-                                               *prev_case_key))) {
-        expanded_size += 5;
-      } else {
-        expanded_size += 4;
+    auto compute_expanded_size =
+        [](const std::vector<std::pair<int32_t, cfg::Block*>>& c) -> uint32_t {
+      uint32_t size = 0;
+      std::optional<int32_t> prev;
+      for (auto [key, _] : c) {
+        if (key >= -8 && key < 8) {
+          size += 3;
+        } else if (!fits_16(key) || !prev ||
+                   !fits_16(static_cast<int32_t>(static_cast<int64_t>(key) -
+                                                 *prev))) {
+          size += 5;
+        } else {
+          size += 4;
+        }
+        prev = key;
       }
-      prev_case_key = case_key;
+      return size;
+    };
+
+    if (sort_by_appear100) {
+      // Sort by target-block appearance percentage (appear100) so that the most
+      // frequently appearing cases are checked first in the expanded if-else
+      // chain. Fall back to case-key order if block appearance percentage
+      // sorting makes expansion too large (due to lost ADD_INT_LIT
+      // opportunities) or when no data exists.
+      auto get_max_appear100 = [](cfg::Block* target) -> float {
+        const auto* sb = source_blocks::get_first_source_block(target);
+        if (sb == nullptr) {
+          return -1.0f;
+        }
+        float max_appear = -1.0f;
+        sb->foreach_val([&max_appear](const auto& v) {
+          if (v && v->appear100 > max_appear) {
+            max_appear = v->appear100;
+          }
+        });
+        return max_appear;
+      };
+      // Precompute appear100 values to avoid redundant O(n log n) calls inside
+      // the comparator.
+      std::vector<float> appear100(cases.size());
+      always_assert(!appear100.empty());
+      for (size_t i = 0; i < cases.size(); ++i) {
+        appear100[i] = get_max_appear100(cases[i].second);
+      }
+      std::vector<size_t> indices(cases.size());
+      std::iota(indices.begin(), indices.end(), 0);
+      std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
+        if (appear100[a] != appear100[b]) {
+          return appear100[a] > appear100[b]; // Higher appear100 first.
+        }
+        return cases[a].first < cases[b].first; // Tie-break by case key.
+      });
+      // Reorder cases by sorted indices.
+      std::vector<std::pair<int32_t, cfg::Block*>> sorted_cases(cases.size());
+      always_assert(!sorted_cases.empty());
+      for (size_t i = 0; i < indices.size(); ++i) {
+        sorted_cases[i] = cases[indices[i]];
+      }
+      cases = std::move(sorted_cases);
+    } else {
+      std::sort(cases.begin(), cases.end(),
+                [](const auto& p, const auto& q) { return p.first < q.first; });
+    }
+    uint32_t expanded_size = compute_expanded_size(cases);
+    if (sort_by_appear100 && expanded_size >= original_size) {
+      // Appear100-sorted expansion is too large. Try key-sorted instead.
+      std::sort(cases.begin(), cases.end(),
+                [](const auto& p, const auto& q) { return p.first < q.first; });
+      expanded_size = compute_expanded_size(cases);
     }
     if (expanded_size >= original_size) {
       // Nothing to gain by exploding instructions
@@ -699,6 +756,8 @@ void ReduceSparseSwitchesPass::bind_config() {
 
   bind("expand_remaining", m_config.expand_remaining,
        m_config.expand_remaining);
+  bind("expand_sort_by_appear100", m_config.expand_sort_by_appear100,
+       m_config.expand_sort_by_appear100);
   bind("write_sparse_switches", m_config.write_sparse_switches,
        m_config.write_sparse_switches);
 };
@@ -736,7 +795,8 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
         m_config.min_multiplexing_switch_cases, cfg);
 
     if (m_config.expand_remaining) {
-      local_stats += expand_transformation(cfg, conf.disable_violation_fixes());
+      local_stats += expand_transformation(cfg, conf.disable_violation_fixes(),
+                                           m_config.expand_sort_by_appear100);
     }
 
     if (local_stats.removed_trivial_switch_cases == 0 &&
