@@ -454,15 +454,8 @@ void analyze_reachable_from_manifest(
     prune_unexported_components.emplace(string_to_tag.at(s));
   }
 
-  auto manifest_class_info = [&apk_dir]() {
-    try {
-      auto resources = create_resource_reader(apk_dir);
-      return resources->get_manifest_class_info();
-    } catch (const std::exception& e) {
-      std::cerr << "Error reading manifest: " << e.what() << std::endl;
-      return ManifestClassInfo{};
-    }
-  }();
+  auto manifest_class_info =
+      create_resource_reader(apk_dir)->get_manifest_class_info();
 
   for (const auto& classname :
        UnorderedIterable(manifest_class_info.application_classes)) {
