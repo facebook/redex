@@ -1,6 +1,9 @@
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS = . test
+SUBDIRS = .
+if ENABLE_TESTS
+SUBDIRS += test
+endif
 
 ACLOCAL_AMFLAGS = -I m4
 

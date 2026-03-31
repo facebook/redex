@@ -149,6 +149,7 @@ AS_IF([test "x$NO_ANDROID_HOME" = "xno"],
         )
     ]
 )
+AM_CONDITIONAL([HAVE_ANDROID_SDK],[test "x$NO_ANDROID_HOME" != "xno"])
 
 # check whether user enabled tests
 AC_ARG_ENABLE([tests],
@@ -217,6 +218,7 @@ AS_IF([test "x$enable_tests" != "xno"], [
             [AC_MSG_ERROR([--with-googletest is specified but does not seem to point at a valid GoogleTest installation with necessary header and library files])])
     fi
 ])
+AM_CONDITIONAL([ENABLE_TESTS],[test "x$enable_tests" != "xno"])
 
 # check whether user enabled kotlin tests
 AC_ARG_ENABLE([kotlin-tests],

@@ -1,4 +1,7 @@
-SUBDIRS = . samples integ unit
+SUBDIRS = . unit
+if HAVE_ANDROID_SDK
+SUBDIRS += samples integ
+endif
 
 check_SCRIPTS = check_num_passes.sh
 # _DEPENDENCIES does not seem to work for SCRIPTS
