@@ -30,7 +30,7 @@
   },
   "resolutions": {
     "on-headers": "^1.1.0",
-    "brace-expansion": "^1.1.12",
+    "brace-expansion": "^1.1.13",
     "mermaid": "^11.10.0",
     "minimatch": ">=3.1.5",
     "webpack-dev-server": "^5.2.1",
@@ -39,6 +39,8 @@
     "@babel/runtime-corejs3": "^7.26.10",
     "@babel/runtime": "^7.26.10",
     "@docusaurus/**/diff": ">=8.0.3",
+    "diff": ">=5.2.2",
+    "svgo": ">=3.3.3",
     "lodash": ">=4.17.23",
     "lodash-es": ">=4.17.23",
     "qs": "^6.14.2",
