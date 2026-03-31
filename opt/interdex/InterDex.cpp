@@ -540,7 +540,8 @@ void InterDex::emit_interdex_classes(
     DexClass* cls = type_class(type);
     if (cls == nullptr) {
       TRACE(IDEX, 5, "[interdex classes]: No such entry %s.", SHOW(type));
-      if (type->get_name()->str().starts_with(SCROLL_SET_START_FORMAT)) {
+      const auto type_name = type->get_name()->str();
+      if (type_name.starts_with(SCROLL_SET_START_FORMAT)) {
         always_assert_log(
             !m_emitting_scroll_set,
             "Scroll start marker discovered after another scroll start marker");
@@ -551,12 +552,12 @@ void InterDex::emit_interdex_classes(
         TRACE(IDEX, 2, "Marking dex as scroll at betamap entry %td",
               std::distance(interdex_types.begin(), it));
         dex_info.scroll = true;
-      } else if (type->get_name()->str().starts_with(SCROLL_SET_END_FORMAT)) {
+      } else if (type_name.starts_with(SCROLL_SET_END_FORMAT)) {
         always_assert_log(
             m_emitting_scroll_set,
             "Scroll end marker discovered without scroll start marker");
         m_emitting_scroll_set = false;
-      } else if (type->get_name()->str().starts_with(BG_SET_START_FORMAT)) {
+      } else if (type_name.starts_with(BG_SET_START_FORMAT)) {
         always_assert_log(!m_emitting_bg_set,
                           "Background start marker discovered after another "
                           "background start marker");
@@ -567,7 +568,7 @@ void InterDex::emit_interdex_classes(
               std::distance(interdex_types.begin(), it));
         m_emitting_bg_set = true;
         dex_info.background = true;
-      } else if (type->get_name()->str().starts_with(BG_SET_END_FORMAT)) {
+      } else if (type_name.starts_with(BG_SET_END_FORMAT)) {
         always_assert_log(
             m_emitting_bg_set,
             "Background end marker discovered without background start marker");

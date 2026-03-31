@@ -402,8 +402,9 @@ bool Model::is_excluded(const DexType* type) const {
   if (m_excluded.count(type) != 0u) {
     return true;
   }
+  const auto type_name = type->get_name()->str();
   for (const auto& prefix : UnorderedIterable(m_spec.exclude_prefixes)) {
-    if (type->get_name()->str().starts_with(prefix)) {
+    if (type_name.starts_with(prefix)) {
       return true;
     }
   }
