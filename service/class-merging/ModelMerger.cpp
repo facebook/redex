@@ -233,10 +233,11 @@ void update_refs_to_mergeable_fields(
       if (field == nullptr) {
         continue;
       }
-      if (fields_lookup.find(field) == fields_lookup.end()) {
+      auto fields_it = fields_lookup.find(field);
+      if (fields_it == fields_lookup.end()) {
         continue;
       }
-      auto* const new_field = fields_lookup.at(field);
+      auto* const new_field = fields_it->second;
       insn->set_field(new_field);
       TRACE(CLMG,
             9,
@@ -249,9 +250,9 @@ void update_refs_to_mergeable_fields(
       }
       if (opcode::is_an_iget(insn->opcode())) {
         auto* field_type = field->get_type();
-        field_type = mergeable_to_merger.count(field_type) > 0
-                         ? mergeable_to_merger.at(field_type)
-                         : field_type;
+        auto merger_it = mergeable_to_merger.find(field_type);
+        field_type = merger_it != mergeable_to_merger.end() ? merger_it->second
+                                                            : field_type;
         auto sb_it = sb_before_igets.find(insn);
         patch_iget(cfg, it, field_type,
                    sb_it != sb_before_igets.end() ? sb_it->second : nullptr,
