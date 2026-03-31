@@ -448,10 +448,12 @@ static Candidate normalize(
           &walk](const PartialCandidateNode& pcn, CandidateNode* cn,
                  IRInstruction* last_out_reg_assignment_insn) {
     UndoMap undo_map;
+    cn->insns.reserve(pcn.insns.size());
     for (auto* insn : pcn.insns) {
       CandidateInstruction ci;
       ci.core = to_core(insn);
 
+      ci.srcs.reserve(insn->srcs_size());
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         ci.srcs.push_back(normalize_use(insn->src(i), insn->src_is_wide(i)));
       }
@@ -502,6 +504,7 @@ static Candidate normalize(
   }
   pca.set_result(out_reg ? std::optional<reg_t>(out_reg->first) : std::nullopt,
                  c.res_type);
+  c.arg_types.reserve(arg_regs.size());
   for (auto reg : arg_regs) {
     const auto* type = type_analysis.get_type_demand(pca, reg);
     c.arg_types.push_back(type);
@@ -1766,6 +1769,7 @@ class OutlinedMethodCreator {
     const auto* name =
         m_method_name_generator.get_name(c, m_config.obfuscate_method_names);
     DexTypeList::ContainerType arg_types;
+    arg_types.reserve(c.arg_types.size());
     for (const auto* t : c.arg_types) {
       arg_types.push_back(t->to_mutable());
     }
