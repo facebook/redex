@@ -28,8 +28,11 @@ void setup_side_effect_on_vregs(const IRInstruction* insn,
   if (it != vregs.end()) {
     it->second = true;
   }
-  if (insn->dest_is_wide() && vregs.find(dest_reg + 1) != vregs.end()) {
-    vregs.find(dest_reg + 1)->second = true;
+  if (insn->dest_is_wide()) {
+    auto it2 = vregs.find(dest_reg + 1);
+    if (it2 != vregs.end()) {
+      it2->second = true;
+    }
   }
 }
 
@@ -335,8 +338,9 @@ bool create_move_and_fix_clobbered(
   // conditional insn to use the copied (un-clobbered) reg.
   for (size_t i = 0; i < it->insn->srcs_size(); i++) {
     auto reg = it->insn->src(i);
-    if (reg_map.find(reg) != reg_map.end()) {
-      it->insn->set_src(i, reg_map.find(reg)->second);
+    auto reg_it = reg_map.find(reg);
+    if (reg_it != reg_map.end()) {
+      it->insn->set_src(i, reg_it->second);
     }
   }
   return true;
