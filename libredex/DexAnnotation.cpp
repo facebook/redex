@@ -811,8 +811,8 @@ void DexAnnotationDirectory::gather_annotations(
 void DexAnnotationDirectory::vencode(
     DexOutputIdx* dodx,
     std::vector<uint32_t>& annodirout,
-    std::map<ParamAnnotations*, uint32_t>& xrefmap,
-    std::map<DexAnnotationSet*, uint32_t>& asetmap) {
+    UnorderedMap<ParamAnnotations*, uint32_t>& xrefmap,
+    UnorderedMap<DexAnnotationSet*, uint32_t>& asetmap) {
   uint32_t classoff = 0;
   uint32_t cntaf = 0;
   uint32_t cntam = 0;
@@ -881,9 +881,10 @@ void DexAnnotationSet::gather_annotations(std::vector<DexAnnotation*>& list) {
   }
 }
 
-void DexAnnotationSet::vencode(DexOutputIdx* /*dodx*/,
-                               std::vector<uint32_t>& asetout,
-                               std::map<DexAnnotation*, uint32_t>& annoout) {
+void DexAnnotationSet::vencode(
+    DexOutputIdx* /*dodx*/,
+    std::vector<uint32_t>& asetout,
+    UnorderedMap<DexAnnotation*, uint32_t>& annoout) {
   asetout.push_back((uint32_t)m_annotations.size());
   std::sort(m_annotations.begin(), m_annotations.end(),
             [](const auto& a, const auto& b) {

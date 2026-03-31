@@ -14,6 +14,7 @@
 #include <map>
 #include <vector>
 
+#include "DeterministicContainers.h"
 #include "Gatherable.h"
 
 class DexFieldRef;
@@ -566,7 +567,7 @@ class DexAnnotationSet : public Gatherable {
   }
   void vencode(DexOutputIdx* dodx,
                std::vector<uint32_t>& asetout,
-               std::map<DexAnnotation*, uint32_t>& annoout);
+               UnorderedMap<DexAnnotation*, uint32_t>& annoout);
   void gather_annotations(std::vector<DexAnnotation*>& alist);
 };
 
@@ -636,8 +637,8 @@ class DexAnnotationDirectory {
   void gather_xrefs(std::vector<ParamAnnotations*>& xrefs);
   void vencode(DexOutputIdx* dodx,
                std::vector<uint32_t>& annodirout,
-               std::map<ParamAnnotations*, uint32_t>& xrefmap,
-               std::map<DexAnnotationSet*, uint32_t>& asetmap);
+               UnorderedMap<ParamAnnotations*, uint32_t>& xrefmap,
+               UnorderedMap<DexAnnotationSet*, uint32_t>& asetmap);
 
   friend std::string show(const DexAnnotationDirectory*);
 };

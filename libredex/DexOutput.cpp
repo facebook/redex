@@ -1293,7 +1293,7 @@ void DexOutput::generate_annotations() {
    */
   std::vector<DexAnnotationDirectory*> lad;
   lad.reserve(hdr.class_defs_size);
-  std::map<DexAnnotationDirectory*, int> ad_to_classnum;
+  UnorderedMap<DexAnnotationDirectory*, int> ad_to_classnum;
   annomap_t annomap;
   asetmap_t asetmap;
   xrefmap_t xrefmap;

@@ -281,10 +281,10 @@ std::vector<const DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
   return strlist;
 }
 
-using annomap_t = std::map<DexAnnotation*, uint32_t>;
-using asetmap_t = std::map<DexAnnotationSet*, uint32_t>;
-using xrefmap_t = std::map<ParamAnnotations*, uint32_t>;
-using adirmap_t = std::map<DexAnnotationDirectory*, uint32_t>;
+using annomap_t = UnorderedMap<DexAnnotation*, uint32_t>;
+using asetmap_t = UnorderedMap<DexAnnotationSet*, uint32_t>;
+using xrefmap_t = UnorderedMap<ParamAnnotations*, uint32_t>;
+using adirmap_t = UnorderedMap<DexAnnotationDirectory*, uint32_t>;
 
 struct CodeItemEmit {
   DexMethod* method;
