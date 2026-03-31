@@ -118,7 +118,7 @@ DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
       return nullptr;
     }
     DexClass* outer_cls = type_class(outer);
-    if (cls == nullptr) {
+    if (outer_cls == nullptr) {
       TRACE(MMINL, 4, "outer class %s is external?", SHOW(outer));
       return nullptr;
     }
