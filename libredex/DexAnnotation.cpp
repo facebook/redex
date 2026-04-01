@@ -748,16 +748,21 @@ void DexAnnotationDirectory::gather_asets(
     aset.push_back(m_class);
   }
   if (m_field) {
+    std::sort(m_field->begin(), m_field->end(), field_annotation_compare);
     for (auto fanno : *m_field) {
       aset.push_back(fanno.second);
     }
   }
   if (m_method) {
+    std::sort(m_method->begin(), m_method->end(), method_annotation_compare);
     for (auto manno : *m_method) {
       aset.push_back(manno.second);
     }
   }
   if (m_method_param) {
+    std::sort(m_method_param->begin(),
+              m_method_param->end(),
+              method_param_annotation_compare);
     for (auto mpanno : *m_method_param) {
       ParamAnnotations* params = mpanno.second;
       for (auto& param : *params) {
@@ -786,18 +791,23 @@ void DexAnnotationDirectory::gather_annotations(
     m_class->gather_annotations(alist);
   }
   if (m_field) {
+    std::sort(m_field->begin(), m_field->end(), field_annotation_compare);
     for (auto fanno : *m_field) {
       DexAnnotationSet* das = fanno.second;
       das->gather_annotations(alist);
     }
   }
   if (m_method) {
+    std::sort(m_method->begin(), m_method->end(), method_annotation_compare);
     for (auto manno : *m_method) {
       DexAnnotationSet* das = manno.second;
       das->gather_annotations(alist);
     }
   }
   if (m_method_param) {
+    std::sort(m_method_param->begin(),
+              m_method_param->end(),
+              method_param_annotation_compare);
     for (auto mpanno : *m_method_param) {
       ParamAnnotations* params = mpanno.second;
       for (auto& param : *params) {
@@ -876,6 +886,10 @@ void DexAnnotationDirectory::vencode(
 }
 
 void DexAnnotationSet::gather_annotations(std::vector<DexAnnotation*>& list) {
+  std::sort(m_annotations.begin(), m_annotations.end(),
+            [](const auto& a, const auto& b) {
+              return compare_dextypes(a->type(), b->type());
+            });
   for (auto& annotation : m_annotations) {
     list.push_back(annotation.get());
   }

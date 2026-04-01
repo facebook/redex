@@ -1316,6 +1316,16 @@ void DexOutput::generate_annotations() {
     ad->gather_annotations(annolist);
     ad->gather_xrefs(xreflist);
   }
+  // Sort annolist by encoded content to ensure deterministic emission order.
+  // Without this, annotation offsets depend on gather order which can vary
+  // due to parallel pass execution modifying annotation vectors.
+  std::sort(annolist.begin(), annolist.end(),
+            [this](DexAnnotation* a, DexAnnotation* b) {
+              std::vector<uint8_t> a_bytes, b_bytes;
+              a->vencode(&m_dodx, a_bytes);
+              b->vencode(&m_dodx, b_bytes);
+              return a_bytes < b_bytes;
+            });
   unique_annotations(annomap, annolist);
   unique_asets(annomap, asetmap, asetlist);
   unique_xrefs(asetmap, xrefmap, xreflist);
