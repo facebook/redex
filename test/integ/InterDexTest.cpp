@@ -17,13 +17,16 @@
 
 #include "InterDexPass.h"
 
+#include "CleanupDynamicallyDead.h"
+
 class InterDexTest : public RedexIntegrationTest {
  public:
   void define_test(const std::vector<std::string>& betmap,
                    const std::string& expected_manifest,
                    bool minimize_cross_dex_refs_explore_alternatives = false,
                    bool order_interdex = true,
-                   bool define_dynamically_dead_classes = false) {
+                   bool define_dynamically_dead_classes = false,
+                   bool last_dexes_only = false) {
     if (define_dynamically_dead_classes) {
       for (auto& cls : *classes) {
         if (cls->get_name() ==
@@ -55,6 +58,11 @@ class InterDexTest : public RedexIntegrationTest {
       cfg["InterDexPass"]["order_interdex"] = order_interdex;
     }
 
+    if (define_dynamically_dead_classes && last_dexes_only) {
+      cfg["InterDexPass"]["reorder_dynamically_dead_classes"] = true;
+      cfg["CleanupDynamicallyDeadPass"]["last_dexes_only"] = true;
+    }
+
     auto path = boost::filesystem::path(tmp_dir.path);
     path += boost::filesystem::path::preferred_separator;
     path += "assets";
@@ -65,6 +73,9 @@ class InterDexTest : public RedexIntegrationTest {
     Pass* pass = nullptr;
     pass = new interdex::InterDexPass(/* register_plugins = */ false);
     std::vector<Pass*> passes = {pass};
+    if (last_dexes_only) {
+      passes.push_back(new CleanupDynamicallyDeadPass());
+    }
 
     run_passes(passes, nullptr, cfg);
 
@@ -424,6 +435,43 @@ TEST_F(InterDexTest, without_order_interdex) {
   EXPECT_EQ(get_class(1, 3), "Lcom/facebook/redextest/C9;");
 
   // First regular class is the one with highest seed weight
+}
+
+TEST_F(InterDexTest, last_dexes_halfnosis) {
+  define_test({
+      "com/facebook/redextest/InterDexPrimary.class",
+      "DexEndMarker0.class",
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=0,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex02/Canary;,ordinal=2,coldstart=0,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex03/Canary;,ordinal=3,coldstart=0,extended=0,primary=0,scroll=0,background=0\n",
+    /* minimize_cross_dex_refs_explore_alternatives */ true,
+    /* order_interdex */ true,
+    /* define_dynamically_dead_classes */ true,
+    /* last_dexes_only */ true
+  );
+
+  // All classes remain in a single store (no Voltron separation).
+  EXPECT_EQ(stores.size(), 1);
+  // CDDP relocates dead classes: strips the trailing dead dex left by
+  // InterDexPass and re-packs dead classes into new trailing dexes.
+  EXPECT_EQ(stores[0].get_dexen().size(), 4);
+
+  // The dynamically dead class (C7) ends up in the last dex.
+  auto& last_dex = stores[0].get_dexen().back();
+  bool found_c7 = std::any_of(last_dex.begin(), last_dex.end(),
+      [](DexClass* cls) {
+        return cls->get_name()->str() == "Lcom/facebook/redextest/C7;";
+      });
+  EXPECT_TRUE(found_c7);
+
+  // C7 must not appear in any earlier dex.
+  for (size_t i = 0; i + 1 < stores[0].get_dexen().size(); i++) {
+    for (auto* cls : stores[0].get_dexen()[i]) {
+      EXPECT_NE(cls->get_name()->str(), "Lcom/facebook/redextest/C7;");
+    }
+  }
 }
 
 /* clang-format on */
