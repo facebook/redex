@@ -120,7 +120,6 @@ void PrintKotlinStats::eval_pass(DexStoresVector& stores,
                                  ConfigFiles&,
                                  PassManager&) {
   Scope scope = build_class_scope(stores);
-  setup();
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (is_kotlin_class(cls)) {
       cls->rstate.set_cls_kotlin();
@@ -131,6 +130,12 @@ void PrintKotlinStats::eval_pass(DexStoresVector& stores,
 void PrintKotlinStats::run_pass(DexStoresVector& stores,
                                 ConfigFiles& conf,
                                 PassManager& mgr) {
+  // Run setup here (not in eval_pass) so that wrapper methods created by
+  // earlier passes (e.g., $WrCheckParameter_V1_4 from
+  // KotlinNullCheckOptimizationPass) are picked up by get_method() lookups.
+  // eval_pass only tags Kotlin classes via source file name, which doesn't
+  // depend on anything setup() initializes.
+  setup();
   Scope scope = build_class_scope(stores);
   UnorderedSet<DexType*> delegate_types{
       DexType::get_type(KPROPERTY_ARRAY),
