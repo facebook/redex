@@ -726,10 +726,10 @@ DexMethod* MethodCreator::create() {
   // now allocate the rest at the start
   size_t temp_reg{0};
   for (size_t i = 0; i < meth_code->get_registers_size(); ++i) {
-    if (reg_map.find(i) != reg_map.end()) {
+    if (!reg_map.emplace(i, temp_reg).second) {
       continue;
     }
-    reg_map[i] = temp_reg++;
+    temp_reg++;
   }
   always_assert(temp_reg == param_reg);
   transform::remap_registers(meth_code, reg_map);

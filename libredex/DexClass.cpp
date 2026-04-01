@@ -840,9 +840,9 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     always_assert(dextry->m_start_addr + dextry->m_insn_count <=
                   code->insns_size);
     dti[tryno].insn_count = dextry->m_insn_count;
-    if (catches_map.find(dextry->m_catches) == catches_map.end()) {
-      catches_map[dextry->m_catches] =
-          static_cast<uint32_t>(hemit - handler_base);
+    auto [cm_it, inserted] = catches_map.emplace(
+        dextry->m_catches, static_cast<uint32_t>(hemit - handler_base));
+    if (inserted) {
       size_t catchcount = dextry->m_catches.size();
       bool has_catchall = dextry->m_catches.back().first == nullptr;
       if (has_catchall) {
@@ -861,7 +861,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
         hemit = write_uleb128(hemit, catch_addr);
       }
     }
-    dti[tryno].handler_off = catches_map.at(dextry->m_catches);
+    dti[tryno].handler_off = cm_it->second;
   }
   return static_cast<int>(hemit - reinterpret_cast<uint8_t*>(output));
 }

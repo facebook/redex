@@ -888,8 +888,8 @@ void ConfigFiles::build_cls_interdex_groups() {
     }
 
     DexType* type = DexType::get_type(cls_name);
-    if ((type != nullptr) && m_cls_to_interdex_group.count(type) == 0) {
-      m_cls_to_interdex_group[type] = group_id;
+    if (type != nullptr) {
+      m_cls_to_interdex_group.try_emplace(type, group_id);
     }
   }
 
