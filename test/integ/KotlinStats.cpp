@@ -37,7 +37,8 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
 
   PrintKotlinStats::Stats stats = klr->get_stats();
 
-  EXPECT_EQ(stats.kotlin_null_check_insns, 9);
+  EXPECT_EQ(stats.kotlin_null_check_param_insns, 9);
+  EXPECT_EQ(stats.kotlin_null_check_expr_insns, 0);
   EXPECT_EQ(stats.kotlin_public_param_objects, 29);
 
   // LExample;.$$delegatedProperties:[Lkotlin/reflect/KProperty;

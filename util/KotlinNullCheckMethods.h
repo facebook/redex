@@ -122,53 +122,62 @@ inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_4(
   return static_cast<DexMethod*>(DexMethod::get_method(wrapper_signature));
 }
 
+// Inserts methods used in Kotlin parameter null assertions
+// (checkParameterIsNotNull, checkNotNullParameter, and their wrappers).
+inline void get_kotlin_param_null_assertions(UnorderedSet<DexMethodRef*>& out) {
+  if (auto* m =
+          method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull()) {
+    out.emplace(m);
+  }
+  if (auto* m =
+          method::kotlin_jvm_internal_Intrinsics_checkNotNullParameter()) {
+    out.emplace(m);
+  }
+  if (auto* m = kotlin_nullcheck_wrapper::
+          kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_3()) {
+    out.emplace(m);
+  }
+  if (auto* m = kotlin_nullcheck_wrapper::
+          kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_4()) {
+    out.emplace(m);
+  }
+}
+
+// Inserts methods used in Kotlin expression null assertions
+// (checkExpressionValueIsNotNull, checkNotNullExpressionValue, and their
+// wrappers).
+inline void get_kotlin_expr_null_assertions(UnorderedSet<DexMethodRef*>& out) {
+  if (auto* m = method::
+          kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull()) {
+    out.emplace(m);
+  }
+  if (auto* m = method::
+          kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue()) {
+    out.emplace(m);
+  }
+  for (auto err : all_NullErrSrc) {
+    if (auto* m = kotlin_nullcheck_wrapper::
+            kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_3(
+                get_err_msg(err))) {
+      out.emplace(m);
+    }
+    if (auto* m = kotlin_nullcheck_wrapper::
+            kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_4(
+                get_err_msg(err))) {
+      out.emplace(m);
+    }
+  }
+}
+
 // This returns methods that are used in Kotlin null assertion.
 // These null assertions will take the object that they are checking for
 // nullness as first argument and returns void. The value of the object will
 // not be null beyond this program point in the execution path.
 inline UnorderedSet<DexMethodRef*> get_kotlin_null_assertions() {
-  UnorderedSet<DexMethodRef*> null_check_methods;
-  DexMethodRef* method;
-  method = method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull();
-  if (method != nullptr) {
-    null_check_methods.emplace(method);
-  }
-  method = method::kotlin_jvm_internal_Intrinsics_checkNotNullParameter();
-  if (method != nullptr) {
-    null_check_methods.emplace(method);
-  }
-  method = kotlin_nullcheck_wrapper::
-      kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_3();
-  if (method != nullptr) {
-    null_check_methods.emplace(method);
-  }
-  method = kotlin_nullcheck_wrapper::
-      kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_4();
-  if (method != nullptr) {
-    null_check_methods.emplace(method);
-  }
-  method =
-      method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull();
-  if (method != nullptr) {
-    null_check_methods.emplace(method);
-  }
-  method = method::kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue();
-  if (method != nullptr) {
-    null_check_methods.emplace(method);
-  }
-  for (auto err : all_NullErrSrc) {
-    method = kotlin_nullcheck_wrapper::
-        kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_3(get_err_msg(err));
-    if (method != nullptr) {
-      null_check_methods.emplace(method);
-    }
-    method = kotlin_nullcheck_wrapper::
-        kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_4(get_err_msg(err));
-    if (method != nullptr) {
-      null_check_methods.emplace(method);
-    }
-  }
-  return null_check_methods;
+  UnorderedSet<DexMethodRef*> methods;
+  get_kotlin_param_null_assertions(methods);
+  get_kotlin_expr_null_assertions(methods);
+  return methods;
 }
 
 inline NullErrSrc get_wrapper_code(IROpcode opcode) {
