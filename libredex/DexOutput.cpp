@@ -1308,6 +1308,9 @@ void DexOutput::generate_annotations() {
     }
   }
   std::sort(lad.begin(), lad.end(), annotation_cmp);
+  for (auto* ad : lad) {
+    ad->sort_members();
+  }
   std::vector<DexAnnotation*> annolist;
   std::vector<DexAnnotationSet*> asetlist;
   std::vector<ParamAnnotations*> xreflist;

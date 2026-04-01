@@ -632,6 +632,7 @@ class DexAnnotationDirectory {
   int aset_count() { return m_aset_count; }
   int anno_count() { return m_anno_count; }
   int xref_count() { return m_xref_count; }
+  void sort_members();
   void gather_annotations(std::vector<DexAnnotation*>& alist);
   void gather_asets(std::vector<DexAnnotationSet*>& aset);
   void gather_xrefs(std::vector<ParamAnnotations*>& xrefs);
