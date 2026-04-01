@@ -22,6 +22,15 @@ namespace {
 const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
   // Lazily initialized on first call. DexMethod::make_method acquires a global
   // lock, so we avoid doing this at static init time.
+  //
+  // Safety criterion: only include methods that are static, final, or defined
+  // on a final class. Virtual methods on non-final classes are unsafe because
+  // a subclass could override them to return null, and we match on the
+  // DexMethodRef from the call site, which resolves to the override at runtime.
+  // Checking the full class hierarchy is not worthwhile here because these are
+  // external methods whose subclasses are not all visible to Redex. For
+  // app-internal methods, interprocedural constant propagation already analyzes
+  // method bodies and can determine non-null returns without a hardcoded list.
   static const auto* methods = []() {
     auto* s = new std::unordered_set<const DexMethodRef*>();
     for (const char* sig : {
@@ -38,9 +47,6 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
 
              // Object.getClass: final native, always returns non-null.
              "Ljava/lang/Object;.getClass:()Ljava/lang/Class;",
-
-             // Object.toString: always returns a new String or `this`.
-             "Ljava/lang/Object;.toString:()Ljava/lang/String;",
 
              // Enum.name: final, set by the compiler, always non-null.
              "Ljava/lang/Enum;.name:()Ljava/lang/String;",
@@ -118,9 +124,6 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
              "Landroid/app/Dialog;.requireViewById:(I)Landroid/view/View;",
              "Landroid/content/Context;.getString:(I)Ljava/lang/String;",
              ("Landroid/content/Context;.getString:"
-              "(I[Ljava/lang/Object;)Ljava/lang/String;"),
-             "Landroid/content/res/Resources;.getString:(I)Ljava/lang/String;",
-             ("Landroid/content/res/Resources;.getString:"
               "(I[Ljava/lang/Object;)Ljava/lang/String;"),
 
              // Guava ImmutableList: annotated @NonNull.
