@@ -23,6 +23,7 @@ class PrintKotlinStats : public Pass {
     size_t unknown_null_check_insns{0};
     size_t kotlin_null_check_param_insns{0};
     size_t kotlin_null_check_expr_insns{0};
+    size_t kotlin_null_check_notnull_insns{0};
     size_t kotlin_areequal_insns{0};
     size_t kotlin_default_arg_check_insns{0};
     size_t kotlin_default_arg_1_param{0};
@@ -60,6 +61,7 @@ class PrintKotlinStats : public Pass {
       unknown_null_check_insns += that.unknown_null_check_insns;
       kotlin_null_check_param_insns += that.kotlin_null_check_param_insns;
       kotlin_null_check_expr_insns += that.kotlin_null_check_expr_insns;
+      kotlin_null_check_notnull_insns += that.kotlin_null_check_notnull_insns;
       kotlin_areequal_insns += that.kotlin_areequal_insns;
       kotlin_default_arg_check_insns += that.kotlin_default_arg_check_insns;
       kotlin_default_arg_1_param += that.kotlin_default_arg_1_param;
@@ -134,6 +136,7 @@ class PrintKotlinStats : public Pass {
  private:
   UnorderedSet<DexMethodRef*> m_kotlin_param_null_assertions;
   UnorderedSet<DexMethodRef*> m_kotlin_expr_null_assertions;
+  UnorderedSet<DexMethodRef*> m_kotlin_notnull_assertions;
   DexMethodRef* m_kotlin_areequal = nullptr;
   DexType* m_kotlin_lambdas_base = nullptr;
   DexType* m_kotlin_coroutin_continuation_base = nullptr;

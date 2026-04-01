@@ -96,4 +96,42 @@ TEST_F(PrintKotlinStatsTest, SimpleArgumentPassingTest) {
 
   ASSERT_EQ(stats.kotlin_null_check_param_insns, 1);
   ASSERT_EQ(stats.kotlin_null_check_expr_insns, 1);
+  ASSERT_EQ(stats.kotlin_null_check_notnull_insns, 0);
+}
+
+TEST_F(PrintKotlinStatsTest, CheckNotNullTest) {
+  Scope scope;
+  DexMethod* method_public = assembler::method_from_string(R"(
+      (method (public) "LPUB;.meth1:(Ljava/lang/Object;)Ljava/lang/Object;"
+       (
+        (load-param-object v0)
+        (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.checkNotNull:(Ljava/lang/Object;)V")
+        (const-string "null cannot be cast to non-null type kotlin.String")
+        (move-result-pseudo-object v1)
+        (invoke-static (v0 v1) "Lkotlin/jvm/internal/Intrinsics;.checkNotNull:(Ljava/lang/Object;Ljava/lang/String;)V")
+        (return-object v0)
+       )
+      )
+    )");
+  DexMethod* method_private = assembler::method_from_string(R"(
+      (method (private) "LPRI;.meth2:(Ljava/lang/Object;)Ljava/lang/Object;"
+       (
+        (return-object v1)
+       )
+      )
+    )");
+
+  prepare_scope(scope, method_public, method_private);
+  PrintKotlinStats pass;
+  pass.setup();
+  PrintKotlinStats::Stats stats =
+      walk::parallel::methods<PrintKotlinStats::Stats>(
+          scope, [&](DexMethod* meth) {
+            meth->get_code()->build_cfg();
+            return pass.handle_method(meth);
+          });
+
+  ASSERT_EQ(stats.kotlin_null_check_param_insns, 0);
+  ASSERT_EQ(stats.kotlin_null_check_expr_insns, 0);
+  ASSERT_EQ(stats.kotlin_null_check_notnull_insns, 2);
 }
