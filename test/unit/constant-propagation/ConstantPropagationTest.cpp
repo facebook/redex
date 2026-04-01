@@ -1822,3 +1822,40 @@ TEST_F(ConstantPropagationTest, NewInstanceNullCheckElimination) {
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
+
+// Verify that checkNotNull teaches constant propagation that the value is
+// non-null, enabling elimination of a subsequent null check branch.
+// RedexTest sets known_non_null_returns_enable = true, so checkNotNull is
+// included in get_kotlin_null_assertions().
+TEST_F(ConstantPropagationTest, CheckNotNullEnablesNullCheckElimination) {
+  auto* check_not_null = DexMethod::make_method(
+      "Lkotlin/jvm/internal/Intrinsics;.checkNotNull:"
+      "(Ljava/lang/Object;)V");
+  check_not_null->make_concrete(ACC_PUBLIC | ACC_STATIC, true);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.checkNotNull:(Ljava/lang/Object;)V")
+      (if-eqz v0 :is_null)
+      (const v1 1)
+      (goto :end)
+      (:is_null)
+      (const v1 0)
+      (:end)
+      (return v1)
+    )
+  )");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.checkNotNull:(Ljava/lang/Object;)V")
+      (const v1 1)
+      (return v1)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
