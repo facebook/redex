@@ -191,6 +191,17 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
               "([Ljava/lang/Object;)"
               "Lcom/google/common/collect/ImmutableList;"),
 
+             // toString() on selected final JDK classes: always returns
+             // non-null. Only final classes are safe here because virtual
+             // dispatch selects the runtime type's implementation, and a
+             // subclass could override toString() to return null.
+             "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;",
+             "Ljava/lang/StringBuffer;.toString:()Ljava/lang/String;",
+             "Ljava/lang/String;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Long;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Integer;.toString:()Ljava/lang/String;",
+             "Ljava/util/UUID;.toString:()Ljava/lang/String;",
+
              // Guava ImmutableMap: annotated @NonNull.
              ("Lcom/google/common/collect/ImmutableMap;.of:()"
               "Lcom/google/common/collect/ImmutableMap;"),
