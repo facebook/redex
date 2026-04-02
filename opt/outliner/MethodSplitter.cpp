@@ -9,6 +9,7 @@
 
 #include "ClosureAggregator.h"
 #include "ConcurrentContainers.h"
+#include "ControlFlow.h"
 #include "DexLimits.h"
 #include "InitClassesWithSideEffects.h"
 #include "MethodClosures.h"
@@ -476,8 +477,39 @@ void split_methods_in_stores(
     }
     return false;
   };
+  // Exclude methods containing loadLibrary/loadLibraryUnsafe calls from
+  // splitting. Splitting these methods separates the const-string (library
+  // name) from the invoke, which causes ReachableNativesPass to crash.
+  auto has_load_library_call = [](DexMethod* method) {
+    auto* code = method->get_code();
+    if (code == nullptr || !code->cfg_built()) {
+      return false;
+    }
+    for (auto* block : code->cfg().blocks()) {
+      for (auto& mie : *block) {
+        if (mie.type != MFLOW_OPCODE) {
+          continue;
+        }
+        auto* insn = mie.insn;
+        if (!insn->has_method() || !opcode::is_invoke_static(insn->opcode())) {
+          continue;
+        }
+        auto callee_name = insn->get_method()->get_name()->str();
+        if (callee_name != "loadLibrary" &&
+            callee_name != "loadLibraryUnsafe") {
+          continue;
+        }
+        auto cls_name = insn->get_method()->get_class()->str();
+        if (cls_name == "Lcom/facebook/soloader/SoLoader;" ||
+            cls_name == "Lcom/facebook/soloader/nativeloader/NativeLoader;") {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
   walk::parallel::code(scope, [&](DexMethod* method, IRCode&) {
-    if (is_excluded(method)) {
+    if (is_excluded(method) || has_load_library_call(method)) {
       stats->excluded_methods++;
       return;
     }
