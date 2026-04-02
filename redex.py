@@ -132,6 +132,22 @@ def write_debugger_command(
     return script_name
 
 
+def find_redex_binary(redex_binary: typing.Optional[str]) -> typing.Optional[str]:
+    redex_binary = redex_binary or shutil.which("redex-all")
+    if redex_binary is not None:
+        return redex_binary
+
+    # __file__ can be /path/fb-redex.pex/redex.pyc
+    dir_name = dirname(abspath(__file__))
+    while not isdir(dir_name):
+        dir_name = dirname(dir_name)
+
+    bundled_binary = join(dir_name, "redex-all")
+    if isfile(bundled_binary):
+        return bundled_binary
+    return None
+
+
 def add_extra_environment_args(env: typing.Dict[str, str]) -> None:
     # If we haven't set MALLOC_CONF but we have requested to profile the memory
     # of a specific pass, set some reasonable defaults
@@ -239,20 +255,14 @@ def run_redex_binary(
     exception_formatter: ExceptionMessageFormatter,
     output_line_handler: typing.Optional[typing.Callable[[str], str]],
 ) -> None:
+    state.args.redex_binary = find_redex_binary(state.args.redex_binary)
     if state.args.redex_binary is None:
-        state.args.redex_binary = shutil.which("redex-all")
-
-    if state.args.redex_binary is None:
-        # __file__ can be /path/fb-redex.pex/redex.pyc
-        dir_name = dirname(abspath(__file__))
-        while not isdir(dir_name):
-            dir_name = dirname(dir_name)
-        state.args.redex_binary = join(dir_name, "redex-all")
+        sys.exit("redex-all was not found")
     if not isfile(state.args.redex_binary) or not os.access(
         state.args.redex_binary, os.X_OK
     ):
         sys.exit(
-            "redex-all is not found or is not executable: " + state.args.redex_binary
+            "redex-all was not found or is not executable: " + state.args.redex_binary
         )
     LOGGER.debug("Running redex binary at %s", state.args.redex_binary)
 
@@ -607,6 +617,7 @@ def validate_args(args: argparse.Namespace) -> None:
         extract_signing_args(args)
 
     if not args.unpack_only:
+        args.redex_binary = find_redex_binary(args.redex_binary)
         if not args.redex_binary:
             raise argparse.ArgumentTypeError("Requires --redex-binary argument")
         if not args.config:
