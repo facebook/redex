@@ -38,6 +38,11 @@ class UniqueMethodTracker {
       if (code_hash != other.code_hash) {
         return false;
       }
+      // Methods with different prototypes are never equal.
+      // DexProto is interned, so pointer comparison is sufficient.
+      if (method->get_proto() != other.method->get_proto()) {
+        return false;
+      }
       // Defensive: verify both methods still have valid code/CFG.
       const auto* const code = method->get_code();
       const auto* const other_code = other.method->get_code();
