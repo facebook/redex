@@ -123,10 +123,20 @@ class Impl {
     }
   }
 
+  // When true, excludes debug info and source blocks from the hash.
+  // Used by DexMethodHasher to hash only the actual code instructions.
+  Impl& set_code_only(bool code_only) {
+    m_code_only = code_only;
+    return *this;
+  }
+
   size_t m_hash{0};
   size_t m_code_hash{0};
   size_t m_registers_hash{0};
   size_t m_positions_hash{0};
+
+ private:
+  bool m_code_only{false};
 };
 
 // Hashes a DexClass including all its methods and fields.
@@ -141,10 +151,11 @@ class DexClassImpl final : public Impl {
   DexClass* const m_cls;
 };
 
-// Hashes only the code of a method, excluding method signature/class.
 class DexMethodImpl final : public Impl {
  public:
-  explicit DexMethodImpl(const DexMethod* method) : m_method(method) {}
+  explicit DexMethodImpl(const DexMethod* method) : m_method(method) {
+    set_code_only(true);
+  }
   DexHash run() override;
 
  private:
@@ -339,9 +350,11 @@ void Impl::hash_code_init(
       hash(get_mie_id(mie.target->src));
       break;
     case MFLOW_DEBUG:
-      hash((uint8_t)MFLOW_DEBUG);
-      hash(mie.dbgop->opcode());
-      hash(mie.dbgop->uvalue());
+      if (!m_code_only) {
+        hash((uint8_t)MFLOW_DEBUG);
+        hash(mie.dbgop->opcode());
+        hash(mie.dbgop->uvalue());
+      }
       break;
     case MFLOW_POSITION: {
       auto old_hash2 = m_hash;
@@ -362,10 +375,13 @@ void Impl::hash_code_init(
       break;
     }
     case MFLOW_SOURCE_BLOCK:
-      hash((uint8_t)MFLOW_SOURCE_BLOCK);
-      for (auto* sb = mie.src_block.get(); sb != nullptr; sb = sb->next.get()) {
-        hash(sb->src);
-        hash(sb->id);
+      if (!m_code_only) {
+        hash((uint8_t)MFLOW_SOURCE_BLOCK);
+        for (auto* sb = mie.src_block.get(); sb != nullptr;
+             sb = sb->next.get()) {
+          hash(sb->src);
+          hash(sb->id);
+        }
       }
       break;
     case MFLOW_FALLTHROUGH:
