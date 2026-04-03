@@ -238,11 +238,11 @@ Stats reduce_uncallable_instance_methods(
             method->is_virtual()
                 ? resolve_method_deprecated(method, MethodSearch::Super, method)
                 : nullptr;
+        auto* method_cls = type_class(method->get_class());
         if (overridden_method == nullptr && method->is_virtual() &&
             !is_implementation_method(method)) {
           class_post_processing.update(
-              type_class(method->get_class()),
-              [method](DexClass*, ClassPostProcessing& cpp, bool) {
+              method_cls, [method](DexClass*, ClassPostProcessing& cpp, bool) {
                 cpp.abstract_vmethods.insert(method);
               });
           std::lock_guard<std::mutex> lock_guard(stats_mutex);
@@ -256,7 +256,7 @@ Stats reduce_uncallable_instance_methods(
           // upgrading the visibility of the overridden method.
           always_assert(overridden_method != method);
           class_post_processing.update(
-              type_class(method->get_class()),
+              method_cls,
               [method,
                overridden_method](DexClass*, ClassPostProcessing& cpp, bool) {
                 cpp.remove_vmethods.emplace(method, overridden_method);

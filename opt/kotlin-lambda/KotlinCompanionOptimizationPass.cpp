@@ -679,9 +679,10 @@ void filter_untrackable_usages(
         }
         // Allow from the outer class's <clinit> (stores companion field) or
         // the companion's own <clinit> (initializes $$INSTANCE).
+        auto* method_cls = type_class(method->get_class());
         if (method::is_clinit(method) &&
-            (type_class(method->get_class()) == candidates.find(from)->second ||
-             type_class(method->get_class()) == from)) {
+            (method_cls == candidates.find(from)->second ||
+             method_cls == from)) {
           break;
         }
         rejected.insert(from);
