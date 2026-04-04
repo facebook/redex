@@ -16,12 +16,19 @@ namespace random_forest {
 
 struct RandomForestTestHelper {
   MethodContextContext context{};
-  MethodContext caller{
-      context, MethodContext::Vals{{3.5, std::nullopt, 7},
-                                   {std::nullopt, std::nullopt, std::nullopt}}};
-  MethodContext callee{
-      context, MethodContext::Vals{{2.5, std::nullopt, 5},
-                                   {std::nullopt, std::nullopt, std::nullopt}}};
+  MethodContext caller;
+  MethodContext callee;
+
+  // Use constructor initializer list instead of NSDMIs to work around
+  // Apple Clang not respecting friend access in default member initializers.
+  RandomForestTestHelper()
+      : caller(context,
+               MethodContext::Vals{{3.5, std::nullopt, 7},
+                                   {std::nullopt, std::nullopt, std::nullopt}}),
+        callee(
+            context,
+            MethodContext::Vals{{2.5, std::nullopt, 5},
+                                {std::nullopt, std::nullopt, std::nullopt}}) {}
 };
 
 struct RandomForestTest : public testing::Test {};
