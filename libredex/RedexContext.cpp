@@ -141,11 +141,17 @@ RedexContext::~RedexContext() {
             // Delete DexMethods. Use set to prevent double freeing aliases
             UnorderedSet<DexMethod*> delete_methods;
             for (auto&& [_, loc] : UnorderedIterable(s_method_map)) {
-              auto* method = static_cast<DexMethod*>(loc.load());
-              if ((reinterpret_cast<size_t>(method) >> 16) %
-                          method_buckets_count ==
-                      bucket &&
-                  delete_methods.emplace(method).second) {
+              // Check bucket using the base pointer before downcasting,
+              // to avoid reading a potentially freed object's vptr
+              // (another bucket thread may have already deleted it).
+              auto* ref = loc.load();
+              if ((reinterpret_cast<size_t>(ref) >> 16) %
+                      method_buckets_count !=
+                  bucket) {
+                continue;
+              }
+              auto* method = static_cast<DexMethod*>(ref);
+              if (delete_methods.emplace(method).second) {
                 delete method;
               }
             }
@@ -165,11 +171,16 @@ RedexContext::~RedexContext() {
             // Delete DexFields. Use set to prevent double freeing aliases
             UnorderedSet<DexField*> delete_fields;
             for (auto&& [_, loc] : UnorderedIterable(s_field_map)) {
-              auto* field = static_cast<DexField*>(loc.load());
-              if ((reinterpret_cast<size_t>(field) >> 16) %
-                          field_buckets_count ==
-                      bucket &&
-                  delete_fields.emplace(field).second) {
+              // Check bucket using the base pointer before downcasting,
+              // to avoid reading a potentially freed object's vptr
+              // (another bucket thread may have already deleted it).
+              auto* ref = loc.load();
+              if ((reinterpret_cast<size_t>(ref) >> 16) % field_buckets_count !=
+                  bucket) {
+                continue;
+              }
+              auto* field = static_cast<DexField*>(ref);
+              if (delete_fields.emplace(field).second) {
                 delete field;
               }
             }
