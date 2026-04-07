@@ -164,7 +164,7 @@ bool TypedefAnnoChecker::should_not_check(const DexMethod* m) const {
       kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
   for (DexMethodRef* kotlin_null_method :
        UnorderedIterable(null_check_methods)) {
-    if (kotlin_null_method->get_name() == m->get_name()) {
+    if (kotlin_null_method == m) {
       return true;
     }
   }
@@ -504,10 +504,6 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
   bool has_int_vals = int_value_set != nullptr && !int_value_set->empty();
   always_assert_log(has_int_vals ^ has_str_vals,
                     "%s has both str and int const values", SHOW(anno_class));
-  if (!has_str_vals && !has_int_vals) {
-    TRACE(TAC, 1, "%s contains no annotation constants", SHOW(anno_class));
-    return std::nullopt;
-  }
 
   auto* cls = type_class(m_method->get_class());
   if (m_config.skip_anonymous_classes && klass::maybe_anonymous_class(cls)) {
@@ -779,14 +775,20 @@ void TypedefAnnoCheckerPass::gather_typedef_values(
   if (get_annotation(cls, m_config.str_typedef) != nullptr) {
     UnorderedSet<const DexString*> str_values;
     for (auto* field : fields) {
-      str_values.emplace(
-          dynamic_cast<DexEncodedValueString*>(field->get_static_value())
-              ->string());
+      auto* str_val =
+          dynamic_cast<DexEncodedValueString*>(field->get_static_value());
+      always_assert_log(str_val != nullptr,
+                        "StringDef field %s has no string value",
+                        SHOW(field));
+      str_values.emplace(str_val->string());
     }
     strdef_constants.emplace(cls, std::move(str_values));
   } else if (get_annotation(cls, m_config.int_typedef) != nullptr) {
     UnorderedSet<uint64_t> int_values;
     for (auto* field : fields) {
+      always_assert_log(field->get_static_value() != nullptr,
+                        "IntDef field %s has no static value",
+                        SHOW(field));
       int_values.emplace(field->get_static_value()->value());
     }
     intdef_constants.emplace(cls, std::move(int_values));
