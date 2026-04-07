@@ -669,27 +669,29 @@ void filter_untrackable_usages(
       return type_inference->get_type_environments();
     };
 
+    // Helper: returns true if this method is a clinit of the companion's
+    // outer class or the companion class itself.
+    auto is_companion_clinit = [&](DexClass* companion) {
+      if (!method::is_clinit(method)) {
+        return false;
+      }
+      auto* method_cls = type_class(method->get_class());
+      return method_cls == candidates.find(companion)->second ||
+             method_cls == companion;
+    };
+
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto* insn = it->insn;
       switch (insn->opcode()) {
       case OPCODE_SPUT_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if (skip(from)) {
-          break;
-        }
-        // Allow from the outer class's <clinit> (stores companion field) or
-        // the companion's own <clinit> (initializes $$INSTANCE).
-        auto* method_cls = type_class(method->get_class());
-        if (method::is_clinit(method) &&
-            (method_cls == candidates.find(from)->second ||
-             method_cls == from)) {
+        if (skip(from) || is_companion_clinit(from)) {
           break;
         }
         rejected.insert(from);
         break;
       }
 
-      // If there is any instance field, add it to bad list.
       case OPCODE_IPUT_OBJECT:
       case OPCODE_IGET_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
@@ -705,8 +707,6 @@ void filter_untrackable_usages(
         if (skip(from)) {
           break;
         }
-        // Check we can track the uses of the Companion object instance.
-        // i.e. Companion object is only used to invoke methods
         auto* outer = candidates.find(from)->second;
         if (!is_def_trackable(insn, from, outer, move_aware_chains)) {
           rejected.insert(from);
@@ -714,15 +714,59 @@ void filter_untrackable_usages(
         break;
       }
 
-      case OPCODE_INSTANCE_OF:
+      case OPCODE_INSTANCE_OF: {
+        auto* from = type_class(insn->get_type());
+        if (skip(from) || is_companion_clinit(from)) {
+          break;
+        }
+        rejected.insert(from);
+        break;
+      }
+
       case OPCODE_NEW_INSTANCE: {
         auto* from = type_class(insn->get_type());
         if (skip(from)) {
           break;
         }
-        if (method::is_clinit(method) &&
-            (type_class(method->get_class()) == candidates.find(from)->second ||
-             type_class(method->get_class()) == from)) {
+        if (is_companion_clinit(from)) {
+          // D8 may reuse the new-instance register after sput-object
+          // (e.g., TAG = Companion.javaClass.simpleName compiles to
+          // getClass() on the same register).  Reject if the register
+          // has uses beyond <init> and sput-object — Phase 5 cannot
+          // safely nullify the new-instance.
+          auto* outer = candidates.find(from)->second;
+          if (type_class(method->get_class()) == outer) {
+            auto du = move_aware_chains.get_def_use_chains();
+            auto mov_it = cfg.move_result_of(it);
+            IRInstruction* def_insn = nullptr;
+            if (!mov_it.is_end() && du.count(mov_it->insn) != 0u) {
+              def_insn = mov_it->insn;
+            } else if (du.count(insn) != 0u) {
+              def_insn = insn;
+            }
+            if (def_insn != nullptr) {
+              for (const auto& use : UnorderedIterable(du.at(def_insn))) {
+                auto* u = use.insn;
+                // Allow companion construction sequence.
+                if ((opcode::is_an_invoke(u->opcode()) &&
+                     method::is_init(u->get_method()) &&
+                     u->get_method()->get_class() == from->get_type()) ||
+                    (opcode::is_an_sput(u->opcode()) &&
+                     u->get_field()->get_type() == from->get_type()) ||
+                    opcode::is_a_move(u->opcode())) {
+                  continue;
+                }
+                rejected.insert(from);
+                TRACE(KOTLIN_COMPANION,
+                      2,
+                      "Reject %s: new-instance register reused in "
+                      "clinit by %s",
+                      SHOW(from),
+                      SHOW(u));
+                break;
+              }
+            }
+          }
           break;
         }
         rejected.insert(from);
@@ -736,10 +780,7 @@ void filter_untrackable_usages(
         }
         if ((type_class(method->get_class()) == from &&
              method::is_init(method)) ||
-            (method::is_clinit(method) &&
-             (type_class(method->get_class()) ==
-                  candidates.find(from)->second ||
-              type_class(method->get_class()) == from))) {
+            is_companion_clinit(from)) {
           break;
         }
         rejected.insert(from);
@@ -914,7 +955,6 @@ void cleanup_clinits_and_fields(
     // and remove the invoke-direct and sput-object.
     if (outer_cls->get_clinit() != nullptr) {
       auto& clinit_cfg = outer_cls->get_clinit()->get_code()->cfg();
-      cfg::CFGMutation m(clinit_cfg);
 
       auto is_companion_new_instance = [&](IRInstruction* insn) {
         return opcode::is_new_instance(insn->opcode()) &&
@@ -930,6 +970,7 @@ void cleanup_clinits_and_fields(
                companion_fields.count(insn->get_field()) != 0u;
       };
 
+      cfg::CFGMutation m(clinit_cfg);
       for (auto it = cfg::InstructionIterable(clinit_cfg).begin();
            it != cfg::InstructionIterable(clinit_cfg).end();
            it++) {
