@@ -134,7 +134,7 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
   // the information in the other components. As such, it only makes sense to
   // call reduce() after meet/narrow -- operations which can refine the
   // components of a product. However, we may still need to canonicalize our
-  // product after a join/widen, so these methods might be overriden.
+  // product after a join/widen, so these methods might be overridden.
 
   void join_with(const Derived& other_domain) {
     combine_with(
