@@ -72,7 +72,7 @@ bool is_valid_load_for_nonleaf(IROpcode op) {
 
 // Return true if this block is a leaf.
 // Any block that is not part of the if/switch tree is considered a leaf.
-// TODO(T219644020): This function does to identify all blocks that must be
+// TODO(T219644020): This function does not identify all blocks that must be
 // leafs.
 bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
   // non-leaf nodes only have GOTO and BRANCH outgoing edges

@@ -88,7 +88,7 @@ void keep_rules::print_seeds(std::ostream& output,
       if (!s.empty()) {
         return s;
       }
-      std::cerr << "WARNING: this class has no deobu name: "
+      std::cerr << "WARNING: this class has no deobfuscated name: "
                 << cls->get_name()->c_str() << '\n';
       return cls->get_name()->str();
     }();

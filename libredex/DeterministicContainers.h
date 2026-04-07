@@ -91,9 +91,9 @@
  *     - `auto&& ui = UnorderedIterable(my_unordered_set);`
  *        `auto it = ui.begin();`
  *        `while (it != ui.end()) ...`
- * - Avoid storing `UnorderedIterable(...)` in an local variable.
+ * - Avoid storing `UnorderedIterable(...)` in a local variable.
  *     - Instead, prefer using any of the `unordered_...` helper functions.
- *     - If you must store the result of `UnorderedIterable(...)` in an local
+ *     - If you must store the result of `UnorderedIterable(...)` in a local
  *       variable, always use `auto&&` to deal with the possibility that
  *       `UnorderedIterable(...)` returns a reference to the original collection
  *       that you don't want to copy.

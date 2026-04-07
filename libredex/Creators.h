@@ -338,7 +338,7 @@ struct MethodBlock {
                              MethodBlock** true_block);
 
   /**
-   * Emit an switch opcode against the test Locations.
+   * Emit a switch opcode against the test Locations.
    * It returns the MethodBlock for the default case.
    * On return the std::map will contain MethodBlock for each case.
    * switch_op cond jump case1, case2,...

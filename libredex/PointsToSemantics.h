@@ -156,7 +156,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToVariable& v);
  * counterparts in Dex bytecode. Note that we do not attempt to model exceptions
  * precisely. The `PTS_GET_EXCEPTION` operation stands for `move-exception`, but
  * assumes that any exception can be caught. This also explains why we have no
- * operation corresponding to `throw`. As for the disjuction, it's simply the
+ * operation corresponding to `throw`. As for the disjunction, it's simply the
  * union of points-to variables (V = V1 U V2 U ... U Vn). We also introduce a
  * special operation `PTS_GET_CLASS` for java.lang.Object#getClass(), since
  * java.lang.Class objects need to be handled specially by the analyzer.

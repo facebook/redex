@@ -104,7 +104,7 @@ bool ends_with_may_throw(cfg::Block* p) {
 /*
  * Given an method-item-entry ordering, delete positions that are...
  * - duplicates with the previous position, even across block boundaries
- *   (they will get reconstituted when the cfg is rebuild)
+ *   (they will get reconstituted when the cfg is rebuilt)
  * - adjacent to an immediately following position, as the last position wins.
  * Parent positions are kept as needed.
  */
@@ -885,7 +885,7 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
           } else {
             always_assert(target_mie.target->type == BRANCH_SIMPLE);
           }
-          // The the branch information is stored in the edges, we don't need
+          // The branch information is stored in the edges, we don't need
           // the targets inside the blocks anymore
           target_block->m_entries.erase_and_dispose(
               target_block->m_entries.iterator_to(target_mie));
@@ -2144,7 +2144,7 @@ MethodItemEntry* ControlFlowGraph::create_catch(
   // throw edges and connecting the catch entry `next` pointers according to the
   // throw edge indices.
   //
-  // We stop early if we find find an equivalent linked list of catch entries
+  // We stop early if we find an equivalent linked list of catch entries
   return self_recursive_fn(
       [this, &throws_end, catch_to_containing_block](
           auto self, const EdgeVector::iterator& it) -> MethodItemEntry* {
@@ -2189,7 +2189,8 @@ std::vector<Block*> ControlFlowGraph::blocks() const {
   return result;
 }
 
-// Uses a standard depth-first search ith a side table of already-visited nodes.
+// Uses a standard depth-first search with a side table of already-visited
+// nodes.
 std::vector<Block*> ControlFlowGraph::blocks_reverse_post_deprecated() const {
   std::stack<Block*> stack;
   for (const auto& entry : m_blocks) {
@@ -2330,7 +2331,7 @@ void ControlFlowGraph::calculate_exit_block() {
     uint32_t head = dfns[b] = ++next_dfn;
     // The head member (initialized with next_dfn tell us whether any
     // vertex in the current SCC has a successor edge that points
-    // outside itself. reffer to the Tarjan algorithm for explanation.
+    // outside itself. Refer to the Tarjan algorithm for explanation.
     std::stack<State> state_stack;
     State new_state{b, b->succs(), 0, head};
     state_stack.push(new_state);
@@ -2377,12 +2378,12 @@ void ControlFlowGraph::calculate_exit_block() {
       uint32_t succ_has_exit = static_cast<uint32_t>(top_state.has_exit);
 
       // Pops a state in essence ending a recursive call in the
-      // recursive Tarjan algrithm.
+      // recursive Tarjan algorithm.
       state_stack.pop();
       // Now the topState is invalid.
 
       // After unwinding one of the recursive calls (see the recursive Tarjan
-      // algorithm) and we have not unwinded the full recursion update the
+      // algorithm) and we have not unwound the full recursion update the
       // "current recursive state" with data from the previous "recursion". The
       // recursion state is the original recursive Tarjan algorithm. The State
       // struct keeps the recursive local state, so it can be implemented
@@ -2419,7 +2420,7 @@ void ControlFlowGraph::reset_exit_block() {
     return;
   }
   // If we get here, we have a "ghost" exit block, that was created to represent
-  // multiple exist blocks. We need to remove that "ghost" exit block before
+  // multiple exit blocks. We need to remove that "ghost" exit block before
   // recomputing the exit of a CFG with multiple exit points.
   remove_block(m_exit_block);
   always_assert(m_exit_block == nullptr);

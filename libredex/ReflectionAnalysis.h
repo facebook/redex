@@ -53,8 +53,8 @@ class Analyzer;
  */
 
 /*
- * The first three are inputs of an reflecting operation.
- * The last three are output of an reflecting operation.
+ * The first three are inputs of a reflecting operation.
+ * The last three are output of a reflecting operation.
  */
 /* clang-format off */
  enum AbstractObjectKind {

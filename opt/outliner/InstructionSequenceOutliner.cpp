@@ -986,7 +986,7 @@ static MethodCandidates find_method_candidates(
   auto big_blocks = big_blocks::get_big_blocks(cfg);
   // Along big blocks, we are assigning consecutive indices to instructions.
   // We'll use this to manage ranges of instructions that need to get
-  // invalidated when overlapping ranges of insturctions are outlined.
+  // invalidated when overlapping ranges of instructions are outlined.
   Lazy<UnorderedMap<const IRInstruction*, size_t>> insn_idxes([&big_blocks]() {
     UnorderedMap<const IRInstruction*, size_t> res;
     for (auto& big_block : big_blocks) {
@@ -2529,7 +2529,7 @@ static NewlyOutlinedMethods outline(
                           config.reuse_outlined_methods_across_dexes)) {
       dex_state.insert_method_ref();
     } else {
-      TRACE(ISO, 3, "[invoke sequence outliner] could not ouline");
+      TRACE(ISO, 3, "[invoke sequence outliner] could not outline");
       not_outlined_count++;
     }
 

@@ -50,7 +50,7 @@ void ResolveMethodRefs::analyze_method(
     for (auto it = ii.begin(); it != ii.end(); it++) {
       auto* insn = it->insn;
       lta.analyze_instruction(insn, &env);
-      // Since we only consider kotlin non capturing lambda, which orignial
+      // Since we only consider kotlin non capturing lambda, which originally
       // derived from an interface.
       if (insn->opcode() != OPCODE_INVOKE_INTERFACE) {
         continue;
@@ -90,7 +90,7 @@ void ResolveMethodRefs::analyze_method(
 
       TRACE(TYPE, 5, "Intf %s is resolved to: %s \n", SHOW(intf), SHOW(impl));
 
-      // resolve the interface to its implenmentor.
+      // resolve the interface to its implementor.
       // 1. add check_cast.
       auto* check_cast = new IRInstruction(OPCODE_CHECK_CAST);
       check_cast->set_src(0, insn->src(0));

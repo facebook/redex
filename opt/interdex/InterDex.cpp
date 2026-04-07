@@ -211,7 +211,7 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
 }
 
 // Perf sensitive classes and all the classes they reference via super classes
-// can not be dynamically_dead.
+// cannot be dynamically_dead.
 void exclude_extra_dynamically_dead_class(
     const std::vector<DexClass*>& candidates) {
   for (auto const& cls : candidates) {
@@ -1150,7 +1150,7 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
 
           TRACE(IDEX, 2,
                 "Found cross-dex-ref-minimization solution with %f remaining "
-                "difficulity at index %zu",
+                "difficulty at index %zu",
                 remaining_difficulty, index);
           {
             std::lock_guard<std::mutex> lock_guard(best_mutex);

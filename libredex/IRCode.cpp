@@ -781,7 +781,7 @@ void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
  * DexPositions. There are two scenarios where we want to eliminate them:
  *
  * 1) A DexPosition needs to be emitted iff it immediately precedes a dex
- * opcode. If there are multple DexPositions immediately before a given opcode,
+ * opcode. If there are multiple DexPositions immediately before a given opcode,
  * only the last one needs to get emitted. Concretely:
  *
  *   .pos "LFoo;.a()V" Foo.java 123
@@ -1289,7 +1289,7 @@ void IRCode::gather_methodhandles(
 }
 
 /*
- * Returns an estimated of the number of 2-byte code units needed to encode
+ * Returns an estimate of the number of 2-byte code units needed to encode
  * all the instructions.
  */
 size_t IRCode::sum_opcode_sizes() const {

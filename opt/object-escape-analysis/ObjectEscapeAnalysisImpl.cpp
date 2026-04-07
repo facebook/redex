@@ -131,7 +131,7 @@ DexMethod* resolve_invoke_inlinable_callee(
   auto* method_ref = insn->get_method();
   always_assert_log(
       type::check_cast(inlinable_type, method_ref->get_class()),
-      "Inlinable type %s it compatible with declaring type of method in {%s}",
+      "Inlinable type %s is compatible with declaring type of method in {%s}",
       SHOW(inlinable_type), SHOW(insn));
   auto* callee = resolve_method_deprecated(
       type_class(inlinable_type), method_ref->get_name(),

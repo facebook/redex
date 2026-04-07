@@ -574,7 +574,7 @@ Result check_uninitialized(DexMethod* method, bool relaxed_init_check) {
           remove_from_uninitialized_list(insn->dest());
         }
       }
-      // get the the next block.
+      // get the next block.
       if (current_block == big_block->get_last_block()) {
         break;
       }

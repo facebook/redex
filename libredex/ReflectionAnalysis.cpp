@@ -440,7 +440,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     // be interpreted separately.
     //
     // Note that we do not try to infer them as STRINGs.
-    // Since we don't have the the actual value of the string other than their
+    // Since we don't have the actual value of the string other than their
     // type being String. Also for CLASSes, the exact Java type they refer to is
     // not available here.
     auto init_state = AbstractObjectEnvironment::top();

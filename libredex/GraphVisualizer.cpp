@@ -91,9 +91,9 @@ using namespace cfg;
 
 namespace {
 
-// A "container" that helps with formatting list. Use as a helper instance, add
-// elements to the stream given by next(), and create the final format with the
-// supplied operator<<.
+// A "container" that helps with formatting a list. Use as a helper instance,
+// add elements to the stream given by next(), and create the final format with
+// the supplied operator<<.
 class List {
  public:
   explicit List() : m_empty(true) {}

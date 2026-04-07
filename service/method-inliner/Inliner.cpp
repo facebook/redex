@@ -297,7 +297,7 @@ MultiMethodInliner::MultiMethodInliner(
 
 void MultiMethodInliner::inline_methods() {
   // The order in which we inline is such that once a callee is considered to
-  // be inlined, it's code will no longer change. So we can cache...
+  // be inlined, its code will no longer change. So we can cache...
   // - its size
   // - its set of type refs
   // - its set of method refs
@@ -1297,7 +1297,7 @@ bool MultiMethodInliner::caller_too_large(DexType* /*caller_type*/,
 
 bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
   if (for_speed()) {
-    // inline_for_speed::should_inline was used earlire to prune the static
+    // inline_for_speed::should_inline was used earlier to prune the static
     // call-graph
     return true;
   }
@@ -2095,7 +2095,7 @@ bool MultiMethodInliner::should_partially_inline(cfg::Block* block,
   always_assert(insn->has_method());
   // We don't want to partially inline true virtuals.
   // To avoid dealing with inserting additional casts, we also avoid callees
-  // which don't match the formal method given by the instruction exctly. We
+  // which don't match the formal method given by the instruction exactly. We
   // also don't want to attempt to partially inline an invoke-super instruction,
   // as this would make it necessary to track different versions of
   // partially-inlined code based on the invoke-instruction, as then the

@@ -7,7 +7,7 @@
 
 /*
  * This pass splits out methods that are not frequently called (see
- * method_profiles_appear_percent_threshold for the frequent threashold) from
+ * method_profiles_appear_percent_threshold for the frequent threshold) from
  * the cold-start dexes.
  *
  * The approach here is a new interdex plugin (with the possibility of running
@@ -60,7 +60,7 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
 
   UnorderedSet<DexMethod*> sufficiently_popular_methods;
   // Methods that appear in the profiles and whose frequency does not exceed
-  // the threashold.
+  // the threshold.
   UnorderedSet<DexMethod*> insufficiently_popular_methods;
 
   Scope scope = build_class_scope(stores);

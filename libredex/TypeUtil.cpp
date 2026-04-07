@@ -609,7 +609,7 @@ bool is_min_sdk_acceptable_impl(const DexType* source_type,
       *msg << "Filtering " << show(source_type) << " -> " << show(target_type)
            << " because " << show(cur_type) << "'s superclass is "
            << show(api.get_framework_classes().at(cur_type).super_cls)
-           << "in min-sdk but " << show(cls->get_super_class()) << " now.";
+           << " in min-sdk but " << show(cls->get_super_class()) << " now.";
       return false;
     }
     return true;

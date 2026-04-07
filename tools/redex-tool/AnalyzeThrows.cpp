@@ -137,7 +137,7 @@ void collect_throwing_blocks(DexMethod* meth, LogicalBlock& throwing_blocks) {
     }
   }
   if (blocks.size() == no_throw_blocks.size()) {
-    // I beleive this happens if a method throws and catches within
+    // I believe this happens if a method throws and catches within
     // the method, needs some investigation
     fprintf(stderr, "throw blocks reachable from return in %s\n", SHOW(meth));
     return;

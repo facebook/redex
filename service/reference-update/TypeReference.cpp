@@ -24,10 +24,9 @@ template <typename T>
 void assert_old_types_have_definitions(const T& old_to_new) {
   for (const auto& pair : UnorderedIterable(old_to_new)) {
     auto* cls = type_class(pair.first);
-    always_assert_log(
-        cls && cls->is_def(),
-        "\t[type-reference] Old type %s should have deffinition\n",
-        SHOW(pair.first));
+    always_assert_log(cls && cls->is_def(),
+                      "\t[type-reference] Old type %s should have definition\n",
+                      SHOW(pair.first));
   }
 }
 

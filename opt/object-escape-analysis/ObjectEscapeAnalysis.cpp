@@ -21,7 +21,7 @@
  *
  * This pass is conservative: Any use of an object allocation that isn't fully
  * understood, e.g. an external method invocation, causes that allocation to
- * become ineligable for optimization. In any case, this pass will not transform
+ * become ineligible for optimization. In any case, this pass will not transform
  * a root method with the no_optimizations annotation.
  *
  * The pass computes...

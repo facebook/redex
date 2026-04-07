@@ -14,9 +14,9 @@ namespace cfg {
 
 /**
  * RAII abstraction for accessing the Editable ControlFlowGraph for a given
- * IRCode instance.  Will create an CFG if one does not already exist,
+ * IRCode instance.  Will create a CFG if one does not already exist,
  * which will be cleared when the instance is cleaned up, whereas an existing
- * CFG will remaining after the instance is cleaned up.
+ * CFG will remain after the instance is cleaned up.
  */
 class ScopedCFG {
  public:

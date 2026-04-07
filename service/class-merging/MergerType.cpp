@@ -52,7 +52,7 @@ std::string get_type_name_tag(const DexType* root_type) {
     }
   }
   auto root_name_tag_str = root_name_tag.str();
-  // Apparantly, since we were traversing in reverse, we need to reverse the
+  // Apparently, since we were traversing in reverse, we need to reverse the
   // name tag string.
   // E.g., "esaBE" -> "EBase".
   std::reverse(root_name_tag_str.begin(), root_name_tag_str.end());

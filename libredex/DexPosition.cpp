@@ -280,7 +280,7 @@ void RealPositionMapper::process_pattern_switch_positions() {
   //
   // (some line): method Lredex/$Position;.switch:()V, line 101
   //
-  // Note that the callsite remain unchanged, still referencing the pattern-id,
+  // Note that the callsite remains unchanged, still referencing the pattern-id,
   // e.g.
   //
   // (some line): method Lredex/$Position;.pattern:()V, line 12345

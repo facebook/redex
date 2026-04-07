@@ -978,7 +978,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
       break;
     case SortMode::CLASS_STRINGS:
       TRACE(CUSTOMSORT, 2,
-            "Unsupport bytecode sorting method SortMode::CLASS_STRINGS");
+            "Unsupported bytecode sorting method SortMode::CLASS_STRINGS");
       break;
     case SortMode::METHOD_SIMILARITY:
       TRACE(CUSTOMSORT, 2, "using method similarity order");
@@ -1642,7 +1642,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
     // relocate data in order to improve locality. When relocating data it will
     // inflate debug information into an IR. This inflation currently doesn't
     // properly unique debug information that has already been inflated, and
-    // instead reinflates debug information everytime a method references it.
+    // instead reinflates debug information every time a method references it.
     // Internally this vector is
     // ${number of position entries in D} * ${number of methods referencing D
     // entries long for a given debug program D. Without this filtering we've
@@ -2341,7 +2341,7 @@ void DexOutput::generate_map() {
 /**
  * When things move around in redex, we might find ourselves in a situation
  * where a regular OPCODE_CONST_STRING is now referring to a jumbo string,
- * or vice versea. This fixup ensures that all const string opcodes agree
+ * or vice versa. This fixup ensures that all const string opcodes agree
  * with the jumbo-ness of their stridx.
  */
 static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {

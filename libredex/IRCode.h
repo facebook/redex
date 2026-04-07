@@ -155,7 +155,7 @@ class IRCode {
   // Build a Control Flow Graph
   //  * A CFG's blocks each own a small IRList (with
   //    MethodItemEntries taken from IRCode)
-  // Changes to an CFG are reflected in IRCode after `clear_cfg` is
+  // Changes to a CFG are reflected in IRCode after `clear_cfg` is
   // called. For cfg, it is only rebuilt when the flag
   // rebuild_even_if_already_built is true. Otherwise, the current
   // cfg will be kept.

@@ -208,7 +208,7 @@ struct Rebinder {
       TRACE(BIND, 4, "external %s", SHOW(real_ref));
       return;
     }
-    // If the rebind target is in the exluded external list, stop.
+    // If the rebind target is in the excluded external list, stop.
     if (is_external && is_excluded_external(show(real_ref))) {
       TRACE(BIND, 4, "excluded external %s", SHOW(real_ref));
       return;

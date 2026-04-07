@@ -50,7 +50,7 @@ static IROpcode opcode_for_interval(const sign_domain::Interval intv) {
   }
 }
 
-/* Insert an asssertion after \p it. This is only used in return value check.*/
+/* Insert an assertion after \p it. This is only used in return value check.*/
 static void insert_assertion(cfg::ControlFlowGraph& cfg,
                              cfg::InstructionIterator& it,
                              const DexMethod* member,

@@ -40,7 +40,7 @@
  * Background of synthetic switch map classes:
  *   javac converts enum switches to a packed switch. In order to do this, for
  *   every use of an enum in a switch statement, an anonymous class is generated
- *   in the class the switchis defined. This class will contain ONLY lookup
+ *   in the class the switch is defined. This class will contain ONLY lookup
  *   tables (array) as static fields and a static initializer.
  *
  * 2. Try to replace enum objects with boxed Integer objects based on static

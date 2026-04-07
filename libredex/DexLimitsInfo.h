@@ -49,7 +49,7 @@ class DexLimitsInfo {
   bool update_refs_by_adding_class(DexClass* cls);
   void update_refs_by_always_adding_class(DexClass* cls);
 
-  // Update the the refs when cls is removed from current dex.
+  // Update the refs when cls is removed from current dex.
   void update_refs_by_erasing_class(DexClass* cls);
 
   const DexStructure& get_dex() const { return m_dex; }

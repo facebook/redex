@@ -330,7 +330,7 @@ MergerType& Model::create_merger_helper(
   size_t group_count = m_shape_to_count[shape]++;
   UnorderedSet<size_t>& hash_cache = m_shape_hash_cache[shape];
   std::string name;
-  // If the interdex grouping option is disbled, we assume that the model can
+  // If the interdex grouping option is disabled, we assume that the model can
   // collapse nicely into a small set of merged shape classes. In this case, the
   // legacy naming scheme is more stable. The trailing hash of the mergeable set
   // is actually likely to make the shape symbol less stable.
@@ -680,7 +680,7 @@ void Model::map_fields(MergerType& merger,
   if (merger.field_count() == 0) {
     return;
   }
-  // for each mergeable type build order the field accroding to the
+  // for each mergeable type build order the field according to the
   // shape. The field order shape is implicit and defined by the shape itself
   for (const auto& type : classes) {
     TRACE(CLMG, 8, "Collecting fields for %s", SHOW(type));
@@ -996,7 +996,7 @@ void Model::distribute_virtual_methods(
       // the emitted code is correct. Virtual method refs can be rebound at a
       // later point.
       auto top_def = virt_scope->methods[0];
-      // We emit invoke_super agaist the overridden method by default in the
+      // We emit invoke_super against the overridden method by default in the
       // virtual dispatch. A non-external abstract method is not a valid target
       // for invoke-super, so we skip it.
       const auto get_initial_overridden = [](DexMethod* meth) -> DexMethod* {

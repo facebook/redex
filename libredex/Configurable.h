@@ -38,7 +38,7 @@ class DexType;
  *   // reflection
  *   std::string get_config_name() override { return "MyConfigurablePass"; }
  *
- *   // Override get_config_doc to provide a docoumentation string explaining
+ *   // Override get_config_doc to provide a documentation string explaining
  *   // the overall purpose of the Configurable (e.g. your pass)
  *   std::string get_config_doc() override {
  *     return "Shrink the app by doing xyz"
@@ -72,7 +72,7 @@ class Configurable {
       static constexpr int shift = 0;
       // mask for type bindflags
       static constexpr bindflags_t mask = {0xffL << shift};
-      // error or warn on unsresolvable types
+      // error or warn on unresolvable types
       static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
       static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};
     };
@@ -80,7 +80,7 @@ class Configurable {
       static constexpr int shift = 2;
       // mask for class bindflags
       static constexpr bindflags_t mask = {0xffL << shift};
-      // error or warn on unsresolvable classes
+      // error or warn on unresolvable classes
       static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
       static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};
     };
@@ -88,7 +88,7 @@ class Configurable {
       static constexpr int shift = 4;
       // mask for method bindflags
       static constexpr bindflags_t mask = {0xffL << shift};
-      // error or warn on unsresolvable methods
+      // error or warn on unresolvable methods
       static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
       static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};
       // error or warn if method is not a def

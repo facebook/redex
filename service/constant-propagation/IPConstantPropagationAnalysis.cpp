@@ -48,7 +48,7 @@ FixpointIterator::~FixpointIterator() {
 
 void FixpointIterator::analyze_node(call_graph::NodeId const& node,
                                     Domain* current_state) const {
-  auto args = current_state->get(CURRENT_PARTITION_LABEL); // intential copy
+  auto args = current_state->get(CURRENT_PARTITION_LABEL); // intentional copy
   current_state->set(CURRENT_PARTITION_LABEL, ArgumentDomain::bottom());
   always_assert(current_state->is_bottom());
 

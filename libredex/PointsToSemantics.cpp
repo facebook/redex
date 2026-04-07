@@ -1267,7 +1267,7 @@ class PointsToActionGenerator final {
   // naming.
   UnorderedMap<const IRInstruction*, PointsToVariable> m_anchors;
   // A table that keeps track of all disjunctions already created, so that we
-  // only generate one disjuction per anchor set.
+  // only generate one disjunction per anchor set.
   UnorderedMap<PointsToVariableSet,
                PointsToVariable,
                PointsToVariableSet::Hash,

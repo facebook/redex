@@ -140,7 +140,7 @@ void update_code_type_refs(
                                          &resolved_virtual_to_interface);
         // This is a very tricky case where ResolveRefs cannot resolve a
         // MethodRef to MethodDef. It is a invoke-virtual with a MethodRef
-        // referencing an interface method implmentation defined in a subclass
+        // referencing an interface method implementation defined in a subclass
         // of the referenced type. To resolve the actual def we need to go
         // through another interface method search. Maybe we should fix it in
         // ResolveRefs.
@@ -486,7 +486,7 @@ void fix_existing_merger_cls(const Model& model,
   cls->set_super_class(const_cast<DexType*>(model.get_parent(type)));
   TRACE(CLMG,
         5,
-        "create hierarhcy: updated DexClass from MergerType: %s",
+        "create hierarchy: updated DexClass from MergerType: %s",
         SHOW(cls));
 }
 

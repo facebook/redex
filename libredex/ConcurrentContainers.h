@@ -543,7 +543,7 @@ class ConcurrentHashtable final {
     std::stack<std::atomic<Ptr>*> locs;
     for (size_t i = 0; i < storage->size; ++i) {
       std::atomic<Ptr>* loc = &ptrs[i];
-      // Lock the bucket (or mark the bucket as moved if its empty). This might
+      // Lock the bucket (or mark the bucket as moved if it's empty). This might
       // fail due to a race with an insertion or erasure
       Ptr ptr = nullptr;
       Node* node = nullptr;

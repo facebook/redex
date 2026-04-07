@@ -611,7 +611,7 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
                   stats.replaced_gotos_with_throws);
   TRACE(RG, 1,
         "[reduce gotos] Replaced %zu gotos with returns, inverted %zu "
-        "conditional brnaches in total",
+        "conditional branches in total",
         stats.replaced_gotos_with_returns, stats.inverted_conditional_branches);
 }
 

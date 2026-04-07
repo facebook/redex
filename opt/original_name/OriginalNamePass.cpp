@@ -77,7 +77,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
 
   size_t store_id = 0;
   for (auto& store : stores) {
-    // Backup dex, in case we exceed field limits. We assuem there is at most 1
+    // Backup dex, in case we exceed field limits. We assume there is at most 1
     // new dex for each store.
     DexClasses new_dex;
     bool canary_inserted = false;

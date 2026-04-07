@@ -202,7 +202,7 @@ bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
             }
           } else {
             bool no_current_type = true;
-            // No need to check on methods whose class/argumetns are not
+            // No need to check on methods whose class/arguments are not
             // superclass or interface of ifield_cls.
             if (callee != nullptr &&
                 (parent_intf_set.count(callee->get_class()) == 0u)) {

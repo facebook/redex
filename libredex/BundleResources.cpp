@@ -1031,7 +1031,7 @@ std::string BundleResources::get_base_assets_dir() {
 }
 
 namespace {
-// Collect all resource ids referred in an given xml element.
+// Collect all resource ids referred in a given xml element.
 // attr->compiled_item->ref->id
 void collect_rids_for_element(const aapt::pb::XmlElement& element,
                               UnorderedSet<uint32_t>& result) {

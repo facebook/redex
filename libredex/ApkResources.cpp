@@ -2984,7 +2984,7 @@ ResourcesArscFile::get_inlinable_resource_values() {
   }
 
   // If a reference is found, check if the referenced value is inlinable and add
-  // it's actual value to the map (instead of the reference).
+  // its actual value to the map (instead of the reference).
   resources::resources_inlining_find_refs(past_refs, &inlinable_resources);
   return inlinable_resources;
 }

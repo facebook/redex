@@ -120,7 +120,7 @@ void build_refs(const Scope& scope, refs_t& class_refs) {
 }
 
 void verify(DexStoresVector& stores) {
-  // Buld references map and class-to-store map
+  // Build references map and class-to-store map
   refs_t class_refs;
   class_to_store_map_t cls_store_map;
   for (auto& store : stores) {

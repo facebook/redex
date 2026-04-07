@@ -27,7 +27,7 @@ void IntraDexClassMergingPass::bind_config() {
   bind("global_min_count",
        4,
        m_global_min_count,
-       "Ignore interface or class hierarchies with less than global_mint_count "
+       "Ignore interface or class hierarchies with less than global_min_count "
        "implementors or subclasses");
   bind("min_count",
        2,
@@ -76,7 +76,7 @@ void IntraDexClassMergingPass::bind_config() {
        m_reshuffle_config.extra_linear_alloc_limit,
        m_reshuffle_config.extra_linear_alloc_limit,
        "How many extra linear_alloc_limit to be reserved for the dexes "
-       "this pass rocesses.");
+       "this pass processes.");
   bind("max_batches",
        m_reshuffle_config.max_batches,
        m_reshuffle_config.max_batches,
