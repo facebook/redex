@@ -184,9 +184,9 @@ bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
   }
 
   const auto& cfg = m->get_code()->cfg();
-  DexField* delegate = nullptr;
 
   for (auto* block : cfg.blocks()) {
+    DexField* delegate = nullptr;
     for (const auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
       if (insn->opcode() == OPCODE_IGET_OBJECT) {
