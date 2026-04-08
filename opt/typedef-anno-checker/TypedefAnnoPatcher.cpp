@@ -445,17 +445,17 @@ void collect_return_candidates_impl(
 void PatchingCandidates::apply_patching(Stats& class_stats) {
   for (auto* field :
        unordered_to_ordered_keys(m_field_candidates, compare_dexfields)) {
-    auto* anno = m_field_candidates.at(field);
+    const auto* anno = m_field_candidates.at(field);
     add_annotation_impl(field, anno, class_stats);
   }
   for (auto* method :
        unordered_to_ordered_keys(m_method_candidates, compare_dexmethods)) {
-    auto* anno = m_method_candidates.at(method);
+    const auto* anno = m_method_candidates.at(method);
     add_annotation_impl(method, anno, class_stats);
   }
   for (auto& pc :
        unordered_to_ordered_keys(m_param_candidates, compare_param_candidate)) {
-    auto* anno = m_param_candidates.at(pc);
+    const auto* anno = m_param_candidates.at(pc);
     add_param_annotation(pc.method, anno, pc.index, class_stats);
   }
 }
@@ -769,7 +769,12 @@ void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
           if (field_anno == boost::none) {
             continue;
           }
-          add_param_annotation(ctor, *field_anno, param_idx - 2, class_stats);
+          // param_idx is 1-based (pre-incremented) and includes `this`.
+          // Subtract 2 to convert to 0-based index excluding `this`.
+          constexpr size_t kThisAndPreIncrementOffset = 2;
+          add_param_annotation(ctor, *field_anno,
+                               param_idx - kThisAndPreIncrementOffset,
+                               class_stats);
         }
       }
     }
