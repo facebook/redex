@@ -120,6 +120,7 @@ libredex_la_SOURCES = \
 	libredex/BundleResources.cpp \
 	libredex/CFGMutation.cpp \
 	libredex/CallGraph.cpp \
+	libredex/ChromeTraceWriter.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ClassUtil.cpp \
 	libredex/ClassChecker.cpp \

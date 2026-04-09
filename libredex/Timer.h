@@ -37,6 +37,13 @@ struct Timer {
   bool m_indent;
 };
 
+// Helper to record a chrome trace event without exposing ChromeTraceWriter
+// in this header. Defined in Timer.cpp.
+void maybe_record_chrome_trace(
+    const std::string& name,
+    std::chrono::high_resolution_clock::time_point start,
+    std::chrono::high_resolution_clock::time_point end);
+
 // An accumulating thread-safe timer with a scope-based approach.
 // Note: uses uint64_t microseconds to simplify and use optimized atomic.
 class AccumulatingTimer {

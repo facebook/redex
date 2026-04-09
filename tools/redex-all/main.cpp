@@ -38,6 +38,7 @@
 #include <boost/program_options/variables_map.hpp>
 
 #include "AggregateException.h"
+#include "ChromeTraceWriter.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h" // To set s_DEBUG.
@@ -118,6 +119,7 @@ struct Arguments {
   bool properties_check_allow_disabled{false};
   std::optional<std::string> assert_abort;
   std::optional<std::string> crash_file;
+  bool chrome_trace{false};
 };
 
 DEBUG_ONLY void dump_args(const Arguments& args) {
@@ -487,6 +489,11 @@ Arguments parse_args(int argc, char* argv[]) {
 
   od.add_options()("crash-file", po::value<std::string>(),
                    "Path to a file crash data should be written to.");
+  od.add_options()(
+      "chrome-trace",
+      "Write a Chrome Trace Event JSON file (redex-chrome-trace.json) to the "
+      "meta output directory for visualization in Perfetto or "
+      "chrome://tracing.");
 
   // For testing purposes.
   od.add_options()("assert-abort", po::value<std::string>(),
@@ -519,6 +526,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("crash-file") != 0u) {
     args.crash_file = vm["crash-file"].as<std::string>();
+  }
+
+  if (vm.count("chrome-trace") != 0u) {
+    args.chrome_trace = true;
   }
 
   if (vm.count("assert-abort") != 0u) {
@@ -564,7 +575,10 @@ Arguments parse_args(int argc, char* argv[]) {
     reflected_config["properties"] = reflect_property_definitions();
 
     std::cout << reflected_config << std::flush;
-    exit(EXIT_SUCCESS);
+    // Use _exit() to avoid running static destructors, which can crash
+    // when ConcurrentContainer destructors access already-destroyed
+    // AccumulatingTimer globals during exit() tear-down.
+    _exit(EXIT_SUCCESS);
   }
 
   if (vm.count("show-passes") != 0u) {
@@ -1901,6 +1915,11 @@ int check_pass_properties(const Arguments& args) {
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[]) {
+  // Start chrome tracing as early as possible so the epoch predates all
+  // timers. Will be disabled after argument parsing if --chrome-trace
+  // was not requested.
+  ChromeTraceWriter::init();
+
   signal(SIGABRT, debug_backtrace_handler);
   signal(SIGINT, debug_backtrace_handler);
   signal(SIGSEGV, crash_backtrace_handler);
@@ -1933,6 +1952,8 @@ int main(int argc, char* argv[]) {
       concurrent_container_destruction_scope;
 
   std::string stats_output_path;
+  std::optional<std::string> chrome_trace_path;
+  bool chrome_trace_enabled{false};
   Json::Value stats;
   double cpu_time_s;
 
@@ -1953,6 +1974,12 @@ int main(int argc, char* argv[]) {
     // TODO: Make the command line -jarpath option like a colon separated
     //       list of library JARS.
     Arguments args = parse_args(argc, argv);
+
+    if (args.chrome_trace) {
+      chrome_trace_enabled = true;
+    } else {
+      ChromeTraceWriter::disable();
+    }
 
     if (args.crash_file) {
       set_crash_fd(crash_file.open(*args.crash_file));
@@ -2100,6 +2127,10 @@ int main(int argc, char* argv[]) {
     stats_output_path = conf.metafile(
         args.config.get("stats_output", "redex-stats.txt").asString());
 
+    if (chrome_trace_enabled) {
+      chrome_trace_path = conf.metafile("redex-chrome-trace.json");
+    }
+
     const bool dump_strings =
         args.config.get("dump-string-locales", false).asBool();
     if (dump_strings) {
@@ -2134,6 +2165,10 @@ int main(int argc, char* argv[]) {
   {
     std::ofstream out(stats_output_path);
     out << stats;
+  }
+
+  if (chrome_trace_path) {
+    ChromeTraceWriter::write(*chrome_trace_path);
   }
 
   TRACE(MAIN, 1, "Done.");

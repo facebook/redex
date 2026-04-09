@@ -307,6 +307,8 @@ def run_redex_binary(
         args += ["--assert-abort", state.args.assert_abort]
     if state.args.assert_abort_thread:
         args += ["--assert-abort-thread", state.args.assert_abort_thread]
+    if state.args.chrome_trace:
+        args += ["--chrome-trace"]
 
     args += state.dexen
 
@@ -935,6 +937,13 @@ Given an APK, produce a better APK!
     parser.add_argument("--trace-class-name", type=str)
     parser.add_argument("--trace-method-name", type=str)
     parser.add_argument("--after-pass-trace-file", type=str)
+    parser.add_argument(
+        "--chrome-trace",
+        action="store_true",
+        default=False,
+        help="Write a Chrome Trace Event JSON file (redex-chrome-trace.json) to the "
+        "meta output directory for visualization in Perfetto or chrome://tracing.",
+    )
 
     # Extra args for redex binary.
     parser.add_argument("--redex-extra-args", action="append", default=[])

@@ -51,6 +51,7 @@ check_PROGRAMS = \
     cfg_inliner_test \
     cfg_mutation_test \
     cfg_positions_test \
+    chrome_trace_writer_test \
     class_checker_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
@@ -224,6 +225,8 @@ cfg_mutation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 cfg_positions_test_SOURCES = CFGPositionsTest.cpp
 cfg_positions_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+chrome_trace_writer_test_SOURCES = ChromeTraceWriterTest.cpp
 
 check_breadcrumbs_test_SOURCES = CheckBreadCrumbsTest.cpp
 

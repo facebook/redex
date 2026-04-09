@@ -8,8 +8,10 @@
 #include "Timer.h"
 
 #include <list>
+#include <thread>
 #include <utility>
 
+#include "ChromeTraceWriter.h"
 #include "Trace.h"
 
 int Timer::s_indent = 0;
@@ -43,7 +45,20 @@ Timer::~Timer() {
   TRACE(TIME, 1, "%*s%s completed in %.1lf seconds", 4 * s_indent, "",
         m_msg.c_str(), duration_s);
 
+  if (ChromeTraceWriter::enabled()) {
+    ChromeTraceWriter::record(m_msg, m_start, end, std::this_thread::get_id());
+  }
+
   Timer::add_timer(std::move(m_msg), duration_s);
+}
+
+void maybe_record_chrome_trace(
+    const std::string& name,
+    std::chrono::high_resolution_clock::time_point start,
+    std::chrono::high_resolution_clock::time_point end) {
+  if (ChromeTraceWriter::enabled()) {
+    ChromeTraceWriter::record(name, start, end, std::this_thread::get_id());
+  }
 }
 
 void Timer::add_timer(std::string msg, double dur_s) {
