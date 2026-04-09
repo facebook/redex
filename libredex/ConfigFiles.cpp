@@ -87,11 +87,30 @@ class StringTabSplitter {
 };
 
 void from_chars(std::string_view s, int64_t* res) {
-  // make 0-terminated, probably using small-string optimization
+  if (s.empty()) {
+    return; // keep default value
+  }
   std::string copy(s);
   char* endptr = nullptr;
   *res = strtol(copy.data(), &endptr, 10);
-  always_assert(endptr == copy.data() + copy.size());
+  if (endptr != copy.data() + copy.size()) {
+    // Non-numeric value (e.g. "null" from Hive NULL serialization).
+    // Treat as missing data and keep the struct default.
+    fprintf(stderr,
+            "[warning] dead_class_list: non-numeric value \"%s\", "
+            "treating as default\n",
+            copy.c_str());
+    return;
+  }
+}
+
+// Strip surrounding double quotes from a string_view, if present.
+std::string_view unquote(std::string_view s) {
+  if (s.size() >= 2 && s.front() == '"' && s.back() == '"') {
+    s.remove_prefix(1);
+    s.remove_suffix(1);
+  }
+  return s;
 }
 } // namespace
 
@@ -528,7 +547,7 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
                    line.end());
         DeadClassLoadCounts load_counts;
         StringTabSplitter splitter(line);
-        std::string_view classname = splitter.get();
+        std::string_view classname = unquote(splitter.get());
         const uint32_t k_num_remaining_columns = 5;
         std::array<int64_t*, k_num_remaining_columns> columns = {
             &load_counts.sampled, &load_counts.unsampled,
