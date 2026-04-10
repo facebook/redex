@@ -34,31 +34,6 @@ DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
   return def_method;
 }
 
-// The ModelGen class with the ModelDefinition annotation is the original
-// _Spec class that all the other classes ($Builder, $Serializer, $Deserializer,
-// etc.) are derived from. When we check a Parcel or Json read, we know that we
-// are either in the $Builder or $Deserializer class and need to derive the base
-// Spec class from the name
-bool is_model_gen(const DexMethod* m) {
-  DexType* type = m->get_class();
-  auto model_gen_cls_name =
-      type->str().substr(0, type->str().size() - 1) + "Spec;";
-  DexClass* cls = type_class(DexType::make_type(model_gen_cls_name));
-  if (cls == nullptr) {
-    // the class could end in $Builder or $Deserializer
-    auto model_gen_cls_name_from_builder =
-        type->str().substr(0, type->str().find('$')) + "Spec;";
-    cls = type_class(DexType::make_type(model_gen_cls_name_from_builder));
-  }
-  if ((cls == nullptr) || (cls->get_anno_set() == nullptr)) {
-    return false;
-  }
-  DexAnnotation* anno = get_annotation(
-      cls, DexType::make_type("Lcom/facebook/annotationprocessors/modelgen/"
-                              "iface/ModelDefinition;"));
-  return anno != nullptr;
-}
-
 struct MaybeParamName {
   std::optional<std::string_view> name;
   MaybeParamName(const DexMethod* method, size_t param_index)
@@ -617,7 +592,7 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
             .failed_instruction(def)
             .str();
       }
-      if (is_model_gen(m_method) || should_not_check(def_method)) {
+      if (should_not_check(def_method)) {
         break;
       }
       auto callees = resolve_callees(def_method);

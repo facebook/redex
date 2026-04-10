@@ -358,6 +358,14 @@ public class TypedefAnnoCheckerTest {
     return null;
   }
 
+  // Simulates the ModelGen pattern: an untyped source (like Parcel.readInt())
+  // passes a value to a typedef-annotated parameter. The checker should NOT
+  // flag this if the source class is in do_not_check_list.
+  static void testUntypedSourceToTypedSink() {
+    int val = UntypedSource.readInt();
+    testValidIntAnnoReturn(val);
+  }
+
   // Test that a boolean parameter returned as an IntDef that does NOT contain
   // both 0 and 1 is flagged as an error. The compiler optimizes `flag ? 1 : 0`
   // to use the boolean value directly, producing an IOPCODE_LOAD_PARAM def.

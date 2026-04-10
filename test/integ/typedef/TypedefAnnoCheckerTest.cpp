@@ -57,17 +57,24 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
       const Scope& scope,
       DexMethod* method,
       const method_override_graph::Graph& method_override_graph) {
+    return run_checker_with_config(scope, method, method_override_graph,
+                                   get_config());
+  }
+
+  TypedefAnnoChecker run_checker_with_config(
+      const Scope& scope,
+      DexMethod* method,
+      const method_override_graph::Graph& method_override_graph,
+      const TypedefAnnoCheckerPass::Config& config) {
     StrDefConstants strdef_constants;
     IntDefConstants intdef_constants;
-    TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+    TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(config);
     for (auto* cls : scope) {
       pass.gather_typedef_values(cls, strdef_constants, intdef_constants);
     }
 
-    TypedefAnnoChecker checker = TypedefAnnoChecker(strdef_constants,
-                                                    intdef_constants,
-                                                    get_config(),
-                                                    method_override_graph);
+    TypedefAnnoChecker checker = TypedefAnnoChecker(
+        strdef_constants, intdef_constants, config, method_override_graph);
     checker.run(method);
     return checker;
   }
@@ -688,6 +695,56 @@ TEST_F(TypedefAnnoCheckerTest, TestXORInvalidIntDef) {
               std::string::npos);
   EXPECT_TRUE(err_str.find("does not contain both the values 0 and 1") !=
               std::string::npos);
+}
+
+// Simulates the ModelGen pattern: an untyped source (like Parcel.readInt())
+// returns a raw value that flows into a typedef-annotated parameter. Without
+// do_not_check_list, the checker flags this. With the source class in
+// do_not_check_list, the checker skips it — the same mechanism that makes
+// is_model_gen redundant for real ModelGen code.
+TEST_F(TypedefAnnoCheckerTest, TestUntypedSourceWithoutSkip) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerTest;.testUntypedSourceToTypedSink:()V")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // Without do_not_check_list, the checker should flag UntypedSource.readInt()
+  // as not having the typedef annotation.
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_FALSE(checker.complete());
+  auto err_str = checker.error();
+  EXPECT_TRUE(err_str.find("UntypedSource") != std::string::npos);
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestUntypedSourceWithSkip) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerTest;.testUntypedSourceToTypedSink:()V")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // With UntypedSource in do_not_check_list, the checker should pass.
+  // This is the same mechanism that handles Parcel.readInt() for ModelGen.
+  // Set deobfuscated names so do_not_check_list prefix matching works
+  // (in production these are set by the obfuscation pipeline).
+  auto* read_int = DexMethod::get_method(
+                       "Lcom/facebook/redextest/UntypedSource;.readInt:()I")
+                       ->as_def();
+  ASSERT_NE(nullptr, read_int);
+  read_int->set_deobfuscated_name(show(read_int));
+
+  auto config = get_config();
+  config.do_not_check_list.insert("Lcom/facebook/redextest/UntypedSource;");
+  auto checker =
+      run_checker_with_config(scope, method, *method_override_graph, config);
+  EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
