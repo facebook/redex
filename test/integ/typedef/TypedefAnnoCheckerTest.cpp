@@ -1547,43 +1547,6 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVal) {
   EXPECT_TRUE(checker.complete());
 }
 
-TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalValInvalid) {
-  auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest;.testLambdaCallLocalValInvalid:()"
-          "Ljava/lang/String;")
-          ->as_def();
-
-  auto method_override_graph = mog::build_graph(scope);
-
-  auto* synth_method =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest$testLambdaCallLocalValInvalid$1;.invoke:()"
-          "Ljava/lang/String;")
-          ->as_def();
-
-  DexClass* synth_class = type_class(synth_method->get_class());
-  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
-
-  run_patcher(scope, *method_override_graph);
-
-  auto checker = run_checker(scope, method, *method_override_graph);
-  EXPECT_FALSE(checker.complete());
-  EXPECT_EQ(
-      checker.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalValInvalid:()Ljava/lang/String;\n\
-  at TypedefAnnoCheckerTest.kt:180\n\
-  the string value randomval does not have the typedef annotation  Linteg/TestStringDef; attached to it.\n\
-  Check that the value is annotated and exists in the typedef annotation class.\n\
-  failed instruction: CONST_STRING \"randomval\"\n\
-  Calling: Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testLambdaCallLocalValInvalid$1;.<init>:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)V\n\
-  Incorrect parameter: index 1($local_val)");
-}
-
 TEST_F(TypedefAnnoCheckerTest, TestClassConstructorDefaultArgs) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);
@@ -1801,45 +1764,6 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarInt) {
   EXPECT_TRUE(checker.complete());
 }
 
-TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntInvalid) {
-  auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I")
-          ->as_def();
-
-  auto method_override_graph = mog::build_graph(scope);
-
-  // set the deobfuscated name manually since it doesn't get set by default in
-  // integ tests
-  DexClass* synth_class = type_class(DexType::make_type(
-      "Lcom/facebook/redextest/"
-      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarIntInvalid$1;"));
-  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
-
-  run_patcher(scope, *method_override_graph);
-
-  auto checker = run_checker(scope, method, *method_override_graph);
-  EXPECT_FALSE(checker.complete());
-  EXPECT_EQ(
-      checker.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I\n\
-  at TypedefAnnoCheckerTest.kt:248\n\
-  the int value 7 does not have the typedef annotation  Linteg/TestIntDef; attached to it.\n\
-  Check that the value is annotated and exists in the typedef annotation class.\n\
-  failed instruction: CONST v1, 7\n\
- Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I\n\
-\n\
-TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I\n\
-  at TypedefAnnoCheckerTest.kt:250\n\
-  the int value 9 does not have the typedef annotation  Linteg/TestIntDef; attached to it.\n\
-  Check that the value is annotated and exists in the typedef annotation class.\n\
-  failed instruction: CONST v1, 9\n\
- Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I");
-}
-
 TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntDefault) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);
@@ -1862,45 +1786,6 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntDefault) {
 
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
-}
-
-TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntDefaultInvalid) {
-  auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerKtTest;."
-                     "testLambdaCallLocalVarIntDefaultInvalid:()I")
-                     ->as_def();
-
-  auto method_override_graph = mog::build_graph(scope);
-
-  // set the deobfuscated name manually since it doesn't get set by default in
-  // integ tests
-  DexClass* synth_class = type_class(DexType::make_type(
-      "Lcom/facebook/redextest/"
-      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarIntDefaultInvalid$1;"));
-  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
-
-  run_patcher(scope, *method_override_graph);
-
-  auto checker = run_checker(scope, method, *method_override_graph);
-  EXPECT_FALSE(checker.complete());
-  EXPECT_EQ(
-      checker.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I\n\
-  at TypedefAnnoCheckerTest.kt:272\n\
-  the int value 7 does not have the typedef annotation  Linteg/TestIntDef; attached to it.\n\
-  Check that the value is annotated and exists in the typedef annotation class.\n\
-  failed instruction: CONST v1, 7\n\
- Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I\n\
-\n\
-TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I\n\
-  at TypedefAnnoCheckerTest.kt:274\n\
-  the int value 9 does not have the typedef annotation  Linteg/TestIntDef; attached to it.\n\
-  Check that the value is annotated and exists in the typedef annotation class.\n\
-  failed instruction: CONST v1, 9\n\
- Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarString) {
@@ -1927,45 +1812,6 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarString) {
   EXPECT_TRUE(checker.complete());
 }
 
-TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringInvalid) {
-  auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerKtTest;."
-                     "testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;")
-                     ->as_def();
-
-  auto method_override_graph = mog::build_graph(scope);
-
-  // set the deobfuscated name manually since it doesn't get set by default in
-  // integ tests
-  DexClass* synth_class = type_class(DexType::make_type(
-      "Lcom/facebook/redextest/"
-      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarStringInvalid$1;"));
-  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
-
-  run_patcher(scope, *method_override_graph);
-
-  auto checker = run_checker(scope, method, *method_override_graph);
-  EXPECT_FALSE(checker.complete());
-  EXPECT_EQ(
-      checker.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;\n\
-  at TypedefAnnoCheckerTest.kt:200\n\
-  the string value seven does not have the typedef annotation  Linteg/TestStringDef; attached to it.\n\
-  Check that the value is annotated and exists in the typedef annotation class.\n\
-  failed instruction: CONST_STRING \"seven\"\n\
- Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;\n\
-\n\
-TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;\n\
-  at TypedefAnnoCheckerTest.kt:202\n\
-  the string value eight does not have the typedef annotation  Linteg/TestStringDef; attached to it.\n\
-  Check that the value is annotated and exists in the typedef annotation class.\n\
-  failed instruction: CONST_STRING \"eight\"\n\
- Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;");
-}
-
 TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringDefault) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);
@@ -1988,48 +1834,6 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringDefault) {
 
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
-}
-
-TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringDefaultInvalid) {
-  auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest;."
-          "testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;")
-          ->as_def();
-
-  auto method_override_graph = mog::build_graph(scope);
-
-  // set the deobfuscated name manually since it doesn't get set by default in
-  // integ tests
-
-  DexClass* synth_class = type_class(
-      DexType::make_type("Lcom/facebook/redextest/"
-                         "TypedefAnnoCheckerKtTest$"
-                         "testLambdaCallLocalVarStringDefaultInvalid$1;"));
-  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
-
-  run_patcher(scope, *method_override_graph);
-
-  auto checker = run_checker(scope, method, *method_override_graph);
-  EXPECT_FALSE(checker.complete());
-  EXPECT_EQ(
-      checker.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;\n\
-  at TypedefAnnoCheckerTest.kt:224\n\
-  the string value seven does not have the typedef annotation  Linteg/TestStringDef; attached to it.\n\
-  Check that the value is annotated and exists in the typedef annotation class.\n\
-  failed instruction: CONST_STRING \"seven\"\n\
- Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;\n\
-\n\
-TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;\n\
-  at TypedefAnnoCheckerTest.kt:226\n\
-  the string value eight does not have the typedef annotation  Linteg/TestStringDef; attached to it.\n\
-  Check that the value is annotated and exists in the typedef annotation class.\n\
-  failed instruction: CONST_STRING \"eight\"\n\
- Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestFunInterfaceSyntheticFields) {

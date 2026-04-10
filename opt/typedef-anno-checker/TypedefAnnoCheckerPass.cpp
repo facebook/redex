@@ -480,8 +480,11 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
   always_assert_log(has_int_vals ^ has_str_vals,
                     "%s has both str and int const values", SHOW(anno_class));
 
+  // Skip anonymous/lambda classes entirely. Kotlin generates synthetic code
+  // in these classes where typedef annotations are not preserved, leading to
+  // false positives that aren't worth the complexity of patching.
   auto* cls = type_class(m_method->get_class());
-  if (m_config.skip_anonymous_classes && klass::maybe_anonymous_class(cls)) {
+  if (klass::maybe_anonymous_class(cls)) {
     return std::nullopt;
   }
 

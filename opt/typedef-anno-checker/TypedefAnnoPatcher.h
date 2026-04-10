@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <mutex>
-
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "LiveRange.h"
@@ -41,25 +39,16 @@ struct Stats {
 
 struct PatcherStats {
   Stats fix_kt_enum_ctor_param;
-  Stats patch_lambdas;
   Stats patch_parameters_and_returns;
   Stats patch_synth_cls_fields_from_ctor_param;
-  Stats patch_enclosing_lambda_fields;
-  Stats patch_ctor_params_from_synth_cls_fields;
-  Stats patch_chained_getters;
 
   PatcherStats() = default;
 
   PatcherStats& operator+=(const PatcherStats& other) {
     fix_kt_enum_ctor_param += other.fix_kt_enum_ctor_param;
-    patch_lambdas += other.patch_lambdas;
     patch_parameters_and_returns += other.patch_parameters_and_returns;
     patch_synth_cls_fields_from_ctor_param +=
         other.patch_synth_cls_fields_from_ctor_param;
-    patch_enclosing_lambda_fields += other.patch_enclosing_lambda_fields;
-    patch_ctor_params_from_synth_cls_fields +=
-        other.patch_ctor_params_from_synth_cls_fields;
-    patch_chained_getters += other.patch_chained_getters;
     return *this;
   }
 };
@@ -144,32 +133,15 @@ class TypedefAnnoPatcher {
   void collect_return_candidates(DexMethod* method,
                                  PatchingCandidates& candidates);
 
-  void patch_enclosing_lambda_fields(const DexClass* cls, Stats& class_stats);
-
   void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor,
                                               Stats& class_stats,
                                               PatchingCandidates& candidates);
 
-  void patch_lambdas(DexMethod* method,
-                     std::vector<const DexField*>* patched_fields,
-                     PatchingCandidates& candidates);
-
-  void patch_ctor_params_from_synth_cls_fields(DexClass* cls,
-                                               Stats& class_stats);
-
   void fix_kt_enum_ctor_param(const DexClass* cls, Stats& class_stats);
-
-  void populate_chained_getters(DexClass* cls);
-  void patch_chained_getters(PatchingCandidates& candidates);
 
   UnorderedSet<const TypedefAnnoType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
   const size_t m_max_iteration;
-  ConcurrentMap<std::string, std::vector<const DexField*>> m_lambda_anno_map;
-  InsertOnlyConcurrentSet<std::string_view> m_patched_returns;
-  InsertOnlyConcurrentSet<DexClass*> m_chained_getters;
 
   PatcherStats m_patcher_stats;
-
-  std::mutex m_anno_patching_mutex;
 };
