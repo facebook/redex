@@ -1836,6 +1836,45 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringDefault) {
   EXPECT_TRUE(checker.complete());
 }
 
+// Tests that the patcher propagates typedef annotations from an interface
+// to a delegation class's forwarding method, so the checker passes.
+TEST_F(TypedefAnnoCheckerTest, TestDelegatePatternWithPatcher) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "DelegateTestHelper;.callDelegate:(I)V")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+// Tests the delegate forwarding method itself — the patcher propagates
+// the typedef annotation from the interface, so the checker passes when
+// verifying the return value of DelegatingClass.transform.
+TEST_F(TypedefAnnoCheckerTest, TestDelegateMethodWithPatcher) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "DelegatingClass;.transform:(I)I")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
 TEST_F(TypedefAnnoCheckerTest, TestFunInterfaceSyntheticFields) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);

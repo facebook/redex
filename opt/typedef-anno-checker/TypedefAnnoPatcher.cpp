@@ -425,25 +425,29 @@ void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
   }
 }
 
-// https://kotlinlang.org/docs/fun-interfaces.html#sam-conversions
-// SAM conversions appear in Kotlin and provide a more concise way to override
-// methods. This function collects annotation candidates for synthetic methods
-// that override methods with return or parameter annotations.
+// If a method overrides an interface/base method that has typedef annotations,
+// propagate those annotations to the overriding method. This covers SAM
+// conversions, Kotlin delegation on named classes, and any other case where
+// the implementation method lacks annotations that the interface declares.
 void TypedefAnnoPatcher::collect_overriding_method_candidates(
     DexMethod* m, PatchingCandidates& candidates) {
-  DexClass* cls = type_class(m->get_class());
-  if (!klass::maybe_anonymous_class(cls)) {
+  auto overriddens = mog::get_overridden_methods(m_method_override_graph, m,
+                                                 true /*include_interfaces*/);
+  if (overriddens.empty()) {
     return;
   }
 
-  auto overriddens = mog::get_overridden_methods(m_method_override_graph, m,
-                                                 true /*include_interfaces*/);
+  auto existing_return =
+      type_inference::get_typedef_anno_from_member(m, m_typedef_annos);
+
   for (const auto* overridden : UnorderedIterable(overriddens)) {
-    // Collect return annotation candidate.
-    auto return_anno = type_inference::get_typedef_anno_from_member(
-        overridden, m_typedef_annos);
-    if (return_anno != boost::none) {
-      candidates.add_method_candidate(m, *return_anno);
+    if (existing_return == boost::none) {
+      auto return_anno = type_inference::get_typedef_anno_from_member(
+          overridden, m_typedef_annos);
+      if (return_anno != boost::none) {
+        candidates.add_method_candidate(m, *return_anno);
+        existing_return = return_anno;
+      }
     }
 
     // Collect parameter annotation candidates.
@@ -455,6 +459,16 @@ void TypedefAnnoPatcher::collect_overriding_method_candidates(
           anno_set->get_annotations(), m_typedef_annos);
       if (annotation == boost::none) {
         continue;
+      }
+      // Skip if this param already has a typedef annotation.
+      if (m->get_param_anno() != nullptr &&
+          m->get_param_anno()->count(param_idx) == 1) {
+        auto existing = type_inference::get_typedef_annotation(
+            m->get_param_anno()->at(param_idx)->get_annotations(),
+            m_typedef_annos);
+        if (existing != boost::none) {
+          continue;
+        }
       }
       candidates.add_param_candidate(m, *annotation, param_idx);
     }

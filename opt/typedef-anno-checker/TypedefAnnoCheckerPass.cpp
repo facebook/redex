@@ -147,65 +147,13 @@ bool TypedefAnnoChecker::should_not_check(const DexMethod* m) const {
   return false;
 }
 
-bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
-  auto* cls = type_class(m->get_class());
-  if (cls == nullptr) {
-    return false;
-  }
-  DexTypeList* interfaces = cls->get_interfaces();
-
-  if (interfaces->empty()) {
-    return false;
-  }
-
-  const auto& cfg = m->get_code()->cfg();
-
-  for (auto* block : cfg.blocks()) {
-    DexField* delegate = nullptr;
-    for (const auto& mie : InstructionIterable(block)) {
-      auto* insn = mie.insn;
-      if (insn->opcode() == OPCODE_IGET_OBJECT) {
-        DexField* field = insn->get_field()->as_def();
-        if (field == nullptr) {
-          continue;
-        }
-        // find methods that delegate with $$delegate_ P1697234372
-        if (field->get_simple_deobfuscated_name().starts_with("$$delegate_")) {
-          delegate = field;
-        } else {
-          // find methods that delegate without $$delegate_ P1698648093
-          // the field type must match one of the interfaces
-          for (const auto* interface : *interfaces) {
-            if (interface->get_name() == field->get_type()->get_name()) {
-              delegate = field;
-            }
-          }
-        }
-      } else if (opcode::is_an_invoke(insn->opcode()) &&
-                 (delegate != nullptr)) {
-        auto* callee = insn->get_method()->as_def();
-        if (callee == nullptr) {
-          continue;
-        }
-        if (m->get_simple_deobfuscated_name() ==
-                callee->get_simple_deobfuscated_name() &&
-            m->get_proto() == callee->get_proto()) {
-          TRACE(TAC, 2, "skipping delegate method %s", SHOW(m));
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
 void TypedefAnnoChecker::run(DexMethod* m) {
   IRCode* code = m->get_code();
   if (code == nullptr) {
     return;
   }
 
-  if (is_value_of_opt(m) || is_delegate(m) || is_generated(m)) {
+  if (is_value_of_opt(m) || is_generated(m)) {
     return;
   }
 

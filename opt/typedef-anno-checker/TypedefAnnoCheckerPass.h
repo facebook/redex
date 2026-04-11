@@ -125,7 +125,6 @@ class TypedefAnnoChecker {
 
  private:
   bool is_value_of_opt(const DexMethod* m);
-  bool is_delegate(const DexMethod* m);
   bool is_generated(const DexMethod* m) const;
   bool should_not_check(const DexMethod* m) const;
 
