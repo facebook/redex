@@ -101,7 +101,7 @@ struct CaseKeysExtent {
   static CaseKeysExtent from_ordered(const std::vector<int32_t>& case_keys);
 
   // Computes number of entries needed for a packed switch, accounting for any
-  // holes that might exist; assumes case_keys are sorted
+  // holes that might exist
   uint64_t get_packed_switch_size() const;
 
   // Whether a sparse switch statement will be more compact than a packed switch

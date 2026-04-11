@@ -164,7 +164,7 @@ class Configurable {
     bool is_required;
     bindflags_t bindflags;
 
-    // n.b. make this a std::variant after c++17
+    // TODO: convert this to std::variant
     Type type;
     std::tuple<std::string, Reflection> variant;
     Json::Value default_value;

@@ -544,7 +544,7 @@ void TransitiveClosureMarkerWorker::push_if_class_retained(
     return;
   }
   TRACE(REACH, 4,
-        "Conditionally marking method if declaring class is instantiable: %s",
+        "Conditionally marking method if declaring class is retained: %s",
         SHOW(method));
   auto* clazz = type_class(method->get_class());
   m_shared_state->cond_marked->if_class_retained.methods.insert(method);
@@ -559,7 +559,7 @@ void TransitiveClosureMarkerWorker::push_if_class_retained(
     return;
   }
   TRACE(REACH, 4,
-        "Conditionally marking field if declaring class is instantiable: %s",
+        "Conditionally marking field if declaring class is retained: %s",
         SHOW(field));
   auto* clazz = type_class(field->get_class());
   m_shared_state->cond_marked->if_class_retained.fields.insert(field);

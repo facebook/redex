@@ -809,7 +809,10 @@ std::string show_opcode(const DexInstruction* insn, bool deobfuscated = false) {
   case DOPCODE_REM_DOUBLE_2ADDR:
     return "rem-double/2addr";
   case DOPCODE_IGET_QUICK:
-    return "add-double/2addr";
+    ss << "iget-quick ";
+    ss << show_field(dynamic_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
   case DOPCODE_IGET_WIDE_QUICK:
     ss << "iget-wide-quick ";
     ss << show_field(dynamic_cast<const DexOpcodeField*>(insn)->get_field(),

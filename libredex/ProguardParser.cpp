@@ -248,7 +248,7 @@ std::string parse_target(TokenIndex& idx) {
               << idx.show_context(2) << '\n';
     return "";
   }
-  return idx.str_next(); // Consume the filepath token
+  return idx.str_next(); // Consume the version token
 }
 
 std::vector<std::string> parse_filter_list_command(TokenIndex& idx) {

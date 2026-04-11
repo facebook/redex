@@ -173,8 +173,6 @@ size_t compute_conditionally_pure_methods(
 // state and only call other methods which do not have side effects.
 // The return value indicates how many iterations the fixed-point computation
 // required.
-// The return value indicates how many iterations the fixed-point computation
-// required.
 size_t compute_no_side_effects_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,

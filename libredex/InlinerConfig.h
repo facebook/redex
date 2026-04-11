@@ -94,10 +94,10 @@ struct InlinerConfig {
   uint64_t max_relevant_invokes_when_local_only{10};
 
   /**
-   * 1. Derive blocklist/caller_blocklist/intradex_allowlist/no_inline_allowlist
+   * 1. Derive blocklist/caller_blocklist/intradex_allowlist/no_inline_blocklist
    *    from patterns.
    * 2. Set rstate of classes and methods if they are annotated by any
-   *    no_inline_annos, force_inline_anno, or match no_inline_allowlist.
+   *    no_inline_annos, force_inline_annos, or match no_inline_blocklist.
    */
   void populate(const Scope& scope);
 
