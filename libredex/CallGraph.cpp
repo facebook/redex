@@ -128,7 +128,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
   auto& roots = root_and_dynamic.roots;
   auto& dynamic_methods = root_and_dynamic.dynamic_methods;
   // Gather clinits and root methods, and the methods that override or
-  // overriden by the root methods.
+  // overridden by the root methods.
   auto add_root_method_overrides = [&roots](const DexMethod* method) {
     if ((method->get_code() == nullptr) || root(method) ||
         method->is_external()) {
@@ -149,7 +149,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
         !is_method_dynamic) {
       // For root methods and dynamically added classes, created via
       // Proxy.newProxyInstance, we need to add them and their overrides and
-      // overriden to roots.
+      // overridden to roots.
       return;
     }
     if (is_method_dynamic) {
@@ -251,7 +251,7 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
                           can_rename(method))) {
       // For root methods and dynamically added classes, created via
       // Proxy.newProxyInstance, we need to add them and their overrides and
-      // overriden to roots.
+      // overridden to roots.
       return;
     }
     const auto& overriding_methods =

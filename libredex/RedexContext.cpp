@@ -825,7 +825,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
     } else {
       // We are about to change its class. Use a better name to remember its
       // original source class on a collision. Tokenize the class name into
-      // parts, and use them until no more collison.
+      // parts, and use them until no more collision.
       //
       // "com/facebook/foo/Bar;" => {"com", "facebook", "foo", "Bar"}
       std::string cls_name = show_deobfuscated(old_spec.cls);

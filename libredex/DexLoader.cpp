@@ -672,7 +672,7 @@ void DexLoader::gather_input_stats() {
             break;
           default:
             // These are special opcodes. We separate them out to the default
-            // case to show we're properly interpretting this program.
+            // case to show we're properly interpreting this program.
             break;
           }
         }
@@ -795,7 +795,7 @@ void DexLoader::load_dex() {
           try {
             load_dex_class(static_cast<int>(num));
           } catch (const std::exception& exc) {
-            TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
+            TRACE(MAIN, 1, "Worker threw the exception:%s", exc.what());
             std::lock_guard<std::mutex> lock_guard(all_exceptions_mutex);
             all_exceptions.emplace_back(std::current_exception());
           }

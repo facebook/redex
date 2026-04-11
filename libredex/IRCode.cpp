@@ -501,7 +501,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
 
 /**
  * Map the `DexPositions` to a newly created clone. At the same time, it
- * preserves the relationship between a position and it's parent.
+ * preserves the relationship between a position and its parent.
  */
 UnorderedMap<DexPosition*, std::unique_ptr<DexPosition>>
 get_old_to_new_position_copies(IRList* ir_list) {

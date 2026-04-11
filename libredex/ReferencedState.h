@@ -84,7 +84,7 @@ class ReferencedState {
         // native -> Java references from Java -> native refs.
         bool m_by_string : 1;
 
-        // Is this member is a kotlin class
+        // Is this member a kotlin class
         bool m_is_kotlin : 1;
         // This may be set on classes, indicating that its static initializer
         // has no side effects.
@@ -317,7 +317,7 @@ class ReferencedState {
            !inner_struct.m_name_used;
   }
 
-  // \returns true if the current class' renamable satus has been set.
+  // \returns true if the current class' renamable status has been set.
   bool is_renamable_initialized() const {
     return inner_struct.m_renamable_initialized;
   }

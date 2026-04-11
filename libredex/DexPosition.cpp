@@ -426,7 +426,7 @@ void RealPositionMapper::write_map_v2() {
 
   std::ofstream ofs(m_filename_v2.c_str(),
                     std::ofstream::out | std::ofstream::trunc);
-  uint32_t magic = 0xfaceb000; // serves as endianess check
+  uint32_t magic = 0xfaceb000; // serves as endianness check
   ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
   uint32_t version = 2;
   ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));

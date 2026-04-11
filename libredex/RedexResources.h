@@ -316,7 +316,7 @@ std::string convert_utf8_to_mutf8(std::string_view input);
 // A convenient wrapper to allow convert_utf8_to_mutf8 to be used with u8"foo"
 // string literals.
 std::string convert_utf8_to_mutf8(std::u8string_view input);
-// Given a map of a id which holds a reference value, and the id that the
+// Given a map of an id which holds a reference value, and the id that the
 // reference points to, along with all the past found inlinable values, for each
 // id in past_refs, if it is inlinable, adds it to inlinable_resources with the
 // value that it's reference holds
@@ -454,9 +454,9 @@ class ResourceTableFile {
   virtual void finalize_resource_table(const ResourceConfig& config);
 
   // Returns any file paths from entries in the given ID. A non-existent ID or
-  // an for which all values are not files will return an empty vector.
+  // one for which all values are not files will return an empty vector.
   // NOTE: callers should be resilient against duplicate file paths being
-  // returned, which could concievably exist.
+  // returned, which could conceivably exist.
   virtual std::vector<std::string> get_files_by_rid(
       uint32_t res_id,
       ResourcePathType path_type = ResourcePathType::DevicePath) = 0;
@@ -489,7 +489,7 @@ class ResourceTableFile {
 
   // For a given resource ID, find all string values that the ID could represent
   // across all configurations (including chasing down references).
-  // NOTE: in case of supplimental characters in string values, UTF-8 standard
+  // NOTE: in case of supplemental characters in string values, UTF-8 standard
   // encoding will be returned, so that the caller will have a consistent
   // behavior regardless of apk / aab container formats.
   virtual void resolve_string_values_for_resource_reference(

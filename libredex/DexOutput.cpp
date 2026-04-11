@@ -753,7 +753,7 @@ void DexOutput::insert_map_item(uint16_t maptype,
 
 void DexOutput::generate_string_data(SortMode mode) {
   /*
-   * This is a index to position within the string data.  There
+   * This is an index to position within the string data.  There
    * is no specific ordering specified here for the dex spec.
    * The optimized sort here would be different than the one
    * for the symbol table.  The symbol table should be packed
@@ -1516,7 +1516,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
   std::map<uint32_t, DebugMethodMap> param_to_sizes;
   UnorderedMap<const DexMethod*, DebugMetadata> method_to_debug_meta;
   // We need this to calculate the size of normal debug programs for each
-  // method. Hopefully no debug program is > 128k. Its ok to increase this
+  // method. Hopefully no debug program is > 128k. It's ok to increase this
   // in the future.
   constexpr int TMP_SIZE = 128 * 1024;
   auto temporary_buffer = std::make_unique<uint8_t[]>(TMP_SIZE);

@@ -14,7 +14,7 @@
  *
  * This is preferred over using std::mutex or std::atomic<T> directly because:
  *
- * - This class is lock free and hence doesn't bare the cost of
+ * - This class is lock free and hence doesn't bear the cost of
  *   locking/unlocking a mutex.
  * - Most atomic operations in std::atomic<T> (if not used carefully) and
  *   locking/unlocking in std::mutex incurs a memory fence, which is unnecessary
@@ -25,7 +25,7 @@
  * though this class is lock-free, atomic operations still bear extra cost,
  * which is unnecessary in single-threaded scenarios. For multi-threaded stat
  * counting, it's usually more efficient than this class to use the walker
- * pattern, where each thread count stats separately, which then get sumed up
+ * pattern, where each thread count stats separately, which then get summed up
  * after joining threads.
  *
  * Its APIs follow the same semantics as those of std::atomic<T>. But they

@@ -693,7 +693,7 @@ class walk {
     }
 
     // Call `walker` on all given virtual scopes in parallel.
-    //   WalkerFn should `const VirtualScope*`.
+    //   WalkerFn should accept `const VirtualScope*`.
     template <class VirtualScopes, typename WalkerFn>
     static void virtual_scopes(
         const VirtualScopes& virtual_scopes,

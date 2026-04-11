@@ -395,7 +395,7 @@ const Node& Graph::get_node(const DexMethod* method) const {
 
 void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
   // The type-class lookup should only ever fail during testing if the
-  // environment isn't fully build up.
+  // environment isn't fully built up.
   auto may_be_interface = [](DexType* t) {
     auto* cls = type_class(t);
     return (cls == nullptr) || is_interface(cls);

@@ -824,7 +824,7 @@ class ConcurrentHashtable final {
 };
 
 /*
- * Helper class to represent result of an (attmpted) insertion. What's
+ * Helper class to represent result of an (attempted) insertion. What's
  * interesting is that even when insertion fails, because a value with the same
  * key is already present in the hashtable, a new value might have been
  * incidentally constructed, possibly moving the supplied arguments in the
@@ -970,7 +970,7 @@ class ConcurrentContainerConcurrentDestructionScope {
 /*
  * This class implements the common functionalities of concurrent sets and maps.
  * A concurrent container is a collection of a ConcurrentHashtable
- * (providing functionality similar yo unordered_map/unordered_set) arranged in
+ * (providing functionality similar to unordered_map/unordered_set) arranged in
  * slots. Whenever a thread performs a concurrent operation on an element, the
  * slot is uniquely determined by the hash code of the element. A sharded lock
  * is obtained if the operation in question cannot be performed lock-free. A
@@ -1323,10 +1323,10 @@ class ConcurrentContainer {
  * values.
  *
  * Compared to other concurrent datatypes, the ConcurrentMap has additional
- * overhead: It maintains another set mutexes, one per slot, and even reading a
- * value safely requires aquiring a lock.
+ * overhead: It maintains another set of mutexes, one per slot, and even reading
+ * a value safely requires acquiring a lock.
  *
- * Prefer using an InsertOnlyConcurrentMap or an AtomicMap when possibly:
+ * Prefer using an InsertOnlyConcurrentMap or an AtomicMap when possible:
  * - InsertOnlyConcurrentMap more clearly conveys the possible intent of an
  * insertion-only map whose elements cannot be mutated, and it allows safely
  * reading values without requiring copying them under a lock.

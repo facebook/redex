@@ -341,7 +341,7 @@ bool Block::is_unreachable() const {
     }
     block = block->goes_to_only_edge();
   }
-  // We hit a non-terminating loop; that doesn't make this this unreachable.
+  // We hit a non-terminating loop; that doesn't make this unreachable.
   return false;
 }
 

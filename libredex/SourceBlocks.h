@@ -221,7 +221,7 @@ struct InsertResult {
 // Source data for a profile = interaction. Three options per interactions:
 // * Nothing (std::nullopt)
 // * A string that denotes a serialized profile, and an error value, in case
-//   the profile does nto match the CFG.
+//   the profile does not match the CFG.
 // * A general default value.
 using ProfileData =
     std::variant<std::nullopt_t,

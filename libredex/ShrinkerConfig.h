@@ -34,7 +34,7 @@ struct ShrinkerConfig {
   std::string reg_alloc_random_forest;
 
   // Internally used option that decides whether to analyze constructors to find
-  // immutable attributes (only relevant when using constant-propagaation).
+  // immutable attributes (only relevant when using constant-propagation).
   bool analyze_constructors{false};
 };
 

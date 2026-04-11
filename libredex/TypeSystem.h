@@ -159,7 +159,7 @@ class TypeSystem {
   /**
    * Return the set of every parent interface of a given interface.
    * The type must be an interface (not a class).
-   * The direct list of interfaces implemented can be retrived in the
+   * The direct list of interfaces implemented can be retrieved in the
    * DexClass.
    */
   void get_all_super_interfaces(const DexType* intf, TypeSet& supers) const;

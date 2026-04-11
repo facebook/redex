@@ -1787,7 +1787,7 @@ std::string escape_string(const char* ptr) {
     } else {
       char32_t code_point = unit;
       // Despite the name "mutf8_next_code_point" does not return code points,
-      // it return code units. Munge together surrogate pairs if need be.
+      // it returns code units. Munge together surrogate pairs if need be.
       if (unit >= 0xD800 && unit <= 0xDFFF) {
         code_point = (unit - 0xD800) * 0x400;
         uint32_t low_unit = mutf8_next_code_point(ptr);

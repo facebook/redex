@@ -72,7 +72,7 @@ void InlinerConfig::bind_config() {
        "across classes. Avoid this annotation, prefer using "
        "no_inline_blocklist.");
   bind("caller_blocklist", {}, caller_blocklist,
-       "Any method defined in a class matching any given prefix will not t "
+       "Any method defined in a class matching any given prefix will not be "
        "inlined at all callsite if possible. This is problematic as Redex may "
        "move methods across classes.");
   bind("intradex_allowlist", {}, intradex_allowlist,

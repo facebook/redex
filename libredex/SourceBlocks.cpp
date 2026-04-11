@@ -479,7 +479,7 @@ struct CustomValueInsertHelper {
   struct FuzzingMetadata {
     uint32_t indegrees{0};
     uint32_t insertion_id{0};
-    bool has_values{false}; // to check if a block has had it's values filled in
+    bool has_values{false}; // to check if a block has had its values filled in
     bool should_be_hot{false}; // to check if a block should be set as hot, used
                                // if a pred is hot and wants to set at least one
                                // succ to hot. If this false, the source block

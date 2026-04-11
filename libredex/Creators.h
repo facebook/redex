@@ -120,12 +120,12 @@ struct MethodBlock {
               const std::vector<Location>& args);
 
   /**
-   * new-instance; instatiate 'type' into dst location.
+   * new-instance; instantiate 'type' into dst location.
    */
   void new_instance(DexType* type, Location& dst);
 
   /**
-   * new-array; instatiate an array 'type' of 'size' into dst location.
+   * new-array; instantiate an array 'type' of 'size' into dst location.
    */
   void new_array(DexType* type, const Location& size, const Location& dst);
 
@@ -309,7 +309,7 @@ struct MethodBlock {
    * else_label:
    *   code3     <-- else_block points here
    *   code4
-   *   got end_if_label // emitted automatically
+   *   goto end_if_label // emitted automatically
    */
   MethodBlock* if_else_test(IROpcode if_op,
                             Location first,
@@ -331,7 +331,7 @@ struct MethodBlock {
    * else_label:
    *   code3     <-- else_block points here
    *   code4
-   *   got end_if_label // emitted automatically
+   *   goto end_if_label // emitted automatically
    */
   MethodBlock* if_else_testz(IROpcode if_op,
                              Location test,

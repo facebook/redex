@@ -45,7 +45,7 @@ void write_array(std::ostream& os, const Container& container) {
  * all our binary files.
  */
 inline void write_header(std::ostream& os, uint32_t version) {
-  uint32_t magic = 0xfaceb000; // serves as endianess check
+  uint32_t magic = 0xfaceb000; // serves as endianness check
   write(os, magic);
   write(os, version);
 }

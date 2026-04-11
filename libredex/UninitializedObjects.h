@@ -25,7 +25,7 @@ using UninitializedObjectEnvironment =
 using UninitializedObjectEnvironments =
     UnorderedMap<const IRInstruction*, UninitializedObjectEnvironment>;
 
-// For each instruction, ånd each incoming register, determine if it may contain
+// For each instruction, and each incoming register, determine if it may contain
 // an uninitialized object, i.e. one that was created or passed in via the
 // receiver argument of a constructor, and no invoke-direct to a constructor
 // happened yet.

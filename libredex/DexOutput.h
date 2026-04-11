@@ -210,7 +210,7 @@ inline bool compare_dexmethodhandles(const DexMethodHandle* a,
  * example, DexField contains both a DexType (m_type) and a DexString (m_name).
  * Even though DexType also contains a string, DexField::gather_strings will
  * only gather m_name; it does not follow m_type to find more strings.  This
- * design simplifies the implentation of the gather methods since it breaks
+ * design simplifies the implementation of the gather methods since it breaks
  * cycles in the reference graph, but it makes finding a "complete" set more
  * involved.  To gather all strings, for instance, one must not only gather all
  * strings at the class level, but also gather strings for all types discovered

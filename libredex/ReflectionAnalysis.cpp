@@ -565,7 +565,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       auto obj = aobj.get_object();
       // Append the referenced type here to the potential dex types list.
       // Doing this increases the type information we have at the reflection
-      // site. It's up to the user of the analysis  how to interpret this
+      // site. It's up to the user of the analysis how to interpret this
       // information.
       if (obj && (obj->is_object()) && (obj->dex_type != nullptr)) {
         const auto* dex_type = insn->get_type();

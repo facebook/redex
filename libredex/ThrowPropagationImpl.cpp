@@ -83,7 +83,7 @@ bool ThrowPropagator::check_if_dead_code_present_and_prepare_block(
     // throwing instructions in the middle of the existing block, but that
     // causes complications due to the possibly following and then dangling
     // move-result instruction, so we'll explicitly split the block here
-    // in order to keep all invariant happy.)
+    // in order to keep all invariants happy.)
     if (will_throw_or_not_terminate_or_unreachable(cfg_it)) {
       // As above, nothing to do, since an exception will be thrown anyway.
       return false;

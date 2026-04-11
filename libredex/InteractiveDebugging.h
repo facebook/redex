@@ -20,7 +20,7 @@ using BlockId = size_t;
 // namespace cfg
 class IRCode;
 
-// The following APIs are intended to be called from the debugger (athough
+// The following APIs are intended to be called from the debugger (although
 // there's no harm calling them from internal code if desired).
 // __attribute__((used)) is important so that the linker does not discard them,
 // as they may not be referenced by any other code.  Consider making LLDB

@@ -312,7 +312,7 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   if (!input) {
     throw RedexException(
         RedexError::INVALID_BETAMAP,
-        "[error] Can not open <coldstart_classes> file, path is "s +
+        "[error] Cannot open <coldstart_classes> file, path is "s +
             m_coldstart_class_filename);
   }
 
@@ -447,7 +447,7 @@ std::vector<std::string> ConfigFiles::load_coldstart_methods() {
   if (!input) {
     throw RedexException(
         RedexError::INTERNAL_ERROR,
-        "[error] Can not open <coldstart_meth_ordering> file, path is "s +
+        "[error] Cannot open <coldstart_meth_ordering> file, path is "s +
             m_coldstart_methods_filename);
   }
 
@@ -537,7 +537,7 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
       std::ifstream input(dead_class_list_filename);
       if (!input) {
         fprintf(stderr,
-                "[error] Can not open <dead_class_list> file, path is %s\n",
+                "[error] Cannot open <dead_class_list> file, path is %s\n",
                 dead_class_list_filename.c_str());
         exit(EXIT_FAILURE);
       }
@@ -593,10 +593,9 @@ void ConfigFiles::build_halfnosis_block_list() {
     if (!halfnosis_block_list_filename.empty()) {
       std::ifstream input(halfnosis_block_list_filename);
       if (!input) {
-        fprintf(
-            stderr,
-            "[error] Can not open <halfnosis_block_list> file, path is %s\n",
-            halfnosis_block_list_filename.c_str());
+        fprintf(stderr,
+                "[error] Cannot open <halfnosis_block_list> file, path is %s\n",
+                halfnosis_block_list_filename.c_str());
         exit(EXIT_FAILURE);
       }
       for (std::string line; std::getline(input, line);) {

@@ -239,7 +239,7 @@ bool load(const std::string& input_dir) {
   std::string input_file = input_dir + IRMETA_FILE_NAME;
   std::ifstream istrm(input_file, std::ios::binary | std::ios::in);
   if (!istrm.is_open()) {
-    std::cerr << "Can not open " << input_file << std::endl;
+    std::cerr << "Cannot open " << input_file << std::endl;
     return false;
   }
 

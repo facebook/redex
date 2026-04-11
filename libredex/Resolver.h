@@ -38,7 +38,7 @@ enum class MethodSearch {
                    // method. Fallback to interface search when virtual search
                    // failed.
                    // This is added because we don't have Miranda methods in
-                   // Redex but this case exist:
+                   // Redex but this case exists:
                    // Interface a { something(); }
                    // class b implements a {}
                    // class c extends b { something(){} }

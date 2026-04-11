@@ -68,7 +68,7 @@
  * ultimate escape mechanism to expose the raw unordered collection, or simply
  * passes through any other collection. Use at your own risk.
  *
- * The new unordered collection wrapper types  doesn't provide wrappers for all
+ * The new unordered collection wrapper types don't provide wrappers for all
  * members yet; filling that in is a work-in-progress.
  *
  * TODO: An intention of the design is to largely keep open the option of

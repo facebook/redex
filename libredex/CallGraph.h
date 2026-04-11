@@ -102,7 +102,7 @@ class Edge {
 
 using EdgeId = const Edge*;
 
-// This exposes a `EdgesVector` as a iterable of `const Edge*`.
+// This exposes a `EdgesVector` as an iterable of `const Edge*`.
 class EdgesAdapter {
  public:
   explicit EdgesAdapter(const std::vector<Edge>* edges) : m_edges(edges) {}

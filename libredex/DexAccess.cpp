@@ -30,8 +30,8 @@ void overriden_should_not_be_public(
 /**
  * XXX: Why not simply mark the virtual methods public? For a virtual method,
  * there can be an invisible final virtual method with the same signature in the
- * parents, they do not have overriding relationship. Change the latter method
- * be visible to it is wrong.
+ * parents, they do not have overriding relationship. Making the latter method
+ * visible to it is wrong.
  */
 void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
   auto graph = method_override_graph::build_graph(scope);

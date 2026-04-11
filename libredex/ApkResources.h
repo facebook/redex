@@ -217,7 +217,7 @@ class TableEntryParser : public TableParser {
                       arsc::EntryValueData& data);
 };
 
-// Holds parsed details of the .arsc file. Make sure to disregarded/regenerate
+// Holds parsed details of the .arsc file. Make sure to disregard/regenerate
 // this when the backing file on disk gets modified.
 // NOTE: this class should ideally not leak out into any optimization passes,
 // but may be useful directly from test cases.
@@ -233,7 +233,7 @@ class TableSnapshot {
   // strings pool.
   void get_type_names(uint32_t package_id, std::vector<std::string>* out);
   // Given a package id (shifted to low bits) return the type ids to the string
-  // name of that type, optionally coalesing custom resource types to their
+  // name of that type, optionally coalescing custom resource types to their
   // "normal" type (i.e. when true "dimen.2" will be returned as "dimen" to
   // reflect the fact that it's really meant to be interpreted as dimen).
   UnorderedMap<uint8_t, std::string> get_type_ids_to_resource_type_names(

@@ -22,7 +22,7 @@ class ScopedCFG {
  public:
   ScopedCFG() = default;
 
-  /** Ensure an CFG exists for `code`, creating one if needed. */
+  /** Ensure a CFG exists for `code`, creating one if needed. */
   inline explicit ScopedCFG(IRCode* code);
 
   ScopedCFG(const ScopedCFG&) = delete;

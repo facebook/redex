@@ -1172,19 +1172,19 @@ void PassManager::check_no_new_dex_features(const DexStoresVector& stores,
   case 39:
     always_assert_log(
         !m_has_dex39_features,
-        "Input APK has dex39 features that this pass %s don't support",
+        "Input APK has dex39 features that this pass %s doesn't support",
         pass->name().c_str());
     [[fallthrough]];
   case 38:
     always_assert_log(
         !m_has_dex38_features,
-        "Input APK has dex38 features that this pass %s don't support",
+        "Input APK has dex38 features that this pass %s doesn't support",
         pass->name().c_str());
     [[fallthrough]];
   case 37:
     always_assert_log(
         !m_has_dex37_features,
-        "Input APK has dex37 features that this pass %s don't support",
+        "Input APK has dex37 features that this pass %s doesn't support",
         pass->name().c_str());
     [[fallthrough]];
   case 35:

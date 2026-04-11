@@ -498,7 +498,7 @@ class ControlFlowGraph {
   // NOTE: this function copies pointers to blocks from m_blocks.
   // If a block is created or destroyed while we're iterating on a copy, the
   // copy is now stale. That stale copy may have a pointer to a deleted block or
-  // it may be incomplete (not iterating over the newly creating block).
+  // it may be incomplete (not iterating over the newly created block).
   //
   // TODO: We should probably have an API to offer iterators into the blocks map
   // instead for reads or some mutations since insertion and erasure of elements
@@ -570,7 +570,7 @@ class ControlFlowGraph {
   // copies all edges of a certain type from one block to another
   void copy_succ_edges_of_type(Block* from, Block* to, EdgeType type);
 
-  // copes all edges that match the predicate from one block to another
+  // copies all edges that match the predicate from one block to another
   template <typename EdgePredicate>
   void copy_succ_edges_if(Block* from, Block* to, EdgePredicate edge_predicate);
 

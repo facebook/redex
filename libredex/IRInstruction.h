@@ -435,7 +435,7 @@ class IRInstruction final {
 
   IROpcode m_opcode; // 2 bytes
   // If m_num_srcs > MAX_NUM_INLINE_SRCS, then the registers reside in an
-  // outline m_srcs array which is appropriately sized.
+  // out-of-line m_srcs array which is appropriately sized.
   src_index_t m_num_srcs{0}; // 2 bytes
   reg_t m_dest{0}; // 4 bytes
   // 8 bytes so far

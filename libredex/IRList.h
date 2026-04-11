@@ -794,7 +794,7 @@ class IRList {
   void remove_opcode(const IRList::iterator& it);
 
   /*
-   * Returns an estimated of the number of 2-byte code units needed to encode
+   * Returns an estimate of the number of 2-byte code units needed to encode
    * all the instructions.
    */
   size_t sum_opcode_sizes() const;

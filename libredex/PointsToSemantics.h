@@ -437,7 +437,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a);
  * points-to equations because either the code is unavailable (external
  * libraries, native methods), the code doesn't exist (abstract methods) or the
  * code exists but has no effect on pointers. Each case may be subject to a
- * different semantic intepretation.
+ * different semantic interpretation.
  */
 enum MethodKind {
   PTS_APK, // Regular method defined in the APK
@@ -501,8 +501,8 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s);
 /*
  * This represents the points-to semantics of all methods inside a given scope.
  *
- * IMPORTANT: the procedure used to generate the points-to sematics assumes that
- * invoke-* instructions are in denormalized form, i.e., wide arguments are
+ * IMPORTANT: the procedure used to generate the points-to semantics assumes
+ * that invoke-* instructions are in denormalized form, i.e., wide arguments are
  * explicitly represented by a pair of consecutive registers. The generation of
  * the points-to semantics doesn't modify the IR and hence, can be used anywhere
  * in Redex.

@@ -109,7 +109,7 @@ class IODIMetadata {
 
   UnorderedMap<const DexMethod*, size_t> m_iodi_method_layers;
 
-  // These exists for can_safely_use_iodi
+  // These exist for can_safely_use_iodi
   UnorderedSet<const DexMethod*> m_huge_methods;
 
   bool m_marked{false};

@@ -339,7 +339,7 @@ void read_single_manifest(const std::string& manifest,
         aapt::pb::XmlNode pb_node;
 
         bool read_finish = pb_node.ParseFromCodedStream(&input);
-        always_assert_log(read_finish, "BundleResoource failed to read %s",
+        always_assert_log(read_finish, "BundleResource failed to read %s",
                           manifest.c_str());
         if (pb_node.has_element() && pb_node.element().name() == "manifest") {
           const auto& manifest_element = pb_node.element();
@@ -789,7 +789,7 @@ boost::optional<int32_t> BundleResources::get_min_sdk() {
       [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
-        always_assert_log(read_finish, "BundleResoource failed to read %s",
+        always_assert_log(read_finish, "BundleResource failed to read %s",
                           base_manifest.c_str());
         if (pb_node.has_element()) {
           const auto& manifest_element = pb_node.element();
@@ -840,7 +840,7 @@ boost::optional<std::string> BundleResources::get_manifest_package_name() {
       [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
-        always_assert_log(read_finish, "BundleResoource failed to read %s",
+        always_assert_log(read_finish, "BundleResource failed to read %s",
                           base_manifest.c_str());
         if (pb_node.has_element()) {
           const auto& manifest_element = pb_node.element();
@@ -945,7 +945,7 @@ bool BundleResources::rename_classes_in_layout(
       [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
-        always_assert_log(read_finish, "BundleResoource failed to read %s",
+        always_assert_log(read_finish, "BundleResource failed to read %s",
                           file_path.c_str());
         size_t num_renamed = 0;
         apply_rename_map(rename_map, &pb_node, &num_renamed);
@@ -970,7 +970,7 @@ void BundleResources::fully_qualify_layout(
       [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         always_assert_log(pb_node.ParseFromCodedStream(&input),
-                          "BundleResoource failed to read %s",
+                          "BundleResource failed to read %s",
                           file_path.c_str());
         size_t elements_changed = 0;
         fully_qualify_element(element_to_class_name, &pb_node,
@@ -1317,7 +1317,7 @@ void BundleResources::collect_layout_classes_and_attributes_for_file(
       [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
-        always_assert_log(read_finish, "BundleResoource failed to read %s",
+        always_assert_log(read_finish, "BundleResource failed to read %s",
                           file_path.c_str());
         if (pb_node.has_element()) {
           const auto& root = pb_node.element();
@@ -1352,7 +1352,7 @@ void BundleResources::collect_xml_attribute_string_values_for_file(
       [&](google::protobuf::io::CodedInputStream& input, size_t /*size*/) {
         aapt::pb::XmlNode pb_node;
         always_assert_log(pb_node.ParseFromCodedStream(&input),
-                          "BundleResoource failed to read %s",
+                          "BundleResource failed to read %s",
                           file_path.c_str());
         if (pb_node.has_element()) {
           const auto& root = pb_node.element();
@@ -1397,7 +1397,7 @@ size_t BundleResources::remap_xml_reference_attributes(
       [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
         aapt::pb::XmlNode pb_node;
         bool read_finish = pb_node.ParseFromCodedStream(&input);
-        always_assert_log(read_finish, "BundleResoource failed to read %s",
+        always_assert_log(read_finish, "BundleResource failed to read %s",
                           filename.c_str());
         change_resource_id_in_xml_references(kept_to_remapped_ids, &pb_node,
                                              &num_changed);
@@ -1478,7 +1478,7 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
           aapt::pb::ResourceTable pb_restable;
           bool read_finish = pb_restable.ParseFromCodedStream(&input);
           always_assert_log(read_finish,
-                            "BundleResoource failed to read %s",
+                            "BundleResource failed to read %s",
                             resources_pb_path.c_str());
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
@@ -1557,7 +1557,7 @@ void ResourcesPbFile::nullify_res_ids_and_serialize(
           aapt::pb::ResourceTable pb_restable;
           bool read_finish = pb_restable.ParseFromCodedStream(&input);
           always_assert_log(read_finish,
-                            "BundleResoource failed to read %s",
+                            "BundleResource failed to read %s",
                             resources_pb_path.c_str());
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
@@ -1625,7 +1625,7 @@ void ResourcesPbFile::remap_file_paths_and_serialize(
           aapt::pb::ResourceTable pb_restable;
           bool read_finish = pb_restable.ParseFromCodedStream(&input);
           always_assert_log(read_finish,
-                            "BundleResoource failed to read %s",
+                            "BundleResource failed to read %s",
                             resources_pb_path.c_str());
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
@@ -1680,7 +1680,7 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
           aapt::pb::ResourceTable pb_restable;
           bool read_finish = pb_restable.ParseFromCodedStream(&input);
           always_assert_log(read_finish,
-                            "BundleResoource failed to read %s",
+                            "BundleResource failed to read %s",
                             resources_pb_path.c_str());
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
@@ -1707,8 +1707,7 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
               auto current_type_id = type->type_id().id();
               auto is_allow_type = allowed_types.count(current_type_id) > 0;
               if (!is_allow_type && filepath_old_to_new.empty()) {
-                TRACE(RES, 9,
-                      "BundleResources: skipping annonymize type %X: %s",
+                TRACE(RES, 9, "BundleResources: skipping anonymize type %X: %s",
                       current_type_id, type->name().c_str());
                 continue;
               }
@@ -1887,7 +1886,7 @@ void ResourcesPbFile::collect_resource_data_for_file(
       [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
         aapt::pb::ResourceTable pb_restable;
         bool read_finish = pb_restable.ParseFromCodedStream(&input);
-        always_assert_log(read_finish, "BundleResoource failed to read %s",
+        always_assert_log(read_finish, "BundleResource failed to read %s",
                           resources_pb_path.c_str());
         if (pb_restable.has_source_pool()) {
           // Source positions refer to ResStringPool entries which are file
@@ -1897,7 +1896,7 @@ void ResourcesPbFile::collect_resource_data_for_file(
           // bundles should omit this data.
           reset_pb_source(&pb_restable);
         }
-        // Repeated fields might not be comming in ordered, to make following
+        // Repeated fields might not be coming in ordered, to make following
         // config_value comparison work with different order, reorder repeated
         // fields in config_value's value
         reorder_config_value_repeated_field(&pb_restable);
@@ -2549,7 +2548,7 @@ ResourcesPbFile::get_inlinable_resource_values() {
     inlinable_resources.insert({id, inlinable_val});
   }
   // If a reference is found, check if the referenced value is inlinable and add
-  // it's actual value to the map (instead of the reference). NOTE: only works
+  // its actual value to the map (instead of the reference). NOTE: only works
   // if reference only goes down one level.
   resources::resources_inlining_find_refs(past_refs, &inlinable_resources);
   return inlinable_resources;

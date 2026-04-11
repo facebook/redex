@@ -22,11 +22,11 @@
  *
  * See
  * https://source.android.com/devices/tech/dalvik/dex-format#dalvik-annotation-default
- * for more details on annotaion defaults encoding.
+ * for more details on annotation defaults encoding.
  *
  * Params
  *   target_anno_type - DexType of anno for which default is being looked up
- *   lookup_anno_element_name - The element name which is being lookedup
+ *   lookup_anno_element_name - The element name which is being looked up
  *
  * Return
  *   The DexEncodedValue of the default value. Caller has to appropriately

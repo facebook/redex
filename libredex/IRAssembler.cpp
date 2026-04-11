@@ -235,7 +235,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   } else {
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       s_patn({s_patn(&reg_str)}, tail)
-          .must_match(tail, "Expected src reg for" + opcode_str);
+          .must_match(tail, "Expected src reg for " + opcode_str);
       insn->set_src(i, reg_from_str(reg_str));
     }
   }
@@ -1035,7 +1035,7 @@ DexField* create_concrete_field(const std::string& field_name,
 
   DexField* ret = field->make_concrete(access_flags);
 
-  // If we have an additional paramter, adding that data in as well
+  // If we have an additional parameter, adding that data in as well
   if (is_static(ret) && !tail.is_nil()) {
     s_expr code_expr;
     s_patn({s_patn(code_expr)}, tail).match_with(tail);

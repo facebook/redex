@@ -297,7 +297,7 @@ class XStoreRefs {
   /**
    * Verify that a 'type' can be moved in the DexStore identified by
    * 'store_idx'.
-   * Use it when an anlaysis over a given DEX (or instructions in a given
+   * Use it when an analysis over a given DEX (or instructions in a given
    * method/class) needs to be performed by an optimization.
    */
   bool illegal_ref(size_t store_idx, const DexType* type) const {

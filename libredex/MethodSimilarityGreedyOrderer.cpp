@@ -140,7 +140,7 @@ void MethodSimilarityGreedyOrderer::compute_score() {
                    std::greater<ScoreValue>>
               map;
           // Mapping from score value (key) to Method Ids. The key is in a
-          // decreasing score order. Becuase it iterates Method Id in order,
+          // decreasing score order. Because it iterates Method Id in order,
           // the vector is already sorted by Method index (source order).
           for (auto&& [score_value, method_ids] :
                UnorderedIterable(score_map)) {

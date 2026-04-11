@@ -1035,7 +1035,7 @@ void parse(const std::vector<Token>& vec,
     case TokenType::dontskipnonpubliclibraryclasses: {
       // -skipnonpubliclibraryclasses not supported
       // -dontskipnonpubliclibraryclassmembers not supported
-      // Silenty ignore the dontskipnonpubliclibraryclasses option.
+      // Silently ignore the dontskipnonpubliclibraryclasses option.
       continue;
     }
     case TokenType::keep:
@@ -1253,7 +1253,7 @@ Stats parse(const std::string_view& config,
   }
 
   if (!ok) {
-    std::cerr << "Found " << ret.unknown_tokens << " unkown tokens in "
+    std::cerr << "Found " << ret.unknown_tokens << " unknown tokens in "
               << filename << "\n";
     pg_config->ok = false;
     return ret;
