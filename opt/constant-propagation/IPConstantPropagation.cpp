@@ -7,6 +7,8 @@
 
 #include "IPConstantPropagation.h"
 
+#include <future>
+
 #include "ConfigFiles.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
@@ -303,11 +305,15 @@ void PassImpl::run(const DexStoresVector& stores,
   auto string_analyzer_state = StringAnalyzerState::make_default();
   auto package_name_state = PackageNameState::make(package_name);
   State cp_state;
+  // Start TypeSystem construction in background — it only reads scope and is
+  // independent of analyze(), which takes 80-136s. This hides the ~16s cost.
+  auto type_system_future =
+      std::async(std::launch::async, [&scope]() { return TypeSystem(scope); });
   auto fp_iter =
       analyze(scope, &immut_analyzer_state, &api_level_analyzer_state,
               &string_analyzer_state, &package_name_state, cp_state);
   m_stats.fp_iter = fp_iter->get_stats();
-  TypeSystem type_system(scope);
+  auto type_system = type_system_future.get();
   optimize(scope, type_system, xstores, *fp_iter, &immut_analyzer_state,
            cp_state);
 }
