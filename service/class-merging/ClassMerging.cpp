@@ -54,6 +54,10 @@ std::unique_ptr<RefChecker> create_ref_checker(const bool per_dex_grouping,
   return std::make_unique<RefChecker>(xstores, store_id, min_sdk_api);
 }
 
+} // namespace
+
+namespace class_merging {
+
 void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
                                             ModelSpec* spec) {
   TypeSet merging_targets_set;
@@ -94,10 +98,6 @@ void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
   spec->merging_targets.insert(merging_targets_set.begin(),
                                merging_targets_set.end());
 }
-
-} // namespace
-
-namespace class_merging {
 
 ModelStats merge_model(Scope& scope,
                        ConfigFiles& conf,

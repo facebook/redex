@@ -16,6 +16,7 @@
 #include "MergingStrategies.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeSystem.h"
 
 using namespace class_merging;
 
@@ -285,6 +286,7 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
+  TypeSystem type_system(scope);
   ModelStats total_stats;
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {
@@ -296,8 +298,15 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
             "dex");
       model_spec.include_primary_dex = true;
     }
-    total_stats +=
-        class_merging::merge_model(scope, conf, mgr, stores, model_spec, false);
+    if (model_spec.merging_targets.empty()) {
+      class_merging::load_roots_subtypes_as_merging_targets(type_system,
+                                                            &model_spec);
+    }
+    if (model_spec.merging_targets.empty()) {
+      continue;
+    }
+    total_stats += class_merging::merge_model(type_system, scope, conf, mgr,
+                                              stores, model_spec, false);
   }
   post_dexen_changes(scope, stores);
   total_stats.update_redex_stats(" total", mgr);

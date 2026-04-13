@@ -11,6 +11,9 @@
 
 namespace class_merging {
 
+void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
+                                            ModelSpec* spec);
+
 ModelStats merge_model(Scope& scope,
                        ConfigFiles& conf,
                        PassManager& mgr,
