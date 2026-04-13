@@ -14,7 +14,7 @@
 #include "Walkers.h"
 
 namespace {
-void overriden_should_not_be_public(
+void overridden_should_not_be_public(
     const method_override_graph::Node* method,
     const method_override_graph::Graph* graph,
     UnorderedSet<const DexMethod*>* should_not_mark) {
@@ -22,8 +22,8 @@ void overriden_should_not_be_public(
     return;
   }
   should_not_mark->insert(method->method);
-  for (const auto* overriden : UnorderedIterable(method->parents)) {
-    overriden_should_not_be_public(overriden, graph, should_not_mark);
+  for (const auto* overridden : UnorderedIterable(method->parents)) {
+    overridden_should_not_be_public(overridden, graph, should_not_mark);
   }
 }
 
@@ -42,7 +42,7 @@ void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
     // If a final method has children, it can only be package-private and we can
     // not change it to be public.
     if (is_final(method) && !pair.second.children.empty()) {
-      overriden_should_not_be_public(
+      overridden_should_not_be_public(
           &pair.second, graph.get(), &should_not_mark);
       const auto& children = pair.second.children;
       auto* first_child = *unordered_any(children);
