@@ -76,7 +76,7 @@ const std::vector<UnorderedSet<uint32_t>> SYNTHETIC_PARENT_ATTRIBUTE_SETS = {
     {kFontFamily, kPaddingStart, kIsGame},
     {kTextStyleAttrId, kTextColorAttrId}};
 
-void verify_attribute_existance(
+void verify_attribute_existence(
     ResourceTableFile* res_table,
     const UnorderedMap<std::string, UnorderedSet<uint32_t>>& attributes_map,
     bool should_exist,
@@ -115,10 +115,10 @@ void verify_attribute_existance(
 
 void resource_value_merging_PreVerify(ResourceTableFile* res_table,
                                       StyleAnalysis* style_analysis) {
-  verify_attribute_existance(res_table, REMOVED_ATTRIBUTES, true,
+  verify_attribute_existence(res_table, REMOVED_ATTRIBUTES, true,
                              "before optimization");
 
-  verify_attribute_existance(res_table, ADDED_ATTRIBUTES, false,
+  verify_attribute_existence(res_table, ADDED_ATTRIBUTES, false,
                              "before optimization");
 
   // Verify that these attributes are marked for deletion
@@ -185,10 +185,10 @@ void verify_synthetic_parents(ResourceTableFile* res_table,
 }
 
 void resource_value_merging_PostVerify(ResourceTableFile* res_table) {
-  verify_attribute_existance(res_table, REMOVED_ATTRIBUTES, false,
+  verify_attribute_existence(res_table, REMOVED_ATTRIBUTES, false,
                              "after optimization");
 
-  verify_attribute_existance(res_table, ADDED_ATTRIBUTES, true,
+  verify_attribute_existence(res_table, ADDED_ATTRIBUTES, true,
                              "after optimization");
 
   ResourceValueMergingPass pass;
