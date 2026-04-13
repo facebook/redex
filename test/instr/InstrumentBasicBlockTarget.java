@@ -84,7 +84,7 @@ public class InstrumentBasicBlockTarget {
         System.out.println("Greater than 4");
         z += 1;
       } else {
-        System.out.println("Couldnt make it to 4!, early return");
+        System.out.println("Couldn't make it to 4!, early return");
         z -= 1;
         return z;
       }
@@ -700,7 +700,7 @@ public class InstrumentBasicBlockTarget {
     // Assert that the offset in the statsArray is 10
     assertThat(MetadataParser.getOffset("testFunc02")).isEqualTo(10);
 
-    // Assert that TestFunc02 excuted only BasicBlocks (1) skipping
+    // Assert that TestFunc02 executed only BasicBlocks (1) skipping
     // 2 which is [0,1] in the Bit-Vector form due to return in the if condition
     int[] blockList = {2,1};
     int[] blockHitList = {0,1};
@@ -726,7 +726,7 @@ public class InstrumentBasicBlockTarget {
     // Assert that the offset in the statsArray is 13
     assertThat(MetadataParser.getOffset("testFunc03")).isEqualTo(13);
 
-    // Assert that TestFunc03 excuted all BasicBlocks
+    // Assert that TestFunc03 executed all BasicBlocks
     // which is [1,1] in the Bit-Vector form
     int[] blockList = {2,1};
     int[] blockHitList = {1,1};
@@ -748,7 +748,7 @@ public class InstrumentBasicBlockTarget {
     try {
       testFunc04(10,16);
     } catch (Exception e) {
-      System.out.println("Exeception Thrown");
+      System.out.println("Exception Thrown");
       thrown = true;
     }
     assertThat(thrown).isTrue();
@@ -760,7 +760,7 @@ public class InstrumentBasicBlockTarget {
     // Assert that the offset in the statsArray is 16
     assertThat(MetadataParser.getOffset("testFunc04")).isEqualTo(16);
 
-    // Assert that TestFunc04 excuted only some BasicBlocks skipping others due to ArrayOutOfBounds exception
+    // Assert that TestFunc04 executed only some BasicBlocks skipping others due to ArrayOutOfBounds exception
     assertThat(MetadataParser.getBlockHits("testFunc04", stats)).isEqualTo("0[]");
   }
 
@@ -777,7 +777,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc05")).isEqualTo(18);
 
-    // Assert that TestFunc05 excuted only some BasicBlocks skipping others due to flag being zero
+    // Assert that TestFunc05 executed only some BasicBlocks skipping others due to flag being zero
     assertThat(MetadataParser.getBlockHits("testFunc05", stats)).isEqualTo("5[1:0,2:0,3:1,4:1,5:0]");
   }
 
@@ -794,7 +794,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc06")).isEqualTo(21);
 
-    // Assert that TestFunc06 excuted only some BasicBlocks skipping others due to early return in exception
+    // Assert that TestFunc06 executed only some BasicBlocks skipping others due to early return in exception
     assertThat(MetadataParser.getBlockHits("testFunc06", stats)).isEqualTo("3[1:1,2:1,4:0]");
   }
 
@@ -811,7 +811,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc07")).isEqualTo(24);
 
-    // Assert that TestFunc07 excuted only some BasicBlocks skipping others due 8 % 2 = 0 and
+    // Assert that TestFunc07 executed only some BasicBlocks skipping others due 8 % 2 = 0 and
     // there was no exception handling needed so it returned early
     assertThat(MetadataParser.getBlockHits("testFunc07", stats)).isEqualTo("6[1:1,2:1,4:0,6:0,7:0,9:0]");
   }
@@ -826,7 +826,7 @@ public class InstrumentBasicBlockTarget {
     try {
       value = testFunc08(5,2,8);
     } catch (Exception e) {
-      System.out.println("Exeception Thrown");
+      System.out.println("Exception Thrown");
     }
     assertThat(value).isEqualTo(7);
     InstrumentBasicBlockAnalysis.stopTracing();
@@ -836,7 +836,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc08")).isEqualTo(27);
 
-    // Assert that TestFunc08 excuted only some BasicBlocks skipping others due to
+    // Assert that TestFunc08 executed only some BasicBlocks skipping others due to
     // index being 2 and 2 % 2 = 0 which causes an Array Index Out of Bounds Exception
     // before it returns early
     assertThat(MetadataParser.getBlockHits("testFunc08", stats)).isEqualTo("11[1:1,2:1,3:1,4:1,5:1,6:1,7:0,8:0,10:0,11:0,12:1]");
@@ -855,7 +855,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc09")).isEqualTo(30);
 
-    // Assert that TestFunc09 excuted only some BasicBlocks skipping
+    // Assert that TestFunc09 executed only some BasicBlocks skipping
     // everything else because it didn't have to go into the initial if condition
     // because test-flag > 0 and the switch statement made it jump to exact basicblock
     // of 16 and returning immediately.
@@ -920,7 +920,7 @@ public class InstrumentBasicBlockTarget {
     try {
       testFunc13(array);
     } catch (Exception e) {
-      System.out.println("Exeception Thrown");
+      System.out.println("Exception Thrown");
     }
     InstrumentBasicBlockAnalysis.stopTracing();
 
@@ -992,7 +992,7 @@ public class InstrumentBasicBlockTarget {
     try {
       testFunc17(array);
     } catch (Exception e) {
-      System.out.println("Exeception Thrown");
+      System.out.println("Exception Thrown");
     }
     InstrumentBasicBlockAnalysis.stopTracing();
 
@@ -1083,7 +1083,7 @@ public class InstrumentBasicBlockTarget {
     // Assert that the offset in the statsArray is 64
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(64);
 
-    // Assert that TestFunc19 excuted only BasicBlocks (1,2,15,17,18,22,24,25,28,27,30,31,32) skipping
+    // Assert that TestFunc19 executed only BasicBlocks (1,2,15,17,18,22,24,25,28,27,30,31,32) skipping
     // everything else because it only had to go to particular switch blocks.
     // As this test case has numerous basicblocks (32),
     // it needs two bitvectors so we need to make sure it is [0,0,0,1,0,0,1,1,1,0,1,1,1,0,1,1] in
@@ -1119,7 +1119,7 @@ public class InstrumentBasicBlockTarget {
     // Assert that the offset in the statsArray is 64
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(64);
 
-    // Assert that TestFunc19 excuted only BasicBlocks (1,2,3,13,17,20,28,30,31) skipping
+    // Assert that TestFunc19 executed only BasicBlocks (1,2,3,13,17,20,28,30,31) skipping
     // everything else because it only had to go to particular switch blocks.
     // As this test case has numerous basicblocks (32),
     // it needs two bitvectors so we need to make sure it is [0,1,0,0,0,0,1,0,0,0,1,1,0,1,1,1] in
@@ -1155,7 +1155,7 @@ public class InstrumentBasicBlockTarget {
     // Assert that the offset in the statsArray is 64
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(64);
 
-    // Assert that TestFunc19 excuted only BasicBlocks (1,2,7,8) skipping
+    // Assert that TestFunc19 executed only BasicBlocks (1,2,7,8) skipping
     // everything else because it only had to go to particular switch blocks.
     // As this test case has numerous basicblocks (32),
     // it needs two bitvectors so we need to make sure it is [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1] in
@@ -1192,7 +1192,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(67);
 
-    // Assert that TestFunc20 excuted some BasicBlocks skipping
+    // Assert that TestFunc20 executed some BasicBlocks skipping
     // everything else because it only had to go to particular switch blocks.
     assertThat(MetadataParser.getBlockHits("testFunc20", stats)).isEqualTo("35[2:1,3:1,4:1,5:1,6:1,7:1,8:1,9:1,10:1,11:1,12:1,13:1,14:1,15:1,16:1,17:1,18:1,19:1,20:1,21:1,24:0,25:0,26:0,28:1,29:1,31:0,32:1,33:1,35:0,36:0,37:0,38:1,39:0,40:1,42:0]");
   }
@@ -1213,7 +1213,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(67);
 
-    // Assert that TestFunc20 excuted some BasicBlocks skipping
+    // Assert that TestFunc20 executed some BasicBlocks skipping
     // everything else because it only had to go to particular switch blocks.
     assertThat(MetadataParser.getBlockHits("testFunc20", stats)).isEqualTo("35[2:1,3:1,4:1,5:1,6:1,7:1,8:1,9:1,10:1,11:1,12:1,13:1,14:1,15:1,16:1,17:1,18:1,19:0,20:0,21:0,24:0,25:0,26:0,28:1,29:0,31:0,32:1,33:1,35:0,36:0,37:0,38:0,39:1,40:0,42:1]");
   }
@@ -1234,7 +1234,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(67);
 
-    // Assert that TestFunc20 excuted some BasicBlocks skipping
+    // Assert that TestFunc20 executed some BasicBlocks skipping
     // everything else because it only had to go to particular switch blocks.
     assertThat(MetadataParser.getBlockHits("testFunc20", stats)).isEqualTo("35[2:1,3:1,4:1,5:1,6:1,7:1,8:1,9:1,10:1,11:1,12:1,13:1,14:1,15:1,16:1,17:1,18:1,19:1,20:1,21:1,24:0,25:0,26:0,28:1,29:1,31:0,32:1,33:1,35:0,36:0,37:0,38:1,39:0,40:1,42:0]");
   }
@@ -1254,7 +1254,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(72);
 
-    // Assert that TestFunc21 excuted some BasicBlocks skipping
+    // Assert that TestFunc21 executed some BasicBlocks skipping
     // everything else because it only had to go to particular switch blocks.
     assertThat(MetadataParser.getBlockHits("testFunc21", stats)).isEqualTo("22[1:0,2:0,3:1,4:1,5:1,6:0,7:0,8:0,10:0,11:0,12:0,13:1,14:1,15:1,16:0,17:1,19:1,20:1,21:1,22:1,23:1,24:1]");
   }
@@ -1274,7 +1274,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(72);
 
-    // Assert that TestFunc21 excuted some BasicBlocks skipping
+    // Assert that TestFunc21 executed some BasicBlocks skipping
     // everything else because it only had to go to particular switch blocks.
     assertThat(MetadataParser.getBlockHits("testFunc21", stats)).isEqualTo("22[1:1,2:0,3:0,4:1,5:1,6:0,7:0,8:0,10:0,11:0,12:0,13:0,14:0,15:0,16:1,17:1,19:1,20:1,21:1,22:1,23:1,24:1]");
   }
@@ -1294,7 +1294,7 @@ public class InstrumentBasicBlockTarget {
 
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(72);
 
-    // Assert that TestFunc21 excuted some BasicBlocks skipping
+    // Assert that TestFunc21 executed some BasicBlocks skipping
     // everything else because it only had to go to particular switch blocks.
     assertThat(MetadataParser.getBlockHits("testFunc21", stats)).isEqualTo("22[1:1,2:1,3:0,4:1,5:1,6:1,7:1,8:1,10:1,11:0,12:1,13:0,14:0,15:0,16:0,17:0,19:0,20:0,21:0,22:0,23:0,24:1]");
   }
