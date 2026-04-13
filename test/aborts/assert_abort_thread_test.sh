@@ -44,6 +44,9 @@ check_stack() {
     COUNT=$(grep -c "$LINE" "$OUT_TMP")
     if [ "$COUNT" -ne "$EXPECTED_COUNT" ] ;  then
       echo "Found $LINE $COUNT times, expected $EXPECTED_COUNT times!"
+      echo "=== Full symbolicated stack trace ==="
+      cat "$OUT_TMP"
+      echo "=== End stack trace ==="
       exit 1
     fi
 }
