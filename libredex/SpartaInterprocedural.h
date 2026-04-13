@@ -29,7 +29,7 @@ struct AnalysisAdaptorBase {
 
   // The summary argument is unused in the adaptor base. Only certain
   // analyses will require this argument, in which case this function
-  // should be *overriden* in the derived class.
+  // should be *overridden* in the derived class.
   template <typename Registry>
   static call_graph::Graph call_graph_of(const Scope& scope,
                                          Registry* /*reg*/) {
