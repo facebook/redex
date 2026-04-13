@@ -1667,7 +1667,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
-       overriden_conditionally_pure_methods) {
+       overridden_conditionally_pure_methods) {
   // A virtual base method is not actually conditionally pure if there is an
   // overriding method in a derived class that performs writes.
 
