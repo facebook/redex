@@ -282,7 +282,7 @@ struct ResStringPool_ref
 /** ********************************************************************
  *  String Pool
  *
- *  A set of strings that can be references by others through a
+ *  A set of strings that can be referenced by others through a
  *  ResStringPool_ref.
  *
  *********************************************************************** */
@@ -444,7 +444,7 @@ private:
  * XML tree header.  This appears at the front of an XML tree,
  * describing its content.  It is followed by a flat array of
  * ResXMLTree_node structures; the hierarchy of the XML document
- * is described by the occurrance of RES_XML_START_ELEMENT_TYPE
+ * is described by the occurrence of RES_XML_START_ELEMENT_TYPE
  * and corresponding RES_XML_END_ELEMENT_TYPE nodes in the array.
  */
 struct ResXMLTree_header
@@ -553,7 +553,7 @@ struct ResXMLTree_attribute
     // The original raw string value of this attribute.
     struct ResStringPool_ref rawValue;
 
-    // Processesd typed value of this attribute.
+    // Processed typed value of this attribute.
     struct Res_value typedValue;
 };
 
@@ -777,7 +777,7 @@ struct ResTable_package
 // - a 8 char variant code prefixed by a 'v'
 //
 // each separated by a single char separator, which sums up to a total of 24
-// chars, (25 include the string terminator). Numbering system specificator,
+// chars, (25 include the string terminator). Numbering system specifier,
 // if present, can add up to 14 bytes (-u-nu-xxxxxxxx), giving 39 bytes,
 // or 40 bytes to make it 4 bytes aligned.
 #define RESTABLE_MAX_LOCALE_LEN 40
@@ -1125,7 +1125,7 @@ struct ResTable_config
 
     // Return true if 'this' can be considered a match for the parameters in
     // 'settings'.
-    // Note this is asymetric.  A default piece of data will match every request
+    // Note this is asymmetric.  A default piece of data will match every request
     // but a request for the default should not match odd specifics
     // (ie, request with no mcc should not match a particular mcc's data)
     // settings is the requested settings
@@ -1187,7 +1187,7 @@ struct ResTable_config
     // and 0 if they're equally specific.
     int isLocaleMoreSpecificThan(const ResTable_config &o) const;
 
-    // Returns an integer representng the imporance score of the configuration locale.
+    // Returns an integer representing the importance score of the configuration locale.
     int getImportanceScoreOfLocale() const;
 
     // Return true if 'this' is a better locale match than 'o' for the
@@ -1247,7 +1247,7 @@ struct ResTable_typeSpec
  * by an array of ResTable_sparseTypeEntry defining only the entries that
  * have values for this type. Each entry is sorted by their entry ID such
  * that a binary search can be performed over the entries. The ID and offset
- * are encoded in a uint32_t. See ResTabe_sparseTypeEntry.
+ * are encoded in a uint32_t. See ResTable_sparseTypeEntry.
  *
  * There may be multiple of these chunks for a particular resource type,
  * supply different configuration variations for the resource values of
@@ -1338,7 +1338,7 @@ struct ResTable_entry
         // If set, this resource has been declared public, so libraries
         // are allowed to reference it.
         FLAG_PUBLIC = 0x0002,
-        // If set, this is a weak resource and may be overriden by strong
+        // If set, this is a weak resource and may be overridden by strong
         // resources of the same name/type. This is only useful during
         // linking with other resource tables.
         FLAG_WEAK = 0x0004
@@ -1436,7 +1436,7 @@ struct ResTable_map
         // supplied as additional entries in the map.
         TYPE_ENUM = 1<<16,
 
-        // Attribute holds a bitmaks of flags.  The flag bit values are
+        // Attribute holds a bitmask of flags.  The flag bit values are
         // supplied as additional entries in the map.
         TYPE_FLAGS = 1<<17
     };
