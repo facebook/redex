@@ -28,6 +28,14 @@ struct Timer {
 
   static void add_timer(std::string msg, double dur_s);
 
+  // Run a callable under a Timer scope. Equivalent to:
+  //   { Timer t(msg); fn(); }
+  template <typename Fn>
+  static decltype(auto) scope(std::string msg, Fn&& fn) {
+    Timer t(std::move(msg));
+    return std::forward<Fn>(fn)();
+  }
+
  private:
   static std::mutex& get_s_lock();
   static times_t& get_s_times();

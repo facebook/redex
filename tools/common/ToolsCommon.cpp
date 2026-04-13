@@ -94,10 +94,8 @@ void write_intermediate_dex(const RedexOptions& redex_options,
                             DexStoresVector& stores,
                             Json::Value& dex_files) {
   Timer write_int_dex_timer("Write intermediate dex");
-  {
-    Timer t("Instruction lowering");
-    instruction_lowering::run(stores);
-  }
+  Timer::scope("Instruction lowering",
+               [&] { instruction_lowering::run(stores); });
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
   for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
     auto& store = stores[store_number];

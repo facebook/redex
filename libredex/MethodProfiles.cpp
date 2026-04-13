@@ -839,11 +839,10 @@ boost::optional<uint32_t> MethodProfiles::get_interaction_count(
 }
 
 void MethodProfiles::process_unresolved_lines() {
-  {
-    Timer t("Processing unresolved profile lines");
+  Timer::scope("Processing unresolved profile lines", [&] {
     process_unresolved_lines(false);
     process_unresolved_lines(true);
-  }
+  });
   if (!m_unresolved_manual_lines.empty()) {
     Timer t("Processing unresolved manual lines");
     get_baseline_profile_method_map(true);

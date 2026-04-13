@@ -538,8 +538,7 @@ bool AnnoKill::kill_annotations() {
     m_kill = get_removable_annotation_instances();
   }
 
-  {
-    Timer timer{"optimize classes"};
+  Timer::scope("optimize classes", [&] {
     m_stats += walk::parallel::classes<AnnoKillStats>(
         m_scope, [&](auto* clazz) -> AnnoKillStats {
           AnnoKillStats local_stats{};
@@ -567,10 +566,9 @@ bool AnnoKill::kill_annotations() {
           }
           return local_stats;
         });
-  }
+  });
 
-  {
-    Timer timer{"optimize methods"};
+  Timer::scope("optimize methods", [&] {
     m_stats += walk::parallel::methods<AnnoKillStats>(m_scope, [&](DexMethod*
                                                                        method) {
       // Method annotations
@@ -625,10 +623,9 @@ bool AnnoKill::kill_annotations() {
 
       return local_stats;
     });
-  }
+  });
 
-  {
-    Timer timer{"optimize fields"};
+  Timer::scope("optimize fields", [&] {
     m_stats +=
         walk::parallel::fields<AnnoKillStats>(m_scope, [&](DexField* field) {
           AnnoKillStats local_stats{};
@@ -653,7 +650,7 @@ bool AnnoKill::kill_annotations() {
 
           return local_stats;
         });
-  }
+  });
 
   bool classes_removed = false;
   // We're done removing annotation instances, go ahead and remove annotation

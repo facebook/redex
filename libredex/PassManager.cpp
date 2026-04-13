@@ -1374,10 +1374,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // Clear stale data. Make sure we start fresh.
   m_preserved_analysis_passes.clear();
 
-  {
-    Timer t("API Level Checker");
+  Timer::scope("API Level Checker", [&] {
     api::LevelChecker::init(m_redex_options.min_sdk, scope);
-  }
+  });
 
   maybe_write_env_seeds_file(conf, scope);
   maybe_print_seeds_incoming(conf, scope, m_pg_config);

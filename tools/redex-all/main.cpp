@@ -1428,30 +1428,26 @@ void redex_frontend(ConfigFiles& conf, /* input */
   load_library_jars(args, external_classes, library_jars,
                     pg_config.basedirectory);
 
-  {
-    Timer t("Deobfuscating dex elements");
+  Timer::scope("Deobfuscating dex elements", [&] {
     for (auto& store : stores) {
       apply_deobfuscated_names(store.get_dexen(), conf.get_proguard_map());
     }
-  }
+  });
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
-  {
-    Timer t("No Optimizations Rules");
+  Timer::scope("No Optimizations Rules", [&] {
     // this will change rstate of methods
     keep_rules::process_no_optimizations_rules(
         conf.get_no_optimizations_annos(),
         conf.get_no_optimizations_blocklist(), scope);
-  }
-  {
-    Timer t("Initializing reachable classes");
+  });
+  Timer::scope("Initializing reachable classes", [&] {
     // init reachable will change rstate of classes, methods and fields
     init_reachable_classes(scope, ReachableClassesConfig(json_config));
-  }
-  {
-    Timer t("Processing proguard rules");
+  });
+  Timer::scope("Processing proguard rules", [&] {
     process_proguard_rules(conf, scope, external_classes, pg_config);
-  }
+  });
 
   TRACE(NATIVE, 2, "Blanket native classes: %zu",
         g_redex->blanket_native_root_classes.size());
@@ -1676,8 +1672,7 @@ void redex_backend(ConfigFiles& conf,
     Timer::add_timer(kJsonTimerName, json_timer.get_seconds());
     wod_mem_stats.trace_log("Writing optimized dexes");
 
-    {
-      Timer t("Writing full rename map JSON");
+    Timer::scope("Writing full rename map JSON", [&] {
       std::ofstream ofs(conf.metafile("redex-full-rename-map.jsonl"));
       // We want this to be JSONL. Unclear why `<<` does this for redex-stats
       // but need extra here.
@@ -1689,15 +1684,14 @@ void redex_backend(ConfigFiles& conf,
         writer->write(json, &ofs);
         ofs << "\n";
       }
-    }
+    });
   }
 
   sanitizers::lsan_do_recoverable_leak_check();
 
   std::vector<DexMethod*> needs_debug_line_mapping;
 
-  {
-    Timer t("Writing opt decisions data");
+  Timer::scope("Writing opt decisions data", [&] {
     const Json::Value& opt_decisions_args = json_config["opt_decisions"];
     if (opt_decisions_args.get("enable_logs", false).asBool()) {
       auto opt_decisions_output_path = conf.metafile(OPT_DECISIONS);
@@ -1708,10 +1702,9 @@ void redex_backend(ConfigFiles& conf,
         opt_data_out << opt_data;
       }
     }
-  }
+  });
 
-  {
-    Timer t("Writing stats");
+  Timer::scope("Writing stats", [&] {
     if (needs_addresses) {
       Timer t2{"Writing debug line mapping"};
       write_debug_line_mapping(debug_line_map_filename, method_to_id,
@@ -1722,16 +1715,12 @@ void redex_backend(ConfigFiles& conf,
       Timer t2{"Writing IODI metadata"};
       iodi_metadata.write(iodi_metadata_filename, method_to_id);
     }
-    {
-      Timer t2{"Writing position map"};
-      pos_mapper->write_map();
-    }
-    {
-      Timer t2{"Collecting output stats"};
+    Timer::scope("Writing position map", [&] { pos_mapper->write_map(); });
+    Timer::scope("Collecting output stats", [&] {
       stats["output_stats"] =
           get_output_stats(output_totals, output_dexes_stats, manager,
                            instruction_lowering_stats, pos_mapper.get());
-    }
+    });
     print_warning_summary();
 
     if (dex_output_config.write_class_sizes) {
@@ -1745,7 +1734,7 @@ void redex_backend(ConfigFiles& conf,
             << output_totals.class_size.at(c) << "\n";
       }
     }
-  }
+  });
 }
 
 void dump_class_method_info_map(const std::string& file_path,
@@ -2103,11 +2092,10 @@ int main(int argc, char* argv[]) {
     PassManager manager(passes, std::move(pg_config), conf, args.redex_options,
                         &props_manager);
 
-    {
-      Timer t("Running optimization passes");
+    Timer::scope("Running optimization passes", [&] {
       manager.run_passes(stores, conf);
       maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_AFTER_ALL_PASSES");
-    }
+    });
 
     if (args.stop_pass_idx == boost::none) {
       // Call redex_backend by default
@@ -2142,10 +2130,7 @@ int main(int argc, char* argv[]) {
       dump_string_locales(conf.metafile(STRING_LOCALE_DUMP), configs);
     }
 
-    {
-      Timer t("Freeing global memory");
-      delete g_redex;
-    }
+    Timer::scope("Freeing global memory", [&] { delete g_redex; });
     cpu_time_s = ((double)std::clock()) / CLOCKS_PER_SEC;
   }
   // now that all the timers are done running, we can collect the data
