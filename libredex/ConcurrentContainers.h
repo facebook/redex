@@ -1013,8 +1013,7 @@ class ConcurrentContainer {
 
   virtual ~ConcurrentContainer() {
     auto timer_scope = cc_impl::s_destructor.scope();
-    if (!cc_impl::is_thread_pool_active() ||
-        size() <= cc_impl::s_concurrent_destruction_threshold) {
+    if (size() <= cc_impl::s_concurrent_destruction_threshold) {
       for (size_t slot = 0; slot < n_slots; ++slot) {
         m_slots[slot].destroy();
       }
