@@ -737,6 +737,7 @@ void Model::collect_methods() {
           "Collect methods for merger %s [%zu]",
           SHOW(merger.type),
           merger.mergeables.size());
+    UnorderedSet<const VirtualScope*> processed_intf_scopes;
     for (const auto* mergeable : merger.mergeables) {
       const auto* cls = type_class(mergeable);
       always_assert(cls);
@@ -766,11 +767,14 @@ void Model::collect_methods() {
 
         // interface methods
         if (is_impl_scope(virt_scope)) {
-          TRACE(CLMG,
-                8,
-                "interface virtual scope [%zu]",
-                virt_scope->methods.size());
-          add_interface_scope(merger, *virt_scope);
+          if (processed_intf_scopes.count(virt_scope) == 0) {
+            processed_intf_scopes.insert(virt_scope);
+            TRACE(CLMG,
+                  8,
+                  "interface virtual scope [%zu]",
+                  virt_scope->methods.size());
+            add_interface_scope(merger, *virt_scope);
+          }
           continue;
         }
 
@@ -1027,19 +1031,56 @@ void Model::distribute_virtual_methods(
         }
       };
 
-      for (const auto& pair : virt_scope->methods) {
-        auto* virt_meth = pair.first;
-        if (!virt_meth->is_def()) {
+      // Optimization: instead of iterating ALL methods in the scope
+      // (which can be 10K+ for common virtual methods), first find
+      // overridden_meth from non-mergeable methods, then iterate
+      // only the merger's mergeables to find their methods in the scope.
+
+      // Step 1: Find overridden_meth from non-mergeable methods
+      // (skip if already set from top_def)
+      if (overridden_meth == nullptr) {
+        for (const auto& pair : virt_scope->methods) {
+          auto* virt_meth = pair.first;
+          if (!virt_meth->is_def()) {
+            continue;
+          }
+          if (!virt_meth->is_external() && is_abstract(virt_meth)) {
+            continue;
+          }
+          if (merger.mergeables.count(virt_meth->get_class()) == 0) {
+            update_overridden(virt_scope->methods[0], virt_meth);
+            if (overridden_meth != nullptr) {
+              break;
+            }
+          }
+        }
+      }
+
+      // Step 2: Build a class->method map for this scope (cached)
+      auto scope_map_it = m_scope_class_method_map.find(virt_scope);
+      if (scope_map_it == m_scope_class_method_map.end()) {
+        auto& class_method_map = m_scope_class_method_map[virt_scope];
+        for (const auto& pair : virt_scope->methods) {
+          auto* virt_meth = pair.first;
+          if (!virt_meth->is_def()) {
+            continue;
+          }
+          if (!virt_meth->is_external() && is_abstract(virt_meth)) {
+            continue;
+          }
+          class_method_map[virt_meth->get_class()] = virt_meth;
+        }
+        scope_map_it = m_scope_class_method_map.find(virt_scope);
+      }
+      const auto& class_method_map = scope_map_it->second;
+
+      // Step 3: Iterate merger's mergeables and look up their methods
+      for (const auto* mergeable : merger.mergeables) {
+        auto meth_it = class_method_map.find(mergeable);
+        if (meth_it == class_method_map.end()) {
           continue;
         }
-        if (!virt_meth->is_external() && is_abstract(virt_meth)) {
-          // Skip abstract overridden
-          continue;
-        }
-        if (merger.mergeables.count(virt_meth->get_class()) == 0) {
-          update_overridden(virt_scope->methods[0], virt_meth);
-          continue;
-        }
+        auto* virt_meth = meth_it->second;
         TRACE(CLMG,
               9,
               "method %s (%s)",

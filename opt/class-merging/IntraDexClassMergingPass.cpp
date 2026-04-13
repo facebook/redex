@@ -140,8 +140,9 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
       root_dexen.size() > 1) {
     if (m_enable_mergeability_aware_reshuffle) {
       class_merging::Model merging_model =
-          class_merging::construct_global_model(
-              scope, mgr, conf, stores, m_merging_spec, m_global_min_count);
+          class_merging::construct_global_model(type_system, scope, mgr, conf,
+                                                stores, m_merging_spec,
+                                                m_global_min_count);
       InterDexReshuffleImpl impl(
           conf, mgr, m_reshuffle_config, scope, root_dexen,
           interdex_pass->get_dynamically_dead_dexes(), &merging_model);

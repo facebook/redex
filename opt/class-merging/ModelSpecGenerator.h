@@ -49,6 +49,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
  * set to match those used by the IntraDexClassMerging pass.
  */
 class_merging::Model construct_global_model(
+    const TypeSystem& type_system,
     DexClasses& scope,
     PassManager& mgr,
     ConfigFiles& conf,

@@ -381,6 +381,12 @@ class Model {
   ConfigFiles& m_conf;
   const XDexRefs m_x_dex;
 
+  // Cache: VirtualScope* -> (class -> method) for fast lookup in
+  // distribute_virtual_methods. Avoids iterating all methods in a scope.
+  mutable UnorderedMap<const VirtualScope*,
+                       UnorderedMap<const DexType*, DexMethod*>>
+      m_scope_class_method_map;
+
   /**
    * Build a Model given a set of roots and a set of types deriving from the
    * roots.

@@ -226,6 +226,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
 }
 
 class_merging::Model construct_global_model(
+    const TypeSystem& type_system,
     DexClasses& scope,
     PassManager& mgr,
     ConfigFiles& conf,
@@ -242,7 +243,6 @@ class_merging::Model construct_global_model(
   global_model_merging_spec.min_count = 2;
   global_model_merging_spec.max_count = std::numeric_limits<size_t>::max();
 
-  TypeSystem type_system(scope);
   find_all_mergeables_and_roots(type_system, scope,
                                 /*global_min_count=*/global_min_count, mgr,
                                 &global_model_merging_spec);
