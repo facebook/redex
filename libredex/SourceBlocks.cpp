@@ -1420,6 +1420,29 @@ size_t count_all_sbs(
       b, [&](auto* sb ATTRIBUTE_UNUSED) { ++ret; });
   return ret;
 }
+size_t count_throw_delineated_no_sbs(
+    Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  size_t num_violations = 0;
+  bool had_sb = false;
+  bool has_throw_site = false;
+  for (auto it = b->begin(); it != b->end(); ++it) {
+    if (it->type == MFLOW_SOURCE_BLOCK) {
+      had_sb = true;
+    }
+    if (it->type == MFLOW_OPCODE && opcode::can_throw(it->insn->opcode()) &&
+        it->insn->opcode() != OPCODE_THROW) {
+      has_throw_site = true;
+      if (!had_sb) {
+        num_violations++;
+      }
+      had_sb = false;
+    }
+  }
+  if (!had_sb && has_throw_site) {
+    num_violations++;
+  }
+  return num_violations;
+}
 
 struct ViolationsAndPotentialViolations {
   size_t violations{0};
@@ -1806,12 +1829,14 @@ using ViolationCounterFnPtr = ViolationsAndPotentialViolations (*)(
     const dominators::SimpleFastDominators<cfg::GraphInterface>&,
     bool ignore_undefined);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 5> gCounters = {
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 6> gCounters = {
     {{"~blocks~count", &count_blocks},
      {"~blocks~with~source~blocks", &count_block_has_sbs},
      {"~blocks~without~source~blocks", &count_block_no_sbs},
      {"~blocks~with~incomplete-source~blocks", &count_block_has_incomplete_sbs},
-     {"~assessment~source~blocks~total", &count_all_sbs}}};
+     {"~assessment~source~blocks~total", &count_all_sbs},
+     {"~throw~delineated~blocks~without~source~blocks",
+      &count_throw_delineated_no_sbs}}};
 
 constexpr std::array<std::pair<std::string_view, ViolationCounterFnPtr>, 7>
     gViolationCounters = {
@@ -2328,20 +2353,21 @@ struct ViolationsHelper::ViolationsHelperImpl {
     size_t num_violations = 0;
     for (auto* cur : cfg.blocks()) {
       bool had_sb = false;
+      bool has_throw_site = false;
       for (auto it = cur->begin(); it != cur->end(); ++it) {
         if (it->type == MFLOW_SOURCE_BLOCK) {
           had_sb = true;
         }
         if (it->type == MFLOW_OPCODE && opcode::can_throw(it->insn->opcode()) &&
             it->insn->opcode() != OPCODE_THROW) {
-          // We hit a can throw instruction
+          has_throw_site = true;
           if (!had_sb) {
             num_violations++;
           }
           had_sb = false;
         }
       }
-      if (!had_sb) {
+      if (!had_sb && has_throw_site) {
         num_violations++;
       }
     }
