@@ -2183,6 +2183,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return hot_no_hot_pred_cfg(cfg, ignore_undefined);
     case Violation::KHotAllChildrenCold:
       return hot_all_children_cold_cfg(cfg, ignore_undefined);
+    case Violation::kUncoveredThrowDelineatedBlocks:
+      return uncovered_throw_delineated_blocks_violations_cfg(cfg);
     case Violation::ViolationSize:
       not_reached();
     }
@@ -2319,6 +2321,31 @@ struct ViolationsHelper::ViolationsHelperImpl {
       sum += chain_and_dom_violations(b, dom, ignore_undefined).violations;
     }
     return sum;
+  }
+
+  static size_t uncovered_throw_delineated_blocks_violations_cfg(
+      cfg::ControlFlowGraph& cfg) {
+    size_t num_violations = 0;
+    for (auto* cur : cfg.blocks()) {
+      bool had_sb = false;
+      for (auto it = cur->begin(); it != cur->end(); ++it) {
+        if (it->type == MFLOW_SOURCE_BLOCK) {
+          had_sb = true;
+        }
+        if (it->type == MFLOW_OPCODE && opcode::can_throw(it->insn->opcode()) &&
+            it->insn->opcode() != OPCODE_THROW) {
+          // We hit a can throw instruction
+          if (!had_sb) {
+            num_violations++;
+          }
+          had_sb = false;
+        }
+      }
+      if (!had_sb) {
+        num_violations++;
+      }
+    }
+    return num_violations;
   }
 
   static size_t uncovered_source_blocks_violations_cfg(
@@ -2474,6 +2501,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
     case Violation::kHotNoHotPred: {
       return "HotNoHotPred";
     }
+    case Violation::kUncoveredThrowDelineatedBlocks: {
+      return "UncoveredThrowDelineatedBlocks";
+    }
     case Violation::ViolationSize: {
       not_reached();
     }
@@ -2508,7 +2538,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
         for (Violation v = Violation::kHotImmediateDomNotHot;
              v < Violation::ViolationSize;
              v = static_cast<Violation>(static_cast<int>(v) + 1)) {
-          if (v != Violation::kUncoveredSourceBlocks) {
+          if (v != Violation::kUncoveredSourceBlocks &&
+              v != Violation::kUncoveredThrowDelineatedBlocks) {
             block_ss << "  " << get_violation_name(v) << ": ";
             if (violation_blocks.count(source_block) != 0u) {
               block_has_violations = true;
@@ -2534,6 +2565,13 @@ struct ViolationsHelper::ViolationsHelperImpl {
       if (violation_map.count(uncovered) != 0u) {
         ss << "  " << get_violation_name(uncovered) << ": ";
         for (const auto& str : violation_map[uncovered]) {
+          ss << str << ", ";
+        }
+      }
+      Violation uncovered_throw = Violation::kUncoveredThrowDelineatedBlocks;
+      if (violation_map.count(uncovered_throw) != 0u) {
+        ss << "  " << get_violation_name(uncovered_throw) << ": ";
+        for (const auto& str : violation_map[uncovered_throw]) {
           ss << str << ", ";
         }
       }
@@ -3022,6 +3060,60 @@ struct ViolationsHelper::ViolationsHelperImpl {
         }
       };
       return handle_violation<HotAllChildrenCold>(
+          m, print_violations, violation_blocks, ignore_undefined);
+    }
+    case Violation::kUncoveredThrowDelineatedBlocks: {
+      struct UncoveredThrowDelineated
+          : ViolationVisitorBase<UncoveredThrowDelineated> {
+        bool had_sb{false};
+
+        using Base = ViolationVisitorBase<UncoveredThrowDelineated>;
+
+        explicit UncoveredThrowDelineated(cfg::ControlFlowGraph& cfg,
+                                          bool ignore_undefined)
+            : Base(cfg, ignore_undefined) {}
+
+        explicit UncoveredThrowDelineated(cfg::ControlFlowGraph& cfg,
+                                          ViolationBlockMap* violating_blocks,
+                                          bool ignore_undefined)
+            : Base(cfg, violating_blocks, ignore_undefined) {}
+
+        void on_start_block(std::ostream&, cfg::Block*) { had_sb = false; }
+
+        void on_end_block(std::ostream& os, cfg::Block* /*b*/) {
+          if (!had_sb) {
+            if (violating_blocks != nullptr) {
+              auto& map = (*violating_blocks)[nullptr];
+              map[Violation::kUncoveredThrowDelineatedBlocks].emplace_back(
+                  "B" + std::to_string(cur->id()));
+            }
+            os << "!!!UNCOVERED THROW DELINEATED BLOCK\n";
+          }
+        }
+
+        void mie_after_impl(std::ostream& os,
+                            const MethodItemEntry& mie,
+                            bool /*ignore_undefined*/) {
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            had_sb = true;
+            return;
+          }
+          if (mie.type == MFLOW_OPCODE &&
+              opcode::can_throw(mie.insn->opcode()) &&
+              mie.insn->opcode() != OPCODE_THROW) {
+            if (!had_sb) {
+              if (violating_blocks != nullptr) {
+                auto& map = (*violating_blocks)[nullptr];
+                map[Violation::kUncoveredThrowDelineatedBlocks].emplace_back(
+                    "B" + std::to_string(cur->id()));
+              }
+              os << "!!!UNCOVERED THROW DELINEATED BLOCK\n";
+            }
+            had_sb = false;
+          }
+        }
+      };
+      return handle_violation<UncoveredThrowDelineated>(
           m, print_violations, violation_blocks, ignore_undefined);
     }
     case Violation::ViolationSize:

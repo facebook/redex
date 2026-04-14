@@ -628,7 +628,8 @@ struct ViolationsHelper {
     kHotMethodColdEntry = 3,
     kHotNoHotPred = 4,
     KHotAllChildrenCold = 5,
-    ViolationSize = 6,
+    kUncoveredThrowDelineatedBlocks = 6,
+    ViolationSize = 7,
   };
 
   ViolationsHelper(Violation v,
