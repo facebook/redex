@@ -7,6 +7,7 @@
 
 #include "ConstantPropagationTransform.h"
 
+#include <unordered_set>
 #include <vector>
 
 #include "ReachableClasses.h"
@@ -18,9 +19,12 @@
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeInference.h"
+#include "TypeUtil.h"
 
 namespace constant_propagation_transform_internal {
 bool enable_object_domain_null_check_elim = false;
+// TODO(T263034329): Remove this.
+bool enable_replacing_areequal = false;
 } // namespace constant_propagation_transform_internal
 
 namespace constant_propagation {
@@ -165,6 +169,86 @@ bool Transform::eliminate_redundant_null_check(
     break;
   }
   return false;
+}
+
+// Final classes with symmetric equals -- safe to swap areEqual arguments.
+bool is_safe_symmetric_equals_type(const DexType* t) {
+  static const std::unordered_set<const DexType*> safe_types = {
+      type::java_lang_Boolean(),   type::java_lang_Byte(),
+      type::java_lang_Character(), type::java_lang_Class(),
+      type::java_lang_Integer(),   type::java_lang_Long(),
+      type::java_lang_Short(),     type::java_lang_String(),
+  };
+  always_assert(!safe_types.contains(nullptr));
+  return safe_types.contains(t);
+}
+
+// Swap areEqual(a, b) to areEqual(b, a) when b is non-null and both args are
+// final types with symmetric equals, so the non-null arg becomes first.
+void Transform::swap_kotlin_areequal(
+    const intraprocedural::FixpointIterator& intra_cp,
+    cfg::ControlFlowGraph& cfg,
+    bool is_static,
+    const DexType* declaring_type,
+    DexProto* proto) {
+  if (!constant_propagation_transform_internal::enable_replacing_areequal) {
+    return;
+  }
+  auto* kotlin_areequal = DexMethod::get_method(
+      "Lkotlin/jvm/internal/Intrinsics;.areEqual:"
+      "(Ljava/lang/Object;Ljava/lang/Object;)Z");
+  if (kotlin_areequal == nullptr) {
+    return;
+  }
+  // Skip TypeInference if no areEqual calls in this method.
+  if (auto ii = cfg::ConstInstructionIterable(cfg);
+      !std::any_of(ii.begin(), ii.end(), [&](const auto& mie) {
+        return mie.insn->opcode() == OPCODE_INVOKE_STATIC &&
+               mie.insn->get_method() == kotlin_areequal;
+      })) {
+    return;
+  }
+  type_inference::TypeInference ti(cfg);
+  ti.run(is_static, declaring_type, proto->get_args());
+  auto& type_envs = ti.get_type_environments();
+  for (const auto& block : cfg.blocks()) {
+    auto env = intra_cp.get_entry_state_at(block);
+    if (env.is_bottom()) {
+      continue;
+    }
+    for (auto& mie : InstructionIterable(block)) {
+      auto* insn = mie.insn;
+      intra_cp.analyze_instruction(insn, &env, false);
+      if (insn->opcode() != OPCODE_INVOKE_STATIC ||
+          insn->get_method() != kotlin_areequal) {
+        continue;
+      }
+      // Skip if first arg is already non-null or known null -- swapping
+      // gains nothing.
+      if (auto src0_val = env.get(insn->src(0));
+          is_known_non_null(src0_val) || src0_val.is_zero()) {
+        continue;
+      }
+      if (!is_known_non_null(env.get(insn->src(1)))) {
+        continue;
+      }
+      auto ti_it = type_envs.find(insn);
+      if (ti_it == type_envs.end()) {
+        continue;
+      }
+      auto& type_env = ti_it->second;
+      auto type0 = type_env.get_dex_type(insn->src(0));
+      auto type1 = type_env.get_dex_type(insn->src(1));
+      if (!type0 || !type1 || !is_safe_symmetric_equals_type(*type0) ||
+          !is_safe_symmetric_equals_type(*type1)) {
+        continue;
+      }
+      auto src0 = insn->src(0);
+      insn->set_src(0, insn->src(1));
+      insn->set_src(1, src0);
+      ++m_stats.kotlin_areequal_swapped;
+    }
+  }
 }
 
 bool Transform::eliminate_redundant_put(
@@ -1023,6 +1107,7 @@ void Transform::apply(const intraprocedural::FixpointIterator& fp_iter,
                       DexProto* proto) {
   legacy_apply_constants_and_prune_unreachable(fp_iter, wps, cfg, xstores,
                                                declaring_type);
+  swap_kotlin_areequal(fp_iter, cfg, is_static, declaring_type, proto);
   if ((xstores != nullptr) && !g_redex->instrument_mode) {
     m_stats.unreachable_instructions_removed += cfg.simplify();
     fp_iter.clear_switch_succ_cache();
@@ -1441,6 +1526,7 @@ void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
   sm.set_metric("added_param_const", added_param_const);
   sm.set_metric("class_isinstance_replaced", class_isinstance_replaced);
   sm.set_metric("class_cast_replaced", class_cast_replaced);
+  sm.set_metric("kotlin_areequal_swapped", kotlin_areequal_swapped);
 }
 
 } // namespace constant_propagation

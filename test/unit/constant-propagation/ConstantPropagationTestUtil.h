@@ -11,6 +11,7 @@
 
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
+#include "DexUtil.h"
 #include "RedexTest.h"
 
 namespace cp = constant_propagation;
@@ -58,6 +59,25 @@ struct ConstantPropagationTest : public RedexTest {
     default:
       not_reached();
     }
+    code->clear_cfg();
+  }
+
+  // Overload that takes a DexMethod* and calls apply(), running all
+  // transform phases including those that require method info.
+  static void do_const_prop(
+      DexMethod* method,
+      const std::function<void(const IRInstruction*, ConstantEnvironment*)>&
+          insn_analyzer = cp::ConstantPrimitiveAnalyzer(),
+      const cp::Transform::Config& transform_config = cp::Transform::Config()) {
+    auto* code = method->get_code();
+    code->build_cfg();
+    cp::State state;
+    cp::intraprocedural::FixpointIterator intra_cp(&state, code->cfg(),
+                                                   insn_analyzer);
+    intra_cp.run(ConstantEnvironment());
+    cp::Transform tf(transform_config, state);
+    tf.apply(intra_cp, cp::WholeProgramState(), code->cfg(), nullptr,
+             is_static(method), method->get_class(), method->get_proto());
     code->clear_cfg();
   }
 };
