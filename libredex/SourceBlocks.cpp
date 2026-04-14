@@ -1400,6 +1400,10 @@ size_t count_block_has_sbs(
     Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   return source_blocks::has_source_blocks(b) ? 1 : 0;
 }
+size_t count_block_no_sbs(
+    Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  return source_blocks::has_source_blocks(b) ? 0 : 1;
+}
 size_t count_block_has_incomplete_sbs(
     Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   auto* sb = get_first_source_block(b);
@@ -1802,9 +1806,10 @@ using ViolationCounterFnPtr = ViolationsAndPotentialViolations (*)(
     const dominators::SimpleFastDominators<cfg::GraphInterface>&,
     bool ignore_undefined);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 4> gCounters = {
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 5> gCounters = {
     {{"~blocks~count", &count_blocks},
      {"~blocks~with~source~blocks", &count_block_has_sbs},
+     {"~blocks~without~source~blocks", &count_block_no_sbs},
      {"~blocks~with~incomplete-source~blocks", &count_block_has_incomplete_sbs},
      {"~assessment~source~blocks~total", &count_all_sbs}}};
 
