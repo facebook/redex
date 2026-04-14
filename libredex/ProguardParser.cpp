@@ -174,14 +174,13 @@ std::string parse_single_filepath_command(TokenIndex& idx) {
 template <bool kOptional = false>
 std::vector<std::string> parse_filepaths(TokenIndex& idx,
                                          const std::string& basedir) {
-  std::vector<std::string> filepaths;
   if (idx.type() != TokenType::filepath) {
     if (!kOptional) {
       std::cerr << "Expected filepath but got " << idx.show() << " at line "
                 << idx.line() << '\n'
                 << idx.show_context(2) << '\n';
     }
-    {};
+    return {};
   }
   std::vector<std::string> res;
   while (idx.type() == TokenType::filepath) {
