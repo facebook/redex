@@ -27,7 +27,7 @@ void print_method_seeds(std::ostream& output,
                         const bool allowobfuscation_filter) {
 
   for (DexMethod* method : methods) {
-    if (impl::KeepState::has_keep(method) ||
+    if (!impl::KeepState::has_keep(method) ||
         (allowshrinking_filter && !impl::KeepState::allowshrinking(method)) ||
         (allowobfuscation_filter &&
          !impl::KeepState::allowobfuscation(method))) {
