@@ -285,7 +285,7 @@ void PassImpl::optimize(
 void PassImpl::run(const DexStoresVector& stores,
                    const ConfigFiles& conf,
                    int min_sdk,
-                   const boost::optional<std::string>& package_name) {
+                   const std::optional<std::string>& package_name) {
   // reset statistics, to be meaningful when pass runs multiple times
   m_stats = Stats();
   m_transform_stats = Transform::Stats();

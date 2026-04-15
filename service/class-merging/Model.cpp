@@ -323,9 +323,9 @@ MergerType& Model::create_merger_helper(
     const DexType* merger_type,
     const MergerType::Shape& shape,
     const TypeSet& intf_set,
-    const boost::optional<size_t>& dex_id,
+    const std::optional<size_t>& dex_id,
     const ConstTypeVector& group_values,
-    const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+    const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const InterdexSubgroupIdx subgroup_idx) {
   size_t group_count = m_shape_to_count[shape]++;
   UnorderedSet<size_t>& hash_cache = m_shape_hash_cache[shape];
@@ -358,11 +358,11 @@ void Model::create_mergers_helper(
     const DexType* merger_type,
     const MergerType::Shape& shape,
     const TypeSet& intf_set,
-    const boost::optional<size_t>& dex_id,
+    const std::optional<size_t>& dex_id,
     const TypeSet& group_values,
     const strategy::Strategy strategy,
-    const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-    const boost::optional<size_t>& max_mergeables_count,
+    const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+    const std::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
   InterdexSubgroupIdx subgroup_cnt = 0;
   strategy::MergingStrategy ms(strategy, group_values);
@@ -583,7 +583,7 @@ TypeGroupByDex Model::group_per_dex(const TypeSet& types,
                                     const ModelSpec& spec) {
   if (!spec.per_dex_grouping) {
     TypeSet group(types.begin(), types.end());
-    return {{boost::none, group}};
+    return {{std::nullopt, group}};
   }
   std::vector<TypeSet> new_groups(m_x_dex.num_dexes());
   for (const auto* type : types) {
@@ -597,7 +597,7 @@ TypeGroupByDex Model::group_per_dex(const TypeSet& types,
     if (group.size() >= spec.min_count) {
       TRACE(CLMG, 7, "dex_id %zu: group %zu", dex_id, group.size());
       result.emplace_back(
-          std::make_pair(boost::optional<size_t>(dex_id), std::move(group)));
+          std::make_pair(std::optional<size_t>(dex_id), std::move(group)));
     }
   }
   return result;
@@ -665,7 +665,7 @@ void Model::flatten_shapes(const InterDexGrouping& interdex_grouping,
           interdex_grouping.visit_groups(m_spec, group, interdex_visitor);
         } else {
           create_mergers_helper(merger.type, *shape, *intf_set, dex_id, group,
-                                m_spec.strategy, boost::none, m_spec.max_count,
+                                m_spec.strategy, std::nullopt, m_spec.max_count,
                                 m_spec.min_count);
         }
       }

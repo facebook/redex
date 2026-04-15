@@ -9,6 +9,8 @@
 
 #include <ostream>
 
+#include "OptionalIO.h"
+// TODO(T000000000): Remove after downstream boost::optional migration
 #include <boost/optional/optional_io.hpp>
 
 #include <sparta/FiniteAbstractDomain.h>
@@ -155,12 +157,12 @@ namespace type_inference {
 
 // if one of these annotations has the str_typedef_anno or int_typedef_anno
 // annotation, return it
-boost::optional<const DexType*> get_typedef_annotation(
+std::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
     const UnorderedSet<const DexType*>& typedef_annotations);
 
 template <typename DexMember>
-boost::optional<const DexType*> get_typedef_anno_from_member(
+std::optional<const DexType*> get_typedef_anno_from_member(
     const DexMember* member,
     const UnorderedSet<const DexType*>& typedef_annotations) {
   if (!typedef_annotations.empty() && member->is_def()) {
@@ -171,7 +173,7 @@ boost::optional<const DexType*> get_typedef_anno_from_member(
                                     typedef_annotations);
     }
   }
-  return boost::none;
+  return std::nullopt;
 }
 /*
  * Checks whether a (joined) type can be safely used in the presence of if-
@@ -253,11 +255,11 @@ class TypeEnvironment final
     apply<2>([=](auto env) { env->update(reg, operation); }, true);
   }
 
-  boost::optional<const DexType*> get_dex_type(reg_t reg) const {
+  std::optional<const DexType*> get_dex_type(reg_t reg) const {
     return get<1>().get(reg).get_dex_type();
   }
 
-  boost::optional<const DexType*> get_annotation(reg_t reg) const {
+  std::optional<const DexType*> get_annotation(reg_t reg) const {
     return get<1>().get(reg).get_annotation_type();
   }
 

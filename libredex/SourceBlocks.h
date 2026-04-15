@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ControlFlow.h"
@@ -225,7 +226,7 @@ struct InsertResult {
 // * A general default value.
 using ProfileData =
     std::variant<std::nullopt_t,
-                 std::pair<std::string, boost::optional<SourceBlock::Val>>,
+                 std::pair<std::string, std::optional<SourceBlock::Val>>,
                  SourceBlock::Val>;
 
 InsertResult insert_source_blocks(const DexString* method,

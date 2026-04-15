@@ -7,9 +7,11 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
 #include <cstdint>
 #include <map>
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
+#include <boost/optional.hpp>
 #include <string>
 #include <sys/types.h>
 #include <vector>
@@ -251,8 +253,8 @@ class TableSnapshot {
   // Options for collect_resource_values() below.
   struct CollectionOptions {
     // If present, limit the result to only values in the given configs.
-    boost::optional<std::vector<android::ResTable_config>> include_configs{
-        boost::none};
+    std::optional<std::vector<android::ResTable_config>> include_configs{
+        std::nullopt};
     // If true, collect the parent id for ResTable_map_entry occurrences.
     bool include_map_entry_parents{true};
     // If true, collect ids from ResTable_map structures that follow
@@ -414,9 +416,9 @@ class ApkResources : public AndroidResources {
         m_manifest(directory + "/AndroidManifest.xml") {}
   ~ApkResources() override;
 
-  boost::optional<int32_t> get_min_sdk() override;
+  std::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
-  boost::optional<std::string> get_manifest_package_name() override;
+  std::optional<std::string> get_manifest_package_name() override;
   UnorderedSet<std::string> get_service_loader_classes() override;
   UnorderedSet<uint32_t> get_xml_reference_attributes(
       const std::string& filename) override;

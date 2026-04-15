@@ -17,14 +17,14 @@
 
 namespace typedef_anno {
 bool is_int(const type_inference::TypeEnvironment& env, reg_t reg) {
-  return env.get_dex_type(reg) != boost::none &&
+  return env.get_dex_type(reg) != std::nullopt &&
          type::is_int(*env.get_dex_type(reg));
 }
 
 // if there's no dex type, the value is null, and the checker does not enforce
 // nullability
 bool is_string(const type_inference::TypeEnvironment& env, reg_t reg) {
-  return env.get_dex_type(reg) != boost::none
+  return env.get_dex_type(reg) != std::nullopt
              ? *env.get_dex_type(reg) == type::java_lang_String()
              : true;
 }
@@ -47,7 +47,7 @@ bool has_typedef_annos(
     auto& anno_set = anno.second;
     auto typedef_anno = type_inference::get_typedef_annotation(
         anno_set->get_annotations(), typedef_annos);
-    if (typedef_anno != boost::none) {
+    if (typedef_anno != std::nullopt) {
       return true;
     }
   }
@@ -325,7 +325,7 @@ void collect_return_candidates_impl(DexMethod* m,
                                     PatchingCandidates& candidates,
                                     MethodAnalysis& analysis) {
   auto& envs = analysis.envs();
-  boost::optional<const TypedefAnnoType*> anno = boost::none;
+  std::optional<const TypedefAnnoType*> anno = std::nullopt;
   bool patch_return = true;
   for (cfg::Block* b : analysis.cfg().blocks()) {
     for (auto& mie : InstructionIterable(b)) {
@@ -333,8 +333,8 @@ void collect_return_candidates_impl(DexMethod* m,
       IROpcode opcode = insn->opcode();
       if ((opcode == OPCODE_RETURN_OBJECT || opcode == OPCODE_RETURN)) {
         auto return_anno = envs.at(insn).get_annotation(insn->src(0));
-        if (return_anno == boost::none ||
-            (anno != boost::none && return_anno != anno)) {
+        if (return_anno == std::nullopt ||
+            (anno != std::nullopt && return_anno != anno)) {
           patch_return = false;
         } else {
           anno = return_anno;
@@ -343,7 +343,7 @@ void collect_return_candidates_impl(DexMethod* m,
     }
   }
 
-  if (patch_return && anno != boost::none) {
+  if (patch_return && anno != std::nullopt) {
     candidates.add_method_candidate(m, *anno);
   }
 }
@@ -400,7 +400,7 @@ void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
     for (const auto& [param_idx, anno_set] : *param_annos) {
       auto annotation = type_inference::get_typedef_annotation(
           anno_set->get_annotations(), m_typedef_annos);
-      if (annotation == boost::none) {
+      if (annotation == std::nullopt) {
         continue;
       }
 
@@ -441,10 +441,10 @@ void TypedefAnnoPatcher::collect_overriding_method_candidates(
       type_inference::get_typedef_anno_from_member(m, m_typedef_annos);
 
   for (const auto* overridden : UnorderedIterable(overriddens)) {
-    if (existing_return == boost::none) {
+    if (existing_return == std::nullopt) {
       auto return_anno = type_inference::get_typedef_anno_from_member(
           overridden, m_typedef_annos);
-      if (return_anno != boost::none) {
+      if (return_anno != std::nullopt) {
         candidates.add_method_candidate(m, *return_anno);
         existing_return = return_anno;
       }
@@ -457,7 +457,7 @@ void TypedefAnnoPatcher::collect_overriding_method_candidates(
     for (const auto& [param_idx, anno_set] : *overridden->get_param_anno()) {
       auto annotation = type_inference::get_typedef_annotation(
           anno_set->get_annotations(), m_typedef_annos);
-      if (annotation == boost::none) {
+      if (annotation == std::nullopt) {
         continue;
       }
       // Skip if this param already has a typedef annotation.
@@ -466,7 +466,7 @@ void TypedefAnnoPatcher::collect_overriding_method_candidates(
         auto existing = type_inference::get_typedef_annotation(
             m->get_param_anno()->at(param_idx)->get_annotations(),
             m_typedef_annos);
-        if (existing != boost::none) {
+        if (existing != std::nullopt) {
           continue;
         }
       }
@@ -615,7 +615,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
       }
 
       auto annotation = env.get_annotation(src_reg);
-      if (annotation == boost::none) {
+      if (annotation == std::nullopt) {
         continue;
       }
 

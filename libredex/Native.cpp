@@ -20,10 +20,10 @@ namespace fs = boost::filesystem;
 
 namespace {
 
-boost::optional<Json::Value> read_json_from_file(const std::string& filename) {
+std::optional<Json::Value> read_json_from_file(const std::string& filename) {
   std::ifstream file_stream(filename);
   if (!file_stream) {
-    return boost::none;
+    return std::nullopt;
   }
   Json::Value json;
   file_stream >> json;

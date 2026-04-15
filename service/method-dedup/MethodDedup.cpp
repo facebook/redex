@@ -131,7 +131,7 @@ size_t dedup_methods_helper(
     const std::vector<DexMethod*>& to_dedup,
     bool dedup_fill_in_stack_trace,
     std::vector<DexMethod*>& replacements,
-    boost::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>& new_to_old) {
+    std::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>& new_to_old) {
   if (to_dedup.size() <= 1) {
     replacements = to_dedup;
     return 0;
@@ -147,20 +147,20 @@ size_t dedup_methods_helper(
         duplicates_to_replacement[m] = replacement;
       }
       // Update dedup map
-      if (new_to_old == boost::none) {
+      if (new_to_old == std::nullopt) {
         continue;
       }
       if (new_to_old->count(m) > 0) {
         auto orig_old_list = new_to_old->at(m);
         new_to_old->erase(m);
         for (auto* orig_old : orig_old_list) {
-          new_to_old.get()[replacement].insert(orig_old);
+          (*new_to_old)[replacement].insert(orig_old);
         }
       }
-      new_to_old.get()[replacement].insert(m);
+      (*new_to_old)[replacement].insert(m);
     }
-    if (new_to_old != boost::none) {
-      new_to_old.get()[replacement].insert(replacement);
+    if (new_to_old != std::nullopt) {
+      (*new_to_old)[replacement].insert(replacement);
     }
 
     replacements.push_back(replacement);
@@ -182,7 +182,7 @@ size_t dedup_methods(
     const std::vector<DexMethod*>& to_dedup,
     bool dedup_fill_in_stack_trace,
     std::vector<DexMethod*>& replacements,
-    boost::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>& new_to_old) {
+    std::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>& new_to_old) {
   size_t total_dedup_count = 0;
   auto to_dedup_temp = to_dedup;
   while (true) {

@@ -655,8 +655,10 @@ UnorderedSet<std::string> parse_keep_xml_file(
     return resource_names;
   }
 
-  boost::optional<std::string> keep_value =
+  auto boost_keep_value =
       tree.get_optional<std::string>("resources.<xmlattr>.tools:keep");
+  std::optional<std::string> keep_value =
+      boost_keep_value ? std::make_optional(*boost_keep_value) : std::nullopt;
 
   if (!keep_value.has_value()) {
     return resource_names;

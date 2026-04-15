@@ -39,7 +39,7 @@ void IntraDexClassMergingPass::bind_config() {
        max_count,
        "Maximum mergeable class count per merging group");
   if (max_count > 0) {
-    m_merging_spec.max_count = boost::optional<size_t>(max_count);
+    m_merging_spec.max_count = std::optional<size_t>(max_count);
   }
   bind("use_stable_shape_names", false, m_merging_spec.use_stable_shape_names);
   bind("mergeability_checks_use_of_const_class", false,

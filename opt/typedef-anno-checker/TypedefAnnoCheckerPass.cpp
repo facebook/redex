@@ -175,7 +175,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   m_ud_chains = &ud_chains;
   m_du_chains = &du_chains;
 
-  m_return_annotation = boost::none;
+  m_return_annotation = std::nullopt;
   DexAnnotationSet* return_annos = m->get_anno_set();
   if (return_annos != nullptr) {
     m_return_annotation = type_inference::get_typedef_annotation(
@@ -271,7 +271,7 @@ void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
         auto annotation = type_inference::get_typedef_annotation(
             param_anno.second->get_annotations(),
             m_inference->get_annotations());
-        if (annotation == boost::none) {
+        if (annotation == std::nullopt) {
           continue;
         }
         int param_index = insn->opcode() == OPCODE_INVOKE_STATIC
@@ -348,7 +348,7 @@ void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
     auto env_anno = env.get_annotation(insn->src(0));
     auto field_anno = type_inference::get_typedef_anno_from_member(
         insn->get_field(), m_inference->get_annotations());
-    if (env_anno != boost::none && field_anno != boost::none &&
+    if (env_anno != std::nullopt && field_anno != std::nullopt &&
         env_anno.value() != field_anno.value()) {
       add_error(ErrorBuilder(m_method, format_source_loc(insn))
                     .detail("assigned field ", insn->get_field()->c_str(),
@@ -356,7 +356,7 @@ void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
                             " to a value with annotation ", show(env_anno), ".")
                     .failed_instruction(insn)
                     .str());
-    } else if (env_anno == boost::none && field_anno != boost::none) {
+    } else if (env_anno == std::nullopt && field_anno != std::nullopt) {
       if (auto err = check_typedef_value(field_anno, insn, 0)) {
         std::ostringstream ctx;
         ctx << "\n Error writing to field " << show(insn->get_field())
@@ -415,7 +415,7 @@ void TypedefAnnoChecker::check_instruction(IRInstruction* insn) {
 }
 
 std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
-    const boost::optional<const DexType*>& annotation,
+    const std::optional<const DexType*>& annotation,
     IRInstruction* insn,
     const src_index_t src) {
 
@@ -515,7 +515,7 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
         break;
       }
       auto anno = env->second.get_annotation(def->dest());
-      if (anno == boost::none || anno != annotation) {
+      if (anno == std::nullopt || anno != annotation) {
         return ErrorBuilder(m_method, format_source_loc(insn))
             .detail(
                 "one of the parameters needs to have the typedef "
@@ -548,10 +548,10 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
       }
       auto callees = resolve_callees(def_method);
       for (const DexMethod* callee : UnorderedIterable(callees)) {
-        boost::optional<const DexType*> anno =
+        std::optional<const DexType*> anno =
             type_inference::get_typedef_anno_from_member(
                 callee, m_inference->get_annotations());
-        if (anno == boost::none || anno != annotation) {
+        if (anno == std::nullopt || anno != annotation) {
           DexType* return_type = callee->get_proto()->get_rtype();
           // constant folding might cause the source to be the invoked boolean
           // method https://fburl.com/code/h3dn0ft0

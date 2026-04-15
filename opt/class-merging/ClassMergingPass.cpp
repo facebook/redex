@@ -153,7 +153,7 @@ void ClassMergingPass::bind_config() {
                        use_stable_shape_names, update_method_profiles_stats] {
     if (max_num_dispatch_target > 0) {
       m_max_num_dispatch_target =
-          boost::optional<size_t>(static_cast<size_t>(max_num_dispatch_target));
+          std::optional<size_t>(static_cast<size_t>(max_num_dispatch_target));
     }
 
     if (models.empty()) {
@@ -253,7 +253,7 @@ void ClassMergingPass::bind_config() {
       }
 
       if (max_count > 0) {
-        model.max_count = boost::optional<size_t>(max_count);
+        model.max_count = std::optional<size_t>(max_count);
       }
       model.process_method_meta = process_method_meta;
       model.max_num_dispatch_target = m_max_num_dispatch_target;

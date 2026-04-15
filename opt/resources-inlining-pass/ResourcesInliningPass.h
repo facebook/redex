@@ -77,7 +77,7 @@ class ResourcesInliningPass : public Pass {
       const UnorderedMap<uint32_t, resources::InlinableValue>&,
       const std::map<uint32_t, std::string>& id_to_name,
       const std::vector<std::string>& type_names,
-      const boost::optional<std::string>& package_name);
+      const std::optional<std::string>& package_name);
 
   static void inline_resource_values_dex(
       DexMethod* method,

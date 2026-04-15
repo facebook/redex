@@ -37,8 +37,8 @@ class EvaluateTypeChecksPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   // Exposed for testing.
-  static boost::optional<int32_t> evaluate(const DexType* src_type,
-                                           const DexType* test_type);
+  static std::optional<int32_t> evaluate(const DexType* src_type,
+                                         const DexType* test_type);
   static void optimize(DexMethod* m, shrinker::Shrinker& shrinker);
 };
 

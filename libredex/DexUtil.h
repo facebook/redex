@@ -8,10 +8,11 @@
 #pragma once
 
 #include <algorithm>
-#include <boost/optional.hpp>
 #include <cctype>
 #include <functional>
 #include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
+#include <boost/optional.hpp>
 #include <string_view>
 #include <vector>
 
@@ -277,31 +278,31 @@ inline std::optional<std::string_view> primitive_desc_to_name(char desc) {
   }
 }
 
-inline boost::optional<char> primitive_name_to_desc(std::string_view name) {
+inline std::optional<char> primitive_name_to_desc(std::string_view name) {
   if (name.empty()) {
-    return boost::none;
+    return std::nullopt;
   }
   switch (name[0]) {
   case 'b':
-    return name == "byte"      ? boost::optional<char>('B')
-           : name == "boolean" ? boost::optional<char>('Z')
-                               : boost::none;
+    return name == "byte"      ? std::optional<char>('B')
+           : name == "boolean" ? std::optional<char>('Z')
+                               : std::nullopt;
   case 'c':
-    return name == "char" ? boost::optional<char>('C') : boost::none;
+    return name == "char" ? std::optional<char>('C') : std::nullopt;
   case 'd':
-    return name == "double" ? boost::optional<char>('D') : boost::none;
+    return name == "double" ? std::optional<char>('D') : std::nullopt;
   case 'f':
-    return name == "float" ? boost::optional<char>('F') : boost::none;
+    return name == "float" ? std::optional<char>('F') : std::nullopt;
   case 'i':
-    return name == "int" ? boost::optional<char>('I') : boost::none;
+    return name == "int" ? std::optional<char>('I') : std::nullopt;
   case 'l':
-    return name == "long" ? boost::optional<char>('J') : boost::none;
+    return name == "long" ? std::optional<char>('J') : std::nullopt;
   case 's':
-    return name == "short" ? boost::optional<char>('S') : boost::none;
+    return name == "short" ? std::optional<char>('S') : std::nullopt;
   case 'v':
-    return name == "void" ? boost::optional<char>('V') : boost::none;
+    return name == "void" ? std::optional<char>('V') : std::nullopt;
   default:
-    return boost::none;
+    return std::nullopt;
   }
 }
 

@@ -43,7 +43,7 @@ class MergingStrategy final {
       : m_strategy(strategy), m_mergeable_types(mergeable_types) {}
 
   void apply_grouping(size_t min_mergeables_count,
-                      const boost::optional<size_t>& max_mergeables_count,
+                      const std::optional<size_t>& max_mergeables_count,
                       const GroupWalkerFn& walker) {
     switch (m_strategy) {
     case BY_CLASS_COUNT:
@@ -65,20 +65,18 @@ class MergingStrategy final {
   const Strategy m_strategy;
   const TypeSet& m_mergeable_types;
 
-  void group_by_cls_count(
-      const TypeSet& mergeable_types,
-      size_t min_mergeables_count,
-      const boost::optional<size_t>& opt_max_mergeables_count,
-      const GroupWalkerFn& walker);
+  void group_by_cls_count(const TypeSet& mergeable_types,
+                          size_t min_mergeables_count,
+                          const std::optional<size_t>& opt_max_mergeables_count,
+                          const GroupWalkerFn& walker);
 
   /**
    * Note it does only check the virtual methods code size on the classes and it
    * is not aware of how later optimizations would change the code.
    */
-  void group_by_code_size(
-      const TypeSet& mergeable_types,
-      const boost::optional<size_t>& opt_max_mergeables_count,
-      const GroupWalkerFn& walker);
+  void group_by_code_size(const TypeSet& mergeable_types,
+                          const std::optional<size_t>& opt_max_mergeables_count,
+                          const GroupWalkerFn& walker);
 
   void group_by_refs(const TypeSet& mergeable_types,
                      const GroupWalkerFn& walker);

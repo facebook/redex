@@ -11,10 +11,12 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/noncopyable.hpp>
-#include <boost/optional.hpp>
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
+#include <boost/optional.hpp>
 #include <set>
 #include <string>
 #include <utility>
@@ -183,7 +185,7 @@ struct StyleResource {
 
     uint8_t get_data_type() const { return data_type; }
     uint32_t get_value_bytes() const { return value_bytes; }
-    const boost::optional<std::string>& get_value_string() const {
+    const std::optional<std::string>& get_value_string() const {
       return value_string;
     }
     const std::vector<Span>& get_styled_string() const { return styled_string; }
@@ -191,7 +193,7 @@ struct StyleResource {
    private:
     uint8_t data_type{0};
     uint32_t value_bytes{0};
-    boost::optional<std::string> value_string{boost::none};
+    std::optional<std::string> value_string{std::nullopt};
     std::vector<Span> styled_string;
   };
 
@@ -579,10 +581,10 @@ class ResourceTableFile {
 
 class AndroidResources {
  public:
-  virtual boost::optional<int32_t> get_min_sdk() = 0;
+  virtual std::optional<int32_t> get_min_sdk() = 0;
 
   virtual ManifestClassInfo get_manifest_class_info() = 0;
-  virtual boost::optional<std::string> get_manifest_package_name() = 0;
+  virtual std::optional<std::string> get_manifest_package_name() = 0;
 
   virtual UnorderedSet<std::string> get_service_loader_classes() = 0;
 

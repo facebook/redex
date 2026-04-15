@@ -15,6 +15,7 @@
 
 #include "ControlFlow.h"
 #include "IRCode.h"
+#include <optional>
 
 namespace big_blocks {
 
@@ -114,7 +115,7 @@ struct InstructionIterable {
 };
 
 // Gets the big block starting from the given block, if any
-boost::optional<BigBlock> get_big_block(cfg::Block* block);
+std::optional<BigBlock> get_big_block(cfg::Block* block);
 
 // Each block of the original cfg appears in exactly one big block.
 std::vector<BigBlock> get_big_blocks(cfg::ControlFlowGraph& cfg);

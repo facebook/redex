@@ -237,13 +237,13 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
         // RESULT_REGISTER for some instruction.
         const auto& o = analysis->get_abstract_object(RESULT_REGISTER, insn);
         if (o &&
-            (o.get().obj_kind != reflection::CLASS ||
+            (o->obj_kind != reflection::CLASS ||
              (analysis->get_class_source(RESULT_REGISTER, insn).has_value() &&
-              analysis->get_class_source(RESULT_REGISTER, insn).get() ==
+              analysis->get_class_source(RESULT_REGISTER, insn).value() ==
                   reflection::REFLECTION))) {
           // If the obj is a CLASS then it must have a class source of
           // REFLECTION
-          return o.get().dex_type;
+          return o->dex_type;
         }
       }
       return nullptr;

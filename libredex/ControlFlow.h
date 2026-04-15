@@ -12,8 +12,10 @@
 #include <vector>
 
 #include <boost/dynamic_bitset.hpp>
-#include <boost/optional/optional.hpp>
 #include <boost/range/sub_range.hpp>
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
+#include <boost/optional.hpp>
 
 #include <sparta/WeakTopologicalOrdering.h>
 
@@ -129,7 +131,7 @@ struct ThrowInfo {
 class Edge final {
  public:
   using CaseKey = int32_t;
-  using MaybeCaseKey = boost::optional<CaseKey>;
+  using MaybeCaseKey = std::optional<CaseKey>;
 
  private:
   Block* m_src;
@@ -140,14 +142,14 @@ class Edge final {
     ThrowInfo* m_throw_info;
     // If `m_type` is not EDGE_THROW then this union is an optional case key.
     // If this edge is a non-default outgoing edge of an OPCODE_SWITCH, then
-    // this is not `boost::none`.
+    // this is not `std::nullopt`.
     MaybeCaseKey m_case_key;
   };
   EdgeType m_type;
 
  public:
   Edge(Block* src, Block* target, EdgeType type)
-      : m_src(src), m_target(target), m_case_key(boost::none), m_type(type) {
+      : m_src(src), m_target(target), m_case_key(std::nullopt), m_type(type) {
     always_assert_log(m_type != EDGE_THROW,
                       "Need a catch type and index to create a THROW edge");
   }

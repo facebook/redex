@@ -82,7 +82,7 @@ Shrinker::Shrinker(
     const UnorderedSet<DexMethodRef*>& configured_pure_methods,
     const UnorderedSet<const DexString*>& configured_finalish_field_names,
     const UnorderedSet<const DexField*>& configured_finalish_fields,
-    const boost::optional<std::string>& package_name,
+    const std::optional<std::string>& package_name,
     const method_override_graph::Graph* method_override_graph)
     : m_forest(load(config.reg_alloc_random_forest)),
       m_xstores(stores, conf.normal_primary_dex()),

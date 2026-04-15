@@ -115,9 +115,9 @@ InstructionIterator InstructionIterable::end() const {
       ir_list::InstructionIterable(last_block).end()));
 }
 
-boost::optional<BigBlock> get_big_block(cfg::Block* block) {
+std::optional<BigBlock> get_big_block(cfg::Block* block) {
   if (is_big_block_successor(block)) {
-    return boost::none;
+    return std::nullopt;
   }
   std::vector<cfg::Block*> blocks;
   do {

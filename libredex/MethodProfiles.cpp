@@ -828,11 +828,11 @@ bool MethodProfiles::parse_line(const std::string& line,
   }
 }
 
-boost::optional<uint32_t> MethodProfiles::get_interaction_count(
+std::optional<uint32_t> MethodProfiles::get_interaction_count(
     const std::string& interaction_id) const {
   const auto& search = m_interaction_counts.find(interaction_id);
   if (search == m_interaction_counts.end()) {
-    return boost::none;
+    return std::nullopt;
   } else {
     return search->second;
   }
@@ -1089,8 +1089,8 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
                   m_method_profiles->get_interaction_count(a);
               const auto& b_interactions =
                   m_method_profiles->get_interaction_count(b);
-              if (a_interactions != boost::none &&
-                  b_interactions != boost::none) {
+              if (a_interactions != std::nullopt &&
+                  b_interactions != std::nullopt) {
                 return *a_interactions > *b_interactions;
               }
 

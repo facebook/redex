@@ -44,7 +44,7 @@ MethodTransformsMap build_test(
 
   const std::map<uint32_t, std::string> id_to_name;
   const std::vector<std::string> type_names;
-  const boost::optional<std::string> package_name;
+  const std::optional<std::string> package_name;
 
   auto transforms = ResourcesInliningPass::find_transformations(
       scope, inlinable_resources, id_to_name, type_names, package_name);

@@ -505,8 +505,7 @@ struct PackageNameState {
   const UnorderedSet<DexMethodRef*> getter_methods;
   const DexString* package_name;
 
-  static PackageNameState make(
-      const boost::optional<std::string>& package_name);
+  static PackageNameState make(const std::optional<std::string>& package_name);
 };
 
 class PackageNameAnalyzer final

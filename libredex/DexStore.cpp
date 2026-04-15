@@ -181,9 +181,9 @@ void DexStore::add_classes(DexClasses classes) {
 
 void DexStore::add_class(DexClass* new_cls,
                          DexStoresVector& stores,
-                         boost::optional<size_t> dex_id) {
+                         std::optional<size_t> dex_id) {
   redex_assert(!stores.empty());
-  if (dex_id == boost::none) {
+  if (dex_id == std::nullopt) {
     DexClassesVector& root_store = stores.front().get_dexen();
     redex_assert(!root_store.empty());
     // Add the class to the last dex of root_store.

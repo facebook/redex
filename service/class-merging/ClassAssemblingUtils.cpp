@@ -277,7 +277,7 @@ void patch_iget(cfg::ControlFlowGraph& cfg,
 void add_class(DexClass* new_cls,
                Scope& scope,
                DexStoresVector& stores,
-               boost::optional<size_t> dex_id) {
+               std::optional<size_t> dex_id) {
   always_assert(new_cls != nullptr);
   TRACE(CLMG, 4, " ClassMerging Adding class %s to dex(%s) scope[%zu]",
         SHOW(new_cls), dex_id ? std::to_string(*dex_id).c_str() : "last",

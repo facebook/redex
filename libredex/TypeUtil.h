@@ -11,6 +11,7 @@
 #include "FrameworkApi.h"
 #include "WellKnownTypes.h"
 #include <Lazy.h>
+#include <optional>
 
 /**
  * Basic datatypes used by bytecode.
@@ -225,8 +226,8 @@ bool is_subclass(const DexType* parent, const DexType* child);
  * function returns 1; if it fails, the function returns 0. If it cannot be
  * determined, the function returns none.
  */
-boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
-                                             const DexType* test_type);
+std::optional<int32_t> evaluate_type_check(const DexType* src_type,
+                                           const DexType* test_type);
 
 /**
  * Validate if the caller has the permit to call a method or access a field.

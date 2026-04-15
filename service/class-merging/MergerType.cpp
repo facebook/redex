@@ -84,8 +84,8 @@ std::string MergerType::Shape::build_type_name(
     const ConstTypeVector& mergeables_set,
     const TypeSet& intf_set,
     size_t group_count,
-    const boost::optional<size_t>& opt_dex_id,
-    const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+    const std::optional<size_t>& opt_dex_id,
+    const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     UnorderedSet<size_t>& hash_cache) const {
   const auto* parent = root_type;
   if (root_type == type::java_lang_Object() && intf_set.size() == 1) {
@@ -95,8 +95,8 @@ std::string MergerType::Shape::build_type_name(
   std::ostringstream ss;
   ss << "L" << prefix << root_name_tag << "Shape";
 
-  if (interdex_subgroup_idx != boost::none) {
-    ss << "_I" << interdex_subgroup_idx.get();
+  if (interdex_subgroup_idx != std::nullopt) {
+    ss << "_I" << *interdex_subgroup_idx;
   }
 
   if (opt_dex_id && *opt_dex_id >= 0) {
@@ -125,9 +125,9 @@ std::string MergerType::Shape::build_type_name_legacy(
     const std::string& prefix,
     const DexType* root_type,
     const TypeSet& intf_set,
-    const boost::optional<size_t>& opt_dex_id,
+    const std::optional<size_t>& opt_dex_id,
     size_t count,
-    const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+    const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const InterdexSubgroupIdx subgroup_idx) const {
   const auto* parent = root_type;
   if (root_type == type::java_lang_Object() && intf_set.size() == 1) {
@@ -143,8 +143,8 @@ std::string MergerType::Shape::build_type_name_legacy(
     ss << "_" << *opt_dex_id;
   }
 
-  if (interdex_subgroup_idx != boost::none) {
-    ss << "_I" << interdex_subgroup_idx.get();
+  if (interdex_subgroup_idx != std::nullopt) {
+    ss << "_I" << *interdex_subgroup_idx;
   }
 
   if (subgroup_idx != 0) {

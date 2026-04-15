@@ -92,12 +92,11 @@ void blocklist_field(DexMethod* reflecting_method,
   }
 }
 
-void blocklist_method(
-    DexMethod* reflecting_method,
-    const DexType* type,
-    const DexString* name,
-    const boost::optional<std::vector<const DexType*>>& params,
-    bool declared) {
+void blocklist_method(DexMethod* reflecting_method,
+                      const DexType* type,
+                      const DexString* name,
+                      const std::optional<std::vector<const DexType*>>& params,
+                      bool declared) {
   auto* cls = type_class(type);
   if (cls == nullptr) {
     return;
@@ -106,7 +105,8 @@ void blocklist_method(
     if (t->get_name() != name) {
       return;
     }
-    if (params != boost::none && !t->get_proto()->get_args()->equals(*params)) {
+    if (params != std::nullopt &&
+        !t->get_proto()->get_args()->equals(*params)) {
       return;
     }
     if (!is_public(t) && !declared) {
@@ -238,7 +238,7 @@ void analyze_reflection(const Scope& scope) {
       if (arg_str_value == nullptr) {
         continue;
       }
-      boost::optional<std::vector<const DexType*>> param_types = boost::none;
+      std::optional<std::vector<const DexType*>> param_types = std::nullopt;
       if (refl_type == GET_METHOD || refl_type == GET_CONSTRUCTOR ||
           refl_type == GET_DECLARED_METHOD ||
           refl_type == GET_DECLARED_CONSTRUCTOR) {

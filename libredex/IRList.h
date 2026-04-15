@@ -9,13 +9,15 @@
 
 #include <bit>
 #include <boost/intrusive/list.hpp>
-#include <boost/optional.hpp>
 #include <boost/range/sub_range.hpp>
 #include <functional>
 #include <iosfwd>
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
+#include <boost/optional.hpp>
 #include <set>
 #include <string>
 #include <type_traits>
@@ -196,13 +198,13 @@ struct SourceBlock {
         m_storage(make_storage(other.m_storage.get())) {}
   SourceBlock& operator=(const SourceBlock&);
 
-  boost::optional<float> get_val(size_t i) const {
+  std::optional<float> get_val(size_t i) const {
     const auto& val = get_at(i);
-    return val ? boost::optional<float>(val->val) : boost::none;
+    return val ? std::optional<float>(val->val) : std::nullopt;
   }
-  boost::optional<float> get_appear100(size_t i) const {
+  std::optional<float> get_appear100(size_t i) const {
     const auto& val = get_at(i);
-    return val ? boost::optional<float>(val->appear100) : boost::none;
+    return val ? std::optional<float>(val->appear100) : std::nullopt;
   }
 
   const Val& get_at(size_t i) const {
@@ -361,7 +363,7 @@ struct SourceBlock {
   }
 
   template <typename Fn>
-  boost::optional<size_t> find_val(const Fn& pred) const {
+  std::optional<size_t> find_val(const Fn& pred) const {
     if (!m_storage) {
       for (size_t i = 0; i < vals_size; i++) {
         const Val val = Val::default_value();
@@ -369,7 +371,7 @@ struct SourceBlock {
           return i;
         }
       }
-      return boost::none;
+      return std::nullopt;
     }
     for (size_t i = 0; i < vals_size; i++) {
       if (m_storage->bits.contains_index(i)) {
@@ -385,7 +387,7 @@ struct SourceBlock {
         }
       }
     }
-    return boost::none;
+    return std::nullopt;
   }
 
   bool operator==(const SourceBlock& other) const;

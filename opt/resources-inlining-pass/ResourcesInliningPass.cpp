@@ -177,7 +177,7 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
         inlinable_resources,
     const std::map<uint32_t, std::string>& id_to_name,
     const std::vector<std::string>& type_names,
-    const boost::optional<std::string>& package_name) {
+    const std::optional<std::string>& package_name) {
   DexMethodRef* getResourceEntryName = DexMethod::get_method(
       "Landroid/content/res/Resources;.getResourceEntryName:(I)Ljava/lang/"
       "String;");
@@ -277,7 +277,7 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
           auto masked_type = elem_id & 0x00FF0000;
           const std::string& type_name =
               type_names.at((masked_type >> TYPE_INDEX_BIT_SHIFT) - 1);
-          if (package_name == boost::none) {
+          if (package_name == std::nullopt) {
             return;
           }
           insertable.inlinable =

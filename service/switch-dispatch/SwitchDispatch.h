@@ -43,8 +43,8 @@ struct Spec {
   DexAccessFlags access_flags;
   DexField* type_tag_field;
   DexMethod* overridden_meth;
-  boost::optional<size_t> max_num_dispatch_target;
-  boost::optional<size_t> type_tag_param_idx;
+  std::optional<size_t> max_num_dispatch_target;
+  std::optional<size_t> type_tag_param_idx;
   bool keep_debug_info;
 
   Spec(DexType* owner_type,
@@ -63,8 +63,8 @@ struct Spec {
         type_tag_field(type_tag_field),
         overridden_meth(overridden_meth),
         keep_debug_info(keep_debug_info) {
-    max_num_dispatch_target = boost::none;
-    type_tag_param_idx = boost::none;
+    max_num_dispatch_target = std::nullopt;
+    type_tag_param_idx = std::nullopt;
   }
 
   Spec(DexType* owner_type,
@@ -74,7 +74,7 @@ struct Spec {
        DexAccessFlags access_flags,
        DexField* type_tag_field,
        DexMethod* overridden_meth,
-       boost::optional<size_t> type_tag_param_idx,
+       std::optional<size_t> type_tag_param_idx,
        bool keep_debug_info)
       : owner_type(owner_type),
         type(type),
@@ -85,7 +85,7 @@ struct Spec {
         overridden_meth(overridden_meth),
         type_tag_param_idx(type_tag_param_idx),
         keep_debug_info(keep_debug_info) {
-    max_num_dispatch_target = boost::none;
+    max_num_dispatch_target = std::nullopt;
   }
 
   Spec(DexType* owner_type,
@@ -95,8 +95,8 @@ struct Spec {
        DexAccessFlags access_flags,
        DexField* type_tag_field,
        DexMethod* overridden_meth,
-       boost::optional<size_t> max_num_dispatch_target,
-       boost::optional<size_t> type_tag_param_idx,
+       std::optional<size_t> max_num_dispatch_target,
+       std::optional<size_t> type_tag_param_idx,
        bool keep_debug_info)
       : owner_type(owner_type),
         type(type),

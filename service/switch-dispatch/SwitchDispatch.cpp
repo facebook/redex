@@ -267,17 +267,17 @@ std::vector<Location> get_args_from(DexMethod* method, MethodCreator& mc) {
 
 size_t estimate_num_switch_dispatch_needed(
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee,
-    const boost::optional<size_t> max_num_dispatch_target = boost::none) {
+    const std::optional<size_t> max_num_dispatch_target = std::nullopt) {
   // Analyze the size of the dispatch
   size_t num_cases = indices_to_callee.size();
   // If the config is enabled we shortcut the instruction count limit.
   // This should only happen for testing.
   TRACE(SDIS, 9, "num cases %zu, max num dispatch targets %zu", num_cases,
-        max_num_dispatch_target.get_value_or(0));
-  if (max_num_dispatch_target != boost::none &&
-      num_cases > max_num_dispatch_target.get()) {
+        max_num_dispatch_target.value_or(0));
+  if (max_num_dispatch_target != std::nullopt &&
+      num_cases > *max_num_dispatch_target) {
     return std::ceil(static_cast<float>(num_cases) /
-                     static_cast<float>(max_num_dispatch_target.get()));
+                     static_cast<float>(*max_num_dispatch_target));
   }
   if (num_cases > MAX_NUM_DISPATCH_TARGET) {
     size_t total_num_insn = 0;

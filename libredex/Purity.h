@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
 #include "MethodUtil.h"
+#include <optional>
 
 struct ConfigFiles;
 class IRInstruction;
@@ -152,7 +153,7 @@ bool process_base_and_overriding_methods(
 size_t compute_locations_closure(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>&
+    const std::function<std::optional<LocationsAndDependencies>(DexMethod*)>&
         init_func,
     UnorderedMap<const DexMethod*, CseUnorderedLocationSet>* result);
 

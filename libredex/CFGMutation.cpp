@@ -246,9 +246,9 @@ bool CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
                          m_insert_before.end());
     }
     if (m_replace.has_value()) {
-      replacement.reserve(replacement.size() + m_replace.get().size());
-      replacement.insert(replacement.end(), m_replace.get().begin(),
-                         m_replace.get().end());
+      replacement.reserve(replacement.size() + m_replace->size());
+      replacement.insert(replacement.end(), m_replace->begin(),
+                         m_replace->end());
     } else {
       // Copying to avoid problem, replacing insn B with A-B-C
       auto* insn_copy = new IRInstruction(*it->insn);

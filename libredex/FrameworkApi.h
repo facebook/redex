@@ -9,6 +9,7 @@
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
+#include <optional>
 
 namespace api {
 
@@ -49,7 +50,7 @@ class AndroidSDK {
   AndroidSDK() = default;
 
  public:
-  explicit AndroidSDK(boost::optional<std::string> sdk_api_file) {
+  explicit AndroidSDK(std::optional<std::string> sdk_api_file) {
     if (sdk_api_file) {
       m_sdk_api_file = *sdk_api_file;
       load_framework_classes();

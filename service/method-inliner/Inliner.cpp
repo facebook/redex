@@ -174,7 +174,7 @@ MultiMethodInliner::MultiMethodInliner(
                  configured_pure_methods,
                  configured_finalish_field_names,
                  /* configured_finalish_fields */ {},
-                 /* package_name */ boost::none,
+                 /* package_name */ std::nullopt,
                  /* package_name */ method_override_graph),
       m_local_only(local_only),
       m_hot_cold_inlining_behavior(hot_cold_inlining_behavior),

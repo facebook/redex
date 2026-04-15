@@ -1301,14 +1301,14 @@ IRList::ConsecutiveStyle IRList::CONSECUTIVE_STYLE =
     IRList::ConsecutiveStyle::kMax;
 
 void IRList::chain_consecutive_source_blocks(ConsecutiveStyle style) {
-  boost::optional<IRList::iterator> last_it = boost::none;
+  std::optional<IRList::iterator> last_it = std::nullopt;
   for (auto it = begin(); it != end(); ++it) {
     if (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG) {
       // We can move over debug info. Otherwise, reset.
       continue;
     }
     if (it->type != MFLOW_SOURCE_BLOCK) {
-      last_it = boost::none;
+      last_it = std::nullopt;
       continue;
     }
 

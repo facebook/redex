@@ -419,23 +419,23 @@ struct Injector {
     conf.get_method_profiles();
   }
 
-  boost::optional<SourceBlock::Val> maybe_val_from_mp(
+  std::optional<SourceBlock::Val> maybe_val_from_mp(
       const std::string& interaction, const DexMethodRef* mref) {
     auto& method_profiles = conf.get_method_profiles();
     if (!method_profiles.has_stats()) {
-      return boost::none;
+      return std::nullopt;
     }
 
     const auto& mp_map = method_profiles.all_interactions();
     const auto& inter_it = mp_map.find(interaction);
     if (inter_it == mp_map.end()) {
-      return boost::none;
+      return std::nullopt;
     }
 
     const auto& inter_map = inter_it->second;
     auto it = inter_map.find(mref);
     if (it == inter_map.end()) {
-      return boost::none;
+      return std::nullopt;
     }
 
     // For now, just convert to coverage. Having stats means it's not zero.

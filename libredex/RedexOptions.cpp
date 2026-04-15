@@ -20,7 +20,7 @@ void RedexOptions::serialize(Json::Value& entry_data) const {
   options["min_sdk"] = min_sdk;
   options["debug_info_kind"] = debug_info_kind_to_string(debug_info_kind);
   options["jni_summary_path"] = jni_summary_path;
-  if (package_name != boost::none) {
+  if (package_name != std::nullopt) {
     options["package_name"] = *package_name;
   }
 }

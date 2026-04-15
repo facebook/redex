@@ -157,10 +157,10 @@ class CheckerConfig {
     return ret;
   }
 
-  boost::optional<std::string> run_verifier(const Scope& scope,
-                                            bool exit_on_fail = true) {
+  std::optional<std::string> run_verifier(const Scope& scope,
+                                          bool exit_on_fail = true) {
     if (m_disabled) {
-      return boost::none;
+      return std::nullopt;
     }
 
     if (m_config.check_classes) {
@@ -268,7 +268,7 @@ class CheckerConfig {
       return oss.str();
     }
 
-    return boost::none;
+    return std::nullopt;
   }
 
   [[noreturn]] static void fail_error(std::string error_msg,
@@ -916,10 +916,10 @@ class TraceClassAfterEachPass {
     }
   }
 
-  boost::optional<std::string_view> matches_source_block(DexMethod* method) {
+  std::optional<std::string_view> matches_source_block(DexMethod* method) {
     auto* code = method->get_code();
     if (code == nullptr) {
-      return boost::none;
+      return std::nullopt;
     }
     if (code->cfg_built()) {
       auto& cfg = code->cfg();
@@ -942,7 +942,7 @@ class TraceClassAfterEachPass {
         }
       }
     }
-    return boost::none;
+    return std::nullopt;
   }
 
   void dump(const std::string& pass_name, DexStoresVector& stores) {
@@ -994,7 +994,7 @@ class TraceClassAfterEachPass {
         std::mutex print_mtx;
         walk::parallel::methods(temp_scope, [&](DexMethod* m) {
           auto str = matches_source_block(m);
-          if (str != boost::none) {
+          if (str != std::nullopt) {
             std::lock_guard lock(print_mtx);
             auto search = to_print.find(*str);
             if (search == to_print.end()) {
@@ -1120,9 +1120,9 @@ void PassManager::check_no_new_dex_features(const DexStoresVector& stores,
                                             int check_against_version) {
   always_assert_log(check_against_version <= 39 && check_against_version >= 35,
                     "Checking on unknown version %d", check_against_version);
-  if ((check_against_version >= 37 && m_has_dex37_features == boost::none) ||
-      (check_against_version >= 38 && m_has_dex38_features == boost::none) ||
-      (check_against_version >= 39 && m_has_dex39_features == boost::none)) {
+  if ((check_against_version >= 37 && m_has_dex37_features == std::nullopt) ||
+      (check_against_version >= 38 && m_has_dex38_features == std::nullopt) ||
+      (check_against_version >= 39 && m_has_dex39_features == std::nullopt)) {
     // We run the feature check once in the full pass run and store the value
     std::atomic<bool> has_dex37_features{false};
     std::atomic<bool> has_dex38_features{false};
@@ -1502,7 +1502,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       scope = build_class_scope(it);
 
       if (run_hasher) {
-        m_current_pass_info->hash = boost::optional<hashing::DexHash>(
+        m_current_pass_info->hash = std::optional<hashing::DexHash>(
             this->run_hasher(pass->name().c_str(), scope));
       }
       if (run_assessor) {

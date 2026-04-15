@@ -43,8 +43,7 @@ s_expr PointsToVariable::to_s_expr() const {
   return s_expr({s_expr("V"), s_expr(m_id)});
 }
 
-boost::optional<PointsToVariable> PointsToVariable::from_s_expr(
-    const s_expr& e) {
+std::optional<PointsToVariable> PointsToVariable::from_s_expr(const s_expr& e) {
   int32_t id;
   if (!s_patn({s_patn("V"), s_patn(&id)}).match_with(e)) {
     return {};
@@ -122,13 +121,12 @@ s_expr op_kind_to_s_expr(PointsToOperationKind kind) {
   return s_expr(it->second);
 }
 
-boost::optional<PointsToOperationKind> string_to_op_kind(
-    const std::string& str) {
+std::optional<PointsToOperationKind> string_to_op_kind(const std::string& str) {
   auto it = string_to_op_table.find(str);
   if (it == string_to_op_table.end()) {
     return {};
   }
-  return boost::optional<PointsToOperationKind>(it->second);
+  return std::optional<PointsToOperationKind>(it->second);
 }
 
 s_expr special_edge_to_s_expr(SpecialPointsToEdge edge) {
@@ -139,7 +137,7 @@ s_expr special_edge_to_s_expr(SpecialPointsToEdge edge) {
   }
 }
 
-boost::optional<SpecialPointsToEdge> string_to_special_edge(
+std::optional<SpecialPointsToEdge> string_to_special_edge(
     const std::string& str) {
   if (str == "PTS_ARRAY_ELEMENT") {
     return {PTS_ARRAY_ELEMENT};
@@ -159,7 +157,7 @@ s_expr dex_method_to_s_expr(DexMethodRef* dex_method) {
                  s_expr(signature)});
 }
 
-boost::optional<DexMethodRef*> s_expr_to_dex_method(const s_expr& e) {
+std::optional<DexMethodRef*> s_expr_to_dex_method(const s_expr& e) {
   std::string type_str;
   std::string name_str;
   std::string rtype_str;
@@ -231,7 +229,7 @@ s_expr PointsToOperation::to_s_expr() const {
   }
 }
 
-boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
+std::optional<PointsToOperation> PointsToOperation::from_s_expr(
     const s_expr& e) {
   using namespace pts_impl;
   std::string op_kind_str;
@@ -400,7 +398,7 @@ PointsToAction PointsToAction::check_cast_operation(const DexType* dex_type,
 PointsToAction PointsToAction::get_operation(
     const PointsToOperation& operation,
     PointsToVariable dest,
-    boost::optional<PointsToVariable> instance) {
+    std::optional<PointsToVariable> instance) {
   always_assert(operation.is_get());
   always_assert(!instance || operation.kind != PTS_SPUT);
   if (instance) {
@@ -414,7 +412,7 @@ PointsToAction PointsToAction::get_operation(
 PointsToAction PointsToAction::put_operation(
     const PointsToOperation& operation,
     PointsToVariable rhs,
-    boost::optional<PointsToVariable> lhs) {
+    std::optional<PointsToVariable> lhs) {
   always_assert(operation.is_put());
   always_assert(!lhs || operation.kind != PTS_SPUT);
   if (lhs) {
@@ -426,8 +424,8 @@ PointsToAction PointsToAction::put_operation(
 
 PointsToAction PointsToAction::invoke_operation(
     const PointsToOperation& operation,
-    boost::optional<PointsToVariable> dest,
-    boost::optional<PointsToVariable> instance,
+    std::optional<PointsToVariable> dest,
+    std::optional<PointsToVariable> instance,
     const std::vector<std::pair<int32_t, PointsToVariable>>& args) {
   always_assert(operation.is_invoke());
   always_assert(!instance || operation.kind != PTS_INVOKE_STATIC);
@@ -490,7 +488,7 @@ s_expr PointsToAction::to_s_expr() const {
   return s_expr({m_operation.to_s_expr(), s_expr(args)});
 }
 
-boost::optional<PointsToAction> PointsToAction::from_s_expr(const s_expr& e) {
+std::optional<PointsToAction> PointsToAction::from_s_expr(const s_expr& e) {
   s_expr operation;
   s_expr args;
   if (!s_patn({s_patn(operation), s_patn({}, args)}).match_with(e)) {
@@ -1033,7 +1031,7 @@ class PointsToActionGenerator final {
           break;
         }
         auto lhs =
-            boost::optional<PointsToVariable>(get_variable_from_anchor(insn));
+            std::optional<PointsToVariable>(get_variable_from_anchor(insn));
         for (size_t i = 0; i < insn->srcs_size(); ++i) {
           m_semantics->add(PointsToAction::put_operation(
               PointsToOperation(PTS_IPUT_SPECIAL, PTS_ARRAY_ELEMENT),
@@ -1051,7 +1049,7 @@ class PointsToActionGenerator final {
       m_semantics->add(PointsToAction::put_operation(
           PointsToOperation(PTS_IPUT_SPECIAL, PTS_ARRAY_ELEMENT),
           rhs,
-          boost::optional<PointsToVariable>(lhs)));
+          std::optional<PointsToVariable>(lhs)));
       break;
     }
     case OPCODE_IPUT_OBJECT: {
@@ -1062,7 +1060,7 @@ class PointsToActionGenerator final {
       m_semantics->add(PointsToAction::put_operation(
           PointsToOperation(PTS_IPUT, insn->get_field()),
           rhs,
-          boost::optional<PointsToVariable>(lhs)));
+          std::optional<PointsToVariable>(lhs)));
       break;
     }
     case OPCODE_SPUT_OBJECT: {
@@ -1077,7 +1075,7 @@ class PointsToActionGenerator final {
       m_semantics->add(PointsToAction::get_operation(
           PointsToOperation(PTS_IGET_SPECIAL, PTS_ARRAY_ELEMENT),
           get_variable_from_anchor(insn),
-          boost::optional<PointsToVariable>(instance)));
+          std::optional<PointsToVariable>(instance)));
       break;
     }
     case OPCODE_IGET_OBJECT: {
@@ -1086,7 +1084,7 @@ class PointsToActionGenerator final {
       m_semantics->add(PointsToAction::get_operation(
           PointsToOperation(PTS_IGET, insn->get_field()),
           get_variable_from_anchor(insn),
-          boost::optional<PointsToVariable>(instance)));
+          std::optional<PointsToVariable>(instance)));
       break;
     }
     case OPCODE_SGET_OBJECT: {
@@ -1145,13 +1143,13 @@ class PointsToActionGenerator final {
     size_t src_idx{0};
 
     // Allocate a variable for the returned object if any.
-    boost::optional<PointsToVariable> dest;
+    std::optional<PointsToVariable> dest;
     if (type::is_object(insn->get_method()->get_proto()->get_rtype())) {
       dest = {get_variable_from_anchor(insn)};
     }
 
     // Allocate a variable for the instance object if any.
-    boost::optional<PointsToVariable> instance;
+    std::optional<PointsToVariable> instance;
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       // The first argument is a reference to the object instance on which the
       // method is invoked.
@@ -1447,12 +1445,12 @@ s_expr method_kind_to_s_expr(MethodKind kind) {
   return s_expr(it->second);
 }
 
-boost::optional<MethodKind> string_to_method_kind(const std::string& str) {
+std::optional<MethodKind> string_to_method_kind(const std::string& str) {
   auto it = string_to_method_kind_table.find(str);
   if (it == string_to_method_kind_table.end()) {
     return {};
   }
-  return boost::optional<MethodKind>(it->second);
+  return std::optional<MethodKind>(it->second);
 }
 
 } // namespace pts_impl
@@ -1482,7 +1480,7 @@ s_expr PointsToMethodSemantics::to_s_expr() const {
                  s_expr(actions)});
 }
 
-boost::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
+std::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
     const s_expr& e) {
   using namespace pts_impl;
   s_expr dex_method_expr;
@@ -1511,7 +1509,7 @@ boost::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
     }
     semantics.add(*action_opt);
   }
-  return boost::optional<PointsToMethodSemantics>(semantics);
+  return std::optional<PointsToMethodSemantics>(semantics);
 }
 
 std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s) {
@@ -1593,13 +1591,13 @@ void PointsToSemantics::load_stubs(const std::string& file_name) {
   }
 }
 
-boost::optional<PointsToMethodSemantics*>
-PointsToSemantics::get_method_semantics(DexMethodRef* dex_method) {
+std::optional<PointsToMethodSemantics*> PointsToSemantics::get_method_semantics(
+    DexMethodRef* dex_method) {
   auto entry = m_method_semantics.find(dex_method);
   if (entry == m_method_semantics.end()) {
     return {};
   }
-  return boost::optional<PointsToMethodSemantics*>(&entry->second);
+  return std::optional<PointsToMethodSemantics*>(&entry->second);
 }
 
 MethodKind PointsToSemantics::default_method_kind() const {

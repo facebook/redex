@@ -169,14 +169,14 @@ void MethodSimilarityGreedyOrderer::insert(DexMethod* method) {
   }
 }
 
-boost::optional<MethodSimilarityGreedyOrderer::MethodId>
+std::optional<MethodSimilarityGreedyOrderer::MethodId>
 MethodSimilarityGreedyOrderer::get_next() {
   // Clear best candidates.
   if (m_id_to_method.empty()) {
     return {};
   }
 
-  if (m_last_method_id != boost::none) {
+  if (m_last_method_id != std::nullopt) {
     // Iterate m_score_map from the highest score..
     for (const auto& [score, method_id_bitset] :
          m_score_map[*m_last_method_id]) {
@@ -194,7 +194,7 @@ MethodSimilarityGreedyOrderer::get_next() {
       }
     }
   }
-  boost::optional<MethodId> best_method_id = m_id_to_method.begin()->first;
+  std::optional<MethodId> best_method_id = m_id_to_method.begin()->first;
   TRACE(OPUT,
         3,
         "[method-similarity-orderer] reverted to %s",
@@ -225,9 +225,9 @@ void MethodSimilarityGreedyOrderer::order(std::vector<DexMethod*>& methods) {
   // Compute scores among methods in parallel.
   compute_score();
 
-  m_last_method_id = boost::none;
-  for (boost::optional<MethodId> best_method_id = get_next();
-       best_method_id != boost::none;
+  m_last_method_id = std::nullopt;
+  for (std::optional<MethodId> best_method_id = get_next();
+       best_method_id != std::nullopt;
        best_method_id = get_next()) {
     m_last_method_id = best_method_id;
     auto* meth = m_id_to_method[*m_last_method_id];

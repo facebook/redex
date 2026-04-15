@@ -1088,8 +1088,8 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithConflictingInterface) {
   EXPECT_EQ(type_a, *checker.get_dex_type(insns[3], 0));
   EXPECT_EQ(type_b, *checker.get_dex_type(insns[6], 0));
   EXPECT_EQ(type_b, *checker.get_dex_type(insns[7], 0));
-  EXPECT_EQ(boost::none, checker.get_dex_type(insns[8], 0));
-  EXPECT_EQ(boost::none, checker.get_dex_type(insns[9], 0));
+  EXPECT_EQ(std::nullopt, checker.get_dex_type(insns[8], 0));
+  EXPECT_EQ(std::nullopt, checker.get_dex_type(insns[9], 0));
 }
 
 /**

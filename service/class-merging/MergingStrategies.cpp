@@ -67,7 +67,7 @@ size_t estimate_vmethods_code_size(const DexClass* cls) {
 void MergingStrategy::group_by_cls_count(
     const TypeSet& mergeable_types,
     size_t min_mergeables_count,
-    const boost::optional<size_t>& opt_max_mergeables_count,
+    const std::optional<size_t>& opt_max_mergeables_count,
     const GroupWalkerFn& walker) {
   size_t max_mergeables_count = opt_max_mergeables_count
                                     ? *opt_max_mergeables_count
@@ -93,7 +93,7 @@ void MergingStrategy::group_by_cls_count(
 
 void MergingStrategy::group_by_code_size(
     const TypeSet& mergeable_types,
-    const boost::optional<size_t>& opt_max_mergeables_count,
+    const std::optional<size_t>& opt_max_mergeables_count,
     const GroupWalkerFn& walker) {
   // 9000 - buffer_for_switch_payload
   constexpr size_t huge_method_split_limit = 8500;

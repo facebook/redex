@@ -10,6 +10,8 @@
 #include <iosfwd>
 #include <memory>
 
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
 #include <boost/optional.hpp>
 #include <utility>
 
@@ -84,7 +86,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObjectKind obj_kind;
   const DexType* dex_type;
   const DexString* dex_string;
-  boost::optional<int64_t> dex_int = boost::none;
+  std::optional<int64_t> dex_int = std::nullopt;
   // Attaching a set of potential dex types.
   UnorderedSet<const DexType*> potential_dex_types;
 
@@ -99,7 +101,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   // 1. We need to store information of arrays of Class objects.
   // 2. Associate the parameterType argument of getDeclaredMethod to the Class
   // arrays.
-  boost::optional<std::vector<const DexType*>> dex_type_array = boost::none;
+  std::optional<std::vector<const DexType*>> dex_type_array = std::nullopt;
 
   // AbstractObject must be default constructible in order to be used as an
   // abstract value.
@@ -210,10 +212,10 @@ class AbstractObjectDomain final
       : sparta::AbstractDomainScaffolding<AbstractObject, AbstractObjectDomain>(
             kind) {}
 
-  boost::optional<AbstractObject> get_object() const {
+  std::optional<AbstractObject> get_object() const {
     return (this->kind() == sparta::AbstractValueKind::Value)
-               ? boost::optional<AbstractObject>(*this->get_value())
-               : boost::none;
+               ? std::optional<AbstractObject>(*this->get_value())
+               : std::nullopt;
   }
 };
 
@@ -224,7 +226,7 @@ bool operator!=(const AbstractObject& x, const AbstractObject& y);
 bool is_not_reflection_output(const AbstractObject& obj);
 
 using ReflectionAbstractObject =
-    std::pair<AbstractObject, boost::optional<ClassObjectSource>>;
+    std::pair<AbstractObject, std::optional<ClassObjectSource>>;
 
 using ReflectionSites = std::vector<
     std::pair<IRInstruction*, std::map<reg_t, ReflectionAbstractObject>>>;
@@ -361,7 +363,7 @@ class ReflectionAnalysis final {
   /**
    * Return a parameter type array for this invoke method instruction.
    */
-  boost::optional<std::vector<const DexType*>> get_method_params(
+  std::optional<std::vector<const DexType*>> get_method_params(
       IRInstruction* invoke_insn) const;
 
   bool has_found_reflection() const;
@@ -372,16 +374,16 @@ class ReflectionAnalysis final {
    * the abstract object returned is the value held by the register *before*
    * that instruction is executed.
    */
-  boost::optional<AbstractObject> get_abstract_object(
-      size_t reg, IRInstruction* insn) const;
+  std::optional<AbstractObject> get_abstract_object(size_t reg,
+                                                    IRInstruction* insn) const;
 
-  boost::optional<AbstractObject> get_result_abstract_object(
+  std::optional<AbstractObject> get_result_abstract_object(
       IRInstruction* insn) const {
     return get_abstract_object(RESULT_REGISTER, insn);
   }
 
-  boost::optional<ClassObjectSource> get_class_source(
-      size_t reg, IRInstruction* insn) const;
+  std::optional<ClassObjectSource> get_class_source(size_t reg,
+                                                    IRInstruction* insn) const;
 
   CallingContextMap get_calling_context_partition() const;
 

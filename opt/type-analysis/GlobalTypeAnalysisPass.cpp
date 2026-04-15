@@ -22,8 +22,8 @@ using namespace type_analyzer;
 
 namespace {
 
-bool are_different(const boost::optional<const DexType*>& gtype,
-                   const boost::optional<const DexType*>& ltype) {
+bool are_different(const std::optional<const DexType*>& gtype,
+                   const std::optional<const DexType*>& ltype) {
   if (!gtype) {
     return false;
   }
@@ -32,7 +32,7 @@ bool are_different(const boost::optional<const DexType*>& gtype,
 
 bool trace_results_if_different(const std::string& prefix,
                                 const DexTypeDomain& gdomain,
-                                const boost::optional<const DexType*>& ltype,
+                                const std::optional<const DexType*>& ltype,
                                 std::ostringstream& out) {
   if (gdomain.is_top() || gdomain.is_bottom()) {
     return false;

@@ -217,7 +217,7 @@ bool AbstractObject::leq(const AbstractObject& other) const {
   if (obj_kind == other.obj_kind) {
     switch (obj_kind) {
     case AbstractObjectKind::INT: {
-      if (other.dex_int == boost::none) {
+      if (other.dex_int == std::nullopt) {
         return true;
       }
       break;
@@ -227,7 +227,7 @@ bool AbstractObject::leq(const AbstractObject& other) const {
       if ((dex_type != nullptr) && other.dex_type == nullptr) {
         return true;
       }
-      if (dex_type_array && other.dex_type_array == boost::none) {
+      if (dex_type_array && other.dex_type_array == std::nullopt) {
         return true;
       }
       if ((heap_address != 0u) && other.heap_address == 0) {
@@ -248,7 +248,7 @@ bool AbstractObject::leq(const AbstractObject& other) const {
       if (other.dex_type == nullptr && other.dex_string == nullptr) {
         return true;
       }
-      if (dex_type_array && other.dex_type_array == boost::none) {
+      if (dex_type_array && other.dex_type_array == std::nullopt) {
         return true;
       }
       break;
@@ -274,14 +274,14 @@ sparta::AbstractValueKind AbstractObject::join_with(
   switch (obj_kind) {
   case AbstractObjectKind::INT:
     // Be conservative and drop the int
-    dex_int = boost::none;
+    dex_int = std::nullopt;
     break;
   case AbstractObjectKind::OBJECT:
   case AbstractObjectKind::CLASS:
     // Be conservative and drop the type info
     dex_type = nullptr;
     heap_address = 0;
-    dex_type_array = boost::none;
+    dex_type_array = std::nullopt;
     potential_dex_types.clear();
     break;
   case AbstractObjectKind::STRING:
@@ -293,7 +293,7 @@ sparta::AbstractValueKind AbstractObject::join_with(
     // Be conservative and drop the field and method info
     dex_type = nullptr;
     dex_string = nullptr;
-    dex_type_array = boost::none;
+    dex_type_array = std::nullopt;
     potential_dex_types.clear();
     break;
   }
@@ -608,7 +608,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           offset_object->is_int()) {
 
         const auto* type = source_object->dex_type;
-        boost::optional<int64_t> offset = offset_object->dex_int;
+        std::optional<int64_t> offset = offset_object->dex_int;
         auto class_array =
             current_state->get_heap_class_array(array_object->heap_address)
                 .get_constant();
@@ -768,11 +768,11 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
   }
 
-  boost::optional<AbstractObject> get_abstract_object(
-      size_t reg, IRInstruction* insn) const {
+  std::optional<AbstractObject> get_abstract_object(size_t reg,
+                                                    IRInstruction* insn) const {
     auto it = m_environments.find(insn);
     if (it == m_environments.end()) {
-      return boost::none;
+      return std::nullopt;
     }
     return it->second.get_abstract_obj(reg).get_object();
   }
@@ -787,13 +787,14 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     return it->second;
   }
 
-  boost::optional<ClassObjectSource> get_class_source(
-      size_t reg, IRInstruction* insn) const {
+  std::optional<ClassObjectSource> get_class_source(size_t reg,
+                                                    IRInstruction* insn) const {
     auto it = m_environments.find(insn);
     if (it == m_environments.end()) {
-      return boost::none;
+      return std::nullopt;
     }
-    return it->second.get_class_source(reg).get_constant();
+    auto boost_val = it->second.get_class_source(reg).get_constant();
+    return boost_val ? std::make_optional(*boost_val) : std::nullopt;
   }
 
   const AbstractObjectDomain& get_return_value() const {
@@ -997,8 +998,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case CLASS: {
       AbstractObjectKind element_kind;
       const DexString* element_name = nullptr;
-      boost::optional<std::vector<const DexType*>> method_param_types =
-          boost::none;
+      std::optional<std::vector<const DexType*>> method_param_types =
+          std::nullopt;
       if (callee == m_cache->get_method ||
           callee == m_cache->get_declared_method) {
         element_kind = METHOD;
@@ -1142,9 +1143,9 @@ void ReflectionAnalysis::gather_reflection_sites(
     if (is_not_reflection_output(*aobj)) {
       continue;
     }
-    boost::optional<ClassObjectSource> cls_src =
+    std::optional<ClassObjectSource> cls_src =
         aobj->is_class() ? m_analyzer->get_class_source(reg, insn)
-                         : boost::none;
+                         : std::nullopt;
     if (aobj->is_class() && cls_src == ClassObjectSource::NON_REFLECTION) {
       continue;
     }
@@ -1189,7 +1190,7 @@ AbstractObjectDomain ReflectionAnalysis::get_return_value() const {
   return m_analyzer->get_return_value();
 }
 
-boost::optional<std::vector<const DexType*>>
+std::optional<std::vector<const DexType*>>
 ReflectionAnalysis::get_method_params(IRInstruction* invoke_insn) const {
   auto* code = const_cast<DexMethod*>(m_dex_method)->get_code();
   always_assert(code->cfg_built());
@@ -1208,11 +1209,11 @@ ReflectionAnalysis::get_method_params(IRInstruction* invoke_insn) const {
   }
   if ((move_result_insn == nullptr) ||
       !opcode::is_a_move_result(move_result_insn->opcode())) {
-    return boost::none;
+    return std::nullopt;
   }
   auto arg_param = get_abstract_object(RESULT_REGISTER, move_result_insn);
   if (!arg_param || !arg_param->is_method()) {
-    return boost::none;
+    return std::nullopt;
   }
   return arg_param->dex_type_array;
 }
@@ -1221,18 +1222,18 @@ bool ReflectionAnalysis::has_found_reflection() const {
   return !get_reflection_sites().empty();
 }
 
-boost::optional<AbstractObject> ReflectionAnalysis::get_abstract_object(
+std::optional<AbstractObject> ReflectionAnalysis::get_abstract_object(
     size_t reg, IRInstruction* insn) const {
   if (m_analyzer == nullptr) {
-    return boost::none;
+    return std::nullopt;
   }
   return m_analyzer->get_abstract_object(reg, insn);
 }
 
-boost::optional<ClassObjectSource> ReflectionAnalysis::get_class_source(
+std::optional<ClassObjectSource> ReflectionAnalysis::get_class_source(
     size_t reg, IRInstruction* insn) const {
   if (m_analyzer == nullptr) {
-    return boost::none;
+    return std::nullopt;
   }
   return m_analyzer->get_class_source(reg, insn);
 }

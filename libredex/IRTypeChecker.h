@@ -7,8 +7,10 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
 #include <memory>
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
+#include <boost/optional.hpp>
 
 #include "TypeInference.h"
 
@@ -136,8 +138,8 @@ class IRTypeChecker final {
    */
   IRType get_type(IRInstruction* insn, reg_t reg) const;
 
-  boost::optional<const DexType*> get_dex_type(IRInstruction* insn,
-                                               reg_t reg) const;
+  std::optional<const DexType*> get_dex_type(IRInstruction* insn,
+                                             reg_t reg) const;
 
   std::string dump_annotated_cfg(DexMethod* method) const;
   std::string dump_annotated_cfg_reduced(DexMethod* method) const;
@@ -151,7 +153,7 @@ class IRTypeChecker final {
   void assume_reference(TypeEnvironment* state,
                         reg_t reg,
                         bool in_move = false) const;
-  void assume_assignable(boost::optional<const DexType*> from,
+  void assume_assignable(std::optional<const DexType*> from,
                          const DexType* to) const;
   void check_instruction(IRInstruction* insn,
                          TypeEnvironment* current_state) const;

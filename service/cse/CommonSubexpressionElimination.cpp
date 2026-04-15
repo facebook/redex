@@ -1189,12 +1189,12 @@ void SharedState::init_method_barriers(const Scope& scope) {
   Timer t("init_method_barriers");
   auto iterations = compute_locations_closure(
       scope, m_method_override_graph.get(),
-      [&](DexMethod* method) -> boost::optional<LocationsAndDependencies> {
+      [&](DexMethod* method) -> std::optional<LocationsAndDependencies> {
         auto action = get_base_or_overriding_method_action(
             method, &m_safe_method_defs,
             /* ignore_methods_with_assumenosideeffects */ true);
         if (action == MethodOverrideAction::UNKNOWN) {
-          return boost::none;
+          return std::nullopt;
         }
         LocationsAndDependencies lads;
         if (action == MethodOverrideAction::EXCLUDE) {
@@ -1209,7 +1209,7 @@ void SharedState::init_method_barriers(const Scope& scope) {
               auto location = get_written_location(barrier);
               if (location ==
                   CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
-                return boost::none;
+                return std::nullopt;
               }
               lads.locations.insert(location);
               continue;
@@ -1217,7 +1217,7 @@ void SharedState::init_method_barriers(const Scope& scope) {
 
             if (barrier.opcode == OPCODE_INVOKE_SUPER) {
               // TODO: Implement
-              return boost::none;
+              return std::nullopt;
             }
 
             if (!process_base_and_overriding_methods(
@@ -1230,7 +1230,7 @@ void SharedState::init_method_barriers(const Scope& scope) {
                       }
                       return true;
                     })) {
-              return boost::none;
+              return std::nullopt;
             }
           }
         }

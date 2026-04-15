@@ -58,8 +58,8 @@ class ModelMethodMerger {
       const TypeTags* type_tags,
       const UnorderedMap<DexMethod*, std::string>& method_debug_map,
       const ModelSpec& model_spec,
-      boost::optional<size_t> max_num_dispatch_target,
-      boost::optional<method_profiles::MethodProfiles*> method_profiles);
+      std::optional<size_t> max_num_dispatch_target,
+      std::optional<method_profiles::MethodProfiles*> method_profiles);
 
   TypeToMethod& merge_methods() {
     merge_ctors();
@@ -91,8 +91,8 @@ class ModelMethodMerger {
   const ModelSpec m_model_spec;
   // This member is only used for testing purpose. If its value is greator than
   // zero, the splitting decision will bypass the instruction count limit.
-  boost::optional<size_t> m_max_num_dispatch_target;
-  boost::optional<method_profiles::MethodProfiles*> m_method_profiles;
+  std::optional<size_t> m_max_num_dispatch_target;
+  std::optional<method_profiles::MethodProfiles*> m_method_profiles;
 
   // dmethods
   MergerToMethods m_merger_ctors;

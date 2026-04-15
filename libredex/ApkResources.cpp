@@ -592,7 +592,7 @@ void TableSnapshot::collect_resource_values(
     const CollectionOptions& options,
     std::vector<android::Res_value>* out) {
   auto should_include_config = [&](android::ResTable_config* maybe) {
-    if (options.include_configs == boost::none) {
+    if (options.include_configs == std::nullopt) {
       return true;
     }
     for (const auto& c : *options.include_configs) {
@@ -651,7 +651,7 @@ void TableSnapshot::union_style_and_parent_attribute_values_impl(
 
 void TableSnapshot::union_style_and_parent_attribute_values(
     uint32_t id, std::vector<android::Res_value>* out) {
-  CollectionOptions options{boost::none, false, true};
+  CollectionOptions options{std::nullopt, false, true};
   UnorderedSet<uint32_t> seen;
   union_style_and_parent_attribute_values_impl(id, options, &seen, out);
 }
@@ -944,7 +944,7 @@ std::string get_string_attribute_value(
   return std::string("");
 }
 
-boost::optional<resources::StringOrReference>
+std::optional<resources::StringOrReference>
 get_attribute_string_or_reference_value(const android::ResXMLTree& parser,
                                         size_t idx) {
   auto data_type = parser.getAttributeDataType(idx);
@@ -959,7 +959,7 @@ get_attribute_string_or_reference_value(const android::ResXMLTree& parser,
       return resources::StringOrReference(converted);
     }
   }
-  return boost::none;
+  return std::nullopt;
 }
 
 bool has_raw_attribute_value(const android::ResXMLTree& parser,
@@ -1157,7 +1157,7 @@ class XmlElementCollector : public arsc::SimpleXmlParser {
  public:
   ~XmlElementCollector() override {}
 
-  boost::optional<std::string> get_element_name(
+  std::optional<std::string> get_element_name(
       android::ResXMLTree_attrExt* extension) {
     auto ns = dtohl(extension->ns.index);
     auto name_idx = dtohl(extension->name.index);
@@ -1170,13 +1170,13 @@ class XmlElementCollector : public arsc::SimpleXmlParser {
       }
       return element_name;
     }
-    return boost::none;
+    return std::nullopt;
   }
 
   bool visit_start_tag(android::ResXMLTree_node* node,
                        android::ResXMLTree_attrExt* extension) override {
     auto name = get_element_name(extension);
-    if (name != boost::none) {
+    if (name != std::nullopt) {
       m_element_names.emplace(*name);
     }
     return arsc::SimpleXmlParser::visit_start_tag(node, extension);
@@ -1210,7 +1210,7 @@ class NodeAttributeTransformer : public XmlElementCollector {
   bool visit_start_tag(android::ResXMLTree_node* node,
                        android::ResXMLTree_attrExt* extension) override {
     auto name = get_element_name(extension);
-    if (name != boost::none) {
+    if (name != std::nullopt) {
       auto search = m_element_to_class_name.find(*name);
       if (search != m_element_to_class_name.end()) {
         // Make the new "class" attribute
@@ -1372,15 +1372,15 @@ void ApkResources::fully_qualify_layout(
 
 namespace {
 template <typename ValueType>
-boost::optional<ValueType> read_xml_value(
+std::optional<ValueType> read_xml_value(
     const std::string& file_path,
     const std::string& tag_name,
     const uint8_t& data_type,
     const std::string& attribute,
-    const std::function<boost::optional<ValueType>(android::ResXMLTree&,
-                                                   size_t)>& attribute_reader) {
+    const std::function<std::optional<ValueType>(android::ResXMLTree&, size_t)>&
+        attribute_reader) {
   if (!boost::filesystem::exists(file_path)) {
-    return boost::none;
+    return std::nullopt;
   }
 
   auto file = RedexMappedFile::open(file_path);
@@ -1388,7 +1388,7 @@ boost::optional<ValueType> read_xml_value(
   if (file.size() == 0) {
     fprintf(stderr, "WARNING: Cannot find/read the xml file %s\n",
             file_path.c_str());
-    return boost::none;
+    return std::nullopt;
   }
 
   android::ResXMLTree parser;
@@ -1397,7 +1397,7 @@ boost::optional<ValueType> read_xml_value(
   if (parser.getError() != android::NO_ERROR) {
     fprintf(stderr, "WARNING: Failed to parse the xml file %s\n",
             file_path.c_str());
-    return boost::none;
+    return std::nullopt;
   }
 
   const android::String16 tag(tag_name.c_str());
@@ -1421,15 +1421,15 @@ boost::optional<ValueType> read_xml_value(
     }
   } while ((event_code != android::ResXMLParser::END_DOCUMENT) &&
            (event_code != android::ResXMLParser::BAD_DOCUMENT));
-  return boost::none;
+  return std::nullopt;
 }
 } // namespace
 
-boost::optional<int32_t> ApkResources::get_min_sdk() {
+std::optional<int32_t> ApkResources::get_min_sdk() {
   return read_xml_value<int32_t>(
       m_manifest, "uses-sdk", android::Res_value::TYPE_INT_DEC, "minSdkVersion",
       [](android::ResXMLTree& parser, size_t idx) {
-        return boost::optional<int32_t>(parser.getAttributeData(idx));
+        return std::optional<int32_t>(parser.getAttributeData(idx));
       });
 }
 
@@ -1445,7 +1445,7 @@ ManifestClassInfo ApkResources::get_manifest_class_info() {
         return;
       }
       auto package_name = get_manifest_package_name();
-      if (package_name == boost::none) {
+      if (package_name == std::nullopt) {
         // This possibly could be an assert instead of just tracing. For now,
         // just mimic previous behavior which didn't even append package name.
         TRACE(RES, 1,
@@ -1459,17 +1459,17 @@ ManifestClassInfo ApkResources::get_manifest_class_info() {
   return classes;
 }
 
-boost::optional<std::string> ApkResources::get_manifest_package_name() {
+std::optional<std::string> ApkResources::get_manifest_package_name() {
   return read_xml_value<std::string>(
       m_manifest, "manifest", android::Res_value::TYPE_STRING, "package",
       [](android::ResXMLTree& parser, size_t idx) {
         size_t len;
         const auto* chars = parser.getAttributeStringValue(idx, &len);
         if (chars == nullptr) {
-          return boost::optional<std::string>{};
+          return std::optional<std::string>{};
         }
         android::String16 s16(chars, len);
-        return boost::optional<std::string>(convert_from_string16(s16));
+        return std::optional<std::string>(convert_from_string16(s16));
       });
 }
 

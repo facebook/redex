@@ -614,7 +614,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
     // recognize those coldstart_pct markers.
     bool uses_coldstart_pct_marker = conf.get_recognize_coldstart_pct_marker();
     auto subgroup_idx = merger.interdex_subgroup;
-    if (uses_coldstart_pct_marker && subgroup_idx != boost::none) {
+    if (uses_coldstart_pct_marker && subgroup_idx != std::nullopt) {
       if (*subgroup_idx < conf.get_num_interdex_groups() - 1) {
         subgroup_idx = 0;
       } else {
@@ -685,8 +685,8 @@ std::vector<DexClass*> ModelMerger::merge_model(
       model.get_model_spec(),
       model.get_model_spec().max_num_dispatch_target,
       update_method_profiles_stats
-          ? boost::optional<method_profiles::MethodProfiles*>(&method_profile)
-          : boost::none);
+          ? std::optional<method_profiles::MethodProfiles*>(&method_profile)
+          : std::nullopt);
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
 

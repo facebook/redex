@@ -7,7 +7,7 @@
 
 #include "IRTypeChecker.h"
 
-#include <boost/optional/optional.hpp>
+#include <optional>
 #include <utility>
 
 #include "BigBlocks.h"
@@ -361,16 +361,16 @@ Result check_load_params(const DexMethod* method) {
   size_t load_insns_cnt = 0;
 
   auto handle_instance =
-      [&](IRInstruction* insn) -> boost::optional<std::string> {
+      [&](IRInstruction* insn) -> std::optional<std::string> {
     // Must be a param-object.
     if (insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
       return std::string(
                  "First parameter must be loaded with load-param-object: ") +
              show(insn);
     }
-    return boost::none;
+    return std::nullopt;
   };
-  auto handle_other = [&](IRInstruction* insn) -> boost::optional<std::string> {
+  auto handle_other = [&](IRInstruction* insn) -> std::optional<std::string> {
     if (sig_it == signature->end()) {
       return std::string("Not enough argument types for ") + show(insn);
     }
@@ -393,11 +393,11 @@ Result check_load_params(const DexMethod* method) {
              type::type_shorty(*sig_it);
     }
     ++sig_it;
-    return boost::none;
+    return std::nullopt;
   };
 
   bool non_load_param_seen = false;
-  using handler_t = std::function<boost::optional<std::string>(IRInstruction*)>;
+  using handler_t = std::function<std::optional<std::string>(IRInstruction*)>;
   handler_t handler =
       is_static_method ? handler_t(handle_other) : handler_t(handle_instance);
 
@@ -415,7 +415,7 @@ Result check_load_params(const DexMethod* method) {
     }
     auto res = handler(insn);
     if (res) {
-      return Result::make_error(res.get());
+      return Result::make_error(*res);
     }
     // Instance methods have an extra 'load-param' at the beginning for the
     // instance object.
@@ -1131,7 +1131,7 @@ void IRTypeChecker::assume_reference(TypeEnvironment* state,
               /* ignore_top */ in_move && !m_verify_moves);
 }
 
-void IRTypeChecker::assume_assignable(boost::optional<const DexType*> from,
+void IRTypeChecker::assume_assignable(std::optional<const DexType*> from,
                                       const DexType* to) const {
   // There are some cases in type inference where we have to give up
   // and claim we don't know anything about a dex type. See
@@ -1885,8 +1885,8 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, reg_t reg) const {
   return it->second.get_type(reg).element();
 }
 
-boost::optional<const DexType*> IRTypeChecker::get_dex_type(IRInstruction* insn,
-                                                            reg_t reg) const {
+std::optional<const DexType*> IRTypeChecker::get_dex_type(IRInstruction* insn,
+                                                          reg_t reg) const {
   check_completion();
   auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);

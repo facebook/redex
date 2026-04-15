@@ -113,7 +113,7 @@ bool is_less_than_for_any_value(
                              rhs->get_at(i) == SourceBlock::Val::none())) {
       return false;
     }
-    if (lhs->get_val(i).get_value_or(0) < rhs->get_val(i).get_value_or(0)) {
+    if (lhs->get_val(i).value_or(0) < rhs->get_val(i).value_or(0)) {
       return true;
     }
   }
@@ -1507,7 +1507,7 @@ ViolationsAndPotentialViolations hot_no_hot_pred(
             first_sb_pred->get_at(i) == SourceBlock::Val::none()) {
           return {0, 1};
         }
-        summed_values[i] += first_sb_pred->get_val(i).get_value_or(0);
+        summed_values[i] += first_sb_pred->get_val(i).value_or(0);
       }
     }
   }
@@ -1516,7 +1516,7 @@ ViolationsAndPotentialViolations hot_no_hot_pred(
         first_sb_current_b->get_at(i) == SourceBlock::Val::none()) {
       return {0, 1};
     }
-    if (summed_values[i] < first_sb_current_b->get_val(i).get_value_or(0)) {
+    if (summed_values[i] < first_sb_current_b->get_val(i).value_or(0)) {
       return {1, 1};
     }
   }
@@ -1547,7 +1547,7 @@ ViolationsAndPotentialViolations hot_all_children_cold(Block* block,
             first_sb_succ->get_at(i) == SourceBlock::Val::none()) {
           return {0, 1};
         }
-        summed_values[i] += first_sb_succ->get_val(i).get_value_or(0);
+        summed_values[i] += first_sb_succ->get_val(i).value_or(0);
       }
     }
   }
@@ -1562,7 +1562,7 @@ ViolationsAndPotentialViolations hot_all_children_cold(Block* block,
     // This means that for this current hot block (with respect to the last
     // source block of the hot block), the sum of the hit values of its children
     // must be greater or equal to its hit values
-    if (summed_values[i] < last_sb_before_throw->get_val(i).get_value_or(0)) {
+    if (summed_values[i] < last_sb_before_throw->get_val(i).value_or(0)) {
       return {1, 1};
     }
   }

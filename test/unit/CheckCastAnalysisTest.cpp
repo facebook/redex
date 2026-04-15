@@ -44,7 +44,7 @@ struct CheckCastAnalysisTest : public RedexTest {
     }
   }
   static api::AndroidSDK create_empty_sdk() {
-    return api::AndroidSDK(boost::none);
+    return api::AndroidSDK(std::nullopt);
   }
 };
 

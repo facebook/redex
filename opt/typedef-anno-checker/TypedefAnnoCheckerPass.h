@@ -136,7 +136,7 @@ class TypedefAnnoChecker {
   // Returns nullopt if the value is safe, or the error message string if not.
   // Self-contained errors (field reads) are reported directly via add_error().
   std::optional<std::string> check_typedef_value(
-      const boost::optional<const DexType*>& annotation,
+      const std::optional<const DexType*>& annotation,
       IRInstruction* insn,
       src_index_t src);
 
@@ -154,7 +154,7 @@ class TypedefAnnoChecker {
   const live_range::UseDefChains* m_ud_chains{nullptr};
   const live_range::DefUseChains* m_du_chains{nullptr};
   const TypeEnvironments* m_envs{nullptr};
-  boost::optional<const DexType*> m_return_annotation;
+  std::optional<const DexType*> m_return_annotation;
 
   const StrDefConstants& m_strdef_constants;
   const IntDefConstants& m_intdef_constants;

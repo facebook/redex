@@ -10,6 +10,7 @@
 #include <set>
 
 #include <boost/dynamic_bitset.hpp>
+#include <optional>
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
@@ -61,7 +62,7 @@ class MethodSimilarityGreedyOrderer {
       m_score_map;
 
   // Last Method Id that is ordered.
-  boost::optional<MethodId> m_last_method_id;
+  std::optional<MethodId> m_last_method_id;
 
   // Mapping from stable hash (64 bit) to code hash id (32 bit). This saves
   // space.
@@ -76,7 +77,7 @@ class MethodSimilarityGreedyOrderer {
   void gather_code_hash_ids(const std::vector<DexInstruction*>& instructions,
                             std::vector<CodeHashId>& code_hash_ids);
 
-  boost::optional<MethodId> get_next();
+  std::optional<MethodId> get_next();
 
   void compute_score();
 

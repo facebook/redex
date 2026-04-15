@@ -13,7 +13,9 @@
 #include <utility>
 #include <vector>
 
-#include <boost/optional/optional.hpp>
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
+#include <boost/optional.hpp>
 
 class DexClass;
 class DexMethod;
@@ -26,7 +28,7 @@ class ControlFlowGraph;
 namespace visualizer {
 
 template <typename T>
-using optional = boost::optional<T>;
+using optional = std::optional<T>;
 
 void print_compilation_header(std::ostream& os,
                               const std::string& name,
@@ -56,7 +58,7 @@ class MethodCFGStream {
 
   void add_pass(const std::string& pass_name,
                 Options o = (Options)(SKIP_NO_CHANGE | PRINT_CODE),
-                const optional<std::string>& extra_prefix = boost::none);
+                const optional<std::string>& extra_prefix = std::nullopt);
 
   std::string get_output() const { return m_ss.str(); }
 

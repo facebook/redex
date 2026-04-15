@@ -15,6 +15,8 @@
 #include <vector>
 
 #include <boost/container/flat_map.hpp>
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
 #include <boost/optional.hpp>
 
 #include <sparta/S_Expression.h>
@@ -117,7 +119,7 @@ class PointsToVariable final {
 
   sparta::s_expr to_s_expr() const;
 
-  static boost::optional<PointsToVariable> from_s_expr(const sparta::s_expr& e);
+  static std::optional<PointsToVariable> from_s_expr(const sparta::s_expr& e);
 
  private:
   static constexpr int32_t null_var_id() { return -1; }
@@ -299,8 +301,7 @@ struct PointsToOperation {
 
   sparta::s_expr to_s_expr() const;
 
-  static boost::optional<PointsToOperation> from_s_expr(
-      const sparta::s_expr& e);
+  static std::optional<PointsToOperation> from_s_expr(const sparta::s_expr& e);
 };
 
 /*
@@ -359,16 +360,15 @@ class PointsToAction final {
   static PointsToAction get_operation(
       const PointsToOperation& operation,
       PointsToVariable dest,
-      boost::optional<PointsToVariable> instance = {});
+      std::optional<PointsToVariable> instance = {});
 
   /*
    * Used to build PTS_IPUT, PTS_IPUT_SPECIAL and PTS_SPUT actions. There is no
    * lhs for PTS_SPUT.
    */
-  static PointsToAction put_operation(
-      const PointsToOperation& operation,
-      PointsToVariable rhs,
-      boost::optional<PointsToVariable> lhs = {});
+  static PointsToAction put_operation(const PointsToOperation& operation,
+                                      PointsToVariable rhs,
+                                      std::optional<PointsToVariable> lhs = {});
 
   /*
    * Used to build PTS_INVOKE_VIRTUAL, PTS_INVOKE_SUPER, PTS_INVOKE_DIRECT,
@@ -379,8 +379,8 @@ class PointsToAction final {
    */
   static PointsToAction invoke_operation(
       const PointsToOperation& operation,
-      boost::optional<PointsToVariable> dest,
-      boost::optional<PointsToVariable> instance,
+      std::optional<PointsToVariable> dest,
+      std::optional<PointsToVariable> instance,
       const std::vector<std::pair<int32_t, PointsToVariable>>& args);
 
   /*
@@ -398,7 +398,7 @@ class PointsToAction final {
 
   sparta::s_expr to_s_expr() const;
 
-  static boost::optional<PointsToAction> from_s_expr(const sparta::s_expr& e);
+  static std::optional<PointsToAction> from_s_expr(const sparta::s_expr& e);
 
  private:
   static constexpr int32_t lhs_key() { return -1; }
@@ -481,7 +481,7 @@ class PointsToMethodSemantics {
 
   sparta::s_expr to_s_expr() const;
 
-  static boost::optional<PointsToMethodSemantics> from_s_expr(
+  static std::optional<PointsToMethodSemantics> from_s_expr(
       const sparta::s_expr& e);
 
  private:
@@ -537,7 +537,7 @@ class PointsToSemantics final {
 
   const TypeSystem& get_type_system() { return m_type_system; }
 
-  boost::optional<PointsToMethodSemantics*> get_method_semantics(
+  std::optional<PointsToMethodSemantics*> get_method_semantics(
       DexMethodRef* dex_method);
 
  private:

@@ -31,7 +31,7 @@ using ConstTypeHashSet = UnorderedSet<const DexType*>;
 namespace class_merging {
 
 using TypeToTypeSet = UnorderedMap<const DexType*, TypeSet>;
-using TypeGroupByDex = std::vector<std::pair<boost::optional<size_t>, TypeSet>>;
+using TypeGroupByDex = std::vector<std::pair<std::optional<size_t>, TypeSet>>;
 
 enum TypeTagConfig {
   // No type tags exist in the input hierarchy. No type tags need to be
@@ -149,7 +149,7 @@ struct ModelSpec {
   // Process @MethodMeta annotations
   bool process_method_meta{false};
   // Max mergeable count per merger type
-  boost::optional<size_t> max_count{boost::none};
+  std::optional<size_t> max_count{std::nullopt};
   // Approximate shaping
   Json::Value approximate_shape_merging;
   // Allows merging classes with non-primitive static fields. Enabling this will
@@ -195,7 +195,7 @@ struct ModelSpec {
     return type_like_string_confg == TypeLikeStringConfig::EXCLUDE;
   }
 
-  boost::optional<size_t> max_num_dispatch_target{boost::none};
+  std::optional<size_t> max_num_dispatch_target{std::nullopt};
 
   bool use_stable_shape_names{false};
 
@@ -420,19 +420,19 @@ class Model {
       const DexType* merger_type,
       const MergerType::Shape& shape,
       const TypeSet& intf_set,
-      const boost::optional<size_t>& dex_id,
+      const std::optional<size_t>& dex_id,
       const ConstTypeVector& group_values,
-      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+      const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
       const InterdexSubgroupIdx subgroup_idx);
   void create_mergers_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,
       const TypeSet& intf_set,
-      const boost::optional<size_t>& dex_id,
+      const std::optional<size_t>& dex_id,
       const TypeSet& group_values,
       const strategy::Strategy strategy,
-      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-      const boost::optional<size_t>& max_mergeables_count,
+      const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+      const std::optional<size_t>& max_mergeables_count,
       size_t min_mergeables_count);
 
   // make shapes out of the model classes

@@ -54,6 +54,6 @@ void patch_iget(cfg::ControlFlowGraph& cfg,
 void add_class(DexClass* new_cls,
                Scope& scope,
                DexStoresVector& stores,
-               boost::optional<size_t> dex_id);
+               std::optional<size_t> dex_id);
 
 } // namespace class_merging

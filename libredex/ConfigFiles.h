@@ -7,8 +7,10 @@
 
 #pragma once
 
-#include <boost/optional/optional.hpp>
 #include <memory>
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
+#include <boost/optional.hpp>
 #include <string>
 #include <vector>
 
@@ -200,15 +202,15 @@ struct ConfigFiles {
   std::string get_preprocessed_baseline_profile_file(
       const std::string& config_name) const;
 
-  boost::optional<std::string> get_android_sdk_api_file(int32_t api_level) {
+  std::optional<std::string> get_android_sdk_api_file(int32_t api_level) {
     std::string api_file;
     std::string key = "android_sdk_api_" + std::to_string(api_level) + "_file";
     m_json.get(key.c_str(), "", api_file);
 
     if (api_file.empty()) {
-      return boost::none;
+      return std::nullopt;
     }
-    return boost::optional<std::string>(api_file);
+    return std::optional<std::string>(api_file);
   }
 
   const api::AndroidSDK& get_android_sdk_api(int32_t min_sdk_api);

@@ -471,7 +471,7 @@ RemoveResult optimize_impl(DexMethod* method,
 
 } // namespace
 
-boost::optional<int32_t> EvaluateTypeChecksPass::evaluate(
+std::optional<int32_t> EvaluateTypeChecksPass::evaluate(
     const DexType* src_type, const DexType* test_type) {
   return type::evaluate_type_check(src_type, test_type);
 }

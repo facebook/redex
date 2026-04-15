@@ -1839,14 +1839,14 @@ bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
 }
 
 PackageNameState PackageNameState::make(
-    const boost::optional<std::string>& package_name) {
+    const std::optional<std::string>& package_name) {
   UnorderedSet<DexMethodRef*> refs{
       DexMethod::get_method(
           "Landroid/content/Context;.getPackageName:()Ljava/lang/String;"),
       DexMethod::get_method(
           "Landroid/content/ContextWrapper;.getPackageName:()Ljava/lang/"
           "String;")};
-  const DexString* dex_string = package_name != boost::none
+  const DexString* dex_string = package_name != std::nullopt
                                     ? DexString::make_string(*package_name)
                                     : nullptr;
   return {std::move(refs), dex_string};

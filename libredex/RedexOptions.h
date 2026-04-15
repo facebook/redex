@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
 #include <boost/optional.hpp>
 
 #include <cstdint>
@@ -56,7 +58,7 @@ class RedexOptions {
   Architecture arch{Architecture::UNKNOWN};
   DebugInfoKind debug_info_kind{DebugInfoKind::NoCustomSymbolication};
   std::string jni_summary_path;
-  boost::optional<std::string> package_name{boost::none};
+  std::optional<std::string> package_name{std::nullopt};
 
   /*
    * Overwriting the `this` register breaks the verifier before Android M and

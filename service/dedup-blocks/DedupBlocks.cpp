@@ -1233,7 +1233,7 @@ class DedupBlocksImpl {
         }
         joined_type_domain.join_with(type_domain);
         if (common_dex_type && dex_type && *common_dex_type != *dex_type) {
-          common_dex_type = boost::none;
+          common_dex_type = std::nullopt;
         }
       }
       always_assert(!joined_type_domain.is_bottom());

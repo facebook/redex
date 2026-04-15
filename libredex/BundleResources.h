@@ -21,6 +21,7 @@
 #include "androidfw/ResourceTypes.h"
 #include "protores/Resources.pb.h"
 #include <google/protobuf/repeated_field.h>
+#include <optional>
 
 using ConfigValues = google::protobuf::RepeatedPtrField<aapt::pb::ConfigValue>;
 
@@ -112,9 +113,9 @@ class BundleResources : public AndroidResources {
   explicit BundleResources(const std::string& directory)
       : AndroidResources(directory) {}
   ~BundleResources() override;
-  boost::optional<int32_t> get_min_sdk() override;
+  std::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
-  boost::optional<std::string> get_manifest_package_name() override;
+  std::optional<std::string> get_manifest_package_name() override;
   UnorderedSet<std::string> get_service_loader_classes() override;
   UnorderedSet<uint32_t> get_xml_reference_attributes(
       const std::string& filename) override;

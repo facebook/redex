@@ -552,7 +552,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     uint32_t line_addin) {
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
   uint32_t prev_addr = 0;
-  boost::optional<uint32_t> prev_line;
+  std::optional<uint32_t> prev_line;
   auto& entries = debugitem->get_entries();
 
   for (auto it = entries.begin(); it != entries.end(); ++it) {

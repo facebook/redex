@@ -7,9 +7,9 @@
 
 #include "IRAssembler.h"
 
-#include <boost/optional/optional.hpp>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <sstream>
 #include <tuple>
 #include <variant>
@@ -846,15 +846,15 @@ s_expr to_s_expr(const IRCode* code) {
   return s_expr(exprs);
 }
 
-static boost::optional<reg_t> largest_reg_operand(const IRInstruction* insn) {
-  boost::optional<reg_t> max_reg;
+static std::optional<reg_t> largest_reg_operand(const IRInstruction* insn) {
+  std::optional<reg_t> max_reg;
   if (insn->has_dest()) {
     max_reg = insn->dest();
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    // boost::none is the smallest element of the ordering.
+    // std::nullopt is the smallest element of the ordering.
     // It's smaller than any uint16_t.
-    max_reg = std::max(max_reg, boost::make_optional(insn->src(i)));
+    max_reg = std::max(max_reg, std::make_optional(insn->src(i)));
   }
   return max_reg;
 }
@@ -868,7 +868,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
                     e.str().c_str());
   LabelDefs label_defs;
   LabelRefs label_refs;
-  boost::optional<reg_t> max_reg;
+  std::optional<reg_t> max_reg;
   UnorderedMap<std::string, DexPosition*> positions;
 
   // map from catch name to catch marker pointer

@@ -95,7 +95,7 @@ class PassImpl : public Pass {
   void run(const DexStoresVector& stores,
            const ConfigFiles& conf,
            int min_sdk = 0,
-           const boost::optional<std::string>& = boost::none);
+           const std::optional<std::string>& = std::nullopt);
 
   /*
    * Exposed for testing purposes.

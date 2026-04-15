@@ -130,7 +130,7 @@ class SourceBlocksTest : public RedexTest {
 
   static std::vector<source_blocks::ProfileData> single_profile(
       const std::string& p) {
-    return std::vector<ProfileData>{std::make_pair(p, boost::none)};
+    return std::vector<ProfileData>{std::make_pair(p, std::nullopt)};
   }
 
  private:

@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <queue>
 
-#include <boost/optional/optional.hpp>
+#include <optional>
 
 #include <sparta/MonotonicFixpointIterator.h>
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
@@ -25,9 +25,9 @@ namespace {
 
 /**
  * Returns the register that holds the result of computing insn, if there is
- * one or boost::none if such a register does not exist.
+ * one or std::nullopt if such a register does not exist.
  */
-inline boost::optional<reg_t> dest(const IRInstruction* insn) {
+inline std::optional<reg_t> dest(const IRInstruction* insn) {
   if (insn->has_move_result_any()) {
     return RESULT_REGISTER;
   } else if (insn->has_dest()) {

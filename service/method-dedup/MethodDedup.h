@@ -53,6 +53,6 @@ size_t dedup_methods(
     const std::vector<DexMethod*>& to_dedup,
     bool dedup_fill_in_stack_trace,
     std::vector<DexMethod*>& replacements,
-    boost::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>& new_to_old);
+    std::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>& new_to_old);
 
 } // namespace method_dedup

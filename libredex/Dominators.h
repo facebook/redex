@@ -7,7 +7,9 @@
 
 #pragma once
 
-#include <boost/optional/optional.hpp>
+#include <optional>
+// TODO(T000000000): Remove after downstream boost::optional migration
+#include <boost/optional.hpp>
 
 #include "DeterministicContainers.h"
 #include "GraphUtil.h"
@@ -47,7 +49,7 @@ class SimpleFastDominators {
           continue;
         }
         const auto& preds = GraphInterface::predecessors(graph, node);
-        boost::optional<NodeId> new_idom;
+        std::optional<NodeId> new_idom;
         for (auto& pred : preds) {
           const auto& src = GraphInterface::source(graph, pred);
           if (!m_idoms.count(src)) {

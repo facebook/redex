@@ -1998,7 +1998,7 @@ void ControlFlowGraph::insert_branches_and_targets(
         auto& branch_mie = *branch_it;
 
         BranchTarget* bt =
-            edge->case_key() != boost::none
+            edge->case_key() != std::nullopt
                 ? new BranchTarget(&branch_mie, *edge->case_key())
                 : new BranchTarget(&branch_mie);
         auto* target_mie = new MethodItemEntry(bt);
@@ -2530,7 +2530,7 @@ void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
         m_removed_insns.push_back(last_insn);
         pred_block->m_entries.erase_and_dispose(last_it);
         fwd_edge->set_type(EDGE_GOTO);
-        fwd_edge->set_case_key(boost::none);
+        fwd_edge->set_case_key(std::nullopt);
       }
     }
   }
@@ -3075,7 +3075,7 @@ std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
         switch (succ->type()) {
         case EDGE_BRANCH:
           o << "br";
-          if (succ->case_key() != boost::none) {
+          if (succ->case_key() != std::nullopt) {
             o << " " << *succ->case_key();
           }
           break;

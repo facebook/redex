@@ -789,7 +789,7 @@ size_t compute_locations_closure_impl(
 size_t compute_locations_closure(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>&
+    const std::function<std::optional<LocationsAndDependencies>(DexMethod*)>&
         init_func,
     UnorderedMap<const DexMethod*, CseUnorderedLocationSet>* result) {
   return compute_locations_closure_impl(scope, method_override_graph, init_func,
@@ -838,13 +838,13 @@ static size_t analyze_read_locations(
 
   return compute_locations_closure_impl(
       scope, method_override_graph,
-      [&](DexMethod* method) -> boost::optional<LocationsAndDependencies> {
+      [&](DexMethod* method) -> std::optional<LocationsAndDependencies> {
         auto action = get_base_or_overriding_method_action_impl(
             method, &pure_methods_closure,
             ignore_methods_with_assumenosideeffects);
 
         if (action == MethodOverrideAction::UNKNOWN) {
-          return boost::none;
+          return std::nullopt;
         }
 
         LocationsAndDependencies lads;
@@ -857,7 +857,7 @@ static size_t analyze_read_locations(
                   }
                   return true;
                 })) {
-          return boost::none;
+          return std::nullopt;
         }
 
         if (action == MethodOverrideAction::EXCLUDE) {
@@ -943,7 +943,7 @@ static size_t analyze_read_locations(
             });
 
         if (unknown) {
-          return boost::none;
+          return std::nullopt;
         }
 
         return lads;

@@ -183,7 +183,7 @@ void set_type(TypeEnvironment* state, reg_t reg, const TypeDomain& type) {
 void set_integral(
     TypeEnvironment* state,
     reg_t reg,
-    const boost::optional<const DexType*>& annotation = boost::none) {
+    const std::optional<const DexType*>& annotation = std::nullopt) {
   state->set_type(reg, TypeDomain(IRType::INT));
   const auto anno = DexAnnoType(annotation);
   DexTypeDomain dex_type_domain = DexTypeDomain::create_for_anno(&anno);
@@ -202,7 +202,7 @@ void set_scalar(TypeEnvironment* state, reg_t reg) {
 
 void set_reference(TypeEnvironment* state,
                    reg_t reg,
-                   const boost::optional<const DexType*>& dex_type_opt,
+                   const std::optional<const DexType*>& dex_type_opt,
                    bool is_not_null = false) {
   state->set_type(reg, TypeDomain(IRType::REFERENCE));
   const auto* dex_type = dex_type_opt ? *dex_type_opt : nullptr;
@@ -214,11 +214,10 @@ void set_reference(TypeEnvironment* state,
 }
 
 // The presence of DexAnnoType implies Nullable
-void set_reference_with_anno(
-    TypeEnvironment* state,
-    reg_t reg,
-    const boost::optional<const DexType*>& dex_type_opt,
-    const boost::optional<const DexType*>& annotation) {
+void set_reference_with_anno(TypeEnvironment* state,
+                             reg_t reg,
+                             const std::optional<const DexType*>& dex_type_opt,
+                             const std::optional<const DexType*>& annotation) {
   state->set_type(reg, TypeDomain(IRType::REFERENCE));
   const auto* dex_type = dex_type_opt ? *dex_type_opt : nullptr;
   const auto anno = DexAnnoType(annotation);
@@ -261,7 +260,7 @@ void set_type(TypeEnvironment* state, reg_t reg, const IntTypeDomain& type) {
 
 void set_int(TypeEnvironment* state,
              reg_t reg,
-             const boost::optional<const DexType*>& annotation = boost::none) {
+             const std::optional<const DexType*>& annotation = std::nullopt) {
   state->set_type(reg, IntTypeDomain(IntType::INT));
   set_integral(state, reg, annotation);
 }
@@ -335,7 +334,7 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   }
 }
 
-boost::optional<const DexType*> get_typedef_annotation(
+std::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
     const UnorderedSet<const DexType*>& typedef_annotations) {
   for (auto const& anno : annotations) {
@@ -360,7 +359,7 @@ boost::optional<const DexType*> get_typedef_annotation(
       return DexType::make_type(anno->type()->get_name());
     }
   }
-  return boost::none;
+  return std::nullopt;
 }
 
 bool TypeInference::is_pure_virtual_with_annotation(
@@ -447,7 +446,7 @@ void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
               /* expected */ IRType::SCALAR);
-  const boost::optional<const DexType*> annotation = state->get_annotation(reg);
+  const std::optional<const DexType*> annotation = state->get_annotation(reg);
   const auto anno = DexAnnoType(annotation);
   DexTypeDomain dex_type_domain = DexTypeDomain::create_for_anno(&anno);
   state->set_dex_type(reg, dex_type_domain);
@@ -455,7 +454,7 @@ void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
 
 void TypeInference::refine_integral(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ IRType::INT);
-  const boost::optional<const DexType*> annotation = state->get_annotation(reg);
+  const std::optional<const DexType*> annotation = state->get_annotation(reg);
   const auto anno = DexAnnoType(annotation);
   DexTypeDomain dex_type_domain = DexTypeDomain::create_for_anno(&anno);
   state->set_dex_type(reg, dex_type_domain);
@@ -533,7 +532,7 @@ void TypeInference::run(bool is_static,
   bool first_param = true;
   for (const auto& mie : InstructionIterable(m_cfg.get_param_instructions())) {
     IRInstruction* insn = mie.insn;
-    boost::optional<const DexType*> annotation = boost::none;
+    std::optional<const DexType*> annotation = std::nullopt;
 
     if (!first_param || is_static) {
       if (!m_annotations.empty() && (param_anno != nullptr) &&
@@ -1017,9 +1016,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     DexFieldRef* field = insn->get_field();
     const DexType* type = field->get_type();
-    boost::optional<const DexType*> annotation =
+    std::optional<const DexType*> annotation =
         get_typedef_anno_from_member(field, m_annotations);
-    boost::optional<const DexType*> src_anno =
+    std::optional<const DexType*> src_anno =
         current_state->get_annotation(insn->src(0));
     DexField* field_def = field->as_def();
     if ((field_def != nullptr) &&
@@ -1065,11 +1064,11 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_IGET_OBJECT: {
     refine_reference(current_state, insn->src(0));
-    boost::optional<const DexType*> annotation =
+    std::optional<const DexType*> annotation =
         get_typedef_anno_from_member(insn->get_field(), m_annotations);
     always_assert(insn->has_field());
     auto* const field = insn->get_field();
-    boost::optional<const DexType*> src_anno =
+    std::optional<const DexType*> src_anno =
         current_state->get_annotation(insn->src(0));
     DexField* field_def = field->as_def();
     if ((field_def != nullptr) &&
@@ -1122,7 +1121,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_SGET: {
     DexType* type = insn->get_field()->get_type();
-    boost::optional<const DexType*> annotation =
+    std::optional<const DexType*> annotation =
         get_typedef_anno_from_member(insn->get_field(), m_annotations);
     if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
@@ -1159,7 +1158,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_SGET_OBJECT: {
     always_assert(insn->has_field());
     auto* const field = insn->get_field();
-    boost::optional<const DexType*> annotation =
+    std::optional<const DexType*> annotation =
         get_typedef_anno_from_member(insn->get_field(), m_annotations);
     set_reference_with_anno(current_state, RESULT_REGISTER, field->get_type(),
                             annotation);
@@ -1279,16 +1278,16 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       break;
     }
     if (type::is_object(return_type)) {
-      boost::optional<const DexType*> annotation =
+      std::optional<const DexType*> annotation =
           get_typedef_anno_from_member(dex_method, m_annotations);
       if (is_pure_virtual_with_annotation(dex_method)) {
         auto callees = method_override_graph::get_overriding_methods(
             *m_method_override_graph, dex_method->as_def());
         for (const DexMethod* callee : UnorderedIterable(callees)) {
-          boost::optional<const DexType*> anno =
+          std::optional<const DexType*> anno =
               get_typedef_anno_from_member(callee, m_annotations);
-          if (anno == boost::none || anno != annotation) {
-            annotation = boost::none;
+          if (anno == std::nullopt || anno != annotation) {
+            annotation = std::nullopt;
             break;
           }
         }
@@ -1299,16 +1298,16 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     }
     if (type::is_integral(return_type)) {
       if (type::is_int(return_type)) {
-        boost::optional<const DexType*> annotation =
+        std::optional<const DexType*> annotation =
             get_typedef_anno_from_member(dex_method, m_annotations);
         if (is_pure_virtual_with_annotation(dex_method)) {
           auto callees = method_override_graph::get_overriding_methods(
               *m_method_override_graph, dex_method->as_def());
           for (const DexMethod* callee : UnorderedIterable(callees)) {
-            boost::optional<const DexType*> anno =
+            std::optional<const DexType*> anno =
                 get_typedef_anno_from_member(callee, m_annotations);
-            if (anno == boost::none || anno != annotation) {
-              annotation = boost::none;
+            if (anno == std::nullopt || anno != annotation) {
+              annotation = std::nullopt;
               break;
             }
           }
