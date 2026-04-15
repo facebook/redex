@@ -12,10 +12,12 @@ REDEX_BINARY="$1"
 shift
 
 OUT_TMP="$(dirname "$SCRIPT")/test.out"
+DEBUG_STDERR="$(dirname "$SCRIPT")/stderr_debug"
 
 # We are using pass-through mode for simplicity. The actual data
 # does not matter
 # shellcheck disable=SC2015
+REDEX_STDERR_DEBUG="$DEBUG_STDERR" \
 "$FB_REDEX" --redex-binary "$REDEX_BINARY" \
   --config /tmp/test.config \
   --outdir /tmp/test --dex-files /tmp/test.apk \
@@ -30,6 +32,31 @@ mv "${OUT_TMP}.clean" "$OUT_TMP"
 grep 'This is an abort test.' "$OUT_TMP" || ( echo "Did not find abort message" ; exit 1 ; )
 
 # Check for stack symbolication.
+
+dump_debug() {
+    echo "=== Raw pipe bytes (before Python decode/handler) ==="
+    if [ -f "${DEBUG_STDERR}.raw" ]; then
+      xxd "${DEBUG_STDERR}.raw" | head -200
+      echo ""
+      echo "--- terminate/what lines in raw pipe ---"
+      grep -an 'terminate\|what()' "${DEBUG_STDERR}.raw" || echo "(none)"
+      echo "--- NUL byte check ---"
+      if tr -d '\0' < "${DEBUG_STDERR}.raw" | cmp -s - "${DEBUG_STDERR}.raw"; then
+        echo "No NUL bytes in raw pipe"
+      else
+        echo "NUL bytes present in raw pipe"
+      fi
+    else
+      echo "(no raw debug file)"
+    fi
+    echo "=== Python decode/handler metadata ==="
+    if [ -f "${DEBUG_STDERR}.meta" ]; then
+      cat "${DEBUG_STDERR}.meta"
+    else
+      echo "(no metadata file - no decode errors or handler mutations)"
+    fi
+    echo "=== End debug ==="
+}
 
 check_stack() {
     LINE="$1"
@@ -47,6 +74,7 @@ check_stack() {
       echo "=== Full symbolicated stack trace ==="
       cat "$OUT_TMP"
       echo "=== End stack trace ==="
+      dump_debug
       exit 1
     fi
 }
