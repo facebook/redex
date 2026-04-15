@@ -96,8 +96,7 @@ extract_object_with_attr_value(const ConstantValue& value) {
     always_assert(object.attributes.size() == 1);
     auto signed_value =
         object.attributes.front().value.maybe_get<SignedConstantDomain>();
-    if (signed_value != boost::none &&
-        signed_value.value().get_constant() != std::nullopt) {
+    if (signed_value && signed_value.value().get_constant() != std::nullopt) {
       auto primitive_value = *signed_value.value().get_constant();
       return std::pair<const DexType*, int64_t>(object.type, primitive_value);
     } else {

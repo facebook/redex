@@ -261,16 +261,16 @@ class EnumUpcastDetector {
       return;
     }
     auto summary_it = m_config->param_summary_map.find(method);
-    boost::optional<UnorderedSet<uint16_t>&> safe_params;
+    UnorderedSet<uint16_t>* safe_params = nullptr;
     if (summary_it != m_config->param_summary_map.end()) {
       auto& summary = summary_it->second;
-      safe_params = summary.safe_params;
+      safe_params = &summary.safe_params;
     }
 
     auto* const args = method->get_proto()->get_args();
     auto it = args->begin();
     for (size_t arg_id = 0; arg_id < insn->srcs_size(); ++arg_id, ++it) {
-      if (safe_params && (safe_params->count(arg_id) != 0u)) {
+      if ((safe_params != nullptr) && (safe_params->count(arg_id) != 0u)) {
         continue;
       }
       reject_if_inconsistent(insn, env->get(insn->src(arg_id)), *it,

@@ -9,8 +9,6 @@
 
 #include "Pass.h"
 
-#include <boost/optional.hpp>
-
 #include "Model.h"
 
 namespace class_merging {

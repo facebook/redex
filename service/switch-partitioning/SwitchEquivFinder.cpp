@@ -175,7 +175,7 @@ class key_creating_visitor
 
   SwitchEquivFinder::SwitchingKey operator()(
       const ConstantClassObjectDomain& dom) const {
-    if (dom.is_top() || dom.get_constant() == boost::none) {
+    if (dom.is_top() || !dom.get_constant()) {
       return SwitchEquivFinder::DefaultCase{};
     }
     return *dom.get_constant();

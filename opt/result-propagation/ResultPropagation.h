@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <optional>
 
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
@@ -47,7 +47,7 @@ class ReturnParamResolver {
    * For an invocation given by an instruction, figure out whether
    * it will always return one of its incoming sources.
    */
-  boost::optional<ParamIndex> get_return_param_index(
+  std::optional<ParamIndex> get_return_param_index(
       const IRInstruction* insn,
       const UnorderedMap<const DexMethod*, ParamIndex>&
           methods_which_return_parameter,
@@ -57,7 +57,7 @@ class ReturnParamResolver {
    * For a method given by its cfg, figure out whether all regular return
    * instructions would return a particular incoming parameter.
    */
-  boost::optional<ParamIndex> get_return_param_index(
+  std::optional<ParamIndex> get_return_param_index(
       const cfg::ControlFlowGraph& cfg,
       const UnorderedMap<const DexMethod*, ParamIndex>&
           methods_which_return_parameter) const;

@@ -8,10 +8,9 @@
 #pragma once
 
 #include <limits>
-#include <utility>
-
-#include <boost/optional.hpp>
+#include <optional>
 #include <sparta/MonotonicFixpointIterator.h>
+#include <utility>
 
 #include "BaseIRAnalyzer.h"
 #include "ConcurrentContainers.h"
@@ -27,8 +26,8 @@ class DexMethodRef;
 
 namespace constant_propagation {
 
-boost::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
-                                                    const State& state);
+std::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
+                                                  const State& state);
 
 namespace intraprocedural {
 
@@ -321,9 +320,9 @@ struct ImmutableAttributeAnalyzerState {
     size_t insn_src_id_of_attr;
     // The object is passed in as a source register of the method invocation,
     // like `this` pointer of constructor.
-    boost::optional<size_t> insn_src_id_of_obj = boost::none;
+    std::optional<size_t> insn_src_id_of_obj = std::nullopt;
     // The object is the return value of the method. Example, Integer.valueOf(I)
-    bool obj_is_dest() const { return insn_src_id_of_obj == boost::none; }
+    bool obj_is_dest() const { return insn_src_id_of_obj == std::nullopt; }
 
     explicit Initializer(DexMethod* method_attr) : attr(method_attr) {}
     explicit Initializer(DexField* field_attr) : attr(field_attr) {}
@@ -333,7 +332,7 @@ struct ImmutableAttributeAnalyzerState {
       return *this;
     }
     Initializer& set_obj_to_dest() {
-      insn_src_id_of_obj = boost::none;
+      insn_src_id_of_obj = std::nullopt;
       return *this;
     }
     Initializer& set_src_id_of_obj(size_t id) {
@@ -665,7 +664,7 @@ ReturnState collect_return_state(IRCode* code,
  * Get source argument index, if any, which is getting dereferenced by an
  * instruction. A null object would cause an exception to be thrown.
  */
-boost::optional<size_t> get_dereferenced_object_src_index(const IRInstruction*);
+std::optional<size_t> get_dereferenced_object_src_index(const IRInstruction*);
 
 /*
  * Handle reading of static fields fXXX in $EnumUtils class.

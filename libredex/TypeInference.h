@@ -10,8 +10,6 @@
 #include <ostream>
 
 #include "OptionalIO.h"
-// TODO(T000000000): Remove after downstream boost::optional migration
-#include <boost/optional/optional_io.hpp>
 
 #include <sparta/FiniteAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>

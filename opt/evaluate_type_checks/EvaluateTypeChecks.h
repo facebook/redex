@@ -10,8 +10,6 @@
 #include "Pass.h"
 #include "Shrinker.h"
 
-#include <boost/optional.hpp>
-
 class DexType;
 class DexMethod;
 class XStoreRefs;

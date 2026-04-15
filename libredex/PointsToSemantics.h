@@ -16,8 +16,6 @@
 
 #include <boost/container/flat_map.hpp>
 #include <optional>
-// TODO(T000000000): Remove after downstream boost::optional migration
-#include <boost/optional.hpp>
 
 #include <sparta/S_Expression.h>
 

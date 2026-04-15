@@ -10,8 +10,6 @@
 #include <memory>
 
 #include <optional>
-// TODO(T000000000): Remove after downstream boost::optional migration
-#include <boost/optional.hpp>
 
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"

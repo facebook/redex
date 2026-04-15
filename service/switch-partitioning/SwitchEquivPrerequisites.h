@@ -73,7 +73,7 @@ class known_visitor : public boost::static_visitor<bool> {
     if (dom.is_top()) {
       return false;
     }
-    return dom.get_constant() != boost::none;
+    return !!dom.get_constant();
   }
 
   template <typename Domain>

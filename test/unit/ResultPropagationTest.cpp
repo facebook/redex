@@ -6,7 +6,6 @@
  */
 
 #include "OptionalIO.h"
-#include <boost/optional/optional_io.hpp>
 #include <gtest/gtest.h>
 #include <optional>
 
@@ -28,7 +27,7 @@ const DexMethodRef* get_invoked_method(cfg::ControlFlowGraph* cfg) {
 }
 
 void test_get_return_param_index(const std::string& code_str,
-                                 boost::optional<ParamIndex> expected) {
+                                 std::optional<ParamIndex> expected) {
   auto code = assembler::ircode_from_string(code_str);
   code->build_cfg();
   auto& cfg = code->cfg();
@@ -50,7 +49,7 @@ TEST_F(ResultPropagationTest, trivial) {
       (return-void)
     )
   )";
-  test_get_return_param_index(code_str, boost::none);
+  test_get_return_param_index(code_str, std::nullopt);
 }
 
 TEST_F(ResultPropagationTest, return_non_param) {
@@ -60,7 +59,7 @@ TEST_F(ResultPropagationTest, return_non_param) {
       (return v0)
     )
   )";
-  test_get_return_param_index(code_str, boost::none);
+  test_get_return_param_index(code_str, std::nullopt);
 }
 
 TEST_F(ResultPropagationTest, return_first_param) {
@@ -127,7 +126,7 @@ TEST_F(ResultPropagationTest, return_second_param_wide_clobbered) {
       (return-wide v1)
     )
   )";
-  test_get_return_param_index(code_str, boost::none);
+  test_get_return_param_index(code_str, std::nullopt);
 }
 
 TEST_F(ResultPropagationTest, return_check_cast) {
@@ -151,7 +150,7 @@ TEST_F(ResultPropagationTest, return_unknown_invoke) {
       (return v1)
     )
   )";
-  test_get_return_param_index(code_str, boost::none);
+  test_get_return_param_index(code_str, std::nullopt);
 }
 
 TEST_F(ResultPropagationTest, return_unknown_irrelevant_invoke) {
@@ -164,7 +163,7 @@ TEST_F(ResultPropagationTest, return_unknown_irrelevant_invoke) {
       (return v1)
     )
   )";
-  test_get_return_param_index(code_str, boost::none);
+  test_get_return_param_index(code_str, std::nullopt);
 }
 
 TEST_F(ResultPropagationTest, return_receiver_of_framework_method) {

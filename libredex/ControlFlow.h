@@ -14,8 +14,6 @@
 #include <boost/dynamic_bitset.hpp>
 #include <boost/range/sub_range.hpp>
 #include <optional>
-// TODO(T000000000): Remove after downstream boost::optional migration
-#include <boost/optional.hpp>
 
 #include <sparta/WeakTopologicalOrdering.h>
 

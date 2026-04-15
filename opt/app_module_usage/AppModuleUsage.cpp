@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <boost/none.hpp>
 #include <boost/none_t.hpp>
-#include <boost/optional/optional.hpp>
 #include <fstream>
 #include <optional>
 #include <sstream>

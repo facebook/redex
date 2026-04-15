@@ -8,6 +8,7 @@
 #include "Inliner.h"
 
 #include <cstdint>
+#include <optional>
 #include <utility>
 
 #include "ApiLevelChecker.h"
@@ -712,7 +713,7 @@ size_t MultiMethodInliner::inline_inlinables(
       });
 
   std::vector<DexMethod*> inlined_callees;
-  boost::optional<reg_t> cfg_next_caller_reg;
+  std::optional<reg_t> cfg_next_caller_reg;
   if (!m_config.unique_inlined_registers) {
     cfg_next_caller_reg = caller->cfg().get_registers_size();
   }
@@ -1934,12 +1935,12 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   const auto* inlined_cost = get_average_inlined_cost(callee);
   always_assert(inlined_cost);
 
-  boost::optional<CalleeCallerRefs> callee_caller_refs;
+  std::optional<CalleeCallerRefs> callee_caller_refs;
   float cross_dex_penalty{0};
   if (m_cross_dex_penalty && !is_private(callee)) {
     callee_caller_refs = get_callee_caller_refs(callee);
     if (callee_caller_refs->same_class) {
-      callee_caller_refs = boost::none;
+      callee_caller_refs = std::nullopt;
     } else {
       // Inlining methods into different classes might lead to worse
       // cross-dex-ref minimization results.

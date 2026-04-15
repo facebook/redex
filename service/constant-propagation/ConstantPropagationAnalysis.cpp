@@ -162,8 +162,8 @@ inline INT_TYPE art_float_to_integral(FLOAT_TYPE f) {
 
 namespace constant_propagation {
 
-boost::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
-                                                    const State& state) {
+std::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
+                                                  const State& state) {
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     auto* method = insn->get_method();
@@ -187,10 +187,10 @@ boost::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
   default:
     break;
   }
-  return boost::none;
+  return std::nullopt;
 }
 
-boost::optional<size_t> get_dereferenced_object_src_index(
+std::optional<size_t> get_dereferenced_object_src_index(
     const IRInstruction* insn) {
   switch (insn->opcode()) {
   case OPCODE_MONITOR_ENTER:
@@ -232,7 +232,7 @@ boost::optional<size_t> get_dereferenced_object_src_index(
   case OPCODE_IPUT_BOOLEAN:
     return 1;
   default:
-    return boost::none;
+    return std::nullopt;
   }
 }
 
@@ -686,7 +686,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
   int32_t lit = static_cast<int32_t>(insn->get_literal());
   auto scd = env->get<SignedConstantDomain>(insn->src(0));
   const auto cst = scd.get_constant();
-  boost::optional<int64_t> result = boost::none;
+  std::optional<int64_t> result = std::nullopt;
   if (cst) {
     TRACE(CONSTP, 5, "Attempting to fold %s with literal %d", SHOW(insn), lit);
     bool use_result_reg = false;
@@ -754,7 +754,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
       break;
     }
     auto res_const_dom = SignedConstantDomain::top();
-    if (result != boost::none) {
+    if (result != std::nullopt) {
       int32_t result32 = (int32_t)(*result & 0xFFFFFFFF);
       res_const_dom = SignedConstantDomain(result32);
     }
@@ -823,7 +823,7 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
   const auto cst_left = scd_left.get_constant();
   const auto scd_right = env->get<SignedConstantDomain>(insn->src(1));
   const auto cst_right = scd_right.get_constant();
-  boost::optional<int64_t> result = boost::none;
+  std::optional<int64_t> result = std::nullopt;
   if (cst_left && cst_right) {
     TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
     bool use_result_reg = false;
@@ -878,7 +878,7 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
       return analyze_default(insn, env);
     }
     auto res_const_dom = SignedConstantDomain::top();
-    if (result != boost::none) {
+    if (result != std::nullopt) {
       if (opcode::is_binop64(op)) {
         res_const_dom = SignedConstantDomain(*result);
       } else {
@@ -1368,10 +1368,8 @@ bool NewObjectAnalyzer::analyze_new_array(
   if (ignore_type(state, insn->get_type())) {
     return false;
   }
-  boost::optional<SignedConstantDomain> array_length_opt =
-      env->get<SignedConstantDomain>(insn->src(0));
   SignedConstantDomain array_length =
-      array_length_opt ? *array_length_opt : SignedConstantDomain::top();
+      env->get<SignedConstantDomain>(insn->src(0));
   array_length.meet_with(SignedConstantDomain(sign_domain::Interval::GEZ));
   env->set(RESULT_REGISTER, NewObjectDomain(insn, array_length));
   return true;
@@ -1915,7 +1913,7 @@ void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
 namespace {
 struct IfZeroMeetWith {
   sign_domain::Interval right_zero_meet_interval;
-  boost::optional<sign_domain::Interval> left_zero_meet_interval{boost::none};
+  std::optional<sign_domain::Interval> left_zero_meet_interval{std::nullopt};
 };
 } // namespace
 
