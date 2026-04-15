@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "ControlFlow.h"
+#include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexStore.h"
@@ -453,3 +454,122 @@ bool is_identifier(const std::string_view& ident) {
   return true;
 }
 } // namespace java_names
+
+void create_object_class() {
+  auto* type = type::java_lang_Object();
+  if (type_class(type) != nullptr) {
+    return;
+  }
+
+  std::vector<DexMethod*> object_methods;
+
+  // required sigs
+  auto* void_args = DexTypeList::make_type_list({});
+  auto* void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
+  auto* object_bool = DexProto::make_proto(
+      type::_boolean(),
+      DexTypeList::make_type_list({type::java_lang_Object()}));
+  auto* void_void = DexProto::make_proto(type::_void(), void_args);
+  auto* void_class = DexProto::make_proto(type::java_lang_Class(), void_args);
+  auto* void_int = DexProto::make_proto(type::_int(), void_args);
+  auto* void_string = DexProto::make_proto(type::java_lang_String(), void_args);
+  auto* long_void = DexProto::make_proto(
+      type::_void(), DexTypeList::make_type_list({type::_long()}));
+  auto* long_int_void = DexProto::make_proto(
+      type::_void(),
+      DexTypeList::make_type_list({type::_long(), type::_int()}));
+
+  // required names
+  const auto* clone = DexString::make_string("clone");
+  const auto* equals = DexString::make_string("equals");
+  const auto* finalize = DexString::make_string("finalize");
+  const auto* getClass = DexString::make_string("getClass");
+  const auto* hashCode = DexString::make_string("hashCode");
+  const auto* notify = DexString::make_string("notify");
+  const auto* notifyAll = DexString::make_string("notifyAll");
+  const auto* toString = DexString::make_string("toString");
+  const auto* wait = DexString::make_string("wait");
+
+  // protected java.lang.Object.clone()Ljava/lang/Object;
+  auto* method = DexMethod::make_method_downcast(type, clone, void_object);
+  method->set_access(ACC_PROTECTED);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public java.lang.Object.equals(Ljava/lang/Object;)Z
+  method = DexMethod::make_method_downcast(type, equals, object_bool);
+  method->set_access(ACC_PUBLIC);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // protected java.lang.Object.finalize()V
+  method = DexMethod::make_method_downcast(type, finalize, void_void);
+  method->set_access(ACC_PROTECTED);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final native java.lang.Object.getClass()Ljava/lang/Class;
+  method = DexMethod::make_method_downcast(type, getClass, void_class);
+  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public native java.lang.Object.hashCode()I
+  method = DexMethod::make_method_downcast(type, hashCode, void_int);
+  method->set_access(ACC_PUBLIC | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  method = DexMethod::make_method_downcast(type, notify, void_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final native java.lang.Object.notifyAll()V
+  method = DexMethod::make_method_downcast(type, notifyAll, void_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public java.lang.Object.toString()Ljava/lang/String;
+  method = DexMethod::make_method_downcast(type, toString, void_string);
+  method->set_access(ACC_PUBLIC);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final java.lang.Object.wait()V
+  method = DexMethod::make_method_downcast(type, wait, void_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final java.lang.Object.wait(J)V
+  method = DexMethod::make_method_downcast(type, wait, long_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final native java.lang.Object.wait(JI)V
+  method = DexMethod::make_method_downcast(type, wait, long_int_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  ClassCreator cc(type);
+  cc.set_access(ACC_PUBLIC);
+  auto* object_class = cc.create();
+  for (auto const& m : object_methods) {
+    object_class->add_method(m);
+  }
+}

@@ -159,6 +159,13 @@ Scope build_class_scope(const T& dexen) {
 };
 Scope build_class_scope(const DexStoresVector& stores);
 
+/**
+ * Create a DexClass for java.lang.Object with standard virtual methods.
+ * Needed when no jar files are specified on the command line (common in tests).
+ * If Object already exists, this is a no-op.
+ */
+void create_object_class();
+
 Scope build_class_scope_for_packages(
     const DexStoresVector& stores,
     const UnorderedSet<std::string>& package_names);

@@ -305,8 +305,15 @@ void PassImpl::run(const DexStoresVector& stores,
   auto string_analyzer_state = StringAnalyzerState::make_default();
   auto package_name_state = PackageNameState::make(package_name);
   State cp_state;
-  // Start TypeSystem construction in background — it only reads scope and is
-  // independent of analyze(), which takes 80-136s. This hides the ~16s cost.
+  // Ensure java.lang.Object's DexClass and methods exist before launching the
+  // async TypeSystem construction. TypeSystem → ClassScopes →
+  // build_signature_map → get_vmethods may lazily call create_object_class(),
+  // which mutates java.lang.Object by adding methods. If that runs
+  // concurrently with analyze()'s parallel class walkers (which read the same
+  // method vectors), it causes a heap-use-after-free.
+  create_object_class();
+  // Start TypeSystem construction in background — only reads scope now that
+  // java.lang.Object is fully initialized. Hides ~16s cost behind analyze().
   auto type_system_future =
       std::async(std::launch::async, [&scope]() { return TypeSystem(scope); });
   auto fp_iter =
