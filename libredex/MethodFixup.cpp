@@ -42,8 +42,8 @@ void fixup_references_to_removed_methods(
           insn->set_method(it->second);
         }
       }
-      always_assert_log(!opcode::is_invoke_virtual(op) ||
-                            !opcode::is_invoke_interface(op) ||
+      always_assert_log((!opcode::is_invoke_virtual(op) &&
+                         !opcode::is_invoke_interface(op)) ||
                             !removed_vmethods.count(insn->get_method()),
                         "%s", SHOW(insn));
       return cfg_adapter::LOOP_CONTINUE;
