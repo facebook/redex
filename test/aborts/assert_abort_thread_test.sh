@@ -22,6 +22,10 @@ OUT_TMP="$(dirname "$SCRIPT")/test.out"
   --assert-abort-thread "This is an abort test." \
   >"$OUT_TMP" 2>&1 && exit 1 || true
 
+# Strip NUL bytes so grep doesn't treat the output as binary.
+tr -d '\0' < "$OUT_TMP" > "${OUT_TMP}.clean"
+mv "${OUT_TMP}.clean" "$OUT_TMP"
+
 # Check for abort message.
 grep 'This is an abort test.' "$OUT_TMP" || ( echo "Did not find abort message" ; exit 1 ; )
 
