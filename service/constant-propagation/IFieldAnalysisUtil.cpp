@@ -7,6 +7,8 @@
 
 #include "IFieldAnalysisUtil.h"
 
+#include <optional>
+
 #include "TypeSystem.h"
 #include "Walkers.h"
 
@@ -43,7 +45,7 @@ class ThisObjectAnalysis final
     return exit_state_at_source;
   }
 
-  boost::optional<UnorderedSet<DexMethod*>> collect_method_called_on_this() {
+  std::optional<UnorderedSet<DexMethod*>> collect_method_called_on_this() {
     UnorderedSet<DexMethod*> return_set;
     const auto* code = m_method->get_code();
     const auto& cfg = code->cfg();
@@ -80,13 +82,13 @@ class ThisObjectAnalysis final
                    op == OPCODE_APUT_OBJECT) {
           auto this_info = env.get(insn->src(0)).get_constant();
           if (!this_info || *this_info) {
-            return boost::none;
+            return std::nullopt;
           }
         } else if (op == OPCODE_FILLED_NEW_ARRAY) {
           for (auto src : insn->srcs()) {
             auto this_info = env.get(src).get_constant();
             if (!this_info || *this_info) {
-              return boost::none;
+              return std::nullopt;
             }
           }
         }

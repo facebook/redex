@@ -40,8 +40,8 @@ void update_call_refs(
     always_assert(callee != nullptr && type_tags.count(callee) > 0);
     auto* new_callee_method = old_to_new_callee.at(callee);
     auto type_tag_arg = with_type_tag
-                            ? boost::optional<uint32_t>(type_tags.at(callee))
-                            : boost::none;
+                            ? std::optional<uint32_t>(type_tags.at(callee))
+                            : std::nullopt;
     method_reference::NewCallee new_callee(new_callee_method, type_tag_arg);
     patch_callsite(callsite, new_callee);
   }

@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
 #include <functional>
 #include <optional>
 
@@ -93,8 +92,8 @@ void update_method_signature_type_references(
     const Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& old_to_new,
     const ClassHierarchy& ch,
-    boost::optional<UnorderedMap<DexMethod*, std::string>&> method_debug_map =
-        boost::none);
+    std::optional<std::reference_wrapper<UnorderedMap<DexMethod*, std::string>>>
+        method_debug_map = std::nullopt);
 
 void update_field_type_references(
     const Scope& scope,

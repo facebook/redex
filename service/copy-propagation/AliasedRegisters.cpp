@@ -12,6 +12,7 @@
 #include <boost/container_hash/hash.hpp>
 #include <boost/range/algorithm.hpp>
 #include <numeric>
+#include <optional>
 
 using namespace sparta;
 
@@ -154,7 +155,7 @@ bool AliasedRegisters::are_aliases(const Value& r1, const Value& r2) const {
     return true;
   }
   auto v1 = m_graph.get_vertex(r1);
-  return find_in_tree(r2, v1) != boost::none;
+  return find_in_tree(r2, v1) != std::nullopt;
 }
 
 // Return the vertex of the root node of the tree that `v` belongs to
@@ -173,12 +174,12 @@ vertex_t AliasedRegisters::find_root(vertex_t v) const {
 // If `old_root` is a root node, promote a different node from this tree to the
 // root.
 void AliasedRegisters::change_root_helper(
-    vertex_t old_root, boost::optional<vertex_t> maybe_new_root) {
+    vertex_t old_root, std::optional<vertex_t> maybe_new_root) {
   auto in_adj = m_graph.inv_adjacent_vertices(old_root);
   if (!in_adj.empty()) {
     always_assert_log(
         !has_outgoing(old_root), "Only 2 levels allowed\n%s", dump().c_str());
-    vertex_t new_root = (maybe_new_root == boost::none)
+    vertex_t new_root = (maybe_new_root == std::nullopt)
                             ? find_new_root(old_root)
                             : *maybe_new_root;
     if (new_root != old_root) {
@@ -206,7 +207,7 @@ void AliasedRegisters::change_root_helper(
 // If `old_root` is a root, promote one of its leaves to the root.
 // Otherwise, do nothing.
 void AliasedRegisters::maybe_change_root(vertex_t old_root) {
-  change_root_helper(old_root, boost::none);
+  change_root_helper(old_root, std::nullopt);
 }
 
 // Promote `new_root` to a root and demote `old_root` to a leaf
@@ -242,7 +243,7 @@ vertex_t AliasedRegisters::find_new_root(vertex_t old_root) const {
 //
 // `max_addressable` is useful for instructions that can only address up to v15
 reg_t AliasedRegisters::get_representative(
-    const Value& orig, const boost::optional<reg_t>& max_addressable) const {
+    const Value& orig, const std::optional<reg_t>& max_addressable) const {
   always_assert(orig.is_register());
 
   // if orig is not in the graph, then it has no representative
@@ -286,7 +287,7 @@ reg_t AliasedRegisters::get_representative(
 
 // If any nodes in the same tree as `in_this_tree` have the Value `r`, then
 // return `r`'s vertex.
-boost::optional<vertex_t> AliasedRegisters::find_in_tree(
+std::optional<vertex_t> AliasedRegisters::find_in_tree(
     const Value& r, vertex_t in_this_tree) const {
   auto v = m_graph.get_vertex(r);
   vertex_t root = find_root(in_this_tree);
@@ -297,7 +298,7 @@ boost::optional<vertex_t> AliasedRegisters::find_in_tree(
   if (std::find(adj.begin(), adj.end(), v) != adj.end()) {
     return v;
   }
-  return boost::none;
+  return std::nullopt;
 }
 
 // return a vector of `root` and all the vertices in the same group

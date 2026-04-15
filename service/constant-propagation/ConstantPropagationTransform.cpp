@@ -7,6 +7,7 @@
 
 #include "ConstantPropagationTransform.h"
 
+#include <optional>
 #include <unordered_set>
 #include <vector>
 
@@ -317,7 +318,7 @@ void try_simplify(const ConstantEnvironment& env,
 
   auto reg_is_exact = [&env](reg_t reg, int64_t val) {
     auto value = env.get(reg).maybe_get<SignedConstantDomain>();
-    return (value != boost::none) && (value->get_constant() != boost::none) &&
+    return (value != std::nullopt) && (value->get_constant() != std::nullopt) &&
            (*value->get_constant() == val);
   };
 
@@ -926,7 +927,7 @@ void Transform::remove_dead_switch(
   bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
   if (!goto_is_feasible && !remaining_branch_targets.empty()) {
     // Rewire infeasible goto to absorb all cases to most common target
-    boost::optional<int32_t> most_common_case_key;
+    std::optional<int32_t> most_common_case_key;
     cfg::Block* most_common_target{nullptr};
     uint32_t most_common_target_count{0};
     UnorderedSet<cfg::Block*> visited;
@@ -1224,8 +1225,7 @@ void Transform::forward_targets(
         always_assert(!succ_env.is_bottom());
       }
 
-      boost::optional<std::pair<cfg::Block*, ConstantEnvironment>>
-          only_feasible;
+      std::optional<std::pair<cfg::Block*, ConstantEnvironment>> only_feasible;
       for (auto* succ_succ_edge : cfg.get_succ_edges_if(succ, is_normal)) {
         auto succ_succ_env = intra_cp.analyze_edge(succ_succ_edge, succ_env);
         if (succ_succ_env.is_bottom()) {
@@ -1510,8 +1510,8 @@ void Transform::legacy_apply_forward_targets(
 }
 
 void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
-  using OptScope = boost::optional<ScopedMetrics::Scope>;
-  OptScope scope = with_scope ? OptScope(sm.scope("const_prop")) : boost::none;
+  using OptScope = std::optional<ScopedMetrics::Scope>;
+  OptScope scope = with_scope ? OptScope(sm.scope("const_prop")) : std::nullopt;
   sm.set_metric("branches_forwarded", branches_forwarded);
   sm.set_metric("branch_propagated", branches_removed);
   sm.set_metric("materialized_consts", materialized_consts);

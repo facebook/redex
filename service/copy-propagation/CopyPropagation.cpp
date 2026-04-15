@@ -284,7 +284,7 @@ class AliasFixpointIterator final
 
             // We don't give a `max_addressable` register to get_rep() because
             // the upper half of a register is never addressed in IR
-            reg_t upper = get_rep(r + 1, aliases, boost::none);
+            reg_t upper = get_rep(r + 1, aliases, std::nullopt);
 
             if (upper != rep + 1) {
               continue;
@@ -299,7 +299,7 @@ class AliasFixpointIterator final
 
   reg_t get_rep(reg_t orig,
                 AliasedRegisters& aliases,
-                const boost::optional<reg_t>& max_addressable) const {
+                const std::optional<reg_t>& max_addressable) const {
     auto val = Value::create_register(orig);
     reg_t rep = aliases.get_representative(val, max_addressable);
     if (rep < RESULT_REGISTER) {

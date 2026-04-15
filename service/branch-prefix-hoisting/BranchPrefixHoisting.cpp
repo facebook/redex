@@ -7,6 +7,8 @@
 
 #include "BranchPrefixHoisting.h"
 
+#include <optional>
+
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "GraphUtil.h"
@@ -485,8 +487,8 @@ size_t hoist_insns_for_block(
       redex_assert(*it->insn == insn);
 
       // Deleting does not have a good API. Gymnastics here.
-      boost::optional<IRList::iterator> prev =
-          it != b->begin() ? boost::make_optional(std::prev(it)) : boost::none;
+      std::optional<IRList::iterator> prev =
+          it != b->begin() ? std::make_optional(std::prev(it)) : std::nullopt;
       b->remove_insn(it);
       if (prev) {
         it = std::next(*prev);

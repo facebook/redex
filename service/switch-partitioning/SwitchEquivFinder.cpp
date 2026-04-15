@@ -165,7 +165,7 @@ class key_creating_visitor
 
   SwitchEquivFinder::SwitchingKey operator()(
       const SignedConstantDomain& dom) const {
-    if (dom.is_top() || dom.get_constant() == boost::none) {
+    if (dom.is_top() || dom.get_constant() == std::nullopt) {
       return SwitchEquivFinder::DefaultCase{};
     }
     // It's safe to cast down to 32 bits because long values can't be used in
@@ -315,7 +315,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
           }
         }
       } else {
-        boost::optional<InstructionSet> next_loads;
+        std::optional<InstructionSet> next_loads;
         std::vector<SourceBlock*> next_source_blocks;
         for (const auto& mie : *next) {
           if (mie.type == MFLOW_SOURCE_BLOCK) {
@@ -338,7 +338,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
           auto* insn = mie.insn;
           auto op = insn->opcode();
           if (is_valid_load_for_nonleaf(op)) {
-            if (next_loads == boost::none) {
+            if (next_loads == std::nullopt) {
               // Copy loads here because we only want these loads to propagate
               // to successors of `next`, not any other successors of `b`
               next_loads = loads;
@@ -357,7 +357,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
         }
 
         bool success = false;
-        if (next_loads != boost::none) {
+        if (next_loads != std::nullopt) {
           success = recurse(next, *next_loads, source_blocks_out.get());
         } else {
           success = recurse(next, loads, source_blocks_out.get());

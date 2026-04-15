@@ -7,8 +7,7 @@
 
 #pragma once
 
-#include <boost/none.hpp>
-#include <boost/optional/optional.hpp>
+#include <optional>
 
 #include <sparta/AbstractDomain.h>
 #include <sparta/PatriciaTreeMap.h>
@@ -217,7 +216,7 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   // Each alias group has one representative register
   reg_t get_representative(
       const Value& orig,
-      const boost::optional<reg_t>& max_addressable = boost::none) const;
+      const std::optional<reg_t>& max_addressable = std::nullopt) const;
 
   // ---- extends AbstractValue ----
 
@@ -253,13 +252,13 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   using InsertionOrder = sparta::PatriciaTreeMap<vertex_t, uint32_t>;
   InsertionOrder m_insert_order;
 
-  boost::optional<vertex_t> find_in_tree(const Value& r,
-                                         vertex_t in_this_tree) const;
+  std::optional<vertex_t> find_in_tree(const Value& r,
+                                       vertex_t in_this_tree) const;
   vertex_t find_root(vertex_t v) const;
   vertex_t find_new_root(vertex_t old_root) const;
 
   void change_root_helper(vertex_t old_root,
-                          boost::optional<vertex_t> maybe_new_root);
+                          std::optional<vertex_t> maybe_new_root);
   void maybe_change_root(vertex_t old_root);
   void change_root_to(vertex_t old_root, vertex_t new_root);
 

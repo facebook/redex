@@ -481,13 +481,13 @@ CanOutlineBlockDecider::can_outline_from_big_block(
   }
   // Make sure m_max_vals is initialized
   if (!m_max_vals) {
-    m_max_vals.reset(new LazyUnorderedMap<cfg::Block*, boost::optional<float>>(
-        [](cfg::Block* block) -> boost::optional<float> {
+    m_max_vals.reset(new LazyUnorderedMap<cfg::Block*, std::optional<float>>(
+        [](cfg::Block* block) -> std::optional<float> {
           auto* sb = source_blocks::get_first_source_block(block);
           if (sb == nullptr) {
-            return boost::none;
+            return std::nullopt;
           }
-          boost::optional<float> max_val;
+          std::optional<float> max_val;
           sb->foreach_val([&](const auto& val_pair) {
             if (!val_pair) {
               return;
@@ -501,7 +501,7 @@ CanOutlineBlockDecider::can_outline_from_big_block(
   }
   // Via m_max_vals, we consider the maximum hit number for each block.
   // Across all blocks, we are also computing the maximum value.
-  boost::optional<float> val;
+  std::optional<float> val;
   for (auto* block : big_block.get_blocks()) {
     auto block_val = (*m_max_vals)[block];
     if (!val || (block_val && *block_val > *val)) {

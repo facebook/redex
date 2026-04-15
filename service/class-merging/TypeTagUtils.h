@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <optional>
 
 #include "DexClass.h"
 
@@ -18,7 +18,7 @@ namespace type_tag_utils {
 /**
  * Parse `typeTag` fields on the @ModelIdentity annotation of a given class.
  */
-boost::optional<uint32_t> parse_model_type_tag(const DexClass*);
+std::optional<uint32_t> parse_model_type_tag(const DexClass*);
 
 } // namespace type_tag_utils
 

@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
 #include <vector>
 
 #include "CheckCastAnalysis.h"

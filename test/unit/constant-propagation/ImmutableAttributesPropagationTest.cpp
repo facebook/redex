@@ -248,7 +248,7 @@ TEST_F(ImmutableTest, abstract_domain) {
     EXPECT_FALSE(constant->jvm_cached_singleton);
     const auto& field_value =
         constant->attributes[0].value.maybe_get<SignedConstantDomain>();
-    EXPECT_TRUE(field_value->get_constant() == boost::none);
+    EXPECT_TRUE(!field_value->get_constant());
   }
   {
     // Integer{100} join Char{100} => top

@@ -7,8 +7,7 @@
 
 #pragma once
 
-#include <boost/none.hpp>
-#include <boost/optional/optional.hpp>
+#include <optional>
 
 #include "DexClass.h"
 #include "DexStore.h"
@@ -40,19 +39,19 @@ using CallSites = std::vector<CallSite>;
 // One example would be passing the type tag in type erased code.
 struct NewCallee {
   DexMethod* method;
-  boost::optional<std::vector<uint32_t>> additional_args = boost::none;
+  std::optional<std::vector<uint32_t>> additional_args = std::nullopt;
 
   explicit NewCallee(DexMethod* method) : method(method) {}
-  NewCallee(DexMethod* method, boost::optional<uint32_t> arg) : method(method) {
-    if (arg == boost::none) {
+  NewCallee(DexMethod* method, std::optional<uint32_t> arg) : method(method) {
+    if (arg == std::nullopt) {
       return;
     }
     std::vector<uint32_t> args;
-    args.push_back(arg.get());
-    additional_args = boost::optional<std::vector<uint32_t>>(args);
+    args.push_back(*arg);
+    additional_args = std::optional<std::vector<uint32_t>>(args);
   }
   NewCallee(DexMethod* method, std::vector<uint32_t>& args) : method(method) {
-    additional_args = boost::optional<std::vector<uint32_t>>(args);
+    additional_args = std::optional<std::vector<uint32_t>>(args);
   }
 };
 

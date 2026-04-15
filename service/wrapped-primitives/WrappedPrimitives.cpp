@@ -87,17 +87,17 @@ bool contains_relevant_invoke(
 // Checks if the value is a known ObjectWithImmutAttr with a single known
 // attribute value. Makes assumptions that there is only 1, as is consistent
 // with the other assumptions in the pass.
-boost::optional<std::pair<const DexType*, int64_t>>
+std::optional<std::pair<const DexType*, int64_t>>
 extract_object_with_attr_value(const ConstantValue& value) {
   auto obj_or_none = value.maybe_get<ObjectWithImmutAttrDomain>();
-  if (obj_or_none != boost::none &&
-      obj_or_none->get_constant() != boost::none) {
+  if (obj_or_none != std::nullopt &&
+      obj_or_none->get_constant() != std::nullopt) {
     auto object = *obj_or_none->get_constant();
     always_assert(object.attributes.size() == 1);
     auto signed_value =
         object.attributes.front().value.maybe_get<SignedConstantDomain>();
     if (signed_value != boost::none &&
-        signed_value.value().get_constant() != boost::none) {
+        signed_value.value().get_constant() != std::nullopt) {
       auto primitive_value = *signed_value.value().get_constant();
       return std::pair<const DexType*, int64_t>(object.type, primitive_value);
     } else {
@@ -107,7 +107,7 @@ extract_object_with_attr_value(const ConstantValue& value) {
     TRACE(WP, 2, "  Not a known ObjectWithImmutAttrDomain");
   }
 
-  return boost::none;
+  return std::nullopt;
 }
 
 bool needs_cast(const TypeSystem& type_system,
@@ -212,7 +212,7 @@ WrappedPrimitives::build_known_definitions(
         auto dest_reg = insn->dest();
         const auto& value = reg_env.get(dest_reg);
         auto maybe_pair = extract_object_with_attr_value(value);
-        if (maybe_pair != boost::none) {
+        if (maybe_pair != std::nullopt) {
           // Store a mapping of primary instruction to its dest register and
           // value. This may be useful later for ambiguous data flow into a
           // wrapped API method.
@@ -319,7 +319,7 @@ void WrappedPrimitives::optimize_method(
           TRACE(WP, 2, "  Checking v%u", current_reg);
           const auto& value = reg_env.get(current_reg);
           auto maybe_pair = extract_object_with_attr_value(value);
-          if (maybe_pair != boost::none) {
+          if (maybe_pair != std::nullopt) {
             const auto* wrapper_type = maybe_pair->first;
             auto literal = maybe_pair->second;
             TRACE(WP,

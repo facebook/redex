@@ -749,13 +749,13 @@ class SignedConstantDomain final
     return numeric_interval_domain_from_int(m_bounds.l, m_bounds.u);
   }
 
-  boost::optional<int64_t> get_constant() const {
+  std::optional<int64_t> get_constant() const {
     if (!m_bounds.is_constant()) {
-      return boost::none;
+      return std::nullopt;
     }
     always_assert(m_bitset.is_constant() &&
                   *m_bitset.get_constant() == m_bounds.l);
-    return boost::optional<int64_t>(m_bounds.l);
+    return std::optional<int64_t>(m_bounds.l);
   }
 
   /* Return the largest element within the interval. */

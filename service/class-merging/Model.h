@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
 #include <json/value.h>
 #include <string>
 

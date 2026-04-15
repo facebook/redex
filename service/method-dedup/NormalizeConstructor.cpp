@@ -7,6 +7,8 @@
 
 #include "NormalizeConstructor.h"
 
+#include <optional>
+
 #include "DexClass.h"
 #include "EditableCfgAdapter.h"
 #include "MethodReference.h"
@@ -222,11 +224,11 @@ bool is_simple_super_invoke(
 /**
  * @param ifields : Should include all the instance fields of the class.
  */
-boost::optional<ConstructorSummary> summarize_constructor_logic(
+std::optional<ConstructorSummary> summarize_constructor_logic(
     const std::vector<DexField*>& ifields, DexMethod* method) {
   if (root(method) || !is_constructor(method) || !method::is_init(method) ||
       method->get_code() == nullptr) {
-    return boost::none;
+    return std::nullopt;
   }
   UnorderedMap<DexFieldRef*, FieldOrigin> field_to_origin;
   std::vector<FieldOrigin> ctor_params_to_origin;
@@ -259,13 +261,13 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
         auto* ref = insn->get_method();
         if (summary.super_ctor != nullptr || !method::is_init(ref) ||
             ref->get_class() == method->get_class()) {
-          return boost::none;
+          return std::nullopt;
         }
 
         summary.super_ctor = ref;
         if (!is_simple_super_invoke(insn, env, load_params, used_args,
                                     ctor_params_to_origin)) {
-          return boost::none;
+          return std::nullopt;
         }
       } else if (opcode::is_an_iput(opcode)) {
         redex_assert(insn->srcs_size() == 2);
@@ -274,11 +276,11 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
         const auto& defs = env.get(src);
         always_assert(!defs.is_bottom() && !defs.is_top());
         if (defs.size() != 1) {
-          return boost::none;
+          return std::nullopt;
         }
         auto* def = *defs.elements().begin();
         if (!opcode::is_a_load_param(def->opcode())) {
-          return boost::none;
+          return std::nullopt;
         }
         uint32_t arg_idx = load_params.at(def);
         if (used_args.count(arg_idx) != 0u) {
@@ -286,7 +288,7 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
           // values coming from the same parameters. This makes it simpler
           // to check whether two candidate constructors are actually
           // dedupable.
-          return boost::none;
+          return std::nullopt;
         }
         used_args.insert(arg_idx);
         field_to_origin.insert({f, FieldOrigin(arg_idx)});
@@ -295,14 +297,14 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
                  opcode::is_a_literal_const(opcode)) {
         // these instructions are allowed inside the constructor
       } else {
-        return boost::none;
+        return std::nullopt;
       }
       reaching_definitions.analyze_instruction(insn, &env);
     }
   }
 
   if (summary.super_ctor == nullptr) {
-    return boost::none;
+    return std::nullopt;
   }
   for (auto* field : ifields) {
     if (field_to_origin.count(field) == 0) {
@@ -319,18 +321,18 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
 
   // Ensure bijection.
   if (used_args.size() != summary.get_arg_ids_origin_size()) {
-    return boost::none;
+    return std::nullopt;
   }
   if (used_args.size() != method->get_proto()->get_args()->size()) {
     // Not support methods with unused arguments. We can remove unused
     // arguments or reordering the instructions first.
-    return boost::none;
+    return std::nullopt;
   }
   return summary;
 }
 
 using CtorSummaries = std::
-    map<DexMethod*, boost::optional<ConstructorSummary>, dexmethods_comparator>;
+    map<DexMethod*, std::optional<ConstructorSummary>, dexmethods_comparator>;
 
 /**
  * A constructor representative needs a more "generic" proto.

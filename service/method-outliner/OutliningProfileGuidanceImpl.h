@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "BigBlocks.h"
 #include "DeterministicContainers.h"
 #include "Lazy.h"
@@ -71,7 +73,7 @@ class CanOutlineBlockDecider {
   bool m_sufficiently_warm;
   bool m_sufficiently_hot;
   mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_in_loop;
-  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, boost::optional<float>>>
+  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, std::optional<float>>>
       m_max_vals;
   mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_throughput;
 

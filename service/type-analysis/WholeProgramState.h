@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <sparta/HashedAbstractPartition.h>
 
 #include "CallGraph.h"
@@ -181,12 +183,12 @@ class WholeProgramState {
     out << wps.m_method_partition;
     return out;
   }
-  boost::optional<DexTypeDomain> get_type_for_method_with_known_type(
+  std::optional<DexTypeDomain> get_type_for_method_with_known_type(
       const DexMethodRef* method) const {
     if (m_known_method_returns.find(method) != m_known_method_returns.end()) {
       return m_known_method_returns.find(method)->second;
     }
-    return boost::none;
+    return std::nullopt;
   }
 
  private:

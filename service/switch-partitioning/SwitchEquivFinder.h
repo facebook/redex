@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
 #include <boost/variant/get.hpp>
 #include <boost/variant/variant.hpp>
 #include <map>
+#include <optional>
 #include <ostream>
 
 #include "ConstantEnvironment.h"
@@ -110,11 +110,11 @@ class SwitchEquivFinder {
   }
   // Returns the block representing the default case, if a default case is
   // present.
-  boost::optional<cfg::Block*> default_case() const {
+  std::optional<cfg::Block*> default_case() const {
     DefaultCase d;
     auto search = m_key_to_case.find(d);
     if (search == m_key_to_case.end()) {
-      return boost::none;
+      return std::nullopt;
     }
     return search->second;
   }
@@ -172,7 +172,7 @@ class SwitchEquivFinder {
   bool m_success{false};
 
   // A map from case keys to leaf blocks. The case key is the value held in
-  // `m_switching_reg` upon reaching this leaf. `boost::none` represents the
+  // `m_switching_reg` upon reaching this leaf. `std::nullopt` represents the
   // fallthrough block.
   KeyToCase m_key_to_case;
 

@@ -225,20 +225,20 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
 
     std::vector<InlinableOptimization> transforms;
     auto check_register = [](ConstantEnvironment& env,
-                             reg_t reg) -> boost::optional<int64_t> {
+                             reg_t reg) -> std::optional<int64_t> {
       const auto& register_env = env.get_register_environment();
       const auto& value = register_env.get(reg);
       auto constant_domain = value.maybe_get<SignedConstantDomain>();
-      if (constant_domain != boost::none && !constant_domain->is_top() &&
+      if (constant_domain != std::nullopt && !constant_domain->is_top() &&
           !constant_domain->is_bottom()) {
         return constant_domain->get_constant();
       }
       auto r_domain = value.maybe_get<ConstantResourceIdDomain>();
-      if (r_domain != boost::none && r_domain->is_value()) {
+      if (r_domain != std::nullopt && r_domain->is_value()) {
         auto id = r_domain->get_constant();
-        return boost::optional<int64_t>(id->id);
+        return std::optional<int64_t>(id->id);
       }
-      return boost::none;
+      return std::nullopt;
     };
     auto handle_instruction = [&](ConstantEnvironment& env,
                                   IRInstruction* insn) {
@@ -254,7 +254,7 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
         return;
       }
       auto const_value = check_register(env, insn->src(1));
-      if (const_value != boost::none &&
+      if (const_value != std::nullopt &&
           inlinable_resources.find(static_cast<uint32_t>(
               const_value.value())) != inlinable_resources.end() &&
           value_method_comp) {
@@ -264,7 +264,7 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
         insertable.inlinable =
             inlinable_resources.at(static_cast<uint32_t>(const_value.value()));
         transforms.push_back(insertable);
-      } else if (const_value != boost::none && name_method_comp) {
+      } else if (const_value != std::nullopt && name_method_comp) {
         auto elem_id = static_cast<uint32_t>(const_value.value());
         auto insertable = InlinableOptimization();
         insertable.insn = insn;

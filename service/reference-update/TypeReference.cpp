@@ -511,7 +511,8 @@ void update_method_signature_type_references(
     const Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& old_to_new,
     const ClassHierarchy& ch,
-    boost::optional<UnorderedMap<DexMethod*, std::string>&> method_debug_map) {
+    std::optional<std::reference_wrapper<UnorderedMap<DexMethod*, std::string>>>
+        method_debug_map) {
   // Virtual methods.
   // The key is the hash of signature and an old type reference. Group the
   // methods by key.
@@ -521,9 +522,9 @@ void update_method_signature_type_references(
 
   // Callback for updating method debug map.
   std::function<void(DexMethod*)> update_method_debug_map = [](DexMethod*) {};
-  if (method_debug_map != boost::none) {
+  if (method_debug_map != std::nullopt) {
     update_method_debug_map = [&method_debug_map](DexMethod* method) {
-      method_debug_map.get()[method] = get_method_signature(method);
+      method_debug_map->get()[method] = get_method_signature(method);
     };
   }
 

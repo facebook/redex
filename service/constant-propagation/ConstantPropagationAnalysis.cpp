@@ -306,8 +306,7 @@ bool LocalArrayAnalyzer::analyze_aget(const IRInstruction* insn,
   if (insn->opcode() == OPCODE_AGET_OBJECT) {
     return false;
   }
-  boost::optional<int64_t> idx_opt =
-      env->get<SignedConstantDomain>(insn->src(1)).get_constant();
+  auto idx_opt = env->get<SignedConstantDomain>(insn->src(1)).get_constant();
   if (!idx_opt) {
     return false;
   }
@@ -433,7 +432,7 @@ bool ResourceIdAnalyzer::is_src_known(const IRInstruction* insn,
   const auto& register_env = env->get_register_environment();
   const auto& value = register_env.get(insn->src(i));
   auto r_domain = value.maybe_get<ConstantResourceIdDomain>();
-  return r_domain != boost::none && r_domain->is_value();
+  return r_domain != std::nullopt && r_domain->is_value();
 }
 
 bool ResourceIdAnalyzer::analyze_r_const(const IRInstruction* insn,

@@ -7,8 +7,7 @@
 
 #include "CanonicalizeLocks.h"
 
-#include <boost/none.hpp>
-#include <boost/optional/optional.hpp>
+#include <optional>
 
 #include "CFGMutation.h"
 #include "ControlFlow.h"
@@ -33,7 +32,7 @@ struct RDefs {
   UnorderedMap<IRInstruction*, size_t> ordering;
 };
 
-boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
+std::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
   // Do not use MoveAware, we want to track the moves.
   std::unique_ptr<reaching_defs::FixpointIterator> rdefs;
   auto get_defs = [&](Block* b, const IRInstruction* i) {
@@ -128,12 +127,12 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
 
     auto* immediate_rdef = get_rdef(monitor_insn, monitor_insn->src(0));
     if (immediate_rdef == nullptr) {
-      return boost::none;
+      return std::nullopt;
     }
 
     auto* root_rdef = find_root_def(monitor_insn);
     if (root_rdef == nullptr) {
-      return boost::none;
+      return std::nullopt;
     }
 
     ret.data.emplace(monitor_insn,

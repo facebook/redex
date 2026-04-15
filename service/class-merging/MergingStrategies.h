@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <boost/optional/optional.hpp>
-
 #include "ClassHierarchy.h"
 
 class DexType;

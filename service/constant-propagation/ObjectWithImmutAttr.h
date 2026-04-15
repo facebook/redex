@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -336,22 +337,22 @@ struct ObjectWithImmutAttr {
 
   bool empty() const { return attributes.empty(); }
 
-  boost::optional<const AttrDomain> get_value(const DexMethod* method) const {
+  std::optional<const AttrDomain> get_value(const DexMethod* method) const {
     for (const auto& attr : attributes) {
       if (attr.attr.is_method() && attr.attr.val.method == method) {
         return attr.value;
       }
     }
-    return boost::none;
+    return std::nullopt;
   }
 
-  boost::optional<const AttrDomain> get_value(const DexField* field) const {
+  std::optional<const AttrDomain> get_value(const DexField* field) const {
     for (const auto& attr : attributes) {
       if (attr.attr.is_field() && attr.attr.val.field == field) {
         return attr.value;
       }
     }
-    return boost::none;
+    return std::nullopt;
   }
 
   friend std::ostream& operator<<(std::ostream& out,
@@ -412,8 +413,8 @@ class ObjectWithImmutAttrDomain final
   ObjectWithImmutAttrDomain& operator=(ObjectWithImmutAttrDomain&& other) =
       default;
 
-  boost::optional<ObjectWithImmutAttr> get_constant() const {
-    return m_value ? boost::make_optional(*m_value) : boost::none;
+  std::optional<ObjectWithImmutAttr> get_constant() const {
+    return m_value ? std::make_optional(*m_value) : std::nullopt;
   }
 
   bool is_bottom() const { return m_kind == sparta::AbstractValueKind::Bottom; }

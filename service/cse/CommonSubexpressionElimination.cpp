@@ -52,6 +52,7 @@
 #include "CommonSubexpressionElimination.h"
 
 #include <cinttypes>
+#include <optional>
 #include <utility>
 
 #include <sparta/ConstantAbstractDomain.h>
@@ -671,22 +672,22 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     return *value_id;
   }
 
-  boost::optional<value_id_t> unwrap_value(const IRValue& value,
-                                           const DexMethodRef* unwrap_method,
-                                           const DexMethodRef* wrap_method,
-                                           const DexMethodRef* abs_method,
-                                           bool is_unboxed) const {
+  std::optional<value_id_t> unwrap_value(const IRValue& value,
+                                         const DexMethodRef* unwrap_method,
+                                         const DexMethodRef* wrap_method,
+                                         const DexMethodRef* abs_method,
+                                         bool is_unboxed) const {
     if (is_unboxed) {
       // for unboxing in boxing-unboxing pattern, the value could be an invoke
       // or IOPCODE_POSITIONAL_UNBOXING.
       if (!opcode::is_an_invoke(value.opcode) &&
           value.opcode != IOPCODE_POSITIONAL_UNBOXING) {
-        return boost::none;
+        return std::nullopt;
       }
     } else {
       // for boxing, we only consider invoke value.
       if (!opcode::is_an_invoke(value.opcode)) {
-        return boost::none;
+        return std::nullopt;
       }
     }
 
@@ -697,12 +698,12 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
                                            value_method == abs_method)
                                         : value_method == unwrap_method;
     if (!has_unwrap_method) {
-      return boost::none;
+      return std::nullopt;
     }
 
     auto it = m_proper_id_values.find(value.srcs.at(0));
     if (it == m_proper_id_values.end()) {
-      return boost::none;
+      return std::nullopt;
     }
 
     const auto& inner_value = it->second;
@@ -713,16 +714,16 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
       auto unwrapped_value = inner_value.srcs.at(0);
       if (!is_pre_state_src(unwrapped_value)) {
         // TODO: Support capturing pre-state values
-        return boost::optional<value_id_t>(unwrapped_value);
+        return std::optional<value_id_t>(unwrapped_value);
       }
     }
-    return boost::none;
+    return std::nullopt;
   }
 
-  boost::optional<value_id_t> get_value_id(const IRValue& value) const {
+  std::optional<value_id_t> get_value_id(const IRValue& value) const {
     auto it = m_value_ids.find(value);
     if (it != m_value_ids.end()) {
-      return boost::optional<value_id_t>(it->second);
+      return std::optional<value_id_t>(it->second);
     }
     value_id_t id = m_value_ids.size() * ValueIdFlags::BASE;
     always_assert(id / ValueIdFlags::BASE == m_value_ids.size());
@@ -733,7 +734,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
       auto location = get_field_location(value.opcode, value.field);
       if (location ==
           CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
-        return boost::none;
+        return std::nullopt;
       }
       id |= get_location_value_id_mask(location);
     } else if (opcode::is_an_invoke(value.opcode)) {
@@ -795,7 +796,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
       }
     }
     m_value_ids.emplace(value, id);
-    return boost::optional<value_id_t>(id);
+    return std::optional<value_id_t>(id);
   }
 
   IRValue get_array_length_value(value_id_t array_value_id) const {
@@ -805,7 +806,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     return value;
   }
 
-  boost::optional<IRValue> get_equivalent_put_value(
+  std::optional<IRValue> get_equivalent_put_value(
       const IRInstruction* insn, CseEnvironment* current_state) const {
     const auto& ref_env = current_state->get_ref_env();
     if (opcode::is_an_sput(insn->opcode())) {
@@ -843,7 +844,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
         return value;
       }
     }
-    return boost::none;
+    return std::nullopt;
   }
 
   IRValue get_pre_state_src_value(reg_t reg, const IRInstruction* insn) const {

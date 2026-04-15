@@ -67,8 +67,8 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
     auto& cfg = code->cfg();
     auto* insn = callsite.insn;
     auto iterator = cfg.find_insn(insn);
-    if (new_callee.additional_args != boost::none) {
-      const auto& args = new_callee.additional_args.get();
+    if (new_callee.additional_args != std::nullopt) {
+      const auto& args = new_callee.additional_args.value();
       auto old_size = insn->srcs_size();
       insn->set_srcs_size(old_size + args.size());
       size_t pos = old_size;
@@ -85,8 +85,8 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
   } else {
     auto iterator = code->iterator_to(*callsite.mie);
     auto* insn = callsite.mie->insn;
-    if (new_callee.additional_args != boost::none) {
-      const auto& args = new_callee.additional_args.get();
+    if (new_callee.additional_args != std::nullopt) {
+      const auto& args = new_callee.additional_args.value();
       auto old_size = insn->srcs_size();
       insn->set_srcs_size(old_size + args.size());
       size_t pos = old_size;

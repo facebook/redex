@@ -7,6 +7,8 @@
 
 #include "FieldOpTracker.h"
 
+#include <optional>
+
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
@@ -139,7 +141,7 @@ class WritesAnalyzer {
         // have a (relevant) lifetime.
         auto has_lifetime =
             [this, &type_inference, insn](
-                reg_t reg, const boost::optional<const DexType*>& formal_type) {
+                reg_t reg, const std::optional<const DexType*>& formal_type) {
               if (formal_type && !this->has_lifetime(*formal_type)) {
                 // If the formal type has no lifetime, then we can stop here.
                 // More precise type information of the value actually flowing
@@ -181,7 +183,7 @@ class WritesAnalyzer {
           const auto& type_env =
               type_inference->get_type_environments().at(insn);
           const auto& array_type = type_env.get_dex_type(insn->src(1));
-          boost::optional<const DexType*> component_type;
+          std::optional<const DexType*> component_type;
           if (array_type && type::is_array(*array_type)) {
             component_type = type::get_array_component_type(*array_type);
           }
