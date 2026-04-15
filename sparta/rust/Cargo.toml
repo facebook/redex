@@ -13,6 +13,3 @@ disjoint-sets = "0.4.2"
 im = "15.1.0"
 petgraph = "0.6.2"
 sparta-proc-macros = { path = "../rust-proc-macros", version = "0.1.0" }
-
-[dev-dependencies]
-rand = "0.8.5"
