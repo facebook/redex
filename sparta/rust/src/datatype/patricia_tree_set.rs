@@ -170,7 +170,7 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use rand::Rng;
+    use rand::RngExt as _;
 
     use crate::datatype::PatriciaTreeSet;
     use crate::datatype::powerset::SetAbstractDomainOps;
