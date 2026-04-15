@@ -298,9 +298,19 @@ def run_and_stream_stderr(
             if len(err_out) > 1000:
                 err_out = err_out[100:]
 
+        # Flush stderr to ensure all streamed output reaches the output
+        # file/pipe before the process exits. When stderr is redirected (not a
+        # tty), Python's TextIOWrapper may buffer writes; without an explicit
+        # flush, the last lines (e.g. terminate/what from the C++ runtime) can
+        # be lost if the process exits before the buffer is flushed.
+        sys.stderr.flush()
+
         if debug_raw:
             debug_raw.close()
         if debug_meta:
+            debug_meta.write(
+                f"lines_processed: {len(err_out)}\nflush_completed: True\n"
+            )
             debug_meta.close()
 
         returncode = proc.wait()
