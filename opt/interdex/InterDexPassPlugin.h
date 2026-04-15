@@ -22,6 +22,14 @@ class InterDexPassPlugin {
   // before running its implementation.
   virtual void configure(const Scope&, ConfigFiles&) {}
 
+  // Pre-reserve refs that will be needed by additional_classes() but are
+  // not tied to any specific emitted class. Called once before class
+  // emission begins.
+  virtual void gather_initial_refs(std::vector<DexMethodRef*>&,
+                                   std::vector<DexFieldRef*>&,
+                                   std::vector<DexType*>&,
+                                   std::vector<DexType*>&) {}
+
   // Will prevent clazz from going into any output dex.
   virtual bool should_skip_class(const DexClass*) const { return false; }
 
