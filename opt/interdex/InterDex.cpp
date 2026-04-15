@@ -158,6 +158,25 @@ void gather_refs(
   itrefs->insert(init_type_refs.begin(), init_type_refs.end());
 }
 
+void gather_initial_refs(
+    const std::vector<std::unique_ptr<interdex::InterDexPassPlugin>>& plugins,
+    DexesStructure& dexes_structure) {
+  std::vector<DexMethodRef*> method_refs;
+  std::vector<DexFieldRef*> field_refs;
+  std::vector<const DexType*> type_refs;
+  std::vector<const DexType*> init_type_refs;
+  for (const auto& plugin : plugins) {
+    plugin->gather_initial_refs(method_refs, field_refs, type_refs,
+                                init_type_refs);
+  }
+
+  dexes_structure.add_refs_no_checks(
+      MethodRefs(method_refs.begin(), method_refs.end()),
+      FieldRefs(field_refs.begin(), field_refs.end()),
+      TypeRefs(type_refs.begin(), type_refs.end()),
+      TypeRefs(init_type_refs.begin(), init_type_refs.end()));
+}
+
 void print_stats(DexesStructure* dexes_structure) {
   TRACE(IDEX, 2, "InterDex Stats:");
   TRACE(IDEX, 2, "\t dex count: %zu", dexes_structure->get_num_dexes());
@@ -1193,6 +1212,7 @@ void InterDex::run_in_force_single_dex_mode() {
   // Add all classes into m_dexes_structure without further checking when
   // force_single_dex is on. The overflow checking will be done later on at
   // the end of the pipeline (e.g. write_classes_to_dex).
+  gather_initial_refs(m_plugins, m_emitting_state.dexes_structure);
   for (DexClass* cls : scope) {
     MethodRefs clazz_mrefs;
     FieldRefs clazz_frefs;
@@ -1227,6 +1247,8 @@ void InterDex::run() {
   auto unreferenced_classes = find_unrefenced_coldstart_classes(
       m_scope, m_interdex_types, m_static_prune_classes,
       m_class_references_cache);
+
+  gather_initial_refs(m_plugins, m_emitting_state.dexes_structure);
 
   const auto& primary_dex = m_dexen[0];
 
