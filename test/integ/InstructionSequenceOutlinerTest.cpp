@@ -5,11 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/optional.hpp>
 #include <fstream>
+#include <functional>
 #include <gtest/gtest.h>
 #include <json/reader.h>
 #include <json/value.h>
+#include <optional>
 #include <unordered_set>
 
 #include "ControlFlow.h"
@@ -87,7 +88,7 @@ void get_positions(std::unordered_set<DexPosition*>& positions,
 
 class InstructionSequenceOutlinerTest : public RedexIntegrationTest {
  public:
-  boost::optional<DexClasses&> classes;
+  std::optional<std::reference_wrapper<DexClasses>> classes;
   InstructionSequenceOutlinerTest() {
     auto* config_file_env = std::getenv("config_file");
     always_assert_log(config_file_env,
@@ -115,7 +116,7 @@ TEST_F(InstructionSequenceOutlinerTest, basic) {
   // sequence is surrounded by some distractions
   std::vector<DexMethodRef*> println_methods;
   std::vector<DexMethod*> basic_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("basic") != std::string::npos) {
         IRCode* code = m->get_code();
@@ -167,7 +168,7 @@ TEST_F(InstructionSequenceOutlinerTest, twice) {
   // Testing that there can be multiple outlined locations within a method.
   std::vector<DexMethod*> twice_methods;
   DexMethodRef* println_method = nullptr;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("twice") != std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -199,7 +200,7 @@ TEST_F(InstructionSequenceOutlinerTest, in_try) {
   // individual blocks) surrounded by a try-catch.
   std::vector<DexMethod*> in_try_methods;
   DexMethodRef* println_method = nullptr;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str() == "in_try") {
         cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -235,7 +236,7 @@ TEST_F(InstructionSequenceOutlinerTest, in_try_ineligible_) {
   //   (in_try_ineligible_due_to_conditional_branch)
   std::vector<DexMethod*> in_try_ineligible_methods;
   DexMethodRef* println_method = nullptr;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("in_try_ineligible_") !=
           std::string::npos) {
@@ -273,7 +274,7 @@ TEST_F(InstructionSequenceOutlinerTest, in_try_ineligible_) {
 TEST_F(InstructionSequenceOutlinerTest, param) {
   // Testing outlining of code into a method that takes a parameter
   std::vector<DexMethod*> param_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("param") != std::string::npos) {
         param_methods.push_back(m);
@@ -312,7 +313,7 @@ TEST_F(InstructionSequenceOutlinerTest, result) {
   // Testing outlining of code that has a live-out value that needs to be
   // returned by the outlined method
   std::vector<DexMethod*> result_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("result") != std::string::npos) {
         result_methods.push_back(m);
@@ -348,7 +349,7 @@ TEST_F(InstructionSequenceOutlinerTest, result) {
 TEST_F(InstructionSequenceOutlinerTest, normalization) {
   // Testing that outlining happens modulo register naming
   std::vector<DexMethod*> param_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("normalization") != std::string::npos) {
         param_methods.push_back(m);
@@ -385,7 +386,7 @@ TEST_F(InstructionSequenceOutlinerTest, normalization) {
 TEST_F(InstructionSequenceOutlinerTest, defined_reg_escapes_to_catch) {
   // We cannot outline when a defined register escapes to a throw block
   std::vector<DexMethod*> defined_reg_escapes_to_catch_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str() == "defined_reg_escapes_to_catch") {
         defined_reg_escapes_to_catch_methods.push_back(m);
@@ -412,7 +413,7 @@ TEST_F(InstructionSequenceOutlinerTest, big_block_can_end_with_no_tries) {
   // can have throwing code followed by non-throwing code.
   std::vector<DexMethod*> big_block_can_end_with_no_tries_methods;
   DexMethodRef* println_method;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("big_block_can_end_with_no_tries") !=
           std::string::npos) {
@@ -443,7 +444,7 @@ TEST_F(InstructionSequenceOutlinerTest, big_block_can_end_with_no_tries) {
 TEST_F(InstructionSequenceOutlinerTest, two_out_regs) {
   // We cannot outline when there are two defined live-out regs
   std::vector<DexMethod*> two_out_regs_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str() == "defined_reg_escapes_to_catch") {
         two_out_regs_methods.push_back(m);
@@ -472,7 +473,7 @@ TEST_F(InstructionSequenceOutlinerTest, type_demand) {
   // outlined instruction sequence starts with a cast, which only has the
   // weaked type demand of Object.
   std::vector<DexMethod*> param_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("type_demand") != std::string::npos) {
         param_methods.push_back(m);
@@ -512,7 +513,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_tree) {
   // the outlined methods
   std::vector<DexMethod*> cfg_tree_methods;
   std::unordered_set<DexMethodRef*> println_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("cfg_tree") != std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -560,7 +561,7 @@ TEST_F(InstructionSequenceOutlinerTest, switch) {
   // control-flow).
   std::vector<DexMethod*> cfg_tree_methods;
   std::unordered_set<DexMethodRef*> println_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("switch") != std::string::npos) {
         cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -605,7 +606,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_arg_and_res) {
   // registers.
   std::vector<DexMethod*> cfg_tree_methods;
   std::unordered_set<DexMethodRef*> println_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("cfg_with_arg_and_res") !=
           std::string::npos) {
@@ -654,7 +655,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_const_res) {
   // here, ints.
   std::vector<DexMethod*> cfg_tree_methods;
   std::unordered_set<DexMethodRef*> println_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("cfg_with_const_res") !=
           std::string::npos) {
@@ -705,7 +706,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_float_const_res) {
   // method with a different return type.
   std::vector<DexMethod*> cfg_tree_methods;
   std::unordered_set<DexMethodRef*> println_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("cfg_with_float_const_res") !=
           std::string::npos) {
@@ -753,7 +754,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_res) {
   // specific return type (if there is a single such type).
   std::vector<DexMethod*> cfg_tree_methods;
   std::unordered_set<DexMethodRef*> println_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("cfg_with_object_res") !=
           std::string::npos) {
@@ -802,7 +803,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_joinable_object_res) {
   // mentioned in the code.
   std::vector<DexMethod*> cfg_tree_methods;
   std::unordered_set<DexMethodRef*> println_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("cfg_with_joinable_object_res") !=
           std::string::npos) {
@@ -850,7 +851,7 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_arg) {
   // specific type demand (if there is a single such type).
   std::vector<DexMethod*> cfg_tree_methods;
   std::unordered_set<DexMethodRef*> println_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str().find("cfg_with_object_arg") !=
           std::string::npos) {
@@ -899,7 +900,7 @@ TEST_F(InstructionSequenceOutlinerTest, distributed) {
   // it put into a generated helper class
   std::vector<DexMethod*> distributed_methods;
   std::vector<DexMethodRef*> println_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_dmethods()) {
       if (m->get_name()->str() == "distributed") {
         cfg::ScopedCFG scoped_cfg(m->get_code());
@@ -946,7 +947,7 @@ TEST_F(InstructionSequenceOutlinerTest, colocate_with_refs) {
   // but the outlinable instrucitons are all members that share a common
   // base class, then that base class will host the outlined method.
   std::vector<DexMethod*> colocate_with_refs_methods;
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes->get()) {
     for (const auto& m : cls->get_vmethods()) {
       if (m->get_name()->str() == "colocate_with_refs") {
         colocate_with_refs_methods.push_back(m);

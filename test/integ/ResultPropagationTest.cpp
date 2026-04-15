@@ -17,8 +17,7 @@
 
 #include "ResultPropagation.h"
 
-boost::optional<ParamIndex> find_return_param_index(
-    cfg::ControlFlowGraph& cfg) {
+std::optional<ParamIndex> find_return_param_index(cfg::ControlFlowGraph& cfg) {
   for (auto& mie : InstructionIterable(cfg)) {
     TRACE(RP, 2, "  %s", SHOW(mie.insn));
   }
@@ -28,18 +27,18 @@ boost::optional<ParamIndex> find_return_param_index(
   auto it = exit_block->rbegin();
   if (it == exit_block->rend() ||
       !opcode::is_a_return_value(it->insn->opcode())) {
-    return boost::none;
+    return std::nullopt;
   }
   auto return_reg = it->insn->src(0);
   TRACE(RP, 2, "  returns v%d", return_reg);
   ++it;
   if (it == exit_block->rend() || !opcode::is_a_move(it->insn->opcode())) {
-    return boost::none;
+    return std::nullopt;
   }
   auto src_reg = it->insn->src(0);
   TRACE(RP, 2, "  move v%d, v%d", it->insn->dest(), src_reg);
   if (it->insn->dest() != return_reg) {
-    return boost::none;
+    return std::nullopt;
   }
   // let's see if it came from a unique load-param
   IRInstruction* load_param = nullptr;
@@ -50,7 +49,7 @@ boost::optional<ParamIndex> find_return_param_index(
           load_param = mie.insn;
         } else {
           TRACE(RP, 2, "  move_reg clobbered");
-          return boost::none;
+          return std::nullopt;
         }
       }
     }
@@ -61,7 +60,7 @@ boost::optional<ParamIndex> find_return_param_index(
     return param_index;
   } else {
     TRACE(RP, 2, "  did not find matching load-param");
-    return boost::none;
+    return std::nullopt;
   }
 }
 
@@ -90,7 +89,7 @@ TEST_F(ResultPropagationTest, useSwitch) {
                           strlen(test_method_prefix)),
                   0);
         const auto* const suffix = method_name + strlen(test_method_prefix);
-        boost::optional<ParamIndex> expected;
+        std::optional<ParamIndex> expected;
         if (strcmp(suffix, "none") != 0) {
           expected = atoi(suffix);
         }

@@ -7,8 +7,7 @@
 
 #pragma once
 
-#include <boost/none.hpp>
-#include <boost/optional/optional.hpp>
+#include <optional>
 
 #include "Creators.h"
 #include "DexClass.h"
@@ -21,11 +20,11 @@ struct SimpleClassHierarchy {
   SimpleClassHierarchy() {
     auto simple_class =
         [](const std::string& name, const DexType* super_type,
-           boost::optional<std::pair<std::string, std::string>> field =
-               boost::none,
-           boost::optional<std::vector<const char*>> method = boost::none,
-           boost::optional<DexType*> intf = boost::none,
-           boost::optional<DexAccessFlags> access = boost::none) {
+           std::optional<std::pair<std::string, std::string>> field =
+               std::nullopt,
+           std::optional<std::vector<const char*>> method = std::nullopt,
+           std::optional<DexType*> intf = std::nullopt,
+           std::optional<DexAccessFlags> access = std::nullopt) {
           auto* this_type = DexType::make_type(name);
           ClassCreator cc(this_type);
           cc.set_super(const_cast<DexType*>(super_type));
@@ -59,15 +58,15 @@ struct SimpleClassHierarchy {
         "LBar;", foo->get_type(),
         std::make_pair<std::string, std::string>("m_xyzzy", "LXyzzy;"));
     baz = simple_class(
-        "LBaz;", bar->get_type(), /*field=*/boost::none,
+        "LBaz;", bar->get_type(), /*field=*/std::nullopt,
         std::vector<const char*>{"methodBar", "LXyzzy;", "LXyzzy;"});
     qux = simple_class("LQux;", baz->get_type());
-    iquux =
-        simple_class("LIQuux;", type::java_lang_Object(), /*field=*/boost::none,
-                     /*method=*/boost::none,
-                     /*intf=*/boost::none, DexAccessFlags::ACC_INTERFACE);
-    quuz = simple_class("LQuuz;", foo->get_type(), /*field=*/boost::none,
-                        /*method=*/boost::none, iquux->get_type());
+    iquux = simple_class("LIQuux;", type::java_lang_Object(),
+                         /*field=*/std::nullopt,
+                         /*method=*/std::nullopt,
+                         /*intf=*/std::nullopt, DexAccessFlags::ACC_INTERFACE);
+    quuz = simple_class("LQuuz;", foo->get_type(), /*field=*/std::nullopt,
+                        /*method=*/std::nullopt, iquux->get_type());
   }
 
   // Will be created in constructor. Hierarchy is:

@@ -8,8 +8,10 @@
 #pragma once
 
 #include <boost/filesystem.hpp>
+#include <functional>
 #include <gtest/gtest.h>
 #include <json/value.h>
+#include <optional>
 
 #if __has_include(<unistd.h>)
 #include <unistd.h>
@@ -97,7 +99,7 @@ struct RedexIntegrationTest : public RedexTest {
   std::string dex_file;
   const char* secondary_dex_file;
   std::vector<DexStore> stores;
-  boost::optional<DexClasses&> classes;
+  DexClasses* classes = nullptr;
   DexMetadata dex_metadata;
   redex::TempDir configfiles_out_dir;
   std::unique_ptr<ConfigFiles> conf;
@@ -118,7 +120,7 @@ struct RedexIntegrationTest : public RedexTest {
       root_store.add_classes(load_classes_from_dex(
           DexLocation::make_location("dex", secondary_dex_file)));
     }
-    classes = root_store.get_dexen().back();
+    classes = &root_store.get_dexen().back();
     stores.emplace_back(std::move(root_store));
     configfiles_out_dir = redex::make_tmp_dir("RedexIntegrationTest%%%%%%%%");
   }

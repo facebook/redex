@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/optional.hpp>
 #include <gtest/gtest.h>
+#include <optional>
 
 #include "Creators.h"
 #include "DexClass.h"

@@ -7,8 +7,7 @@
 
 #pragma once
 
-#include <boost/none.hpp>
-#include <boost/optional/optional.hpp>
+#include <optional>
 #include <string>
 #include <unistd.h>
 #include <utility>
@@ -17,11 +16,11 @@ class ScopedCommandProfiling final {
  public:
   struct ProfilerInfo {
     std::string command;
-    boost::optional<std::string> shutdown_cmd;
-    boost::optional<std::string> post_cmd;
+    std::optional<std::string> shutdown_cmd;
+    std::optional<std::string> post_cmd;
     ProfilerInfo(std::string command,
-                 boost::optional<std::string> shutdown_cmd,
-                 boost::optional<std::string> post_cmd)
+                 std::optional<std::string> shutdown_cmd,
+                 std::optional<std::string> post_cmd)
         : command(std::move(command)),
           shutdown_cmd(std::move(shutdown_cmd)),
           post_cmd(std::move(post_cmd)) {}
@@ -29,14 +28,14 @@ class ScopedCommandProfiling final {
 
   explicit ScopedCommandProfiling(
       const std::string& cmd,
-      boost::optional<std::string> shutdown_cmd = boost::none,
-      boost::optional<std::string> post_cmd = boost::none,
+      std::optional<std::string> shutdown_cmd = std::nullopt,
+      std::optional<std::string> post_cmd = std::nullopt,
       // Note: using a string* to simplify API and help avoid copies.
       const char* log_str = nullptr);
   explicit ScopedCommandProfiling(
       const std::string& cmd,
-      boost::optional<std::string> shutdown_cmd = boost::none,
-      boost::optional<std::string> post_cmd = boost::none,
+      std::optional<std::string> shutdown_cmd = std::nullopt,
+      std::optional<std::string> post_cmd = std::nullopt,
       const std::string* log_str = nullptr)
       : ScopedCommandProfiling(cmd,
                                std::move(shutdown_cmd),
@@ -56,13 +55,13 @@ class ScopedCommandProfiling final {
   ScopedCommandProfiling& operator=(const ScopedCommandProfiling&) = delete;
   ScopedCommandProfiling& operator=(ScopedCommandProfiling&&) noexcept;
 
-  static boost::optional<ProfilerInfo> maybe_info_from_env(
+  static std::optional<ProfilerInfo> maybe_info_from_env(
       const std::string& prefix);
   template <typename T>
-  static boost::optional<ScopedCommandProfiling> maybe_from_info(
-      const boost::optional<ProfilerInfo>& info, const T* log_str = nullptr);
+  static std::optional<ScopedCommandProfiling> maybe_from_info(
+      const std::optional<ProfilerInfo>& info, const T* log_str = nullptr);
   template <typename T>
-  static boost::optional<ScopedCommandProfiling> maybe_from_env(
+  static std::optional<ScopedCommandProfiling> maybe_from_env(
       const std::string& prefix, const T* log_str = nullptr) {
     return maybe_from_info(maybe_info_from_env(prefix), log_str);
   }
@@ -70,7 +69,7 @@ class ScopedCommandProfiling final {
  private:
   pid_t m_profiler{-1};
   // Run this shutdown command to end the profiling, instead of SIGINT
-  boost::optional<std::string> m_shutdown_cmd;
+  std::optional<std::string> m_shutdown_cmd;
   // After the profiling process has finished, run this command.
-  boost::optional<std::string> m_post_cmd;
+  std::optional<std::string> m_post_cmd;
 };

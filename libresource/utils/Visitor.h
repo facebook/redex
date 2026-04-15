@@ -8,7 +8,7 @@
 #ifndef _FB_ANDROID_VISITOR_H
 #define _FB_ANDROID_VISITOR_H
 
-#include <boost/optional.hpp>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -243,15 +243,15 @@ class SimpleXmlParser : public arsc::XmlFileVisitor {
                         "Pool not found or uninitialized");
     return dtohl(m_global_strings_header->header.size);
   }
-  boost::optional<size_t> attributes_header_offset() {
+  std::optional<size_t> attributes_header_offset() {
     if (m_attribute_ids_header == nullptr) {
-      return boost::none;
+      return std::nullopt;
     }
     return get_file_offset(m_attribute_ids_header);
   }
-  boost::optional<size_t> attributes_data_size() {
+  std::optional<size_t> attributes_data_size() {
     if (m_attribute_ids_header == nullptr) {
-      return boost::none;
+      return std::nullopt;
     }
     return dtohl(m_attribute_ids_header->size);
   }

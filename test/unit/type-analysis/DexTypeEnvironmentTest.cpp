@@ -7,7 +7,7 @@
 
 #include "DexTypeEnvironment.h"
 
-#include <boost/optional/optional_io.hpp>
+#include "OptionalIO.h"
 
 #include <sparta/PatriciaTreeSet.h>
 

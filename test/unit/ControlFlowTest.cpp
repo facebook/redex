@@ -368,7 +368,7 @@ TEST_F(ControlFlowTest, copyConstructibleIterator) {
   code->build_cfg();
   ControlFlowGraph& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
-  boost::optional<cfg::InstructionIterator> opt;
+  std::optional<cfg::InstructionIterator> opt;
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     opt = it;
   }

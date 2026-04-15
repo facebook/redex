@@ -153,11 +153,10 @@ class IODITest : public ::testing::Test {
     return true;
   }
 
-  static boost::optional<size_t> get_iodi_layer(
-      const DexDebugItem& debug_item) {
+  static std::optional<size_t> get_iodi_layer(const DexDebugItem& debug_item) {
     auto line_start = debug_item.get_line_start();
     if (line_start != 0 && !is_layered_iodi(debug_item)) {
-      return boost::none;
+      return std::nullopt;
     }
     return (line_start & DexOutput::kIODILayerMask) >>
            DexOutput::kIODILayerShift;

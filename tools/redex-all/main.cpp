@@ -16,6 +16,7 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -113,7 +114,7 @@ struct Arguments {
   // Entry data contains the list of dex files, config file and original
   // command line arguments. For development usage
   Json::Value entry_data;
-  boost::optional<int> stop_pass_idx;
+  std::optional<int> stop_pass_idx;
   RedexOptions redex_options;
   bool properties_check{false};
   bool properties_check_allow_disabled{false};
@@ -717,7 +718,7 @@ Arguments parse_args(int argc, char* argv[]) {
     args.redex_options.jni_summary_path = vm["jni-summary"].as<std::string>();
   }
 
-  if (args.stop_pass_idx != boost::none) {
+  if (args.stop_pass_idx != std::nullopt) {
     // Resize the passes list and append an additional RegAllocPass if its final
     // pass is not RegAllocPass.
     auto& passes_list = args.config["redex"]["passes"];
@@ -2106,7 +2107,7 @@ int main(int argc, char* argv[]) {
       maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_AFTER_ALL_PASSES");
     });
 
-    if (args.stop_pass_idx == boost::none) {
+    if (args.stop_pass_idx == std::nullopt) {
       // Call redex_backend by default
       auto profile_backend =
           ScopedCommandProfiling::maybe_from_env("BACKEND_", "backend");

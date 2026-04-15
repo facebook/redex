@@ -5,8 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "OptionalIO.h"
 #include <boost/optional/optional_io.hpp>
 #include <gtest/gtest.h>
+#include <optional>
 
 #include "ControlFlow.h"
 #include "IRAssembler.h"

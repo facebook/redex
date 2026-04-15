@@ -1569,7 +1569,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       auto scoped_command_prof = profiler_info_pass == pass
                                      ? ScopedCommandProfiling::maybe_from_info(
                                            profiler_info, &pass->name())
-                                     : boost::none;
+                                     : std::nullopt;
       auto scoped_command_all_prof = ScopedCommandProfiling::maybe_from_info(
           profiler_all_info, &pass->name());
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);

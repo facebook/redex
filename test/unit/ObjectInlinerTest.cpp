@@ -61,7 +61,7 @@ void test_object_inliner(
     const std::vector<std::pair<std::string, std::string>>& swap_fields,
     const std::vector<uint16_t>& /*srcs*/,
     const std::string& expected_str,
-    boost::optional<const std::string> callee_ctor_str = boost::none) {
+    std::optional<const std::string> callee_ctor_str = std::nullopt) {
   DexType* callee_type = DexType::make_type(callee_class);
   [[maybe_unused]] DexType* caller_type = DexType::make_type(caller_class);
 

@@ -6,13 +6,12 @@
  */
 
 #include <boost/iostreams/device/mapped_file.hpp>
-#include <boost/none.hpp>
-#include <boost/optional/optional.hpp>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <secure_lib/secure_string.h>
 #include <utility>
 
@@ -29,14 +28,14 @@ constexpr uint32_t ID_ATTRIBUTE = 0x010100d0;
 namespace {
 
 // give a stringPool ref of a name, return name in string format.
-boost::optional<std::string> get_name_string(
+std::optional<std::string> get_name_string(
     const struct android::ResStringPool_ref& name_ref,
     android::ResStringPool& pool) {
   auto idx = dtohl(name_ref.index);
   if (arsc::is_valid_string_idx(pool, idx)) {
     return arsc::get_string_from_pool(pool, idx);
   }
-  return boost::none;
+  return std::nullopt;
 }
 
 // Writes the new string into the file's pool, if necessary and returns the pool
@@ -110,7 +109,7 @@ class XmlValidator : public arsc::SimpleXmlParser {
                        android::ResXMLTree_attrExt* extension,
                        android::ResXMLTree_attribute* attribute) override {
     if (m_found_node) {
-      boost::optional<std::string> attr_name =
+      std::optional<std::string> attr_name =
           get_name_string(attribute->name, global_strings());
       auto attr_idx = dtohl(attribute->name.index);
       if ((m_is_using_attr_id && attr_idx < attribute_count() &&
@@ -407,7 +406,7 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
                        android::ResXMLTree_attrExt* extension,
                        android::ResXMLTree_attribute* attribute) override {
     if (m_found_tag && !m_edited_attribute) {
-      boost::optional<std::string> attr_name =
+      std::optional<std::string> attr_name =
           get_name_string(attribute->name, global_strings());
       auto attr_idx = dtohl(attribute->name.index);
       bool found_attribute = false;
