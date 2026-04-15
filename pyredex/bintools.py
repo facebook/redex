@@ -270,20 +270,38 @@ def run_and_stream_stderr(
         assert stderr is not None
 
         store_logs = get_store_logs_temp_file()
+        debug_stderr = os.environ.get("REDEX_STDERR_DEBUG")
+        debug_raw = open(debug_stderr + ".raw", "wb") if debug_stderr else None
+        debug_meta = open(debug_stderr + ".meta", "w") if debug_stderr else None
 
         for line in stderr:
+            if debug_raw:
+                debug_raw.write(line)
+                debug_raw.flush()
             try:
                 str_line = line.decode(sys.stdout.encoding)
             except UnicodeDecodeError:
                 str_line = "<UnicodeDecodeError>\n"
+                if debug_meta:
+                    debug_meta.write(f"UnicodeDecodeError: {line!r}\n")
             if line_handler:
+                orig = str_line
                 str_line = line_handler(str_line)
+                if debug_meta and orig != str_line:
+                    debug_meta.write(
+                        f"line_handler changed: {orig!r} -> {str_line!r}\n"
+                    )
             sys.stderr.write(str_line)
             if store_logs:
                 store_logs.write(str_line)
             err_out.append(str_line)
             if len(err_out) > 1000:
                 err_out = err_out[100:]
+
+        if debug_raw:
+            debug_raw.close()
+        if debug_meta:
+            debug_meta.close()
 
         returncode = proc.wait()
 
