@@ -607,7 +607,7 @@ void DexLoader::gather_input_stats() {
       }
 
       m_stats.string_data_bytes +=
-          static_cast<int64_t>(encdata.size() - orig_size);
+          static_cast<int64_t>(orig_size - encdata.size());
       break;
     }
     case TYPE_DEBUG_INFO_ITEM: {
@@ -708,7 +708,7 @@ void DexLoader::gather_input_stats() {
       }
 
       m_stats.annotations_directory_bytes +=
-          static_cast<int64_t>(encdata.size() - orig_size);
+          static_cast<int64_t>(orig_size - encdata.size());
       break;
     }
     case TYPE_HIDDENAPI_CLASS_DATA_ITEM:
