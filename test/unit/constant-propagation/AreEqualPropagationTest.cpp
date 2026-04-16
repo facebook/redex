@@ -16,9 +16,9 @@ using namespace std::string_view_literals;
 #include "ConstantPropagationTestUtil.h"
 #include "IRAssembler.h"
 
-struct AreEqualPropagationTest : public ConstantPropagationTest {};
-
 namespace {
+
+struct AreEqualSwappingTest : public ConstantPropagationTest {};
 
 // When second arg is non-null and both args are safe symmetric-equals types,
 // swap args so the non-null one becomes first.
@@ -29,7 +29,7 @@ struct TypePairParam {
 };
 
 class AreEqualSwapSafeTypesTest
-    : public AreEqualPropagationTest,
+    : public AreEqualSwappingTest,
       public ::testing::WithParamInterface<TypePairParam> {};
 
 TEST_P(AreEqualSwapSafeTypesTest, SecondArgNonNullBothSafeTypes_ArgsSwapped) {
@@ -84,7 +84,7 @@ INSTANTIATE_TEST_SUITE_P(
 // When at least one arg is not a safe type, the swap must not fire.
 
 class AreEqualNoSwapUnsafeTypeTest
-    : public AreEqualPropagationTest,
+    : public AreEqualSwappingTest,
       public ::testing::WithParamInterface<TypePairParam> {};
 
 TEST_P(AreEqualNoSwapUnsafeTypeTest, SecondArgNonNullUnsafeType_Retained) {
@@ -127,7 +127,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 // When the first arg is known null, areEqual must be retained (cannot call
 // equals on null).
-TEST_F(AreEqualPropagationTest, AreEqualFirstArgNull_Retained) {
+TEST_F(AreEqualSwappingTest, AreEqualFirstArgNull_Retained) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -143,7 +143,7 @@ TEST_F(AreEqualPropagationTest, AreEqualFirstArgNull_Retained) {
 }
 
 // When both args are known non-null, swapping gains nothing.
-TEST_F(AreEqualPropagationTest, BothArgsNonNull_Retained) {
+TEST_F(AreEqualSwappingTest, BothArgsNonNull_Retained) {
   auto* m = assembler::method_from_string(R"(
     (method (static) "LFoo;.test:(Ljava/lang/String;Ljava/lang/String;)Z"
      (
@@ -167,7 +167,7 @@ TEST_F(AreEqualPropagationTest, BothArgsNonNull_Retained) {
 
 // When the first arg is known null, swapping gains nothing and can hurt:
 // it routes through b.equals(null), which is opaque to CP.
-TEST_F(AreEqualPropagationTest, FirstArgKnownNull_Retained) {
+TEST_F(AreEqualSwappingTest, FirstArgKnownNull_Retained) {
   auto* m = assembler::method_from_string(R"(
     (method (static) "LFoo;.test:(Ljava/lang/String;Ljava/lang/String;)Z"
      (
