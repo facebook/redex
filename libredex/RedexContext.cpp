@@ -418,7 +418,7 @@ const DexString* RedexContext::make_string(std::string_view str) {
     always_assert_type_log((v & 0xf0) == 0xe0, INVALID_DEX,
                            "Invalid size encoding mutf8 string");
     uint8_t v3 = *s++;
-    always_assert_type_log((v2 & 0xc0) == 0x80, INVALID_DEX,
+    always_assert_type_log((v3 & 0xc0) == 0x80, INVALID_DEX,
                            "Invalid 3rd byte on mutf8 string");
     return (v & 0x1f) << 12 | (v2 & 0x3f) << 6 | (v3 & 0x3f);
   };
