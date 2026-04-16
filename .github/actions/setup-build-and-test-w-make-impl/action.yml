@@ -29,11 +29,11 @@ runs:
   - name: Cache build
     uses: actions/cache@v4
     with:
-      key: v2-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}-${{ github.sha }}
+      key: v3-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}-${{ github.sha }}
       path: build.tar.zstd
       restore-keys: |
-        v2-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}-
-        v2-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.base_ref }}-
+        v3-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}-
+        v3-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.base_ref }}-
   # Would be nice to use the cache action output, but we want to unpack even on
   # restore_keys hit.
   - name: Unpack build cache
