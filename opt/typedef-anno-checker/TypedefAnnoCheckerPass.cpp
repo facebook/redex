@@ -170,10 +170,8 @@ void TypedefAnnoChecker::run(DexMethod* m) {
 
   live_range::MoveAwareChains chains(cfg);
   live_range::UseDefChains ud_chains = chains.get_use_def_chains();
-  live_range::DefUseChains du_chains = chains.get_def_use_chains();
   m_inference = &inference;
   m_ud_chains = &ud_chains;
-  m_du_chains = &du_chains;
 
   m_return_annotation = std::nullopt;
   DexAnnotationSet* return_annos = m->get_anno_set();
@@ -611,17 +609,8 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
       break;
     }
     case OPCODE_NEW_INSTANCE: {
-      auto duchains_it = m_du_chains->find(def);
-      const auto& uses_set = duchains_it->second;
-      for (live_range::Use use : UnorderedIterable(uses_set)) {
-        IRInstruction* use_insn = use.insn;
-        if (opcode::is_an_iput(use_insn->opcode()) ||
-            opcode::is_an_sput(use_insn->opcode())) {
-          if (auto err = check_typedef_value(annotation, use_insn, 0)) {
-            add_error(*err);
-          }
-        }
-      }
+      // Field writes on the new object are checked separately by
+      // check_instruction when it encounters IPUT/SPUT instructions.
       break;
     }
     case OPCODE_CHECK_CAST: {

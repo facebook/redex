@@ -152,7 +152,6 @@ class TypedefAnnoChecker {
   DexMethod* m_method{nullptr};
   const type_inference::TypeInference* m_inference{nullptr};
   const live_range::UseDefChains* m_ud_chains{nullptr};
-  const live_range::DefUseChains* m_du_chains{nullptr};
   const TypeEnvironments* m_envs{nullptr};
   std::optional<const DexType*> m_return_annotation;
 
