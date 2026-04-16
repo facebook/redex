@@ -384,6 +384,7 @@ def run_redex_binary(
                 elif exists(crash_file) and getsize(crash_file) > 0:
                     with open(crash_file) as f:
                         sys.stderr.write(f.read())
+                sys.stderr.flush()
 
             abort_error = None
             if returncode == -6:  # SIGABRT

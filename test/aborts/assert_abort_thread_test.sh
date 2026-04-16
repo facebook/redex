@@ -49,6 +49,15 @@ dump_debug() {
     else
       echo "(no raw debug file)"
     fi
+    echo "=== Lines written to sys.stderr (post line_handler) ==="
+    if [ -f "${DEBUG_STDERR}.written" ]; then
+      echo "--- terminate/what lines in .written ---"
+      grep -an 'terminate\|what()' "${DEBUG_STDERR}.written" || echo "(none)"
+      echo "--- byte count of .written file ---"
+      wc -c < "${DEBUG_STDERR}.written"
+    else
+      echo "(no .written debug file)"
+    fi
     echo "=== Python decode/handler metadata ==="
     if [ -f "${DEBUG_STDERR}.meta" ]; then
       cat "${DEBUG_STDERR}.meta"

@@ -273,6 +273,10 @@ def run_and_stream_stderr(
         debug_stderr = os.environ.get("REDEX_STDERR_DEBUG")
         debug_raw = open(debug_stderr + ".raw", "wb") if debug_stderr else None
         debug_meta = open(debug_stderr + ".meta", "w") if debug_stderr else None
+        # .written mirrors every str_line we hand to sys.stderr.write so we can
+        # compare against the final OUT_TMP and localize where bytes are lost.
+        debug_written = open(debug_stderr + ".written", "w") if debug_stderr else None
+        total_chars_written = 0
 
         for line in stderr:
             if debug_raw:
@@ -292,6 +296,10 @@ def run_and_stream_stderr(
                         f"line_handler changed: {orig!r} -> {str_line!r}\n"
                     )
             sys.stderr.write(str_line)
+            total_chars_written += len(str_line)
+            if debug_written:
+                debug_written.write(str_line)
+                debug_written.flush()
             if store_logs:
                 store_logs.write(str_line)
             err_out.append(str_line)
@@ -307,9 +315,20 @@ def run_and_stream_stderr(
 
         if debug_raw:
             debug_raw.close()
+        if debug_written:
+            debug_written.close()
         if debug_meta:
+            try:
+                stderr_fd_size = os.fstat(sys.stderr.fileno()).st_size
+            except (OSError, AttributeError, ValueError):
+                stderr_fd_size = None
             debug_meta.write(
-                f"lines_processed: {len(err_out)}\nflush_completed: True\n"
+                f"lines_processed: {len(err_out)}\n"
+                f"flush_completed: True\n"
+                f"total_chars_written: {total_chars_written}\n"
+                f"stderr_fd_size_after_flush: {stderr_fd_size}\n"
+                f"stderr_type: {type(sys.stderr).__name__}\n"
+                f"stderr_line_buffering: {getattr(sys.stderr, 'line_buffering', None)}\n"
             )
             debug_meta.close()
 
