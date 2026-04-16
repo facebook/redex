@@ -74,73 +74,58 @@ class ErrorBuilder {
 
 } // namespace
 
-bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
-  if (m->get_simple_deobfuscated_name() != "valueOfOpt") {
-    return false;
-  }
-
-  // the util class
-  auto* cls = type_class(m->get_class());
-  if (cls == nullptr ||
-      !cls->get_deobfuscated_name_or_empty_copy().ends_with("$Util;")) {
-    return false;
-  }
-
-  if (cls->get_anno_set() == nullptr) {
-    return false;
-  }
-
-  DexClass* typedef_cls = nullptr;
-  DexAnnotation* anno = get_annotation(
-      cls, DexType::make_type("Ldalvik/annotation/EnclosingClass;"));
-  if (anno != nullptr) {
-    const auto& value = anno->anno_elems().begin()->encoded_value;
-    if (value->evtype() == DexEncodedValueTypes::DEVT_TYPE) {
-      auto* type_value = dynamic_cast<DexEncodedValueType*>(value.get());
-      auto type_name = type_value->show_deobfuscated();
-      typedef_cls = type_class(DexType::make_type(type_name));
+// Returns true if this method should be skipped entirely by the checker.
+// Consolidates all method-level skip logic in one place.
+bool TypedefAnnoChecker::should_skip_method(const DexMethod* m) const {
+  // Skip methods on generated classes.
+  if (!m_config.generated_type_annos.empty()) {
+    auto* cls = type_class(m->get_class());
+    if (cls->get_anno_set() != nullptr &&
+        has_any_annotation(cls, m_config.generated_type_annos)) {
+      return true;
     }
   }
 
-  if ((typedef_cls == nullptr) || (typedef_cls->get_anno_set() == nullptr)) {
-    return false;
-  }
-
-  if ((get_annotation(typedef_cls, m_config.int_typedef) == nullptr) &&
-      (get_annotation(typedef_cls, m_config.str_typedef) == nullptr)) {
-    return false;
-  }
-  return true;
-}
-
-bool TypedefAnnoChecker::is_generated(const DexMethod* m) const {
-  if (m_config.generated_type_annos.empty()) {
-    return false;
-  }
-  DexType* type = m->get_class();
-  DexClass* cls = type_class(type);
-  if (cls->get_anno_set() == nullptr) {
-    return false;
-  }
-  if (has_any_annotation(cls, m_config.generated_type_annos)) {
-    return true;
-  }
-  return false;
-}
-
-bool TypedefAnnoChecker::should_not_check(const DexMethod* m) const {
+  // Skip methods matching the do_not_check_list prefix.
   for (const auto& prefix : UnorderedIterable(m_config.do_not_check_list)) {
     if (m->get_deobfuscated_name_or_empty_copy().starts_with(prefix)) {
       return true;
     }
   }
 
+  // Skip Kotlin null assertion methods.
   auto null_check_methods =
       kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
   for (DexMethodRef* kotlin_null_method :
        UnorderedIterable(null_check_methods)) {
     if (kotlin_null_method == m) {
       return true;
+    }
+  }
+
+  // Skip valueOfOpt in typedef $Util classes — these are factory methods
+  // that convert raw values to typedef values by design.
+  if (m->get_simple_deobfuscated_name() == "valueOfOpt") {
+    auto* cls = type_class(m->get_class());
+    if (cls != nullptr &&
+        cls->get_deobfuscated_name_or_empty_copy().ends_with("$Util;") &&
+        cls->get_anno_set() != nullptr) {
+      DexAnnotation* anno = get_annotation(
+          cls, DexType::make_type("Ldalvik/annotation/EnclosingClass;"));
+      if (anno != nullptr) {
+        const auto& value = anno->anno_elems().begin()->encoded_value;
+        if (value->evtype() == DexEncodedValueTypes::DEVT_TYPE) {
+          auto* type_value = dynamic_cast<DexEncodedValueType*>(value.get());
+          auto type_name = type_value->show_deobfuscated();
+          auto* typedef_cls = type_class(DexType::make_type(type_name));
+          if (typedef_cls != nullptr &&
+              typedef_cls->get_anno_set() != nullptr &&
+              (get_annotation(typedef_cls, m_config.int_typedef) != nullptr ||
+               get_annotation(typedef_cls, m_config.str_typedef) != nullptr)) {
+            return true;
+          }
+        }
+      }
     }
   }
 
@@ -153,7 +138,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     return;
   }
 
-  if (is_value_of_opt(m) || is_generated(m)) {
+  if (should_skip_method(m)) {
     return;
   }
 
@@ -200,7 +185,8 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   if (!m_good) {
     TRACE(TAC, 2, "Done checking %s", SHOW(m));
   }
-  // Clean up the param names from dex debug items
+  // Clean up the param names from dex debug items to prevent them from
+  // leaking into error messages of subsequent methods checked in the same run.
   if (code->get_debug_item() != nullptr) {
     code->get_debug_item()->remove_param_names();
   }
@@ -442,8 +428,14 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
     switch (def->opcode()) {
     case OPCODE_CONST_STRING: {
       const auto* const const_value = def->get_string();
-      if (const_value->str().empty() && is_generated(m_method)) {
-        break;
+      // Generated classes may produce empty string constants as placeholders.
+      if (const_value->str().empty() &&
+          !m_config.generated_type_annos.empty()) {
+        auto* gen_cls = type_class(m_method->get_class());
+        if (gen_cls->get_anno_set() != nullptr &&
+            has_any_annotation(gen_cls, m_config.generated_type_annos)) {
+          break;
+        }
       }
       if (str_value_set->count(const_value) == 0) {
         return ErrorBuilder(m_method, format_source_loc(insn))
@@ -541,7 +533,7 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
             .failed_instruction(def)
             .str();
       }
-      if (should_not_check(def_method)) {
+      if (should_skip_method(def_method)) {
         break;
       }
       auto callees = resolve_callees(def_method);
