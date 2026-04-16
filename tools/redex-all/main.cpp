@@ -2000,7 +2000,6 @@ int main(int argc, char* argv[]) {
                 enable_object_domain_null_check_elim,
         "enable_object_domain_null_check_elim must be turned on if "
         "enable_replacing_areequal is turned on.");
-
     // TODO(T257927964): Remove this.
     constant_propagation::known_non_null_returns_enable =
         args.config.get("enable_known_non_null_returns", false).asBool();
@@ -2095,6 +2094,16 @@ int main(int argc, char* argv[]) {
     }
 
     check_required_resources(conf, true);
+
+    // Verify that areEqual has the expected semantics (delegates to
+    // first.equals(second)) before allowing the swap optimization. This must
+    // happen after redex_frontend (which loads dex files and creates method
+    // refs) and before any parallel walk, because reading areEqual's IRCode
+    // is not thread-safe.
+    if (constant_propagation_transform_internal::enable_replacing_areequal) {
+      auto err = constant_propagation::verify_areequal_semantics();
+      always_assert_log(!err.has_value(), "%s", err->c_str());
+    }
 
     auto const& passes = PassRegistry::get().get_passes();
     auto props_manager = redex_properties::Manager(

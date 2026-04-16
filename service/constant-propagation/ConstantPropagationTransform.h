@@ -27,6 +27,10 @@ extern bool enable_replacing_areequal;
 } // namespace constant_propagation_transform_internal
 
 namespace constant_propagation {
+// Verify that Intrinsics.areEqual delegates to first.equals(second).
+// Must be called after dex loading, before any parallel walk.
+// Returns std::nullopt on success, or an error message on failure.
+std::optional<std::string> verify_areequal_semantics();
 
 /**
  * Optimize the given code by:
