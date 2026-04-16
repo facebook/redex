@@ -297,8 +297,6 @@ void collect_setter_missing_param_annos(
                             candidates);
 }
 
-// Core logic of collect_param_candidates, operating on a pre-built
-// MethodAnalysis to allow sharing with collect_return_candidates_impl.
 void collect_param_candidates_impl(DexMethod* m,
                                    PatchingCandidates& candidates,
                                    MethodAnalysis& analysis) {
@@ -498,8 +496,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
             if (is_constructor(m) &&
                 has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
               patch_synth_cls_fields_from_ctor_param(
-                  m, class_stats.patch_synth_cls_fields_from_ctor_param,
-                  candidates);
+                  m, class_stats.patch_synth_cls_fields_from_ctor_param);
             }
           }
           return class_stats;
@@ -541,19 +538,12 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
 }
 
 // Propagates typedef annotations from constructor parameters to class fields.
-//
-// In Kotlin synthetic classes (lambdas, anonymous classes), annotation applied
-// to the properties is only applied to the ctor parameter at bytecode level. We
-// need to propagate the annotation to the backing field to close the data flow
-// loop. This function:
-// 1. Analyzes the constructor's CFG to find field writes (iput instructions)
-// 2. If the written value has a typedef annotation, patches the field
-// 3. Collects the corresponding Kotlin getter/setter as candidates
-//
-// Note: Field patching is done in-place (not deferred) because the getter/
-// setter candidate collection depends on the field already being annotated.
+// In Kotlin synthetic classes, annotations on properties are only applied to
+// ctor parameters at bytecode level. This patches the backing field so that
+// the fixed-point loop can discover getter/setter annotations in subsequent
+// iterations via collect_return/param_candidates_impl.
 void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
-    DexMethod* ctor, Stats& class_stats, PatchingCandidates& candidates) {
+    DexMethod* ctor, Stats& class_stats) {
   auto analysis =
       MethodAnalysis::create(ctor, m_typedef_annos, m_method_override_graph);
   if (!analysis) {
@@ -561,41 +551,11 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
   }
 
   auto& envs = analysis->envs();
-  const auto class_name_dot = ctor->get_class()->get_name()->str() + ".";
-
-  // Helper to collect Kotlin-generated getter and setter as candidates.
-  // Kotlin generates accessor methods like: getFoo() and setFoo(value).
-  auto collect_kotlin_accessor_candidates = [&class_name_dot, &candidates,
-                                             this](DexField* field) {
-    auto field_name = field->get_simple_deobfuscated_name();
-    if (field_name.empty()) {
-      return;
-    }
-    field_name.at(0) = static_cast<char>(
-        std::toupper(static_cast<unsigned char>(field_name.at(0))));
-    const auto type_desc = type::is_int(field->get_type())
-                               ? "I"
-                               : type::java_lang_String()->get_name()->str();
-
-    if (auto* getter = DexMethod::get_method(class_name_dot + "get" +
-                                             field_name + ":()" + type_desc);
-        getter != nullptr && getter->is_def()) {
-      collect_return_candidates(getter->as_def(), candidates);
-    }
-    if (auto* setter = DexMethod::get_method(
-            class_name_dot + "set" + field_name + ":(" + type_desc + ")V");
-        setter != nullptr && setter->is_def()) {
-      collect_param_candidates(setter->as_def(), candidates);
-    }
-  };
 
   for (cfg::Block* b : analysis->cfg().blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
 
-      // Only process iput and iput-object instructions.
-      // Typedef annotations only apply to int and String types, so we skip
-      // iput-wide, iput-boolean, iput-byte, iput-char, and iput-short.
       if (insn->opcode() != OPCODE_IPUT &&
           insn->opcode() != OPCODE_IPUT_OBJECT) {
         continue;
@@ -606,7 +566,6 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
         continue;
       }
 
-      // Only consider int or String values (valid typedef targets).
       auto& env = envs.at(insn);
       reg_t src_reg = insn->src(0);
       if (!typedef_anno::is_int(env, src_reg) &&
@@ -619,42 +578,9 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
         continue;
       }
 
-      // Patch the field in-place. This must happen before collecting getter/
-      // setter candidates, as they depend on the field being annotated.
-      // No lock needed: updates are local to the current class being processed.
       add_annotation_impl(field, *annotation, class_stats);
-
-      collect_kotlin_accessor_candidates(field);
     }
   }
-}
-
-// This does 3 things if missing_param_annos is nullptr:
-// 1. if a parameter is passed into an invoked method that expects an annotated
-// argument, patch the parameter
-// 2. if a parameter is passed into a field write and the field is annotated,
-// patch the parameter
-//
-// if missing_param_annos is not nullptr, do not patch anything. Upon obtaining
-// the parameter annotations, just add them to missing_param_annos
-void TypedefAnnoPatcher::collect_param_candidates(
-    DexMethod* m, PatchingCandidates& candidates) {
-  auto analysis =
-      MethodAnalysis::create(m, m_typedef_annos, m_method_override_graph);
-  if (!analysis) {
-    return;
-  }
-  collect_param_candidates_impl(m, candidates, *analysis);
-}
-
-void TypedefAnnoPatcher::collect_return_candidates(
-    DexMethod* m, PatchingCandidates& candidates) {
-  auto analysis =
-      MethodAnalysis::create(m, m_typedef_annos, m_method_override_graph);
-  if (!analysis) {
-    return;
-  }
-  collect_return_candidates_impl(m, candidates, *analysis);
 }
 
 void TypedefAnnoPatcher::print_stats(PassManager& mgr) {

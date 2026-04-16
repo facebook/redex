@@ -127,15 +127,8 @@ class TypedefAnnoPatcher {
   void collect_overriding_method_candidates(DexMethod* m,
                                             PatchingCandidates& candidates);
 
-  void collect_param_candidates(DexMethod* method,
-                                PatchingCandidates& candidates);
-
-  void collect_return_candidates(DexMethod* method,
-                                 PatchingCandidates& candidates);
-
   void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor,
-                                              Stats& class_stats,
-                                              PatchingCandidates& candidates);
+                                              Stats& class_stats);
 
   void fix_kt_enum_ctor_param(const DexClass* cls, Stats& class_stats);
 
