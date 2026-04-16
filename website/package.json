@@ -50,7 +50,8 @@
     "dompurify": ">=3.3.2",
     "node-forge": ">=1.4.0",
     "serialize-javascript": ">=7.0.5",
-    "**/express/path-to-regexp": "0.1.13"
+    "**/express/path-to-regexp": "0.1.13",
+    "follow-redirects": ">=1.16.0"
   },
   "browserslist": {
     "production": [
