@@ -428,15 +428,6 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
     switch (def->opcode()) {
     case OPCODE_CONST_STRING: {
       const auto* const const_value = def->get_string();
-      // Generated classes may produce empty string constants as placeholders.
-      if (const_value->str().empty() &&
-          !m_config.generated_type_annos.empty()) {
-        auto* gen_cls = type_class(m_method->get_class());
-        if (gen_cls->get_anno_set() != nullptr &&
-            has_any_annotation(gen_cls, m_config.generated_type_annos)) {
-          break;
-        }
-      }
       if (str_value_set->count(const_value) == 0) {
         return ErrorBuilder(m_method, format_source_loc(insn))
             .detail("the string value ", show(const_value),
@@ -591,12 +582,11 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
       auto field_anno = type_inference::get_typedef_anno_from_member(
           def->get_field(), m_inference->get_annotations());
       if (!field_anno || field_anno != annotation) {
-        add_error(ErrorBuilder(m_method, format_source_loc(insn))
-                      .detail("the field ", def->get_field()->str(),
-                              " needs to have the annotation ",
-                              show(annotation), ".")
-                      .failed_instruction(def)
-                      .str());
+        return ErrorBuilder(m_method, format_source_loc(insn))
+            .detail("the field ", def->get_field()->str(),
+                    " needs to have the annotation ", show(annotation), ".")
+            .failed_instruction(def)
+            .str();
       }
       break;
     }
@@ -607,7 +597,7 @@ std::optional<std::string> TypedefAnnoChecker::check_typedef_value(
     }
     case OPCODE_CHECK_CAST: {
       if (auto err = check_typedef_value(annotation, def, 0)) {
-        add_error(*err);
+        return err;
       }
       break;
     }

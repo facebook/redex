@@ -968,7 +968,9 @@ TEST_F(TypedefAnnoCheckerTest, TestNoAnnoField) {
       "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testNoAnnoField:()I\n\
   at TypedefAnnoCheckerTest.java:160\n\
   the field no_anno_field needs to have the annotation  Linteg/TestIntDef;.\n\
-  failed instruction: IGET v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.no_anno_field:I");
+  failed instruction: IGET v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.no_anno_field:I\n\
+  Calling: Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I\n\
+  Incorrect parameter: index 0(val)");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestPureVirtualCall) {
