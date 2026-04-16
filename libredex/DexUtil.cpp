@@ -19,7 +19,6 @@
 #include "MethodUtil.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
-#include "Trace.h"
 #include "TypeUtil.h"
 #include "UnknownVirtuals.h"
 
