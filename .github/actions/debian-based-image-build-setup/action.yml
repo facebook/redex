@@ -16,7 +16,15 @@ runs:
     run: sudo apt-get -qq update || ( apt-get -qq update && apt-get -qq install --no-install-recommends -y sudo ; )
     shell: bash
   - name: Install tools
-    run: sudo apt-get install -qq --no-install-recommends -y git-restore-mtime zstd tar
+    run: sudo apt-get install -qq --no-install-recommends -y zstd tar curl python3
+    shell: bash
+  - name: Install git-restore-mtime
+    # The GitHub Actions runner ships a Git version newer than the distro's,
+    # which can break the distro's git-restore-mtime package. Install a
+    # newer version directly from upstream.
+    run: |
+      sudo curl -fsSL -o /usr/local/bin/git-restore-mtime https://raw.githubusercontent.com/MestreLion/git-tools/v2025.08/git-restore-mtime
+      sudo chmod +x /usr/local/bin/git-restore-mtime
     shell: bash
   - name: Add 32-bit Arch
     run: sudo dpkg --add-architecture i386 && sudo apt-get update
