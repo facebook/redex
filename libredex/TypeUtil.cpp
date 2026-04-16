@@ -8,7 +8,6 @@
 #include "TypeUtil.h"
 
 #include "DexUtil.h"
-#include "IRCode.h"
 #include "KotlinLambdaAnalyzer.h"
 #include "Lazy.h"
 #include "RedexContext.h"
