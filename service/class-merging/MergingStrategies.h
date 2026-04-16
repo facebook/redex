@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "ClassHierarchy.h"
 
 class DexType;
