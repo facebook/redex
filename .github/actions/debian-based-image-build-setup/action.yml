@@ -21,9 +21,10 @@ runs:
   - name: Install git-restore-mtime
     # The GitHub Actions runner ships a Git version newer than the distro's,
     # which can break the distro's git-restore-mtime package. Install a
-    # newer version directly from upstream.
+    # newer version directly from upstream. Pinned to the commit SHA of
+    # release v2025.08 so the upstream tag cannot silently move under us.
     run: |
-      sudo curl -fsSL -o /usr/local/bin/git-restore-mtime https://raw.githubusercontent.com/MestreLion/git-tools/v2025.08/git-restore-mtime
+      sudo curl -fsSL -o /usr/local/bin/git-restore-mtime https://raw.githubusercontent.com/MestreLion/git-tools/b5822d297b3ca4a3b6574e78327a464790b14937/git-restore-mtime
       sudo chmod +x /usr/local/bin/git-restore-mtime
     shell: bash
   - name: Add 32-bit Arch
