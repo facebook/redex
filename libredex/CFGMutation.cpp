@@ -194,7 +194,7 @@ bool CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
                                    ir_list::InstructionIterator& it) {
   always_assert_log(
       !is_terminal(it->insn->opcode()) || m_replace.has_value() ||
-          m_insert_after.empty(),
+          m_replace_var.has_value() || m_insert_after.empty(),
       "Insert after terminal operation without replacing it is prohibited.");
   // Save in case of iterator invalidation.
   bool invalidated = false;
@@ -225,8 +225,20 @@ bool CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
   redex_assert(m_insert_before.empty() ||
                (m_insert_after_var.empty() && m_insert_before_var.empty()));
   redex_assert(m_insert_after_var.empty() || m_insert_before_var.empty());
+  redex_assert(!m_replace_var.has_value() ||
+               (!m_replace.has_value() && m_insert_before.empty() &&
+                m_insert_after.empty() && m_insert_after_var.empty() &&
+                m_insert_before_var.empty()));
 
-  if (!m_insert_after_var.empty() || !m_insert_before_var.empty()) {
+  if (m_replace_var.has_value()) {
+    it++;
+    if (it.unwrap() != block->end() && cfg_it->insn->has_move_result_any() &&
+        cfg.move_result_of(cfg_it) == block->to_cfg_instruction_iterator(it)) {
+      it++;
+    }
+    invalidated =
+        cfg.replace_insns(cfg_it, m_replace_var->begin(), m_replace_var->end());
+  } else if (!m_insert_after_var.empty() || !m_insert_before_var.empty()) {
     if (!m_insert_before_var.empty()) {
       invalidated = cfg.insert_before(cfg_it, m_insert_before_var.begin(),
                                       m_insert_before_var.end());
@@ -310,6 +322,9 @@ void CFGMutation::ChangeSet::scan(bool* throws_or_returns, bool* may_throw) {
   if (m_replace) {
     scan_insns(*m_replace);
   }
+  if (m_replace_var) {
+    scan_variants(*m_replace_var);
+  }
   scan_insns(m_insert_after);
   scan_variants(m_insert_before_var);
   scan_variants(m_insert_after_var);
@@ -331,6 +346,14 @@ void CFGMutation::ChangeSet::dispose() {
   dispose_insns(m_insert_after);
   if (m_replace) {
     dispose_insns(*m_replace);
+  }
+  if (m_replace_var) {
+    for (auto& v : *m_replace_var) {
+      if (std::holds_alternative<IRInstruction*>(v)) {
+        delete std::get<IRInstruction*>(v);
+      }
+    }
+    m_replace_var.reset();
   }
 }
 

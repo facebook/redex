@@ -164,6 +164,11 @@ class CFGMutation {
   void replace(const cfg::InstructionIterator& anchor,
                std::vector<IRInstruction*> instructions);
 
+  /// Replace with a new change at this \p anchor, supporting mixed content
+  /// (instructions and source blocks) from a vector of MethodItemEntry.
+  void replace_mie(const cfg::InstructionIterator& anchor,
+                   std::vector<MethodItemEntry> entries);
+
   /// Remove change at this \p anchor.
   /// \p anchor is the instruction that is removed. If at the time the change
   ///     is applied, the anchor does not exist, the change will be ignored.
@@ -216,6 +221,9 @@ class CFGMutation {
     void add_var(Insert where,
                  std::vector<cfg::ControlFlowGraph::InsertVariant> var);
 
+    void add_replace_var(
+        std::vector<cfg::ControlFlowGraph::InsertVariant> var_change);
+
     /// Free the instructions owned by this ChangeSet.  Leaves the ChangeSet
     /// empty (so applying it would be a nop).
     void dispose();
@@ -223,10 +231,12 @@ class CFGMutation {
     /// Gets the original iterator.
     IRList::iterator& get_iterator() { return m_it; }
 
-    bool has_replace() const { return !!m_replace; }
+    bool has_replace() const { return !!m_replace || !!m_replace_var; }
 
     bool is_simple_empty_replace() const {
-      return m_insert_before.empty() && m_replace && m_replace->empty() &&
+      return m_insert_before.empty() &&
+             ((m_replace && m_replace->empty()) ||
+              (m_replace_var && m_replace_var->empty())) &&
              m_insert_after.empty() && m_insert_pos_before.empty() &&
              m_insert_pos_after.empty() && m_insert_sb_before.empty() &&
              m_insert_sb_after.empty() && m_insert_before_var.empty() &&
@@ -238,6 +248,8 @@ class CFGMutation {
 
     std::vector<IRInstruction*> m_insert_before;
     std::optional<std::vector<IRInstruction*>> m_replace;
+    boost::optional<std::vector<cfg::ControlFlowGraph::InsertVariant>>
+        m_replace_var;
     std::vector<IRInstruction*> m_insert_after;
 
     std::vector<std::unique_ptr<DexPosition>> m_insert_pos_before;
@@ -432,6 +444,29 @@ inline void CFGMutation::replace(const cfg::InstructionIterator& anchor,
   always_assert(!anchor.is_end());
   get_change_set(anchor)->add_change(ChangeSet::Insert::Replacing,
                                      std::move(instructions));
+}
+
+inline void CFGMutation::replace_mie(const cfg::InstructionIterator& anchor,
+                                     std::vector<MethodItemEntry> entries) {
+  always_assert(!anchor.is_end());
+  std::vector<cfg::ControlFlowGraph::InsertVariant> variants;
+  variants.reserve(entries.size());
+  for (auto& mie : entries) {
+    if (mie.type == MFLOW_OPCODE) {
+      variants.emplace_back(mie.insn);
+    } else if (mie.type == MFLOW_SOURCE_BLOCK) {
+      variants.emplace_back(std::move(mie.src_block));
+    }
+  }
+  get_change_set(anchor)->add_replace_var(std::move(variants));
+}
+
+inline void CFGMutation::ChangeSet::add_replace_var(
+    std::vector<cfg::ControlFlowGraph::InsertVariant> var_change) {
+  always_assert_log(!m_replace.has_value() && !m_replace_var.has_value(),
+                    "It's not possible to have two Replacing instructions "
+                    "for a single anchor.");
+  m_replace_var = std::move(var_change);
 }
 
 inline void CFGMutation::remove(const cfg::InstructionIterator& anchor) {

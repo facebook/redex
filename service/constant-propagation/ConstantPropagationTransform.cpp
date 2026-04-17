@@ -1117,7 +1117,7 @@ bool Transform::replace_with_throw(
   // We'll replace this instruction with a different instruction sequence that
   // unconditionally throws a null pointer exception.
 
-  m_mutation->replace(cfg_it, npe_creator->get_insns(insn));
+  m_mutation->replace_mie(cfg_it, npe_creator->get_insns(insn));
   ++m_stats.throws;
 
   if (insn->has_move_result_any()) {

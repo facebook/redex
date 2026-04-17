@@ -12,6 +12,7 @@
 #include "RedexTest.h"
 #include "RemoveUninstantiablesImpl.h"
 #include "ScopeHelper.h"
+#include "SourceBlocks.h"
 #include "TypeUtil.h"
 #include "VirtualScope.h"
 #include "Walkers.h"
@@ -1090,6 +1091,135 @@ TEST_F(RemoveUninstantiablesTest, RemovePackagePrivateVMethod) {
   run_remove_uninstantiables(dss);
 
   EXPECT_NO_METHOD_DEF("LFooBar;.baz:()V");
+}
+
+TEST_F(RemoveUninstantiablesTest, NpeStubsGetSourceBlocks) {
+  g_redex->instrument_mode = true;
+
+  auto* foo = def_class("LFoo;");
+  foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
+
+  auto* void_t = type::_void();
+  auto* void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+  create_abstract_method(foo, "doStuff", void_void);
+
+  auto actual_ir = assembler::ircode_from_string(R"((
+    (load-param-object v0)
+    (invoke-interface (v0) "LFoo;.doStuff:()V;")
+    (return-void)
+  ))");
+
+  actual_ir->build_cfg();
+  auto& cfg = actual_ir->cfg();
+
+  // Insert source blocks so the method has profiling metadata.
+  source_blocks::insert_source_blocks(DexString::make_string("LTest;.test:()V"),
+                                      &cfg);
+
+  // Run the replacement.
+  auto stats = replace_uninstantiable_refs(cfg);
+  EXPECT_EQ(1, stats.invokes);
+
+  // Verify every non-exit block has a source block.
+  for (auto* block : cfg.blocks()) {
+    if (block == cfg.exit_block()) {
+      continue;
+    }
+
+    auto* sb = source_blocks::get_first_source_block(block);
+    EXPECT_NE(nullptr, sb) << "Block B" << block->id()
+                           << " is missing source block";
+  }
+
+  // Additionally, verify that throw-delineated segments within blocks have
+  // source blocks. Check that after NEW_INSTANCE NullPointerException, a
+  // source block exists before the next throwing instruction.
+  auto* npe_type = DexType::get_type("Ljava/lang/NullPointerException;");
+  ASSERT_NE(nullptr, npe_type);
+
+  for (auto* block : cfg.blocks()) {
+    bool need_sb = false;
+    for (auto it = block->begin(); it != block->end(); ++it) {
+      if (it->type == MFLOW_SOURCE_BLOCK) {
+        need_sb = false;
+        continue;
+      }
+      if (it->type != MFLOW_OPCODE) {
+        continue;
+      }
+      auto op = it->insn->opcode();
+      // move_result_pseudo is part of the preceding instruction group.
+      if (opcode::is_a_move_result_pseudo(op)) {
+        continue;
+      }
+      EXPECT_FALSE(need_sb) << "Missing source block before instruction "
+                            << show(it->insn) << " in block B" << block->id();
+      need_sb =
+          (op == OPCODE_NEW_INSTANCE && it->insn->get_type() == npe_type) ||
+          (op == OPCODE_INVOKE_DIRECT &&
+           it->insn->get_method()->get_class() == npe_type) ||
+          opcode::is_throw(op);
+    }
+  }
+
+  actual_ir->clear_cfg();
+}
+
+TEST_F(RemoveUninstantiablesTest, NpeStubsGetSourceBlocksFieldAccess) {
+  g_redex->instrument_mode = true;
+
+  def_class("LFoo;");
+  def_class("LBar;", Bar_init);
+
+  DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
+
+  auto actual_ir = assembler::ircode_from_string(R"((
+    (load-param-object v0)
+    (iget v0 "LFoo;.a:I")
+    (move-result-pseudo v1)
+    (return-void)
+  ))");
+
+  actual_ir->build_cfg();
+  auto& cfg = actual_ir->cfg();
+
+  source_blocks::insert_source_blocks(
+      DexString::make_string("LTest;.test2:()V"), &cfg);
+
+  auto stats = replace_uninstantiable_refs(cfg);
+  EXPECT_EQ(1, stats.field_accesses_on_uninstantiable);
+
+  // Verify throw-delineated segments have source blocks.
+  auto* npe_type = DexType::get_type("Ljava/lang/NullPointerException;");
+  ASSERT_NE(nullptr, npe_type);
+
+  for (auto* block : cfg.blocks()) {
+    bool need_sb = false;
+    for (auto it = block->begin(); it != block->end(); ++it) {
+      if (it->type == MFLOW_SOURCE_BLOCK) {
+        need_sb = false;
+        continue;
+      }
+      if (it->type != MFLOW_OPCODE) {
+        continue;
+      }
+      auto op = it->insn->opcode();
+      // move_result_pseudo is part of the preceding instruction group.
+      if (opcode::is_a_move_result_pseudo(op)) {
+        continue;
+      }
+      EXPECT_FALSE(need_sb) << "Missing source block before instruction "
+                            << show(it->insn) << " in block B" << block->id();
+      need_sb =
+          (op == OPCODE_NEW_INSTANCE && it->insn->get_type() == npe_type) ||
+          (op == OPCODE_INVOKE_DIRECT &&
+           it->insn->get_method()->get_class() == npe_type) ||
+          opcode::is_throw(op);
+    }
+  }
+
+  actual_ir->clear_cfg();
 }
 
 } // namespace

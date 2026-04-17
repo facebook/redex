@@ -17,6 +17,7 @@
 #include "NullPointerExceptionUtil.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -142,7 +143,9 @@ Stats replace_uninstantiable_refs(
       // which gives us the best chance of finding an uninstantiable type.
       if (scoped_uninstantiable_types.count(insn->get_method()->get_class()) !=
           0u) {
-        m.replace(it, npe_creator.get_insns(insn));
+        auto* sb = source_blocks::get_last_source_block_before(it.block(),
+                                                               it.unwrap());
+        m.replace_mie(it, npe_creator.get_insns(insn, sb));
         stats.invokes++;
       }
       continue;
@@ -165,14 +168,18 @@ Stats replace_uninstantiable_refs(
 
     if (opcode::is_an_iget(op) && (scoped_uninstantiable_types.count(
                                        insn->get_field()->get_class()) != 0u)) {
-      m.replace(it, npe_creator.get_insns(insn));
+      auto* sb =
+          source_blocks::get_last_source_block_before(it.block(), it.unwrap());
+      m.replace_mie(it, npe_creator.get_insns(insn, sb));
       stats.field_accesses_on_uninstantiable++;
       continue;
     }
 
     if (opcode::is_an_iput(op) && (scoped_uninstantiable_types.count(
                                        insn->get_field()->get_class()) != 0u)) {
-      m.replace(it, npe_creator.get_insns(insn));
+      auto* sb =
+          source_blocks::get_last_source_block_before(it.block(), it.unwrap());
+      m.replace_mie(it, npe_creator.get_insns(insn, sb));
       stats.field_accesses_on_uninstantiable++;
       continue;
     }
