@@ -6,7 +6,7 @@
  */
 
 /*
- * This pass eliminates gotos by moving trivial instructions such a consts and
+ * This pass eliminates gotos by moving trivial instructions such as consts and
  * moves before a conditional branch.
  *
  * For example:
@@ -58,10 +58,10 @@ constexpr const char* METRIC_SKIPPED_BRANCHES = "num_skipped_branches";
 
 // Helper function that checks if a branch is hot.
 // Here we assume that :
-// 1. if a represenative block is hit, the rest of source blocks are also
+// 1. if a representative block is hit, the rest of source blocks are also
 // covered.
-// 2. if a represenative block is hit via any one interaction, it is considered
-// to be "hot" Potentially introduce hotness threshhold here.
+// 2. if a representative block is hit via any one interaction, it is considered
+// to be "hot" Potentially introduce hotness threshold here.
 
 bool UpCodeMotionPass::is_hot(cfg::Block* b) {
   const auto* rep_block = source_blocks::get_first_source_block(b);
