@@ -9,8 +9,6 @@
 #include <json/json.h>
 #include <unordered_set>
 
-#include "ControlFlow.h"
-#include "DexInstruction.h"
 #include "IRCode.h"
 #include "MethodUtil.h"
 #include "RedexTest.h"

@@ -8,15 +8,11 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
-#include "DexAsm.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "Inliner.h"
 #include "RedexTest.h"
 #include "Shrinker.h"
 #include "TailDuplicationPass.h"
-#include "Walkers.h"
 
 struct TailDuplicationTest : public RedexTest {
   TailDuplicationTest() {

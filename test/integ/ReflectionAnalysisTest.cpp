@@ -14,7 +14,6 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "DexLoader.h"
 #include "DexStore.h"
 #include "DexUtil.h"
 #include "IRCode.h"

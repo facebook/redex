@@ -11,11 +11,9 @@
 #include <string>
 #include <unordered_set>
 
-#include "Creators.h"
 #include "DexClass.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "LocalDce.h"
 #include "RedexTest.h"
 #include "ReflectionAnalysis.h"
 #include "Show.h"

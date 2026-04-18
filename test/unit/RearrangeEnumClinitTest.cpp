@@ -17,7 +17,6 @@
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "TypeUtil.h"
-#include "Walkers.h"
 
 namespace rearrange_enum_clinit {
 

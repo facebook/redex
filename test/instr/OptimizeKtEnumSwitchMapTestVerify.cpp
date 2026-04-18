@@ -6,7 +6,6 @@
  */
 
 #include "Debug.h"
-#include "DexInstruction.h"
 #include "verify/OptimizeEnumCommon.h"
 #include "verify/VerifyUtil.h"
 

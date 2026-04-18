@@ -18,7 +18,6 @@
 #include "ResourceValueMergingPass.h"
 #include "ResourcesTestDefs.h"
 #include "ResourcesValidationHelper.h"
-#include "Trace.h"
 #include "androidfw/ResourceTypes.h"
 
 using namespace boost::filesystem;

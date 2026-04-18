@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "ConfigFiles.h"
-#include "DexLoader.h"
 #include "DexStore.h"
 #include "IRList.h"
 #include "TypeInference.h"

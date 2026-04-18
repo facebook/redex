@@ -12,7 +12,6 @@
 #include <string>
 
 #include "DexInstruction.h"
-#include "Match.h"
 #include "VerifyUtil.h"
 
 namespace {

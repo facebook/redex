@@ -13,10 +13,7 @@
 #include <string>
 
 #include "BranchPrefixHoistingPass.h"
-#include "ControlFlow.h"
-#include "DexAsm.h"
 #include "DexClass.h"
-#include "DexLoader.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRList.h"

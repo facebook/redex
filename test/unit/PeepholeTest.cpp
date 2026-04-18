@@ -11,13 +11,11 @@
 #include <sstream>
 
 #include "Creators.h"
-#include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
 #include "Peephole.h"
 #include "RedexTest.h"
-#include "ScopeHelper.h"
 
 class PeepholeTest : public RedexTest {
  public:

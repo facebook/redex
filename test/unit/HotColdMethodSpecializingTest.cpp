@@ -17,7 +17,6 @@
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "Show.h"
-#include "Walkers.h"
 
 class HotColdMethodSpecializingTest : public RedexTest {
  public:

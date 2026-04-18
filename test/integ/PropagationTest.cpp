@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "Show.h"

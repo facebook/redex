@@ -10,7 +10,6 @@
 #include "DexAsm.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InstructionLowering.h"

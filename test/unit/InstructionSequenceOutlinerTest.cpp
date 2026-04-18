@@ -11,7 +11,6 @@
 #include <iterator>
 #include <utility>
 
-#include "ControlFlow.h"
 #include "DexAsm.h"
 #include "DexClass.h"
 #include "DexStore.h"

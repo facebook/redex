@@ -7,14 +7,12 @@
 
 #include <gtest/gtest.h>
 
-#include "ControlFlow.h"
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "PureMethods.h"
 #include "RedexTest.h"
 #include "VirtualScope.h"
-#include "Walkers.h"
 
 class PureAnalysisTest : public RedexTest {
  public:

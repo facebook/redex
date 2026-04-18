@@ -10,7 +10,6 @@
 #include <iterator>
 
 #include "ControlFlow.h"
-#include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"

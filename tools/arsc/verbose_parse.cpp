@@ -10,7 +10,6 @@
 #include <fstream>
 #include <iostream>
 
-#include "androidfw/ResourceTypes.h"
 #include "utils/Visitor.h"
 
 namespace {

@@ -13,7 +13,6 @@
 #include <string>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "JarLoader.h"
 #include "ProguardConfiguration.h"

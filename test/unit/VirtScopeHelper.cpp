@@ -9,6 +9,7 @@
 
 #include "Creators.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "RedexContext.h"
 #include "ScopeHelper.h"
 

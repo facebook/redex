@@ -20,7 +20,6 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IRList.h"
-#include "InstructionLowering.h"
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"

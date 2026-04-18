@@ -16,7 +16,6 @@
 #include "DexUtil.h"
 #include "KotlinStatelessLambdaSingletonRemovalPass.h"
 #include "RedexTest.h"
-#include "Resolver.h"
 #include "Show.h"
 
 namespace {

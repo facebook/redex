@@ -27,13 +27,14 @@ $ ./native/redex/tools/redex-tool/DexSqlQuery.py dex.db
 #include <vector>
 
 #include "ClassHierarchy.h"
+#include "DexAnnotation.h"
 #include "DexOutput.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Tool.h"
-#include "Walkers.h"
 
 namespace {
 

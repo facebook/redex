@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "DexLoader.h"
+#include "DexDefs.h"
 #include "RedexTest.h"
 #include <gtest/gtest.h>
 
