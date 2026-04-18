@@ -30,7 +30,6 @@
 #include "InterDexPass.h"
 #include "MethodProfiles.h"
 #include "PluginRegistry.h"
-#include "Resolver.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
 
