@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include "KotlinLambdaAnalyzer.h"
-#include "MethodProfiles.h"
 #include "Pass.h"
 
 class KotlinStatelessLambdaSingletonRemovalPass : public Pass {
@@ -43,28 +41,5 @@ This pass replaces references to the singleton `INSTANCE` field (via `sget-objec
     )");
   }
 
-  void bind_config() override {
-    bind("exclude_hot",
-         false,
-         m_exclude_hot,
-         "Exclude hot lambdas from singleton removal");
-    bind("exclude_hot_call_count_threshold",
-         kDefaultExcludeHotCallCountThreshold,
-         m_exclude_hot_call_count_threshold,
-         "Call count threshold for determining hot lambdas (used when "
-         "exclude_hot is true)");
-  }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  static constexpr float kDefaultExcludeHotCallCountThreshold = 5.0f;
-
-  bool is_hot_lambda(
-      const KotlinLambdaAnalyzer& analyzer,
-      const method_profiles::MethodProfiles& method_profiles) const;
-
-  bool m_exclude_hot{false};
-  float m_exclude_hot_call_count_threshold{
-      kDefaultExcludeHotCallCountThreshold};
 };
