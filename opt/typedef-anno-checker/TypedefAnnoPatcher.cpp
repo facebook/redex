@@ -480,9 +480,9 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
           // All the updates happening in this walk is local to the current
           // class. Therefore, there's no race condition between individual
           // annotation patching.
-          auto class_stats = PatcherStats();
+          Stats class_stats;
           if (is_enum(cls) && type::is_kotlin_class(cls)) {
-            fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
+            fix_kt_enum_ctor_param(cls, class_stats);
           }
           for (auto* m : cls->get_all_methods()) {
             auto analysis = MethodAnalysis::create(m, m_typedef_annos,
@@ -494,8 +494,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
             collect_overriding_method_candidates(m, candidates);
             if (is_constructor(m) &&
                 has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
-              patch_synth_cls_fields_from_ctor_param(
-                  m, class_stats.patch_synth_cls_fields_from_ctor_param);
+              patch_synth_cls_fields_from_ctor_param(m, class_stats);
             }
           }
           return class_stats;
@@ -516,7 +515,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
           new_stats.num_patched_fields_and_methods);
     candidates = {};
     if (new_stats.not_zero()) {
-      m_patcher_stats.patch_parameters_and_returns += new_stats;
+      m_patcher_stats += new_stats;
       return true;
     }
 
@@ -583,32 +582,11 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
 }
 
 void TypedefAnnoPatcher::print_stats(PassManager& mgr) {
-  size_t total_member_patched = 0;
-  size_t total_param_patched = 0;
-
-  // Helper to report metrics and traces for a Stats object, and accumulate
-  // totals.
-  auto report_stats = [&](const std::string& name, const Stats& stats) {
-    mgr.set_metric(name + " field/methods",
-                   stats.num_patched_fields_and_methods);
-    mgr.set_metric(name + " params", stats.num_patched_parameters);
-    TRACE(TAC, 1, "[patcher] %s field/methods %zu", name.c_str(),
-          stats.num_patched_fields_and_methods);
-    TRACE(TAC, 1, "[patcher] %s params %zu", name.c_str(),
-          stats.num_patched_parameters);
-    total_member_patched += stats.num_patched_fields_and_methods;
-    total_param_patched += stats.num_patched_parameters;
-  };
-
-  report_stats("fix_kt_enum_ctor_param",
-               m_patcher_stats.fix_kt_enum_ctor_param);
-  report_stats("patch_parameters_and_returns",
-               m_patcher_stats.patch_parameters_and_returns);
-  report_stats("patch_synth_cls_fields_from_ctor_param",
-               m_patcher_stats.patch_synth_cls_fields_from_ctor_param);
-
-  mgr.set_metric("total_member_patched", total_member_patched);
-  TRACE(TAC, 1, "[patcher] total_member_patched %zu", total_member_patched);
-  mgr.set_metric("total_param_patched", total_param_patched);
-  TRACE(TAC, 1, "[patcher] total_param_patched %zu", total_param_patched);
+  mgr.set_metric("total_member_patched",
+                 m_patcher_stats.num_patched_fields_and_methods);
+  mgr.set_metric("total_param_patched", m_patcher_stats.num_patched_parameters);
+  TRACE(TAC, 1, "[patcher] total_member_patched %zu",
+        m_patcher_stats.num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] total_param_patched %zu",
+        m_patcher_stats.num_patched_parameters);
 }

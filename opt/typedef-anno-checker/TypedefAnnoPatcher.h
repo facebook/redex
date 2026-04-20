@@ -37,21 +37,7 @@ struct Stats {
   }
 };
 
-struct PatcherStats {
-  Stats fix_kt_enum_ctor_param;
-  Stats patch_parameters_and_returns;
-  Stats patch_synth_cls_fields_from_ctor_param;
-
-  PatcherStats() = default;
-
-  PatcherStats& operator+=(const PatcherStats& other) {
-    fix_kt_enum_ctor_param += other.fix_kt_enum_ctor_param;
-    patch_parameters_and_returns += other.patch_parameters_and_returns;
-    patch_synth_cls_fields_from_ctor_param +=
-        other.patch_synth_cls_fields_from_ctor_param;
-    return *this;
-  }
-};
+using PatcherStats = Stats;
 
 struct ParamCandidate {
   DexMethod* method;
