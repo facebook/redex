@@ -102,7 +102,7 @@ bool ends_with_may_throw(cfg::Block* p) {
 }
 
 /*
- * Given an method-item-entry ordering, delete positions that are...
+ * Given a method-item-entry ordering, delete positions that are...
  * - duplicates with the previous position, even across block boundaries
  *   (they will get reconstituted when the cfg is rebuilt)
  * - adjacent to an immediately following position, as the last position wins.
@@ -1345,7 +1345,7 @@ void ControlFlowGraph::sanity_check() const {
     auto* insn = mie.insn;
     always_assert_log(
         pointer_check.count(insn) == 0,
-        "IRInstruction pointers must be unqiue. You have inserted the "
+        "IRInstruction pointers must be unique. You have inserted the "
         "following IRInstruction* multiple times:\n >> %s",
         SHOW(*insn));
     pointer_check.insert(insn);
@@ -1543,8 +1543,8 @@ void ControlFlowGraph::gather_catch_types(
           DexType* t = e->throw_info()->catch_type;
           if (t != nullptr) {
             const auto pair = seen.insert(t);
-            bool insertion_occured = pair.second;
-            if (insertion_occured) {
+            bool insertion_occurred = pair.second;
+            if (insertion_occurred) {
               types.push_back(t);
             }
           }
@@ -3164,7 +3164,7 @@ bool ControlFlowGraph::structural_equals(
     auto* b2 = other_blocks.front();
     this_blocks.pop();
     other_blocks.pop();
-    // Push b1, b2's GOTO succes into queue;
+    // Push b1, b2's GOTO successors into queue;
     auto* goto1 = b1->goes_to();
     auto* goto2 = b2->goes_to();
     if (goto1 != nullptr) {
@@ -3180,7 +3180,7 @@ bool ControlFlowGraph::structural_equals(
       return false;
     }
 
-    // Push b1, b2's THROW succes into queue;
+    // Push b1, b2's THROW successors into queue;
     auto throw1_edges = b1->get_outgoing_throws_in_order();
     auto throw2_edges = b2->get_outgoing_throws_in_order();
     if (throw1_edges.size() != throw2_edges.size()) {
