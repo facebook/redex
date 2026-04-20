@@ -9,8 +9,6 @@
 
 #include <sparta/FiniteAbstractDomain.h>
 
-#include "DexUtil.h"
-
 enum Nullness {
   NN_BOTTOM,
   UNINITIALIZED, // The elements of a newly allocated array is not NULL or

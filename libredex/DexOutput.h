@@ -9,8 +9,6 @@
 
 #include <memory>
 
-#include <optional>
-
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"

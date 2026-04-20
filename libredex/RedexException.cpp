@@ -6,6 +6,9 @@
  */
 
 #include "RedexException.h"
+
+#include <sstream>
+
 #include "Debug.h"
 
 RedexException::RedexException(

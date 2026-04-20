@@ -14,7 +14,7 @@
 #include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "IRCode.h"
+class IRInstruction;
 
 namespace method_override_graph {
 class Graph;

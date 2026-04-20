@@ -12,7 +12,6 @@
 #include <json/json.h>
 
 #include "ControlFlow.h"
-#include "CppUtil.h"
 #include "DexStore.h"
 #include "Show.h"
 #include "WorkQueue.h"

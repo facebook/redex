@@ -13,7 +13,6 @@
 #include "ClassHierarchy.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "Timer.h"
 #include "TypeUtil.h"
 
 /*

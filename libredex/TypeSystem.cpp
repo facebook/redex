@@ -8,7 +8,6 @@
 #include "TypeSystem.h"
 
 #include "RedexContext.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
 

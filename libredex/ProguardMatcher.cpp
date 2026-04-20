@@ -11,7 +11,6 @@
 #include <iostream>
 #include <mutex>
 #include <sstream>
-#include <thread>
 
 #include "ClassHierarchy.h"
 #include "DeterministicContainers.h"

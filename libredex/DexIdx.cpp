@@ -7,8 +7,6 @@
 
 #include "DexIdx.h"
 
-#include <limits>
-
 #include "DexAnnotation.h"
 #include "DexCallSite.h"
 #include "DexClass.h"

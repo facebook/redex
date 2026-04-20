@@ -7,10 +7,8 @@
 
 #pragma once
 
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/operations.hpp>
+#include <boost/container_hash/hash.hpp>
 #include <boost/graph/adjacency_list.hpp>
-#include <boost/noncopyable.hpp>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -26,7 +24,6 @@
 #include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
-#include "RedexMappedFile.h"
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 const char* const RES_DIRECTORY = "res";
