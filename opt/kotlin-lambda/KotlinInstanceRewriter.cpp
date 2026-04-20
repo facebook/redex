@@ -11,6 +11,8 @@
 #include "KotlinLambdaAnalyzer.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "SourceBlocks.h"
+#include "SourceBlocksUtils.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 
@@ -203,7 +205,16 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
         IRInstruction* init_isn = new IRInstruction(OPCODE_INVOKE_DIRECT);
         init_isn->set_method(init)->set_srcs_size(1)->set_src(
             0, move_result_it->insn->dest());
-        m.replace(insn_it, {new_isn, mov_result, init_isn});
+        auto* sb = source_blocks::get_last_source_block_before(
+            insn_it.block(), insn_it.unwrap());
+        std::vector<MethodItemEntry> replacement;
+        replacement.emplace_back(new_isn);
+        replacement.emplace_back(mov_result);
+        if (sb != nullptr) {
+          replacement.emplace_back(source_blocks::clone_as_synthetic(sb));
+        }
+        replacement.emplace_back(init_isn);
+        m.replace_mie(insn_it, std::move(replacement));
         m.remove(move_result_it);
         stats.kotlin_new_inserted++;
       }
