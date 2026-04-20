@@ -10,7 +10,6 @@
 #include "DexUtil.h"
 #include "KotlinInstanceRewriter.h"
 #include "PassManager.h"
-#include "TypeUtil.h"
 
 void KotlinStatelessLambdaSingletonRemovalPass::run_pass(
     DexStoresVector& stores, ConfigFiles& /* conf */, PassManager& mgr) {
