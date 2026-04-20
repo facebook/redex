@@ -37,8 +37,6 @@ struct Stats {
   }
 };
 
-using PatcherStats = Stats;
-
 struct ParamCandidate {
   DexMethod* method;
   src_index_t index;
@@ -122,5 +120,5 @@ class TypedefAnnoPatcher {
   const method_override_graph::Graph& m_method_override_graph;
   const size_t m_max_iteration;
 
-  PatcherStats m_patcher_stats;
+  Stats m_patcher_stats;
 };

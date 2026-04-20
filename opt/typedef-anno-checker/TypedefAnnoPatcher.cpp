@@ -475,7 +475,7 @@ void TypedefAnnoPatcher::collect_overriding_method_candidates(
 void TypedefAnnoPatcher::run(const Scope& scope) {
   PatchingCandidates candidates;
   const auto phase_one = [this, &scope, &candidates]() {
-    m_patcher_stats += walk::parallel::classes<PatcherStats>(
+    m_patcher_stats += walk::parallel::classes<Stats>(
         scope, [this, &candidates](DexClass* cls) {
           // All the updates happening in this walk is local to the current
           // class. Therefore, there's no race condition between individual
