@@ -79,6 +79,51 @@ int g_crash_fd = -1;
 
 std::atomic<size_t> g_crashing{0};
 
+// Set when CRASH_BACKTRACE has already been written for the in-flight crash
+// (either by our std::terminate handler before abort(), or by an explicit
+// pre-write in a path that calls abort() directly). The SIGABRT signal handler
+// then skips its own CRASH_BACKTRACE to avoid duplicate frames, and to ensure
+// the trace survives even if ASan's SIGABRT interceptor preempts our handler.
+//
+// This flag is intentionally only set on paths that are about to terminate the
+// process (uncaught throw -> std::terminate, or direct abort()). It is NEVER
+// set in code paths that may unwind into a catch handler (e.g. unit tests that
+// EXPECT_THROW assert_fail), because there is no way to clear it once set, and
+// leaving it set across a caught throw would silently suppress the crash
+// backtrace for any later, unrelated SIGABRT in the same process.
+std::atomic<bool> g_pre_crash_backtrace_done{false};
+
+std::terminate_handler g_prev_terminate_handler{nullptr};
+
+// Custom std::terminate handler that writes the crash backtrace synchronously
+// to g_crash_fd before delegating to the previous handler (which prints
+// "terminate called..."/"what():..." and calls abort()). Doing the write here,
+// instead of from debug_backtrace_handler (the SIGABRT signal handler),
+// ensures the trace is captured even when ASan's SIGABRT interceptor preempts
+// the signal handler.
+//
+// std::terminate is invoked only for *uncaught* exceptions, so this does not
+// fire on caught throws -- in particular, the DebugTest unit tests that
+// EXPECT_THROW assert_fail are unaffected.
+[[noreturn]] void redex_terminate_handler() {
+  g_pre_crash_backtrace_done.store(true, std::memory_order_release);
+  CRASH_BACKTRACE();
+  if (g_prev_terminate_handler != nullptr) {
+    g_prev_terminate_handler(); // typically prints diagnostic + calls abort()
+  }
+  std::abort(); // safety net; previous handler should not return
+}
+
+// Static initializer that installs redex_terminate_handler. Lives in the same
+// translation unit as g_pre_crash_backtrace_done so initialization order is
+// well-defined (declaration order within the namespace).
+struct TerminateHandlerInstaller {
+  TerminateHandlerInstaller() noexcept {
+    g_prev_terminate_handler = std::set_terminate(&redex_terminate_handler);
+  }
+};
+const TerminateHandlerInstaller g_terminate_handler_installer{};
+
 }; // namespace
 
 void set_crash_fd(int fd) { g_crash_fd = fd; }
@@ -115,7 +160,12 @@ void crash_backtrace_handler(int sig) {
 void debug_backtrace_handler(int sig) {
   size_t crashing = g_crashing.fetch_add(1);
   if (crashing == 0) {
-    CRASH_BACKTRACE();
+    // Skip if assert_fail already wrote the backtrace synchronously before
+    // throwing/aborting (g_pre_crash_backtrace_done). Avoids duplicate frames
+    // and protects against ASan SIGABRT interception suppressing this handler.
+    if (!g_pre_crash_backtrace_done.load(std::memory_order_acquire)) {
+      CRASH_BACKTRACE();
+    }
   } else {
     sleep(60); // Sleep a minute, then go on to die if we're still alive.
   }
@@ -281,6 +331,14 @@ void assert_fail(const char* expr,
     // Pretend a termination for `redex.py`.
     std::cerr << "terminate called after assertion" << std::endl;
     std::cerr << "  what():  RedexError: " << type << " " << msg << std::endl;
+    // Write the crash backtrace synchronously before abort(). ASan can
+    // intercept the resulting SIGABRT and prevent debug_backtrace_handler
+    // from running CRASH_BACKTRACE. This is safe (no flag-leak risk) because
+    // abort() never returns.
+    if (!redex_debug::no_stacktrace_for_type[type]) {
+      g_pre_crash_backtrace_done.store(true, std::memory_order_release);
+      CRASH_BACKTRACE();
+    }
     abort();
   }
 #endif
