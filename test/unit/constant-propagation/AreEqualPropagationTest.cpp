@@ -33,6 +33,7 @@ class AreEqualSwapSafeTypesTest
       public ::testing::WithParamInterface<TypePairParam> {};
 
 TEST_P(AreEqualSwapSafeTypesTest, SecondArgNonNullBothSafeTypes_ArgsSwapped) {
+  DexMethod::make_method("Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z");
   const auto& param = GetParam();
   std::string method_str = R"(
     (method (static) "LFoo;.test:($T0$T1)Z"
@@ -59,7 +60,7 @@ TEST_P(AreEqualSwapSafeTypesTest, SecondArgNonNullBothSafeTypes_ArgsSwapped) {
       (load-param-object v0)
       (load-param-object v1)
       (if-eqz v1 :is_null)
-      (invoke-static (v1 v0) "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/lang/Object;)Z")
+      (invoke-virtual (v1 v0) "Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z")
       (move-result v2)
       (return v2)
       (:is_null)
@@ -142,8 +143,8 @@ TEST_F(AreEqualSwappingTest, AreEqualFirstArgNull_Retained) {
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
 
-// When both args are known non-null, swapping gains nothing.
 TEST_F(AreEqualSwappingTest, BothArgsNonNull_Retained) {
+  DexMethod::make_method("Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z");
   auto* m = assembler::method_from_string(R"(
     (method (static) "LFoo;.test:(Ljava/lang/String;Ljava/lang/String;)Z"
      (
@@ -160,9 +161,23 @@ TEST_F(AreEqualSwappingTest, BothArgsNonNull_Retained) {
      )
     )
   )");
-  const auto expected = assembler::to_s_expr(m->get_code());
   do_const_prop(m);
-  EXPECT_EQ(assembler::to_s_expr(m->get_code()), expected);
+
+  const auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (if-eqz v0 :is_null)
+      (if-eqz v1 :is_null)
+      (invoke-virtual (v0 v1) "Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (return v2)
+      (:is_null)
+      (const v2 0)
+      (return v2)
+    )
+  )");
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
 }
 
 // When the first arg is known null, swapping gains nothing and can hurt:
@@ -179,6 +194,148 @@ TEST_F(AreEqualSwappingTest, FirstArgKnownNull_Retained) {
       (return v2)
       (:first_nonnull)
       (const v2 1)
+      (return v2)
+     )
+    )
+  )");
+  const auto expected = assembler::to_s_expr(m->get_code());
+  do_const_prop(m);
+  EXPECT_EQ(assembler::to_s_expr(m->get_code()), expected);
+}
+
+struct AreEqualReplacementTest : public ConstantPropagationTest {};
+
+TEST_F(AreEqualReplacementTest, FirstArgNonNull_Replaced) {
+  DexMethod::make_method("Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z");
+  auto* m = assembler::method_from_string(R"(
+    (method (static) "LFoo;.test:(Ljava/lang/String;Ljava/lang/Object;)Z"
+     (
+      (load-param-object v0)
+      (load-param-object v1)
+      (if-eqz v0 :is_null)
+      (invoke-static (v0 v1) "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/lang/Object;)Z")
+      (move-result v2)
+      (return v2)
+      (:is_null)
+      (const v2 0)
+      (return v2)
+     )
+    )
+  )");
+  do_const_prop(m);
+
+  const auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (if-eqz v0 :is_null)
+      (invoke-virtual (v0 v1) "Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (return v2)
+      (:is_null)
+      (const v2 0)
+      (return v2)
+    )
+  )");
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
+}
+
+// When the first arg is nullable, areEqual must be retained.
+TEST_F(AreEqualReplacementTest, FirstArgNullable_Retained) {
+  auto* m = assembler::method_from_string(R"(
+    (method (static) "LFoo;.test:(Ljava/lang/Object;Ljava/lang/Object;)Z"
+     (
+      (load-param-object v0)
+      (load-param-object v1)
+      (invoke-static (v0 v1) "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/lang/Object;)Z")
+      (move-result v2)
+      (return v2)
+     )
+    )
+  )");
+  const auto expected = assembler::to_s_expr(m->get_code());
+  do_const_prop(m);
+  EXPECT_EQ(assembler::to_s_expr(m->get_code()), expected);
+}
+
+// Intrinsics.areEqual has typed overloads for Double/Float that use IEEE 754
+// semantics. Even with first arg non-null, these must not be replaced.
+// The (Object, Object) call is a sanity check (should be replaced).
+struct OverloadParam {
+  std::string name;
+  std::string_view sig;
+};
+
+class AreEqualFloatDoubleOverloadTest
+    : public AreEqualReplacementTest,
+      public ::testing::WithParamInterface<OverloadParam> {};
+
+TEST_P(AreEqualFloatDoubleOverloadTest, FloatDoubleOverload_Retained) {
+  DexMethod::make_method("Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z");
+  std::string method_str = R"(
+    (method (static) "LFoo;.test:(Ljava/lang/String;Ljava/lang/Object;)Z"
+     (
+      (load-param-object v0)
+      (load-param-object v1)
+      (if-eqz v0 :is_null)
+      (invoke-static (v0 v1) "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/lang/Object;)Z")
+      (move-result v2)
+      (invoke-static (v0 v1) "Lkotlin/jvm/internal/Intrinsics;.areEqual:($SIG)Z")
+      (move-result v3)
+      (return v2)
+      (:is_null)
+      (const v2 0)
+      (return v2)
+     )
+    )
+  )";
+  method_str.replace(method_str.find("$SIG"), 4, GetParam().sig);
+  auto* m = assembler::method_from_string(method_str);
+  do_const_prop(m);
+
+  std::string expected_str = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (if-eqz v0 :is_null)
+      (invoke-virtual (v0 v1) "Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (invoke-static (v0 v1) "Lkotlin/jvm/internal/Intrinsics;.areEqual:($SIG)Z")
+      (move-result v3)
+      (return v2)
+      (:is_null)
+      (const v2 0)
+      (return v2)
+    )
+  )";
+  expected_str.replace(expected_str.find("$SIG"), 4, GetParam().sig);
+  const auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AreEqualFloatDoubleOverloadTests,
+    AreEqualFloatDoubleOverloadTest,
+    ::testing::Values(
+        OverloadParam{"Double_Double", "Ljava/lang/Double;Ljava/lang/Double;"},
+        OverloadParam{"Double_double", "Ljava/lang/Double;D"},
+        OverloadParam{"double_Double", "DLjava/lang/Double;"},
+        OverloadParam{"Float_Float", "Ljava/lang/Float;Ljava/lang/Float;"},
+        OverloadParam{"Float_float", "Ljava/lang/Float;F"},
+        OverloadParam{"float_Float", "FLjava/lang/Float;"}),
+    [](const auto& info) { return info.param.name; });
+
+// When the first arg is known null, areEqual must be retained (cannot call
+// equals on null).
+TEST_F(AreEqualReplacementTest, FirstArgNull_Retained) {
+  auto* m = assembler::method_from_string(R"(
+    (method (static) "LFoo;.test:(Ljava/lang/Object;Ljava/lang/Object;)Z"
+     (
+      (load-param-object v0)
+      (load-param-object v1)
+      (const v0 0)
+      (invoke-static (v0 v1) "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/lang/Object;)Z")
+      (move-result v2)
       (return v2)
      )
     )

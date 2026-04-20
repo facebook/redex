@@ -285,9 +285,8 @@ void GlobalConfig::bind_config() {
        "non-null in constant propagation, enabling removal of redundant "
        "Kotlin null-check intrinsics");
   bind("enable_replacing_areequal", false, bool_param,
-       "When true, enable swapping Kotlin Intrinsics.areEqual arguments "
-       "so the non-null arg becomes first, when the second arg is non-null "
-       "and both args are safe symmetric-equals types");
+       "When true, replace Kotlin Intrinsics.areEqual with Object.equals "
+       "when the receiver is proven non-null by constant propagation");
   bind("ignore_no_keep_rules", {}, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("json_serde_supercls", {}, string_vector_param);

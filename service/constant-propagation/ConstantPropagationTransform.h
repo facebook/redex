@@ -69,6 +69,7 @@ class Transform final {
     size_t class_isinstance_replaced{0};
     size_t class_cast_replaced{0};
     size_t kotlin_areequal_swapped{0};
+    size_t kotlin_areequal_replaced{0};
 
     Stats& operator+=(const Stats& that) {
       branches_removed += that.branches_removed;
@@ -82,6 +83,7 @@ class Transform final {
       redundant_puts_removed += that.redundant_puts_removed;
       class_cast_replaced += that.class_cast_replaced;
       kotlin_areequal_swapped += that.kotlin_areequal_swapped;
+      kotlin_areequal_replaced += that.kotlin_areequal_replaced;
       return *this;
     }
 
@@ -153,6 +155,8 @@ class Transform final {
   bool eliminate_redundant_null_check(const ConstantEnvironment&,
                                       const WholeProgramState& wps,
                                       const cfg::InstructionIterator& cfg_it);
+  bool replace_kotlin_areequal(const ConstantEnvironment&,
+                               const cfg::InstructionIterator& cfg_it);
   bool replace_with_throw(const ConstantEnvironment&,
                           const cfg::InstructionIterator& cfg_it,
                           npe::NullPointerExceptionCreator* npe_creator);

@@ -313,6 +313,40 @@ void Transform::swap_kotlin_areequal(
   }
 }
 
+bool Transform::replace_kotlin_areequal(
+    const ConstantEnvironment& env, const cfg::InstructionIterator& cfg_it) {
+  if (!constant_propagation_transform_internal::enable_replacing_areequal) {
+    return false;
+  }
+  auto* insn = cfg_it->insn;
+  if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+    return false;
+  }
+  auto* kotlin_areequal = DexMethod::get_method(
+      "Lkotlin/jvm/internal/Intrinsics;.areEqual:"
+      "(Ljava/lang/Object;Ljava/lang/Object;)Z");
+  if (kotlin_areequal == nullptr || insn->get_method() != kotlin_areequal) {
+    return false;
+  }
+  // areEqual(a, b) calls a.equals(b) when a is non-null. When we can prove
+  // a is non-null, replace with invoke-virtual Object.equals directly.
+  // Both invoke-static areEqual and invoke-virtual equals take two source
+  // registers (the static args / receiver + arg), so in-place modification
+  // preserves the associated move-result-pseudo.
+  if (!is_known_non_null(env.get(insn->src(0)))) {
+    return false;
+  }
+  auto* object_equals =
+      DexMethod::get_method("Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z");
+  if (object_equals == nullptr) {
+    return false;
+  }
+  insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
+  insn->set_method(object_equals);
+  ++m_stats.kotlin_areequal_replaced;
+  return true;
+}
+
 bool Transform::eliminate_redundant_put(
     const ConstantEnvironment& env,
     const WholeProgramState& wps,
@@ -1167,9 +1201,9 @@ void Transform::apply(const intraprocedural::FixpointIterator& fp_iter,
                       bool is_static,
                       DexType* declaring_type,
                       DexProto* proto) {
+  swap_kotlin_areequal(fp_iter, cfg, is_static, declaring_type, proto);
   legacy_apply_constants_and_prune_unreachable(fp_iter, wps, cfg, xstores,
                                                declaring_type);
-  swap_kotlin_areequal(fp_iter, cfg, is_static, declaring_type, proto);
   if ((xstores != nullptr) && !g_redex->instrument_mode) {
     m_stats.unreachable_instructions_removed += cfg.simplify();
     fp_iter.clear_switch_succ_cache();
@@ -1209,6 +1243,7 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
       auto cfg_it = block->to_cfg_instruction_iterator(it);
       bool any_changes = eliminate_redundant_put(env, wps, cfg_it) ||
                          eliminate_redundant_null_check(env, wps, cfg_it) ||
+                         replace_kotlin_areequal(env, cfg_it) ||
                          replace_with_throw(env, cfg_it, &npe_creator);
       auto* insn = cfg_it->insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
@@ -1588,6 +1623,7 @@ void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
   sm.set_metric("class_isinstance_replaced", class_isinstance_replaced);
   sm.set_metric("class_cast_replaced", class_cast_replaced);
   sm.set_metric("kotlin_areequal_swapped", kotlin_areequal_swapped);
+  sm.set_metric("kotlin_areequal_replaced", kotlin_areequal_replaced);
 }
 
 } // namespace constant_propagation
