@@ -64,6 +64,12 @@ dump_debug() {
     else
       echo "(no metadata file - no decode errors or handler mutations)"
     fi
+    echo "=== Symbolication path diagnostics ==="
+    if [ -f "${DEBUG_STDERR}.symbolize" ]; then
+      cat "${DEBUG_STDERR}.symbolize"
+    else
+      echo "(no symbolize debug file - did not reach maybe_addr2line)"
+    fi
     echo "=== End debug ==="
 }
 
