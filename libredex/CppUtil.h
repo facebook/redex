@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cctype>
+#include <cstdint>
 #include <string_view>
 #include <utility>
 
