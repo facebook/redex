@@ -1424,21 +1424,19 @@ size_t count_throw_delineated_no_sbs(
     Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   size_t num_violations = 0;
   bool had_sb = false;
-  bool has_throw_site = false;
   for (auto it = b->begin(); it != b->end(); ++it) {
     if (it->type == MFLOW_SOURCE_BLOCK) {
       had_sb = true;
     }
     if (it->type == MFLOW_OPCODE && opcode::can_throw(it->insn->opcode()) &&
         it->insn->opcode() != OPCODE_THROW) {
-      has_throw_site = true;
       if (!had_sb) {
         num_violations++;
       }
       had_sb = false;
     }
   }
-  if (!had_sb && has_throw_site) {
+  if (!had_sb) {
     num_violations++;
   }
   return num_violations;
@@ -2351,25 +2349,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
   static size_t uncovered_throw_delineated_blocks_violations_cfg(
       cfg::ControlFlowGraph& cfg) {
     size_t num_violations = 0;
+    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
     for (auto* cur : cfg.blocks()) {
-      bool had_sb = false;
-      bool has_throw_site = false;
-      for (auto it = cur->begin(); it != cur->end(); ++it) {
-        if (it->type == MFLOW_SOURCE_BLOCK) {
-          had_sb = true;
-        }
-        if (it->type == MFLOW_OPCODE && opcode::can_throw(it->insn->opcode()) &&
-            it->insn->opcode() != OPCODE_THROW) {
-          has_throw_site = true;
-          if (!had_sb) {
-            num_violations++;
-          }
-          had_sb = false;
-        }
-      }
-      if (!had_sb && has_throw_site) {
-        num_violations++;
-      }
+      num_violations += count_throw_delineated_no_sbs(cur, dom);
     }
     return num_violations;
   }
@@ -3117,9 +3099,11 @@ struct ViolationsHelper::ViolationsHelperImpl {
           }
         }
 
-        void mie_after_impl(std::ostream& os,
-                            const MethodItemEntry& mie,
-                            bool /*ignore_undefined*/) {
+        void mie_after_impl(std::ostream&,
+                            const MethodItemEntry&,
+                            bool /*ignore_undefined*/) {}
+
+        void mie_before(std::ostream& os, const MethodItemEntry& mie) {
           if (mie.type == MFLOW_SOURCE_BLOCK) {
             had_sb = true;
             return;
