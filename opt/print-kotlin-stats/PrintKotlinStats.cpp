@@ -12,6 +12,7 @@
 #include "KotlinLambdaAnalyzer.h"
 #include "KotlinNullCheckMethods.h"
 #include "MethodProfiles.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "TypeUtil.h"
@@ -137,9 +138,7 @@ void PrintKotlinStats::setup() {
       m_kotlin_expr_null_assertions);
   kotlin_nullcheck_wrapper::get_kotlin_notnull_assertions(
       m_kotlin_notnull_assertions);
-  m_kotlin_areequal = DexMethod::get_method(
-      "Lkotlin/jvm/internal/Intrinsics;.areEqual:"
-      "(Ljava/lang/Object;Ljava/lang/Object;)Z");
+  m_kotlin_areequal = method::kotlin_jvm_internal_Intrinsics_areEqual();
   m_kotlin_lambdas_base = DexType::get_type(KOTLIN_LAMBDA);
   m_kotlin_coroutin_continuation_base = DexType::get_type(CONTINUATION_IMPL);
   m_instance = DexString::make_string("INSTANCE");

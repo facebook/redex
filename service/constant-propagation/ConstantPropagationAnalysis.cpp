@@ -1234,11 +1234,9 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
 
 StringAnalyzerState StringAnalyzerState::make_default() {
   UnorderedSet<DexMethod*> methods;
-  auto* kotlin_are_equal = DexMethod::get_method(
-      "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
-      "lang/Object;)Z");
-  if (kotlin_are_equal != nullptr && kotlin_are_equal->as_def() != nullptr) {
-    methods.emplace(kotlin_are_equal->as_def());
+  auto* kotlin_are_equal = method::kotlin_jvm_internal_Intrinsics_areEqual();
+  if (kotlin_are_equal != nullptr) {
+    methods.emplace(kotlin_are_equal);
   }
   return StringAnalyzerState(methods);
 }

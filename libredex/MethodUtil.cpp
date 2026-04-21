@@ -565,6 +565,12 @@ DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue() {
       "lang/Object;Ljava/lang/String;)V"));
 }
 
+DexMethod* kotlin_jvm_internal_Intrinsics_areEqual() {
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
+      "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
+      "lang/Object;)Z"));
+}
+
 DexMethod* redex_internal_checkObjectNotNull() {
   return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V"));
