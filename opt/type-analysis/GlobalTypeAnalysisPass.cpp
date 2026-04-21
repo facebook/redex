@@ -11,6 +11,7 @@
 #include "DexUtil.h"
 #include "GlobalTypeAnalyzer.h"
 #include "KotlinNullCheckMethods.h"
+#include "OptionalIO.h"
 #include "ResolveMethodRefs.h"
 #include "Show.h"
 #include "Trace.h"

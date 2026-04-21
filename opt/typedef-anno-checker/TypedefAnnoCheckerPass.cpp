@@ -13,6 +13,7 @@
 #include "ClassUtil.h"
 #include "DexUtil.h"
 #include "KotlinNullCheckMethods.h"
+#include "OptionalIO.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"

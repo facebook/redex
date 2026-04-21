@@ -12,6 +12,7 @@
 #include "ApiLevelChecker.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
+#include "OptionalIO.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
