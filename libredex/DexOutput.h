@@ -15,7 +15,6 @@
 #include "DexMethodHandle.h"
 #include "DexStats.h"
 #include "GlobalConfig.h"
-#include "Pass.h"
 
 class DexAnnotation;
 class DexCallSite;
