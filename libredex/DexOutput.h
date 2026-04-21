@@ -14,7 +14,6 @@
 #include "DexClass.h"
 #include "DexMethodHandle.h"
 #include "DexStats.h"
-#include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "Pass.h"
 
