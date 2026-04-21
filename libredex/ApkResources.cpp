@@ -7,6 +7,7 @@
 
 #include "ApkResources.h"
 
+#include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <cstdint>
