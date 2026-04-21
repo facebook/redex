@@ -17,7 +17,6 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodOverrideGraph.h"
-#include "MethodProfiles.h"
 #include "Mutators.h"
 #include "Resolver.h"
 #include "Show.h"

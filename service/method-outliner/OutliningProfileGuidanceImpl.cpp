@@ -9,7 +9,6 @@
 
 #include <boost/regex.hpp>
 
-#include "BaselineProfileConfig.h"
 #include "CallGraph.h"
 #include "ConfigFiles.h"
 #include "MethodOverrideGraph.h"

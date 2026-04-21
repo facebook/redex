@@ -7,7 +7,6 @@
 
 #include "RegisterType.h"
 
-#include "DexClass.h"
 #include "Show.h"
 #include "TypeUtil.h"
 

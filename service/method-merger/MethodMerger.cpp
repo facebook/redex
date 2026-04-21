@@ -12,7 +12,6 @@
 #include "IRCode.h"
 #include "MethodReference.h"
 #include "ReachableClasses.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "SwitchDispatch.h"
 #include "Trace.h"

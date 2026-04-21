@@ -12,7 +12,6 @@
 
 #include "CFGMutation.h"
 #include "ControlFlow.h"
-#include "DexClass.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "IRCode.h"

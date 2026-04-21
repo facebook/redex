@@ -10,7 +10,6 @@
 #include <optional>
 
 #include "DexClass.h"
-#include "EditableCfgAdapter.h"
 #include "MethodReference.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"

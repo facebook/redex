@@ -13,7 +13,6 @@
 #include "DexAsm.h"
 #include "Show.h"
 #include "Trace.h"
-#include "TypeReference.h"
 
 using namespace dex_asm;
 

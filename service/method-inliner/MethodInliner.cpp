@@ -26,7 +26,6 @@
 #include "IRInstruction.h"
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
-#include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "Resolver.h"
