@@ -19,6 +19,7 @@
 #include "PassManager.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 
@@ -190,8 +191,6 @@ struct Rearranger {
     auto orig_new_array_size_it = orig_new_array_size_cfg_it.unwrap();
     always_assert(orig_new_array_size_it->insn->opcode() == OPCODE_CONST);
 
-    // Just move to the front. This does not handle source blocks. Assume
-    // this is not important for now.
     auto new_array_it = b->begin();
     while (new_array_it->type != MFLOW_OPCODE) {
       ++new_array_it;
@@ -211,6 +210,16 @@ struct Rearranger {
             (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
                 ->set_dest(new_reg),
         });
+
+    // NEW_ARRAY is throwable — insert a source block after its
+    // MOVE_RESULT_PSEUDO to cover the new throw-delineated segment.
+    auto* first_sb = source_blocks::get_first_source_block(b);
+    if (first_sb != nullptr) {
+      auto mrp_it = new_array_it;
+      --mrp_it;
+      source_blocks::impl::BlockAccessor::insert_source_block_after(
+          b, mrp_it, source_blocks::clone_as_synthetic(first_sb));
+    }
 
     array_sput->set_src(0, new_reg);
 
@@ -340,6 +349,17 @@ struct Rearranger {
                     ->set_src(1, alloc_reg)
                     ->set_src(2, *extra_reg),
             });
+
+        // INVOKE_DIRECT is throwable — insert a source block after it
+        // to cover the segment up to APUT_OBJECT.
+        {
+          auto* sb = source_blocks::find_between(
+              IRList::reverse_iterator(insert_after_it), b->rend());
+          if (sb != nullptr) {
+            source_blocks::impl::BlockAccessor::insert_source_block_after(
+                b, insert_after_it, source_blocks::clone_as_synthetic(sb));
+          }
+        }
 
         // Remove the old aput.
         b->remove_insn(cfg.find_insn(use.insn, b).unwrap());

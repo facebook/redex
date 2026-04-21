@@ -14,8 +14,10 @@
 #include "Creators.h"
 #include "DexClass.h"
 #include "IRAssembler.h"
+#include "MethodUtil.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
+#include "SourceBlocks.h"
 #include "TypeUtil.h"
 
 namespace rearrange_enum_clinit {
@@ -446,6 +448,106 @@ TEST_F(RearrangeEnumClinitFieldTest, OtherClone) {
     )
   )";
   ASSERT_TRUE(check_other(values_src));
+}
+
+TEST_F(RearrangeEnumClinitTest, SourceBlocksCoverage) {
+  const auto* src = R"(
+  (
+    (.src_block "LTest;.<clinit>:()V" 0 (1.0 1.0))
+    (const v4 2)
+    (const v3 1)
+    (const v2 0)
+    (new-instance "LTest;")
+    (move-result-pseudo-object v0)
+    (.src_block "LTest;.<clinit>:()V" 1 (1.0 1.0))
+    (const-string ALPHA)
+    (move-result-pseudo-object v1)
+    (invoke-direct (v0 v1 v2) "LTest;.<init>:(Ljava/lang/String;I)V")
+    (.src_block "LTest;.<clinit>:()V" 2 (1.0 1.0))
+    (sput-object v0 "LTest;.ALPHA:LTest;")
+    (move-object v16 v0)
+    (new-instance "LTest;")
+    (move-result-pseudo-object v0)
+    (.src_block "LTest;.<clinit>:()V" 3 (1.0 1.0))
+    (const-string BETA)
+    (move-result-pseudo-object v1)
+    (invoke-direct (v0 v1 v3) "LTest;.<init>:(Ljava/lang/String;I)V")
+    (.src_block "LTest;.<clinit>:()V" 4 (1.0 1.0))
+    (sput-object v0 "LTest;.BETA:LTest;")
+    (move-object v17 v0)
+    (new-instance "LTest;")
+    (move-result-pseudo-object v0)
+    (.src_block "LTest;.<clinit>:()V" 5 (1.0 1.0))
+    (const-string GAMMA)
+    (move-result-pseudo-object v1)
+    (invoke-direct (v0 v1 v4) "LTest;.<init>:(Ljava/lang/String;I)V")
+    (.src_block "LTest;.<clinit>:()V" 6 (1.0 1.0))
+    (sput-object v0 "LTest;.GAMMA:LTest;")
+    (move-object v18 v0)
+    (const v0 3)
+    (new-array v0 "[LTest;")
+    (move-result-pseudo-object v0)
+    (move-object v1 v16)
+    (aput-object v1 v0 v2)
+    (move-object v1 v17)
+    (aput-object v1 v0 v3)
+    (move-object v1 v18)
+    (aput-object v1 v0 v4)
+    (sput-object v0 "LTest;.$VALUES:[LTest;")
+    (return-void)
+   )
+    )";
+
+  auto code = assembler::ircode_from_string(src);
+  auto res = run(code.get());
+
+  ASSERT_EQ(res, MethodResult::kChanged);
+
+  cfg::ScopedCFG cfg(code.get());
+  auto* block = cfg->entry_block();
+
+  bool found_new_array = false;
+  bool sb_after_new_array = false;
+  int invoke_direct_count = 0;
+  int sb_after_invoke_direct_count = 0;
+  bool last_was_new_array_mrp = false;
+  bool last_was_invoke_direct = false;
+
+  for (auto& mie : *block) {
+    if (mie.type == MFLOW_OPCODE) {
+      if (mie.insn->opcode() == OPCODE_NEW_ARRAY) {
+        found_new_array = true;
+      } else if (found_new_array &&
+                 opcode::is_a_move_result_pseudo(mie.insn->opcode()) &&
+                 !last_was_new_array_mrp) {
+        last_was_new_array_mrp = true;
+        continue;
+      } else if (opcode::is_an_invoke(mie.insn->opcode()) &&
+                 method::is_constructor(mie.insn->get_method())) {
+        invoke_direct_count++;
+        last_was_invoke_direct = true;
+        continue;
+      }
+      last_was_new_array_mrp = false;
+      last_was_invoke_direct = false;
+    } else if (mie.type == MFLOW_SOURCE_BLOCK) {
+      if (last_was_new_array_mrp) {
+        sb_after_new_array = true;
+      }
+      if (last_was_invoke_direct) {
+        sb_after_invoke_direct_count++;
+      }
+      last_was_new_array_mrp = false;
+      last_was_invoke_direct = false;
+    }
+  }
+
+  EXPECT_TRUE(found_new_array);
+  EXPECT_TRUE(sb_after_new_array)
+      << "Expected source block after NEW_ARRAY's MOVE_RESULT_PSEUDO";
+  EXPECT_EQ(invoke_direct_count, 3);
+  EXPECT_EQ(sb_after_invoke_direct_count, 3)
+      << "Expected source block after each INVOKE_DIRECT";
 }
 
 } // namespace rearrange_enum_clinit
