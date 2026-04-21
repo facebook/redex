@@ -11,6 +11,7 @@
 
 #include "AnnoUtils.h"
 #include "ClassUtil.h"
+#include "DexUtil.h"
 #include "KotlinNullCheckMethods.h"
 #include "PassManager.h"
 #include "Resolver.h"

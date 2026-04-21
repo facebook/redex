@@ -7,6 +7,7 @@
 
 #include "DedupBlocksPass.h"
 
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"

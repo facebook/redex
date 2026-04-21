@@ -30,6 +30,7 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexStore.h"
+#include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "IRCode.h"
 #include "Macros.h"

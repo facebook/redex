@@ -11,6 +11,7 @@
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "FrameworkApi.h"
 #include "PassManager.h"
 #include "Show.h"

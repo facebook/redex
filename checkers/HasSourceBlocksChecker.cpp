@@ -9,6 +9,7 @@
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
 

@@ -7,6 +7,7 @@
 
 #include <string.h>
 
+#include "DexUtil.h"
 #include "TypeSystem.h"
 #include "UnmarkProguardKeep.h"
 #include "Walkers.h"

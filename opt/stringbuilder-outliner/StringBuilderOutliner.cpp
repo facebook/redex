@@ -13,6 +13,7 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"

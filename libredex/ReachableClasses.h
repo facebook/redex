@@ -11,7 +11,6 @@
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "JsonWrapper.h"
 
 struct ReachableClassesConfig {

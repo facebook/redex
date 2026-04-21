@@ -6,6 +6,7 @@
  */
 
 #include "PureMethods.h"
+#include "DexUtil.h"
 #include "LocalPointersAnalysis.h"
 #include "PassManager.h"
 #include "Purity.h"

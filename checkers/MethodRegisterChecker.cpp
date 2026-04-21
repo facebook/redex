@@ -10,6 +10,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexOpcode.h"
+#include "DexUtil.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "Interference.h"

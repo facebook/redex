@@ -9,6 +9,7 @@
 
 #include "CopyPropagation.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "LocalDce.h"
 #include "PassManager.h"
 #include "Purity.h"

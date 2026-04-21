@@ -16,6 +16,7 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"

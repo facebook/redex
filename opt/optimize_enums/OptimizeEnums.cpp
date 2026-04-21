@@ -17,6 +17,7 @@
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "EnumAnalyzeGeneratedMethods.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumTransformer.h"

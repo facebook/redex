@@ -11,6 +11,7 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
 #include "Show.h"

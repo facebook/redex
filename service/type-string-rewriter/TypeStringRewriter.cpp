@@ -8,6 +8,7 @@
 #include "TypeStringRewriter.h"
 
 #include "ControlFlow.h"
+#include "DexUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 

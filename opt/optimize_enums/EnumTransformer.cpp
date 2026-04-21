@@ -14,6 +14,7 @@
 #include "DeterministicContainers.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "EnumUpcastAnalysis.h"
 #include "Mutators.h"
 #include "OptData.h"

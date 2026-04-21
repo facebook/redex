@@ -11,6 +11,7 @@
 #include "ControlFlow.h"
 #include "DexLimits.h"
 #include "DexStore.h"
+#include "DexUtil.h"
 #include "InitClassesWithSideEffects.h"
 #include "MethodClosures.h"
 #include "Show.h"

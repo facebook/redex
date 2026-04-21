@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "ConfigFiles.h"
+#include "DexUtil.h"
 #include "InstructionLowering.h"
 #include "ScopedCFG.h"
 #include "Show.h"

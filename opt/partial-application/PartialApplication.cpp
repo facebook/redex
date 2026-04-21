@@ -89,6 +89,7 @@
 #include "ConfigFiles.h"
 #include "Creators.h"
 #include "DeterministicContainers.h"
+#include "DexUtil.h"
 #include "LiveRange.h"
 #include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"

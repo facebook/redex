@@ -13,6 +13,7 @@
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
 #include "Show.h"

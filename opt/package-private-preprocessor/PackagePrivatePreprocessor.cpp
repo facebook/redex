@@ -55,6 +55,7 @@
 #include <cinttypes>
 
 #include "DeterministicContainers.h"
+#include "DexUtil.h"
 #include "IROpcode.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"

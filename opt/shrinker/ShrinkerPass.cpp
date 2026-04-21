@@ -9,6 +9,7 @@
 
 #include "ConfigFiles.h"
 #include "ConstantPropagationAnalysis.h"
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "ScopedMetrics.h"
 #include "Shrinker.h"

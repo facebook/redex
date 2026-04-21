@@ -8,6 +8,7 @@
 #include "InsertDebugInfoPass.h"
 
 #include "ControlFlow.h"
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Walkers.h"
