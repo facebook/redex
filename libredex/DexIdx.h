@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "Debug.h"
 #include "DexDefs.h"
