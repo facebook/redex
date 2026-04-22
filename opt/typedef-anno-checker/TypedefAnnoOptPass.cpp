@@ -12,7 +12,6 @@
 #include "DexUtil.h"
 #include "MethodReference.h"
 #include "PassManager.h"
-#include "Show.h"
 #include "StringTreeSet.h"
 #include "Walkers.h"
 

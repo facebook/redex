@@ -21,7 +21,6 @@
 #include "Trace.h"
 #include "TypeReference.h"
 #include "Walkers.h"
-#include "WorkQueue.h"
 
 namespace {
 using ClassMap = UnorderedMap<DexClass*, DexClass*>;

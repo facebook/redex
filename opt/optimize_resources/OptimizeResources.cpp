@@ -12,12 +12,10 @@
 #include <utility>
 
 #include "ConfigFiles.h"
-#include "GlobalConfig.h"
 #include "IOUtil.h"
 #include "PassManager.h"
 #include "RClass.h"
 #include "ReachableResources.h"
-#include "Show.h"
 
 namespace opt_res {
 ReachableResourcesPlugin::ReachableResourcesPlugin(std::string name)

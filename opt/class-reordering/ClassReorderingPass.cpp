@@ -10,7 +10,6 @@
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "PassManager.h"
-#include "Show.h"
 #include "Timer.h"
 
 namespace {

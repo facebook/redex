@@ -18,7 +18,6 @@
 #include "DexStructure.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "MethodProfiles.h"
 #include "PassManager.h"
 #include "RedexContext.h"
 #include "Show.h"

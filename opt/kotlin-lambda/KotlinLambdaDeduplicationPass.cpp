@@ -12,10 +12,8 @@
 #include <ranges>
 #include <unordered_set>
 
-#include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "DexMemberRefs.h"
-#include "DexStore.h"
 #include "DexUtil.h"
 #include "KotlinLambdaAnalyzer.h"
 #include "MethodUtil.h"

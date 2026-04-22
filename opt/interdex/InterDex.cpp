@@ -18,7 +18,6 @@
 #include "DexLoader.h"
 #include "IOUtil.h"
 #include "IRCode.h"
-#include "IRInstruction.h"
 #include "InterDexPassPlugin.h"
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"

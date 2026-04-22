@@ -30,7 +30,6 @@
 #include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
-#include "SwitchEquivFinder.h"
 #include "Trace.h"
 #include "Walkers.h"
 

@@ -10,11 +10,8 @@
 #include <fstream>
 #include <functional>
 
-#include "CFGMutation.h"
-#include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
-#include "InitClassPruner.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
 #include "MethodOverrideGraph.h"

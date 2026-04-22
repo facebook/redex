@@ -7,11 +7,9 @@
 
 #include "MaterializeNullChecksPass.h"
 
-#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "Show.h"
 #include "Walkers.h"
 
 void MaterializeNullChecksPass::run_pass(DexStoresVector& stores,

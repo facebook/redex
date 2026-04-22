@@ -16,8 +16,6 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "IRInstruction.h"
-#include "IRList.h"
 #include "IROpcode.h"
 #include "LiveRange.h"
 #include "PassManager.h"

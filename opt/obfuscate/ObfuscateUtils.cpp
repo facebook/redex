@@ -8,7 +8,6 @@
 #include "ObfuscateUtils.h"
 #include "DexClass.h"
 #include "Trace.h"
-#include "Walkers.h"
 #include <algorithm>
 
 namespace obfuscate_utils {

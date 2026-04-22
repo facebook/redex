@@ -7,7 +7,6 @@
 
 #include "IntrinsifyNullChecksPass.h"
 
-#include "ControlFlow.h"
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
