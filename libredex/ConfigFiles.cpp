@@ -23,6 +23,7 @@
 #include "GlobalConfig.h"
 #include "MethodProfiles.h"
 #include "ProguardMap.h"
+#include "Trace.h"
 
 using namespace std::string_literals;
 using TypeSet = std::set<const DexType*, dextypes_comparator>;

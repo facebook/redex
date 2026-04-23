@@ -56,6 +56,7 @@
 #include "SourceBlocks.h"
 #include "ThreadPool.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {
