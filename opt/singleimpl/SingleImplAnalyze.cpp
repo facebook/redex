@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "ClassUtil.h"
+#include "ConfigFiles.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexOutput.h"

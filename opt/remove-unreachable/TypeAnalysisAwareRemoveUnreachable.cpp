@@ -12,6 +12,7 @@
 #include "Reachability.h"
 #include "Show.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 

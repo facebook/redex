@@ -8,6 +8,7 @@
 #include "UnreachableLoweringPass.h"
 
 #include "CFGMutation.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "Creators.h"
 #include "Lazy.h"

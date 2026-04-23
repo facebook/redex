@@ -6,6 +6,7 @@
  */
 
 #include "WrappedPrimitivesPass.h"
+#include "ControlFlow.h"
 
 #include "DexUtil.h"
 #include "Lazy.h"

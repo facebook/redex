@@ -6,9 +6,11 @@
  */
 
 #include "TypeAnalysisCallGraphGenerationPass.h"
+#include "ConfigFiles.h"
 
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
+#include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"

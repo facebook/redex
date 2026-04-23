@@ -16,6 +16,7 @@
 
 #include "BlockInstrument.h"
 #include "CFGMutation.h"
+#include "ControlFlow.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -33,6 +34,7 @@
 #include "Shrinker.h"
 #include "ShrinkerConfig.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 

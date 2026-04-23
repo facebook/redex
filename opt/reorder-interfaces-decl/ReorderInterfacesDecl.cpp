@@ -6,10 +6,12 @@
  */
 
 #include "ReorderInterfacesDecl.h"
+#include "ConfigFiles.h"
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "Walkers.h"
 

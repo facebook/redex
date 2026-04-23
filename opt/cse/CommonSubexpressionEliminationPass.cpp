@@ -11,9 +11,11 @@
 #include "ConfigFiles.h"
 #include "CopyPropagation.h"
 #include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "LocalDce.h"
 #include "Purity.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace cse_impl;

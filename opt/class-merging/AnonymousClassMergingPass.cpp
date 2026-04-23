@@ -17,6 +17,7 @@
 #include "MergingStrategies.h"
 #include "ModelSpecGenerator.h"
 #include "PassManager.h"
+#include "Trace.h"
 
 namespace class_merging {
 

@@ -55,7 +55,9 @@
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

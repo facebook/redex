@@ -21,6 +21,7 @@
 #include "PassManager.h"
 #include "Purity.h"
 #include "ScopedMetrics.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WrappedPrimitives.h"

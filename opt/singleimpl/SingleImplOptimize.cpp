@@ -22,6 +22,7 @@
 #include "IRList.h"
 #include "LocalDce.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
 #include "Trace.h"

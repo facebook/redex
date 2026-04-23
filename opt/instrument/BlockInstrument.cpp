@@ -22,6 +22,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
+#include "InitClassesWithSideEffects.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
 #include "LoopInfo.h"
@@ -29,6 +30,7 @@
 #include "ScopedMetrics.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 

@@ -6,10 +6,14 @@
  */
 
 #include "BuilderTransform.h"
+#include "ConfigFiles.h"
 
 #include <utility>
 
 #include "DexClass.h"
+#include "InitClassesWithSideEffects.h"
+#include "Show.h"
+#include "Trace.h"
 
 namespace builder_pattern {
 

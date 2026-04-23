@@ -6,6 +6,7 @@
  */
 
 #include "IntrinsifyNullChecksPass.h"
+#include "ConfigFiles.h"
 
 #include "Creators.h"
 #include "DexAsm.h"

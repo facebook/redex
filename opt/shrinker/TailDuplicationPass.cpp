@@ -14,10 +14,12 @@
 #include "DedupBlocks.h"
 #include "DexAssessments.h"
 #include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
 #include "ScopedMetrics.h"
 #include "Shrinker.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

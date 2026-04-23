@@ -28,6 +28,7 @@
 #include "MethodInliner.h"
 #include "MethodProfiles.h"
 #include "PGIForest.h"
+#include "PassManager.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"

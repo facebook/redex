@@ -19,6 +19,7 @@
 #include "InitDeps.h"
 #include "LocalDce.h"
 #include "PassManager.h"
+#include "Show.h"
 #include "Shrinker.h"
 #include "Timer.h"
 #include "Trace.h"

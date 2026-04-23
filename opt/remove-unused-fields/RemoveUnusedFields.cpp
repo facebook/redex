@@ -12,6 +12,7 @@
 
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "FieldOpTracker.h"

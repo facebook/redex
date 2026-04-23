@@ -8,11 +8,13 @@
 #include "KotlinInstanceRewriter.h"
 #include "AtomicStatCounter.h"
 #include "CFGMutation.h"
+#include "ControlFlow.h"
 #include "KotlinLambdaAnalyzer.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "SourceBlocksUtils.h"
+#include "Trace.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 

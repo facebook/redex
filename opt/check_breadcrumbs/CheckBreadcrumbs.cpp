@@ -15,6 +15,7 @@
 #include <boost/filesystem/operations.hpp>
 
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
 #include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexClass.h"

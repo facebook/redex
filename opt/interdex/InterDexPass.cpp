@@ -12,6 +12,7 @@
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "InterDexPassMetrics.h"
 #include "JsonWrapper.h"
 #include "PassManager.h"

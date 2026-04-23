@@ -6,6 +6,7 @@
  */
 
 #include "RearrangeEnumClinit.h"
+#include "ControlFlow.h"
 
 #include <atomic>
 #include <optional>

@@ -6,9 +6,11 @@
  */
 
 #include "MakePublicPass.h"
+#include "ConfigFiles.h"
 
 #include "DexAccess.h"
 #include "DexUtil.h"
+#include "PassManager.h"
 
 void MakePublicPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& /*conf*/,

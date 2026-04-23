@@ -12,8 +12,11 @@
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "IRCode.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
 #include "RemoveBuildersHelper.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

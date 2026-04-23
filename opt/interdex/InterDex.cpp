@@ -6,6 +6,7 @@
  */
 
 #include "InterDex.h"
+#include "ControlFlow.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -22,6 +23,7 @@
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 #include "file-utils.h"

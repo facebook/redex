@@ -6,6 +6,7 @@
  */
 
 #include "MaterializeNullChecksPass.h"
+#include "ConfigFiles.h"
 
 #include "DexClass.h"
 #include "DexUtil.h"

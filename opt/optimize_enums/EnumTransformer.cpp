@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "CFGMutation.h"
+#include "ControlFlow.h"
 #include "Creators.h"
 #include "DeterministicContainers.h"
 #include "DexAsm.h"
@@ -22,6 +23,7 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "TypeReference.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"

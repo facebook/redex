@@ -30,6 +30,7 @@
 #include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 

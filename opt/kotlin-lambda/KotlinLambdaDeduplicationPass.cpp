@@ -13,6 +13,7 @@
 #include <unordered_set>
 
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
 #include "DexMemberRefs.h"
 #include "DexUtil.h"
 #include "KotlinLambdaAnalyzer.h"

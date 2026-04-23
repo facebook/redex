@@ -9,12 +9,14 @@
 
 #include "ConfigFiles.h"
 #include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "Shrinker.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

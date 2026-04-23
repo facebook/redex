@@ -7,6 +7,7 @@
 
 #include "PrintKotlinStats.h"
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "KotlinLambdaAnalyzer.h"
@@ -14,6 +15,7 @@
 #include "MethodProfiles.h"
 #include "MethodUtil.h"
 #include "PassManager.h"
+#include "Trace.h"
 #include "UniqueMethodTracker.h"
 #include "Walkers.h"
 

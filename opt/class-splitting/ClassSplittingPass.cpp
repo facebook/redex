@@ -27,10 +27,13 @@
 #include <vector>
 
 #include "ClassSplitting.h"
+#include "ConfigFiles.h"
 #include "InterDexPass.h"
 #include "MethodProfiles.h"
+#include "PassManager.h"
 #include "PluginRegistry.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace interdex;

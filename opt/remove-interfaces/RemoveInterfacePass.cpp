@@ -8,6 +8,7 @@
 #include "RemoveInterfacePass.h"
 
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
 #include "Creators.h"
 #include "DexStoreUtil.h"
 #include "DexUtil.h"

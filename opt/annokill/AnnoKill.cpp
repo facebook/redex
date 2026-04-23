@@ -17,6 +17,7 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 constexpr const char* METRIC_ANNO_KILLED = "num_anno_killed";

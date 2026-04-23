@@ -6,6 +6,8 @@
  */
 
 #include "MethodInlinePass.h"
+#include "ConfigFiles.h"
+#include "PassManager.h"
 
 void MethodInlinePass::bind_config() {
   size_t cost_invoke;

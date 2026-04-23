@@ -8,6 +8,7 @@
 #include "WriteBarrierLoweringPass.h"
 
 #include "CFGMutation.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "Creators.h"
 #include "DexAsm.h"

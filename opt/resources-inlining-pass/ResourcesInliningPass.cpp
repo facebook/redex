@@ -11,6 +11,7 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "PassManager.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "androidfw/ResourceTypes.h"

@@ -22,6 +22,7 @@
 #include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 #include "locator.h"
 

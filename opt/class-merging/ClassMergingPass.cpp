@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "InterDexGrouping.h"
 #include "MergingStrategies.h"
+#include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeSystem.h"

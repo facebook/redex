@@ -16,6 +16,7 @@
 #include "ConfigFiles.h"
 #include "IOUtil.h"
 #include "OptimizeResources.h"
+#include "PassManager.h"
 #include "RClass.h"
 #include "ReadMaybeMapped.h"
 #include "RedexResources.h"

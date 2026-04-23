@@ -6,8 +6,10 @@
  */
 
 #include "BridgeSynthInlinePass.h"
+#include "ConfigFiles.h"
 
 #include "MethodInliner.h"
+#include "PassManager.h"
 
 void BridgeSynthInlinePass::run_pass(DexStoresVector& stores,
                                      ConfigFiles& conf,

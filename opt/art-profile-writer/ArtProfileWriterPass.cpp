@@ -31,6 +31,7 @@
 #include "PassManager.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 

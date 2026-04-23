@@ -9,11 +9,13 @@
 
 #include "ClassMerging.h"
 #include "ClassUtil.h"
+#include "ControlFlow.h"
 #include "LiveRange.h"
 #include "Model.h"
 #include "PassManager.h"
 #include "ReflectionAnalysis.h"
 #include "Show.h"
+#include "Trace.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 

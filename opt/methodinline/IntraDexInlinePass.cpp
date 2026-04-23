@@ -6,8 +6,10 @@
  */
 
 #include "IntraDexInlinePass.h"
+#include "ConfigFiles.h"
 
 #include "MethodInliner.h"
+#include "PassManager.h"
 
 void IntraDexInlinePass::bind_config() {
   std::string hot_cold_inlining_behavior_str;

@@ -18,6 +18,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "InitClassesWithSideEffects.h"
 #include "LiveRange.h"
 #include "PassManager.h"
 #include "Trace.h"
