@@ -1436,7 +1436,7 @@ size_t count_throw_delineated_no_sbs(
       had_sb = false;
     }
   }
-  if (!had_sb) {
+  if (!had_sb && !b->empty()) {
     num_violations++;
   }
   return num_violations;
@@ -3088,8 +3088,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
         void on_start_block(std::ostream&, cfg::Block*) { had_sb = false; }
 
-        void on_end_block(std::ostream& os, cfg::Block* /*b*/) {
-          if (!had_sb) {
+        void on_end_block(std::ostream& os, cfg::Block* b) {
+          if (!had_sb && !b->empty()) {
             if (violating_blocks != nullptr) {
               auto& map = (*violating_blocks)[nullptr];
               map[Violation::kUncoveredThrowDelineatedBlocks].emplace_back(
