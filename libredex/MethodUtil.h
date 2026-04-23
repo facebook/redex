@@ -147,6 +147,8 @@ DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull();
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue();
 
+DexMethod* kotlin_jvm_internal_Intrinsics_areEqual();
+
 DexMethod* redex_internal_checkObjectNotNull();
 
 DexMethod* java_lang_invoke_MethodHandle_invoke();

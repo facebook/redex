@@ -1209,11 +1209,9 @@ StringAnalyzerState StringAnalyzerState::get() {
   std::lock_guard<std::mutex> lock(s_string_analyzer_state_mtx);
   if (s_string_analyzer_state == boost::none) {
     UnorderedSet<DexMethod*> methods;
-    auto* kotlin_are_equal = DexMethod::get_method(
-        "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
-        "lang/Object;)Z");
-    if (kotlin_are_equal != nullptr && kotlin_are_equal->as_def() != nullptr) {
-      methods.emplace(kotlin_are_equal->as_def());
+    auto* kotlin_are_equal = method::kotlin_jvm_internal_Intrinsics_areEqual();
+    if (kotlin_are_equal != nullptr) {
+      methods.emplace(kotlin_are_equal);
     }
     s_string_analyzer_state = StringAnalyzerState(methods);
     // For tests.

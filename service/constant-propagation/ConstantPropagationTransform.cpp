@@ -101,20 +101,17 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
 // Not a perfect check, but should be sufficient to catch most semantic
 // changes from upstream.
 std::optional<std::string> verify_areequal_semantics() {
-  auto* areequal_ref = DexMethod::get_method(
-      "Lkotlin/jvm/internal/Intrinsics;.areEqual:"
-      "(Ljava/lang/Object;Ljava/lang/Object;)Z");
+  auto* areequal_ref = method::kotlin_jvm_internal_Intrinsics_areEqual();
   if (areequal_ref == nullptr) {
     return "Intrinsics.areEqual method not found";
   }
-  auto* method = resolve_method(areequal_ref, MethodSearch::Static);
-  if (method == nullptr || method->get_code() == nullptr) {
+  if (areequal_ref->get_code() == nullptr) {
     return "Intrinsics.areEqual has no code";
   }
   DexMethodRef* object_equals = method::java_lang_Object_equals();
   always_assert(object_equals != nullptr);
 
-  const auto insns = InstructionIterable(method->get_code());
+  const auto insns = InstructionIterable(areequal_ref->get_code());
 
   // Must have exactly two nullness checks and no other branches.
   const auto null_checks =
@@ -224,9 +221,7 @@ void Transform::swap_kotlin_areequal(
   if (!constant_propagation_transform_internal::enable_replacing_areequal) {
     return;
   }
-  auto* kotlin_areequal = DexMethod::get_method(
-      "Lkotlin/jvm/internal/Intrinsics;.areEqual:"
-      "(Ljava/lang/Object;Ljava/lang/Object;)Z");
+  auto* kotlin_areequal = method::kotlin_jvm_internal_Intrinsics_areEqual();
   if (kotlin_areequal == nullptr) {
     return;
   }
@@ -290,9 +285,7 @@ bool Transform::replace_kotlin_areequal(
   if (insn->opcode() != OPCODE_INVOKE_STATIC) {
     return false;
   }
-  auto* kotlin_areequal = DexMethod::get_method(
-      "Lkotlin/jvm/internal/Intrinsics;.areEqual:"
-      "(Ljava/lang/Object;Ljava/lang/Object;)Z");
+  auto* kotlin_areequal = method::kotlin_jvm_internal_Intrinsics_areEqual();
   if (kotlin_areequal == nullptr || insn->get_method() != kotlin_areequal) {
     return false;
   }
