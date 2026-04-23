@@ -329,11 +329,8 @@ bool Transform::replace_kotlin_areequal(
   if (!is_known_non_null(env.get(insn->src(0)))) {
     return false;
   }
-  auto* object_equals =
-      DexMethod::get_method("Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z");
-  if (object_equals == nullptr) {
-    return false;
-  }
+  auto* object_equals = method::java_lang_Object_equals();
+  always_assert(object_equals != nullptr);
   insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
   insn->set_method(object_equals);
   ++m_stats.kotlin_areequal_replaced;
