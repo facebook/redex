@@ -6,12 +6,12 @@
  */
 
 /*
- * This pass identifies tracable object allocations that don't escape, and then
+ * This pass identifies traceable object allocations that don't escape, and then
  * attempts to inline all code interacting with the local object, turning all
  * instance fields into registers. The changes are only applied when the
  * estimated savings are not negative. This helps reduce...
  * - object allocations at runtime, and
- * - code size by eliminating a many of the involved classes, fields and
+ * - code size by eliminating many of the involved classes, fields and
  *   methods.
  *
  * At the core is an interprocedural escape analysis with method-level summaries
@@ -30,9 +30,9 @@
  *   escape
  * - "inline anchors", which are particular instructions (in particular methods)
  *   which produce a new unescaped object, either by directly allocating it or
- *   invoking a method that directly or indirect allocates and returns an object
- *   that doesn't otherwise escape, and then possibly use that object in ways
- *   where it doesn't escape
+ *   invoking a method that directly or indirectly allocates and returns an
+ * object that doesn't otherwise escape, and then possibly use that object in
+ * ways where it doesn't escape
  * - "root methods", which are all the methods which contain "inline anchors" of
  *   types whose allocation instructions are all ultimately inlinably anchored.
  * - "reduced methods", which are root methods where all inlinable anchors got
@@ -274,7 +274,7 @@ class InlinedEstimator {
  public:
   // Sentinel for the case where we encounter an unconditionally throwing cast.
   // In this case, we'll abort and not consider this for inlining, as we don't
-  // want to bother modeling this rare care.
+  // want to bother modeling this rare case.
   static constexpr const int64_t THROWING_CHECK_CAST =
       std::numeric_limits<int64_t>::max();
 
@@ -522,7 +522,7 @@ UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
           return true;
         }
         if (delta > config.incomplete_estimated_delta_threshold) {
-          // Skipping, as it's highly unlikely to results in an overall size
+          // Skipping, as it's highly unlikely to result in an overall size
           // win, while taking a very long time to compute exactly.
           num_incomplete_estimated_delta_threshold_exceeded++;
           keep(inlinable_methods);
@@ -1230,7 +1230,7 @@ class RootMethodReducer {
       auto du_chains = get_augmented_du_chains_for_inlinable_new_instances(
           &throwing_check_cast);
       if (throwing_check_cast) {
-        // Hm, unlike that the program would unconditionally crash. It's
+        // Hm, unlikely that the program would unconditionally crash. It's
         // probably in dead code. We'll try to shrink (unless we are in a state
         // where rewritten invoke-supers are present).
         if (find_rewritten_invoke_supers() == nullptr) {
@@ -1553,7 +1553,7 @@ std::vector<const DexType*> order_inlinable_types(
 }
 
 // Reduce all root methods to a set of variants. The reduced methods are ordered
-// by how many types where inlined, with the largest number of inlined types
+// by how many types were inlined, with the largest number of inlined types
 // going first.
 UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
     const ObjectEscapeConfig& config,
@@ -1668,8 +1668,8 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
     }
   }
 
-  // All types which could not be accomodated by any reduced method variants are
-  // marked as "irreducible", which is later used when doing a global cost
+  // All types which could not be accommodated by any reduced method variants
+  // are marked as "irreducible", which is later used when doing a global cost
   // analysis.
   static const InlinableTypes no_types;
   {
