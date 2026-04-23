@@ -21,6 +21,8 @@ class ScopedMetrics;
 
 namespace constant_propagation_transform_internal {
 extern bool enable_object_domain_null_check_elim;
+// TODO(T263034329): Remove this.
+extern bool enable_replacing_areequal;
 } // namespace constant_propagation_transform_internal
 
 namespace constant_propagation {
@@ -59,6 +61,7 @@ class Transform final {
     size_t null_checks_method_calls{0};
     size_t unreachable_instructions_removed{0};
     size_t redundant_puts_removed{0};
+    size_t kotlin_areequal_swapped{0};
 
     Stats& operator+=(const Stats& that) {
       branches_removed += that.branches_removed;
@@ -70,6 +73,7 @@ class Transform final {
       null_checks_method_calls += that.null_checks_method_calls;
       unreachable_instructions_removed += that.unreachable_instructions_removed;
       redundant_puts_removed += that.redundant_puts_removed;
+      kotlin_areequal_swapped += that.kotlin_areequal_swapped;
       return *this;
     }
 
@@ -141,6 +145,11 @@ class Transform final {
   bool replace_with_throw(const ConstantEnvironment&,
                           const cfg::InstructionIterator& cfg_it,
                           npe::NullPointerExceptionCreator* npe_creator);
+  void swap_kotlin_areequal(const intraprocedural::FixpointIterator&,
+                            cfg::ControlFlowGraph&,
+                            bool is_static,
+                            DexType* declaring_type,
+                            DexProto* proto);
 
   void remove_dead_switch(const intraprocedural::FixpointIterator& intra_cp,
                           const ConstantEnvironment&,

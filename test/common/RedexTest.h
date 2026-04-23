@@ -60,6 +60,8 @@ extern bool enable_low6bits;
 
 namespace constant_propagation_transform_internal {
 extern bool enable_object_domain_null_check_elim;
+// TODO(T263034329): Remove this.
+extern bool enable_replacing_areequal;
 } // namespace constant_propagation_transform_internal
 
 namespace constant_propagation {
@@ -75,6 +77,8 @@ struct RedexTest : public testing::Test {
     signed_constant_domain_internal::enable_low6bits = true;
     constant_propagation_transform_internal::
         enable_object_domain_null_check_elim = true;
+    // TODO(T263034329): Remove this.
+    constant_propagation_transform_internal::enable_replacing_areequal = true;
     // TODO(T257927964): Remove this.
     constant_propagation::known_non_null_returns_enable = true;
   }
