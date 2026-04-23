@@ -9,9 +9,12 @@
 
 #include <unordered_set>
 
+#include "IRCode.h"
+#include "Match.h"
 #include "ReachableClasses.h"
 #include "ReachingDefinitions.h"
 #include "RedexContext.h"
+#include "Resolver.h"
 #include "ScopedMetrics.h"
 #include "SignedConstantDomain.h"
 #include "SourceBlocks.h"
@@ -91,6 +94,65 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
   m_added_param_values.insert(m_added_param_values.end(), replacement.begin(),
                               replacement.end());
   ++m_stats.added_param_const;
+}
+
+// Verify that Intrinsics.areEqual has the expected semantics.
+// Returns std::nullopt on success, or an error message on failure.
+// Not a perfect check, but should be sufficient to catch most semantic
+// changes from upstream.
+std::optional<std::string> verify_areequal_semantics() {
+  auto* areequal_ref = DexMethod::get_method(
+      "Lkotlin/jvm/internal/Intrinsics;.areEqual:"
+      "(Ljava/lang/Object;Ljava/lang/Object;)Z");
+  if (areequal_ref == nullptr) {
+    return "Intrinsics.areEqual method not found";
+  }
+  auto* method = resolve_method(areequal_ref, MethodSearch::Static);
+  if (method == nullptr || method->get_code() == nullptr) {
+    return "Intrinsics.areEqual has no code";
+  }
+  DexMethodRef* object_equals = method::java_lang_Object_equals();
+  always_assert(object_equals != nullptr);
+
+  const auto insns = InstructionIterable(method->get_code());
+
+  // Must have exactly two nullness checks and no other branches.
+  const auto null_checks =
+      m::find_insn_match(insns, m::if_eqz_() || m::if_nez_());
+  if (null_checks.size() != 2) {
+    return "Intrinsics.areEqual has " + std::to_string(null_checks.size()) +
+           " null checks, expected 2";
+  }
+  const auto all_branches =
+      m::find_insn_match(insns, m::a_conditional_branch());
+  if (all_branches.size() != 2) {
+    return "Intrinsics.areEqual has " + std::to_string(all_branches.size()) +
+           " branches, expected 2";
+  }
+
+  // Must call Object.equals exactly once, with no other invokes.
+  const auto all_invokes =
+      m::find_insn_match(insns, m::invoke_virtual_() || m::invoke_static_() ||
+                                    m::invoke_direct_() || m::invoke_super_() ||
+                                    m::invoke_interface_());
+  const auto non_equals = m::find_insn_match(
+      insns,
+      (m::invoke_virtual_() || m::invoke_static_() || m::invoke_direct_() ||
+       m::invoke_super_() || m::invoke_interface_()) &&
+          !m::invoke_virtual_(m::has_method(m::equals(object_equals))));
+  const auto equals_calls = m::find_insn_match(
+      insns, m::invoke_virtual_(m::has_method(m::equals(object_equals))));
+  if (equals_calls.size() != 1) {
+    return "Intrinsics.areEqual has " + std::to_string(equals_calls.size()) +
+           " Object.equals calls, expected 1; first invoke: " +
+           (non_equals.empty() ? "(none)" : SHOW(non_equals.front()));
+  }
+  if (all_invokes.size() != 1) {
+    return "Intrinsics.areEqual has " + std::to_string(all_invokes.size()) +
+           " invokes, expected 1; first unexpected: " +
+           SHOW(non_equals.front());
+  }
+  return std::nullopt;
 }
 
 namespace {
