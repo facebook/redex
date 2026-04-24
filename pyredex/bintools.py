@@ -9,6 +9,7 @@
 
 
 import enum
+import json
 import logging
 import os
 import platform
@@ -17,6 +18,8 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
+import time
 import typing
 from functools import reduce
 
@@ -25,6 +28,152 @@ from pyredex.logger import get_store_logs_temp_file
 
 IS_WINDOWS: bool = os.name == "nt"
 LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+# Diagnostic instrumentation gated on REDEX_STDERR_DEBUG. To be removed.
+
+_SIGNAL_LITE_FD: typing.Optional[int] = None
+_SIGNAL_LITE_FD_PATH: typing.Optional[str] = None
+
+
+def _collect_fd_metadata(info: typing.Dict[str, typing.Any], fd: int) -> None:
+    """Populate *info* with fstat / fdlink / fdinfo for *fd*."""
+    try:
+        st = os.fstat(fd)
+        info["dev"] = st.st_dev
+        info["ino"] = st.st_ino
+        info["size"] = st.st_size
+    except OSError as e:
+        info["fstat_err"] = repr(e)
+    try:
+        info["fdlink"] = os.readlink(f"/proc/self/fd/{fd}")
+    except OSError as e:
+        info["fdlink_err"] = repr(e)
+    try:
+        with open(f"/proc/self/fdinfo/{fd}") as fdinfo_f:
+            info["fdinfo"] = fdinfo_f.read().strip().replace("\n", "; ")
+    except OSError as e:
+        info["fdinfo_err"] = repr(e)
+
+
+def _stream_info(stream_label: str, s: object) -> typing.Dict[str, typing.Any]:
+    info: typing.Dict[str, typing.Any] = {"stream": stream_label, "id": id(s)}
+    info["type"] = type(s).__name__ if s is not None else None
+    if s is None:
+        return info
+    fd: typing.Optional[int] = None
+    try:
+        fd = s.fileno()  # pyre-ignore[16]: duck-typed stream
+    except (OSError, AttributeError, ValueError):
+        pass
+    info["fd"] = fd
+    if fd is not None and fd >= 0:
+        _collect_fd_metadata(info, fd)
+    info["encoding"] = getattr(s, "encoding", None)
+    info["errors"] = getattr(s, "errors", None)
+    info["line_buffering"] = getattr(s, "line_buffering", None)
+    info["write_through"] = getattr(s, "write_through", None)
+    info["closed"] = getattr(s, "closed", None)
+    try:
+        info["isatty"] = s.isatty()  # pyre-ignore[16]: duck-typed stream
+    except (OSError, AttributeError, ValueError):
+        info["isatty"] = None
+    buf = getattr(s, "buffer", None)
+    info["buffer_id"] = id(buf) if buf is not None else None
+    raw = getattr(buf, "raw", None) if buf is not None else None
+    info["raw_id"] = id(raw) if raw is not None else None
+    return info
+
+
+def snapshot_streams(
+    label: str,
+    debug_stderr: typing.Optional[str] = None,
+    extra: typing.Optional[typing.Dict[str, typing.Any]] = None,
+) -> None:
+    """Append one snapshot record to ${REDEX_STDERR_DEBUG}.streams."""
+    if debug_stderr is None:
+        debug_stderr = os.environ.get("REDEX_STDERR_DEBUG")
+    if not debug_stderr:
+        return
+    streams = [
+        ("sys.stderr", sys.stderr),
+        ("sys.__stderr__", sys.__stderr__),
+        ("sys.stdout", sys.stdout),
+    ]
+    seen_handler_ids: typing.Set[int] = set()
+    for logger_name in ("redex", ""):
+        for handler in logging.getLogger(logger_name).handlers:
+            if id(handler) in seen_handler_ids:
+                continue
+            seen_handler_ids.add(id(handler))
+            stream = getattr(handler, "stream", None)
+            streams.append(
+                (
+                    f"logger[{logger_name or 'root'}].{type(handler).__name__}",
+                    stream,
+                )
+            )
+    record: typing.Dict[str, typing.Any] = {
+        "label": label,
+        "pid": os.getpid(),
+        "ppid": os.getppid(),
+        "tid": threading.get_ident(),
+        "monotonic_ns": time.monotonic_ns(),
+        "streams": [_stream_info(lbl, s) for lbl, s in streams],
+    }
+    if extra:
+        record["extra"] = extra
+    payload = json.dumps(record, default=repr) + "\n"
+    try:
+        with open(debug_stderr + ".streams", "a") as f:
+            f.write(payload)
+    except OSError:
+        pass
+
+
+def _get_signal_lite_fd(debug_stderr: str) -> typing.Optional[int]:
+    """Open the .streams file once and cache the fd; signal path uses os.write only."""
+    global _SIGNAL_LITE_FD, _SIGNAL_LITE_FD_PATH
+    if _SIGNAL_LITE_FD is not None and _SIGNAL_LITE_FD_PATH == debug_stderr:
+        return _SIGNAL_LITE_FD
+    try:
+        _SIGNAL_LITE_FD = os.open(
+            debug_stderr + ".streams",
+            os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+            0o644,
+        )
+        _SIGNAL_LITE_FD_PATH = debug_stderr
+    except OSError:
+        _SIGNAL_LITE_FD = None
+    return _SIGNAL_LITE_FD
+
+
+def snapshot_signal_lite(
+    label: str,
+    state: typing.Optional[str] = None,
+    debug_stderr: typing.Optional[str] = None,
+) -> None:
+    """Async-signal-safe variant for SIGINT/SIGALRM paths."""
+    if debug_stderr is None:
+        debug_stderr = os.environ.get("REDEX_STDERR_DEBUG")
+    if not debug_stderr:
+        return
+    fd = _get_signal_lite_fd(debug_stderr)
+    if fd is None:
+        return
+    record = {
+        "label": label,
+        "state": state,
+        "pid": os.getpid(),
+        "tid": threading.get_ident(),
+        "monotonic_ns": time.monotonic_ns(),
+        "lite": True,
+    }
+    payload = (json.dumps(record) + "\n").encode()
+    try:
+        os.write(fd, payload)
+    except OSError:
+        pass
 
 
 _BACKTRACE_PATTERN: typing.Pattern[str] = re.compile(
@@ -271,35 +420,26 @@ def run_and_stream_stderr(
 
         store_logs = get_store_logs_temp_file()
         debug_stderr = os.environ.get("REDEX_STDERR_DEBUG")
-        debug_raw = open(debug_stderr + ".raw", "wb") if debug_stderr else None
-        debug_meta = open(debug_stderr + ".meta", "w") if debug_stderr else None
-        # .written mirrors every str_line we hand to sys.stderr.write so we can
-        # compare against the final OUT_TMP and localize where bytes are lost.
-        debug_written = open(debug_stderr + ".written", "w") if debug_stderr else None
+        snapshot_streams("bintools.S01.loop_entry", debug_stderr)
         total_chars_written = 0
+        first_iter = True
 
         for line in stderr:
-            if debug_raw:
-                debug_raw.write(line)
-                debug_raw.flush()
             try:
                 str_line = line.decode(sys.stdout.encoding)
             except UnicodeDecodeError:
                 str_line = "<UnicodeDecodeError>\n"
-                if debug_meta:
-                    debug_meta.write(f"UnicodeDecodeError: {line!r}\n")
             if line_handler:
-                orig = str_line
                 str_line = line_handler(str_line)
-                if debug_meta and orig != str_line:
-                    debug_meta.write(
-                        f"line_handler changed: {orig!r} -> {str_line!r}\n"
-                    )
+            if first_iter:
+                first_iter = False
+                snapshot_streams(
+                    "bintools.S02.first_iter_before_write",
+                    debug_stderr,
+                    extra={"first_str_line_len": len(str_line)},
+                )
             sys.stderr.write(str_line)
             total_chars_written += len(str_line)
-            if debug_written:
-                debug_written.write(str_line)
-                debug_written.flush()
             if store_logs:
                 store_logs.write(str_line)
             err_out.append(str_line)
@@ -312,25 +452,14 @@ def run_and_stream_stderr(
         # flush, the last lines (e.g. terminate/what from the C++ runtime) can
         # be lost if the process exits before the buffer is flushed.
         sys.stderr.flush()
-
-        if debug_raw:
-            debug_raw.close()
-        if debug_written:
-            debug_written.close()
-        if debug_meta:
-            try:
-                stderr_fd_size = os.fstat(sys.stderr.fileno()).st_size
-            except (OSError, AttributeError, ValueError):
-                stderr_fd_size = None
-            debug_meta.write(
-                f"lines_processed: {len(err_out)}\n"
-                f"flush_completed: True\n"
-                f"total_chars_written: {total_chars_written}\n"
-                f"stderr_fd_size_after_flush: {stderr_fd_size}\n"
-                f"stderr_type: {type(sys.stderr).__name__}\n"
-                f"stderr_line_buffering: {getattr(sys.stderr, 'line_buffering', None)}\n"
-            )
-            debug_meta.close()
+        snapshot_streams(
+            "bintools.S03.post_flush",
+            debug_stderr,
+            extra={
+                "total_chars_written": total_chars_written,
+                "lines_processed": len(err_out),
+            },
+        )
 
         returncode = proc.wait()
 
@@ -388,9 +517,11 @@ class SigIntHandler:
         self.set_state(BinaryState.STARTED)
 
     def set_postprocessing(self) -> None:
+        snapshot_streams("bintools.S09.set_postprocessing")
         self.set_state(BinaryState.POSTPROCESSING)
 
     def set_finished(self) -> None:
+        snapshot_streams("bintools.S10.set_finished")
         self.set_state(BinaryState.FINISHED)
         self.uninstall()
 
@@ -399,6 +530,7 @@ class SigIntHandler:
 
     def _sigalrm_handler(self, _signum, _frame) -> None:
         signal.signal(signal.SIGALRM, signal.SIG_DFL)
+        snapshot_signal_lite("bintools.S08.sigalrm_handler_fired", self._state.name)
         if self._state == BinaryState.STARTED:
             # Send SIGINT in case redex-all was not in the same process
             # group and wait some more.
@@ -416,6 +548,7 @@ class SigIntHandler:
 
     def _sigint_handler(self, _signum, _frame) -> None:
         signal.signal(signal.SIGINT, self._old_handler)
+        snapshot_signal_lite("bintools.S07.sigint_handler_fired", self._state.name)
         if self._state == BinaryState.UNSTARTED or self._state == BinaryState.FINISHED:
             os.kill(os.getpid(), signal.SIGINT)
 
