@@ -11,8 +11,9 @@ shift
 REDEX_BINARY="$1"
 shift
 
-OUT_TMP="$(dirname "$SCRIPT")/test.out"
-DEBUG_STDERR="$(dirname "$SCRIPT")/stderr_debug"
+OUT_TMP="$(mktemp "$(dirname "$SCRIPT")/test.out.XXXXXX")"
+DEBUG_STDERR="$(mktemp -d "$(dirname "$SCRIPT")/stderr_debug.XXXXXX")/d"
+trap 'rm -f "$OUT_TMP" "${DEBUG_STDERR}".*; rmdir "$(dirname "$DEBUG_STDERR")" 2>/dev/null' EXIT
 
 # We are using pass-through mode for simplicity. The actual data
 # does not matter
@@ -30,18 +31,6 @@ REDEX_STDERR_DEBUG="$DEBUG_STDERR" \
   echo "pre_tr_nul=$(tr -cd '\0' < "$OUT_TMP" | wc -c)"
 } > "${DEBUG_STDERR}.outtmp_meta"
 
-# Binary view of OUT_TMP before tr -d '\0' (post-tr cat hides NULs).
-# Head 4 KB; add tail 1 KB if larger.
-PRE_TR_SIZE=$(wc -c < "$OUT_TMP")
-{
-  echo "--- head (first 4096 bytes; total ${PRE_TR_SIZE} bytes) ---"
-  od -An -tx1 -c -N 4096 "$OUT_TMP"
-  if [ "$PRE_TR_SIZE" -gt 4096 ]; then
-    echo "--- tail (last 1024 bytes) ---"
-    tail -c 1024 "$OUT_TMP" | od -An -tx1 -c
-  fi
-} > "${DEBUG_STDERR}.outtmp_pretr_od" 2>/dev/null || true
-
 # Strip NUL bytes so grep doesn't treat the output as binary.
 tr -d '\0' < "$OUT_TMP" > "${OUT_TMP}.clean"
 mv "${OUT_TMP}.clean" "$OUT_TMP"
@@ -54,23 +43,11 @@ grep 'This is an abort test.' "$OUT_TMP" || ( echo "Did not find abort message" 
 # Check for stack symbolication.
 
 dump_debug() {
-    echo "=== .symbolize ==="
-    if [ -f "${DEBUG_STDERR}.symbolize" ]; then
-      cat "${DEBUG_STDERR}.symbolize"
-    else
-      echo "(no symbolize debug file)"
-    fi
     echo "=== .outtmp_meta ==="
     if [ -f "${DEBUG_STDERR}.outtmp_meta" ]; then
       cat "${DEBUG_STDERR}.outtmp_meta"
     else
       echo "(no outtmp_meta file)"
-    fi
-    echo "=== .outtmp_pretr_od ==="
-    if [ -f "${DEBUG_STDERR}.outtmp_pretr_od" ]; then
-      cat "${DEBUG_STDERR}.outtmp_pretr_od"
-    else
-      echo "(no pretr_od file)"
     fi
     echo "=== .streams ==="
     if [ -f "${DEBUG_STDERR}.streams" ]; then

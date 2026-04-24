@@ -388,22 +388,6 @@ def run_redex_binary(
                 # Note: no need for store-logs, as this has failed anyways.
                 symbolized = bintools.maybe_addr2line(crash_file)
 
-                debug_stderr = os.environ.get("REDEX_STDERR_DEBUG")
-                if debug_stderr:
-                    crash_size = getsize(crash_file) if exists(crash_file) else 0
-                    sym_len = None if symbolized is None else len(symbolized)
-                    with open(debug_stderr + ".symbolize", "w") as df:
-                        df.write(f"crash_file_size: {crash_size}\n")
-                        df.write(f"symbolized_len: {sym_len}\n")
-                    bintools.snapshot_streams(
-                        "redex.S04.before_symbolize_write",
-                        debug_stderr,
-                        extra={
-                            "crash_file_size": crash_size,
-                            "symbolized_len": sym_len,
-                        },
-                    )
-
                 if symbolized:
                     sys.stderr.write("\n")
                     sys.stderr.write("\n".join(symbolized))
@@ -412,10 +396,6 @@ def run_redex_binary(
                     with open(crash_file) as f:
                         sys.stderr.write(f.read())
                 sys.stderr.flush()
-                if debug_stderr:
-                    bintools.snapshot_streams(
-                        "redex.S05.after_symbolize_flush", debug_stderr
-                    )
 
             abort_error = None
             if returncode == -6:  # SIGABRT

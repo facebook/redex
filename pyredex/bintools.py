@@ -30,12 +30,6 @@ IS_WINDOWS: bool = os.name == "nt"
 LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-# Diagnostic instrumentation gated on REDEX_STDERR_DEBUG. To be removed.
-
-_SIGNAL_LITE_FD: typing.Optional[int] = None
-_SIGNAL_LITE_FD_PATH: typing.Optional[str] = None
-
-
 def _collect_fd_metadata(info: typing.Dict[str, typing.Any], fd: int) -> None:
     """Populate *info* with fstat / fdlink / fdinfo for *fd*."""
     try:
@@ -127,51 +121,6 @@ def snapshot_streams(
     try:
         with open(debug_stderr + ".streams", "a") as f:
             f.write(payload)
-    except OSError:
-        pass
-
-
-def _get_signal_lite_fd(debug_stderr: str) -> typing.Optional[int]:
-    """Open the .streams file once and cache the fd; signal path uses os.write only."""
-    global _SIGNAL_LITE_FD, _SIGNAL_LITE_FD_PATH
-    if _SIGNAL_LITE_FD is not None and _SIGNAL_LITE_FD_PATH == debug_stderr:
-        return _SIGNAL_LITE_FD
-    try:
-        _SIGNAL_LITE_FD = os.open(
-            debug_stderr + ".streams",
-            os.O_WRONLY | os.O_APPEND | os.O_CREAT,
-            0o644,
-        )
-        _SIGNAL_LITE_FD_PATH = debug_stderr
-    except OSError:
-        _SIGNAL_LITE_FD = None
-    return _SIGNAL_LITE_FD
-
-
-def snapshot_signal_lite(
-    label: str,
-    state: typing.Optional[str] = None,
-    debug_stderr: typing.Optional[str] = None,
-) -> None:
-    """Async-signal-safe variant for SIGINT/SIGALRM paths."""
-    if debug_stderr is None:
-        debug_stderr = os.environ.get("REDEX_STDERR_DEBUG")
-    if not debug_stderr:
-        return
-    fd = _get_signal_lite_fd(debug_stderr)
-    if fd is None:
-        return
-    record = {
-        "label": label,
-        "state": state,
-        "pid": os.getpid(),
-        "tid": threading.get_ident(),
-        "monotonic_ns": time.monotonic_ns(),
-        "lite": True,
-    }
-    payload = (json.dumps(record) + "\n").encode()
-    try:
-        os.write(fd, payload)
     except OSError:
         pass
 
@@ -419,10 +368,6 @@ def run_and_stream_stderr(
         assert stderr is not None
 
         store_logs = get_store_logs_temp_file()
-        debug_stderr = os.environ.get("REDEX_STDERR_DEBUG")
-        snapshot_streams("bintools.S01.loop_entry", debug_stderr)
-        total_chars_written = 0
-        first_iter = True
 
         for line in stderr:
             try:
@@ -431,15 +376,7 @@ def run_and_stream_stderr(
                 str_line = "<UnicodeDecodeError>\n"
             if line_handler:
                 str_line = line_handler(str_line)
-            if first_iter:
-                first_iter = False
-                snapshot_streams(
-                    "bintools.S02.first_iter_before_write",
-                    debug_stderr,
-                    extra={"first_str_line_len": len(str_line)},
-                )
             sys.stderr.write(str_line)
-            total_chars_written += len(str_line)
             if store_logs:
                 store_logs.write(str_line)
             err_out.append(str_line)
@@ -452,14 +389,6 @@ def run_and_stream_stderr(
         # flush, the last lines (e.g. terminate/what from the C++ runtime) can
         # be lost if the process exits before the buffer is flushed.
         sys.stderr.flush()
-        snapshot_streams(
-            "bintools.S03.post_flush",
-            debug_stderr,
-            extra={
-                "total_chars_written": total_chars_written,
-                "lines_processed": len(err_out),
-            },
-        )
 
         returncode = proc.wait()
 
@@ -517,11 +446,9 @@ class SigIntHandler:
         self.set_state(BinaryState.STARTED)
 
     def set_postprocessing(self) -> None:
-        snapshot_streams("bintools.S09.set_postprocessing")
         self.set_state(BinaryState.POSTPROCESSING)
 
     def set_finished(self) -> None:
-        snapshot_streams("bintools.S10.set_finished")
         self.set_state(BinaryState.FINISHED)
         self.uninstall()
 
@@ -530,7 +457,6 @@ class SigIntHandler:
 
     def _sigalrm_handler(self, _signum, _frame) -> None:
         signal.signal(signal.SIGALRM, signal.SIG_DFL)
-        snapshot_signal_lite("bintools.S08.sigalrm_handler_fired", self._state.name)
         if self._state == BinaryState.STARTED:
             # Send SIGINT in case redex-all was not in the same process
             # group and wait some more.
@@ -548,7 +474,6 @@ class SigIntHandler:
 
     def _sigint_handler(self, _signum, _frame) -> None:
         signal.signal(signal.SIGINT, self._old_handler)
-        snapshot_signal_lite("bintools.S07.sigint_handler_fired", self._state.name)
         if self._state == BinaryState.UNSTARTED or self._state == BinaryState.FINISHED:
             os.kill(os.getpid(), signal.SIGINT)
 
