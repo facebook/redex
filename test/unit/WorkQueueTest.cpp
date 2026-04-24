@@ -9,7 +9,6 @@
 
 #include <array>
 #include <atomic>
-#include <chrono>
 #include <gtest/gtest.h>
 
 #include "Macros.h"
