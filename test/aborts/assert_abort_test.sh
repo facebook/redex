@@ -24,9 +24,29 @@ REDEX_STDERR_DEBUG="$DEBUG_STDERR" \
   --assert-abort "This is an abort test." \
   >"$OUT_TMP" 2>&1 && exit 1 || true
 
+# Record pre/post-tr size and pre-tr NUL count.
+{
+  echo "pre_tr_size=$(wc -c < "$OUT_TMP")"
+  echo "pre_tr_nul=$(tr -cd '\0' < "$OUT_TMP" | wc -c)"
+} > "${DEBUG_STDERR}.outtmp_meta"
+
+# Binary view of OUT_TMP before tr -d '\0' (post-tr cat hides NULs).
+# Head 4 KB; add tail 1 KB if larger.
+PRE_TR_SIZE=$(wc -c < "$OUT_TMP")
+{
+  echo "--- head (first 4096 bytes; total ${PRE_TR_SIZE} bytes) ---"
+  od -An -tx1 -c -N 4096 "$OUT_TMP"
+  if [ "$PRE_TR_SIZE" -gt 4096 ]; then
+    echo "--- tail (last 1024 bytes) ---"
+    tail -c 1024 "$OUT_TMP" | od -An -tx1 -c
+  fi
+} > "${DEBUG_STDERR}.outtmp_pretr_od" 2>/dev/null || true
+
 # Strip NUL bytes so grep doesn't treat the output as binary.
 tr -d '\0' < "$OUT_TMP" > "${OUT_TMP}.clean"
 mv "${OUT_TMP}.clean" "$OUT_TMP"
+
+echo "post_tr_size=$(wc -c < "$OUT_TMP")" >> "${DEBUG_STDERR}.outtmp_meta"
 
 # Check for abort message.
 grep 'This is an abort test.' "$OUT_TMP" || ( echo "Did not find abort message" ; exit 1 ; )
@@ -34,41 +54,29 @@ grep 'This is an abort test.' "$OUT_TMP" || ( echo "Did not find abort message" 
 # Check for stack symbolication.
 
 dump_debug() {
-    echo "=== Raw pipe bytes (before Python decode/handler) ==="
-    if [ -f "${DEBUG_STDERR}.raw" ]; then
-      xxd "${DEBUG_STDERR}.raw" | head -200
-      echo ""
-      echo "--- terminate/what lines in raw pipe ---"
-      grep -an 'terminate\|what()' "${DEBUG_STDERR}.raw" || echo "(none)"
-      echo "--- NUL byte check ---"
-      if tr -d '\0' < "${DEBUG_STDERR}.raw" | cmp -s - "${DEBUG_STDERR}.raw"; then
-        echo "No NUL bytes in raw pipe"
-      else
-        echo "NUL bytes present in raw pipe"
-      fi
-    else
-      echo "(no raw debug file)"
-    fi
-    echo "=== Lines written to sys.stderr (post line_handler) ==="
-    if [ -f "${DEBUG_STDERR}.written" ]; then
-      echo "--- terminate/what lines in .written ---"
-      grep -an 'terminate\|what()' "${DEBUG_STDERR}.written" || echo "(none)"
-      echo "--- byte count of .written file ---"
-      wc -c < "${DEBUG_STDERR}.written"
-    else
-      echo "(no .written debug file)"
-    fi
-    echo "=== Python decode/handler metadata ==="
-    if [ -f "${DEBUG_STDERR}.meta" ]; then
-      cat "${DEBUG_STDERR}.meta"
-    else
-      echo "(no metadata file - no decode errors or handler mutations)"
-    fi
-    echo "=== Symbolication path diagnostics ==="
+    echo "=== .symbolize ==="
     if [ -f "${DEBUG_STDERR}.symbolize" ]; then
       cat "${DEBUG_STDERR}.symbolize"
     else
-      echo "(no symbolize debug file - did not reach maybe_addr2line)"
+      echo "(no symbolize debug file)"
+    fi
+    echo "=== .outtmp_meta ==="
+    if [ -f "${DEBUG_STDERR}.outtmp_meta" ]; then
+      cat "${DEBUG_STDERR}.outtmp_meta"
+    else
+      echo "(no outtmp_meta file)"
+    fi
+    echo "=== .outtmp_pretr_od ==="
+    if [ -f "${DEBUG_STDERR}.outtmp_pretr_od" ]; then
+      cat "${DEBUG_STDERR}.outtmp_pretr_od"
+    else
+      echo "(no pretr_od file)"
+    fi
+    echo "=== .streams ==="
+    if [ -f "${DEBUG_STDERR}.streams" ]; then
+      cat "${DEBUG_STDERR}.streams"
+    else
+      echo "(no streams file)"
     fi
     echo "=== End debug ==="
 }

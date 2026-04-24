@@ -392,32 +392,21 @@ def run_redex_binary(
                 # Note: no need for store-logs, as this has failed anyways.
                 symbolized = bintools.maybe_addr2line(crash_file)
 
-                # Diagnostics for the assert-abort tests. Captures the state of
-                # the symbolication path (gated by REDEX_STDERR_DEBUG) so that
-                # CI failures can localize whether the missing trace is due to
-                # an empty crash_file (CRASH_BACKTRACE never ran -- e.g. ASan
-                # SIGABRT interception), maybe_addr2line returning None
-                # despite a non-empty crash_file (addr2line missing), or both
-                # paths producing output but bytes being lost downstream.
                 debug_stderr = os.environ.get("REDEX_STDERR_DEBUG")
                 if debug_stderr:
-                    crash_exists = exists(crash_file)
-                    crash_size = getsize(crash_file) if crash_exists else 0
+                    crash_size = getsize(crash_file) if exists(crash_file) else 0
+                    sym_len = None if symbolized is None else len(symbolized)
                     with open(debug_stderr + ".symbolize", "w") as df:
-                        df.write(f"crash_file_path: {crash_file}\n")
-                        df.write(f"crash_file_exists: {crash_exists}\n")
                         df.write(f"crash_file_size: {crash_size}\n")
-                        if crash_exists and crash_size > 0:
-                            with open(crash_file) as cf:
-                                df.write("--- crash_file content (begin) ---\n")
-                                df.write(cf.read())
-                                df.write("--- crash_file content (end) ---\n")
-                        sym_len = "None" if symbolized is None else str(len(symbolized))
                         df.write(f"symbolized_len: {sym_len}\n")
-                        if symbolized:
-                            df.write("--- symbolized content (begin) ---\n")
-                            df.write("\n".join(symbolized))
-                            df.write("\n--- symbolized content (end) ---\n")
+                    bintools.snapshot_streams(
+                        "redex.S04.before_symbolize_write",
+                        debug_stderr,
+                        extra={
+                            "crash_file_size": crash_size,
+                            "symbolized_len": sym_len,
+                        },
+                    )
 
                 if symbolized:
                     sys.stderr.write("\n")
@@ -427,6 +416,10 @@ def run_redex_binary(
                     with open(crash_file) as f:
                         sys.stderr.write(f.read())
                 sys.stderr.flush()
+                if debug_stderr:
+                    bintools.snapshot_streams(
+                        "redex.S05.after_symbolize_flush", debug_stderr
+                    )
 
             abort_error = None
             if returncode == -6:  # SIGABRT
