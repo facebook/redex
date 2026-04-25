@@ -435,6 +435,9 @@ BatchingRejection check_batching_safety(
 
 } // namespace
 
+constexpr std::string_view kDefaultOrchestratorAnnotation =
+    "Lcom/facebook/redex/annotations/GenerateStaticInitBatch;";
+
 void ClinitBatchingPass::bind_config() {
   bind("interaction_pattern", "", m_interaction_pattern,
        "Regex pattern to filter baseline profile interactions (e.g., "
@@ -447,7 +450,73 @@ void ClinitBatchingPass::bind_config() {
        "When true, skips known-benign virtual/interface calls (e.g., "
        "``Object.toString()``) during safety analysis instead of rejecting "
        "them.");
+  bind("orchestrator_annotation",
+       std::string(kDefaultOrchestratorAnnotation),
+       m_orchestrator_annotation,
+       "Dalvik descriptor of the annotation that marks the orchestrator "
+       "method (e.g., ``Lcom/facebook/redex/annotations/"
+       "GenerateStaticInitBatch;``).");
   trait(Traits::Pass::unique, true);
+}
+
+void ClinitBatchingPass::eval_pass(DexStoresVector& stores,
+                                   ConfigFiles& /* conf */,
+                                   PassManager& /* mgr */) {
+  auto scope = build_class_scope(stores);
+
+  // Get the annotation type for the orchestrator
+  DexType* orchestrator_anno = DexType::get_type(m_orchestrator_annotation);
+
+  always_assert_log(
+      orchestrator_anno != nullptr,
+      "ClinitBatchingPass: orchestrator annotation type %s not found in dex. "
+      "Ensure the annotation class is included in the build.",
+      m_orchestrator_annotation.c_str());
+
+  // Walk all methods to find those annotated with the orchestrator annotation.
+  // eval_pass runs before any optimization passes, so we can safely modify
+  // rstate here to protect the orchestrator from premature removal by
+  // MethodInlinePass (dont_inline) and LocalDce (no_optimizations).
+  walk::methods(scope, [&](DexMethod* method) {
+    if (m_orchestrator_method != nullptr) {
+      return;
+    }
+    auto* anno_set = method->get_anno_set();
+    if (anno_set == nullptr) {
+      return;
+    }
+
+    auto& anno_list = anno_set->get_annotations();
+    for (const auto& anno : anno_list) {
+      if (anno->type() == orchestrator_anno) {
+        m_orchestrator_method = method;
+        // Mark the orchestrator method as dont_inline to prevent
+        // MethodInlinePass from removing calls to this empty method
+        // before we fill it in during run_pass(). This flag is
+        // intentionally left set after run_pass() because the
+        // orchestrator should never be inlined — it is called once at
+        // startup and its purpose is to be a single AOT-compiled entry
+        // point.
+        method->rstate.set_dont_inline();
+        // Also mark no_optimizations to prevent the purity analysis
+        // (compute_no_side_effects_methods) from classifying this empty
+        // method as side-effect-free, which would cause LocalDce to
+        // remove its call sites. Cleared at the end of run_pass().
+        method->rstate.set_no_optimizations();
+        TRACE(CLINIT_BATCHING,
+              1,
+              "ClinitBatchingPass: found orchestrator method %s",
+              SHOW(method));
+        return;
+      }
+    }
+  });
+
+  always_assert_log(
+      m_orchestrator_method != nullptr,
+      "ClinitBatchingPass: no method annotated with %s found. "
+      "Ensure that the orchestrator method exists and is annotated.",
+      m_orchestrator_annotation.c_str());
 }
 
 InsertOnlyConcurrentMap<DexMethod*, DexClass*>
@@ -587,6 +656,8 @@ ClinitBatchingPass::identify_candidate_clinits(const Scope& scope,
 void ClinitBatchingPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
+  always_assert(m_orchestrator_method != nullptr);
+
   auto scope = build_class_scope(stores);
 
   // Build method override graph if virtual call following is enabled
@@ -750,6 +821,10 @@ void ClinitBatchingPass::run_pass(DexStoresVector& stores,
         1,
         "ClinitBatchingPass: found %zu clinits for batching",
         analysis_candidates.size());
+
+  // Clear no_optimizations so later passes can optimize the now-populated
+  // orchestrator body.
+  m_orchestrator_method->rstate.reset_no_optimizations();
 }
 
 static ClinitBatchingPass s_pass;

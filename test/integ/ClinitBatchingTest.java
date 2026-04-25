@@ -7,6 +7,8 @@
 
 package com.facebook.redextest;
 
+import com.facebook.redextest.annotation.GenerateStaticInitBatch;
+
 /**
  * Test class with a simple static initializer for ClinitBatchingPass testing.
  * The clinit only uses SPUT of constants to its own fields.
@@ -96,4 +98,16 @@ class ClinitBatchingTestC {
  */
 class ClinitBatchingTestSmall {
     public static int sSmallField = 1;
+}
+
+/**
+ * Orchestrator class for ClinitBatchingPass.
+ * The annotated method will be filled with invoke-static calls to all
+ * __initStatics$*() methods in dependency order.
+ */
+class ClinitBatchingOrchestrator {
+    @GenerateStaticInitBatch
+    public static void initAllStatics() {
+        // Empty — ClinitBatchingPass fills this in.
+    }
 }

@@ -49,6 +49,8 @@ class ClinitBatchingPass : public Pass {
 
   void bind_config() override;
 
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
@@ -71,6 +73,10 @@ class ClinitBatchingPass : public Pass {
       const Scope& scope, ConfigFiles& conf, PassManager& mgr);
 
   std::string m_interaction_pattern;
+  std::string m_orchestrator_annotation;
   bool m_allow_safe_virtual_calls{false};
   bool m_skip_benign_virtual_calls{false};
+
+  // Method annotated with @GenerateStaticInitBatch, found during eval_pass
+  DexMethod* m_orchestrator_method{nullptr};
 };
