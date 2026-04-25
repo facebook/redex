@@ -74,7 +74,6 @@ class ClinitBatchingPass : public Pass {
 
   std::string m_interaction_pattern;
   std::string m_orchestrator_annotation;
-  bool m_allow_safe_virtual_calls{false};
   bool m_skip_benign_virtual_calls{false};
 
   // Method annotated with @GenerateStaticInitBatch, found during eval_pass

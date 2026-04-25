@@ -16,6 +16,7 @@
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
 #include "DexUtil.h"
+#include "EarlyClassLoadsAnalysis.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InitClassesWithSideEffects.h"
@@ -443,9 +444,6 @@ void ClinitBatchingPass::bind_config() {
        "Regex pattern to filter baseline profile interactions (e.g., "
        "``ColdStart``). Only clinits hot in matching interactions are "
        "candidates for batching.");
-  bind("allow_safe_virtual_calls", false, m_allow_safe_virtual_calls,
-       "When true, uses the method override graph to follow virtual and "
-       "interface calls during safety analysis instead of rejecting them.");
   bind("skip_benign_virtual_calls", false, m_skip_benign_virtual_calls,
        "When true, skips known-benign virtual/interface calls (e.g., "
        "``Object.toString()``) during safety analysis instead of rejecting "
@@ -660,16 +658,65 @@ void ClinitBatchingPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
 
-  // Build method override graph if virtual call following is enabled
-  std::unique_ptr<const method_override_graph::Graph> method_override_graph;
-  if (m_allow_safe_virtual_calls) {
-    method_override_graph = method_override_graph::build_graph(scope);
-  }
+  // Build method override graph. EarlyClassLoadsAnalysis always needs it for
+  // virtual call resolution; the safety analysis uses it conditionally.
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
-  // Step 1: Identify candidate clinits based on baseline profile
+  // Step 1: Run early class loads analysis to find classes loaded before
+  // the orchestrator is called
+  clinit_batching::EarlyClassLoadsAnalysis early_analysis(
+      m_orchestrator_method, conf, method_override_graph.get());
+  auto early_result = early_analysis.run();
+
+  always_assert_log(!early_result.error_message.has_value(),
+                    "ClinitBatchingPass: early class loads analysis failed: %s",
+                    early_result.error_message.has_value()
+                        ? early_result.error_message->c_str()
+                        : "");
+
+  always_assert_log(
+      early_result.orchestrator_encountered,
+      "ClinitBatchingPass: orchestrator method %s not encountered in "
+      "callgraph from entry points. Ensure the orchestrator is reachable "
+      "from an application entry point.",
+      SHOW(m_orchestrator_method));
+
+  mgr.set_metric("early_loaded_classes",
+                 early_result.early_loaded_classes.size());
+  mgr.set_metric("entry_points_count", early_result.entry_points.size());
+
+  TRACE(CLINIT_BATCHING,
+        1,
+        "ClinitBatchingPass: found %zu early loaded classes from %zu entry "
+        "points",
+        early_result.early_loaded_classes.size(),
+        early_result.entry_points.size());
+
+  // Step 2: Identify candidate clinits based on baseline profile
   auto candidate_clinits = identify_candidate_clinits(scope, conf, mgr);
 
-  // Step 2: Safety analysis using InitClassesWithSideEffects as the base
+  // Step 3: Filter out early loaded classes from candidates
+  size_t excluded_early = 0;
+  UnorderedMap<DexMethod*, DexClass*> filtered_candidates;
+  for (const auto& [clinit, cls] : UnorderedIterable(candidate_clinits)) {
+    if (early_result.early_loaded_classes.count(cls) != 0) {
+      TRACE(CLINIT_BATCHING,
+            3,
+            "ClinitBatchingPass: excluding %s - loaded before orchestrator",
+            SHOW(clinit));
+      excluded_early++;
+    } else {
+      filtered_candidates.emplace(clinit, cls);
+    }
+  }
+  mgr.set_metric("excluded_early_loads", excluded_early);
+
+  TRACE(CLINIT_BATCHING,
+        1,
+        "ClinitBatchingPass: excluded %zu candidates due to early class loads",
+        excluded_early);
+
+  // Step 4: Safety analysis using InitClassesWithSideEffects as the base
   // filter, plus batching-specific checks (monitors, throws, virtual/interface
   // calls with override graph support).
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -693,7 +740,7 @@ void ClinitBatchingPass::run_pass(DexStoresVector& stores,
 
   UnorderedMap<DexMethod*, DexClass*> analysis_candidates;
   size_t candidate_idx = 0;
-  for (const auto& [clinit, cls] : UnorderedIterable(candidate_clinits)) {
+  for (const auto& [clinit, cls] : UnorderedIterable(filtered_candidates)) {
     candidate_idx++;
 
     // Two-stage filter: InitClassesWithSideEffects + batching-specific checks
@@ -805,7 +852,6 @@ void ClinitBatchingPass::run_pass(DexStoresVector& stores,
   }
 
   // Future steps:
-  // - Early class loads analysis
   // - Build dependency graph
   // - Transform clinits
   // - Generate orchestrator
@@ -813,8 +859,6 @@ void ClinitBatchingPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("batched_clinits", analysis_candidates.size());
   mgr.set_metric("interaction_pattern_set",
                  m_interaction_pattern.empty() ? 0 : 1);
-  mgr.set_metric("allow_safe_virtual_calls",
-                 m_allow_safe_virtual_calls ? 1 : 0);
   mgr.set_metric("skip_benign_virtual_calls",
                  m_skip_benign_virtual_calls ? 1 : 0);
   TRACE(CLINIT_BATCHING,

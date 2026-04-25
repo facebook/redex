@@ -13,10 +13,12 @@
 #include "DexClass.h"
 #include "PassManager.h"
 #include "RedexTest.h"
+#include "RedexTestUtils.h"
 
 class ClinitBatchingPassTest : public RedexTest {
  protected:
   DexStoresVector stores;
+  redex::TempDir m_apk_dir;
 
   void SetUp() override {
     DexStore root_store("classes");
@@ -58,12 +60,56 @@ class ClinitBatchingPassTest : public RedexTest {
     orch_creator.add_method(method);
     auto* orch_cls = orch_creator.create();
 
-    root_store.add_classes({orch_cls});
+    // Create a synthetic Application subclass that the EarlyClassLoadsAnalysis
+    // discovers via the binary manifest. Its attachBaseContext calls the
+    // orchestrator so the analysis finds the orchestrator entry point.
+    auto* app_type = DexType::make_type("Landroid/app/Application;");
+    auto* test_app_type =
+        DexType::make_type("Lcom/facebook/redextest/TestApplication;");
+    ClassCreator app_creator(test_app_type);
+    app_creator.set_access(ACC_PUBLIC);
+    app_creator.set_super(app_type);
+
+    // Add a default constructor
+    auto* app_init = dynamic_cast<DexMethod*>(DexMethod::make_method(
+        test_app_type, DexString::make_string("<init>"),
+        DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}))));
+    app_init->set_access(ACC_PUBLIC);
+    app_init->make_concrete(ACC_PUBLIC, false);
+    app_init->set_code(assembler::ircode_from_string(
+        "((load-param-object v0) (return-void))"));
+    app_creator.add_method(app_init);
+
+    auto* context_type = DexType::make_type("Landroid/content/Context;");
+    auto* attach_method = dynamic_cast<DexMethod*>(DexMethod::make_method(
+        test_app_type, DexString::make_string("attachBaseContext"),
+        DexProto::make_proto(type::_void(),
+                             DexTypeList::make_type_list({context_type}))));
+    attach_method->set_access(ACC_PUBLIC);
+    attach_method->make_concrete(ACC_PUBLIC, true);
+    attach_method->set_code(assembler::ircode_from_string(
+        "((load-param-object v0) (load-param-object v1)"
+        " (invoke-static () \"" +
+        show(method) + "\") (return-void))"));
+    app_creator.add_method(attach_method);
+    auto* app_cls = app_creator.create();
+
+    root_store.add_classes({orch_cls, app_cls});
     stores = {root_store};
   }
 
   void run_pass(const Json::Value& config = Json::nullValue) {
-    ConfigFiles conf(config);
+    Json::Value cfg = config.isNull() ? Json::Value(Json::objectValue) : config;
+
+    // Set up apk_dir with the binary AndroidManifest.xml test fixture.
+    m_apk_dir = redex::make_tmp_dir("clinit_batching_unit_test_%%%%%%%%");
+    auto* manifest_path_env = std::getenv("manifest");
+    always_assert_log(manifest_path_env, "manifest env var must be set.\n");
+    redex::copy_file(manifest_path_env,
+                     m_apk_dir.path + "/AndroidManifest.xml");
+    cfg["apk_dir"] = m_apk_dir.path;
+
+    ConfigFiles conf(cfg);
     conf.parse_global_config();
     ClinitBatchingPass pass;
     std::vector<Pass*> passes{&pass};

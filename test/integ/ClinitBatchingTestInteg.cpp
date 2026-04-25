@@ -13,6 +13,7 @@
 #include "DexClass.h"
 #include "MethodUtil.h"
 #include "RedexTest.h"
+#include "RedexTestUtils.h"
 #include "Walkers.h"
 
 class ClinitBatchingTest : public RedexIntegrationTest {
@@ -31,10 +32,22 @@ class ClinitBatchingTest : public RedexIntegrationTest {
     mp_val[0] = method_profile_path;
     cfg["agg_method_stats_files"] = mp_val;
 
+    setup_apk_dir(cfg);
+
     Pass* pass = new ClinitBatchingPass();
     std::vector<Pass*> passes = {pass};
 
     run_passes(passes, nullptr, cfg);
+  }
+
+  void setup_apk_dir(Json::Value& cfg) {
+    m_apk_dir = redex::make_tmp_dir("clinit_batching_test_%%%%%%%%");
+    auto* manifest_path_env = std::getenv("manifest");
+    always_assert_log(manifest_path_env,
+                      "manifest env var must be set for ClinitBatchingTest.\n");
+    redex::copy_file(manifest_path_env,
+                     m_apk_dir.path + "/AndroidManifest.xml");
+    cfg["apk_dir"] = m_apk_dir.path;
   }
 
   DexMethod* find_clinit(const std::string& class_name) {
@@ -64,6 +77,9 @@ class ClinitBatchingTest : public RedexIntegrationTest {
     });
     return count;
   }
+
+ private:
+  redex::TempDir m_apk_dir;
 };
 
 /**
@@ -135,6 +151,8 @@ TEST_F(ClinitBatchingTest, test_no_candidates_without_profiles) {
   config_file >> cfg;
 
   // Don't set agg_method_stats_files - no profiles available
+  setup_apk_dir(cfg);
+
   Pass* pass = new ClinitBatchingPass();
   std::vector<Pass*> passes = {pass};
 

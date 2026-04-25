@@ -7,7 +7,22 @@
 
 package com.facebook.redextest;
 
+import android.app.Application;
+import android.content.Context;
 import com.facebook.redextest.annotation.GenerateStaticInitBatch;
+
+/**
+ * Minimal Application subclass for testing. The EarlyClassLoadsAnalysis
+ * discovers this via the binary AndroidManifest.xml test fixture and uses
+ * it as the entry point for the callgraph walk.
+ */
+class TestApplication extends Application {
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(base);
+        ClinitBatchingOrchestrator.initAllStatics();
+    }
+}
 
 /**
  * Test class with a simple static initializer for ClinitBatchingPass testing.
