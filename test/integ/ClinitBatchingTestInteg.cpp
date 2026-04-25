@@ -103,16 +103,14 @@ TEST_F(ClinitBatchingTest, test_candidate_selection_with_profiles) {
   EXPECT_EQ(candidate_count_it->second, 3)
       << "Should identify 3 hot clinits as candidates";
 
-  // Verify batched_clinits metric - only clinits with pure constant
-  // assignments to their own fields pass the safety checks. Classes with SGET
-  // (reading static fields), virtual method calls (string concat), array
-  // operations, or constructor calls (whose targets cannot be resolved to
-  // verify safety) are rejected by the pure pattern check.
+  // Verify batched_clinits metric - all 3 candidates use constant
+  // assignments to their own fields (SPUT of int constants), so they all
+  // pass the safety analysis.
   auto batched_count_it = metrics.find("batched_clinits");
   ASSERT_NE(batched_count_it, metrics.end())
       << "batched_clinits metric should exist";
   EXPECT_EQ(batched_count_it->second, 3)
-      << "Should batch 3 clinits that pass pure pattern safety checks";
+      << "Should batch 3 clinits that pass safety analysis";
 
   // Verify exclusion metrics exist
   auto excluded_not_hot_it = metrics.find("excluded_not_hot");

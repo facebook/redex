@@ -7,25 +7,446 @@
 
 #include "ClinitBatchingPass.h"
 
+#include <chrono>
+
 #include <boost/regex.hpp> // NOLINT(facebook-unused-include-check)
 
 #include "BaselineProfile.h"
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
 #include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "IRInstruction.h"
+#include "InitClassesWithSideEffects.h"
+#include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "MethodUtil.h"
 #include "PassManager.h"
+#include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
+
+namespace {
+
+// Batching-specific safety checks that go beyond what
+// InitClassesWithSideEffects checks. The library handles general
+// side-effects (SGET, static calls, constructors, NEW_INSTANCE,
+// class hierarchy). These additional checks catch patterns that the
+// library considers safe but are unsafe when running a clinit earlier
+// at batch time.
+enum class BatchingRejection {
+  None,
+  HasMonitorOp,
+  HasThrow,
+  HasVirtualCall,
+  HasInterfaceCall,
+  HasUnresolvedVirtualCall,
+  HasTooManyOverrides,
+  HasUnresolvedInterfaceCall,
+  HasTooManyInterfaceOverrides,
+  HasUnresolvedInternalCall,
+  HasExternalCall,
+  DepthExceeded,
+};
+
+constexpr size_t kMaxSafetyCheckDepth = 50;
+constexpr size_t kMaxSafetyCheckVisited = 100;
+constexpr size_t kMaxOverrideTargets = 5;
+
+struct VirtualCallRejections {
+  BatchingRejection no_graph;
+  BatchingRejection unresolved;
+  BatchingRejection too_many;
+};
+
+VirtualCallRejections get_virtual_call_rejections(bool is_iface) {
+  if (is_iface) {
+    return {BatchingRejection::HasInterfaceCall,
+            BatchingRejection::HasUnresolvedInterfaceCall,
+            BatchingRejection::HasTooManyInterfaceOverrides};
+  }
+  return {BatchingRejection::HasVirtualCall,
+          BatchingRejection::HasUnresolvedVirtualCall,
+          BatchingRejection::HasTooManyOverrides};
+}
+
+// Counters for benign virtual/interface calls and depth-exceeded events
+// accumulated during a single check_batching_safety traversal.
+struct BatchingSafetyStats {
+  size_t benign_virtual_calls = 0;
+  size_t depth_exceeded = 0;
+};
+
+// Result of a batching safety check. Carries both the rejection reason and
+// whether the analysis short-circuited on a cycle-detection hit in `visited`.
+// Cycle-dependent results must not be cached cross-traversal because they
+// are context-dependent: the short-circuit returned None only because the
+// method was already being analyzed in the current traversal. In a different
+// traversal, that method would be fully analyzed and might be rejected.
+struct SafetyResult {
+  BatchingRejection rejection;
+  bool cycle_dependent;
+
+  static SafetyResult safe() { return {BatchingRejection::None, false}; }
+  static SafetyResult cycle() { return {BatchingRejection::None, true}; }
+  static SafetyResult reject(BatchingRejection r) { return {r, false}; }
+
+  SafetyResult with_cycle(bool dep) const {
+    return {rejection, cycle_dependent || dep};
+  }
+};
+
+// Forward declaration for mutual recursion.
+SafetyResult check_batching_safety_impl(
+    const DexMethod* method,
+    UnorderedSet<const DexMethod*>& visited,
+    const method_override_graph::Graph* override_graph,
+    bool skip_benign,
+    size_t depth,
+    UnorderedMap<const DexMethod*, BatchingRejection>* cache,
+    BatchingSafetyStats& stats);
+
+// Helper to recursively check a triggered clinit for batching safety.
+// Walks the superclass chain, checking each class's own clinit.
+SafetyResult check_clinit_safety(
+    DexClass* cls,
+    UnorderedSet<const DexMethod*>& visited,
+    const method_override_graph::Graph* override_graph,
+    bool skip_benign,
+    size_t depth,
+    UnorderedMap<const DexMethod*, BatchingRejection>* cache,
+    BatchingSafetyStats& stats) {
+  bool any_cycle = false;
+  while (cls != nullptr && !cls->is_external()) {
+    auto* clinit = cls->get_clinit();
+    if (clinit != nullptr) {
+      auto r = check_batching_safety_impl(clinit, visited, override_graph,
+                                          skip_benign, depth, cache, stats);
+      if (r.rejection != BatchingRejection::None) {
+        return r;
+      }
+      any_cycle = any_cycle || r.cycle_dependent;
+    }
+    auto* super_type = cls->get_super_class();
+    cls = super_type != nullptr ? type_class(super_type) : nullptr;
+  }
+  return {BatchingRejection::None, any_cycle};
+}
+
+// `visited` and `cache` serve different purposes and both are necessary:
+//
+// - `visited` is per-traversal cycle detection (a fresh UnorderedSet per
+//   check_batching_safety call). It prevents infinite recursion. A method is
+//   added when we *begin* processing it.
+//
+// - `cache` is cross-traversal memoization (persists across calls). It avoids
+//   re-analyzing methods already fully evaluated. A method is added when we
+//   *complete* processing it.
+//
+// A method currently being processed is in `visited` but NOT in `cache`.
+// Results are not cached when:
+// - DepthExceeded: a different call path might reach the method at a shallower
+//   depth and succeed.
+// - cycle_dependent: the result depended on a visited-set short-circuit that
+//   is only valid in the current traversal's context.
+SafetyResult check_batching_safety_impl(
+    const DexMethod* method,
+    UnorderedSet<const DexMethod*>& visited,
+    const method_override_graph::Graph* override_graph,
+    bool skip_benign,
+    size_t depth,
+    UnorderedMap<const DexMethod*, BatchingRejection>* cache,
+    BatchingSafetyStats& stats) {
+  if (method == nullptr) {
+    return SafetyResult::safe();
+  }
+  if (method->get_code() == nullptr) {
+    if (is_abstract(method)) {
+      return SafetyResult::safe();
+    }
+    if (method->is_external()) {
+      if (skip_benign && method::is_clinit_invoked_method_benign(method)) {
+        return SafetyResult::safe();
+      }
+      return SafetyResult::reject(BatchingRejection::HasExternalCall);
+    }
+    return SafetyResult::reject(BatchingRejection::HasUnresolvedInternalCall);
+  }
+  if (visited.count(method) != 0) {
+    return SafetyResult::cycle();
+  }
+  // Check memoization cache
+  if (cache != nullptr) {
+    auto it = cache->find(method);
+    if (it != cache->end()) {
+      return SafetyResult{it->second, false};
+    }
+  }
+  if (depth >= kMaxSafetyCheckDepth) {
+    stats.depth_exceeded++;
+    return SafetyResult::reject(BatchingRejection::DepthExceeded);
+  }
+  if (visited.size() >= kMaxSafetyCheckVisited) {
+    stats.depth_exceeded++;
+    return SafetyResult::reject(BatchingRejection::DepthExceeded);
+  }
+  visited.insert(method);
+
+  bool any_cycle = false;
+
+  auto cache_and_return = [&](SafetyResult r) -> SafetyResult {
+    r = r.with_cycle(any_cycle);
+    if (cache != nullptr && r.rejection != BatchingRejection::DepthExceeded &&
+        !r.cycle_dependent) {
+      cache->emplace(method, r.rejection);
+    }
+    return r;
+  };
+
+  // Helper: merge a sub-result. Returns true if rejected (caller should
+  // return immediately with the cached result).
+  auto merge = [&](SafetyResult sub) -> bool {
+    any_cycle = any_cycle || sub.cycle_dependent;
+    return sub.rejection != BatchingRejection::None;
+  };
+
+  // Helper for invoke-static and invoke-direct: recurse into the resolved
+  // callee and check the callee's declaring class clinit.
+  auto check_resolved_callee = [&](const DexMethod* callee,
+                                   DexMethodRef* method_ref) -> SafetyResult {
+    if (callee != nullptr) {
+      auto r = check_batching_safety_impl(callee, visited, override_graph,
+                                          skip_benign, depth + 1, cache, stats);
+      if (merge(r)) {
+        return r;
+      }
+      auto r2 = check_clinit_safety(type_class(callee->get_class()), visited,
+                                    override_graph, skip_benign, depth + 1,
+                                    cache, stats);
+      if (merge(r2)) {
+        return r2;
+      }
+    } else {
+      auto* ref_class = type_class(method_ref->get_class());
+      if (ref_class != nullptr && !ref_class->is_external()) {
+        return SafetyResult::reject(
+            BatchingRejection::HasUnresolvedInternalCall);
+      }
+      if (skip_benign && method::is_clinit_invoked_method_benign(method_ref)) {
+        return SafetyResult::safe();
+      }
+      return SafetyResult::reject(BatchingRejection::HasExternalCall);
+    }
+    return SafetyResult::safe();
+  };
+
+  // InstructionIterable requires non-const access for implementation reasons,
+  // but we only read instructions. This const_cast is safe.
+  auto* code = const_cast<IRCode*>(method->get_code());
+  always_assert(code->cfg_built());
+  for (auto& mie : InstructionIterable(code->cfg())) {
+    auto* insn = mie.insn;
+    auto op = insn->opcode();
+    if (opcode::is_a_monitor(op)) {
+      return cache_and_return(
+          SafetyResult::reject(BatchingRejection::HasMonitorOp));
+    }
+    if (opcode::is_throw(op)) {
+      return cache_and_return(
+          SafetyResult::reject(BatchingRejection::HasThrow));
+    }
+    // invoke-super: resolve via manual superclass walk from the caller's class.
+    // resolve_method(ref, Super) without a caller falls back to a Virtual
+    // search from the ref's declaring class, which is incorrect (T132919742).
+    if (opcode::is_invoke_super(op)) {
+      auto* method_ref = insn->get_method();
+      if (skip_benign && method::is_clinit_invoked_method_benign(method_ref)) {
+        stats.benign_virtual_calls++;
+        continue;
+      }
+      auto* caller_cls = type_class(method->get_class());
+      const DexMethod* resolved = nullptr;
+      if (caller_cls != nullptr) {
+        auto* super_type = caller_cls->get_super_class();
+        auto* current =
+            (super_type != nullptr) ? type_class(super_type) : nullptr;
+        while (current != nullptr && !current->is_external()) {
+          for (auto* vm : current->get_vmethods()) {
+            if (vm->get_name() == method_ref->get_name() &&
+                vm->get_proto() == method_ref->get_proto()) {
+              resolved = vm;
+              current = nullptr;
+              break;
+            }
+          }
+          if (current != nullptr) {
+            auto* next_super = current->get_super_class();
+            current =
+                (next_super != nullptr) ? type_class(next_super) : nullptr;
+          }
+        }
+      }
+      if (resolved == nullptr) {
+        auto* ref_class = type_class(method_ref->get_class());
+        if (ref_class != nullptr && !ref_class->is_external()) {
+          return cache_and_return(SafetyResult::reject(
+              BatchingRejection::HasUnresolvedInternalCall));
+        }
+        return cache_and_return(
+            SafetyResult::reject(BatchingRejection::HasExternalCall));
+      }
+      if (skip_benign && method::is_clinit_invoked_method_benign(resolved)) {
+        stats.benign_virtual_calls++;
+        continue;
+      }
+      auto r = check_batching_safety_impl(resolved, visited, override_graph,
+                                          skip_benign, depth + 1, cache, stats);
+      if (merge(r)) {
+        return cache_and_return(r);
+      }
+      auto r2 = check_clinit_safety(type_class(resolved->get_class()), visited,
+                                    override_graph, skip_benign, depth + 1,
+                                    cache, stats);
+      if (merge(r2)) {
+        return cache_and_return(r2);
+      }
+      continue;
+    }
+    // Virtual/interface calls: when override graph is available, resolve
+    // targets and follow them. Otherwise reject.
+    if (opcode::is_invoke_virtual(op) || opcode::is_invoke_interface(op)) {
+      bool is_iface = opcode::is_invoke_interface(op);
+      auto [reject_no_graph, reject_unresolved, reject_too_many] =
+          get_virtual_call_rejections(is_iface);
+      if (override_graph == nullptr) {
+        return cache_and_return(SafetyResult::reject(reject_no_graph));
+      }
+      auto* method_ref = insn->get_method();
+      if (skip_benign && method::is_clinit_invoked_method_benign(method_ref)) {
+        stats.benign_virtual_calls++;
+        continue;
+      }
+      auto* resolved = resolve_method(method_ref, opcode_to_search(insn));
+      if (resolved == nullptr) {
+        return cache_and_return(SafetyResult::reject(reject_unresolved));
+      }
+      if (skip_benign && method::is_clinit_invoked_method_benign(resolved)) {
+        stats.benign_virtual_calls++;
+        continue;
+      }
+      auto r = check_batching_safety_impl(resolved, visited, override_graph,
+                                          skip_benign, depth + 1, cache, stats);
+      if (merge(r)) {
+        return cache_and_return(r);
+      }
+      auto overriders = method_override_graph::get_overriding_methods(
+          *override_graph, resolved, /* include_interfaces */ true);
+      if (overriders.size() > kMaxOverrideTargets) {
+        return cache_and_return(SafetyResult::reject(reject_too_many));
+      }
+      for (const auto* overrider : UnorderedIterable(overriders)) {
+        if (skip_benign && method::is_clinit_invoked_method_benign(overrider)) {
+          stats.benign_virtual_calls++;
+          continue;
+        }
+        r = check_batching_safety_impl(overrider, visited, override_graph,
+                                       skip_benign, depth + 1, cache, stats);
+        if (merge(r)) {
+          return cache_and_return(r);
+        }
+      }
+      auto r2 = check_clinit_safety(type_class(resolved->get_class()), visited,
+                                    override_graph, skip_benign, depth + 1,
+                                    cache, stats);
+      if (merge(r2)) {
+        return cache_and_return(r2);
+      }
+      continue;
+    }
+
+    // Static field access triggers the declaring class's clinit.
+    if (opcode::is_an_sget(op) || opcode::is_an_sput(op)) {
+      auto* field_ref = insn->get_field();
+      always_assert(field_ref != nullptr);
+      auto* resolved_field = resolve_field(field_ref, FieldSearch::Static);
+      auto* dep_class = resolved_field != nullptr
+                            ? type_class(resolved_field->get_class())
+                            : type_class(field_ref->get_class());
+      auto r = check_clinit_safety(dep_class, visited, override_graph,
+                                   skip_benign, depth + 1, cache, stats);
+      if (merge(r)) {
+        return cache_and_return(r);
+      }
+      continue;
+    }
+
+    // invoke-static: recurse into callee and check the callee's class clinit.
+    if (opcode::is_invoke_static(op)) {
+      auto* method_ref = insn->get_method();
+      auto* callee = resolve_method(method_ref, MethodSearch::Static);
+      auto r = check_resolved_callee(callee, method_ref);
+      if (r.rejection != BatchingRejection::None) {
+        return cache_and_return(r);
+      }
+      continue;
+    }
+
+    // invoke-direct: recurse into callee and check the callee's class clinit.
+    if (opcode::is_invoke_direct(op)) {
+      auto* method_ref = insn->get_method();
+      auto* callee = resolve_method(method_ref, MethodSearch::Direct);
+      auto r = check_resolved_callee(callee, method_ref);
+      if (r.rejection != BatchingRejection::None) {
+        return cache_and_return(r);
+      }
+      continue;
+    }
+
+    // new-instance: triggers class initialization (clinit chain). The actual
+    // constructor call is a separate invoke-direct instruction, which the
+    // invoke-direct handler above will process.
+    if (op == OPCODE_NEW_INSTANCE) {
+      auto* inst_class = type_class(insn->get_type());
+      if (inst_class != nullptr && !inst_class->is_external()) {
+        auto r = check_clinit_safety(inst_class, visited, override_graph,
+                                     skip_benign, depth + 1, cache, stats);
+        if (merge(r)) {
+          return cache_and_return(r);
+        }
+      }
+    }
+  }
+  return cache_and_return(SafetyResult::safe());
+}
+
+BatchingRejection check_batching_safety(
+    const DexMethod* clinit,
+    const method_override_graph::Graph* override_graph,
+    bool skip_benign,
+    BatchingSafetyStats& stats,
+    UnorderedMap<const DexMethod*, BatchingRejection>* cache = nullptr) {
+  UnorderedSet<const DexMethod*> visited;
+  return check_batching_safety_impl(clinit, visited, override_graph,
+                                    skip_benign, 0, cache, stats)
+      .rejection;
+}
+
+} // namespace
 
 void ClinitBatchingPass::bind_config() {
   bind("interaction_pattern", "", m_interaction_pattern,
        "Regex pattern to filter baseline profile interactions (e.g., "
        "``ColdStart``). Only clinits hot in matching interactions are "
        "candidates for batching.");
+  bind("allow_safe_virtual_calls", false, m_allow_safe_virtual_calls,
+       "When true, uses the method override graph to follow virtual and "
+       "interface calls during safety analysis instead of rejecting them.");
+  bind("skip_benign_virtual_calls", false, m_skip_benign_virtual_calls,
+       "When true, skips known-benign virtual/interface calls (e.g., "
+       "``Object.toString()``) during safety analysis instead of rejecting "
+       "them.");
   trait(Traits::Pass::unique, true);
 }
 
@@ -168,22 +589,167 @@ void ClinitBatchingPass::run_pass(DexStoresVector& stores,
                                   PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
+  // Build method override graph if virtual call following is enabled
+  std::unique_ptr<const method_override_graph::Graph> method_override_graph;
+  if (m_allow_safe_virtual_calls) {
+    method_override_graph = method_override_graph::build_graph(scope);
+  }
+
   // Step 1: Identify candidate clinits based on baseline profile
   auto candidate_clinits = identify_candidate_clinits(scope, conf, mgr);
 
-  // Future steps (T3-T6):
-  // - Build dependency graph between candidate clinits
-  // - Transform clinits: extract body to __initStatics$*() methods
-  // - Generate orchestrator method body
-  // - Validate correctness
+  // Step 2: Safety analysis using InitClassesWithSideEffects as the base
+  // filter, plus batching-specific checks (monitors, throws, virtual/interface
+  // calls with override graph support).
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false, method_override_graph.get());
 
-  mgr.set_metric("batched_clinits", candidate_clinits.size());
+  size_t rejected_side_effects = 0;
+  size_t rejected_monitor = 0;
+  size_t rejected_throw = 0;
+  size_t rejected_virtual_call = 0;
+  size_t rejected_interface_call = 0;
+  size_t rejected_unresolved_virtual = 0;
+  size_t rejected_too_many_overrides = 0;
+  size_t rejected_unresolved_interface = 0;
+  size_t rejected_too_many_interface_overrides = 0;
+  size_t rejected_unresolved_internal = 0;
+  size_t rejected_external_call = 0;
+  size_t rejected_depth_exceeded = 0;
+  size_t benign_virtual_calls = 0;
+  size_t depth_exceeded_events = 0;
+  UnorderedMap<const DexMethod*, BatchingRejection> safety_cache;
+
+  UnorderedMap<DexMethod*, DexClass*> analysis_candidates;
+  size_t candidate_idx = 0;
+  for (const auto& [clinit, cls] : UnorderedIterable(candidate_clinits)) {
+    candidate_idx++;
+
+    // Two-stage filter: InitClassesWithSideEffects + batching-specific checks
+    if (init_classes_with_side_effects.refine(cls->get_type()) != nullptr) {
+      rejected_side_effects++;
+      continue;
+    }
+    BatchingSafetyStats call_stats;
+    auto pre_cache_size = safety_cache.size();
+    auto start = std::chrono::steady_clock::now();
+    auto batching_rejection = check_batching_safety(
+        clinit, method_override_graph.get(), m_skip_benign_virtual_calls,
+        call_stats, &safety_cache);
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - start)
+                          .count();
+    TRACE(CLINIT_BATCHING, 2,
+          "check_batching_safety[%zu/%zu]: %s took %lldms -> %d "
+          "(cache: %zu -> %zu, benign: %zu, depth_exceeded: %zu)",
+          candidate_idx, candidate_clinits.size(), SHOW(clinit),
+          (long long)elapsed_ms, static_cast<int>(batching_rejection),
+          pre_cache_size, safety_cache.size(), call_stats.benign_virtual_calls,
+          call_stats.depth_exceeded);
+    benign_virtual_calls += call_stats.benign_virtual_calls;
+    depth_exceeded_events += call_stats.depth_exceeded;
+    switch (batching_rejection) {
+    case BatchingRejection::HasMonitorOp:
+      rejected_monitor++;
+      break;
+    case BatchingRejection::HasThrow:
+      rejected_throw++;
+      break;
+    case BatchingRejection::HasVirtualCall:
+      rejected_virtual_call++;
+      break;
+    case BatchingRejection::HasUnresolvedVirtualCall:
+      rejected_virtual_call++;
+      rejected_unresolved_virtual++;
+      break;
+    case BatchingRejection::HasTooManyOverrides:
+      rejected_virtual_call++;
+      rejected_too_many_overrides++;
+      break;
+    case BatchingRejection::HasInterfaceCall:
+      rejected_interface_call++;
+      break;
+    case BatchingRejection::HasUnresolvedInterfaceCall:
+      rejected_interface_call++;
+      rejected_unresolved_interface++;
+      break;
+    case BatchingRejection::HasTooManyInterfaceOverrides:
+      rejected_interface_call++;
+      rejected_too_many_interface_overrides++;
+      break;
+    case BatchingRejection::HasUnresolvedInternalCall:
+      rejected_unresolved_internal++;
+      break;
+    case BatchingRejection::HasExternalCall:
+      rejected_external_call++;
+      break;
+    case BatchingRejection::DepthExceeded:
+      rejected_depth_exceeded++;
+      break;
+    case BatchingRejection::None:
+      analysis_candidates.emplace(clinit, cls);
+      break;
+    }
+  }
+
+  mgr.set_metric("analysis_candidates", analysis_candidates.size());
+  mgr.set_metric("rejected_side_effects", rejected_side_effects);
+  mgr.set_metric("rejected_monitor", rejected_monitor);
+  mgr.set_metric("rejected_throw", rejected_throw);
+  mgr.set_metric("rejected_virtual_call", rejected_virtual_call);
+  mgr.set_metric("rejected_unresolved_virtual", rejected_unresolved_virtual);
+  mgr.set_metric("rejected_too_many_overrides", rejected_too_many_overrides);
+  mgr.set_metric("rejected_interface_call", rejected_interface_call);
+  mgr.set_metric("rejected_unresolved_interface",
+                 rejected_unresolved_interface);
+  mgr.set_metric("rejected_too_many_interface_overrides",
+                 rejected_too_many_interface_overrides);
+  mgr.set_metric("rejected_unresolved_internal", rejected_unresolved_internal);
+  mgr.set_metric("rejected_external_call", rejected_external_call);
+  mgr.set_metric("benign_virtual_calls", benign_virtual_calls);
+  mgr.set_metric("rejected_depth_exceeded", rejected_depth_exceeded);
+  mgr.set_metric("depth_exceeded_events", depth_exceeded_events);
+
+  TRACE(CLINIT_BATCHING, 1,
+        "ClinitBatchingPass: safety analysis accepted %zu "
+        "(rejected: side_effects=%zu, monitor=%zu, throw=%zu, "
+        "virtual_call=%zu, interface_call=%zu)",
+        analysis_candidates.size(), rejected_side_effects, rejected_monitor,
+        rejected_throw, rejected_virtual_call, rejected_interface_call);
+
+  // Verify invariant: every candidate must pass batching safety checks.
+  // The dependency graph relies on the absence of virtual/interface calls,
+  // monitor ops, and throw in the transitive call graph reachable through
+  // invoke-static/invoke-direct chains.
+  for (const auto& [clinit, cls] : UnorderedIterable(analysis_candidates)) {
+    BatchingSafetyStats verify_stats;
+    auto rejection = check_batching_safety(clinit, method_override_graph.get(),
+                                           m_skip_benign_virtual_calls,
+                                           verify_stats, &safety_cache);
+    always_assert_log(
+        rejection == BatchingRejection::None,
+        "ClinitBatchingPass: candidate %s passed initial safety check but "
+        "fails re-check before dep graph build (this is a bug)",
+        SHOW(clinit));
+  }
+
+  // Future steps:
+  // - Early class loads analysis
+  // - Build dependency graph
+  // - Transform clinits
+  // - Generate orchestrator
+
+  mgr.set_metric("batched_clinits", analysis_candidates.size());
   mgr.set_metric("interaction_pattern_set",
                  m_interaction_pattern.empty() ? 0 : 1);
+  mgr.set_metric("allow_safe_virtual_calls",
+                 m_allow_safe_virtual_calls ? 1 : 0);
+  mgr.set_metric("skip_benign_virtual_calls",
+                 m_skip_benign_virtual_calls ? 1 : 0);
   TRACE(CLINIT_BATCHING,
         1,
         "ClinitBatchingPass: found %zu clinits for batching",
-        candidate_clinits.size());
+        analysis_candidates.size());
 }
 
 static ClinitBatchingPass s_pass;

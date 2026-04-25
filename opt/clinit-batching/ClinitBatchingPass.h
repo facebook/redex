@@ -71,4 +71,6 @@ class ClinitBatchingPass : public Pass {
       const Scope& scope, ConfigFiles& conf, PassManager& mgr);
 
   std::string m_interaction_pattern;
+  bool m_allow_safe_virtual_calls{false};
+  bool m_skip_benign_virtual_calls{false};
 };
