@@ -25,6 +25,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/class-merging \
 	-I$(top_srcdir)/opt/class-reordering \
 	-I$(top_srcdir)/opt/class-splitting \
+	-I$(top_srcdir)/opt/clinit-batching \
 	-I$(top_srcdir)/opt/constant-propagation \
 	-I$(top_srcdir)/opt/copy-propagation \
 	-I$(top_srcdir)/opt/cse \
