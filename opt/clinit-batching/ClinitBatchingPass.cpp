@@ -26,6 +26,7 @@
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StaticFieldDependencyGraph.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -651,6 +652,35 @@ ClinitBatchingPass::identify_candidate_clinits(const Scope& scope,
   return candidate_clinits;
 }
 
+clinit_batching::TopologicalSortResult
+ClinitBatchingPass::build_dependency_graph(
+    const UnorderedMap<DexMethod*, DexClass*>& candidate_clinits,
+    PassManager& mgr,
+    const method_override_graph::Graph* override_graph,
+    bool skip_benign) {
+  clinit_batching::StaticFieldDependencyGraph graph;
+
+  // Build the dependency graph from candidate clinits
+  graph.build(candidate_clinits, override_graph, skip_benign);
+
+  // Perform topological sort and report metrics
+  auto sort_result = graph.topological_sort();
+
+  mgr.set_metric("dependency_graph_nodes", graph.size());
+  mgr.set_metric("ordered_classes_count", sort_result.ordered_classes.size());
+  mgr.set_metric("cyclic_classes_count", sort_result.cyclic_classes.size());
+
+  TRACE(CLINIT_BATCHING,
+        1,
+        "ClinitBatchingPass: dependency graph has %zu nodes, "
+        "%zu in valid order, %zu in cycles",
+        graph.size(),
+        sort_result.ordered_classes.size(),
+        sort_result.cyclic_classes.size());
+
+  return sort_result;
+}
+
 void ClinitBatchingPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
@@ -852,19 +882,47 @@ void ClinitBatchingPass::run_pass(DexStoresVector& stores,
   }
 
   // Future steps:
-  // - Build dependency graph
   // - Transform clinits
   // - Generate orchestrator
 
-  mgr.set_metric("batched_clinits", analysis_candidates.size());
+  // Step 5: Build dependency graph and topological sort
+  auto sort_result = build_dependency_graph(analysis_candidates, mgr,
+                                            method_override_graph.get(),
+                                            m_skip_benign_virtual_calls);
+
+  // Build a set from cyclic classes for O(1) lookup
+  UnorderedSet<DexClass*> cyclic_set;
+  for (auto* cls : sort_result.cyclic_classes) {
+    cyclic_set.insert(cls);
+  }
+
+  // Exclude cyclic classes from batching
+  UnorderedMap<DexMethod*, DexClass*> final_candidates;
+  size_t excluded_cyclic = 0;
+  for (const auto& [clinit, cls] : UnorderedIterable(analysis_candidates)) {
+    if (cyclic_set.count(cls) != 0) {
+      excluded_cyclic++;
+      TRACE(CLINIT_BATCHING,
+            3,
+            "ClinitBatchingPass: excluding %s - involved in dependency cycle",
+            SHOW(clinit));
+    } else {
+      final_candidates.emplace(clinit, cls);
+    }
+  }
+  mgr.set_metric("excluded_cyclic", excluded_cyclic);
+
+  mgr.set_metric("batched_clinits", final_candidates.size());
   mgr.set_metric("interaction_pattern_set",
                  m_interaction_pattern.empty() ? 0 : 1);
   mgr.set_metric("skip_benign_virtual_calls",
                  m_skip_benign_virtual_calls ? 1 : 0);
   TRACE(CLINIT_BATCHING,
         1,
-        "ClinitBatchingPass: found %zu clinits for batching",
-        analysis_candidates.size());
+        "ClinitBatchingPass: found %zu clinits for batching "
+        "(excluded %zu cyclic)",
+        final_candidates.size(),
+        excluded_cyclic);
 
   // Clear no_optimizations so later passes can optimize the now-populated
   // orchestrator body.

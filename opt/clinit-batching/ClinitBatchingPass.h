@@ -9,6 +9,7 @@
 
 #include "DeterministicContainers.h"
 #include "Pass.h"
+#include "StaticFieldDependencyGraph.h"
 
 /**
  * ClinitBatchingPass eliminates class initializers (clinits) by making classes
@@ -71,6 +72,21 @@ class ClinitBatchingPass : public Pass {
    */
   InsertOnlyConcurrentMap<DexMethod*, DexClass*> identify_candidate_clinits(
       const Scope& scope, ConfigFiles& conf, PassManager& mgr);
+
+  /**
+   * Builds a dependency graph between candidate classes based on static field
+   * accesses, static method invocations, and new instance creations in clinits.
+   * Performs topological sort and reports metrics.
+   *
+   * @param candidate_clinits Map of clinit methods to their containing classes
+   * @param mgr Pass manager for metrics
+   * @return Topological sort result with ordered and cyclic classes
+   */
+  clinit_batching::TopologicalSortResult build_dependency_graph(
+      const UnorderedMap<DexMethod*, DexClass*>& candidate_clinits,
+      PassManager& mgr,
+      const method_override_graph::Graph* override_graph = nullptr,
+      bool skip_benign = false);
 
   std::string m_interaction_pattern;
   std::string m_orchestrator_annotation;
