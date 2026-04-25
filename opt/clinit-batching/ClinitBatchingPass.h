@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "Pass.h"
 
 /**
@@ -51,5 +52,23 @@ class ClinitBatchingPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
+  /**
+   * Identifies candidate clinits for batching based on baseline profile data.
+   * A clinit is a candidate if:
+   * 1. It is marked as hot in the baseline profile
+   * 2. It doesn't have no_optimizations or should_not_outline flags
+   * 3. Its class is not a reachability root (can be deleted)
+   * 4. Its class can be renamed (not referenced externally via JNI/reflection)
+   * 5. Its class is not an enum (TODO: verify whether enums actually need
+   *    special treatment — see comment in implementation)
+   *
+   * @param scope The class scope to analyze
+   * @param conf Configuration files containing baseline profile info
+   * @param mgr Pass manager for metrics
+   * @return Map of clinit methods to their containing classes
+   */
+  InsertOnlyConcurrentMap<DexMethod*, DexClass*> identify_candidate_clinits(
+      const Scope& scope, ConfigFiles& conf, PassManager& mgr);
+
   std::string m_interaction_pattern;
 };
