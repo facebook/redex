@@ -88,6 +88,39 @@ class ClinitBatchingPass : public Pass {
       const method_override_graph::Graph* override_graph = nullptr,
       bool skip_benign = false);
 
+  /**
+   * Transforms candidate clinits by:
+   * 1. Removing ACC_FINAL from static fields written by the clinit
+   * 2. Creating a new __initStatics$<ClassName>() method with the clinit body
+   * 3. Removing the original clinit (making the class trivially initialized)
+   *
+   * @param ordered_classes Classes in dependency order for initialization
+   * @param conf Configuration files for method profiles
+   * @param mgr Pass manager for metrics
+   * @return Map of classes to their new __initStatics$*() methods
+   */
+  UnorderedMap<DexClass*, DexMethod*> transform_clinits(
+      const std::vector<DexClass*>& ordered_classes,
+      ConfigFiles& conf,
+      PassManager& mgr);
+
+  /**
+   * Generates the orchestrator method body that calls all __initStatics$*()
+   * methods in dependency order.
+   *
+   * @param orchestrator_method The annotated method to fill with calls
+   * @param init_statics_methods Map of classes to their __initStatics$*()
+   * methods
+   * @param ordered_classes Classes in dependency order for initialization
+   * @param mgr Pass manager for metrics
+   * @return Number of init calls generated
+   */
+  size_t generate_orchestrator(
+      DexMethod* orchestrator_method,
+      const UnorderedMap<DexClass*, DexMethod*>& init_statics_methods,
+      const std::vector<DexClass*>& ordered_classes,
+      PassManager& mgr);
+
   std::string m_interaction_pattern;
   std::string m_orchestrator_annotation;
   bool m_skip_benign_virtual_calls{false};

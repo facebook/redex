@@ -7,10 +7,12 @@
 
 #include "ClinitBatchingPass.h"
 
+#include <algorithm>
 #include <chrono>
 
 #include <boost/regex.hpp> // NOLINT(facebook-unused-include-check)
 
+#include "ApiLevelChecker.h"
 #include "BaselineProfile.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
@@ -681,6 +683,183 @@ ClinitBatchingPass::build_dependency_graph(
   return sort_result;
 }
 
+UnorderedMap<DexClass*, DexMethod*> ClinitBatchingPass::transform_clinits(
+    const std::vector<DexClass*>& ordered_classes,
+    ConfigFiles& conf,
+    PassManager& mgr) {
+  auto& method_profiles = conf.get_method_profiles();
+
+  size_t affected_final_fields = 0;
+  UnorderedMap<DexClass*, DexMethod*> transformed_clinits;
+
+  // Process each class in the ordered list
+  for (DexClass* cls : ordered_classes) {
+    DexMethod* clinit = cls->get_clinit();
+    always_assert(clinit != nullptr);
+    IRCode* code = clinit->get_code();
+    always_assert(code != nullptr);
+    always_assert(code->cfg_built());
+
+    // Step 1: Remove ACC_FINAL from static fields being written
+    UnorderedSet<DexField*> final_fields;
+    for (auto& mie : InstructionIterable(code->cfg())) {
+      auto* insn = mie.insn;
+      if (opcode::is_an_sput(insn->opcode())) {
+        auto* field = insn->get_field();
+        auto* resolved_field = resolve_field(field, FieldSearch::Static);
+        if (resolved_field == nullptr || !is_final(resolved_field)) {
+          continue;
+        }
+        // Only remove ACC_FINAL from fields belonging to this class.
+        // A clinit could theoretically write to a parent class's field.
+        if (resolved_field->get_class() != clinit->get_class()) {
+          continue;
+        }
+        if (final_fields.insert(resolved_field).second) {
+          resolved_field->set_access(resolved_field->get_access() & ~ACC_FINAL);
+        }
+      }
+    }
+    affected_final_fields += final_fields.size();
+
+    // Step 2: Create new __initStatics$<ClassName>() method with clinit body
+    // Generate a unique method name based on the class name
+    std::string class_name = show(cls->get_type());
+    // Remove L prefix and ; suffix, replace / with _
+    if (class_name.size() > 2 && class_name[0] == 'L' &&
+        class_name.back() == ';') {
+      class_name = class_name.substr(1, class_name.size() - 2);
+    }
+    std::replace(class_name.begin(), class_name.end(), '/', '_');
+    std::string new_method_name = "__initStatics$" + class_name;
+
+    const auto* method_name = DexMethod::get_unique_name(
+        clinit->get_class(), DexString::make_string(new_method_name),
+        clinit->get_proto());
+    auto* init_statics =
+        DexMethod::make_method(clinit->get_class(), method_name,
+                               clinit->get_proto())
+            ->make_concrete(ACC_STATIC | ACC_PUBLIC, clinit->release_code(),
+                            /* is_virtual */ false);
+
+    init_statics->rstate.set_generated();
+    init_statics->rstate.set_dont_inline();
+    int api_level = api::LevelChecker::get_method_level(clinit);
+    init_statics->rstate.set_api_level(api_level);
+    init_statics->set_deobfuscated_name(show_deobfuscated(init_statics));
+
+    // Step 3: Add the new method to the class
+    cls->add_method(init_statics);
+
+    // Step 4: Derive stats for the new method from the original clinit
+    method_profiles.derive_stats(init_statics, {clinit});
+
+    // Step 5: Remove the original clinit, making the class trivially
+    // initialized (a class with no clinit needs no initialization barrier).
+    cls->remove_method(clinit);
+
+    transformed_clinits.emplace(cls, init_statics);
+
+    TRACE(CLINIT_BATCHING,
+          3,
+          "ClinitBatchingPass: transformed clinit %s -> %s",
+          SHOW(cls),
+          SHOW(init_statics));
+  }
+
+  // Report metrics
+  mgr.set_metric("transformed_clinits_count", transformed_clinits.size());
+  mgr.set_metric("affected_final_fields", affected_final_fields);
+
+  TRACE(
+      CLINIT_BATCHING,
+      1,
+      "ClinitBatchingPass: transformed %zu clinits, affected %zu final fields",
+      transformed_clinits.size(),
+      affected_final_fields);
+
+  return transformed_clinits;
+}
+
+size_t ClinitBatchingPass::generate_orchestrator(
+    DexMethod* orchestrator_method,
+    const UnorderedMap<DexClass*, DexMethod*>& init_statics_methods,
+    const std::vector<DexClass*>& ordered_classes,
+    PassManager& mgr) {
+  always_assert(orchestrator_method != nullptr);
+
+  auto* code = orchestrator_method->get_code();
+  always_assert(code != nullptr);
+  always_assert(code->cfg_built());
+  auto& cfg = code->cfg();
+
+  // Find the RETURN_VOID instruction where we'll insert our calls
+  auto ii = cfg::InstructionIterable(cfg);
+  auto it = ii.begin();
+  auto end = ii.end();
+
+  // Skip any parameter loading instructions
+  while (it != end && opcode::is_a_load_param(it->insn->opcode())) {
+    ++it;
+  }
+
+  // The orchestrator should be empty (just RETURN_VOID). We set dont_inline
+  // and no_optimizations in eval_pass to prevent other passes from modifying
+  // it.
+  always_assert_log(it != end && it->insn->opcode() == OPCODE_RETURN_VOID,
+                    "ClinitBatchingPass: orchestrator method %s is not empty "
+                    "(expected RETURN_VOID, found %s)",
+                    SHOW(orchestrator_method),
+                    it != end ? SHOW(it->insn) : "end");
+
+  // Generate invoke-static instructions for each __initStatics$*() method
+  // in dependency order
+  std::vector<IRInstruction*> insns;
+  insns.reserve(ordered_classes.size());
+
+  for (DexClass* cls : ordered_classes) {
+    auto it2 = init_statics_methods.find(cls);
+    if (it2 == init_statics_methods.end()) {
+      continue;
+    }
+
+    DexMethod* init_statics = it2->second;
+
+    // Generate: invoke-static {}, <init_statics>
+    auto* invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
+    invoke->set_method(init_statics);
+    invoke->set_srcs_size(0);
+    insns.push_back(invoke);
+
+    TRACE(CLINIT_BATCHING,
+          3,
+          "ClinitBatchingPass: adding call to %s in orchestrator",
+          SHOW(init_statics));
+  }
+
+  if (insns.empty()) {
+    TRACE(CLINIT_BATCHING,
+          1,
+          "ClinitBatchingPass: no init calls to generate for orchestrator");
+    return 0;
+  }
+
+  // Insert the generated instructions before the RETURN_VOID
+  cfg.insert_before(it, insns);
+
+  // Report metrics
+  mgr.set_metric("num_init_calls_generated", insns.size());
+
+  TRACE(CLINIT_BATCHING,
+        1,
+        "ClinitBatchingPass: generated %zu invoke-static calls in "
+        "orchestrator method %s",
+        insns.size(),
+        SHOW(orchestrator_method));
+
+  return insns.size();
+}
+
 void ClinitBatchingPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
@@ -881,48 +1060,34 @@ void ClinitBatchingPass::run_pass(DexStoresVector& stores,
         SHOW(clinit));
   }
 
-  // Future steps:
-  // - Transform clinits
-  // - Generate orchestrator
-
   // Step 5: Build dependency graph and topological sort
   auto sort_result = build_dependency_graph(analysis_candidates, mgr,
                                             method_override_graph.get(),
                                             m_skip_benign_virtual_calls);
 
-  // Build a set from cyclic classes for O(1) lookup
-  UnorderedSet<DexClass*> cyclic_set;
-  for (auto* cls : sort_result.cyclic_classes) {
-    cyclic_set.insert(cls);
-  }
+  // Step 6: Transform clinits in dependency order
+  auto transformed_clinits =
+      transform_clinits(sort_result.ordered_classes, conf, mgr);
 
-  // Exclude cyclic classes from batching
-  UnorderedMap<DexMethod*, DexClass*> final_candidates;
-  size_t excluded_cyclic = 0;
-  for (const auto& [clinit, cls] : UnorderedIterable(analysis_candidates)) {
-    if (cyclic_set.count(cls) != 0) {
-      excluded_cyclic++;
-      TRACE(CLINIT_BATCHING,
-            3,
-            "ClinitBatchingPass: excluding %s - involved in dependency cycle",
-            SHOW(clinit));
-    } else {
-      final_candidates.emplace(clinit, cls);
-    }
-  }
-  mgr.set_metric("excluded_cyclic", excluded_cyclic);
+  // Step 7: Generate orchestrator method body with invoke-static calls
+  auto num_init_calls =
+      generate_orchestrator(m_orchestrator_method, transformed_clinits,
+                            sort_result.ordered_classes, mgr);
 
-  mgr.set_metric("batched_clinits", final_candidates.size());
+  mgr.set_metric("batched_clinits", transformed_clinits.size());
+  mgr.set_metric("skipped_cyclic_classes", sort_result.cyclic_classes.size());
+  mgr.set_metric("orchestrator_generated", 1);
   mgr.set_metric("interaction_pattern_set",
                  m_interaction_pattern.empty() ? 0 : 1);
   mgr.set_metric("skip_benign_virtual_calls",
                  m_skip_benign_virtual_calls ? 1 : 0);
   TRACE(CLINIT_BATCHING,
         1,
-        "ClinitBatchingPass: found %zu clinits for batching "
-        "(excluded %zu cyclic)",
-        final_candidates.size(),
-        excluded_cyclic);
+        "ClinitBatchingPass: batched %zu clinits, skipped %zu cyclic classes, "
+        "%zu orchestrator calls",
+        transformed_clinits.size(),
+        sort_result.cyclic_classes.size(),
+        num_init_calls);
 
   // Clear no_optimizations so later passes can optimize the now-populated
   // orchestrator body.

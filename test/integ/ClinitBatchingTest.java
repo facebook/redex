@@ -126,3 +126,45 @@ class ClinitBatchingOrchestrator {
         // Empty — ClinitBatchingPass fills this in.
     }
 }
+
+/**
+ * Class with a simple clinit that only uses SPUT to its own fields.
+ */
+class SimpleClinitClass {
+  static int s_value1 = 42;
+  static int s_value2 = 43;
+  static int s_value3 = 44;
+  static int s_value4 = 45;
+  static int s_value5 = 46;
+  static int s_value6 = 47;
+  static int s_value7 = 48;
+  static int s_value8 = 49;
+}
+
+/**
+ * Class A in a dependency chain. Only assigns to its own static fields.
+ */
+class DependencyClassA {
+  static int s_a_value1 = 10;
+  static int s_a_value2 = 11;
+  static int s_a_value3 = 12;
+  static int s_a_value4 = 13;
+  static int s_a_value5 = 14;
+  static int s_a_value6 = 15;
+  static int s_a_value7 = 16;
+  static int s_a_value8 = 17;
+}
+
+/**
+ * Class B depends on A (reads A's static field via SGET).
+ */
+class DependencyClassB {
+  static int s_b_value1 = DependencyClassA.s_a_value1 + 5;
+  static int s_b_value2 = 20;
+  static int s_b_value3 = 30;
+  static int s_b_value4 = 40;
+  static int s_b_value5 = 50;
+  static int s_b_value6 = 60;
+  static int s_b_value7 = 70;
+  static int s_b_value8 = 80;
+}

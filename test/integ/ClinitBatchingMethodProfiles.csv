@@ -4,3 +4,6 @@ index,name,appear100,appear#,avg_call,avg_order,avg_rank100,min_api_level
 1,Lcom/facebook/redextest/ClinitBatchingTest;.<clinit>:()V,99.0000,99,2.0000,0.0000,0.000000,29
 2,Lcom/facebook/redextest/ClinitBatchingTestB;.<clinit>:()V,98.0000,98,2.0000,1.0000,1.000000,29
 3,Lcom/facebook/redextest/ClinitBatchingTestC;.<clinit>:()V,97.0000,97,2.0000,2.0000,2.000000,29
+4,Lcom/facebook/redextest/SimpleClinitClass;.<clinit>:()V,96.0000,96,2.0000,3.0000,3.000000,29
+5,Lcom/facebook/redextest/DependencyClassA;.<clinit>:()V,95.0000,95,2.0000,4.0000,4.000000,29
+6,Lcom/facebook/redextest/DependencyClassB;.<clinit>:()V,94.0000,94,2.0000,5.0000,5.000000,29
