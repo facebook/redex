@@ -12,51 +12,25 @@ REDEX_BINARY="$1"
 shift
 
 OUT_TMP="$(mktemp "$(dirname "$SCRIPT")/test.out.XXXXXX")"
-DEBUG_STDERR="$(mktemp -d "$(dirname "$SCRIPT")/stderr_debug.XXXXXX")/d"
-trap 'rm -f "$OUT_TMP" "${DEBUG_STDERR}".*; rmdir "$(dirname "$DEBUG_STDERR")" 2>/dev/null' EXIT
+trap 'rm -f "$OUT_TMP"' EXIT
 
 # We are using pass-through mode for simplicity. The actual data
 # does not matter
 # shellcheck disable=SC2015
-REDEX_STDERR_DEBUG="$DEBUG_STDERR" \
 "$FB_REDEX" --redex-binary "$REDEX_BINARY" \
   --config /tmp/test.config \
   --outdir /tmp/test --dex-files /tmp/test.apk \
   --assert-abort "This is an abort test." \
   >"$OUT_TMP" 2>&1 && exit 1 || true
 
-# Record pre/post-tr size and pre-tr NUL count.
-{
-  echo "pre_tr_size=$(wc -c < "$OUT_TMP")"
-  echo "pre_tr_nul=$(tr -cd '\0' < "$OUT_TMP" | wc -c)"
-} > "${DEBUG_STDERR}.outtmp_meta"
-
 # Strip NUL bytes so grep doesn't treat the output as binary.
 tr -d '\0' < "$OUT_TMP" > "${OUT_TMP}.clean"
 mv "${OUT_TMP}.clean" "$OUT_TMP"
-
-echo "post_tr_size=$(wc -c < "$OUT_TMP")" >> "${DEBUG_STDERR}.outtmp_meta"
 
 # Check for abort message.
 grep 'This is an abort test.' "$OUT_TMP" || ( echo "Did not find abort message" ; exit 1 ; )
 
 # Check for stack symbolication.
-
-dump_debug() {
-    echo "=== .outtmp_meta ==="
-    if [ -f "${DEBUG_STDERR}.outtmp_meta" ]; then
-      cat "${DEBUG_STDERR}.outtmp_meta"
-    else
-      echo "(no outtmp_meta file)"
-    fi
-    echo "=== .streams ==="
-    if [ -f "${DEBUG_STDERR}.streams" ]; then
-      cat "${DEBUG_STDERR}.streams"
-    else
-      echo "(no streams file)"
-    fi
-    echo "=== End debug ==="
-}
 
 check_stack() {
     LINE="$1"
@@ -74,7 +48,6 @@ check_stack() {
       echo "=== Full symbolicated stack trace ==="
       cat "$OUT_TMP"
       echo "=== End stack trace ==="
-      dump_debug
       exit 1
     fi
 }
