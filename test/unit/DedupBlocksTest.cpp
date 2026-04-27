@@ -14,7 +14,9 @@
 #include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "IROpcode.h"
 #include "RedexTest.h"
+#include "SourceBlocks.h"
 #include "Walkers.h"
 
 struct Branch {
@@ -2042,4 +2044,156 @@ TEST_F(DedupBlocksTest, blockWithIterativeLimit2) {
   )");
 
   EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// Verify that split_postfix preserves source block coverage for blocks ending
+// with a may-throw instruction. When split_postfix splits a block at a
+// may-throw instruction, the source block covering the post-throw segment gets
+// moved to the new split block. After dedup merges the split block with another
+// identical block, the original block must still have source block coverage.
+TEST_F(DedupBlocksTest, splitPostfixPreservesSourceBlockCoverage) {
+  DexMethod* method =
+      get_fresh_method("splitPostfixPreservesSourceBlockCoverage");
+  method->set_deobfuscated_name(show(method));
+
+  // Two branches sharing a common postfix (add-int, add-int, return-void).
+  // Branch A has invoke-static (may-throw) before the common postfix.
+  const auto* str = R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :C)
+
+      (invoke-static () "LFoo;.bar:()V")
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return-void)
+
+      (:C)
+      (const v1 1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return-void)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  auto& code_ref = *method->get_code();
+  code_ref.build_cfg();
+  auto& cfg = code_ref.cfg();
+
+  // Add a source block to every non-exit block.
+  for (auto* block : cfg.blocks()) {
+    if (block == cfg.exit_block()) {
+      continue;
+    }
+    auto sb = std::make_unique<SourceBlock>(
+        method->get_deobfuscated_name_or_null(), block->id(),
+        std::vector<SourceBlock::Val>{SourceBlock::Val(1.0f, 1.0f)});
+    source_blocks::impl::BlockAccessor::push_source_block(block, std::move(sb));
+  }
+
+  // Add a second source block after the invoke-static (simulating a
+  // throw-delineated segment boundary, like the real-world SB@3).
+  for (auto* block : cfg.blocks()) {
+    for (auto it = block->begin(); it != block->end(); ++it) {
+      if (it->type == MFLOW_OPCODE &&
+          it->insn->opcode() == OPCODE_INVOKE_STATIC) {
+        auto* first_sb = source_blocks::get_first_source_block(block);
+        if (first_sb != nullptr) {
+          auto sb_after = std::make_unique<SourceBlock>(*first_sb);
+          sb_after->id = 100;
+          sb_after->next = nullptr;
+          source_blocks::impl::BlockAccessor::insert_source_block_after(
+              block, it, std::move(sb_after));
+        }
+        break;
+      }
+    }
+  }
+
+  dedup_blocks_impl::Config config;
+  dedup_blocks_impl::DedupBlocks impl(&config, method);
+  impl.run();
+
+  // After dedup, every non-exit block must have a source block, and any block
+  // ending with a may-throw instruction must have a source block after it.
+  for (auto* block : cfg.blocks()) {
+    if (block == cfg.exit_block()) {
+      continue;
+    }
+
+    auto* sb = source_blocks::get_first_source_block(block);
+    EXPECT_NE(sb, nullptr) << "Block B" << block->id()
+                           << " missing source block";
+
+    auto last_it = block->get_last_insn();
+    if (last_it != block->end() && opcode::can_throw(last_it->insn->opcode())) {
+      bool found_sb_after = false;
+      for (auto check_it = std::next(IRList::iterator(last_it));
+           check_it != block->end();
+           ++check_it) {
+        if (check_it->type == MFLOW_SOURCE_BLOCK) {
+          found_sb_after = true;
+          break;
+        }
+      }
+      EXPECT_TRUE(found_sb_after)
+          << "Block B" << block->id()
+          << " missing source block after may-throw instruction";
+    }
+  }
+
+  code_ref.clear_cfg();
+}
+
+// Verify that normal dedup behavior (postfix deduplication) is not regressed
+// by the source block coverage fix.
+TEST_F(DedupBlocksTest, splitPostfixNormalBehaviorPreserved) {
+  DexMethod* method = get_fresh_method("splitPostfixNormalBehaviorPreserved");
+  method->set_deobfuscated_name(show(method));
+
+  const auto* str = R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :C)
+
+      (invoke-static () "LFoo;.bar:()V")
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return-void)
+
+      (:C)
+      (const v1 1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return-void)
+    )
+  )";
+
+  auto code_val = assembler::ircode_from_string(str);
+  method->set_code(std::move(code_val));
+
+  run_dedup_blocks();
+
+  const auto* expected_str = R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :C)
+
+      (invoke-static () "LFoo;.bar:()V")
+
+      (:F)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return-void)
+
+      (:C)
+      (const v1 1)
+      (goto :F)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
