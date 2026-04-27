@@ -7,6 +7,7 @@
 
 #include "DexClass.h"
 #include "DexInstruction.h"
+#include "DexUtil.h"
 #include "JarLoader.h"
 #include "ProguardConfiguration.h"
 #include "ProguardParser.h"
