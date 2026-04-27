@@ -8,8 +8,6 @@
 #include "AppModuleUsage.h"
 
 #include <algorithm>
-#include <boost/none.hpp>
-#include <boost/none_t.hpp>
 #include <fstream>
 #include <optional>
 #include <sstream>

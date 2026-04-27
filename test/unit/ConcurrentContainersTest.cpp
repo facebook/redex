@@ -8,6 +8,7 @@
 #include "ConcurrentContainers.h"
 
 #include <algorithm>
+#include <boost/thread.hpp>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -17,8 +18,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
-#include <boost/thread/thread.hpp>
 
 constexpr size_t kThreads = 50;
 constexpr size_t kSampleSize = 1000;

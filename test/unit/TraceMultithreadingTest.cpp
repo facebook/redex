@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/thread/thread.hpp>
+#include <boost/thread.hpp>
 #include <gtest/gtest.h>
 #include <vector>
 

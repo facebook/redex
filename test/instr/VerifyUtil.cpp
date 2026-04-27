@@ -6,7 +6,6 @@
  */
 
 #include <algorithm>
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 // NOLINTNEXTLINE(facebook-unused-include-check)
 #include <boost/regex.hpp>
