@@ -40,7 +40,7 @@ JarMethodInfoMap load_jar_method_info(const std::string& base_directory,
                       const auto& attribute_name, uint8_t* attribute_pointer,
                       uint8_t* attribute_pointer_end) {
     // 0: DexField, 1: DexMethod
-    if (field_or_method.which() != 1 || attribute_name != "Code" != 0) {
+    if (field_or_method.which() != 1 || attribute_name != "Code") {
       return;
     }
 
@@ -66,22 +66,21 @@ JarMethodInfoMap load_jar_method_info(const std::string& base_directory,
 void diff_in_out_jars_from_command_line(const std::string& command_line_path) {
   std::ifstream config(command_line_path);
   if (!config.is_open()) {
-    std::cerr << "Unable to open \'" << command_line_path << '\'' << std::endl;
+    std::cerr << "Unable to open \'" << command_line_path << '\'' << '\n';
     return;
   }
 
   keep_rules::ProguardConfiguration pg_config;
   keep_rules::proguard_parser::parse(config, &pg_config, command_line_path);
-  std::cout << "Number of -injar options: " << pg_config.injars.size()
-            << std::endl;
+  std::cout << "Number of -injar options: " << pg_config.injars.size() << '\n';
   std::cout << "Number of -outjar options: " << pg_config.outjars.size()
-            << std::endl;
+            << '\n';
 
   RedexContext* injar_context = g_redex;
   std::cout << "Reading injar files... " << std::flush;
   auto injar_info =
       load_jar_method_info(pg_config.basedirectory, pg_config.injars);
-  std::cout << injar_info.size() << " method info loaded." << std::endl;
+  std::cout << injar_info.size() << " method info loaded." << '\n';
 
   // Create a new context for outjars and switch the context.
   std::unique_ptr<RedexContext> outjar_context(new RedexContext());
@@ -89,15 +88,15 @@ void diff_in_out_jars_from_command_line(const std::string& command_line_path) {
   std::cout << "Reading outjar files... " << std::flush;
   auto outjar_info =
       load_jar_method_info(pg_config.basedirectory, pg_config.outjars);
-  std::cout << outjar_info.size() << " method info loaded." << std::endl;
+  std::cout << outjar_info.size() << " method info loaded." << '\n';
 
-  std::cout << "Diffing in and out jars... " << std::endl;
+  std::cout << "Diffing in and out jars... " << '\n';
   JarMethodInfoMap diff;
   for (auto&& pair : injar_info) {
     auto found = outjar_info.find(pair.first);
     if (found == end(outjar_info)) {
       std::cerr << "Uh-oh, " << pair.first << " can't be found in outjars"
-                << std::endl;
+                << '\n';
       continue;
     }
     const auto& in = pair.second;
@@ -120,17 +119,17 @@ void diff_in_out_jars_from_command_line(const std::string& command_line_path) {
 
   for (const auto& pair : diff) {
     std::cout << "DIFF: " << pair.first << " " << print_tuple(pair.second)
-              << std::endl;
+              << '\n';
   }
 
   for (const auto& pair : injar_info) {
     std::cout << "IN: " << pair.first << " " << print_tuple(pair.second)
-              << std::endl;
+              << '\n';
   }
 
   for (const auto& pair : outjar_info) {
     std::cout << "OUT: " << pair.first << " " << print_tuple(pair.second)
-              << std::endl;
+              << '\n';
   }
 
   g_redex = injar_context;
@@ -183,7 +182,7 @@ DexMethodInfoMap load_dex_method_move_info(const std::string& dir) {
       for (const auto& insn : code->get_instructions()) {
         if (dex_opcode::is_move(insn->opcode())) {
           ++num_moves;
-          moves_size += insn->size();
+          moves_size += static_cast<int>(insn->size());
         }
       }
     }
@@ -194,14 +193,12 @@ DexMethodInfoMap load_dex_method_move_info(const std::string& dir) {
 }
 
 void dump_method_sizes_from_dexen_dir(const std::string& dexen_dir) {
-  std::cout << "INFO: " << "Loading directory " << dexen_dir << " ... "
-            << std::endl;
+  std::cout << "INFO: " << "Loading directory " << dexen_dir << " ... " << '\n';
   auto info = load_dex_method_info(dexen_dir);
-  std::cout << "INFO: " << info.size() << " method information loaded"
-            << std::endl;
+  std::cout << "INFO: " << info.size() << " method information loaded" << '\n';
   for (const auto& pair : info) {
     std::cout << "SIZE: " << pair.first << " " << std::get<0>(pair.second)
-              << " " << std::get<1>(pair.second) << std::endl;
+              << " " << std::get<1>(pair.second) << '\n';
   }
 }
 
@@ -209,23 +206,23 @@ void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
                               const std::string& dexen_dir_B,
                               bool is_comparing_dex_size) {
   std::cout << "INFO: " << "Loading directory " << dexen_dir_A << " ... "
-            << std::endl;
+            << '\n';
   RedexContext* A_context = g_redex;
   auto A_info = is_comparing_dex_size ? load_dex_method_info(dexen_dir_A)
                                       : load_dex_method_move_info(dexen_dir_A);
   std::cout << "INFO: " << A_info.size() << " method information loaded"
-            << std::endl;
+            << '\n';
 
   std::cout << "INFO: " << "Loading directory " << dexen_dir_B << " ... "
-            << std::endl;
+            << '\n';
   std::unique_ptr<RedexContext> B_context(new RedexContext());
   g_redex = B_context.get();
   auto B_info = is_comparing_dex_size ? load_dex_method_info(dexen_dir_B)
                                       : load_dex_method_move_info(dexen_dir_B);
   std::cout << "INFO: " << B_info.size() << " method information loaded"
-            << std::endl;
+            << '\n';
 
-  std::cout << "Diffing A and B... " << std::endl;
+  std::cout << "Diffing A and B... " << '\n';
   DexMethodInfoMap diff;
   int total_disappear_method_moves = 0;
   int total_disappear_method_move_sizes = 0;
@@ -252,7 +249,7 @@ void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
   int total_move_sizes = 0;
   for (const auto& pair : diff) {
     std::cout << "DIFF: " << pair.first << " " << std::get<0>(pair.second)
-              << " " << std::get<1>(pair.second) << std::endl;
+              << " " << std::get<1>(pair.second) << '\n';
     if (!is_comparing_dex_size) {
       total_num_moves += std::get<0>(pair.second);
       total_move_sizes += std::get<1>(pair.second);
@@ -260,28 +257,25 @@ void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
   }
   if (!is_comparing_dex_size) {
     std::cout << "DISAPPEARED METHODS: #moves: " << total_disappear_method_moves
-              << ", move sizes: " << total_disappear_method_move_sizes
-              << std::endl;
+              << ", move sizes: " << total_disappear_method_move_sizes << '\n';
     std::cout << "EXISTED METHODS DIFF: #moves: " << total_num_moves
-              << ", move sizes: " << total_move_sizes << std::endl;
-    std::cout
-        << "TOTAL DIFF: #moves: "
-        << total_num_moves - total_disappear_method_moves << ", move sizes: "
-        << total_move_sizes - total_disappear_method_move_sizes << std::endl;
+              << ", move sizes: " << total_move_sizes << '\n';
+    std::cout << "TOTAL DIFF: #moves: "
+              << total_num_moves - total_disappear_method_moves
+              << ", move sizes: "
+              << total_move_sizes - total_disappear_method_move_sizes << '\n';
   }
 
   g_redex = A_context;
 }
 
 void dump_method_move_info_from_dex_dir(const std::string& dex_dir) {
-  std::cout << "INFO: " << "Loading directory " << dex_dir << " ... "
-            << std::endl;
+  std::cout << "INFO: " << "Loading directory " << dex_dir << " ... " << '\n';
   auto info = load_dex_method_move_info(dex_dir);
-  std::cout << "INFO: " << info.size() << " method information loaded"
-            << std::endl;
+  std::cout << "INFO: " << info.size() << " method information loaded" << '\n';
   for (const auto& pair : info) {
     std::cout << pair.first << ": #moves = " << std::get<0>(pair.second)
-              << ", size = " << std::get<1>(pair.second) << std::endl;
+              << ", size = " << std::get<1>(pair.second) << '\n';
   }
 }
 
@@ -323,7 +317,7 @@ class DiffMethodSizes : public Tool {
                                  true /* is_comparing_dex_size */);
         break;
       default:
-        std::cerr << "Only one or two --dexendir can be provided" << std::endl;
+        std::cerr << "Only one or two --dexendir can be provided" << '\n';
         break;
       }
     } else if (!options["show-moves"].empty()) {
@@ -338,11 +332,11 @@ class DiffMethodSizes : public Tool {
                                  false /* is_comparing_dex_size */);
         break;
       default:
-        std::cerr << "Only one or two --dexendir can be provided" << std::endl;
+        std::cerr << "Only one or two --dexendir can be provided" << '\n';
         break;
       }
     } else {
-      std::cerr << "No option or invalid option was given" << std::endl;
+      std::cerr << "No option or invalid option was given" << '\n';
     }
   }
 };
