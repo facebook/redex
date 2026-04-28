@@ -167,6 +167,7 @@ check_PROGRAMS = \
     compact_pointer_vector_test \
     source_blocks_test \
     split_huge_switch_test \
+    static_field_dependency_graph_test \
     static_relo_v2_test \
     stringbuilder_outline_test \
     strip_debug_info_test \
@@ -505,6 +506,8 @@ compact_pointer_vector_test_SOURCES = CompactPointerVectorTest.cpp
 source_blocks_test_SOURCES = SourceBlocksTest.cpp
 
 split_huge_switch_test_SOURCES = SplitHugeSwitchTest.cpp
+
+static_field_dependency_graph_test_SOURCES = StaticFieldDependencyGraphTest.cpp
 
 static_relo_v2_test_SOURCES = StaticReloV2Test.cpp
 
