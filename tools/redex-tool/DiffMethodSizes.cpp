@@ -16,6 +16,8 @@
 #include "Tool.h"
 #include "Walkers.h"
 
+#include <sys/types.h>
+
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -137,9 +139,9 @@ void diff_in_out_jars_from_command_line(const std::string& command_line_path) {
 
 using DexMethodInfoMap =
     std::unordered_map<std::string, // Method as string
-                       std::tuple<int, int>>; // <code size, register size>
-                                              // or <#move, moves size> if
-                                              // it is storing move info.
+                       std::tuple<int, size_t>>; // <code size, register size>
+                                                 // or <#move, moves size> if
+                                                 // it is storing move info.
 
 DexMethodInfoMap load_dex_method_info(const std::string& dir) {
   DexStore root_store("dex");
@@ -177,12 +179,12 @@ DexMethodInfoMap load_dex_method_move_info(const std::string& dir) {
     always_assert(result.find(key) == end(result));
     const auto* code = method->get_dex_code();
     int num_moves = 0;
-    int moves_size = 0;
+    size_t moves_size = 0;
     if (code != nullptr) {
       for (const auto& insn : code->get_instructions()) {
         if (dex_opcode::is_move(insn->opcode())) {
           ++num_moves;
-          moves_size += static_cast<int>(insn->size());
+          moves_size += insn->size();
         }
       }
     }
@@ -225,13 +227,14 @@ void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
   std::cout << "Diffing A and B... " << '\n';
   DexMethodInfoMap diff;
   int total_disappear_method_moves = 0;
-  int total_disappear_method_move_sizes = 0;
+  ssize_t total_disappear_method_move_sizes = 0;
   for (auto&& pair : A_info) {
     auto found = B_info.find(pair.first);
     if (found == end(B_info)) {
       if (!is_comparing_dex_size) {
         total_disappear_method_moves += std::get<0>(pair.second);
-        total_disappear_method_move_sizes += std::get<1>(pair.second);
+        total_disappear_method_move_sizes +=
+            static_cast<ssize_t>(std::get<1>(pair.second));
       }
       continue;
     }
@@ -241,18 +244,20 @@ void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
       continue;
     }
 
-    diff.emplace(pair.first,
-                 std::make_tuple(std::get<0>(B_sizes) - std::get<0>(A_sizes),
-                                 std::get<1>(B_sizes) - std::get<1>(A_sizes)));
+    diff.emplace(
+        pair.first,
+        std::make_tuple(std::get<0>(B_sizes) - std::get<0>(A_sizes),
+                        static_cast<ssize_t>(std::get<1>(B_sizes)) -
+                            static_cast<ssize_t>(std::get<1>(A_sizes))));
   }
   int total_num_moves = 0;
-  int total_move_sizes = 0;
+  ssize_t total_move_sizes = 0;
   for (const auto& pair : diff) {
     std::cout << "DIFF: " << pair.first << " " << std::get<0>(pair.second)
               << " " << std::get<1>(pair.second) << '\n';
     if (!is_comparing_dex_size) {
       total_num_moves += std::get<0>(pair.second);
-      total_move_sizes += std::get<1>(pair.second);
+      total_move_sizes += static_cast<ssize_t>(std::get<1>(pair.second));
     }
   }
   if (!is_comparing_dex_size) {
