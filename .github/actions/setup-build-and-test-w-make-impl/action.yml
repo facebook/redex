@@ -70,10 +70,37 @@ runs:
     working-directory: build
     shell: bash
   - name: Run tests
+    id: run-tests
     run: |-
       mkdir -p /tmp/test-results
+      rm -f /tmp/test-results/*.xml
       export GTEST_OUTPUT=xml:/tmp/test-results/
+      set +e
       make -j4 check V=0
+      rc=$?
+      echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+      exit 0
     working-directory: build
     if: inputs.run_tests == 'true'
+    shell: bash
+  - name: Sanitize artifact name
+    id: artifact-name
+    if: inputs.run_tests == 'true' && (success() || failure())
+    run: |-
+      name="test-results-${{ inputs.job_name }}"
+      name="${name//[:\"<>|*?\\\/]/-}"
+      name="${name// /_}"
+      echo "name=$name" >> "$GITHUB_OUTPUT"
+    shell: bash
+  - name: Upload test results
+    if: inputs.run_tests == 'true' && (success() || failure())
+    uses: actions/upload-artifact@v4
+    with:
+      name: ${{ steps.artifact-name.outputs.name }}
+      path: /tmp/test-results/
+      if-no-files-found: ignore
+      retention-days: 14
+  - name: Fail job on test failure
+    if: steps.run-tests.outputs.exit_code != '0' && steps.run-tests.outputs.exit_code != ''
+    run: exit 1
     shell: bash
