@@ -51,7 +51,8 @@
     "node-forge": ">=1.4.0",
     "serialize-javascript": ">=7.0.5",
     "**/express/path-to-regexp": "0.1.13",
-    "follow-redirects": ">=1.16.0"
+    "follow-redirects": ">=1.16.0",
+    "postcss": ">=8.5.10"
   },
   "browserslist": {
     "production": [
