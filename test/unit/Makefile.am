@@ -235,6 +235,8 @@ check_breadcrumbs_test_SOURCES = CheckBreadCrumbsTest.cpp
 check_cast_analysis_test_SOURCES = CheckCastAnalysisTest.cpp
 
 clinit_batching_pass_test_SOURCES = ClinitBatchingPassTest.cpp
+EXTRA_clinit_batching_pass_test_DEPENDENCIES = clinit_batching_pass_test.env
+$(eval $(call make_env,clinit_batching_pass_test,manifest=$(srcdir)/../integ/ClinitBatchingTestManifest.xml))
 
 class_checker_test_SOURCES = ClassCheckerTest.cpp ScopeHelper.cpp
 
