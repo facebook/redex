@@ -59,21 +59,26 @@ runs:
     working-directory: build
     shell: bash
   - name: Build
-    run: make -j4 V=0
+    run: |
+      set -x
+      make -j"$(nproc)" V=0
     working-directory: build
     shell: bash
   - name: Compress build directory
     run: tar cf - build | zstd -T0 -3 > build.tar.zstd
     shell: bash
   - name: Build tests
-    run: make -j4 check TESTS= V=0
+    run: |
+      set -x
+      make -j"$(nproc)" check TESTS= V=0
     working-directory: build
     shell: bash
   - name: Run tests
     run: |-
       mkdir -p /tmp/test-results
       export GTEST_OUTPUT=xml:/tmp/test-results/
-      make -j4 check V=0
+      set -x
+      make -j"$(nproc)" check V=0
     working-directory: build
     if: inputs.run_tests == 'true'
     shell: bash
