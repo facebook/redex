@@ -197,8 +197,15 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
              "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;",
              "Ljava/lang/StringBuffer;.toString:()Ljava/lang/String;",
              "Ljava/lang/String;.toString:()Ljava/lang/String;",
-             "Ljava/lang/Long;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Boolean;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Byte;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Character;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Class;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Double;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Float;.toString:()Ljava/lang/String;",
              "Ljava/lang/Integer;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Long;.toString:()Ljava/lang/String;",
+             "Ljava/lang/Short;.toString:()Ljava/lang/String;",
              "Ljava/util/UUID;.toString:()Ljava/lang/String;",
 
              // Guava ImmutableMap: annotated @NonNull.
