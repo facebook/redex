@@ -76,7 +76,7 @@ runs:
       rm -f /tmp/test-results/*.xml
       export GTEST_OUTPUT=xml:/tmp/test-results/
       set +e
-      make -j4 check V=0
+      make -j4 check V=1 VERBOSE=1
       rc=$?
       echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
       exit 0
