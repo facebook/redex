@@ -22,6 +22,7 @@
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
+#include "OptimizeResources.h"
 #include "PassManager.h"
 #include "RedexResources.h"
 #include "Show.h"
@@ -196,6 +197,13 @@ void collect_string_values_from_code(
 }
 } // namespace
 
+void ObfuscateResourcesPass::eval_pass(DexStoresVector&,
+                                       ConfigFiles& conf,
+                                       PassManager&) {
+  auto& plugin_registry = opt_res::ReachableResourcesPluginRegistry::get();
+  plugin_registry.configure_plugins(conf);
+}
+
 void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager& mgr) {
@@ -263,6 +271,23 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
       TRACE(OBFUS_RES, 3, "Keeping overlayable name '%s'",
             search->second.c_str());
       keep_resource_names_specific.emplace(search->second);
+    }
+  }
+  // Keep resource names referenced from JavaScript bundles.
+  // These are resolved by name at runtime (e.g. React Native's PlatformColor).
+  {
+    auto& plugin_registry = opt_res::ReachableResourcesPluginRegistry::get();
+    for (const auto& p : plugin_registry.get_plugins()) {
+      auto reachable_ids = p->get_reachable_resources(
+          resources->get_base_assets_dir(), res_table->name_to_ids);
+      TRACE(OBFUS_RES, 2, "Plugin %s keeping %zu name(s) from obfuscation",
+            p->get_name().c_str(), reachable_ids.size());
+      for (auto id : UnorderedIterable(reachable_ids)) {
+        auto search = res_table->id_to_name.find(id);
+        if (search != res_table->id_to_name.end()) {
+          keep_resource_names_specific.emplace(search->second);
+        }
+      }
     }
   }
 

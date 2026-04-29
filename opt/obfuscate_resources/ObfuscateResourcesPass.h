@@ -88,6 +88,7 @@ class ObfuscateResourcesPass : public Pass {
          m_code_references_okay_to_obfuscate);
   }
 
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
