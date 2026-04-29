@@ -846,7 +846,7 @@ class DedupBlocksImpl {
   }
 
   // copy over the last source block of the main block to the commmon block
-  void copy_last_source_block(cfg::Block* block, cfg::Block* split_block) {
+  void copy_over_source_block(cfg::Block* block, cfg::Block* split_block) {
     SourceBlock* last_src_blk = source_blocks::get_last_source_block(block);
     if (last_src_blk != nullptr) {
       auto new_sb = std::make_unique<SourceBlock>(*last_src_blk);
@@ -860,25 +860,6 @@ class DedupBlocksImpl {
         split_block->insert_before(split_block_it, std::move(new_sb));
       }
     }
-  }
-
-  // When the first entry moved to the split block is a source block, it was
-  // originally in the predecessor block covering a throw-delineated segment.
-  // Clone it back into the original block so both blocks retain the original
-  // source block id and values.
-  void copy_first_source_block(cfg::Block* block, cfg::Block* split_block) {
-    auto* sb = source_blocks::get_first_source_block(split_block);
-    if (sb == nullptr) {
-      return;
-    }
-    auto last_insn_it = block->get_last_insn();
-    if (last_insn_it == block->end()) {
-      return;
-    }
-    // Put a faithful copy (original id and values) in the original block.
-    auto original_copy = std::make_unique<SourceBlock>(*sb);
-    source_blocks::impl::BlockAccessor::insert_source_block_after(
-        block, last_insn_it, std::move(original_copy));
   }
 
   // When instrumenting, do not deduplicate catch handler head blocks. If
@@ -953,11 +934,7 @@ class DedupBlocksImpl {
           }
           // add a source block in the beginning if there isn't one already
           if (split_block->begin()->type != MFLOW_SOURCE_BLOCK) {
-            copy_last_source_block(block, split_block);
-          } else {
-            // The first entry moved was a source block — clone it back into
-            // the original block so both blocks retain coverage.
-            copy_first_source_block(block, split_block);
+            copy_over_source_block(block, split_block);
           }
           continue;
         }
@@ -989,11 +966,7 @@ class DedupBlocksImpl {
         // isn't one already
         auto* split_block = cfg.split_block(cfg_it);
         if (split_block->begin()->type != MFLOW_SOURCE_BLOCK) {
-          copy_last_source_block(block, split_block);
-        } else {
-          // The first entry moved was a source block — clone it back into
-          // the original block so both blocks retain coverage.
-          copy_first_source_block(block, split_block);
+          copy_over_source_block(block, split_block);
         }
 
         TRACE(DEDUP_BLOCKS, 4,
