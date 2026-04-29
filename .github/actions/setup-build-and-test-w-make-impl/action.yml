@@ -100,6 +100,105 @@ runs:
       path: /tmp/test-results/
       if-no-files-found: ignore
       retention-days: 14
+  - name: Test summary
+    if: inputs.run_tests == 'true' && (success() || failure())
+    run: |-
+      python3 - <<'PYEOF'
+      import glob
+      import os
+      import xml.etree.ElementTree as ET
+
+      xml_files = sorted(glob.glob("/tmp/test-results/*.xml"))
+      if not xml_files:
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("## 🧪 Test Results\n\nNo test result XML files found.\n")
+          raise SystemExit(0)
+
+      total_tests = 0
+      total_failures = 0
+      total_disabled = 0
+      total_errors = 0
+      total_time = 0.0
+      failed_suites = []  # [(suite_name, [(test_name, message)])]
+      passing_suites = []
+
+      for xml_file in xml_files:
+          try:
+              tree = ET.parse(xml_file)
+          except ET.ParseError:
+              failed_suites.append((os.path.basename(xml_file), [("XML parse error", "Malformed XML — test may have crashed")]))
+              continue
+          root = tree.getroot()
+          for testsuite in root.iter("testsuite"):
+              name = testsuite.get("name", os.path.basename(xml_file))
+              tests = int(testsuite.get("tests", 0))
+              failures = int(testsuite.get("failures", 0))
+              disabled = int(testsuite.get("disabled", 0))
+              errors = int(testsuite.get("errors", 0))
+              time_taken = float(testsuite.get("time", 0))
+              total_tests += tests
+              total_failures += failures
+              total_disabled += disabled
+              total_errors += errors
+              total_time += time_taken
+              suite_failures = []
+              for testcase in testsuite.findall("testcase"):
+                  failure = testcase.find("failure")
+                  if failure is not None:
+                      tc_name = testcase.get("name", "unknown")
+                      msg = (failure.get("message") or failure.text or "").strip()
+                      if len(msg) > 500:
+                          msg = msg[:500] + "..."
+                      suite_failures.append((tc_name, msg))
+              if suite_failures:
+                  failed_suites.append((name, suite_failures))
+              elif tests > 0:
+                  passing_suites.append(name)
+
+      total_passed = total_tests - total_failures - total_errors
+      icon = "❌" if (total_failures + total_errors) > 0 else "✅"
+      parts = [f"{total_passed} passed"]
+      if total_failures + total_errors > 0:
+          parts.append(f"{total_failures + total_errors} failed")
+      if total_disabled > 0:
+          parts.append(f"{total_disabled} skipped")
+
+      lines = [f"## {icon} Test Results: {', '.join(parts)}", ""]
+      lines.append(f"**{len(xml_files)}** test binaries | **{total_time:.1f}s** total time")
+      lines.append("")
+
+      for suite_name, failures in failed_suites:
+          lines.append(f"<details>")
+          lines.append(f"<summary>❌ {suite_name} ({len(failures)} failure{'s' if len(failures) != 1 else ''})</summary>")
+          lines.append("")
+          for tc_name, msg in failures:
+              lines.append(f"**{tc_name}**")
+              if msg:
+                  lines.append(f"```")
+                  lines.append(msg)
+                  lines.append(f"```")
+              lines.append("")
+          lines.append("</details>")
+          lines.append("")
+
+      if passing_suites:
+          lines.append("<details>")
+          lines.append(f"<summary>✅ {len(passing_suites)} passing test suites</summary>")
+          lines.append("")
+          lines.append(", ".join(sorted(passing_suites)))
+          lines.append("")
+          lines.append("</details>")
+          lines.append("")
+
+      summary = "\n".join(lines)
+      # Respect 1 MiB limit
+      if len(summary.encode("utf-8")) > 1_000_000:
+          summary = summary[:999_000] + "\n\n⚠️ Output truncated (1 MiB limit)\n"
+
+      with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+          f.write(summary)
+      PYEOF
+    shell: bash
   - name: Fail job on test failure
     if: steps.run-tests.outputs.exit_code != '0' && steps.run-tests.outputs.exit_code != ''
     run: exit 1
