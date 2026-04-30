@@ -9,7 +9,6 @@
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <iostream>
-#include <memory>
 #include <string>
 
 #include "ControlFlow.h"

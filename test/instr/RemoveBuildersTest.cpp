@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <gtest/gtest.h>
-#include <memory>
 
 #include "DexInstruction.h"
 #include "VerifyUtil.h"

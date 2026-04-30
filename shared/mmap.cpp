@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 
-#include <memory>
 #include <sstream>
 #include <utility>
 
