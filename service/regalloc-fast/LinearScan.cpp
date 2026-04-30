@@ -7,7 +7,6 @@
 
 #include "LinearScan.h"
 
-#include <algorithm>
 #include <optional>
 #include <utility>
 #include <vector>

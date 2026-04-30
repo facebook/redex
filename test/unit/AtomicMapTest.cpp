@@ -7,7 +7,6 @@
 
 #include "ConcurrentContainers.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <gtest/gtest.h>

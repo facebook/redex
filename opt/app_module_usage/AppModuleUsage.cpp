@@ -7,7 +7,6 @@
 
 #include "AppModuleUsage.h"
 
-#include <algorithm>
 #include <fstream>
 #include <optional>
 #include <sstream>

@@ -7,7 +7,6 @@
 
 #include "RenameClassesV2.h"
 
-#include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/regex.hpp>
 #include <map>
