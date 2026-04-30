@@ -84,12 +84,21 @@ DexMethod* FbjniMarker::process_method(DexType* type,
   auto internal_type = to_internal_type(method_tokens.rtype);
   method_tokens_internal.rtype = internal_type;
 
-  // MethodDescriptorTokens contains string_views only.
-  std::vector<std::string> internal_type_string_store;
-  for (auto str : method_tokens.args) {
-    auto ty = to_internal_type(str);
-    internal_type_string_store.emplace_back(ty);
-    method_tokens_internal.args.push_back(internal_type_string_store.back());
+  // Convert all arg types to internal form inside a lambda so the mutable
+  // string storage is fully built before any string_views are taken from it.
+  const auto internal_arg_types = [&]() {
+    std::vector<std::string> store;
+    store.reserve(method_tokens.args.size());
+    for (const auto& str : method_tokens.args) {
+      store.emplace_back(to_internal_type(str));
+    }
+    return store;
+  }();
+  // MethodDescriptorTokens contains string_views only — safe now because
+  // internal_arg_types is const and will not reallocate.
+  method_tokens_internal.args.reserve(internal_arg_types.size());
+  for (const auto& s : internal_arg_types) {
+    method_tokens_internal.args.emplace_back(s);
   }
 
   auto* method_ref = DexMethod::get_method(method_tokens_internal);
