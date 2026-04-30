@@ -11,6 +11,7 @@
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/HashedSetAbstractDomain.h>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"

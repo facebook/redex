@@ -7,6 +7,7 @@
 
 #include "Split.h"
 
+#include "Debug.h"
 namespace regalloc {
 
 // Calculate potential split costs for each live range. Also store information

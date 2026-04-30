@@ -7,6 +7,7 @@
 
 #include "EnumConfig.h"
 
+#include "Debug.h"
 #include "LocalPointersAnalysis.h"
 #include "Show.h"
 #include "Trace.h"

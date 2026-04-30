@@ -8,6 +8,7 @@
 #include "WrappedPrimitivesPass.h"
 #include "ControlFlow.h"
 
+#include "Debug.h"
 #include "DexUtil.h"
 #include "Lazy.h"
 #include "LiveRange.h"

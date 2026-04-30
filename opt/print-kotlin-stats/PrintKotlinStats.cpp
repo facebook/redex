@@ -8,6 +8,7 @@
 #include "PrintKotlinStats.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "KotlinLambdaAnalyzer.h"

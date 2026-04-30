@@ -11,6 +11,7 @@
 #include <istream>
 #include <sstream>
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 
 namespace api {

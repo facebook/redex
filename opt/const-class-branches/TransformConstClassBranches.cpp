@@ -14,6 +14,7 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexStructure.h"
 #include "PassManager.h"

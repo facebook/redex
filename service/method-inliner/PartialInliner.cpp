@@ -8,6 +8,7 @@
 #include "PartialInliner.h"
 
 #include "CFGInliner.h"
+#include "Debug.h"
 #include "Inliner.h"
 #include "Show.h"
 #include "SourceBlocks.h"

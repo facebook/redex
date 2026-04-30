@@ -9,6 +9,7 @@
 
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "Show.h"
 #include "Trace.h"

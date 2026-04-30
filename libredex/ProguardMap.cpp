@@ -9,6 +9,7 @@
 
 #include <fstream>
 
+#include "Debug.h"
 #include "DexEncoding.h"
 #include "DexPosition.h"
 #include "DexUtil.h"

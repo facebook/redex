@@ -9,6 +9,7 @@
 
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "FinalInlineV2.h"
 #include "InitClassesWithSideEffects.h"
 #include "PassManager.h"

@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "AnalysisUsage.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "MaxDepthAnalysis.h"
 #include "Pass.h"

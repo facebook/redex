@@ -9,6 +9,7 @@
 #include <numeric>
 
 #include "CrossDexRefMinimizer.h"
+#include "Debug.h"
 #include "Show.h"
 #include "Trace.h"
 

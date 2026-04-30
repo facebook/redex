@@ -11,6 +11,7 @@
 
 #include "CallGraph.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"

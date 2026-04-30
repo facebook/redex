@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 #include "MethodOverrideGraph.h"
 #include "MethodUtil.h"
 #include "Resolver.h"

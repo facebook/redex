@@ -16,6 +16,7 @@
 #include "ClassUtil.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstructorAnalysis.h"
+#include "Debug.h"
 #include "DexInstruction.h"
 #include "InlineForSpeed.h"
 #include "InlinerConfig.h"

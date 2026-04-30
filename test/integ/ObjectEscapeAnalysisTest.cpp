@@ -13,6 +13,7 @@
 #include <string>
 
 #include "BranchPrefixHoistingPass.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "IRAssembler.h"
 #include "IRCode.h"

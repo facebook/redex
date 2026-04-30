@@ -10,6 +10,7 @@
 #include <sstream>
 #include <string>
 
+#include "Debug.h"
 #include "DexHasher.h"
 #include "Trace.h"
 #include "TypeReference.h"

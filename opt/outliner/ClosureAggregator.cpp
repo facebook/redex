@@ -7,6 +7,7 @@
 
 #include "ClosureAggregator.h"
 
+#include "Debug.h"
 #include <numeric>
 
 namespace method_splitting_impl {

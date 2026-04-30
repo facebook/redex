@@ -11,6 +11,7 @@
 #include <set>
 
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
 #include "DexUtil.h"

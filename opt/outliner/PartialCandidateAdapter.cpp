@@ -7,6 +7,7 @@
 
 #include "PartialCandidateAdapter.h"
 
+#include "Debug.h"
 namespace outliner_impl {
 
 PartialCandidateAdapter::PartialCandidateAdapter(OutlinerTypeAnalysis& ota,

@@ -8,6 +8,7 @@
 #include "IntraDexInlinePass.h"
 #include "ConfigFiles.h"
 
+#include "Debug.h"
 #include "MethodInliner.h"
 #include "PassManager.h"
 

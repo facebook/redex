@@ -12,6 +12,7 @@
 #include "ConstantPropagationTestUtil.h"
 #include "ConstructorParams.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "IRAssembler.h"
 #include "JarLoader.h"
 

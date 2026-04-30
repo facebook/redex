@@ -15,6 +15,7 @@
 #include <variant>
 
 #include "Creators.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"

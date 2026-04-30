@@ -8,6 +8,7 @@
 #include "MethodDedup.h"
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DedupBlocks.h"
 #include "IRCode.h"
 #include "MethodReference.h"

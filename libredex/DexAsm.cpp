@@ -7,6 +7,7 @@
 
 #include "DexAsm.h"
 
+#include "Debug.h"
 #include "IRInstruction.h"
 #include "Show.h"
 

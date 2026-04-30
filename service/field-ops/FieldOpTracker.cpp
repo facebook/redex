@@ -14,6 +14,7 @@
 
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "Lazy.h"

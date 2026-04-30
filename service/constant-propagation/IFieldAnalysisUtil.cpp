@@ -9,6 +9,7 @@
 
 #include <optional>
 
+#include "Debug.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 

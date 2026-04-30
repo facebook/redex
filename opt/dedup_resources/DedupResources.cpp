@@ -14,6 +14,7 @@
 #include <map>
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "IOUtil.h"
 #include "OptimizeResources.h"
 #include "PassManager.h"

@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 
+#include "Debug.h"
 #include "DexPosition.h"
 #include "IRList.h"
 #include "IROpcode.h"

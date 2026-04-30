@@ -11,6 +11,7 @@
 #include <iterator>
 #include <vector>
 
+#include "Debug.h"
 #include "IRAssembler.h"
 #include "IRInstruction.h"
 #include "Match.h"

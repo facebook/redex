@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
+#include "Debug.h"
 #include "IRAssembler.h"
 #include "OutlinerTypeAnalysis.h"
 #include "PartialCandidateAdapter.h"

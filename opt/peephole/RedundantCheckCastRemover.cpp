@@ -7,6 +7,7 @@
 
 #include "RedundantCheckCastRemover.h"
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"

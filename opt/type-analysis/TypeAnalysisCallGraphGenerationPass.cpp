@@ -8,6 +8,7 @@
 #include "TypeAnalysisCallGraphGenerationPass.h"
 #include "ConfigFiles.h"
 
+#include "Debug.h"
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"

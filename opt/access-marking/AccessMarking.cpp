@@ -9,6 +9,7 @@
 
 #include "ClassHierarchy.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"

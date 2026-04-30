@@ -10,6 +10,7 @@
 #include <cinttypes>
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "RedexResources.h"
 #include "Trace.h"

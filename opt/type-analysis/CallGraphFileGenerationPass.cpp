@@ -13,6 +13,7 @@
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"

@@ -12,6 +12,7 @@
 #include "ApiLevelChecker.h"
 #include "BaselineProfile.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "PassManager.h"

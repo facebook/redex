@@ -7,6 +7,7 @@
 
 #include "EnumUpcastAnalysis.h"
 
+#include "Debug.h"
 #include "EnumClinitAnalysis.h"
 #include "LiveRange.h"
 #include "Macros.h"

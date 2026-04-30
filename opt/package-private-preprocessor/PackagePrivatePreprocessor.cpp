@@ -54,6 +54,7 @@
 
 #include <cinttypes>
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "IROpcode.h"

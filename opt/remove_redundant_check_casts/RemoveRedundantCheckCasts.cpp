@@ -10,6 +10,7 @@
 #include "CheckCastAnalysis.h"
 #include "CheckCastTransform.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"

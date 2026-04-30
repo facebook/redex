@@ -89,6 +89,7 @@
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "IRCode.h"

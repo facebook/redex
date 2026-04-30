@@ -15,6 +15,11 @@
 #include <set>
 #include <type_traits>
 
+#include "ControlFlow.h"
+#include "Debug.h"
+#include "DeterministicContainers.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
 #include "RedexContext.h"
 
 #include <bit>

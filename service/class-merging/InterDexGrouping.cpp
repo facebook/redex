@@ -7,6 +7,7 @@
 
 #include "InterDexGrouping.h"
 
+#include "Debug.h"
 #include "Model.h"
 #include "ScopedCFG.h"
 #include "Show.h"

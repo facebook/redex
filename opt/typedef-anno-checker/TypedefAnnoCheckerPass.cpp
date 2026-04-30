@@ -11,6 +11,7 @@
 
 #include "AnnoUtils.h"
 #include "ClassUtil.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "KotlinNullCheckMethods.h"
 #include "OptionalIO.h"

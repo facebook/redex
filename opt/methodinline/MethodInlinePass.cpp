@@ -7,6 +7,7 @@
 
 #include "MethodInlinePass.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "PassManager.h"
 
 void MethodInlinePass::bind_config() {

@@ -8,6 +8,7 @@
 #include "DexStoreUtil.h"
 
 #include "Creators.h"
+#include "Debug.h"
 #include "DexEncoding.h"
 
 bool is_canary(DexClass* clazz) {

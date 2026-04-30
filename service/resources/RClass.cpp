@@ -13,6 +13,7 @@
 #include "CFGMutation.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"

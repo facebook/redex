@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 
+#include "Debug.h"
 #include "Show.h"
 #include "SingleImplDefs.h"
 #include "TypeUtil.h"

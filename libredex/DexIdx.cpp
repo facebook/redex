@@ -7,6 +7,7 @@
 
 #include "DexIdx.h"
 
+#include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexCallSite.h"
 #include "DexClass.h"

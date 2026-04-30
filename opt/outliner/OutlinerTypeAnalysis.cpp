@@ -7,6 +7,7 @@
 
 #include "OutlinerTypeAnalysis.h"
 
+#include "Debug.h"
 #include "DexTypeEnvironment.h"
 #include "Show.h"
 

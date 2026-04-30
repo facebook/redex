@@ -15,6 +15,7 @@
 #include <sparta/MonotonicFixpointIterator.h>
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
 
+#include "Debug.h"
 #include "Show.h"
 #include "Trace.h"
 

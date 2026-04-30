@@ -7,6 +7,7 @@
 
 #include "NativeNames.h"
 
+#include "Debug.h"
 #include <cctype>
 #include <sstream>
 

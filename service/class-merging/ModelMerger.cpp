@@ -11,6 +11,7 @@
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
 #include "Creators.h" // NOLINT
+#include "Debug.h"
 #include "Inliner.h"
 #include "MethodReference.h"
 #include "Resolver.h"

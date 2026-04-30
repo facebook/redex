@@ -9,6 +9,7 @@
 
 #include <vector>
 
+#include "Debug.h"
 #include "RedexContext.h"
 
 #include <boost/algorithm/string.hpp>

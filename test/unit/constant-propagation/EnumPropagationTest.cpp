@@ -9,6 +9,7 @@
 
 #include "ConstantPropagationTestUtil.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "IRAssembler.h"
 #include "JarLoader.h"
 

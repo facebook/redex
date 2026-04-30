@@ -9,6 +9,7 @@
 #include "AtomicStatCounter.h"
 #include "CFGMutation.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "KotlinLambdaAnalyzer.h"
 #include "PassManager.h"
 #include "Show.h"

@@ -10,6 +10,7 @@
 #include <atomic>
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexAsm.h"
 #include "DexClass.h"
 #include "DexUtil.h"

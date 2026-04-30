@@ -8,6 +8,7 @@
 #include "OptimizeEnumsUnmap.h"
 
 #include "CFGMutation.h"
+#include "Debug.h"
 #include "Show.h"
 #include "Trace.h"
 

@@ -7,6 +7,7 @@
 
 #include "MethodSimilarityGreedyOrderer.h"
 
+#include "Debug.h"
 #include "DexInstruction.h"
 #include "Show.h"
 #include "Timer.h"

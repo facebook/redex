@@ -14,6 +14,7 @@
 
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexMemberRefs.h"
 #include "DexUtil.h"
 #include "KotlinLambdaAnalyzer.h"

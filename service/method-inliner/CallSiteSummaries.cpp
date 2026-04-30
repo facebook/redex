@@ -8,6 +8,7 @@
 #include "CallSiteSummaries.h"
 
 #include "ConstantPropagationAnalysis.h"
+#include "Debug.h"
 #include "PriorityThreadPoolDAGScheduler.h"
 #include "Timer.h"
 

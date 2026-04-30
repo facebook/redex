@@ -10,6 +10,7 @@
 #include <iostream>
 #include <ostream>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "MethodUtil.h"

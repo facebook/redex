@@ -6,6 +6,7 @@
  */
 
 #include "DexDebugInstruction.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexDefs.h"
 #include "DexIdx.h"

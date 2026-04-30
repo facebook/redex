@@ -9,6 +9,7 @@
 
 #include <iostream>
 
+#include "Debug.h"
 #include "DebugUtils.h"
 #include "DexClass.h"
 #include "GraphColoring.h"

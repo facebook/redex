@@ -13,6 +13,7 @@
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "HierarchyUtil.h"
 #include "InitClassPruner.h"

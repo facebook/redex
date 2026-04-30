@@ -6,6 +6,7 @@
  */
 
 #include "ObfuscateUtils.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "Trace.h"
 #include <algorithm>

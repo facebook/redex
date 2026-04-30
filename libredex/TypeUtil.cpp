@@ -7,6 +7,7 @@
 
 #include "TypeUtil.h"
 
+#include "Debug.h"
 #include "DexUtil.h"
 #include "KotlinLambdaAnalyzer.h"
 #include "Lazy.h"

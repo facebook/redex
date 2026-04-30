@@ -6,6 +6,7 @@
  */
 
 #include "DexMethodHandle.h"
+#include "Debug.h"
 #include "DexAnnotation.h"
 
 DexMethodHandle::DexMethodHandle(MethodHandleType type,

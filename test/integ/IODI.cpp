@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "Debug.h"
 #include "DexDefs.h"
 #include "DexLoader.h"
 #include "DexOutput.h"

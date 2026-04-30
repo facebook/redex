@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 
+#include "Debug.h"
 #include "DexEncoding.h"
 #include "Show.h"
 #include "StringBuilder.h"

@@ -14,6 +14,8 @@
 #include <sstream>
 
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"

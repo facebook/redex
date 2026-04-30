@@ -7,6 +7,7 @@
 
 #include "TypeAnalysisTransform.h"
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "IRInstruction.h"
 #include "KotlinNullCheckMethods.h"

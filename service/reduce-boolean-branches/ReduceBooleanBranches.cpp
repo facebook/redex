@@ -32,6 +32,7 @@
 #include "ReduceBooleanBranches.h"
 
 #include "CFGMutation.h"
+#include "Debug.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
 #include "Trace.h"

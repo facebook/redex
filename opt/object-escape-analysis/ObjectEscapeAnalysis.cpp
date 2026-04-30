@@ -47,6 +47,7 @@
 
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "ExpandableMethodParams.h"

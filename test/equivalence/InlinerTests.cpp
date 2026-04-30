@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "Debug.h"
 #include "DexAsm.h"
 #include "IRCode.h"
 #include "LegacyInliner.h"

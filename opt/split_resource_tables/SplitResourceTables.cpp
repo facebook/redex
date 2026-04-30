@@ -14,6 +14,7 @@
 #include <map>
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "IOUtil.h"
 #include "MethodReference.h"

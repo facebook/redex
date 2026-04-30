@@ -6,6 +6,7 @@
  */
 
 #include "InterDexReshuffleImpl.h"
+#include "Debug.h"
 #include "InterDexPassMetrics.h"
 #include "Model.h"
 #include "Show.h"

@@ -9,6 +9,7 @@
 
 #include <optional>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "MethodReference.h"
 #include "ReachingDefinitions.h"

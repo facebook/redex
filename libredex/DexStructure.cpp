@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexLimits.h"
 #include "Show.h"

@@ -7,6 +7,7 @@
 
 #include "Resolver.h"
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 
 #include "Show.h"

@@ -10,6 +10,7 @@
 #include "ConfigFiles.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
+#include "Debug.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"

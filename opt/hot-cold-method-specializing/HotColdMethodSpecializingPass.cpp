@@ -8,6 +8,7 @@
 #include "HotColdMethodSpecializingPass.h"
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "InitClassesWithSideEffects.h"
 #include "MethodOverrideGraph.h"

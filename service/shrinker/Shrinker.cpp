@@ -12,6 +12,7 @@
 #include "BranchPrefixHoisting.h"
 #include "ConstantUses.h"
 #include "ConstructorParams.h"
+#include "Debug.h"
 #include "LinearScan.h"
 #include "RegisterAllocation.h"
 #include "ScopedMetrics.h"

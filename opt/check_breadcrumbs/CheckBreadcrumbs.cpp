@@ -16,6 +16,7 @@
 
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexClass.h"

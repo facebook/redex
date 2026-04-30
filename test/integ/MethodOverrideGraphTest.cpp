@@ -6,6 +6,7 @@
  */
 
 #include "MethodOverrideGraph.h"
+#include "Debug.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

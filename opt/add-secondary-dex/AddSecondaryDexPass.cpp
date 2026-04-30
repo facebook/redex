@@ -7,6 +7,7 @@
 
 #include "AddSecondaryDexPass.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexStoreUtil.h"
 #include "PassManager.h"
 

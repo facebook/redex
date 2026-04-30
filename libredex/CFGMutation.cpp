@@ -6,6 +6,7 @@
  */
 
 #include "CFGMutation.h"
+#include "Debug.h"
 #include "IRList.h"
 #include "IROpcode.h"
 #include "Show.h"

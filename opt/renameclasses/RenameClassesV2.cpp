@@ -16,6 +16,7 @@
 
 #include "ClassUtil.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexEncoding.h"
 #include "DexUtil.h"

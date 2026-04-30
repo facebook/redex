@@ -7,6 +7,7 @@
 
 #include "RegisterType.h"
 
+#include "Debug.h"
 #include "Show.h"
 #include "TypeUtil.h"
 

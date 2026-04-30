@@ -16,6 +16,7 @@
 
 #include <json/value.h>
 
+#include "Debug.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexPosition.h"

@@ -13,6 +13,7 @@
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
 #include "DexStructure.h"

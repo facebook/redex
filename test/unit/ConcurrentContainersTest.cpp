@@ -6,6 +6,7 @@
  */
 
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 
 #include <algorithm>
 #include <boost/thread.hpp>

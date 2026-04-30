@@ -9,6 +9,7 @@
 
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 #include "DexTypeEnvironment.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"

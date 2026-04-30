@@ -12,6 +12,7 @@
 #include <sparta/WeakTopologicalOrdering.h>
 
 #include "CppUtil.h"
+#include "Debug.h"
 #include "SourceBlocks.h"
 
 namespace method_splitting_impl {

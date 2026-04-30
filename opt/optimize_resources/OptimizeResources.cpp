@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "IOUtil.h"
 #include "PassManager.h"
 #include "RClass.h"

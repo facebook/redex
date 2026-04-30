@@ -13,6 +13,7 @@
 #include <sstream>
 
 #include "ClassHierarchy.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexUtil.h"

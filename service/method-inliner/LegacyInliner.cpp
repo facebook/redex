@@ -7,6 +7,7 @@
 
 #include "LegacyInliner.h"
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexPosition.h"
 #include "DexUtil.h"

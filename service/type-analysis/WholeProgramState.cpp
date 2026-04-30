@@ -7,6 +7,7 @@
 
 #include "WholeProgramState.h"
 
+#include "Debug.h"
 #include "GlobalTypeAnalyzer.h"
 #include "Resolver.h"
 #include "Show.h"

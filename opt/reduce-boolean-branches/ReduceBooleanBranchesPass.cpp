@@ -8,6 +8,7 @@
 #include "ReduceBooleanBranchesPass.h"
 
 #include "CopyPropagation.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "LocalDce.h"

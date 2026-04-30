@@ -14,6 +14,7 @@
 
 #include "ClosureAggregator.h"
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 #include "InstructionLowering.h"
 #include "Lazy.h"
 #include "Liveness.h"

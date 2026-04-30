@@ -7,6 +7,7 @@
 
 #include "GlobalConfig.h"
 
+#include "Debug.h"
 #include <utility>
 
 void InlinerConfig::bind_config() {

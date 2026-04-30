@@ -7,6 +7,7 @@
 
 #include "IPConstantPropagationAnalysis.h"
 
+#include "Debug.h"
 #include "DexAnnotation.h"
 #include "WorkQueue.h"
 

@@ -11,6 +11,7 @@
 
 #include <sparta/PatriciaTreeSet.h>
 
+#include "Debug.h"
 #include "Show.h"
 #include "Walkers.h"
 #include "WorkQueue.h"

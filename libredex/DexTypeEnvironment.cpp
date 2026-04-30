@@ -9,6 +9,7 @@
 
 #include <ostream>
 
+#include "Debug.h"
 #include "Show.h"
 
 namespace dtv_impl {

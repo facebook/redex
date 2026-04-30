@@ -10,6 +10,7 @@
 #include "ApiLevelChecker.h"
 #include "ClassHierarchy.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "PassManager.h"

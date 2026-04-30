@@ -9,6 +9,7 @@
 #include <optional>
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"

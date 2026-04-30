@@ -15,6 +15,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IRInstruction.h"

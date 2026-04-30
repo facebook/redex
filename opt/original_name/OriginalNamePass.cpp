@@ -11,6 +11,7 @@
 
 #include "ClassHierarchy.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexLimitsInfo.h"
 

@@ -6,6 +6,7 @@
  */
 
 #include "PassManager.h"
+#include "Debug.h"
 #include "DexAssessments.h"
 
 #include <cstdio>

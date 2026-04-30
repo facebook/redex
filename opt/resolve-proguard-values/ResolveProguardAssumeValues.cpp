@@ -9,6 +9,7 @@
 
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "ProguardConfiguration.h"
 #include "RedexContext.h"

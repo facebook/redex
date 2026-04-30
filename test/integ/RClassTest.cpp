@@ -8,6 +8,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexInstruction.h"

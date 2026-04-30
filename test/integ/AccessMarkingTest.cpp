@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "AccessMarking.h"
+#include "Debug.h"
 #include "RedexTest.h"
 
 class AccessMarkingTest : public RedexIntegrationTest {};

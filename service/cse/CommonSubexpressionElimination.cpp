@@ -63,6 +63,7 @@
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
 #include "IRInstruction.h"

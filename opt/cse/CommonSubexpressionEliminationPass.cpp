@@ -10,6 +10,7 @@
 #include "CommonSubexpressionElimination.h"
 #include "ConfigFiles.h"
 #include "CopyPropagation.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalDce.h"

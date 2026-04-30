@@ -47,6 +47,7 @@
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "CppUtil.h"
+#include "Debug.h"
 #include "DedupVirtualMethods.h"
 #include "GlobalConfig.h"
 #include "IRCode.h"

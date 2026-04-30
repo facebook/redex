@@ -10,6 +10,7 @@
 
 #include <utility>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "InitClassesWithSideEffects.h"
 #include "Show.h"

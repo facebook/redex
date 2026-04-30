@@ -6,6 +6,7 @@
  */
 
 #include "ClassUtil.h"
+#include "Debug.h"
 #include "DexAsm.h"
 #include "IRCode.h"
 #include "Show.h"

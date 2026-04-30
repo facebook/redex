@@ -21,6 +21,7 @@
 #include "BaselineProfile.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAssessments.h"
 #include "DexStructure.h"

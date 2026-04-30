@@ -7,6 +7,7 @@
 
 #include "RecursionPruner.h"
 
+#include "Debug.h"
 namespace inliner {
 
 RecursionPruner::RecursionPruner(

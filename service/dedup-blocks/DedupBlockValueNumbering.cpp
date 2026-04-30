@@ -9,6 +9,7 @@
 
 #include <map>
 
+#include "Debug.h"
 #include "RedexContext.h"
 
 using namespace DedupBlkValueNumbering;

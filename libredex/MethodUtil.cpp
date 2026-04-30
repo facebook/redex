@@ -8,6 +8,7 @@
 #include "MethodUtil.h"
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexAnnotation.h"
 #include "EditableCfgAdapter.h"
 #include "RedexContext.h"

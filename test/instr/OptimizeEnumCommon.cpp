@@ -7,6 +7,7 @@
 
 #include "OptimizeEnumCommon.h"
 
+#include "Debug.h"
 #include "MatchFlow.h"
 
 std::set<BranchCase> collect_const_branch_cases(DexMethodRef* method_ref) {

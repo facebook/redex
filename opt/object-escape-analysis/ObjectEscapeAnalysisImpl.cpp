@@ -6,6 +6,7 @@
  */
 
 #include "ObjectEscapeAnalysisImpl.h"
+#include "Debug.h"
 #include "Trace.h"
 
 #include "Walkers.h"

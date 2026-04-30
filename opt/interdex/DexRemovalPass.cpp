@@ -7,6 +7,7 @@
 
 #include "DexRemovalPass.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "InterDexPass.h"

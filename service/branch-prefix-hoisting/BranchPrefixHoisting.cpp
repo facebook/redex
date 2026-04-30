@@ -10,6 +10,7 @@
 #include <optional>
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "GraphUtil.h"
 #include "RedexContext.h"

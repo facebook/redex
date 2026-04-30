@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"

@@ -8,6 +8,7 @@
 #include "EnumClinitAnalysis.h"
 
 #include "ConstantPropagationAnalysis.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Show.h"

@@ -13,6 +13,7 @@
 
 #include "CFGMutation.h"
 #include "ConstantPropagationAnalysis.h"
+#include "Debug.h"
 #include "IRList.h"
 #include "LiveRange.h"
 #include "ReachingDefinitions.h"

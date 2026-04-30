@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"

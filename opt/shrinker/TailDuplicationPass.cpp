@@ -11,6 +11,7 @@
 
 #include "BaselineProfile.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DedupBlocks.h"
 #include "DexAssessments.h"
 #include "DexUtil.h"

@@ -10,6 +10,7 @@
 #include <map>
 #include <set>
 
+#include "Debug.h"
 #include "DexAccess.h"
 #include "DexUtil.h"
 #include "MethodUtil.h"

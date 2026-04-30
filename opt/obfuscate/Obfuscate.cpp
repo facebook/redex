@@ -8,6 +8,7 @@
 #include <list>
 
 #include "ClassHierarchy.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"

@@ -11,6 +11,7 @@
 
 #include <boost/range/adaptor/reversed.hpp>
 
+#include "Debug.h"
 #include "DexPosition.h"
 #include "IROpcode.h"
 #include "MethodUtil.h"

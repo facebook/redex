@@ -8,6 +8,7 @@
 #include "ClassAssemblingUtils.h"
 
 #include "Creators.h"
+#include "Debug.h"
 #include "DexStore.h"
 #include "Show.h"
 #include "Trace.h"
