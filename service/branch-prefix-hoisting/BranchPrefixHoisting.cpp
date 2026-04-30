@@ -73,12 +73,12 @@ IRInstruction* get_next_common_insn(
       auto* insn = it->insn;
       // Make sure all the constant uses are of same type before hoisting.
       auto type_demand = constant_uses->get_constant_type_demand(insn);
-      if (type_demand == constant_uses::TypeDemand::Error) {
+      if (type_demand == constant_uses::TypeDemand::Error ||
+          (type_demand_opt && *type_demand_opt != type_demand)) {
         return nullptr;
-      } else if (!type_demand_opt) {
+      }
+      if (!type_demand_opt) {
         type_demand_opt = type_demand;
-      } else if (*type_demand_opt != type_demand) {
-        return nullptr;
       }
     }
   }
@@ -558,10 +558,10 @@ size_t process_hoisting_for_block(
     return 0;
   }
 
-  auto all_preds_are_same = [](const std::vector<cfg::Edge*>& edges) {
+  auto all_preds_are_same = [](const auto& edges) {
     auto it = edges.begin();
     always_assert(it != edges.end());
-    auto* first_src = (*it++)->src();
+    auto first_src = (*it++)->src();
     for (; it != edges.end(); it++) {
       if ((*it)->src() != first_src) {
         return false;
@@ -575,7 +575,7 @@ size_t process_hoisting_for_block(
   auto get_succ_blocks_if_same_preds_and_no_throw =
       [&cfg, &all_preds_are_same](
           cfg::Block* block) -> std::optional<std::vector<cfg::Block*>> {
-    const std::vector<cfg::Edge*>& succ_edges = block->succs();
+    const auto& succ_edges = block->succs();
     std::vector<cfg::Block*> succ_blocks;
     succ_blocks.reserve(succ_edges.size());
     for (auto* edge : succ_edges) {

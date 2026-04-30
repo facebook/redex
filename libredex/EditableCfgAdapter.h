@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "ControlFlow.h"
 #include "IRCode.h"
 #include "IRList.h"
@@ -28,20 +30,29 @@ enum LoopExit {
   LOOP_BREAK,
 };
 
-/**
- * Iterate through instructions only.
- * Function is of type MethodItemEntry& -> LoopExit
- */
-template <typename Function>
-void iterate(IRCode* code, Function func) {
+namespace impl {
+
+template <typename IRCodeType>
+using cfgInstructionIterable = std::conditional_t<std::is_const_v<IRCodeType>,
+                                                  cfg::ConstInstructionIterable,
+                                                  cfg::InstructionIterable>;
+
+template <typename IRCodeType>
+using irlistInstructionIterable =
+    std::conditional_t<std::is_const_v<IRCodeType>,
+                       ir_list::ConstInstructionIterable,
+                       ir_list::InstructionIterable>;
+
+template <typename IRCodeType, typename Function>
+void iterate(IRCodeType* code, const Function& func) {
   if (code->cfg_built()) {
-    for (MethodItemEntry& mie : cfg::InstructionIterable(code->cfg())) {
+    for (auto& mie : cfgInstructionIterable<IRCodeType>(code->cfg())) {
       if (func(mie) == LOOP_BREAK) {
         break;
       }
     }
   } else {
-    for (MethodItemEntry& mie : ir_list::InstructionIterable(code)) {
+    for (auto& mie : irlistInstructionIterable<IRCodeType>(code)) {
       if (func(mie) == LOOP_BREAK) {
         break;
       }
@@ -49,14 +60,8 @@ void iterate(IRCode* code, Function func) {
   }
 }
 
-/**
- * Iterate through all types of `MethodItemEntry`s, not just instructions.
- * See IRList.h for a full description of the types of `MethodItemEntry`s
- *
- * Function is of type MethodItemEntry& -> LoopExit
- */
-template <typename Function>
-void iterate_all(IRCode* code, Function func) {
+template <typename IRCodeType, typename Function>
+void iterate_all(IRCodeType* code, const Function& func) {
   if (code->cfg_built()) {
     for (cfg::Block* b : code->cfg().blocks()) {
       for (auto& mie : *b) {
@@ -66,7 +71,7 @@ void iterate_all(IRCode* code, Function func) {
       }
     }
   } else {
-    for (MethodItemEntry& mie : *code) {
+    for (auto& mie : *code) {
       if (func(mie) == LOOP_BREAK) {
         break;
       }
@@ -74,14 +79,10 @@ void iterate_all(IRCode* code, Function func) {
   }
 }
 
-/**
- * Iterate through instructions only
- * Function is IRList::Iterator -> LoopExit
- */
-template <typename Function>
-void iterate_with_iterator(IRCode* code, Function func) {
+template <typename IRCodeType, typename Function>
+void iterate_with_iterator(IRCodeType* code, const Function& func) {
   if (code->cfg_built()) {
-    auto ii = cfg::InstructionIterable(code->cfg());
+    auto ii = cfgInstructionIterable<IRCodeType>(code->cfg());
     const auto& end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
       if (func(it.unwrap()) == LOOP_BREAK) {
@@ -89,7 +90,7 @@ void iterate_with_iterator(IRCode* code, Function func) {
       }
     }
   } else {
-    auto ii = ir_list::InstructionIterable(code);
+    auto ii = irlistInstructionIterable<IRCodeType>(code);
     const auto& end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
       if (func(it.unwrap()) == LOOP_BREAK) {
@@ -98,17 +99,45 @@ void iterate_with_iterator(IRCode* code, Function func) {
     }
   }
 }
+} // namespace impl
 
 /**
- * const versions of the above functions
+ * Iterate through instructions only.
  */
-void iterate(const IRCode* code,
-             std::function<LoopExit(const MethodItemEntry&)> func);
+inline void iterate(IRCode* code,
+                    const std::function<LoopExit(MethodItemEntry&)>& func) {
+  impl::iterate(code, func);
+}
+inline void iterate(
+    const IRCode* code,
+    const std::function<LoopExit(const MethodItemEntry&)>& func) {
+  impl::iterate(code, func);
+}
 
-void iterate_all(const IRCode* code,
-                 std::function<LoopExit(const MethodItemEntry&)> func);
+/**
+ * Iterate through all types of `MethodItemEntry`s, not just instructions.
+ * See IRList.h for a full description of the types of `MethodItemEntry`s.
+ */
+inline void iterate_all(IRCode* code,
+                        const std::function<LoopExit(MethodItemEntry&)>& func) {
+  impl::iterate_all(code, func);
+}
+inline void iterate_all(
+    const IRCode* code,
+    const std::function<LoopExit(const MethodItemEntry&)>& func) {
+  impl::iterate_all(code, func);
+}
 
-void iterate_with_iterator(
-    const IRCode* code, std::function<LoopExit(IRList::const_iterator)> func);
-
+/**
+ * Iterate through instructions only
+ */
+inline void iterate_with_iterator(
+    IRCode* code, const std::function<LoopExit(IRList::iterator)>& func) {
+  impl::iterate_with_iterator(code, func);
+}
+inline void iterate_with_iterator(
+    const IRCode* code,
+    const std::function<LoopExit(IRList::const_iterator)>& func) {
+  impl::iterate_with_iterator(code, func);
+}
 }; // namespace cfg_adapter

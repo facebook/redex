@@ -12,6 +12,7 @@
 #include <sparta/WeakTopologicalOrdering.h>
 
 #include "CppUtil.h"
+#include "SourceBlocks.h"
 
 namespace method_splitting_impl {
 
@@ -31,8 +32,11 @@ bool is_hot(const cfg::Block* b) {
   return is_hot;
 }
 
-std::string_view describe(HotSplitKind kind) {
-  switch (kind) {
+std::string_view describe(std::optional<HotSplitKind> kind) {
+  if (kind == std::nullopt) {
+    return "uninitialized";
+  }
+  switch (kind.value()) {
   case HotSplitKind::Hot:
     return "hot";
   case HotSplitKind::HotCold:

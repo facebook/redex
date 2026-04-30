@@ -13,6 +13,7 @@
 #include "ConstantPropagationState.h"
 #include "ConstantPropagationWholeProgramState.h"
 #include "DeterministicContainers.h"
+#include "DexStore.h"
 #include "IRCode.h"
 #include "Liveness.h"
 #include "NullPointerExceptionUtil.h"
@@ -156,7 +157,7 @@ class Transform final {
   void swap_kotlin_areequal(const intraprocedural::FixpointIterator&,
                             cfg::ControlFlowGraph&,
                             bool is_static,
-                            DexType* declaring_type,
+                            const DexType* declaring_type,
                             DexProto* proto);
 
   void remove_dead_switch(const intraprocedural::FixpointIterator& intra_cp,
@@ -241,7 +242,7 @@ class value_to_instruction_visitor final
     if (!cst) {
       return {};
     }
-    auto* type = const_cast<DexType*>(*cst);
+    auto* type = (*cst)->to_mutable();
     if ((m_xstores == nullptr) ||
         m_xstores->illegal_ref(m_declaring_type, type)) {
       return {};
@@ -250,6 +251,18 @@ class value_to_instruction_visitor final
     insn->set_type(type);
     return {insn, (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
                       ->set_dest(m_original->dest())};
+  }
+
+  std::vector<IRInstruction*> operator()(
+      const ConstantResourceIdDomain& dom) const {
+    auto cst = dom.get_constant();
+    if (!cst) {
+      return {};
+    }
+    IRInstruction* insn = new IRInstruction(IOPCODE_R_CONST);
+    insn->set_literal(cst->id);
+    insn->set_dest(m_original->dest());
+    return {insn};
   }
 
   template <typename Domain>

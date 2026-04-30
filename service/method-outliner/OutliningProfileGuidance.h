@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "DexClass.h"
+#include <string>
 
 namespace outliner {
 

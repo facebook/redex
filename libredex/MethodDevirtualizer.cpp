@@ -74,7 +74,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
       }
 
       MethodSearch type = drop_this ? MethodSearch::Any : MethodSearch::Virtual;
-      auto* method = resolve_method(insn->get_method(), type);
+      auto* method = resolve_method_deprecated(insn->get_method(), type);
       if (method == nullptr || (target_methods.count(method) == 0u)) {
         continue;
       }

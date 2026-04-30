@@ -22,7 +22,8 @@
 // NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
 #include "Show.h"
-#include "Walkers.h"
+
+using namespace std::literals::string_literals;
 
 using CallSitePredicate = const std::function<bool(DexCallSite*)>&;
 int ensureCallSite(DexIdx* idx, CallSitePredicate predicate) {
@@ -326,12 +327,15 @@ TEST(Dex038Test, ReadWriteDex038) {
   DexMetadata dm;
   dm.set_id("classes");
   DexStore root_store(dm);
+  int input_dex_version = 0;
   root_store.add_classes(
       load_classes_from_dex(DexLocation::make_location("dex", dexfile),
                             /*stats=*/nullptr,
+                            &input_dex_version,
                             true,
                             true,
                             38));
+  EXPECT_EQ(input_dex_version, 38);
   DexClasses& classes = root_store.get_dexen().back();
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(root_store));
@@ -358,20 +362,19 @@ TEST(Dex038Test, ReadWriteDex038) {
   std::string output_dex = tmpdir.path + "/output.dex";
   auto gtypes = std::make_shared<GatheredTypes>(&classes);
 
-  write_classes_to_dex(
-      output_dex,
-      &classes,
-      std::move(gtypes),
-      0,
-      nullptr,
-      0,
-      dummy_cfg,
-      pos_mapper.get(),
-      DebugInfoKind::NoCustomSymbolication,
-      &method_to_id,
-      &code_debug_lines,
-      nullptr,
-      "dex\n038\0"); // NOLINT(bugprone-string-literal-with-embedded-nul)
+  write_classes_to_dex(output_dex,
+                       &classes,
+                       std::move(gtypes),
+                       0,
+                       nullptr,
+                       0,
+                       dummy_cfg,
+                       pos_mapper.get(),
+                       DebugInfoKind::NoCustomSymbolication,
+                       &method_to_id,
+                       &code_debug_lines,
+                       nullptr,
+                       "dex\n038\0"s);
 
   delete g_redex;
   g_redex = new RedexContext();

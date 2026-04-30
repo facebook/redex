@@ -10,7 +10,7 @@
 #include "MatchFlow.h"
 
 std::set<BranchCase> collect_const_branch_cases(DexMethodRef* method_ref) {
-  auto* method = static_cast<DexMethod*>(method_ref);
+  auto* method = dynamic_cast<DexMethod*>(method_ref);
   method->balloon();
 
   auto* code = method->get_code();

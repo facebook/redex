@@ -7,11 +7,10 @@
 
 #include "RemoveBuilderPattern.h"
 
-#include <boost/regex.hpp>
+#include <boost/regex.hpp> // NOLINT
 
 #include "BuilderTransform.h"
 #include "ConfigFiles.h"
-#include "CppUtil.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
@@ -86,10 +85,11 @@ class RemoveClasses {
  public:
   RemoveClasses(const DexType* super_cls,
                 const Scope& scope,
+                const ConfigFiles& conf,
                 const init_classes::InitClassesWithSideEffects&
                     init_classes_with_side_effects,
                 const inliner::InlinerConfig& inliner_config,
-                const std::vector<DexType*>& blocklist,
+                const std::vector<const DexType*>& blocklist,
                 const size_t max_num_inline_iteration,
                 DexStoresVector& stores)
       : m_root(super_cls),
@@ -97,13 +97,13 @@ class RemoveClasses {
         m_blocklist(blocklist),
         m_type_system(scope),
         m_transform(scope,
+                    conf,
                     m_type_system,
                     super_cls,
                     init_classes_with_side_effects,
                     inliner_config,
                     stores),
-        m_max_num_inline_iteration(max_num_inline_iteration),
-        m_stores(stores) {
+        m_max_num_inline_iteration(max_num_inline_iteration) {
     gather_classes();
   }
 
@@ -264,7 +264,7 @@ class RemoveClasses {
       }
     });
 
-    for (DexType* type : m_blocklist) {
+    for (const DexType* type : m_blocklist) {
       if (m_classes.count(type) != 0u) {
         TRACE(BLD_PATTERN, 2,
               "Excluding type since it was in the blocklist: %s", SHOW(type));
@@ -381,7 +381,7 @@ class RemoveClasses {
 
   const DexType* m_root;
   const Scope& m_scope;
-  const std::vector<DexType*>& m_blocklist;
+  const std::vector<const DexType*>& m_blocklist;
   TypeSystem m_type_system;
   BuilderTransform m_transform;
   UnorderedSet<const DexType*> m_classes;
@@ -391,13 +391,12 @@ class RemoveClasses {
   size_t m_num_removed_usages{0};
   size_t m_max_num_inline_iteration{0};
   std::map<size_t, size_t> m_num_inline_iterations;
-  const DexStoresVector& m_stores;
 };
 
 } // namespace
 
 void RemoveBuilderPatternPass::bind_config() {
-  std::vector<DexType*> roots;
+  std::vector<const DexType*> roots;
   bind("roots", {}, roots, Configurable::default_doc(),
        Configurable::bindflags::types::warn_if_unresolvable);
   bind("blocklist", {}, m_blocklist, Configurable::default_doc(),
@@ -440,7 +439,7 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
           m_max_num_inline_iteration);
     Timer t("root_iteration");
     RemoveClasses rm_builder_pattern(
-        root, scope, init_classes_with_side_effects,
+        root, scope, conf, init_classes_with_side_effects,
         *conf.get_global_config().get_config_by_name<InlinerConfig>("inliner"),
         m_blocklist, m_max_num_inline_iteration, stores);
     rm_builder_pattern.optimize();

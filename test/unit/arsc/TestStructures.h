@@ -7,14 +7,13 @@
 
 #pragma once
 
-#include "Util.h"
 #include "androidfw/ResourceTypes.h"
 #include "utils/Serialize.h"
 
 // Data that is used to write many test cases against. Meant to be included from
 // individual test cpp files that want to code against it.
 
-PACKED(struct EntryAndValue {
+struct EntryAndValue {
   android::ResTable_entry entry{};
   android::Res_value value{};
   EntryAndValue(uint32_t key_string_idx, uint8_t data_type, uint32_t data) {
@@ -24,7 +23,7 @@ PACKED(struct EntryAndValue {
     value.dataType = data_type;
     value.data = data;
   }
-});
+};
 
 // For testing simplicity, a map that has two items in it.
 struct MapEntryAndTwoValues {

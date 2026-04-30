@@ -14,7 +14,6 @@
 
 #include "ClassHierarchy.h"
 #include "Debug.h"
-#include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "PassManager.h"
@@ -89,8 +88,8 @@ bool implements_all_intf_methods(const DexClass* impl_cls,
                                  const DexClass* intf_cls) {
   // Check if the class hierarchy implements all interface methods
   for (auto* intf_meth : intf_cls->get_vmethods()) {
-    auto* resolved = resolve_virtual(impl_cls, intf_meth->get_name(),
-                                     intf_meth->get_proto());
+    auto* resolved = resolve_virtual_deprecated(impl_cls, intf_meth->get_name(),
+                                                intf_meth->get_proto());
     if (resolved == nullptr) {
       // method not found (probably optimized away)
       // => exclude pair from possible merging
@@ -154,7 +153,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
 
     std::unique_ptr<SingleImplAnalysis> single_impls =
         SingleImplAnalysis::analyze(scope, stores, single_impl, intfs, pg_map,
-                                    m_pass_config);
+                                    m_pass_config, conf);
 
     auto optimized_stats = optimize(std::move(single_impls), ch, scope,
                                     m_pass_config, android_sdk);

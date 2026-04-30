@@ -39,7 +39,7 @@ struct ReserveRefsInfo {
 
 using MethodRefs = UnorderedSet<DexMethodRef*>;
 using FieldRefs = UnorderedSet<DexFieldRef*>;
-using TypeRefs = UnorderedSet<DexType*>;
+using TypeRefs = UnorderedSet<const DexType*>;
 using MergerIndex = size_t;
 using MethodGroup = size_t;
 
@@ -165,7 +165,7 @@ also reject some legal cases.
 
   size_t size() const { return m_classes_iterators.size(); }
 
-  size_t get_tref_occurrences(DexType* type) const {
+  size_t get_tref_occurrences(const DexType* type) const {
     auto it = m_trefs.find(type);
     return it == m_trefs.end() ? 0 : it->second;
   }
@@ -183,7 +183,9 @@ also reject some legal cases.
   size_t get_num_classes() const { return m_classes.size(); }
 
   size_t get_num_trefs() const { return m_trefs.size(); }
-  const UnorderedMap<DexType*, size_t>& get_trefs() const { return m_trefs; }
+  const UnorderedMap<const DexType*, size_t>& get_trefs() const {
+    return m_trefs;
+  }
 
   size_t get_num_mrefs() const { return m_mrefs.size(); }
   const UnorderedMap<DexMethodRef*, size_t>& get_mrefs() const {
@@ -275,7 +277,7 @@ also reject some legal cases.
 
  private:
   size_t m_linear_alloc_size;
-  UnorderedMap<DexType*, size_t> m_trefs;
+  UnorderedMap<const DexType*, size_t> m_trefs;
   UnorderedMap<DexMethodRef*, size_t> m_mrefs;
   UnorderedMap<DexFieldRef*, size_t> m_frefs;
   TypeRefs m_pending_init_class_fields;

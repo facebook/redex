@@ -16,11 +16,11 @@
 #include "ControlFlow.h"
 #include "DexAsm.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRList.h"
+#include "IROpcode.h"
 #include "ObjectEscapeAnalysis.h"
 #include "RedexTest.h"
 #include "VirtualScope.h"
@@ -32,8 +32,7 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
     // we need in the tests to create a proper scope
     virt_scope::get_vmethods(type::java_lang_Object());
 
-    auto* object_ctor =
-        static_cast<DexMethod*>(method::java_lang_Object_ctor());
+    auto* object_ctor = method::java_lang_Object_ctor();
     object_ctor->set_access(ACC_PUBLIC | ACC_CONSTRUCTOR);
     object_ctor->set_external();
     type_class(type::java_lang_Object())->add_method(object_ctor);

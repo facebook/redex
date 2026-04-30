@@ -11,7 +11,7 @@
 #include "DeterministicContainers.h"
 #include "PassManager.h"
 #include "Show.h"
-#include "Walkers.h"
+#include "Timer.h"
 
 namespace {
 size_t rearrange_dex(DexClasses& dex) {
@@ -19,11 +19,11 @@ size_t rearrange_dex(DexClasses& dex) {
 
   auto new_dex = DexClasses();
   new_dex.reserve(dex.size());
-  UnorderedSet<DexType*> class_types_in_dex;
-  UnorderedSet<DexType*> inserted;
+  UnorderedSet<const DexType*> class_types_in_dex;
+  UnorderedSet<const DexType*> inserted;
 
-  std::function<size_t(DexType*)> insert_class_and_its_hierachy =
-      [&](DexType* cls_type) -> size_t {
+  std::function<size_t(const DexType*)> insert_class_and_its_hierachy =
+      [&](const DexType* cls_type) -> size_t {
     if (class_types_in_dex.find(cls_type) == class_types_in_dex.end()) {
       // Such class does not exist the dex originally; no need to insert
       return 0;
@@ -35,7 +35,7 @@ size_t rearrange_dex(DexClasses& dex) {
     inserted.insert(cls_type);
     size_t insert_amount = 1;
     auto* cls = type_class(cls_type);
-    for (auto* intf : *cls->get_interfaces()) {
+    for (const auto* intf : *cls->get_interfaces()) {
       insert_amount += insert_class_and_its_hierachy(intf);
     }
     insert_amount += insert_class_and_its_hierachy(cls->get_super_class());

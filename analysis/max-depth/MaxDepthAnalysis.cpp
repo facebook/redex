@@ -11,10 +11,11 @@
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/HashedSetAbstractDomain.h>
 
-#include "ControlFlow.h"
 #include "DexClass.h"
-#include "IRCode.h"
+#include "DexUtil.h"
+
 #include "IRInstruction.h"
+#include "Resolver.h"
 #include "SpartaInterprocedural.h"
 
 namespace {
@@ -143,7 +144,7 @@ class MaxDepthFunctionAnalyzer : public Base {
   void analyze_invoke(IRInstruction* insn) {
     auto* callee = insn->get_method();
     auto* callee_method =
-        resolve_method(callee, opcode_to_search(insn), m_method);
+        resolve_method_deprecated(callee, opcode_to_search(insn), m_method);
     if (callee_method != nullptr) {
       auto summary =
           this->get_summaries()->get(callee_method, DepthDomain::top());
@@ -186,13 +187,16 @@ using Analysis = InterproceduralAnalyzer<MaxDepthAnalysisAdaptor>;
 void MaxDepthAnalysisPass::run_pass(DexStoresVector& stores,
                                     ConfigFiles& /* conf */,
                                     PassManager& /* pm */) {
-  auto analysis = Analysis(build_class_scope(stores), m_max_iteration);
+  auto analysis =
+      Analysis(build_class_scope(stores), static_cast<int>(m_max_iteration));
   analysis.run();
   m_result = std::make_shared<UnorderedMap<const DexMethod*, int>>();
 
   for (const auto& entry : UnorderedIterable(analysis.registry.get_map())) {
     if (entry.second.is_value()) {
-      (*m_result)[entry.first] = entry.second.depth();
+      auto depth = entry.second.depth();
+      always_assert(depth <= std::numeric_limits<int>::max());
+      (*m_result)[entry.first] = static_cast<int>(depth);
     }
   }
 }

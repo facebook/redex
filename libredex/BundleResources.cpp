@@ -13,7 +13,6 @@
 #include "BundleResources.h"
 
 #include <fstream>
-#include <istream>
 #include <map>
 #include <queue>
 #include <stdexcept>
@@ -50,7 +49,8 @@ void read_protobuf_file_contents(
       return;
     }
     google::protobuf::io::CodedInputStream input(
-        (const google::protobuf::uint8*)data, size);
+        reinterpret_cast<const google::protobuf::uint8*>(data),
+        static_cast<int>(size));
     fn(input, size);
   });
 }
@@ -767,10 +767,6 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
 
 using StyleResource = resources::StyleResource;
 using StyleModificationSpec = resources::StyleModificationSpec;
-using ResourceAttributeMap =
-    UnorderedMap<uint32_t,
-                 UnorderedMap<uint32_t, StyleModificationSpec::Modification>>;
-
 boost::optional<int32_t> BundleResources::get_min_sdk() {
   std::string base_manifest = (boost::filesystem::path(m_directory) /
                                "base/manifest/AndroidManifest.xml")
@@ -1518,7 +1514,7 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
                   auto* remapped_entry =
                       new_remapped_entry(*source_entry, source_id, old_to_new);
                   remapped_entry->mutable_entry_id()->set_id(
-                      current_entry_id++);
+                      static_cast<uint32_t>(current_entry_id++));
                   new_entries.AddAllocated(remapped_entry);
                 }
                 new_type->clear_entry();
@@ -1959,7 +1955,7 @@ void ResourcesPbFile::get_type_names(std::vector<std::string>* type_names) {
                     "Must provide an empty vector, for documented indexing "
                     "scheme to be valid");
   auto highest_type_id = m_type_id_to_names.rbegin()->first;
-  for (size_t i = 1; i <= highest_type_id; i++) {
+  for (uint32_t i = 1; i <= highest_type_id; i++) {
     auto search = m_type_id_to_names.find(i);
     if (search != m_type_id_to_names.end()) {
       type_names->emplace_back(search->second);
@@ -2500,9 +2496,7 @@ ResourcesPbFile::get_inlinable_resource_values() {
       continue;
     } else if (item.has_str()) {
       const std::string& og_str = item.str().value();
-      const std::string& mutf8_string =
-          resources::convert_utf8_to_mutf8(og_str);
-      inlinable_val.string_value = mutf8_string;
+      inlinable_val.string_value = resources::convert_utf8_to_mutf8(og_str);
       inlinable_val.type = android::Res_value::TYPE_STRING;
     } else if (item.has_prim()) {
       if (item.prim().oneof_value_case() ==
@@ -2581,7 +2575,7 @@ std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
   switch (prim.oneof_value_case()) {
   case aapt::pb::Primitive::kFloatValue:
     data_type = android::Res_value::TYPE_FLOAT;
-    value = prim.float_value();
+    value = static_cast<uint32_t>(prim.float_value());
     break;
   case aapt::pb::Primitive::kDimensionValue:
     data_type = android::Res_value::TYPE_DIMENSION;
@@ -2630,7 +2624,8 @@ std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
 void process_style_entry_item(uint32_t attr_id,
                               const aapt::pb::Item& item,
                               StyleResource& style_entry) {
-  auto add_attribute = [&attr_id, &style_entry](uint8_t type, auto value) {
+  auto add_attribute = [&attr_id, &style_entry](uint8_t type,
+                                                const auto& value) {
     style_entry.attributes.insert({attr_id, StyleResource::Value(type, value)});
   };
 
@@ -2701,9 +2696,9 @@ resources::StyleMap ResourcesPbFile::get_style_map() {
   return style_map;
 }
 
-bool does_resource_exists_in_file(uint32_t resource_id,
-                                  const std::string& file_path) {
-  bool resource_found = false;
+UnorderedMap<uint32_t, int> get_resources_in_file(
+    const std::string& file_path) {
+  UnorderedMap<uint32_t, int> resources_found;
   read_protobuf_file_contents(
       file_path,
       [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
@@ -2718,53 +2713,49 @@ bool does_resource_exists_in_file(uint32_t resource_id,
             auto type_id = pb_type.type_id().id();
             for (const auto& pb_entry : pb_type.entry()) {
               auto entry_id = pb_entry.entry_id().id();
-              auto current_resource_id =
-                  MAKE_RES_ID(package_id, type_id, entry_id);
-              if (current_resource_id == resource_id) {
-                resource_found = true;
-                return;
-              }
+              auto resource_id = MAKE_RES_ID(package_id, type_id, entry_id);
+              resources_found[resource_id]++;
             }
           }
         }
       });
-  return resource_found;
+
+  return resources_found;
 }
 
-void assert_resource_in_one_files(
-    uint32_t resource_id, const std::vector<std::string>& resources_pb_paths) {
-  std::unordered_set<std::string> files;
+void assert_resources_in_at_most_one_file(
+    const UnorderedSet<uint32_t>& resource_ids,
+    const std::vector<std::string>& resources_pb_paths) {
+  UnorderedMap<uint32_t, int> resource_occ_count;
   for (const auto& path : resources_pb_paths) {
-    if (does_resource_exists_in_file(resource_id, path)) {
-      files.insert(path);
+    const auto& resources_in_file = get_resources_in_file(path);
+    for (const auto& [resource_id, count] :
+         UnorderedIterable(resources_in_file)) {
+      resource_occ_count[resource_id] += count;
     }
   }
 
-  always_assert_log(files.size() <= 1, "Resource 0x%x is in %zu files",
-                    resource_id, files.size());
+  for (const auto& resource_id : UnorderedIterable(resource_ids)) {
+    always_assert_log(resource_occ_count[resource_id] <= 1,
+                      "Resource 0x%x is not in exactly one file", resource_id);
+  }
 }
 
 // Finds a resource in a protocol buffer table and applies a modification to
 // it The modification is applied using the user-provided callback function
 // Returns true if the resource was found and modified, false otherwise
 bool modify_attribute_from_style_resource(
-    const ResourceAttributeMap& modifications,
+    const resources::ResourceAttributeMap& resource_id_to_mod_attribute,
     aapt::pb::ResourceTable& resource_table,
     const std::function<
         bool(aapt::pb::Style*,
-             const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&,
-             UnorderedMap<uint32_t, StyleModificationSpec::Modification>&)>&
-        modifier_function,
-    ResourceAttributeMap& modified_resources) {
+             std::vector<resources::StyleModificationSpec::Modification>&)>&
+        modification_function) {
 
   constexpr const char* STYLE_TYPE_NAME = "style";
   bool is_file_modified = false;
 
-  if (traceEnabled(RES, 9)) {
-    std::string serialized;
-    resource_table.SerializeToString(&serialized);
-    TRACE(RES, 9, "Package count: %d", resource_table.package_size());
-  }
+  TRACE(RES, 9, "Package count: %d", resource_table.package_size());
 
   for (int package_idx = 0; package_idx < resource_table.package_size();
        package_idx++) {
@@ -2796,8 +2787,9 @@ bool modify_attribute_from_style_resource(
               entry_idx, resource_id, resource_entry->name().c_str(),
               resource_entry->config_value_size());
 
-        const auto& modification_pair = modifications.find(resource_id);
-        if (modification_pair == modifications.end()) {
+        const auto& modifications_it =
+            resource_id_to_mod_attribute.find(resource_id);
+        if (modifications_it == resource_id_to_mod_attribute.end()) {
           continue;
         }
 
@@ -2817,14 +2809,10 @@ bool modify_attribute_from_style_resource(
                             ->mutable_style();
           TRACE(RES, 9, "        Style has %d attributes", style->entry_size());
 
-          UnorderedMap<uint32_t, StyleModificationSpec::Modification>
-              modified_attributes;
-          is_file_modified |= modifier_function(
-              style, modification_pair->second, modified_attributes);
+          auto resource_modifications = modifications_it->second;
 
-          if (!modified_attributes.empty()) {
-            modified_resources.insert({resource_id, modified_attributes});
-          }
+          is_file_modified |=
+              modification_function(style, resource_modifications);
         }
       }
     }
@@ -2834,14 +2822,12 @@ bool modify_attribute_from_style_resource(
 }
 
 void apply_attribute_modification_for_file(
-    const ResourceAttributeMap& modifications,
+    const resources::ResourceAttributeMap& resource_id_to_mod_attribute,
     const std::string& resource_path,
     const std::function<
         bool(aapt::pb::Style*,
-             const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&,
-             UnorderedMap<uint32_t, StyleModificationSpec::Modification>&)>&
-        modifier_function,
-    ResourceAttributeMap& modified_resources) {
+             std::vector<resources::StyleModificationSpec::Modification>&)>&
+        modification_function) {
   read_protobuf_file_contents(
       resource_path,
       [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
@@ -2852,10 +2838,9 @@ void apply_attribute_modification_for_file(
           return;
         }
 
-        // Apply modifications to the resource file
         bool is_file_modified = modify_attribute_from_style_resource(
-            modifications, resource_table, modifier_function,
-            modified_resources);
+            resource_id_to_mod_attribute, resource_table,
+            modification_function);
 
         if (is_file_modified) {
           std::ofstream output_file(resource_path, std::ofstream::binary);
@@ -2865,61 +2850,6 @@ void apply_attribute_modification_for_file(
           }
         }
       });
-}
-
-// Assumes all modifications are being done on unambiguous resources
-void ResourcesPbFile::apply_attribute_removals(
-    const std::vector<StyleModificationSpec::Modification>& modifications,
-    const std::vector<std::string>& resources_pb_paths) {
-  ResourceAttributeMap modified_resources;
-
-  const auto& attribute_removal_function =
-      [](aapt::pb::Style* style,
-         const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
-             attribute_map,
-         UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
-             modified_attributes) -> bool {
-    bool removed_any = false;
-    for (int attr = style->entry_size() - 1; attr >= 0; attr--) {
-      auto* style_entry = style->mutable_entry(attr);
-      if (style_entry->has_key()) {
-        uint32_t attr_id = style_entry->key().id();
-        TRACE(RES, 9, "        Attribute[%d]: id=0x%x", attr, attr_id);
-
-        auto it = attribute_map.find(attr_id);
-        if (it != attribute_map.end()) {
-          style->mutable_entry()->DeleteSubrange(attr, 1);
-          modified_attributes.insert({attr_id, it->second});
-          removed_any = true;
-        }
-      }
-    }
-    return removed_any;
-  };
-
-  ResourceAttributeMap removals;
-  for (const auto& mod : modifications) {
-    if (mod.type == StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE) {
-      uint32_t resource_id = mod.resource_id;
-      assert_resource_in_one_files(resource_id, resources_pb_paths);
-      removals[resource_id].insert({mod.attribute_id.value(), mod});
-    }
-  }
-
-  for (const auto& resource_path : resources_pb_paths) {
-    TRACE(RES, 9, "Examining resource file: %s", resource_path.c_str());
-    apply_attribute_modification_for_file(removals, resource_path,
-                                          attribute_removal_function,
-                                          modified_resources);
-  }
-
-  for (const auto& [resource_id, attr_map] :
-       UnorderedIterable(modified_resources)) {
-    for (const auto& [attr_id, mod] : UnorderedIterable(attr_map)) {
-      TRACE(RES, 8, "Successfully removed attribute 0x%x from resource 0x%x",
-            attr_id, resource_id);
-    }
-  }
 }
 
 void add_attribute_to_style(aapt::pb::Item* item,
@@ -2976,13 +2906,13 @@ void add_attribute_to_style(aapt::pb::Item* item,
     prim->set_color_rgb4_value(value_bytes);
     break;
   case android::Res_value::TYPE_INT_DEC:
-    prim->set_int_decimal_value(value_bytes);
+    prim->set_int_decimal_value(static_cast<int32_t>(value_bytes));
     break;
   case android::Res_value::TYPE_INT_HEX:
     prim->set_int_hexadecimal_value(value_bytes);
     break;
   case android::Res_value::TYPE_FLOAT:
-    prim->set_float_value(value_bytes);
+    prim->set_float_value(static_cast<float>(value_bytes));
     break;
   case android::Res_value::TYPE_DIMENSION:
     prim->set_dimension_value(value_bytes);
@@ -2996,64 +2926,243 @@ void add_attribute_to_style(aapt::pb::Item* item,
   }
 }
 
-bool attribute_addition_function(
-    aapt::pb::Style* style,
-    const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
-        attributes_to_add,
-    UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
-        modified_attributes) {
-  if (attributes_to_add.empty()) {
-    return false;
-  }
-
-  for (const auto& [attr_id, mod] : UnorderedIterable(attributes_to_add)) {
-
-    auto* new_entry = style->add_entry();
-    auto* key = new_entry->mutable_key();
-    key->set_id(attr_id);
-    key->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
-
-    add_attribute_to_style(new_entry->mutable_item(), mod.value.value());
-
-    modified_attributes.insert({attr_id, mod});
-    TRACE(RES, 9, "        Added new attribute: id=0x%x", attr_id);
-  }
-
-  reorder_style(style);
-
-  return true;
-}
-
-void ResourcesPbFile::apply_attribute_additions(
+void ResourcesPbFile::apply_attribute_removals_and_additions(
     const std::vector<StyleModificationSpec::Modification>& modifications,
     const std::vector<std::string>& resources_pb_paths) {
-  ResourceAttributeMap modified_resources;
+  resources::ResourceAttributeMap resource_id_to_mod_attribute;
 
-  ResourceAttributeMap additions;
   for (const auto& mod : modifications) {
-    if (mod.type == StyleModificationSpec::ModificationType::ADD_ATTRIBUTE) {
-      int32_t resource_id = mod.resource_id;
-      assert_resource_in_one_files(resource_id, resources_pb_paths);
-      additions[resource_id].insert({mod.attribute_id.value(), mod});
+    resource_id_to_mod_attribute[mod.resource_id].push_back(mod);
+  }
+
+  auto add_and_remove_attrs =
+      [](aapt::pb::Style* style,
+         std::vector<resources::StyleModificationSpec::Modification>&
+             modifications) -> bool {
+    UnorderedSet<uint32_t> removals;
+    UnorderedMap<uint32_t, StyleModificationSpec::Modification> additions;
+
+    for (const auto& mod : modifications) {
+      if (!mod.attribute_id.has_value()) {
+        continue;
+      }
+
+      auto type = mod.type;
+      uint32_t attr_id = mod.attribute_id.value();
+      if (type == StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE) {
+        removals.insert(attr_id);
+      } else if (type ==
+                 StyleModificationSpec::ModificationType::ADD_ATTRIBUTE) {
+        additions.emplace(attr_id, mod);
+      }
     }
+
+    bool modified = false;
+
+    for (int attr = style->entry_size() - 1; attr >= 0; attr--) {
+      auto* style_entry = style->mutable_entry(attr);
+      if (style_entry->has_key()) {
+        uint32_t attr_id = style_entry->key().id();
+        if (removals.count(attr_id) != 0u) {
+          style->mutable_entry()->DeleteSubrange(attr, 1);
+          modified = true;
+        }
+      }
+    }
+
+    for (const auto& [attr_id, mod] : UnorderedIterable(additions)) {
+      auto* new_entry = style->add_entry();
+      auto* key = new_entry->mutable_key();
+      key->set_id(attr_id);
+      key->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
+
+      add_attribute_to_style(new_entry->mutable_item(), mod.value.value());
+      modified = true;
+    }
+
+    if (modified && !additions.empty()) {
+      reorder_style(style);
+    }
+
+    return modified;
+  };
+
+  for (const auto& file_path : resources_pb_paths) {
+    TRACE(RES, 9, "Processing resource file: %s", file_path.c_str());
+    apply_attribute_modification_for_file(resource_id_to_mod_attribute,
+                                          file_path, add_and_remove_attrs);
+  }
+}
+
+void ResourcesPbFile::apply_style_merges(
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& resources_pb_paths) {
+  UnorderedMap<uint32_t,
+               std::vector<resources::StyleModificationSpec::Modification>>
+      style_modifications;
+
+  UnorderedSet<uint32_t> resource_ids;
+
+  for (const auto& mod : modifications) {
+    if (mod.type !=
+        StyleModificationSpec::ModificationType::UPDATE_PARENT_ADD_ATTRIBUTES) {
+      continue;
+    }
+    uint32_t resource_id = mod.resource_id;
+    resource_ids.insert(resource_id);
+    style_modifications[resource_id].push_back(mod);
+  }
+  assert_resources_in_at_most_one_file(resource_ids, resources_pb_paths);
+
+  auto style_merge_function =
+      [](aapt::pb::Style* style,
+         std::vector<resources::StyleModificationSpec::Modification>&
+             modifications) -> bool {
+    always_assert_log(modifications.size() == 1,
+                      "Only expect one entry when trying to merge attributes "
+                      "into child resource");
+    auto modification = modifications[0];
+    uint32_t resource_id = modification.resource_id;
+
+    auto parent_id_opt = modification.parent_id;
+    always_assert(parent_id_opt.has_value());
+    uint32_t parent_id = parent_id_opt.value();
+
+    UnorderedSet<uint32_t> existing_entries;
+    for (const auto& existing_entry : style->entry()) {
+      if (existing_entry.has_key()) {
+        existing_entries.insert(existing_entry.key().id());
+      }
+    }
+
+    for (const auto& [attr_id, value] :
+         UnorderedIterable(modification.values)) {
+      always_assert_log(
+          existing_entries.find(attr_id) == existing_entries.end(),
+          "Attribute 0x%x already exists in style 0x%x", attr_id, resource_id);
+
+      auto* new_entry = style->add_entry();
+      auto* key = new_entry->mutable_key();
+      key->set_id(attr_id);
+      key->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
+
+      add_attribute_to_style(new_entry->mutable_item(), value);
+    }
+
+    if (parent_id != 0) {
+      auto* parent = style->mutable_parent();
+      parent->set_id(parent_id);
+      parent->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
+    } else {
+      style->clear_parent();
+    }
+
+    reorder_style(style);
+    return true;
+  };
+
+  for (const auto& file_path : resources_pb_paths) {
+    TRACE(RES, 9, "Processing resource file for style merges: %s",
+          file_path.c_str());
+    apply_attribute_modification_for_file(style_modifications, file_path,
+                                          style_merge_function);
+  }
+}
+
+bool add_styles_to_resource_table(
+    const UnorderedMap<uint32_t,
+                       std::vector<StyleModificationSpec::Modification>>&
+        id_to_mods,
+    aapt::pb::ResourceTable& resource_table) {
+  constexpr const char* STYLE_TYPE_NAME = "style";
+  bool is_file_modified = false;
+
+  TRACE(RES, 9, "Package count: %d", resource_table.package_size());
+
+  for (int package_idx = 0; package_idx < resource_table.package_size();
+       package_idx++) {
+    auto* package = resource_table.mutable_package(package_idx);
+    uint32_t package_id = package->package_id().id();
+
+    for (int type_idx = 0; type_idx < package->type_size(); type_idx++) {
+      auto* type = package->mutable_type(type_idx);
+
+      if (type->name() == STYLE_TYPE_NAME) {
+        uint32_t current_type_id = type->type_id().id();
+        for (const auto& [resource_id, mods] : UnorderedIterable(id_to_mods)) {
+          uint32_t package_index =
+              (resource_id >> PACKAGE_INDEX_BIT_SHIFT) & 0xFF;
+          uint32_t type_index = (resource_id >> TYPE_INDEX_BIT_SHIFT) & 0xFF;
+          uint32_t entry_index = resource_id & 0xFFFF;
+
+          if (package_index != package_id || type_index != current_type_id) {
+            continue;
+          }
+
+          auto* new_entry = type->add_entry();
+          new_entry->mutable_entry_id()->set_id(entry_index);
+          new_entry->set_name(SYNTHETIC_PARENT_NAME);
+
+          auto* config_value = new_entry->add_config_value();
+          auto* value = config_value->mutable_value();
+          auto* compound_value = value->mutable_compound_value();
+          compound_value->mutable_style();
+
+          is_file_modified = true;
+        }
+      }
+    }
+  }
+  return is_file_modified;
+}
+
+void add_styles_to_resource_file(
+    const UnorderedMap<uint32_t,
+                       std::vector<StyleModificationSpec::Modification>>&
+        id_to_mods,
+    const std::string& resource_path) {
+  read_protobuf_file_contents(
+      resource_path,
+      [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
+        aapt::pb::ResourceTable resource_table;
+        if (!resource_table.ParseFromCodedStream(&input)) {
+          TRACE(RES, 9, "Failed to read resource file: %s",
+                resource_path.c_str());
+          return;
+        }
+
+        // Apply modifications to the resource file
+        bool is_file_modified =
+            add_styles_to_resource_table(id_to_mods, resource_table);
+
+        if (is_file_modified) {
+          std::ofstream output_file(resource_path, std::ofstream::binary);
+          if (!resource_table.SerializeToOstream(&output_file)) {
+            TRACE(RES, 9, "Failed to write modified resource file: %s",
+                  resource_path.c_str());
+          }
+        }
+      });
+}
+
+void ResourcesPbFile::add_styles(
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& resources_pb_paths) {
+  UnorderedMap<uint32_t, std::vector<StyleModificationSpec::Modification>>
+      id_to_mods;
+  for (const auto& mod : modifications) {
+    if (mod.type != StyleModificationSpec::ModificationType::NEW_STYLE) {
+      continue;
+    }
+
+    uint32_t resource_id = mod.resource_id;
+    TRACE(RES, 1, "Adding style for resource id: 0x%x", resource_id);
+    id_to_mods[resource_id].push_back(mod);
   }
 
   for (const auto& resource_path : resources_pb_paths) {
-    TRACE(RES, 9, "Examining resource file for additions: %s",
-          resource_path.c_str());
-    apply_attribute_modification_for_file(additions, resource_path,
-                                          attribute_addition_function,
-                                          modified_resources);
-  }
-
-  if (traceEnabled(RES, 8)) {
-    for (const auto& [resource_id, attr_map] :
-         UnorderedIterable(modified_resources)) {
-      for (const auto& [attr_id, mod] : UnorderedIterable(attr_map)) {
-        TRACE(RES, 8, "Successfully added attribute 0x%x to resource 0x%x",
-              attr_id, resource_id);
-      }
-    }
+    TRACE(RES, 9, "Adding styles to resource file: %s", resource_path.c_str());
+    add_styles_to_resource_file(id_to_mods, resource_path);
   }
 }
 

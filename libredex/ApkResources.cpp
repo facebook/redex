@@ -208,7 +208,7 @@ bool TableEntryParser::visit_type(android::ResTable_package* package,
   android::TypeVariant tv(type);
   uint16_t entry_id = 0;
   for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it, ++entry_id) {
-    android::ResTable_entry* entry = const_cast<android::ResTable_entry*>(*it);
+    const android::ResTable_entry* entry = *it;
     uint32_t res_id = package_type_id << 16 | entry_id;
     if (entry == nullptr) {
       arsc::EntryValueData data(nullptr, 0);
@@ -307,6 +307,11 @@ TableSnapshot::TableSnapshot(RedexMappedFile& mapped_file, size_t len) {
                                          true) == android::NO_ERROR,
         "Failed to parse type strings for package 0x%x", package_id);
   }
+}
+
+const android::ResStringPool& TableSnapshot::get_key_strings(
+    android::ResTable_package* package) const {
+  return m_key_strings.at(GET_ID(package));
 }
 
 void TableSnapshot::gather_non_empty_resource_ids(std::vector<uint32_t>* ids) {
@@ -668,7 +673,7 @@ resources::StyleResource read_style_resource(
     android::ResTable_config* config,
     android::ResTable_map_entry* entry) {
   StyleCollector collector(entry);
-  auto parent_id dtohl(entry->parent.ident);
+  auto parent_id = dtohl(entry->parent.ident);
   return {id, *config, parent_id, std::move(collector.m_attributes)};
 }
 } // namespace apk
@@ -713,7 +718,7 @@ size_t write_serialized_data(const android::Vector<char>& vector,
   auto trunc_res = _chsize_s(fd, vec_size);
   _close(fd);
 #else
-  auto trunc_res = truncate(f.filename.c_str(), vec_size);
+  auto trunc_res = truncate(f.filename.c_str(), static_cast<off_t>(vec_size));
 #endif
   redex_assert(trunc_res == 0);
   return vec_size > 0 ? vec_size : f_size;
@@ -1424,8 +1429,7 @@ boost::optional<int32_t> ApkResources::get_min_sdk() {
   return read_xml_value<int32_t>(
       m_manifest, "uses-sdk", android::Res_value::TYPE_INT_DEC, "minSdkVersion",
       [](android::ResXMLTree& parser, size_t idx) {
-        return boost::optional<int32_t>(
-            static_cast<int32_t>(parser.getAttributeData(idx)));
+        return boost::optional<int32_t>(parser.getAttributeData(idx));
       });
 }
 
@@ -1861,22 +1865,7 @@ class PackageStringRefCollector : public apk::TableParser {
     std::map<android::ResTable_type*, std::set<android::ResStringPool_ref*>>
         entries;
     m_package_entries.emplace(package, std::move(entries));
-    std::shared_ptr<android::ResStringPool> key_strings =
-        std::make_shared<android::ResStringPool>();
-    m_package_key_strings.emplace(package, std::move(key_strings));
     apk::TableParser::visit_package(package);
-    return true;
-  }
-
-  bool visit_key_strings(android::ResTable_package* package,
-                         android::ResStringPool_header* pool) override {
-    auto& key_strings = m_package_key_strings.at(package);
-    always_assert_log(key_strings->getError() == android::NO_INIT,
-                      "Key strings re-init!");
-    always_assert_log(key_strings->setTo(pool, dtohl(pool->header.size),
-                                         true) == android::NO_ERROR,
-                      "Failed to parse key strings!");
-    apk::TableParser::visit_key_strings(package, pool);
     return true;
   }
 
@@ -1907,8 +1896,6 @@ class PackageStringRefCollector : public apk::TableParser {
       android::ResTable_package*,
       std::map<android::ResTable_type*, std::set<android::ResStringPool_ref*>>>
       m_package_entries;
-  std::map<android::ResTable_package*, std::shared_ptr<android::ResStringPool>>
-      m_package_key_strings;
 };
 } // namespace
 
@@ -2044,12 +2031,12 @@ void project_string_mapping(const UnorderedSet<uint32_t>& used_strings,
   }
 }
 
-#define POOL_FLAGS(pool)                                               \
-  (((pool)->isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0) | \
-   ((pool)->isSorted() ? android::ResStringPool_header::SORTED_FLAG : 0))
+#define POOL_FLAGS(pool)                                              \
+  (((pool).isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0) | \
+   ((pool).isSorted() ? android::ResStringPool_header::SORTED_FLAG : 0))
 
 #define POOL_FLAGS_CLEAR_SORT(pool) \
-  ((pool)->isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0)
+  ((pool).isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0)
 
 void rebuild_type_strings(
     const uint32_t& package_id,
@@ -2073,11 +2060,10 @@ void rebuild_type_strings(
 
 void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
   // Find the global string pool and read its settings.
-  GlobalStringPoolReader string_reader;
-  string_reader.visit(m_f.data(), m_arsc_len);
-  auto string_pool = string_reader.global_strings();
+  auto& table_snapshot = get_table_snapshot();
+  auto& string_pool = table_snapshot.get_global_strings();
   TRACE(RES, 9, "Global string pool has %zu styles and %zu total strings",
-        string_pool->styleCount(), string_pool->size());
+        string_pool.styleCount(), string_pool.size());
 
   // 1) Collect all referenced global string indicies and key string indicies.
   PackageStringRefCollector collector;
@@ -2092,7 +2078,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
 
   // 2) Build the compacted map of old -> new indicies for used global strings.
   UnorderedMap<uint32_t, uint32_t> global_old_to_new;
-  project_string_mapping(used_global_strings, *string_pool, &global_old_to_new);
+  project_string_mapping(used_global_strings, string_pool, &global_old_to_new);
 
   // 3) Remap all Res_value structs
   auto remap_value = [&global_old_to_new](android::Res_value* value) {
@@ -2123,7 +2109,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
   };
   std::shared_ptr<arsc::ResStringPoolBuilder> global_strings_builder =
       std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(string_pool));
-  rebuild_string_pool(*string_pool, global_old_to_new, remap_spans,
+  rebuild_string_pool(string_pool, global_old_to_new, remap_spans,
                       global_strings_builder.get());
 
   // 4) Serialize the ResTable with the modified ResStringPool (which will have
@@ -2142,13 +2128,13 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
       const auto& package_type_entries = package_entry_pairs.second;
       refs.insert(package_type_entries.begin(), package_type_entries.end());
     }
-    auto key_string_pool = collector.m_package_key_strings.at(package);
+    const auto& key_string_pool = table_snapshot.get_key_strings(package);
     UnorderedSet<uint32_t> used_key_strings;
     for (const auto& ref : refs) {
       used_key_strings.emplace(dtohl(ref->index));
     }
     UnorderedMap<uint32_t, uint32_t> key_old_to_new;
-    project_string_mapping(used_key_strings, *key_string_pool, &key_old_to_new,
+    project_string_mapping(used_key_strings, key_string_pool, &key_old_to_new,
                            config.sort_key_strings);
 
     auto& type_strings_header =
@@ -2175,7 +2161,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     }
     std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
         std::make_shared<arsc::ResStringPoolBuilder>(key_flags);
-    rebuild_string_pool(*key_string_pool, key_old_to_new,
+    rebuild_string_pool(key_string_pool, key_old_to_new,
                         key_strings_builder.get());
     package_builder->set_key_strings(key_strings_builder);
     // Copy over all existing type data, which has been remapped by the step
@@ -2212,7 +2198,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     // Copy all type names that were not fully deleted (or empty strings if they
     // were).
     std::shared_ptr<arsc::ResStringPoolBuilder> type_strings_builder =
-        std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(&type_strings));
+        std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(type_strings));
     for (int i = 0; i <= last_kept_type_name; i++) {
       type_strings_builder->add_string(kept_type_names.at(i));
     }
@@ -2286,6 +2272,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
   arsc::ResTableBuilder table_builder;
 
   // Find the global string pool and read its settings.
+  auto& table_snapshot = get_table_snapshot();
   GlobalStringPoolReader string_reader;
   string_reader.visit(m_f.data(), m_arsc_len);
 
@@ -2302,7 +2289,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
     auto string_pool = string_reader.global_strings();
     TRACE(RES, 9, "Global string pool has %zu styles and %zu total strings",
           string_pool->styleCount(), string_pool->size());
-    auto flags = POOL_FLAGS_CLEAR_SORT(string_pool);
+    auto flags = POOL_FLAGS_CLEAR_SORT(*string_pool);
     // Build global old string to new string mapping and collect
     // new strings to add to global string pool
     std::map<std::string, uint32_t> global_new_strings_to_id;
@@ -2359,8 +2346,8 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
 
     if (start_package_id == package->id && !allowed_types.empty()) {
       // Set new string to be added to key string pool.
-      auto key_string_pool = collector.m_package_key_strings.at(package);
-      uint32_t new_key_string_index = key_string_pool->size();
+      const auto& key_string_pool = table_snapshot.get_key_strings(package);
+      auto new_key_string_index = (uint32_t)key_string_pool.size();
       std::map<uint32_t, std::string> key_id_to_new_strings;
       key_id_to_new_strings[new_key_string_index] = RESOURCE_NAME_REMOVED;
 
@@ -2380,7 +2367,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
         // keep_resource_specific values are given as standard UTF-8; compare
         // against string pool also as standard UTF-8.
         std::string old_string =
-            arsc::get_string_from_pool(*key_string_pool, old);
+            arsc::get_string_from_pool(key_string_pool, old);
         if (keep_resource_specific.count(old_string) > 0 ||
             unordered_any_of(keep_resource_prefixes, [&](const std::string& v) {
               return old_string.find(v) == 0;
@@ -2397,7 +2384,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
       std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
           std::make_shared<arsc::ResStringPoolBuilder>(
               POOL_FLAGS_CLEAR_SORT(key_string_pool));
-      rebuild_string_pool_with_addition(*key_string_pool, key_id_to_new_strings,
+      rebuild_string_pool_with_addition(key_string_pool, key_id_to_new_strings,
                                         key_strings_builder.get());
       package_builder->set_key_strings(key_strings_builder);
     } else {
@@ -2634,8 +2621,8 @@ size_t ResourcesArscFile::serialize() {
     android::ResStringPool type_strings(
         type_strings_header, dtohl(type_strings_header->header.size));
     auto type_strings_builder = std::make_shared<arsc::ResStringPoolBuilder>(
-        m_added_types.empty() ? POOL_FLAGS(&type_strings)
-                              : POOL_FLAGS_CLEAR_SORT(&type_strings));
+        m_added_types.empty() ? POOL_FLAGS(type_strings)
+                              : POOL_FLAGS_CLEAR_SORT(type_strings));
     rebuild_type_strings(package_id, type_strings, m_added_types,
                          type_strings_builder.get());
     package_builder->set_type_strings(type_strings_builder);
@@ -3054,14 +3041,14 @@ UnorderedSet<uint8_t> extract_types_to_process(
   return types_to_process;
 }
 
+using StyleModificationSpec = resources::StyleModificationSpec;
+
 void ResourcesArscFile::modify_attributes(
     const resources::ResourceAttributeMap& resource_id_to_mod_attribute,
     const std::function<
         void(android::ResTable_entry* entry_ptr,
-             const UnorderedMap<uint32_t,
-                                resources::StyleModificationSpec::Modification>&
-                 attrs_to_modify,
-             arsc::ResComplexEntryBuilder& builder)>& get_attributes) {
+             const std::vector<resources::StyleModificationSpec::Modification>&,
+             arsc::ResComplexEntryBuilder&)>& get_attributes) {
   auto& table_snapshot = get_table_snapshot();
   auto& parsed_table = table_snapshot.get_parsed_table();
 
@@ -3156,7 +3143,6 @@ void ResourcesArscFile::modify_attributes(
           complex_builder.set_key_string_index(dtohl(entry->key.index));
           complex_builder.set_parent_id(
               dtohl(((android::ResTable_map_entry*)entry)->parent.ident));
-
           get_attributes(entry, attributes_to_modify, complex_builder);
 
           type_definer->add(config, complex_builder);
@@ -3184,74 +3170,269 @@ void ResourcesArscFile::modify_attributes(
   mark_file_closed();
 }
 
-void ResourcesArscFile::apply_attribute_removals(
-    const std::vector<resources::StyleModificationSpec::Modification>&
-        modifications,
-    const std::vector<std::string>& /* unused */) {
-  resources::ResourceAttributeMap res_id_to_attrs_to_remove;
-  for (const auto& mod : modifications) {
-    if (mod.type ==
-        resources::StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE) {
-      res_id_to_attrs_to_remove[mod.resource_id].insert(
-          {mod.attribute_id.value(), mod});
-    }
-  }
-
-  auto remove_attribute =
-      [](android::ResTable_entry* entry_ptr,
-         const UnorderedMap<uint32_t,
-                            resources::StyleModificationSpec::Modification>&
-             attrs_to_modify,
-         arsc::ResComplexEntryBuilder& builder) {
-        apk::StyleCollector collector(entry_ptr);
-
-        for (const auto& [attr_id, attr_value] : collector.m_attributes) {
-          if (attrs_to_modify.count(attr_id) == 0) {
-            builder.add(attr_id, attr_value.get_data_type(),
-                        attr_value.get_value_bytes());
-          } else {
-            TRACE(RES, 9, "Removing attribute %u", attr_id);
-          }
-        }
-      };
-
-  modify_attributes(res_id_to_attrs_to_remove, remove_attribute);
-}
-
-void ResourcesArscFile::apply_attribute_additions(
+void ResourcesArscFile::apply_attribute_removals_and_additions(
     const std::vector<resources::StyleModificationSpec::Modification>&
         modifications,
     const std::vector<std::string>& /* resources_pb_paths */) {
-  resources::ResourceAttributeMap res_id_to_attrs_to_add;
+  resources::ResourceAttributeMap res_id_to_modifications;
+
   for (const auto& mod : modifications) {
-    if (mod.type ==
-        resources::StyleModificationSpec::ModificationType::ADD_ATTRIBUTE) {
-      res_id_to_attrs_to_add[mod.resource_id].insert(
-          {mod.attribute_id.value(), mod});
+    auto type = mod.type;
+    if (type == resources::StyleModificationSpec::ModificationType::
+                    REMOVE_ATTRIBUTE ||
+        type ==
+            resources::StyleModificationSpec::ModificationType::ADD_ATTRIBUTE) {
+      res_id_to_modifications[mod.resource_id].push_back(mod);
     }
   }
 
-  auto add_attributes =
+  if (res_id_to_modifications.empty()) {
+    return;
+  }
+
+  auto apply_modifications =
       [](android::ResTable_entry* entry_ptr,
-         const UnorderedMap<uint32_t,
-                            resources::StyleModificationSpec::Modification>&
-             attrs_to_modify,
+         const std::vector<resources::StyleModificationSpec::Modification>&
+             modifications_to_apply,
          arsc::ResComplexEntryBuilder& builder) {
+        UnorderedSet<uint32_t> removals;
+        UnorderedMap<uint32_t, resources::StyleModificationSpec::Modification>
+            additions;
+
+        for (const auto& mod : modifications_to_apply) {
+          uint32_t attr_id = mod.attribute_id.value();
+          auto type = mod.type;
+          if (type == resources::StyleModificationSpec::ModificationType::
+                          REMOVE_ATTRIBUTE) {
+            removals.insert(attr_id);
+          } else if (type == resources::StyleModificationSpec::
+                                 ModificationType::ADD_ATTRIBUTE) {
+            additions.emplace(attr_id, mod);
+          }
+        }
+
+        if (removals.empty() && additions.empty()) {
+          return;
+        }
+
         apk::StyleCollector collector(entry_ptr);
+
+        for (const auto& [attr_id, attr_value] : collector.m_attributes) {
+          if (removals.find(attr_id) == removals.end()) {
+            builder.add(attr_id, attr_value.get_data_type(),
+                        attr_value.get_value_bytes());
+          }
+        }
+
+        for (const auto& [attr_id, mod] : UnorderedIterable(additions)) {
+          always_assert_log(mod.value.has_value(),
+                            "Attribute 0x%x has no value", attr_id);
+
+          const auto& styled_value = mod.value.value();
+          builder.add(attr_id, styled_value.get_data_type(),
+                      styled_value.get_value_bytes());
+        }
+      };
+
+  modify_attributes(res_id_to_modifications, apply_modifications);
+}
+
+void ResourcesArscFile::apply_style_merges(
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& /* resources_pb_paths */) {
+  resources::ResourceAttributeMap res_id_to_modifications;
+  for (const auto& modification : modifications) {
+    if (modification.type !=
+        StyleModificationSpec::ModificationType::UPDATE_PARENT_ADD_ATTRIBUTES) {
+      continue;
+    }
+    res_id_to_modifications[modification.resource_id].push_back(modification);
+  }
+
+  auto update_styles =
+      [](android::ResTable_entry* entry_ptr,
+         const std::vector<resources::StyleModificationSpec::Modification>&
+             modifications_to_apply,
+         arsc::ResComplexEntryBuilder& builder) {
+        if (modifications_to_apply.empty()) {
+          return;
+        }
+
+        apk::StyleCollector collector(entry_ptr);
+
+        always_assert_log(
+            modifications_to_apply.size() == 1,
+            "Only expect one entry when trying to merge attributes "
+            "into child resource");
+        auto modification = modifications_to_apply[0];
+
+        auto parent_id_opt = modification.parent_id;
+        always_assert(parent_id_opt.has_value());
+        uint32_t parent_id = parent_id_opt.value();
+        uint32_t resource_id = modification.resource_id;
 
         for (const auto& [attr_id, attr_value] : collector.m_attributes) {
           builder.add(attr_id, attr_value.get_data_type(),
                       attr_value.get_value_bytes());
         }
 
-        for (const auto& [attr_id, mod] : UnorderedIterable(attrs_to_modify)) {
-          const auto& styled_value = mod.value.value();
+        for (const auto& [attr_id, styled_value] :
+             UnorderedIterable(modification.values)) {
+          always_assert_log(collector.m_attributes.find(attr_id) ==
+                                collector.m_attributes.end(),
+                            "Attribute 0x%x already exists in style 0x%x",
+                            attr_id, resource_id);
           builder.add(attr_id, styled_value.get_data_type(),
                       styled_value.get_value_bytes());
           TRACE(RES, 9, "Adding attribute %u", attr_id);
         }
+        builder.set_parent_id(parent_id);
       };
-  modify_attributes(res_id_to_attrs_to_add, add_attributes);
+  modify_attributes(res_id_to_modifications, update_styles);
+}
+
+void ResourcesArscFile::add_styles(
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& /* resources_pb_paths */) {
+  UnorderedMap<uint32_t, StyleModificationSpec::Modification> new_styles;
+
+  for (const auto& mod : modifications) {
+    if (mod.type == StyleModificationSpec::ModificationType::NEW_STYLE) {
+      uint32_t resource_id = mod.resource_id;
+      TRACE(RES, 1, "Adding style for resource id: 0x%x", resource_id);
+      new_styles.emplace(resource_id, mod);
+    }
+  }
+
+  if (new_styles.empty()) {
+    return;
+  }
+
+  auto& table_snapshot = get_table_snapshot();
+  auto& parsed_table = table_snapshot.get_parsed_table();
+
+  arsc::ResTableBuilder table_builder;
+  table_builder.set_global_strings(parsed_table.m_global_pool_header);
+
+  for (const auto& package : parsed_table.m_packages) {
+    auto package_id = package->id;
+    auto package_builder = std::make_shared<arsc::ResPackageBuilder>(package);
+
+    const auto& existing_key_pool = table_snapshot.get_key_strings(package);
+
+    auto key_flags = POOL_FLAGS_CLEAR_SORT(existing_key_pool);
+    std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
+        std::make_shared<arsc::ResStringPoolBuilder>(key_flags);
+
+    auto no_name_key_index = static_cast<uint32_t>(existing_key_pool.size());
+    std::map<uint32_t, std::string> key_id_to_new_strings;
+    key_id_to_new_strings[no_name_key_index] = SYNTHETIC_PARENT_NAME;
+
+    rebuild_string_pool_with_addition(existing_key_pool, key_id_to_new_strings,
+                                      key_strings_builder.get());
+
+    package_builder->set_key_strings(key_strings_builder);
+    package_builder->set_type_strings(
+        parsed_table.m_package_type_string_headers.at(package));
+
+    auto& type_infos = parsed_table.m_package_types.at(package);
+    for (auto& type_info : type_infos) {
+      uint8_t type_id = type_info.spec->id;
+
+      if (!is_type_named(type_id, "style")) {
+        package_builder->add_type(type_info);
+
+        continue;
+      }
+
+      auto entry_count = dtohl(type_info.spec->entryCount);
+
+      uint32_t total_new_styles =
+          entry_count + static_cast<uint32_t>(new_styles.size());
+
+      std::vector<uint32_t> flags;
+      flags.reserve(total_new_styles);
+
+      for (uint32_t entry_id = 0; entry_id < total_new_styles; entry_id++) {
+        uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry_id);
+        auto flag_search = parsed_table.m_res_id_to_flags.find(res_id);
+        if (flag_search != parsed_table.m_res_id_to_flags.end()) {
+          flags.push_back(flag_search->second);
+        } else {
+          flags.push_back(0);
+        }
+      }
+
+      auto configs = parsed_table.get_configs(package_id, type_id);
+      always_assert_log(std::any_of(configs.begin(), configs.end(),
+                                    [](auto* config) {
+                                      return arsc::is_default_config(config);
+                                    }),
+                        "Style type 0x%x requires a default config for new "
+                        "resource insertion",
+                        type_id);
+
+      auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+          package_id, type_id, configs, flags, false,
+          arsc::any_sparse_types(type_info.configs));
+
+      for (auto& config : configs) {
+        for (uint32_t entry_id = 0; entry_id < entry_count; entry_id++) {
+          uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry_id);
+          auto entry_search = parsed_table.m_res_id_to_entries.find(res_id);
+
+          if (entry_search != parsed_table.m_res_id_to_entries.end()) {
+            auto& config_entries = entry_search->second;
+            auto config_entry = config_entries.find(config);
+
+            if (config_entry != config_entries.end()) {
+              auto entry_data = config_entry->second;
+              type_definer->add(config, entry_data);
+            } else {
+              type_definer->add_empty(config);
+            }
+          } else {
+            type_definer->add_empty(config);
+          }
+        }
+
+        for (uint32_t entry_id = entry_count; entry_id < total_new_styles;
+             entry_id++) {
+          uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry_id);
+          always_assert_log(
+              new_styles.find(res_id) != new_styles.end(),
+              "Creating a styled resource 0x%x that should not be created",
+              res_id);
+
+          if (arsc::is_default_config(config)) {
+            arsc::ResComplexEntryBuilder style_builder;
+            style_builder.set_key_string_index(no_name_key_index);
+            type_definer->add(config, style_builder);
+          } else {
+            type_definer->add_empty(config);
+          }
+        }
+      }
+
+      package_builder->add_type(type_definer);
+    }
+
+    auto& overlayables = parsed_table.m_package_overlayables.at(package);
+    package_builder->add_overlays(overlayables);
+
+    auto& unknown_chunks = parsed_table.m_package_unknown_chunks.at(package);
+    for (auto& header : unknown_chunks) {
+      package_builder->add_chunk(header);
+    }
+
+    table_builder.add_package(package_builder);
+  }
+
+  android::Vector<char> serialized;
+  table_builder.serialize(&serialized);
+
+  m_arsc_len = write_serialized_data_with_expansion(serialized, std::move(m_f));
+  mark_file_closed();
 }
 
 ResourcesArscFile::~ResourcesArscFile() {}

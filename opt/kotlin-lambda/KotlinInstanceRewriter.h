@@ -8,9 +8,11 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
-#include "DexUtil.h"
+#include "Debug.h"
+#include "DexClass.h"
 
 class PassManager;
+class IRInstruction;
 
 class KotlinInstanceRewriter {
  public:

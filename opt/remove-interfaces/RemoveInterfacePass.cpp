@@ -7,6 +7,7 @@
 
 #include "RemoveInterfacePass.h"
 
+#include "ConfigFiles.h"
 #include "Creators.h"
 #include "DexStoreUtil.h"
 #include "DexUtil.h"
@@ -31,20 +32,21 @@ constexpr size_t MAX_IMPLS_SIZE = 2;
 std::vector<Location> get_args_for(DexProto* proto, MethodCreator& mc) {
   std::vector<Location> args;
   size_t args_size = proto->get_args()->size();
+  args.reserve(args_size);
   for (size_t arg_loc = 0; arg_loc < args_size; ++arg_loc) {
-    args.push_back(mc.get_local(arg_loc));
+    args.push_back(mc.get_local(static_cast<int>(arg_loc)));
   }
 
   return args;
 }
 
-std::unique_ptr<DexAnnotationSet> get_anno_set(DexType* anno_type) {
+std::unique_ptr<DexAnnotationSet> get_anno_set(const DexType* anno_type) {
   auto anno_set = std::make_unique<DexAnnotationSet>();
   anno_set->add_annotation(std::make_unique<DexAnnotation>(
-      anno_type, DexAnnotationVisibility::DAV_BUILD));
+      const_cast<DexType*>(anno_type), DexAnnotationVisibility::DAV_BUILD));
   return anno_set;
 }
-DexMethod* materialized_dispatch(DexType* owner, MethodCreator&& mc) {
+DexMethod* materialized_dispatch(DexType* owner, MethodCreator mc) {
   auto* dispatch = mc.create();
   TRACE(RM_INTF,
         9,
@@ -79,7 +81,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
                              const std::vector<DexMethod*>& targets,
                              const DexMethod* intf_method,
                              const bool keep_debug_info,
-                             DexType* dispatch_anno) {
+                             const DexType* dispatch_anno) {
   DexType* dispatch_owner = targets.front()->get_class();
   // Owner and proto
   auto orig_name = std::string(intf_method->c_str());
@@ -130,8 +132,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
     MethodBlock* curr_block;
 
     if (idx < targets.size() - 1) {
-      mb->instance_of(self_loc, type_test_loc,
-                      const_cast<DexType*>(target_type));
+      mb->instance_of(self_loc, type_test_loc, target_type);
       curr_block = mb->if_testz(OPCODE_IF_EQZ, type_test_loc);
     } else {
       // Last case
@@ -156,8 +157,8 @@ void update_interface_calls(
     if (!insn->has_method()) {
       return;
     }
-    auto* const method =
-        resolve_method(insn->get_method(), opcode_to_search(insn), meth);
+    auto* const method = resolve_method_deprecated(
+        insn->get_method(), opcode_to_search(insn), meth);
     if (method == nullptr || old_to_new_callee.count(method) == 0) {
       return;
     }
@@ -176,9 +177,9 @@ void update_interface_calls(
  */
 DexTypeList* get_new_impl_list(const DexType* impl,
                                const DexType* intf_to_remove) {
-  std::set<DexType*, dextypes_comparator> new_intfs;
+  std::set<const DexType*, dextypes_comparator> new_intfs;
   auto* cls = type_class(impl);
-  for (auto* const intf : *cls->get_interfaces()) {
+  for (const auto* const intf : *cls->get_interfaces()) {
     if (intf == intf_to_remove) {
       continue;
     }
@@ -236,7 +237,7 @@ void remove_interface_references(
     if (!insn->has_type()) {
       return;
     }
-    auto* const ref_type = insn->get_type();
+    const auto* const ref_type = insn->get_type();
     const auto* type = type::get_element_type_if_array(ref_type);
     if (interfaces.count(type) == 0) {
       return;
@@ -274,18 +275,20 @@ void remove_interface_references(
   update_field_type_references(scope, old_to_new);
 }
 
-size_t exclude_unremovables(const Scope& scope,
-                            const DexStoresVector& stores,
-                            const TypeSystem& type_system,
-                            bool include_primary_dex,
-                            const std::vector<DexType*>& excluded_interfaces,
-                            TypeSet& candidates) {
+size_t exclude_unremovables(
+    const Scope& scope,
+    const DexStoresVector& stores,
+    const ConfigFiles& conf,
+    const TypeSystem& type_system,
+    bool include_primary_dex,
+    const std::vector<const DexType*>& excluded_interfaces,
+    TypeSet& candidates) {
   size_t count = 0;
   always_assert(!stores.empty());
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
 
   // Excluded by config
-  for (auto* ex : excluded_interfaces) {
+  for (const auto* ex : excluded_interfaces) {
     if (candidates.count(ex) != 0) {
       candidates.erase(ex);
       count++;
@@ -326,9 +329,9 @@ size_t exclude_unremovables(const Scope& scope,
     }
 
     if (!can_rename(meth)) {
-      std::vector<DexType*> types;
+      std::vector<const DexType*> types;
       meth->get_proto()->gather_types(types);
-      for (auto* type : types) {
+      for (const auto* type : types) {
         if (candidates.count(type) != 0) {
           TRACE(RM_INTF, 5, "Excluding %s cannot rename %s", SHOW(type),
                 SHOW(meth));
@@ -431,7 +434,7 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
   // If not all implementors are matched, return an empty dispatch set; the
   // caller will bail on the current interface.
   if (!implementors.empty()) {
-    return MethodOrderedSet();
+    targets.clear();
   }
   return targets;
 }
@@ -444,7 +447,7 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
 void include_parent_interfaces(const DexType* root, TypeSet& interfaces) {
   TypeSet parent_interfaces;
   for (const auto* const intf : interfaces) {
-    for (auto* const parent_intf : *type_class(intf)->get_interfaces()) {
+    for (const auto* const parent_intf : *type_class(intf)->get_interfaces()) {
       if (parent_intf != root) {
         parent_interfaces.insert(parent_intf);
       }
@@ -547,6 +550,7 @@ TypeSet RemoveInterfacePass::remove_leaf_interfaces(
 void RemoveInterfacePass::remove_interfaces_for_root(
     const Scope& scope,
     const DexStoresVector& stores,
+    const ConfigFiles& conf,
     const DexType* root,
     const TypeSystem& type_system) {
   TRACE(RM_INTF, 5, "Processing root %s", SHOW(root));
@@ -555,9 +559,9 @@ void RemoveInterfacePass::remove_interfaces_for_root(
   include_parent_interfaces(root, interfaces);
 
   m_total_num_interface += interfaces.size();
-  m_num_interface_excluded +=
-      exclude_unremovables(scope, stores, type_system, m_include_primary_dex,
-                           m_excluded_interfaces, interfaces);
+  m_num_interface_excluded += exclude_unremovables(
+      scope, stores, conf, type_system, m_include_primary_dex,
+      m_excluded_interfaces, interfaces);
 
   TRACE(RM_INTF, 5, "removable interfaces %zu", interfaces.size());
   TypeSet removed =
@@ -602,12 +606,12 @@ void RemoveInterfacePass::bind_config() {
 }
 
 void RemoveInterfacePass::run_pass(DexStoresVector& stores,
-                                   ConfigFiles&,
+                                   ConfigFiles& conf,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
   TypeSystem type_system(scope);
-  for (auto* const root : m_interface_roots) {
-    remove_interfaces_for_root(scope, stores, root, type_system);
+  for (const auto* const root : m_interface_roots) {
+    remove_interfaces_for_root(scope, stores, conf, root, type_system);
   }
   mgr.incr_metric("num_total_interface", m_total_num_interface);
   mgr.incr_metric("num_interface_excluded", m_num_interface_excluded);

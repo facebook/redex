@@ -99,16 +99,16 @@ void write_out_callgraph(const Scope& scope,
   gather_cg_information(cg, &nodes, &nodes_to_ids, &nodes_to_succs);
   InsertOnlyConcurrentMap<DexMethod*, std::string> method_to_first_position;
   gather_method_positions(scope, &method_to_first_position);
-  size_t bit_32_size = sizeof(uint32_t);
+  constexpr std::streamsize bit_32_size = sizeof(uint32_t);
   always_assert(nodes.size() <= std::numeric_limits<uint32_t>::max());
-  uint32_t num_method = nodes.size();
+  uint32_t num_method = static_cast<uint32_t>(nodes.size());
   std::ofstream ofs(callgraph_filename.c_str(),
                     std::ofstream::out | std::ofstream::trunc);
   uint32_t magic = 0xfaceb000; // serves as endianess check
-  ofs.write((const char*)&magic, bit_32_size);
+  ofs.write(reinterpret_cast<const char*>(&magic), bit_32_size);
   uint32_t version = 1;
-  ofs.write((const char*)&version, bit_32_size);
-  ofs.write((const char*)&num_method, bit_32_size);
+  ofs.write(reinterpret_cast<const char*>(&version), bit_32_size);
+  ofs.write(reinterpret_cast<const char*>(&num_method), bit_32_size);
   uint32_t cur_id = 0;
   for (const auto& node : nodes) {
     always_assert_log(cur_id == nodes_to_ids.at(node), "Node id mismatch");
@@ -133,15 +133,15 @@ void write_out_callgraph(const Scope& scope,
                           : "{NOPOSITION}");
       }
     }
-    uint32_t ssize = node_name.size();
-    ofs.write((const char*)&ssize, bit_32_size);
+    uint32_t ssize = static_cast<uint32_t>(node_name.size());
+    ofs.write(reinterpret_cast<const char*>(&ssize), bit_32_size);
     ofs << node_name;
     const auto& succs = nodes_to_succs.at(node);
     always_assert(succs.size() <= std::numeric_limits<uint32_t>::max());
-    uint32_t num_succs = succs.size();
-    ofs.write((const char*)&num_succs, bit_32_size);
+    uint32_t num_succs = static_cast<uint32_t>(succs.size());
+    ofs.write(reinterpret_cast<const char*>(&num_succs), bit_32_size);
     for (auto succ : succs) {
-      ofs.write((const char*)&succ, bit_32_size);
+      ofs.write(reinterpret_cast<const char*>(&succ), bit_32_size);
     }
   }
 }

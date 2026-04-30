@@ -98,12 +98,12 @@ constexpr const char* NEW_CHECK_EXPR_NULL_SIGNATURE_POST =
 // Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull which does not
 // require name of the parameter.
 inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_3() {
-  return static_cast<DexMethod*>(
+  return dynamic_cast<DexMethod*>(
       DexMethod::get_method(NEW_CHECK_PARAM_NULL_SIGNATURE_V1_3));
 }
 
 inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_4() {
-  return static_cast<DexMethod*>(
+  return dynamic_cast<DexMethod*>(
       DexMethod::get_method(NEW_CHECK_PARAM_NULL_SIGNATURE_V1_4));
 }
 
@@ -116,7 +116,7 @@ inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_3(
   wrapper_signature.append(NEW_CHECK_EXPR_NULL_SIGNATURE_V1_3_PRE);
   wrapper_signature.append(msg);
   wrapper_signature.append(NEW_CHECK_EXPR_NULL_SIGNATURE_POST);
-  return static_cast<DexMethod*>(DexMethod::get_method(wrapper_signature));
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(wrapper_signature));
 }
 
 inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_4(
@@ -125,7 +125,7 @@ inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_4(
   wrapper_signature.append(NEW_CHECK_EXPR_NULL_SIGNATURE_V1_4_PRE);
   wrapper_signature.append(msg);
   wrapper_signature.append(NEW_CHECK_EXPR_NULL_SIGNATURE_POST);
-  return static_cast<DexMethod*>(DexMethod::get_method(wrapper_signature));
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(wrapper_signature));
 }
 
 // Inserts methods used in Kotlin parameter null assertions

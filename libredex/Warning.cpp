@@ -7,25 +7,25 @@
 
 #include "Warning.h"
 
+#include <array>
 #include <cstdarg>
 #include <cstdio>
 
 OptWarningLevel g_warning_level = NO_WARN;
 
-const char* s_warning_text[] = {
+constexpr std::array<const char*, 6> s_warning_text = {
 #define OPT_WARN(warn, str) str,
     OPT_WARNINGS
 #undef OPT_WARN
 };
 
-size_t s_warning_counts[] = {
+std::array<size_t, 6> s_warning_counts = {
 #define OPT_WARN(...) 0,
     OPT_WARNINGS
 #undef OPT_WARN
 };
 
-constexpr size_t kNumWarnings =
-    sizeof(s_warning_counts) / sizeof(s_warning_counts[0]);
+constexpr size_t kNumWarnings = s_warning_counts.size();
 
 void opt_warn(OptWarning warn, const char* fmt, ...) {
   ++s_warning_counts[warn];

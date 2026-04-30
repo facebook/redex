@@ -169,8 +169,8 @@ class RenameClassesPassV2 : public Pass {
 
   std::string prepend_package_prefix(const char* descriptor);
 
-  int m_base_strings_size = 0;
-  int m_ren_strings_size = 0;
+  uint32_t m_base_strings_size = 0;
+  uint32_t m_ren_strings_size = 0;
 
   // Config and rules
   bool m_rename_annotations;

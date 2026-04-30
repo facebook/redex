@@ -22,7 +22,7 @@ class ClInitSideEffectsAnalysis {
   const method::ClInitHasNoSideEffectsPredicate* m_clinit_has_no_side_effects;
   const InsertOnlyConcurrentSet<DexMethod*>* m_non_true_virtuals;
   UnorderedSet<DexMethodRef*> m_active;
-  UnorderedSet<DexType*> m_initialized;
+  UnorderedSet<const DexType*> m_initialized;
 
  public:
   explicit ClInitSideEffectsAnalysis(
@@ -63,12 +63,12 @@ class ClInitSideEffectsAnalysis {
   }
 
  private:
-  bool clinit_has_no_side_effects(DexType* type) {
+  bool clinit_has_no_side_effects(const DexType* type) {
     return (m_clinit_has_no_side_effects != nullptr) &&
            (*m_clinit_has_no_side_effects)(type);
   }
 
-  bool init_class_or_new_instance_may_have_side_effects(DexType* type) {
+  bool init_class_or_new_instance_may_have_side_effects(const DexType* type) {
     return !clinit_has_no_side_effects(type) &&
            type != type::java_lang_Object() &&
            (m_initialized.count(type) == 0u);
@@ -107,7 +107,8 @@ class ClInitSideEffectsAnalysis {
     always_assert(opcode::is_invoke_direct(insn->opcode()) ||
                   opcode::is_invoke_virtual(insn->opcode()) ||
                   opcode::is_invoke_static(insn->opcode()));
-    auto* method = resolve_method(method_ref, opcode_to_search(insn));
+    auto* method =
+        resolve_method_deprecated(method_ref, opcode_to_search(insn));
     if (method == nullptr) {
       return true;
     }
@@ -541,48 +542,48 @@ WELL_KNOWN_METHODS
 #undef FOR_EACH
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"
       "Object;Ljava/lang/String;)V"));
 }
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullParameter() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkNotNullParameter:(Ljava/lang/"
       "Object;Ljava/lang/String;)V"));
 }
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull:(Ljava/"
       "lang/Object;Ljava/lang/String;)V"));
 }
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkNotNullExpressionValue:(Ljava/"
       "lang/Object;Ljava/lang/String;)V"));
 }
 
 DexMethod* kotlin_jvm_internal_Intrinsics_areEqual() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
       "lang/Object;)Z"));
 }
 
 DexMethod* redex_internal_checkObjectNotNull() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V"));
 }
 
 DexMethod* java_lang_invoke_MethodHandle_invoke() {
-  return static_cast<DexMethod*>(
+  return dynamic_cast<DexMethod*>(
       DexMethod::get_method("Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/"
                             "lang/Object;)Ljava/lang/Object;"));
 }
 
 DexMethod* java_lang_invoke_MethodHandle_invokeExact() {
-  return static_cast<DexMethod*>(DexMethod::get_method(
+  return dynamic_cast<DexMethod*>(DexMethod::get_method(
       "Ljava/lang/invoke/MethodHandle;.invokeExact:([Ljava/"
       "lang/Object;)Ljava/lang/Object;"));
 }

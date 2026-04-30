@@ -23,11 +23,12 @@ struct RandomForestTestHelper {
   // Apple Clang not respecting friend access in default member initializers.
   RandomForestTestHelper()
       : caller(context,
-               MethodContext::Vals{{3.5, boost::none, 7},
-                                   {boost::none, boost::none, boost::none}}),
-        callee(context,
-               MethodContext::Vals{{2.5, boost::none, 5},
-                                   {boost::none, boost::none, boost::none}}) {}
+               MethodContext::Vals{{3.5, std::nullopt, 7},
+                                   {std::nullopt, std::nullopt, std::nullopt}}),
+        callee(
+            context,
+            MethodContext::Vals{{2.5, std::nullopt, 5},
+                                {std::nullopt, std::nullopt, std::nullopt}}) {}
 };
 
 struct RandomForestTest : public testing::Test {};

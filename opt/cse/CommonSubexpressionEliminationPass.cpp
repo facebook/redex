@@ -88,9 +88,9 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           return Stats();
         }
 
-        Stats stats;
+        Stats method_stats;
         while (true) {
-          stats.max_iterations++;
+          method_stats.max_iterations++;
           TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
           always_assert(code->cfg_built());
           CommonSubexpressionElimination cse(
@@ -98,10 +98,10 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
               method::is_init(method) || method::is_clinit(method),
               method->get_class(), method->get_proto()->get_args());
           bool any_changes = cse.patch(m_runtime_assertions);
-          stats += cse.get_stats();
+          method_stats += cse.get_stats();
 
           if (!any_changes) {
-            return stats;
+            return method_stats;
           }
 
           copy_propagation_impl::CopyPropagation copy_propagation(

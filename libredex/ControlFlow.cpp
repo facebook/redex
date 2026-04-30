@@ -14,9 +14,9 @@
 #include <utility>
 
 #include "CppUtil.h"
+#include "DeterministicContainers.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
-#include "DexUtil.h"
 #include "IRList.h"
 #include "InstructionLowering.h"
 #include "RedexContext.h"
@@ -27,8 +27,8 @@
 std::atomic<size_t> build_cfg_counter{0};
 namespace {
 
-bool edge_type_structural_equals(std::vector<cfg::Edge*> e1,
-                                 std::vector<cfg::Edge*> e2) {
+bool edge_type_structural_equals(const cfg::CompactEdgeVector& e1,
+                                 const cfg::CompactEdgeVector& e2) {
   if (e1.empty() && e2.empty()) {
     return true;
   }
@@ -302,10 +302,12 @@ opcode::Branchingness Block::branchingness() const {
   return opcode::BRANCH_NONE;
 }
 
-uint32_t Block::num_opcodes() const { return m_entries.count_opcodes(); }
+uint32_t Block::num_opcodes() const {
+  return static_cast<uint32_t>(m_entries.count_opcodes());
+}
 
 uint32_t Block::sum_opcode_sizes() const {
-  return m_entries.sum_opcode_sizes();
+  return static_cast<uint32_t>(m_entries.sum_opcode_sizes());
 }
 
 uint32_t Block::estimate_code_units() const {
@@ -1515,7 +1517,8 @@ boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
   return block->m_entries.get_param_instructions();
 }
 
-void ControlFlowGraph::gather_catch_types(std::vector<DexType*>& types) const {
+void ControlFlowGraph::gather_catch_types(
+    std::vector<const DexType*>& types) const {
   UnorderedSet<DexType*> seen;
   // get the catch types of all the incoming edges to all the catch blocks
   for (const auto& entry : m_blocks) {
@@ -1544,14 +1547,15 @@ void ControlFlowGraph::gather_strings(
   }
 }
 
-void ControlFlowGraph::gather_types(std::vector<DexType*>& types) const {
+void ControlFlowGraph::gather_types(std::vector<const DexType*>& types) const {
   gather_catch_types(types);
   for (const auto& entry : m_blocks) {
     entry.second->m_entries.gather_types(types);
   }
 }
 
-void ControlFlowGraph::gather_init_classes(std::vector<DexType*>& types) const {
+void ControlFlowGraph::gather_init_classes(
+    std::vector<const DexType*>& types) const {
   for (const auto& entry : m_blocks) {
     entry.second->m_entries.gather_init_classes(types);
   }
@@ -1589,7 +1593,7 @@ ControlFlowGraph::primary_instruction_of_move_result_for_type_check(
     const cfg::InstructionIterator& it) {
   auto* move_result_insn = it->insn;
   always_assert(opcode::is_move_result_any(move_result_insn->opcode()));
-  auto* block = const_cast<Block*>(it.block());
+  auto* block = it.block();
   if (block->get_first_insn()->insn == move_result_insn) {
     const auto& preds = block->preds();
     always_assert(preds.size() == 1);
@@ -1608,7 +1612,7 @@ cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     const cfg::InstructionIterator& it) const {
   auto* move_result_insn = it->insn;
   always_assert(opcode::is_move_result_any(move_result_insn->opcode()));
-  auto* block = const_cast<Block*>(it.block());
+  auto* block = it.block();
   if (block->get_first_insn()->insn == move_result_insn) {
     const auto& preds = block->preds();
     always_assert(preds.size() == 1);
@@ -1727,7 +1731,7 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   }
 }
 
-InstructionIterator ControlFlowGraph::find_insn(IRInstruction* insn,
+InstructionIterator ControlFlowGraph::find_insn(const IRInstruction* insn,
                                                 Block* hint) {
   if (hint != nullptr) {
     auto ii = ir_list::InstructionIterable(hint);
@@ -1747,7 +1751,7 @@ InstructionIterator ControlFlowGraph::find_insn(IRInstruction* insn,
   return iterable.end();
 }
 
-ConstInstructionIterator ControlFlowGraph::find_insn(IRInstruction* insn,
+ConstInstructionIterator ControlFlowGraph::find_insn(const IRInstruction* insn,
                                                      Block* hint) const {
   if (hint != nullptr) {
     auto ii = ir_list::InstructionIterable(hint);
@@ -2300,8 +2304,8 @@ void ControlFlowGraph::calculate_exit_block() {
     // Stack is used to push such objects in order to implement
     // algorithm iteratively.
     struct State {
-      const Block* b{nullptr};
-      const std::vector<Edge*>& succs;
+      Block* b{nullptr};
+      const CompactEdgeVector& succs;
       uint32_t element{0};
       uint32_t head{0};
       bool has_exit{false};
@@ -2343,7 +2347,7 @@ void ControlFlowGraph::calculate_exit_block() {
       if (top_state.head == dfns[top_state.b]) {
         const Block* top{nullptr};
         if (!top_state.has_exit) {
-          exit_blocks.push_back(const_cast<Block*>(top_state.b));
+          exit_blocks.push_back(top_state.b);
           top_state.has_exit = true;
         }
         do {
@@ -3023,7 +3027,7 @@ uint32_t ControlFlowGraph::replace_blocks(
   for (const auto& p : old_new_blocks) {
     auto* old_block = p.first;
     auto* new_block = p.second;
-    std::vector<Edge*> to_redirect = old_block->preds();
+    auto to_redirect = old_block->preds();
     for (auto* e : to_redirect) {
       set_edge_target(e, new_block);
     }
@@ -3241,9 +3245,10 @@ DexPosition* ControlFlowGraph::get_dbg_pos(const cfg::InstructionIterator& it) {
     if (b->preds().size() == 1 && !reverse_gotos.empty()) {
       Block* prev_block = reverse_gotos[0]->src();
       if (!prev_block->empty()) {
-        auto* result = search_block(prev_block, std::prev(prev_block->end()));
-        if (result != nullptr) {
-          return result;
+        auto* search_result =
+            search_block(prev_block, std::prev(prev_block->end()));
+        if (search_result != nullptr) {
+          return search_result;
         }
       }
       // Didn't find any MFLOW_POSITIONs in `prev_block`, keep going.

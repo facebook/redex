@@ -72,87 +72,76 @@ void create_object_class() {
   // function is called multiple times with type::java_lang_Object()), we
   // will fail an assertion. This only happens in tests when no external jars
   // are available protected java.lang.Object.clone()Ljava/lang/Object;
-  auto* method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, clone, void_object));
+  auto* method = DexMethod::make_method_downcast(type, clone, void_object);
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public java.lang.Object.equals(Ljava/lang/Object;)Z
-  method = static_cast<DexMethod*>(
-      DexMethod::make_method(type, equals, object_bool));
+  method = DexMethod::make_method_downcast(type, equals, object_bool);
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // protected java.lang.Object.finalize()V
-  method = static_cast<DexMethod*>(
-      DexMethod::make_method(type, finalize, void_void));
+  method = DexMethod::make_method_downcast(type, finalize, void_void);
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final native java.lang.Object.getClass()Ljava/lang/Class;
-  method = static_cast<DexMethod*>(
-      DexMethod::make_method(type, getClass, void_class));
+  method = DexMethod::make_method_downcast(type, getClass, void_class);
   method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public native java.lang.Object.hashCode()I
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, hashCode, void_int));
+  method = DexMethod::make_method_downcast(type, hashCode, void_int);
   method->set_access(ACC_PUBLIC | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, notify, void_void));
+  method = DexMethod::make_method_downcast(type, notify, void_void);
   method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final native java.lang.Object.notifyAll()V
-  method = static_cast<DexMethod*>(
-      DexMethod::make_method(type, notifyAll, void_void));
+  method = DexMethod::make_method_downcast(type, notifyAll, void_void);
   method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public java.lang.Object.toString()Ljava/lang/String;
-  method = static_cast<DexMethod*>(
-      DexMethod::make_method(type, toString, void_string));
+  method = DexMethod::make_method_downcast(type, toString, void_string);
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final java.lang.Object.wait()V
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, wait, void_void));
+  method = DexMethod::make_method_downcast(type, wait, void_void);
   method->set_access(ACC_PUBLIC | ACC_FINAL);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final java.lang.Object.wait(J)V
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, wait, long_void));
+  method = DexMethod::make_method_downcast(type, wait, long_void);
   method->set_access(ACC_PUBLIC | ACC_FINAL);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final native java.lang.Object.wait(JI)V
-  method = static_cast<DexMethod*>(
-      DexMethod::make_method(type, wait, long_int_void));
+  method = DexMethod::make_method_downcast(type, wait, long_int_void);
   method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
@@ -258,6 +247,7 @@ void mark_methods(const DexType* type,
       // mark final and override accordingly
       auto& first_scope = scopes[0];
       if (first_scope.methods.size() == 1) {
+        always_assert(!first_scope.methods.empty());
         TRACE(VIRT, 6, "FINAL %s", SHOW(first_scope.methods[0].first));
         first_scope.methods[0].second |= FINAL;
       } else {
@@ -476,13 +466,13 @@ void merge(const BaseSigs& base_sigs,
 DexMethod* make_miranda(const DexType* type,
                         const DexString* name,
                         const DexProto* proto) {
-  auto* miranda = DexMethod::make_method(
+  auto* miranda = DexMethod::make_method_downcast(
       const_cast<DexType*>(type), name, const_cast<DexProto*>(proto));
   // The next assert may fire because we don't delete DexMethod from the
   // cache and we may find one we have deleted and it was a def.
   // Come up with a better assert story
   // always_assert(!miranda->is_def());
-  return static_cast<DexMethod*>(miranda);
+  return miranda;
 }
 
 bool load_interfaces_methods(const DexTypeList*, BaseIntfSigs&);
@@ -859,12 +849,6 @@ std::vector<const DexMethod*> select_from(const VirtualScope* scope,
   }
   return refined_scope;
 }
-
-const std::vector<const VirtualScope*> ClassScopes::empty_scope =
-    std::vector<const VirtualScope*>();
-const std::vector<std::vector<const VirtualScope*>>
-    ClassScopes::empty_interface_scope =
-        std::vector<std::vector<const VirtualScope*>>();
 
 ClassScopes::ClassScopes(const Scope& scope) {
   m_hierarchy = build_type_hierarchy(scope);

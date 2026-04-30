@@ -42,14 +42,14 @@ DexStoresDependencies build_transitive_resolved_dependencies(
     const DexStoresVector& stores) {
   DexStoresDependencies transitive_resolved_dependencies;
   if (stores.size() == 1) {
-    // special case to accommodate tests with non-standard store names
+    // special case to accomodate tests with non-standard store names
     const auto& store = stores.front();
     transitive_resolved_dependencies.emplace(&store, DexStoreDependencies());
     return transitive_resolved_dependencies;
   }
 
-  // We handle the root store separately, as it may appear twice in the list
-  // of stores (a quirk to handle the primary dex).
+  // We handle the root store separately, as it may appear twist in the list
+  // of stores (a quick to handle the primary dex).
   const auto& root_store = stores.front();
   always_assert_log(
       root_store.get_name() == ROOT_STORE_NAME,
@@ -93,7 +93,7 @@ DexStoresDependencies build_reverse_dependencies(
     const DexStoresVector& stores) {
   DexStoresDependencies reverse_dependencies;
   if (stores.size() == 1) {
-    // special case to accommodate tests with non-standard store names
+    // special case to accomodate tests with non-standard store names
     const auto& store = stores.front();
     reverse_dependencies.emplace(&store, DexStoreDependencies());
     return reverse_dependencies;
@@ -229,15 +229,18 @@ UnorderedSet<const DexType*> get_root_store_types(const DexStoresVector& stores,
   return types;
 }
 
-XStoreRefs::XStoreRefs(const DexStoresVector& stores)
-    : XStoreRefs(stores, "") {}
+XStoreRefs::XStoreRefs(const DexStoresVector& stores,
+                       const bool normal_primary_dex)
+    : XStoreRefs(stores, normal_primary_dex, "") {}
 
 XStoreRefs::XStoreRefs(const DexStoresVector& stores,
+                       const bool normal_primary_dex,
                        std::string shared_module_prefix)
     : m_transitive_resolved_dependencies(
           build_transitive_resolved_dependencies(stores)),
       m_reverse_dependencies(build_reverse_dependencies(stores)),
-      m_shared_module_prefix(std::move(shared_module_prefix)) {
+      m_shared_module_prefix(std::move(shared_module_prefix)),
+      m_normal_primary_dex(normal_primary_dex) {
 
   std::vector<std::pair<const DexClasses*, size_t>> dexes;
 
@@ -269,9 +272,9 @@ XStoreRefs::XStoreRefs(const DexStoresVector& stores,
 
 bool XStoreRefs::illegal_ref_load_types(const DexType* location,
                                         const DexClass* cls) const {
-  UnorderedSet<DexType*> types;
+  UnorderedSet<const DexType*> types;
   cls->gather_load_types(types);
-  for (auto* t : UnorderedIterable(types)) {
+  for (const auto* t : UnorderedIterable(types)) {
     if (illegal_ref(location, t)) {
       return true;
     }
@@ -303,7 +306,7 @@ size_t XDexRefs::get_dex_idx(const DexType* type) const {
 
 bool XDexRefs::cross_dex_ref_override(const DexMethod* overridden,
                                       const DexMethod* overriding) const {
-  auto* type = overriding->get_class();
+  const auto* type = overriding->get_class();
   auto idx = get_dex_idx(type);
   do {
     type = type_class(type)->get_super_class();
@@ -349,17 +352,17 @@ XDexMethodRefs::XDexMethodRefs(const DexStoresVector& stores)
 
 XDexMethodRefs::Refs XDexMethodRefs::get_for_callee(
     const cfg::ControlFlowGraph& callee_cfg,
-    UnorderedSet<DexType*> refined_init_class_types) const {
+    UnorderedSet<const DexType*> refined_init_class_types) const {
   std::vector<DexMethodRef*> lmethods;
   std::vector<DexFieldRef*> lfields;
-  std::vector<DexType*> ltypes;
+  std::vector<const DexType*> ltypes;
   callee_cfg.gather_methods(lmethods);
   callee_cfg.gather_fields(lfields);
   callee_cfg.gather_types(ltypes);
 
   return (Refs){UnorderedSet<DexMethodRef*>(lmethods.begin(), lmethods.end()),
                 UnorderedSet<DexFieldRef*>(lfields.begin(), lfields.end()),
-                UnorderedSet<DexType*>(ltypes.begin(), ltypes.end()),
+                UnorderedSet<const DexType*>(ltypes.begin(), ltypes.end()),
                 std::move(refined_init_class_types)};
 }
 
@@ -371,7 +374,7 @@ bool XDexMethodRefs::has_cross_dex_refs(const Refs& callee_refs,
   // result in an sget instruction to a field unreferenced in the caller dex.
   // This init-class logic mimics (the second part of) what
   // DexStructure::resolve_init_classes does.
-  for (auto* refined_type :
+  for (const auto* refined_type :
        UnorderedIterable(callee_refs.refined_init_class_types)) {
     if (caller_refs.types.count(refined_type) == 0) {
       return true;

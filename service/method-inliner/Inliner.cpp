@@ -28,7 +28,6 @@
 #include "PartialInliner.h"
 #include "RecursionPruner.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Timer.h"
 #include "UnknownVirtuals.h"
 #include "Walkers.h"
@@ -52,11 +51,11 @@ const uint64_t MAX_HOT_COLD_CALLEE_SIZE = 27;
  * gathering-logic mimics (the first part of) what
  * DexStructure::resolve_init_classes does.
  */
-UnorderedSet<DexType*> gather_resolved_init_class_types(
+UnorderedSet<const DexType*> gather_resolved_init_class_types(
     const cfg::ControlFlowGraph& cfg,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects) {
-  UnorderedSet<DexType*> refined_init_class_types;
+  UnorderedSet<const DexType*> refined_init_class_types;
 
   for (const auto& mie : InstructionIterable(cfg)) {
     auto* insn = mie.insn;
@@ -90,7 +89,7 @@ float estimate_cross_dex_penalty(const InlinedCost* inlined_cost,
   return cross_dex_penalty;
 }
 
-bool is_finalizable(DexType* type) {
+bool is_finalizable(const DexType* type) {
   for (const auto* cls = type_class(type);
        (cls != nullptr) && cls->get_type() != type::java_lang_Object();
        cls = type_class(cls->get_super_class())) {
@@ -115,6 +114,7 @@ MultiMethodInliner::MultiMethodInliner(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     DexStoresVector& stores,
+    const ConfigFiles& conf,
     const UnorderedSet<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch, const DexMethod*)>
         concurrent_resolve_fn,
@@ -167,6 +167,7 @@ MultiMethodInliner::MultiMethodInliner(
       m_shrinker(stores,
                  scope,
                  init_classes_with_side_effects,
+                 conf,
                  config.shrinker,
                  min_sdk,
                  configured_pure_methods,
@@ -306,7 +307,7 @@ void MultiMethodInliner::inline_methods() {
   m_callee_insn_sizes =
       std::make_unique<InsertOnlyConcurrentMap<const DexMethod*, size_t>>();
   m_callee_type_refs = std::make_unique<InsertOnlyConcurrentMap<
-      const DexMethod*, std::shared_ptr<UnorderedBag<DexType*>>>>();
+      const DexMethod*, std::shared_ptr<UnorderedBag<const DexType*>>>>();
   if (m_ref_checkers) {
     m_callee_code_refs = std::make_unique<
         InsertOnlyConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>();
@@ -495,7 +496,7 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
         }
 
         auto it2 = m_inlined_invokes_need_cast.find(insn);
-        auto* needs_receiver_cast =
+        const auto* needs_receiver_cast =
             it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
         inlinables.push_back((Inlinable){callee, insn, no_return, partial,
                                          for_speed, std::move(reduced_code),
@@ -523,7 +524,7 @@ size_t MultiMethodInliner::inline_callees(
       auto* callee = callee_opt->method;
       always_assert(callee->is_concrete());
       auto it2 = m_inlined_invokes_need_cast.find(insn);
-      auto* needs_receiver_cast =
+      const auto* needs_receiver_cast =
           it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
       inlinables.push_back((Inlinable){callee, insn, false, false, false,
                                        nullptr, get_callee_insn_size(callee),
@@ -626,7 +627,8 @@ void MultiMethodInliner::make_partial(const DexMethod* method,
   inlined_cost->reduced_code.reset();
 }
 
-DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
+const DexType* MultiMethodInliner::get_needs_init_class(
+    DexMethod* callee) const {
   if (!is_static(callee) || assumenosideeffects(callee)) {
     return nullptr;
   }
@@ -636,7 +638,7 @@ DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
   if (insn == nullptr) {
     return nullptr;
   }
-  auto* type = const_cast<DexType*>(insn->get_type());
+  const auto* type = insn->get_type();
   delete insn;
   return type;
 }
@@ -693,10 +695,10 @@ size_t MultiMethodInliner::inline_inlinables(
           return static_cast<int>(a.partial) < static_cast<int>(b.partial);
         }
         if (a.for_speed != b.for_speed) {
-          return a.for_speed < b.for_speed;
+          return static_cast<int>(a.for_speed) < static_cast<int>(b.for_speed);
         }
         // Third, if appropriate, prefer inlining not-cold / maybe-hot callees
-        if (preferred_methods) {
+        if (preferred_methods != nullptr) {
           auto a_not_cold = preferred_methods->count_unsafe(a.callee);
           auto b_not_cold = preferred_methods->count_unsafe(b.callee);
           if (a_not_cold != b_not_cold) {
@@ -884,7 +886,7 @@ size_t MultiMethodInliner::inline_inlinables(
       cfg_next_caller_reg = caller->cfg().get_registers_size();
     }
     auto timer2 = m_inline_with_cfg_timer.scope();
-    auto* needs_init_class = get_needs_init_class(callee_method);
+    const auto* needs_init_class = get_needs_init_class(callee_method);
     auto needs_constructor_fence =
         get_needs_constructor_fence(caller_method, callee_method);
     auto callee_has_constructor_fence =
@@ -1394,8 +1396,8 @@ static float get_invoke_cost(const InlinerCostConfig& cost_config,
                              float result_used) {
   float invoke_cost =
       cost_config.cost_invoke + result_used * cost_config.cost_move_result;
-  invoke_cost += get_inlined_regs_cost(callee->get_proto()->get_args()->size(),
-                                       cost_config);
+  invoke_cost += static_cast<float>(get_inlined_regs_cost(
+      callee->get_proto()->get_args()->size(), cost_config));
   return invoke_cost;
 }
 
@@ -1421,7 +1423,7 @@ static size_t get_inlined_cost(IRInstruction* insn,
     } else if (op == IOPCODE_UNREACHABLE) {
       cost += cost_config.op_unreachable_cost;
     } else if (op == IOPCODE_WRITE_BARRIER) {
-      cost += cost_config.cost_invoke;
+      cost += static_cast<size_t>(cost_config.cost_invoke);
     }
   } else {
     cost++;
@@ -1459,7 +1461,7 @@ static size_t get_inlined_cost(IRInstruction* insn,
  */
 static size_t get_inlined_cost(const std::vector<cfg::Block*>& blocks,
                                size_t index,
-                               const std::vector<cfg::Edge*>& succs) {
+                               const cfg::CompactEdgeVector& succs) {
   auto* block = blocks.at(index);
   switch (block->branchingness()) {
   case opcode::Branchingness::BRANCH_GOTO:
@@ -1681,7 +1683,7 @@ const InlinedCost* MultiMethodInliner::get_fully_inlined_cost(
   return m_fully_inlined_costs
       .get_or_create_and_assert_equal(
           callee,
-          [&](const auto&) {
+          [&](const auto&) -> InlinedCost {
             InlinedCost inlined_cost(
                 get_inlined_cost(is_static(callee), callee->get_class(),
                                  callee->get_proto(), callee->get_code()));
@@ -1732,7 +1734,7 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
   return m_call_site_inlined_costs
       .get_or_create_and_assert_equal(
           key,
-          [&](const auto&) {
+          [&](const auto&) -> InlinedCost {
             auto inlined_cost = get_inlined_cost(
                 is_static(callee), callee->get_class(), callee->get_proto(),
                 callee->get_code(), call_site_summary);
@@ -1801,11 +1803,16 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
       if (callee_has_result && !call_site_summary->result_used) {
         callees_unused_results += count;
       }
-      inlined_cost.code += call_site_inlined_cost->code * count;
-      inlined_cost.method_refs += call_site_inlined_cost->method_refs * count;
-      inlined_cost.other_refs += call_site_inlined_cost->other_refs * count;
-      inlined_cost.result_used += call_site_inlined_cost->result_used * count;
-      inlined_cost.unused_args += call_site_inlined_cost->unused_args * count;
+      inlined_cost.code +=
+          call_site_inlined_cost->code * static_cast<float>(count);
+      inlined_cost.method_refs +=
+          call_site_inlined_cost->method_refs * static_cast<float>(count);
+      inlined_cost.other_refs +=
+          call_site_inlined_cost->other_refs * static_cast<float>(count);
+      inlined_cost.result_used +=
+          call_site_inlined_cost->result_used * static_cast<float>(count);
+      inlined_cost.unused_args +=
+          call_site_inlined_cost->unused_args * static_cast<float>(count);
       if (call_site_inlined_cost->no_return) {
         callees_no_return++;
       } else {
@@ -1819,11 +1826,11 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
 
     always_assert(callees_analyzed > 0);
     // compute average costs
-    inlined_cost.code /= callees_analyzed;
-    inlined_cost.method_refs /= callees_analyzed;
-    inlined_cost.other_refs /= callees_analyzed;
-    inlined_cost.result_used /= callees_analyzed;
-    inlined_cost.unused_args /= callees_analyzed;
+    inlined_cost.code /= static_cast<float>(callees_analyzed);
+    inlined_cost.method_refs /= static_cast<float>(callees_analyzed);
+    inlined_cost.other_refs /= static_cast<float>(callees_analyzed);
+    inlined_cost.result_used /= static_cast<float>(callees_analyzed);
+    inlined_cost.unused_args /= static_cast<float>(callees_analyzed);
     return inlined_cost;
   }();
   TRACE(INLINE, 4, "get_average_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%zu}",
@@ -1958,7 +1965,8 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
       total_fence_cost += 3 * count;
     }
   }
-  float average_fence_cost = total_fence_cost * 1.0 / caller_count;
+  float average_fence_cost =
+      static_cast<float>(total_fence_cost) / static_cast<float>(caller_count);
   float invoke_cost =
       get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
   TRACE(INLINE, 3,
@@ -1981,9 +1989,10 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   // involved?
   if ((inlined_cost->code + average_fence_cost -
        inlined_cost->unused_args * m_inliner_cost_config.unused_args_discount) *
-              caller_count +
-          classes * (cross_dex_penalty - cross_dex_bonus) >
-      invoke_cost * caller_count + method_cost) {
+              static_cast<float>(caller_count) +
+          static_cast<float>(classes) * (cross_dex_penalty - cross_dex_bonus) >
+      invoke_cost * static_cast<float>(caller_count) +
+          static_cast<float>(method_cost)) {
     return true;
   }
 
@@ -2042,7 +2051,7 @@ bool MultiMethodInliner::should_inline_at_call_site(
       get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
   auto fence_cost = get_needs_constructor_fence(caller, callee) ? 3 : 0;
   float inline_cost =
-      inlined_cost->code + fence_cost -
+      inlined_cost->code + static_cast<float>(fence_cost) -
       inlined_cost->unused_args * m_inliner_cost_config.unused_args_discount +
       cross_dex_penalty;
   bool size_increased = inline_cost > invoke_cost;
@@ -2120,9 +2129,9 @@ bool MultiMethodInliner::has_external_catch(
   always_assert(callee->get_code()->cfg_built());
   const auto& callee_cfg =
       reduced_cfg != nullptr ? *reduced_cfg : callee->get_code()->cfg();
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   callee_cfg.gather_catch_types(types);
-  for (auto* type : types) {
+  for (const auto* type : types) {
     auto* cls = type_class(type);
     if (cls != nullptr && cls->is_external() && !is_public(cls)) {
       return true;
@@ -2246,14 +2255,11 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
 
 bool MultiMethodInliner::outlined_invoke_outlined(IRInstruction* insn,
                                                   const DexMethod* caller) {
-  if (!PositionPatternSwitchManager::
-          CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD &&
-      insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(caller) &&
-      is_outlined_method(insn->get_method())) {
-    // TODO: Remove this limitation imposed by symbolication infrastructure.
-    return true;
-  }
-  return false;
+  // TODO: Remove this limitation imposed by symbolication infrastructure.
+  return !PositionPatternSwitchManager::
+             CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD &&
+         insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(caller) &&
+         is_outlined_method(insn->get_method());
 }
 
 /**
@@ -2265,7 +2271,7 @@ bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
                                                      const DexMethod* callee) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER) {
     if (m_config.rewrite_invoke_super) {
-      auto* resolved_method = resolve_invoke_method(insn, callee);
+      auto* resolved_method = resolve_invoke_method_deprecated(insn, callee);
       if ((resolved_method != nullptr) && resolved_method->is_def() &&
           (resolved_method->as_def()->get_code() != nullptr)) {
         return false;
@@ -2407,7 +2413,7 @@ std::shared_ptr<XDexMethodRefs::Refs> MultiMethodInliner::get_callee_x_dex_refs(
   return x_dex_refs;
 }
 
-std::shared_ptr<UnorderedBag<DexType*>>
+std::shared_ptr<UnorderedBag<const DexType*>>
 MultiMethodInliner::get_callee_type_refs(
     const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg) {
   if (m_callee_type_refs && (reduced_cfg == nullptr)) {
@@ -2417,7 +2423,7 @@ MultiMethodInliner::get_callee_type_refs(
     }
   }
 
-  UnorderedSet<DexType*> type_refs_set;
+  UnorderedSet<const DexType*> type_refs_set;
   always_assert(callee->get_code()->cfg_built());
   const auto& callee_cfg =
       reduced_cfg != nullptr ? *reduced_cfg : callee->get_code()->cfg();
@@ -2443,8 +2449,8 @@ MultiMethodInliner::get_callee_type_refs(
     }
   }
 
-  auto type_refs = std::make_shared<UnorderedBag<DexType*>>();
-  for (auto* type : UnorderedIterable(type_refs_set)) {
+  auto type_refs = std::make_shared<UnorderedBag<const DexType*>>();
+  for (const auto* type : UnorderedIterable(type_refs_set)) {
     // filter out what xstores.illegal_ref(...) doesn't care about
     if (type_class_internal(type) == nullptr) {
       continue;
@@ -2519,7 +2525,7 @@ bool MultiMethodInliner::cross_store_reference(
   always_assert(callee_type_refs);
   const auto& xstores = m_shrinker.get_xstores();
   size_t store_idx = xstores.get_store_idx(caller->get_class());
-  for (auto* type : UnorderedIterable(*callee_type_refs)) {
+  for (const auto* type : UnorderedIterable(*callee_type_refs)) {
     if (xstores.illegal_ref(store_idx, type)) {
       info.cross_store++;
       return true;
@@ -2559,7 +2565,7 @@ bool MultiMethodInliner::cross_hot_cold(const DexMethod* caller,
                                         const DexMethod* callee,
                                         uint64_t estimated_callee_size) {
   const auto* preferred_methods = get_preferred_methods();
-  if (!preferred_methods) {
+  if (preferred_methods == nullptr) {
     return false;
   }
 
@@ -2671,7 +2677,8 @@ float MultiMethodInliner::compute_profile_guided_discount(
   }
 
   // Bias toward inlining if the inlined code is smaller than the original.
-  auto shrinkage = std::min(inline_cost / full_cost->full_code, 1.0f);
+  auto shrinkage =
+      std::min(inline_cost / static_cast<float>(full_cost->full_code), 1.0f);
   auto shrink_discount =
       pow(shrinkage, m_inliner_cost_config.profile_guided_shrink_bias);
 
@@ -2699,12 +2706,12 @@ float MultiMethodInliner::compute_profile_guided_discount(
     float percentage = float(hot_units) / float(hot_units + cold_units);
     const auto t = m_inliner_cost_config.profile_guided_heat_threshold;
     const auto d = m_inliner_cost_config.profile_guided_heat_discount;
-    heat_discount = (d - 1.0) / (1.0 - t);
+    heat_discount = static_cast<float>((d - 1.0) / (1.0 - t));
     heat_discount *= (percentage - t);
     heat_discount += 1.0;
   }
 
-  return shrink_discount * heat_discount;
+  return static_cast<float>(shrink_discount * heat_discount);
 }
 
 namespace inliner {
@@ -2713,8 +2720,8 @@ namespace inliner {
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
                      IRInstruction* callsite,
-                     DexType* needs_receiver_cast,
-                     DexType* needs_init_class,
+                     const DexType* needs_receiver_cast,
+                     const DexType* needs_init_class,
                      size_t next_caller_reg,
                      const cfg::ControlFlowGraph* reduced_cfg,
                      DexMethod* rewrite_invoke_super_callee,

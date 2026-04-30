@@ -120,7 +120,7 @@ void WrappedPrimitivesPass::bind_config() {
           members.size() == 1,
           "Wrong specification: allowed invoke object should be just 1 mapping "
           "of method ref string to method ref string.");
-      auto api = members.at(0);
+      const auto& api = members.at(0);
       TRACE(WP, 2, "Checking for API '%s'", api.c_str());
       auto* wrapped_api = DexMethod::get_method(api);
       if (wrapped_api == nullptr) {
@@ -174,23 +174,23 @@ void WrappedPrimitivesPass::run_pass(DexStoresVector& /*stores*/,
   TRACE(WP, 1, "check-cast instructions inserted: %zu", casts);
   mgr.set_metric(METRIC_CASTS_INSERTED, casts);
 
-  // Clear state so that no further work gets done from multiple rounds of IPCP
+  // Clear state so that no futher work gets done from multiple rounds of IPCP
   wp::initialize({});
 }
 
 namespace {
-using PrecedingSourceBlockMap = UnorderedMap<IRInstruction*, SourceBlock*>;
+using PreceedingSourceBlockMap = UnorderedMap<IRInstruction*, SourceBlock*>;
 
-PrecedingSourceBlockMap build_preceding_source_block_map(
+PreceedingSourceBlockMap build_preceeding_source_block_map(
     cfg::ControlFlowGraph& cfg) {
-  PrecedingSourceBlockMap result;
+  PreceedingSourceBlockMap result;
   for (auto* b : cfg.blocks()) {
-    SourceBlock* preceding_source_block{nullptr};
+    SourceBlock* preceeding_source_block{nullptr};
     for (const auto& mie : *b) {
       if (mie.type == MFLOW_SOURCE_BLOCK) {
-        preceding_source_block = mie.src_block.get();
+        preceeding_source_block = mie.src_block.get();
       } else if (mie.type == MFLOW_OPCODE) {
-        result.emplace(mie.insn, preceding_source_block);
+        result.emplace(mie.insn, preceeding_source_block);
       }
     }
   }
@@ -276,8 +276,8 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
     auto& cfg = code->cfg();
     Lazy<live_range::LazyLiveRanges> live_ranges(
         [&]() { return std::make_unique<live_range::LazyLiveRanges>(cfg); });
-    Lazy<PrecedingSourceBlockMap> sb_lookup(
-        [&]() { return build_preceding_source_block_map(cfg); });
+    Lazy<PreceedingSourceBlockMap> sb_lookup(
+        [&]() { return build_preceeding_source_block_map(cfg); });
     for (MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
       if (mie.type != MFLOW_OPCODE) {
         continue;
@@ -298,13 +298,13 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
                 // to the original location of the usage before optimizations.
                 auto field_name = show_deobfuscated(def);
                 for (const auto& use : UnorderedIterable(search->second)) {
-                  SourceBlock* preceding_source_block{nullptr};
+                  SourceBlock* preceeding_source_block{nullptr};
                   auto sb = sb_lookup->find(use.insn);
                   if (sb != sb_lookup->end() && sb->second != nullptr) {
-                    preceding_source_block = sb->second;
+                    preceeding_source_block = sb->second;
                   }
                   trace_field_usage(field_name, method_name, insn,
-                                    preceding_source_block);
+                                    preceeding_source_block);
                 }
               }
             }

@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "DexAccess.h"
 #include "DexClass.h"
 
 const int OBJ_METH_NAMES = 9;

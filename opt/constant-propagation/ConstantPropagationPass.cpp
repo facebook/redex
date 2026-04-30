@@ -7,19 +7,20 @@
 
 #include "ConstantPropagationPass.h"
 
+#include "ConfigFiles.h"
 #include "ConstantPropagation.h"
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "ScopedMetrics.h"
 #include "Trace.h"
-#include "Walkers.h"
 
 using namespace constant_propagation;
 
 void ConstantPropagationPass::run_pass(DexStoresVector& stores,
-                                       ConfigFiles&,
+                                       ConfigFiles& conf,
                                        PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
 
   ConstantPropagation impl(m_config);
   auto state = constant_propagation::State();

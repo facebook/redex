@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include "Pass.h"
 
 class PerfMethodInlinePass : public Pass {
@@ -30,7 +29,7 @@ class PerfMethodInlinePass : public Pass {
     };
   }
 
-  ~PerfMethodInlinePass();
+  ~PerfMethodInlinePass() override;
 
   void bind_config() override;
 

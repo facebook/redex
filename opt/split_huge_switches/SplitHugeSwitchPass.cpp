@@ -9,16 +9,18 @@
 
 #include <algorithm>
 #include <iostream>
+#include <optional>
 
 #include <boost/regex.hpp>
 
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexLimits.h"
 #include "DexStore.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "InterDexPass.h"
+#include "InterDexPassMetrics.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
 #include "MethodUtil.h"
@@ -133,7 +135,7 @@ class MoveResultAwareFixpointIterator final
   }
 };
 
-boost::optional<IRInstruction*> find_def(
+std::optional<IRInstruction*> find_def(
     const MoveResultAwareFixpointIterator& rdefs,
     const cfg::InstructionIterator& src_it,
     size_t src_index = 0) {
@@ -147,16 +149,16 @@ boost::optional<IRInstruction*> find_def(
 
   auto defs_expr = defs.get(src_it->insn->src(src_index));
   if (defs_expr.is_top() || defs_expr.is_bottom()) {
-    return boost::none;
+    return std::nullopt;
   }
   if (defs_expr.elements().size() != 1) {
-    return boost::none;
+    return std::nullopt;
   }
 
   return *defs_expr.elements().begin();
 }
 
-using ParamChain = boost::optional<std::vector<IRInstruction*>>;
+using ParamChain = std::optional<std::vector<IRInstruction*>>;
 
 ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
                             cfg::InstructionIterator cur) {
@@ -172,13 +174,13 @@ ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
   for (;;) {
     auto src = find_def(rdefs, cur);
     if (!src) {
-      return boost::none;
+      return std::nullopt;
     }
     auto* src_insn = *src;
 
     val.push_back(src_insn);
     if (seen.count(src_insn) != 0) {
-      return boost::none;
+      return std::nullopt;
     }
     seen.insert(src_insn);
 
@@ -191,7 +193,7 @@ ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
       return val;
     }
     if (src_insn->srcs_size() >= 2) {
-      return boost::none;
+      return std::nullopt;
     }
 
     cur = cfg.find_insn(src_insn, cur.block());
@@ -314,7 +316,7 @@ std::pair<cfg::Block*, reg_t> clone_param_chain(
       cfg.copy_succ_edges(cfg.entry_block(), new_block);
       cfg.set_edge_target(cfg.entry_block()->succs()[0], new_block);
     }
-    IRInstruction* clone_insn = new IRInstruction(**it);
+    auto* clone_insn = new IRInstruction(**it);
     // Replace old_reg with new_reg.
     for (size_t i = 0; i < clone_insn->srcs_size(); ++i) {
       if (clone_insn->src(i) == old_reg) {
@@ -433,10 +435,10 @@ void insert_dispatches(
 }
 
 struct AnalysisData {
-  boost::optional<cfg::ScopedCFG> scoped_cfg = boost::none;
-  boost::optional<cfg::InstructionIterator> switch_it = boost::none;
-  boost::optional<ParamChain> param_chain = boost::none;
-  boost::optional<SwitchRange> switch_range = boost::none;
+  std::optional<cfg::ScopedCFG> scoped_cfg = std::nullopt;
+  std::optional<cfg::InstructionIterator> switch_it = std::nullopt;
+  std::optional<ParamChain> param_chain = std::nullopt;
+  std::optional<SwitchRange> switch_range = std::nullopt;
 
   DexMethod* m{nullptr};
   bool no_code{false};
@@ -553,7 +555,8 @@ AnalysisData analyze(DexMethod* m,
   }
   data.no_easy_expr = false;
 
-  size_t nr_splits = (size_t)std::ceil(((float)size) / code_units_threshold);
+  auto nr_splits = static_cast<size_t>(std::ceil(
+      static_cast<float>(size) / static_cast<float>(code_units_threshold)));
   redex_assert(nr_splits > 1);
   auto switch_range =
       get_switch_range(*scoped_cfg, switch_it.block(), nr_splits);
@@ -599,17 +602,12 @@ AnalysisData analyze(DexMethod* m,
 
   // Filter out non-hot methods.
   if (hotness_threshold > 0 && method_profiles.has_stats()) {
-    auto is_hot_fn = [&]() {
-      for (const auto& interaction_stats : method_profiles.all_interactions()) {
-        const auto& stats_map = interaction_stats.second;
-        if (stats_map.count(m) != 0 &&
-            stats_map.at(m).call_count >= hotness_threshold) {
-          return true;
-        }
-      }
-      return false;
-    };
-    bool is_hot = is_hot_fn();
+    bool is_hot = std::ranges::any_of(
+        method_profiles.all_interactions(), [&](const auto& interaction_stats) {
+          const auto& stats_map = interaction_stats.second;
+          return stats_map.count(m) != 0 &&
+                 stats_map.at(m).call_count >= hotness_threshold;
+        });
     if (!is_hot) {
       data.not_hot = true;
       return data;
@@ -909,17 +907,17 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
 
   auto print_debug = [&](const Stats& stats, const Stats* result_stats) {
     auto print = [&](const auto& in, const std::string& header) {
-      std::cerr << header << std::endl;
+      std::cerr << header << '\n';
       for (const DexMethod* m : unordered_to_ordered(in, compare_dexmethods)) {
-        std::cerr << " * " << show(m) << std::endl;
+        std::cerr << " * " << show(m) << '\n';
       }
     };
     print(stats.large_methods_set, "Large methods");
     print(stats.switch_methods_set, "Large methods with a switch");
     print(stats.large_switches_set, "Large methods with a large switch");
-    std::cerr << stats.constructor << " constructors." << std::endl;
-    std::cerr << stats.non_simple_chain << " non-simple chains." << std::endl;
-    std::cerr << stats.not_hot << " non-hot methods." << std::endl;
+    std::cerr << stats.constructor << " constructors." << '\n';
+    std::cerr << stats.non_simple_chain << " non-simple chains." << '\n';
+    std::cerr << stats.not_hot << " non-hot methods." << '\n';
     if (result_stats != nullptr) {
       print(result_stats->new_methods, "Created methods");
     }
@@ -945,8 +943,7 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("no_slots", result_stats.no_slots);
 
   auto replace_chars = [](std::string& s) {
-    for (size_t i = 0; i < s.length(); ++i) {
-      char& c = s.at(i);
+    for (auto& c : s) {
       if (isalnum(c) == 0) {
         c = '_';
       }

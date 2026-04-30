@@ -26,7 +26,8 @@ void DexEncodedValueString::gather_strings(
   lstring.push_back(string());
 }
 
-void DexEncodedValueType::gather_types(std::vector<DexType*>& ltype) const {
+void DexEncodedValueType::gather_types(
+    std::vector<const DexType*>& ltype) const {
   ltype.push_back(type());
 }
 
@@ -62,7 +63,8 @@ void DexEncodedValueArray::gather_strings(
   }
 }
 
-void DexEncodedValueArray::gather_types(std::vector<DexType*>& ltype) const {
+void DexEncodedValueArray::gather_types(
+    std::vector<const DexType*>& ltype) const {
   for (auto& ev : *evalues()) {
     ev->gather_types(ltype);
   }
@@ -91,7 +93,7 @@ void DexEncodedValueAnnotation::gather_strings(
 }
 
 void DexEncodedValueAnnotation::gather_types(
-    std::vector<DexType*>& ltype) const {
+    std::vector<const DexType*>& ltype) const {
   ltype.push_back(m_type);
   for (auto const& anno : m_annotations) {
     anno.encoded_value->gather_types(ltype);
@@ -120,7 +122,7 @@ void DexAnnotation::gather_strings(
   }
 }
 
-void DexAnnotation::gather_types(std::vector<DexType*>& ltype) const {
+void DexAnnotation::gather_types(std::vector<const DexType*>& ltype) const {
   ltype.push_back(m_type);
   for (auto const& anno : m_anno_elems) {
     anno.encoded_value->gather_types(ltype);
@@ -159,7 +161,7 @@ void DexAnnotationSet::gather_strings(
   }
 }
 
-void DexAnnotationSet::gather_types(std::vector<DexType*>& ltype) const {
+void DexAnnotationSet::gather_types(std::vector<const DexType*>& ltype) const {
   for (auto const& anno : m_annotations) {
     anno->gather_types(ltype);
   }
@@ -217,7 +219,7 @@ void type_encoder_signext(std::vector<uint8_t>& encdata,
                           uint64_t val) {
   size_t mp = encdata.size();
   encdata.push_back(0);
-  int64_t sval = *(int64_t*)&val;
+  int64_t sval = static_cast<int64_t>(val);
   int64_t t = sval;
   int bytes = 0;
   while (true) {
@@ -272,9 +274,9 @@ void type_encoder_fp(std::vector<uint8_t>& encdata,
 }
 
 static void uleb_append(std::vector<uint8_t>& bytes, uint32_t v) {
-  uint8_t tarray[5];
-  uint8_t* pend = write_uleb128(tarray, v);
-  for (uint8_t* p = tarray; p < pend; p++) {
+  std::array<uint8_t, 5> tarray{};
+  uint8_t* pend = write_uleb128(tarray.data(), v);
+  for (uint8_t* p = tarray.data(); p < pend; p++) {
     bytes.push_back(*p);
   }
 }
@@ -666,8 +668,9 @@ std::unique_ptr<DexAnnotationSet> DexAnnotationSet::get_annotation_set(
   auto aset = std::make_unique<DexAnnotationSet>();
   uint32_t count = *adata++;
   always_assert_type_log(adata <= adata + count, INVALID_DEX, "Dex overflow");
-  always_assert_type_log((uint8_t*)(adata + count) <= idx->end(), INVALID_DEX,
-                         "Dex overflow");
+  always_assert_type_log(reinterpret_cast<const uint8_t*>(adata + count) <=
+                             idx->end(),
+                         INVALID_DEX, "Dex overflow");
 
   aset->m_annotations.reserve(count - std::count(adata, adata + count, 0));
 
@@ -686,34 +689,34 @@ void DexAnnotationDirectory::calc_internals() {
   auto updateCount = [this](DexAnnotationSet* das) {
     unsigned long ca, cv;
     das->viz_counts(ca, cv);
-    m_anno_count += ca;
-    m_aset_size += 4 + 4 * (ca);
+    m_anno_count += static_cast<int>(ca);
+    m_aset_size += static_cast<int>(4 + 4 * ca);
     m_aset_count++;
     return cv;
   };
   if (m_class != nullptr) {
-    cntviz += updateCount(m_class);
+    cntviz += static_cast<int>(updateCount(m_class));
   }
   if (m_field) {
     for (auto const& p : *m_field) {
       DexAnnotationSet* das = p.second;
-      cntviz += updateCount(das);
+      cntviz += static_cast<int>(updateCount(das));
     }
   }
   if (m_method) {
     for (auto const& p : *m_method) {
       DexAnnotationSet* das = p.second;
-      cntviz += updateCount(das);
+      cntviz += static_cast<int>(updateCount(das));
     }
   }
   if (m_method_param) {
     for (auto const& p : *m_method_param) {
       ParamAnnotations* pa = p.second;
-      m_xref_size += 4 + 4 * pa->size();
+      m_xref_size += static_cast<int>(4 + 4 * pa->size());
       m_xref_count++;
       for (auto const& pp : *pa) {
         const auto& das = pp.second;
-        cntviz += updateCount(das.get());
+        cntviz += static_cast<int>(updateCount(das.get()));
       }
     }
   }
@@ -992,9 +995,50 @@ std::string DexEncodedValueArray::show_deobfuscated() const {
   return show_helper(this, true);
 }
 
-std::string DexEncodedValueString::show() const { return ::show(string()); }
+std::string DexEncodedValueString::show() const {
+  return ::show_escaped(string());
+}
+
+std::string DexEncodedValueString::show_deobfuscated() const {
+  const auto* dex_string = string();
+  auto starts_with_type_name = [](const std::string_view& s) {
+    const auto* i = s.begin();
+    while (i != s.end() && *i == '[') {
+      i++;
+    }
+    return i != s.end() && *i == 'L';
+  };
+  // Check if this is possibly an obfuscated type name. At least length of LX/0;
+  if (dex_string->is_simple() && dex_string->length() >= 5) {
+    auto s = dex_string->str();
+    auto last_char = s.back();
+    if (starts_with_type_name(s) && (last_char == ';' || last_char == '<')) {
+      // Note that array types should pass above check, which should get handled
+      // gracefully by show_deobfuscated(const DexType*).
+      std::string maybe_type_name(s);
+      if (last_char == '<') {
+        maybe_type_name.pop_back();
+        maybe_type_name.push_back(';');
+      }
+      auto* maybe_type = DexType::get_type(maybe_type_name);
+      if (maybe_type != nullptr) {
+        auto result = ::show_deobfuscated(maybe_type);
+        always_assert(!result.empty());
+        if (last_char == '<') {
+          result.pop_back();
+          result.push_back('<');
+        }
+        return result;
+      }
+    }
+  }
+  return show();
+}
 
 std::string DexEncodedValueType::show() const { return ::show(type()); }
+std::string DexEncodedValueType::show_deobfuscated() const {
+  return ::show_deobfuscated(type());
+}
 
 std::string DexEncodedValueField::show() const { return ::show(field()); }
 std::string DexEncodedValueField::show_deobfuscated() const {

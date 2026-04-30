@@ -64,6 +64,7 @@
  */
 
 #include "ConstantUses.h"
+#include "ReachingDefinitions.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -179,7 +180,7 @@ TypeDemand ConstantUses::get_constant_type_demand(IRInstruction* insn) const {
   return type_demand;
 }
 
-TypeDemand ConstantUses::get_type_demand(DexType* type) {
+TypeDemand ConstantUses::get_type_demand(const DexType* type) {
   switch (type->c_str()[0]) {
   case 'V':
     not_reached();
@@ -275,8 +276,6 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
     // In the Android verifier, the check-cast instruction updates the assumed
     // exact type on the incoming register, even in the case of a zero constant.
     // We don't track exact types here, and just bail out.
-    return TypeDemand::Error;
-
   case OPCODE_INSTANCE_OF:
     // The Android verifier in some ART versions match a pattern of
     // instance-of + ifXXX, and then may strengthen assumptions on the incoming

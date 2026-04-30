@@ -12,8 +12,6 @@
 #include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
-#include "DexLoader.h"
-#include "DexOutput.h"
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "Resolver.h"
@@ -131,7 +129,7 @@ AnnoKill::AnnoKill(Scope& scope,
 namespace {
 void gather_complete_referenced_annos(
     const AnnoKill::AnnoSet& initial_referenced_annos,
-    DexType* type,
+    const DexType* type,
     AnnoKill::AnnoSet* result) {
   auto* cls = type_class(type);
   if (cls == nullptr || !is_annotation(cls) || cls->is_external()) {
@@ -247,7 +245,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
       return;
     }
 
-    const auto& has_anno = [&](DexType* type) {
+    const auto& has_anno = [&](const DexType* type) {
       if (all_annos.count(type) > 0) {
         TRACE(ANNO,
               3,
@@ -266,8 +264,8 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
     }
   });
 
-  ConcurrentSet<DexType*> concurrent_referenced_annos;
-  auto add_concurrent_referenced_anno = [&](DexType* t) {
+  ConcurrentSet<const DexType*> concurrent_referenced_annos;
+  auto add_concurrent_referenced_anno = [&](const DexType* t) {
     if (referenced_annos.count(t) == 0u) {
       concurrent_referenced_annos.insert(t);
     }
@@ -290,7 +288,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
         }
 
         if (insn->has_type()) {
-          auto* type = insn->get_type();
+          const auto* type = insn->get_type();
           if (all_annos.count(type) > 0) {
             add_concurrent_referenced_anno(type);
             TRACE(ANNO,
@@ -334,7 +332,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
         } else if (insn->has_method()) {
           auto* method = insn->get_method();
           DexMethod* methdef =
-              resolve_method(method, opcode_to_search(insn), meth);
+              resolve_method_deprecated(method, opcode_to_search(insn), meth);
           if (methdef != nullptr) {
             method = methdef;
           }
@@ -373,7 +371,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
   // For each referenced annotation, make sure any annotations it references are
   // also tracked as referenced, so we don't end up with a dangling ref.
   AnnoKill::AnnoSet gathered;
-  for (auto* referenced : UnorderedIterable(referenced_annos)) {
+  for (const auto* referenced : UnorderedIterable(referenced_annos)) {
     gather_complete_referenced_annos(referenced_annos, referenced, &gathered);
   }
   insert_unordered_iterable(referenced_annos, gathered);
@@ -382,7 +380,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
 
 AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
   // Determine which annotation classes are removable.
-  UnorderedSet<DexType*> bannotations;
+  UnorderedSet<const DexType*> bannotations;
   for (auto* clazz : m_scope) {
     if ((clazz->get_access() & DexAccessFlags::ACC_ANNOTATION) == 0u) {
       continue;
@@ -542,8 +540,8 @@ bool AnnoKill::kill_annotations() {
 
   {
     Timer timer{"optimize classes"};
-    m_stats +=
-        walk::parallel::classes<AnnoKillStats>(m_scope, [&](auto* clazz) {
+    m_stats += walk::parallel::classes<AnnoKillStats>(
+        m_scope, [&](auto* clazz) -> AnnoKillStats {
           AnnoKillStats local_stats{};
           DexAnnotationSet* aset = clazz->get_anno_set();
           if (!aset) {

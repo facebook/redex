@@ -21,8 +21,9 @@
 #include "RedexContext.h"
 #include "RedexOptions.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Walkers.h"
+
+using namespace std::literals::string_literals;
 
 struct DexOutputTestHelper {
   static std::unique_ptr<uint8_t[]> steal_output(DexOutput& output) {
@@ -71,7 +72,6 @@ class IODITest : public ::testing::Test {
     always_assert(stores.size() == 1);
     auto& store = stores[0];
     auto& dexen = store.get_dexen();
-    auto store_name = store.get_name();
     always_assert(dexen.size() == 1);
 
     auto gtypes = std::make_shared<GatheredTypes>(dexen.data());
@@ -89,9 +89,8 @@ class IODITest : public ::testing::Test {
                      pos_mapper.get(),
                      &method_to_id,
                      &code_debug_lines);
-    output.prepare(
-        // NOLINTNEXTLINE(bugprone-string-literal-with-embedded-nul)
-        SortMode::DEFAULT, {SortMode::DEFAULT}, dummy_cfg, "dex\n035\0");
+    output.prepare(SortMode::DEFAULT, {SortMode::DEFAULT}, dummy_cfg,
+                   "dex\n035\0"s);
     if (mids != nullptr) {
       for (auto& iter : UnorderedIterable(method_to_id)) {
         DexMethod* method = iter.first;
@@ -238,7 +237,8 @@ void log_debug_to_methods(const std::map<void*, DexMethods>& result) {
     const char* dexfile = std::getenv("dexfile");
     redex_assert(dexfile);
     auto pre_classes = load_classes_from_dex(
-        DexLocation::make_location("", dexfile), /*stats=*/nullptr, false);
+        DexLocation::make_location("", dexfile), /*stats=*/nullptr,
+        /*input_dex_version*/ nullptr, false);
     auto pre_debug_data = debug_to_methods(pre_classes);
     for (auto& data : pre_debug_data) {
       EXPECT_EQ(data.second.size(), 1);
@@ -315,6 +315,7 @@ TEST_F(IODITest, couldIODIBeBetter) {
     auto next_biggest = methods.begin();
     uint32_t biggest_insns = (*next_biggest)->get_dex_code()->size();
     while ((*next_biggest)->get_dex_code()->size() == biggest_insns &&
+           // NOLINTNEXTLINE(bugprone-inc-dec-in-conditions)
            ++next_biggest != methods.end()) {
       ;
     }
@@ -581,8 +582,8 @@ class IODIEncodingTest : public IODITest {
         if (layered) {
           auto layer = get_iodi_layer(*debug_item);
           if (layer) {
-            pretty_name = IODIMetadata::get_layered_name(pretty_name, *layer,
-                                                         pretty_name);
+            pretty_name =
+                IODIMetadata::get_layered_name(std::move(pretty_name), *layer);
           }
         }
         if (is_plain) {

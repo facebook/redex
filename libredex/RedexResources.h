@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/graph/adjacency_list.hpp>
@@ -33,6 +32,7 @@ const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 const char* const RES_DIRECTORY = "res";
 const char* const OBFUSCATED_RES_DIRECTORY = "r";
 const char* const RESOURCE_NAME_REMOVED = "(name removed)";
+const char* const SYNTHETIC_PARENT_NAME = "(synthetic parent)";
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
 const uint32_t APPLICATION_PACKAGE = 0x7f;
@@ -227,6 +227,8 @@ struct StyleInfo {
   Graph graph;
   // Actual representation of the parsed style information from the application.
   StyleMap styles;
+  // Maps resource ID to the vertex in the graph.
+  std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> id_to_vertex;
   // Returns information from the graph as a .dot format, for visualization.
   // Optionally this can exclude nodes that have no outgoing/inbound edges which
   // might not be interesting to look at.
@@ -242,24 +244,46 @@ struct StyleInfo {
   // Returns the set of root vertices in the graph. These are typically the
   // top-level styles in the style hierarchy.
   UnorderedSet<vertex_t> get_roots() const;
+
+  // Gets all children of the given resource ID.
+  std::vector<uint32_t> get_children(uint32_t resource_id) const;
+
+  // Gets parent of the given resource ID.
+  std::optional<uint32_t> get_unambiguous_parent(uint32_t resource_id) const;
+
+  // Gets the depth of the tree from a given resource ID relative to the leaf.
+  uint32_t get_depth(uint32_t resource_id) const;
+
+  void set_max_resource_id(uint32_t max_resource_id);
+
+  // Returns the next available resource ID to use.
+  uint32_t get_new_resource_id();
+
+ private:
+  uint32_t max_resource_id{0};
 };
 
 // Modification specification for styles in APK and App Bundle containers.
 // This structure defines operations that can be performed on styles during
 // serialization.
 struct StyleModificationSpec {
-  enum class ModificationType { ADD_ATTRIBUTE, REMOVE_ATTRIBUTE, DELETE_STYLE };
+  enum class ModificationType {
+    ADD_ATTRIBUTE,
+    REMOVE_ATTRIBUTE,
+    UPDATE_PARENT_ADD_ATTRIBUTES,
+    NEW_STYLE
+  };
 
   struct Modification {
     ModificationType type;
-
     uint32_t resource_id{0};
     std::optional<uint32_t> attribute_id{std::nullopt};
     std::optional<StyleResource::Value> value{std::nullopt};
     std::optional<uint32_t> parent_id{std::nullopt};
+    UnorderedMap<uint32_t, StyleResource::Value> values;
 
     explicit Modification(uint32_t resource_id)
-        : type(ModificationType::DELETE_STYLE), resource_id{resource_id} {}
+        : type(ModificationType::NEW_STYLE), resource_id{resource_id} {}
     Modification(uint32_t resource_id, uint32_t attr_id)
         : type(ModificationType::REMOVE_ATTRIBUTE),
           resource_id{resource_id},
@@ -271,29 +295,27 @@ struct StyleModificationSpec {
           resource_id{resource_id},
           attribute_id(attr_id),
           value(val) {}
+    Modification(uint32_t resource_id,
+                 uint32_t parent_id,
+                 UnorderedMap<uint32_t, StyleResource::Value> values)
+        : type(ModificationType::UPDATE_PARENT_ADD_ATTRIBUTES),
+          resource_id(resource_id),
+          parent_id(parent_id),
+          values(std::move(values)) {}
   };
 
   std::vector<Modification> modifications;
 };
 
 using ResourceAttributeMap =
-    UnorderedMap<uint32_t,
-                 UnorderedMap<uint32_t, StyleModificationSpec::Modification>>;
+    UnorderedMap<uint32_t, std::vector<StyleModificationSpec::Modification>>;
 
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
 std::string convert_utf8_to_mutf8(std::string_view input);
-// This line is needed because this header is exposed to dependents, which may
-// be using C++17.
-// This is not 202002L because GCC 10 (shipped in Debian 11) defines __cplusplus
-// to be so with -std=gnu++20 flag.
-// TODO(T233875592): Change this to 202002L when GCC 11 becomes the minimum
-// supported compiler version.
-#if __cplusplus >= 201709L
 // A convenient wrapper to allow convert_utf8_to_mutf8 to be used with u8"foo"
 // string literals.
 std::string convert_utf8_to_mutf8(std::u8string_view input);
-#endif // __cplusplus >= 201709L
 // Given a map of a id which holds a reference value, and the id that the
 // reference points to, along with all the past found inlinable values, for each
 // id in past_refs, if it is inlinable, adds it to inlinable_resources with the
@@ -483,14 +505,21 @@ class ResourceTableFile {
   // configurations.
   virtual resources::StyleMap get_style_map() = 0;
 
-  // Deletes referenced attribute/value in android app
-  virtual void apply_attribute_removals(
+  // Removes and adds referenced attribute/value in android app
+  // Does removals first then additions
+  virtual void apply_attribute_removals_and_additions(
       const std::vector<resources::StyleModificationSpec::Modification>&
           modifications,
       const std::vector<std::string>& resources_pb_paths) = 0;
 
-  // Adds referenced attribute/value in android app
-  virtual void apply_attribute_additions(
+  // Merges parent with child style
+  virtual void apply_style_merges(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) = 0;
+
+  // Adds new style to resources apps
+  virtual void add_styles(
       const std::vector<resources::StyleModificationSpec::Modification>&
           modifications,
       const std::vector<std::string>& resources_pb_paths) = 0;

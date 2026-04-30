@@ -8,6 +8,7 @@
 #include "SwitchEquivFinder.h"
 
 #include <algorithm>
+#include <map>
 #include <vector>
 
 #include "CFGMutation.h"
@@ -17,7 +18,6 @@
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Trace.h"
 
 namespace {
@@ -110,13 +110,9 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
 
   auto* last_insn = last->insn;
   auto last_op = last_insn->opcode();
-  if (opcode::is_branch(last_op) && has_src(last_insn, reg)) {
-    // The only non-leaf block is one that branches on the switching reg
-    return false;
-  }
-
+  // The only non-leaf block is one that branches on the switching reg
   // Any other block must be a leaf
-  return true;
+  return !(opcode::is_branch(last_op) && has_src(last_insn, reg));
 }
 
 // For the leaf, check if the non-leaf predecessor block contributes to any
@@ -270,7 +266,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
   recurse = [&](cfg::Block* b, const InstructionSet& loads,
                 const std::vector<SourceBlock*>& source_blocks_in) {
     // `loads` represents the state of the registers after evaluating `b`.
-    std::vector<cfg::Edge*> ordered_edges(b->succs());
+    std::vector<cfg::Edge*> ordered_edges(b->succs().to_vector());
     // NOTE: To maintain proper order of duplicated cases, non leafs successors
     // will be encountered first.
     std::stable_sort(ordered_edges.begin(), ordered_edges.end(),
@@ -544,7 +540,7 @@ void SwitchEquivFinder::normalize_extra_loads(
   // Remove loads that aren't used outside the if-else chain blocks
   for (auto& block_and_insns : UnorderedIterable(m_extra_loads)) {
     InstructionSet& insns = block_and_insns.second;
-    std20::erase_if(insns, [&used_defs](auto& p) {
+    std::erase_if(insns, [&used_defs](auto& p) {
       return used_defs.count(p.second) == 0;
     });
   }

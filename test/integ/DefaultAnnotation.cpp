@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "AnnoUtils.h"
-#include "DexInstruction.h"
 #include "RedexTest.h"
 #include "Show.h"
 #include "Trace.h"
@@ -43,7 +42,7 @@ TEST_F(DefaultAnnotationTest, defaultAnnotation) {
             // defaults in the test Java source
             EXPECT_EQ(anno->anno_elems().size(), 0);
 
-            int intResult =
+            uint32_t intResult =
                 parse_int_anno_value(dex_method, anno->type(), int_anno_name);
             TRACE(ANNO, 9, "default value for %s is  %d\n",
                   int_anno_name.c_str(), intResult);
@@ -59,7 +58,7 @@ TEST_F(DefaultAnnotationTest, defaultAnnotation) {
                 parse_bool_anno_value(dex_method, anno->type(), bool_anno_name);
             TRACE(ANNO, 9, "default value for %s is  %s\n",
                   bool_anno_name.c_str(), boolResult ? "true" : "false");
-            EXPECT_EQ(1, (int)boolResult);
+            EXPECT_TRUE(boolResult);
 
             const DexEncodedValue* result =
                 parse_default_anno_value(anno->type(), no_such_anno_name);
@@ -73,7 +72,7 @@ TEST_F(DefaultAnnotationTest, defaultAnnotation) {
             // 3 annotations in the test Java source
             EXPECT_EQ(anno->anno_elems().size(), 3);
 
-            int intResult =
+            uint32_t intResult =
                 parse_int_anno_value(dex_method, anno->type(), int_anno_name);
             TRACE(ANNO, 9, "value for %s is %d\n", int_anno_name.c_str(),
                   intResult);
@@ -89,7 +88,7 @@ TEST_F(DefaultAnnotationTest, defaultAnnotation) {
                 parse_bool_anno_value(dex_method, anno->type(), bool_anno_name);
             TRACE(ANNO, 9, "value for %s is %s\n", bool_anno_name.c_str(),
                   boolResult ? "true" : "false");
-            EXPECT_EQ(0, (int)boolResult);
+            EXPECT_FALSE(boolResult);
 
             const DexEncodedValue* result =
                 parse_default_anno_value(anno->type(), no_such_anno_name);

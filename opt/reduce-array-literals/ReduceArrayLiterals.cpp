@@ -8,7 +8,6 @@
 #include "ReduceArrayLiterals.h"
 
 #include <cinttypes>
-#include <vector>
 
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/HashedSetAbstractDomain.h>
@@ -20,12 +19,11 @@
 #include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
+#include "DexStructure.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "InterDexPass.h"
 #include "LiveRange.h"
 #include "PassManager.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "Walkers.h"
 
@@ -70,7 +68,7 @@ struct TrackedValue {
   const IRInstruction* new_array_insn;
   uint32_t aput_insns_size{0};
   PatriciaTreeMap<uint32_t, const IRInstruction*> aput_insns{};
-  PatriciaTreeSet<const IRInstruction*> aput_insns_range{};
+  PatriciaTreeSet<const IRInstruction*> aput_insns_range;
 };
 
 struct TrackedValueHasher {
@@ -79,9 +77,10 @@ struct TrackedValueHasher {
     case TrackedValueKind::Other:
       return std::numeric_limits<size_t>::max();
     case TrackedValueKind::Literal:
-      return (size_t)tv.literal;
+      return static_cast<size_t>(tv.literal);
     case TrackedValueKind::NewArray:
-      return tv.length + (size_t)tv.new_array_insn ^ tv.aput_insns_size;
+      return tv.length + reinterpret_cast<size_t>(tv.new_array_insn) ^
+             tv.aput_insns_size;
     default:
       not_reached();
     }
@@ -107,20 +106,30 @@ bool operator==(const TrackedValue& a, const TrackedValue& b) {
 }
 
 TrackedValue make_other() {
-  return (TrackedValue){TrackedValueKind::Other, {0}, nullptr};
+  return (TrackedValue){.kind = TrackedValueKind::Other,
+                        .literal = 0,
+                        .new_array_insn = nullptr,
+                        .aput_insns_range = {}};
 }
 
 TrackedValue make_literal(const IRInstruction* instr) {
   always_assert(instr->opcode() == OPCODE_CONST);
   always_assert(instr->has_literal());
-  return (TrackedValue){
-      TrackedValueKind::Literal, {(int32_t)instr->get_literal()}, nullptr};
+  auto lit = instr->get_literal();
+  always_assert(lit <= 2147483647 && lit >= -2147483648);
+  return (TrackedValue){.kind = TrackedValueKind::Literal,
+                        .literal = static_cast<int32_t>(lit),
+                        .new_array_insn = nullptr,
+                        .aput_insns_range = {}};
 }
 
-TrackedValue make_array(int32_t length, const IRInstruction* instr) {
+TrackedValue make_array(uint32_t length, const IRInstruction* instr) {
   always_assert(length >= 0);
   always_assert(instr->opcode() == OPCODE_NEW_ARRAY);
-  return (TrackedValue){TrackedValueKind::NewArray, {length}, instr};
+  return (TrackedValue){.kind = TrackedValueKind::NewArray,
+                        .length = length,
+                        .new_array_insn = instr,
+                        .aput_insns_range = {}};
 }
 
 bool is_new_array(const TrackedValue& tv) {
@@ -288,7 +297,8 @@ class Analyzer final
         TRACE(RAL, 4, "[RAL]     with length %" PRId64, length_literal);
         always_assert(length_literal >= 0 && length_literal <= 2147483647);
         current_state->set(RESULT_REGISTER,
-                           TrackedDomain(make_array(length_literal, insn)));
+                           TrackedDomain(make_array(
+                               static_cast<uint32_t>(length_literal), insn)));
       }
       break;
     }
@@ -340,8 +350,8 @@ class Analyzer final
 
  private:
   bool is_array_construction_in_progress(
-      const boost::optional<TrackedValue>& array,
-      const boost::optional<TrackedValue>& index) const {
+      const std::optional<TrackedValue>& array,
+      const std::optional<TrackedValue>& index) const {
     return array && is_new_array(*array) && !is_array_literal(*array) &&
            index && is_literal(*index);
   }
@@ -356,16 +366,15 @@ class Analyzer final
     }
   }
 
-  boost::optional<TrackedValue> get_singleton(
-      const TrackedDomain& domain) const {
+  std::optional<TrackedValue> get_singleton(const TrackedDomain& domain) const {
     if (domain.kind() != AbstractValueKind::Value) {
-      return boost::none;
+      return std::nullopt;
     }
     const auto& elements = domain.elements();
     if (elements.size() != 1) {
-      return boost::none;
+      return std::nullopt;
     }
-    return boost::optional<TrackedValue>(*elements.begin());
+    return std::optional<TrackedValue>(*elements.begin());
   }
 
   void escape_new_arrays(uint32_t reg,
@@ -474,7 +483,7 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    auto* type = new_array_insn->get_type();
+    const auto* type = new_array_insn->get_type();
     auto* element_type = type::get_array_component_type(type);
 
     if (has_left_out_aputs(du_chains, new_array_insn, aput_insns)) {
@@ -555,11 +564,11 @@ void ReduceArrayLiterals::patch() {
 void ReduceArrayLiterals::patch_new_array(
     const IRInstruction* new_array_insn,
     const std::vector<const IRInstruction*>& aput_insns) {
-  auto* type = new_array_insn->get_type();
+  const auto* type = new_array_insn->get_type();
 
   // prepare for chunking, if needed
 
-  boost::optional<reg_t> chunk_dest;
+  std::optional<reg_t> chunk_dest;
   if (aput_insns.size() > m_max_filled_elements) {
     // we are going to chunk
     chunk_dest = m_cfg.allocate_temp();
@@ -573,7 +582,7 @@ void ReduceArrayLiterals::patch_new_array(
 
   // remove new-array instruction
 
-  auto it = m_cfg.find_insn(const_cast<IRInstruction*>(new_array_insn));
+  auto it = m_cfg.find_insn(new_array_insn);
   always_assert(new_array_insn->opcode() == OPCODE_NEW_ARRAY);
   auto move_result_it = m_cfg.move_result_of(it);
   if (move_result_it.is_end()) {
@@ -599,10 +608,10 @@ void ReduceArrayLiterals::patch_new_array(
 }
 
 size_t ReduceArrayLiterals::patch_new_array_chunk(
-    DexType* type,
+    const DexType* type,
     size_t chunk_start,
     const std::vector<const IRInstruction*>& aput_insns,
-    boost::optional<reg_t> chunk_dest,
+    std::optional<reg_t> chunk_dest,
     reg_t overall_dest,
     std::vector<reg_t>* temp_regs) {
   cfg::CFGMutation mutation(m_cfg);
@@ -653,10 +662,12 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
     const_insn->set_literal(0)->set_dest(m_local_temp_regs[0]);
     new_insns.push_back(const_insn);
     const_insn = new IRInstruction(OPCODE_CONST);
-    const_insn->set_literal(chunk_start)->set_dest(m_local_temp_regs[1]);
+    const_insn->set_literal(static_cast<int64_t>(chunk_start))
+        ->set_dest(m_local_temp_regs[1]);
     new_insns.push_back(const_insn);
     const_insn = new IRInstruction(OPCODE_CONST);
-    const_insn->set_literal(chunk_size)->set_dest(m_local_temp_regs[2]);
+    const_insn->set_literal(static_cast<int64_t>(chunk_size))
+        ->set_dest(m_local_temp_regs[2]);
     new_insns.push_back(const_insn);
     IRInstruction* invoke_static_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
     auto* arraycopy_method = DexMethod::get_method(

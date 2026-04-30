@@ -70,7 +70,7 @@ DexClass* create_java_lang_object() {
   const auto* wait = DexString::make_string("wait");
 
   // protected java.lang.Object.clone()Ljava/lang/Object;
-  auto* method = static_cast<DexMethod*>(
+  auto* method = dynamic_cast<DexMethod*>(
       DexMethod::make_method(obj_t, clone, void_object));
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
@@ -78,7 +78,7 @@ DexClass* create_java_lang_object() {
   obj_cls->add_method(method);
 
   // public java.lang.Object.equals(Ljava/lang/Object;)Z
-  method = static_cast<DexMethod*>(
+  method = dynamic_cast<DexMethod*>(
       DexMethod::make_method(obj_t, equals, object_bool));
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
@@ -86,18 +86,18 @@ DexClass* create_java_lang_object() {
   obj_cls->add_method(method);
 
   // protected java.lang.Object.finalize()V
-  method = static_cast<DexMethod*>(
+  method = dynamic_cast<DexMethod*>(
       DexMethod::make_method(obj_t, finalize, void_void));
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
   method->set_external();
   obj_cls->add_method(method);
 
-  method = static_cast<DexMethod*>(
+  method = dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, getClass, void_class));
   if (method == nullptr) {
     // public final native java.lang.Object.getClass()Ljava/lang/Class;
-    method = static_cast<DexMethod*>(
+    method = dynamic_cast<DexMethod*>(
         DexMethod::make_method(obj_t, getClass, void_class));
     method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
     method->set_virtual(true);
@@ -105,11 +105,11 @@ DexClass* create_java_lang_object() {
   }
   obj_cls->add_method(method);
 
-  method =
-      static_cast<DexMethod*>(DexMethod::get_method(obj_t, hashCode, void_int));
+  method = dynamic_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, hashCode, void_int));
   if (method == nullptr) {
     // public native java.lang.Object.hashCode()I
-    method = static_cast<DexMethod*>(
+    method = dynamic_cast<DexMethod*>(
         DexMethod::make_method(obj_t, hashCode, void_int));
     method->set_access(ACC_PUBLIC | ACC_NATIVE);
     method->set_virtual(true);
@@ -118,10 +118,10 @@ DexClass* create_java_lang_object() {
   obj_cls->add_method(method);
 
   method =
-      static_cast<DexMethod*>(DexMethod::get_method(obj_t, notify, void_void));
+      dynamic_cast<DexMethod*>(DexMethod::get_method(obj_t, notify, void_void));
   if (method == nullptr) {
     // public final native java.lang.Object.notify()V
-    method = static_cast<DexMethod*>(
+    method = dynamic_cast<DexMethod*>(
         DexMethod::make_method(obj_t, notify, void_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
     method->set_virtual(true);
@@ -129,11 +129,11 @@ DexClass* create_java_lang_object() {
   }
   obj_cls->add_method(method);
 
-  method = static_cast<DexMethod*>(
+  method = dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, notifyAll, void_void));
   if (method == nullptr) {
     // public final native java.lang.Object.notifyAll()V
-    method = static_cast<DexMethod*>(
+    method = dynamic_cast<DexMethod*>(
         DexMethod::make_method(obj_t, notifyAll, void_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
     method->set_virtual(true);
@@ -141,11 +141,11 @@ DexClass* create_java_lang_object() {
   }
   obj_cls->add_method(method);
 
-  method = static_cast<DexMethod*>(
+  method = dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, toString, void_string));
   if (method == nullptr) {
     // public java.lang.Object.toString()Ljava/lang/String;
-    method = static_cast<DexMethod*>(
+    method = dynamic_cast<DexMethod*>(
         DexMethod::make_method(obj_t, toString, void_string));
     method->set_access(ACC_PUBLIC);
     method->set_virtual(true);
@@ -154,11 +154,11 @@ DexClass* create_java_lang_object() {
   obj_cls->add_method(method);
 
   method =
-      static_cast<DexMethod*>(DexMethod::get_method(obj_t, wait, void_void));
+      dynamic_cast<DexMethod*>(DexMethod::get_method(obj_t, wait, void_void));
   if (method == nullptr) {
     // public final java.lang.Object.wait()V
-    method =
-        static_cast<DexMethod*>(DexMethod::make_method(obj_t, wait, void_void));
+    method = dynamic_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, wait, void_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL);
     method->set_virtual(true);
     method->set_external();
@@ -166,22 +166,22 @@ DexClass* create_java_lang_object() {
   obj_cls->add_method(method);
 
   method =
-      static_cast<DexMethod*>(DexMethod::get_method(obj_t, wait, long_void));
+      dynamic_cast<DexMethod*>(DexMethod::get_method(obj_t, wait, long_void));
   if (method == nullptr) {
     // public final java.lang.Object.wait(J)V
-    method =
-        static_cast<DexMethod*>(DexMethod::make_method(obj_t, wait, long_void));
+    method = dynamic_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, wait, long_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL);
     method->set_virtual(true);
     method->set_external();
   }
   obj_cls->add_method(method);
 
-  method = static_cast<DexMethod*>(
+  method = dynamic_cast<DexMethod*>(
       DexMethod::get_method(obj_t, wait, long_int_void));
   if (method == nullptr) {
     // public final native java.lang.Object.wait(JI)V
-    method = static_cast<DexMethod*>(
+    method = dynamic_cast<DexMethod*>(
         DexMethod::make_method(obj_t, wait, long_int_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
     method->set_virtual(true);
@@ -239,7 +239,7 @@ DexMethod* create_abstract_method(DexClass* cls,
                                   DexProto* proto,
                                   DexAccessFlags access /*= ACC_PUBLIC*/) {
   access = access | ACC_ABSTRACT;
-  auto* method = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* method = dynamic_cast<DexMethod*>(DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto));
   method->make_concrete(access, std::unique_ptr<IRCode>(nullptr), true);
   cls->add_method(method);

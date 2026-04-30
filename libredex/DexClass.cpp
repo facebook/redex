@@ -25,14 +25,19 @@
 #include "RedexContext.h"
 #include "Show.h"
 #include "StringBuilder.h"
+#include "Trace.h"
 #include "Util.h"
-#include "Walkers.h"
 #include "Warning.h"
 
 #include <algorithm>
 #include <boost/functional/hash.hpp>
 #include <memory>
 #include <unordered_set>
+
+#define INSTANTIATE1(METHOD, TYPE)                       \
+  template void METHOD(std::vector<TYPE>&) const;        \
+  template void METHOD(std::unordered_set<TYPE>&) const; \
+  template void METHOD(UnorderedSet<TYPE>&) const;
 
 #define INSTANTIATE(METHOD, TYPE)                              \
   template void METHOD(std::vector<TYPE>&) const;              \
@@ -205,7 +210,7 @@ int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
   return (int)(((uint8_t*)typep) - (uint8_t*)output);
 }
 
-DexTypeList* DexTypeList::push_front(DexType* t) const {
+DexTypeList* DexTypeList::push_front(const DexType* t) const {
   ContainerType new_list;
   new_list.push_back(t);
   new_list.insert(new_list.end(), m_list.begin(), m_list.end());
@@ -219,28 +224,31 @@ DexTypeList* DexTypeList::pop_front() const {
 }
 DexTypeList* DexTypeList::pop_front(size_t n) const {
   redex_assert(m_list.size() >= n);
-  ContainerType new_list{m_list.begin() + n, m_list.end()};
+  ContainerType new_list{m_list.begin() + static_cast<ptrdiff_t>(n),
+                         m_list.end()};
   return make_type_list(std::move(new_list));
 }
 
 DexTypeList* DexTypeList::pop_back(size_t n) const {
   redex_assert(m_list.size() >= n);
-  ContainerType new_list{m_list.begin(), m_list.end() - n};
+  ContainerType new_list{m_list.begin(),
+                         m_list.end() - static_cast<ptrdiff_t>(n)};
   return make_type_list(std::move(new_list));
 }
 
-DexTypeList* DexTypeList::push_back(DexType* t) const {
+DexTypeList* DexTypeList::push_back(const DexType* t) const {
   ContainerType new_list{m_list};
   new_list.push_back(t);
   return make_type_list(std::move(new_list));
 }
-DexTypeList* DexTypeList::push_back(const std::vector<DexType*>& t) const {
+DexTypeList* DexTypeList::push_back(
+    const std::vector<const DexType*>& t) const {
   ContainerType new_list{m_list};
   new_list.insert(new_list.end(), t.begin(), t.end());
   return make_type_list(std::move(new_list));
 }
 
-DexTypeList* DexTypeList::replace_head(DexType* new_head) const {
+DexTypeList* DexTypeList::replace_head(const DexType* new_head) const {
   redex_assert(!m_list.empty());
   ContainerType new_list{m_list};
   new_list[0] = new_head;
@@ -268,7 +276,7 @@ DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags) {
 DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
                                      std::unique_ptr<DexEncodedValue> v) {
   // FIXME assert if already concrete
-  auto* that = static_cast<DexField*>(this);
+  auto* that = dynamic_cast<DexField*>(this);
   that->m_access = access_flags;
   that->m_concrete = true;
   if (is_static(access_flags)) {
@@ -298,7 +306,7 @@ dex_member_refs::FieldDescriptorTokens DexFieldRef::get_descriptor_tokens()
 
 void DexFieldRef::delete_field_DO_NOT_USE(DexFieldRef* field) {
   erase_field(field);
-  delete static_cast<DexField*>(field);
+  delete dynamic_cast<DexField*>(field);
 }
 
 DexFieldRef* DexField::get_field(
@@ -406,7 +414,7 @@ void DexDebugEntry::gather_strings(
     insn->gather_strings(lstring);
   }
 }
-void DexDebugEntry::gather_types(std::vector<DexType*>& ltype) const {
+void DexDebugEntry::gather_types(std::vector<const DexType*>& ltype) const {
   if (type == DexDebugEntryType::Instruction) {
     insn->gather_types(ltype);
   }
@@ -573,10 +581,10 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     if (!positions.empty()) {
       auto line_base = pos_mapper->position_to_line(positions.back());
       auto line = line_base | line_addin;
-      line_info->emplace_back(DebugLineItem(it->addr, line_base));
+      line_info->emplace_back(it->addr, line_base);
       int32_t line_delta;
       if (prev_line) {
-        line_delta = line - *prev_line;
+        line_delta = static_cast<int32_t>(line - *prev_line);
       } else {
         *line_start = line;
         line_delta = 0;
@@ -592,7 +600,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
                      (addr_delta * DBG_LINE_RANGE) + DBG_FIRST_SPECIAL;
       if ((special & ~0xff) != 0u) {
         dbgops.emplace_back(
-            new DexDebugInstruction(DBG_ADVANCE_PC, uint32_t(addr_delta)));
+            new DexDebugInstruction(DBG_ADVANCE_PC, addr_delta));
         special = line_delta - DBG_LINE_BASE + DBG_FIRST_SPECIAL;
       }
       dbgops.emplace_back(
@@ -649,7 +657,7 @@ void DexDebugItem::bind_positions(DexMethod* method, const DexString* file) {
   }
 }
 
-void DexDebugItem::gather_types(std::vector<DexType*>& ltype) const {
+void DexDebugItem::gather_types(std::vector<const DexType*>& ltype) const {
   for (const auto& entry : m_dbg_entries) {
     entry.gather_types(ltype);
   }
@@ -772,11 +780,11 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
         uint32_t tidx = read_uleb128_checked<redex::DexAssert>(handler);
         uint32_t hoff = read_uleb128_checked<redex::DexAssert>(handler);
         DexType* dt = idx->get_nullable_typeidx(tidx);
-        dextry->m_catches.push_back(std::make_pair(dt, hoff));
+        dextry->m_catches.emplace_back(dt, hoff);
       }
       if (has_catchall) {
         auto hoff = read_uleb128_checked<redex::DexAssert>(handler);
-        dextry->m_catches.push_back(std::make_pair(nullptr, hoff));
+        dextry->m_catches.emplace_back(nullptr, hoff);
       }
       dc->m_tries.emplace_back(dextry);
     }
@@ -793,13 +801,15 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   code->tries_size = 0;
   /* Debug info is added later */
   code->debug_info_off = 0;
-  uint16_t* insns = (uint16_t*)(code + 1);
+  uint16_t* insns = reinterpret_cast<uint16_t*>(code + 1);
   for (auto const& opc : get_instructions()) {
     opc->encode(dodx, insns);
   }
-  code->insns_size = (uint32_t)(insns - ((uint16_t*)(code + 1)));
+  code->insns_size =
+      static_cast<uint32_t>(insns - reinterpret_cast<uint16_t*>(code + 1));
   if (m_tries.empty()) {
-    return ((code->insns_size * sizeof(uint16_t)) + sizeof(dex_code_item));
+    return static_cast<int>((code->insns_size * sizeof(uint16_t)) +
+                            sizeof(dex_code_item));
   }
   /*
    * Now the tries..., obscenely messy encoding :(
@@ -808,15 +818,15 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   if ((code->insns_size & 1) != 0u) {
     insns++;
   }
-  int tries = code->tries_size = m_tries.size();
-  dex_tries_item* dti = (dex_tries_item*)insns;
-  uint8_t* handler_base = (uint8_t*)(dti + tries);
+  int tries = code->tries_size = static_cast<int>(m_tries.size());
+  dex_tries_item* dti = reinterpret_cast<dex_tries_item*>(insns);
+  uint8_t* handler_base = reinterpret_cast<uint8_t*>(dti + tries);
   uint8_t* hemit = handler_base;
   std::unordered_set<DexCatches, boost::hash<DexCatches>> catches_set;
   for (auto& dextry : m_tries) {
     catches_set.insert(dextry->m_catches);
   }
-  hemit = write_uleb128(hemit, catches_set.size());
+  hemit = write_uleb128(hemit, static_cast<uint32_t>(catches_set.size()));
   int tryno = 0;
   UnorderedMap<DexCatches, uint32_t, boost::hash<DexCatches>> catches_map;
   for (auto it = m_tries.begin(); it != m_tries.end(); ++it, ++tryno) {
@@ -827,7 +837,8 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
                   code->insns_size);
     dti[tryno].insn_count = dextry->m_insn_count;
     if (catches_map.find(dextry->m_catches) == catches_map.end()) {
-      catches_map[dextry->m_catches] = hemit - handler_base;
+      catches_map[dextry->m_catches] =
+          static_cast<uint32_t>(hemit - handler_base);
       size_t catchcount = dextry->m_catches.size();
       bool has_catchall = dextry->m_catches.back().first == nullptr;
       if (has_catchall) {
@@ -848,7 +859,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     }
     dti[tryno].handler_off = catches_map.at(dextry->m_catches);
   }
-  return (int)(hemit - ((uint8_t*)output));
+  return static_cast<int>(hemit - reinterpret_cast<uint8_t*>(output));
 }
 
 DexMethod::DexMethod(DexType* type, const DexString* name, DexProto* proto)
@@ -911,10 +922,21 @@ DexMethodRef* DexMethod::make_method(const DexMethodSpec& spec) {
   return g_redex->make_method(spec.cls, spec.name, spec.proto);
 }
 
+DexMethod* DexMethod::make_method_downcast(const DexType* type,
+                                           const DexString* name,
+                                           const DexProto* proto) {
+  return dynamic_cast<DexMethod*>(g_redex->make_method(type, name, proto));
+}
+
+DexMethod* DexMethod::make_method_downcast(const DexMethodSpec& spec) {
+  return dynamic_cast<DexMethod*>(
+      g_redex->make_method(spec.cls, spec.name, spec.proto));
+}
+
 DexMethod* DexMethod::make_method_from(DexMethod* that,
                                        DexType* target_cls,
                                        const DexString* name) {
-  auto* m = static_cast<DexMethod*>(
+  auto* m = dynamic_cast<DexMethod*>(
       DexMethod::make_method(target_cls, name, that->get_proto()));
   redex_assert(m != that);
   if (that->m_anno) {
@@ -1177,7 +1199,7 @@ void DexMethod::become_virtual() {
 DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
                                        std::unique_ptr<DexCode> dc,
                                        bool is_virtual) {
-  auto* that = static_cast<DexMethod*>(this);
+  auto* that = dynamic_cast<DexMethod*>(this);
   that->m_access = access;
   that->m_dex_code = std::move(dc);
   that->m_concrete = true;
@@ -1188,7 +1210,7 @@ DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
 DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
                                        std::unique_ptr<IRCode> dc,
                                        bool is_virtual) {
-  auto* that = static_cast<DexMethod*>(this);
+  auto* that = dynamic_cast<DexMethod*>(this);
   that->m_access = access;
   that->m_code = std::move(dc);
   that->m_concrete = true;
@@ -1259,13 +1281,13 @@ void DexClass::load_class_data_item(
     return;
   }
   const uint8_t* encd = idx->get_uleb_data(cdi_off);
-  always_assert(encd < idx->end());
+  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t sfield_count = read_uleb128(&encd);
-  always_assert(encd < idx->end());
+  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t ifield_count = read_uleb128(&encd);
-  always_assert(encd < idx->end());
+  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t dmethod_count = read_uleb128(&encd);
-  always_assert(encd < idx->end());
+  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t vmethod_count = read_uleb128(&encd);
   uint32_t ndex = 0;
 
@@ -1284,7 +1306,7 @@ void DexClass::load_class_data_item(
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     always_assert_type_log(is_static(access_flags), INVALID_DEX,
                            "Static field not marked static");
-    DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
+    DexField* df = dynamic_cast<DexField*>(idx->get_fieldidx(ndex));
     always_assert_type_log(df->get_class() == get_type(), INVALID_DEX,
                            "Referenced field does not belong to class");
     std::unique_ptr<DexEncodedValue> ev = nullptr;
@@ -1305,7 +1327,7 @@ void DexClass::load_class_data_item(
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     always_assert_type_log(!is_static(access_flags), INVALID_DEX,
                            "Non-Static field marked static");
-    DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
+    DexField* df = dynamic_cast<DexField*>(idx->get_fieldidx(ndex));
     always_assert_type_log(df->get_class() == get_type(), INVALID_DEX,
                            "Referenced field does not belong to class");
     df->make_concrete(access_flags);
@@ -1324,7 +1346,7 @@ void DexClass::load_class_data_item(
     always_assert(encd < idx->end());
     uint32_t code_off = read_uleb128(&encd);
     // Find method in method index, returns same pointer for same method.
-    DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
+    DexMethod* dm = dynamic_cast<DexMethod*>(idx->get_methodidx(ndex));
     always_assert_type_log(dm->get_class() == get_type(), INVALID_DEX,
                            "Referenced method does not belong to class");
     std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
@@ -1538,53 +1560,64 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   m_anno =
       DexAnnotationSet::get_annotation_set(idx, annodir->class_annotations_off);
   const uint32_t* annodata = (uint32_t*)(annodir + 1);
-  always_assert_type_log(annodata <= annodata + annodir->fields_size * 2,
-                         INVALID_DEX, "Dex overflow");
-  always_assert_type_log((uint8_t*)(annodata + annodir->fields_size * 2) <=
-                             idx->end(),
-                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      annodata <= annodata + static_cast<size_t>(annodir->fields_size) * 2,
+      INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      reinterpret_cast<const uint8_t*>(
+          annodata + static_cast<size_t>(annodir->methods_size) * 2) <=
+          idx->end(),
+      INVALID_DEX, "Dex overflow");
   for (uint32_t i = 0; i < annodir->fields_size; i++) {
     uint32_t fidx = *annodata++;
     uint32_t off = *annodata++;
-    DexField* field = static_cast<DexField*>(idx->get_fieldidx(fidx));
+    DexField* field = dynamic_cast<DexField*>(idx->get_fieldidx(fidx));
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
     auto res = field->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach annotation set");
   }
-  always_assert_type_log(annodata <= annodata + annodir->methods_size * 2,
-                         INVALID_DEX, "Dex overflow");
-  always_assert_type_log((uint8_t*)(annodata + annodir->methods_size * 2) <=
-                             idx->end(),
-                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      annodata <= annodata + static_cast<size_t>(annodir->methods_size) * 2,
+      INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      reinterpret_cast<const uint8_t*>(
+          annodata + static_cast<size_t>(annodir->methods_size) * 2) <=
+          idx->end(),
+      INVALID_DEX, "Dex overflow");
   for (uint32_t i = 0; i < annodir->methods_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t off = *annodata++;
-    DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
+    DexMethod* method = dynamic_cast<DexMethod*>(idx->get_methodidx(midx));
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
     auto res = method->attach_annotation_set(std::move(aset));
     always_assert_type_log(res, INVALID_DEX, "Failed to attach method set");
   }
-  always_assert_type_log(annodata <= annodata + annodir->parameters_size * 2,
-                         INVALID_DEX, "Dex overflow");
-  always_assert_type_log((uint8_t*)(annodata + annodir->parameters_size * 2) <=
-                             idx->end(),
-                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      annodata <= annodata + static_cast<size_t>(annodir->parameters_size) * 2,
+      INVALID_DEX, "Dex overflow");
+  always_assert_type_log(
+      reinterpret_cast<const uint8_t*>(
+          annodata + static_cast<size_t>(annodir->parameters_size) * 2) <=
+          idx->end(),
+      INVALID_DEX, "Dex overflow");
   for (uint32_t i = 0; i < annodir->parameters_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t xrefoff = *annodata++;
     if (xrefoff != 0) {
-      DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
+      DexMethod* method = dynamic_cast<DexMethod*>(idx->get_methodidx(midx));
       const uint32_t* annoxref = idx->get_uint_data(xrefoff);
       uint32_t count = *annoxref++;
       always_assert_type_log(annoxref <= annoxref + count, INVALID_DEX,
                              "Dex overflow");
-      always_assert_type_log((uint8_t*)(annoxref + count) <= idx->end(),
-                             INVALID_DEX, "Dex overflow");
+      always_assert_type_log(
+          reinterpret_cast<const uint8_t*>(annoxref + count) <= idx->end(),
+          INVALID_DEX, "Dex overflow");
       for (uint32_t j = 0; j < count; j++) {
         uint32_t off = annoxref[j];
         auto aset = DexAnnotationSet::get_annotation_set(idx, off);
         if (aset != nullptr) {
-          method->attach_param_annotation_set(j, std::move(aset));
+          method->attach_param_annotation_set(static_cast<int>(j),
+                                              std::move(aset));
           redex_assert(CONSTP(method)->get_param_anno());
         }
       }
@@ -1705,7 +1738,7 @@ DexClass* DexClass::create(DexIdx* idx,
                            const dex_class_def* cdef,
                            const DexLocation* location) {
   auto cls = [&]() {
-    auto check_type = [](DexType* type) {
+    auto check_type = [](const DexType* type) {
       always_assert_type_log(type != nullptr, INVALID_DEX, "no type");
       always_assert_type_log(type::is_object(type), INVALID_DEX,
                              "Not a reference type: %s", SHOW(type));
@@ -1726,7 +1759,7 @@ DexClass* DexClass::create(DexIdx* idx,
 
     auto* interfaces = idx->get_type_list(cdef->interfaces_off);
     if (interfaces != nullptr) {
-      for (auto* intf : *interfaces) {
+      for (const auto* intf : *interfaces) {
         check_type(intf);
       }
     }
@@ -1793,14 +1826,14 @@ template <typename C>
 void DexTypeList::gather_types(C& ltype) const {
   c_append_all(ltype, m_list.begin(), m_list.end());
 }
-INSTANTIATE(DexTypeList::gather_types, DexType*)
+INSTANTIATE1(DexTypeList::gather_types, const DexType*)
 
 static const DexString* make_shorty(const DexType* rtype,
                                     const DexTypeList* args) {
   std::string s;
   s.push_back(type::type_shorty(rtype));
   if (args != nullptr) {
-    for (auto* arg : *args) {
+    for (const auto* arg : *args) {
       s.push_back(type::type_shorty(arg));
     }
   }
@@ -1833,7 +1866,7 @@ void DexProto::gather_types(C& ltype) const {
     c_append(ltype, m_rtype);
   }
 }
-INSTANTIATE(DexProto::gather_types, DexType*)
+INSTANTIATE1(DexProto::gather_types, const DexType*)
 
 void DexProto::gather_strings(std::vector<const DexString*>& lstring) const {
   if (m_shorty != nullptr) {
@@ -1851,7 +1884,7 @@ namespace {
 template <typename C>
 void maybe_sort_unique(C&) {}
 template <>
-void maybe_sort_unique(std::vector<DexType*>& vec) {
+void maybe_sort_unique(std::vector<const DexType*>& vec) {
   sort_unique(vec);
 }
 
@@ -1878,7 +1911,7 @@ void DexClass::gather_types(C& ltype) const {
     m_interfaces->gather_types(ltype);
   }
   if (m_anno) {
-    std::vector<DexType*> type_vec;
+    std::vector<const DexType*> type_vec;
     m_anno->gather_types(type_vec);
     c_append_all(ltype, type_vec.begin(), type_vec.end());
   }
@@ -1899,9 +1932,9 @@ void DexClass::gather_types(C& ltype) const {
   // Remove duplicates.
   maybe_sort_unique(ltype);
 }
-INSTANTIATE(DexClass::gather_types, DexType*)
+INSTANTIATE1(DexClass::gather_types, const DexType*)
 
-void DexClass::gather_load_types(UnorderedSet<DexType*>& ltype) const {
+void DexClass::gather_load_types(UnorderedSet<const DexType*>& ltype) const {
   if (is_external()) {
     return;
   }
@@ -1916,7 +1949,7 @@ void DexClass::gather_load_types(UnorderedSet<DexType*>& ltype) const {
     }
   }
   if (m_interfaces != nullptr) {
-    for (auto* itype : *m_interfaces) {
+    for (const auto* itype : *m_interfaces) {
       auto* iclass = type_class_internal(itype);
       if (iclass != nullptr) {
         iclass->gather_load_types(ltype);
@@ -1925,7 +1958,7 @@ void DexClass::gather_load_types(UnorderedSet<DexType*>& ltype) const {
   }
 }
 
-void DexClass::gather_init_classes(std::vector<DexType*>& ltype) const {
+void DexClass::gather_init_classes(std::vector<const DexType*>& ltype) const {
   for (auto const& m : m_dmethods) {
     m->gather_init_classes(ltype);
   }
@@ -2016,7 +2049,7 @@ INSTANTIATE(DexClass::gather_methods, DexMethodRef*)
 
 const DexField* DexFieldRef::as_def() const {
   if (is_def()) {
-    return static_cast<const DexField*>(this);
+    return dynamic_cast<const DexField*>(this);
   } else {
     return nullptr;
   }
@@ -2024,7 +2057,7 @@ const DexField* DexFieldRef::as_def() const {
 
 DexField* DexFieldRef::as_def() {
   if (is_def()) {
-    return static_cast<DexField*>(this);
+    return dynamic_cast<DexField*>(this);
   } else {
     return nullptr;
   }
@@ -2088,7 +2121,7 @@ void DexFieldRef::gather_types_shallow(C& ltype) const {
   ltype.insert(ltype.end(), m_spec.cls);
   ltype.insert(ltype.end(), m_spec.type);
 }
-INSTANTIATE(DexFieldRef::gather_types_shallow, DexType*)
+INSTANTIATE1(DexFieldRef::gather_types_shallow, const DexType*)
 
 void DexFieldRef::gather_strings_shallow(
     std::vector<const DexString*>& lstring) const {
@@ -2101,7 +2134,7 @@ void DexFieldRef::gather_strings_shallow(
 
 template <typename C>
 void DexField::gather_types(C& ltype) const {
-  std::vector<DexType*> type_vec;
+  std::vector<const DexType*> type_vec;
   if (m_value) {
     m_value->gather_types(type_vec);
   }
@@ -2110,7 +2143,7 @@ void DexField::gather_types(C& ltype) const {
   }
   c_append_all(ltype, type_vec.begin(), type_vec.end());
 }
-INSTANTIATE(DexField::gather_types, DexType*)
+INSTANTIATE1(DexField::gather_types, const DexType*)
 
 template <typename C>
 void DexField::gather_strings_internal(C& lstring) const {
@@ -2170,7 +2203,7 @@ void DexMethod::set_external() {
 template <typename C>
 void DexMethod::gather_types(C& ltype) const {
   gather_types_shallow(ltype); // Handle DexMethodRef parts.
-  std::vector<DexType*> type_vec; // Simplify refactor.
+  std::vector<const DexType*> type_vec; // Simplify refactor.
   if (m_code) {
     m_code->gather_types(type_vec);
   }
@@ -2186,9 +2219,9 @@ void DexMethod::gather_types(C& ltype) const {
   }
   c_append_all(ltype, type_vec.begin(), type_vec.end());
 }
-INSTANTIATE(DexMethod::gather_types, DexType*)
+INSTANTIATE1(DexMethod::gather_types, const DexType*)
 
-void DexMethod::gather_init_classes(std::vector<DexType*>& ltype) const {
+void DexMethod::gather_init_classes(std::vector<const DexType*>& ltype) const {
   if (m_code) {
     m_code->gather_init_classes(ltype);
   }
@@ -2293,7 +2326,7 @@ INSTANTIATE(DexMethod::gather_methods_from_annos, DexMethodRef*)
 
 const DexMethod* DexMethodRef::as_def() const {
   if (is_def()) {
-    return static_cast<const DexMethod*>(this);
+    return dynamic_cast<const DexMethod*>(this);
   } else {
     return nullptr;
   }
@@ -2301,7 +2334,7 @@ const DexMethod* DexMethodRef::as_def() const {
 
 DexMethod* DexMethodRef::as_def() {
   if (is_def()) {
-    return static_cast<DexMethod*>(this);
+    return dynamic_cast<DexMethod*>(this);
   } else {
     return nullptr;
   }
@@ -2312,7 +2345,7 @@ void DexMethodRef::gather_types_shallow(C& ltype) const {
   ltype.insert(ltype.end(), m_spec.cls);
   m_spec.proto->gather_types(ltype);
 }
-INSTANTIATE(DexMethodRef::gather_types_shallow, DexType*)
+INSTANTIATE1(DexMethodRef::gather_types_shallow, const DexType*)
 
 void DexMethodRef::gather_strings_shallow(
     std::vector<const DexString*>& lstring) const {
@@ -2356,7 +2389,7 @@ DexProto* DexType::get_non_overlapping_proto(const DexString* method_name,
   }
   DexTypeList::ContainerType new_arg_list;
   auto* rtype = orig_proto->get_rtype();
-  for (auto* t : *orig_proto->get_args()) {
+  for (const auto* t : *orig_proto->get_args()) {
     new_arg_list.push_back(t);
   }
   new_arg_list.push_back(type::_int());
@@ -2400,7 +2433,7 @@ void DexMethod::add_load_params(size_t num_add_loads) {
 }
 
 void gather_components(std::vector<const DexString*>& lstring,
-                       std::vector<DexType*>& ltype,
+                       std::vector<const DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,
                        std::vector<DexCallSite*>& lcallsite,
@@ -2409,7 +2442,7 @@ void gather_components(std::vector<const DexString*>& lstring,
                        bool exclude_loads) {
   // Gather references reachable from each class.
   UnorderedSet<const DexString*> strings;
-  UnorderedSet<DexType*> types;
+  UnorderedSet<const DexType*> types;
   UnorderedSet<DexFieldRef*> fields;
   UnorderedSet<DexMethodRef*> methods;
   UnorderedSet<DexCallSite*> callsites;
@@ -2438,7 +2471,7 @@ void gather_components(std::vector<const DexString*>& lstring,
     }
 
     // Gather strings needed for each type.
-    for (auto* type : UnorderedIterable(types)) {
+    for (const auto* type : UnorderedIterable(types)) {
       if (type != nullptr) {
         strings.insert(type->get_name());
       }
@@ -2523,7 +2556,7 @@ void DexMethodRef::erase_method(DexMethodRef* mref) {
 
 void DexMethodRef::delete_method_DO_NOT_USE(DexMethodRef* method) {
   erase_method(method);
-  delete static_cast<DexMethod*>(method);
+  delete dynamic_cast<DexMethod*>(method);
 }
 
 dex_member_refs::MethodDescriptorTokens DexMethodRef::get_descriptor_tokens()
@@ -2531,7 +2564,7 @@ dex_member_refs::MethodDescriptorTokens DexMethodRef::get_descriptor_tokens()
   dex_member_refs::MethodDescriptorTokens res;
   res.cls = get_class()->str();
   res.name = get_name()->str();
-  for (auto* t : *get_proto()->get_args()) {
+  for (const auto* t : *get_proto()->get_args()) {
     res.args.push_back(t->str());
   }
   res.rtype = get_proto()->get_rtype()->str();
@@ -2539,3 +2572,21 @@ dex_member_refs::MethodDescriptorTokens DexMethodRef::get_descriptor_tokens()
 }
 
 DexClass* type_class(const DexType* t) { return g_redex->type_class(t); }
+
+bool DexMethodRef::is_valid_name(std::string_view name) {
+  if (name.empty()) {
+    return false;
+  }
+  if (name[0] == '<') {
+    return name == "<init>" || name == "<clinit>";
+  }
+  if (!is_valid_identifier(name)) {
+    return false;
+  }
+  for (auto c : name) {
+    if (c == '<' || c == '>') {
+      return false;
+    }
+  }
+  return true;
+}

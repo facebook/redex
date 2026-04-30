@@ -58,7 +58,7 @@ class Analyzer {
  public:
   Analyzer(bool is_static, DexTypeList* args, cfg::ControlFlowGraph& cfg)
       : m_is_static(is_static), m_args(args), m_cfg(cfg) {}
-  AnalysisResult analyze(DexType* type) {
+  AnalysisResult analyze(const DexType* type) {
     if (type::is_boolean(type)) {
       return AnalysisResult::Boolean;
     } else if (type::is_object(type)) {
@@ -156,11 +156,10 @@ class Analyzer {
       it = m_cfg.find_insn(xor_1_insn, it.block());
       (*negations)++;
     }
-    if (analyze(it.block(), it->insn, it->insn->src(0)) !=
-        AnalysisResult::Boolean) {
-      return InstructionIterable(m_cfg).end();
-    }
-    return it;
+    return analyze(it.block(), it->insn, it->insn->src(0)) ==
+                   AnalysisResult::Boolean
+               ? it
+               : InstructionIterable(m_cfg).end();
   }
 
  private:

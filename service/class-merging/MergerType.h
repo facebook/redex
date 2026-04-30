@@ -9,8 +9,9 @@
 
 #include <boost/functional/hash.hpp>
 
+#include "ClassHierarchy.h"
 #include "DexClass.h"
-#include "TypeSystem.h"
+#include "TypeUtil.h"
 
 namespace class_merging {
 

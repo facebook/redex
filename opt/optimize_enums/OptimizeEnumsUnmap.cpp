@@ -291,20 +291,20 @@ class OptimizeEnumsUnmapCfg {
     m_mutation.insert_after(ordi_move_result_it, {move_ordinal_result});
   }
 
-  boost::optional<size_t> get_ordinal_for_case(
+  std::optional<size_t> get_ordinal_for_case(
       const GeneratedSwitchCasetoField& case_to_enum, int64_t case_value) {
     // Turn the case value back into the enum ordinal.
     const auto case_enum_it = case_to_enum.find(case_value);
     if (case_enum_it == case_to_enum.end()) {
       // We don't actually have a full inverse mapping.
-      return boost::none;
+      return std::nullopt;
     }
     auto* const case_enum = case_enum_it->second;
 
     const auto enum_ordinal_it = m_enum_field_to_ordinal.find(case_enum);
     if (enum_ordinal_it == m_enum_field_to_ordinal.end()) {
       // We don't actually have a full ordinal mapping.
-      return boost::none;
+      return std::nullopt;
     }
     const auto enum_ordinal = enum_ordinal_it->second;
 
@@ -367,7 +367,7 @@ class OptimizeEnumsUnmapCfg {
       }
 
       const size_t enum_ordinal = *enum_ordinal_maybe;
-      succ->set_case_key(enum_ordinal);
+      succ->set_case_key(static_cast<int>(enum_ordinal));
     }
 
     if (obsolete_zero_edge != nullptr) {
@@ -422,7 +422,7 @@ class OptimizeEnumsUnmapCfg {
           return;
         }
 
-        enum_ordinal = *enum_ordinal_maybe;
+        enum_ordinal = static_cast<int32_t>(*enum_ordinal_maybe);
       }
 
       auto kase_it = m_cfg.find_insn(insn_kase);
@@ -454,9 +454,9 @@ OptimizeEnumsUnmapMatchFlow::OptimizeEnumsUnmapMatchFlow(
     const GeneratedSwitchCases& generated_switch_cases) {
   // The flow is: an ordinal into any switchmap lookup that we have
   // the mapping for, which then goes to a comparison with a constant.
-  DexMethod* java_enum_ordinal =
-      resolve_method(DexMethod::get_method("Ljava/lang/Enum;.ordinal:()I"),
-                     MethodSearch::Virtual);
+  DexMethod* java_enum_ordinal = resolve_method_deprecated(
+      DexMethod::get_method("Ljava/lang/Enum;.ordinal:()I"),
+      MethodSearch::Virtual);
   always_assert(java_enum_ordinal);
 
   auto m_invoke_ordinal = m::invoke_virtual_(m::has_method(

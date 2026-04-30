@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <array>
 #include <vector>
 
 #include "UnknownVirtuals.h"
@@ -13,7 +14,7 @@ namespace {
 
 // add any type on which an access is allowed and safe without accessibility
 // issues
-const char* safe_types_on_refs[] = {
+constexpr std::array<const char*, 10> safe_types_on_refs{
     "Ljava/lang/Object;",        "Ljava/lang/String;",  "Ljava/lang/Enum;",
     "Ljava/lang/StringBuilder;", "Ljava/lang/Boolean;", "Ljava/lang/Class;",
     "Ljava/lang/Long;",          "Ljava/lang/Integer;", "Landroid/os/Bundle;",
@@ -24,7 +25,7 @@ const char* safe_types_on_refs[] = {
  * all caches are filled and usable.
  */
 struct DexTypeCache {
-  std::vector<DexType*> cache;
+  std::vector<const DexType*> cache;
 
   DexTypeCache() {
     for (const auto* const safe_type : safe_types_on_refs) {
@@ -35,8 +36,8 @@ struct DexTypeCache {
     }
   }
 
-  bool has_type(DexType* type) {
-    for (auto* cached_type : cache) {
+  bool has_type(const DexType* type) {
+    for (const auto* cached_type : cache) {
       if (cached_type == type) {
         return true;
       }
@@ -53,7 +54,7 @@ struct DexTypeCache {
  * protected. When public the optimization holds otherwise it's not always
  * possible to optimize and we conservatively give up.
  */
-bool static type_ok(DexType* type) {
+bool static type_ok(const DexType* type) {
   static DexTypeCache* cache = new DexTypeCache();
   return cache->has_type(type);
 }
@@ -64,7 +65,8 @@ bool static type_ok(DexType* type) {
  * Following is a short list of safe methods that are called with frequency
  * and are optimizable.
  */
-bool is_method_known_to_be_public_helper(DexType* type, DexMethodRef* meth) {
+bool is_method_known_to_be_public_helper(const DexType* type,
+                                         DexMethodRef* meth) {
   const auto* meth_name = meth->get_name()->c_str();
   static auto* view = DexType::get_type("Landroid/view/View;");
   if (view == type) {
@@ -125,7 +127,7 @@ bool is_method_known_to_be_public(DexMethodRef* method) {
   if (is_method_known_to_be_public_helper(method->get_class(), method)) {
     return true;
   }
-  auto* type = method->get_class();
+  const auto* type = method->get_class();
   if (type_ok(type)) {
     return true;
   }

@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "BranchPrefixHoisting.h"
-#include "BranchPrefixHoistingPass.h"
 #include "ControlFlow.h"
 #include "IRAssembler.h"
 #include "IRCode.h"

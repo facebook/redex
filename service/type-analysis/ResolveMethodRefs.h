@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "DexClass.h"
-#include "DexUtil.h"
+#include "DexStore.h"
 #include "GlobalTypeAnalyzer.h"
 #include "IRInstruction.h"
 #include "PassManager.h"

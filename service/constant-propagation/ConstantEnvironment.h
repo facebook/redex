@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <limits>
 #include <utility>
 
 #include <sparta/ConstantAbstractDomain.h>
@@ -19,8 +18,8 @@
 #include <sparta/ReducedProductAbstractDomain.h>
 
 #include "ConstantArrayDomain.h"
-#include "ControlFlow.h"
 #include "DisjointUnionWithSignedConstantDomain.h"
+#include "IRInstruction.h"
 #include "NewObjectDomain.h"
 #include "ObjectDomain.h"
 #include "ObjectWithImmutAttr.h"
@@ -43,6 +42,19 @@ using IntegerSetDomain = sparta::HashedSetAbstractDomain<int64_t>;
 using StringSetDomain = sparta::PatriciaTreeSetAbstractDomain<const DexString*>;
 
 using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
+
+struct ResourceId {
+  uint32_t id;
+  bool operator==(const ResourceId& other) const { return id == other.id; }
+  friend std::ostream& operator<<(std::ostream& out, const ResourceId& x) {
+    std::ostringstream oss;
+    oss << "R" << std::hex << std::showbase << x.id;
+    out << std::move(oss).str();
+    return out;
+  }
+};
+
+using ConstantResourceIdDomain = sparta::ConstantAbstractDomain<ResourceId>;
 
 using ConstantClassObjectDomain =
     sparta::ConstantAbstractDomain<const DexType*>;
@@ -88,6 +100,7 @@ using ConstantValue =
                                           StringDomain,
                                           ConstantClassObjectDomain,
                                           ConstantInjectionIdDomain,
+                                          ConstantResourceIdDomain,
                                           ObjectWithImmutAttrDomain,
                                           NewObjectDomain,
                                           AbstractHeapPointer>;
@@ -150,9 +163,10 @@ class ConstantEnvironment final
                             FieldEnvironment(),
                             ConstantHeap())) {}
 
-  static void reduce_product(std::tuple<ConstantRegisterEnvironment,
-                                        FieldEnvironment,
-                                        ConstantHeap>&) {}
+  static void reduce_product(
+      [[maybe_unused]] std::
+          tuple<ConstantRegisterEnvironment, FieldEnvironment, ConstantHeap>&) {
+  }
   /*
    * Getters and setters
    */

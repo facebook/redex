@@ -8,7 +8,8 @@
 #include <fstream>
 #include <iostream>
 
-#include "DexOutput.h"
+#include "DexUtil.h"
+#include "ProguardMap.h"
 #include "Show.h"
 #include "Tool.h"
 #include "Walkers.h"
@@ -28,7 +29,7 @@ void dump_sizes(std::ostream& ofs, DexStoresVector& stores) {
         << (method->get_dex_code() != nullptr ? method->get_dex_code()->size()
                                               : -1)
         << ", " << method->is_virtual() << ", " << method->is_external() << ", "
-        << method->is_concrete() << std::endl;
+        << method->is_concrete() << '\n';
   };
   walk::classes(build_class_scope(stores), [&](DexClass* cls) {
     for (auto* dmethod : cls->get_dmethods()) {

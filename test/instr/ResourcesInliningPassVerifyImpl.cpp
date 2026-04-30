@@ -8,7 +8,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "ApkResources.h"
 #include "RedexResources.h"
 #include "ResourcesInliningPass.h"
 #include "verify/VerifyUtil.h"

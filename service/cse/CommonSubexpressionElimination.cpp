@@ -65,11 +65,11 @@
 #include "FieldOpTracker.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeInference.h"
-#include "Walkers.h"
 
 using namespace sparta;
 using namespace cse_impl;
@@ -154,12 +154,6 @@ class CondEnvironment final
           CondEnvironment> {
  public:
   using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
-
-  // Some older compilers complain that the class is not default constructible.
-  // We intended to use the default constructors of the base class (via using
-  // AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor), but some
-  // compilers fail to catch this. So we insert a redundant '= default'.
-  CondEnvironment() = default;
 };
 
 class CseEnvironment final
@@ -190,18 +184,21 @@ class CseEnvironment final
     return ReducedProductAbstractDomain::get<2>();
   }
 
-  CseEnvironment& mutate_def_env(std::function<void(DefEnvironment*)> f) {
-    apply<0>(std::move(f));
+  CseEnvironment& mutate_def_env(
+      const std::function<void(DefEnvironment*)>& f) {
+    apply<0>(f);
     return *this;
   }
 
-  CseEnvironment& mutate_ref_env(std::function<void(RefEnvironment*)> f) {
-    apply<1>(std::move(f));
+  CseEnvironment& mutate_ref_env(
+      const std::function<void(RefEnvironment*)>& f) {
+    apply<1>(f);
     return *this;
   }
 
-  CseEnvironment& mutate_cond_env(std::function<void(CondEnvironment*)> f) {
-    apply<2>(std::move(f));
+  CseEnvironment& mutate_cond_env(
+      const std::function<void(CondEnvironment*)>& f) {
+    apply<2>(f);
     return *this;
   }
 
@@ -228,7 +225,8 @@ static Barrier make_barrier(const IRInstruction* insn) {
                                              ? FieldSearch::Static
                                              : FieldSearch::Instance);
   } else if (insn->has_method()) {
-    b.method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    b.method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   }
   return b;
 }
@@ -645,7 +643,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
 
   CseUnorderedLocationSet get_clobbered_locations(
       const IRInstruction* insn, const CseEnvironment* current_state) const {
-    DexType* exact_virtual_scope = nullptr;
+    const DexType* exact_virtual_scope = nullptr;
     if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
       auto src0 = current_state->get_ref_env().get(insn->src(0)).get_constant();
       if (src0) {
@@ -1001,7 +999,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     return mask;
   }
 
-  DexType* get_exact_type(value_id_t value_id) const {
+  const DexType* get_exact_type(value_id_t value_id) const {
     auto it = m_positional_insns.find(value_id);
     if (it == m_positional_insns.end()) {
       return nullptr;
@@ -1052,7 +1050,7 @@ SharedState::SharedState(
   // The list of methods is not exhaustive; it was derived by observing the most
   // common barriers encountered in real-life code, and then studying their spec
   // to check whether they are "safe" in the context of CSE barriers.
-  static const std::string_view safe_method_names[] = {
+  static constexpr auto safe_method_names = std::to_array<std::string_view>({
       "Landroid/os/SystemClock;.elapsedRealtime:()J",
       "Landroid/os/SystemClock;.uptimeMillis:()J",
       "Landroid/util/SparseArray;.append:(ILjava/lang/Object;)V",
@@ -1150,7 +1148,7 @@ SharedState::SharedState(
       "Ljava/util/LinkedHashMap;.<init>:()V",
       "Ljava/util/LinkedList;.<init>:()V",
       "Ljava/util/Random;.<init>:()V",
-  };
+  });
 
   for (auto const safe_method_name : safe_method_names) {
     auto* method_ref = DexMethod::get_method(safe_method_name);
@@ -1297,7 +1295,7 @@ void SharedState::init_scope(
 
 CseUnorderedLocationSet SharedState::get_relevant_written_locations(
     const IRInstruction* insn,
-    DexType* exact_virtual_scope,
+    const DexType* exact_virtual_scope,
     const CseUnorderedLocationSet& read_locations) {
   if (may_be_barrier(insn, exact_virtual_scope)) {
     if (opcode::is_an_invoke(insn->opcode())) {
@@ -1313,7 +1311,7 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
 }
 
 bool SharedState::may_be_barrier(const IRInstruction* insn,
-                                 DexType* exact_virtual_scope) {
+                                 const DexType* exact_virtual_scope) {
   auto opcode = insn->opcode();
   switch (opcode) {
   case OPCODE_MONITOR_ENTER:
@@ -1340,7 +1338,7 @@ bool SharedState::may_be_barrier(const IRInstruction* insn,
 }
 
 bool SharedState::is_invoke_safe(const IRInstruction* insn,
-                                 DexType* exact_virtual_scope) {
+                                 const DexType* exact_virtual_scope) {
   always_assert(opcode::is_an_invoke(insn->opcode()));
   auto* method_ref = insn->get_method();
   auto opcode = insn->opcode();
@@ -1350,7 +1348,7 @@ bool SharedState::is_invoke_safe(const IRInstruction* insn,
     return true;
   }
 
-  auto* method = resolve_method(method_ref, opcode_to_search(insn));
+  auto* method = resolve_method_deprecated(method_ref, opcode_to_search(insn));
   if (method == nullptr) {
     return false;
   }
@@ -1391,7 +1389,8 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
   }
 
   auto* method_ref = insn->get_method();
-  DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
+  DexMethod* method =
+      resolve_method_deprecated(method_ref, opcode_to_search(insn));
   CseUnorderedLocationSet written_locations;
   if (!process_base_and_overriding_methods(
           m_method_override_graph.get(), method, &m_safe_method_defs,
@@ -1424,8 +1423,8 @@ void SharedState::log_barrier(const Barrier& barrier) {
 const CseUnorderedLocationSet&
 SharedState::get_read_locations_of_conditionally_pure_method(
     const DexMethodRef* method_ref, IROpcode opcode) const {
-  auto* method = resolve_method(const_cast<DexMethodRef*>(method_ref),
-                                opcode_to_search(opcode));
+  auto* method = resolve_method_deprecated(
+      const_cast<DexMethodRef*>(method_ref), opcode_to_search(opcode));
   if (method == nullptr) {
     return no_locations;
   }
@@ -1461,7 +1460,8 @@ bool SharedState::has_pure_method(const IRInstruction* insn) const {
     return true;
   }
 
-  auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* method =
+      resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   if (method != nullptr &&
       m_pure_methods.find(method) != m_pure_methods.end()) {
     TRACE(CSE, 4, "[CSE] resolved %spure for %s",

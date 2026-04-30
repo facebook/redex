@@ -137,18 +137,18 @@ void RealPositionMapper::register_position(DexPosition* pos) {
 int64_t RealPositionMapper::add_position(DexPosition* pos) {
   auto [it, _] = m_pos_line_map.emplace(pos, -1);
   if (it->second == -1) {
-    it->second = m_positions.size();
+    it->second = static_cast<int64_t>(m_positions.size());
     m_positions.push_back(pos);
   }
   return it->second;
 }
 
 uint32_t RealPositionMapper::get_line(DexPosition* pos) {
-  return m_pos_line_map.at(pos) + 1;
+  return static_cast<uint32_t>(m_pos_line_map.at(pos) + 1);
 }
 
 uint32_t RealPositionMapper::position_to_line(DexPosition* pos) {
-  return add_position(pos) + 1;
+  return static_cast<uint32_t>(add_position(pos) + 1);
 }
 
 void RealPositionMapper::write_map() {
@@ -305,7 +305,7 @@ void RealPositionMapper::write_map_v2() {
     if (line == -1) {
       auto idx = m_positions.size();
       m_positions.emplace_back(pos);
-      line = idx;
+      line = static_cast<int64_t>(idx);
     }
   }
 
@@ -427,11 +427,11 @@ void RealPositionMapper::write_map_v2() {
   std::ofstream ofs(m_filename_v2.c_str(),
                     std::ofstream::out | std::ofstream::trunc);
   uint32_t magic = 0xfaceb000; // serves as endianess check
-  ofs.write((const char*)&magic, sizeof(magic));
+  ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
   uint32_t version = 2;
-  ofs.write((const char*)&version, sizeof(version));
-  uint32_t spool_count = string_pool.size();
-  ofs.write((const char*)&spool_count, sizeof(spool_count));
+  ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));
+  uint32_t spool_count = static_cast<uint32_t>(string_pool.size());
+  ofs.write(reinterpret_cast<const char*>(&spool_count), sizeof(spool_count));
   always_assert(string_pool.size() < std::numeric_limits<uint32_t>::max());
 
   // Finally, rewrite the string-ids following the deterministic ordering of the
@@ -444,9 +444,9 @@ void RealPositionMapper::write_map_v2() {
     auto& mapped = map[string_id];
     if (mapped == unmapped) {
       const auto& s = string_pool.at(string_id);
-      uint32_t ssize = s->size();
-      ofs.write((const char*)&ssize, sizeof(ssize));
-      ofs.write(s->data(), ssize * sizeof(char));
+      uint32_t ssize = static_cast<uint32_t>(s->size());
+      ofs.write(reinterpret_cast<const char*>(&ssize), sizeof(ssize));
+      ofs.write(s->data(), static_cast<std::streamsize>(ssize * sizeof(char)));
       mapped = next_mapped++;
     }
     string_id = mapped - first_mapped;
@@ -457,9 +457,10 @@ void RealPositionMapper::write_map_v2() {
     order(pos_data[5 * idx + 2]); // file_id
   }
   always_assert(next_mapped - first_mapped == string_pool.size());
-  uint32_t pos_count = m_positions.size();
-  ofs.write((const char*)&pos_count, sizeof(pos_count));
-  ofs.write((const char*)pos_data.data(), sizeof(uint32_t) * pos_data.size());
+  uint32_t pos_count = static_cast<uint32_t>(m_positions.size());
+  ofs.write(reinterpret_cast<const char*>(&pos_count), sizeof(pos_count));
+  ofs.write(reinterpret_cast<const char*>(pos_data.data()),
+            static_cast<std::streamsize>(sizeof(uint32_t) * pos_data.size()));
 
   TRACE(OPUT, 2,
         "positions: %zu, string pool size: %zu, semi-dense string ids: %u",

@@ -7,7 +7,6 @@
 
 #include "Debug.h"
 #include "DexInstruction.h"
-#include "SwitchMap.h"
 #include "verify/OptimizeEnumCommon.h"
 #include "verify/VerifyUtil.h"
 

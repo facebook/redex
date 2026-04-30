@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <mutex>
-
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "InitClassesWithSideEffects.h"

@@ -47,14 +47,14 @@ void scope_info(const ClassScopes& class_scopes) {
         }
         // class is internal
         if (!can_rename_scope(scope)) {
-          cant_rename_scopes[scope_meth_count]++;
+          cant_rename_scopes[static_cast<int>(scope_meth_count)]++;
           return;
         }
         if (is_impl_scope(scope)) {
-          impl_scopes[scope_meth_count]++;
+          impl_scopes[static_cast<int>(scope_meth_count)]++;
           return;
         }
-        easy_scopes[scope_meth_count]++;
+        easy_scopes[static_cast<int>(scope_meth_count)]++;
       });
 
   const auto scope_count = [](const std::map<int, int>& map) {
@@ -280,8 +280,7 @@ bool VirtualRenamer::usable_name(const DexString* name,
   auto* const proto = scope->methods[0].first->get_proto();
   bool has_ste = stack_trace_elements != nullptr;
   for (const auto& type : hier) {
-    if (DexMethod::get_method(const_cast<DexType*>(type), name, proto) !=
-        nullptr) {
+    if (DexMethod::get_method(type, name, proto) != nullptr) {
       return false;
     }
     if (has_ste) {
@@ -502,7 +501,7 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
         }
         DexMethod* top = nullptr;
         if (is_interface(cls)) {
-          top = resolve_method(callee, MethodSearch::Interface);
+          top = resolve_method_deprecated(callee, MethodSearch::Interface);
         } else {
           top = find_top_impl(cls, callee->get_name(), callee->get_proto());
           if (top == nullptr) {

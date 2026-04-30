@@ -66,4 +66,11 @@ public class MainActivity extends Activity {
       android.util.Log.w(LOG_TAG, "res_entry_name: " + res_entry_name);
     }
   }
+
+  private void crazy() {
+    System.out.println(R.color.simple + 1);
+    System.out.println((long)R.string.styled_text);
+    Resources resources = getResources();
+    System.out.println(resources.getBoolean(R.bool.should_log));
+  }
 }

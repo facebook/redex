@@ -18,7 +18,7 @@ bool implements(const DexClass* cls, const DexType* intf) {
   if (is_interface(cls)) {
     return false;
   }
-  for (auto* const interface : *cls->get_interfaces()) {
+  for (const auto* const interface : *cls->get_interfaces()) {
     if (interface == intf) {
       return true;
     }
@@ -34,8 +34,8 @@ bool implements(const DexClass* cls, const DexType* intf) {
 
 // Is `left` a subset of `right`
 bool is_subset(DexTypeList* left, DexTypeList* right) {
-  std::unordered_set<DexType*> rset(right->begin(), right->end());
-  for (auto* ltype : *left) {
+  std::unordered_set<const DexType*> rset(right->begin(), right->end());
+  for (const auto* ltype : *left) {
     if (rset.count(ltype) == 0) {
       return false;
     }
@@ -75,8 +75,8 @@ const DexType* find_common_super_class(const DexType* l, const DexType* r) {
 }
 
 const DexType* find_common_type(const DexType* l, const DexType* r) {
-  const DexClass* l_cls = const_cast<const DexClass*>(type_class(l));
-  const DexClass* r_cls = const_cast<const DexClass*>(type_class(r));
+  const DexClass* l_cls = type_class(l);
+  const DexClass* r_cls = type_class(r);
   if ((l_cls == nullptr) || (r_cls == nullptr)) {
     return nullptr;
   }

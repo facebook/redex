@@ -18,7 +18,6 @@
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "TypeUtil.h"
-#include "VirtScopeHelper.h"
 #include "Walkers.h"
 
 namespace rearrange_enum_clinit {

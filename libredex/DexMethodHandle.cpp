@@ -7,7 +7,6 @@
 
 #include "DexMethodHandle.h"
 #include "DexAnnotation.h"
-#include "DexIdx.h"
 
 DexMethodHandle::DexMethodHandle(MethodHandleType type,
                                  DexMethodRef* methodref) {

@@ -13,13 +13,12 @@
 
 #include <array>
 #include <atomic>
+#include <boost/regex.hpp> // NOLINT
 #include <cstring>
 #include <exception>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <memory>
-#include <regex>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -46,14 +45,14 @@
 #include <sys/syscall.h>
 #endif
 
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/exception/all.hpp>
 #ifdef __APPLE__
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
 #endif
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
-#include <boost/stacktrace.hpp>
+#include <boost/stacktrace.hpp> // NOLINT
 #pragma GCC diagnostic pop
 
 // By default, run with slow invariant checks in debug mode.
@@ -177,7 +176,7 @@ void debug_backtrace_handler(int sig) {
 std::string v_format2string(const char* fmt, va_list ap) {
   va_list backup;
   va_copy(backup, ap);
-  size_t size = vsnprintf(NULL, 0, fmt, ap);
+  size_t size = vsnprintf(nullptr, 0, fmt, ap);
   // size is the number of chars would had been written
 
   std::unique_ptr<char[]> buffer = std::make_unique<char[]>(size + 1);
@@ -206,10 +205,13 @@ struct StackTrace {
   std::array<void*, 256> trace;
   size_t len;
 
-  StackTrace() { len = backtrace(trace.data(), trace.size()); }
+  StackTrace() {
+    len = static_cast<size_t>(
+        backtrace(trace.data(), static_cast<int>(trace.size())));
+  }
 
   void print_to_stderr() const {
-    backtrace_symbols_fd(trace.data(), len, STDERR_FILENO);
+    backtrace_symbols_fd(trace.data(), static_cast<int>(len), STDERR_FILENO);
   }
 };
 
@@ -235,7 +237,7 @@ using traced = boost::error_info<struct tag_stacktrace, StType>;
 
 #ifdef __linux__
 std::atomic<pid_t> g_aborting{0};
-pid_t get_tid() { return syscall(SYS_gettid); }
+pid_t get_tid() { return static_cast<pid_t>(syscall(SYS_gettid)); }
 pid_t g_abort_if_not_tid{0};
 #endif
 bool g_block_multi_asserts{false};
@@ -317,8 +319,8 @@ void assert_fail(const char* expr,
 
   if (redex_debug::abort_for_type[type]) {
     // Pretend a termination for `redex.py`.
-    std::cerr << "terminate called after assertion" << std::endl;
-    std::cerr << "  what():  RedexError: " << type << " " << msg << std::endl;
+    std::cerr << "terminate called after assertion" << '\n';
+    std::cerr << "  what():  RedexError: " << type << " " << msg << '\n';
     if (!redex_debug::no_stacktrace_for_type[type]) {
       CRASH_BACKTRACE();
     }
@@ -329,8 +331,8 @@ void assert_fail(const char* expr,
   // Asked to abort if not the set thread. Print message and exit.
   if (g_abort_if_not_tid != 0 && g_abort_if_not_tid != cur) {
     // Pretend a termination for `redex.py`.
-    std::cerr << "terminate called after assertion" << std::endl;
-    std::cerr << "  what():  RedexError: " << type << " " << msg << std::endl;
+    std::cerr << "terminate called after assertion" << '\n';
+    std::cerr << "  what():  RedexError: " << type << " " << msg << '\n';
     // Write the crash backtrace synchronously before abort(). ASan can
     // intercept the resulting SIGABRT and prevent debug_backtrace_handler
     // from running CRASH_BACKTRACE. This is safe (no flag-leak risk) because
@@ -382,7 +384,7 @@ VmStats get_mem_stats() {
   }};
 
   std::string line;
-  std::regex re("[^:]*:\\s*([0-9]*)\\s*(.)B");
+  boost::regex re("[^:]*:\\s*([0-9]*)\\s*(.)B");
   while (std::getline(ifs, line)) {
     const auto* it_relevant_stat = std::find_if(
         relevant_stats.begin(), relevant_stats.end(),
@@ -391,10 +393,10 @@ VmStats get_mem_stats() {
     if (it_relevant_stat != relevant_stats.end()) {
       const auto& [stat_name, stat_field_ptr] = *it_relevant_stat;
 
-      std::smatch match;
-      bool matched = std::regex_match(line, match, re);
+      boost::smatch match;
+      bool matched = boost::regex_match(line, match, re);
       if (!matched) {
-        std::cerr << "Error: could not match " << line << std::endl;
+        std::cerr << "Error: could not match " << line << '\n';
         continue;
       }
       std::string num_str = match.str(1);
@@ -405,7 +407,7 @@ VmStats get_mem_stats() {
         size_t idx;
         val = std::stoull(num_str, &idx);
       } catch (...) {
-        std::cerr << "Failed to parse numeric value in " << line << std::endl;
+        std::cerr << "Failed to parse numeric value in " << line << '\n';
         continue;
       }
 
@@ -416,7 +418,7 @@ VmStats get_mem_stats() {
       } else if (size_prefix_str == "G") {
         val *= static_cast<uint64_t>(1024 * 1024 * 1024);
       } else {
-        std::cerr << "Unknown size modifier in " << line << std::endl;
+        std::cerr << "Unknown size modifier in " << line << '\n';
         continue;
       }
 

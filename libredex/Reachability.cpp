@@ -15,12 +15,12 @@
 #include "CFGMutation.h"
 #include "DexAnnotation.h"
 #include "DexUtil.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "ProguardConfiguration.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "ThrowPropagationImpl.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -342,11 +342,11 @@ void TransitiveClosureMarkerWorker::visit(const ReachableObject& obj) {
     visit_method_references_gatherer_instantiable(obj.cls);
     break;
   case ReachableObjectType::RETURNS:
-    visit_returns(static_cast<const DexMethod*>(obj.method));
+    visit_returns(dynamic_cast<const DexMethod*>(obj.method));
     break;
   case ReachableObjectType::METHOD_REFERENCES_GATHERER_RETURNING:
     visit_method_references_gatherer_returning(
-        static_cast<const DexMethod*>(obj.method));
+        dynamic_cast<const DexMethod*>(obj.method));
     break;
   case ReachableObjectType::ANNO:
   case ReachableObjectType::SEED:
@@ -623,12 +623,12 @@ void gather_dynamic_references_impl(const DexAnnotation* anno,
   //    @JsonDeserialize(using=MyJsonDeserializer.class)
   if (anno->runtime_visible()) {
     const auto& elems = anno->anno_elems();
-    std::vector<DexType*> ltype;
+    std::vector<const DexType*> ltype;
     for (auto const& dae : elems) {
       const auto& evalue = dae.encoded_value;
       evalue->gather_types(ltype);
     }
-    for (auto* dextype : ltype) {
+    for (const auto* dextype : ltype) {
       auto* cls = type_class(dextype);
       if (cls != nullptr) {
         references->classes_dynamically_referenced.insert(cls);
@@ -776,8 +776,8 @@ MethodReferencesGatherer::get_returning_dependency(
   };
   if (opcode::is_invoke_static(op) || opcode::is_invoke_direct(op)) {
     always_assert(refs->methods.size() == 1);
-    const auto* resolved_callee =
-        resolve_method(insn->get_method(), opcode_to_search(insn), m_method);
+    const auto* resolved_callee = resolve_method_deprecated(
+        insn->get_method(), opcode_to_search(insn), m_method);
     if (resolved_callee != nullptr) {
       always_assert(!resolved_callee->is_virtual());
       always_assert(!is_abstract(resolved_callee));
@@ -897,8 +897,8 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
     if (opcode::is_new_instance(op)) {
       refs->new_instances.push_back(insn->get_type());
     } else if (gather_methods && opcode::is_invoke_super(op)) {
-      auto* callee =
-          resolve_method(insn->get_method(), MethodSearch::Super, m_method);
+      auto* callee = resolve_method_deprecated(insn->get_method(),
+                                               MethodSearch::Super, m_method);
       if ((callee != nullptr) && !callee->is_external()) {
         always_assert(callee->is_virtual());
         if (is_abstract(callee)) {
@@ -911,7 +911,7 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
       }
     } else if (gather_methods && (opcode::is_invoke_virtual(op) ||
                                   opcode::is_invoke_interface(op))) {
-      auto* resolved_callee = resolve_invoke_method(insn, m_method);
+      auto* resolved_callee = resolve_invoke_method_deprecated(insn, m_method);
       if (resolved_callee == nullptr) {
         // Typically clone() on an array, or other obscure external references
         TRACE(REACH, 2, "Unresolved virtual callee at %s", SHOW(insn));
@@ -929,12 +929,11 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
         refs->unknown_invoke_virtual_targets = true;
       } else if (opcode::is_invoke_interface(op) && is_interface(base_cls)) {
         // Why can_rename? To mirror what VirtualRenamer looks at.
-        if (root(resolved_callee) || !can_rename(resolved_callee)) {
+        if (root(resolved_callee) || !can_rename(resolved_callee) ||
+            is_annotation(base_cls)) {
           // We cannot rule out that there are dynamically added classes,
           // possibly even created at runtime via Proxy.newProxyInstance, that
           // override this method. So we assume the worst.
-          refs->unknown_invoke_virtual_targets = true;
-        } else if (is_annotation(base_cls)) {
           refs->unknown_invoke_virtual_targets = true;
         }
       }
@@ -1020,7 +1019,7 @@ void MethodReferencesGatherer::advance(const Advance& advance,
     m_returning_dependencies.erase(it);
     unordered_erase_if(m_returning_dependencies, [&mies](auto& p) {
       auto& cfg_needles = p.second;
-      std20::erase_if(cfg_needles, [&mies](const auto& cfg_needle) {
+      std::erase_if(cfg_needles, [&mies](const auto& cfg_needle) {
         return mies.count(&*cfg_needle.it);
       });
       return cfg_needles.empty();
@@ -1093,7 +1092,8 @@ void MethodReferencesGatherer::advance(const Advance& advance,
       queue.push((CFGNeedle){e->target(), e->target()->begin()});
     }
   };
-  auto visit_throw_succs_if_last_insn = [&visit_succ](auto* block, auto it) {
+  auto visit_throw_succs_if_last_insn = [&visit_succ](auto* block,
+                                                      const auto& it) {
     if (block->get_last_insn() == it) {
       for (auto* e : block->succs()) {
         if (e->type() == cfg::EDGE_THROW) {
@@ -1360,7 +1360,7 @@ void TransitiveClosureMarkerWorker::visit_cls(const DexClass* cls) {
   }
   push(cls, type_class(cls->get_super_class()));
   if (!m_shared_state->relaxed_keep_interfaces) {
-    for (auto* t : *cls->get_interfaces()) {
+    for (const auto* t : *cls->get_interfaces()) {
       push(cls, t);
     }
   }
@@ -1419,7 +1419,7 @@ void TransitiveClosureMarkerWorker::visit_instantiable(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting instantiable class: %s", SHOW(cls));
 
   instantiable(cls->get_super_class());
-  for (auto* intf : *cls->get_interfaces()) {
+  for (const auto* intf : *cls->get_interfaces()) {
     instantiable(intf);
   }
   auto* cond_marked = m_shared_state->cond_marked;
@@ -1546,7 +1546,7 @@ void TransitiveClosureMarkerWorker::returns(const DexMethod* method) {
       ReachableObject(method, ReachableObjectType::RETURNS));
 }
 
-void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
+void TransitiveClosureMarkerWorker::instantiable(const DexType* type) {
   auto* cls = type_class(type);
   if ((cls == nullptr) || cls->is_external()) {
     return;
@@ -1558,7 +1558,7 @@ void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
       ReachableObject(cls, ReachableObjectType::INSTANTIABLE));
 }
 
-void TransitiveClosureMarkerWorker::directly_instantiable(DexType* type) {
+void TransitiveClosureMarkerWorker::directly_instantiable(const DexType* type) {
   if (!m_shared_state->reachable_aspects->directly_instantiable_types.insert(
           type)) {
     return;
@@ -2083,8 +2083,8 @@ static void sweep_if_unmarked(const ReachableObjects& reachables,
 }
 
 void sweep_interfaces(const ReachableObjects& reachables, DexClass* cls) {
-  UnorderedSet<DexType*> new_interfaces_set;
-  std::vector<DexType*> new_interfaces_vec;
+  UnorderedSet<const DexType*> new_interfaces_set;
+  std::vector<const DexType*> new_interfaces_vec;
   std::function<void(DexTypeList*)> visit;
   visit = [&](auto* interfaces) {
     for (auto* intf : *interfaces) {
@@ -2349,7 +2349,7 @@ void sweep_code(
     InsertOnlyConcurrentSet<DexMethod*>* affected_methods) {
   Timer t("Sweep Code");
   auto scope = build_class_scope(stores);
-  UnorderedSet<DexType*> uninstantiable_types;
+  UnorderedSet<const DexType*> uninstantiable_types;
   UnorderedSet<DexMethod*> uncallable_instance_methods;
   for (auto* cls : scope) {
     if (reachable_aspects.instantiable_types.count_unsafe(cls) == 0u) {
@@ -2425,8 +2425,8 @@ remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
   // abstract methods, if any, so that we won't make them abstract or remove
   // them.
   ConcurrentSet<const DexMethod*> implementation_methods;
-  workqueue_run<DexType*>(
-      [&](DexType* type) {
+  workqueue_run<const DexType*>(
+      [&](const DexType* type) {
         UnorderedMap<const DexString*, UnorderedSet<const DexProto*>>
             implemented;
         for (auto* cls = type_class(type);

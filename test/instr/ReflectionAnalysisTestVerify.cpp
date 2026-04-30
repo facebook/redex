@@ -46,7 +46,7 @@ void test_analysis(const DexClasses& classes,
   EXPECT_EQ(actual_output, expect_output);
 }
 
-using Methods = std::set<std::pair<std::string, std::vector<DexType*>>>;
+using Methods = std::set<std::pair<std::string, std::vector<const DexType*>>>;
 
 void get_reflected_methods_by_test(Methods& out,
                                    const DexClasses& classes,
@@ -63,7 +63,7 @@ void get_reflected_methods_by_test(Methods& out,
   ReflectionAnalysis analysis(meth);
   ASSERT_TRUE(analysis.has_found_reflection());
 
-  std::vector<DexType*> empty;
+  std::vector<const DexType*> empty;
   DexType* test_cls =
       DexType::make_type("Lcom/facebook/redextest/ReflectionAnalysisTest$Baz;");
   for (const auto& site : analysis.get_reflection_sites()) {

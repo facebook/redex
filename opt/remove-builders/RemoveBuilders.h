@@ -28,10 +28,10 @@ class RemoveBuildersPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  UnorderedSet<DexType*> m_builders;
-  UnorderedSet<DexType*> m_blocklist;
+  UnorderedSet<const DexType*> m_builders;
+  UnorderedSet<const DexType*> m_blocklist;
   bool m_enable_buildee_constr_change;
 
-  std::vector<DexType*> created_builders(DexMethod*);
-  bool escapes_stack(DexType*, DexMethod*);
+  std::vector<const DexType*> created_builders(DexMethod*);
+  bool escapes_stack(const DexType*, DexMethod*);
 };

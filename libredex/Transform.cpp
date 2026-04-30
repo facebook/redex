@@ -92,7 +92,8 @@ void remap_registers(cfg::ControlFlowGraph& cfg, const RegMap& reg_map) {
 }
 
 MethodItemEntry* find_active_catch(IRCode* code, IRList::iterator pos) {
-  while (++pos != code->end() && pos->type != MFLOW_TRY) {
+  ++pos;
+  for (; pos != code->end() && pos->type != MFLOW_TRY; ++pos) {
     ;
   }
   return pos != code->end() && pos->tentry->type == TRY_END

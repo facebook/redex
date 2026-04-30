@@ -7,7 +7,6 @@
 
 #include <sstream>
 
-#include "DexAccess.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexDefs.h"
@@ -41,7 +40,7 @@ void DexDebugOpcodeStartLocal::gather_strings(
 }
 
 void DexDebugOpcodeStartLocal::gather_types(
-    std::vector<DexType*>& ltype) const {
+    std::vector<const DexType*>& ltype) const {
   if (m_type != nullptr) {
     ltype.push_back(m_type);
   }
@@ -92,7 +91,7 @@ DexDebugInstruction* DexDebugInstruction::make_instruction(
     return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_ADVANCE_LINE: {
-    int32_t v = (uint32_t)read_sleb128_checked<redex::DexAssert>(encdata_ptr);
+    int32_t v = read_sleb128_checked<redex::DexAssert>(encdata_ptr);
     return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_START_LOCAL: {

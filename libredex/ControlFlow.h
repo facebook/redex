@@ -17,6 +17,7 @@
 
 #include <sparta/WeakTopologicalOrdering.h>
 
+#include "CompactPointerVector.h"
 #include "DeterministicContainers.h"
 #include "DexPosition.h"
 #include "IRCode.h"
@@ -234,6 +235,8 @@ class Edge final {
 
 std::ostream& operator<<(std::ostream& os, const Edge& e);
 
+using CompactEdgeVector = CompactPointerVector<Edge*>;
+
 using BlockId = size_t;
 
 template <bool is_const>
@@ -266,8 +269,8 @@ class Block final {
     always_assert(m_parent != nullptr);
     return *m_parent;
   }
-  const std::vector<Edge*>& preds() const { return m_preds; }
-  const std::vector<Edge*>& succs() const { return m_succs; }
+  const CompactEdgeVector& preds() const { return m_preds; }
+  const CompactEdgeVector& succs() const { return m_succs; }
 
   bool operator<(const Block& other) const { return this->id() < other.id(); }
 
@@ -451,8 +454,8 @@ class Block final {
   // otherwise, this is empty.
   IRList m_entries;
 
-  std::vector<Edge*> m_preds;
-  std::vector<Edge*> m_succs;
+  CompactEdgeVector m_preds;
+  CompactEdgeVector m_succs;
 
   // the graph that this block belongs to
   ControlFlowGraph* m_parent = nullptr;
@@ -557,8 +560,8 @@ class ControlFlowGraph {
 
   void add_edge(Edge* e) {
     m_edges.insert(e);
-    e->src()->m_succs.emplace_back(e);
-    e->target()->m_preds.emplace_back(e);
+    e->src()->m_succs.push_back(e);
+    e->target()->m_preds.push_back(e);
   }
 
   // copies all edges from one block to another
@@ -961,10 +964,10 @@ class ControlFlowGraph {
   // by default, start at the entry block
   boost::sub_range<IRList> get_param_instructions() const;
 
-  void gather_catch_types(std::vector<DexType*>& types) const;
+  void gather_catch_types(std::vector<const DexType*>& types) const;
   void gather_strings(std::vector<const DexString*>& strings) const;
-  void gather_types(std::vector<DexType*>& types) const;
-  void gather_init_classes(std::vector<DexType*>& types) const;
+  void gather_types(std::vector<const DexType*>& types) const;
+  void gather_init_classes(std::vector<const DexType*>& types) const;
   void gather_fields(std::vector<DexFieldRef*>& fields) const;
   void gather_methods(std::vector<DexMethodRef*>& methods) const;
   void gather_callsites(std::vector<DexCallSite*>& callsites) const;
@@ -1013,8 +1016,9 @@ class ControlFlowGraph {
 
   // Search all the instructions in this CFG for the given one. Return an
   // iterator to it, or end, if it isn't in the graph.
-  InstructionIterator find_insn(IRInstruction* insn, Block* hint = nullptr);
-  ConstInstructionIterator find_insn(IRInstruction* insn,
+  InstructionIterator find_insn(const IRInstruction* insn,
+                                Block* hint = nullptr);
+  ConstInstructionIterator find_insn(const IRInstruction* insn,
                                      Block* hint = nullptr) const;
 
   // choose an order of blocks for output; note that unless
@@ -1309,17 +1313,12 @@ class GraphInterface {
   using Graph = ControlFlowGraph;
   using NodeId = Block*;
   using EdgeId = Edge*;
-  static NodeId entry(const Graph& graph) {
-    return const_cast<NodeId>(graph.entry_block());
-  }
-  static NodeId exit(const Graph& graph) {
-    return const_cast<NodeId>(graph.exit_block());
-  }
-  static const std::vector<EdgeId>& predecessors(const Graph&,
-                                                 const NodeId& b) {
+  static NodeId entry(const Graph& graph) { return graph.entry_block(); }
+  static NodeId exit(const Graph& graph) { return graph.exit_block(); }
+  static const CompactEdgeVector& predecessors(const Graph&, const NodeId& b) {
     return b->preds();
   }
-  static const std::vector<EdgeId>& successors(const Graph&, const NodeId& b) {
+  static const CompactEdgeVector& successors(const Graph&, const NodeId& b) {
     return b->succs();
   }
   static NodeId source(const Graph&, const EdgeId& e) { return e->src(); }

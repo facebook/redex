@@ -139,6 +139,10 @@ std::string show_deobfuscated(const DexProto*);
 std::string show_deobfuscated(const DexCallSite*);
 std::string show_deobfuscated(const DexMethodHandle*);
 
+// Print the string as standard UTF-8, with control characters escaped (note:
+// quotes are not escaped).
+std::string show_escaped(const DexString* s);
+
 // SHOW(x) is syntax sugar for show(x).c_str()
 #define SHOW(...) show(__VA_ARGS__).c_str()
 

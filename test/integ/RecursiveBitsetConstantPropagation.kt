@@ -44,11 +44,11 @@ class RecursiveBitsetConstantPropagation {
 
   private var f = { -> Unit }
 
-  fun callLambda() {
+  public fun callLambda() {
     f()
   }
 
-  fun main() {
+  public fun main() {
     // Second lowest bit of flags is never set.
     processWithNoLambda(1, 1)
     processWithNoLambda(2, 1)

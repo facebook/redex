@@ -14,11 +14,12 @@
 #include "DexOutput.h"
 #include "Macros.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Warning.h"
 
 unsigned DexInstruction::count_from_opcode() const {
   // clang-format off
-  static int args[] = {
+  static constexpr std::array<int, 256> args = {
       0, /* FMT_f00x   */
       0, /* FMT_f10x   */
       0, /* FMT_f12x   */
@@ -175,7 +176,6 @@ uint16_t DexInstruction::dest() const {
   case FMT_f51l:
     return (m_opcode >> 8) & 0xff;
   case FMT_f32x:
-    return m_arg[0];
   case FMT_f41c_d:
   case FMT_f52c_d:
     return m_arg[0];
@@ -211,8 +211,6 @@ DexInstruction* DexInstruction::set_dest(uint16_t vreg) {
     m_opcode = (m_opcode & 0x00ff) | (vreg << 8);
     return this;
   case FMT_f32x:
-    m_arg[0] = vreg;
-    return this;
   case FMT_f41c_d:
   case FMT_f52c_d:
     m_arg[0] = vreg;
@@ -223,7 +221,7 @@ DexInstruction* DexInstruction::set_dest(uint16_t vreg) {
   }
 }
 
-uint16_t DexInstruction::src(int i) const {
+uint16_t DexInstruction::src(size_t i) const {
   auto format = dex_opcode::format(opcode());
   switch (format) {
   case FMT_f11x_s:
@@ -290,8 +288,9 @@ uint16_t DexInstruction::src(int i) const {
       return (m_arg[0] >> 12) & 0xf;
     case 4:
       return (m_opcode >> 8) & 0xf;
+    default:
+      not_reached();
     }
-    not_reached();
   case FMT_f41c_s:
     redex_assert(i == 0);
     return m_arg[0];
@@ -321,15 +320,16 @@ uint16_t DexInstruction::src(int i) const {
       return (m_arg[1] >> 8) & 0xf;
     case 6:
       return (m_arg[1] >> 12) & 0xf;
+    default:
+      not_reached();
     }
-    not_reached();
   default:
     // All other formats do not define source registers.
     not_reached_log("Unhandled opcode: %s", SHOW(this));
   }
 }
 
-DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
+DexInstruction* DexInstruction::set_src(size_t i, uint16_t vreg) {
   auto format = dex_opcode::format(opcode());
   switch (format) {
   case FMT_f11x_s:
@@ -419,8 +419,9 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
     case 4:
       m_opcode = (m_opcode & 0xf0ff) | (vreg << 8);
       return this;
+    default:
+      not_reached();
     }
-    not_reached();
   case FMT_f41c_s:
     redex_assert(i == 0);
     m_arg[0] = vreg;
@@ -458,8 +459,9 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
     case 6:
       m_arg[0] = (m_arg[1] & 0x0fff) | (vreg << 12);
       return this;
+    default:
+      not_reached();
     }
-    not_reached();
   default:
     // All other formats do not define source registers.
     not_reached_log("Unhandled opcode: %s", SHOW(this));
@@ -476,7 +478,7 @@ DexInstruction* DexInstruction::set_srcs(const std::vector<uint16_t>& vregs) {
 template <int Width>
 int64_t signext(uint64_t uv) {
   int shift = 64 - Width;
-  return int64_t(uint64_t(uv) << shift) >> shift;
+  return int64_t(uv << shift) >> shift;
 }
 
 int64_t DexInstruction::get_literal() const {
@@ -680,8 +682,8 @@ void DexOpcodeString::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
 
 size_t DexOpcodeType::size() const { return m_count + 2; }
 
-void DexOpcodeType::gather_types(std::vector<DexType*>& ltype) const {
-  ltype.push_back(m_type);
+void DexOpcodeType::gather_types(std::vector<const DexType*>& ltype) const {
+  ltype.push_back(const_cast<DexType*>(m_type));
 }
 
 void DexOpcodeType::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
@@ -828,8 +830,8 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
       return new DexOpcodeData(insns - count, count - 1);
     } else if (fopcode == FOPCODE_FILLED_ARRAY) {
       uint16_t ewidth = *insns++;
-      uint32_t size = *((uint32_t*)insns);
-      int count = (ewidth * size + 1) / 2 + 4;
+      uint32_t size = *reinterpret_cast<const uint32_t*>(insns);
+      int count = static_cast<int>((ewidth * size + 1) / 2 + 4);
       always_assert_type_log(count >= 0, RedexError::INVALID_DEX,
                              "Negative count");
       insns += count - 2;
@@ -1109,14 +1111,14 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
   case DOPCODE_NEW_INSTANCE:
   case DOPCODE_NEW_ARRAY: {
     uint16_t tidx = *insns++;
-    DexType* type = idx->get_typeidx(tidx);
+    const DexType* type = idx->get_typeidx(tidx);
     return new DexOpcodeType(fopcode, type);
   }
   case DOPCODE_FILLED_NEW_ARRAY:
   case DOPCODE_FILLED_NEW_ARRAY_RANGE: {
     uint16_t tidx = *insns++;
     uint16_t arg = *insns++;
-    DexType* type = idx->get_typeidx(tidx);
+    const DexType* type = idx->get_typeidx(tidx);
     return new DexOpcodeType(fopcode, type, arg);
   }
   case DOPCODE_CONST_METHOD_HANDLE: {
@@ -1130,7 +1132,7 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
     return new DexOpcodeProto(fopcode, proto);
   }
   default:
-    fprintf(stderr, "Unknown opcode %02x\n", opcode);
+    TRACE(ERRORS, 1, "Unknown opcode %02x", opcode);
     return nullptr;
   }
 }

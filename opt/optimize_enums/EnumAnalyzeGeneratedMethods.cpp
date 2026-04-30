@@ -7,6 +7,9 @@
 
 #include "EnumAnalyzeGeneratedMethods.h"
 
+#include <array>
+
+#include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -133,7 +136,7 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
    * to a call to `Enum.valueOf()` or `Enum.values()` directly or reflectively
    * because they are safe and final.
    */
-  static const DexMethodRef* allowlisted_methods[] = {
+  static const std::array allowlisted_methods{
       DexMethod::get_method("Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V"),
       DexMethod::get_method("Ljava/lang/Enum;.compareTo:(Ljava/lang/Enum;)I"),
       DexMethod::get_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"),
@@ -191,7 +194,7 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
     }
   } break;
   case OPCODE_INVOKE_STATIC: {
-    auto* callee = resolve_method(callee_ref, MethodSearch::Static);
+    auto* callee = resolve_method_deprecated(callee_ref, MethodSearch::Static);
     if (m_candidate_methods.count(callee) != 0u) {
       if (is_enum_valueof(callee)) {
         // Enum.valueOf() calls Enum.values() and so we reject the whole type

@@ -22,6 +22,7 @@
 
 #include "Debug.h"
 #include "DeterministicContainers.h"
+#include "StlUtil.h"
 
 class DexCallSite;
 class DexDebugInstruction;
@@ -184,14 +185,15 @@ struct SourceBlock {
   SourceBlock(const DexString* src, size_t id, const std::vector<Val>& v)
       : src(src),
         id(id),
-        vals_size(v.size()),
-        vals_(clone_vals(v.data(), v.size())) {}
+        vals_size((uint32_t)v.size()),
+        m_storage(make_storage(v)) {}
   SourceBlock(const SourceBlock& other)
       : src(other.src),
         next(other.next == nullptr ? nullptr : new SourceBlock(*other.next)),
         id(other.id),
         vals_size(other.vals_size),
-        vals_(clone_vals(other.vals_.get(), other.vals_size)) {}
+        m_storage(make_storage(other.m_storage.get())) {}
+  SourceBlock& operator=(const SourceBlock&);
 
   boost::optional<float> get_val(size_t i) const {
     const auto& val = get_at(i);
@@ -203,98 +205,117 @@ struct SourceBlock {
   }
 
   const Val& get_at(size_t i) const {
-    if (vals_) {
-      return vals_[i];
+    if (m_storage) {
+      if (m_storage->bits.contains_index(i)) {
+        size_t idx = m_storage->bits.count_before_index(i);
+        return m_storage->data[idx];
+      }
     }
     return default_value;
   }
 
   void set_at(size_t i, const Val& val) {
-    if (vals_ == nullptr) {
+    if (!m_storage || !m_storage->bits.contains_index(i)) {
       if (val.is_default_value()) {
         return;
       }
-      denormalize();
+      expand_storage();
     }
-    vals_[i] = val;
+    size_t idx = m_storage->bits.count_before_index(i);
+    m_storage->data[idx] = val;
   }
 
   void fill(const Val& val);
 
   template <typename Fn>
   void apply_at(size_t i, const Fn& fn) {
-    if (vals_ == nullptr) {
+    if (!m_storage || !m_storage->bits.contains_index(i)) {
       Val val = Val::default_value();
       fn(val);
       if (val.is_default_value()) {
         return;
       }
-      denormalize();
-      vals_[i] = val;
+      expand_storage();
+      m_storage->data[i] = val;
       return;
     }
-    fn(vals_[i]);
-  }
-
-  static std::unique_ptr<Val[]> clone_vals(const Val* vals, size_t vals_size) {
-    if (is_default_values(vals, vals_size)) {
-      return nullptr;
-    }
-    auto res = std::make_unique<Val[]>(vals_size);
-    for (size_t i = 0; i < vals_size; i++) {
-      res[i] = vals[i];
-    }
-    return res;
+    size_t idx = m_storage->bits.count_before_index(i);
+    fn(m_storage->data[idx]);
   }
 
   template <typename Fn>
   void foreach_val(const Fn& fn) const {
-    if (vals_ == nullptr) {
+    if (!m_storage) {
       for (size_t i = 0; i < vals_size; i++) {
         const Val val = Val::default_value();
-        fn(val);
+        invoke_fn(fn, i, val);
       }
       return;
     }
     for (size_t i = 0; i < vals_size; i++) {
-      const Val& val = vals_[i];
-      fn(val);
+      if (m_storage->bits.contains_index(i)) {
+        size_t idx = m_storage->bits.count_before_index(i);
+        const Val& val = m_storage->data[idx];
+        invoke_fn(fn, i, val);
+      } else {
+        const Val val = Val::default_value();
+        invoke_fn(fn, i, val);
+      }
     }
   }
 
   template <typename Fn>
   void foreach_val(const Fn& fn) {
-    if (vals_ == nullptr) {
+    if (!m_storage) {
       for (size_t i = 0; i < vals_size; i++) {
         Val val = Val::default_value();
-        fn(val);
+        invoke_fn(fn, i, val);
         if (!val.is_default_value()) {
-          denormalize();
-          vals_[i] = val;
+          expand_storage();
+          m_storage->data[i] = val;
         }
       }
       return;
     }
     for (size_t i = 0; i < vals_size; i++) {
-      fn(vals_[i]);
+      if (m_storage->bits.contains_index(i)) {
+        size_t idx = m_storage->bits.count_before_index(i);
+        Val& val = m_storage->data[idx];
+        invoke_fn(fn, i, val);
+      } else {
+        Val val = Val::default_value();
+        invoke_fn(fn, i, val);
+        if (!val.is_default_value()) {
+          expand_storage();
+          m_storage->data[i] = val;
+        }
+      }
     }
   }
 
   template <typename Fn>
   bool foreach_val_early(const Fn& fn) const {
-    if (vals_ == nullptr) {
+    if (!m_storage) {
       for (size_t i = 0; i < vals_size; i++) {
         const Val val = Val::default_value();
-        if (fn(val)) {
+        if (invoke_fn(fn, i, val)) {
           return true;
         }
       }
       return false;
     }
     for (size_t i = 0; i < vals_size; i++) {
-      const Val& val = vals_[i];
-      if (fn(val)) {
-        return true;
+      if (m_storage->bits.contains_index(i)) {
+        size_t idx = m_storage->bits.count_before_index(i);
+        const Val& val = m_storage->data[idx];
+        if (invoke_fn(fn, i, val)) {
+          return true;
+        }
+      } else {
+        const Val val = Val::default_value();
+        if (invoke_fn(fn, i, val)) {
+          return true;
+        }
       }
     }
     return false;
@@ -302,13 +323,13 @@ struct SourceBlock {
 
   template <typename Fn>
   bool foreach_val_early(const Fn& fn) {
-    if (vals_ == nullptr) {
+    if (!m_storage) {
       for (size_t i = 0; i < vals_size; i++) {
         Val val = Val::default_value();
-        auto res = fn(val);
+        bool res = invoke_fn(fn, i, val);
         if (!val.is_default_value()) {
-          denormalize();
-          vals_[i] = val;
+          expand_storage();
+          m_storage->data[i] = val;
         }
         if (res) {
           return true;
@@ -317,11 +338,53 @@ struct SourceBlock {
       return false;
     }
     for (size_t i = 0; i < vals_size; i++) {
-      if (fn(vals_[i])) {
-        return true;
+      if (m_storage->bits.contains_index(i)) {
+        size_t idx = m_storage->bits.count_before_index(i);
+        Val& val = m_storage->data[idx];
+        if (invoke_fn(fn, i, val)) {
+          return true;
+        }
+      } else {
+        Val val = Val::default_value();
+        bool res = invoke_fn(fn, i, val);
+        if (!val.is_default_value()) {
+          expand_storage();
+          m_storage->data[i] = val;
+        }
+        if (res) {
+          return true;
+        }
       }
     }
     return false;
+  }
+
+  template <typename Fn>
+  boost::optional<size_t> find_val(const Fn& pred) const {
+    if (!m_storage) {
+      for (size_t i = 0; i < vals_size; i++) {
+        const Val val = Val::default_value();
+        if (invoke_fn(pred, i, val)) {
+          return i;
+        }
+      }
+      return boost::none;
+    }
+    for (size_t i = 0; i < vals_size; i++) {
+      if (m_storage->bits.contains_index(i)) {
+        size_t idx = m_storage->bits.count_before_index(i);
+        const Val& val = m_storage->data[idx];
+        if (invoke_fn(pred, i, val)) {
+          return i;
+        }
+      } else {
+        const Val val = Val::default_value();
+        if (invoke_fn(pred, i, val)) {
+          return i;
+        }
+      }
+    }
+    return boost::none;
   }
 
   bool operator==(const SourceBlock& other) const;
@@ -359,36 +422,109 @@ struct SourceBlock {
 
   void min(const SourceBlock& other);
 
-  bool normalize() {
-    if (vals_ == nullptr) {
-      return true;
-    }
-    if (is_default_values(vals_.get(), vals_size)) {
-      vals_.reset();
-      return true;
-    }
-    return false;
-  }
+  bool normalize(size_t* elided_vals, size_t* unelided_vals);
 
  private:
   static const Val default_value;
 
-  // nullptr vals_ represents vals_size many Val::default_value() values.
-  std::unique_ptr<Val[]> vals_;
+  class InteractionBitSet {
+   private:
+    uint64_t m_bits;
+    explicit InteractionBitSet(uint64_t bits) : m_bits(bits) {}
 
-  static bool is_default_values(const Val* vals, size_t vals_size) {
-    if (vals == nullptr) {
-      return true;
+   public:
+    // We are not including `sizeof(m_bits) * 8` itself, as that would lead to
+    // undefined behavior in the expression `((uint64_t)1 << 64) - 1` in
+    // C++ (although completely fine as far as the realizing X86 instruction are
+    // concerned).
+    static const constexpr size_t MAX_SIZE = sizeof(m_bits) * 8 - 1;
+
+    InteractionBitSet() : m_bits(0) {}
+
+    static InteractionBitSet from_index(size_t i) {
+      return InteractionBitSet(((uint64_t)1) << i);
     }
-    for (size_t i = 0; i < vals_size; i++) {
-      if (!vals[i].is_default_value()) {
-        return false;
-      }
+
+    static InteractionBitSet all(size_t size) {
+      return InteractionBitSet((((uint64_t)1) << size) - 1);
     }
-    return true;
+
+    InteractionBitSet first() { return InteractionBitSet(m_bits & -m_bits); }
+
+    bool contains(const InteractionBitSet& other) const {
+      return (m_bits & other.m_bits) != 0;
+    }
+
+    bool contains_index(size_t i) const { return contains(from_index(i)); }
+
+    bool operator==(const InteractionBitSet& other) const {
+      return m_bits == other.m_bits;
+    }
+
+    // NOLINTNEXTLINE
+    /* implicit */ operator bool() const { return m_bits != 0; }
+
+    size_t first_index() const { return std20::countr_zero(m_bits); }
+
+    size_t count() const { return std20::popcount(m_bits); }
+
+    size_t count_before_index(size_t i) const {
+      return count_before(from_index(i));
+    }
+
+    size_t count_before(InteractionBitSet other) const {
+      return std20::popcount(m_bits & (other.m_bits - 1));
+    }
+
+    void add(InteractionBitSet other) { m_bits |= other.m_bits; }
+
+    void intersect_with(InteractionBitSet other) { m_bits &= other.m_bits; }
+
+    void remove(InteractionBitSet other) { m_bits &= ~other.m_bits; }
+
+    void remove_first() { m_bits &= (m_bits - 1); }
+  };
+
+  struct Storage {
+    InteractionBitSet bits; // for each set bit, we have a data entry
+    Val data[1]; // variable sized, matching number of bits set
+  };
+
+  struct FreeDeleter {
+    void operator()(void* p) const { std::free(p); }
+  };
+
+  // nullptr m_storage represents vals_size many Val::default_value() values.
+  std::unique_ptr<Storage, FreeDeleter> m_storage;
+
+  template <typename Fn, typename ValType>
+  static auto invoke_fn(const Fn& fn, size_t i, ValType& val) {
+    if constexpr (std::is_invocable_v<Fn, size_t, ValType&>) {
+      return fn(i, val);
+    } else {
+      return fn(val);
+    }
   }
 
-  void denormalize();
+  static std::unique_ptr<Storage, FreeDeleter> make_storage(
+      size_t vals_size, const Val& val = Val::default_value());
+
+  static std::unique_ptr<Storage, FreeDeleter> make_storage(
+      const Storage* other);
+
+  static std::unique_ptr<Storage, FreeDeleter> make_storage(
+      const std::vector<Val>& vals);
+
+  static bool has_all_default_values(const Storage* storage);
+
+  static bool has_default_value(const Storage* storage);
+
+  bool is_storage_expanded() const {
+    return vals_size == 0 ||
+           (m_storage && m_storage->bits == InteractionBitSet::all(vals_size));
+  }
+
+  void expand_storage();
 };
 
 static_assert(sizeof(void*) != 8 || sizeof(SourceBlock) == 32);
@@ -448,6 +584,7 @@ struct MethodItemEntry {
     std::unique_ptr<SourceBlock> src_block;
   };
   MethodItemEntry(const MethodItemEntry&);
+  MethodItemEntry& operator=(const MethodItemEntry&);
   explicit MethodItemEntry(DexInstruction* dex_insn) {
     this->type = MFLOW_DEX_OPCODE;
     this->dex_insn = dex_insn;
@@ -484,8 +621,8 @@ struct MethodItemEntry {
   void replace_ir_with_dex(DexInstruction* dex_insn);
 
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
@@ -702,10 +839,10 @@ class IRList {
   IRList::const_reverse_iterator rbegin() const { return m_list.rbegin(); }
   IRList::const_reverse_iterator rend() const { return m_list.rend(); }
 
-  void gather_catch_types(std::vector<DexType*>& ltype) const;
+  void gather_catch_types(std::vector<const DexType*>& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
@@ -785,7 +922,8 @@ class InstructionIteratorImpl {
   using iterator_category = std::bidirectional_iterator_tag;
 
   InstructionIteratorImpl() {}
-  InstructionIteratorImpl(Iterator it, Iterator end) : m_it(it), m_end(end) {
+  InstructionIteratorImpl(const Iterator& it, const Iterator& end)
+      : m_it(it), m_end(end) {
     to_next_instruction();
   }
 

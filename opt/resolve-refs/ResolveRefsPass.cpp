@@ -7,12 +7,12 @@
 
 #include "ResolveRefsPass.h"
 
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
+#include <optional>
 
 #include "ApiLevelChecker.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
-#include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -20,8 +20,6 @@
 #include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
-
-namespace mog = method_override_graph;
 using namespace resolve_refs;
 
 namespace impl {
@@ -171,10 +169,10 @@ void try_desuperify(const DexMethod* caller,
   if ((callee_cls == nullptr) || is_interface(callee_cls)) {
     return;
   }
-  // resolve_method_ref will start its search in the superclass of :cls.
-  auto* callee = resolve_method_ref(cls, insn->get_method()->get_name(),
-                                    insn->get_method()->get_proto(),
-                                    MethodSearch::Virtual);
+  // start resolve_method search in the superclass of :cls.
+  auto* callee = resolve_method_deprecated(
+      type_class(cls->get_super_class()), insn->get_method()->get_name(),
+      insn->get_method()->get_proto(), MethodSearch::Virtual);
   // External methods may not always be final across runtime versions
   if (callee == nullptr || callee->is_external() || !is_final(callee)) {
     return;
@@ -197,7 +195,7 @@ bool is_excluded_external(const std::vector<std::string>& excluded_externals,
   return false;
 }
 
-boost::optional<DexMethod*> get_inferred_method_def(
+std::optional<DexMethod*> get_inferred_method_def(
     const DexMethod* caller,
     const std::vector<std::string>& excluded_externals,
     const bool /*is_support_lib*/,
@@ -207,15 +205,24 @@ boost::optional<DexMethod*> get_inferred_method_def(
     RefStats& stats) {
 
   auto* inferred_cls = type_class(inferred_type);
-  auto* resolved =
-      resolve_method(inferred_cls, callee->get_name(), callee->get_proto(),
-                     opcode_to_search(invoke_op));
+  auto method_search = opcode_to_search(invoke_op);
+  if (inferred_cls != nullptr && !is_interface(inferred_cls) &&
+      method_search == MethodSearch::Interface) {
+    // If the inferred type is a non-interface class, we should use
+    // Virtual search instead of Interface search.
+    // Interface search will walk through interface hierarchy of inferred_cls
+    // it won't check on interface hierarchy along inferred_cls's super
+    // class hierarchy
+    method_search = MethodSearch::Virtual;
+  }
+  auto* resolved = resolve_method_deprecated(
+      inferred_cls, callee->get_name(), callee->get_proto(), method_search);
   // 1. If we cannot resolve the callee based on the inferred_cls, we bail.
   if ((resolved == nullptr) || !resolved->is_def()) {
     TRACE(RESO, 4, "Bailed resolved upon inferred_cls %s for %s",
           SHOW(inferred_cls), SHOW(callee));
     stats.num_failed_infer_resolver_fail++;
-    return boost::none;
+    return std::nullopt;
   }
   auto* resolved_cls = type_class(resolved->get_class());
   bool is_external = (resolved_cls != nullptr) && resolved_cls->is_external();
@@ -223,7 +230,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
   if (is_external && is_excluded_external(excluded_externals, show(resolved))) {
     TRACE(RESO, 4, "Bailed on excluded external%s", SHOW(resolved));
     stats.num_failed_infer_to_external++;
-    return boost::none;
+    return std::nullopt;
   }
 
   // 3. Accessibility check.
@@ -232,7 +239,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
     TRACE(RESO, 4, "Bailed on inaccessible %s from %s", SHOW(resolved),
           SHOW(caller));
     stats.num_failed_infer_cannot_access++;
-    return boost::none;
+    return std::nullopt;
   }
   if (!is_external && !is_public(resolved_cls)) {
     set_public(resolved_cls);
@@ -243,12 +250,12 @@ boost::optional<DexMethod*> get_inferred_method_def(
     TRACE(RESO, 4, "Bailed on incompatible invoke opcode: %s is an interface",
           SHOW(inferred_cls));
     stats.num_failed_infer_callee_target_type++;
-    return boost::none;
+    return std::nullopt;
   }
 
   TRACE(RESO, 4, "Inferred to %s for type %s", SHOW(resolved),
         SHOW(inferred_type));
-  return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
+  return std::optional<DexMethod*>(resolved);
 }
 
 } // namespace impl
@@ -261,8 +268,8 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
   always_assert(insn->has_method());
   auto* mref = insn->get_method();
   bool resolved_virtual_to_interface;
-  auto* mdef =
-      resolve_invoke_method(insn, caller, &resolved_virtual_to_interface);
+  auto* mdef = resolve_invoke_method_deprecated(insn, caller,
+                                                &resolved_virtual_to_interface);
   if ((mdef == nullptr) && is_array_clone(insn)) {
     auto* object_array_clone = method::java_lang_Objects_clone();
     TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref),
@@ -431,7 +438,8 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
     }
 
     auto* mref = insn->get_method();
-    auto* callee = resolve_method(mref, opcode_to_search(insn), method);
+    auto* callee =
+        resolve_method_deprecated(mref, opcode_to_search(insn), method);
     if (callee == nullptr) {
       if (mref != method::java_lang_Objects_clone()) {
         stats.num_unresolvable_mrefs++;
@@ -499,11 +507,11 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
 }
 
 void ResolveRefsPass::run_pass(DexStoresVector& stores,
-                               ConfigFiles& /* conf */,
+                               ConfigFiles& conf,
                                PassManager& mgr) {
   always_assert(m_min_sdk_api);
   Scope scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
   impl::RefStats stats = walk::parallel::methods<impl::RefStats>(
       scope, [this, &xstores](DexMethod* method) {
         auto local_stats = resolve_refs(method);

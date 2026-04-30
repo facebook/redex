@@ -19,7 +19,6 @@
 
 #include <sparta/S_Expression.h>
 
-#include "ControlFlow.h"
 #include "DexClass.h"
 #include "PointsToSemanticsUtils.h"
 #include "TypeSystem.h"
@@ -125,7 +124,7 @@ class PointsToVariable final {
 
   static constexpr int32_t this_var_id() { return -2; }
 
-  explicit PointsToVariable(size_t id) : m_id(id) {}
+  explicit PointsToVariable(int32_t id) : m_id(id) {}
 
   // A user-defined variable always has a positive identifier. We use negative
   // identifiers for special variables, like the `null` variable.
@@ -211,7 +210,7 @@ struct PointsToOperation {
     DexMethodRef* dex_method;
     DexFieldRef* dex_field;
     const DexString* dex_string;
-    DexType* dex_type;
+    const DexType* dex_type;
     size_t parameter;
     SpecialPointsToEdge special_edge;
   };
@@ -229,7 +228,7 @@ struct PointsToOperation {
   PointsToOperation(PointsToOperationKind k, const DexString* s)
       : kind(k), dex_string(s) {}
 
-  PointsToOperation(PointsToOperationKind k, DexType* t)
+  PointsToOperation(PointsToOperationKind k, const DexType* t)
       : kind(k), dex_type(t) {}
 
   PointsToOperation(PointsToOperationKind k, size_t p)
@@ -349,7 +348,7 @@ class PointsToAction final {
   /*
    * Used to build a PTS_CHECK_CAST action.
    */
-  static PointsToAction check_cast_operation(DexType* dex_type,
+  static PointsToAction check_cast_operation(const DexType* dex_type,
                                              PointsToVariable dest,
                                              PointsToVariable src);
 
@@ -455,7 +454,7 @@ class PointsToMethodSemantics {
  public:
   PointsToMethodSemantics(DexMethodRef* dex_method,
                           MethodKind kind,
-                          size_t start_var_id,
+                          int32_t start_var_id,
                           size_t size_hint);
 
   DexMethodRef* get_method() const { return m_dex_method; }
@@ -490,7 +489,7 @@ class PointsToMethodSemantics {
   MethodKind m_kind;
   // The variable counter allows us to generate new variables when we need to
   // modify the system of points-to actions (e.g., for inlining method calls).
-  size_t m_variable_counter;
+  int32_t m_variable_counter;
   std::vector<PointsToAction> m_points_to_actions;
 
   friend std::ostream& operator<<(std::ostream&,

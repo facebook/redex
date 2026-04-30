@@ -46,7 +46,7 @@ class StripDebugInfoTest : public RedexIntegrationTest {
         if (!method->is_def()) {
           continue;
         }
-        IRCode* code = static_cast<DexMethod*>(method)->get_code();
+        IRCode* code = dynamic_cast<DexMethod*>(method)->get_code();
         if (code == nullptr) {
           continue;
         }

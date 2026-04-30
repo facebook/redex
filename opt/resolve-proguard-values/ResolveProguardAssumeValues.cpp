@@ -9,7 +9,6 @@
 
 #include "CFGMutation.h"
 #include "ProguardConfiguration.h"
-#include "ReachingDefinitions.h"
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"

@@ -38,9 +38,9 @@ outer:
  * of the register file, and returns the first register of that range.
  */
 vreg_t VirtualRegistersFile::find_free_range_at_end() const {
-  for (int i = m_free.size() - 1; i >= 0; --i) {
-    if (!m_free[i]) {
-      return i + 1;
+  for (size_t i = m_free.size(); i > 0; --i) {
+    if (!m_free[i - 1]) {
+      return i;
     }
   }
   return 0;

@@ -9,16 +9,12 @@
 
 #include <iostream>
 
-#include "CppUtil.h"
-#include "Debug.h"
 #include "DebugUtils.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "GraphColoring.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "LiveRange.h"
-#include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -58,7 +54,7 @@ Allocator::Stats allocate(
     return allocator.get_stats();
   } catch (const std::exception& e) {
     std::cerr << "Failed to allocate " << method_describer() << ": " << e.what()
-              << std::endl;
+              << '\n';
     print_stack_trace(std::cerr, e);
 
     std::string cfg_tmp;
@@ -66,9 +62,8 @@ Allocator::Stats allocate(
       cfg_tmp = SHOW(code->cfg());
       code->clear_cfg();
     }
-    std::cerr << "As s-expr: " << std::endl
-              << assembler::to_s_expr(code) << std::endl;
-    std::cerr << "As CFG: " << std::endl << cfg_tmp << std::endl;
+    std::cerr << "As s-expr: " << '\n' << assembler::to_s_expr(code) << '\n';
+    std::cerr << "As CFG: " << '\n' << cfg_tmp << '\n';
 
     throw;
   }

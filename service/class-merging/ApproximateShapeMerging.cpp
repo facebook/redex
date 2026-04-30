@@ -8,7 +8,6 @@
 #include "ApproximateShapeMerging.h"
 
 #include <algorithm>
-#include <climits>
 #include <fstream>
 
 #include "ConfigFiles.h"
@@ -225,8 +224,7 @@ void print_edge(const Shape& from_shape,
      << num_mergeables.at(from_shape) << "\"" << " -> " << "\""
      << to_shape.to_string() << "\\n"
      << num_mergeables.at(to_shape) << "\""
-     << "  [label=\"dist=" << distance(to_shape, from_shape) << "\"]"
-     << std::endl;
+     << "  [label=\"dist=" << distance(to_shape, from_shape) << "\"]\n";
 }
 
 void write_shape_graph(const ConfigFiles& conf,
@@ -239,13 +237,13 @@ void write_shape_graph(const ConfigFiles& conf,
     TRACE(CLMG, 5, "         Cannot open file.");
     return;
   }
-  os << "digraph G {" << std::endl;
+  os << "digraph G {\n";
   for (const auto& it : UnorderedIterable(pred_map)) {
     for (const auto& from_shape : UnorderedIterable(it.second)) {
       print_edge(from_shape, it.first, num_mergeables, os);
     }
   }
-  os << "}" << std::endl;
+  os << "}\n";
   os.close();
 }
 

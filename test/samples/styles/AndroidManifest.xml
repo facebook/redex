@@ -13,6 +13,10 @@
   <application
       android:allowBackup="true"
       android:label="Resource Value Merging Test">
+      <activity
+        android:name=".MainActivity"
+        android:theme="@style/ThemeA"
+        android:exported="false" />
   </application>
 
 </manifest>

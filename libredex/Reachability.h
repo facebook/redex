@@ -15,10 +15,8 @@
 #include "DexClass.h"
 #include "KeepReason.h"
 #include "MethodOverrideGraph.h"
-#include "MethodUtil.h"
 #include "Pass.h"
 #include "RemoveUninstantiablesImpl.h"
-#include "Thread.h"
 
 class DexAnnotation;
 
@@ -362,12 +360,12 @@ struct ReachableAspects {
   UnorderedMap<const DexMethod*, UnorderedSet<const IRInstruction*>>
       non_returning_insns;
   ConcurrentSet<const DexMethod*> returning_methods;
-  ConcurrentSet<DexType*> directly_instantiable_types;
+  ConcurrentSet<const DexType*> directly_instantiable_types;
   CallableInstanceMethods implementation_methods;
   InstantiableTypes incomplete_directly_instantiable_types;
   CallableInstanceMethods zombie_implementation_methods;
   std::vector<DexMethod*> zombie_methods;
-  UnorderedSet<const DexClass*> deserializable_types{};
+  UnorderedSet<const DexClass*> deserializable_types;
   uint64_t instructions_unvisited{0};
   const DexType* parcelable_type = DexType::get_type("Landroid/os/Parcelable;");
   void finish(const ConditionallyMarked& cond_marked,
@@ -376,7 +374,7 @@ struct ReachableAspects {
 
 struct References {
   std::vector<const DexString*> strings;
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   std::vector<DexFieldRef*> fields;
   std::vector<DexMethodRef*> methods;
   // Conditional virtual method references. They are already resolved DexMethods
@@ -397,7 +395,7 @@ struct References {
   std::vector<const DexMethod*>
       method_references_gatherer_dependencies_if_method_returning;
   bool method_references_gatherer_dependency_if_instance_method_callable{false};
-  std::vector<DexType*> new_instances;
+  std::vector<const DexType*> new_instances;
   UnorderedSet<const DexMethod*> invoke_super_targets;
   std::vector<const DexClass*> classes_if_instantiable;
   bool returns{false};
@@ -627,11 +625,11 @@ class TransitiveClosureMarkerWorker {
 
   void returns(const DexMethod* method);
 
-  void instantiable(DexType* type);
+  void instantiable(const DexType* type);
 
-  void directly_instantiable(DexType* type);
-  void directly_instantiable(const std::vector<DexType*>& types) {
-    for (auto* type : types) {
+  void directly_instantiable(const DexType* type);
+  void directly_instantiable(const std::vector<const DexType*>& types) {
+    for (const auto* type : types) {
       directly_instantiable(type);
     }
   }

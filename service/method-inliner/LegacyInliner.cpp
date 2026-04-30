@@ -68,8 +68,6 @@ IRInstruction* move_result(IRInstruction* res, IRInstruction* move_res) {
   return move;
 }
 
-} // namespace
-
 /*
  * For splicing a callee's IRList into a caller.
  */
@@ -188,6 +186,8 @@ class MethodSplicer {
   }
 };
 
+} // namespace
+
 namespace legacy_inliner {
 
 DexPosition* last_position_before(const IRList::const_iterator& it,
@@ -196,8 +196,9 @@ DexPosition* last_position_before(const IRList::const_iterator& it,
   // as pointing to the element preceding pos
   auto position_it = std::prev(IRList::const_reverse_iterator(it));
   const auto& rend = code->rend();
-  while (++position_it != rend && position_it->type != MFLOW_POSITION) {
-    ;
+  ++position_it;
+  while (position_it != rend && position_it->type != MFLOW_POSITION) {
+    ++position_it;
   }
   return position_it == rend ? nullptr : position_it->pos.get();
 }
@@ -237,8 +238,9 @@ void inline_method_unsafe(const DexMethod* caller_method,
   // find the move-result after the invoke, if any. Must be the first
   // instruction after the invoke
   auto move_res = pos;
-  while (move_res++ != caller_code->end() && move_res->type != MFLOW_OPCODE) {
-    ;
+  ++move_res;
+  while (move_res != caller_code->end() && move_res->type != MFLOW_OPCODE) {
+    ++move_res;
   }
   if (!opcode::is_a_move_result(move_res->insn->opcode())) {
     move_res = caller_code->end();

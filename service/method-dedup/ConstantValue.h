@@ -119,8 +119,8 @@ class ConstantValues {
     return m_const_vals;
   }
 
-  std::vector<DexType*> get_constant_types() {
-    std::vector<DexType*> res;
+  std::vector<const DexType*> get_constant_types() {
+    std::vector<const DexType*> res;
     for (const auto& c : m_const_vals) {
       if (c.is_invalid()) {
         continue;

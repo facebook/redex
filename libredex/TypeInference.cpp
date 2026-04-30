@@ -341,14 +341,14 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
 
 boost::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
-    const UnorderedSet<DexType*>& typedef_annotations) {
+    const UnorderedSet<const DexType*>& typedef_annotations) {
   for (auto const& anno : annotations) {
     auto* const anno_class = type_class(anno->type());
     if (anno_class == nullptr) {
       continue;
     }
     bool has_typedef = false;
-    for (auto* annotation : UnorderedIterable(typedef_annotations)) {
+    for (const auto* annotation : UnorderedIterable(typedef_annotations)) {
       if (get_annotation(anno_class, annotation) != nullptr) {
         if (has_typedef) {
           always_assert_log(
@@ -523,7 +523,7 @@ void TypeInference::run(const DexMethod* dex_method) {
 }
 
 void TypeInference::run(bool is_static,
-                        DexType* declaring_type,
+                        const DexType* declaring_type,
                         DexTypeList* args,
                         const ParamAnnotations* param_anno) {
   // We need to compute the initial environment by assigning the parameter
@@ -614,12 +614,10 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
-  case IOPCODE_LOAD_PARAM_WIDE: {
+  case IOPCODE_LOAD_PARAM_WIDE:
+  case OPCODE_NOP: {
     // IOPCODE_LOAD_PARAM_* instructions have been processed before the
     // analysis.
-    break;
-  }
-  case OPCODE_NOP: {
     break;
   }
   case OPCODE_MOVE: {
@@ -808,7 +806,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CHECK_CAST: {
     refine_reference(current_state, insn->src(0));
-    auto* to_type = insn->get_type();
+    const auto* to_type = insn->get_type();
 
     if (!m_skip_check_cast_upcasting) {
       set_reference(current_state, RESULT_REGISTER, to_type);
@@ -1241,7 +1239,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         // method is invoked.
         refine_reference(current_state, insn->src(src_idx++));
       }
-      for (DexType* arg_type : *arg_types) {
+      for (const DexType* arg_type : *arg_types) {
         if (type::is_object(arg_type)) {
           refine_reference(current_state, insn->src(src_idx++));
           continue;
@@ -1569,7 +1567,7 @@ void TypeInference::print(std::ostream& output) const {
       IRInstruction* insn = mie.insn;
       auto it = m_type_envs.find(insn);
       always_assert(it != m_type_envs.end());
-      output << SHOW(insn) << " -- " << it->second << std::endl;
+      output << SHOW(insn) << " -- " << it->second << '\n';
     }
   }
 }
@@ -1579,7 +1577,7 @@ void TypeInference::traceState(TypeEnvironment* state) const {
     return;
   }
   std::ostringstream out;
-  out << *state << std::endl;
+  out << *state << '\n';
   TRACE(TYPE, 9, "%s", out.str().c_str());
 }
 

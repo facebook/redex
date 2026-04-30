@@ -7,9 +7,7 @@
 
 #include "ReachableClasses.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <chrono>
+#include <boost/algorithm/string/predicate.hpp>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -19,13 +17,11 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "FbjniMarker.h"
-#include "Match.h"
 #include "RedexResources.h"
 #include "ReflectionAnalysis.h"
 #include "Show.h"
 #include "StringUtil.h"
 #include "Trace.h"
-#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {
@@ -70,7 +66,7 @@ struct DexItemIter<DexMethod*, F> {
  * reflection. :reflecting_method is the method containing the reflection site.
  */
 void blocklist_field(DexMethod* reflecting_method,
-                     DexType* type,
+                     const DexType* type,
                      const DexString* name,
                      bool declared) {
   auto* cls = type_class(type);
@@ -96,11 +92,12 @@ void blocklist_field(DexMethod* reflecting_method,
   }
 }
 
-void blocklist_method(DexMethod* reflecting_method,
-                      DexType* type,
-                      const DexString* name,
-                      const boost::optional<std::vector<DexType*>>& params,
-                      bool declared) {
+void blocklist_method(
+    DexMethod* reflecting_method,
+    const DexType* type,
+    const DexString* name,
+    const boost::optional<std::vector<const DexType*>>& params,
+    bool declared) {
   auto* cls = type_class(type);
   if (cls == nullptr) {
     return;
@@ -241,7 +238,7 @@ void analyze_reflection(const Scope& scope) {
       if (arg_str_value == nullptr) {
         continue;
       }
-      boost::optional<std::vector<DexType*>> param_types = boost::none;
+      boost::optional<std::vector<const DexType*>> param_types = boost::none;
       if (refl_type == GET_METHOD || refl_type == GET_CONSTRUCTOR ||
           refl_type == GET_DECLARED_METHOD ||
           refl_type == GET_DECLARED_CONSTRUCTOR) {
@@ -333,7 +330,7 @@ void mark_reachable_by_string(DexMethod* method) {
   }
 }
 
-void mark_reachable_by_classname(DexType* dtype) {
+void mark_reachable_by_classname(const DexType* dtype) {
   mark_reachable_by_classname(type_class_internal(dtype));
 }
 
@@ -348,7 +345,7 @@ bool matches_onclick_method(
   auto* prototype = dmethod->get_proto();
   auto* args_list = prototype->get_args();
   if (args_list->size() == 1) {
-    auto* first_type = args_list->at(0);
+    const auto* first_type = args_list->at(0);
     if (first_type->str() == "Landroid/view/View;") {
       return names_to_keep.count(dmethod->str()) > 0;
     }
@@ -597,7 +594,7 @@ bool in_reflected_pkg(DexClass* dclass,
  * as root.
  */
 void analyze_serializable(const Scope& scope) {
-  DexType* serializable = DexType::get_type("Ljava/io/Serializable;");
+  const DexType* serializable = DexType::get_type("Ljava/io/Serializable;");
   if (serializable == nullptr) {
     return;
   }
@@ -606,7 +603,7 @@ void analyze_serializable(const Scope& scope) {
 
   for (const auto* child : children) {
     DexClass* child_cls = type_class(child);
-    DexType* child_super_type = child_cls->get_super_class();
+    const DexType* child_super_type = child_cls->get_super_class();
     DexClass* child_supercls = type_class(child_super_type);
     if ((child_supercls == nullptr) || child_supercls->is_external()) {
       continue;

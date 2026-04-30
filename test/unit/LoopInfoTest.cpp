@@ -9,7 +9,6 @@
 
 #include <sparta/WeakTopologicalOrdering.h>
 
-#include "ControlFlow.h"
 #include "LoopInfo.h"
 #include "RedexTest.h"
 

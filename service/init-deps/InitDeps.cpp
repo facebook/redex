@@ -7,15 +7,14 @@
 
 #include "InitDeps.h"
 
-#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <vector>
 
 #include <sparta/WeakTopologicalOrdering.h>
 
-#include "ConfigFiles.h"
 #include "DeterministicContainers.h"
-#include "DexUtil.h"
+#include "DexClass.h"
 #include "Show.h"
 #include "Timer.h"
 #include "Trace.h"

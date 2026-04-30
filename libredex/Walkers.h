@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include <algorithm>
-#include <functional>
-#include <thread>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include "ControlFlow.h"

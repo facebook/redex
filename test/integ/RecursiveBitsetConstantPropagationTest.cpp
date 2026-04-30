@@ -14,7 +14,6 @@
 #include "DexUtil.h"
 #include "IPConstantPropagation.h"
 #include "RedexTest.h"
-#include "Resolver.h"
 
 namespace {
 
@@ -64,7 +63,7 @@ TEST_P(RecursiveBitsetConstantPropagationTest,
 
 TEST_P(RecursiveBitsetConstantPropagationTest,
        AfterOptimizationOnlySecondLowestBitIsGone) {
-  Pass* constp = new constant_propagation::interprocedural::PassImpl();
+  Pass* constp = new InterproceduralConstantPropagationPass();
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 

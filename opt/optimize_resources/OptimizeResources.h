@@ -10,7 +10,6 @@
 #include "DeterministicContainers.h"
 #include "GlobalConfig.h"
 #include "Pass.h"
-#include "ReachableResources.h"
 #include "RedexResources.h"
 #include "Trace.h"
 
@@ -26,7 +25,7 @@ namespace opt_res {
 class ReachableResourcesPlugin {
  public:
   explicit ReachableResourcesPlugin(std::string name);
-  virtual void configure(ConfigFiles& conf) {}
+  virtual void configure(ConfigFiles& /* conf */) {}
   // Given the directory holding the unpacked input zip, and a list of resource
   // names to their corresponding ids, return a list of resource IDs that should
   // be considered reachable.
@@ -56,6 +55,8 @@ struct ReachableResourcesPluginRegistry {
   ReachableResourcesPluginRegistry() {}
   ReachableResourcesPluginRegistry(const ReachableResourcesPluginRegistry&) =
       delete;
+  ReachableResourcesPluginRegistry& operator=(
+      const ReachableResourcesPluginRegistry&) = delete;
 
   std::vector<ReachableResourcesPlugin*> m_registered_plugins;
 };
@@ -136,7 +137,7 @@ class OptimizeResourcesPass : public Pass {
 
   static void report_metric(TraceModule trace_module,
                             const std::string& metric_name,
-                            int metric_value,
+                            size_t metric_value,
                             PassManager& mgr);
 
  private:

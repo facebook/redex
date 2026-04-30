@@ -9,13 +9,13 @@
 
 #include <charconv>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
 
 #include "CppUtil.h"
 #include "Debug.h"
-#include "DexDefs.h"
 #include "DexOpcode.h"
 #include "Gatherable.h"
 #include "IROpcode.h"
@@ -119,7 +119,7 @@ class DexInstruction : public Gatherable {
    */
   DexOpcode opcode() const;
   uint16_t dest() const;
-  uint16_t src(int i) const;
+  uint16_t src(size_t i) const;
   uint16_t arg_word_count() const;
   uint16_t range_base() const;
   uint16_t range_size() const;
@@ -131,7 +131,7 @@ class DexInstruction : public Gatherable {
    */
   DexInstruction* set_opcode(DexOpcode);
   DexInstruction* set_dest(uint16_t vreg);
-  DexInstruction* set_src(int i, uint16_t vreg);
+  DexInstruction* set_src(size_t i, uint16_t vreg);
   DexInstruction* set_srcs(const std::vector<uint16_t>& vregs);
   DexInstruction* set_arg_word_count(uint16_t count);
   DexInstruction* set_range_base(uint16_t base);
@@ -176,28 +176,29 @@ class DexOpcodeString : public DexInstruction {
 
 class DexOpcodeType : public DexInstruction {
  private:
-  DexType* m_type;
+  const DexType* m_type;
 
  public:
   size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
-  void gather_types(std::vector<DexType*>& ltype) const override;
+  void gather_types(std::vector<const DexType*>& ltype) const override;
   DexOpcodeType* clone() const override { return new DexOpcodeType(*this); }
 
-  DexOpcodeType(DexOpcode opcode, DexType* type) : DexInstruction(opcode) {
+  DexOpcodeType(DexOpcode opcode, const DexType* type)
+      : DexInstruction(opcode) {
     m_type = type;
     m_ref_type = REF_TYPE;
   }
 
-  DexOpcodeType(DexOpcode opcode, DexType* type, uint16_t arg)
+  DexOpcodeType(DexOpcode opcode, const DexType* type, uint16_t arg)
       : DexInstruction(opcode, arg) {
     m_type = type;
     m_ref_type = REF_TYPE;
   }
 
-  DexType* get_type() const { return m_type; }
+  const DexType* get_type() const { return m_type; }
 
-  void set_type(DexType* type) { m_type = type; }
+  void set_type(const DexType* type) { m_type = type; }
 };
 
 class DexOpcodeField : public DexInstruction {
@@ -378,7 +379,7 @@ inline uint32_t fill_array_data_payload_element_count(
   always_assert_log(op_data->opcode() == FOPCODE_FILLED_ARRAY,
                     "DexOpcodeData is not an array payload");
   always_assert(op_data->data_size() >= 3);
-  auto* size_ptr = (uint32_t*)(op_data->data() + 1);
+  const auto* size_ptr = reinterpret_cast<const uint32_t*>(op_data->data() + 1);
   return *size_ptr;
 }
 
@@ -392,15 +393,15 @@ std::unique_ptr<DexOpcodeData> encode_fill_array_data_payload(
   int width = sizeof(IntType);
   size_t total_copy_size = vec.size() * width;
   // one "code unit" is a 2 byte word
-  int total_used_code_units =
-      (total_copy_size + 1 /* for rounding up int division */) / 2 + 4;
+  int total_used_code_units = static_cast<int>(
+      (total_copy_size + 1 /* for rounding up int division */) / 2 + 4);
   std::vector<uint16_t> data(total_used_code_units);
   uint16_t* ptr = data.data();
   ptr[0] = FOPCODE_FILLED_ARRAY; // header
   ptr[1] = width;
-  *(uint32_t*)(ptr + 2) = vec.size();
-  uint8_t* data_bytes = (uint8_t*)(ptr + 4);
-  memcpy(data_bytes, (void*)vec.data(), total_copy_size);
+  *reinterpret_cast<uint32_t*>(ptr + 2) = vec.size();
+  uint8_t* data_bytes = reinterpret_cast<uint8_t*>(ptr + 4);
+  memcpy(data_bytes, vec.data(), total_copy_size);
   return std::make_unique<DexOpcodeData>(data);
 }
 
@@ -430,11 +431,11 @@ std::vector<IntType> get_fill_array_data_payload(const DexOpcodeData* op_data) {
   int width = sizeof(IntType);
   const auto* data = op_data->data();
   always_assert_log(*data++ == width, "Incorrect width");
-  auto count = *((uint32_t*)data);
+  auto count = *reinterpret_cast<const uint32_t*>(data);
   data += 2;
   std::vector<IntType> vec;
   vec.reserve(count);
-  auto* element_data = (uint8_t*)data;
+  const auto* element_data = reinterpret_cast<const uint8_t*>(data);
   for (size_t i = 0; i < count; i++) {
     IntType result = 0;
     memcpy(&result, element_data, width);

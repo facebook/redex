@@ -9,7 +9,8 @@
 
 #include <cstddef>
 
-#if __cpp_lib_hardware_interference_size >= 201603
+#if defined(__cpp_lib_hardware_interference_size) && \
+    __cpp_lib_hardware_interference_size >= 201603
 
 #include <new>
 

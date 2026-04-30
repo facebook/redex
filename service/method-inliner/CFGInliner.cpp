@@ -12,7 +12,6 @@
 #include "DexPosition.h"
 #include "IRList.h"
 #include "IROpcode.h"
-#include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -32,8 +31,8 @@ const DexString* get_partial_inline_source() {
  */
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& callsite,
-                            DexType* needs_receiver_cast,
-                            DexType* needs_init_class,
+                            const DexType* needs_receiver_cast,
+                            const DexType* needs_init_class,
                             const ControlFlowGraph& callee_orig,
                             size_t next_caller_reg,
                             DexMethod* rewrite_invoke_super_callee,
@@ -80,8 +79,8 @@ void remove_dangling_partial_inline_dex_positions(
 
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             InstructionIterator inline_site,
-                            DexType* needs_receiver_cast,
-                            DexType* needs_init_class,
+                            const DexType* needs_receiver_cast,
+                            const DexType* needs_init_class,
                             const ControlFlowGraph& callee_orig,
                             size_t next_caller_reg,
                             CFGInlinerPlugin& plugin,
@@ -188,7 +187,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   auto callee_regs_size = callee.get_registers_size();
   auto old_caller_regs_size = caller->get_registers_size();
   always_assert(next_caller_reg <= old_caller_regs_size);
-  remap_registers(&callee, next_caller_reg);
+  remap_registers(&callee, static_cast<reg_t>(next_caller_reg));
 
   auto alt_srcs = plugin.inline_srcs();
   move_arg_regs(&callee, alt_srcs ? *alt_srcs : inline_site->insn->srcs_copy());
@@ -224,7 +223,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   } else {
     size_t needed_caller_regs_size = next_caller_reg + callee_regs_size;
     if (needed_caller_regs_size > old_caller_regs_size) {
-      caller->set_registers_size(needed_caller_regs_size);
+      caller->set_registers_size(static_cast<reg_t>(needed_caller_regs_size));
     }
   }
 
@@ -263,7 +262,7 @@ void CFGInliner::rewrite_invoke_supers(ControlFlowGraph* cfg,
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
     auto* insn = mie.insn;
     if (opcode::is_invoke_super(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
+      auto* callee = resolve_invoke_method_deprecated(insn, method);
       always_assert(callee);
       // Illegal combination; someone needs to clean this up.
       insn->set_opcode(OPCODE_INVOKE_DIRECT);

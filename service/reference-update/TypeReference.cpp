@@ -20,8 +20,8 @@ namespace {
  * trying to update a virtual method that may override any external virtual
  * method.
  */
-void assert_old_types_have_definitions(
-    const UnorderedMap<DexType*, DexType*>& old_to_new) {
+template <typename T>
+void assert_old_types_have_definitions(const T& old_to_new) {
   for (const auto& pair : UnorderedIterable(old_to_new)) {
     auto* cls = type_class(pair.first);
     always_assert_log(
@@ -37,13 +37,13 @@ const DexString* gen_new_name(const std::string_view org_name, size_t seed) {
   std::string new_name = str_copy(org_name.substr(0, end));
   new_name.append(mangling_affix);
   while (seed != 0u) {
-    int d = seed % 62;
+    int d = static_cast<int>(seed % 62);
     if (d < 10) {
-      new_name.push_back(d + '0');
+      new_name.push_back(static_cast<char>(d + '0'));
     } else if (d < 36) {
-      new_name.push_back(d - 10 + 'a');
+      new_name.push_back(static_cast<char>(d - 10 + 'a'));
     } else {
-      new_name.push_back(d - 36 + 'A');
+      new_name.push_back(static_cast<char>(d - 36 + 'A'));
     }
     seed /= 62;
   }
@@ -58,7 +58,7 @@ size_t hash_signature(const DexMethodRef* method) {
   auto* proto = method->get_proto();
   boost::hash_combine(seed, method->str());
   boost::hash_combine(seed, proto->get_rtype()->str());
-  for (DexType* arg : *proto->get_args()) {
+  for (const DexType* arg : *proto->get_args()) {
     boost::hash_combine(seed, arg->str());
   }
   return seed;
@@ -131,7 +131,7 @@ void add_vmethod_to_groups(
     add_vmethod_to_group(
         rtype, old_to_new.at(rtype), possible_new_name, method, &group);
   }
-  for (auto* const arg_type : *proto->get_args()) {
+  for (const auto* const arg_type : *proto->get_args()) {
     auto* extracted_arg_type =
         const_cast<DexType*>(type::get_element_type_if_array(arg_type));
     if (old_to_new.count(extracted_arg_type) != 0u) {
@@ -150,7 +150,10 @@ void add_vmethod_to_groups(
 DexProto* get_new_proto(const DexProto* proto,
                         const DexType* old_type_ref,
                         DexType* new_type_ref) {
-  return type_reference::get_new_proto(proto, {{old_type_ref, new_type_ref}});
+  return type_reference::get_new_proto(
+      proto,
+      UnorderedMap<const DexType*, const DexType*>{
+          {old_type_ref, new_type_ref}});
 }
 
 /**
@@ -205,159 +208,203 @@ void update_vmethods_group_one_type_ref(const VMethodGroup& group,
 
 namespace type_reference {
 
-void TypeRefUpdater::update_methods_fields(const Scope& scope) {
-  // Change specs of all the other methods and fields if their specs contain
-  // any candidate types.
-  walk::parallel::methods(scope, [this](DexMethod* method) {
-    if (mangling(method)) {
-      always_assert_log(
-          can_rename(method), "Method %s can not be renamed\n", SHOW(method));
-    }
-  });
-  walk::parallel::fields(scope, [this](DexField* field) {
-    if (mangling(field)) {
-      always_assert_log(
-          can_rename(field), "Field %s can not be renamed\n", SHOW(field));
-    }
-  });
-  // Update all the method refs and field refs.
-  ConcurrentSet<DexMethodRef*> methods;
-  ConcurrentSet<DexFieldRef*> fields;
-  walk::parallel::code(scope, [&](DexMethod* /*method*/, IRCode& code) {
-    if (code.cfg_built()) {
-      for (auto& mie : InstructionIterable(code.cfg())) {
-        auto* insn = mie.insn;
-        if (insn->has_field()) {
-          fields.insert(insn->get_field());
-        } else if (insn->has_method()) {
-          methods.insert(insn->get_method());
+namespace {
+
+template <typename MapT>
+class TypeRefUpdaterImpl {
+ public:
+  explicit TypeRefUpdaterImpl(const MapT& old_to_new)
+      : m_old_to_new(old_to_new) {}
+
+  void update_methods_fields(const Scope& scope) {
+    // Change specs of all the other methods and fields if their specs contain
+    // any candidate types.
+    walk::parallel::methods(scope, [this](DexMethod* method) {
+      if (mangling(method)) {
+        always_assert_log(
+            can_rename(method), "Method %s can not be renamed\n", SHOW(method));
+      }
+    });
+    walk::parallel::fields(scope, [this](DexField* field) {
+      if (mangling(field)) {
+        always_assert_log(
+            can_rename(field), "Field %s can not be renamed\n", SHOW(field));
+      }
+    });
+    // Update all the method refs and field refs.
+    ConcurrentSet<DexMethodRef*> methods;
+    ConcurrentSet<DexFieldRef*> fields;
+    walk::parallel::code(scope, [&](DexMethod* /*method*/, IRCode& code) {
+      if (code.cfg_built()) {
+        for (auto& mie : InstructionIterable(code.cfg())) {
+          auto* insn = mie.insn;
+          if (insn->has_field()) {
+            fields.insert(insn->get_field());
+          } else if (insn->has_method()) {
+            methods.insert(insn->get_method());
+          }
+        }
+      } else {
+        for (auto& mie : InstructionIterable(code)) {
+          auto* insn = mie.insn;
+          if (insn->has_field()) {
+            fields.insert(insn->get_field());
+          } else if (insn->has_method()) {
+            methods.insert(insn->get_method());
+          }
         }
       }
-    } else {
-      for (auto& mie : InstructionIterable(code)) {
-        auto* insn = mie.insn;
-        if (insn->has_field()) {
-          fields.insert(insn->get_field());
-        } else if (insn->has_method()) {
-          methods.insert(insn->get_method());
-        }
+    });
+    workqueue_run<DexFieldRef*>([this](DexFieldRef* field) { mangling(field); },
+                                fields);
+    workqueue_run<DexMethodRef*>(
+        [this](DexMethodRef* method) { mangling(method); }, methods);
+
+    std::map<DexMethod*, DexProto*, dexmethods_comparator> inits;
+    insert_unordered_iterable(inits, m_inits);
+    std::vector<std::pair<DexMethod*, DexProto*>> colliding_inits;
+    for (auto& pair : inits) {
+      auto* method = pair.first;
+      auto* new_proto = pair.second;
+      if (DexMethod::get_method(
+              method->get_class(), method->get_name(), new_proto) == nullptr) {
+        DexMethodSpec spec;
+        spec.proto = new_proto;
+        method->change(spec, false /* rename on collision */);
+        TRACE(REFU, 9, "Update ctor %s ", SHOW(method));
+      } else {
+        colliding_inits.emplace_back(method->as_def(), new_proto);
       }
     }
-  });
-  workqueue_run<DexFieldRef*>([this](DexFieldRef* field) { mangling(field); },
-                              fields);
-  workqueue_run<DexMethodRef*>(
-      [this](DexMethodRef* method) { mangling(method); }, methods);
+    fix_colliding_dmethods(scope, colliding_inits);
+  }
 
-  std::map<DexMethod*, DexProto*, dexmethods_comparator> inits;
-  insert_unordered_iterable(inits, m_inits);
-  std::vector<std::pair<DexMethod*, DexProto*>> colliding_inits;
-  for (auto& pair : inits) {
-    auto* method = pair.first;
-    auto* new_proto = pair.second;
-    if (DexMethod::get_method(
-            method->get_class(), method->get_name(), new_proto) == nullptr) {
-      DexMethodSpec spec;
-      spec.proto = new_proto;
-      method->change(spec, false /* rename on collision */);
-      TRACE(REFU, 9, "Update ctor %s ", SHOW(method));
-    } else {
-      colliding_inits.emplace_back(method->as_def(), new_proto);
+ private:
+  /**
+   * Try to convert "type" to a new type. Return nullptr if it's not found in
+   * the old_to_new mapping. LOld; => LNew; [LOld; => [LNew;
+   * [[LOld; => [[LNew;
+   * ...
+   */
+  DexType* try_convert_to_new_type(DexType* type) {
+    uint32_t level = type::get_array_level(type);
+    DexType* elem_type = type;
+    if (level != 0u) {
+      elem_type = type::get_array_element_type(type);
     }
-  }
-  fix_colliding_dmethods(scope, colliding_inits);
-}
-
-DexType* TypeRefUpdater::try_convert_to_new_type(DexType* type) {
-  uint32_t level = type::get_array_level(type);
-  DexType* elem_type = type;
-  if (level != 0u) {
-    elem_type = type::get_array_element_type(type);
-  }
-  if (m_old_to_new.count(elem_type) != 0u) {
-    auto* new_type = m_old_to_new.at(elem_type);
-    return level != 0u ? type::make_array_type(new_type, level) : new_type;
-  }
-  return nullptr;
-}
-
-bool TypeRefUpdater::mangling(DexFieldRef* field) {
-  DexType* new_type = try_convert_to_new_type(field->get_type());
-  if (new_type != nullptr) {
-    size_t seed = 0;
-    boost::hash_combine(seed, field->get_type()->str());
-    boost::hash_combine(seed, field->str());
-    DexFieldSpec spec;
-    spec.name = gen_new_name(field->str(), seed);
-    spec.type = new_type;
-    field->change(spec);
-    TRACE(REFU, 9, "Update field %s ", SHOW(field));
-    return true;
-  }
-  return false;
-}
-
-bool TypeRefUpdater::mangling(DexMethodRef* method) {
-  size_t seed = 0;
-  DexProto* proto = method->get_proto();
-  DexType* rtype = try_convert_to_new_type(proto->get_rtype());
-  if (rtype != nullptr) {
-    boost::hash_combine(seed, -1);
-    boost::hash_combine(seed, proto->get_rtype()->str());
-  } else { // Keep unchanged.
-    rtype = proto->get_rtype();
-  }
-  DexTypeList::ContainerType new_args;
-  size_t id = 0;
-  for (DexType* arg : *proto->get_args()) {
-    DexType* new_arg = try_convert_to_new_type(arg);
-    if (new_arg != nullptr) {
-      boost::hash_combine(seed, id);
-      boost::hash_combine(seed, arg->str());
-    } else { // Keep unchanged.
-      new_arg = arg;
+    if (m_old_to_new.count(elem_type) != 0u) {
+      auto* new_type = m_old_to_new.at(elem_type);
+      return level != 0u ? type::make_array_type(new_type, level) : new_type;
     }
-    new_args.push_back(new_arg);
-    ++id;
+    return nullptr;
   }
-  // Do not need update the signature.
-  if (seed == 0) {
+
+  /**
+   * Change a field to new type if its original type is a candidate.
+   * Return true if the field is updated.
+   */
+  bool mangling(DexFieldRef* field) {
+    DexType* new_type = try_convert_to_new_type(field->get_type());
+    if (new_type != nullptr) {
+      size_t seed = 0;
+      boost::hash_combine(seed, field->get_type()->str());
+      boost::hash_combine(seed, field->str());
+      DexFieldSpec spec;
+      spec.name = gen_new_name(field->str(), seed);
+      spec.type = new_type;
+      field->change(spec);
+      TRACE(REFU, 9, "Update field %s ", SHOW(field));
+      return true;
+    }
     return false;
   }
-  DexProto* new_proto = DexProto::make_proto(
-      rtype, DexTypeList::make_type_list(std::move(new_args)));
-  if (method::is_init(method)) {
-    // Handle <init> method definitions separately because their names must be
-    // "<init>"
-    if (method->is_def()) {
-      // Don't check for init collisions here, since mangling() can execute in a
-      // parallel context.
-      m_inits.emplace(method->as_def(), new_proto);
+
+  /**
+   * Change proto of a method if its proto contains any candidate.
+   */
+  bool mangling(DexMethodRef* method) {
+    size_t seed = 0;
+    DexProto* proto = method->get_proto();
+    DexType* rtype = try_convert_to_new_type(proto->get_rtype());
+    if (rtype != nullptr) {
+      boost::hash_combine(seed, -1);
+      boost::hash_combine(seed, proto->get_rtype()->str());
+    } else { // Keep unchanged.
+      rtype = proto->get_rtype();
+    }
+    DexTypeList::ContainerType new_args;
+    size_t id = 0;
+    for (const DexType* arg : *proto->get_args()) {
+      // TODO: Remove const-cast when ready.
+      const DexType* new_arg =
+          try_convert_to_new_type(const_cast<DexType*>(arg));
+      if (new_arg != nullptr) {
+        boost::hash_combine(seed, id);
+        boost::hash_combine(seed, arg->str());
+      } else { // Keep unchanged.
+        new_arg = arg;
+      }
+      new_args.push_back(new_arg);
+      ++id;
+    }
+    // Do not need update the signature.
+    if (seed == 0) {
+      return false;
+    }
+    DexProto* new_proto = DexProto::make_proto(
+        rtype, DexTypeList::make_type_list(std::move(new_args)));
+    if (method::is_init(method)) {
+      // Handle <init> method definitions separately because their names must be
+      // "<init>"
+      if (method->is_def()) {
+        // Don't check for init collisions here, since mangling() can execute in
+        // a parallel context.
+        m_inits.emplace(method->as_def(), new_proto);
+      } else {
+        // TODO(fengliu): Work on D19340102 to figure out these cases.
+        TRACE(REFU,
+              2,
+              "[Warning] Method ref %s has no definition but has internal type "
+              "reference in its signature",
+              SHOW(method));
+        DexMethodSpec spec;
+        spec.proto = new_proto;
+        method->change(spec, false /* rename on collision */);
+      }
     } else {
-      // TODO(fengliu): Work on D19340102 to figure out these cases.
-      TRACE(REFU,
-            2,
-            "[Warning] Method ref %s has no definition but has internal type "
-            "reference in its signature",
-            SHOW(method));
       DexMethodSpec spec;
       spec.proto = new_proto;
+      boost::hash_combine(seed, method->str());
+      spec.name = gen_new_name(method->str(), seed);
       method->change(spec, false /* rename on collision */);
+      TRACE(REFU, 9, "Update method %s ", SHOW(method));
     }
-  } else {
-    DexMethodSpec spec;
-    spec.proto = new_proto;
-    boost::hash_combine(seed, method->str());
-    spec.name = gen_new_name(method->str(), seed);
-    method->change(spec, false /* rename on collision */);
-    TRACE(REFU, 9, "Update method %s ", SHOW(method));
+    return true;
   }
-  return true;
+
+  InsertOnlyConcurrentMap<DexMethod*, DexProto*> m_inits;
+  const MapT& m_old_to_new;
+};
+
+} // namespace
+
+void TypeRefUpdater::update_methods_fields(const Scope& scope) {
+  if (m_old_to_new) {
+    TypeRefUpdaterImpl(m_old_to_new->get()).update_methods_fields(scope);
+  } else {
+    TypeRefUpdaterImpl(m_old_to_new_const->get()).update_methods_fields(scope);
+  }
 }
 
 TypeRefUpdater::TypeRefUpdater(
     const UnorderedMap<DexType*, DexType*>& old_to_new)
     : m_old_to_new(old_to_new) {
+  assert_old_types_have_definitions(old_to_new);
+}
+
+TypeRefUpdater::TypeRefUpdater(
+    const UnorderedMap<const DexType*, DexType*>& old_to_new)
+    : m_old_to_new_const(old_to_new) {
   assert_old_types_have_definitions(old_to_new);
 }
 
@@ -380,7 +427,7 @@ std::string get_method_signature(const DexMethod* method) {
   auto* arg_list = proto->get_args();
   if (!arg_list->empty()) {
     ss << "(";
-    for (auto* t : *arg_list) {
+    for (const auto* t : *arg_list) {
       ss << show(t) << ", ";
     }
     ss.seekp(-2, std::ios_base::end);
@@ -396,7 +443,7 @@ bool proto_has_reference_to(const DexProto* proto,
   if (targets.count(rtype) != 0u) {
     return true;
   }
-  for (auto* const arg_type : *proto->get_args()) {
+  for (const auto* const arg_type : *proto->get_args()) {
     const auto* extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (targets.count(extracted_arg_type) != 0u) {
       return true;
@@ -417,10 +464,38 @@ DexProto* get_new_proto(
     rtype = proto->get_rtype();
   }
   DexTypeList::ContainerType lst;
-  for (auto* const arg_type : *proto->get_args()) {
+  for (const auto* const arg_type : *proto->get_args()) {
     const auto* extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (old_to_new.count(extracted_arg_type) > 0) {
       auto* merger_type = old_to_new.at(extracted_arg_type);
+      auto level = type::get_array_level(arg_type);
+      auto* new_arg_type = type::make_array_type(merger_type, level);
+      lst.push_back(new_arg_type);
+    } else {
+      lst.push_back(arg_type);
+    }
+  }
+
+  return DexProto::make_proto(const_cast<DexType*>(rtype),
+                              DexTypeList::make_type_list(std::move(lst)));
+}
+
+DexProto* get_new_proto(
+    const DexProto* proto,
+    const UnorderedMap<const DexType*, const DexType*>& old_to_new) {
+  const auto* rtype = type::get_element_type_if_array(proto->get_rtype());
+  if (old_to_new.count(rtype) > 0) {
+    const auto* merger_type = old_to_new.at(rtype);
+    auto level = type::get_array_level(proto->get_rtype());
+    rtype = type::make_array_type(merger_type, level);
+  } else {
+    rtype = proto->get_rtype();
+  }
+  DexTypeList::ContainerType lst;
+  for (const auto* const arg_type : *proto->get_args()) {
+    const auto* extracted_arg_type = type::get_element_type_if_array(arg_type);
+    if (old_to_new.count(extracted_arg_type) > 0) {
+      const auto* merger_type = old_to_new.at(extracted_arg_type);
       auto level = type::get_array_level(arg_type);
       auto* new_arg_type = type::make_array_type(merger_type, level);
       lst.push_back(new_arg_type);
@@ -653,9 +728,8 @@ void fix_colliding_dmethods(
         if (!insn->has_method()) {
           continue;
         }
-        auto* const callee = resolve_method(
-            insn->get_method(),
-            opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
+        auto* const callee = resolve_method_deprecated(
+            insn->get_method(), opcode_to_search(insn), meth);
         if (callee == nullptr ||
             num_additional_args.find(callee) == num_additional_args.end()) {
           continue;
@@ -668,9 +742,8 @@ void fix_colliding_dmethods(
         if (!insn->has_method()) {
           continue;
         }
-        auto* const callee = resolve_method(
-            insn->get_method(),
-            opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
+        auto* const callee = resolve_method_deprecated(
+            insn->get_method(), opcode_to_search(insn), meth);
         if (callee == nullptr ||
             num_additional_args.find(callee) == num_additional_args.end()) {
           continue;
@@ -690,6 +763,7 @@ void fix_colliding_dmethods(
       // 42 is a dummy int val as the additional argument to the patched
       // colliding method.
       std::vector<uint32_t> additional_args;
+      additional_args.reserve(num_additional_args.at(callee));
       for (size_t i = 0; i < num_additional_args.at(callee); ++i) {
         additional_args.push_back(42);
       }

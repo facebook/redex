@@ -7,8 +7,7 @@
 
 #include "ReBindRefs.h"
 
-#include <boost/algorithm/string.hpp>
-#include <functional>
+#include <boost/algorithm/string/predicate.hpp>
 #include <string>
 #include <vector>
 
@@ -134,7 +133,7 @@ struct Rebinder {
   DexMethod* bind_to_visible_ancestor(const DexClass* cls,
                                       const DexString* name,
                                       const DexProto* proto) {
-    auto* leaf_impl = resolve_virtual(cls, name, proto);
+    auto* leaf_impl = resolve_virtual_deprecated(cls, name, proto);
     if (leaf_impl == nullptr) {
       return nullptr;
     }

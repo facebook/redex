@@ -8,13 +8,11 @@
 #include "LinearScan.h"
 
 #include <algorithm>
-#include <cmath>
 #include <optional>
 #include <utility>
 #include <vector>
 
 #include "ControlFlow.h"
-#include "CppUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IRList.h"
@@ -65,7 +63,9 @@ void LinearScanAllocator::allocate() {
   if (m_live_intervals.empty()) {
     return;
   }
-  for (int32_t idx = m_live_intervals.size() - 1; idx >= 0; --idx) {
+  for (int32_t idx = static_cast<int32_t>(m_live_intervals.size()) - 1;
+       idx >= 0;
+       --idx) {
     auto& live_interval = m_live_intervals[idx];
     expire_old_intervals(live_interval.end_point);
     // TODO: (in the future) add spill here given dex constraints

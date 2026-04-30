@@ -9,8 +9,6 @@
 
 #include <atomic>
 
-#include <sparta/WorkQueue.h> // For `default_num_threads`.
-
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -53,7 +51,9 @@ class PriorityThreadPool {
   }
 
   // Creates an instance with a custom number of threads
-  explicit PriorityThreadPool(int num_threads) { set_num_threads(num_threads); }
+  explicit PriorityThreadPool(size_t num_threads) {
+    set_num_threads(num_threads);
+  }
 
   ~PriorityThreadPool() {
     // If the pool was created (>0 threads), `join` must be manually called
@@ -71,7 +71,7 @@ class PriorityThreadPool {
   }
 
   // The number of threads may be set at most once to a positive number
-  void set_num_threads(int num_threads) {
+  void set_num_threads(size_t num_threads) {
     always_assert(m_threads == 0);
     always_assert(!m_shutdown);
     m_threads = num_threads;
@@ -87,7 +87,7 @@ class PriorityThreadPool {
     sparta::AsyncRunner* async_runner =
         redex_thread_pool::ThreadPool::get_instance();
     if (async_runner != nullptr) {
-      for (int i = 0; i < num_threads; ++i) {
+      for (size_t i = 0; i < num_threads; ++i) {
         async_runner->run_async(&PriorityThreadPool::run, this);
       }
       return;
@@ -96,17 +96,17 @@ class PriorityThreadPool {
     boost::thread::attributes attrs;
     attrs.set_stack_size(static_cast<size_t>(8 * 1024 * 1024)); // 8MB stack.
 
-    for (int i = 0; i < num_threads; ++i) {
+    for (size_t i = 0; i < num_threads; ++i) {
       m_pool.emplace_back(attrs, [this]() { this->run(); });
     }
   }
 
   // Post a work item with a priority. This method is thread safe.
-  void post(int priority, const std::function<void()>& f) {
+  void post(int priority, std::function<void()> f) {
     always_assert(m_threads > 0);
     std::unique_lock<std::mutex> lock{m_mutex};
     always_assert(!m_shutdown);
-    m_pending_work_items[priority].push(f);
+    m_pending_work_items[priority].push(std::move(f));
     m_work_condition.notify_one();
   }
 
@@ -140,9 +140,7 @@ class PriorityThreadPool {
     wait(/*init_shutdown=*/allow_new_work);
     {
       std::unique_lock<std::mutex> lock{m_mutex};
-      while (m_running > 0) {
-        m_not_running_condition.wait(lock);
-      }
+      m_not_running_condition.wait(lock, [this] { return m_running == 0; });
     }
     for (auto& thread : m_pool) {
       thread.join();
@@ -160,7 +158,7 @@ class PriorityThreadPool {
     };
 
     for (bool first = true;; first = false) {
-      auto highest_priority_f = [&]() -> std::optional<std::function<void()>> {
+      auto highest_priority_f = [&]() -> std::function<void()> {
         std::unique_lock<std::mutex> lock{m_mutex};
 
         // Notify when *all* work is done, i.e. nothing is running or pending.
@@ -178,15 +176,15 @@ class PriorityThreadPool {
         });
         if (m_pending_work_items.empty()) {
           redex_assert(m_shutdown);
-          return std::nullopt;
+          return nullptr;
         }
 
         m_running_work_items++;
 
         // Find work item with highest priority
-        const auto& p_it = std::prev(m_pending_work_items.end());
+        auto p_it = std::prev(m_pending_work_items.end());
         auto& queue = p_it->second;
-        auto f = queue.front();
+        auto f = std::move(queue.front());
         queue.pop();
         if (queue.empty()) {
           m_pending_work_items.erase(p_it);
@@ -200,7 +198,7 @@ class PriorityThreadPool {
 
       // Run!
       try {
-        (*highest_priority_f)();
+        highest_priority_f();
       } catch (std::exception& e) {
         redex_workqueue_impl::redex_queue_exception_handler(e);
         not_running();

@@ -7,7 +7,7 @@
 
 #include "ConstantPropagationAnalysis.h"
 
-#include <boost/functional/hash.hpp>
+#include <boost/container_hash/hash.hpp>
 #include <cinttypes>
 #include <cstring>
 #include <limits>
@@ -16,6 +16,7 @@
 #include <type_traits>
 
 #include "RedexContext.h"
+
 #include "StlUtil.h"
 
 // Note: MSVC STL doesn't implement std::isnan(Integral arg). We need to provide
@@ -29,12 +30,11 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 #endif
 
 #include "DexAccess.h"
+#include "DexAnnotation.h"
 #include "DexInstruction.h"
-#include "DexUtil.h"
 #include "Resolver.h"
 #include "Trace.h"
 #include "Transform.h"
-#include "Walkers.h"
 
 // While undefined behavior C++-wise, the two's complement implementation of
 // modern processors matches the required Java semantics. So silence ubsan.
@@ -428,6 +428,62 @@ bool LocalArrayAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
   }
 }
 
+bool ResourceIdAnalyzer::is_src_known(const IRInstruction* insn,
+                                      ConstantEnvironment* env,
+                                      src_index_t i) {
+  const auto& register_env = env->get_register_environment();
+  const auto& value = register_env.get(insn->src(i));
+  auto r_domain = value.maybe_get<ConstantResourceIdDomain>();
+  return r_domain != boost::none && r_domain->is_value();
+}
+
+bool ResourceIdAnalyzer::analyze_r_const(const IRInstruction* insn,
+                                         ConstantEnvironment* env) {
+  auto id = static_cast<uint32_t>(insn->get_literal());
+  TRACE(CONSTP, 5, "Discovered new resource id for reg: %d value: %d",
+        insn->dest(), id);
+  env->set(insn->dest(), ConstantResourceIdDomain({.id = id}));
+  return true;
+}
+
+bool ResourceIdAnalyzer::analyze_cmp(const IRInstruction* insn,
+                                     ConstantEnvironment* env) {
+  if (ResourceIdAnalyzer::is_src_known(insn, env, 0) ||
+      ResourceIdAnalyzer::is_src_known(insn, env, 1)) {
+    env->set(insn->dest(), ConstantValue::top());
+    return true;
+  }
+  return false;
+}
+
+bool ResourceIdAnalyzer::analyze_binop(const IRInstruction* insn,
+                                       ConstantEnvironment* env) {
+  if (ResourceIdAnalyzer::is_src_known(insn, env, 0) ||
+      ResourceIdAnalyzer::is_src_known(insn, env, 1)) {
+    env->set(insn->dest(), ConstantValue::top());
+    return true;
+  }
+  return false;
+}
+
+bool ResourceIdAnalyzer::analyze_unop(const IRInstruction* insn,
+                                      ConstantEnvironment* env) {
+  if (ResourceIdAnalyzer::is_src_known(insn, env, 0)) {
+    env->set(insn->dest(), ConstantValue::top());
+    return true;
+  }
+  return false;
+}
+
+bool ResourceIdAnalyzer::analyze_binop_lit(const IRInstruction* insn,
+                                           ConstantEnvironment* env) {
+  if (ResourceIdAnalyzer::is_src_known(insn, env, 0)) {
+    env->set(insn->dest(), ConstantValue::top());
+    return true;
+  }
+  return false;
+}
+
 bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
                                         ConstantEnvironment* env) {
   if (opcode::is_a_load_param(insn->opcode())) {
@@ -573,7 +629,7 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     case OPCODE_LONG_TO_INT:
       return apply((int32_t)val);
     case OPCODE_INT_TO_LONG:
-      return apply((int64_t)val);
+      return apply(val);
     case OPCODE_INT_TO_BYTE:
       return apply((int8_t)val);
     case OPCODE_INT_TO_CHAR:
@@ -629,7 +685,7 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
 bool PrimitiveAnalyzer::analyze_binop_lit(
     const IRInstruction* insn, ConstantEnvironment* env) NO_UBSAN_ARITH {
   auto op = insn->opcode();
-  int32_t lit = insn->get_literal();
+  int32_t lit = static_cast<int32_t>(insn->get_literal());
   auto scd = env->get<SignedConstantDomain>(insn->src(0));
   const auto cst = scd.get_constant();
   boost::optional<int64_t> result = boost::none;
@@ -681,9 +737,9 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
     // as in https://source.android.com/devices/tech/dalvik/dalvik-bytecode
     // the following operations have the second operand masked.
     case OPCODE_SHL_INT_LIT: {
-      uint32_t ucst = *cst;
+      uint32_t ucst = static_cast<uint32_t>(*cst);
       uint32_t uresult = ucst << (lit & 0x1f);
-      result = (int32_t)uresult;
+      result = static_cast<int32_t>(uresult);
       break;
     }
     case OPCODE_SHR_INT_LIT: {
@@ -691,7 +747,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
       break;
     }
     case OPCODE_USHR_INT_LIT: {
-      uint32_t ucst = *cst;
+      uint32_t ucst = static_cast<uint32_t>(*cst);
       // defined in dalvik spec
       result = ucst >> (lit & 0x1f);
       break;
@@ -1005,13 +1061,13 @@ bool StaticFinalFieldAnalyzer::analyze_sget(const IRInstruction* insn,
   }
 
   auto* field = insn->get_field();
-  const auto* dex_field = static_cast<const DexField*>(field);
+  const auto* dex_field = dynamic_cast<const DexField*>(field);
   // Only want to set the environment of the variable has a static value
   // and is certainly final and will not be modified
   if ((field != nullptr) && field->is_def() &&
       (dex_field->get_static_value() != nullptr) && is_final(dex_field)) {
-    const auto constant =
-        SignedConstantDomain(dex_field->get_static_value()->value());
+    const auto constant = SignedConstantDomain(
+        static_cast<int64_t>(dex_field->get_static_value()->value()));
     env->set(RESULT_REGISTER, constant);
     return true;
   }
@@ -1114,7 +1170,8 @@ bool EnumFieldAnalyzer::analyze_invoke(const EnumFieldAnalyzerState& state,
                                        ConstantEnvironment* env) {
   auto op = insn->opcode();
   if (op == OPCODE_INVOKE_VIRTUAL) {
-    auto* method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+    auto* method =
+        resolve_method_deprecated(insn->get_method(), MethodSearch::Virtual);
     if (method == nullptr) {
       return false;
     }
@@ -1235,7 +1292,7 @@ bool StringAnalyzer::analyze_invoke(const StringAnalyzerState* state,
                                     const IRInstruction* insn,
                                     ConstantEnvironment* env) {
   DexMethod* method =
-      resolve_method(insn->get_method(), opcode_to_search(insn));
+      resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr) {
     return false;
   }
@@ -1276,7 +1333,7 @@ bool StringAnalyzer::analyze_invoke(const StringAnalyzerState* state,
 }
 
 bool NewObjectAnalyzer::ignore_type(
-    const ImmutableAttributeAnalyzerState* state, DexType* type) {
+    const ImmutableAttributeAnalyzerState* state, const DexType* type) {
   // Avoid types that may interact other more specialized object domains.
   if (state->may_be_initialized_type(type) ||
       type == type::java_lang_String() || type == type::java_lang_Boolean()) {
@@ -1304,7 +1361,8 @@ bool NewObjectAnalyzer::analyze_filled_new_array(
   if (ignore_type(state, insn->get_type())) {
     return false;
   }
-  auto array_length = SignedConstantDomain(insn->srcs_size());
+  auto array_length =
+      SignedConstantDomain(static_cast<int64_t>(insn->srcs_size()));
   env->set(RESULT_REGISTER, NewObjectDomain(insn, array_length));
   return true;
 }
@@ -1472,7 +1530,7 @@ bool ImmutableAttributeAnalyzerState::is_jvm_cached_object(
   return value >= cached_objects.begin && value < cached_objects.end;
 }
 
-DexType* ImmutableAttributeAnalyzerState::initialized_type(
+const DexType* ImmutableAttributeAnalyzerState::initialized_type(
     const DexMethod* initialize_method) {
   auto* res = method::is_init(initialize_method)
                   ? initialize_method->get_class()
@@ -1484,7 +1542,7 @@ DexType* ImmutableAttributeAnalyzerState::initialized_type(
 }
 
 bool ImmutableAttributeAnalyzerState::may_be_initialized_type(
-    DexType* type) const {
+    const DexType* type) const {
   if (type == nullptr || type::is_array(type)) {
     return false;
   }
@@ -1492,14 +1550,14 @@ bool ImmutableAttributeAnalyzerState::may_be_initialized_type(
   return *may_be_initialized_types
               .get_or_create_and_assert_equal(
                   type,
-                  [&](DexType*) {
+                  [&](const DexType*) {
                     return compute_may_be_initialized_type(type);
                   })
               .first;
 }
 
 bool ImmutableAttributeAnalyzerState::compute_may_be_initialized_type(
-    DexType* type) const {
+    const DexType* type) const {
   // Here we effectively check if check_cast(type, x) for any x in
   // initialized_types.
   always_assert(type != nullptr);
@@ -1529,7 +1587,7 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
   auto* field_ref = insn->get_field();
   DexField* field = resolve_field(field_ref, FieldSearch::Instance);
   if (field == nullptr) {
-    field = static_cast<DexField*>(field_ref);
+    field = dynamic_cast<DexField*>(field_ref);
   }
 
   // Immutable state should not be updated in parallel with analysis.
@@ -1566,11 +1624,12 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   auto* method_ref = insn->get_method();
-  DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
+  DexMethod* method =
+      resolve_method_deprecated(method_ref, opcode_to_search(insn));
   if (method == nullptr) {
     // Redex may run without sdk as input, so the method resolving may fail.
     // Example: Integer.valueOf(I) is an external method.
-    method = static_cast<DexMethod*>(method_ref);
+    method = dynamic_cast<DexMethod*>(method_ref);
   }
 
   // Immutable state should not be updated in parallel with analysis.
@@ -1630,7 +1689,7 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
   }
   ObjectWithImmutAttr object(
       ImmutableAttributeAnalyzerState::initialized_type(method),
-      it->second.size());
+      static_cast<uint32_t>(it->second.size()));
   // Only support one register for the object, can be easily extended. For
   // example, virtual method may return `this` pointer, so two registers are
   // holding the same heap object.
@@ -1884,11 +1943,12 @@ void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
 /*
  * Helpers for CFG edge analysis
  */
-
+namespace {
 struct IfZeroMeetWith {
   sign_domain::Interval right_zero_meet_interval;
   boost::optional<sign_domain::Interval> left_zero_meet_interval{boost::none};
 };
+} // namespace
 
 static const UnorderedMap<IROpcode, IfZeroMeetWith, boost::hash<IROpcode>>
     if_zero_meet_with{
@@ -2108,8 +2168,10 @@ void FixpointIterator::analyze_switch(const IRInstruction* insn,
       return;
     }
     auto selector_const = scd->get_constant();
-    if (selector_const && has_switch_consecutive_case_keys(
-                              edge->src(), *selector_const, *selector_const)) {
+    if (selector_const &&
+        has_switch_consecutive_case_keys(
+            edge->src(), static_cast<int32_t>(*selector_const),
+            static_cast<int32_t>(*selector_const))) {
       env->set_to_bottom();
       return;
     }
@@ -2120,7 +2182,8 @@ void FixpointIterator::analyze_switch(const IRInstruction* insn,
     auto lb = numeric_interval_domain.lower_bound();
     auto ub = numeric_interval_domain.upper_bound();
     if (lb > NumericIntervalDomain::MIN && ub < NumericIntervalDomain::MAX &&
-        has_switch_consecutive_case_keys(edge->src(), lb, ub)) {
+        has_switch_consecutive_case_keys(edge->src(), static_cast<int32_t>(lb),
+                                         static_cast<int32_t>(ub))) {
       env->set_to_bottom();
       return;
     }

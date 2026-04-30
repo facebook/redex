@@ -7,14 +7,14 @@
 
 #include "RedexResources.h"
 
+#include <array>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem/operations.hpp>
-#include <boost/graph/depth_first_search.hpp>
-#include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/regex/pending/unicode_iterator.hpp>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <string>
@@ -25,9 +25,6 @@
 #include "CppUtil.h"
 #include "Debug.h"
 #include "DetectBundle.h"
-#include "DexUtil.h"
-#include "GlobalConfig.h"
-#include "IOUtil.h"
 #include "ReadMaybeMapped.h"
 #include "Trace.h"
 #include "WorkQueue.h"
@@ -110,12 +107,13 @@ namespace {
 UnorderedSet<std::string> extract_classes_from_native_lib(const char* data,
                                                           size_t size) {
   UnorderedSet<std::string> classes;
-  char buffer[MAX_CLASSNAME_LENGTH + 2]; // +2 for the trailing ";\0"
+  std::array<char, MAX_CLASSNAME_LENGTH + 2> buffer{}; // +2 for the trailing
+                                                       // ";\0"
   const char* inptr = data;
   const char* end = inptr + size;
 
   while (inptr < end) {
-    char* outptr = buffer;
+    char* outptr = buffer.data();
     size_t length = 0;
     // All classnames start with a package, which starts with a lowercase
     // letter. Some of them are preceded by an 'L' and followed by a ';' in
@@ -139,7 +137,7 @@ UnorderedSet<std::string> extract_classes_from_native_lib(const char* data,
       if (length >= MIN_CLASSNAME_LENGTH) {
         *outptr++ = ';';
         *outptr = '\0';
-        classes.insert(std::string(buffer));
+        classes.insert(std::string(buffer.data()));
       }
     }
     inptr++;
@@ -528,13 +526,16 @@ void ResourceTableFile::finalize_resource_table(const ResourceConfig& config) {
 
 resources::StyleInfo ResourceTableFile::load_style_info() {
   resources::StyleInfo style_info;
+  uint32_t max_resource_id = 0;
   style_info.styles = get_style_map();
   TRACE(RES,
         3,
         "Building style graph; style count = %zu",
         style_info.styles.size());
   std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> added_nodes;
-  for (auto&& [id, _] : style_info.styles) {
+  for (const auto& style : style_info.styles) {
+    auto id = style.first;
+    max_resource_id = std::max(max_resource_id, id);
     auto v =
         boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
     added_nodes.emplace(id, v);
@@ -552,6 +553,8 @@ resources::StyleInfo ResourceTableFile::load_style_info() {
       }
     }
   }
+  style_info.set_max_resource_id(max_resource_id);
+  style_info.id_to_vertex = added_nodes;
   return style_info;
 }
 
@@ -583,8 +586,8 @@ std::string convert_utf8_to_mutf8(std::string_view input) {
       out << '\xC0' << '\x80';
     } else if (code_point < 0x10000) {
       // Normal UTF-8 encoding.
-      char dest[4] = {0};
-      utf32_to_utf8(&code_point, 1, dest, sizeof(dest));
+      std::array<char, 4> dest{};
+      utf32_to_utf8(&code_point, 1, dest.data(), dest.size());
       for (size_t i = 0; i < (size_t)len; i++) {
         out << dest[i];
       }
@@ -645,11 +648,11 @@ UnorderedSet<std::string> parse_keep_xml_file(
         xml_file, tree, boost::property_tree::xml_parser::trim_whitespace);
   } catch (const std::exception& e) {
     std::cerr << "Error parsing XML file at " << xml_file_path << ": "
-              << e.what() << std::endl;
+              << e.what() << '\n';
     return resource_names;
   } catch (...) {
     std::cerr << "Unknown error occurred while parsing XML file at "
-              << xml_file_path << std::endl;
+              << xml_file_path << '\n';
     return resource_names;
   }
 
@@ -660,7 +663,7 @@ UnorderedSet<std::string> parse_keep_xml_file(
     return resource_names;
   }
 
-  std::string keep_str = keep_value.value();
+  const std::string& keep_str = keep_value.value();
   for (const auto& token : split_string(keep_str, ",")) {
     std::string_view trimmed_token = trim_whitespaces(token);
     size_t pos = trimmed_token.find('/');
@@ -713,7 +716,7 @@ std::string StyleInfo::print_as_dot(
   // NOTE: this should get converted over to use boost graph printing
   // functionality. Only reason for leaving as-is, for now, is to keep the
   // existing API for letting users customize the display of nodes.
-  oss << "digraph {" << std::endl;
+  oss << "digraph {" << '\n';
   for (auto id : ordered_nodes) {
     oss << "  " << "node" << id << " [";
     bool emitted_label{false};
@@ -739,16 +742,16 @@ std::string StyleInfo::print_as_dot(
       auto str = stringify(id);
       oss << "label=\"" << str << "\"";
     }
-    oss << "];" << std::endl;
+    oss << "];" << '\n';
   }
-  oss << "  subgraph parents_edges {" << std::endl;
+  oss << "  subgraph parents_edges {" << '\n';
   for (auto&& [id, set] : ordered_parents) {
     for (auto parent : set) {
-      oss << "    node" << id << " -> node" << parent << ";" << std::endl;
+      oss << "    node" << id << " -> node" << parent << ";" << '\n';
     }
   }
-  oss << "  }" << std::endl;
-  oss << "}" << std::endl;
+  oss << "  }" << '\n';
+  oss << "}" << '\n';
   return oss.str();
 }
 
@@ -777,4 +780,62 @@ UnorderedSet<StyleInfo::vertex_t> StyleInfo::get_roots() const {
 
   return root_vertices;
 }
+
+std::vector<uint32_t> StyleInfo::get_children(uint32_t resource_id) const {
+  auto vertex = id_to_vertex.at(resource_id);
+  auto children = boost::adjacent_vertices(vertex, graph);
+  std::vector<uint32_t> children_ids;
+  for (auto child = children.first; child != children.second; ++child) {
+    children_ids.push_back(graph[*child].id);
+  }
+  return children_ids;
+}
+
+std::optional<uint32_t> StyleInfo::get_unambiguous_parent(
+    uint32_t resource_id) const {
+  const auto& resource_styles_it = styles.find(resource_id);
+  if (resource_styles_it == styles.end()) {
+    return std::nullopt;
+  }
+
+  const auto& resource_styles = resource_styles_it->second;
+  if (resource_styles.size() != 1) {
+    return std::nullopt;
+  }
+
+  const auto& resource_style = resource_styles[0];
+  return resource_style.parent;
+}
+
+uint32_t StyleInfo::get_depth(uint32_t resource_id) const {
+  std::function<uint32_t(uint32_t)> calculate_depth =
+      [&](uint32_t id) -> uint32_t {
+    auto children = get_children(id);
+
+    if (children.empty()) {
+      return 0;
+    }
+
+    uint32_t max_depth = 0;
+    for (uint32_t child_id : children) {
+      uint32_t child_depth = calculate_depth(child_id);
+      max_depth = std::max(max_depth, child_depth + 1);
+    }
+
+    return max_depth;
+  };
+
+  return calculate_depth(resource_id);
+}
+
+void StyleInfo::set_max_resource_id(uint32_t new_max_resource_id) {
+  max_resource_id = new_max_resource_id;
+}
+
+uint32_t StyleInfo::get_new_resource_id() {
+  uint32_t new_max_resource_id = max_resource_id + 1;
+  set_max_resource_id(new_max_resource_id);
+  return new_max_resource_id;
+}
+
 }; // namespace resources

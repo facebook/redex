@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
-
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Model.h"

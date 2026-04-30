@@ -10,7 +10,6 @@
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
-#include "BaseIRAnalyzer.h"
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "IRCode.h"
@@ -205,7 +204,7 @@ class WritesAnalyzer {
             if (non_zero_value_defs.empty()) {
               continue;
             }
-            DexType* arg_type;
+            const DexType* arg_type;
             if (src_idx == 0 && is_instance) {
               arg_type = insn->get_method()->get_class();
             } else {
@@ -219,7 +218,7 @@ class WritesAnalyzer {
             bool other =
                 src_idx != 0 || op != OPCODE_INVOKE_DIRECT ||
                 !method::is_init(insn->get_method()) ||
-                ((invoked_ctor = resolve_method(
+                ((invoked_ctor = resolve_method_deprecated(
                       insn->get_method(), MethodSearch::Direct)) == nullptr);
             escape(non_zero_value_defs, nullptr, invoked_ctor, other);
           }

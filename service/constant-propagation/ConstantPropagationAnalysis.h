@@ -159,6 +159,27 @@ class InjectionIdAnalyzer final
 using ConstantPrimitiveAnalyzer =
     InstructionAnalyzerCombiner<PrimitiveAnalyzer>;
 
+class ResourceIdAnalyzer final
+    : public InstructionAnalyzerBase<ResourceIdAnalyzer, ConstantEnvironment> {
+ public:
+  static bool analyze_r_const(const IRInstruction* insn,
+                              ConstantEnvironment* env);
+  static bool analyze_cmp(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_unop(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_binop_lit(const IRInstruction* insn,
+                                ConstantEnvironment* env);
+
+  static bool analyze_binop(const IRInstruction* insn,
+                            ConstantEnvironment* env);
+
+ private:
+  static bool is_src_known(const IRInstruction* insn,
+                           ConstantEnvironment* env,
+                           src_index_t i);
+};
+
 /*
  * Defines default analyses of opcodes that have the potential to let
  * heap-allocated values escape. It sets the escaped values to Top.
@@ -266,7 +287,7 @@ struct EnumFieldAnalyzerState {
   const DexMethod* enum_equals;
 
   EnumFieldAnalyzerState()
-      : enum_equals(static_cast<DexMethod*>(DexMethod::get_method(
+      : enum_equals(dynamic_cast<DexMethod*>(DexMethod::get_method(
             "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {}
 };
 
@@ -333,8 +354,9 @@ struct ImmutableAttributeAnalyzerState {
   ConcurrentSet<DexMethod*> attribute_methods;
   ConcurrentSet<DexField*> attribute_fields;
   UnorderedMap<DexMethod*, CachedBoxedObjects> cached_boxed_objects;
-  ConcurrentSet<DexType*> initialized_types;
-  mutable InsertOnlyConcurrentMap<DexType*, bool> may_be_initialized_types;
+  ConcurrentSet<const DexType*> initialized_types;
+  mutable InsertOnlyConcurrentMap<const DexType*, bool>
+      may_be_initialized_types;
 
   ImmutableAttributeAnalyzerState();
 
@@ -349,12 +371,12 @@ struct ImmutableAttributeAnalyzerState {
                                 long end);
   bool is_jvm_cached_object(DexMethod* initialize_method, long value) const;
 
-  static DexType* initialized_type(const DexMethod* initialize_method);
+  static const DexType* initialized_type(const DexMethod* initialize_method);
 
-  bool may_be_initialized_type(DexType* type) const;
+  bool may_be_initialized_type(const DexType* type) const;
 
  private:
-  bool compute_may_be_initialized_type(DexType* type) const;
+  bool compute_may_be_initialized_type(const DexType* type) const;
 };
 
 class ImmutableAttributeAnalyzer final
@@ -386,14 +408,14 @@ struct BoxedBooleanAnalyzerState {
   static const BoxedBooleanAnalyzerState& get();
 
   const DexType* boolean_class{DexType::get_type("Ljava/lang/Boolean;")};
-  const DexField* boolean_true{static_cast<DexField*>(
+  const DexField* boolean_true{dynamic_cast<DexField*>(
       DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"))};
-  const DexField* boolean_false{static_cast<DexField*>(
+  const DexField* boolean_false{dynamic_cast<DexField*>(
       DexField::get_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;"))};
   const DexMethod* boolean_valueof{
-      static_cast<DexMethod*>(DexMethod::get_method(
+      dynamic_cast<DexMethod*>(DexMethod::get_method(
           "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;"))};
-  const DexMethod* boolean_booleanvalue{static_cast<DexMethod*>(
+  const DexMethod* boolean_booleanvalue{dynamic_cast<DexMethod*>(
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z"))};
 };
 
@@ -504,7 +526,7 @@ class NewObjectAnalyzer
                                      ConstantEnvironment,
                                      ImmutableAttributeAnalyzerState*> {
   static bool ignore_type(const ImmutableAttributeAnalyzerState* state,
-                          DexType* type);
+                          const DexType* type);
 
  public:
   static bool analyze_new_instance(const ImmutableAttributeAnalyzerState* state,

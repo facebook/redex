@@ -8,18 +8,17 @@
 #include "ObfuscateResourcesPass.h"
 
 #include <algorithm>
-#include <boost/algorithm/string.hpp>
-#include <boost/format.hpp>
+#include <boost/algorithm/string.hpp> // NOLINT
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/format.hpp> // NOLINT
 #include <cstdio>
 #include <string>
 
-#include "ApkResources.h"
 #include "BundleResources.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
-#include "DetectBundle.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
 #include "OptimizeResources.h"

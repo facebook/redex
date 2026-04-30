@@ -44,18 +44,14 @@ struct Tracer {
       return;
     }
 
-    std::cerr << "Trace settings:" << std::endl;
-    std::cerr << "TRACEFILE=" << (envfile == nullptr ? "" : envfile)
-              << std::endl;
+    std::cerr << "Trace settings:" << '\n';
+    std::cerr << "TRACEFILE=" << (envfile == nullptr ? "" : envfile) << '\n';
     std::cerr << "SHOW_TIMESTAMPS="
-              << (show_timestamps == nullptr ? "" : show_timestamps)
-              << std::endl;
+              << (show_timestamps == nullptr ? "" : show_timestamps) << '\n';
     std::cerr << "SHOW_TRACEMODULE="
-              << (show_tracemodule == nullptr ? "" : show_tracemodule)
-              << std::endl;
+              << (show_tracemodule == nullptr ? "" : show_tracemodule) << '\n';
     std::cerr << "TRACE_METHOD_FILTER="
-              << (m_method_filter == nullptr ? "" : m_method_filter)
-              << std::endl;
+              << (m_method_filter == nullptr ? "" : m_method_filter) << '\n';
 
     init_trace_modules(traceenv);
     init_trace_file(envfile);
@@ -146,8 +142,9 @@ struct Tracer {
     char* tracespec = strdup(traceenv);
     const char* sep = ",: ";
     const char* module = nullptr;
-    for (const char* tok = strtok(tracespec, sep); tok != nullptr;
-         tok = strtok(nullptr, sep)) {
+    char* saveptr = nullptr;
+    for (const char* tok = strtok_r(tracespec, sep, &saveptr); tok != nullptr;
+         tok = strtok_r(nullptr, sep, &saveptr)) {
       auto level = strtol(tok, nullptr, 10);
       if (level != 0) {
         if (module != nullptr) {

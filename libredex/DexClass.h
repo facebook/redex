@@ -102,6 +102,8 @@ class DexString {
   DexString() = delete;
   DexString(DexString&&) = delete;
   DexString(const DexString&) = delete;
+  DexString& operator=(DexString&&) = delete;
+  DexString& operator=(const DexString&) = delete;
 
   uint32_t size() const { return m_repr.length; }
 
@@ -187,6 +189,8 @@ class DexType {
   DexType() = delete;
   DexType(DexType&&) = delete;
   DexType(const DexType&) = delete;
+  DexType& operator=(DexType&&) = delete;
+  DexType& operator=(const DexType&) = delete;
 
   // DexType retrieval/creation
 
@@ -222,6 +226,19 @@ class DexType {
   std::string_view str() const { return get_name()->str(); }
   std::string str_copy() const { return get_name()->str_copy(); }
   DexProto* get_non_overlapping_proto(const DexString*, DexProto*);
+  DexType* to_mutable() const {
+    // This method can be implemented without const_cast:
+    //   return DexType::get_type(this->get_name());
+    // But this doesn't make sense performance wise, and the return value is
+    // always the same. For this reason, the constness of DexType doesn't make a
+    // difference in redex in terms of constness safety.
+    //
+    // Rather than letting const_cast scatter everywhere, we contain the
+    // const_cast call here -- const_cast can now remain a red flag of code
+    // correctness.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    return const_cast<DexType*>(this);
+  }
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -260,7 +277,7 @@ class DexFieldRef {
   bool m_concrete;
   bool m_external;
 
-  ~DexFieldRef() {}
+  virtual ~DexFieldRef() = default;
   DexFieldRef(DexType* container, const DexString* name, DexType* type) {
     m_spec.cls = container;
     m_spec.name = name;
@@ -273,6 +290,8 @@ class DexFieldRef {
   DexFieldRef() = delete;
   DexFieldRef(DexFieldRef&&) = delete;
   DexFieldRef(const DexFieldRef&) = delete;
+  DexFieldRef& operator=(DexFieldRef&&) = delete;
+  DexFieldRef& operator=(const DexFieldRef&) = delete;
 
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
@@ -449,9 +468,9 @@ struct dexfields_comparator {
 
 class DexTypeList {
  public:
-  using ContainerType = std::vector<DexType*>;
+  using ContainerType = std::vector<const DexType*>;
 
-  using value_type = DexType*;
+  using value_type = const DexType*;
   using iterator = typename ContainerType::iterator;
   using const_iterator = typename ContainerType::const_iterator;
 
@@ -461,7 +480,7 @@ class DexTypeList {
   size_t size() const { return m_list.size(); }
   bool empty() const { return m_list.empty(); }
 
-  DexType* at(size_t i) const { return m_list.at(i); }
+  const DexType* at(size_t i) const { return m_list.at(i); }
 
   // DexTypeList retrieval/creation
 
@@ -501,19 +520,19 @@ class DexTypeList {
   template <typename C>
   void gather_types(C& ltype) const;
 
-  bool equals(const std::vector<DexType*>& vec) const {
+  bool equals(const std::vector<const DexType*>& vec) const {
     return std::equal(m_list.begin(), m_list.end(), vec.begin(), vec.end());
   }
 
-  DexTypeList* push_front(DexType* t) const;
+  DexTypeList* push_front(const DexType* t) const;
   DexTypeList* pop_front() const;
   DexTypeList* pop_front(size_t n) const;
   DexTypeList* pop_back(size_t n) const;
 
-  DexTypeList* push_back(DexType* t) const;
-  DexTypeList* push_back(const std::vector<DexType*>& t) const;
+  DexTypeList* push_back(const DexType* t) const;
+  DexTypeList* push_back(const std::vector<const DexType*>& t) const;
 
-  DexTypeList* replace_head(DexType* new_head) const;
+  DexTypeList* replace_head(const DexType* new_head) const;
 
  private:
   // See UNIQUENESS above for the rationale for the private constructor pattern.
@@ -557,6 +576,8 @@ class DexProto {
   DexProto() = delete;
   DexProto(DexProto&&) = delete;
   DexProto(const DexProto&) = delete;
+  DexProto& operator=(DexProto&&) = delete;
+  DexProto& operator=(const DexProto&) = delete;
 
   // DexProto retrieval/creation
 
@@ -637,7 +658,7 @@ struct DexDebugEntry final {
   DexDebugEntry(DexDebugEntry&& other) noexcept;
   ~DexDebugEntry();
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
 };
 
 class DexDebugItem {
@@ -676,7 +697,7 @@ class DexDebugItem {
       uint32_t num_params,
       const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops);
 
-  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring) const;
 };
 
@@ -831,7 +852,7 @@ class DexMethodRef {
   bool m_concrete;
   bool m_external;
 
-  ~DexMethodRef() {}
+  virtual ~DexMethodRef() = default;
   DexMethodRef(DexType* type, const DexString* name, DexProto* proto)
       : m_spec(type, name, proto) {
     m_concrete = false;
@@ -842,6 +863,8 @@ class DexMethodRef {
   DexMethodRef() = delete;
   DexMethodRef(DexMethodRef&&) = delete;
   DexMethodRef(const DexMethodRef&) = delete;
+  DexMethodRef& operator=(DexMethodRef&&) = delete;
+  DexMethodRef& operator=(const DexMethodRef&) = delete;
 
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
@@ -892,6 +915,8 @@ class DexMethodRef {
   static void delete_method(DexMethodRef* method);
 
   dex_member_refs::MethodDescriptorTokens get_descriptor_tokens() const;
+
+  static bool is_valid_name(std::string_view name);
 };
 
 class DexMethod : public DexMethodRef {
@@ -938,6 +963,15 @@ class DexMethod : public DexMethodRef {
                                    const DexProto* proto);
 
   static DexMethodRef* make_method(const DexMethodSpec& spec);
+
+  // Similar to make_method but return DexMethod* instead of DexMethodRef*.
+  // Use those only if you are expecting a DexMethod* not a DexMethodRef*
+  // because these methods do runtime check with dynamic_cast.
+  static DexMethod* make_method_downcast(const DexType* type,
+                                         const DexString* name,
+                                         const DexProto* proto);
+
+  static DexMethod* make_method_downcast(const DexMethodSpec& spec);
 
   /**
    * Create a copy of method `that`. This excludes `rstate`.
@@ -1113,7 +1147,7 @@ class DexMethod : public DexMethodRef {
   template <typename C>
   void gather_methodhandles(C& lmethodhandle) const;
 
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
 
   /*
    * DexCode <-> IRCode conversion methods.
@@ -1365,8 +1399,8 @@ class DexClass {
   template <typename C>
   void gather_methodhandles(C& lmethodhandle) const;
 
-  void gather_load_types(UnorderedSet<DexType*>& ltype) const;
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_load_types(UnorderedSet<const DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
 
   // Whether to optimize for perf, instead of space.
   // This bit is only set by the InterDex pass and not available earlier.
@@ -1460,7 +1494,7 @@ inline DexClass* type_class_internal(const DexType* t) {
  * methods, such that components are sorted and unique.
  */
 void gather_components(std::vector<const DexString*>& lstring,
-                       std::vector<DexType*>& ltype,
+                       std::vector<const DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,
                        std::vector<DexCallSite*>& lcallsite,

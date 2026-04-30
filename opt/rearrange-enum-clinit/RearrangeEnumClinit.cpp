@@ -47,7 +47,8 @@ struct Rearranger {
         mac(cfg),
         def_use(mac.get_def_use_chains()),
         use_def(mac.get_use_def_chains()),
-        insn_map([](auto* block) {
+        insn_map([](auto* block)
+                     -> UnorderedMap<const IRInstruction*, IRList::iterator> {
           UnorderedMap<const IRInstruction*, IRList::iterator> map;
           for (auto it = block->begin(); it != block->end(); ++it) {
             if (it->type == MFLOW_OPCODE) {

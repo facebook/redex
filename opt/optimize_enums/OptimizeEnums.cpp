@@ -135,8 +135,8 @@ bool analyze_enum_ctors(
   for (; !delegating_calls.empty(); delegating_calls.pop()) {
     auto dc = delegating_calls.front();
 
-    auto* delegate =
-        resolve_method(dc.invoke->get_method(), MethodSearch::Direct);
+    auto* delegate = resolve_method_deprecated(dc.invoke->get_method(),
+                                               MethodSearch::Direct);
 
     uint32_t delegate_ordinal;
     { // Only proceed if the delegate constructor has already been processed.
@@ -215,9 +215,9 @@ void collect_generated_switch_cases(
     GeneratedSwitchCases& generated_switch_cases) {
   mf::flow_t f;
 
-  DexMethod* Enum_ordinal =
-      resolve_method(DexMethod::get_method("Ljava/lang/Enum;.ordinal:()I"),
-                     MethodSearch::Virtual);
+  DexMethod* Enum_ordinal = resolve_method_deprecated(
+      DexMethod::get_method("Ljava/lang/Enum;.ordinal:()I"),
+      MethodSearch::Virtual);
   always_assert(Enum_ordinal);
 
   auto m_generated_field = m::has_field(
@@ -383,7 +383,7 @@ class OptimizeEnums {
                              int max_enum_size,
                              bool skip_sanity_check,
                              const bool support_kt_19_enum_entries,
-                             const std::vector<DexType*>& allowlist,
+                             const std::vector<const DexType*>& allowlist,
                              ConfigFiles& conf,
                              UnorderedMap<UnsafeType, size_t>& unsafe_counts) {
     if (max_enum_size <= 0) {
@@ -483,7 +483,7 @@ class OptimizeEnums {
     });
 
     // Need to remember to understand what was rejected.
-    UnorderedSet<DexType*> orig_candidates;
+    UnorderedSet<const DexType*> orig_candidates;
     insert_unordered_iterable(orig_candidates, config.candidate_enums);
 
     auto add_unsafe_usage = [&](const DexType* type, UnsafeType u) {
@@ -494,12 +494,12 @@ class OptimizeEnums {
 
     optimize_enums::reject_unsafe_enums(m_scope, &config, add_unsafe_usage);
     if (traceEnabled(ENUM, 4)) {
-      for (auto* cls : UnorderedIterable(config.candidate_enums)) {
+      for (const auto* cls : UnorderedIterable(config.candidate_enums)) {
         TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
       }
     }
 
-    for (auto* t : UnorderedIterable(orig_candidates)) {
+    for (const auto* t : UnorderedIterable(orig_candidates)) {
       if (config.candidate_enums.count_unsafe(t) == 0) {
         unsafe_enums.emplace_unsafe(t, UnsafeTypes{UnsafeType::kUsage});
       }
@@ -700,7 +700,11 @@ class OptimizeEnums {
     }
 
     // return-void is the last instruction
-    return opcode::is_return_void(it->insn->opcode()) && (++it) == ii.end();
+    if (!opcode::is_return_void(it->insn->opcode())) {
+      return false;
+    }
+    ++it;
+    return it == ii.end();
   }
 
   /**

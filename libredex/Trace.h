@@ -8,11 +8,9 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
 #include <string>
 
 #include "Macros.h"
-#include "Util.h"
 
 class DexMethodRef;
 class DexType;
@@ -60,6 +58,7 @@ class DexType;
   TM(DS)                \
   TM(EMPTY)             \
   TM(ENUM)              \
+  TM(ERRORS)            \
   TM(EVALTC)            \
   TM(FALCO_STATS)       \
   TM(FINALINLINE)       \

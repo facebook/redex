@@ -18,6 +18,7 @@ namespace builder_pattern {
 class BuilderTransform {
  public:
   BuilderTransform(const Scope& scope,
+                   const ConfigFiles& conf,
                    const TypeSystem& type_system,
                    const DexType* root,
                    const init_classes::InitClassesWithSideEffects&
@@ -36,7 +37,7 @@ class BuilderTransform {
       DexMethod* caller, const UnorderedSet<IRInstruction*>& insns);
 
   void update_virtual_calls(
-      const UnorderedMap<IRInstruction*, DexType*>& insn_to_type);
+      const UnorderedMap<IRInstruction*, const DexType*>& insn_to_type);
 
   void replace_fields(const InstantiationToUsage& usage, DexMethod* method);
 
@@ -49,7 +50,7 @@ class BuilderTransform {
   const DexType* m_root;
   std::unique_ptr<MultiMethodInliner> m_inliner;
   inliner::InlinerConfig m_inliner_config;
-  ConcurrentMethodResolver m_concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated m_concurrent_method_resolver;
 
   // Used for tracking changes that we need to restore.
   UnorderedMap<DexMethod*, DexMethod*> m_method_copy;

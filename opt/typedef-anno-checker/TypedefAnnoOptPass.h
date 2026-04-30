@@ -9,7 +9,6 @@
 
 #include <mutex>
 
-#include "ControlFlow.h"
 #include "Pass.h"
 #include "TypeInference.h"
 
@@ -28,8 +27,8 @@ class TypedefAnnoOptPass : public Pass {
   }
 
   struct Config {
-    DexType* int_typedef{nullptr};
-    DexType* str_typedef{nullptr};
+    const DexType* int_typedef{nullptr};
+    const DexType* str_typedef{nullptr};
   };
 
   void bind_config() override {

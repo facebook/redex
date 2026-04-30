@@ -8,7 +8,6 @@
 #include "TypeAnalysisTransform.h"
 
 #include "DeterministicContainers.h"
-#include "DexInstruction.h"
 #include "IRInstruction.h"
 #include "KotlinNullCheckMethods.h"
 #include "Show.h"

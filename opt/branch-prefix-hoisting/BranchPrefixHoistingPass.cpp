@@ -56,19 +56,19 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   bool can_allocate_regs = !mgr.regalloc_has_run();
-  int total_insns_hoisted = walk::parallel::methods<int>(
-      scope, [can_allocate_regs](DexMethod* method) -> int {
+  size_t total_insns_hoisted = walk::parallel::methods<size_t>(
+      scope, [can_allocate_regs](DexMethod* method) -> size_t {
         auto* const code = method->get_code();
         if ((code == nullptr) || method->rstate.no_optimizations()) {
           return 0;
         }
         TraceContext context{method};
 
-        int insns_hoisted = branch_prefix_hoisting_impl::process_code(
+        size_t insns_hoisted = branch_prefix_hoisting_impl::process_code(
             code, method, can_allocate_regs);
         if (insns_hoisted != 0) {
           TRACE(BPH, 3,
-                "[branch prefix hoisting] Moved %u insns in method {%s}",
+                "[branch prefix hoisting] Moved %zu insns in method {%s}",
                 insns_hoisted, SHOW(method));
         }
         return insns_hoisted;

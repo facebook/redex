@@ -7,7 +7,7 @@
 
 #include "DelSuper.h"
 
-#include <algorithm>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -34,16 +34,16 @@ constexpr const char* METRIC_METHOD_RELAXED_VISIBILITY =
 constexpr const char* METRIC_CLASS_RELAXED_VISIBILITY =
     "num_class_relaxed_visibility";
 
-static const IROpcode s_return_invoke_super_void_opcs[2] = {OPCODE_INVOKE_SUPER,
-                                                            OPCODE_RETURN_VOID};
+constexpr std::array s_return_invoke_super_void_opcs{OPCODE_INVOKE_SUPER,
+                                                     OPCODE_RETURN_VOID};
 
-static const IROpcode s_return_invoke_super_opcs[3] = {
+constexpr std::array s_return_invoke_super_opcs{
     OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT, OPCODE_RETURN};
 
-static const IROpcode s_return_invoke_super_wide_opcs[3] = {
+constexpr std::array s_return_invoke_super_wide_opcs{
     OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT_WIDE, OPCODE_RETURN_WIDE};
 
-static const IROpcode s_return_invoke_super_obj_opcs[3] = {
+constexpr std::array s_return_invoke_super_obj_opcs{
     OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT_OBJECT, OPCODE_RETURN_OBJECT};
 
 class DelSuper {
@@ -110,13 +110,13 @@ class DelSuper {
     return true;
   }
 
+  template <size_t N>
   bool are_opcs_equal(const std::vector<IRInstruction*>& insns,
-                      const IROpcode* opcs,
-                      size_t opcs_len) {
-    if (insns.size() != opcs_len) {
+                      const std::array<IROpcode, N>& opcs) {
+    if (insns.size() != N) {
       return false;
     }
-    for (size_t i = 0; i < opcs_len; ++i) {
+    for (size_t i = 0; i < N; ++i) {
       if (insns[i]->opcode() != opcs[i]) {
         return false;
       }
@@ -169,10 +169,10 @@ class DelSuper {
     }
 
     // Must satisfy one of the four "trivial invoke super" patterns
-    if (!(are_opcs_equal(insns, s_return_invoke_super_void_opcs, 2) ||
-          are_opcs_equal(insns, s_return_invoke_super_opcs, 3) ||
-          are_opcs_equal(insns, s_return_invoke_super_wide_opcs, 3) ||
-          are_opcs_equal(insns, s_return_invoke_super_obj_opcs, 3))) {
+    if (!(are_opcs_equal(insns, s_return_invoke_super_void_opcs) ||
+          are_opcs_equal(insns, s_return_invoke_super_opcs) ||
+          are_opcs_equal(insns, s_return_invoke_super_wide_opcs) ||
+          are_opcs_equal(insns, s_return_invoke_super_obj_opcs))) {
       return nullptr;
     }
 

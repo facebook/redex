@@ -40,14 +40,14 @@ optional<std::string> parse_str(const Json::Value& str,
   return str.asString();
 }
 
-optional<DexType*> parse_type(const Json::Value& str,
-                              Configurable::bindflags_t bindflags) {
+optional<const DexType*> parse_type(const Json::Value& str,
+                                    Configurable::bindflags_t bindflags) {
   assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
              "Only type bindflags may be specified for a DexType*");
   if (!str.isString()) {
     throw std::runtime_error("Expected string, got:" + str.asString());
   }
-  auto* type = DexType::get_type(str.asString());
+  const auto* type = DexType::get_type(str.asString());
   if (type == nullptr) {
     error_or_warn(
         bindflags & Configurable::bindflags::types::error_if_unresolvable,
@@ -401,8 +401,8 @@ UnorderedSet<std::string> Configurable::as<UnorderedSet<std::string>>(
 }
 
 template <>
-DexType* Configurable::as<DexType*>(const Json::Value& value,
-                                    bindflags_t bindflags) {
+const DexType* Configurable::as<const DexType*>(const Json::Value& value,
+                                                bindflags_t bindflags) {
   if (auto type = parse_type(value, bindflags)) {
     return *type;
   }
@@ -410,7 +410,7 @@ DexType* Configurable::as<DexType*>(const Json::Value& value,
 }
 
 template <>
-std::vector<DexType*> Configurable::as<std::vector<DexType*>>(
+std::vector<const DexType*> Configurable::as<std::vector<const DexType*>>(
     const Json::Value& value, bindflags_t bindflags) {
   return std::move(*parse_vec(value, parse_type, bindflags));
 }
@@ -422,23 +422,12 @@ std::vector<DexMethod*> Configurable::as<std::vector<DexMethod*>>(
 }
 
 template <>
-UnorderedSet<DexType*> Configurable::as<UnorderedSet<DexType*>>(
+UnorderedSet<const DexType*> Configurable::as<UnorderedSet<const DexType*>>(
     const Json::Value& value, bindflags_t bindflags) {
   return std::move(*parse_set(value, parse_type, bindflags));
 }
 
-template <>
-UnorderedSet<const DexType*> Configurable::as<UnorderedSet<const DexType*>>(
-    const Json::Value& value, bindflags_t bindflags) {
-  return std::move(*parse_set(
-      value,
-      [](const Json::Value& v, bindflags_t b) {
-        return std::optional<const DexType*>(parse_type(v, b));
-      },
-      bindflags));
-}
-
-using TypeMap = UnorderedMap<DexType*, DexType*>;
+using TypeMap = UnorderedMap<const DexType*, const DexType*>;
 
 template <>
 TypeMap Configurable::as<TypeMap>(const Json::Value& value,
@@ -559,7 +548,7 @@ IMPLEMENT_REFLECTOR_EX(long, "long")
 IMPLEMENT_REFLECTOR_EX(unsigned long, "long")
 IMPLEMENT_REFLECTOR_EX(long long, "long")
 IMPLEMENT_REFLECTOR_EX(unsigned long long, "long")
-IMPLEMENT_REFLECTOR_EX(DexType*, "string")
+IMPLEMENT_REFLECTOR_EX(const DexType*, "string")
 IMPLEMENT_REFLECTOR_EX(std::string, "string")
 IMPLEMENT_REFLECTOR_EX(Json::Value, "json")
 IMPLEMENT_REFLECTOR_EX(std::vector<Json::Value>, "list")
@@ -567,10 +556,9 @@ IMPLEMENT_REFLECTOR_EX(std::optional<std::string>, "string")
 IMPLEMENT_REFLECTOR_EX(std::vector<std::string>, "list")
 IMPLEMENT_REFLECTOR_EX(std::vector<unsigned int>, "list")
 IMPLEMENT_REFLECTOR_EX(UnorderedSet<std::string>, "set")
-IMPLEMENT_REFLECTOR_EX(std::vector<DexType*>, "list")
+IMPLEMENT_REFLECTOR_EX(std::vector<const DexType*>, "list")
 IMPLEMENT_REFLECTOR_EX(std::vector<DexMethod*>, "list")
 IMPLEMENT_REFLECTOR_EX(UnorderedSet<const DexType*>, "set")
-IMPLEMENT_REFLECTOR_EX(UnorderedSet<DexType*>, "set")
 IMPLEMENT_REFLECTOR_EX(UnorderedSet<DexClass*>, "set")
 IMPLEMENT_REFLECTOR_EX(UnorderedSet<DexMethod*>, "set")
 IMPLEMENT_REFLECTOR_EX(Configurable::MapOfVectorOfStrings, "dict")

@@ -80,11 +80,15 @@ class ResourcesPbFile : public ResourceTableFile {
   get_inlinable_resource_values() override;
   UnorderedSet<uint32_t> get_overlayable_id_roots() override;
   resources::StyleMap get_style_map() override;
-  void apply_attribute_removals(
+  void apply_attribute_removals_and_additions(
       const std::vector<resources::StyleModificationSpec::Modification>&
           modifications,
       const std::vector<std::string>& resources_pb_paths) override;
-  void apply_attribute_additions(
+  void apply_style_merges(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) override;
+  void add_styles(
       const std::vector<resources::StyleModificationSpec::Modification>&
           modifications,
       const std::vector<std::string>& resources_pb_paths) override;
@@ -153,7 +157,8 @@ class BundleResources : public AndroidResources {
       size_t* out_num_renamed) override;
 };
 
-bool does_resource_exists_in_file(uint32_t resource_id,
-                                  const std::string& file_path);
+void assert_resources_in_at_most_one_file(
+    const UnorderedSet<uint32_t>& resource_ids,
+    const std::vector<std::string>& resources_pb_paths);
 
 #endif // HAS_PROTOBUF

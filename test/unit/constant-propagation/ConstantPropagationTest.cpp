@@ -5,7 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ConstantPropagationPass.h"
+#include "ConstantPropagationAnalysis.h"
+#include "SignedConstantDomain.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -50,8 +51,8 @@ TEST_F(ConstantPropagationTest, SourceBlockTargetMutating) {
 
   code->build_cfg();
 
-  for (auto block : code->cfg().blocks()) {
-    for (auto sb : source_blocks::gather_source_blocks(block)) {
+  for (auto* block : code->cfg().blocks()) {
+    for (auto* sb : source_blocks::gather_source_blocks(block)) {
       if (sb->id == 2) {
         auto value = sb->get_at(0);
         ASSERT_TRUE(value);

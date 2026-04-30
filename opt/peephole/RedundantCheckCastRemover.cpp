@@ -9,12 +9,12 @@
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRCode.h"
 #include "Match.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 RedundantCheckCastRemover::RedundantCheckCastRemover(

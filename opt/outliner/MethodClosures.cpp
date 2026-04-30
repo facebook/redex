@@ -13,13 +13,11 @@
 
 #include "Lazy.h"
 #include "LiveRange.h"
-#include "Liveness.h"
 #include "MethodUtil.h"
 #include "MonitorCount.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
-#include "WorkQueue.h"
+#include "SourceBlocks.h"
 
 namespace {
 

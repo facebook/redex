@@ -60,7 +60,7 @@ struct BlockAccessor {
 };
 
 inline std::vector<Edge*> get_sorted_edges(Block* b) {
-  auto succs = b->succs();
+  auto succs = b->succs().to_vector();
   std::sort(succs.begin(), succs.end(), [](const Edge* lhs, const Edge* rhs) {
     if (lhs->type() != rhs->type()) {
       return lhs->type() < rhs->type();
@@ -237,6 +237,9 @@ struct InsertResult {
   std::string serialized_idom_map;
   bool profile_success;
   size_t normalized_count;
+  size_t denormalized_count;
+  size_t elided_vals;
+  size_t unelided_vals;
 };
 
 // Source data for a profile = interaction. Three options per interactions:
@@ -414,19 +417,19 @@ inline bool is_hot(cfg::Block* b, float threshold = 0.0f) {
 
 // If a method's entry block is hot, consider this method is hot.
 inline bool method_is_hot(const DexMethod* method, float threshold = 0.0f) {
-  auto& cfg = method->get_code()->cfg();
+  const auto& cfg = method->get_code()->cfg();
   return is_hot(cfg.entry_block(), threshold);
 }
 
 // If a method's entry block may be hot, consider this method may be hot.
 inline bool method_maybe_hot(const DexMethod* method, float threshold = 0.0f) {
-  auto& cfg = method->get_code()->cfg();
+  const auto& cfg = method->get_code()->cfg();
   return maybe_hot(cfg.entry_block(), threshold);
 }
 
 // If a method's entry block is not cold, consider this method is not cold.
 inline bool method_is_not_cold(const DexMethod* method) {
-  auto& cfg = method->get_code()->cfg();
+  const auto& cfg = method->get_code()->cfg();
   return is_not_cold(cfg.entry_block());
 }
 
@@ -497,7 +500,12 @@ inline void get_hot_cold_units(cfg::ControlFlowGraph& cfg,
   }
 }
 
-inline SourceBlock* get_last_source_block(cfg::Block* b) {
+template <typename BlockType, typename SourceBlockType>
+inline SourceBlockType* get_last_source_block_impl(BlockType* b) {
+  static_assert(
+      std::is_same_v<std::remove_const_t<BlockType>, cfg::Block> &&
+      std::is_same_v<std::remove_const_t<SourceBlockType>, SourceBlock>);
+
   auto rit = std::find_if(b->rbegin(), b->rend(), [](const auto& mie) {
     return mie.type == MFLOW_SOURCE_BLOCK;
   });
@@ -508,10 +516,14 @@ inline SourceBlock* get_last_source_block(cfg::Block* b) {
 
   return rit->src_block.get();
 }
-inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
-  return const_cast<SourceBlock*>(
-      get_last_source_block(const_cast<cfg::Block*>(b)));
+
+inline SourceBlock* get_last_source_block(cfg::Block* b) {
+  return get_last_source_block_impl<cfg::Block, SourceBlock>(b);
 }
+inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
+  return get_last_source_block_impl<const cfg::Block, const SourceBlock>(b);
+}
+
 // This helper gets the last source block in a block if it is after a throw,
 // otherwise returns a nullptr
 inline SourceBlock* get_last_source_block_if_after_throw(cfg::Block* b) {
@@ -632,21 +644,24 @@ struct ViolationsHelper {
   struct ViolationsHelperImpl;
   std::unique_ptr<ViolationsHelperImpl> impl;
   bool track_intermethod_violations{false};
+  bool print_all_violations{false};
 
   enum class Violation {
-    kHotImmediateDomNotHot,
-    kChainAndDom,
-    kUncoveredSourceBlocks,
-    kHotMethodColdEntry,
-    kHotNoHotPred,
-    KHotAllChildrenCold,
+    kHotImmediateDomNotHot = 0,
+    kChainAndDom = 1,
+    kUncoveredSourceBlocks = 2,
+    kHotMethodColdEntry = 3,
+    kHotNoHotPred = 4,
+    KHotAllChildrenCold = 5,
+    ViolationSize = 6,
   };
 
   ViolationsHelper(Violation v,
                    const Scope& scope,
                    size_t top_n,
                    std::vector<std::string> to_vis,
-                   bool track_intermethod_violations = false);
+                   bool track_intermethod_violations,
+                   bool print_all_violations);
   ~ViolationsHelper();
 
   void process(ScopedMetrics* sm);

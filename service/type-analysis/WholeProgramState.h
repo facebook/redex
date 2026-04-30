@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <boost/optional/optional_io.hpp>
-
 #include <sparta/HashedAbstractPartition.h>
 
 #include "CallGraph.h"
@@ -178,7 +176,7 @@ class WholeProgramState {
 
   friend std::ostream& operator<<(std::ostream& out,
                                   const WholeProgramState& wps) {
-    out << wps.m_field_partition << std::endl;
+    out << wps.m_field_partition << '\n';
     out << wps.m_method_partition;
     return out;
   }

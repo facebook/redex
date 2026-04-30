@@ -7,6 +7,8 @@
 
 #include "EnumTransformer.h"
 
+#include <vector>
+
 #include "CFGMutation.h"
 #include "Creators.h"
 #include "DeterministicContainers.h"
@@ -19,7 +21,6 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "TypeReference.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"
@@ -68,7 +69,7 @@
 namespace {
 using namespace optimize_enums;
 using namespace dex_asm;
-using EnumAttributeMap = UnorderedMap<DexType*, EnumAttributes>;
+using EnumAttributeMap = UnorderedMap<const DexType*, EnumAttributes>;
 namespace ptrs = local_pointers;
 
 /**
@@ -163,7 +164,7 @@ struct EnumUtil {
     dexen.push_back(cls);
   }
 
-  bool is_super_type_of_candidate_enum(DexType* type) {
+  bool is_super_type_of_candidate_enum(const DexType* type) {
     return type == ENUM_TYPE || type == OBJECT_TYPE ||
            type == SERIALIZABLE_TYPE || type == COMPARABLE_TYPE;
   }
@@ -197,10 +198,10 @@ struct EnumUtil {
    *  ...
    * IF it is not a candidate enum, return nullptr.
    */
-  DexType* try_convert_to_int_type(const EnumAttributeMap& enum_attributes_map,
-                                   DexType* type) const {
+  const DexType* try_convert_to_int_type(
+      const EnumAttributeMap& enum_attributes_map, const DexType* type) const {
     uint32_t level = type::get_array_level(type);
-    DexType* elem_type = type;
+    const DexType* elem_type = type;
     if (level != 0u) {
       elem_type = type::get_array_element_type(type);
     }
@@ -220,7 +221,7 @@ struct EnumUtil {
    * The implemmentation of the substitute method depends on the substitute
    * method of LCandidateEnum;.toString:()String.
    */
-  DexMethodRef* add_substitute_of_stringvalueof(DexType* enum_type,
+  DexMethodRef* add_substitute_of_stringvalueof(const DexType* enum_type,
                                                 SourceBlock* prev_sb) {
     add_substitute_of_tostring(enum_type, prev_sb);
     auto* proto = DexProto::make_proto(
@@ -251,13 +252,14 @@ struct EnumUtil {
    * LCandidateEnum;.toString:()String. Otherwise return the overriding method.
    * Store the method ref at the same time.
    */
-  DexMethodRef* add_substitute_of_tostring(DexType* enum_type,
+  DexMethodRef* add_substitute_of_tostring(const DexType* enum_type,
                                            SourceBlock* prev_sb) {
     auto* method_ref = get_user_defined_tostring_method(type_class(enum_type));
     if (method_ref == nullptr) {
       return add_substitute_of_name(enum_type, prev_sb);
     } else {
-      auto* method = resolve_method(method_ref, MethodSearch::Virtual);
+      auto* method =
+          resolve_method_deprecated(method_ref, MethodSearch::Virtual);
       always_assert(method);
       return method_ref;
     }
@@ -282,7 +284,7 @@ struct EnumUtil {
    * substitute for LCandidateEnum;.name:()String.
    * Store the method ref at the same time.
    */
-  DexMethodRef* add_substitute_of_name(DexType* enum_type,
+  DexMethodRef* add_substitute_of_name(const DexType* enum_type,
                                        SourceBlock* prev_sb) {
     auto* method = get_substitute_of_name(enum_type);
     collect_callsite_source_blocks(method, prev_sb);
@@ -292,7 +294,7 @@ struct EnumUtil {
   /**
    * Return method ref to LCandidateEnum;.redex$OE$name:(Integer)String
    */
-  DexMethodRef* get_substitute_of_name(DexType* enum_type) {
+  DexMethodRef* get_substitute_of_name(const DexType* enum_type) {
     auto* proto = DexProto::make_proto(
         STRING_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
     auto* method = DexMethod::make_method(enum_type, REDEX_NAME, proto);
@@ -304,7 +306,7 @@ struct EnumUtil {
    * substitute for LCandidateEnum;.hashCode:()I.
    * Store the method ref at the same time.
    */
-  DexMethodRef* add_substitute_of_hashcode(DexType* enum_type,
+  DexMethodRef* add_substitute_of_hashcode(const DexType* enum_type,
                                            SourceBlock* prev_sb) {
     // `redex$OE$hashCode()` uses `redex$OE$name()` so we better make sure
     // the method exists.
@@ -317,7 +319,7 @@ struct EnumUtil {
   /**
    * Returns a method ref to LCandidateEnum;.redex$OE$hashCode:(Integer)I
    */
-  DexMethodRef* get_substitute_of_hashcode(DexType* enum_type) {
+  DexMethodRef* get_substitute_of_hashcode(const DexType* enum_type) {
     auto* proto = DexProto::make_proto(
         INT_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
     auto* method = DexMethod::make_method(enum_type, REDEX_HASHCODE, proto);
@@ -704,19 +706,19 @@ class CodeTransformer final {
       }
     } break;
     case OPCODE_NEW_ARRAY: {
-      auto* array_type = insn->get_type();
-      auto* new_type = try_convert_to_int_type(array_type);
+      const auto* array_type = insn->get_type();
+      const auto* new_type = try_convert_to_int_type(array_type);
       if (new_type != nullptr) {
         insn->set_type(new_type);
       }
     } break;
     case OPCODE_CHECK_CAST: {
-      auto* type = insn->get_type();
-      auto* new_type = try_convert_to_int_type(type);
+      const auto* type = insn->get_type();
+      const auto* new_type = try_convert_to_int_type(type);
       if (new_type != nullptr) {
         const auto& possible_src_types = env.get(insn->src(0));
         if (!possible_src_types.empty()) {
-          DexType* candidate_type =
+          const DexType* candidate_type =
               extract_candidate_enum_type(possible_src_types);
           always_assert(candidate_type == type);
         }
@@ -728,7 +730,7 @@ class CodeTransformer final {
     } break;
     default: {
       if (insn->has_type() && insn->opcode() != IOPCODE_INIT_CLASS) {
-        auto* type = insn->get_type();
+        const auto* type = insn->get_type();
         always_assert_log(try_convert_to_int_type(type) == nullptr,
                           "Unhandled type %s in %s method %s\n", SHOW(type),
                           SHOW(insn), SHOW(m_method));
@@ -871,7 +873,7 @@ class CodeTransformer final {
     auto* insn = mie->insn;
     auto* container = insn->get_method()->get_class();
     auto reg = insn->src(0);
-    auto* candidate_type = infer_candidate_type(env.get(reg), container);
+    const auto* candidate_type = infer_candidate_type(env.get(reg), container);
     if (candidate_type == nullptr) {
       return;
     }
@@ -895,7 +897,8 @@ class CodeTransformer final {
     auto* insn = mie->insn;
     auto* container = insn->get_method()->get_class();
     auto src_reg = insn->src(0);
-    auto* candidate_type = infer_candidate_type(env.get(src_reg), container);
+    const auto* candidate_type =
+        infer_candidate_type(env.get(src_reg), container);
     if (candidate_type == nullptr) {
       return;
     }
@@ -919,7 +922,7 @@ class CodeTransformer final {
       MethodItemEntry* mie,
       SourceBlock* prev_sb) {
     auto* insn = mie->insn;
-    DexType* candidate_type =
+    const DexType* candidate_type =
         extract_candidate_enum_type(env.get(insn->src(0)));
     if (candidate_type == nullptr) {
       return;
@@ -946,7 +949,7 @@ class CodeTransformer final {
       MethodItemEntry* mie,
       SourceBlock* prev_sb) {
     auto* insn = mie->insn;
-    DexType* candidate_type =
+    const DexType* candidate_type =
         extract_candidate_enum_type(env.get(insn->src(1)));
     if (candidate_type == nullptr) {
       return;
@@ -984,7 +987,8 @@ class CodeTransformer final {
     auto* insn = mie->insn;
     auto* container = insn->get_method()->get_class();
     auto src_reg = insn->src(0);
-    auto* candidate_type = infer_candidate_type(env.get(src_reg), container);
+    const auto* candidate_type =
+        infer_candidate_type(env.get(src_reg), container);
     if (candidate_type == nullptr) {
       return;
     }
@@ -1007,7 +1011,7 @@ class CodeTransformer final {
     auto* insn = mie->insn;
     auto* method_ref = insn->get_method();
     auto* container_type = method_ref->get_class();
-    auto* candidate_type =
+    const auto* candidate_type =
         infer_candidate_type(env.get(insn->src(0)), container_type);
     if (candidate_type == nullptr) {
       return;
@@ -1026,7 +1030,7 @@ class CodeTransformer final {
       }
     }
     if (method == nullptr) {
-      method = resolve_method(method_ref, opcode_to_search(insn));
+      method = resolve_method_deprecated(method_ref, opcode_to_search(insn));
     }
     always_assert(method);
     always_assert_log(
@@ -1047,9 +1051,9 @@ class CodeTransformer final {
    * types are not related to our candidate types. Bail out if the type are
    * mixed (our analysis part should have excluded this case).
    */
-  DexType* infer_candidate_type(const EnumTypes& reg_types,
-                                DexType* target_type) {
-    DexType* candidate_type = nullptr;
+  const DexType* infer_candidate_type(const EnumTypes& reg_types,
+                                      const DexType* target_type) {
+    const DexType* candidate_type = nullptr;
     if (is_a_candidate(target_type)) {
       candidate_type = target_type;
     } else if (!m_enum_util->is_super_type_of_candidate_enum(target_type)) {
@@ -1068,7 +1072,7 @@ class CodeTransformer final {
       candidate_type = *type_set.begin();
       return is_a_candidate(candidate_type) ? candidate_type : nullptr;
     } else {
-      for (auto* t : type_set) {
+      for (const auto* t : type_set) {
         always_assert_log(!is_a_candidate(t), "%s\n", SHOW(t));
       }
       return nullptr;
@@ -1081,23 +1085,20 @@ class CodeTransformer final {
    * not contain other types,
    * or assertion failure when the types are mixed.
    */
-  DexType* extract_candidate_enum_type(const EnumTypes& types) {
+  const DexType* extract_candidate_enum_type(const EnumTypes& types) {
     return infer_candidate_type(types, m_enum_util->OBJECT_TYPE);
   }
 
-  DexType* try_convert_to_int_type(DexType* type) {
+  const DexType* try_convert_to_int_type(const DexType* type) {
     return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
   }
 
-  bool is_a_candidate(DexType* type) const {
-    auto* elem_type =
-        const_cast<DexType*>(type::get_element_type_if_array(type));
+  bool is_a_candidate(const DexType* type) const {
+    const auto* elem_type = type::get_element_type_if_array(type);
     return m_enum_attributes_map.count(elem_type) != 0u;
   }
 
-  inline reg_t allocate_temp() {
-    return m_method->get_code()->cfg().allocate_temp();
-  }
+  reg_t allocate_temp() { return m_method->get_code()->cfg().allocate_temp(); }
 
   const EnumAttributeMap& m_enum_attributes_map;
   EnumUtil* m_enum_util;
@@ -1143,8 +1144,9 @@ class EnumTransformer final {
                 SHOW(enum_cls), num_enum_constants);
         }
       }
-      m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
-      m_enum_objs += num_enum_constants;
+      m_int_objs = std::max<uint32_t>(
+          m_int_objs, static_cast<uint32_t>(num_enum_constants));
+      m_enum_objs += static_cast<uint32_t>(num_enum_constants);
       m_enum_attributes_map.emplace(enum_type, attributes);
       TRACE(ENUM, 2, "\tcleaning enum %s with num const values %zu",
             SHOW(enum_cls), num_enum_constants);
@@ -1160,6 +1162,7 @@ class EnumTransformer final {
   }
 
   EnumTransformer(const EnumTransformer&) = delete;
+  EnumTransformer& operator=(const EnumTransformer&) = delete;
 
   void run() {
     auto scope = build_class_scope(m_stores);
@@ -1171,11 +1174,12 @@ class EnumTransformer final {
               is_generated_enum_method(method)) {
             return false;
           }
-          std::vector<DexType*> types;
+          std::vector<const DexType*> types;
           method->gather_types(types);
-          return std::any_of(types.begin(), types.end(), [this](DexType* type) {
-            return (bool)try_convert_to_int_type(type);
-          });
+          return std::any_of(types.begin(), types.end(),
+                             [this](const DexType* type) {
+                               return (bool)try_convert_to_int_type(type);
+                             });
         },
         [&](DexMethod* method, IRCode& /*code*/) {
           if ((m_enum_attributes_map.count(method->get_class()) != 0u) &&
@@ -1203,7 +1207,8 @@ class EnumTransformer final {
     // types with Integer type.
     UnorderedMap<DexType*, DexType*> type_mapping;
     for (auto& pair : UnorderedIterable(m_enum_attributes_map)) {
-      type_mapping[pair.first] = m_enum_util->INTEGER_TYPE;
+      type_mapping[const_cast<DexType*>(pair.first)] =
+          m_enum_util->INTEGER_TYPE;
     }
     type_reference::TypeRefUpdater updater(type_mapping);
     updater.update_methods_fields(scope);
@@ -1214,9 +1219,7 @@ class EnumTransformer final {
 
   uint32_t get_int_objs_count() { return m_int_objs; }
   uint32_t get_enum_objs_count() { return m_enum_objs; }
-  uint32_t get_enum_attributes_map_size() {
-    return m_enum_attributes_map.size();
-  }
+  size_t get_enum_attributes_map_size() { return m_enum_attributes_map.size(); }
   size_t get_eliminated_kotlin_enum_classes() { return m_kotlin_enum_classes; }
 
  private:
@@ -1246,7 +1249,7 @@ class EnumTransformer final {
                               SHOW(insn), SHOW(method));
           }
         } else if (insn->has_type() && insn->opcode() != IOPCODE_INIT_CLASS) {
-          auto* type_ref = insn->get_type();
+          const auto* type_ref = insn->get_type();
           always_assert_log(!try_convert_to_int_type(type_ref),
                             "Invalid insn %s in %s\n", SHOW(insn),
                             SHOW(method));
@@ -1440,6 +1443,7 @@ class EnumTransformer final {
     // exhaustive.
     //
     // Arbitrarily choose the first case block.
+    always_assert(!cases.empty());
     cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
                       cases);
     cfg.recompute_registers_size();
@@ -1559,7 +1563,7 @@ class EnumTransformer final {
     auto synth_field_access = synth_access();
     UnorderedSet<DexField*> synth_fields;
 
-    std20::erase_if(sfields, [&](auto* field) {
+    std::erase_if(sfields, [&](auto* field) {
       if (enum_constants.count(field)) {
         return true;
       }
@@ -1579,7 +1583,7 @@ class EnumTransformer final {
     always_assert(!synth_fields.empty());
     auto& dmethods = enum_cls->get_dmethods();
     // Delete <init>, values() and valueOf(String) methods, and clean <clinit>.
-    std20::erase_if(dmethods, [&, this](auto* method) {
+    std::erase_if(dmethods, [&, this](auto* method) {
       if (method::is_clinit(method)) {
         clean_clinit(enum_constants, m_enum_util->m_config, enum_cls, method,
                      synth_fields, m_enum_util->KT_ENUM_ENTRIES_FACTORY_METHOD);
@@ -1705,7 +1709,7 @@ class EnumTransformer final {
     }
   }
 
-  DexType* try_convert_to_int_type(DexType* type) {
+  const DexType* try_convert_to_int_type(const DexType* type) {
     return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
   }
 

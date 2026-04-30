@@ -40,8 +40,8 @@ static CheckRecursionResult do_check_recursion(DexMethod* method,
     }
 
     auto* callee_method_ref = insn->get_method();
-    auto* callee_method =
-        resolve_method(callee_method_ref, opcode_to_search(insn), method);
+    auto* callee_method = resolve_method_deprecated(
+        callee_method_ref, opcode_to_search(insn), method);
     if (callee_method == nullptr) {
       continue;
     }

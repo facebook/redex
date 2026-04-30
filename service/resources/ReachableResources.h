@@ -10,7 +10,6 @@
 #include <utility>
 
 #include "DeterministicContainers.h"
-#include "DexClass.h"
 #include "GlobalConfig.h"
 #include "PassManager.h"
 #include "RClass.h"

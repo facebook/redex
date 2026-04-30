@@ -8,8 +8,8 @@
 #include "RegisterType.h"
 
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 namespace regalloc {
 
@@ -108,7 +108,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_NEG_FLOAT:
     return RegisterType::NORMAL;
   case OPCODE_NEG_DOUBLE:
-    return RegisterType::WIDE;
   case OPCODE_INT_TO_LONG:
     return RegisterType::WIDE;
   case OPCODE_INT_TO_FLOAT:
@@ -130,13 +129,10 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_DOUBLE_TO_LONG:
     return RegisterType::WIDE;
   case OPCODE_DOUBLE_TO_FLOAT:
-    return RegisterType::NORMAL;
   case OPCODE_INT_TO_BYTE:
   case OPCODE_INT_TO_CHAR:
   case OPCODE_INT_TO_SHORT:
-    return RegisterType::NORMAL;
   case OPCODE_ARRAY_LENGTH:
-    return RegisterType::NORMAL;
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT:
   case OPCODE_CMPL_DOUBLE:
@@ -286,7 +282,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_NEW_INSTANCE:
   case OPCODE_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY:
-    return RegisterType::OBJECT;
   case OPCODE_CONST_METHOD_HANDLE:
   case OPCODE_CONST_METHOD_TYPE:
     return RegisterType::OBJECT;
@@ -362,7 +357,6 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   case OPCODE_RETURN_WIDE:
     return RegisterType::WIDE;
   case OPCODE_RETURN_OBJECT:
-    return RegisterType::OBJECT;
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_THROW:

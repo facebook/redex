@@ -8,6 +8,7 @@
 #include "VerticalMerging.h"
 
 #include "ClassHierarchy.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
@@ -322,7 +323,7 @@ void record_annotation(
   // Remove class if it is the type of an annotation.
   // TODO(suree404): Merge the classes even though it appears in annotation?
   walk::annotations(scope, [&](DexAnnotation* anno) {
-    std::vector<DexType*> types_in_anno;
+    std::vector<const DexType*> types_in_anno;
     anno->gather_types(types_in_anno);
     for (const auto& type : types_in_anno) {
       record_dont_merge_state(type, kStrict, dont_merge_status);
@@ -401,7 +402,8 @@ void record_code_reference(
             deferred_record_dont_merge_state(callee_ref->get_class(), kStrict);
             TRACE(VMERGE, 9, "dont_merge %s for pure ref %s",
                   SHOW(callee_ref->get_class()), SHOW(callee_ref));
-            DexMethod* callee = resolve_method(callee_ref, MethodSearch::Any);
+            DexMethod* callee =
+                resolve_method_deprecated(callee_ref, MethodSearch::Any);
             if (callee != nullptr) {
               deferred_record_dont_merge_state(callee->get_class(), kStrict);
               TRACE(VMERGE, 9,
@@ -567,7 +569,7 @@ void update_references(const Scope& scope,
       },
       [&](DexMethod* method, IRInstruction* insn) {
         if (insn->has_type()) {
-          auto* ref_type = insn->get_type();
+          const auto* ref_type = insn->get_type();
           DexType* type =
               const_cast<DexType*>(type::get_element_type_if_array(ref_type));
           auto find_mergeable = update_map.find(type);
@@ -608,7 +610,7 @@ void update_references(const Scope& scope,
 }
 
 void update_implements(DexClass* from_cls, DexClass* to_cls) {
-  std::set<DexType*, dextypes_comparator> new_intfs;
+  std::set<const DexType*, dextypes_comparator> new_intfs;
   TRACE(VMERGE, 5, "interface before : ");
   for (const auto& cls_intf : *to_cls->get_interfaces()) {
     TRACE(VMERGE, 5, "  %s", SHOW(cls_intf));
@@ -682,9 +684,10 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
               resolved_virtual_calls.emplace(insn, merger_method_ref);
             }
           } else { // Merger is the superclass.
-            if (resolve_virtual(find_merger->second,
-                                mergeable_method_ref->get_name(),
-                                mergeable_method_ref->get_proto()) != nullptr) {
+            if (resolve_virtual_deprecated(find_merger->second,
+                                           mergeable_method_ref->get_name(),
+                                           mergeable_method_ref->get_proto()) !=
+                nullptr) {
               merger_method_ref =
                   DexMethod::make_method(find_merger->second->get_type(),
                                          mergeable_method_ref->get_name(),
@@ -940,13 +943,13 @@ void VerticalMergingPass::merge_classes(const Scope& scope,
 }
 
 void VerticalMergingPass::run_pass(DexStoresVector& stores,
-                                   ConfigFiles& /*conf*/,
+                                   ConfigFiles& conf,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
   UnorderedMap<const DexType*, DontMergeState> dont_merge_status;
   record_referenced(scope, m_blocklist, &dont_merge_status);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
   size_t num_single_extend;
   auto mergeable_to_merger =
       collect_can_merge(scope, xstores, dont_merge_status, &num_single_extend);

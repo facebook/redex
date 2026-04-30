@@ -30,7 +30,7 @@ void test(const char* signature, const std::string& code_str, bool is_pure) {
 
   creator1.set_super(type::java_lang_Object());
   creator2.set_super(type::java_lang_Object());
-  auto* method1 = static_cast<DexMethod*>(DexMethod::make_method(signature));
+  auto* method1 = dynamic_cast<DexMethod*>(DexMethod::make_method(signature));
   method1->set_access(ACC_PUBLIC);
   method1->set_external();
   method1->set_code(assembler::ircode_from_string(code_str));
@@ -40,7 +40,7 @@ void test(const char* signature, const std::string& code_str, bool is_pure) {
   creator2.add_field(field_b);
 
   auto* method2 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.add:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.add:()V"));
   method2->set_access(ACC_PUBLIC);
   method2->set_virtual(true);
   method2->set_external();

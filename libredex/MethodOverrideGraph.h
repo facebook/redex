@@ -10,7 +10,6 @@
 #include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexStore.h"
 
 // The definition of TypeSet is defined differently in ClassHierarchy, so we
 // need to manually define ClassHierarchy here.
@@ -91,7 +90,7 @@ struct Node {
   std::unique_ptr<OtherInterfaceImplementations>
       other_interface_implementations;
   // Whether the current Node's method is an interface method.
-  bool is_interface;
+  bool is_interface{false};
 
   // Checks whther the current method's class, or any other implementation
   // class, can be cast to the given base type.
@@ -120,7 +119,10 @@ class Graph {
   void dump(std::ostream&) const;
 
  private:
-  static Node empty_node;
+  static const Node& get_empty_node() {
+    static const Node empty_node;
+    return empty_node;
+  }
   ConcurrentMap<const DexMethod*, Node> m_nodes;
 };
 

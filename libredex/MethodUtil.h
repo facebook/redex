@@ -101,7 +101,7 @@ inline bool is_constructor(const DexMethod* meth) {
 
 inline bool is_constructor(const DexMethodRef* meth) {
   return meth->is_def() &&
-         method::is_constructor(static_cast<const DexMethod*>(meth));
+         method::is_constructor(dynamic_cast<const DexMethod*>(meth));
 }
 
 /** Determine if the method takes no arguments. */
@@ -122,7 +122,7 @@ inline bool has_n_args(const DexMethodRef* meth, size_t n) {
  */
 inline bool has_code(const DexMethodRef* meth) {
   return meth->is_def() &&
-         static_cast<const DexMethod*>(meth)->get_code() != nullptr;
+         dynamic_cast<const DexMethod*>(meth)->get_code() != nullptr;
 }
 
 /**

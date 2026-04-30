@@ -12,6 +12,7 @@
 #include <boost/none_t.hpp>
 #include <boost/optional/optional.hpp>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
 
@@ -44,14 +45,14 @@ void write_violations_to_file(const app_module_usage::Violations& violations,
     for (const auto& module : modules) {
       ofs << ", " << module;
     }
-    ofs << std::endl;
+    ofs << '\n';
   }
   ofs.close();
 }
 
 void write_method_module_usages_to_file(
     const app_module_usage::MethodStoresReferenced& method_store_refs,
-    const InsertOnlyConcurrentMap<DexType*, DexStore*>& type_store_map,
+    const InsertOnlyConcurrentMap<const DexType*, DexStore*>& type_store_map,
     const std::string& path) {
 
   TRACE(APP_MOD_USE, 4, "Outputting module usages at %s", path.c_str());
@@ -73,7 +74,7 @@ void write_method_module_usages_to_file(
       }
       ofs << store->get_name();
     }
-    ofs << std::endl;
+    ofs << '\n';
   }
   ofs.close();
 }
@@ -105,7 +106,7 @@ void write_app_module_use_stats(
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   for (const auto& [module, use_count] : UnorderedIterable(counts)) {
     ofs << module->get_name() << ", " << use_count.direct_count << ", "
-        << use_count.reflective_count << std::endl;
+        << use_count.reflective_count << '\n';
   }
   ofs.close();
 }
@@ -182,7 +183,7 @@ void AppModuleUsagePass::load_preexisting_violations(DexStoresVector& stores) {
 
   std::string line;
   while (getline(ifs, line)) {
-    boost::optional<std::string> entrypoint;
+    std::optional<std::string> entrypoint;
     for (std::string_view csv_component : split_string(line, ",")) {
       csv_component = trim_whitespaces(csv_component);
       if (!entrypoint) {
@@ -206,7 +207,7 @@ void AppModuleUsagePass::load_preexisting_violations(DexStoresVector& stores) {
 app_module_usage::MethodStoresReferenced
 AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
 
-  auto get_type_ref_for_insn = [](IRInstruction* insn) -> DexType* {
+  auto get_type_ref_for_insn = [](IRInstruction* insn) -> const DexType* {
     if (insn->has_method()) {
       return insn->get_method()->get_class();
     } else if (insn->has_field()) {
@@ -230,7 +231,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
             /* metadata_cache */ &refl_metadata_cache);
 
     auto get_reflective_type_ref_for_insn =
-        [&analysis](IRInstruction* insn) -> DexType* {
+        [&analysis](IRInstruction* insn) -> const DexType* {
       if (!opcode::is_an_invoke(insn->opcode())) {
         // If an object type is from reflection it will be in the
         // RESULT_REGISTER for some instruction.
@@ -248,7 +249,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
       return nullptr;
     };
 
-    auto get_store_if_access_is_xstore = [&](DexType* to) -> DexStore* {
+    auto get_store_if_access_is_xstore = [&](const DexType* to) -> DexStore* {
       // The type may be external.
       auto it = m_type_store_map.find(to);
       if (it == m_type_store_map.end()) {
@@ -265,7 +266,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
     auto& cfg = code.cfg();
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;
-      auto* maybe_type_ref = get_type_ref_for_insn(insn);
+      const auto* maybe_type_ref = get_type_ref_for_insn(insn);
       if (maybe_type_ref != nullptr) {
         auto* maybe_store = get_store_if_access_is_xstore(maybe_type_ref);
         if (maybe_store != nullptr) {
@@ -273,7 +274,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
           stores_referenced[maybe_store] = false /* used_only_reflectively */;
         }
       }
-      auto* maybe_refl_type_ref = get_reflective_type_ref_for_insn(insn);
+      const auto* maybe_refl_type_ref = get_reflective_type_ref_for_insn(insn);
       if (maybe_refl_type_ref != nullptr) {
         auto* maybe_store = get_store_if_access_is_xstore(maybe_refl_type_ref);
         if (maybe_store != nullptr) {
@@ -372,7 +373,7 @@ unsigned AppModuleUsagePass::gather_violations(
 
 template <typename T>
 UnorderedSet<std::string_view> AppModuleUsagePass::get_modules_used(
-    T* entrypoint, DexType* annotation_type) {
+    T* entrypoint, const DexType* annotation_type) {
   UnorderedSet<std::string_view> modules = {};
   auto anno_set = entrypoint->get_anno_set();
   if (anno_set) {
@@ -398,13 +399,13 @@ UnorderedSet<std::string_view> AppModuleUsagePass::get_modules_used(
 }
 
 template UnorderedSet<std::string_view>
-AppModuleUsagePass::get_modules_used<DexMethod>(DexMethod*, DexType*);
+AppModuleUsagePass::get_modules_used<DexMethod>(DexMethod*, const DexType*);
 
 template UnorderedSet<std::string_view>
-AppModuleUsagePass::get_modules_used<DexField>(DexField*, DexType*);
+AppModuleUsagePass::get_modules_used<DexField>(DexField*, const DexType*);
 
 template UnorderedSet<std::string_view>
-AppModuleUsagePass::get_modules_used<DexClass>(DexClass*, DexType*);
+AppModuleUsagePass::get_modules_used<DexClass>(DexClass*, const DexType*);
 
 bool AppModuleUsagePass::access_excused_due_to_preexisting(
     const std::string& entrypoint_name, DexStore* store_used) const {

@@ -19,9 +19,9 @@ struct ClassReferences {
 
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   std::vector<const DexString*> strings;
-  std::vector<DexType*> init_types;
+  std::vector<const DexType*> init_types;
 };
 
 class ClassReferencesCache {

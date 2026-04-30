@@ -17,12 +17,11 @@ using namespace class_merging;
 
 namespace {
 
-DexType* check_current_instance(const ConstTypeHashSet& types,
-                                IRInstruction* insn) {
-  DexType* type = nullptr;
+const DexType* check_current_instance(const ConstTypeHashSet& types,
+                                      IRInstruction* insn) {
+  const DexType* type = nullptr;
   if (insn->has_type()) {
-    type =
-        const_cast<DexType*>(type::get_element_type_if_array(insn->get_type()));
+    type = type::get_element_type_if_array(insn->get_type());
   } else if (insn->has_method()) {
     type = insn->get_method()->get_class();
   } else if (insn->has_field()) {
@@ -36,7 +35,7 @@ DexType* check_current_instance(const ConstTypeHashSet& types,
   return type;
 }
 
-ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
+ConcurrentMap<const DexType*, TypeHashSet> get_type_usages(
     const ConstTypeHashSet& types,
     const Scope& scope,
     InterDexGroupingInferringMode mode) {
@@ -47,16 +46,16 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
           return oss.str();
         }()
             .c_str());
-  ConcurrentMap<DexType*, TypeHashSet> res;
+  ConcurrentMap<const DexType*, TypeHashSet> res;
   // Ensure all types will be handled.
   for (const auto* t : UnorderedIterable(types)) {
-    res.emplace(const_cast<DexType*>(t), TypeHashSet());
+    res.emplace(t, TypeHashSet());
   }
 
   auto class_loads_update = [&](auto* insn, auto* cls) {
-    const auto& updater = [&cls](
-                              DexType* /* key */, UnorderedSet<DexType*>& set,
-                              bool /* already_exists */) { set.emplace(cls); };
+    const auto& updater =
+        [&cls](const DexType* /* key */, UnorderedSet<DexType*>& set,
+               bool /* already_exists */) { set.emplace(cls); };
 
     if (insn->has_type()) {
       auto* current_instance = check_current_instance(types, insn);

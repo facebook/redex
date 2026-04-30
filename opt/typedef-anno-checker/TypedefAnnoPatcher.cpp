@@ -52,8 +52,9 @@ bool is_int_or_obj_ref(const type_inference::TypeEnvironment& env, reg_t reg) {
 
 namespace {
 
-bool has_typedef_annos(ParamAnnotations* param_annos,
-                       const UnorderedSet<TypedefAnnoType*>& typedef_annos) {
+bool has_typedef_annos(
+    ParamAnnotations* param_annos,
+    const UnorderedSet<const TypedefAnnoType*>& typedef_annos) {
   if (param_annos == nullptr) {
     return false;
   }
@@ -69,11 +70,11 @@ bool has_typedef_annos(ParamAnnotations* param_annos,
 }
 
 DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
-  auto* def_method =
-      resolve_method(insn->get_method(), opcode_to_search(insn), caller);
+  auto* def_method = resolve_method_deprecated(insn->get_method(),
+                                               opcode_to_search(insn), caller);
   if (def_method == nullptr && insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
-    def_method =
-        resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+    def_method = resolve_method_deprecated(insn->get_method(),
+                                           MethodSearch::InterfaceVirtual);
   }
   return def_method;
 }
@@ -136,7 +137,7 @@ bool is_synthesized_lambda_class(const DexClass* cls) {
   if (cls->get_ctors().size() != 1) {
     return false;
   }
-  const auto vmethods = cls->get_vmethods();
+  const auto& vmethods = cls->get_vmethods();
   if (vmethods.empty()) {
     return false;
   }
@@ -215,13 +216,14 @@ bool add_annotation(DexMember* member,
 
 bool add_param_annotation_set(DexMethod* m,
                               DexAnnotationSet* anno_set,
-                              const int param,
+                              size_t param,
                               Stats& class_stats) {
   bool added = false;
+  int param_idx = static_cast<int>(param);
   if (m->get_param_anno() != nullptr) {
-    if (m->get_param_anno()->count(param) == 1) {
+    if (m->get_param_anno()->count(param_idx) == 1) {
       std::unique_ptr<DexAnnotationSet>& param_anno_set =
-          m->get_param_anno()->at(param);
+          m->get_param_anno()->at(param_idx);
       if (param_anno_set != nullptr) {
         size_t anno_size = param_anno_set->get_annotations().size();
         param_anno_set->combine_with(*anno_set);
@@ -235,7 +237,7 @@ bool add_param_annotation_set(DexMethod* m,
   }
   DexAccessFlags access = m->get_access();
   m->set_access(ACC_SYNTHETIC);
-  m->attach_param_annotation_set(param,
+  m->attach_param_annotation_set(param_idx,
                                  std::make_unique<DexAnnotationSet>(*anno_set));
   m->set_access(access);
   return true;
@@ -243,7 +245,7 @@ bool add_param_annotation_set(DexMethod* m,
 
 bool add_param_annotation(DexMethod* m,
                           const TypedefAnnoType* anno,
-                          const int param,
+                          size_t param,
                           Stats& class_stats) {
   DexAnnotationSet anno_set = DexAnnotationSet();
   anno_set.add_annotation(std::make_unique<DexAnnotation>(
@@ -546,12 +548,12 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
           if (traceEnabled(TAC, 2)) {
             trace_update(class_prefix);
           }
-          m_lambda_anno_map.update(class_prefix,
-                                   [&patched_fields](auto, auto& fields, auto) {
-                                     for (const auto* f : patched_fields) {
-                                       fields.push_back(f);
-                                     }
-                                   });
+          m_lambda_anno_map.update(
+              class_prefix, [&patched_fields](const auto&, auto& fields, auto) {
+                for (const auto* f : patched_fields) {
+                  fields.push_back(f);
+                }
+              });
         }
         return class_stats;
       });
@@ -862,7 +864,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
         add_annotation(field, *annotation, m_anno_patching_mutex, class_stats);
 
         auto field_name = field->get_simple_deobfuscated_name();
-        field_name.at(0) = std::toupper(field_name.at(0));
+        field_name.at(0) = static_cast<char>(std::toupper(field_name.at(0)));
         const auto int_or_string =
             type::is_int(field->get_type())
                 ? "I"

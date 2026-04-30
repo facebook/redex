@@ -13,7 +13,6 @@
 #include "GlobalConfig.h"
 #include "ReachableResources.h"
 #include "RedexResources.h"
-#include "Trace.h"
 
 class StyleAnalysis {
  public:
@@ -55,4 +54,5 @@ class StyleAnalysis {
   UnorderedSet<uint32_t> m_roots;
   std::unique_ptr<resources::ReachableResources> m_reachable_resources;
   resources::StyleInfo m_style_info;
+  std::optional<UnorderedSet<uint32_t>> m_directly_reachable_styles;
 };

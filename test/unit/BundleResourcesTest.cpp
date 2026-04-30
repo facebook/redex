@@ -15,6 +15,7 @@
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
+#include "ResourceValueMergingPass.h"
 #include "ResourcesTestDefs.h"
 #include "ResourcesValidationHelper.h"
 #include "Trace.h"
@@ -697,7 +698,7 @@ TEST(BundleResources, TestRemoveStyleAttribute) {
       modifications.emplace_back(style_id, attr_id);
     }
 
-    res_table->apply_attribute_removals(modifications, paths);
+    res_table->apply_attribute_removals_and_additions(modifications, paths);
 
     auto new_res_table = resources->load_res_table();
     resources::StyleMap updated_style_map = new_res_table->get_style_map();
@@ -766,7 +767,7 @@ TEST(BundleResources, TestAddStyleAttribute) {
          Value(android::Res_value::TYPE_REFERENCE, 0x7f030001)},
         {"ChooseMe", kBackgroundAttrId,
          Value(android::Res_value::TYPE_INT_COLOR_ARGB8, 0xFF0000FF)},
-        {"ChildWithParentAttr", kTextSizeAttrId,
+        {"ChildWithParentAttr", kTextSize,
          Value(android::Res_value::TYPE_INT_COLOR_ARGB8, 0xFFFF0000)},
         {"CustomText.Prickly", kFloatAttrId,
          Value(android::Res_value::TYPE_FLOAT, 0x3F800000)},
@@ -783,7 +784,7 @@ TEST(BundleResources, TestAddStyleAttribute) {
       modifications.emplace_back(style_id, mod.attr_id, mod.attr_value);
     }
 
-    res_table->apply_attribute_additions(modifications, paths);
+    res_table->apply_attribute_removals_and_additions(modifications, paths);
 
     auto new_res_table = resources->load_res_table();
     resources::StyleMap updated_style_map = new_res_table->get_style_map();
@@ -826,7 +827,7 @@ TEST(BundleResources, TestAddStyleAttribute) {
         EXPECT_EQ(added_attr.get_data_type(),
                   android::Res_value::TYPE_INT_COLOR_ARGB8);
         EXPECT_EQ(added_attr.get_value_bytes(), 0xFF0000FF);
-      } else if (attr_id == kTextSizeAttrId) {
+      } else if (attr_id == kTextSize) {
         EXPECT_EQ(added_attr.get_data_type(),
                   android::Res_value::TYPE_INT_COLOR_ARGB8);
         EXPECT_EQ(added_attr.get_value_bytes(), 0xFFFF0000);
@@ -855,24 +856,340 @@ TEST(BundleResources, TestAddStyleAttribute) {
   });
 }
 
+TEST(BundleResources, TestRemoveAndAddStyleAttributes) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    using Value = resources::StyleResource::Value;
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+    auto style_map = res_table->get_style_map();
+
+    std::vector<resources::StyleModificationSpec::Modification> modifications;
+    UnorderedMap<uint32_t, UnorderedSet<uint32_t>> original_attributes;
+
+    struct TestData {
+      std::string style_name;
+      uint32_t remove_attr_id;
+      uint32_t add_attr_id;
+      Value add_value;
+    };
+
+    auto get_style_id = [&](const std::string& name) {
+      auto ids = res_table->get_res_ids_by_name(name);
+      EXPECT_THAT(ids, SizeIs(1));
+      return ids[0];
+    };
+
+    auto get_first_attr = [&](uint32_t style_id) {
+      return style_map[style_id][0].attributes.begin()->first;
+    };
+
+    uint32_t prickly_id = get_style_id("CustomText.Prickly");
+    uint32_t unused_id = get_style_id("CustomText.Unused");
+    uint32_t custom_id = get_style_id("CustomText");
+
+    const std::vector<TestData> test_data = {
+        {"CustomText.Prickly", get_first_attr(prickly_id), kEnabledAttrId,
+         Value(android::Res_value::TYPE_INT_BOOLEAN, 1u)},
+        {"CustomText.Unused", get_first_attr(unused_id), kTextStyleAttrId,
+         Value(android::Res_value::TYPE_STRING, std::string("New String"))},
+        {"CustomText", get_first_attr(custom_id), kTextColorAttrId,
+         Value(android::Res_value::TYPE_REFERENCE, 0x7f030002)}};
+
+    for (const auto& [style_id, style_resources] : style_map) {
+      if (!style_resources.empty()) {
+        for (const auto& [attr_id, _] : style_resources[0].attributes) {
+          original_attributes[style_id].insert(attr_id);
+        }
+      }
+    }
+
+    for (const auto& data : test_data) {
+      uint32_t style_id = get_style_id(data.style_name);
+      modifications.emplace_back(style_id, data.remove_attr_id);
+      modifications.emplace_back(style_id, data.add_attr_id, data.add_value);
+    }
+
+    res_table->apply_attribute_removals_and_additions(modifications, paths);
+
+    auto new_res_table = resources->load_res_table();
+    auto updated_style_map = new_res_table->get_style_map();
+
+    for (const auto& data : test_data) {
+      uint32_t style_id = get_style_id(data.style_name);
+      const auto& attributes = updated_style_map[style_id][0].attributes;
+
+      EXPECT_THAT(attributes, Not(Contains(Key(data.remove_attr_id))))
+          << "Attribute not removed from " << data.style_name;
+      EXPECT_THAT(attributes, Contains(Key(data.add_attr_id)))
+          << "Attribute not added to " << data.style_name;
+
+      const auto& added_attr = attributes.at(data.add_attr_id);
+      if (data.add_attr_id == kEnabledAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_INT_BOOLEAN);
+        EXPECT_TRUE(added_attr.get_value_bytes() != 0);
+      } else if (data.add_attr_id == kTextStyleAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(), android::Res_value::TYPE_STRING);
+        EXPECT_EQ(added_attr.get_value_string().value(), "New String");
+      } else if (data.add_attr_id == kTextColorAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_REFERENCE);
+        EXPECT_EQ(added_attr.get_value_bytes(), 0x7f030002);
+      }
+
+      UnorderedSet<uint32_t> expected_attrs = original_attributes[style_id];
+      expected_attrs.erase(data.remove_attr_id);
+      expected_attrs.insert(data.add_attr_id);
+
+      UnorderedSet<uint32_t> actual_attrs;
+      for (const auto& [attr_id, _] : attributes) {
+        actual_attrs.insert(attr_id);
+      }
+
+      EXPECT_THAT(actual_attrs, Eq(expected_attrs))
+          << "Attribute set mismatch for " << data.style_name;
+    }
+  });
+}
+
 TEST(BundleResources, TestResourceExists) {
   setup_resources_and_run([&](const std::string&, BundleResources* resources) {
     auto directory = resources->get_directory();
     auto res_pb_file_path = directory + "/base/resources.pb";
     auto res_table = resources->load_res_table();
 
-    std::vector<std::pair<std::string, bool>> name_expected_pairs = {
-        {"ChooseMe", true},    {"ParentWithAttr", true},
-        {"CustomText", true},  {"IDontExist", false},
-        {"DoISlipBy?", false}, {"IWillSneakPastYou", false},
-    };
+    {
+      UnorderedSet<uint32_t> resource_ids;
+      std::vector<std::string> names = {"ChooseMe", "ParentWithAttr",
+                                        "IDontExist"};
 
-    for (const auto& [resource_name, expected] : name_expected_pairs) {
-      auto style_ids = res_table->get_res_ids_by_name(resource_name);
-      auto style_id = style_ids.size() == 1 ? style_ids[0] : 0;
+      for (const auto& name : names) {
+        auto ids = res_table->get_res_ids_by_name(name);
+        if (ids.empty()) {
+          resource_ids.insert(0x12345678);
+        } else {
+          resource_ids.insert(ids[0]);
+        }
+      }
 
-      EXPECT_EQ(does_resource_exists_in_file(style_id, res_pb_file_path),
-                expected);
+      assert_resources_in_at_most_one_file(resource_ids, {res_pb_file_path});
     }
+
+    {
+      UnorderedSet<uint32_t> resource_ids;
+      std::vector<std::string> names = {
+          "ChooseMe",
+          "ParentWithAttr",
+      };
+
+      for (const auto& name : names) {
+        auto ids = res_table->get_res_ids_by_name(name);
+        EXPECT_THAT(ids, SizeIs(1));
+        resource_ids.insert(ids[0]);
+      }
+
+      assert_resources_in_at_most_one_file(resource_ids, {res_pb_file_path});
+    }
+  });
+}
+void verify_attributes(const resources::StyleResource::AttrMap& attributes,
+                       const std::vector<uint32_t>& expected) {
+  for (uint32_t attr_id : expected) {
+    EXPECT_THAT(attributes, Contains(Key(attr_id)))
+        << "Attribute 0x" << std::hex << attr_id << std::dec
+        << " was not found in style";
+  }
+  EXPECT_EQ(attributes.size(), expected.size());
+}
+
+TEST(BundleResources, TestApplyStyleMerges) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    ResourceValueMergingPass pass;
+
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+    auto style_info = res_table->load_style_info();
+
+    auto app_theme_light_id =
+        res_table->get_res_ids_by_name("AppTheme.Light").at(0);
+    auto app_theme_light_blue_id =
+        res_table->get_res_ids_by_name("AppTheme.Light.Blue").at(0);
+    auto app_theme_light_blue_no_action_bar_id =
+        res_table->get_res_ids_by_name("AppTheme.Light.Blue.NoActionBar").at(0);
+
+    const std::vector<uint32_t> light_attributes = {kTextColorAttrId,
+                                                    kBackgroundAttrId};
+    const std::vector<uint32_t> blue_attributes = {kColorPrimaryAttrId,
+                                                   kColorAccent};
+    const std::vector<uint32_t> no_action_bar_attributes = {kWindowNoTitle,
+                                                            kWindowActionBar};
+
+    // First merge: AppTheme.Light into its children
+    std::vector<uint32_t> resources_to_merge = {app_theme_light_id};
+    auto modifications =
+        pass.get_parent_and_attribute_modifications_for_merging(
+            style_info, resources_to_merge);
+
+    res_table->apply_style_merges({modifications}, paths);
+
+    res_table = resources->load_res_table();
+    style_info = res_table->load_style_info();
+
+    // Verify that AppTheme.Light.Blue now contains both its own attributes and
+    // Light's attributes
+    auto blue_style =
+        res_table->get_style_map().at(app_theme_light_blue_id).at(0);
+
+    std::vector<uint32_t> expected_blue_attributes = blue_attributes;
+    expected_blue_attributes.insert(expected_blue_attributes.end(),
+                                    light_attributes.begin(),
+                                    light_attributes.end());
+
+    verify_attributes(blue_style.attributes, expected_blue_attributes);
+
+    // Second merge: AppTheme.Light.Blue into its children
+    resources_to_merge = {app_theme_light_blue_id};
+    modifications = pass.get_parent_and_attribute_modifications_for_merging(
+        style_info, resources_to_merge);
+
+    res_table->apply_style_merges({modifications}, paths);
+
+    // Verify that NoActionBar now contains all attributes from the hierarchy
+    auto no_action_bar_style = resources->load_res_table()
+                                   ->get_style_map()
+                                   .at(app_theme_light_blue_no_action_bar_id)
+                                   .at(0);
+
+    std::vector<uint32_t> expected_no_action_bar_attributes =
+        no_action_bar_attributes;
+    expected_no_action_bar_attributes.insert(
+        expected_no_action_bar_attributes.end(),
+        blue_attributes.begin(),
+        blue_attributes.end());
+    expected_no_action_bar_attributes.insert(
+        expected_no_action_bar_attributes.end(),
+        light_attributes.begin(),
+        light_attributes.end());
+    verify_attributes(no_action_bar_style.attributes,
+                      expected_no_action_bar_attributes);
+  });
+}
+
+TEST(BundleResources, TestApplyStyleChained) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    ResourceValueMergingPass pass;
+
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+    auto style_info = res_table->load_style_info();
+
+    auto app_theme_light_id =
+        res_table->get_res_ids_by_name("AppTheme.Light").at(0);
+    auto app_theme_light_blue_id =
+        res_table->get_res_ids_by_name("AppTheme.Light.Blue").at(0);
+    auto app_theme_light_blue_no_action_bar_id =
+        res_table->get_res_ids_by_name("AppTheme.Light.Blue.NoActionBar").at(0);
+
+    const std::vector<uint32_t> light_attributes = {kTextColorAttrId,
+                                                    kBackgroundAttrId};
+    const std::vector<uint32_t> blue_attributes = {kColorPrimaryAttrId,
+                                                   kColorAccent};
+    const std::vector<uint32_t> no_action_bar_attributes = {kWindowNoTitle,
+                                                            kWindowActionBar};
+
+    // Merge both Light and Light.Blue in one operation
+    std::vector<uint32_t> resources_to_merge = {app_theme_light_id,
+                                                app_theme_light_blue_id};
+    auto modifications =
+        pass.get_parent_and_attribute_modifications_for_merging(
+            style_info, resources_to_merge);
+
+    res_table->apply_style_merges({modifications}, paths);
+
+    res_table = resources->load_res_table();
+    style_info = res_table->load_style_info();
+
+    // Verify that NoActionBar now contains all attributes from the hierarchy
+    auto no_action_bar_style = res_table->get_style_map()
+                                   .at(app_theme_light_blue_no_action_bar_id)
+                                   .at(0);
+
+    std::vector<uint32_t> expected_no_action_bar_attributes =
+        no_action_bar_attributes;
+    expected_no_action_bar_attributes.insert(
+        expected_no_action_bar_attributes.end(),
+        blue_attributes.begin(),
+        blue_attributes.end());
+    expected_no_action_bar_attributes.insert(
+        expected_no_action_bar_attributes.end(),
+        light_attributes.begin(),
+        light_attributes.end());
+    verify_attributes(no_action_bar_style.attributes,
+                      expected_no_action_bar_attributes);
+  });
+}
+
+TEST(BundleResources, TestAddStyles) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+
+    std::vector<std::string> styles = {"ChooseMe",
+                                       "ParentWithAttr",
+                                       "ChildWithParentAttr",
+                                       "CustomText",
+                                       "CustomText.Prickly",
+                                       "CustomText.Unused",
+                                       "ThemeParent",
+                                       "ThemeA",
+                                       "ThemeB",
+                                       "ThemeUnused",
+                                       "DupTheme1",
+                                       "DupTheme2",
+                                       "StyleNotSorted",
+                                       "StyleSorted",
+                                       "ThemeDifferentA",
+                                       "ThemeDifferentB",
+                                       "AmbiguousParent",
+                                       "AmbiguousSmall",
+                                       "AmbiguousBig",
+                                       "SimpleParent1",
+                                       "SimpleParent2",
+                                       "Confusing",
+                                       "Unclear",
+                                       "AppTheme",
+                                       "AppTheme.Light",
+                                       "AppTheme.Light.Blue",
+                                       "AppTheme.Light.Blue.NoActionBar"};
+
+    uint32_t new_style_id = 0;
+    for (const auto& name : styles) {
+      auto ids = res_table->get_res_ids_by_name(name);
+      for (const auto id : ids) {
+        new_style_id = std::max(new_style_id, id);
+      }
+    }
+    new_style_id++;
+    resources::StyleModificationSpec::Modification new_style_mod(new_style_id);
+
+    res_table->add_styles({new_style_mod}, paths);
+
+    auto new_res_table = resources->load_res_table();
+    auto style_map = new_res_table->get_style_map();
+
+    EXPECT_THAT(style_map, Contains(Key(new_style_id)))
+        << "New style with ID 0x" << std::hex << new_style_id << std::dec
+        << " was not created";
+
+    const auto& style_resources = style_map.at(new_style_id);
+    EXPECT_THAT(style_resources, SizeIs(1));
+    EXPECT_EQ(style_resources[0].parent, 0)
+        << "New style should have no parent (0)";
+    EXPECT_TRUE(style_resources[0].attributes.empty())
+        << "New style should have no attributes";
   });
 }

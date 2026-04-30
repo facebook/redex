@@ -18,6 +18,7 @@ class ClassChecker {
   ClassChecker(ClassChecker&& other) = default;
 
   ClassChecker& operator=(const ClassChecker&) = delete;
+  ClassChecker& operator=(ClassChecker&& other) = default;
 
   void init_setting(
       bool definition_check,

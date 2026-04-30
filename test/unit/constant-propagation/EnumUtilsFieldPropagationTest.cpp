@@ -39,7 +39,7 @@ struct EnumUtilsFieldTest : public ConstantPropagationTest {
     creator.set_super(type::java_lang_Object());
     creator.set_access(ACC_PUBLIC | ACC_FINAL);
 
-    auto* f42 = static_cast<DexField*>(
+    auto* f42 = dynamic_cast<DexField*>(
         DexField::make_field("Lredex/$EnumUtils;.f42:Ljava/lang/Integer;"));
     f42->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
     creator.add_field(f42);

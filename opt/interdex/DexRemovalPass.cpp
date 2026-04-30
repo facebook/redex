@@ -12,7 +12,6 @@
 #include "InterDexPass.h"
 #include "InterDexReshuffleImpl.h"
 #include "PassManager.h"
-#include "Show.h"
 #include "Trace.h"
 
 namespace {
@@ -70,7 +69,7 @@ size_t DexRemovalPass::remove_empty_dexes(DexClassesVector& dexen) {
               dex.end());
 
     // Insert a new canary class.
-    DexClass* canary_cls = create_canary(i);
+    DexClass* canary_cls = create_canary(static_cast<int>(i));
     for (auto* m : canary_cls->get_all_methods()) {
       if (m->get_code() == nullptr) {
         continue;
@@ -104,7 +103,7 @@ void DexRemovalPass::sanity_check(Scope& original_scope,
     auto& dex = root_dexen_new.at(i);
     for (auto* cls : dex) {
       if (is_canary(cls)) {
-        std::string expected_name = get_canary_name(i);
+        std::string expected_name = get_canary_name(static_cast<int>(i));
         auto* dtype = cls->get_type();
         const auto* oldname = dtype->get_name();
         always_assert(oldname->str() == expected_name);

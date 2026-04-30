@@ -6,8 +6,6 @@
  */
 
 #include "Split.h"
-#include "Show.h"
-#include "Trace.h"
 
 namespace regalloc {
 
@@ -26,7 +24,7 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
       for (auto reg : live_out.elements()) {
         if (!live_in.contains(reg)) {
           split_costs->increase_load(reg);
-          // Record how many death on edge occured at certain catch block.
+          // Record how many death on edge occurred at certain catch block.
           if (succ->type() == cfg::EDGE_THROW) {
             split_costs->add_catch_block(reg, succ->target());
           } else {

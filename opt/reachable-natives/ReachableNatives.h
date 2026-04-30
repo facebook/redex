@@ -9,11 +9,9 @@
 
 #include <vector>
 
-#include "ConstantUses.h"
 #include "DeterministicContainers.h"
 #include "IRList.h"
 #include "Pass.h"
-#include "TypeInference.h"
 
 /*
    This pass will identify native methods which are (un)reachable, ignoring

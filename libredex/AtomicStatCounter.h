@@ -51,34 +51,32 @@ class AtomicStatCounter final {
  public:
   // Require providing explicit value in construction to enforce better clarity.
   AtomicStatCounter() = delete;
-  inline explicit AtomicStatCounter(T value) noexcept : counter{value} {}
-  inline AtomicStatCounter(const AtomicStatCounter& other) noexcept
+  explicit AtomicStatCounter(T value) noexcept : counter{value} {}
+  AtomicStatCounter(const AtomicStatCounter& other) noexcept
       : counter{other.counter.load(std::memory_order_relaxed)} {}
-  inline AtomicStatCounter(AtomicStatCounter&& other) noexcept
+  AtomicStatCounter(AtomicStatCounter&& other) noexcept
       // There's no more efficient way to move an atomic than to copy it.
       // NOLINTNEXTLINE(performance-move-constructor-init)
       : AtomicStatCounter(other) // invoke the copy constructor
   {}
-  inline AtomicStatCounter& operator=(const AtomicStatCounter& other) noexcept {
+  AtomicStatCounter& operator=(const AtomicStatCounter& other) noexcept {
     counter.store(other.counter.load(std::memory_order_relaxed),
                   std::memory_order_relaxed);
     return *this;
   }
-  inline AtomicStatCounter& operator=(AtomicStatCounter&& other) noexcept {
+  AtomicStatCounter& operator=(AtomicStatCounter&& other) noexcept {
     *this = other; // invoke the copy assignment operator
     return *this;
   }
 
-  inline T load() const noexcept {
-    return counter.load(std::memory_order_relaxed);
-  }
+  T load() const noexcept { return counter.load(std::memory_order_relaxed); }
   // NOLINTNEXTLINE(google-explicit-constructor)
-  inline operator T() const noexcept { return load(); }
-  inline T operator++() noexcept { return *this += 1; }
-  inline T operator++(int) noexcept {
+  operator T() const noexcept { return load(); }
+  T operator++() noexcept { return *this += 1; }
+  T operator++(int) noexcept {
     return counter.fetch_add(1, std::memory_order_relaxed);
   }
-  inline T operator+=(T value) noexcept {
+  T operator+=(T value) noexcept {
     counter.fetch_add(value, std::memory_order_relaxed);
     return *this;
   }

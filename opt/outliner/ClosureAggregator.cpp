@@ -20,11 +20,11 @@ uint64_t ClosureAggregator::ClosureInfo::get_primary_priority_denominator()
                                                return static_cast<uint64_t>(x) +
                                                       static_cast<uint64_t>(y);
                                              }));
-  uint32_t unapplied_code_size = code_size - applied_code_size;
+  size_t unapplied_code_size = code_size - applied_code_size;
   int64_t denominator = static_cast<int64_t>(unapplied_code_size) * 16;
   for (size_t i = 1; i < infrequent_code_sizes.size(); ++i) {
-    denominator -=
-        static_cast<int64_t>(infrequent_code_sizes[i]) * 16 / (i + 1);
+    denominator -= static_cast<int64_t>(infrequent_code_sizes[i]) * 16 /
+                   static_cast<int64_t>(i + 1);
   }
   return static_cast<uint64_t>(std::max(denominator, INT64_C(1)));
 }
@@ -86,8 +86,7 @@ void ClosureAggregator::insert(const Closure* c) {
       for (const Closure* affected_closure : UnorderedIterable(closures)) {
         always_assert(affected_closure != c);
         affected_closures[affected_closure]
-            .infrequent_code_sizes[frequency - 1] -=
-            static_cast<int32_t>(component->code_size);
+            .infrequent_code_sizes[frequency - 1] -= component->code_size;
       }
     }
     ++frequency;

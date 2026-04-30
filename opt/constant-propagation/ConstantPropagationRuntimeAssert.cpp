@@ -9,7 +9,7 @@
 
 #include "ControlFlow.h"
 #include "ProguardMap.h"
-#include "Walkers.h"
+#include "Resolver.h"
 
 namespace constant_propagation {
 
@@ -230,7 +230,8 @@ bool RuntimeAssertTransform::insert_return_value_assert(
   if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC) {
     return false;
   }
-  auto* callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* callee =
+      resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   if (callee == nullptr) {
     return false;
   }

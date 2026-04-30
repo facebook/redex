@@ -8,11 +8,10 @@
 #pragma once
 
 #include <algorithm>
-#include <boost/optional.hpp>
-#include <boost/optional/optional.hpp>
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -49,23 +48,23 @@ class MethodContextContext {
     const MethodContextContext& m_context;
 
     struct Vals {
-      std::vector<boost::optional<float>> hits;
-      std::vector<boost::optional<float>> appear100;
+      std::vector<std::optional<float>> hits;
+      std::vector<std::optional<float>> appear100;
     };
-    const boost::optional<Vals> m_vals;
+    const std::optional<Vals> m_vals;
 
-    uint32_t m_params{0};
-    uint32_t m_regs{0};
-    uint32_t m_insns{0};
-    uint32_t m_opcodes{0};
-    uint32_t m_blocks{0};
-    uint32_t m_edges{0};
-    uint32_t m_num_loops{0};
+    size_t m_params{0};
+    reg_t m_regs{0};
+    size_t m_insns{0};
+    size_t m_opcodes{0};
+    size_t m_blocks{0};
+    size_t m_edges{0};
+    size_t m_num_loops{0};
     uint32_t m_deepest_loop{0};
 
    private:
     MethodContext(const MethodContextContext& context,
-                  boost::optional<Vals>&& vals)
+                  std::optional<Vals>&& vals)
         : m_context(context), m_vals(std::move(vals)) {}
 
     friend class MethodContextContext;
@@ -77,10 +76,10 @@ class MethodContextContext {
         m_profiles(profiles) {}
 
   MethodContext create(const DexMethod* m) {
-    std::vector<boost::optional<float>> hits;
-    std::vector<boost::optional<float>> appear;
+    std::vector<std::optional<float>> hits;
+    std::vector<std::optional<float>> appear;
     bool has_data = false;
-    boost::optional<MethodContext::Vals> vals = boost::none;
+    std::optional<MethodContext::Vals> vals = std::nullopt;
     for (const auto& i : m_interaction_list) {
       auto maybe_stat = m_profiles->get_method_stat(i, m);
       if (maybe_stat) {
@@ -88,12 +87,12 @@ class MethodContextContext {
         hits.emplace_back(maybe_stat->call_count);
         appear.emplace_back(maybe_stat->appear_percent);
       } else {
-        hits.emplace_back(boost::none);
-        appear.emplace_back(boost::none);
+        hits.emplace_back(std::nullopt);
+        appear.emplace_back(std::nullopt);
       }
     }
     if (has_data) {
-      vals = boost::make_optional(MethodContext::Vals({hits, appear}));
+      vals = std::make_optional(MethodContext::Vals({hits, appear}));
     }
 
     MethodContext res{*this, std::move(vals)};
@@ -151,7 +150,7 @@ inline float get_max_hits_or_zero(const MethodContext& context) {
   if (!context.m_vals) {
     return 0;
   }
-  boost::optional<float> max = boost::none;
+  std::optional<float> max = std::nullopt;
   for (const auto& v : context.m_vals->hits) {
     if (v) {
       if (!max) {
@@ -171,7 +170,7 @@ inline float get_max_appear100_or_zero(const MethodContext& context) {
   if (!context.m_vals) {
     return 0;
   }
-  boost::optional<float> max = boost::none;
+  std::optional<float> max = std::nullopt;
   for (const auto& v : context.m_vals->appear100) {
     if (v) {
       if (!max) {

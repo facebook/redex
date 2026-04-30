@@ -11,8 +11,10 @@
 
 #include "DexPosition.h"
 #include "IROpcode.h"
+#include "MethodUtil.h"
 #include "RedexContext.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Transform.h"
 
 namespace {
@@ -307,7 +309,7 @@ void MethodBlock::move(Location src, Location& dst) {
   push_instruction(move);
 }
 
-void MethodBlock::move_result(Location& dst, DexType* type) {
+void MethodBlock::move_result(Location& dst, const DexType* type) {
   always_assert(dst.is_compatible(type));
   auto ch = type::type_shorty(type);
   redex_assert(ch != 'V');
@@ -326,7 +328,7 @@ void MethodBlock::move_result(Location& dst, DexType* type) {
   push_instruction(mov_res);
 }
 
-void MethodBlock::check_cast(Location& src_and_dst, DexType* type) {
+void MethodBlock::check_cast(Location& src_and_dst, const DexType* type) {
   IRInstruction* check_cast = new IRInstruction(OPCODE_CHECK_CAST);
   auto reg = src_and_dst.get_reg();
   check_cast->set_type(type)->set_src(0, reg);
@@ -384,7 +386,9 @@ void MethodBlock::load_const(Location& loc, int32_t value) {
   push_instruction(load);
 }
 
-void MethodBlock::load_const(Location& loc, int64_t value, DexType* type) {
+void MethodBlock::load_const(Location& loc,
+                             int64_t value,
+                             const DexType* type) {
   always_assert(type::is_wide_type(type) == loc.is_wide());
   IRInstruction* load =
       new IRInstruction(loc.is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
@@ -398,7 +402,7 @@ void MethodBlock::load_const(Location& loc, double value) {
   always_assert(loc.is_wide());
   IRInstruction* load = new IRInstruction(OPCODE_CONST_WIDE);
   load->set_dest(loc.get_reg());
-  load->set_literal(value);
+  load->set_literal(std20::bit_cast<int64_t>(value));
   loc.type = type::_double();
   push_instruction(load);
 }
@@ -549,7 +553,7 @@ void MethodCreator::load_locals(DexMethod* meth) {
   auto* proto = meth->get_proto();
   auto* args = proto->get_args();
   if (args != nullptr) {
-    for (auto* arg : *args) {
+    for (const auto* arg : *args) {
       make_local_at(arg, it->insn->dest());
       ++it;
     }
@@ -685,7 +689,8 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexAccessFlags access,
                              std::unique_ptr<DexAnnotationSet> anno,
                              bool with_debug_item)
-    : method(static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))),
+    : method(
+          dynamic_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))),
       m_with_debug_item(with_debug_item) {
   always_assert_log(!method->is_concrete(), "Method already defined");
   if (anno) {
@@ -759,7 +764,7 @@ DexMethod* MethodCreator::make_static_from(const DexString* name,
                                            DexClass* target_cls) {
   redex_assert(!is_static(meth));
   redex_assert(!method::is_init(meth) && !method::is_clinit(meth));
-  auto* smeth = static_cast<DexMethod*>(
+  auto* smeth = dynamic_cast<DexMethod*>(
       DexMethod::make_method(target_cls->get_type(), name, proto));
   smeth->make_concrete(meth->get_access() | ACC_STATIC, meth->release_code(),
                        false);

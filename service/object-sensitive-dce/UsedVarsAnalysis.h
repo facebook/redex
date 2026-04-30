@@ -10,7 +10,6 @@
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
 #include <sparta/ReducedProductAbstractDomain.h>
 
-#include "DexUtil.h"
 #include "LocalPointersAnalysis.h"
 #include "Resolver.h"
 #include "SideEffectSummary.h"

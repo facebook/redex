@@ -144,7 +144,8 @@ DexMethod* ClassSplitter::create_trampoline_method(DexMethod* method,
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   trampoline_target_method->set_deobfuscated_name(
       show_deobfuscated(trampoline_target_method));
-  trampoline_target_method->rstate.set_api_level(api_level);
+  trampoline_target_method->rstate.set_api_level(
+      static_cast<int32_t>(api_level));
   target_cls->add_method(trampoline_target_method);
   return trampoline_target_method;
 }
@@ -483,7 +484,7 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
         case OPCODE_INVOKE_DIRECT:
         case OPCODE_INVOKE_VIRTUAL:
         case OPCODE_INVOKE_SUPER: {
-          auto* resolved_method = resolve_method(
+          auto* resolved_method = resolve_method_deprecated(
               insn->get_method(), opcode_to_search(insn), method);
           if ((resolved_method != nullptr) &&
               (methods_to_staticize.count(resolved_method) != 0u)) {
@@ -495,7 +496,7 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
         }
         case OPCODE_INVOKE_INTERFACE:
         case OPCODE_INVOKE_STATIC: {
-          auto* resolved_method = resolve_method(
+          auto* resolved_method = resolve_method_deprecated(
               insn->get_method(), opcode_to_search(insn), method);
           always_assert(!resolved_method ||
                         !methods_to_staticize.count(resolved_method));

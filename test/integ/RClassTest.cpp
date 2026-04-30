@@ -18,6 +18,7 @@
 #include "LiveRange.h"
 #include "RClass.h"
 #include "RedexContext.h"
+#include "RedexResources.h"
 #include "RedexTest.h"
 #include "Show.h"
 #include "ShowCFG.h"
@@ -252,7 +253,8 @@ TEST_F(RClassTest, remapResourceClassArrays) {
   // A typical styleable inner class, which has different conventions and is
   // indexed directly into. Deletion should instead insert zeros.
   DexClass* styleable_class = get_r_class(*classes, styleable_r_class_name);
-  std::cout << "\n" << "BASELINE R$styleable <clinit>:" << "\n";
+  std::cout << "\n"
+            << "BASELINE R$styleable <clinit>:" << "\n";
   auto* styleable_clinit = styleable_class->get_clinit();
   auto* styleable_code = styleable_clinit->get_code();
   dump_code_verbose(styleable_code);
@@ -261,7 +263,8 @@ TEST_F(RClassTest, remapResourceClassArrays) {
   // opcode sequences for filling arrays statically.
   DexClass* another_styleable_r_class =
       get_r_class(*classes, another_styleable_r_class_name);
-  std::cout << "\n" << "BASELINE R$styleable2 <clinit>:" << "\n";
+  std::cout << "\n"
+            << "BASELINE R$styleable2 <clinit>:" << "\n";
   auto* another_clinit = another_styleable_r_class->get_clinit();
   auto* another_code = another_clinit->get_code();
   dump_code_verbose(another_code);
@@ -330,7 +333,8 @@ TEST_F(RClassTest, remapResourceClassArrays) {
             << "Did not find expected number of new array opcodes!";
       };
 
-  std::cout << "\n" << "MODIFIED R <clinit>:" << "\n";
+  std::cout << "\n"
+            << "MODIFIED R <clinit>:" << "\n";
   dump_code_verbose(code);
 
   auto no_further_checks = [](const std::string& field_name,
@@ -342,13 +346,15 @@ TEST_F(RClassTest, remapResourceClassArrays) {
                          {"Lcom/redextest/R;.six:[I", 9}},
                         no_further_checks);
 
-  std::cout << "\n" << "MODIFIED R$styleable <clinit>:" << "\n";
+  std::cout << "\n"
+            << "MODIFIED R$styleable <clinit>:" << "\n";
   dump_code_verbose(styleable_code);
   verify_expected_sizes(styleable_code->cfg(),
                         {{"Lcom/redextest/R$styleable;.four:[I", 2}},
                         no_further_checks);
 
-  std::cout << "\n" << "MODIFIED R$styleable2 <clinit>:" << "\n";
+  std::cout << "\n"
+            << "MODIFIED R$styleable2 <clinit>:" << "\n";
   dump_code_verbose(another_code);
   auto callback = [](const std::string& /*field_name*/,
                      const std::vector<uint32_t>& payload) {

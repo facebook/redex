@@ -7,7 +7,6 @@
 
 #include "ApiLevelChecker.h"
 
-#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "Show.h"
@@ -20,9 +19,9 @@ namespace api {
 // these values until g_redex exists and the classes have been loaded from the
 // dex file
 int32_t LevelChecker::s_min_level = 0;
-DexType* LevelChecker::s_requires_api_old = nullptr;
-DexType* LevelChecker::s_requires_api_new = nullptr;
-DexType* LevelChecker::s_target_api = nullptr;
+const DexType* LevelChecker::s_requires_api_old = nullptr;
+const DexType* LevelChecker::s_requires_api_new = nullptr;
+const DexType* LevelChecker::s_target_api = nullptr;
 bool LevelChecker::s_has_been_init = false;
 
 void LevelChecker::init(int32_t min_level, const Scope& scope) {
@@ -50,9 +49,9 @@ void LevelChecker::init(int32_t min_level, const Scope& scope) {
   propagate_levels(scope);
 }
 
-int32_t LevelChecker::get_method_level(const DexMethod* method) {
+int8_t LevelChecker::get_method_level(const DexMethod* method) {
   always_assert_log(s_has_been_init, "must call init first");
-  int32_t method_level = method->rstate.get_api_level();
+  int8_t method_level = method->rstate.get_api_level();
   if (method_level == -1) {
     // We need to initialize the API level. Note that there might be a race,
     // and multiple threads might be initializing the same methods (and class).
@@ -61,7 +60,7 @@ int32_t LevelChecker::get_method_level(const DexMethod* method) {
 
     // must have been created later on by Redex
     DexClass* cls = type_class(method->get_class());
-    int32_t class_level = cls->rstate.get_api_level();
+    int8_t class_level = cls->rstate.get_api_level();
     if (class_level == -1) {
       // must have been created later on by Redex
       init_class(cls);
@@ -113,9 +112,10 @@ DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
   if (slash_idx == std::string::npos || slash_idx < cash_idx) {
     // there's a $ in the class name
     const std::string& outer_name = cls_name.substr(0, cash_idx) + ';';
-    DexType* outer = DexType::get_type(outer_name);
+    const DexType* outer = DexType::get_type(outer_name);
     if (outer == nullptr) {
-      TRACE(MMINL, 4, "Can't find outer class! %s -> %s", cls_name.data(),
+      TRACE(MMINL, 4, "Can't find outer class! %.*s -> %s",
+            static_cast<int>(cls_name.length()), cls_name.data(),
             outer_name.c_str());
       return nullptr;
     }
@@ -158,16 +158,16 @@ namespace {
 void propagate_levels(const ClassHierarchy& ch,
                       DexClass* cls,
                       int32_t min_level) {
-  int32_t current_min_level = cls->rstate.get_api_level();
-  min_level = std::max(min_level, current_min_level);
+  auto current_min_level = cls->rstate.get_api_level();
+  min_level = std::max(min_level, static_cast<int32_t>(current_min_level));
 
   auto* intfs = cls->get_interfaces();
   if (intfs != nullptr) {
-    for (auto* intf : *intfs) {
+    for (const auto* intf : *intfs) {
       auto* intf_cls = type_class(intf);
       if (intf_cls != nullptr) {
-        min_level =
-            std::max(min_level, (int32_t)intf_cls->rstate.get_api_level());
+        min_level = std::max(
+            min_level, static_cast<int32_t>(intf_cls->rstate.get_api_level()));
       }
     }
   }

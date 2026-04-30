@@ -6,6 +6,9 @@
  */
 
 #include "OriginalNamePass.h"
+
+#include <vector>
+
 #include "ClassHierarchy.h"
 #include "ConfigFiles.h"
 #include "DexAnnotation.h"
@@ -16,9 +19,7 @@
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
-#include <boost/algorithm/string.hpp>
 
 #define METRIC_MISSING_ORIGINAL_NAME_ROOT "num_missing_original_name_root"
 #define METRIC_ORIGINAL_NAME_COUNT "num_original_name"
@@ -145,7 +146,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
             dex_id, store_id, dex.size());
       if (!overflow_classes.empty()) {
         // Remove those classes from current dex.
-        size_t removed = std20::erase_if(dex, [&](auto* cls) {
+        size_t removed = std::erase_if(dex, [&](auto* cls) {
           return std::find(overflow_classes.begin(), overflow_classes.end(),
                            cls) != overflow_classes.end();
         });
@@ -157,7 +158,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
             dex.size());
         if (new_dex.empty()) {
           // A canary_cls need to be added when a new dex is created.
-          int dexnum = store.get_dexen().size();
+          int dexnum = static_cast<int>(store.get_dexen().size());
           auto store_name = store.is_root_store() ? "" : store.get_name();
           DexClass* canary_cls = create_canary(dexnum, store_name);
           for (auto* m : canary_cls->get_all_methods()) {

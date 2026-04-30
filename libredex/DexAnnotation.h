@@ -148,13 +148,14 @@ class DexEncodedValueString : public DexEncodedValue {
       : DexEncodedValue(DEVT_STRING, string) {}
 
   const DexString* string() const {
-    return (const DexString*)m_val.m_value_ptr_const;
+    return static_cast<const DexString*>(m_val.m_value_ptr_const);
   }
   void string(const DexString* string) { m_val.m_value_ptr_const = string; }
   void gather_strings(std::vector<const DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, std::vector<uint8_t>& encdata) override;
 
   std::string show() const override;
+  std::string show_deobfuscated() const override;
   bool operator==(const DexEncodedValue& that) const override {
     if (m_evtype != that.evtype()) {
       return false;
@@ -165,7 +166,8 @@ class DexEncodedValueString : public DexEncodedValue {
   }
   size_t hash_value() const override {
     size_t seed = boost::hash<uint8_t>()(m_evtype);
-    boost::hash_combine(seed, (uintptr_t)m_val.m_value_ptr_const);
+    boost::hash_combine(seed,
+                        reinterpret_cast<uintptr_t>(m_val.m_value_ptr_const));
     return seed;
   }
 
@@ -189,7 +191,7 @@ class DexEncodedValuePtr : public DexEncodedValue {
   }
   size_t hash_value() const override {
     size_t seed = boost::hash<uint8_t>()(m_evtype);
-    boost::hash_combine(seed, (uintptr_t)m_val.m_value_ptr);
+    boost::hash_combine(seed, reinterpret_cast<uintptr_t>(m_val.m_value_ptr));
     return seed;
   }
 
@@ -203,12 +205,13 @@ class DexEncodedValueType : public DexEncodedValuePtr {
   explicit DexEncodedValueType(DexType* type)
       : DexEncodedValuePtr(DEVT_TYPE, type) {}
 
-  void gather_types(std::vector<DexType*>& ltype) const override;
+  void gather_types(std::vector<const DexType*>& ltype) const override;
   void encode(DexOutputIdx* dodx, std::vector<uint8_t>& encdata) override;
 
-  DexType* type() const { return (DexType*)m_val.m_value_ptr; }
+  DexType* type() const { return static_cast<DexType*>(m_val.m_value_ptr); }
   void set_type(DexType* type) { m_val.m_value_ptr = type; }
   std::string show() const override;
+  std::string show_deobfuscated() const override;
 
   std::unique_ptr<DexEncodedValue> clone() const override {
     return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(*this));
@@ -223,7 +226,9 @@ class DexEncodedValueField : public DexEncodedValuePtr {
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void encode(DexOutputIdx* dodx, std::vector<uint8_t>& encdata) override;
 
-  DexFieldRef* field() const { return (DexFieldRef*)m_val.m_value_ptr; }
+  DexFieldRef* field() const {
+    return static_cast<DexFieldRef*>(m_val.m_value_ptr);
+  }
   void set_field(DexFieldRef* field) { m_val.m_value_ptr = field; }
   std::string show() const override;
   std::string show_deobfuscated() const override;
@@ -241,7 +246,9 @@ class DexEncodedValueMethod : public DexEncodedValuePtr {
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   void encode(DexOutputIdx* dodx, std::vector<uint8_t>& encdata) override;
 
-  DexMethodRef* method() const { return (DexMethodRef*)m_val.m_value_ptr; }
+  DexMethodRef* method() const {
+    return static_cast<DexMethodRef*>(m_val.m_value_ptr);
+  }
   void set_method(DexMethodRef* method) { m_val.m_value_ptr = method; }
   std::string show() const override;
   std::string show_deobfuscated() const override;
@@ -259,7 +266,7 @@ class DexEncodedValueMethodType : public DexEncodedValuePtr {
   void gather_strings(std::vector<const DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, std::vector<uint8_t>& encdata) override;
 
-  DexProto* proto() const { return (DexProto*)m_val.m_value_ptr; }
+  DexProto* proto() const { return static_cast<DexProto*>(m_val.m_value_ptr); }
   void set_proto(DexProto* proto) { m_val.m_value_ptr = proto; }
   std::string show() const override;
   std::string show_deobfuscated() const override;
@@ -282,7 +289,7 @@ class DexEncodedValueMethodHandle : public DexEncodedValuePtr {
   void encode(DexOutputIdx* dodx, std::vector<uint8_t>& encdata) override;
 
   DexMethodHandle* methodhandle() const {
-    return (DexMethodHandle*)m_val.m_value_ptr;
+    return static_cast<DexMethodHandle*>(m_val.m_value_ptr);
   }
   void set_methodhandle(DexMethodHandle* methodhandle) {
     m_val.m_value_ptr = methodhandle;
@@ -310,7 +317,9 @@ class DexEncodedValueArray : public DexEncodedValue {
    */
   explicit DexEncodedValueArray(Storage* evalues, bool static_val = false)
       : DexEncodedValue(DEVT_ARRAY, evalues), m_static_val(static_val) {}
-  ~DexEncodedValueArray() { delete (Storage*)m_val.m_value_ptr; }
+  ~DexEncodedValueArray() override {
+    delete static_cast<Storage*>(m_val.m_value_ptr);
+  }
 
   // May not copy or assign, as the element is owned.
   DexEncodedValueArray(const DexEncodedValueArray&) = delete;
@@ -326,7 +335,7 @@ class DexEncodedValueArray : public DexEncodedValue {
     if (this == &rhs) {
       return *this;
     }
-    delete (Storage*)m_val.m_value_ptr;
+    delete static_cast<Storage*>(m_val.m_value_ptr);
     m_val.m_value_ptr = rhs.m_val.m_value_ptr;
     m_static_val = rhs.m_static_val;
     rhs.m_val.m_value_ptr = nullptr;
@@ -334,11 +343,11 @@ class DexEncodedValueArray : public DexEncodedValue {
   }
 
   std::vector<std::unique_ptr<DexEncodedValue>>* evalues() const {
-    return (Storage*)m_val.m_value_ptr;
+    return static_cast<Storage*>(m_val.m_value_ptr);
   }
   bool is_static_val() const { return m_static_val; }
 
-  void gather_types(std::vector<DexType*>& ltype) const override;
+  void gather_types(std::vector<const DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   void gather_strings(std::vector<const DexString*>& lstring) const override;
@@ -376,7 +385,7 @@ class DexEncodedValueArray : public DexEncodedValue {
     if (m_val.m_value_ptr == nullptr) {
       evalues_copy = nullptr;
     } else {
-      auto* old = (Storage*)m_val.m_value_ptr;
+      auto* old = static_cast<Storage*>(m_val.m_value_ptr);
       evalues_copy = new Storage();
       evalues_copy->reserve(old->size());
       for (auto& orig : *old) {
@@ -446,7 +455,7 @@ class DexEncodedValueAnnotation : public DexEncodedValue {
   void set_type(DexType* type) { m_type = type; }
   const EncodedAnnotations& annotations() const { return m_annotations; }
 
-  void gather_types(std::vector<DexType*>& ltype) const override;
+  void gather_types(std::vector<const DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   void gather_strings(std::vector<const DexString*>& lstring) const override;
@@ -479,7 +488,7 @@ class DexAnnotation : public Gatherable {
 
   static std::unique_ptr<DexAnnotation> get_annotation(DexIdx* idx,
                                                        uint32_t anno_off);
-  void gather_types(std::vector<DexType*>& ltype) const override;
+  void gather_types(std::vector<const DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   void gather_strings(std::vector<const DexString*>& lstring) const override;
@@ -523,7 +532,7 @@ class DexAnnotationSet : public Gatherable {
     }
   }
 
-  void gather_types(std::vector<DexType*>& ltype) const override;
+  void gather_types(std::vector<const DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   void gather_strings(std::vector<const DexString*>& lstring) const override;
@@ -608,13 +617,13 @@ class DexAnnotationDirectory {
   int annodir_size() {
     int size = 4 * sizeof(uint32_t);
     if (m_field) {
-      size += m_field->size() * 2 * sizeof(uint32_t);
+      size += static_cast<int>(m_field->size() * 2 * sizeof(uint32_t));
     }
     if (m_method) {
-      size += m_method->size() * 2 * sizeof(uint32_t);
+      size += static_cast<int>(m_method->size() * 2 * sizeof(uint32_t));
     }
     if (m_method_param) {
-      size += m_method_param->size() * 2 * sizeof(uint32_t);
+      size += static_cast<int>(m_method_param->size() * 2 * sizeof(uint32_t));
     }
     return size;
   }

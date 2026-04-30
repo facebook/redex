@@ -10,14 +10,13 @@
 #include <memory>
 #include <string>
 
-#include <json/json.h>
+#include <json/value.h>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
-#include "ReachableClasses.h"
+#include "IRList.h"
+#include "IROpcode.h"
 #include "RedexTest.h"
 
-#include "RemoveUnreachable.h"
 #include "TypeAnalysisAwareRemoveUnreachable.h"
 #include "VirtualScope.h"
 

@@ -79,7 +79,7 @@ struct StaticCallGraph {
   // push into static methods to construct call graph
   void add_vertex(DexMethod* method) {
     always_assert(method_id_map.count(method) == 0);
-    int idx = method_id_map.size();
+    int idx = static_cast<int>(method_id_map.size());
     method_id_map[method] = idx;
     vertices.emplace_back(method, idx);
   }
@@ -113,8 +113,8 @@ void build_call_graph(const std::vector<DexClass*>& candidate_classes,
         if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
           continue;
         }
-        DexMethod* callee =
-            resolve_method(mie.insn->get_method(), MethodSearch::Static);
+        DexMethod* callee = resolve_method_deprecated(mie.insn->get_method(),
+                                                      MethodSearch::Static);
         if (graph.method_id_map.find(callee) != graph.method_id_map.end()) {
           int callee_id = graph.method_id_map[callee];
           graph.callers[callee_id].insert(caller_id);
@@ -172,8 +172,8 @@ void color_from_a_class(StaticCallGraph& graph, DexClass* cls, int color) {
         if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
           continue;
         }
-        DexMethod* callee =
-            resolve_method(mie.insn->get_method(), MethodSearch::Static);
+        DexMethod* callee = resolve_method_deprecated(mie.insn->get_method(),
+                                                      MethodSearch::Static);
         if (graph.method_id_map.find(callee) != graph.method_id_map.end()) {
           color_vertex(graph, callee, color);
         }
@@ -198,7 +198,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
     // static call graph. Do the proper logging or relocation for them if there
     // are such kind of unreachable static methods.
     if (vertex.color == -1) {
-      int number_of_callers = graph.callers[vertex.id].size();
+      int number_of_callers = static_cast<int>(graph.callers[vertex.id].size());
       TRACE(STATIC_RELO, 4,
             "method %s has %d static method callers, and the method and its "
             "callers are all unreachable from other classes. Enable "
@@ -278,7 +278,7 @@ int StaticReloPassV2::run_relocation(
     if (set.find(scope[color]) != set.end()) {
       continue;
     }
-    color_from_a_class(graph, scope[color], color);
+    color_from_a_class(graph, scope[color], static_cast<int>(color));
   }
 
   return relocate_clusters(graph, scope);

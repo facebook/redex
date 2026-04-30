@@ -118,4 +118,21 @@ public class SourceBlocksTest {
       j++;
     }
   }
+
+  static class IntermethodViolationsClass {
+
+    public IntermethodViolationsClass() {
+      boolean run_callee = true;
+      if (run_callee) {
+        callee();
+      } else {
+        return;
+      }
+     }
+
+    public int callee() {
+      int i = 0;
+      return i;
+    }
+  }
 }

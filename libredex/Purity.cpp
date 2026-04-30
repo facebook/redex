@@ -15,13 +15,11 @@
 #include <sparta/WeakTopologicalOrdering.h>
 
 #include "ConfigFiles.h"
-#include "ControlFlow.h"
 #include "DexClass.h"
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -466,7 +464,7 @@ class WtoOrdering {
     std::vector<const DexMethod*> root_cache;
     UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>&
         inverse_dependencies;
-    const std::vector<const DexMethod*> empty{};
+    const std::vector<const DexMethod*> empty;
 
     const std::vector<const DexMethod*>& get(const DexMethod* m) {
       if (m == WTO_ROOT) {
@@ -510,7 +508,7 @@ class WtoOrdering {
         },
         wto_nodes);
 
-    return {std::move(root_cache), inverse_dependencies};
+    return {std::move(root_cache), inverse_dependencies, {}};
   }
 
   struct OtherIterationData {
@@ -618,7 +616,8 @@ class WtoOrdering {
       inv_dep_sum += entry.second.size();
       inv_dep_max = std::max(inv_dep_max, entry.second.size());
     }
-    auto inv_dep_avg = ((double)inv_dep_sum) / inverse_dependencies.size();
+    auto inv_dep_avg = static_cast<double>(inv_dep_sum) /
+                       static_cast<double>(inverse_dependencies.size());
     // Purity is too low-level for nice configuration switches. Think
     // about it.
     TRACE(CSE, 4,
@@ -763,8 +762,8 @@ size_t compute_locations_closure_impl(
 
       // remove inverse dependency entries as appropriate
       auto& entries = it->second;
-      std20::erase_if(entries,
-                      [&](auto* m) { return !method_lads.count_unsafe(m); });
+      std::erase_if(entries,
+                    [&](auto* m) { return !method_lads.count_unsafe(m); });
 
       if (entries.empty()) {
         // remove inverse dependency
@@ -875,11 +874,7 @@ static size_t analyze_read_locations(
               case OPCODE_MONITOR_EXIT:
               case OPCODE_FILL_ARRAY_DATA:
               case OPCODE_THROW:
-                unknown = true;
-                break;
               case IOPCODE_INIT_CLASS:
-                unknown = true;
-                break;
               case IOPCODE_WRITE_BARRIER:
                 unknown = true;
                 break;
@@ -921,7 +916,7 @@ static size_t analyze_read_locations(
                     }
                   }
                 } else if (opcode::is_an_invoke(opcode)) {
-                  auto* invoke_method = resolve_method(
+                  auto* invoke_method = resolve_method_deprecated(
                       insn->get_method(), opcode_to_search(opcode), method);
                   if (((invoke_method != nullptr) &&
                        opcode::is_invoke_static(opcode) &&

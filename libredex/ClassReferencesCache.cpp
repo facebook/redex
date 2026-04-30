@@ -7,8 +7,6 @@
 
 #include "ClassReferencesCache.h"
 
-#include <cmath>
-
 #include "DexUtil.h"
 #include "WorkQueue.h"
 

@@ -93,19 +93,19 @@ class PassImpl : public Pass {
    * responsible for picking the right Config settings.
    */
   void run(const DexStoresVector& stores,
+           const ConfigFiles& conf,
            int min_sdk = 0,
            const boost::optional<std::string>& = boost::none);
 
   /*
    * Exposed for testing purposes.
    */
-  std::unique_ptr<FixpointIterator> analyze(
-      const Scope&,
-      const ImmutableAttributeAnalyzerState*,
-      const ApiLevelAnalyzerState*,
-      const StringAnalyzerState*,
-      const PackageNameState*,
-      const State&);
+  std::unique_ptr<FixpointIterator> analyze(const Scope&,
+                                            ImmutableAttributeAnalyzerState*,
+                                            ApiLevelAnalyzerState*,
+                                            StringAnalyzerState*,
+                                            PackageNameState*,
+                                            const State&);
 
  private:
   void compute_analysis_stats(const WholeProgramState&,

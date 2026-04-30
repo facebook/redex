@@ -32,3 +32,5 @@ WarningsAsErrors: 'performance-*,readability-*,misc-definitions-in-headers,moder
 CheckOptions:
   - key: modernize-use-override.IgnoreDestructors
     value: 1
+  - key: bugprone-signed-char-misuse.CharTypdefsToIgnore
+    value: "int8_t"

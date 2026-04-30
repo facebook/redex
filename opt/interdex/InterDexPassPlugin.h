@@ -11,7 +11,7 @@
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
-#include "DexStructure.h"
+#include "PassManager.h"
 #include "PluginRegistry.h"
 
 namespace interdex {
@@ -27,8 +27,8 @@ class InterDexPassPlugin {
   // emission begins.
   virtual void gather_initial_refs(std::vector<DexMethodRef*>&,
                                    std::vector<DexFieldRef*>&,
-                                   std::vector<DexType*>&,
-                                   std::vector<DexType*>&) {}
+                                   std::vector<const DexType*>&,
+                                   std::vector<const DexType*>&) {}
 
   // Will prevent clazz from going into any output dex.
   virtual bool should_skip_class(const DexClass*) const { return false; }
@@ -38,8 +38,8 @@ class InterDexPassPlugin {
   virtual void gather_refs(const DexClass*,
                            std::vector<DexMethodRef*>&,
                            std::vector<DexFieldRef*>&,
-                           std::vector<DexType*>&,
-                           std::vector<DexType*>&) {}
+                           std::vector<const DexType*>&,
+                           std::vector<const DexType*>&) {}
 
   // Return any new codegened classes that should be added to the current dex.
   virtual DexClasses additional_classes(size_t /*dex_count*/,

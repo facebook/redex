@@ -8,7 +8,6 @@
 #include "PrintKotlinStats.h"
 #include "Creators.h"
 #include "IRAssembler.h"
-#include "PassManager.h"
 #include "RedexTest.h"
 #include "Walkers.h"
 

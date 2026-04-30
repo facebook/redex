@@ -67,10 +67,11 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include <boost/format.hpp>
+#include <boost/format.hpp> // NOLINT
 
 #include "BigBlocks.h"
 #include "CFGMutation.h"
@@ -83,10 +84,12 @@
 #include "DexInstruction.h"
 #include "DexLimits.h"
 #include "DexPosition.h"
+#include "DexStoreUtil.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "InterDexPass.h"
+#include "InitClassesWithSideEffects.h"
+#include "InterDexPassMetrics.h"
 #include "Lazy.h"
 #include "Liveness.h"
 #include "MethodProfiles.h"
@@ -103,7 +106,6 @@
 #include "RefChecker.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -133,7 +135,7 @@ struct CandidateInstructionCore {
     DexMethodRef* method;
     DexFieldRef* field;
     const DexString* string;
-    DexType* type;
+    const DexType* type;
     DexOpcodeData* data;
     int64_t literal{0};
   };
@@ -185,7 +187,7 @@ bool operator==(const CandidateInstructionCore& a,
 struct CandidateInstruction {
   CandidateInstructionCore core;
   std::vector<reg_t> srcs;
-  boost::optional<reg_t> dest;
+  std::optional<reg_t> dest;
 };
 static size_t hash_value(const CandidateInstruction& ci) {
   size_t hash = hash_value(ci.core);
@@ -220,7 +222,7 @@ bool operator!=(const CandidateEdgeLabel& a, const CandidateEdgeLabel& b) {
 
 struct CandidateNode {
   std::vector<CandidateInstruction> insns;
-  boost::optional<reg_t> res_reg;
+  std::optional<reg_t> res_reg;
   std::vector<std::pair<CandidateEdgeLabel, std::shared_ptr<CandidateNode>>>
       succs;
 };
@@ -281,9 +283,9 @@ static size_t hash_value(const Candidate& c) {
   size_t hash = c.size;
   boost::hash_combine(hash, c.root);
   for (const auto* arg_type : c.arg_types) {
-    boost::hash_combine(hash, (size_t)arg_type);
+    boost::hash_combine(hash, reinterpret_cast<size_t>(arg_type));
   }
-  boost::hash_combine(hash, (size_t)c.res_type);
+  boost::hash_combine(hash, reinterpret_cast<size_t>(c.res_type));
   return hash;
 }
 static StableHash stable_hash_value(const Candidate& c) {
@@ -371,7 +373,7 @@ class CandidateInstructionCoresBuilder {
 using LazyReachingInitializedsEnvironments =
     Lazy<reaching_initializeds::ReachingInitializedsEnvironments>;
 using OptionalReachingInitializedsEnvironments =
-    boost::optional<reaching_initializeds::ReachingInitializedsEnvironments>;
+    std::optional<reaching_initializeds::ReachingInitializedsEnvironments>;
 
 static std::vector<cfg::Edge*> get_ordered_goto_and_branch_succs(
     cfg::Block* block) {
@@ -402,7 +404,7 @@ static CandidateEdgeLabel normalize(cfg::Edge* e) {
 static Candidate normalize(
     OutlinerTypeAnalysis& type_analysis,
     const PartialCandidate& pc,
-    const boost::optional<std::pair<reg_t, bool>>& out_reg) {
+    const std::optional<std::pair<reg_t, bool>>& out_reg) {
   UnorderedMap<reg_t, reg_t> map;
   reg_t next_arg{pc.temp_regs};
   reg_t next_temp{0};
@@ -423,14 +425,14 @@ static Candidate normalize(
   };
   // We keep track of temp registers only needed along some
   // (conditional) control-flow paths.
-  using UndoMap = UnorderedMap<reg_t, boost::optional<reg_t>>;
+  using UndoMap = UnorderedMap<reg_t, std::optional<reg_t>>;
   auto normalize_def = [&map, &next_temp](reg_t reg, bool wide,
                                           UndoMap* undo_map) {
     if (undo_map->count(reg) == 0u) {
       auto it = map.find(reg);
       undo_map->emplace(reg, it == map.end()
-                                 ? boost::none
-                                 : boost::optional<reg_t>(it->second));
+                                 ? std::nullopt
+                                 : std::optional<reg_t>(it->second));
     }
     reg_t mapped_reg = next_temp;
     next_temp += wide ? 2 : 1;
@@ -517,7 +519,7 @@ using Ranges = std::map<size_t, size_t>;
 struct CandidateMethodLocation {
   IRInstruction* first_insn;
   cfg::Block* hint_block;
-  boost::optional<reg_t> out_reg;
+  std::optional<reg_t> out_reg;
   // We use a linear instruction indexing scheme within a method to identify
   // ranges, which we use later to invalidate other overlapping candidates
   // while incrementally processing the most beneficial candidates using a
@@ -650,7 +652,8 @@ static bool can_outline_insn(const RefChecker& ref_checker,
     return false;
   }
   if (insn->has_method()) {
-    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     if (method == nullptr || method != insn->get_method()) {
       return false;
     }
@@ -800,7 +803,7 @@ static bool explore_candidates_from(
     big_blocks::InstructionIterator it,
     const big_blocks::InstructionIterator& end,
     const ExploredCallback* explored_callback = nullptr) {
-  boost::optional<IROpcode> prev_opcode;
+  std::optional<IROpcode> prev_opcode;
   CandidateInstructionCoresBuilder cores_builder;
   auto* first_block = it.block();
   auto& cfg = first_block->cfg();
@@ -1021,7 +1024,7 @@ static MethodCandidates find_method_candidates(
             return;
           }
           std::vector<std::pair<reg_t, IRInstruction*>> live_out_consts;
-          boost::optional<std::pair<reg_t, bool>> out_reg;
+          std::optional<std::pair<reg_t, bool>> out_reg;
           if (!pc.root.defined_regs.empty()) {
             const auto& live_out =
                 next_block != nullptr
@@ -1153,7 +1156,7 @@ static MethodCandidates find_method_candidates(
           } else {
             cmls.push_back((CandidateMethodLocation){
                 pc.root.insns.front(), first_block,
-                out_reg ? boost::optional<reg_t>(out_reg->first) : boost::none,
+                out_reg ? std::optional<reg_t>(out_reg->first) : std::nullopt,
                 ranges});
           }
         };
@@ -1586,7 +1589,8 @@ static void get_beneficial_candidates(
       const auto& c = *q.second;
       if (candidate_ids.count(c) == 0u) {
         always_assert(candidate_ids.size() < (1ULL << 32));
-        CandidateId candidate_id = candidate_ids.size();
+        CandidateId candidate_id =
+            static_cast<CandidateId>(candidate_ids.size());
         method_candidate_ids.insert(candidate_id);
         candidate_ids.emplace(c, candidate_id);
         candidates_with_infos->push_back(
@@ -1647,7 +1651,8 @@ class MethodNameGenerator {
     if (obfuscated_name) {
       name += OUTLINED_METHOD_SHORT_NAME_PREFIX;
       std::string identifier_name;
-      obfuscate_utils::compute_identifier(short_id_counter++, &identifier_name);
+      obfuscate_utils::compute_identifier(static_cast<int>(short_id_counter++),
+                                          &identifier_name);
       name += identifier_name;
     } else {
       name += OUTLINED_METHOD_NAME_PREFIX;
@@ -1762,14 +1767,13 @@ class OutlinedMethodCreator {
         m_method_name_generator.get_name(c, m_config.obfuscate_method_names);
     DexTypeList::ContainerType arg_types;
     for (const auto* t : c.arg_types) {
-      arg_types.push_back(const_cast<DexType*>(t));
+      arg_types.push_back(t->to_mutable());
     }
     const auto* rtype = c.res_type != nullptr ? c.res_type : type::_void();
     auto* type_list = DexTypeList::make_type_list(std::move(arg_types));
     auto* proto = DexProto::make_proto(rtype, type_list);
-    auto* outlined_method =
-        DexMethod::make_method(const_cast<DexType*>(host_class), name, proto)
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    auto* outlined_method = DexMethod::make_method(host_class, name, proto)
+                                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     // get pattern ids
     *pattern_ids = get_outlined_dbg_positions_patterns(c, ci);
     always_assert(!(*pattern_ids).empty());
@@ -1913,7 +1917,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
   auto* last_dbg_pos = skip_fileless(cfg.get_dbg_pos(first_insn_it));
   cfg::CFGMutation cfg_mutation(cfg);
   const auto first_arg_reg = c.temp_regs;
-  boost::optional<reg_t> last_arg_reg;
+  std::optional<reg_t> last_arg_reg;
   std::vector<reg_t> arg_regs;
   std::function<void(const CandidateNode& cn,
                      big_blocks::InstructionIterator it)>
@@ -1929,7 +1933,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
   walk = [&walk, &last_dbg_pos, &gather_arg_regs, &cml, &cfg, &cfg_mutation](
              const CandidateNode& cn, big_blocks::InstructionIterator it) {
     cfg::Block* last_block{nullptr};
-    boost::optional<cfg::InstructionIterator> last_insn_it;
+    std::optional<cfg::InstructionIterator> last_insn_it;
     for (size_t insn_idx = 0; insn_idx < cn.insns.size();
          last_block = it.block(), last_insn_it = it.unwrap(), insn_idx++,
                 it++) {
@@ -2036,7 +2040,7 @@ class DexState {
            size_t reserved_mrefs)
       : m_mgr(mgr), m_dex(dex), m_dex_id(dex_id) {
     UnorderedSet<DexMethodRef*> method_refs;
-    std::vector<DexType*> init_classes;
+    std::vector<const DexType*> init_classes;
     for (auto* cls : dex) {
       cls->gather_methods(method_refs);
       cls->gather_types(m_type_refs);
@@ -2049,10 +2053,10 @@ class DexState {
     });
 
     UnorderedSet<DexType*> refined_types;
-    for (auto* type : init_classes) {
+    for (const auto* type : init_classes) {
       const auto* refined_type = init_classes_with_side_effects.refine(type);
       if (refined_type != nullptr) {
-        m_type_refs.insert(const_cast<DexType*>(refined_type));
+        m_type_refs.insert(refined_type->to_mutable());
       }
     }
     max_type_refs =
@@ -2112,10 +2116,10 @@ class DexState {
   // Class ids represent the position of a class in the dex; we use this to
   // determine if class in the dex, which one comes first, when deciding
   // on a host class for an outlined method.
-  boost::optional<size_t> get_class_id(const DexType* t) {
+  std::optional<size_t> get_class_id(const DexType* t) {
     auto it = m_class_ids.find(t);
-    return it == m_class_ids.end() ? boost::none
-                                   : boost::optional<size_t>(it->second);
+    return it == m_class_ids.end() ? std::nullopt
+                                   : std::optional<size_t>(it->second);
   }
 };
 
@@ -2221,7 +2225,7 @@ class HostClassSelector {
 
     // Try to find the first allowable base types
     const DexType* host_class{nullptr};
-    boost::optional<size_t> host_class_id;
+    std::optional<size_t> host_class_id;
     auto super_classes = get_super_classes(types);
     for (const auto* type : UnorderedIterable(super_classes)) {
       auto class_id = m_dex_state.get_class_id(type);
@@ -2234,7 +2238,7 @@ class HostClassSelector {
       }
       // In particular, use the base type that appears first in this dex.
       if (host_class == nullptr || *host_class_id > *class_id) {
-        host_class_id = *class_id;
+        host_class_id = class_id;
         host_class = type;
       }
     }
@@ -2342,10 +2346,10 @@ bool outline_candidate(const Config& config,
   // type refs can be added to the dex. We collect those type refs.
   UnorderedSet<const DexType*> type_refs_to_insert;
   for (const auto* t : c.arg_types) {
-    type_refs_to_insert.insert(const_cast<DexType*>(t));
+    type_refs_to_insert.insert(t->to_mutable());
   }
   const auto* rtype = c.res_type != nullptr ? c.res_type : type::_void();
-  type_refs_to_insert.insert(const_cast<DexType*>(rtype));
+  type_refs_to_insert.insert(rtype);
 
   DexMethod* outlined_method{
       find_reusable_method(store, store_dependencies, c, ci, *outlined_methods,
@@ -2538,7 +2542,7 @@ static NewlyOutlinedMethods outline(
         auto& other_c = candidates_with_infos->at(other_id);
         for (auto& cml : cmls) {
           auto& other_cmls = other_c.info.methods.at(method);
-          std20::erase_if(other_cmls, [&](auto& other_cml) {
+          std::erase_if(other_cmls, [&](auto& other_cml) {
             if (ranges_overlap(cml.ranges, other_cml.ranges)) {
               other_c.info.count--;
               if (other_id != id) {
@@ -2621,8 +2625,8 @@ UnorderedMap<const DexMethodRef*, double> get_methods_global_order(
           interaction_id.c_str(), index);
     for (const auto& q : UnorderedIterable(method_stats)) {
       auto& global_order = methods_global_order[q.first];
-      global_order =
-          std::min(global_order, index * 100 + q.second.order_percent);
+      global_order = std::min(global_order, static_cast<double>(index * 100) +
+                                                q.second.order_percent);
     }
   }
   auto ordered_methods = unordered_to_ordered_keys(
@@ -3239,7 +3243,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                   sufficiently_hot_methods.size());
   auto methods_global_order = get_methods_global_order(config, m_config);
   mgr.incr_metric("num_ordered_methods", methods_global_order.size());
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, config.normal_primary_dex());
   size_t dex_id{0};
   const auto& interdex_metrics = mgr.get_interdex_metrics();
   auto it = interdex_metrics.find(interdex::METRIC_RESERVED_MREFS);
@@ -3301,7 +3305,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
           outline(m_config, mgr, store, store_dependencies, dex_state, min_sdk,
                   &candidates_with_infos, &candidate_ids_by_methods,
                   &outlined_methods, iteration, &num_reused_methods);
-      outlined_methods_to_reorder.push_back({&dex, newly_outlined_methods});
+      outlined_methods_to_reorder.emplace_back(&dex, newly_outlined_methods);
       auto affected_methods = count_affected_methods(newly_outlined_methods);
       auto total_methods = count_methods(dex);
       if (total_methods > 0) {

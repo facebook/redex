@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <boost/optional/optional.hpp>
 #include <set>
 
 #include "DexClass.h"

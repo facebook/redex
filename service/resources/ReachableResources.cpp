@@ -7,7 +7,6 @@
 
 #include "ReachableResources.h"
 
-#include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/regex.hpp>
 
@@ -30,7 +29,8 @@ bool is_resource_xml(const std::string& str) {
       if (it->string() == RES_DIRECTORY) {
         return true;
       }
-      if (it != p.end() && (++it)->string() == RES_DIRECTORY) {
+      ++it;
+      if (it != p.end() && it->string() == RES_DIRECTORY) {
         return true;
       }
     }
@@ -89,7 +89,9 @@ UnorderedSet<uint32_t> find_code_resource_references(
   walk::parallel::opcodes(scope, [&](DexMethod* m, IRInstruction* insn) {
     // Collect all accessed fields that could be R fields, or values that got
     // inlined elsewhere.
-    if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
+    if (insn->opcode() == IOPCODE_R_CONST) {
+      potential_ids_from_code.emplace(insn->get_literal());
+    } else if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
       auto* field = resolve_field(insn->get_field(), FieldSearch::Static);
       if ((field != nullptr) && field->is_concrete()) {
         accessed_sfields.emplace(field);
@@ -156,7 +158,8 @@ UnorderedSet<uint32_t> find_code_resource_references(
         resources::is_non_customized_r_class(type_class(field->get_class()));
     if (type::is_primitive(field->get_type()) &&
         (field->get_static_value() != nullptr) &&
-        resources::is_potential_resid(field->get_static_value()->value()) &&
+        resources::is_potential_resid(
+            static_cast<int64_t>(field->get_static_value()->value())) &&
         (is_r_field || assume_id_inlined)) {
       ids_from_code.emplace(field->get_static_value()->value());
     } else if (is_r_field && type::is_array(field->get_type())) {

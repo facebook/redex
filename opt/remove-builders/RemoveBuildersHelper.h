@@ -76,12 +76,12 @@ struct FieldsRegs {
 };
 
 bool tainted_reg_escapes(
-    DexType* type,
+    const DexType* type,
     DexMethod* method,
     const UnorderedMap<IRInstruction*, TaintedRegs>& taint_map,
     bool enable_buildee_constr_change = false);
 
-void transfer_object_reach(DexType* object,
+void transfer_object_reach(const DexType* object,
                            uint32_t regs_size,
                            const IRInstruction* insn,
                            RegSet& regs);
@@ -90,7 +90,7 @@ std::unique_ptr<UnorderedMap<IRInstruction*, TaintedRegs>> get_tainted_regs(
     const cfg::ControlFlowGraph& cfg,
     uint32_t regs_size,
     const std::vector<cfg::Block*>& blocks,
-    DexType* type);
+    const DexType* type);
 
 class BuilderTransform {
  public:
@@ -99,6 +99,7 @@ class BuilderTransform {
                    inliner::InlinerConfig inliner_config,
                    const Scope& scope,
                    DexStoresVector& stores,
+                   const ConfigFiles& conf,
                    bool throws_inline)
       : m_inliner_config(std::move(inliner_config)) {
     // Note: We copy global inline config in the class since it seems that it
@@ -109,14 +110,15 @@ class BuilderTransform {
     UnorderedSet<DexMethod*> no_default_inlinables;
     int min_sdk = 0;
     m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-        scope, init_classes_with_side_effects, stores, no_default_inlinables,
-        std::ref(m_concurrent_method_resolver), m_inliner_config, min_sdk));
+        scope, init_classes_with_side_effects, stores, conf,
+        no_default_inlinables, std::ref(m_concurrent_method_resolver),
+        m_inliner_config, min_sdk));
   }
 
   bool inline_methods(
       DexMethod* method,
-      DexType* type,
-      const std::function<UnorderedSet<DexMethod*>(IRCode*, DexType*)>&
+      const DexType* type,
+      const std::function<UnorderedSet<DexMethod*>(IRCode*, const DexType*)>&
           get_methods_to_inline);
 
   void flush() { m_inliner->flush(); }
@@ -124,19 +126,20 @@ class BuilderTransform {
  private:
   std::unique_ptr<MultiMethodInliner> m_inliner;
   inliner::InlinerConfig m_inliner_config;
-  ConcurrentMethodResolver m_concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated m_concurrent_method_resolver;
 };
 
-UnorderedSet<DexMethod*> get_all_methods(IRCode* code, DexType* type);
+UnorderedSet<DexMethod*> get_all_methods(IRCode* code, const DexType* type);
 
-UnorderedSet<DexMethod*> get_non_init_methods(IRCode* code, DexType* type);
+UnorderedSet<DexMethod*> get_non_init_methods(IRCode* code,
+                                              const DexType* type);
 
-bool has_builder_name(DexType* type);
+bool has_builder_name(const DexType* type);
 
 /**
  * Given a builder, returns the enclosing class type.
  */
-DexType* get_buildee(DexType* builder);
+DexType* get_buildee(const DexType* builder);
 
 /**
  * Given a method and a builder, it will try to remove the builder completely.

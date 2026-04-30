@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "Creators.h"
 #include "DeterministicContainers.h"
 #include "DexStore.h"
 #include "DexUtil.h"
@@ -44,10 +43,5 @@ bool is_in_non_root_store(const DexType* type,
 UnorderedSet<const DexType*> get_non_root_store_types(
     const DexStoresVector& stores,
     const XStoreRefs& xstores,
-    const TypeSet& types,
-    bool include_primary_dex);
-
-UnorderedSet<const DexType*> get_non_root_store_types(
-    const DexStoresVector& stores,
     const TypeSet& types,
     bool include_primary_dex);

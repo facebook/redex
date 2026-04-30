@@ -7,8 +7,8 @@
 
 #include "ProguardLexer.h"
 
+#include <algorithm>
 #include <cctype>
-#include <istream>
 #include <utility>
 #include <vector>
 
@@ -396,8 +396,6 @@ bool Token::is_command() const {
     return false;
 
   case TokenType::command:
-    return true;
-
   // Input/Output Options
   case TokenType::include:
   case TokenType::basedirectory:
@@ -408,8 +406,6 @@ bool Token::is_command() const {
   case TokenType::keepdirectories:
   case TokenType::target:
   case TokenType::dontskipnonpubliclibraryclasses:
-    return true;
-
   // Keep Options
   case TokenType::keep:
   case TokenType::keepclassmembers:
@@ -431,8 +427,6 @@ bool Token::is_command() const {
   case TokenType::dontshrink:
   case TokenType::printusage:
   case TokenType::whyareyoukeeping:
-    return true;
-
   // Optimization Options
   case TokenType::dontoptimize:
   case TokenType::optimizations:
@@ -442,8 +436,6 @@ bool Token::is_command() const {
   case TokenType::mergeinterfacesaggressively:
   case TokenType::allowaccessmodification_token:
   case TokenType::returns:
-    return true;
-
   // Obfuscation Options
   case TokenType::dontobfuscate:
   case TokenType::printmapping:
@@ -451,12 +443,8 @@ bool Token::is_command() const {
   case TokenType::keepattributes:
   case TokenType::dontusemixedcaseclassnames_token:
   case TokenType::keeppackagenames:
-    return true;
-
   // Preverification Options
   case TokenType::dontpreverify_token:
-    return true;
-
   // General Options
   case TokenType::printconfiguration:
   case TokenType::dontwarn:

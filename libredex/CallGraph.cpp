@@ -11,8 +11,8 @@
 
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
+#include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -51,23 +51,24 @@ SingleCalleeStrategy::SingleCalleeStrategy(
 
 CallSites SingleCalleeStrategy::get_callsites(const DexMethod* method) const {
   CallSites callsites;
-  auto* code = const_cast<IRCode*>(method->get_code());
+  const auto* code = method->get_code();
   if (code == nullptr) {
     return callsites;
   }
-  cfg_adapter::iterate_with_iterator(code, [&](const IRList::iterator& it) {
-    auto* insn = it->insn;
-    if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
-      if (callee == nullptr || is_definitely_virtual(callee)) {
+  cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::const_iterator& it) {
+        auto* insn = it->insn;
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto* callee = resolve_invoke_method_deprecated(insn, method);
+          if (callee == nullptr || is_definitely_virtual(callee)) {
+            return cfg_adapter::LOOP_CONTINUE;
+          }
+          if (callee->is_concrete()) {
+            callsites.emplace_back(callee, insn);
+          }
+        }
         return cfg_adapter::LOOP_CONTINUE;
-      }
-      if (callee->is_concrete()) {
-        callsites.emplace_back(callee, insn);
-      }
-    }
-    return cfg_adapter::LOOP_CONTINUE;
-  });
+      });
   return callsites;
 }
 
@@ -126,7 +127,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
   auto& roots = root_and_dynamic.roots;
   auto& dynamic_methods = root_and_dynamic.dynamic_methods;
   // Gather clinits and root methods, and the methods that override or
-  // overriden by the root methods.
+  // overridden by the root methods.
   auto add_root_method_overrides = [&roots](const DexMethod* method) {
     if ((method->get_code() == nullptr) || root(method) ||
         method->is_external()) {
@@ -147,7 +148,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
         !is_method_dynamic) {
       // For root methods and dynamically added classes, created via
       // Proxy.newProxyInstance, we need to add them and their overrides and
-      // overriden to roots.
+      // overridden to roots.
       return;
     }
     if (is_method_dynamic) {
@@ -200,32 +201,33 @@ CompleteCallGraphStrategy::CompleteCallGraphStrategy(
 CallSites CompleteCallGraphStrategy::get_callsites(
     const DexMethod* method) const {
   CallSites callsites;
-  auto* code = const_cast<IRCode*>(method->get_code());
+  const auto* code = method->get_code();
   if (code == nullptr) {
     return callsites;
   }
-  cfg_adapter::iterate_with_iterator(code, [&](const IRList::iterator& it) {
-    auto* insn = it->insn;
-    if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
-      if (callee == nullptr) {
-        return cfg_adapter::LOOP_CONTINUE;
-      }
-      if ((callee->get_code() != nullptr) || is_native(callee)) {
-        callsites.emplace_back(callee, insn);
-      }
-      if (opcode::is_invoke_virtual(insn->opcode()) ||
-          opcode::is_invoke_interface(insn->opcode())) {
-        const auto& overriding_methods =
-            get_ordered_overriding_methods_with_code_or_native(callee);
-        for (const auto* overriding_method :
-             UnorderedIterable(overriding_methods)) {
-          callsites.emplace_back(overriding_method, insn);
+  cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::const_iterator& it) {
+        auto* insn = it->insn;
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto* callee = resolve_invoke_method_deprecated(insn, method);
+          if (callee == nullptr) {
+            return cfg_adapter::LOOP_CONTINUE;
+          }
+          if ((callee->get_code() != nullptr) || is_native(callee)) {
+            callsites.emplace_back(callee, insn);
+          }
+          if (opcode::is_invoke_virtual(insn->opcode()) ||
+              opcode::is_invoke_interface(insn->opcode())) {
+            const auto& overriding_methods =
+                get_ordered_overriding_methods_with_code_or_native(callee);
+            for (const auto* overriding_method :
+                 UnorderedIterable(overriding_methods)) {
+              callsites.emplace_back(overriding_method, insn);
+            }
+          }
         }
-      }
-    }
-    return cfg_adapter::LOOP_CONTINUE;
-  });
+        return cfg_adapter::LOOP_CONTINUE;
+      });
   return callsites;
 }
 
@@ -248,7 +250,7 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
                           can_rename(method))) {
       // For root methods and dynamically added classes, created via
       // Proxy.newProxyInstance, we need to add them and their overrides and
-      // overriden to roots.
+      // overridden to roots.
       return;
     }
     const auto& overriding_methods =
@@ -282,7 +284,7 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
   walk::parallel::opcodes(scope, [&](const DexMethod* method,
                                      IRInstruction* insn) {
     if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
+      auto* callee = resolve_invoke_method_deprecated(insn, method);
       if (callee == nullptr) {
         return;
       }
@@ -314,39 +316,40 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
 
 CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
   CallSites callsites;
-  auto* code = const_cast<IRCode*>(method->get_code());
+  const auto* code = method->get_code();
   if (code == nullptr) {
     return callsites;
   }
-  cfg_adapter::iterate_with_iterator(code, [&](const IRList::iterator& it) {
-    auto* insn = it->insn;
-    if (opcode::is_an_invoke(insn->opcode())) {
-      auto* callee = resolve_invoke_method(insn, method);
-      if (callee == nullptr) {
+  cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::const_iterator& it) {
+        auto* insn = it->insn;
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto* callee = resolve_invoke_method_deprecated(insn, method);
+          if (callee == nullptr) {
+            return cfg_adapter::LOOP_CONTINUE;
+          }
+          if (is_definitely_virtual(callee) &&
+              insn->opcode() != OPCODE_INVOKE_SUPER) {
+            // For true virtual callees, add the callee itself and all of its
+            // overrides if they are not in big virtuals.
+            if (m_big_virtuals.count_unsafe(callee) != 0u) {
+              return cfg_adapter::LOOP_CONTINUE;
+            }
+            if ((callee->get_code() != nullptr) || is_native(callee)) {
+              callsites.emplace_back(callee, insn);
+            }
+            const auto& overriding_methods =
+                get_ordered_overriding_methods_with_code_or_native(callee);
+            for (const auto* overriding_method :
+                 UnorderedIterable(overriding_methods)) {
+              callsites.emplace_back(overriding_method, insn);
+            }
+          } else if (callee->is_concrete()) {
+            callsites.emplace_back(callee, insn);
+          }
+        }
         return cfg_adapter::LOOP_CONTINUE;
-      }
-      if (is_definitely_virtual(callee) &&
-          insn->opcode() != OPCODE_INVOKE_SUPER) {
-        // For true virtual callees, add the callee itself and all of its
-        // overrides if they are not in big virtuals.
-        if (m_big_virtuals.count_unsafe(callee) != 0u) {
-          return cfg_adapter::LOOP_CONTINUE;
-        }
-        if ((callee->get_code() != nullptr) || is_native(callee)) {
-          callsites.emplace_back(callee, insn);
-        }
-        const auto& overriding_methods =
-            get_ordered_overriding_methods_with_code_or_native(callee);
-        for (const auto* overriding_method :
-             UnorderedIterable(overriding_methods)) {
-          callsites.emplace_back(overriding_method, insn);
-        }
-      } else if (callee->is_concrete()) {
-        callsites.emplace_back(callee, insn);
-      }
-    }
-    return cfg_adapter::LOOP_CONTINUE;
-  });
+      });
   return callsites;
 }
 
@@ -537,7 +540,7 @@ const MethodSet& resolve_callees_in_graph(const Graph& graph,
 }
 
 bool invoke_is_dynamic(const Graph& graph, const IRInstruction* insn) {
-  auto* callee = resolve_invoke_method(insn);
+  auto* callee = resolve_invoke_method_deprecated(insn);
   if (callee == nullptr) {
     return true;
   }
@@ -575,7 +578,8 @@ CallgraphStats get_num_nodes_edges(const Graph& graph) {
       num_callsites += callsites.size();
     }
   }
-  return CallgraphStats(visited_node.size(), num_edge, num_callsites);
+  return CallgraphStats(static_cast<uint32_t>(visited_node.size()), num_edge,
+                        num_callsites);
 }
 
 const MethodBag& Graph::get_callers(const DexMethod* callee) const {

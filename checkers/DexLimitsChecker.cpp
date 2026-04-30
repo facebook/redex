@@ -104,16 +104,16 @@ std::string print_new_entries(const dex_data_map_t& old_map_vec,
     // and only translate them when we find an issue.
     UnorderedSet<DexFieldRef*> fields;
     UnorderedSet<DexMethodRef*> methods;
-    UnorderedSet<DexType*> types;
+    UnorderedSet<const DexType*> types;
     // Share memory. Lifetimes are OK because confined to this function.
-    const UnorderedSet<DexType*>& pending_init_class_fields;
-    const UnorderedSet<DexType*>& pending_init_class_types;
+    const UnorderedSet<const DexType*>& pending_init_class_fields;
+    const UnorderedSet<const DexType*>& pending_init_class_types;
 
     DexDataWithSet(UnorderedSet<DexFieldRef*> f,
                    UnorderedSet<DexMethodRef*> m,
-                   UnorderedSet<DexType*> t,
-                   const UnorderedSet<DexType*>& p_f,
-                   const UnorderedSet<DexType*>& p_t)
+                   UnorderedSet<const DexType*> t,
+                   const UnorderedSet<const DexType*>& p_f,
+                   const UnorderedSet<const DexType*>& p_t)
         : fields(std::move(f)),
           methods(std::move(m)),
           types(std::move(t)),

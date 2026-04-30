@@ -10,7 +10,7 @@
 #include <iosfwd>
 #include <utility>
 
-#include <sparta/PatriciaTreeMapAbstractPartition.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
 #include <sparta/ReducedProductAbstractDomain.h>
 #include <sparta/S_Expression.h>
@@ -20,7 +20,6 @@
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "ObjectDomain.h"
 
 /*
  * This analysis identifies heap values that are allocated within a given
@@ -54,7 +53,15 @@ inline bool may_alloc(IROpcode op) {
  */
 class EnvironmentWithStore {
  public:
-  virtual ~EnvironmentWithStore() {}
+  virtual ~EnvironmentWithStore() = default;
+
+  // Explicitly defaulting copy/move semantics for implicit copy constructor
+  // is deprecated warning.
+  EnvironmentWithStore() = default;
+  EnvironmentWithStore(const EnvironmentWithStore&) = default;
+  EnvironmentWithStore& operator=(const EnvironmentWithStore&) = default;
+  EnvironmentWithStore(EnvironmentWithStore&&) = default;
+  EnvironmentWithStore& operator=(EnvironmentWithStore&&) = default;
 
   virtual const PointerEnvironment& get_pointer_environment() const = 0;
 

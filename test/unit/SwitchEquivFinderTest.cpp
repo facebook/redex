@@ -147,6 +147,97 @@ TEST_F(SwitchEquivFinderTest, if_chain) {
   code->clear_cfg();
 }
 
+TEST_F(SwitchEquivFinderTest, test_mix_of_if_and_switch) {
+  setup();
+
+  // Following IR code was derived from:
+  // public static final String foo(int i) {
+  //     switch (i) {
+  //     case 1:
+  //         return "a";
+  //     case 2:
+  //         return "b";
+  //     case 3:
+  //         return "a";
+  //     case 4:
+  //         return "b";
+  //     case 5:
+  //         return "a";
+  //     case 6:
+  //         return "b";
+  //     case 7:
+  //         return "a";
+  //     case 8:
+  //         return "b";
+  //     case 9:
+  //         return "a";
+  //     case 10:
+  //         return "b";
+  //     case 99:
+  //         return "z";
+  //     default:
+  //         return "";
+  //     }
+  // }
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v2)
+      (const-string b)
+      (move-result-pseudo-object v0)
+      (const-string a)
+      (move-result-pseudo-object v1)
+      (const v0 99)
+      (if-eq v2 v0 :L10)
+      (switch v2 (:L0 :L1 :L2 :L3 :L4 :L5 :L6 :L7 :L8 :L9))
+      (const-string "")
+      (move-result-pseudo-object v2)
+      (return-object v2)
+      (:L0 10)
+      (return-object v0)
+      (:L1 9)
+      (return-object v1)
+      (:L2 8)
+      (return-object v0)
+      (:L3 7)
+      (return-object v1)
+      (:L4 6)
+      (return-object v0)
+      (:L5 5)
+      (return-object v1)
+      (:L6 4)
+      (return-object v0)
+      (:L7 3)
+      (return-object v1)
+      (:L8 2)
+      (return-object v0)
+      (:L9 1)
+      (return-object v1)
+      (:L10)
+      (const-string z)
+      (move-result-pseudo-object v2)
+      (return-object v2)
+    )
+)");
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  SwitchEquivFinder finder(&cfg, get_first_branch(cfg), /* switching_reg */ 2);
+  EXPECT_TRUE(finder.success());
+  EXPECT_EQ(finder.key_to_case().size(), 12);
+  bool has_default_case{false};
+  std::vector<int32_t> keys;
+  for (auto&& [key, block] : finder.key_to_case()) {
+    if (SwitchEquivFinder::is_default_case(key)) {
+      has_default_case = true;
+    } else {
+      keys.emplace_back(boost::get<int32_t>(key));
+    }
+  }
+  EXPECT_TRUE(has_default_case);
+  EXPECT_THAT(
+      keys, ::testing::UnorderedElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 99));
+}
+
 TEST_F(SwitchEquivFinderTest, extra_loads_intersect) {
   setup();
 
@@ -1295,4 +1386,73 @@ TEST_F(SwitchEquivFinderTest,
   verify_const_at_block(1, 1);
   verify_const_at_block(2, 2);
   verify_const_at_block(3, 3);
+}
+
+TEST_F(SwitchEquivFinderTest, test_with_eq_not_constant) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v4) "Ljava/lang/Object;.hashCode:()I")
+      (move-result v2)
+
+      (const v1 1)
+      (if-eq v0 v1 :one)
+
+      (if-eq v0 v2 :two)
+
+      (if-eqz v0 :zero)
+
+      (const v3 999)
+      (return v3)
+
+      (:two)
+      (const v3 200)
+      (return v3)
+
+      (:one)
+      (const v3 100)
+      (return v3)
+
+      (:zero)
+      (const v3 0)
+      (return v3)
+    )
+)");
+  // TODO (T219644020): improve logic and verify this is handled correctly.
+}
+
+TEST_F(SwitchEquivFinderTest, ends_with_less_than) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (if-eq v0 v1 :one)
+      (const v2 2)
+      (if-eq v0 v2 :two)
+      (if-lez v0 :maybe_zero)
+
+      (const v3 999)
+      (return v3)
+
+      (:two)
+      (const v3 200)
+      (return v3)
+
+      (:one)
+      (const v3 100)
+      (return v3)
+
+      (:maybe_zero)
+      (const v3 0)
+      (return v3)
+    )
+)");
+  // TODO (T219644020): improve logic and verify this is handled correctly.
 }

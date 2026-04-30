@@ -43,9 +43,9 @@ class DisjointUnionWithSignedConstantDomain final
       : m_variant(SignedConstantDomain::top()) {}
 
   template <typename Domain>
+  // NOLINTNEXTLINE(google-explicit-constructor)
   /* implicit */ DisjointUnionWithSignedConstantDomain(Domain d)
-      : m_variant(d) { // NOLINT(google-explicit-constructor)
-  }
+      : m_variant(d) {}
 
   static DisjointUnionWithSignedConstantDomain top() {
     return DisjointUnionWithSignedConstantDomain(SignedConstantDomain::top());

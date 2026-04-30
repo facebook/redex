@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "RedexResources.h"
 #include "ResourceValueMergingPass.h"
 
 ResourceAttributeInformation get_common_attributes(
@@ -17,9 +17,39 @@ class ResourceValueMergingPassTest : public ::testing::Test {
  protected:
   ResourceValueMergingPass m_pass;
 
+  void assert_style_parent(uint32_t resource_id,
+                           uint32_t expected_parent_id,
+                           const resources::StyleInfo& style_info) {
+    auto style_opt = m_pass.find_style_resource(resource_id, style_info.styles);
+    ASSERT_TRUE(style_opt.has_value());
+    EXPECT_EQ(style_opt->parent, expected_parent_id);
+
+    auto resource_vertex = style_info.id_to_vertex.at(resource_id);
+    auto parent_vertex = style_info.id_to_vertex.at(expected_parent_id);
+    auto edge = boost::edge(parent_vertex, resource_vertex, style_info.graph);
+    EXPECT_TRUE(edge.second);
+  }
+
+  resources::StyleInfo::vertex_t add_vertex(resources::StyleInfo& style_info,
+                                            uint32_t id) {
+    auto vertex =
+        boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
+    style_info.id_to_vertex[id] = vertex;
+    return vertex;
+  }
+
+  void add_edge(resources::StyleInfo& style_info,
+                resources::StyleInfo::vertex_t parent,
+                resources::StyleInfo::vertex_t child) {
+    boost::add_edge(parent, child, style_info.graph);
+  }
+
   resources::StyleResource create_style_resource(
-      uint32_t parent_id, const std::vector<uint32_t>& attr_ids) {
+      uint32_t parent_id,
+      const std::vector<uint32_t>& attr_ids,
+      uint32_t resource_id = 0) {
     resources::StyleResource style;
+    style.id = resource_id;
     style.parent = parent_id;
 
     for (uint32_t attr_id : attr_ids) {
@@ -28,6 +58,160 @@ class ResourceValueMergingPassTest : public ::testing::Test {
     }
 
     return style;
+  }
+
+  void setup_style_graph(
+      resources::StyleInfo& style_info,
+      const std::vector<std::pair<uint32_t, uint32_t>>& resource_parent_pairs,
+      std::unordered_map<uint32_t, resources::StyleInfo::vertex_t>&
+          vertex_map) {
+    for (const auto& [resource_id, parent_id] : resource_parent_pairs) {
+      if (vertex_map.find(resource_id) == vertex_map.end()) {
+        vertex_map[resource_id] = add_vertex(style_info, resource_id);
+      }
+      if (parent_id != 0 && vertex_map.find(parent_id) == vertex_map.end()) {
+        vertex_map[parent_id] = add_vertex(style_info, parent_id);
+      }
+    }
+
+    for (const auto& [resource_id, parent_id] : resource_parent_pairs) {
+      if (parent_id != 0) {
+        add_edge(style_info, vertex_map[parent_id], vertex_map[resource_id]);
+      }
+    }
+
+    style_info.id_to_vertex = vertex_map;
+  }
+
+  void verify_graph_edges(
+      const resources::StyleInfo& style_info,
+      const std::vector<std::pair<uint32_t, uint32_t>>& expected_edges) {
+    for (const auto& [parent_id, child_id] : expected_edges) {
+      const auto parent_vertex_it = style_info.id_to_vertex.find(parent_id);
+      const auto child_vertex_it = style_info.id_to_vertex.find(child_id);
+
+      const auto parent_vertex = parent_vertex_it->second;
+      const auto child_vertex = child_vertex_it->second;
+
+      EXPECT_TRUE(
+          boost::edge(parent_vertex, child_vertex, style_info.graph).second);
+    }
+  }
+
+  void verify_graph_edges_absent(
+      const resources::StyleInfo& style_info,
+      const std::vector<std::pair<uint32_t, uint32_t>>& absent_edges) {
+    for (const auto& [parent_id, child_id] : absent_edges) {
+      const auto parent_vertex_it = style_info.id_to_vertex.find(parent_id);
+      const auto child_vertex_it = style_info.id_to_vertex.find(child_id);
+      const auto parent_vertex = parent_vertex_it->second;
+      const auto child_vertex = child_vertex_it->second;
+
+      EXPECT_FALSE(
+          boost::edge(parent_vertex, child_vertex, style_info.graph).second);
+    }
+  }
+
+  std::vector<resources::StyleModificationSpec::Modification>
+  create_expected_modifications(
+      const std::vector<
+          std::tuple<resources::StyleModificationSpec::ModificationType,
+                     uint32_t,
+                     std::optional<uint32_t>,
+                     std::optional<resources::StyleResource::Value>,
+                     std::optional<uint32_t>,
+                     UnorderedMap<uint32_t, resources::StyleResource::Value>>>&
+          specs) {
+    std::vector<resources::StyleModificationSpec::Modification> modifications;
+
+    for (const auto& [type, resource_id, attr_id_opt, value_opt, parent_id_opt,
+                      values_map] : specs) {
+      switch (type) {
+      case resources::StyleModificationSpec::ModificationType::NEW_STYLE:
+        modifications.emplace_back(resource_id);
+        break;
+      case resources::StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE:
+        modifications.emplace_back(resource_id, attr_id_opt.value());
+        break;
+      case resources::StyleModificationSpec::ModificationType::ADD_ATTRIBUTE:
+        modifications.emplace_back(resource_id, attr_id_opt.value(),
+                                   value_opt.value());
+        break;
+      case resources::StyleModificationSpec::ModificationType::
+          UPDATE_PARENT_ADD_ATTRIBUTES: {
+        UnorderedMap<uint32_t, resources::StyleResource::Value> values =
+            values_map;
+        modifications.emplace_back(resource_id, parent_id_opt.value(),
+                                   std::move(values));
+      } break;
+      default:
+        break;
+      }
+    }
+
+    return modifications;
+  }
+
+  void expect_modifications_equal(
+      const std::vector<resources::StyleModificationSpec::Modification>& actual,
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          expected) {
+    EXPECT_EQ(actual.size(), expected.size());
+
+    for (size_t i = 0; i < std::min(actual.size(), expected.size()); ++i) {
+      const auto& actual_mod = actual[i];
+      const auto& expected_mod = expected[i];
+
+      EXPECT_EQ(actual_mod.type, expected_mod.type);
+      EXPECT_EQ(actual_mod.resource_id, expected_mod.resource_id);
+      EXPECT_EQ(actual_mod.attribute_id, expected_mod.attribute_id);
+      EXPECT_EQ(actual_mod.parent_id, expected_mod.parent_id);
+
+      if (actual_mod.value.has_value() && expected_mod.value.has_value()) {
+        EXPECT_EQ(actual_mod.value.value(), expected_mod.value.value());
+      } else {
+        EXPECT_EQ(actual_mod.value.has_value(), expected_mod.value.has_value());
+      }
+
+      EXPECT_EQ(actual_mod.values.size(), expected_mod.values.size());
+      for (const auto& [key, value] : UnorderedIterable(expected_mod.values)) {
+        auto it = actual_mod.values.find(key);
+        EXPECT_TRUE(it != actual_mod.values.end());
+        if (it != actual_mod.values.end()) {
+          EXPECT_EQ(it->second, value);
+        }
+      }
+    }
+  }
+
+  void test_synthetic_resource_creation(
+      const std::vector<std::pair<uint32_t, uint32_t>>& resource_parent_pairs,
+      uint32_t max_resource_id_before_creation) {
+
+    resources::StyleInfo style_info;
+    style_info.set_max_resource_id(max_resource_id_before_creation);
+
+    std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> vertex_map;
+    setup_style_graph(style_info, resource_parent_pairs, vertex_map);
+
+    for (const auto& [resource_id, parent_id] : resource_parent_pairs) {
+      uint32_t synthetic_id =
+          m_pass.create_synthetic_resource_node(style_info, parent_id);
+
+      EXPECT_TRUE(style_info.id_to_vertex.count(synthetic_id) > 0);
+
+      EXPECT_TRUE(style_info.styles.count(synthetic_id) > 0);
+      EXPECT_EQ(style_info.styles.at(synthetic_id).size(), 1);
+      EXPECT_EQ(style_info.styles.at(synthetic_id)[0].parent, parent_id);
+
+      if (parent_id != 0) {
+        auto parent_vertex = vertex_map.at(parent_id);
+        auto synthetic_vertex = style_info.id_to_vertex.at(synthetic_id);
+        auto edge_exists =
+            boost::edge(parent_vertex, synthetic_vertex, style_info.graph);
+        EXPECT_TRUE(edge_exists.second);
+      }
+    }
   }
 };
 
@@ -378,23 +562,23 @@ TEST_F(ResourceValueMergingPassTest,
   uint32_t attr_id1 = 0x7f020001;
   uint32_t attr_id2 = 0x7f020002;
 
-  candidates.deletion[resource_id1].insert(attr_id1);
-  candidates.deletion[resource_id2].insert(attr_id2);
+  candidates.removals[resource_id1].insert(attr_id1);
+  candidates.removals[resource_id2].insert(attr_id2);
 
   resources::StyleResource::Value value(42, 0);
-  candidates.merging[resource_id1].insert({attr_id1, value});
-  candidates.merging[resource_id2].insert({attr_id2, value});
+  candidates.additions[resource_id1].insert({attr_id1, value});
+  candidates.additions[resource_id2].insert({attr_id2, value});
 
   auto result = m_pass.remove_unoptimizable_resources(
       candidates, directly_reachable_styles);
 
-  EXPECT_EQ(result.deletion.size(), 2);
-  EXPECT_TRUE(result.deletion.find(resource_id1) != result.deletion.end());
-  EXPECT_TRUE(result.deletion.find(resource_id2) != result.deletion.end());
+  EXPECT_EQ(result.removals.size(), 2);
+  EXPECT_TRUE(result.removals.find(resource_id1) != result.removals.end());
+  EXPECT_TRUE(result.removals.find(resource_id2) != result.removals.end());
 
-  EXPECT_EQ(result.merging.size(), 2);
-  EXPECT_TRUE(result.merging.find(resource_id1) != result.merging.end());
-  EXPECT_TRUE(result.merging.find(resource_id2) != result.merging.end());
+  EXPECT_EQ(result.additions.size(), 2);
+  EXPECT_TRUE(result.additions.find(resource_id1) != result.additions.end());
+  EXPECT_TRUE(result.additions.find(resource_id2) != result.additions.end());
 }
 
 TEST_F(ResourceValueMergingPassTest,
@@ -407,25 +591,25 @@ TEST_F(ResourceValueMergingPassTest,
   uint32_t attr_id1 = 0x7f020001;
   uint32_t attr_id2 = 0x7f020002;
 
-  candidates.deletion[resource_id1].insert(attr_id1);
-  candidates.deletion[resource_id2].insert(attr_id2);
+  candidates.removals[resource_id1].insert(attr_id1);
+  candidates.removals[resource_id2].insert(attr_id2);
 
   resources::StyleResource::Value value(42, 0);
-  candidates.merging[resource_id1].insert({attr_id1, value});
-  candidates.merging[resource_id2].insert({attr_id2, value});
+  candidates.additions[resource_id1].insert({attr_id1, value});
+  candidates.additions[resource_id2].insert({attr_id2, value});
 
   directly_reachable_styles.insert(resource_id1);
 
   auto result = m_pass.remove_unoptimizable_resources(
       candidates, directly_reachable_styles);
 
-  EXPECT_EQ(result.deletion.size(), 1);
-  EXPECT_TRUE(result.deletion.find(resource_id1) == result.deletion.end());
-  EXPECT_TRUE(result.deletion.find(resource_id2) != result.deletion.end());
+  EXPECT_EQ(result.removals.size(), 1);
+  EXPECT_TRUE(result.removals.find(resource_id1) == result.removals.end());
+  EXPECT_TRUE(result.removals.find(resource_id2) != result.removals.end());
 
-  EXPECT_EQ(result.merging.size(), 1);
-  EXPECT_TRUE(result.merging.find(resource_id1) == result.merging.end());
-  EXPECT_TRUE(result.merging.find(resource_id2) != result.merging.end());
+  EXPECT_EQ(result.additions.size(), 1);
+  EXPECT_TRUE(result.additions.find(resource_id1) == result.additions.end());
+  EXPECT_TRUE(result.additions.find(resource_id2) != result.additions.end());
 }
 
 TEST_F(ResourceValueMergingPassTest, RemoveUnoptimizableResourcesAllReachable) {
@@ -437,12 +621,12 @@ TEST_F(ResourceValueMergingPassTest, RemoveUnoptimizableResourcesAllReachable) {
   uint32_t attr_id1 = 0x7f020001;
   uint32_t attr_id2 = 0x7f020002;
 
-  candidates.deletion[resource_id1].insert(attr_id1);
-  candidates.deletion[resource_id2].insert(attr_id2);
+  candidates.removals[resource_id1].insert(attr_id1);
+  candidates.removals[resource_id2].insert(attr_id2);
 
   resources::StyleResource::Value value(42, 0);
-  candidates.merging[resource_id1].insert({attr_id1, value});
-  candidates.merging[resource_id2].insert({attr_id2, value});
+  candidates.additions[resource_id1].insert({attr_id1, value});
+  candidates.additions[resource_id2].insert({attr_id2, value});
 
   directly_reachable_styles.insert(resource_id1);
   directly_reachable_styles.insert(resource_id2);
@@ -450,8 +634,8 @@ TEST_F(ResourceValueMergingPassTest, RemoveUnoptimizableResourcesAllReachable) {
   auto result = m_pass.remove_unoptimizable_resources(
       candidates, directly_reachable_styles);
 
-  EXPECT_TRUE(result.deletion.empty());
-  EXPECT_TRUE(result.merging.empty());
+  EXPECT_TRUE(result.removals.empty());
+  EXPECT_TRUE(result.additions.empty());
 }
 
 TEST_F(ResourceValueMergingPassTest,
@@ -465,8 +649,8 @@ TEST_F(ResourceValueMergingPassTest,
   auto result = m_pass.remove_unoptimizable_resources(
       candidates, directly_reachable_styles);
 
-  EXPECT_TRUE(result.deletion.empty());
-  EXPECT_TRUE(result.merging.empty());
+  EXPECT_TRUE(result.removals.empty());
+  EXPECT_TRUE(result.additions.empty());
 }
 
 TEST_F(ResourceValueMergingPassTest, GetResourceAttributesEmptyStyleMap) {
@@ -621,4 +805,2922 @@ TEST_F(ResourceValueMergingPassTest, FindStyleResourceMultipleStyles) {
   auto result = m_pass.find_style_resource(resource_id, style_map);
 
   EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(ResourceValueMergingPassTest, ApplyAdditionsToStyleGraphEmptyAdditions) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions;
+
+  m_pass.apply_additions_to_style_graph(style_info, additions);
+
+  EXPECT_TRUE(style_info.styles.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       ApplyAdditionsToStyleGraphNonexistentResource) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id = 0x7f020001;
+
+  resources::StyleResource::Value value(42, 0);
+
+  additions[resource_id].insert({attr_id, value});
+
+  EXPECT_THROW(m_pass.apply_additions_to_style_graph(style_info, additions),
+               RedexException);
+}
+
+TEST_F(ResourceValueMergingPassTest, ApplyAdditionsToStyleGraphSingleStyle) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  std::vector<resources::StyleResource> styles;
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = 0;
+  styles.push_back(style);
+  style_info.styles[resource_id] = styles;
+
+  resources::StyleResource::Value value1(42, 0);
+  resources::StyleResource::Value value2(43, 0);
+
+  additions[resource_id].insert({attr_id1, value1});
+  additions[resource_id].insert({attr_id2, value2});
+
+  m_pass.apply_additions_to_style_graph(style_info, additions);
+
+  ASSERT_EQ(style_info.styles[resource_id].size(), 1);
+  auto& updated_style = style_info.styles[resource_id][0];
+  EXPECT_EQ(updated_style.attributes.size(), 2);
+  EXPECT_TRUE(updated_style.attributes.find(attr_id1) !=
+              updated_style.attributes.end());
+  EXPECT_TRUE(updated_style.attributes.find(attr_id2) !=
+              updated_style.attributes.end());
+
+  auto attr1_it = updated_style.attributes.find(attr_id1);
+  auto attr2_it = updated_style.attributes.find(attr_id2);
+  EXPECT_EQ(attr1_it->second, value1);
+  EXPECT_EQ(attr2_it->second, value2);
+}
+
+TEST_F(ResourceValueMergingPassTest, ApplyAdditionsToStyleGraphMultipleStyles) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id = 0x7f020001;
+
+  std::vector<resources::StyleResource> styles;
+
+  resources::StyleResource style1;
+  style1.id = resource_id;
+  style1.parent = 0;
+  styles.push_back(style1);
+
+  resources::StyleResource style2;
+  style2.id = resource_id;
+  style2.parent = 0;
+  styles.push_back(style2);
+
+  style_info.styles[resource_id] = styles;
+
+  resources::StyleResource::Value value(42, 0);
+
+  if (additions.find(resource_id) == additions.end()) {
+    additions.emplace(
+        resource_id, UnorderedMap<uint32_t, resources::StyleResource::Value>());
+  }
+  additions[resource_id].insert({attr_id, value});
+
+  EXPECT_THROW(m_pass.apply_additions_to_style_graph(style_info, additions),
+               std::exception);
+}
+
+TEST_F(ResourceValueMergingPassTest, ApplyRemovalsToStyleGraphEmptyRemovals) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.apply_removals_to_style_graph(style_info, removals);
+
+  EXPECT_TRUE(style_info.styles.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       ApplyRemovalsToStyleGraphNonexistentResource) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id = 0x7f020001;
+
+  removals[resource_id].insert(attr_id);
+
+  EXPECT_THROW(m_pass.apply_removals_to_style_graph(style_info, removals),
+               RedexException);
+}
+
+TEST_F(ResourceValueMergingPassTest, ApplyRemovalsToStyleGraphSingleStyle) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+  uint32_t attr_id3 = 0x7f020003;
+
+  std::vector<resources::StyleResource> styles;
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = 0;
+  resources::StyleResource::Value value(42, 0);
+  style.attributes.insert({attr_id1, value});
+  style.attributes.insert({attr_id2, value});
+  style.attributes.insert({attr_id3, value});
+  styles.push_back(style);
+  style_info.styles[resource_id] = styles;
+
+  removals[resource_id].insert(attr_id1);
+  removals[resource_id].insert(attr_id2);
+
+  m_pass.apply_removals_to_style_graph(style_info, removals);
+
+  ASSERT_EQ(style_info.styles[resource_id].size(), 1);
+  auto& updated_style = style_info.styles[resource_id][0];
+  EXPECT_EQ(updated_style.attributes.size(), 1);
+  EXPECT_TRUE(updated_style.attributes.find(attr_id1) ==
+              updated_style.attributes.end());
+  EXPECT_TRUE(updated_style.attributes.find(attr_id2) ==
+              updated_style.attributes.end());
+  EXPECT_TRUE(updated_style.attributes.find(attr_id3) !=
+              updated_style.attributes.end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       ApplyRemovalsToStyleGraphNonexistentAttribute) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+  uint32_t nonexistent_attr_id = 0x7f020003;
+
+  std::vector<resources::StyleResource> styles;
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = 0;
+  resources::StyleResource::Value value(42, 0);
+  style.attributes.insert({attr_id1, value});
+  style.attributes.insert({attr_id2, value});
+  styles.push_back(style);
+  style_info.styles[resource_id] = styles;
+
+  removals[resource_id].insert(attr_id1);
+  removals[resource_id].insert(nonexistent_attr_id);
+
+  EXPECT_THROW(m_pass.apply_removals_to_style_graph(style_info, removals),
+               RedexException);
+}
+
+TEST_F(ResourceValueMergingPassTest, ApplyRemovalsToStyleGraphMultipleStyles) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id = 0x7f020001;
+
+  std::vector<resources::StyleResource> styles;
+
+  resources::StyleResource style1;
+  style1.id = resource_id;
+  style1.parent = 0;
+  styles.push_back(style1);
+
+  resources::StyleResource style2;
+  style2.id = resource_id;
+  style2.parent = 0;
+  styles.push_back(style2);
+
+  style_info.styles[resource_id] = styles;
+
+  removals[resource_id].insert(attr_id);
+
+  EXPECT_THROW(m_pass.apply_removals_to_style_graph(style_info, removals),
+               std::exception);
+}
+
+resources::StyleInfo setup_test_style_info(bool include_grandchildren = false) {
+  resources::StyleInfo style_info;
+
+  auto root = boost::add_vertex(style_info.graph);
+  auto child1 = boost::add_vertex(style_info.graph);
+
+  style_info.graph[root].id = 0x7f010001;
+  style_info.graph[child1].id = 0x7f010002;
+
+  style_info.id_to_vertex[0x7f010001] = root;
+  style_info.id_to_vertex[0x7f010002] = child1;
+
+  boost::add_edge(root, child1, style_info.graph);
+
+  resources::StyleResource::Value value1(42, 0);
+  resources::StyleResource::Value value2(43, 0);
+
+  resources::StyleResource root_style;
+  root_style.id = 0x7f010001;
+  root_style.parent = 0;
+  root_style.attributes.insert({0x7f020001, value1});
+  root_style.attributes.insert({0x7f020002, value2});
+  style_info.styles[0x7f010001].push_back(root_style);
+
+  resources::StyleResource child1_style;
+  child1_style.id = 0x7f010002;
+  child1_style.parent = 0x7f010001;
+  child1_style.attributes.insert({0x7f020001, value1});
+  child1_style.attributes.insert({0x7f020003, value2});
+  style_info.styles[0x7f010002].push_back(child1_style);
+
+  if (include_grandchildren) {
+    auto child2 = boost::add_vertex(style_info.graph);
+    auto grandchild1 = boost::add_vertex(style_info.graph);
+    auto grandchild2 = boost::add_vertex(style_info.graph);
+
+    style_info.graph[child2].id = 0x7f010003;
+    style_info.graph[grandchild1].id = 0x7f010004;
+    style_info.graph[grandchild2].id = 0x7f010005;
+
+    style_info.id_to_vertex[0x7f010003] = child2;
+    style_info.id_to_vertex[0x7f010004] = grandchild1;
+    style_info.id_to_vertex[0x7f010005] = grandchild2;
+
+    boost::add_edge(root, child2, style_info.graph);
+    boost::add_edge(child1, grandchild1, style_info.graph);
+    boost::add_edge(child1, grandchild2, style_info.graph);
+
+    resources::StyleResource child2_style;
+    child2_style.id = 0x7f010003;
+    child2_style.parent = 0x7f010001;
+    child2_style.attributes.insert({0x7f020001, value1});
+    child2_style.attributes.insert({0x7f020004, value2});
+    style_info.styles[0x7f010003].push_back(child2_style);
+
+    resources::StyleResource grandchild1_style;
+    grandchild1_style.id = 0x7f010004;
+    grandchild1_style.parent = 0x7f010002;
+    grandchild1_style.attributes.insert({0x7f020001, value1});
+    grandchild1_style.attributes.insert({0x7f020005, value2});
+    style_info.styles[0x7f010004].push_back(grandchild1_style);
+
+    resources::StyleResource grandchild2_style;
+    grandchild2_style.id = 0x7f010005;
+    grandchild2_style.parent = 0x7f010002;
+    grandchild2_style.attributes.insert({0x7f020001, value1});
+    grandchild2_style.attributes.insert({0x7f020006, value2});
+    style_info.styles[0x7f010005].push_back(grandchild2_style);
+  }
+
+  return style_info;
+}
+
+TEST_F(ResourceValueMergingPassTest, GetGraphDiffsSimple) {
+  resources::StyleInfo initial_style_info = setup_test_style_info(true);
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  // 1. Remove attribute 0x7f020001 from root (0x7f010001)
+  m_pass.apply_removals_to_style_graph(optimized_style_info,
+                                       {{0x7f010001, {0x7f020001}}});
+
+  // 2. Add attribute 0x7f020007 to child1 (0x7f010002)
+  resources::StyleResource::Value value3(44, 0);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> additions;
+  additions.insert({0x7f020007, value3});
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions_map;
+  additions_map.insert({0x7f010002, additions});
+  m_pass.apply_additions_to_style_graph(optimized_style_info, additions_map);
+
+  auto actual_diffs = m_pass.get_graph_diffs(
+      initial_style_info, optimized_style_info, UnorderedSet<uint32_t>());
+
+  auto expected_diffs = create_expected_modifications(
+      {{resources::StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE,
+        0x7f010001,
+        0x7f020001,
+        std::nullopt,
+        std::nullopt,
+        {}},
+       {resources::StyleModificationSpec::ModificationType::ADD_ATTRIBUTE,
+        0x7f010002,
+        0x7f020007,
+        value3,
+        std::nullopt,
+        {}}});
+
+  expect_modifications_equal(actual_diffs, expected_diffs);
+}
+TEST_F(ResourceValueMergingPassTest, GetGraphDiffsWithAmbiguousStyles) {
+  resources::StyleInfo initial_style_info = setup_test_style_info();
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  // 1. Remove attribute 0x7f020001 from root (0x7f010001)
+  m_pass.apply_removals_to_style_graph(optimized_style_info,
+                                       {{0x7f010001, {0x7f020001}}});
+
+  // 2. Add attribute 0x7f020007 to child1 (0x7f010002)
+  resources::StyleResource::Value value3(44, 0);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> additions;
+  additions.insert({0x7f020007, value3});
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions_map;
+  additions_map.insert({0x7f010002, additions});
+  m_pass.apply_additions_to_style_graph(optimized_style_info, additions_map);
+
+  // Mark root as ambiguous
+  UnorderedSet<uint32_t> ambiguous_styles = {0x7f010001};
+
+  auto actual_diffs = m_pass.get_graph_diffs(
+      initial_style_info, optimized_style_info, ambiguous_styles);
+
+  auto expected_diffs = create_expected_modifications(
+      {{resources::StyleModificationSpec::ModificationType::ADD_ATTRIBUTE,
+        0x7f010002,
+        0x7f020007,
+        value3,
+        std::nullopt,
+        {}}});
+
+  expect_modifications_equal(actual_diffs, expected_diffs);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetGraphDiffsWithModifiedAttributeValues) {
+  resources::StyleInfo initial_style_info = setup_test_style_info();
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id = 0x7f020001;
+
+  m_pass.apply_removals_to_style_graph(optimized_style_info,
+                                       {{resource_id, {attr_id}}});
+
+  resources::StyleResource::Value new_value(99, 0);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> additions;
+  additions.insert({attr_id, new_value});
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions_map;
+  additions_map.insert({resource_id, additions});
+  m_pass.apply_additions_to_style_graph(optimized_style_info, additions_map);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto actual_diffs = m_pass.get_graph_diffs(
+      initial_style_info, optimized_style_info, ambiguous_styles);
+
+  auto expected_diffs = create_expected_modifications(
+      {{resources::StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE,
+        resource_id,
+        attr_id,
+        std::nullopt,
+        std::nullopt,
+        {}},
+       {resources::StyleModificationSpec::ModificationType::ADD_ATTRIBUTE,
+        resource_id,
+        attr_id,
+        new_value,
+        std::nullopt,
+        {}}});
+
+  expect_modifications_equal(actual_diffs, expected_diffs);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetGraphDiffsWithMultipleModifiedAttributes) {
+  resources::StyleInfo initial_style_info = setup_test_style_info();
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  resources::StyleResource::Value new_value1(100, 0);
+  resources::StyleResource::Value new_value2(200, 0);
+
+  optimized_style_info.styles[resource_id][0].attributes.insert_or_assign(
+      attr_id1, new_value1);
+  optimized_style_info.styles[resource_id][0].attributes.insert_or_assign(
+      attr_id2, new_value2);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto actual_diffs = m_pass.get_graph_diffs(
+      initial_style_info, optimized_style_info, ambiguous_styles);
+
+  auto expected_diffs = create_expected_modifications(
+      {{resources::StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE,
+        resource_id,
+        attr_id1,
+        std::nullopt,
+        std::nullopt,
+        {}},
+       {resources::StyleModificationSpec::ModificationType::ADD_ATTRIBUTE,
+        resource_id,
+        attr_id1,
+        new_value1,
+        std::nullopt,
+        {}},
+       {resources::StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE,
+        resource_id,
+        attr_id2,
+        std::nullopt,
+        std::nullopt,
+        {}},
+       {resources::StyleModificationSpec::ModificationType::ADD_ATTRIBUTE,
+        resource_id,
+        attr_id2,
+        new_value2,
+        std::nullopt,
+        {}}});
+
+  expect_modifications_equal(actual_diffs, expected_diffs);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetGraphDiffsWithNewResourceNoParent) {
+  resources::StyleInfo initial_style_info = setup_test_style_info();
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  uint32_t new_resource_id = 0x7f010005;
+  uint32_t attr_id = 0x7f020001;
+
+  auto new_vertex = boost::add_vertex(
+      resources::StyleInfo::Node{new_resource_id}, optimized_style_info.graph);
+  optimized_style_info.id_to_vertex[new_resource_id] = new_vertex;
+
+  resources::StyleResource new_style;
+  new_style.id = new_resource_id;
+  new_style.parent = 0;
+  resources::StyleResource::Value value(42, 0);
+  new_style.attributes.insert({attr_id, value});
+  optimized_style_info.styles[new_resource_id].push_back(new_style);
+
+  auto actual_diffs = m_pass.get_graph_diffs(
+      initial_style_info, optimized_style_info, UnorderedSet<uint32_t>());
+
+  auto expected_diffs = create_expected_modifications(
+      {{resources::StyleModificationSpec::ModificationType::NEW_STYLE,
+        new_resource_id,
+        std::nullopt,
+        std::nullopt,
+        std::nullopt,
+        {}},
+
+       {resources::StyleModificationSpec::ModificationType::
+            UPDATE_PARENT_ADD_ATTRIBUTES,
+        new_resource_id, std::nullopt, std::nullopt, 0,
+        UnorderedMap<uint32_t, resources::StyleResource::Value>{
+            {attr_id, value}}}});
+
+  expect_modifications_equal(actual_diffs, expected_diffs);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetGraphDiffsWithMultipleNewResources) {
+  resources::StyleInfo initial_style_info = setup_test_style_info();
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  // Add multiple new resources to the optimized graph
+  uint32_t new_resource_id1 = 0x7f010005;
+  uint32_t new_resource_id2 = 0x7f010006;
+  uint32_t attr_id = 0x7f020001;
+  uint32_t parent_id = 0x7f010001;
+
+  // Add first new resource
+  auto new_vertex1 = boost::add_vertex(
+      resources::StyleInfo::Node{new_resource_id1}, optimized_style_info.graph);
+  optimized_style_info.id_to_vertex[new_resource_id1] = new_vertex1;
+
+  auto parent_vertex = optimized_style_info.id_to_vertex.at(parent_id);
+  boost::add_edge(parent_vertex, new_vertex1, optimized_style_info.graph);
+
+  resources::StyleResource new_style1;
+  new_style1.id = new_resource_id1;
+  new_style1.parent = parent_id;
+  resources::StyleResource::Value value1(42, 0);
+  new_style1.attributes.insert({attr_id, value1});
+  optimized_style_info.styles[new_resource_id1].push_back(new_style1);
+
+  // Add second new resource
+  auto new_vertex2 = boost::add_vertex(
+      resources::StyleInfo::Node{new_resource_id2}, optimized_style_info.graph);
+  optimized_style_info.id_to_vertex[new_resource_id2] = new_vertex2;
+
+  boost::add_edge(parent_vertex, new_vertex2, optimized_style_info.graph);
+
+  resources::StyleResource new_style2;
+  new_style2.id = new_resource_id2;
+  new_style2.parent = parent_id;
+  resources::StyleResource::Value value2(43, 0);
+  new_style2.attributes.insert({attr_id, value2});
+  optimized_style_info.styles[new_resource_id2].push_back(new_style2);
+
+  auto actual_diffs = m_pass.get_graph_diffs(
+      initial_style_info, optimized_style_info, UnorderedSet<uint32_t>());
+
+  auto expected_diffs = create_expected_modifications(
+      {{resources::StyleModificationSpec::ModificationType::NEW_STYLE,
+        new_resource_id1,
+        std::nullopt,
+        std::nullopt,
+        std::nullopt,
+        {}},
+       {resources::StyleModificationSpec::ModificationType::
+            UPDATE_PARENT_ADD_ATTRIBUTES,
+        new_resource_id1, std::nullopt, std::nullopt, parent_id,
+        UnorderedMap<uint32_t, resources::StyleResource::Value>{
+            {attr_id, value1}}},
+       {resources::StyleModificationSpec::ModificationType::NEW_STYLE,
+        new_resource_id2,
+        std::nullopt,
+        std::nullopt,
+        std::nullopt,
+        {}},
+
+       {resources::StyleModificationSpec::ModificationType::
+            UPDATE_PARENT_ADD_ATTRIBUTES,
+        new_resource_id2, std::nullopt, std::nullopt, parent_id,
+        UnorderedMap<uint32_t, resources::StyleResource::Value>{
+            {attr_id, value2}}}});
+
+  expect_modifications_equal(actual_diffs, expected_diffs);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetGraphDiffsWithSyntheticNodeInsertion) {
+  resources::StyleInfo initial_style_info = setup_test_style_info();
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  // Initial setup: parent (0x7f010001) -> child (0x7f010002)
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+  uint32_t attr_id = 0x7f020001;
+
+  uint32_t synthetic_id =
+      m_pass.create_synthetic_resource_node(optimized_style_info, parent_id);
+
+  m_pass.update_parent(optimized_style_info, child_id, synthetic_id);
+
+  resources::StyleResource::Value synthetic_value(99, 0);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> synthetic_additions;
+  synthetic_additions.insert({attr_id, synthetic_value});
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions_map;
+  additions_map.insert({synthetic_id, synthetic_additions});
+  m_pass.apply_additions_to_style_graph(optimized_style_info, additions_map);
+
+  auto actual_diffs = m_pass.get_graph_diffs(
+      initial_style_info, optimized_style_info, UnorderedSet<uint32_t>());
+
+  UnorderedMap<uint32_t, resources::StyleResource::Value> expected_additions;
+  expected_additions.insert({attr_id, synthetic_value});
+
+  auto expected_diffs = create_expected_modifications(
+      {{resources::StyleModificationSpec::ModificationType::NEW_STYLE,
+        synthetic_id,
+        std::nullopt,
+        std::nullopt,
+        std::nullopt,
+        {}},
+       {resources::StyleModificationSpec::ModificationType::
+            UPDATE_PARENT_ADD_ATTRIBUTES,
+        synthetic_id, std::nullopt, std::nullopt, parent_id,
+        expected_additions},
+       {resources::StyleModificationSpec::ModificationType::
+            UPDATE_PARENT_ADD_ATTRIBUTES,
+        child_id,
+        std::nullopt,
+        std::nullopt,
+        synthetic_id,
+        {}}});
+
+  expect_modifications_equal(actual_diffs, expected_diffs);
+}
+
+TEST_F(ResourceValueMergingPassTest, RemoveAttributeFromDescendentSingleChild) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  uint32_t attr_id = 0x01010001;
+  resources::StyleResource::Value attr_value(1, 0x12345678);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  attr_map.insert({attr_id, attr_value});
+
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+
+  ASSERT_EQ(removals.size(), 1);
+  ASSERT_TRUE(removals.find(child_id) != removals.end());
+  ASSERT_EQ(removals[child_id].size(), 1);
+  ASSERT_TRUE(removals[child_id].find(attr_id) != removals[child_id].end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       RemoveAttributeFromDescendentMultipleChildren) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t child3_id = 0x7f010004;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  auto child3_vertex = add_vertex(style_info, child3_id);
+
+  add_edge(style_info, parent_vertex, child1_vertex);
+  add_edge(style_info, parent_vertex, child2_vertex);
+  add_edge(style_info, parent_vertex, child3_vertex);
+
+  uint32_t attr_id = 0x01010001;
+  resources::StyleResource::Value attr_value(1, 0x12345678);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  attr_map.insert({attr_id, attr_value});
+
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+
+  ASSERT_EQ(removals.size(), 3);
+  ASSERT_TRUE(removals.find(child1_id) != removals.end());
+  ASSERT_TRUE(removals.find(child2_id) != removals.end());
+  ASSERT_TRUE(removals.find(child3_id) != removals.end());
+
+  ASSERT_EQ(removals[child1_id].size(), 1);
+  ASSERT_TRUE(removals[child1_id].find(attr_id) != removals[child1_id].end());
+
+  ASSERT_EQ(removals[child2_id].size(), 1);
+  ASSERT_TRUE(removals[child2_id].find(attr_id) != removals[child2_id].end());
+
+  ASSERT_EQ(removals[child3_id].size(), 1);
+  ASSERT_TRUE(removals[child3_id].find(attr_id) != removals[child3_id].end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       RemoveAttributeFromDescendentMultipleAttributes) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  uint32_t attr_id1 = 0x01010001;
+  uint32_t attr_id2 = 0x01010002;
+  uint32_t attr_id3 = 0x01010003;
+
+  resources::StyleResource::Value attr_value1(1, 0x12345678);
+  resources::StyleResource::Value attr_value2(2, std::string("test_value"));
+  resources::StyleResource::Value attr_value3(1, 0x87654321);
+
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  attr_map.insert({attr_id1, attr_value1});
+  attr_map.insert({attr_id2, attr_value2});
+  attr_map.insert({attr_id3, attr_value3});
+
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+
+  ASSERT_EQ(removals.size(), 1);
+  ASSERT_TRUE(removals.find(child_id) != removals.end());
+
+  ASSERT_EQ(removals[child_id].size(), 3);
+  ASSERT_TRUE(removals[child_id].find(attr_id1) != removals[child_id].end());
+  ASSERT_TRUE(removals[child_id].find(attr_id2) != removals[child_id].end());
+  ASSERT_TRUE(removals[child_id].find(attr_id3) != removals[child_id].end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       RemoveAttributeFromDescendentMultiLevelHierarchy) {
+  resources::StyleInfo style_info;
+
+  uint32_t grandparent_id = 0x7f010001;
+  uint32_t parent_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+
+  auto grandparent_vertex = add_vertex(style_info, grandparent_id);
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, grandparent_vertex, parent_vertex);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  uint32_t attr_id = 0x01010001;
+  resources::StyleResource::Value attr_value(1, 0x12345678);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  attr_map.insert({attr_id, attr_value});
+
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+
+  ASSERT_EQ(removals.size(), 1);
+  ASSERT_TRUE(removals.find(child_id) != removals.end());
+  ASSERT_TRUE(removals.find(parent_id) == removals.end());
+
+  ASSERT_EQ(removals[child_id].size(), 1);
+  ASSERT_TRUE(removals[child_id].find(attr_id) != removals[child_id].end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       RemoveAttributeFromDescendentEmptyAttributeMap) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+
+  ASSERT_EQ(removals.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeSimpleParentChild) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0][0], parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeParentWithMultipleChildren) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+
+  add_edge(style_info, parent_vertex, child1_vertex);
+  add_edge(style_info, parent_vertex, child2_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Parent has multiple children, so no merging should occur
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeWithAmbiguousParent) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles = {parent_id};
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Parent is ambiguous, so no merging should occur
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeWithDirectlyReachableParent) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles = {parent_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Parent is directly reachable, so no merging should occur
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeWithDirectlyReachableChild) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles = {child_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Merging can occur even if a child is directly reachable
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0][0], parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeChainedMergesPreOrder) {
+  resources::StyleInfo style_info;
+
+  // Create a chain: grandparent -> parent -> child
+  // where both grandparent and parent have exactly one child
+  uint32_t grandparent_id = 0x7f010001;
+  uint32_t parent_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+
+  auto grandparent_vertex = add_vertex(style_info, grandparent_id);
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, grandparent_vertex, parent_vertex);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Should have two merge pairs: (grandparent, parent) and (parent, child)
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 2);
+
+  // Verify pre-order traversal: grandparent->parent should come before
+  // parent->child
+  EXPECT_THAT(result[0], ::testing::ElementsAre(grandparent_id, parent_id));
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeChainedMergesWithDirectlyReachableParent) {
+  resources::StyleInfo style_info;
+
+  // Create a chain: grandparent -> parent -> child
+  // where both grandparent and parent have exactly one child
+  uint32_t grandparent_id = 0x7f010001;
+  uint32_t parent_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+
+  auto grandparent_vertex = add_vertex(style_info, grandparent_id);
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, grandparent_vertex, parent_vertex);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles = {parent_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Should have one merge value: grandparent
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0][0], grandparent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeComplexHierarchy) {
+  resources::StyleInfo style_info;
+
+  // Create a more complex hierarchy:
+  //     root
+  //    /    \
+  //   A      B (B has 2 children, so no merge)
+  //   |     / \
+  //   C    D   E
+  //   |
+  //   F
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t a_id = 0x7f010002;
+  uint32_t b_id = 0x7f010003;
+  uint32_t c_id = 0x7f010004;
+  uint32_t d_id = 0x7f010005;
+  uint32_t e_id = 0x7f010006;
+  uint32_t f_id = 0x7f010007;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+
+  add_edge(style_info, root_vertex, a_vertex);
+  add_edge(style_info, root_vertex, b_vertex);
+  add_edge(style_info, a_vertex, c_vertex);
+  add_edge(style_info, b_vertex, d_vertex);
+  add_edge(style_info, b_vertex, e_vertex);
+  add_edge(style_info, c_vertex, f_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Expected merges: (A, C) and (C, F)
+  // Root has 2 children, so no merge
+  // B has 2 children, so no merge
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 2);
+
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, c_id));
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeComplexHierarchyMultiple) {
+  resources::StyleInfo style_info;
+
+  // Create a more complex hierarchy:
+  //     root
+  //    /    \
+  //   A      B (B has 2 children, so no merge)
+  //   |     / \
+  //   C    D   E
+  //   |        |
+  //   F        G
+  //            |
+  //            H
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t a_id = 0x7f010002;
+  uint32_t b_id = 0x7f010003;
+  uint32_t c_id = 0x7f010004;
+  uint32_t d_id = 0x7f010005;
+  uint32_t e_id = 0x7f010006;
+  uint32_t f_id = 0x7f010007;
+  uint32_t g_id = 0x7f010008;
+  uint32_t h_id = 0x7f010009;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+  auto g_vertex = add_vertex(style_info, g_id);
+  auto h_vertex = add_vertex(style_info, h_id);
+
+  add_edge(style_info, root_vertex, a_vertex);
+  add_edge(style_info, root_vertex, b_vertex);
+  add_edge(style_info, a_vertex, c_vertex);
+  add_edge(style_info, b_vertex, d_vertex);
+  add_edge(style_info, b_vertex, e_vertex);
+  add_edge(style_info, c_vertex, f_vertex);
+  add_edge(style_info, e_vertex, g_vertex);
+  add_edge(style_info, g_vertex, h_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Expected merges: (A, C), (C, F), (E, G), (G, H)
+  // Root has 2 children, so no merge
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_EQ(result[0].size(), 2);
+  EXPECT_EQ(result[1].size(), 2);
+
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, c_id));
+  EXPECT_THAT(result[1], ::testing::ElementsAre(e_id, g_id));
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeLeafNodesOnly) {
+  resources::StyleInfo style_info;
+
+  uint32_t node1_id = 0x7f010001;
+  uint32_t node2_id = 0x7f010002;
+  uint32_t node3_id = 0x7f010003;
+
+  add_vertex(style_info, node1_id);
+  add_vertex(style_info, node2_id);
+  add_vertex(style_info, node3_id);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeEmptyGraph) {
+  resources::StyleInfo style_info;
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeLongChainPreOrder) {
+  resources::StyleInfo style_info;
+
+  // Create a long chain: A -> B -> C -> D -> E
+  // Each node has exactly one child (except E)
+  uint32_t a_id = 0x7f010001;
+  uint32_t b_id = 0x7f010002;
+  uint32_t c_id = 0x7f010003;
+  uint32_t d_id = 0x7f010004;
+  uint32_t e_id = 0x7f010005;
+
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+
+  add_edge(style_info, a_vertex, b_vertex);
+  add_edge(style_info, b_vertex, c_vertex);
+  add_edge(style_info, c_vertex, d_vertex);
+  add_edge(style_info, d_vertex, e_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Should have 4 merge pairs: (A,B), (B,C), (C,D), (D,E)
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 4);
+
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, b_id, c_id, d_id));
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeMixedConstraints) {
+  resources::StyleInfo style_info;
+
+  // Create hierarchy with mixed constraints:
+  //     root
+  //    /    \
+  //   A      B (ambiguous)
+  //   |      |
+  //   C      D (directly reachable)
+  //   |      |
+  //   E      F
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t a_id = 0x7f010002;
+  uint32_t b_id = 0x7f010003;
+  uint32_t c_id = 0x7f010004;
+  uint32_t d_id = 0x7f010005;
+  uint32_t e_id = 0x7f010006;
+  uint32_t f_id = 0x7f010007;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+
+  add_edge(style_info, root_vertex, a_vertex);
+  add_edge(style_info, root_vertex, b_vertex);
+  add_edge(style_info, a_vertex, c_vertex);
+  add_edge(style_info, b_vertex, d_vertex);
+  add_edge(style_info, c_vertex, e_vertex);
+  add_edge(style_info, d_vertex, f_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles = {b_id};
+  UnorderedSet<uint32_t> directly_reachable_styles = {d_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Expected merges: (A, C) and (C, E)
+  // Root has 2 children, so no merge
+  // B is ambiguous, so no merge for B->D
+  // D is directly reachable, so no merge for D->F
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 2);
+
+  // Verify the correct pairs are present in pre-order
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, c_id));
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeUnderReachable) {
+  resources::StyleInfo style_info;
+
+  // Create hierarchy with mixed constraints:
+  //     root
+  //    /    \
+  //   A      B (reachable)
+  //   |      |
+  //   C      D
+  //   |      |
+  //   E      F
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t a_id = 0x7f010002;
+  uint32_t b_id = 0x7f010003;
+  uint32_t c_id = 0x7f010004;
+  uint32_t d_id = 0x7f010005;
+  uint32_t e_id = 0x7f010006;
+  uint32_t f_id = 0x7f010007;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+
+  add_edge(style_info, root_vertex, a_vertex);
+  add_edge(style_info, root_vertex, b_vertex);
+  add_edge(style_info, a_vertex, c_vertex);
+  add_edge(style_info, b_vertex, d_vertex);
+  add_edge(style_info, c_vertex, e_vertex);
+  add_edge(style_info, d_vertex, f_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles = {b_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Expected merges: (A, C) and (C, E)
+  // Root has 2 children, so no merge
+  // B is ambiguous, so no merge for B->D
+  // D is directly reachable, so no merge for D->F
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_EQ(result[0].size(), 2);
+  EXPECT_EQ(result[1].size(), 1);
+
+  // Verify the correct pairs are present in pre-order
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, c_id));
+  EXPECT_EQ(result[1][0], d_id);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeWithAmbiguousTail) {
+  resources::StyleInfo style_info;
+
+  // Create a chain: grandparent -> parent -> child
+  // where both grandparent and parent have exactly one child
+  uint32_t grandparent_id = 0x7f010001;
+  uint32_t parent_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+
+  auto grandparent_vertex = add_vertex(style_info, grandparent_id);
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, grandparent_vertex, parent_vertex);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles = {child_id};
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Should have two merge pairs: (grandparent, parent) and (parent, child)
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 1);
+
+  // Verify pre-order traversal: grandparent->parent should come before
+  // parent->child
+  EXPECT_THAT(result[0], ::testing::ElementsAre(grandparent_id));
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetParentAndAttributeModificationsForMergingBasic) {
+  resources::StyleInfo style_info;
+
+  // Create a chain of resources: parent -> middle -> child
+  uint32_t parent_id = 0x7f010001;
+  uint32_t middle_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+  uint32_t attr_id3 = 0x7f020003;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto middle_vertex = add_vertex(style_info, middle_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, parent_vertex, middle_vertex);
+  add_edge(style_info, middle_vertex, child_vertex);
+
+  resources::StyleResource parent_style;
+  parent_style.id = parent_id;
+  parent_style.parent = 0;
+  resources::StyleResource::Value value1(42, 0);
+  parent_style.attributes.insert({attr_id1, value1});
+  style_info.styles[parent_id].push_back(parent_style);
+
+  resources::StyleResource middle_style;
+  middle_style.id = middle_id;
+  middle_style.parent = parent_id;
+  resources::StyleResource::Value value2(43, 0);
+  middle_style.attributes.insert({attr_id2, value2});
+  style_info.styles[middle_id].push_back(middle_style);
+
+  resources::StyleResource child_style;
+  child_style.id = child_id;
+  child_style.parent = middle_id;
+  resources::StyleResource::Value value3(44, 0);
+  child_style.attributes.insert({attr_id3, value3});
+  style_info.styles[child_id].push_back(child_style);
+
+  std::vector<uint32_t> resources_to_merge = {parent_id, middle_id};
+
+  auto modification = m_pass.get_parent_and_attribute_modifications_for_merging(
+      style_info, resources_to_merge);
+
+  EXPECT_EQ(modification.resource_id, child_id);
+  EXPECT_EQ(modification.parent_id, 0);
+  EXPECT_EQ(modification.values.size(), 2);
+
+  auto attr1_it = modification.values.find(attr_id1);
+  auto attr2_it = modification.values.find(attr_id2);
+  EXPECT_TRUE(attr1_it != modification.values.end());
+  EXPECT_TRUE(attr2_it != modification.values.end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetParentAndAttributeModificationsForMergingOverrideAttributes) {
+  resources::StyleInfo style_info;
+
+  // Create a chain of resources: parent -> middle -> child
+  uint32_t parent_id = 0x7f010001;
+  uint32_t middle_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto middle_vertex = add_vertex(style_info, middle_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, parent_vertex, middle_vertex);
+  add_edge(style_info, middle_vertex, child_vertex);
+
+  resources::StyleResource parent_style;
+  parent_style.id = parent_id;
+  parent_style.parent = 0;
+  resources::StyleResource::Value value1(42, 0);
+  parent_style.attributes.insert({attr_id1, value1});
+  style_info.styles[parent_id].push_back(parent_style);
+
+  resources::StyleResource middle_style;
+  middle_style.id = middle_id;
+  middle_style.parent = parent_id;
+  resources::StyleResource::Value value2(43, 0);
+  middle_style.attributes.insert({attr_id1, value2});
+  middle_style.attributes.insert({attr_id2, value2});
+  style_info.styles[middle_id].push_back(middle_style);
+
+  resources::StyleResource child_style;
+  child_style.id = child_id;
+  child_style.parent = middle_id;
+  style_info.styles[child_id].push_back(child_style);
+
+  // Resources to merge: parent and middle
+  std::vector<uint32_t> resources_to_merge = {parent_id, middle_id};
+
+  auto modification = m_pass.get_parent_and_attribute_modifications_for_merging(
+      style_info, resources_to_merge);
+
+  EXPECT_EQ(modification.resource_id, child_id);
+  EXPECT_EQ(modification.parent_id, 0);
+  EXPECT_EQ(modification.values.size(), 2);
+
+  auto attr1_it = modification.values.find(attr_id1);
+  auto attr2_it = modification.values.find(attr_id2);
+  EXPECT_TRUE(attr1_it != modification.values.end());
+  EXPECT_TRUE(attr2_it != modification.values.end());
+  EXPECT_EQ(attr1_it->second, value2);
+  EXPECT_EQ(attr2_it->second, value2);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetParentAndAttributeModificationsForMergingLongChain) {
+  resources::StyleInfo style_info;
+
+  // Create a long chain: A -> B -> C -> D -> E
+  uint32_t a_id = 0x7f010001;
+  uint32_t b_id = 0x7f010002;
+  uint32_t c_id = 0x7f010003;
+  uint32_t d_id = 0x7f010004;
+  uint32_t e_id = 0x7f010005;
+
+  uint32_t attr_a = 0x7f020001;
+  uint32_t attr_b = 0x7f020002;
+  uint32_t attr_c = 0x7f020003;
+  uint32_t attr_d = 0x7f020004;
+
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+
+  add_edge(style_info, a_vertex, b_vertex);
+  add_edge(style_info, b_vertex, c_vertex);
+  add_edge(style_info, c_vertex, d_vertex);
+  add_edge(style_info, d_vertex, e_vertex);
+
+  resources::StyleResource a_style;
+  a_style.id = a_id;
+  a_style.parent = 0;
+  resources::StyleResource::Value value_a(10, 0);
+  a_style.attributes.insert({attr_a, value_a});
+  style_info.styles[a_id].push_back(a_style);
+
+  resources::StyleResource b_style;
+  b_style.id = b_id;
+  b_style.parent = a_id;
+  resources::StyleResource::Value value_b(20, 0);
+  b_style.attributes.insert({attr_b, value_b});
+  style_info.styles[b_id].push_back(b_style);
+
+  resources::StyleResource c_style;
+  c_style.id = c_id;
+  c_style.parent = b_id;
+  resources::StyleResource::Value value_c(30, 0);
+  c_style.attributes.insert({attr_c, value_c});
+  style_info.styles[c_id].push_back(c_style);
+
+  resources::StyleResource d_style;
+  d_style.id = d_id;
+  d_style.parent = c_id;
+  resources::StyleResource::Value value_d(40, 0);
+  d_style.attributes.insert({attr_d, value_d});
+  style_info.styles[d_id].push_back(d_style);
+
+  resources::StyleResource e_style;
+  e_style.id = e_id;
+  e_style.parent = d_id;
+  style_info.styles[e_id].push_back(e_style);
+
+  // Test merging the entire chain A -> B -> C -> D
+  std::vector<uint32_t> resources_to_merge = {a_id, b_id, c_id, d_id};
+
+  // Call the function under test
+  auto modification = m_pass.get_parent_and_attribute_modifications_for_merging(
+      style_info, resources_to_merge);
+
+  // Verify the results
+  EXPECT_EQ(modification.resource_id, e_id);
+  EXPECT_EQ(modification.parent_id, 0);
+  EXPECT_EQ(modification.values.size(), 4);
+
+  // Check that all attributes from the chain are present
+  auto attr_a_it = modification.values.find(attr_a);
+  auto attr_b_it = modification.values.find(attr_b);
+  auto attr_c_it = modification.values.find(attr_c);
+  auto attr_d_it = modification.values.find(attr_d);
+
+  EXPECT_TRUE(attr_a_it != modification.values.end());
+  EXPECT_TRUE(attr_b_it != modification.values.end());
+  EXPECT_TRUE(attr_c_it != modification.values.end());
+  EXPECT_TRUE(attr_d_it != modification.values.end());
+
+  EXPECT_EQ(attr_a_it->second, value_a);
+  EXPECT_EQ(attr_b_it->second, value_b);
+  EXPECT_EQ(attr_c_it->second, value_c);
+  EXPECT_EQ(attr_d_it->second, value_d);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetParentAndAttributeModificationsForMergingLongChainWithOverrides) {
+  resources::StyleInfo style_info;
+
+  // Create a long chain: A -> B -> C -> D -> E
+  uint32_t a_id = 0x7f010001;
+  uint32_t b_id = 0x7f010002;
+  uint32_t c_id = 0x7f010003;
+  uint32_t d_id = 0x7f010004;
+  uint32_t e_id = 0x7f010005;
+
+  uint32_t common_attr = 0x7f020001;
+  uint32_t unique_attr = 0x7f020002;
+
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+
+  add_edge(style_info, a_vertex, b_vertex);
+  add_edge(style_info, b_vertex, c_vertex);
+  add_edge(style_info, c_vertex, d_vertex);
+  add_edge(style_info, d_vertex, e_vertex);
+
+  resources::StyleResource a_style;
+  a_style.id = a_id;
+  a_style.parent = 0;
+  resources::StyleResource::Value value_a(10, 0);
+  a_style.attributes.insert({common_attr, value_a});
+  style_info.styles[a_id].push_back(a_style);
+
+  resources::StyleResource b_style;
+  b_style.id = b_id;
+  b_style.parent = a_id;
+  resources::StyleResource::Value value_b(20, 0);
+  b_style.attributes.insert({common_attr, value_b});
+  style_info.styles[b_id].push_back(b_style);
+
+  resources::StyleResource c_style;
+  c_style.id = c_id;
+  c_style.parent = b_id;
+  resources::StyleResource::Value value_c(30, 0);
+  c_style.attributes.insert({common_attr, value_c});
+  resources::StyleResource::Value value_unique(100, 0);
+  c_style.attributes.insert({unique_attr, value_unique});
+  style_info.styles[c_id].push_back(c_style);
+
+  resources::StyleResource d_style;
+  d_style.id = d_id;
+  d_style.parent = c_id;
+  resources::StyleResource::Value value_d(40, 0);
+  d_style.attributes.insert({common_attr, value_d});
+  style_info.styles[d_id].push_back(d_style);
+
+  resources::StyleResource e_style;
+  e_style.id = e_id;
+  e_style.parent = d_id;
+  style_info.styles[e_id].push_back(e_style);
+
+  // Test merging the entire chain B -> C -> D
+  std::vector<uint32_t> resources_to_merge = {b_id, c_id, d_id};
+
+  auto modification = m_pass.get_parent_and_attribute_modifications_for_merging(
+      style_info, resources_to_merge);
+
+  EXPECT_EQ(modification.resource_id, e_id);
+  EXPECT_EQ(modification.parent_id, a_id);
+  EXPECT_EQ(modification.values.size(), 2);
+
+  auto common_attr_it = modification.values.find(common_attr);
+  auto unique_attr_it = modification.values.find(unique_attr);
+
+  EXPECT_TRUE(common_attr_it != modification.values.end());
+  EXPECT_TRUE(unique_attr_it != modification.values.end());
+
+  EXPECT_EQ(common_attr_it->second, value_d);
+  EXPECT_EQ(unique_attr_it->second, value_unique);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetParentAndAttributeModificationsForMergingVeryLongChainSingleValue) {
+  resources::StyleInfo style_info;
+
+  // Create a very long chain: A -> B -> C -> D -> E -> F -> G -> H
+  uint32_t a_id = 0x7f010001;
+  uint32_t b_id = 0x7f010002;
+  uint32_t c_id = 0x7f010003;
+  uint32_t d_id = 0x7f010004;
+  uint32_t e_id = 0x7f010005;
+  uint32_t f_id = 0x7f010006;
+  uint32_t g_id = 0x7f010007;
+  uint32_t h_id = 0x7f010008;
+
+  uint32_t single_attr = 0x7f020001;
+
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+  auto g_vertex = add_vertex(style_info, g_id);
+  auto h_vertex = add_vertex(style_info, h_id);
+
+  add_edge(style_info, a_vertex, b_vertex);
+  add_edge(style_info, b_vertex, c_vertex);
+  add_edge(style_info, c_vertex, d_vertex);
+  add_edge(style_info, d_vertex, e_vertex);
+  add_edge(style_info, e_vertex, f_vertex);
+  add_edge(style_info, f_vertex, g_vertex);
+  add_edge(style_info, g_vertex, h_vertex);
+
+  resources::StyleResource a_style;
+  a_style.id = a_id;
+  a_style.parent = 0;
+  resources::StyleResource::Value value_a(10, 0);
+  a_style.attributes.insert({single_attr, value_a});
+  style_info.styles[a_id].push_back(a_style);
+
+  resources::StyleResource b_style;
+  b_style.id = b_id;
+  b_style.parent = a_id;
+  resources::StyleResource::Value value_b(20, 0);
+  b_style.attributes.insert({single_attr, value_b});
+  style_info.styles[b_id].push_back(b_style);
+
+  resources::StyleResource c_style;
+  c_style.id = c_id;
+  c_style.parent = b_id;
+  resources::StyleResource::Value value_c(30, 0);
+  c_style.attributes.insert({single_attr, value_c});
+  style_info.styles[c_id].push_back(c_style);
+
+  resources::StyleResource d_style;
+  d_style.id = d_id;
+  d_style.parent = c_id;
+  resources::StyleResource::Value value_d(40, 0);
+  d_style.attributes.insert({single_attr, value_d});
+  style_info.styles[d_id].push_back(d_style);
+
+  resources::StyleResource e_style;
+  e_style.id = e_id;
+  e_style.parent = d_id;
+  resources::StyleResource::Value value_e(50, 0);
+  e_style.attributes.insert({single_attr, value_e});
+  style_info.styles[e_id].push_back(e_style);
+
+  resources::StyleResource f_style;
+  f_style.id = f_id;
+  f_style.parent = e_id;
+  resources::StyleResource::Value value_f(60, 0);
+  f_style.attributes.insert({single_attr, value_f});
+  style_info.styles[f_id].push_back(f_style);
+
+  resources::StyleResource g_style;
+  g_style.id = g_id;
+  g_style.parent = f_id;
+  resources::StyleResource::Value value_g(70, 0);
+  g_style.attributes.insert({single_attr, value_g});
+  style_info.styles[g_id].push_back(g_style);
+
+  resources::StyleResource h_style;
+  h_style.id = h_id;
+  h_style.parent = g_id;
+  style_info.styles[h_id].push_back(h_style);
+
+  // Test merging the entire chain A -> B -> C -> D -> E -> F -> G
+  std::vector<uint32_t> resources_to_merge = {a_id, b_id, c_id, d_id,
+                                              e_id, f_id, g_id};
+
+  auto modification = m_pass.get_parent_and_attribute_modifications_for_merging(
+      style_info, resources_to_merge);
+
+  EXPECT_EQ(modification.resource_id, h_id);
+  EXPECT_EQ(modification.parent_id, 0);
+  EXPECT_EQ(modification.values.size(), 1);
+
+  auto attr_it = modification.values.find(single_attr);
+  EXPECT_TRUE(attr_it != modification.values.end());
+
+  EXPECT_EQ(attr_it->second, value_g);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetParentAndAttributeModificationsForMergingPartialChain) {
+  resources::StyleInfo style_info;
+
+  // Create a long chain: A -> B -> C -> D -> E -> F -> G -> H
+  uint32_t a_id = 0x7f010001;
+  uint32_t b_id = 0x7f010002;
+  uint32_t c_id = 0x7f010003;
+  uint32_t d_id = 0x7f010004;
+  uint32_t e_id = 0x7f010005;
+  uint32_t f_id = 0x7f010006;
+  uint32_t g_id = 0x7f010007;
+  uint32_t h_id = 0x7f010008;
+
+  uint32_t single_attr = 0x7f020001;
+
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+  auto g_vertex = add_vertex(style_info, g_id);
+  auto h_vertex = add_vertex(style_info, h_id);
+
+  add_edge(style_info, a_vertex, b_vertex);
+  add_edge(style_info, b_vertex, c_vertex);
+  add_edge(style_info, c_vertex, d_vertex);
+  add_edge(style_info, d_vertex, e_vertex);
+  add_edge(style_info, e_vertex, f_vertex);
+  add_edge(style_info, f_vertex, g_vertex);
+  add_edge(style_info, g_vertex, h_vertex);
+
+  resources::StyleResource a_style;
+  a_style.id = a_id;
+  a_style.parent = 0;
+  resources::StyleResource::Value value_a(10, 0);
+  a_style.attributes.insert({single_attr, value_a});
+  style_info.styles[a_id].push_back(a_style);
+
+  resources::StyleResource b_style;
+  b_style.id = b_id;
+  b_style.parent = a_id;
+  resources::StyleResource::Value value_b(20, 0);
+  b_style.attributes.insert({single_attr, value_b});
+  style_info.styles[b_id].push_back(b_style);
+
+  resources::StyleResource c_style;
+  c_style.id = c_id;
+  c_style.parent = b_id;
+  resources::StyleResource::Value value_c(30, 0);
+  c_style.attributes.insert({single_attr, value_c});
+  style_info.styles[c_id].push_back(c_style);
+
+  resources::StyleResource d_style;
+  d_style.id = d_id;
+  d_style.parent = c_id;
+  resources::StyleResource::Value value_d(40, 0);
+  d_style.attributes.insert({single_attr, value_d});
+  style_info.styles[d_id].push_back(d_style);
+
+  resources::StyleResource e_style;
+  e_style.id = e_id;
+  e_style.parent = d_id;
+  resources::StyleResource::Value value_e(50, 0);
+  e_style.attributes.insert({single_attr, value_e});
+  style_info.styles[e_id].push_back(e_style);
+
+  resources::StyleResource f_style;
+  f_style.id = f_id;
+  f_style.parent = e_id;
+  resources::StyleResource::Value value_f(60, 0);
+  f_style.attributes.insert({single_attr, value_f});
+  style_info.styles[f_id].push_back(f_style);
+
+  resources::StyleResource g_style;
+  g_style.id = g_id;
+  g_style.parent = f_id;
+  resources::StyleResource::Value value_g(70, 0);
+  g_style.attributes.insert({single_attr, value_g});
+  style_info.styles[g_id].push_back(g_style);
+
+  resources::StyleResource h_style;
+  h_style.id = h_id;
+  h_style.parent = g_id;
+  style_info.styles[h_id].push_back(h_style);
+
+  // Test merging just a portion of the chain: C -> D -> E
+  std::vector<uint32_t> resources_to_merge = {c_id, d_id, e_id};
+
+  auto modification = m_pass.get_parent_and_attribute_modifications_for_merging(
+      style_info, resources_to_merge);
+
+  EXPECT_EQ(modification.resource_id, f_id);
+  EXPECT_EQ(modification.parent_id, b_id);
+  EXPECT_EQ(modification.values.size(), 1);
+
+  auto attr_it = modification.values.find(single_attr);
+  EXPECT_TRUE(attr_it != modification.values.end());
+
+  EXPECT_EQ(attr_it->second, value_e);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       ShouldCreateSyntheticResourcesCheaperSynthetic) {
+  uint32_t synthetic_style_cost = 100;
+  uint32_t total_attribute_references = 10;
+  uint32_t attribute_count = 1;
+
+  bool result = m_pass.should_create_synthetic_resources(
+      synthetic_style_cost, total_attribute_references, attribute_count);
+
+  EXPECT_TRUE(result);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       ShouldCreateSyntheticResourcesMultipleAttributes) {
+  uint32_t synthetic_style_cost = 100;
+  uint32_t total_attribute_references = 3;
+  uint32_t attribute_count = 3;
+
+  bool result = m_pass.should_create_synthetic_resources(
+      synthetic_style_cost + 20, total_attribute_references, attribute_count);
+
+  EXPECT_FALSE(result);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       ShouldCreateSyntheticResourcesMoreExpensiveSynthetic) {
+  uint32_t synthetic_style_cost = 200;
+  uint32_t total_attribute_references = 5;
+  uint32_t attribute_count = 3;
+
+  bool result = m_pass.should_create_synthetic_resources(
+      synthetic_style_cost + 20, total_attribute_references, attribute_count);
+
+  EXPECT_FALSE(result);
+}
+
+TEST_F(ResourceValueMergingPassTest, ShouldCreateSyntheticResourcesEqualCost) {
+  uint32_t synthetic_style_cost = 100;
+  uint32_t total_attribute_references = 10;
+  uint32_t attribute_count = 1;
+
+  bool result = m_pass.should_create_synthetic_resources(
+      synthetic_style_cost + 20, total_attribute_references, attribute_count);
+
+  EXPECT_FALSE(result);
+}
+
+TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsEmptyStyleInfo) {
+  resources::StyleInfo style_info;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsEmptyDirectlyReachable) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  add_vertex(style_info, root_id);
+
+  UnorderedSet<uint32_t> directly_reachable_styles;
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsSingleDirectlyReachable) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, root_vertex, child_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource child_style;
+  child_style.id = child_id;
+  child_style.parent = root_id;
+  resources::StyleResource::Value value(42, 0);
+  child_style.attributes.insert({attr_id, value});
+  style_info.styles[child_id].push_back(child_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_THAT(result[0], ::testing::UnorderedElementsAre(child_id));
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsChildDirectlyReachable) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  add_edge(style_info, root_vertex, child1_vertex);
+  add_edge(style_info, root_vertex, child2_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource::Value value(42, 0);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root_id;
+  child1_style.attributes.insert({attr_id, value});
+  style_info.styles[child1_id].push_back(child1_style);
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root_id;
+  child2_style.attributes.insert({attr_id, value});
+  style_info.styles[child2_id].push_back(child2_style);
+
+  // Test case 1: Child directly reachable
+  {
+    UnorderedSet<uint32_t> directly_reachable_styles = {root_id, child1_id};
+    UnorderedSet<uint32_t> ambiguous_styles;
+
+    auto result = m_pass.find_intra_graph_hoistings(
+        style_info, directly_reachable_styles, ambiguous_styles);
+
+    EXPECT_THAT(result.size(), 1);
+    EXPECT_THAT(result[0],
+                ::testing::UnorderedElementsAre(child1_id, child2_id));
+  }
+
+  // Test case 2: Ambiguous root
+  {
+    UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+    UnorderedSet<uint32_t> ambiguous_styles = {root_id};
+
+    auto result = m_pass.find_intra_graph_hoistings(
+        style_info, directly_reachable_styles, ambiguous_styles);
+
+    EXPECT_TRUE(result.empty());
+  }
+}
+
+TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsComplexHierarchy) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t grandchild1_id = 0x7f010004;
+  uint32_t grandchild2_id = 0x7f010005;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  auto grandchild1_vertex = add_vertex(style_info, grandchild1_id);
+  auto grandchild2_vertex = add_vertex(style_info, grandchild2_id);
+
+  add_edge(style_info, root_vertex, child1_vertex);
+  add_edge(style_info, root_vertex, child2_vertex);
+  add_edge(style_info, child1_vertex, grandchild1_vertex);
+  add_edge(style_info, child2_vertex, grandchild2_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root_id;
+  style_info.styles[child1_id].push_back(child1_style);
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root_id;
+  style_info.styles[child2_id].push_back(child2_style);
+
+  // Grandchild1 has attr_id1 that can be hoisted to child1
+  resources::StyleResource grandchild1_style;
+  grandchild1_style.id = grandchild1_id;
+  grandchild1_style.parent = child1_id;
+  resources::StyleResource::Value value1(42, 0);
+  grandchild1_style.attributes.insert({attr_id1, value1});
+  style_info.styles[grandchild1_id].push_back(grandchild1_style);
+
+  // Grandchild2 has attr_id2 that can be hoisted to child2
+  resources::StyleResource grandchild2_style;
+  grandchild2_style.id = grandchild2_id;
+  grandchild2_style.parent = child2_id;
+  resources::StyleResource::Value value2(43, 0);
+  grandchild2_style.attributes.insert({attr_id2, value2});
+  style_info.styles[grandchild2_id].push_back(grandchild2_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id, child1_id,
+                                                      child2_id};
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_THAT(result.size(), 2);
+  EXPECT_THAT(result[0], ::testing::UnorderedElementsAre(grandchild1_id));
+  EXPECT_THAT(result[1], ::testing::UnorderedElementsAre(grandchild2_id));
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsWithAmbiguousStyles) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, root_vertex, child_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource child_style;
+  child_style.id = child_id;
+  child_style.parent = root_id;
+  resources::StyleResource::Value value(42, 0);
+  child_style.attributes.insert({attr_id, value});
+  style_info.styles[child_id].push_back(child_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+  UnorderedSet<uint32_t> ambiguous_styles = {child_id};
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  // Since root is ambiguous, no hoisting should occur
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsMixedChildrenStates) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t child3_id = 0x7f010004;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  auto child3_vertex = add_vertex(style_info, child3_id);
+
+  add_edge(style_info, root_vertex, child1_vertex);
+  add_edge(style_info, root_vertex, child2_vertex);
+  add_edge(style_info, root_vertex, child3_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource::Value value(42, 0);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root_id;
+  child1_style.attributes.insert({attr_id, value});
+  style_info.styles[child1_id].push_back(child1_style);
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root_id;
+  child2_style.attributes.insert({attr_id, value});
+  style_info.styles[child2_id].push_back(child2_style);
+
+  resources::StyleResource child3_style;
+  child3_style.id = child3_id;
+  child3_style.parent = root_id;
+  child3_style.attributes.insert({attr_id, value});
+  style_info.styles[child3_id].push_back(child3_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+  UnorderedSet<uint32_t> ambiguous_styles = {child2_id};
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsMultipleRoots) {
+  resources::StyleInfo style_info;
+
+  uint32_t root1_id = 0x7f010001;
+  uint32_t root2_id = 0x7f010002;
+  uint32_t child1_id = 0x7f010003;
+  uint32_t child2_id = 0x7f010004;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root1_vertex = add_vertex(style_info, root1_id);
+  auto root2_vertex = add_vertex(style_info, root2_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+
+  add_edge(style_info, root1_vertex, child1_vertex);
+  add_edge(style_info, root2_vertex, child2_vertex);
+
+  resources::StyleResource root1_style;
+  root1_style.id = root1_id;
+  root1_style.parent = 0;
+  style_info.styles[root1_id].push_back(root1_style);
+
+  resources::StyleResource root2_style;
+  root2_style.id = root2_id;
+  root2_style.parent = 0;
+  style_info.styles[root2_id].push_back(root2_style);
+
+  // Child1 has attribute that can be hoisted to root1
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root1_id;
+  resources::StyleResource::Value value(42, 0);
+  child1_style.attributes.insert({attr_id, value});
+  style_info.styles[child1_id].push_back(child1_style);
+
+  // Child2 has attribute that can be hoisted to root2
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root2_id;
+  child2_style.attributes.insert({attr_id, value});
+  style_info.styles[child2_id].push_back(child2_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root1_id, root2_id};
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_THAT(result.size(), 2);
+  EXPECT_THAT(result[0], ::testing::UnorderedElementsAre(child2_id));
+  EXPECT_THAT(result[1], ::testing::UnorderedElementsAre(child1_id));
+}
+
+TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsAmbiguousRoot) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010003;
+  uint32_t child2_id = 0x7f010004;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+
+  add_edge(style_info, root_vertex, child1_vertex);
+  add_edge(style_info, root_vertex, child2_vertex);
+
+  resources::StyleResource::Value value(42, 0);
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root_id;
+  child1_style.attributes.insert({attr_id, value});
+  style_info.styles[child1_id].push_back(child1_style);
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root_id;
+  child2_style.attributes.insert({attr_id, value});
+  style_info.styles[child2_id].push_back(child2_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+  UnorderedSet<uint32_t> ambiguous_styles = {root_id};
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesEmptyVector) {
+  resources::StyleInfo style_info;
+  std::vector<uint32_t> resource_ids;
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesSingleResource) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  std::vector<resources::StyleResource> styles;
+  styles.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id, styles});
+
+  std::vector<uint32_t> resource_ids = {resource_id};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_TRUE(result.find(attr_id1) != result.end());
+  EXPECT_TRUE(result.find(attr_id2) != result.end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesMultipleResourcesAllCommon) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t resource_id3 = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  std::vector<resources::StyleResource> styles1;
+  styles1.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id1, styles1});
+
+  std::vector<resources::StyleResource> styles2;
+  styles2.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id2, styles2});
+
+  std::vector<resources::StyleResource> styles3;
+  styles3.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id3, styles3});
+
+  std::vector<uint32_t> resource_ids = {resource_id1, resource_id2,
+                                        resource_id3};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_TRUE(result.find(attr_id1) != result.end());
+  EXPECT_TRUE(result.find(attr_id2) != result.end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesMultipleResourcesSomeCommon) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t resource_id3 = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+  uint32_t attr_id3 = 0x7f020003;
+
+  std::vector<resources::StyleResource> styles1;
+  styles1.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id1, styles1});
+
+  std::vector<resources::StyleResource> styles2;
+  styles2.push_back(create_style_resource(0, {attr_id1, attr_id3}));
+  style_info.styles.insert({resource_id2, styles2});
+
+  std::vector<resources::StyleResource> styles3;
+  styles3.push_back(create_style_resource(0, {attr_id1}));
+  style_info.styles.insert({resource_id3, styles3});
+
+  std::vector<uint32_t> resource_ids = {resource_id1, resource_id2,
+                                        resource_id3};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_TRUE(result.find(attr_id1) != result.end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesMultipleResourcesNoCommon) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t resource_id3 = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+  uint32_t attr_id3 = 0x7f020003;
+
+  std::vector<resources::StyleResource> styles1;
+  styles1.push_back(create_style_resource(0, {attr_id1}));
+  style_info.styles.insert({resource_id1, styles1});
+
+  std::vector<resources::StyleResource> styles2;
+  styles2.push_back(create_style_resource(0, {attr_id2}));
+  style_info.styles.insert({resource_id2, styles2});
+
+  std::vector<resources::StyleResource> styles3;
+  styles3.push_back(create_style_resource(0, {attr_id3}));
+  style_info.styles.insert({resource_id3, styles3});
+
+  std::vector<uint32_t> resource_ids = {resource_id1, resource_id2,
+                                        resource_id3};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesWithNonexistentResource) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t nonexistent_resource_id = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  std::vector<resources::StyleResource> styles1;
+  styles1.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id1, styles1});
+
+  std::vector<resources::StyleResource> styles2;
+  styles2.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id2, styles2});
+
+  std::vector<uint32_t> resource_ids = {resource_id1, resource_id2,
+                                        nonexistent_resource_id};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest, GetCommonParentSingleChild) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  resources::StyleResource child_style;
+  child_style.id = child_id;
+  child_style.parent = parent_id;
+  style_info.styles[child_id] = {child_style};
+
+  std::vector<uint32_t> children = {child_id};
+
+  uint32_t result = m_pass.get_common_parent(children, style_info);
+
+  EXPECT_EQ(result, parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonParentMultipleChildrenSameParent) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t child3_id = 0x7f010004;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  auto child3_vertex = add_vertex(style_info, child3_id);
+
+  add_edge(style_info, parent_vertex, child1_vertex);
+  add_edge(style_info, parent_vertex, child2_vertex);
+  add_edge(style_info, parent_vertex, child3_vertex);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = parent_id;
+  style_info.styles[child1_id] = {child1_style};
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = parent_id;
+  style_info.styles[child2_id] = {child2_style};
+
+  resources::StyleResource child3_style;
+  child3_style.id = child3_id;
+  child3_style.parent = parent_id;
+  style_info.styles[child3_id] = {child3_style};
+
+  std::vector<uint32_t> children = {child1_id, child2_id, child3_id};
+
+  uint32_t result = m_pass.get_common_parent(children, style_info);
+
+  EXPECT_EQ(result, parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonParentMultipleChildrenDifferentParents) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent1_id = 0x7f010001;
+  uint32_t parent2_id = 0x7f010002;
+  uint32_t child1_id = 0x7f010003;
+  uint32_t child2_id = 0x7f010004;
+
+  auto parent1_vertex = add_vertex(style_info, parent1_id);
+  auto parent2_vertex = add_vertex(style_info, parent2_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+
+  add_edge(style_info, parent1_vertex, child1_vertex);
+  add_edge(style_info, parent2_vertex, child2_vertex);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = parent1_id;
+  style_info.styles[child1_id] = {child1_style};
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = parent2_id;
+  style_info.styles[child2_id] = {child2_style};
+
+  std::vector<uint32_t> children = {child1_id, child2_id};
+
+  EXPECT_THROW(m_pass.get_common_parent(children, style_info), std::exception);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetCommonParentEmptyChildren) {
+  resources::StyleInfo style_info;
+  std::vector<uint32_t> children;
+
+  EXPECT_THROW(m_pass.get_common_parent(children, style_info), std::exception);
+}
+
+TEST_F(ResourceValueMergingPassTest, CreateSyntheticResourceNodeBasic) {
+  test_synthetic_resource_creation({{0x7f010001, 0}}, 0x7f01001);
+}
+
+TEST_F(ResourceValueMergingPassTest, CreateSyntheticResourceNodeMultipleCalls) {
+  // Multiple roots
+  test_synthetic_resource_creation(
+      {{0x7f010001, 0}, {0x7f010002, 0}, {0x7f010003, 0}}, 0x7f010003);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       CreateSyntheticResourceNodeGraphStructure) {
+  test_synthetic_resource_creation({{0x7f010002, 0x7f010001}}, 0x7f010040);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       CreateSyntheticResourceNodeWithComplexHierarchy) {
+  test_synthetic_resource_creation(
+      {
+          {0x7f010001, 0}, // grandparent
+          {0x7f010002, 0x7f010001}, // parent
+          {0x7f010003, 0x7f010002} // child
+      },
+      0x7f010003);
+}
+
+TEST_F(ResourceValueMergingPassTest, CreateSyntheticResourceNodeReturnValue) {
+  test_synthetic_resource_creation({{0x7f010001, 0}}, 0x7f010001);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentBasic) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t old_parent_id = 0x7f010002;
+  uint32_t new_parent_id = 0x7f010003;
+
+  auto resource_vertex = add_vertex(style_info, resource_id);
+  auto old_parent_vertex = add_vertex(style_info, old_parent_id);
+  add_vertex(style_info, new_parent_id);
+  add_edge(style_info, old_parent_vertex, resource_vertex);
+
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = old_parent_id;
+  style_info.styles[resource_id] = {style};
+
+  auto initial_edge =
+      boost::edge(old_parent_vertex, resource_vertex, style_info.graph);
+  EXPECT_TRUE(initial_edge.second);
+
+  m_pass.update_parent(style_info, resource_id, new_parent_id);
+
+  auto old_edge =
+      boost::edge(old_parent_vertex, resource_vertex, style_info.graph);
+  EXPECT_FALSE(old_edge.second);
+
+  assert_style_parent(resource_id, new_parent_id, style_info);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentFromZeroToNonZero) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t new_parent_id = 0x7f010002;
+
+  add_vertex(style_info, resource_id);
+  add_vertex(style_info, new_parent_id);
+
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = 0;
+  style_info.styles[resource_id] = {style};
+
+  m_pass.update_parent(style_info, resource_id, new_parent_id);
+
+  assert_style_parent(resource_id, new_parent_id, style_info);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentNonexistentResource) {
+  resources::StyleInfo style_info;
+  uint32_t nonexistent_resource_id = 0x7f010001;
+  uint32_t new_parent_id = 0x7f010002;
+
+  EXPECT_THROW(
+      m_pass.update_parent(style_info, nonexistent_resource_id, new_parent_id),
+      RedexException);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentMultipleStyles) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t new_parent_id = 0x7f010002;
+
+  resources::StyleResource style1;
+  style1.id = resource_id;
+  style1.parent = 0x7f010003;
+
+  resources::StyleResource style2;
+  style2.id = resource_id;
+  style2.parent = 0x7f010004;
+
+  style_info.styles[resource_id] = {style1, style2};
+
+  EXPECT_THROW(m_pass.update_parent(style_info, resource_id, new_parent_id),
+               RedexException);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentMultipleResources) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t old_parent_id = 0x7f010003;
+  uint32_t new_parent_id = 0x7f010004;
+
+  auto resource1_vertex = add_vertex(style_info, resource_id1);
+  auto resource2_vertex = add_vertex(style_info, resource_id2);
+  auto old_parent_vertex = add_vertex(style_info, old_parent_id);
+  auto new_parent_vertex = add_vertex(style_info, new_parent_id);
+  add_edge(style_info, old_parent_vertex, resource1_vertex);
+  add_edge(style_info, old_parent_vertex, resource2_vertex);
+
+  resources::StyleResource style1;
+  style1.id = resource_id1;
+  style1.parent = old_parent_id;
+  style_info.styles[resource_id1] = {style1};
+
+  resources::StyleResource style2;
+  style2.id = resource_id2;
+  style2.parent = old_parent_id;
+  style_info.styles[resource_id2] = {style2};
+
+  m_pass.update_parent(style_info, resource_id1, new_parent_id);
+  m_pass.update_parent(style_info, resource_id2, new_parent_id);
+
+  auto new_edge1 =
+      boost::edge(new_parent_vertex, resource1_vertex, style_info.graph);
+  auto new_edge2 =
+      boost::edge(new_parent_vertex, resource2_vertex, style_info.graph);
+  EXPECT_TRUE(new_edge1.second);
+  EXPECT_TRUE(new_edge2.second);
+
+  auto updated_style1_opt =
+      m_pass.find_style_resource(resource_id1, style_info.styles);
+  auto updated_style2_opt =
+      m_pass.find_style_resource(resource_id2, style_info.styles);
+
+  ASSERT_TRUE(updated_style1_opt.has_value());
+  ASSERT_TRUE(updated_style2_opt.has_value());
+  EXPECT_EQ(updated_style1_opt->parent, new_parent_id);
+  EXPECT_EQ(updated_style2_opt->parent, new_parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentChainOfUpdates) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t parent_id1 = 0x7f010002;
+  uint32_t parent_id2 = 0x7f010003;
+  uint32_t parent_id3 = 0x7f010004;
+
+  auto resource_vertex = add_vertex(style_info, resource_id);
+  auto parent1_vertex = add_vertex(style_info, parent_id1);
+  auto parent2_vertex = add_vertex(style_info, parent_id2);
+  auto parent3_vertex = add_vertex(style_info, parent_id3);
+  add_edge(style_info, parent1_vertex, resource_vertex);
+
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = parent_id1;
+  style_info.styles[resource_id] = {style};
+
+  m_pass.update_parent(style_info, resource_id, parent_id2);
+
+  auto edge2 = boost::edge(parent2_vertex, resource_vertex, style_info.graph);
+  EXPECT_TRUE(edge2.second);
+
+  assert_style_parent(resource_id, parent_id2, style_info);
+
+  m_pass.update_parent(style_info, resource_id, parent_id3);
+
+  auto edge3 = boost::edge(parent3_vertex, resource_vertex, style_info.graph);
+  EXPECT_TRUE(edge3.second);
+
+  assert_style_parent(resource_id, parent_id3, style_info);
+}
+
+TEST_F(ResourceValueMergingPassTest, IntroduceSyntheticResourceBasic) {
+  const uint32_t parent_id = 0x7f010001;
+  const uint32_t child1_id = 0x7f010002;
+  const uint32_t child2_id = 0x7f010003;
+  const uint32_t attr_id = 0x7f020001;
+  const resources::StyleResource::Value common_value(42, 0);
+
+  resources::StyleInfo style_info;
+  style_info.set_max_resource_id(child2_id);
+
+  std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> vertex_map;
+  setup_style_graph(
+      style_info, {{child1_id, parent_id}, {child2_id, parent_id}}, vertex_map);
+
+  auto child1_style = create_style_resource(parent_id, {}, child1_id);
+  child1_style.attributes.insert({attr_id, common_value});
+  style_info.styles[child1_id] = {child1_style};
+
+  auto child2_style = create_style_resource(parent_id, {}, child2_id);
+  child2_style.attributes.insert({attr_id, common_value});
+  style_info.styles[child2_id] = {child2_style};
+
+  auto parent_style = create_style_resource(0, {}, parent_id);
+  style_info.styles[parent_id] = {parent_style};
+
+  const std::vector<uint32_t> children = {child1_id, child2_id};
+  const uint32_t synthetic_id =
+      m_pass.introduce_synthetic_resource(style_info, children);
+
+  EXPECT_EQ(synthetic_id, child2_id + 1);
+  EXPECT_TRUE(style_info.id_to_vertex.find(synthetic_id) !=
+              style_info.id_to_vertex.end());
+
+  const auto synthetic_style_opt =
+      m_pass.find_style_resource(synthetic_id, style_info.styles);
+  ASSERT_TRUE(synthetic_style_opt.has_value());
+  EXPECT_EQ(synthetic_style_opt->parent, parent_id);
+
+  const auto child1_style_opt =
+      m_pass.find_style_resource(child1_id, style_info.styles);
+  const auto child2_style_opt =
+      m_pass.find_style_resource(child2_id, style_info.styles);
+  ASSERT_TRUE(child1_style_opt.has_value());
+  ASSERT_TRUE(child2_style_opt.has_value());
+
+  EXPECT_EQ(child1_style_opt->parent, synthetic_id);
+  EXPECT_EQ(child2_style_opt->parent, synthetic_id);
+
+  verify_graph_edges(style_info,
+                     {{parent_id, synthetic_id},
+                      {synthetic_id, child1_id},
+                      {synthetic_id, child2_id}});
+  verify_graph_edges_absent(style_info,
+                            {{parent_id, child1_id}, {parent_id, child2_id}});
+}
+
+TEST_F(ResourceValueMergingPassTest, IntroduceSyntheticResourceSingleChild) {
+  const uint32_t parent_id = 0x7f010001;
+  const uint32_t child_id = 0x7f010002;
+
+  resources::StyleInfo style_info;
+  style_info.set_max_resource_id(child_id);
+
+  std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> vertex_map;
+  setup_style_graph(style_info, {{child_id, parent_id}}, vertex_map);
+
+  auto child_style = create_style_resource(parent_id, {}, child_id);
+  style_info.styles[child_id] = {child_style};
+
+  auto parent_style = create_style_resource(0, {}, parent_id);
+  style_info.styles[parent_id] = {parent_style};
+
+  const std::vector<uint32_t> children = {child_id};
+  const uint32_t synthetic_id =
+      m_pass.introduce_synthetic_resource(style_info, children);
+
+  EXPECT_GT(synthetic_id, child_id);
+  EXPECT_TRUE(style_info.id_to_vertex.find(synthetic_id) !=
+              style_info.id_to_vertex.end());
+
+  const auto synthetic_style_opt =
+      m_pass.find_style_resource(synthetic_id, style_info.styles);
+  ASSERT_TRUE(synthetic_style_opt.has_value());
+  EXPECT_EQ(synthetic_style_opt->parent, parent_id);
+
+  const auto child_style_updated_opt =
+      m_pass.find_style_resource(child_id, style_info.styles);
+  ASSERT_TRUE(child_style_updated_opt.has_value());
+  EXPECT_EQ(child_style_updated_opt->parent, synthetic_id);
+
+  verify_graph_edges(style_info,
+                     {{parent_id, synthetic_id}, {synthetic_id, child_id}});
+  verify_graph_edges_absent(style_info, {{parent_id, child_id}});
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       IntroduceSyntheticResourceMultipleAttributes) {
+  const uint32_t parent_id = 0x7f010001;
+  const uint32_t child1_id = 0x7f010002;
+  const uint32_t child2_id = 0x7f010003;
+  const uint32_t common_attr_id1 = 0x7f020001;
+  const uint32_t common_attr_id2 = 0x7f020002;
+  const uint32_t unique_attr_id = 0x7f020003;
+
+  const resources::StyleResource::Value common_value1(42, 0);
+  const resources::StyleResource::Value common_value2(43, 0);
+  const resources::StyleResource::Value unique_value(100, 0);
+
+  resources::StyleInfo style_info;
+  style_info.set_max_resource_id(child2_id);
+
+  std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> vertex_map;
+  setup_style_graph(
+      style_info, {{child1_id, parent_id}, {child2_id, parent_id}}, vertex_map);
+
+  auto child1_style = create_style_resource(parent_id, {}, child1_id);
+  child1_style.attributes.insert({common_attr_id1, common_value1});
+  child1_style.attributes.insert({common_attr_id2, common_value2});
+  child1_style.attributes.insert({unique_attr_id, unique_value});
+  style_info.styles[child1_id] = {child1_style};
+
+  auto child2_style = create_style_resource(parent_id, {}, child2_id);
+  child2_style.attributes.insert({common_attr_id1, common_value1});
+  child2_style.attributes.insert({common_attr_id2, common_value2});
+  style_info.styles[child2_id] = {child2_style};
+
+  auto parent_style = create_style_resource(0, {}, parent_id);
+  style_info.styles[parent_id] = {parent_style};
+
+  const std::vector<uint32_t> children = {child1_id, child2_id};
+  const uint32_t synthetic_id =
+      m_pass.introduce_synthetic_resource(style_info, children);
+
+  const auto synthetic_style_opt =
+      m_pass.find_style_resource(synthetic_id, style_info.styles);
+  ASSERT_TRUE(synthetic_style_opt.has_value());
+  EXPECT_TRUE(synthetic_style_opt->attributes.find(common_attr_id1) !=
+              synthetic_style_opt->attributes.end());
+  EXPECT_TRUE(synthetic_style_opt->attributes.find(common_attr_id2) !=
+              synthetic_style_opt->attributes.end());
+  EXPECT_EQ(synthetic_style_opt->attributes.at(common_attr_id1), common_value1);
+  EXPECT_EQ(synthetic_style_opt->attributes.at(common_attr_id2), common_value2);
+  EXPECT_EQ(synthetic_style_opt->attributes.size(), 2);
+  EXPECT_TRUE(synthetic_style_opt->attributes.find(unique_attr_id) ==
+              synthetic_style_opt->attributes.end());
+
+  const auto child1_style_opt =
+      m_pass.find_style_resource(child1_id, style_info.styles);
+  const auto child2_style_opt =
+      m_pass.find_style_resource(child2_id, style_info.styles);
+  ASSERT_TRUE(child1_style_opt.has_value());
+  ASSERT_TRUE(child2_style_opt.has_value());
+
+  EXPECT_FALSE(child1_style_opt->attributes.find(common_attr_id1) !=
+               child1_style_opt->attributes.end());
+  EXPECT_FALSE(child1_style_opt->attributes.find(common_attr_id2) !=
+               child1_style_opt->attributes.end());
+  EXPECT_FALSE(child2_style_opt->attributes.find(common_attr_id1) !=
+               child2_style_opt->attributes.end());
+  EXPECT_FALSE(child2_style_opt->attributes.find(common_attr_id2) !=
+               child2_style_opt->attributes.end());
+
+  EXPECT_TRUE(child1_style_opt->attributes.find(unique_attr_id) !=
+              child1_style_opt->attributes.end());
+  EXPECT_EQ(child1_style_opt->attributes.at(unique_attr_id), unique_value);
+  EXPECT_FALSE(child2_style_opt->attributes.find(unique_attr_id) !=
+               child2_style_opt->attributes.end());
+
+  EXPECT_EQ(child1_style_opt->parent, synthetic_id);
+  EXPECT_EQ(child2_style_opt->parent, synthetic_id);
+
+  verify_graph_edges(style_info,
+                     {{parent_id, synthetic_id},
+                      {synthetic_id, child1_id},
+                      {synthetic_id, child2_id}});
+  verify_graph_edges_absent(style_info,
+                            {{parent_id, child1_id}, {parent_id, child2_id}});
+}
+
+TEST_F(ResourceValueMergingPassTest, IntroduceSyntheticResourceAllRoots) {
+  resources::StyleInfo style_info;
+  uint32_t child1_id = 0x7f010001;
+  uint32_t child2_id = 0x7f010002;
+  uint32_t attr_id = 0x7f020001;
+
+  style_info.set_max_resource_id(child2_id);
+
+  std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> vertex_map;
+  setup_style_graph(style_info, {{child1_id, 0}, {child2_id, 0}}, vertex_map);
+
+  resources::StyleResource::Value common_value(42, 0);
+
+  resources::StyleResource child1_style =
+      create_style_resource(0, {}, child1_id);
+  child1_style.attributes.insert({attr_id, common_value});
+  style_info.styles[child1_id] = {child1_style};
+
+  resources::StyleResource child2_style =
+      create_style_resource(0, {}, child2_id);
+  child2_style.attributes.insert({attr_id, common_value});
+  style_info.styles[child2_id] = {child2_style};
+
+  std::vector<uint32_t> children = {child1_id, child2_id};
+
+  uint32_t synthetic_id =
+      m_pass.introduce_synthetic_resource(style_info, children);
+
+  auto synthetic_style_opt =
+      m_pass.find_style_resource(synthetic_id, style_info.styles);
+  ASSERT_TRUE(synthetic_style_opt.has_value());
+  EXPECT_EQ(synthetic_style_opt->parent, 0);
+
+  verify_graph_edges(style_info,
+                     {{synthetic_id, child1_id}, {synthetic_id, child2_id}});
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       IntroduceSyntheticResourceDifferentParents) {
+  resources::StyleInfo style_info;
+  uint32_t parent1_id = 0x7f010001;
+  uint32_t parent2_id = 0x7f010002;
+  uint32_t child1_id = 0x7f010003;
+  uint32_t child2_id = 0x7f010004;
+
+  style_info.set_max_resource_id(child2_id);
+
+  std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> vertex_map;
+  setup_style_graph(style_info,
+                    {{child1_id, parent1_id}, {child2_id, parent2_id}},
+                    vertex_map);
+
+  resources::StyleResource child1_style = create_style_resource(parent1_id, {});
+  child1_style.id = child1_id;
+  style_info.styles[child1_id] = {child1_style};
+
+  resources::StyleResource child2_style = create_style_resource(parent2_id, {});
+  child2_style.id = child2_id;
+  style_info.styles[child2_id] = {child2_style};
+
+  resources::StyleResource parent1_style = create_style_resource(0, {});
+  parent1_style.id = parent1_id;
+  style_info.styles[parent1_id] = {parent1_style};
+
+  resources::StyleResource parent2_style = create_style_resource(0, {});
+  parent2_style.id = parent2_id;
+  style_info.styles[parent2_id] = {parent2_style};
+
+  std::vector<uint32_t> children = {child1_id, child2_id};
+
+  EXPECT_THROW(m_pass.introduce_synthetic_resource(style_info, children),
+               std::exception);
+}
+
+TEST_F(ResourceValueMergingPassTest, IntroduceSyntheticResourceThreeChildren) {
+
+  const uint32_t parent_id = 0x7f010001;
+  const uint32_t child1_id = 0x7f010002;
+  const uint32_t child2_id = 0x7f010003;
+  const uint32_t child3_id = 0x7f010004;
+  const uint32_t attr_id = 0x7f020001;
+  const resources::StyleResource::Value common_value(42, 0);
+
+  resources::StyleInfo style_info;
+  style_info.set_max_resource_id(child3_id);
+
+  std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> vertex_map;
+  setup_style_graph(
+      style_info,
+      {{child1_id, parent_id}, {child2_id, parent_id}, {child3_id, parent_id}},
+      vertex_map);
+
+  auto child1_style = create_style_resource(parent_id, {}, child1_id);
+  child1_style.attributes.insert({attr_id, common_value});
+  style_info.styles[child1_id] = {child1_style};
+
+  auto child2_style = create_style_resource(parent_id, {}, child2_id);
+  child2_style.attributes.insert({attr_id, common_value});
+  style_info.styles[child2_id] = {child2_style};
+
+  auto child3_style = create_style_resource(parent_id, {}, child3_id);
+  child3_style.attributes.insert({attr_id, common_value});
+  style_info.styles[child3_id] = {child3_style};
+
+  auto parent_style = create_style_resource(0, {}, parent_id);
+  style_info.styles[parent_id] = {parent_style};
+
+  const std::vector<uint32_t> children = {child1_id, child2_id, child3_id};
+  const uint32_t synthetic_id =
+      m_pass.introduce_synthetic_resource(style_info, children);
+
+  const auto synthetic_style_opt =
+      m_pass.find_style_resource(synthetic_id, style_info.styles);
+  ASSERT_TRUE(synthetic_style_opt.has_value());
+  EXPECT_TRUE(synthetic_style_opt->attributes.find(attr_id) !=
+              synthetic_style_opt->attributes.end());
+
+  const auto child1_style_opt =
+      m_pass.find_style_resource(child1_id, style_info.styles);
+  const auto child2_style_opt =
+      m_pass.find_style_resource(child2_id, style_info.styles);
+  const auto child3_style_opt =
+      m_pass.find_style_resource(child3_id, style_info.styles);
+  ASSERT_TRUE(child1_style_opt.has_value());
+  ASSERT_TRUE(child2_style_opt.has_value());
+  ASSERT_TRUE(child3_style_opt.has_value());
+
+  EXPECT_FALSE(child1_style_opt->attributes.find(attr_id) !=
+               child1_style_opt->attributes.end());
+  EXPECT_FALSE(child2_style_opt->attributes.find(attr_id) !=
+               child2_style_opt->attributes.end());
+  EXPECT_FALSE(child3_style_opt->attributes.find(attr_id) !=
+               child3_style_opt->attributes.end());
+
+  EXPECT_EQ(child1_style_opt->parent, synthetic_id);
+  EXPECT_EQ(child2_style_opt->parent, synthetic_id);
+  EXPECT_EQ(child3_style_opt->parent, synthetic_id);
+
+  verify_graph_edges(style_info,
+                     {{parent_id, synthetic_id},
+                      {synthetic_id, child1_id},
+                      {synthetic_id, child2_id},
+                      {synthetic_id, child3_id}});
+  verify_graph_edges_absent(
+      style_info,
+      {{parent_id, child1_id}, {parent_id, child2_id}, {parent_id, child3_id}});
 }

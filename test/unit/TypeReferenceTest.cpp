@@ -37,7 +37,7 @@ struct TypeReferenceTest : public RedexTest {
 
   DexField* make_a_field(const std::string& name, const DexType* type) {
     const auto* fname = DexString::make_string(name);
-    auto* field = static_cast<DexField*>(
+    auto* field = dynamic_cast<DexField*>(
         DexField::make_field(m_class->get_type(), fname, type));
     field->make_concrete(ACC_PUBLIC);
     m_class->add_field(field);

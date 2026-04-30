@@ -16,7 +16,6 @@
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "RedexContext.h"
-#include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
 

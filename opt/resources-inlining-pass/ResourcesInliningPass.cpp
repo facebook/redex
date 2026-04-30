@@ -5,16 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <json/value.h>
-#include <set>
-
+#include "ResourcesInliningPass.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
+#include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "PassManager.h"
-#include "ResourcesInliningPass.h"
 #include "Trace.h"
 #include "Walkers.h"
+#include "androidfw/ResourceTypes.h"
 
 UnorderedMap<uint32_t, resources::InlinableValue>
 ResourcesInliningPass::filter_inlinable_resources(
@@ -200,7 +199,8 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
 
     namespace cp = constant_propagation;
     using CombinedAnalyzer =
-        InstructionAnalyzerCombiner<cp::StaticFinalFieldAnalyzer,
+        InstructionAnalyzerCombiner<cp::ResourceIdAnalyzer,
+                                    cp::StaticFinalFieldAnalyzer,
                                     cp::HeapEscapeAnalyzer,
                                     cp::PrimitiveAnalyzer>;
 
@@ -219,11 +219,27 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
     TRACE(RIP, 1, "Found possible transformations for %s", SHOW(method));
     cp::intraprocedural::FixpointIterator intra_cp(
         /* cp_state */ nullptr, cfg,
-        CombinedAnalyzer(nullptr, nullptr, nullptr));
+        CombinedAnalyzer(nullptr, nullptr, nullptr, nullptr));
     // Runing the combined analyzer initially
     intra_cp.run(ConstantEnvironment());
 
     std::vector<InlinableOptimization> transforms;
+    auto check_register = [](ConstantEnvironment& env,
+                             reg_t reg) -> boost::optional<int64_t> {
+      const auto& register_env = env.get_register_environment();
+      const auto& value = register_env.get(reg);
+      auto constant_domain = value.maybe_get<SignedConstantDomain>();
+      if (constant_domain != boost::none && !constant_domain->is_top() &&
+          !constant_domain->is_bottom()) {
+        return constant_domain->get_constant();
+      }
+      auto r_domain = value.maybe_get<ConstantResourceIdDomain>();
+      if (r_domain != boost::none && r_domain->is_value()) {
+        auto id = r_domain->get_constant();
+        return boost::optional<int64_t>(id->id);
+      }
+      return boost::none;
+    };
     auto handle_instruction = [&](ConstantEnvironment& env,
                                   IRInstruction* insn) {
       if (insn->opcode() != OPCODE_INVOKE_VIRTUAL) {
@@ -237,19 +253,19 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
       if (!value_method_comp && !name_method_comp) {
         return;
       }
-      auto field_domain = env.get<SignedConstantDomain>(insn->src(1));
-      auto const_value = field_domain.get_constant();
+      auto const_value = check_register(env, insn->src(1));
       if (const_value != boost::none &&
-          inlinable_resources.find(const_value.value()) !=
-              inlinable_resources.end() &&
+          inlinable_resources.find(static_cast<uint32_t>(
+              const_value.value())) != inlinable_resources.end() &&
           value_method_comp) {
         // Adding to list of possible optimizations if it is
         auto insertable = InlinableOptimization();
         insertable.insn = insn;
-        insertable.inlinable = inlinable_resources.at(const_value.value());
+        insertable.inlinable =
+            inlinable_resources.at(static_cast<uint32_t>(const_value.value()));
         transforms.push_back(insertable);
       } else if (const_value != boost::none && name_method_comp) {
-        auto elem_id = const_value.value();
+        auto elem_id = static_cast<uint32_t>(const_value.value());
         auto insertable = InlinableOptimization();
         insertable.insn = insn;
         if (id_to_name.find(elem_id) == id_to_name.end()) {

@@ -9,9 +9,9 @@
 
 #include <sparta/MonotonicFixpointIterator.h>
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
-#include "Resolver.h"
 
 namespace method_override_graph {
 class Graph;
@@ -51,7 +51,7 @@ struct CallSite {
   const DexMethod* callee;
   IRInstruction* invoke_insn;
 
-  CallSite() { not_reached(); }
+  [[noreturn]] CallSite() { not_reached(); }
   CallSite(const DexMethod* callee, IRInstruction* invoke_insn)
       : callee(callee), invoke_insn(invoke_insn) {}
 };
@@ -197,7 +197,7 @@ class Graph final {
   NodeId exit() const { return m_exit.get(); }
 
   bool has_node(const DexMethod* m) const {
-    return m_nodes.count_unsafe(const_cast<DexMethod*>(m)) != 0;
+    return m_nodes.count_unsafe(m) != 0;
   }
 
   NodeId node(const DexMethod* m) const {

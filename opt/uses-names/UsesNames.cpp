@@ -24,8 +24,8 @@ namespace {
 class UsesNamesMarker {
 
  public:
-  UsesNamesMarker(DexType* uses_names_anno,
-                  DexType* uses_names_trans_anno,
+  UsesNamesMarker(const DexType* uses_names_anno,
+                  const DexType* uses_names_trans_anno,
                   Scope& scope)
       : m_ch(build_type_hierarchy(scope)),
         uses_names_anno(uses_names_anno),
@@ -116,7 +116,7 @@ class UsesNamesMarker {
   }
 
   static bool match_uses_names_annotation(const DexAnnotationSet* annos,
-                                          DexType* anno_type) {
+                                          const DexType* anno_type) {
     if (annos == nullptr) {
       return false;
     }
@@ -146,7 +146,7 @@ class UsesNamesMarker {
 
       if (has_uses_names || has_uses_name_trans) {
         std::lock_guard<std::mutex> lock(m_map_mutex);
-        DexType* matched_anno;
+        const DexType* matched_anno;
         if (has_uses_names) {
           matched_anno = uses_names_anno;
           metrics.uses_names_anno += 1;
@@ -159,7 +159,7 @@ class UsesNamesMarker {
               "%s annotation found in method %s",
               show(matched_anno).c_str(),
               vshow(meth).c_str());
-        DexType* type = meth->get_proto()->get_args()->at(num);
+        const DexType* type = meth->get_proto()->get_args()->at(num);
         DexClass* cls = type_class(type);
         if (cls == nullptr) {
           TRACE(USES_NAMES, 2, "Class not found for: %s", show(type).c_str());
@@ -182,8 +182,8 @@ class UsesNamesMarker {
   const ClassHierarchy m_ch;
   std::mutex m_map_mutex;
   InterfaceMap m_interface_map;
-  DexType* uses_names_anno;
-  DexType* uses_names_trans_anno;
+  const DexType* uses_names_anno;
+  const DexType* uses_names_trans_anno;
 };
 } // namespace
 

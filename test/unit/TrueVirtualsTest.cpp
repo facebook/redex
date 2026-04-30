@@ -9,12 +9,12 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "Creators.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 namespace mog = method_override_graph;
 

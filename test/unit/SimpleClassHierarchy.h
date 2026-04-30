@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <boost/none.hpp>
+#include <boost/optional/optional.hpp>
 
 #include "Creators.h"
 #include "DexClass.h"
@@ -25,7 +26,7 @@ struct SimpleClassHierarchy {
            boost::optional<std::vector<const char*>> method = boost::none,
            boost::optional<DexType*> intf = boost::none,
            boost::optional<DexAccessFlags> access = boost::none) {
-          auto* this_type = DexType::make_type(name.c_str());
+          auto* this_type = DexType::make_type(name);
           ClassCreator cc(this_type);
           cc.set_super(const_cast<DexType*>(super_type));
           if (intf) {
@@ -38,7 +39,7 @@ struct SimpleClassHierarchy {
             cc.add_field(
                 DexField::make_field(this_type,
                                      DexString::make_string(field->first),
-                                     DexType::make_type(field->second.c_str()))
+                                     DexType::make_type(field->second))
                     ->make_concrete(DexAccessFlags::ACC_PUBLIC));
           }
           if (method) {

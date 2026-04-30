@@ -92,6 +92,7 @@ class Breadcrumbs {
   explicit Breadcrumbs(const Scope& scope,
                        const std::string& allowed_violations_file_path,
                        DexStoresVector& stores,
+                       const ConfigFiles& conf,
                        const std::string& shared_module_prefix,
                        bool reject_illegal_refs_root_store,
                        bool only_verify_primary_dex,

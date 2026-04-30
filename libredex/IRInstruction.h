@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/range/any_range.hpp>
+#include <boost/range/iterator_range.hpp>
 #include <limits>
 #include <memory>
 #include <string>
@@ -139,6 +139,7 @@ class IRInstruction final {
  public:
   explicit IRInstruction(IROpcode op);
   IRInstruction(const IRInstruction&);
+  IRInstruction& operator=(const IRInstruction&);
   ~IRInstruction();
 
   /*
@@ -300,7 +301,7 @@ class IRInstruction final {
 
   int64_t get_literal() const {
     always_assert(has_literal());
-    return m_literal;
+    return static_cast<int64_t>(m_literal);
   }
 
   IRInstruction* set_literal(int64_t literal) {
@@ -320,12 +321,12 @@ class IRInstruction final {
     return this;
   }
 
-  DexType* get_type() const {
+  const DexType* get_type() const {
     always_assert(has_type());
     return m_type;
   }
 
-  IRInstruction* set_type(DexType* type) {
+  IRInstruction* set_type(const DexType* type) {
     always_assert(has_type());
     m_type = type;
     return this;
@@ -399,9 +400,9 @@ class IRInstruction final {
     }
   }
 
-  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_types(std::vector<const DexType*>& ltype) const;
 
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
+  void gather_init_classes(std::vector<const DexType*>& ltype) const;
 
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
 
@@ -443,7 +444,7 @@ class IRInstruction final {
     // pointer-type member so that it works properly even on 32-bit machines
     uint64_t m_literal{0};
     const DexString* m_string;
-    DexType* m_type;
+    const DexType* m_type;
     DexFieldRef* m_field;
     DexMethodRef* m_method;
     DexOpcodeData* m_data;

@@ -13,6 +13,7 @@
 
 #include "CheckCastTransform.h"
 #include "ClassHierarchy.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
@@ -31,9 +32,9 @@ struct ProguardMap;
 
 using Scope = std::vector<DexClass*>;
 
-using TypeList = std::vector<DexType*>;
-using TypeMap = UnorderedMap<DexType*, DexType*>;
-using TypeToTypes = UnorderedMap<DexType*, TypeList>;
+using TypeList = std::vector<const DexType*>;
+using TypeMap = UnorderedMap<const DexType*, const DexType*>;
+using TypeToTypes = UnorderedMap<const DexType*, TypeList>;
 using FieldList = std::vector<DexField*>;
 using OrderedMethodSet = std::set<DexMethod*, dexmethods_comparator>;
 using OpcodeList = std::vector<IRInstruction*>;
@@ -110,7 +111,7 @@ inline EscapeReason operator&(const EscapeReason a, const EscapeReason b) {
 struct SingleImplData {
   // single concrete class for the single impl interface (entry in the
   // SingleImplInterfaces map)
-  DexType* cls;
+  const DexType* cls;
   // Single impl interface escape
   EscapeReason escape;
   // Direct children of the interface
@@ -138,7 +139,7 @@ struct SingleImplData {
 };
 
 // map from single implemented interfaces to the data related to that interface
-using SingleImpls = UnorderedMap<DexType*, SingleImplData>;
+using SingleImpls = UnorderedMap<const DexType*, SingleImplData>;
 
 struct SingleImplAnalysis {
   virtual ~SingleImplAnalysis() = default;
@@ -152,17 +153,18 @@ struct SingleImplAnalysis {
       const TypeMap& single_impl,
       const TypeSet& intfs,
       const ProguardMap& pg_map,
-      const SingleImplConfig& config);
+      const SingleImplConfig& config,
+      const ConfigFiles& global_config);
 
   /**
    * Escape an interface and all parent interfaces.
    */
-  void escape_interface(DexType* intf, EscapeReason reason);
+  void escape_interface(const DexType* intf, EscapeReason reason);
 
   /**
    * Return whether a type is escaped. Works with any type.
    */
-  bool is_escaped(DexType* intf) const {
+  bool is_escaped(const DexType* intf) const {
     auto single_impl = single_impls.find(intf);
     return single_impl != single_impls.end() &&
            single_impl->second.is_escaped();
@@ -171,7 +173,7 @@ struct SingleImplAnalysis {
   /**
    * Return whether a type is single impl.
    */
-  bool is_single_impl(DexType* intf) const {
+  bool is_single_impl(const DexType* intf) const {
     auto single_impl = single_impls.find(intf);
     return single_impl != single_impls.end();
   }
@@ -181,7 +183,7 @@ struct SingleImplAnalysis {
    */
   void get_interfaces(TypeList& to_optimize) const;
 
-  SingleImplData& get_single_impl_data(DexType* intf) {
+  SingleImplData& get_single_impl_data(const DexType* intf) {
     return single_impls.at(intf);
   }
 

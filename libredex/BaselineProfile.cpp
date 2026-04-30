@@ -66,8 +66,10 @@ get_baseline_profiles(
           continue;
         }
 
-        if (stat.appear_percent < interaction_config.threshold ||
-            stat.call_count < interaction_config.call_threshold) {
+        if (stat.appear_percent <
+                static_cast<double>(interaction_config.threshold) ||
+            stat.call_count <
+                static_cast<double>(interaction_config.call_threshold)) {
           continue;
         }
 
@@ -190,7 +192,7 @@ void BaselineProfile::transitively_close_classes(const Scope& scope) {
   // This may not be the most efficient implementation but it is simple and
   // uses common functionality.
 
-  UnorderedSet<DexType*> closed_types;
+  UnorderedSet<const DexType*> closed_types;
 
   unordered_for_each(classes, [&](auto* cls_def) {
     if (cls_def->is_external()) {

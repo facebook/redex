@@ -25,11 +25,11 @@
 #include "MethodOverrideGraph.h"
 #include "ObjectSensitiveDce.h"
 #include "RedexResources.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "SideEffectSummary.h"
 #include "Timer.h"
 #include "Trace.h"
+#include "Walkers.h"
 
 namespace {
 // See the following, which has informed class names to look for.
@@ -347,7 +347,8 @@ FieldArrayValues RClassReader::analyze_clinit(
     std::vector<uint32_t> array_content;
     auto len = array_domain.length();
     for (size_t i = 0; i < len; ++i) {
-      auto value = array_domain.get(i).maybe_get<SignedConstantDomain>();
+      auto value = array_domain.get(static_cast<uint32_t>(i))
+                       .maybe_get<SignedConstantDomain>();
       always_assert_log(value,
                         "%s is not in the SignedConstantDomain, "
                         "stored at %zu in %s:\n%s",
@@ -420,6 +421,21 @@ void RClassWriter::remap_resource_class_scalars(
       }
     }
   }
+  walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
+    if (insn->opcode() == IOPCODE_R_CONST) {
+      int64_t old = insn->get_literal();
+      always_assert_log(old_to_remapped_ids.count(old),
+                        "Encountered resource ID %llx which cannot be "
+                        "remapped",
+                        (long long)old);
+      always_assert_log(old <= std::numeric_limits<uint32_t>::max(),
+                        "Resource ID %llx needs to fit in 32 bits",
+                        (long long)old);
+      always_assert_log(old >= 0, "Resource ID %llx must be positive",
+                        (long long)old);
+      insn->set_literal(old_to_remapped_ids.at((uint32_t)old));
+    }
+  });
 }
 
 namespace {
@@ -527,7 +543,8 @@ size_t RClassWriter::remap_resource_class_clinit(
       // OPCODE: FILL_ARRAY_DATA v0, <data>
       //   fill-array-data-payload { [10 x 4] { ... yada yada ... } }
       // OPCODE: SPUT_OBJECT v0, Lcom/redextest/R;.six:[I
-      auto size_reg = get_register_for_value(new_values.size());
+      auto size_reg =
+          get_register_for_value(static_cast<int32_t>(new_values.size()));
       auto array_reg = cfg.allocate_temp();
 
       auto* new_array = new IRInstruction(OPCODE_NEW_ARRAY);

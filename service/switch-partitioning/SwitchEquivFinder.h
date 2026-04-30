@@ -8,7 +8,8 @@
 #pragma once
 
 #include <boost/optional.hpp>
-#include <boost/variant.hpp>
+#include <boost/variant/get.hpp>
+#include <boost/variant/variant.hpp>
 #include <map>
 #include <ostream>
 
@@ -46,7 +47,7 @@ class SwitchEquivFinder {
 
   using SwitchingKey = boost::variant<DefaultCase, int32_t, const DexType*>;
 
-  static inline bool is_default_case(const SwitchingKey& k) {
+  static bool is_default_case(const SwitchingKey& k) {
     return k.which() == static_cast<int>(KeyKind::DEFAULT);
   }
 

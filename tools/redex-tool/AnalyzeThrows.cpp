@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <array>
 #include <queue>
 #include <unordered_map>
 #include <vector>
@@ -66,11 +67,8 @@ int block_size(const std::vector<cfg::Block*>& logical_block) {
  * Print how many blocks have a given number of instructions.
  */
 void print_blocks_by_size(const LogicalBlock& throwing_blocks) {
-  const int MAX_COUNT = 50;
-  int block_insn_count[MAX_COUNT];
-  for (int i = 0; i < MAX_COUNT; i++) {
-    block_insn_count[i] = 0;
-  }
+  constexpr int MAX_COUNT = 50;
+  std::array<int, MAX_COUNT> block_insn_count{};
   for (const auto& block : throwing_blocks) {
     int count = block_size(block);
     if (count > MAX_COUNT) {
@@ -191,6 +189,8 @@ void find_throwing_block(const Scope& scope) {
 
 } // namespace
 
+namespace {
+
 class AnalyzeThrows : public Tool {
  public:
   AnalyzeThrows()
@@ -210,5 +210,7 @@ class AnalyzeThrows : public Tool {
 
  private:
 };
+
+} // namespace
 
 static AnalyzeThrows s_tool;

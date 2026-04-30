@@ -291,6 +291,9 @@ class TableSnapshot {
   // Get a representation of the underlying parsed file.
   TableEntryParser& get_parsed_table() { return m_table_parser; }
   android::ResStringPool& get_global_strings() { return m_global_strings; }
+  // Get the key strings pool for a specific package
+  const android::ResStringPool& get_key_strings(
+      android::ResTable_package* package) const;
 
  private:
   TableEntryParser m_table_parser;
@@ -367,15 +370,20 @@ class ResourcesArscFile : public ResourceTableFile {
   get_inlinable_resource_values() override;
   UnorderedSet<uint32_t> get_overlayable_id_roots() override;
   resources::StyleMap get_style_map() override;
-  // Deletes referenced attribute/value in android app
-  void apply_attribute_removals(
+  // Removes and adds referenced attribute/value in android app
+  void apply_attribute_removals_and_additions(
       const std::vector<resources::StyleModificationSpec::Modification>&
           modifications,
       const std::vector<std::string>& resources_pb_paths) override;
-  void apply_attribute_additions(
+  void apply_style_merges(
       const std::vector<resources::StyleModificationSpec::Modification>&
           modifications,
       const std::vector<std::string>& resources_pb_paths) override;
+  void add_styles(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) override;
+
   ~ResourcesArscFile() override;
 
   size_t get_length() const;
@@ -388,9 +396,8 @@ class ResourcesArscFile : public ResourceTableFile {
       const resources::ResourceAttributeMap& resource_id_to_mod_attribute,
       const std::function<void(
           android::ResTable_entry* entry_ptr,
-          const UnorderedMap<uint32_t,
-                             resources::StyleModificationSpec::Modification>&
-              attrs_to_modify,
+          const std::vector<resources::StyleModificationSpec::Modification>&
+              modifications_to_apply,
           arsc::ResComplexEntryBuilder& builder)>& get_attributes);
 
   std::string m_path;

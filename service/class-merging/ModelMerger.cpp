@@ -10,6 +10,7 @@
 #include "CFGMutation.h"
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
+#include "Creators.h" // NOLINT
 #include "Inliner.h"
 #include "MethodReference.h"
 #include "Resolver.h"
@@ -135,7 +136,8 @@ void update_code_type_refs(
         }
         bool resolved_virtual_to_interface;
         /*const auto meth_def =*/
-        resolve_invoke_method(insn, meth, &resolved_virtual_to_interface);
+        resolve_invoke_method_deprecated(insn, meth,
+                                         &resolved_virtual_to_interface);
         // This is a very tricky case where ResolveRefs cannot resolve a
         // MethodRef to MethodDef. It is a invoke-virtual with a MethodRef
         // referencing an interface method implmentation defined in a subclass
@@ -356,7 +358,7 @@ void update_instance_of(
     }
     for (auto* invoke : instance_of_invokes) {
       // Inline the invoke to INSTANCE_OF method.
-      auto* callee = resolve_invoke_method(invoke, caller);
+      auto* callee = resolve_invoke_method_deprecated(invoke, caller);
       bool is_inlined = inliner::inline_with_cfg(
           caller, callee, invoke, nullptr, nullptr, cfg.get_registers_size());
       TRACE(CLMG, 9, " inlined (%d) INSTANCE_OF in \n%s", is_inlined,
@@ -518,17 +520,17 @@ void write_out_type_mapping(const ConfigFiles& conf,
   for (const auto* merger : mergers) {
     for (const auto* mergeable : merger->mergeables) {
       out << SHOW(mergeable) << " -> " << SHOW(merger->type) << " "
-          << type_tags.get_type_tag(mergeable) << std::endl;
+          << type_tags.get_type_tag(mergeable) << '\n';
 
       if (method_dedup_map.count(mergeable) != 0u) {
         for (const auto& symbol_map : method_dedup_map.at(mergeable)) {
           out << "  " << symbol_map.first << " -> " << SHOW(symbol_map.second)
-              << std::endl;
+              << '\n';
         }
       }
     }
   }
-  out << std::endl;
+  out << '\n';
 
   os << out.str();
   TRACE(CLMG,
@@ -584,22 +586,22 @@ std::vector<DexClass*> ModelMerger::merge_model(
     // A set of properties in the MergerType define the operation to
     // perform on the given type.
 
-    DexType* type = const_cast<DexType*>(merger.type);
-    auto* cls = type_class(type);
-    const auto& intfs = model.get_interfaces(type);
+    auto* cls = type_class(merger.type);
+    const auto& intfs = model.get_interfaces(merger.type);
     TRACE(CLMG, 3, "%s", merger_info(merger).c_str());
 
     // MergerType has an existing class, update interfaces,
     // fields and parent
     if (cls != nullptr) {
-      fix_existing_merger_cls(model, merger, cls, type);
+      fix_existing_merger_cls(model, merger, cls,
+                              const_cast<DexType*>(merger.type));
       return;
     }
 
     update_merger_fields(merger);
-    cls = create_merger_class(type,
-                              model.get_parent(type),
-                              m_merger_fields.at(type),
+    cls = create_merger_class(merger.type,
+                              model.get_parent(merger.type),
+                              m_merger_fields.at(merger.type),
                               intfs,
                               model_spec.generate_type_tag(),
                               !merger.has_mergeables());
@@ -741,7 +743,8 @@ std::vector<DexClass*> ModelMerger::merge_model(
       scope.end());
 
   TRACE(CLMG, 3, "created %zu merger classes", merger_classes.size());
-  m_stats.m_num_generated_classes = merger_classes.size();
+  m_stats.m_num_generated_classes =
+      static_cast<uint32_t>(merger_classes.size());
   return merger_classes;
 }
 

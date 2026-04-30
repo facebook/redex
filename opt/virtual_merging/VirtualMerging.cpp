@@ -55,9 +55,7 @@
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 
@@ -98,12 +96,13 @@ constexpr size_t kAppear100Buckets = 10;
 } // namespace
 
 VirtualMerging::VirtualMerging(DexStoresVector& stores,
+                               const ConfigFiles& conf,
                                inliner::InlinerConfig inliner_config,
                                size_t max_overriding_method_instructions,
                                const api::AndroidSDK* min_sdk_api,
                                PerfConfig perf_config)
     : m_scope(build_class_scope(stores)),
-      m_xstores(stores),
+      m_xstores(stores, conf.normal_primary_dex()),
       m_xdexes(stores),
       m_type_system(m_scope),
       m_max_overriding_method_instructions(max_overriding_method_instructions),
@@ -116,9 +115,9 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
   int min_sdk = 0;
   m_inliner.reset(new MultiMethodInliner(
-      m_scope, m_init_classes_with_side_effects, stores, no_default_inlinables,
-      std::ref(m_concurrent_method_resolver), m_inliner_config, min_sdk,
-      MultiMethodInlinerMode::None,
+      m_scope, m_init_classes_with_side_effects, stores, conf,
+      no_default_inlinables, std::ref(m_concurrent_method_resolver),
+      m_inliner_config, min_sdk, MultiMethodInlinerMode::None,
       /* true_virtual_callers */ {},
       /* inline_for_speed */ nullptr,
       /* bool analyze_and_prune_inits */ false,
@@ -143,7 +142,8 @@ void VirtualMerging::find_unsupported_virtual_scopes() {
       [&](const DexMethod*, IRInstruction* insn) {
         if (insn->opcode() == OPCODE_INVOKE_SUPER) {
           auto* method_ref = insn->get_method();
-          auto* method = resolve_method(method_ref, MethodSearch::Virtual);
+          auto* method =
+              resolve_method_deprecated(method_ref, MethodSearch::Virtual);
           if (method == nullptr) {
             invoke_super_unresolved_method_refs.insert(method_ref);
           } else {
@@ -288,7 +288,8 @@ struct SimpleOrdering {
     for (size_t i = 0; i < profile_methods.size(); ++i) {
       // +1 to have 0 empty for methods without profile.
       ret.emplace(profile_methods[i],
-                  ((double)i + 1) / (profile_methods.size() + 1));
+                  (static_cast<double>(i) + 1) /
+                      static_cast<double>(profile_methods.size() + 1));
     }
 
     return ret;
@@ -324,14 +325,14 @@ class MergePairsBuilder {
         m_ordering_provider(ordering_provider),
         m_perf_config(perf_config) {}
 
-  boost::optional<std::pair<LocalStats, PairSeq>> build(
+  std::optional<std::pair<LocalStats, PairSeq>> build(
       const UnorderedSet<const DexMethod*>& mergeable_methods,
       const XStoreRefs& xstores,
       const XDexRefs& xdexes,
       const method_profiles::MethodProfiles& profiles,
       VirtualMerging::Strategy strategy) {
     if (!init()) {
-      return boost::none;
+      return std::nullopt;
     }
 
     MergablesMap mergeable_pairs_map =
@@ -1020,17 +1021,17 @@ struct SBHelper {
                                      : parent->get_arbitrary_first_sb(),
             parent->overridden);
         if (overriding_sb != nullptr && first_sb != nullptr) {
-          for (size_t i = 0; i != new_sb->vals_size; ++i) {
-            if (!new_sb->get_val(i)) {
-              new_sb->set_at(i, first_sb->get_at(i));
-            } else if (first_sb->get_val(i)) {
-              new_sb->apply_at(i, [&](auto& val) {
-                val->val += first_sb->get_at(i)->val;
-                val->appear100 =
-                    std::max(val->appear100, first_sb->get_at(i)->val);
-              });
+          new_sb->foreach_val([&](size_t i, auto& val) {
+            if (!val) {
+              val = first_sb->get_at(i);
+              return;
             }
-          }
+            if (first_sb->get_val(i)) {
+              const auto& first_val = first_sb->get_at(i);
+              val->val += first_val->val;
+              val->appear100 = std::max(val->appear100, first_val->val);
+            }
+          });
         }
         block->insert_before(block->end(), std::move(new_sb));
       }
@@ -1046,7 +1047,8 @@ struct SBHelper {
     }
 
     ScopedSplitHelper& operator=(const ScopedSplitHelper&) = delete;
-    ScopedSplitHelper& operator=(ScopedSplitHelper&& rhs) noexcept {
+    [[maybe_unused]] ScopedSplitHelper& operator=(
+        ScopedSplitHelper&& rhs) noexcept {
       block = rhs.block;
       first_sb = rhs.first_sb;
       overriding = rhs.overriding;
@@ -1147,7 +1149,7 @@ VirtualMergingStats apply_ordering(
           // inlined.
           stats.unabstracted_methods++;
           overridden_method->make_concrete(
-              (DexAccessFlags)(overridden_method->get_access() & ~ACC_ABSTRACT),
+              (overridden_method->get_access() & ~ACC_ABSTRACT),
               std::make_unique<IRCode>(),
               true /* is_virtual */);
           overridden_code = overridden_method->get_code();
@@ -1416,7 +1418,8 @@ void VirtualMerging::remap_invoke_virtuals() {
       [&](const DexMethod*, IRInstruction* insn) {
         if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
           auto* method_ref = insn->get_method();
-          auto* method = resolve_method(method_ref, MethodSearch::Virtual);
+          auto* method =
+              resolve_method_deprecated(method_ref, MethodSearch::Virtual);
           auto it = m_virtual_methods_to_remap.find(method);
           if (it != m_virtual_methods_to_remap.end()) {
             insn->set_method(it->second);
@@ -1527,7 +1530,7 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   // We don't need to worry about inlining synchronized code, as we always
   // inline at the top-level outside of other try-catch regions.
   inliner_config.respect_sketchy_methods = false;
-  VirtualMerging vm(stores, inliner_config,
+  VirtualMerging vm(stores, conf, inliner_config,
                     m_max_overriding_method_instructions, min_sdk_api,
                     m_perf_config);
   vm.run(conf.get_method_profiles(), m_strategy, m_insertion_strategy);

@@ -34,6 +34,8 @@ class SourceBlocksTest : public RedexIntegrationTest {
     });
   }
 
+  ConfigFiles config_files = ConfigFiles(Json::nullValue);
+
  protected:
   void enable_pass(InsertSourceBlocksPass& isbp) { isbp.m_force_run = true; }
   void enable_always_inject(InsertSourceBlocksPass& isbp) {
@@ -203,7 +205,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
 
-    ConcurrentMethodResolver concurrent_method_resolver;
+    ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
     auto* baz_ref = DexMethod::get_method(
         "Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
@@ -215,7 +217,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               def_inlinables,
+                               config_files, def_inlinables,
                                std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
@@ -439,13 +441,13 @@ TEST_F(SourceBlocksTest, scaling) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
 
-    ConcurrentMethodResolver concurrent_method_resolver;
+    ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
     UnorderedSet<DexMethod*> def_inlinables{hot_source_blocks_inlined_method};
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               def_inlinables,
+                               config_files, def_inlinables,
                                std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
@@ -1089,6 +1091,76 @@ TEST_F(SourceBlocksTest, chain_and_dom_fix_thrower_test) {
       }
     }
   }
+}
+
+TEST_F(SourceBlocksTest, test_methods_with_intermethod_violations) {
+  auto* profile_path = std::getenv("intermethod-violations");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto* type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$IntermethodViolationsClass;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, true);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+  });
+
+  const auto& metric = pass_manager->get_pass_info().at(0).metrics;
+  ASSERT_EQ(metric.at("method~violation~hot~callee~cold~callers"), 1);
+}
+
+TEST_F(SourceBlocksTest, test_methods_without_intermethod_violations) {
+  auto* profile_path = std::getenv("no-intermethod-violations");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto* type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$IntermethodViolationsClass;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, true);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+  });
+
+  const auto& metric = pass_manager->get_pass_info().at(0).metrics;
+  ASSERT_EQ(metric.at("method~violation~hot~callee~cold~callers"), 0);
 }
 
 namespace {

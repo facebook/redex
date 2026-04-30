@@ -1,0 +1,5 @@
+interaction,appear#
+ColdStart,4
+name,profiled_srcblks_exprs
+Lcom/facebook/redextest/SourceBlocksTest$IntermethodViolationsClass;.<init>:()V,(0.0:0.0(0.0:0.0) g(0.0:0.0 g(0.0:0.0)) b)
+Lcom/facebook/redextest/SourceBlocksTest$IntermethodViolationsClass;.callee:()I,(1.0:0.5)

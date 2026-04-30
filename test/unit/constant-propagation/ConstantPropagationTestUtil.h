@@ -5,9 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include <utility>
 
-#include "ConstantPropagationPass.h"
+#include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationTransform.h"
 #include "DexUtil.h"
 #include "RedexTest.h"
 

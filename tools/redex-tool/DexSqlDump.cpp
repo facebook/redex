@@ -27,9 +27,9 @@ $ ./native/redex/tools/redex-tool/DexSqlQuery.py dex.db
 #include <vector>
 
 #include "ClassHierarchy.h"
-#include "ControlFlow.h"
 #include "DexOutput.h"
 #include "IRCode.h"
+#include "ProguardMap.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Tool.h"
@@ -117,8 +117,8 @@ void dump_method_refs(FILE* fdout,
       }
     }
     if (insn->has_method()) {
-      auto* meth =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
+      auto* meth = resolve_method_deprecated(
+          insn->get_method(), opcode_to_search(insn), method);
       if (meth != nullptr && (method_ids.count(meth) != 0u)) {
         auto method_ref_id = method_ids[meth];
         fprintf(fdout,

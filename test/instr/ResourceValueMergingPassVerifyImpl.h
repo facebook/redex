@@ -11,7 +11,6 @@
 
 #include "RedexResources.h"
 #include "Styles.h"
-#include "verify/VerifyUtil.h"
 
 StyleAnalysis create_style_analysis(const boost::filesystem::path& tmp_path,
                                     const Scope& classes);

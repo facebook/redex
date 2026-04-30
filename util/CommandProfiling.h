@@ -5,7 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/optional.hpp>
+#pragma once
+
+#include <boost/none.hpp>
+#include <boost/optional/optional.hpp>
 #include <string>
 #include <unistd.h>
 #include <utility>

@@ -53,7 +53,7 @@ class ExpandableMethodParams {
       UnorderedMap<DexMethod*,
                    UnorderedMap<param_index_t, std::vector<DexField*>>>;
 
-  static std::vector<DexType*> get_expanded_args_vector(
+  static std::vector<const DexType*> get_expanded_args_vector(
       DexMethod* method,
       param_index_t param_index,
       const std::vector<DexField*>& fields);

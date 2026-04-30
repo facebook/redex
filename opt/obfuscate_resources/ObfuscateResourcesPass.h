@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <set>
 #include <string>
 
 #include "DeterministicContainers.h"

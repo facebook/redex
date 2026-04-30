@@ -37,7 +37,7 @@ void read_static_ids_file(const std::string& path,
     }
     boost::smatch what;
     if (boost::regex_search(line, what, expr)) {
-      uint32_t id = std::stoul(what[4], nullptr, 16);
+      uint32_t id = static_cast<uint32_t>(std::stoul(what[4], nullptr, 16));
       callback(what[1], what[2], what[3], id);
     }
   }

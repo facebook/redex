@@ -15,6 +15,7 @@ namespace builder_pattern {
 
 BuilderTransform::BuilderTransform(
     const Scope& scope,
+    const ConfigFiles& conf,
     const TypeSystem& type_system,
     const DexType* root,
     const init_classes::InitClassesWithSideEffects&
@@ -34,9 +35,9 @@ BuilderTransform::BuilderTransform(
   m_inliner_config.shrinker.compute_pure_methods = false;
   int min_sdk = 0;
   m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-      scope, init_classes_with_side_effects, stores, no_default_inlinables,
-      std::ref(m_concurrent_method_resolver), m_inliner_config, min_sdk,
-      MultiMethodInlinerMode::None));
+      scope, init_classes_with_side_effects, stores, conf,
+      no_default_inlinables, std::ref(m_concurrent_method_resolver),
+      m_inliner_config, min_sdk, MultiMethodInlinerMode::None));
 }
 
 UnorderedSet<IRInstruction*> BuilderTransform::try_inline_calls(
@@ -84,7 +85,8 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
         inlinable_insns.emplace(insn);
       } else if (opcode::is_invoke_direct(insn->opcode())) {
-        auto* callee = resolve_method(insn->get_method(), MethodSearch::Direct);
+        auto* callee =
+            resolve_method_deprecated(insn->get_method(), MethodSearch::Direct);
         if (super_ctors.count(callee) != 0u) {
           inlinable_insns.emplace(insn);
         }
@@ -116,14 +118,15 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
  * Bind virtual calls to the actual implementation.
  */
 void BuilderTransform::update_virtual_calls(
-    const UnorderedMap<IRInstruction*, DexType*>& insn_to_type) {
+    const UnorderedMap<IRInstruction*, const DexType*>& insn_to_type) {
 
   for (const auto& pair : UnorderedIterable(insn_to_type)) {
     auto* insn = pair.first;
-    auto* current_instance = pair.second;
+    const auto* current_instance = pair.second;
 
     if (opcode::is_invoke_virtual(insn->opcode())) {
-      auto* method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+      auto* method =
+          resolve_method_deprecated(insn->get_method(), MethodSearch::Virtual);
       if (method == nullptr) {
         continue;
       }
@@ -163,7 +166,7 @@ void initialize_regs(
     } else {
       initialization_insn = new IRInstruction(OPCODE_CONST);
     }
-    initialization_insn->set_dest(reg);
+    initialization_insn->set_dest(static_cast<reg_t>(reg));
     initialization_insn->set_literal(0);
     cfg::Block* first_block_with_insns = cfg.get_first_block_with_insns();
     auto insert_it = first_block_with_insns->get_first_non_param_loading_insn();
@@ -225,13 +228,13 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
         }
 
         if (opcode::is_an_iput(insn->opcode())) {
-          new_insn->set_dest(field_to_reg[field]);
+          new_insn->set_dest(static_cast<reg_t>(field_to_reg[field]));
           new_insn->set_src(0, insn->src(0));
         } else {
           auto move_result = cfg.move_result_of(it);
           always_assert(!move_result.is_end());
           new_insn->set_dest(move_result->insn->dest());
-          new_insn->set_src(0, field_to_reg[field]);
+          new_insn->set_src(0, static_cast<reg_t>(field_to_reg[field]));
         }
         to_replace.emplace_back(it, new_insn);
       } else if (insn->opcode() == OPCODE_MOVE_OBJECT ||
@@ -246,8 +249,8 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
                               insn->opcode() == OPCODE_CHECK_CAST,
                           "Different insn %s", SHOW(insn));
         if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
-          auto* invoked =
-              resolve_method(insn->get_method(), MethodSearch::Direct);
+          auto* invoked = resolve_method_deprecated(insn->get_method(),
+                                                    MethodSearch::Direct);
 
           // We only accept `Object.<init>()` here, since we can't inline it
           // any further. Keep Object.<init> in place to avoid confusing

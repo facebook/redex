@@ -66,8 +66,8 @@ void scan_any_init_reachables(
   }
   always_assert(code->cfg_built());
   auto& cfg = code->cfg();
-  // We include all methods reachable from clinits and ctors. Even methods don't
-  // access fields can indirectly consume field values through ctor calls.
+  // We include all methods reachable from clinits and ctors. Even methods that
+  // don't access fields can indirectly consume field values through ctor calls.
   reachables.insert(method);
   TRACE(TYPE, 5, "[any init reachables] insert %s", SHOW(method));
   for (auto& mie : cfg::InstructionIterable(cfg)) {
@@ -75,8 +75,8 @@ void scan_any_init_reachables(
     if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }
-    auto* callee_method_def =
-        resolve_method(insn->get_method(), opcode_to_search(insn), method);
+    auto* callee_method_def = resolve_method_deprecated(
+        insn->get_method(), opcode_to_search(insn), method);
     if ((callee_method_def == nullptr) || callee_method_def->is_external() ||
         !callee_method_def->is_concrete()) {
       continue;
@@ -99,13 +99,13 @@ void scan_any_init_reachables(
   if (owning_cls == nullptr) {
     return;
   }
-  // If trace_callbacks, include external overrides (potential call backs)
+  // If trace_callbacks, include external overrides (potential callbacks)
   for (const auto* vmethod : owning_cls->get_vmethods()) {
     bool overrides_external = false;
-    const auto& overridens =
+    const auto& overriddens =
         mog::get_overridden_methods(method_override_graph, vmethod);
-    for (const auto* overriden : UnorderedIterable(overridens)) {
-      if (overriden->is_external()) {
+    for (const auto* overridden : UnorderedIterable(overriddens)) {
+      if (overridden->is_external()) {
         overrides_external = true;
       }
     }
@@ -170,18 +170,18 @@ void GlobalTypeAnalyzer::analyze_node(
 
         auto handle_receiver_domain = [](DexTypeDomain&& receiver_domain) {
           if (receiver_domain.is_bottom() || receiver_domain.is_top()) {
-            return receiver_domain;
+            return std::move(receiver_domain);
           }
 
           if (receiver_domain.is_null()) {
-            return receiver_domain;
+            return std::move(receiver_domain);
           }
 
           // Only the NOT_NULL receiver type domain is visible to the callee.
           // This also helps to ensure global state domains convergence.
           receiver_domain.apply<0>(
               [&](auto* val) { *val = NullnessDomain(Nullness::NOT_NULL); });
-          return receiver_domain;
+          return std::move(receiver_domain);
         };
 
         for (size_t i = 0; i < insn->srcs_size(); ++i) {
@@ -326,8 +326,8 @@ bool extends_android_sdk(const DexClass* cls) {
  * hierarchy instead of checking its name. The reason is that the type name can
  * be obfuscated before running the analysis, so it's not always reliable.
  *
- * An anonymous can either extend an abstract type or extend j/l/Object; and
- * implement one interface.
+ * An anonymous class can either extend an abstract type or extend j/l/Object;
+ * and implement one interface.
  */
 bool is_likely_anonymous_class(const DexType* type) {
   const auto* cls = type_class(type);
@@ -345,8 +345,8 @@ bool is_likely_anonymous_class(const DexType* type) {
 
 /*
  * Check if the object being constructed is leaking to an instance of an
- * anonymous class, whose call back can be invoked by another thread. If that
- * happens, the call back can transitively access fields that are not fully
+ * anonymous class, whose callback can be invoked by another thread. If that
+ * happens, the callback can transitively access fields that are not fully
  * initialized.
  */
 bool is_leaking_this_in_ctor(const DexMethod* caller, const DexMethod* callee) {
@@ -369,7 +369,7 @@ bool is_leaking_this_in_ctor(const DexMethod* caller, const DexMethod* callee) {
  * initialized by the 'init' method does not yield the matching nullness result
  * with the analysis. We will run into errors if we didn't handle this issue.
  *
- * The method provides a simple work around. We gather all methods reachable
+ * The method provides a simple workaround. We gather all methods reachable
  * from a clinit or ctor in the call graph. We put the reachable set into
  * any_init_reachables. In the transformation step, we do not apply null check
  * removal to methods in this set. The simple solution does not employ more
@@ -394,8 +394,8 @@ void GlobalTypeAnalysis::find_any_init_reachables(
       if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
-      auto* callee_method_def =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
+      auto* callee_method_def = resolve_method_deprecated(
+          insn->get_method(), opcode_to_search(insn), method);
       if ((callee_method_def == nullptr) || callee_method_def->is_external() ||
           !callee_method_def->is_concrete()) {
         continue;
@@ -427,10 +427,10 @@ void GlobalTypeAnalysis::find_any_init_reachables(
     }
     for (const auto* vmethod : cls->get_vmethods()) {
       bool overrides_external = false;
-      const auto& overridens =
+      const auto& overriddens =
           mog::get_overridden_methods(method_override_graph, vmethod);
-      for (const auto* overriden : UnorderedIterable(overridens)) {
-        if (overriden->is_external()) {
+      for (const auto* overridden : UnorderedIterable(overriddens)) {
+        if (overridden->is_external()) {
           overrides_external = true;
         }
       }

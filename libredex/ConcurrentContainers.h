@@ -107,19 +107,23 @@ class ConcurrentHashtable final {
       ConcurrentHashtable<Key, Value, Hash, KeyEqual>>;
 
   struct const_key_projection {
-    template <typename key_type2 = key_type,
-              typename = typename std::enable_if_t<
-                  std::is_same_v<key_type2, value_type>>>
-    const key_type2& operator()(const key_type2& key) {
+    template <typename key_type2 = key_type>
+    typename std::enable_if_t<std::is_same_v<key_type2, value_type>,
+                              const value_type&>
+    operator()(const value_type& key) const {
       return key;
     }
 
-    template <typename key_type2 = key_type,
-              typename = typename std::enable_if_t<
-                  !std::is_same_v<key_type2, value_type>>>
-    const key_type2& operator()(const value_type& key) {
+    template <typename key_type2 = key_type>
+    typename std::enable_if_t<!std::is_same_v<key_type2, value_type>,
+                              const key_type&>
+    operator()(const value_type& key) const {
       return key.first;
     }
+
+    // Prevents accidental use of the two methods above with rvalue, e.g.,
+    // value_type().
+    void operator()(value_type&&) const = delete;
   };
 
   /*
@@ -329,6 +333,10 @@ class ConcurrentHashtable final {
 
   /*
    * This operation is always thread-safe.
+   *
+   * The semantic is different from that of try_emplace in STL: args may still
+   * have been moved even if insertion does not take place. args is not moved
+   * only if insertion_result::incidentally_constructed_value() is not nullptr.
    */
   template <typename... Args>
   insertion_result try_emplace(const key_type& key, Args&&... args) {
@@ -372,6 +380,10 @@ class ConcurrentHashtable final {
 
   /*
    * This operation is always thread-safe.
+   *
+   * The semantic is different from that of try_emplace in STL: args may still
+   * have been moved even if insertion does not take place. args is not moved
+   * only if insertion_result::incidentally_constructed_value() is not nullptr.
    */
   template <typename... Args>
   insertion_result try_emplace(key_type&& key, Args&&... args) {
@@ -402,7 +414,7 @@ class ConcurrentHashtable final {
         continue;
       }
       if (!new_node) {
-        new_node = new Node(RvalueRefKeyArgsTag(), std::forward<key_type>(key),
+        new_node = new Node(RvalueRefKeyArgsTag(), std::move(key),
                             std::forward<Args>(args)...);
         key_ptr = &const_key_projection()(new_node->value);
       }
@@ -417,6 +429,10 @@ class ConcurrentHashtable final {
 
   /*
    * This operation is always thread-safe.
+   *
+   * The semantic is different from that of try_insert in STL: value may still
+   * have been moved even if insertion does not take place. value is not moved
+   * only if insertion_result::incidentally_constructed_value() is not nullptr.
    */
   insertion_result try_insert(const value_type& value) {
     Node* new_node = nullptr;
@@ -445,7 +461,7 @@ class ConcurrentHashtable final {
         storage = m_storage.load();
         continue;
       }
-      if (!new_node) {
+      if (new_node == nullptr) {
         new_node = new Node(ConstRefValueTag(), value);
       }
       new_node->prev = root;
@@ -459,6 +475,10 @@ class ConcurrentHashtable final {
 
   /*
    * This operation is always thread-safe.
+   *
+   * The semantic is different from that of try_insert in STL: value may still
+   * have been moved even if insertion does not take place. value is not moved
+   * only if insertion_result::incidentally_constructed_value() is not nullptr.
    */
   insertion_result try_insert(value_type&& value) {
     Node* new_node = nullptr;
@@ -489,9 +509,8 @@ class ConcurrentHashtable final {
         storage = m_storage.load();
         continue;
       }
-      if (!new_node) {
-        new_node =
-            new Node(RvalueRefValueTag(), std::forward<value_type>(value));
+      if (new_node == nullptr) {
+        new_node = new Node(RvalueRefValueTag(), std::move(value));
         value_ptr = &new_node->value;
       }
       new_node->prev = root;
@@ -663,7 +682,7 @@ class ConcurrentHashtable final {
     explicit Node(ConstRefValueTag, const value_type& value) : value(value) {}
 
     explicit Node(RvalueRefValueTag, value_type&& value)
-        : value(std::forward<value_type>(value)) {}
+        : value(std::move(value)) {}
 
     template <typename key_type2 = key_type,
               typename = typename std::enable_if_t<
@@ -872,12 +891,12 @@ class ConcurrentHashtableIterator final {
         return;
       }
       m_node = ConcurrentHashtable::get_node(m_storage->ptrs[m_index].load());
-    } while (!m_node);
+    } while (m_node == nullptr);
   }
 
   ConcurrentHashtableIterator(Storage* storage, size_t index, Node* node)
       : m_storage(storage), m_index(index), m_node(node) {
-    if (!node && index < storage->size) {
+    if ((node == nullptr) && index < storage->size) {
       advance();
     }
   }
@@ -889,7 +908,7 @@ class ConcurrentHashtableIterator final {
     return *this;
   }
 
-  ConcurrentHashtableIterator& operator++(int) {
+  ConcurrentHashtableIterator operator++(int) {
     ConcurrentHashtableIterator retval = *this;
     ++(*this);
     return retval;
@@ -1408,7 +1427,7 @@ class ConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     const auto& map = this->get_container(slot);
     const auto* ptr = map.get(key);
-    if (!ptr) {
+    if (ptr == nullptr) {
       return default_value;
     }
     std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
@@ -1447,7 +1466,7 @@ class ConcurrentMap final
   bool insert(KeyValuePair&& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    return map.try_insert(std::forward<KeyValuePair>(entry)).success;
+    return map.try_insert(std::move(entry)).success;
   }
 
   /*
@@ -1492,7 +1511,7 @@ class ConcurrentMap final
   void insert_or_assign(KeyValuePair&& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result = map.try_insert(std::forward<KeyValuePair>(entry));
+    auto insertion_result = map.try_insert(std::move(entry));
     if (insertion_result.success) {
       return;
     }
@@ -1502,8 +1521,7 @@ class ConcurrentMap final
       insertion_result.stored_value_ptr->second =
           std::move(constructed_value->second);
     } else {
-      insertion_result.stored_value_ptr->second =
-          std::forward<Value>(entry.second);
+      insertion_result.stored_value_ptr->second = std::move(entry.second);
     }
   }
 
@@ -1521,8 +1539,7 @@ class ConcurrentMap final
   bool emplace(Key&& key, Args&&... args) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    return map.try_emplace(std::forward<Key>(key), std::forward<Args>(args)...)
-        .success;
+    return map.try_emplace(std::move(key), std::forward<Args>(args)...).success;
   }
 
   template <typename... Args>
@@ -1539,7 +1556,7 @@ class ConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
     auto insertion_result =
-        map.try_emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+        map.try_emplace(std::move(key), std::forward<Args>(args)...);
     return std::make_pair(&insertion_result.stored_value_ptr->second,
                           insertion_result.success);
   }
@@ -1583,7 +1600,7 @@ class ConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
     std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
-    auto insertion_result = map.try_emplace(std::forward<Key>(key));
+    auto insertion_result = map.try_emplace(std::move(key));
     auto* ptr = insertion_result.stored_value_ptr;
     updater(ptr->first, ptr->second, !insertion_result.success);
   }
@@ -1603,7 +1620,7 @@ class ConcurrentMap final
   void update_unsafe(Key&& key, UpdateFn updater) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result = map.try_emplace(std::forward<Key>(key));
+    auto insertion_result = map.try_emplace(std::move(key));
     auto* ptr = insertion_result.stored_value_ptr;
     updater(ptr->first, ptr->second, !insertion_result.success);
   }
@@ -1794,7 +1811,7 @@ class InsertOnlyConcurrentMap final
   std::pair<Value*, bool> insert_or_assign_unsafe(KeyValuePair&& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result = map.try_emplace(std::forward<KeyValuePair>(entry));
+    auto insertion_result = map.try_emplace(std::move(entry));
     if (insertion_result.success) {
       return std::make_pair(&insertion_result.stored_value_ptr->second, true);
     }
@@ -1803,8 +1820,7 @@ class InsertOnlyConcurrentMap final
       insertion_result.stored_value_ptr->second =
           std::move(constructed_value->second);
     } else {
-      insertion_result.stored_value_ptr->second =
-          std::forward<Value>(entry.second);
+      insertion_result.stored_value_ptr->second = std::move(entry.second);
     }
     return std::make_pair(&insertion_result.stored_value_ptr->second, false);
   }
@@ -1841,7 +1857,7 @@ class InsertOnlyConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
     auto insertion_result =
-        map.try_emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+        map.try_emplace(std::move(key), std::forward<Args>(args)...);
     always_assert(
         insertion_result.success ||
         (insertion_result.incidentally_constructed_value()
@@ -1904,8 +1920,7 @@ class InsertOnlyConcurrentMap final
       return {ptr, false};
     }
     return get_or_emplace_and_assert_equal<ValueEqual>(
-        std::forward<Key>(key),
-        creator(std::forward<Key>(key), std::forward<Args>(args)...));
+        std::move(key), creator(std::move(key), std::forward<Args>(args)...));
   }
 
   template <
@@ -1922,7 +1937,7 @@ class InsertOnlyConcurrentMap final
   void update_unsafe(Key&& key, UpdateFn updater) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto [ptr, emplaced] = map.try_emplace(std::forward<Key>(key));
+    auto [ptr, emplaced] = map.try_emplace(std::move(key));
     updater(ptr->first, ptr->second, !emplaced);
   }
 
@@ -2003,8 +2018,7 @@ class AtomicMap final
   std::atomic<Value>* store(Key&& key, Value&& arg) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result =
-        map.try_emplace(std::forward<Key>(key), std::forward<Value>(arg));
+    auto insertion_result = map.try_emplace(std::move(key), std::move(arg));
     if (!insertion_result->success) {
       auto* constructed_value =
           insertion_result.incidentally_constructed_value();
@@ -2012,7 +2026,7 @@ class AtomicMap final
         insertion_result.stored_value_ptr->second.store(
             std::move(constructed_value->second));
       } else {
-        insertion_result.stored_value_ptr->second = std::forward<Value>(arg);
+        insertion_result.stored_value_ptr->second = std::move(arg);
       }
     }
     return &insertion_result.stored_value_ptr->second;
@@ -2035,7 +2049,7 @@ class AtomicMap final
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
     auto insertion_result =
-        map.try_emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+        map.try_emplace(std::move(key), std::forward<Args>(args)...);
     return std::make_pair(&insertion_result.stored_value_ptr->second,
                           insertion_result.success);
   }
@@ -2175,7 +2189,7 @@ class ConcurrentSet final
   bool insert(Key&& key) {
     size_t slot = Hash()(key) % n_slots;
     auto& set = this->get_container(slot);
-    return set.try_insert(std::forward<Key>(key)).success;
+    return set.try_insert(std::move(key)).success;
   }
 
   /*
@@ -2269,7 +2283,7 @@ class InsertOnlyConcurrentSet final
   std::pair<const Key*, bool> insert(Key&& key) {
     size_t slot = Hash()(key) % n_slots;
     auto& set = this->get_container(slot);
-    auto insertion_result = set.try_insert(std::forward<Key>(key));
+    auto insertion_result = set.try_insert(std::move(key));
     return {insertion_result.stored_value_ptr, insertion_result.success};
   }
 
@@ -2283,7 +2297,7 @@ class InsertOnlyConcurrentSet final
   std::pair<Key*, bool> insert_unsafe(Key&& key) {
     size_t slot = Hash()(key) % n_slots;
     auto& set = this->get_container(slot);
-    auto insertion_result = set.try_insert(std::forward<Key>(key));
+    auto insertion_result = set.try_insert(std::move(key));
     return {insertion_result.stored_value_ptr, insertion_result.success};
   }
 

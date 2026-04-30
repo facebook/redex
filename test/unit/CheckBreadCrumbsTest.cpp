@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include "ConfigFiles.h"
 #include "Creators.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -66,7 +67,7 @@ DexField* make_field_def(DexType* cls,
                          DexType* type,
                          DexAccessFlags access = ACC_PUBLIC,
                          bool external = false) {
-  auto* field = static_cast<DexField*>(
+  auto* field = dynamic_cast<DexField*>(
       DexField::make_field(cls, DexString::make_string(name), type));
   if (external) {
     field->set_access(access);
@@ -204,7 +205,10 @@ std::vector<DexClass*> create_classes() {
   return classes;
 }
 
-class CheckBreadcrumbsTest : public RedexTest {};
+class CheckBreadcrumbsTest : public RedexTest {
+ public:
+  ConfigFiles conf = ConfigFiles(Json::nullValue);
+};
 
 //========== Test Cases ==========
 TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
@@ -216,10 +220,7 @@ TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(store));
   auto scope = build_class_scope(stores);
-  Breadcrumbs bc(scope,
-                 "",
-                 stores,
-                 "",
+  Breadcrumbs bc(scope, "", stores, conf, "",
                  /* reject_illegal_refs_root_store= */ false,
                  /* only_verify_primary_dex= */ false,
                  /* verify_type_hierarchies= */ false,
@@ -319,6 +320,7 @@ TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
   Breadcrumbs bc_shared(scope,
                         "",
                         stores,
+                        conf,
                         "s_",
                         /* reject_illegal_refs_root_store= */ false,
                         /* only_verify_primary_dex= */ false,
@@ -336,6 +338,7 @@ TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
   Breadcrumbs bc_standard(scope,
                           "",
                           stores,
+                          conf,
                           "",
                           /* reject_illegal_refs_root_store= */ false,
                           /* only_verify_primary_dex= */ false,

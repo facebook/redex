@@ -60,7 +60,7 @@ template <class DexMember>
 uint32_t parse_anno_value(const DexMember* member,
                           const DexType* target_anno,
                           DexEncodedValueTypes type,
-                          std::string elem_str = "") {
+                          const std::string& elem_str = "") {
   auto anno_set = member->get_anno_set();
   always_assert(anno_set != nullptr);
   TRACE(ANNO,
@@ -70,14 +70,14 @@ uint32_t parse_anno_value(const DexMember* member,
         SHOW(member),
         SHOW(anno_set));
   auto val = parse_anno_value_helper(anno_set, target_anno, type, elem_str);
-  return val->value();
+  return static_cast<uint32_t>(val->value());
 }
 
 template <class DexMember>
 std::string parse_str_anno_value(const DexMember* member,
                                  const DexType* target_anno,
                                  DexEncodedValueTypes type,
-                                 std::string elem_str = "") {
+                                 const std::string& elem_str = "") {
   always_assert(target_anno);
   always_assert(type == DEVT_STRING);
   auto anno_set = member->get_anno_set();
@@ -147,31 +147,29 @@ const DexEncodedValue* parse_default_anno_value(
 
 bool parse_bool_anno_value(const DexMethod* method,
                            const DexType* target_anno,
-                           std::string name) {
-  auto val =
-      parse_anno_value(method, target_anno, DEVT_BOOLEAN, std::move(name));
+                           const std::string& name) {
+  auto val = parse_anno_value(method, target_anno, DEVT_BOOLEAN, name);
   return static_cast<bool>(val);
 }
 
 uint32_t parse_int_anno_value(const DexMethod* method,
                               const DexType* target_anno,
-                              std::string name) {
-  auto val = parse_anno_value(method, target_anno, DEVT_INT, std::move(name));
-  return static_cast<uint32_t>(val);
+                              const std::string& name) {
+  auto val = parse_anno_value(method, target_anno, DEVT_INT, name);
+  return val;
 }
 
 uint32_t parse_int_anno_value(const DexClass* cls,
                               const DexType* target_anno,
-                              std::string name) {
-  auto val = parse_anno_value(cls, target_anno, DEVT_INT, std::move(name));
-  return static_cast<uint32_t>(val);
+                              const std::string& name) {
+  auto val = parse_anno_value(cls, target_anno, DEVT_INT, name);
+  return val;
 }
 
 std::string parse_str_anno_value(const DexMethod* method,
                                  const DexType* target_anno,
-                                 std::string name) {
-  return parse_str_anno_value(method, target_anno, DEVT_STRING,
-                              std::move(name));
+                                 const std::string& name) {
+  return parse_str_anno_value(method, target_anno, DEVT_STRING, name);
 }
 
 bool has_any_parameter_annotation(const DexMethod* method) {

@@ -71,13 +71,13 @@ const DexString* gen_new_name(std::string_view org_name, size_t seed) {
   std::string name(org_name);
   name.append("$REDEX$PPP$");
   while (seed != 0u) {
-    int d = seed % 62;
+    auto d = static_cast<int>(seed % 62);
     if (d < 10) {
-      name.push_back(d + '0');
+      name.push_back(static_cast<char>(d + '0'));
     } else if (d < 36) {
-      name.push_back(d - 10 + 'a');
+      name.push_back(static_cast<char>(d - 10 + 'a'));
     } else {
-      name.push_back(d - 36 + 'A');
+      name.push_back(static_cast<char>(d - 36 + 'A'));
     }
     seed /= 62;
   }
@@ -255,9 +255,10 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
         method->get_name()->str() == "clone") {
       return;
     }
-    auto* resolved = resolve_method(method, ms, caller);
+    auto* resolved = resolve_method_deprecated(method, ms, caller);
     if ((resolved == nullptr) && ms == MethodSearch::Virtual) {
-      resolved = resolve_method(method, MethodSearch::InterfaceVirtual, caller);
+      resolved = resolve_method_deprecated(
+          method, MethodSearch::InterfaceVirtual, caller);
       if (resolved != nullptr) {
         // We resolved to an interface method. Interface methods are always
         // public, and we don't have a visibility problem. Just log.
@@ -326,9 +327,9 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
         }
       });
   walk::annotations(std::vector<DexClass*>{cls}, [&](DexAnnotation* anno) {
-    std::vector<DexType*> types;
+    std::vector<const DexType*> types;
     anno->gather_types(types);
-    for (auto* type : types) {
+    for (const auto* type : types) {
       visit_type(type);
     }
     std::vector<DexFieldRef*> fields;
@@ -484,7 +485,8 @@ PackagePrivatePreprocessorPass::Stats transform(
     new_true_virtual_scopes.insert(root);
     insert_unordered_iterable(new_true_virtual_scopes_methods, vs.methods);
   }
-  stats.new_virtual_scope_roots = new_true_virtual_scopes.size();
+  stats.new_virtual_scope_roots =
+      static_cast<int>(new_true_virtual_scopes.size());
 
   ConcurrentSet<const DexMethod*> may_be_interface_implementors;
   workqueue_run<const DexMethod*>(
@@ -555,7 +557,7 @@ PackagePrivatePreprocessorPass::Stats transform(
       return;
     }
     auto* method = insn->get_method();
-    auto* resolved = resolve_method(method, opcode_to_search(insn));
+    auto* resolved = resolve_method_deprecated(method, opcode_to_search(insn));
     auto it = new_names.find(resolved);
     if (it == new_names.end()) {
       return;
@@ -573,7 +575,7 @@ PackagePrivatePreprocessorPass::Stats transform(
     spec.name = new_name;
     method->change(spec, false /* rename on collision */);
   }
-  stats.renamed_methods += ordered_methods_to_rename.size();
+  stats.renamed_methods += static_cast<int>(ordered_methods_to_rename.size());
 
   workqueue_run<std::pair<IRInstruction*, DexMethod*>>(
       [&](const std::pair<IRInstruction*, DexMethod*>& p) {
@@ -586,7 +588,7 @@ PackagePrivatePreprocessorPass::Stats transform(
         insn->set_method(new_method);
       },
       insns_to_update);
-  stats.updated_method_refs = insns_to_update.size();
+  stats.updated_method_refs = static_cast<int>(insns_to_update.size());
 
   return stats;
 }

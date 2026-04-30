@@ -49,21 +49,19 @@
 #include "DedupBlockValueNumbering.h"
 
 #include <algorithm>
+#include <map>
 #include <optional>
 
 #include "DexPosition.h"
 #include "Lazy.h"
 #include "LiveRange.h"
 #include "OutlinedMethods.h"
-#include "PassManager.h"
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "TypeInference.h"
-#include <boost/functional/hash.hpp>
 
 namespace {
 
@@ -277,7 +275,8 @@ bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
   // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
   // method?
   if (opcode::is_invoke_virtual(op)) {
-    resolved_method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+    resolved_method =
+        resolve_method_deprecated(insn->get_method(), MethodSearch::Virtual);
     if (resolved_method == method::java_lang_Throwable_fillInStackTrace()) {
       return true;
     }
@@ -298,7 +297,7 @@ bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
         return true;
       }
       resolved_method =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
+          resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     }
     if ((resolved_method != nullptr) && resolved_method->rstate.dont_inline()) {
       return true;
@@ -306,6 +305,8 @@ bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
   }
   return false;
 }
+
+namespace {
 
 class DedupBlocksImpl {
  public:
@@ -531,7 +532,8 @@ class DedupBlocksImpl {
           cfg.delete_edges(block->succs().begin(), block->succs().end());
 
           // Undercounts branch instructions.
-          m_stats.insns_removed += remove_instructions(src_block, block, cfg);
+          m_stats.insns_removed +=
+              static_cast<int>(remove_instructions(src_block, block, cfg));
 
           cfg.add_edge(block, canon, cfg::EDGE_GOTO);
 
@@ -579,10 +581,11 @@ class DedupBlocksImpl {
       }
 
       // Note that replace_blocks also fixes any arising dangling parents.
-      m_stats.insns_removed += cfg.replace_blocks(blocks_to_replace);
+      m_stats.insns_removed +=
+          static_cast<int>(cfg.replace_blocks(blocks_to_replace));
     }
 
-    m_stats.blocks_removed += cnt;
+    m_stats.blocks_removed += static_cast<int>(cnt);
 
     return cnt > 0;
   }
@@ -805,7 +808,7 @@ class DedupBlocksImpl {
         auto& majority_count_group = mie_count[majority_mie];
 
         // Remove the iterators
-        std20::erase_if(block_iterator_map, [&](auto& p) {
+        std::erase_if(block_iterator_map, [&](auto& p) {
           return majority_count_group.blocks.find(p.first) ==
                  majority_count_group.blocks.end();
         });
@@ -1300,7 +1303,7 @@ class DedupBlocksImpl {
     return std::distance(iterable.begin(), iterable.end());
   }
 
-  static void print_dups(const Duplicates& dups) {
+  [[maybe_unused]] void print_dups(const Duplicates& dups) {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {");
     for (const auto& entry : UnorderedIterable(dups)) {
       TRACE(
@@ -1316,6 +1319,8 @@ class DedupBlocksImpl {
     TRACE(DEDUP_BLOCKS, 4, "} end duplicate blocks set");
   }
 };
+
+} // namespace
 
 DedupBlocks::DedupBlocks(const Config* config, DexMethod* method)
     : DedupBlocks(config,

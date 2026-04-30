@@ -271,9 +271,14 @@ static std::string get_code_item(dex_code_item** pcode_item) {
       tries++;
     }
   }
-  *pcode_item = (dex_code_item*)(((uintptr_t)*pcode_item + 3) & ~3);
+  auto addr = reinterpret_cast<uintptr_t>(*pcode_item);
+  addr = (addr + 3) & ~uintptr_t{3};
+  // NOLINTNEXTLINE(performance-no-int-to-ptr)
+  *pcode_item = reinterpret_cast<dex_code_item*>(addr);
   return ss.str();
 }
+
+namespace {
 
 class DexDebugInstructionReader {
  protected:
@@ -371,6 +376,8 @@ class DexDebugInstructionReader {
   }
 };
 
+} // namespace
+
 uint32_t count_debug_instructions(const uint8_t*& encdata) {
   struct DexDebugInstructionCounter : public DexDebugInstructionReader {
     int sum;
@@ -462,7 +469,7 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
     cleansed_data.reserve(utf8_length); // Avoid some reallocation.
     for (size_t i = 0; i < utf8_length; i++) {
       if (isprint(pos[i]) != 0) {
-        cleansed_data.push_back(pos[i]);
+        cleansed_data.push_back(static_cast<char>(pos[i]));
       } else {
         char buf[5];
         sprintf(buf, "\\x%02x", pos[i]);
@@ -530,7 +537,8 @@ void dump_strings(ddump_data* rd, bool print_headers) {
   uint32_t tmp_str_id_off = 0;
   for (uint32_t i = 0; i < size; ++i) {
     const uint8_t* str_data_ptr = (uint8_t*)(rd->dexmmap) + tmp_str_id_off;
-    length += strlen((char*)str_data_ptr);
+    length +=
+        static_cast<int>(strlen(reinterpret_cast<const char*>(str_data_ptr)));
     tmp_str_id_off += 4;
   }
 
@@ -634,7 +642,7 @@ void dump_callsites(ddump_data* rd, bool print_headers) {
   auto* map = rd->dexmmap + rd->dexh->map_off;
   const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
   const dex_callsite_id* callsites = nullptr;
-  int count = 0;
+  uint32_t count = 0;
   for (uint32_t i = 0; i < map_list->size; i++) {
     const auto& item = map_list->items[i];
     if (item.type == TYPE_CALL_SITE_ID_ITEM) {
@@ -646,7 +654,7 @@ void dump_callsites(ddump_data* rd, bool print_headers) {
   // TODO(T58569493) - emit full call site info
   if (print_headers) {
     redump("\nCALL SITE TABLE: %d\n", count);
-    for (int i = 0; i < count; ++i) {
+    for (uint32_t i = 0; i < count; ++i) {
       const uint8_t* ptr =
           reinterpret_cast<uint8_t*>(rd->dexmmap + callsites[i].callsite_off);
       redump("[%0x] offset:0x%0x %s\n", i, callsites[i].callsite_off,
@@ -659,7 +667,7 @@ void dump_methodhandles(ddump_data* rd, bool print_headers) {
   auto* map = rd->dexmmap + rd->dexh->map_off;
   const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
   const dex_methodhandle_id* methodhandles = nullptr;
-  int count = 0;
+  uint32_t count = 0;
   for (uint32_t i = 0; i < map_list->size; i++) {
     const auto& item = map_list->items[i];
     if (item.type == TYPE_METHOD_HANDLE_ITEM) {
@@ -672,7 +680,7 @@ void dump_methodhandles(ddump_data* rd, bool print_headers) {
   // TODO(T58569493) - emit full method handle info
   if (print_headers) {
     redump("\nMETHOD HANDLE TABLE: %d\n", count);
-    for (int i = 0; i < count; ++i) {
+    for (uint32_t i = 0; i < count; ++i) {
       redump("[0x%x] field_or_method_id:0x%x type:%s\n", i,
              methodhandles[i].field_or_method_id,
              format_method_handle_type(

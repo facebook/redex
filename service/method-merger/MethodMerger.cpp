@@ -7,14 +7,14 @@
 
 #include "MethodMerger.h"
 
-#include "DexAsm.h"
-#include "MethodOverrideGraph.h"
+#include "Debug.h"
+#include "DexClass.h"
 #include "MethodReference.h"
+#include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "SwitchDispatch.h"
 #include "Trace.h"
-#include "Walkers.h"
 
 namespace {
 
@@ -68,7 +68,7 @@ void create_one_dispatch(
     old_to_new->emplace(id_meth.second, std::move(new_callee));
   }
   // Record stats: number of merged methods - number of dispatches.
-  uint32_t merged_size = indices_to_callee.size() - 1;
+  uint32_t merged_size = static_cast<uint32_t>(indices_to_callee.size()) - 1;
   if (first_method->is_virtual()) {
     stats->num_merged_nonvirt_methods += merged_size;
   } else if (is_static(first_method)) {

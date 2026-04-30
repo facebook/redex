@@ -11,7 +11,6 @@
 
 #include "Creators.h"
 #include "DexStore.h"
-#include "ReachableClasses.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -88,8 +87,9 @@ DexClass* create_class(const DexType* type,
     // Call to super.<init>
     std::vector<Location> args;
     size_t args_size = super_ctor->get_proto()->get_args()->size();
+    args.reserve(args_size + 1);
     for (size_t arg_loc = 0; arg_loc < args_size + 1; ++arg_loc) {
-      args.push_back(mc.get_local(arg_loc));
+      args.push_back(mc.get_local(static_cast<int>(arg_loc)));
     }
     auto* mb = mc.get_main_block();
     mb->invoke(OPCODE_INVOKE_DIRECT, super_ctor, args);
@@ -109,7 +109,7 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
       unordered_any(fields_map)->second;
   size_t cnt = 0;
   for (const DexField* f : mergeable_fields) {
-    auto* type = f->get_type();
+    const auto* type = f->get_type();
     std::string name;
     if (type == type::_byte() || type == type::_char() ||
         type == type::_short() || type == type::_int()) {
@@ -128,7 +128,8 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
       type = type::_double();
       name = "d";
     } else {
-      static DexType* string_type = DexType::make_type("Ljava/lang/String;");
+      static const DexType* string_type =
+          DexType::make_type("Ljava/lang/String;");
       if (type == string_type) {
         type = string_type;
         name = "s";
@@ -159,7 +160,7 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
 
   always_assert(res.size() == mergeable_fields.size());
   for (size_t i = 0; i < res.size(); i++) {
-    if (acc_final_map[i]) {
+    if (acc_final_map.at(i)) {
       DexField* f = res.at(i);
       always_assert(f != nullptr && f->is_def());
       set_final(f);

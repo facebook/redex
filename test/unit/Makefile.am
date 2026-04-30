@@ -69,6 +69,7 @@ check_PROGRAMS = \
     dedup_blocks_test \
     deobfuscated_alias_test \
     deterministic_containers_test \
+    dex_annotation_test \
     dex_class_test \
     dex_hasher_test \
     dex_instruction_test \
@@ -159,6 +160,7 @@ check_PROGRAMS = \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
+    compact_pointer_vector_test \
     source_blocks_test \
     split_huge_switch_test \
     static_relo_v2_test \
@@ -265,6 +267,8 @@ deobfuscated_alias_test_SOURCES = DeobfuscatedAliasTest.cpp
 
 deterministic_containers_test_SOURCES = DeterministicContainersTest.cpp
 deterministic_containers_test_LDADD = $(COMMON_MOCK_TEST_LIBS) -lpthread
+
+dex_annotation_test_SOURCES = DexAnnotationTest.cpp
 
 dex_class_test_SOURCES = DexClassTest.cpp
 
@@ -471,6 +475,7 @@ resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp ScopeH
 resource_inlining_test_SOURCES = ResourceInliningTest.cpp ScopeHelper.cpp
 
 resource_value_merging_SOURCES = ResourceValueMergingPassTest.cpp
+resource_value_merging_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 result_propagation_test_SOURCES = ResultPropagationTest.cpp
 result_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -480,6 +485,8 @@ side_effects_summary_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 signed_constant_propagation_test_SOURCES = constant-propagation/SignedConstantPropagationTest.cpp
 signed_constant_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
+
+compact_pointer_vector_test_SOURCES = CompactPointerVectorTest.cpp
 
 source_blocks_test_SOURCES = SourceBlocksTest.cpp
 
@@ -547,6 +554,7 @@ xstorerefs_test_SOURCES = XStoreRefsTest.cpp
 string_tree_test_SOURCES = StringTreeTest.cpp
 
 resources_test_SOURCES = RedexResourcesTest.cpp
+resources_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 EXTRA_resources_test_DEPENDENCIES = resources_test.env more_resources/res/layout/class_names.xml
 $(eval $(call make_env,resources_test,\
   test_layout_path=$(srcdir)/example_layout_with_onclick.xml \

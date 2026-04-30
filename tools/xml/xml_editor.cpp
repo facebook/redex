@@ -6,7 +6,8 @@
  */
 
 #include <boost/iostreams/device/mapped_file.hpp>
-#include <boost/optional/optional_io.hpp>
+#include <boost/none.hpp>
+#include <boost/optional/optional.hpp>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -49,21 +50,21 @@ ssize_t ensure_string_in_xml_string_pool(const std::string& path,
     auto mode = (std::ios_base::openmode)std::ios_base::in;
     map->open(path, mode);
     if (!map->is_open()) {
-      std::cerr << "Could not map " << path << std::endl;
+      std::cerr << "Could not map " << path << '\n';
       return -1;
     }
 
     auto result = arsc::ensure_string_in_xml_pool(
         map->const_data(), map->size(), new_string, &new_bytes, &idx);
     if (result != android::OK) {
-      std::cerr << "Unable to parse " << path << std::endl;
+      std::cerr << "Unable to parse " << path << '\n';
       return -1;
     }
   }
   if (!new_bytes.empty()) {
     arsc::write_bytes_to_file(new_bytes, path);
   }
-  return idx;
+  return static_cast<ssize_t>(idx);
 }
 
 class XmlValidator : public arsc::SimpleXmlParser {
@@ -112,10 +113,9 @@ class XmlValidator : public arsc::SimpleXmlParser {
       boost::optional<std::string> attr_name =
           get_name_string(attribute->name, global_strings());
       auto attr_idx = dtohl(attribute->name.index);
-      if (m_is_using_attr_id && attr_idx < attribute_count() &&
-          m_ids[attr_idx] == m_attribute_id) {
-        m_found_attribute = true;
-      } else if (attr_name == m_attribute_name) {
+      if ((m_is_using_attr_id && attr_idx < attribute_count() &&
+           m_ids[attr_idx] == m_attribute_id) ||
+          attr_name == m_attribute_name) {
         m_found_attribute = true;
       }
     }
@@ -415,13 +415,12 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
           get_attribute_id(attr_idx) == m_attribute_id) {
         std::cout << "Found target attribute 0x" << std::hex
                   << get_attribute_id(attr_idx) << " at file offset 0x"
-                  << get_file_offset(attribute) << std::endl;
+                  << get_file_offset(attribute) << '\n';
         found_attribute = true;
         m_edited_attribute = true;
       } else if (attr_name && *attr_name == m_attribute) {
         std::cout << "Found target attribute " << m_attribute
-                  << " at file offset 0x" << get_file_offset(attribute)
-                  << std::endl;
+                  << " at file offset 0x" << get_file_offset(attribute) << '\n';
         found_attribute = true;
         m_edited_attribute = true;
       }
@@ -464,23 +463,21 @@ size_t edit_attribute(char* attribute_name,
       0) {
     data = strtol(attribute_value, nullptr, 0);
   } else {
-    std::cout << "adding " << attribute_value << " into string pool"
-              << std::endl;
+    std::cout << "adding " << attribute_value << " into string pool" << '\n';
     auto ensure_result =
         ensure_string_in_xml_string_pool(path, std::string(attribute_value));
     if (ensure_result < 0) {
       return 1;
     }
     data = (uint32_t)ensure_result;
-    std::cout << "finished appending string pool with new idx " << data
-              << std::endl;
+    std::cout << "finished appending string pool with new idx " << data << '\n';
   }
 
   auto map = std::make_unique<boost::iostreams::mapped_file>();
   auto mode = (std::ios_base::openmode)(std::ios_base::in | std::ios_base::out);
   map->open(path, mode);
   if (!map->is_open()) {
-    std::cerr << "Could not map " << path << std::endl;
+    std::cerr << "Could not map " << path << '\n';
     return 1;
   }
 
@@ -517,8 +514,8 @@ int main(int argc, char** argv) {
     attribute_id = (uint32_t)(strtol(argv[3], nullptr, 0));
   }
   if (argc == 5) {
-    return edit_attribute(argv[3], argv[4], path, tag_name, is_using_attr_id,
-                          attribute_id);
+    return static_cast<int>(edit_attribute(argv[3], argv[4], path, tag_name,
+                                           is_using_attr_id, attribute_id));
   } else if (argc <= 9) {
     if (checked_strncmp(argv[5], strlen(argv[3]), "0x", 2, 2) == 0) {
       is_using_attr_id = true;
@@ -527,7 +524,7 @@ int main(int argc, char** argv) {
     auto type_arg = strtoul(argv[6], nullptr, 0);
     if (type_arg > android::Res_value::TYPE_LAST_INT) {
       std::cerr << "The attribute type value must be at most "
-                << android::Res_value::TYPE_LAST_INT << std::endl;
+                << android::Res_value::TYPE_LAST_INT << '\n';
       return 1;
     }
     uint8_t value_type = static_cast<uint8_t>(type_arg);
@@ -545,7 +542,7 @@ int main(int argc, char** argv) {
         (std::ios_base::openmode)(std::ios_base::in | std::ios_base::out);
     map->open(path, mode);
     if (!map->is_open()) {
-      std::cerr << "Could not map " << path << std::endl;
+      std::cerr << "Could not map " << path << '\n';
       return 1;
     }
 
@@ -556,19 +553,19 @@ int main(int argc, char** argv) {
     map->close();
 
     if (!attribute_namespace.empty() && !validator.m_namespace_found) {
-      std::cerr << "Namespace does not exist in file" << std::endl;
+      std::cerr << "Namespace does not exist in file" << '\n';
       return 1;
     }
     if (!validator.m_id_name_match) {
       std::cerr << "An existing attribute with the same id has a different name"
-                << std::endl;
+                << '\n';
       return 1;
     }
 
     // if the attribute was found, then use edit it instead of inserting it
     if (validator.m_found_attribute) {
-      return edit_attribute(argv[3], argv[4], path, tag_name, is_using_attr_id,
-                            attribute_id);
+      return static_cast<int>(edit_attribute(argv[3], argv[4], path, tag_name,
+                                             is_using_attr_id, attribute_id));
     }
 
     XmlBuilder xml_builder(attribute_id, argv[3], argv[4], value_type,
@@ -580,7 +577,7 @@ int main(int argc, char** argv) {
     }
     map->open(path, mode);
     if (!map->is_open()) {
-      std::cerr << "Could not map " << path << std::endl;
+      std::cerr << "Could not map " << path << '\n';
       return 1;
     }
 
@@ -591,8 +588,9 @@ int main(int argc, char** argv) {
                         "Failed to parse file %s", path.c_str());
 
     android::Vector<char> output;
-    xml_builder.serialize((android::ResChunk_header*)((char*)map->data()),
-                          map->size(), &output);
+    xml_builder.serialize(
+        reinterpret_cast<android::ResChunk_header*>(map->data()), map->size(),
+        &output);
     arsc::write_bytes_to_file(output, path);
   }
   return 0;

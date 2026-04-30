@@ -7,12 +7,13 @@
 
 #pragma once
 
+#include <atomic>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "Debug.h"
-
-class PassManager;
+#include "PassManager.h"
 
 class ScopedMetrics {
  public:
@@ -49,10 +50,42 @@ class ScopedMetrics {
     return Scope(this);
   }
 
-  // In cpp to avoid `PassManager.h` include.
-  void set_metric(const std::string_view& key, int64_t value);
+  // Template method to accept different arithmetic types
+  template <typename T>
+  typename std::enable_if_t<std::is_arithmetic_v<T>, void> set_metric(
+      const std::string_view& key, T value) {
+    auto full_key = cur_path(m_segments);
+    if (!full_key.empty()) {
+      full_key.append(".");
+    }
+    full_key.append(key);
+    m_pm.set_metric(full_key, value);
+  }
+
+  // Specialization for atomic types
+  template <typename T>
+  void set_metric(const std::string_view& key, const std::atomic<T>& value) {
+    static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
+    auto full_key = cur_path(m_segments);
+    if (!full_key.empty()) {
+      full_key.append(".");
+    }
+    full_key.append(key);
+    m_pm.set_metric(full_key, value);
+  }
 
  private:
+  std::string cur_path(const std::vector<std::string>& segments) const {
+    std::string ret;
+    for (const auto& s : segments) {
+      if (!ret.empty()) {
+        ret.append(".");
+      }
+      ret.append(s);
+    }
+    return ret;
+  }
+
   void pop() {
     redex_assert(!m_segments.empty());
     m_segments.pop_back();

@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include <functional>
-#include <gtest/gtest.h>
 #include <string>
 #include <vector>
 

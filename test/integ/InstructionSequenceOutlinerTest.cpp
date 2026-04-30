@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/thread/once.hpp>
+#include <boost/optional.hpp>
 #include <fstream>
 #include <gtest/gtest.h>
-#include <json/json.h>
+#include <json/reader.h>
+#include <json/value.h>
 #include <unordered_set>
 
 #include "ControlFlow.h"

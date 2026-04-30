@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexStore.h"
 #include "FrameworkApi.h"
@@ -119,6 +120,7 @@ class VirtualMerging {
   };
 
   VirtualMerging(DexStoresVector&,
+                 const ConfigFiles& conf,
                  inliner::InlinerConfig,
                  size_t,
                  const api::AndroidSDK* min_sdk_api = nullptr,
@@ -135,7 +137,7 @@ class VirtualMerging {
   XDexRefs m_xdexes;
   TypeSystem m_type_system;
   size_t m_max_overriding_method_instructions;
-  ConcurrentMethodResolver m_concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated m_concurrent_method_resolver;
   inliner::InlinerConfig m_inliner_config;
   init_classes::InitClassesWithSideEffects m_init_classes_with_side_effects;
 

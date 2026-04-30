@@ -62,17 +62,17 @@ void show_class(std::ostream& output,
                 const bool allowobfuscation_filter) {
   if (allowshrinking_filter) {
     if (impl::KeepState::allowshrinking(cls)) {
-      output << name << std::endl;
+      output << name << '\n';
     }
     return;
   }
   if (allowobfuscation_filter) {
     if (impl::KeepState::allowobfuscation(cls)) {
-      output << name << std::endl;
+      output << name << '\n';
     }
     return;
   }
-  output << name << std::endl;
+  output << name << '\n';
 }
 
 // Print out the seeds computed in classes by Redex to the specified ostream.
@@ -89,7 +89,7 @@ void keep_rules::print_seeds(std::ostream& output,
         return s;
       }
       std::cerr << "WARNING: this class has no deobu name: "
-                << cls->get_name()->c_str() << std::endl;
+                << cls->get_name()->c_str() << '\n';
       return cls->get_name()->str();
     }();
     std::string name = java_names::internal_to_external(deob);

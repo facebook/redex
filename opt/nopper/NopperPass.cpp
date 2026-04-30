@@ -80,7 +80,7 @@ void NopperPass::run_pass(DexStoresVector& stores,
         walk::code(dexen[i], [&](DexMethod* method, IRCode&) {
           method_to_dexes.emplace(method, &dexen[i]);
         });
-        auto ad = create_auxiliary_defs(&store, i);
+        auto ad = create_auxiliary_defs(&store, static_cast<uint32_t>(i));
         auxiliary_defs.emplace(&dexen[i], ad);
       }
     }
@@ -120,7 +120,8 @@ void NopperPass::run_pass(DexStoresVector& stores,
   std::mt19937 gen;
   gen.seed(0);
   std::shuffle(noppable_blocks_vec.begin(), noppable_blocks_vec.end(), gen);
-  auto end = (size_t)std::lround(noppable_blocks_vec.size() * m_probability);
+  auto end = static_cast<size_t>(std::lround(
+      static_cast<float>(noppable_blocks_vec.size()) * m_probability));
   noppable_blocks_vec.resize(end);
 
   UnorderedMap<DexMethod*, UnorderedSet<cfg::Block*>> noppable_blocks;

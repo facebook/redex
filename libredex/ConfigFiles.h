@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <boost/optional/optional.hpp>
 #include <memory>
 #include <string>
 #include <vector>
@@ -253,6 +253,11 @@ struct ConfigFiles {
   bool enforce_class_order() const;
 
   bool disable_violation_fixes() const;
+
+  // If true, classes.dex is treated like any other dex file in the root of
+  // the input program. This is derived from InterDexPass configuration, which
+  // also defaults to true.
+  bool normal_primary_dex() const;
 
  private:
   JsonWrapper m_json;

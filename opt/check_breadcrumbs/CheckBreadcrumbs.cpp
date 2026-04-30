@@ -13,8 +13,9 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem.hpp>
+#include <boost/filesystem/operations.hpp>
 
+#include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexClass.h"
@@ -191,7 +192,7 @@ void print_allowed_violations_per_class(
       for (const auto& f : fields->second) {
         fields_detail << "    " << f.first->get_deobfuscated_name_or_empty()
                       << " (" << get_store_name(xstores, f.first->get_type())
-                      << ")" << std::endl;
+                      << ")\n";
       }
     }
     std::ostringstream methods_detail;
@@ -202,8 +203,7 @@ void print_allowed_violations_per_class(
         for (const auto& proto_type : protos->second) {
           method_detail << "      Proto type "
                         << show_deobfuscated(proto_type.first) << " ("
-                        << get_store_name(xstores, proto_type.first) << ")"
-                        << std::endl;
+                        << get_store_name(xstores, proto_type.first) << ")\n";
         }
       }
       auto type_insns = illegal_type.find(method);
@@ -212,7 +212,7 @@ void print_allowed_violations_per_class(
           method_detail << "      Instruction type "
                         << show_deobfuscated(insn.first) << " ("
                         << get_store_name(xstores, insn.first->get_type())
-                        << ")" << std::endl;
+                        << ")\n";
         }
       }
       auto field_type_insns = illegal_field_type.find(method);
@@ -221,7 +221,7 @@ void print_allowed_violations_per_class(
           method_detail
               << "      Field type " << show_deobfuscated(insn.first) << " ("
               << get_store_name(xstores, insn.first->get_field()->get_type())
-              << ")" << std::endl;
+              << ")\n";
         }
       }
       auto field_cls_insns = illegal_field_cls.find(method);
@@ -230,7 +230,7 @@ void print_allowed_violations_per_class(
           method_detail
               << "      Field class " << show_deobfuscated(insn.first) << " ("
               << get_store_name(xstores, insn.first->get_field()->get_class())
-              << ")" << std::endl;
+              << ")\n";
         }
       }
       auto method_calls = illegal_method_call.find(method);
@@ -239,12 +239,12 @@ void print_allowed_violations_per_class(
           method_detail
               << "      Callee class " << show_deobfuscated(insn.first) << " ("
               << get_store_name(xstores, insn.first->get_method()->get_class())
-              << ")" << std::endl;
+              << ")\n";
         }
       }
       auto detail_str = method_detail.str();
       if (!detail_str.empty()) {
-        methods_detail << "    " << show_deobfuscated(method) << std::endl
+        methods_detail << "    " << show_deobfuscated(method) << '\n'
                        << detail_str;
       }
     }
@@ -283,6 +283,7 @@ void gather_unnessary_allows(const UnorderedSet<T>& expected_violations,
 Breadcrumbs::Breadcrumbs(const Scope& scope,
                          const std::string& allowed_violations_file_path,
                          DexStoresVector& stores,
+                         const ConfigFiles& conf,
                          const std::string& shared_module_prefix,
                          bool reject_illegal_refs_root_store,
                          bool only_verify_primary_dex,
@@ -290,7 +291,7 @@ Breadcrumbs::Breadcrumbs(const Scope& scope,
                          bool verify_proto_cross_dex,
                          bool enforce_allowed_violations_file)
     : m_scope(scope),
-      m_xstores(stores, shared_module_prefix),
+      m_xstores(stores, conf.normal_primary_dex(), shared_module_prefix),
       m_reject_illegal_refs_root_store(reject_illegal_refs_root_store),
       m_verify_type_hierarchies(verify_type_hierarchies),
       m_verify_proto_cross_dex(verify_proto_cross_dex),
@@ -332,14 +333,14 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
       for (const auto& field : bad_field.second) {
         bad_fields_count++;
         ss << "Reference to deleted type " << SHOW(bad_field.first)
-           << " in field " << SHOW(field) << std::endl;
+           << " in field " << SHOW(field) << '\n';
       }
     }
     for (const auto& bad_meth : m_bad_methods) {
       for (const auto& meth : bad_meth.second) {
         bad_methods_count++;
         ss << "Reference to deleted type " << SHOW(bad_meth.first)
-           << " in method " << SHOW(meth) << std::endl;
+           << " in method " << SHOW(meth) << '\n';
       }
     }
     for (const auto& bad_insns : m_bad_type_insns) {
@@ -348,7 +349,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
           bad_type_insns_count++;
           ss << "Reference to deleted type " << SHOW(bad_insns.first)
              << " in instruction " << SHOW(insn) << " in method "
-             << SHOW(insns.first) << std::endl;
+             << SHOW(insns.first) << '\n';
         }
       }
     }
@@ -358,7 +359,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
           bad_field_insns_count++;
           ss << "Reference to deleted field " << SHOW(bad_insns.first)
              << " in instruction " << SHOW(insn) << " in method "
-             << SHOW(insns.first) << std::endl;
+             << SHOW(insns.first) << '\n';
         }
       }
     }
@@ -368,7 +369,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
           bad_meths_insns_count++;
           ss << "Reference to deleted method " << SHOW(bad_insns.first)
              << " in instruction " << SHOW(insn) << " in method "
-             << SHOW(insns.first) << std::endl;
+             << SHOW(insns.first) << '\n';
         }
       }
     }
@@ -400,22 +401,22 @@ std::string Breadcrumbs::get_methods_with_bad_refs() {
   for (const auto& class_meth : m_bad_methods) {
     const auto* const type = class_meth.first;
     const auto& methods = class_meth.second;
-    ss << "Bad methods in class " << type->get_name()->c_str() << std::endl;
+    ss << "Bad methods in class " << type->get_name()->c_str() << '\n';
     for (const auto* const method : methods) {
-      ss << "\t" << method->get_name()->c_str() << std::endl;
+      ss << "\t" << method->get_name()->c_str() << '\n';
     }
-    ss << std::endl;
+    ss << '\n';
   }
   for (const auto& meth_field : m_bad_fields_refs) {
     auto* const type = meth_field.first->get_class();
     const auto* const method = meth_field.first;
     const auto& fields = meth_field.second;
     ss << "Bad field refs in method " << type->get_name()->c_str() << "."
-       << method->get_name()->c_str() << std::endl;
+       << method->get_name()->c_str() << '\n';
     for (const auto* const field : fields) {
-      ss << "\t" << field->get_name()->c_str() << std::endl;
+      ss << "\t" << field->get_name()->c_str() << '\n';
     }
-    ss << std::endl;
+    ss << '\n';
   }
   return ss.str();
 }
@@ -453,13 +454,13 @@ size_t Breadcrumbs::process_illegal_elements(
     }
     ss << "Illegal " << desc << " in method "
        << method->get_deobfuscated_name_or_empty() << " ("
-       << get_store_name(xstores, method->get_class()) << ")" << std::endl;
+       << get_store_name(xstores, method->get_class()) << ")\n";
     num_illegal_cross_store_refs += insns.size();
     for (const auto& insn : insns) {
       ss << "\t" << show_deobfuscated(insn.first) << " ("
          << get_store_name(xstores, get_type_from_insn(insn.first)) << ")  By  "
          << show_deobfuscated(insn.second) << " ("
-         << get_store_name(xstores, insn.second) << ")" << std::endl;
+         << get_store_name(xstores, insn.second) << ")\n";
     }
   }
 
@@ -485,12 +486,12 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
 
     ss << "Illegal fields in class "
        << type_class(type)->get_deobfuscated_name_or_empty() << " ("
-       << get_store_name(m_xstores, type) << ")" << std::endl;
+       << get_store_name(m_xstores, type) << ")\n";
     for (const auto& field : fields) {
       ss << "\t" << field.first->get_deobfuscated_name_or_empty() << " ("
          << get_store_name(m_xstores, field.first->get_type()) << ")  By  "
          << show_deobfuscated(field.second) << " ("
-         << get_store_name(m_xstores, field.second) << ")" << std::endl;
+         << get_store_name(m_xstores, field.second) << ")\n";
     }
   }
 
@@ -506,12 +507,12 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
     }
     num_illegal_method_defs++;
     ss << "Illegal types in method proto " << show_deobfuscated(method) << " ("
-       << get_store_name(m_xstores, method->get_class()) << ")" << std::endl;
+       << get_store_name(m_xstores, method->get_class()) << ")\n";
     for (const auto& t : types) {
       ss << "\t" << show_deobfuscated(t.first) << " ("
          << get_store_name(m_xstores, t.first) << ")  By  "
          << show_deobfuscated(t.second) << " ("
-         << get_store_name(m_xstores, t.second) << ")" << std::endl;
+         << get_store_name(m_xstores, t.second) << ")\n";
     }
   }
 
@@ -622,8 +623,8 @@ bool Breadcrumbs::has_illegal_access(const DexMethod* input_method) {
       }
     }
     if (insn->has_method()) {
-      auto* res_method = resolve_method(insn->get_method(),
-                                        opcode_to_search(insn), input_method);
+      auto* res_method = resolve_method_deprecated(
+          insn->get_method(), opcode_to_search(insn), input_method);
       if (res_method != nullptr) {
         if (!check_method_accessibility(input_method, res_method)) {
           result = true;
@@ -647,7 +648,7 @@ std::pair<bool, const DexType*> Breadcrumbs::is_illegal_cross_store(
   std::set<const DexType*, dextypes_comparator> load_types;
   if (m_verify_type_hierarchies) {
     auto* callee_cls = type_class(callee);
-    UnorderedSet<DexType*> types;
+    UnorderedSet<const DexType*> types;
     callee_cls->gather_load_types(types);
     insert_unordered_iterable(load_types, types);
   } else {
@@ -703,9 +704,9 @@ const DexType* Breadcrumbs::check_type(const DexType* type) {
  * missing, or return null if all the type references are defined or external.
  */
 const DexType* Breadcrumbs::check_method(const DexMethodRef* method) {
-  std::vector<DexType*> type_refs;
+  std::vector<const DexType*> type_refs;
   method->gather_types_shallow(type_refs);
-  for (auto* type : type_refs) {
+  for (const auto* type : type_refs) {
     const auto* bad_ref = check_type(type);
     if (bad_ref != nullptr) {
       return bad_ref;
@@ -718,9 +719,9 @@ const DexType* Breadcrumbs::check_anno(const DexAnnotationSet* anno) {
   if (anno == nullptr) {
     return nullptr;
   }
-  std::vector<DexType*> type_refs;
+  std::vector<const DexType*> type_refs;
   anno->gather_types(type_refs);
-  for (auto* type : type_refs) {
+  for (const auto* type : type_refs) {
     const auto* bad_ref = check_type(type);
     if (bad_ref != nullptr) {
       return bad_ref;
@@ -739,9 +740,9 @@ void Breadcrumbs::bad_type(const DexType* type,
 void Breadcrumbs::check_fields() {
   walk::fields(m_scope_to_walk, [&](DexField* field) {
     bool check_cross_store_ref = true;
-    std::vector<DexType*> type_refs;
+    std::vector<const DexType*> type_refs;
     field->gather_types(type_refs);
-    for (auto* type : type_refs) {
+    for (const auto* type : type_refs) {
       const auto* bad_ref = check_type(type);
       if (bad_ref != nullptr) {
         m_bad_fields[bad_ref].emplace_back(field);
@@ -784,7 +785,7 @@ void Breadcrumbs::check_methods() {
         // Ensure type hierarchies of proto types, which might be meaningful for
         // verification on some OS versions.
         auto* const cls = method->get_class();
-        std::vector<DexType*> proto_types;
+        std::vector<const DexType*> proto_types;
         method->get_proto()->gather_types(proto_types);
         for (const auto& t : proto_types) {
           auto pair = is_illegal_cross_store(cls, t);
@@ -852,9 +853,9 @@ void Breadcrumbs::check_field_opcode(const DexMethod* method,
   bool check_cross_store_ref = true;
 
   auto* field = insn->get_field();
-  std::vector<DexType*> type_refs;
+  std::vector<const DexType*> type_refs;
   field->gather_types_shallow(type_refs);
-  for (auto* type : type_refs) {
+  for (const auto* type : type_refs) {
     const auto* bad_ref = check_type(type);
     if (bad_ref != nullptr) {
       bad_type(bad_ref, method, insn);
@@ -888,7 +889,7 @@ void Breadcrumbs::check_field_opcode(const DexMethod* method,
     // the class of the field is around but the field may have
     // been deleted so let's verify the field exists on the class
     if (referenced_field_is_deleted(field)) {
-      m_bad_field_insns[static_cast<DexField*>(field)][method].emplace_back(
+      m_bad_field_insns[dynamic_cast<DexField*>(field)][method].emplace_back(
           insn);
       return;
     }
@@ -908,7 +909,8 @@ void Breadcrumbs::check_method_opcode(const DexMethod* method,
     m_illegal_method_call[method].emplace_back(insn, pair.second);
   }
 
-  DexMethod* res_meth = resolve_method(meth, opcode_to_search(insn), method);
+  DexMethod* res_meth =
+      resolve_method_deprecated(meth, opcode_to_search(insn), method);
   if (res_meth != nullptr) {
     // a resolved method can only differ in the owner class
     if (res_meth != meth) {
@@ -922,7 +924,7 @@ void Breadcrumbs::check_method_opcode(const DexMethod* method,
     // the class of the method is around but the method may have
     // been deleted so let's verify the method exists on the class
     if (referenced_method_is_deleted(meth)) {
-      m_bad_meth_insns[static_cast<DexMethod*>(meth)][method].emplace_back(
+      m_bad_meth_insns[dynamic_cast<DexMethod*>(meth)][method].emplace_back(
           insn);
       return;
     }
@@ -949,10 +951,10 @@ void Breadcrumbs::check_opcodes() {
 }
 
 void CheckBreadcrumbsPass::run_pass(DexStoresVector& stores,
-                                    ConfigFiles& /* conf */,
+                                    ConfigFiles& conf,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  Breadcrumbs bc(scope, allowed_violations_file_path, stores,
+  Breadcrumbs bc(scope, allowed_violations_file_path, stores, conf,
                  shared_module_prefix, reject_illegal_refs_root_store,
                  only_verify_primary_dex, verify_type_hierarchies,
                  verify_proto_cross_dex, enforce_allowed_violations_file);

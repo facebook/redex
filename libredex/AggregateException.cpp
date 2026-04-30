@@ -15,15 +15,15 @@ void run_rethrow_first_aggregate(const std::function<void()>& f) {
   } catch (const aggregate_exception& ae) {
     if (ae.m_exceptions.size() > 1) {
       // We cannot modify exceptions. Log the other messages to stderr.
-      std::cerr << "Too many exceptions. Other exceptions: " << std::endl;
+      std::cerr << "Too many exceptions. Other exceptions: " << '\n';
       for (auto it = ae.m_exceptions.begin() + 1; it != ae.m_exceptions.end();
            ++it) {
         try {
           std::rethrow_exception(*it);
         } catch (const std::exception& e) {
-          std::cerr << " " << e.what() << std::endl;
+          std::cerr << " " << e.what() << '\n';
         } catch (...) {
-          std::cerr << " (Not a std::exception)" << std::endl;
+          std::cerr << " (Not a std::exception)\n";
         }
       }
     }

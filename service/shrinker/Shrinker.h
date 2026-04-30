@@ -8,6 +8,7 @@
 #pragma once
 
 #include "CommonSubexpressionElimination.h"
+#include "ConfigFiles.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationState.h"
 #include "ConstantPropagationTransform.h"
@@ -19,7 +20,6 @@
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalDce.h"
-#include "MethodProfiles.h"
 #include "RandomForest.h"
 #include "ShrinkerConfig.h"
 #include "Timer.h"
@@ -34,6 +34,7 @@ class Shrinker {
            const Scope& scope,
            const init_classes::InitClassesWithSideEffects&
                init_classes_with_side_effects,
+           const ConfigFiles& conf,
            const ShrinkerConfig& config,
            int min_sdk,
            const UnorderedSet<DexMethodRef*>& configured_pure_methods = {},

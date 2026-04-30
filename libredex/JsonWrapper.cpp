@@ -162,7 +162,7 @@ void JsonWrapper::get(const char* name,
         throw std::runtime_error("Cannot convert JSON value to string: " +
                                  key.asString());
       }
-      auto val = *it;
+      const auto& val = *it;
       if (!val.isString()) {
         throw std::runtime_error("Cannot convert JSON value to string: " +
                                  val.asString());

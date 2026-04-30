@@ -98,9 +98,9 @@ bool analyze_gets_helper(const WholeProgramStateAccessor* whole_program_state,
   return true;
 }
 
-bool not_eligible_ifield(DexField* field) {
-  return is_static(field) || field->is_external() || !can_delete(field) ||
-         is_volatile(field);
+bool is_eligible_ifield(const DexField* field) {
+  return !is_static(field) && !field->is_external() && can_delete(field) &&
+         !is_volatile(field);
 }
 
 /**
@@ -111,7 +111,7 @@ void initialize_ifields(
     ConstantFieldPartition* field_partition,
     const UnorderedSet<const DexField*>& definitely_assigned_ifields) {
   walk::fields(scope, [&](DexField* field) {
-    if (not_eligible_ifield(field)) {
+    if (!is_eligible_ifield(field)) {
       return;
     }
     // For instance fields that are always written to before they are read, the
@@ -151,13 +151,10 @@ WholeProgramState::WholeProgramState(
     if (field_blocklist.count(field->get_class()) != 0u) {
       return;
     }
-    if (is_static(field) && !root(field)) {
+    const bool is_non_root_static_field = is_static(field) && !root(field);
+    if (is_non_root_static_field || is_eligible_ifield(field)) {
       m_known_fields.emplace(field);
     }
-    if (not_eligible_ifield(field)) {
-      return;
-    }
-    m_known_fields.emplace(field);
   });
   // Put non-root non true virtual methods in known methods.
   for (const auto& non_true_virtual : UnorderedIterable(non_true_virtuals)) {
@@ -373,7 +370,8 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
       op != OPCODE_INVOKE_VIRTUAL) {
     return false;
   }
-  auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  auto* method =
+      resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr) {
     return false;
   }

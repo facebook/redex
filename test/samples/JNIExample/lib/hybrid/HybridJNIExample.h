@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <fb/fbjni.h>
+#include <fbjni/fbjni.h>
 
 namespace facebook {
 class HybridJNIExample final : public jni::HybridClass<HybridJNIExample> {

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include <boost/regex.hpp>
 #include <cstring>
 #include <filesystem>
@@ -28,7 +29,7 @@
 int find_class_idx(const DexClasses& classes, const char* name) {
   for (size_t i = 0; i < classes.size(); ++i) {
     if (strcmp(name, classes[i]->get_name()->c_str()) == 0) {
-      return i;
+      return static_cast<int>(i);
     }
   }
   return -1;

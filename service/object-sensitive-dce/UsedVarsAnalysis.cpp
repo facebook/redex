@@ -179,7 +179,7 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_VIRTUAL: {
-    auto* method = resolve_invoke_method(insn, m_method);
+    auto* method = resolve_invoke_method_deprecated(insn, m_method);
     const auto& env = m_insn_env_map.at(insn);
     if (method != nullptr) {
       if (method::is_init(method)) {

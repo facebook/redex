@@ -13,7 +13,6 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "IRCode.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "VerifyUtil.h"
 

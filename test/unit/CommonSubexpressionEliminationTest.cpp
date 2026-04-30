@@ -351,14 +351,14 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("Ljava/util/ArrayList;"));
   creator.set_super(type::java_lang_Object());
 
-  auto* method = static_cast<DexMethod*>(
+  auto* method = dynamic_cast<DexMethod*>(
       DexMethod::make_method("Ljava/util/ArrayList;.<init>:()V"));
   method->set_access(ACC_PUBLIC);
   method->set_external();
   // method->set_code(assembler::ircode_from_string("((return-void))"));
   creator.add_method(method);
 
-  method = static_cast<DexMethod*>(DexMethod::make_method(
+  method = dynamic_cast<DexMethod*>(DexMethod::make_method(
       "Ljava/util/ArrayList;.add:(Ljava/lang/Object;)Z"));
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
@@ -1731,7 +1731,7 @@ TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.set_super(type::java_lang_Object());
 
-  auto* method = static_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
+  auto* method = dynamic_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
      (
@@ -2414,7 +2414,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_ne) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, if_lt_after_join) {
-  // When control-flow joints from two paths, we lose the branch conditions.
+  // When control-flow joins from two paths, we lose the branch conditions.
   const auto* code_str = R"(
     (
       (load-param v0)

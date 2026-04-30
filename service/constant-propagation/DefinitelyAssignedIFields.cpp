@@ -7,6 +7,8 @@
 
 #include "DefinitelyAssignedIFields.h"
 
+#include <vector>
+
 #include <sparta/AbstractDomain.h>
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
@@ -14,12 +16,10 @@
 #include <sparta/ReducedProductAbstractDomain.h>
 
 #include "BaseIRAnalyzer.h"
-#include "ConstantPropagationAnalysis.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
 #include "Resolver.h"
-#include "StlUtil.h"
 #include "Timer.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
@@ -229,7 +229,8 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
       } else if (opcode == OPCODE_INVOKE_DIRECT && src_idx == 0) {
         auto* method_ref = insn->get_method();
         if (method::is_init(method_ref)) {
-          DexMethod* method = resolve_method(method_ref, MethodSearch::Direct);
+          DexMethod* method =
+              resolve_method_deprecated(method_ref, MethodSearch::Direct);
           if (method != nullptr) {
             auto* method_class = method->get_class();
             if (method_class == m_declaring_type ||
@@ -339,8 +340,8 @@ UnorderedSet<const DexField*> get_definitely_assigned_ifields(
       for (const auto& use : UnorderedIterable(uses)) {
         if (opcode::is_invoke_direct(use.insn->opcode()) &&
             use.src_index == 0 && method::is_init(use.insn->get_method())) {
-          auto* resolved =
-              resolve_method(use.insn->get_method(), MethodSearch::Direct);
+          auto* resolved = resolve_method_deprecated(use.insn->get_method(),
+                                                     MethodSearch::Direct);
           if (resolved == nullptr || resolved->get_class() != def->get_type()) {
             classes_with_relaxed_invoke_init.insert(def->get_type());
           }
@@ -364,12 +365,12 @@ UnorderedSet<const DexField*> get_definitely_assigned_ifields(
       return;
     }
     auto definitely_assigned_ifields = cls->get_ifields();
-    std20::erase_if(definitely_assigned_ifields, [&](const auto* f) {
+    std::erase_if(definitely_assigned_ifields, [&](const auto* f) {
       return !can_delete(f) || !can_rename(f);
     });
     for (auto* ctor : ctors) {
       const auto* analysis_result = get_analysis_result(ctor);
-      std20::erase_if(definitely_assigned_ifields, [&](auto* f) {
+      std::erase_if(definitely_assigned_ifields, [&](auto* f) {
         return !analysis_result->definitely_assigned_ifields.count(f);
       });
     }

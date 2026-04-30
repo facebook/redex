@@ -98,27 +98,27 @@ class BaseEdgeAwareIRAnalyzer
   // After the normal instruction analysis, if an execution path is taken where
   // the instruction will throw, analyze the throwing continuation of the
   // instruction.
-  virtual void analyze_throw(const IRInstruction* insn,
-                             const cfg::GraphInterface::EdgeId& edge,
-                             Domain* current_state) const {}
+  virtual void analyze_throw(const IRInstruction* /*insn*/,
+                             const cfg::GraphInterface::EdgeId& /*edge*/,
+                             Domain* /*current_state*/) const {}
 
   // After the normal instruction analysis, if an execution path is taken where
   // the instruction will not throw, analyze the not-throwing continuation of
   // the instruction.
-  virtual void analyze_no_throw(const IRInstruction* insn,
-                                Domain* current_state) const {}
+  virtual void analyze_no_throw(const IRInstruction* /*insn*/,
+                                Domain* /*current_state*/) const {}
 
   // When a block ends with an if-instruction, analyze the case where a
   // particular edge is taken.
-  virtual void analyze_if(const IRInstruction* insn,
-                          const cfg::GraphInterface::EdgeId& edge,
-                          Domain* current_state) const {}
+  virtual void analyze_if(const IRInstruction* /*insn*/,
+                          const cfg::GraphInterface::EdgeId& /*edge*/,
+                          Domain* /*current_state*/) const {}
 
   // When a block ends with a switch-instruction, analyze the case where a
   // particular edge is taken.
-  virtual void analyze_switch(const IRInstruction* insn,
-                              const cfg::GraphInterface::EdgeId& edge,
-                              Domain* current_state) const {}
+  virtual void analyze_switch(const IRInstruction* /*insn*/,
+                              const cfg::GraphInterface::EdgeId& /*edge*/,
+                              Domain* /*current_state*/) const {}
 };
 
 template <typename Domain>

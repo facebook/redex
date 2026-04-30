@@ -8,8 +8,6 @@
 #pragma once
 
 #include "DeterministicContainers.h"
-#include "DexUtil.h"
-#include "HierarchyUtil.h"
 #include "InitClassPruner.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"

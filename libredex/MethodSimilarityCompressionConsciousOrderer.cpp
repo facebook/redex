@@ -84,11 +84,11 @@ void init_bipartite_graph(std::vector<BinaryFunction>& functions,
     if (freq <= 1) {
       continue;
     }
-    if (static_cast<size_t>(freq * 2) >= functions.size()) {
+    if (static_cast<size_t>(freq) * 2 >= functions.size()) {
       continue;
     }
 
-    uint32_t new_idx = kmer_index.size();
+    uint32_t new_idx = static_cast<uint32_t>(kmer_index.size());
     kmer_index[kmer] = new_idx;
   }
 
@@ -217,7 +217,7 @@ MethodSimilarityCompressionConsciousOrderer::get_encoded_method_content(
   memset(output.get(), 0, METHOD_MAX_OUTPUT_SIZE);
 
   // Encode
-  size_t size = code->encode(&dodx, (uint32_t*)(output.get()));
+  size_t size = code->encode(&dodx, reinterpret_cast<uint32_t*>(output.get()));
   always_assert_log(size <= METHOD_MAX_OUTPUT_SIZE,
                     "Encoded code size limit exceeded %zu versus %zu", size,
                     METHOD_MAX_OUTPUT_SIZE);

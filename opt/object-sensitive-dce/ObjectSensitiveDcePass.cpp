@@ -14,16 +14,14 @@
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
-#include "HierarchyUtil.h"
 #include "InitClassPruner.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
+#include "MethodOverrideGraph.h"
 #include "ObjectSensitiveDce.h"
 #include "PassManager.h"
 #include "Purity.h"
-#include "ScopedCFG.h"
 #include "SummarySerialization.h"
-#include "Walkers.h"
 
 namespace ptrs = local_pointers;
 

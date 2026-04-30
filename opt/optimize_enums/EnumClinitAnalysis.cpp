@@ -42,7 +42,7 @@ namespace cp = constant_propagation;
 namespace {
 
 DexMethod* get_enum_ctor() {
-  return static_cast<DexMethod*>(
+  return dynamic_cast<DexMethod*>(
       DexMethod::get_method("Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V"));
 }
 
@@ -52,7 +52,7 @@ DexMethod* get_enum_ctor() {
  */
 DexField* get_fake_field(const std::string& full_descriptor) {
   DexField* field =
-      static_cast<DexField*>(DexField::make_field(full_descriptor));
+      dynamic_cast<DexField*>(DexField::make_field(full_descriptor));
   if (field->is_concrete()) {
     field->make_concrete(ACC_PUBLIC);
   }
@@ -150,18 +150,16 @@ class EnumOrdinalAnalyzer
   static bool analyze_aput(const EnumOrdinalAnalyzerState& /*state*/,
                            const IRInstruction* insn,
                            ConstantEnvironment* /*env*/) {
-    if (insn->opcode() == OPCODE_APUT_OBJECT) {
-      // Simply not do further analysis for the aput-object instructions. Maybe
-      // we can improve the analysis in the future.
-      return true;
-    }
-    return false;
+    // Simply not do further analysis for the aput-object instructions. Maybe
+    // we can improve the analysis in the future.
+    return insn->opcode() == OPCODE_APUT_OBJECT;
   }
 
   static bool analyze_invoke(const EnumOrdinalAnalyzerState& state,
                              const IRInstruction* insn,
                              ConstantEnvironment* env) {
-    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     if (method == nullptr) {
       return false;
     }
@@ -317,7 +315,8 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls,
       continue;
     }
 
-    attributes.m_constants_map[enum_sfield].ordinal = *ordinal_value;
+    attributes.m_constants_map[enum_sfield].ordinal =
+        static_cast<int32_t>(*ordinal_value);
     attributes.m_constants_map[enum_sfield].name = *name_value;
 
     for (auto* enum_ifield : cls->get_ifields()) {

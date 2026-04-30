@@ -56,7 +56,7 @@ RegexWithCache make_rx(const std::string& s,
   auto rx =
       std::make_unique<boost::regex>(proguard_parser::form_type_regex(wc));
   InsertOnlyConcurrentMap<const DexString*, bool>* c = nullptr;
-  cache->update(wc, [&](auto, auto& value, bool) { c = &value; });
+  cache->update(wc, [&](const auto&, auto& value, bool) { c = &value; });
   return (RegexWithCache){std::move(rx), c};
 }
 
@@ -390,7 +390,7 @@ class KeepRuleMatcher {
       return;
     }
     m_already_warned.emplace(warning);
-    std::cerr << warning << std::endl;
+    std::cerr << warning << '\n';
   }
 
   size_t m_member_matches{0};
@@ -849,9 +849,9 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
             show_keep(m_keep_rule).c_str());
     }
     if (impl::KeepState::includedescriptorclasses(member)) {
-      std::vector<DexType*> types;
+      std::vector<const DexType*> types;
       member->gather_types_shallow(types);
-      for (auto* type : types) {
+      for (const auto* type : types) {
         if (auto* cls = type_class(type)) {
           impl::KeepState::set_has_keep(cls, &m_keep_rule);
           if (cls->rstate.report_whyareyoukeeping()) {
@@ -894,7 +894,7 @@ void KeepRuleMatcher::keep_processor(DexClass* cls) {
 DexClass* ProguardMatcher::find_single_class(
     const std::string& descriptor) const {
   auto const& dsc = java_names::external_to_internal(descriptor);
-  DexType* typ = DexType::get_type(m_pg_map.translate_class(dsc));
+  const DexType* typ = DexType::get_type(m_pg_map.translate_class(dsc));
   if (typ == nullptr) {
     typ = DexType::get_type(dsc);
     if (typ == nullptr) {

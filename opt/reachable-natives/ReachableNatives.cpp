@@ -7,12 +7,9 @@
 
 #include "ReachableNatives.h"
 
-#include <algorithm>
 #include <fstream>
-#include <iterator>
 #include <string>
 
-#include "BinarySerialization.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "CppUtil.h"
@@ -24,14 +21,11 @@
 #include "IROpcode.h"
 #include "LiveRange.h"
 #include "PassManager.h"
-#include "ProguardConfiguration.h"
 #include "Reachability.h"
-#include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Show.h"
-#include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -67,7 +61,7 @@ bool ReachableNativesPass::gather_load_library(
     if (!opcode::is_invoke_static(insn->opcode())) {
       continue;
     }
-    auto* callee = resolve_invoke_method(insn, caller);
+    auto* callee = resolve_invoke_method_deprecated(insn, caller);
     if (callee == nullptr) {
       continue;
     }
@@ -332,7 +326,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
       for (auto* m : UnorderedIterable(unreachable_natives)) {
         reachable_objects->mark(m);
         self_recursive_fn(
-            [&](auto self, DexType* type) {
+            [&](auto self, const DexType* type) {
               auto* cls = type_class(type);
               if (!scope_set.count(cls) ||
                   reachable_objects->marked_unsafe(cls)) {
@@ -340,7 +334,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
               }
               reachable_objects->mark(cls);
               self(self, cls->get_super_class());
-              for (auto* intf_type : *cls->get_interfaces()) {
+              for (const auto* intf_type : *cls->get_interfaces()) {
                 self(self, intf_type);
               }
               if (!is_abstract(cls)) {

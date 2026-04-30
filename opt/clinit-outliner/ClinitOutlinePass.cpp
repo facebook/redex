@@ -12,8 +12,8 @@
 #include "ApiLevelChecker.h"
 #include "BaselineProfile.h"
 #include "ConfigFiles.h"
-#include "Creators.h"
 #include "DeterministicContainers.h"
+#include "IRCode.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
@@ -136,9 +136,10 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
       auto [old_threshold, new_threshold] = p;
       auto stats =
           method_profiles.get_method_stat(interaction_id, outlined_clinit);
-      if (stats && stats->appear_percent >= new_threshold &&
-          stats->appear_percent < old_threshold) {
-        stats->appear_percent = old_threshold;
+      if (stats &&
+          stats->appear_percent >= static_cast<double>(new_threshold) &&
+          stats->appear_percent < static_cast<double>(old_threshold)) {
+        stats->appear_percent = static_cast<double>(old_threshold);
         method_profiles.set_method_stats(interaction_id, outlined_clinit,
                                          *stats);
       }

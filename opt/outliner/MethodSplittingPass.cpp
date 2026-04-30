@@ -13,7 +13,8 @@
 
 #include "BaselineProfile.h"
 #include "ConfigFiles.h"
-#include "InterDexPass.h"
+#include "DexUtil.h"
+#include "InterDexPassMetrics.h"
 #include "MethodProfiles.h"
 #include "MethodSplitter.h"
 #include "PassManager.h"

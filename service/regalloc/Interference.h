@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <boost/functional/hash.hpp>
 #include <vector>
 
 #include "ControlFlow.h"

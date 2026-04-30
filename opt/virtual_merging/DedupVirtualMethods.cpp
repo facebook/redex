@@ -5,11 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <vector>
+
 #include "DexUtil.h"
 #include "MethodFixup.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -121,7 +122,7 @@ uint32_t remove_duplicated_vmethods(
 
       // Now, remove the methods that are called with INVOKE_SUPER from
       // the duplicates set.
-      std20::erase_if(duplicates, [&](auto& m) {
+      std::erase_if(duplicates, [&](auto& m) {
         return super_invoked_methods.count_unsafe(m);
       });
 

@@ -8,7 +8,7 @@
 #pragma once
 
 #include <boost/iostreams/categories.hpp>
-#include <boost/iostreams/operations.hpp>
+#include <boost/iostreams/operations.hpp> // NOLINT(facebook-unused-include-check)
 #include <cstdio>
 
 class CommentFilter {

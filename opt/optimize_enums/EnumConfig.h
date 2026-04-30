@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
 
@@ -19,12 +21,12 @@ struct ParamSummary {
   // as return value.
   UnorderedSet<uint16_t> safe_params;
   // Index of parameter if it's exactly the return value.
-  boost::optional<uint16_t> returned_param;
+  std::optional<uint16_t> returned_param;
 
-  ParamSummary() : returned_param(boost::none) {}
+  ParamSummary() : returned_param(std::nullopt) {}
 
   ParamSummary(UnorderedSet<uint16_t>&& safe_params,
-               boost::optional<uint16_t> returned_param)
+               std::optional<uint16_t> returned_param)
       : safe_params(std::move(safe_params)), returned_param(returned_param) {}
 
   void print(const DexMethodRef* method) const;
@@ -47,16 +49,16 @@ struct Config {
    * Will try to optimize the enums in the allowlist without considering
    * reference equality of the enum objects.
    */
-  UnorderedSet<DexType*> breaking_reference_equality_allowlist;
+  UnorderedSet<const DexType*> breaking_reference_equality_allowlist;
   SummaryMap param_summary_map;
-  ConcurrentSet<DexType*> candidate_enums;
+  ConcurrentSet<const DexType*> candidate_enums;
 
   explicit Config(uint32_t max_size) : max_enum_size(max_size) {}
 
   explicit Config(uint32_t max_size,
                   bool skip_sanity_check,
                   bool support_kt_19_enum_entries,
-                  const std::vector<DexType*>& allowlist)
+                  const std::vector<const DexType*>& allowlist)
       : max_enum_size(max_size),
         skip_sanity_check(skip_sanity_check),
         support_kt_19_enum_entries(support_kt_19_enum_entries),

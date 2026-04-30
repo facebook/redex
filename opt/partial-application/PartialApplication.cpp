@@ -80,7 +80,7 @@
 
 #include <cinttypes>
 
-#include <boost/format.hpp>
+#include <boost/format.hpp> // NOLINT
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
 
@@ -90,6 +90,7 @@
 #include "Creators.h"
 #include "DeterministicContainers.h"
 #include "LiveRange.h"
+#include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
 #include "OutliningProfileGuidanceImpl.h"
 #include "PassManager.h"
@@ -97,7 +98,6 @@
 #include "RefChecker.h"
 #include "Shrinker.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Walkers.h"
 
 using namespace inliner;
@@ -164,7 +164,7 @@ DexField* try_get_enum_utils_f_field(EnumUtilsCache& cache,
   always_assert(c);
   return *cache
               .get_or_create_and_assert_equal(
-                  *c,
+                  static_cast<int32_t>(*c),
                   [&](int32_t key) -> DexField* {
                     auto* cls =
                         type_class(DexType::make_type("Lredex/$EnumUtils;"));
@@ -190,7 +190,7 @@ std::pair<param_index_t, bool> analyze_args(const DexMethod* callee) {
   }
   param_index_t expanded_src_regs{
       static_cast<param_index_t>(!is_static(callee))};
-  for (auto* t : *args) {
+  for (const auto* t : *args) {
     expanded_src_regs += type::is_wide_type(t) ? 2 : 1;
   }
   auto needs_range = expanded_src_regs > 5;
@@ -235,7 +235,7 @@ ArgExclusivityVector get_arg_exclusivity(const UseDefChains& use_def_chains,
       }
       count++;
     }
-    float ownership = other_use ? 0.0 : (1.0 / count);
+    float ownership = other_use ? 0.0f : (1.0f / static_cast<float>(count));
     // TODO: We also likely need a move if there are more than 16 args
     // (including extra wides) live at this point.
     bool needs_move = needs_range && (other_use || count > 1);
@@ -352,13 +352,16 @@ bool filter(const RefChecker& ref_checker,
       always_assert(signed_value2);
       return filter(ref_checker, enum_utils_cache, *signed_value2);
     }
+    // NOLINTNEXTLINE(bugprone-branch-clone)
   } else if (const auto& string_value = value.maybe_get<StringDomain>()) {
     // TODO: Support strings.
     return false;
+    // NOLINTNEXTLINE(bugprone-branch-clone)
   } else if (const auto& class_or_none =
                  value.maybe_get<ConstantClassObjectDomain>()) {
     // TODO: Support class objects.
     return false;
+    // NOLINTNEXTLINE(bugprone-branch-clone)
   } else if (const auto& new_obj_or_none = value.maybe_get<NewObjectDomain>()) {
     return false;
   } else {
@@ -438,38 +441,37 @@ class CalleeInvocationSelector {
       always_assert(c);
       auto lit = *c;
       if (lit < -2147483648 || lit > 2147483647) {
-        return m_cost_config.const_signed_cost_base +
-               m_cost_config.const_signed_cost_addon_1 +
-               m_cost_config.const_signed_cost_addon_2 +
-               m_cost_config.const_signed_cost_addon_3;
-        ;
+        return static_cast<int16_t>(m_cost_config.const_signed_cost_base +
+                                    m_cost_config.const_signed_cost_addon_1 +
+                                    m_cost_config.const_signed_cost_addon_2 +
+                                    m_cost_config.const_signed_cost_addon_3);
       } else if (lit < -32768 || lit > 32767) {
-        return m_cost_config.const_signed_cost_base +
-               m_cost_config.const_signed_cost_addon_1 +
-               m_cost_config.const_signed_cost_addon_2;
+        return static_cast<int16_t>(m_cost_config.const_signed_cost_base +
+                                    m_cost_config.const_signed_cost_addon_1 +
+                                    m_cost_config.const_signed_cost_addon_2);
       } else if (lit < -8 || lit > 7) {
-        return m_cost_config.const_signed_cost_base +
-               m_cost_config.const_signed_cost_addon_1;
+        return static_cast<int16_t>(m_cost_config.const_signed_cost_base +
+                                    m_cost_config.const_signed_cost_addon_1);
       } else {
-        return m_cost_config.const_signed_cost_base;
+        return static_cast<int16_t>(m_cost_config.const_signed_cost_base);
       }
     } else if (const auto& singleton_value =
                    value.maybe_get<SingletonObjectDomain>()) {
-      return m_cost_config.const_singleton_cost;
+      return static_cast<int16_t>(m_cost_config.const_singleton_cost);
     } else if (const auto& obj_or_none =
                    value.maybe_get<ObjectWithImmutAttrDomain>()) {
       auto object = obj_or_none->get_constant();
       always_assert(object);
       if (try_get_enum_utils_f_field(m_enum_utils_cache, *object) != nullptr) {
-        return m_cost_config.const_obj_or_none_cost_1;
+        return static_cast<int16_t>(m_cost_config.const_obj_or_none_cost_1);
       } else {
         always_assert(object->jvm_cached_singleton);
         always_assert(object->attributes.size() == 1);
         const auto& signed_value2 =
             object->attributes.front().value.maybe_get<SignedConstantDomain>();
         always_assert(signed_value2);
-        return m_cost_config.const_obj_or_none_cost_2 +
-               const_value_cost(*signed_value2);
+        return static_cast<int16_t>(m_cost_config.const_obj_or_none_cost_2 +
+                                    const_value_cost(*signed_value2));
       }
     } else {
       not_reached_log("unexpected value: %s", SHOW(value));
@@ -479,7 +481,7 @@ class CalleeInvocationSelector {
   std::pair<param_index_t, uint32_t> find_argument_with_least_cost(
       const CallSiteSummary* css) const {
     const auto& bindings = css->arguments.bindings();
-    boost::optional<int32_t> least_cost;
+    std::optional<int32_t> least_cost;
     param_index_t least_cost_src_idx = 0;
     for (const auto& p : bindings) {
       const auto& arguments_cost = m_total_argument_costs.at(p.first);
@@ -506,15 +508,16 @@ class CalleeInvocationSelector {
     // - the cost of const instructions
     // - some extra potetnail move overhead if we need the range form
     int32_t pa_cross_dex_penalty =
-        2 * std::ceil(std::sqrt(m_callee_caller_classes));
-    int32_t pa_method_cost = m_cost_config.cost_method + pa_cross_dex_penalty +
-                             static_cast<unsigned long>(css->result_used);
+        static_cast<int32_t>(2 * std::ceil(std::sqrt(m_callee_caller_classes)));
+    int32_t pa_method_cost = static_cast<int32_t>(m_cost_config.cost_method) +
+                             pa_cross_dex_penalty +
+                             static_cast<int32_t>(css->result_used);
     const auto& bindings = css->arguments.bindings();
     for (const auto& r : bindings) {
       pa_method_cost += const_value_cost(r.second);
     }
     if (m_needs_range) {
-      pa_method_cost += m_src_regs;
+      pa_method_cost += static_cast<int32_t>(m_src_regs);
     }
 
     auto call_sites_savings =
@@ -619,8 +622,8 @@ class CalleeInvocationSelector {
         const auto src_idx = q.first;
         const auto& value = q.second;
         auto& aae = aaem[src_idx];
-        int32_t cost =
-            const_value_cost(value) * aae.ownership + 2 * aae.needs_move;
+        int32_t cost = static_cast<int32_t>(
+            const_value_cost(value) * aae.ownership + 2 * aae.needs_move);
         ac.emplace(src_idx, cost);
         auto key = get_key(value);
         m_total_argument_costs.at(src_idx)[key] += cost;
@@ -1000,7 +1003,7 @@ void rewrite_callers(
 
 // Helper used to build the partial-assignment helper methods.
 void push_callee_arg(EnumUtilsCache& enum_utils_cache,
-                     DexType* type,
+                     const DexType* type,
                      const ConstantValue& value,
                      MethodCreator* method_creator,
                      MethodBlock* main_block,
@@ -1034,7 +1037,7 @@ void push_callee_arg(EnumUtilsCache& enum_utils_cache,
       always_assert(object->jvm_cached_singleton);
       always_assert(object->attributes.size() == 1);
       auto* valueOf = type::get_value_of_method_for_type(object->type);
-      auto* valueOf_arg_type = valueOf->get_proto()->get_args()->at(0);
+      const auto* valueOf_arg_type = valueOf->get_proto()->get_args()->at(0);
       auto tmp = method_creator->make_local(valueOf_arg_type);
       const auto& signed_value2 =
           object->attributes.front().value.maybe_get<SignedConstantDomain>();
@@ -1206,7 +1209,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
 
   int min_sdk = mgr.get_redex_options().min_sdk;
   const auto* min_sdk_api = get_min_sdk_api(conf, mgr);
-  XStoreRefs xstores(stores);
+  XStoreRefs xstores(stores, conf.normal_primary_dex());
   // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
   // it rejects all the references from stores with id larger than the largest
   // root_store id.
@@ -1237,7 +1240,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   ShrinkerConfig shrinker_config;
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
-  Shrinker shrinker(stores, scope, init_classes_with_side_effects,
+  Shrinker shrinker(stores, scope, init_classes_with_side_effects, conf,
                     shrinker_config, min_sdk, {}, {}, {},
                     mgr.get_redex_options().package_name);
 
@@ -1253,8 +1256,8 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
         (excluded_classes.count(caller->get_class()) != 0u)) {
       return nullptr;
     }
-    auto* callee =
-        resolve_method(insn->get_method(), opcode_to_search(insn), caller);
+    auto* callee = resolve_method_deprecated(insn->get_method(),
+                                             opcode_to_search(insn), caller);
     if ((callee == nullptr) || callee->is_external()) {
       return nullptr;
     }

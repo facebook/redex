@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/thread/once.hpp>
 #include <gtest/gtest.h>
 #include <json/json.h>
 #include <unordered_set>
@@ -27,8 +26,7 @@ class ObjectSensitiveDceTest : public RedexIntegrationTest {
     // we need in the tests to create a proper scope
     virt_scope::get_vmethods(type::java_lang_Object());
 
-    auto* object_ctor =
-        static_cast<DexMethod*>(method::java_lang_Object_ctor());
+    auto* object_ctor = method::java_lang_Object_ctor();
     object_ctor->set_access(ACC_PUBLIC | ACC_CONSTRUCTOR);
     object_ctor->set_external();
     type_class(type::java_lang_Object())->add_method(object_ctor);

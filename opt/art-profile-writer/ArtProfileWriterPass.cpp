@@ -13,8 +13,8 @@
 
 #include "ArtProfileWriterPass.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/regex.hpp>
+#include <boost/algorithm/string/replace.hpp>
+#include <boost/regex.hpp> // NOLINT
 #include <fstream>
 #include <string>
 
@@ -160,13 +160,14 @@ void never_inline(bool attach_annotations,
           auto* receiver_cls = type_class(receiver_type);
           if ((receiver_cls != nullptr) && !is_interface(receiver_cls)) {
             auto* invoke_method = invoke_insn->get_method();
-            callee = resolve_virtual(receiver_cls, invoke_method->get_name(),
-                                     invoke_method->get_proto());
+            callee = resolve_virtual_deprecated(receiver_cls,
+                                                invoke_method->get_name(),
+                                                invoke_method->get_proto());
           }
         }
       }
       if (callee == nullptr) {
-        callee = resolve_invoke_method(invoke_insn, caller);
+        callee = resolve_invoke_method_deprecated(invoke_insn, caller);
       }
       if (!consider_callee(callee)) {
         return nullptr;
@@ -389,7 +390,7 @@ void never_inline(bool attach_annotations,
 bool never_compile_callcount_threshold_met(
     double call_count, int64_t never_compile_callcount_threshold) {
   return never_compile_callcount_threshold > -1 &&
-         call_count <= never_compile_callcount_threshold;
+         call_count <= static_cast<double>(never_compile_callcount_threshold);
 }
 
 bool never_compile_perf_threshold_met(DexMethod* method,
@@ -421,7 +422,7 @@ bool never_compile_perf_threshold_met(DexMethod* method,
               ? 10
               : 1;
       if (opcode::is_switch(insn->opcode()) && is_sparse(block)) {
-        sparse_switch_cases += block->succs().size();
+        sparse_switch_cases += static_cast<int64_t>(block->succs().size());
       }
     }
   }
@@ -439,8 +440,10 @@ bool never_compile_perf_threshold_met(DexMethod* method,
   // to find a case where the cost of the executing sparse switch
   // excessively dominates the cost of code per switch case, which the
   // following achieves.
-  if ((interpretation_cost / std::pow(sparse_switch_cases, 2)) * 100 >
-      never_compile_perf_threshold) {
+  if ((static_cast<double>(interpretation_cost) /
+       std::pow(sparse_switch_cases, 2)) *
+          100 >
+      static_cast<double>(never_compile_perf_threshold)) {
     return false;
   }
 
@@ -477,7 +480,7 @@ bool never_compile_called_coverage_threshold_met(
   }
   auto effective_call_count = std::max(1.0, call_count);
   if (effective_call_count * covered_code_units * 100 / total_code_units >=
-      never_compile_called_coverage_threshold) {
+      static_cast<double>(never_compile_called_coverage_threshold)) {
     return false;
   }
   TRACE(APW, 5,
@@ -554,9 +557,11 @@ void never_compile_impl(
       }
       if ((excluded_interaction_ids.count(interaction_id) != 0u) &&
           method_stats->appear_percent >
-              harvest_config.never_compile_excluded_appear100_threshold &&
+              static_cast<double>(
+                  harvest_config.never_compile_excluded_appear100_threshold) &&
           method_stats->call_count >
-              harvest_config.never_compile_excluded_call_count_threshold) {
+              static_cast<double>(
+                  harvest_config.never_compile_excluded_call_count_threshold)) {
         return;
       }
       call_count = std::max(call_count, method_stats->call_count);
@@ -1032,17 +1037,16 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                       appear100);
     }
     mgr.incr_metric(prefix + "compiled_code_units",
-                    (size_t)compiled_code_units_cold +
-                        (size_t)compiled_code_units_hot +
-                        (size_t)compiled_code_units_unknown);
+                    compiled_code_units_cold.load() + compiled_code_units_hot +
+                        compiled_code_units_unknown.load());
     mgr.incr_metric(prefix + "compiled_code_units_cold",
-                    (size_t)compiled_code_units_cold);
+                    compiled_code_units_cold);
     mgr.incr_metric(prefix + "compiled_code_units_hot",
-                    (size_t)compiled_code_units_hot);
+                    compiled_code_units_hot);
     mgr.incr_metric(prefix + "compiled_code_units_hot_super",
-                    (size_t)compiled_code_units_hot_super);
+                    compiled_code_units_hot_super);
     mgr.incr_metric(prefix + "compiled_code_units_unknown",
-                    (size_t)compiled_code_units_unknown);
+                    compiled_code_units_unknown);
 
     const auto& bp_config =
         conf.get_baseline_profile_configs().at(bp_config_name);

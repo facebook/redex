@@ -20,8 +20,8 @@
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRInstruction.h"
+#include "TypeUtil.h"
 
 namespace reflection {
 
@@ -82,11 +82,11 @@ using AbstractHeapAddress = uint64_t;
 
 struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObjectKind obj_kind;
-  DexType* dex_type;
+  const DexType* dex_type;
   const DexString* dex_string;
   boost::optional<int64_t> dex_int = boost::none;
   // Attaching a set of potential dex types.
-  UnorderedSet<DexType*> potential_dex_types;
+  UnorderedSet<const DexType*> potential_dex_types;
 
   // for objects of Class[] type, we model the heap stored array with a
   // HeapClassArrayEnvironment
@@ -99,7 +99,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   // 1. We need to store information of arrays of Class objects.
   // 2. Associate the parameterType argument of getDeclaredMethod to the Class
   // arrays.
-  boost::optional<std::vector<DexType*>> dex_type_array = boost::none;
+  boost::optional<std::vector<const DexType*>> dex_type_array = boost::none;
 
   // AbstractObject must be default constructible in order to be used as an
   // abstract value.
@@ -111,12 +111,14 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   explicit AbstractObject(int64_t i)
       : obj_kind(INT), dex_type(nullptr), dex_string(nullptr), dex_int(i) {}
 
-  AbstractObject(AbstractObjectKind k, DexType* t)
+  AbstractObject(AbstractObjectKind k, const DexType* t)
       : obj_kind(k), dex_type(t), dex_string(nullptr) {
     always_assert(k == OBJECT || k == CLASS);
   }
 
-  AbstractObject(AbstractObjectKind k, DexType* t, UnorderedSet<DexType*> p)
+  AbstractObject(AbstractObjectKind k,
+                 const DexType* t,
+                 UnorderedSet<const DexType*> p)
       : obj_kind(k),
         dex_type(t),
         dex_string(nullptr),
@@ -124,15 +126,15 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
     always_assert(k == OBJECT || k == CLASS);
   }
 
-  AbstractObject(AbstractObjectKind k, DexType* t, const DexString* s)
+  AbstractObject(AbstractObjectKind k, const DexType* t, const DexString* s)
       : obj_kind(k), dex_type(t), dex_string(s) {
     always_assert(k == FIELD || k == METHOD);
   }
 
   AbstractObject(AbstractObjectKind k,
-                 DexType* t,
+                 const DexType* t,
                  const DexString* s,
-                 UnorderedSet<DexType*> p)
+                 UnorderedSet<const DexType*> p)
       : obj_kind(k),
         dex_type(t),
         dex_string(s),
@@ -165,7 +167,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
     return sparta::AbstractValueKind::Value;
   }
 
-  DexType* get_dex_type() const { return dex_type; }
+  const DexType* get_dex_type() const { return dex_type; }
 
   bool is_object() const { return obj_kind == OBJECT; }
 
@@ -305,7 +307,7 @@ struct MetadataCache {
                                                       {"Ljava/lang/String;"},
                                                       "Ljava/lang/Class;")};
 
-  const std::map<const DexFieldRef*, DexType*, dexfields_comparator>
+  const std::map<const DexFieldRef*, const DexType*, dexfields_comparator>
       primitive_field_to_type = {
           {type::pseudo::Void_TYPE(), type::_void()},
           {type::pseudo::Boolean_TYPE(), type::_boolean()},
@@ -359,7 +361,7 @@ class ReflectionAnalysis final {
   /**
    * Return a parameter type array for this invoke method instruction.
    */
-  boost::optional<std::vector<DexType*>> get_method_params(
+  boost::optional<std::vector<const DexType*>> get_method_params(
       IRInstruction* invoke_insn) const;
 
   bool has_found_reflection() const;

@@ -10,11 +10,10 @@
 #include <sstream>
 
 #include "Creators.h"
-#include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
-#include "ScopeHelper.h"
+#include "TypeUtil.h"
 #include "UnreachableLoweringPass.h"
 #include "VirtualScope.h"
 

@@ -114,7 +114,7 @@ void Stats::report(PassManager& mgr) const {
 }
 
 Stats replace_uninstantiable_refs(
-    const UnorderedSet<DexType*>& scoped_uninstantiable_types,
+    const UnorderedSet<const DexType*>& scoped_uninstantiable_types,
     cfg::ControlFlowGraph& cfg) {
   cfg::CFGMutation m(cfg);
 
@@ -236,7 +236,7 @@ Stats reduce_uncallable_instance_methods(
       [&](DexMethod* method) {
         auto* overridden_method =
             method->is_virtual()
-                ? resolve_method(method, MethodSearch::Super, method)
+                ? resolve_method_deprecated(method, MethodSearch::Super, method)
                 : nullptr;
         if (overridden_method == nullptr && method->is_virtual() &&
             !is_implementation_method(method)) {

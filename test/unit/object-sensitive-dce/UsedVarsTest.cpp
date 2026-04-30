@@ -12,8 +12,9 @@
 
 #include "Creators.h"
 #include "IRAssembler.h"
-#include "ObjectSensitiveDcePass.h"
+#include "LocalPointersAnalysis.h"
 #include "RedexTest.h"
+#include "SideEffectSummary.h"
 
 namespace ptrs = local_pointers;
 namespace uv = used_vars;
@@ -47,8 +48,9 @@ void optimize(const uv::FixpointIterator& fp_iter, cfg::ControlFlowGraph& cfg) {
 }
 
 // We need to construct the classes in our tests because the used vars analysis
-// will call resolve_method() during its analysis. resolve_method() needs the
-// method to reside in a class hierarchy in order to work correctly.
+// will call resolve_method_deprecated() during its analysis.
+// resolve_method_deprecated() needs the method to reside in a class hierarchy
+// in order to work correctly.
 DexClass* create_simple_class(const std::string& name) {
   ClassCreator cc(DexType::make_type(name));
   cc.set_super(type::java_lang_Object());
@@ -270,10 +272,8 @@ TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
     auto* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
       auto* method = insn->get_method();
-      if (method::is_init(method)) {
-        invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
-        invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
-      } else if (method->get_name()->str() == "nosideeffects") {
+      if (method::is_init(method) ||
+          method->get_name()->str() == "nosideeffects") {
         invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
         invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
       }

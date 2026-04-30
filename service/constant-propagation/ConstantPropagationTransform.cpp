@@ -8,6 +8,7 @@
 #include "ConstantPropagationTransform.h"
 
 #include <unordered_set>
+#include <vector>
 
 #include "IRCode.h"
 #include "Match.h"
@@ -18,7 +19,6 @@
 #include "ScopedMetrics.h"
 #include "SignedConstantDomain.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeInference.h"
@@ -216,7 +216,7 @@ void Transform::swap_kotlin_areequal(
     const intraprocedural::FixpointIterator& intra_cp,
     cfg::ControlFlowGraph& cfg,
     bool is_static,
-    DexType* declaring_type,
+    const DexType* declaring_type,
     DexProto* proto) {
   if (!constant_propagation_transform_internal::enable_replacing_areequal) {
     return;
@@ -753,8 +753,8 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     if (!opcode::is_an_invoke(primary_insn->opcode())) {
       break;
     }
-    auto* invoked = resolve_method(primary_insn->get_method(),
-                                   opcode_to_search(primary_insn));
+    auto* invoked = resolve_method_deprecated(primary_insn->get_method(),
+                                              opcode_to_search(primary_insn));
     if (invoked == nullptr) {
       break;
     }
@@ -885,7 +885,7 @@ void Transform::remove_dead_switch(
       m_edge_adds.emplace_back(block, goto_target, cfg::EDGE_GOTO);
       goto_edge = nullptr;
     }
-    auto removed = std20::erase_if(remaining_branch_edges, [&](auto* e) {
+    auto removed = std::erase_if(remaining_branch_edges, [&](auto* e) {
       if (e->target() == most_common_target) {
         m_edge_deletes.push_back(e);
         return true;
@@ -1226,13 +1226,13 @@ void Transform::forward_targets(
     }
 
     // Find last successor where no assigned reg is live
-    for (int i = unconditional_targets.size() - 1; i >= 1; --i) {
+    for (size_t i = unconditional_targets.size() - 1; i >= 1; --i) {
       const auto& unconditional_target = unconditional_targets.at(i);
       if (is_any_assigned_reg_live_at_target(unconditional_target)) {
         continue;
       }
       TRACE(CONSTP, 2,
-            "forward_targets rewrites target, skipping %d targets, discharged "
+            "forward_targets rewrites target, skipping %zu targets, discharged "
             "%zu assigned regs",
             i, unconditional_target.assigned_regs.size());
       return unconditional_target.target;
@@ -1259,7 +1259,7 @@ void Transform::forward_targets(
 
     // This is an optimization, if block wasn't hit, we don't need to fix up
     // source blocks
-    auto last_source_sb = source_blocks::get_last_source_block(block);
+    auto* last_source_sb = source_blocks::get_last_source_block(block);
     bool block_was_hit = false;
     if (last_source_sb != nullptr) {
       block_was_hit = last_source_sb->foreach_val_early(

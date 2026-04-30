@@ -31,8 +31,14 @@ using namespace virt_scope;
  */
 class TypeSystem {
  private:
-  static const TypeSet empty_set;
-  static const TypeVector empty_vec;
+  static const TypeSet& get_empty_set() {
+    static const TypeSet empty_set;
+    return empty_set;
+  }
+  static const TypeVector& get_empty_vec() {
+    static const TypeVector empty_vec;
+    return empty_vec;
+  }
 
   ClassScopes m_class_scopes;
   ClassHierarchy m_intf_children;
@@ -50,7 +56,7 @@ class TypeSystem {
     const auto& children = m_class_scopes.get_class_hierarchy().find(type);
     return children != m_class_scopes.get_class_hierarchy().end()
                ? children->second
-               : empty_set;
+               : get_empty_set();
   }
 
   /**
@@ -72,7 +78,7 @@ class TypeSystem {
   const TypeVector& parent_chain(const DexType* type) const {
     const auto& parents = m_instanceof_table.find(type);
     if (parents == m_instanceof_table.end()) {
-      return empty_vec;
+      return get_empty_vec();
     }
     return parents->second;
   }
@@ -83,7 +89,7 @@ class TypeSystem {
    */
   const TypeSet& get_implemented_interfaces(const DexType* type) const {
     const auto& intfs = m_interfaces.find(type);
-    return intfs != m_interfaces.end() ? intfs->second : empty_set;
+    return intfs != m_interfaces.end() ? intfs->second : get_empty_set();
   }
 
   TypeSet get_implemented_interfaces(const TypeSet& types) const {
@@ -145,7 +151,7 @@ class TypeSystem {
   const TypeSet& get_implementors(const DexType* intf) const {
     const auto& implementors = m_class_scopes.get_interface_map().find(intf);
     if (implementors == m_class_scopes.get_interface_map().end()) {
-      return empty_set;
+      return get_empty_set();
     }
     return implementors->second;
   }
@@ -166,7 +172,7 @@ class TypeSystem {
   const TypeSet& get_interface_children(const DexType* intf) const {
     const auto& children = m_intf_children.find(intf);
     if (children == m_intf_children.end()) {
-      return empty_set;
+      return get_empty_set();
     }
     return children->second;
   }

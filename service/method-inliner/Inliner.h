@@ -13,6 +13,7 @@
 #include "BaselineProfile.h"
 #include "CallSiteSummaries.h"
 #include "DeterministicContainers.h"
+#include "DexUtil.h"
 #include "PriorityThreadPoolDAGScheduler.h"
 #include "RefChecker.h"
 #include "Resolver.h"
@@ -31,8 +32,8 @@ struct InlinerConfig;
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
                      IRInstruction* callsite,
-                     DexType* needs_receiver_cast,
-                     DexType* needs_init_class,
+                     const DexType* needs_receiver_cast,
+                     const DexType* needs_init_class,
                      size_t next_caller_reg,
                      const cfg::ControlFlowGraph* reduced_cfg = nullptr,
                      DexMethod* rewrite_invoke_super_callee = nullptr,
@@ -154,7 +155,7 @@ struct CallerInsns {
   // Invoke instructions per caller
   UnorderedMap<const DexMethod*, UnorderedSet<IRInstruction*>> caller_insns;
   // Invoke instructions that need a cast
-  UnorderedMap<IRInstruction*, DexType*> inlined_invokes_need_cast;
+  UnorderedMap<IRInstruction*, const DexType*> inlined_invokes_need_cast;
   // Whether there may be any other unknown call-sites.
   bool other_call_sites{false};
   bool other_call_sites_overriding_methods_added{false};
@@ -207,7 +208,7 @@ struct Inlinable {
   size_t insn_size;
   // Whether the callee is a virtual method different from the one referenced in
   // the invoke instruction.
-  DexType* needs_receiver_cast;
+  const DexType* needs_receiver_cast;
 };
 
 struct CalleeCallerRefs {
@@ -276,6 +277,7 @@ class MultiMethodInliner {
       const init_classes::InitClassesWithSideEffects&
           init_classes_with_side_effects,
       DexStoresVector& stores,
+      const ConfigFiles& conf,
       const UnorderedSet<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethodRef*, MethodSearch, const DexMethod*)>
           concurrent_resolve_fn,
@@ -403,7 +405,7 @@ class MultiMethodInliner {
  private:
   void make_partial(const DexMethod* method, InlinedCost* inlined_Cost);
 
-  DexType* get_needs_init_class(DexMethod* callee) const;
+  const DexType* get_needs_init_class(DexMethod* callee) const;
 
   bool get_needs_constructor_fence(const DexMethod* caller,
                                    const DexMethod* callee) const;
@@ -584,7 +586,7 @@ class MultiMethodInliner {
   /**
    * Gets the set of referenced types in a callee.
    */
-  std::shared_ptr<UnorderedBag<DexType*>> get_callee_type_refs(
+  std::shared_ptr<UnorderedBag<const DexType*>> get_callee_type_refs(
       const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg);
 
   /**
@@ -753,7 +755,7 @@ class MultiMethodInliner {
   // Mapping from callers to auxiliary data for contained true virtual callees
   UnorderedMap<const DexMethod*, CallerVirtualCallees> m_caller_virtual_callees;
 
-  UnorderedMap<IRInstruction*, DexType*> m_inlined_invokes_need_cast;
+  UnorderedMap<IRInstruction*, const DexType*> m_inlined_invokes_need_cast;
 
   UnorderedSet<const DexMethod*> m_true_virtual_callees_with_other_call_sites;
 
@@ -814,7 +816,7 @@ class MultiMethodInliner {
   // Optional cache for get_callee_type_refs function
   std::unique_ptr<
       InsertOnlyConcurrentMap<const DexMethod*,
-                              std::shared_ptr<UnorderedBag<DexType*>>>>
+                              std::shared_ptr<UnorderedBag<const DexType*>>>>
       m_callee_type_refs;
 
   // Optional cache for get_callee_code_refs function
@@ -845,7 +847,7 @@ class MultiMethodInliner {
     size_t recursive{0};
     size_t max_call_stack_depth{0};
     size_t waited_seconds{0};
-    int critical_path_length{0};
+    uint32_t critical_path_length{0};
 
     // statistics that may be incremented concurrently
     std::atomic<size_t> kotlin_lambda_inlined{0};
@@ -882,7 +884,7 @@ class MultiMethodInliner {
     std::atomic<size_t> constant_invoke_callees_unused_results{0};
     std::atomic<size_t> constant_invoke_callees_no_return{0};
     inliner::CallSiteSummaryStats call_site_summary_stats;
-    AtomicMap<const DexMethod*, size_t> partially_inlined_callees{};
+    AtomicMap<const DexMethod*, size_t> partially_inlined_callees;
   };
   InliningInfo info;
 

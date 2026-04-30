@@ -65,9 +65,9 @@ class NullPointerExceptionCreator {
         str = implicitly_throwing_npe_insn->get_field()->get_name()->str_copy();
       }
     } else if (implicitly_throwing_npe_insn->has_method()) {
-      auto* resolved_method =
-          resolve_method(implicitly_throwing_npe_insn->get_method(),
-                         opcode_to_search(implicitly_throwing_npe_insn));
+      auto* resolved_method = resolve_method_deprecated(
+          implicitly_throwing_npe_insn->get_method(),
+          opcode_to_search(implicitly_throwing_npe_insn));
       if (resolved_method != nullptr) {
         str = resolved_method->get_simple_deobfuscated_name();
       } else {

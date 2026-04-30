@@ -18,8 +18,6 @@
 #include "MethodProfiles.h"
 #include "RedexTest.h"
 #include "Show.h"
-#include "VirtScopeHelper.h"
-#include "Walkers.h"
 
 class SplitHugeSwitchTest : public RedexTest {
  public:

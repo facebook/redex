@@ -77,8 +77,8 @@ bool can_update_rtype_for(DexMethod* meth, const DexProto* new_proto) {
           SHOW(new_proto));
     return false;
   }
-  auto* resolved = resolve_method(type_class(meth->get_class()),
-                                  meth->get_name(), new_proto);
+  auto* resolved = resolve_method_deprecated(type_class(meth->get_class()),
+                                             meth->get_name(), new_proto);
   if (resolved != nullptr) {
     // Bail on virtual scope collision.
     TRACE(RESO, 4, "specialize bail on virtual scope collision w/ %s",

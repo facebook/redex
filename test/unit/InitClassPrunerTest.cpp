@@ -50,7 +50,7 @@ struct InitClassPrunerTest : public RedexTest {
     const auto* clinit_name = DexString::make_string("<clinit>");
     auto* void_args = DexTypeList::make_type_list({});
     auto* void_void = DexProto::make_proto(type::_void(), void_args);
-    auto* clinit = static_cast<DexMethod*>(
+    auto* clinit = dynamic_cast<DexMethod*>(
         DexMethod::make_method(type, clinit_name, void_void));
     clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
     clinit->set_code(std::make_unique<IRCode>());
@@ -63,7 +63,7 @@ struct InitClassPrunerTest : public RedexTest {
 
   void add_ifield(DexType* type) {
     const auto* ifield_name = DexString::make_string("existing_field");
-    auto* field = static_cast<DexField*>(
+    auto* field = dynamic_cast<DexField*>(
         DexField::make_field(type, ifield_name, type::_int()));
     field->make_concrete(ACC_PUBLIC);
     type_class(type)->add_field(field);

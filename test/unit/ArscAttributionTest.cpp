@@ -10,7 +10,6 @@
 
 #include "ArscStats.h"
 #include "Debug.h"
-#include "Util.h"
 #include "androidfw/ResourceTypes.h"
 #include "arsc/TestStructures.h"
 #include "utils/Errors.h"

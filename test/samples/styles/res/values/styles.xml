@@ -2,41 +2,43 @@
 <resources>
   <!-- Base text styles with common attributes -->
   <style name="BaseTextStyle">
-    <item name="android:textColor">#333333</item>
+    <item name="android:textColor">#212121</item>
     <item name="android:fontFamily">sans-serif</item>
+    <item name="android:paddingStart">5px</item>
+    <item name="android:isGame">false</item>
     <item name="android:layout_margin">0px</item>
-    <item name="android:padding">0px</item>
+    <item name="android:padding">8px</item>
   </style>
 
   <!-- Text style variations -->
   <style name="TextStyle.Heading" parent="BaseTextStyle">
-    <item name="android:textSize">24sp</item>
+    <item name="android:textSize">24px</item>
     <item name="android:textStyle">bold</item>
     <item name="android:textColor">#000000</item>
     <item name="android:layout_marginBottom">16px</item>
   </style>
 
   <style name="TextStyle.Subheading" parent="BaseTextStyle">
-    <item name="android:textSize">24sp</item>
+    <item name="android:textSize">24px</item>
     <item name="android:textStyle">bold</item>
     <item name="android:textColor">#222222</item>
     <item name="android:layout_marginBottom">8px</item>
   </style>
 
   <style name="TextStyle.Body" parent="BaseTextStyle">
-    <item name="android:textSize">24sp</item>
+    <item name="android:textSize">24px</item>
     <item name="android:lineSpacingMultiplier">1.2</item>
   </style>
 
   <style name="TextStyle.Caption" parent="BaseTextStyle">
-    <item name="android:textSize">24sp</item>
+    <item name="android:textSize">24px</item>
     <item name="android:textColor">#666666</item>
     <item name="android:textStyle">italic</item>
   </style>
 
   <!-- Button styles with inheritance -->
   <style name="ButtonBase">
-    <item name="android:textSize">16sp</item>
+    <item name="android:textSize">16px</item>
     <item name="android:textColor">#FFFFFF</item>
     <item name="android:padding">12px</item>
     <item name="android:background">#2196F3</item>
@@ -47,28 +49,39 @@
   <style name="ButtonPrimary" parent="ButtonBase">
     <item name="android:background">#2196F3</item>
     <item name="android:textStyle">bold</item>
+    <item name="android:textColor">#2196F3</item>
   </style>
 
   <style name="ButtonSecondary" parent="ButtonBase">
     <item name="android:background">#FF9800</item>
-    <item name="android:textSize">14sp</item>
+    <item name="android:textColor">#2196F3</item>
+    <item name="android:padding">11px</item>
+    <item name="android:textSize">14px</item>
+    <item name="android:textStyle">bold</item>
   </style>
 
   <style name="ButtonDanger" parent="ButtonBase">
-    <item name="android:background">#F44336</item>
+    <item name="android:background">#FF9800</item>
+    <item name="android:textColor">#2196F3</item>
+    <item name="android:padding">11px</item>
     <item name="android:textStyle">bold</item>
   </style>
 
   <style name="ButtonOutline" parent="ButtonBase">
-    <item name="android:background">#FFFFFF</item>
+    <item name="android:background">#FF9800</item>
     <item name="android:textColor">#2196F3</item>
     <item name="android:padding">11px</item>
+    <item name="android:textStyle">bold</item>
   </style>
 
   <!-- Card styles with inheritance -->
   <style name="CardBase">
+    <item name="android:fontFamily">sans-serif</item>
+    <item name="android:paddingStart">5px</item>
+    <item name="android:isGame">false</item>
     <item name="android:background">#FFFFFF</item>
     <item name="android:layout_margin">8px</item>
+    <item name="android:stackFromBottom">true</item>
   </style>
 
   <style name="CardElevated" parent="CardBase">
@@ -94,10 +107,12 @@
 
   <!-- Input field styles -->
   <style name="InputBase">
-    <item name="android:textSize">16sp</item>
-    <item name="android:padding">12px</item>
+    <item name="android:textSize">16px</item>
+    <item name="android:padding">11px</item>
     <item name="android:textColor">#212121</item>
     <item name="android:layout_marginBottom">16px</item>
+    <item name="android:duplicateParentState">true</item>
+    <item name="android:stackFromBottom">true</item>
   </style>
 
   <style name="InputRounded" parent="InputBase">
@@ -111,9 +126,11 @@
 
   <!-- Complex multi-level inheritance -->
   <style name="AppTheme">
-    <item name="android:textSize">16sp</item>
+    <item name="android:textSize">16px</item>
     <item name="android:textColor">#212121</item>
     <item name="android:background">#FFFFFF</item>
+    <item name="android:duplicateParentState">true</item>
+    <item name="android:stackFromBottom">true</item>
   </style>
 
   <style name="AppTheme.Light" parent="AppTheme">
@@ -133,22 +150,28 @@
 
   <!-- Add ThemeA style to ensure it exists in the styles sample as well -->
   <style name="ThemeParent">
-    <item name="android:background">#CECECE</item>
+    <item name="android:background">#FFFFFF</item>
+    <item name="android:textColor">#212121</item>
+    <item name="android:fontFamily">sans-serif</item>
+    <item name="android:paddingStart">5px</item>
+    <item name="android:isGame">false</item>
   </style>
 
   <style name="ThemeA" parent="ThemeParent">
     <item name="android:background">#CECECE</item>
-    <item name="android:textSize">20sp</item>
+    <item name="android:textSize">20px</item>
     <item name="android:textColor">#00FF00</item>
   </style>
   <style name="ThemeB" parent="ThemeParent">
-    <item name="android:textColor">#00FF00</item>
+    <item name="android:textSize">20px</item>
   </style>
 
   <style name="BaseStyle1">
-    <item name="android:textSize">16sp</item>
-    <item name="android:textColor">#CCCCCC</item>
+    <item name="android:textSize">16px</item>
+    <item name="android:textColor">#212121</item>
     <item name="android:padding">8px</item>
+    <item name="android:duplicateParentState">true</item>
+    <item name="android:stackFromBottom">true</item>
   </style>
 
   <style name="ChildStyle1" parent="BaseStyle1">

@@ -11,7 +11,6 @@
 
 #include <sparta/PatriciaTreeSet.h>
 
-#include "Resolver.h"
 #include "Show.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -216,17 +215,13 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_FILLED_NEW_ARRAY:
     return true;
   case IOPCODE_LOAD_PARAM:
-    return false;
-  case IOPCODE_LOAD_PARAM_OBJECT:
-    return true;
   case IOPCODE_LOAD_PARAM_WIDE:
-    return false;
   case IOPCODE_MOVE_RESULT_PSEUDO:
-    return false;
-  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
-    return true;
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return false;
+  case IOPCODE_LOAD_PARAM_OBJECT:
+  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+    return true;
   case IOPCODE_R_CONST:
   case IOPCODE_INJECTION_ID:
   case IOPCODE_UNREACHABLE:

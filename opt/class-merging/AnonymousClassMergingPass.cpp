@@ -12,6 +12,7 @@
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
 #include "ConfigUtils.h"
+#include "DexUtil.h"
 #include "InterDexGrouping.h"
 #include "MergingStrategies.h"
 #include "ModelSpecGenerator.h"

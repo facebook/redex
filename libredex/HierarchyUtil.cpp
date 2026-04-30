@@ -7,7 +7,6 @@
 
 #include "HierarchyUtil.h"
 
-#include "RedexContext.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;

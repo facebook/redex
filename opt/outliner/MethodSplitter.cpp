@@ -7,13 +7,13 @@
 
 #include "MethodSplitter.h"
 
-#include "ClosureAggregator.h"
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexLimits.h"
 #include "InitClassesWithSideEffects.h"
 #include "MethodClosures.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -39,7 +39,7 @@ class DexState {
            size_t reserved_trefs,
            size_t reserved_mrefs) {
     UnorderedSet<DexMethodRef*> method_refs;
-    std::vector<DexType*> init_classes;
+    std::vector<const DexType*> init_classes;
     for (auto* cls : dex) {
       cls->gather_methods(method_refs);
       cls->gather_types(m_type_refs);
@@ -48,10 +48,10 @@ class DexState {
     m_method_refs_count = method_refs.size() + reserved_mrefs;
 
     UnorderedSet<DexType*> refined_types;
-    for (auto* type : init_classes) {
+    for (const auto* type : init_classes) {
       const auto* refined_type = init_classes_with_side_effects.refine(type);
       if (refined_type != nullptr) {
-        m_type_refs.insert(const_cast<DexType*>(refined_type));
+        m_type_refs.insert(refined_type);
       }
     }
     max_type_refs = get_max_type_refs(min_sdk) - reserved_trefs;
@@ -95,8 +95,8 @@ class DexState {
   }
 };
 
-bool account_for_added_split_method(const std::vector<DexType*>& arg_types,
-                                    DexState* dex_state) {
+bool account_for_added_split_method(
+    const std::vector<const DexType*>& arg_types, DexState* dex_state) {
   if (!dex_state->can_insert_method_ref()) {
     return false;
   }
@@ -232,7 +232,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
         stats->split_count_switches++;
         stats->split_count_switch_cases += splittable_closure->closures.size();
       }
-      switch (splittable_closure->hot_split_kind) {
+      switch (splittable_closure->hot_split_kind.value()) {
       case HotSplitKind::Hot: {
         stats->hot_split_count++;
         if (concurrent_new_hot_split_methods != nullptr) {
@@ -273,7 +273,7 @@ namespace method_splitting_impl {
 SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
                                 DexType* target_type,
                                 const DexString* split_name,
-                                std::vector<DexType*> arg_types) {
+                                std::vector<const DexType*> arg_types) {
   auto* method = splittable_closure.method_closures->method;
   auto* code = method->get_code();
   auto& cfg = code->cfg();
@@ -343,7 +343,16 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   split_cfg.add_edge(split_entry_block, split_landingpad, cfg::EDGE_GOTO);
 
   auto* proto = method->get_proto();
-  auto* split_type_list = DexTypeList::make_type_list(std::move(arg_types));
+  auto* split_type_list = DexTypeList::make_type_list(
+      // TODO: Remove overhead.
+      [&]() {
+        std::vector<const DexType*> non_const_args;
+        non_const_args.reserve(arg_types.size());
+        std::transform(arg_types.begin(), arg_types.end(),
+                       std::back_inserter(non_const_args),
+                       [](const auto* t) { return const_cast<DexType*>(t); });
+        return non_const_args;
+      }());
   auto* split_proto = DexProto::make_proto(proto->get_rtype(), split_type_list);
   auto* split_method_ref =
       DexMethod::make_method(target_type, split_name, split_proto);
@@ -357,7 +366,7 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   auto make_new_sb = [&](auto* method, auto& template_sb) {
     std::optional<SourceBlock::Val> opt_val;
     // TODO: For the hot case, compute "maximum" val over all closures.
-    if (splittable_closure.hot_split_kind != HotSplitKind::Hot) {
+    if (splittable_closure.hot_split_kind.value() != HotSplitKind::Hot) {
       opt_val = SourceBlock::Val{0, 0};
     }
     return source_blocks::clone_as_synthetic(template_sb, method, opt_val);

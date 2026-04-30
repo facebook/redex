@@ -7,9 +7,7 @@
 
 #include "Verifier.h"
 
-#include <algorithm>
 #include <cinttypes>
-#include <map>
 #include <string>
 #include <vector>
 

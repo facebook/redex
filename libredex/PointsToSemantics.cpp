@@ -15,12 +15,11 @@
 #include <iterator>
 #include <memory>
 #include <ostream>
-#include <sstream>
 #include <tuple>
 #include <utility>
 
 #include <boost/container/flat_set.hpp>
-#include <boost/functional/hash.hpp>
+#include <boost/container_hash/hash.hpp>
 
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
@@ -35,7 +34,6 @@
 #include "IROpcode.h"
 #include "Macros.h"
 #include "PointsToSemanticsUtils.h"
-#include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -153,7 +151,7 @@ boost::optional<SpecialPointsToEdge> string_to_special_edge(
 s_expr dex_method_to_s_expr(DexMethodRef* dex_method) {
   DexProto* proto = dex_method->get_proto();
   std::vector<s_expr> signature;
-  for (DexType* arg : *proto->get_args()) {
+  for (const DexType* arg : *proto->get_args()) {
     signature.emplace_back(arg->get_name()->str());
   }
   return s_expr({s_expr(dex_method->get_class()->get_name()->str()),
@@ -348,6 +346,7 @@ class PointsToVariableSet {
   PointsToVariableSet() = default;
 
   template <typename InputIterator>
+  // NOLINTNEXTLINE(performance-unnecessary-value-param)
   PointsToVariableSet(InputIterator begin, InputIterator end)
       : m_set(begin, end) {}
 
@@ -392,7 +391,7 @@ PointsToAction PointsToAction::get_class_operation(PointsToVariable dest,
                         {{dest_key(), dest}, {src_key(), src}});
 }
 
-PointsToAction PointsToAction::check_cast_operation(DexType* dex_type,
+PointsToAction PointsToAction::check_cast_operation(const DexType* dex_type,
                                                     PointsToVariable dest,
                                                     PointsToVariable src) {
   return PointsToAction(PointsToOperation(PTS_CHECK_CAST, dex_type),
@@ -404,7 +403,7 @@ PointsToAction PointsToAction::get_operation(
     PointsToVariable dest,
     boost::optional<PointsToVariable> instance) {
   always_assert(operation.is_get());
-  always_assert(!(instance && operation.kind == PTS_SPUT));
+  always_assert(!instance || operation.kind != PTS_SPUT);
   if (instance) {
     return PointsToAction(operation,
                           {{dest_key(), dest}, {instance_key(), *instance}});
@@ -418,7 +417,7 @@ PointsToAction PointsToAction::put_operation(
     PointsToVariable rhs,
     boost::optional<PointsToVariable> lhs) {
   always_assert(operation.is_put());
-  always_assert(!(lhs && operation.kind == PTS_SPUT));
+  always_assert(!lhs || operation.kind != PTS_SPUT);
   if (lhs) {
     return PointsToAction(operation, {{lhs_key(), *lhs}, {rhs_key(), rhs}});
   } else {
@@ -432,7 +431,7 @@ PointsToAction PointsToAction::invoke_operation(
     boost::optional<PointsToVariable> instance,
     const std::vector<std::pair<int32_t, PointsToVariable>>& args) {
   always_assert(operation.is_invoke());
-  always_assert(!(instance && operation.kind == PTS_INVOKE_STATIC));
+  always_assert(!instance || operation.kind != PTS_INVOKE_STATIC);
   std::vector<std::pair<int32_t, PointsToVariable>> bindings;
   bindings.reserve(args.size() + 2);
   if (dest) {
@@ -450,9 +449,12 @@ PointsToAction PointsToAction::return_operation(PointsToVariable src) {
 }
 
 template <typename InputIterator>
-PointsToAction PointsToAction::disjunction(PointsToVariable dest,
-                                           InputIterator first,
-                                           InputIterator last) {
+PointsToAction PointsToAction::disjunction(
+    PointsToVariable dest,
+    // NOLINTNEXTLINE(performance-unnecessary-value-param)
+    InputIterator first,
+    // NOLINTNEXTLINE(performance-unnecessary-value-param)
+    InputIterator last) {
   pts_impl::PointsToVariableSet vars(first, last);
   std::vector<std::pair<int32_t, PointsToVariable>> args;
   int32_t arg = 0;
@@ -819,7 +821,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
     AnchorEnvironment env;
     // We first initialize all registers to `null`.
     env.set(RESULT_REGISTER, AnchorDomain());
-    for (size_t reg = 0; reg < m_cfg.get_registers_size(); ++reg) {
+    for (reg_t reg = 0; reg < m_cfg.get_registers_size(); ++reg) {
       env.set(reg, AnchorDomain());
     }
     // We then initialize the parameters of the method.
@@ -1004,7 +1006,7 @@ class PointsToActionGenerator final {
       break;
     }
     case OPCODE_NEW_INSTANCE: {
-      DexType* dex_type = insn->get_type();
+      const auto* dex_type = insn->get_type();
       if (m_type_system.is_subtype(type::java_lang_Throwable(), dex_type)) {
         // If the object created is an exception (i.e., its type inherits from
         // java.lang.Throwable), we use PTS_GET_EXCEPTION. In our semantic
@@ -1160,7 +1162,7 @@ class PointsToActionGenerator final {
 
     // Process the arguments of the method invocation.
     int32_t arg_pos = 0;
-    for (DexType* dex_type : *signature) {
+    for (const DexType* dex_type : *signature) {
       if (type::is_object(dex_type)) {
         args.emplace_back(
             arg_pos,
@@ -1458,7 +1460,7 @@ boost::optional<MethodKind> string_to_method_kind(const std::string& str) {
 
 PointsToMethodSemantics::PointsToMethodSemantics(DexMethodRef* dex_method,
                                                  MethodKind kind,
-                                                 size_t start_var_id,
+                                                 int32_t start_var_id,
                                                  size_t size_hint)
     : m_dex_method(dex_method), m_kind(kind), m_variable_counter(start_var_id) {
   m_points_to_actions.reserve(size_hint);
@@ -1476,9 +1478,9 @@ s_expr PointsToMethodSemantics::to_s_expr() const {
                  m_points_to_actions.end(),
                  std::back_inserter(actions),
                  [](const PointsToAction& a) { return a.to_s_expr(); });
-  return s_expr(
-      {dex_method_to_s_expr(m_dex_method), method_kind_to_s_expr(m_kind),
-       s_expr(static_cast<int32_t>(m_variable_counter)), s_expr(actions)});
+  return s_expr({dex_method_to_s_expr(m_dex_method),
+                 method_kind_to_s_expr(m_kind), s_expr(m_variable_counter),
+                 s_expr(actions)});
 }
 
 boost::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
@@ -1528,15 +1530,15 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s) {
   }
   case PTS_APK:
   case PTS_STUB: {
-    o << "{" << std::endl;
+    o << "{" << '\n';
     for (const auto& a : s.get_points_to_actions()) {
-      o << " " << a << std::endl;
+      o << " " << a << '\n';
     }
     o << "}";
     break;
   }
   }
-  o << std::endl;
+  o << '\n';
   return o;
 }
 

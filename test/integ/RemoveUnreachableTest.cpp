@@ -13,8 +13,8 @@
 #include <json/value.h>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
-#include "ReachableClasses.h"
+#include "IRList.h"
+#include "IROpcode.h"
 #include "RedexTest.h"
 
 #include "GlobalTypeAnalysisPass.h"

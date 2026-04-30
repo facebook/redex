@@ -8,7 +8,7 @@
 #pragma once
 
 #include <atomic>
-#include <boost/optional.hpp>
+#include <boost/optional/optional.hpp>
 #include <limits>
 #include <mutex>
 #include <string>
@@ -473,7 +473,7 @@ class ReferencedState {
   void set_api_level(int32_t api_level) {
     always_assert_log(api_level <= std::numeric_limits<int8_t>::max(),
                       "api level too big");
-    inner_struct.m_api_level = api_level;
+    inner_struct.m_api_level = static_cast<int8_t>(api_level);
   }
 
   bool no_optimizations() const {

@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <vector>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -12,7 +14,6 @@
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
 #include "RedexTest.h"
-#include "StlUtil.h"
 
 struct CallGraphTest : public RedexIntegrationTest {
  protected:
@@ -216,8 +217,8 @@ TEST_F(CallGraphTest, test_multiple_callee_graph_entry) {
   EXPECT_THAT(entry_callees,
               ::testing::IsSupersetOf({extended_init, less_impl3_init,
                                        more_impl1_init, pure_ref_3_init}));
-  std20::erase_if(entry_callees,
-                  [](auto* m) { return method::is_argless_init(m); });
+  std::erase_if(entry_callees,
+                [](auto* m) { return method::is_argless_init(m); });
   EXPECT_THAT(entry_callees,
               ::testing::UnorderedElementsAre(clinit,
                                               more_impl1_return,

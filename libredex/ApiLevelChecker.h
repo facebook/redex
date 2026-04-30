@@ -50,7 +50,7 @@ class LevelChecker {
    * correct but it seems like most developers just forgot (or were too lazy) to
    * put the annotation on all the inner classes (especially anonymous ones).
    */
-  static int32_t get_method_level(const DexMethod* method);
+  static int8_t get_method_level(const DexMethod* method);
 
   /**
    * Return the minimum api level of the entire app. This is the lowest value
@@ -117,9 +117,9 @@ class LevelChecker {
    * initialization, these are read-only and safe to use in parallel
    */
   static int32_t s_min_level;
-  static DexType* s_requires_api_old;
-  static DexType* s_requires_api_new;
-  static DexType* s_target_api;
+  static const DexType* s_requires_api_old;
+  static const DexType* s_requires_api_new;
+  static const DexType* s_target_api;
   static bool s_has_been_init;
 };
 

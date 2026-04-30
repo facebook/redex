@@ -13,10 +13,9 @@
 #include <ctime>
 #include <fstream>
 #include <iostream>
-#include <json/json.h>
+#include <json/value.h>
 #include <limits>
 #include <list>
-#include <mutex>
 #include <sstream>
 #include <thread>
 #include <typeinfo>
@@ -33,9 +32,7 @@
 #include "ClassChecker.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
-#include "Debug.h"
 #include "DexClass.h"
-#include "DexLoader.h"
 #include "DexStructure.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
@@ -70,16 +67,18 @@ AccumulatingTimer m_check_unique_deobfuscateds_timer{
 constexpr const char* INCOMING_HASHES = "incoming_hashes.txt";
 constexpr const char* OUTGOING_HASHES = "outgoing_hashes.txt";
 constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
-const std::string PASS_ORDER_KEY = "pass_order";
+constexpr const char* CLASS_REORDERING_PASS_NAME = "ClassReorderingPass";
+constexpr std::string_view PASS_ORDER_KEY{"pass_order"};
 
 const Pass* get_profiled_pass(const PassManager& mgr) {
-  // NOLINTNEXTLINE(bugprone-assert-side-effect)
-  redex_assert(getenv("PROFILE_PASS") != nullptr);
+  const auto* profile_pass_name = getenv("PROFILE_PASS");
+  redex_assert(profile_pass_name != nullptr);
   // Resolve the pass in the constructor so that any typos / references to
   // nonexistent passes are caught as early as possible
-  auto* pass = mgr.find_pass(getenv("PROFILE_PASS"));
-  always_assert(pass != nullptr);
-  std::cerr << "Will run profiler for " << pass->name() << std::endl;
+  const auto* pass = mgr.find_pass(profile_pass_name);
+  always_assert_log(pass != nullptr, "Could not find pass named %s",
+                    profile_pass_name);
+  std::cerr << "Will run profiler for " << pass->name() << '\n';
   return pass;
 }
 
@@ -106,7 +105,7 @@ class CheckerConfig {
       return;
     }
     if (!m_config.run_on_input) {
-      std::cerr << "Note: input type checking is turned off!" << std::endl;
+      std::cerr << "Note: input type checking is turned off!" << '\n';
       return;
     }
 
@@ -131,7 +130,7 @@ class CheckerConfig {
         scope, /* exit_on_fail= */ false);
     if (!res) {
       std::cerr << "Warning: input has accessibility issues. Continuing."
-                << std::endl;
+                << '\n';
       return; // "No" issues.
     }
     std::string msg = *res;
@@ -256,9 +255,9 @@ class CheckerConfig {
 
       std::ostringstream oss;
       oss << "Inconsistency found in Dex code for "
-          << show(res.smallest_error_method) << std::endl
-          << " " << checker.what() << std::endl
-          << "Code:" << std::endl
+          << show(res.smallest_error_method) << '\n'
+          << " " << checker.what() << '\n'
+          << "Code:" << '\n'
           << run_checker_error(res.smallest_error_method);
 
       if (res.errors > 1) {
@@ -272,7 +271,8 @@ class CheckerConfig {
     return boost::none;
   }
 
-  static void fail_error(std::string error_msg, size_t errors = 1) {
+  [[noreturn]] static void fail_error(std::string error_msg,
+                                      size_t errors = 1) {
     if (errors > 1) {
       error_msg.append("\n(");
       error_msg.append(std::to_string(errors - 1));
@@ -484,7 +484,7 @@ class JNINativeContextHelper {
 
     // TODO: For better human readability, change this to CSV of native,java?
     for (const auto& name : output_symbols) {
-      out << name << std::endl;
+      out << name << '\n';
     }
 
     g_native_context.reset();
@@ -665,7 +665,7 @@ class AfterPassSizes {
     pid_t p = fork();
 
     if (p < 0) {
-      std::cerr << "Fork failed!" << strerror(errno) << std::endl;
+      std::cerr << "Fork failed!" << strerror(errno) << '\n';
       return false;
     }
 
@@ -707,13 +707,13 @@ class AfterPassSizes {
         continue;
       }
       if (wait_res == -1) {
-        std::cerr << "Failed " << it->pass_info->name << std::endl;
+        std::cerr << "Failed " << it->pass_info->name << '\n';
       } else {
         if (WIFEXITED(stat) && WEXITSTATUS(stat) == 0) {
           handle_parent(*it);
         } else {
           std::cerr << "AfterPass child failed: " << std::hex << stat
-                    << std::dec << std::endl;
+                    << std::dec << '\n';
         }
       }
       boost::filesystem::remove_all(it->tmp_dir);
@@ -726,7 +726,7 @@ class AfterPassSizes {
     // Discover dex files
     namespace fs = boost::filesystem;
     auto end = fs::directory_iterator();
-    size_t sum{0};
+    uint64_t sum{0};
     for (fs::directory_iterator it{job.tmp_dir}; it != end; ++it) {
       const auto& file = it->path();
       if (fs::is_regular_file(file) &&
@@ -734,9 +734,9 @@ class AfterPassSizes {
         sum += fs::file_size(file);
       }
     }
-    job.pass_info->metrics["after_pass_size"] = sum;
+    job.pass_info->metrics["after_pass_size"] = static_cast<int64_t>(sum);
     if (m_debug) {
-      std::cerr << "Got " << sum << " for " << job.pass_info->name << std::endl;
+      std::cerr << "Got " << sum << " for " << job.pass_info->name << '\n';
     }
   }
 
@@ -745,7 +745,7 @@ class AfterPassSizes {
                     ConfigFiles* conf) {
     // Change output directory.
     if (m_debug) {
-      std::cerr << "After-pass-size to " << tmp_dir << std::endl;
+      std::cerr << "After-pass-size to " << tmp_dir << '\n';
     }
     conf->set_outdir(tmp_dir);
 
@@ -762,7 +762,7 @@ class AfterPassSizes {
       auto* pass = m_mgr->find_pass(pass_name);
       if (pass != nullptr) {
         if (m_debug) {
-          std::cerr << "Running " << pass_name << std::endl;
+          std::cerr << "Running " << pass_name << '\n';
         }
         if (!pass->is_cfg_legacy()) {
           ensure_cfg(*stores);
@@ -838,17 +838,16 @@ class TraceClassAfterEachPass {
 
     auto* trace_class_file = getenv("TRACE_CLASS_FILE");
     std::cerr << "TRACE_CLASS_FILE="
-              << (trace_class_file == nullptr ? "" : trace_class_file)
-              << std::endl;
+              << (trace_class_file == nullptr ? "" : trace_class_file) << '\n';
 
     auto* trace_class_name = getenv("TRACE_CLASS_NAME");
     m_trace_class_env = trace_class_name == nullptr ? "" : trace_class_name;
-    std::cerr << "TRACE_CLASS_NAME=" << m_trace_class_env << std::endl;
+    std::cerr << "TRACE_CLASS_NAME=" << m_trace_class_env << '\n';
     m_trace_class_names = extract_delimited_items(m_trace_class_env, ",");
 
     auto* trace_method_name = getenv("TRACE_METHOD_NAME");
     m_trace_method_env = trace_method_name == nullptr ? "" : trace_method_name;
-    std::cerr << "TRACE_METHOD_NAME=" << m_trace_method_env << std::endl;
+    std::cerr << "TRACE_METHOD_NAME=" << m_trace_method_env << '\n';
     m_trace_method_names = extract_delimited_items(m_trace_method_env, ",");
 
     if (!m_trace_method_names.empty() || !m_trace_class_names.empty()) {
@@ -903,6 +902,14 @@ class TraceClassAfterEachPass {
     std::vector<DexField*> fields = cls->get_all_fields();
     for (auto* v : fields) {
       fprintf(m_fd, "Field %s\n", SHOW(v));
+      if (v->is_concrete() && v->get_static_value() != nullptr) {
+        auto* static_val = v->get_static_value();
+        // Make the printing less verbose; print when the value is nonzero.
+        auto zero = DexEncodedValue::zero_for_type(v->get_type());
+        if (static_val->value() != zero->value()) {
+          fprintf(m_fd, "  Value: %s\n", SHOW(v->get_static_value()));
+        }
+      }
     }
     for (auto* m : methods) {
       dump_method(m);
@@ -1037,7 +1044,8 @@ struct JemallocStats {
     full_stats = pmc->jemalloc_full_stats;
   }
 
-  void process_jemalloc_stats_for_pass(const Pass* pass, size_t run) {
+  void process_jemalloc_stats_for_pass([[maybe_unused]] const Pass* pass,
+                                       [[maybe_unused]] size_t run) {
 #ifdef USE_JEMALLOC
     std::string key_base = "~jemalloc.";
     auto cb = [&](const char* key, uint64_t value) {
@@ -1069,8 +1077,11 @@ struct ViolationsTracking {
           vh(std::make_unique<source_blocks::ViolationsHelper>(
               source_blocks::ViolationsHelper::Violation::kChainAndDom,
               build_class_scope(stores),
-              10,
-              std::vector<std::string>{})) {}
+              /*top_n=*/10,
+              /*to_vis=*/
+              std::vector<std::string>{},
+              /*track_intermethod_violations=*/false,
+              /*print_all_violations=*/false)) {}
     ~Handler() {
       if (vh != nullptr) {
         ScopedMetrics sm(*pm);
@@ -1083,7 +1094,7 @@ struct ViolationsTracking {
     Handler& operator=(const Handler&) = delete;
 
     Handler(Handler&& other) noexcept : pm(other.pm), vh(std::move(other.vh)) {}
-    Handler& operator=(Handler&& rhs) noexcept {
+    [[maybe_unused]] Handler& operator=(Handler&& rhs) noexcept {
       if (vh != nullptr) {
         vh->silence();
       }
@@ -1103,13 +1114,88 @@ struct ViolationsTracking {
 
 } // namespace
 
+void PassManager::check_no_new_dex_features(const DexStoresVector& stores,
+                                            const Pass* pass,
+                                            int check_against_version) {
+  always_assert_log(check_against_version <= 39 && check_against_version >= 35,
+                    "Checking on unknown version %d", check_against_version);
+  if ((check_against_version >= 37 && m_has_dex37_features == boost::none) ||
+      (check_against_version >= 38 && m_has_dex38_features == boost::none) ||
+      (check_against_version >= 39 && m_has_dex39_features == boost::none)) {
+    // We run the feature check once in the full pass run and store the value
+    std::atomic<bool> has_dex37_features{false};
+    std::atomic<bool> has_dex38_features{false};
+    std::atomic<bool> has_dex39_features{false};
+    walk::parallel::classes(build_class_scope(stores), [&](DexClass* cls) {
+      if (is_interface(cls)) {
+        for (auto* m : cls->get_vmethods()) {
+          if (m->get_code() != nullptr) {
+            has_dex37_features = true;
+          }
+        }
+      }
+      for (auto* m : cls->get_all_methods()) {
+        if (m->get_code() == nullptr) {
+          continue;
+        }
+        for (auto& mie : InstructionIterable(m->get_code()->cfg())) {
+          auto* insn = mie.insn;
+          const auto& op = insn->opcode();
+          if (op == OPCODE_INVOKE_CUSTOM || op == OPCODE_INVOKE_POLYMORPHIC) {
+            has_dex38_features = true;
+          }
+          if (op == OPCODE_CONST_METHOD_HANDLE ||
+              op == OPCODE_CONST_METHOD_TYPE) {
+            has_dex39_features = true;
+          }
+          if (op == OPCODE_INVOKE_SUPER || op == OPCODE_INVOKE_DIRECT) {
+            // invoke-super and invoke-direct on interface methods need
+            // additional support.
+            if (insn->get_method() == nullptr) {
+              continue;
+            }
+            auto* insn_method_cls = type_class(insn->get_method()->get_class());
+            if (insn_method_cls != nullptr && is_interface(insn_method_cls)) {
+              has_dex37_features = true;
+            }
+          }
+        }
+      }
+    });
+    m_has_dex37_features = has_dex37_features;
+    m_has_dex38_features = has_dex38_features;
+    m_has_dex39_features = has_dex39_features;
+  }
+
+  switch (check_against_version) {
+  case 39:
+    always_assert_log(
+        !m_has_dex39_features,
+        "Input APK has dex39 features that this pass %s don't support",
+        pass->name().c_str());
+    [[fallthrough]];
+  case 38:
+    always_assert_log(
+        !m_has_dex38_features,
+        "Input APK has dex38 features that this pass %s don't support",
+        pass->name().c_str());
+    [[fallthrough]];
+  case 37:
+    always_assert_log(
+        !m_has_dex37_features,
+        "Input APK has dex37 features that this pass %s don't support",
+        pass->name().c_str());
+    [[fallthrough]];
+  case 35:
+    return;
+  default:
+    not_reached();
+  }
+}
+
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
   return std::make_unique<keep_rules::ProguardConfiguration>();
 }
-
-struct PassManager::InternalFields {
-  std::mutex m_metrics_lock;
-};
 
 PassManager::PassManager(const std::vector<Pass*>& passes)
     : PassManager(
@@ -1182,7 +1268,8 @@ void PassManager::init(const ConfigFiles& config) {
     m_pass_info[i].repeat = count;
     m_pass_info[i].total_repeat = pass_repeats.at(pass);
     m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
-    m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
+    m_pass_info[i].metrics[std::string(PASS_ORDER_KEY)] =
+        static_cast<int64_t>(i);
     m_pass_info[i].config =
         JsonWrapper(config.get_json_config()[pass->name().c_str()]);
   }
@@ -1219,6 +1306,15 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
 }
 
 void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
+  if (m_redex_options.input_dex_version >= 37) {
+    always_assert_log(
+        std::find_if(m_activated_passes.begin(), m_activated_passes.end(),
+                     [](const Pass* pass) {
+                       return pass->name() == CLASS_REORDERING_PASS_NAME;
+                     }) != m_activated_passes.end(),
+        "Dex version 37+ has stricter class order requirement. Enable "
+        "ClassReorderingPass to fulfill the requirement.");
+  }
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Evaluating %s...", pass->name().c_str());
@@ -1496,6 +1592,22 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         ensure_cfg(stores);
         TRACE(PM, 2, "%s Pass uses cfg.\n", SHOW(pass->name()));
       }
+
+      if (pass->pass_support_dex_version() <
+          m_redex_options.input_dex_version) {
+        always_assert(m_redex_options.input_dex_version <= 39);
+        if (pass->need_dex_version_support(m_redex_options.input_dex_version,
+                                           39)) {
+          check_no_new_dex_features(stores, pass, 39);
+        } else if (pass->need_dex_version_support(
+                       m_redex_options.input_dex_version, 38)) {
+          check_no_new_dex_features(stores, pass, 38);
+        } else if (pass->need_dex_version_support(
+                       m_redex_options.input_dex_version, 37)) {
+          check_no_new_dex_features(stores, pass, 37);
+        }
+      }
+
       pass->run_pass(stores, conf, *this);
       auto wall_time_end = std::chrono::steady_clock::now();
       double cpu_time_end = ((double)std::clock()) / CLOCKS_PER_SEC;
@@ -1674,18 +1786,20 @@ PassManager::ActivatedPasses PassManager::compute_activated_passes(
       // the pass list, which needs to be removed for matching.
       auto activate = [&registered_passes, &result](const std::string& n,
                                                     const std::string* a) {
-        for (auto* pass : registered_passes) {
-          if (n == pass->name()) {
+        for (auto* registered_pass : registered_passes) {
+          if (n == registered_pass->name()) {
+            auto* activated_pass = registered_pass;
             if (a != nullptr) {
-              auto cloned_pass = pass->clone(*a);
+              auto cloned_pass = registered_pass->clone(*a);
               always_assert_log(cloned_pass != nullptr,
                                 "Cannot clone pass %s to make alias %s",
                                 n.c_str(), a->c_str());
-              pass = cloned_pass.get();
+              activated_pass = cloned_pass.get();
               result.cloned_passes.emplace_back(std::move(cloned_pass));
             }
 
-            result.activated_passes.emplace_back(pass, a == nullptr ? n : *a);
+            result.activated_passes.emplace_back(activated_pass,
+                                                 a == nullptr ? n : *a);
 
             return true;
           }
@@ -1722,18 +1836,6 @@ Pass* PassManager::find_pass(const std::string& pass_name) const {
       m_activated_passes.end(),
       [&pass_name](const Pass* pass) { return pass->name() == pass_name; });
   return pass_it != m_activated_passes.end() ? *pass_it : nullptr;
-}
-
-void PassManager::incr_metric(const std::string& key, int64_t value) {
-  always_assert_log(m_current_pass_info != nullptr, "No current pass!");
-  std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
-  (m_current_pass_info->metrics)[key] += value;
-}
-
-void PassManager::set_metric(const std::string& key, int64_t value) {
-  always_assert_log(m_current_pass_info != nullptr, "No current pass!");
-  std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
-  (m_current_pass_info->metrics)[key] = value;
 }
 
 int64_t PassManager::get_metric(const std::string& key) {
@@ -1774,7 +1876,8 @@ ReserveRefsInfo PassManager::get_reserved_refs() const {
 }
 
 void PassManager::check_unreleased_reserved_refs() {
-  for (const auto& [name, info] : m_reserved_ref_infos) {
+  if (!m_reserved_ref_infos.empty()) {
+    const auto& [name, info] = m_reserved_ref_infos.front();
     fprintf(stderr, "ABORT! Unreleased reserved refs: %s(%zu, %zu, %zu)\n",
             name.c_str(), info.frefs, info.trefs, info.mrefs);
     exit(EXIT_FAILURE);

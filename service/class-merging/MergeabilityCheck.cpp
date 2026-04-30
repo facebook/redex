@@ -7,12 +7,12 @@
 
 #include "MergeabilityCheck.h"
 
+#include "IRCode.h"
 #include "LiveRange.h"
 #include "Model.h"
 #include "ReachableClasses.h"
 #include "RefChecker.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -249,7 +249,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
         continue;
       }
       const auto* resolved_callee =
-          resolve_method(callee, opcode_to_search(use_insn), method);
+          resolve_method_deprecated(callee, opcode_to_search(use_insn), method);
       if ((resolved_callee == nullptr) ||
           resolved_callee->get_class() != type) {
         TRACE(CLMG, 5,

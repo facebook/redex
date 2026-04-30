@@ -8,7 +8,9 @@
 #include "RemoveUnusedArgs.h"
 
 #include <deque>
+#include <map>
 #include <mutex>
+#include <set>
 #include <vector>
 
 #include "AnnoUtils.h"
@@ -18,14 +20,12 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "Liveness.h"
-#include "Match.h"
 #include "OptData.h"
 #include "OptDataDefs.h"
 #include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Walkers.h"
 
 using namespace opt_metadata;
@@ -83,31 +83,31 @@ RemoveArgs::PassStats RemoveArgs::run(ConfigFiles& config) {
  * move-result instructions, and record this information for each method.
  */
 void RemoveArgs::gather_results_used() {
-  walk::parallel::code(m_scope, [&result_used = m_result_used](DexMethod*,
-                                                               IRCode& code) {
-    always_assert(code.cfg_built());
-    auto& cfg = code.cfg();
-    auto ii = InstructionIterable(cfg);
-    for (auto it = ii.begin(); it != ii.end(); ++it) {
-      auto* insn = it->insn;
-      if (!opcode::is_an_invoke(insn->opcode())) {
-        continue;
-      }
-      auto move_result = cfg.move_result_of(it);
-      if (move_result.is_end()) {
-        continue;
-      }
-      auto* method =
-          resolve_method(insn->get_method(), opcode_to_search(insn->opcode()));
-      // The above should return any callee for a virtual callsite. Because we
-      // only remove results for groups of related methods where every result
-      // can be removed, the logic works for true virtuals.
-      if (method == nullptr) {
-        continue;
-      }
-      result_used.insert(method);
-    }
-  });
+  walk::parallel::code(
+      m_scope, [&result_used = m_result_used](DexMethod*, IRCode& code) {
+        always_assert(code.cfg_built());
+        auto& cfg = code.cfg();
+        auto ii = InstructionIterable(cfg);
+        for (auto it = ii.begin(); it != ii.end(); ++it) {
+          auto* insn = it->insn;
+          if (!opcode::is_an_invoke(insn->opcode())) {
+            continue;
+          }
+          auto move_result = cfg.move_result_of(it);
+          if (move_result.is_end()) {
+            continue;
+          }
+          auto* method = resolve_method_deprecated(
+              insn->get_method(), opcode_to_search(insn->opcode()));
+          // The above should return any callee for a virtual callsite. Because
+          // we only remove results for groups of related methods where every
+          // result can be removed, the logic works for true virtuals.
+          if (method == nullptr) {
+            continue;
+          }
+          result_used.insert(method);
+        }
+      });
 }
 
 // For normalization, we put primitive types last and thus all reference types
@@ -184,14 +184,12 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
             record_fixed_proto(caller_proto, 0);
           } else {
             const auto& node = override_graph.get_node(caller);
-            if (any_external(node.parents)) {
+            if (any_external(node.parents) ||
+                (is_interface_method && any_external(node.children))) {
               // We can't change the signature of an overriding method when the
-              // overridden method is external
-              record_fixed_proto(caller_proto, 0);
-            } else if (is_interface_method && any_external(node.children)) {
-              // This captures the case where an interface defines a method
-              // whose only implementation is one that is inherited from an
-              // external base class.
+              // overridden method is external, or when an interface defines a
+              // method whose only implementation is one that is inherited from
+              // an external base class.
               record_fixed_proto(caller_proto, 0);
             }
           }
@@ -455,7 +453,7 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
     IRInstruction* insn;
   };
   std::vector<LoadParamInfo> load_param_infos;
-  boost::optional<std::vector<LoadParamInfo>::iterator> load_param_infos_it;
+  std::optional<std::vector<LoadParamInfo>::iterator> load_param_infos_it;
   if (method->get_code() != nullptr) {
     auto param_insns = method->get_code()->cfg().get_param_instructions();
     for (const auto& mie : InstructionIterable(param_insns)) {
@@ -466,7 +464,7 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
   }
 
   std::deque<uint16_t> idxs;
-  UnorderedMap<DexType*, std::deque<uint16_t>> idxs_by_type;
+  UnorderedMap<const DexType*, std::deque<uint16_t>> idxs_by_type;
   int idx = 0;
   if (!is_static(method)) {
     idxs.push_back(idx++);
@@ -474,11 +472,11 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
       (*load_param_infos_it)++;
     }
   }
-  for (auto* t : *original_proto->get_args()) {
+  for (const auto* t : *original_proto->get_args()) {
     idxs_by_type[t].push_back(idx++);
   }
 
-  for (auto* t : *reordered_proto->get_args()) {
+  for (const auto* t : *reordered_proto->get_args()) {
     auto& deque = idxs_by_type.find(t)->second;
     auto new_idx = deque.front();
     deque.pop_front();
@@ -615,8 +613,8 @@ void RemoveArgs::gather_updated_entries(
         for (const auto* m : UnorderedIterable(kvp->second)) {
           if (m->get_code() != nullptr) {
             const auto& dead_insn_map = all_dead_insns.at(m);
-            std20::erase_if(running_dead_args,
-                            [&](auto e) { return !dead_insn_map.count(e); });
+            std::erase_if(running_dead_args,
+                          [&](auto e) { return !dead_insn_map.count(e); });
           }
         }
 
@@ -625,7 +623,7 @@ void RemoveArgs::gather_updated_entries(
         for (const auto* m : UnorderedIterable(kvp->second)) {
           if (m->get_code() != nullptr) {
             auto& dead_insn_map = all_dead_insns.at_unsafe(m);
-            std20::erase_if(dead_insn_map, [&](auto e) {
+            std::erase_if(dead_insn_map, [&](const auto& e) {
               return !running_dead_args.count(e.first);
             });
           }
@@ -833,6 +831,7 @@ size_t RemoveArgs::update_callsite(IRInstruction* instr) {
   }
   auto& updated_srcs = kv_pair->second;
   std::vector<reg_t> new_srcs;
+  new_srcs.reserve(updated_srcs.size());
   for (size_t i = 0; i < updated_srcs.size(); ++i) {
     new_srcs.push_back(instr->src(updated_srcs.at(i)));
   }

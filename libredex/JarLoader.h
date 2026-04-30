@@ -12,6 +12,7 @@ class DexLocation;
 class DexField;
 class DexMethod;
 
+// NOLINTNEXTLINE
 #include "boost/variant.hpp"
 
 #include "ConfigFiles.h"

@@ -78,7 +78,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
         if (!opcode::is_an_invoke(insn->opcode())) {
           continue;
         }
-        auto* resolved_callee = resolve_invoke_method(insn, method);
+        auto* resolved_callee = resolve_invoke_method_deprecated(insn, method);
         if (resolved_callee == nullptr) {
           continue;
         }
@@ -110,8 +110,8 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
     if (analysis_cls) {
       auto method_search = get_method_search(*analysis_cls, insn);
       analysis_resolved_callee =
-          resolve_method(*analysis_cls, callee_ref->get_name(),
-                         callee_ref->get_proto(), method_search);
+          resolve_method_deprecated(*analysis_cls, callee_ref->get_name(),
+                                    callee_ref->get_proto(), method_search);
       if (analysis_resolved_callee != nullptr) {
         resolved_callee = analysis_resolved_callee;
       } else {

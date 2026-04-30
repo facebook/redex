@@ -35,8 +35,8 @@ class RemoveBuilderPatternPass : public Pass {
   }
 
  private:
-  std::vector<DexType*> m_roots;
-  std::vector<DexType*> m_blocklist;
+  std::vector<const DexType*> m_roots;
+  std::vector<const DexType*> m_blocklist;
   size_t m_max_num_inline_iteration;
 };
 

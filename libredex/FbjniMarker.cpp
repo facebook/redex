@@ -14,7 +14,8 @@
 #include "Show.h"
 
 #include <fstream>
-#include <json/json.h>
+#include <json/reader.h>
+#include <json/value.h>
 
 template <class DexMember>
 static void mark_member_reachable_by_native(DexMember* member) {
@@ -103,7 +104,7 @@ DexMethod* FbjniMarker::process_method(DexType* type,
 }
 
 std::string FbjniMarker::to_internal_type(std::string_view str) {
-  int array_level = std::count(str.begin(), str.end(), '[');
+  auto array_level = std::count(str.begin(), str.end(), '[');
   std::string array_name(array_level, '[');
 
   auto type_str = array_level > 0 ? str.substr(0, str.find('[')) : str;
@@ -113,11 +114,9 @@ std::string FbjniMarker::to_internal_type(std::string_view str) {
     return array_name + internal_name;
   } else {
     // not primitive, try fully-qualify name first
-    auto inter_str = java_names::external_to_internal(type_str);
     for (auto* dtype : types) {
       if (dtype->str() == type_str) {
-        array_name += type_str;
-        return array_name;
+        return array_name + type_str;
       }
     }
 
@@ -130,7 +129,6 @@ std::string FbjniMarker::to_internal_type(std::string_view str) {
 
     // error: No matching type
     not_reached_log("Can not resolve type %s", SHOW(str));
-    return "";
   }
 }
 

@@ -68,11 +68,11 @@ class DexNameWrapper {
   DexNameWrapper& operator=(DexNameWrapper const& other) = default;
   DexNameWrapper& operator=(DexNameWrapper&& other) noexcept = default;
 
-  inline T get() {
+  T get() {
     always_assert(dex_elem != nullptr);
     return dex_elem;
   }
-  inline const_type get() const {
+  const_type get() const {
     always_assert(dex_elem != nullptr);
     return dex_elem;
   }
@@ -134,7 +134,7 @@ class MethodNameWrapper : public DexMethodWrapper {
 
   // Updates our links union-find style so that finding the end of the chain
   // is cheap
-  inline void update_link() {
+  void update_link() {
     if (next != nullptr) {
       next->update_link();
       next = find_end_link();
@@ -523,11 +523,12 @@ class DexElemManager {
         elemCtr(std::move(elem_ctr)) {}
   // NOLINTNEXTLINE(performance-noexcept-move-constructor)
   DexElemManager(DexElemManager&& other) = default;
+  DexElemManager& operator=(DexElemManager&& other) = default;
   virtual ~DexElemManager() {}
 
   // Mirrors the map [] operator, but ensures we create correct wrappers
   // if they don't exist
-  inline DexNameWrapper<T>* operator[](T elem) {
+  DexNameWrapper<T>* operator[](T elem) {
     auto [it, emplaced] =
         elements[elem->get_class()][sig_getter_fn(elem)].emplace(
             elem->get_name(), nullptr);

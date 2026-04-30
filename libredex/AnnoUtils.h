@@ -10,7 +10,6 @@
 #include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 
 /**
  * Parses the default value of an annotation given the annotation and the
@@ -38,19 +37,19 @@ const DexEncodedValue* parse_default_anno_value(
 
 bool parse_bool_anno_value(const DexMethod* method,
                            const DexType* target_anno,
-                           std::string name = "");
+                           const std::string& name = "");
 
 uint32_t parse_int_anno_value(const DexMethod* method,
                               const DexType* target_anno,
-                              std::string name = "");
+                              const std::string& name = "");
 
 uint32_t parse_int_anno_value(const DexClass* cls,
                               const DexType* target_anno,
-                              std::string name = "");
+                              const std::string& name = "");
 
 std::string parse_str_anno_value(const DexMethod* method,
                                  const DexType* target_anno,
-                                 std::string name = "");
+                                 const std::string& name = "");
 
 template <class DexMember>
 bool has_attribute(DexMember* member,
@@ -72,7 +71,8 @@ bool has_attribute(DexMember* member,
 }
 
 template <class DexMember>
-DexAnnotation* get_annotation(const DexMember* member, DexType* anno_type) {
+DexAnnotation* get_annotation(const DexMember* member,
+                              const DexType* anno_type) {
   const auto& annos = member->get_anno_set();
   if (annos == nullptr) {
     return nullptr;
@@ -88,6 +88,21 @@ DexAnnotation* get_annotation(const DexMember* member, DexType* anno_type) {
 template <class DexMember>
 bool has_any_annotation(DexMember* member,
                         const UnorderedSet<DexType*>& anno_types) {
+  const auto& annos = member->get_anno_set();
+  if (annos == nullptr) {
+    return false;
+  }
+  for (auto& anno : annos->get_annotations()) {
+    if (anno_types.count(anno->type())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+template <class DexMember>
+bool has_any_annotation(DexMember* member,
+                        const UnorderedSet<const DexType*>& anno_types) {
   const auto& annos = member->get_anno_set();
   if (annos == nullptr) {
     return false;

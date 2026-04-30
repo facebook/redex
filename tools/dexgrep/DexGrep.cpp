@@ -7,7 +7,7 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <getopt.h>
+#include <getopt.h> // @donotremove
 #include <regex>
 
 #include "DexCommon.h"
@@ -18,7 +18,7 @@ void print_usage() {
 
 int main(int argc, char* argv[]) {
   bool files_only = false;
-  char c;
+  int c;
   static const struct option options[] = {
       {"files-without-match", no_argument, nullptr, 'l'},
   };

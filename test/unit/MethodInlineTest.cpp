@@ -37,6 +37,8 @@ struct MethodInlineTest : public RedexTest {
     DexMethod::make_method("Ljava/lang/Boolean;.booleanValue:()Z")
         ->make_concrete(ACC_PUBLIC, true);
   }
+
+  ConfigFiles conf = ConfigFiles(Json::nullValue);
 };
 
 void test_inliner(const std::string& caller_str,
@@ -322,12 +324,12 @@ DexMethod* make_a_method_calls_others_with_arg(
  */
 TEST_F(MethodInlineTest, insertMoves) {
   using namespace dex_asm;
-  auto* callee = static_cast<DexMethod*>(DexMethod::make_method(
+  auto* callee = dynamic_cast<DexMethod*>(DexMethod::make_method(
       "Lfoo;", "testCallee", "V", {"I", "Ljava/lang/Object;"}));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   callee->set_code(std::make_unique<IRCode>(callee, 0));
 
-  auto* caller = static_cast<DexMethod*>(
+  auto* caller = dynamic_cast<DexMethod*>(
       DexMethod::make_method("Lfoo;", "testCaller", "V", {}));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   caller->set_code(std::make_unique<IRCode>(caller, 0));
@@ -373,10 +375,10 @@ TEST_F(MethodInlineTest, insertMoves) {
 
 TEST_F(MethodInlineTest, debugPositionsAfterReturn) {
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
   callee->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   const auto& caller_str = R"(
     (
@@ -429,7 +431,7 @@ TEST_F(MethodInlineTest, debugPositionsAfterReturn) {
 }
 
 TEST_F(MethodInlineTest, test_intra_dex_inlining) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   // Only inline methods within dex.
   bool intra_dex = true;
@@ -476,10 +478,10 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             canidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, canidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -489,7 +491,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
 }
 
 TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   // Only inline methods within dex.
   bool intra_dex = true;
@@ -537,10 +539,10 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             canidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, canidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -550,7 +552,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
 }
 
 TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   virt_scope::get_vmethods(type::java_lang_Object());
 
@@ -567,7 +569,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
     const auto* clinit_name = DexString::make_string("<clinit>");
     auto* void_args = DexTypeList::make_type_list({});
     auto* void_void = DexProto::make_proto(type::_void(), void_args);
-    auto* clinit = static_cast<DexMethod*>(
+    auto* clinit = dynamic_cast<DexMethod*>(
         DexMethod::make_method(bar_cls->get_type(), clinit_name, void_void));
     clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
     clinit->set_code(std::make_unique<IRCode>());
@@ -578,7 +580,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
     bar_cls->add_method(clinit);
 
     const auto* sfield_name = DexString::make_string("existing_field");
-    auto* field = static_cast<DexField*>(
+    auto* field = dynamic_cast<DexField*>(
         DexField::make_field(bar_cls->get_type(), sfield_name, type::_int()));
     field->make_concrete(ACC_PUBLIC | ACC_STATIC);
     type_class(bar_cls->get_type())->add_field(field);
@@ -623,10 +625,10 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             canidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, canidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -637,7 +639,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
 
 // Don't inline when it would exceed (configured) size
 TEST_F(MethodInlineTest, size_limit) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   DexStoresVector stores;
   UnorderedSet<DexMethod*> canidates;
@@ -674,16 +676,16 @@ TEST_F(MethodInlineTest, size_limit) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             canidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk, IntraDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, canidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk, IntraDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), 0);
 }
 
 TEST_F(MethodInlineTest, minimal_self_loop_regression) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -712,10 +714,10 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -725,7 +727,7 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
 }
 
 TEST_F(MethodInlineTest, non_unique_inlined_registers) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -760,10 +762,10 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -787,7 +789,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
 }
 
 TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -831,10 +833,10 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -855,7 +857,7 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
 
 TEST_F(MethodInlineTest,
        inline_beneficial_for_particular_instance_after_constant_prop) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -899,10 +901,10 @@ TEST_F(MethodInlineTest,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -932,7 +934,7 @@ TEST_F(MethodInlineTest,
 }
 
 TEST_F(MethodInlineTest, intradex_legal_after_constant_prop) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = true;
 
@@ -978,10 +980,10 @@ TEST_F(MethodInlineTest, intradex_legal_after_constant_prop) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -1013,7 +1015,7 @@ TEST_F(MethodInlineTest, intradex_legal_after_constant_prop) {
 TEST_F(
     MethodInlineTest,
     inline_beneficial_for_particular_instance_after_constant_prop_and_local_dce) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1057,10 +1059,10 @@ TEST_F(
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -1090,7 +1092,7 @@ TEST_F(
 }
 
 TEST_F(MethodInlineTest, throw_after_no_return) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1129,10 +1131,10 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), 0);
@@ -1152,7 +1154,7 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
 }
 
 TEST_F(MethodInlineTest, boxed_boolean) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1172,11 +1174,11 @@ TEST_F(MethodInlineTest, boxed_boolean) {
     check_method = make_unboxing_precondition_method(foo_cls, "check");
     candidates.insert(check_method);
     // foo_main calls check_method a few times.
-    auto* FALSE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
+    auto* FALSE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;"));
     always_assert(FALSE_field != nullptr);
-    auto* TRUE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
+    auto* TRUE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"));
     always_assert(TRUE_field != nullptr);
     foo_main =
         make_a_method_calls_others_with_arg(foo_cls,
@@ -1206,13 +1208,13 @@ TEST_F(MethodInlineTest, boxed_boolean) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex,
-                             /* true_virtual_callers */ {},
-                             /* inline_for_speed */ nullptr,
-                             /* analyze_and_prune_inits */ false, pure_methods);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex,
+      /* true_virtual_callers */ {},
+      /* inline_for_speed */ nullptr,
+      /* analyze_and_prune_inits */ false, pure_methods);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -1248,7 +1250,7 @@ TEST_F(MethodInlineTest, boxed_boolean) {
 }
 
 TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1268,11 +1270,11 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
     check_method = make_unboxing_precondition_method(foo_cls, "check");
     candidates.insert(check_method);
     // foo_main calls check_method a few times.
-    auto* FALSE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
+    auto* FALSE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;"));
     always_assert(FALSE_field != nullptr);
-    auto* TRUE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
+    auto* TRUE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"));
     always_assert(TRUE_field != nullptr);
     foo_main =
         make_a_method_calls_others_with_arg(foo_cls,
@@ -1295,13 +1297,13 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex,
-                             /* true_virtual_callers */ {},
-                             /* inline_for_speed */ nullptr,
-                             /* analyze_and_prune_inits */ false, pure_methods);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex,
+      /* true_virtual_callers */ {},
+      /* inline_for_speed */ nullptr,
+      /* analyze_and_prune_inits */ false, pure_methods);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -1333,27 +1335,27 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
-  DexMethod* nested_callee = static_cast<DexMethod*>(
+  DexMethod* nested_callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.nested_callee:()V"));
   nested_callee->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
-  DexMethod* caller_inside = static_cast<DexMethod*>(
+  DexMethod* caller_inside = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.caller_inside:()V"));
   caller_inside->make_concrete(ACC_PRIVATE,
                                /* is_virtual */ false);
 
-  DexMethod* nested_callee_2 = static_cast<DexMethod*>(
+  DexMethod* nested_callee_2 = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.nested_callee_2:()V"));
   nested_callee_2->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -1435,7 +1437,7 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   nested_callee_2->set_code(assembler::ircode_from_string(nested_callee_2_str));
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1474,13 +1476,13 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ false, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ false, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -1567,11 +1569,11 @@ TEST_F(MethodInlineTest, unused_result) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:(I)I"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:(I)I"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -1616,7 +1618,7 @@ TEST_F(MethodInlineTest, unused_result) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1649,13 +1651,13 @@ TEST_F(MethodInlineTest, unused_result) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ false, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ false, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -1684,16 +1686,16 @@ TEST_F(MethodInlineTest, unused_result) {
 TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
   auto* foo_cls = create_a_class("LFoo;");
 
-  DexMethod* outer_caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.outer_caller:()V"));
+  DexMethod* outer_caller = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.outer_caller:()V"));
   outer_caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* inner_caller = static_cast<DexMethod*>(
+  DexMethod* inner_caller = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.inner_caller:(I)V"));
   inner_caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:(I)I"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:(I)I"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   foo_cls->add_method(outer_caller);
@@ -1759,7 +1761,7 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1797,13 +1799,13 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ false, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ false, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -1838,12 +1840,12 @@ TEST_F(MethodInlineTest,
        dont_inline_callee_with_tries_and_no_catch_all_at_sketchy_call_site) {
   auto* foo_cls = create_a_class("LFoo;");
 
-  DexMethod* caller = static_cast<DexMethod*>(
+  DexMethod* caller = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.sketchyCaller:()V"));
   caller->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
   DexMethod* callee =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
   callee->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
   foo_cls->add_method(caller);
@@ -1882,7 +1884,7 @@ TEST_F(MethodInlineTest,
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   DexStoresVector stores;
   {
@@ -1904,12 +1906,12 @@ TEST_F(MethodInlineTest,
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk, IntraDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ false, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk, IntraDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ false, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -1921,10 +1923,10 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
   auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.sketchy_callee:()V"));
   callee->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
@@ -1964,7 +1966,7 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   DexStoresVector stores;
   {
@@ -1986,12 +1988,12 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk, IntraDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ false, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk, IntraDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ false, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -2003,10 +2005,10 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
   auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
@@ -2050,7 +2052,7 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2086,13 +2088,13 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ false, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ false, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -2123,7 +2125,7 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
 
 /// testing parameter max_cost_for_constant_propagation
 TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
   DexStoresVector stores;
@@ -2143,11 +2145,11 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
     candidates.insert(check_method);
     candidates.insert(small_method);
     // foo_main calls check_method a few times.
-    auto* FALSE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
+    auto* FALSE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;"));
     always_assert(FALSE_field != nullptr);
-    auto* TRUE_field = (DexField*)DexField::get_field(
-        "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
+    auto* TRUE_field = dynamic_cast<DexField*>(
+        DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"));
     always_assert(TRUE_field != nullptr);
     foo_main =
         make_a_method_calls_others_with_arg(foo_cls,
@@ -2183,13 +2185,13 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, std::ref(concurrent_method_resolver),
-                             inliner_config, min_sdk,
-                             intra_dex ? IntraDex : InterDex,
-                             /* true_virtual_callers */ {},
-                             /* inline_for_speed */ nullptr,
-                             /* analyze_and_prune_inits */ false, pure_methods);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex,
+      /* true_virtual_callers */ {},
+      /* inline_for_speed */ nullptr,
+      /* analyze_and_prune_inits */ false, pure_methods);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), 1);
@@ -2202,11 +2204,11 @@ TEST_F(MethodInlineTest, inline_init_not_relaxed) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -2234,7 +2236,7 @@ TEST_F(MethodInlineTest, inline_init_not_relaxed) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2262,13 +2264,13 @@ TEST_F(MethodInlineTest, inline_init_not_relaxed) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ true, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ true, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -2292,11 +2294,11 @@ TEST_F(MethodInlineTest, inline_init_relaxed) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -2324,7 +2326,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2357,13 +2359,13 @@ TEST_F(MethodInlineTest, inline_init_relaxed) {
         scope, /* create_init_class_insns */ false);
     int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting
                       // with min_sdk 21.
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ true, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ true, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -2395,14 +2397,14 @@ TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
   DexMethod* finalize =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.finalize:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.finalize:()V"));
   finalize->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
 
   bar_cls->add_method(caller);
@@ -2431,7 +2433,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2463,13 +2465,13 @@ TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
         scope, /* create_init_class_insns */ false);
     int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting
                       // with min_sdk 21.
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ true, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ true, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -2529,7 +2531,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
   )");
   auto* caller = use->get_all_methods().at(0);
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2573,13 +2575,13 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
         scope, /* create_init_class_insns */ false);
     int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting
                       // with min_sdk 21.
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex,
-                               /* true_virtual_callers */ {},
-                               /* inline_for_speed */ nullptr,
-                               /* analyze_and_prune_inits */ true, {});
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex,
+        /* true_virtual_callers */ {},
+        /* inline_for_speed */ nullptr,
+        /* analyze_and_prune_inits */ true, {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -2611,15 +2613,15 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexField* field =
-      static_cast<DexField*>(DexField::make_field("LFoo;.final_field:Z"));
+      dynamic_cast<DexField*>(DexField::make_field("LFoo;.final_field:Z"));
   field->make_concrete(ACC_PUBLIC);
   foo_cls->add_field(field);
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -2651,7 +2653,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2687,7 +2689,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
     int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting
                       // with min_sdk 21.
     MultiMethodInliner inliner(
-        scope, init_classes_with_side_effects, stores, candidates,
+        scope, init_classes_with_side_effects, stores, conf, candidates,
         std::ref(concurrent_method_resolver), inliner_config, min_sdk,
         intra_dex ? IntraDex : InterDex,
         /* true_virtual_callers */ {},
@@ -2731,16 +2733,16 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */
                         false);
 
   DexField* field =
-      static_cast<DexField*>(DexField::make_field("LFoo;.not_final_field:Z"));
+      dynamic_cast<DexField*>(DexField::make_field("LFoo;.not_final_field:Z"));
   field->make_concrete(ACC_PUBLIC);
   foo_cls->add_field(field);
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   bar_cls->add_method(caller);
@@ -2772,7 +2774,7 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2806,7 +2808,7 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
     int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting
                       // with min_sdk 21.
     MultiMethodInliner inliner(
-        scope, init_classes_with_side_effects, stores, candidates,
+        scope, init_classes_with_side_effects, stores, conf, candidates,
         std::ref(concurrent_method_resolver), inliner_config, min_sdk,
         intra_dex ? IntraDex : InterDex,
         /* true_virtual_callers */ {},
@@ -2849,19 +2851,19 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
   auto* bar_cls = create_a_class("LBar;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   DexField* field =
-      static_cast<DexField*>(DexField::make_field("LFoo;.final_field:Z"));
+      dynamic_cast<DexField*>(DexField::make_field("LFoo;.final_field:Z"));
   field->make_concrete(ACC_PUBLIC);
   foo_cls->add_field(field);
   DexMethod* init =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:(I)V"));
   init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
 
   DexMethod* finalize =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.finalize:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.finalize:()V"));
   finalize->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
 
   bar_cls->add_method(caller);
@@ -2894,7 +2896,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
 
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -2928,7 +2930,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
     int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting
                       // with min_sdk 21.
     MultiMethodInliner inliner(
-        scope, init_classes_with_side_effects, stores, candidates,
+        scope, init_classes_with_side_effects, stores, conf, candidates,
         std::ref(concurrent_method_resolver), inliner_config, min_sdk,
         intra_dex ? IntraDex : InterDex,
         /* true_virtual_callers */ {},
@@ -2971,10 +2973,10 @@ TEST_F(MethodInlineTest, partially_inline) {
   auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
@@ -3017,7 +3019,7 @@ TEST_F(MethodInlineTest, partially_inline) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -3054,10 +3056,10 @@ TEST_F(MethodInlineTest, partially_inline) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex);
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex);
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -3113,14 +3115,14 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   auto* foo_cls = foo_cc.create();
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* base_callee = static_cast<DexMethod*>(
+  DexMethod* base_callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LBase;.callee:(Ljava/lang/Object;)V"));
   base_callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
   callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
 
@@ -3167,7 +3169,7 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   base_callee->set_code(assembler::ircode_from_string(callee_str));
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -3213,7 +3215,7 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
     MultiMethodInliner inliner(
-        scope, init_classes_with_side_effects, stores, candidates,
+        scope, init_classes_with_side_effects, stores, conf, candidates,
         std::ref(concurrent_method_resolver), inliner_config, min_sdk,
         intra_dex ? IntraDex : InterDex, true_virtual_callers);
     inliner.inline_methods();
@@ -3244,14 +3246,14 @@ TEST_F(MethodInlineTest,
   auto* foo_cls = foo_cc.create();
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* base_callee = static_cast<DexMethod*>(
+  DexMethod* base_callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LBase;.callee:(Ljava/lang/Object;)V"));
   base_callee->make_concrete(ACC_ABSTRACT, /* is_virtual */ true);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
   callee->make_concrete(ACC_PRIVATE, /* is_virtual */ true);
 
@@ -3297,7 +3299,7 @@ TEST_F(MethodInlineTest,
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -3342,7 +3344,7 @@ TEST_F(MethodInlineTest,
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
     MultiMethodInliner inliner(
-        scope, init_classes_with_side_effects, stores, candidates,
+        scope, init_classes_with_side_effects, stores, conf, candidates,
         std::ref(concurrent_method_resolver), inliner_config, min_sdk,
         intra_dex ? IntraDex : InterDex, true_virtual_callers);
     inliner.inline_methods();
@@ -3368,10 +3370,10 @@ TEST_F(MethodInlineTest, partially_inline_dex_position_marker_gone) {
   auto* foo_cls = create_a_class("LFoo;");
 
   DexMethod* caller =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  DexMethod* callee = static_cast<DexMethod*>(
+  DexMethod* callee = dynamic_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
@@ -3414,7 +3416,7 @@ TEST_F(MethodInlineTest, partially_inline_dex_position_marker_gone) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodResolver concurrent_method_resolver;
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -3451,10 +3453,10 @@ TEST_F(MethodInlineTest, partially_inline_dex_position_marker_gone) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
-    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, std::ref(concurrent_method_resolver),
-                               inliner_config, min_sdk,
-                               intra_dex ? IntraDex : InterDex);
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex);
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();

@@ -76,6 +76,7 @@ Shrinker::Shrinker(
     const Scope& scope,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
+    const ConfigFiles& conf,
     const ShrinkerConfig& config,
     int min_sdk,
     const UnorderedSet<DexMethodRef*>& configured_pure_methods,
@@ -84,7 +85,7 @@ Shrinker::Shrinker(
     const boost::optional<std::string>& package_name,
     const method_override_graph::Graph* method_override_graph)
     : m_forest(load(config.reg_alloc_random_forest)),
-      m_xstores(stores),
+      m_xstores(stores, conf.normal_primary_dex()),
       m_config(config),
       m_min_sdk(min_sdk),
       m_enabled(config.run_const_prop || config.run_cse ||
@@ -103,7 +104,6 @@ Shrinker::Shrinker(
   static_cast<void>(constant_propagation::EnumFieldAnalyzerState::get());
   static_cast<void>(constant_propagation::BoxedBooleanAnalyzerState::get());
   static_cast<void>(constant_propagation::ApiLevelAnalyzerState::get());
-
   if (config.run_cse || config.run_local_dce) {
     if (config.compute_pure_methods) {
       const auto& pure_methods = ::get_pure_methods();
@@ -145,6 +145,8 @@ Shrinker::Shrinker(
     constant_propagation::immutable_state::analyze_constructors(
         scope, &m_immut_analyzer_state);
   }
+  TRACE(MMINL, 1, "shrinker normal_primary_dex: %d; largest_root_store_id: %zu",
+        conf.normal_primary_dex(), m_xstores.largest_root_store_id());
 }
 
 constant_propagation::Transform::Stats Shrinker::constant_propagation(
@@ -264,7 +266,7 @@ void Shrinker::shrink_code(
   }
 
   using stats_t = std::tuple<size_t, size_t, size_t, size_t>;
-  auto get_features = [&code](size_t mminl_level) -> stats_t {
+  auto get_features = [&code](int mminl_level) -> stats_t {
     if (!traceEnabled(MMINL, mminl_level)) {
       return stats_t{};
     }
@@ -277,7 +279,7 @@ void Shrinker::shrink_code(
     return stats_t{regs_before, insn_before, blocks_before, edges};
   };
 
-  constexpr size_t kMMINLDataCollectionLevel = 10;
+  constexpr int kMMINLDataCollectionLevel = 10;
   auto data_before_reg_alloc = get_features(kMMINLDataCollectionLevel);
 
   size_t reg_alloc_inc{0};

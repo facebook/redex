@@ -37,7 +37,7 @@ DexMethod* resolve_invoke_method_if_unambiguous(
     const method_override_graph::Graph& method_override_graph,
     const IRInstruction* insn,
     const DexMethod* caller) {
-  auto* callee = resolve_invoke_method(insn, caller);
+  auto* callee = resolve_invoke_method_deprecated(insn, caller);
   if ((callee == nullptr) || callee->is_external() ||
       (callee->get_code() == nullptr)) {
     return nullptr;
@@ -103,7 +103,7 @@ const Callees* resolve_invoke_callees(
     const IRInstruction* insn,
     const DexMethod* caller,
     CalleesCache* callees_cache) {
-  auto* callee = resolve_invoke_method(insn, caller);
+  auto* callee = resolve_invoke_method_deprecated(insn, caller);
   auto [callees, _] =
       get_or_create_callees(method_override_graph, insn->opcode(), callee,
                             insn->get_method()->get_class(), callees_cache);
@@ -115,14 +115,15 @@ DexMethod* resolve_invoke_inlinable_callee(
     const IRInstruction* insn,
     const DexMethod* caller,
     CalleesCache* callees_cache,
-    const std::function<DexType*()>& inlinable_type_at_src_index_0_getter) {
+    const std::function<const DexType*()>&
+        inlinable_type_at_src_index_0_getter) {
   const auto* callees = resolve_invoke_callees(method_override_graph, insn,
                                                caller, callees_cache);
   always_assert(!callees->any_unknown);
   if (callees->with_code.size() == 1) {
     return callees->with_code.front();
   }
-  auto* inlinable_type = inlinable_type_at_src_index_0_getter();
+  const auto* inlinable_type = inlinable_type_at_src_index_0_getter();
   if (inlinable_type == nullptr) {
     return nullptr;
   }
@@ -132,9 +133,9 @@ DexMethod* resolve_invoke_inlinable_callee(
       type::check_cast(inlinable_type, method_ref->get_class()),
       "Inlinable type %s it compatible with declaring type of method in {%s}",
       SHOW(inlinable_type), SHOW(insn));
-  auto* callee =
-      resolve_method(type_class(inlinable_type), method_ref->get_name(),
-                     method_ref->get_proto(), MethodSearch::Virtual, caller);
+  auto* callee = resolve_method_deprecated(
+      type_class(inlinable_type), method_ref->get_name(),
+      method_ref->get_proto(), MethodSearch::Virtual, caller);
   always_assert_log(callee, "Could not resolve callee for %s in %s", SHOW(insn),
                     SHOW(inlinable_type));
   always_assert_log(callee->get_code(), "Callee %s for %s in %s has no code",
@@ -165,7 +166,7 @@ src_index_t get_param_index(const DexMethod* callee,
 void analyze_scope(
     const Scope& scope,
     const mog::Graph& method_override_graph,
-    ConcurrentMap<DexType*, Locations>* new_instances,
+    ConcurrentMap<const DexType*, Locations>* new_instances,
     ConcurrentMap<DexMethod*, Locations>* single_callee_invokes,
     InsertOnlyConcurrentSet<DexMethod*>* multi_callee_invokes,
     ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>* dependencies,
@@ -176,7 +177,7 @@ void analyze_scope(
     using Map = UnorderedMap<CalleesKey, const Callees*, CalleesKeyHash>;
     std::array<Map, 2> local_callees_cache;
     auto resolve_invoke_callees = [&](auto* insn) {
-      auto* resolved_callee = resolve_invoke_method(insn, method);
+      auto* resolved_callee = resolve_invoke_method_deprecated(insn, method);
       auto* static_base_type = insn->get_method()->get_class();
       auto op = insn->opcode();
       bool no_overrides = opcode::is_invoke_static(op) ||
@@ -294,7 +295,7 @@ const MethodSummary* resolve_invoke_method_summary(
     const DexMethod* caller,
     CalleesCache* callees_cache,
     MethodSummaryCache* method_summary_cache) {
-  auto* callee = resolve_invoke_method(insn, caller);
+  auto* callee = resolve_invoke_method_deprecated(insn, caller);
   auto [callees, _] =
       get_or_create_callees(method_override_graph, insn->opcode(), callee,
                             insn->get_method()->get_class(), callees_cache);
@@ -362,7 +363,7 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
   };
 
   if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-    auto* type = insn->get_type();
+    const auto* type = insn->get_type();
     auto* cls = type_class(type);
     if ((cls != nullptr) && !cls->is_external() &&
         (m_excluded_classes.count(cls) == 0u)) {
@@ -582,7 +583,7 @@ MethodSummaries compute_method_summaries(
 
 // For an inlinable new-instance or invoke- instruction, determine first
 // resolved callee (if any), and (eventually) allocated type
-std::pair<DexMethod*, DexType*> resolve_inlinable(
+std::pair<DexMethod*, const DexType*> resolve_inlinable(
     const MethodSummaries& method_summaries,
     DexMethod* method,
     const IRInstruction* insn) {
@@ -591,7 +592,7 @@ std::pair<DexMethod*, DexType*> resolve_inlinable(
   DexMethod* first_callee{nullptr};
   while (insn->opcode() != OPCODE_NEW_INSTANCE) {
     always_assert(opcode::is_an_invoke(insn->opcode()));
-    method = resolve_invoke_method(insn, method);
+    method = resolve_invoke_method_deprecated(insn, method);
     if (first_callee == nullptr) {
       first_callee = method;
     }

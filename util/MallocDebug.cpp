@@ -29,6 +29,7 @@
 #endif
 
 #include <algorithm>
+#include <array>
 
 #include <cstdio>
 #include <cstdlib>
@@ -37,8 +38,6 @@
 #include <map>
 #include <string>
 #include <vector>
-
-#include <thread>
 
 #include "Debug.h"
 
@@ -63,13 +62,13 @@ class TinyPRNG {
 
   void seed(const std::string& randSeed) {
     constexpr auto state_size = sizeof(m_next_rand);
-    char state[state_size] = {};
+    std::array<unsigned char, state_size> state{};
     std::string::size_type idx = 0;
     for (const auto& e : randSeed) {
-      state[idx % state_size] ^= e;
+      state[idx % state_size] ^= static_cast<unsigned char>(e);
       idx++;
     }
-    memcpy(&m_next_rand, state, state_size);
+    memcpy(&m_next_rand, state.data(), state_size);
   }
 
  private:
@@ -295,18 +294,18 @@ bool shutdown{false};
 
 extern "C" {
 
-void* malloc(size_t sz) {
+void* malloc(size_t size) {
   if (shutdown) {
-    return libc_malloc(sz);
+    return libc_malloc(size);
   }
-  return malloc_debug.malloc(sz);
+  return malloc_debug.malloc(size);
 }
 
-void* calloc(size_t nelem, size_t elsize) {
+void* calloc(size_t nmemb, size_t size) {
   if (shutdown) {
-    return libc_calloc(nelem, elsize);
+    return libc_calloc(nmemb, size);
   }
-  return malloc_debug.calloc(nelem, elsize);
+  return malloc_debug.calloc(nmemb, size);
 }
 
 void* memalign(size_t alignment, size_t bytes) {
@@ -316,12 +315,12 @@ void* memalign(size_t alignment, size_t bytes) {
   return malloc_debug.memalign(alignment, bytes);
 }
 
-int posix_memalign(void** out, size_t alignment, size_t size) {
+int posix_memalign(void** memptr, size_t alignment, size_t size) {
   if (shutdown) {
-    *out = memalign(alignment, size);
+    *memptr = memalign(alignment, size);
     return 0;
   }
-  return malloc_debug.posix_memalign(out, alignment, size);
+  return malloc_debug.posix_memalign(memptr, alignment, size);
 }
 } // extern "C"
 

@@ -8,6 +8,7 @@
 #include "Util.h"
 
 #include <stddef.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 
 #include <map>

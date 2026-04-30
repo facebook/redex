@@ -7,7 +7,6 @@
 
 #include "ObjectSensitiveDce.h"
 
-#include <fstream>
 #include <functional>
 
 #include "CFGMutation.h"
@@ -19,8 +18,6 @@
 #include "InitClassPruner.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
-#include "PassManager.h"
-#include "ScopedCFG.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"
 
@@ -59,7 +56,7 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
   bool is_pure(IRInstruction* insn) const {
     // This is what LocalDce does.
     auto* ref = insn->get_method();
-    auto* const meth = resolve_method(ref, opcode_to_search(insn));
+    auto* const meth = resolve_method_deprecated(ref, opcode_to_search(insn));
     if (meth == nullptr) {
       return false;
     }
@@ -81,7 +78,7 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
       if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
-      auto* callee = resolve_invoke_method(insn, method);
+      auto* callee = resolve_invoke_method_deprecated(insn, method);
       if (callee == nullptr) {
         if (ptrs::is_array_clone(insn->get_method())) {
           // We'll synthesize appropriate summaries for array clone methods on

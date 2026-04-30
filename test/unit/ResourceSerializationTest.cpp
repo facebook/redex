@@ -8,7 +8,6 @@
 #include <array>
 #include <boost/process/args.hpp>
 #include <boost/process/child.hpp>
-#include <boost/process/io.hpp>
 #include <boost/regex.hpp>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -19,6 +18,7 @@
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
+#include "ResourcesTestDefs.h"
 #include "Util.h"
 #include "androidfw/ResourceTypes.h"
 #include "arsc/TestStructures.h"
@@ -173,7 +173,8 @@ struct ParsedAaptOutput {
   std::vector<std::string> lines;
 
   void dump() {
-    std::cerr << "\n" << "Dump command output:" << "\n";
+    std::cerr << "\n"
+              << "Dump command output:" << "\n";
     for (const auto& line : lines) {
       std::cerr << line << "\n";
     }
@@ -916,7 +917,8 @@ void build_arsc_file_and_validate(
   dimen_type_definer->add_empty(&land_config);
 
   // style
-  std::vector<android::ResTable_config*> style_configs = {&xxhdpi_config};
+  std::vector<android::ResTable_config*> style_configs = {&default_config,
+                                                          &xxhdpi_config};
   std::vector<uint32_t> style_flags = {
       android::ResTable_config::CONFIG_DENSITY};
   auto style_type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
@@ -942,6 +944,9 @@ void build_arsc_file_and_validate(
   android::Vector<char> complex_entry_data;
   complex_entry_builder.serialize(&complex_entry_data);
 
+  style_type_definer->add(
+      &default_config,
+      {(uint8_t*)complex_entry_data.array(), complex_entry_data.size()});
   style_type_definer->add(&xxhdpi_config, {(uint8_t*)complex_entry_data.array(),
                                            complex_entry_data.size()});
 
@@ -1082,8 +1087,8 @@ TEST(ResTable, BuildNewTable) {
     collector.visit(f.data(), f.size());
     ASSERT_EQ(collector.get_reserved_field(0x1), 2)
         << "dimen should have two ResTable_type entries";
-    ASSERT_EQ(collector.get_reserved_field(0x2), 1)
-        << "style should have one ResTable_type entry";
+    ASSERT_EQ(collector.get_reserved_field(0x2), 2)
+        << "style should have two ResTable_type entries";
   });
 }
 
@@ -1184,7 +1189,7 @@ TEST(ResTable, DeleteAllLandscapeEntries) {
     EXPECT_EQ(type_infos.size(), 2);
     EXPECT_EQ(type_infos.at(0).configs.size(), 1)
         << "ResTable_type not cleaned up!";
-    EXPECT_EQ(type_infos.at(1).configs.size(), 1);
+    EXPECT_EQ(type_infos.at(1).configs.size(), 2);
   });
 }
 
@@ -2068,7 +2073,7 @@ TEST(ResourcesArscFile, ApplyAttributeRemovals) {
                                                          0x010100d4};
       modifications.push_back(mod);
 
-      arsc_file.apply_attribute_removals(modifications, {});
+      arsc_file.apply_attribute_removals_and_additions(modifications, {});
     }
     {
       auto modified_dump = aapt_dump_and_parse(arsc_path);
@@ -2085,7 +2090,7 @@ TEST(ResourcesArscFile, ApplyAttributeRemovals) {
                                                          0x01010000};
       modifications.push_back(mod);
 
-      arsc_file.apply_attribute_removals(modifications, {});
+      arsc_file.apply_attribute_removals_and_additions(modifications, {});
     }
     {
       auto modified_dump = aapt_dump_and_parse(arsc_path);
@@ -2102,7 +2107,7 @@ TEST(ResourcesArscFile, ApplyAttributeRemovals) {
                                                          0x01010098};
       modifications.push_back(mod);
 
-      arsc_file.apply_attribute_removals(modifications, {});
+      arsc_file.apply_attribute_removals_and_additions(modifications, {});
     }
     {
       auto modified_dump = aapt_dump_and_parse(arsc_path);
@@ -2123,7 +2128,7 @@ TEST(ResourcesArscFile, ApplyAttributeRemovals) {
       modifications.push_back(mod1);
       modifications.push_back(mod2);
 
-      arsc_file.apply_attribute_removals(modifications, {});
+      arsc_file.apply_attribute_removals_and_additions(modifications, {});
     }
     {
       auto final_dump = aapt_dump_and_parse(arsc_path);
@@ -2186,7 +2191,7 @@ TEST(ResourcesArscFile, ApplyAttributeAdditions) {
               android::Res_value::TYPE_INT_COLOR_RGB8, 0xFFFFFFFF}};
       modifications.push_back(mod);
 
-      arsc_file.apply_attribute_additions(modifications, {});
+      arsc_file.apply_attribute_removals_and_additions(modifications, {});
     }
     {
       auto modified_dump = aapt_dump_and_parse(arsc_path);
@@ -2213,7 +2218,7 @@ TEST(ResourcesArscFile, ApplyAttributeAdditions) {
       modifications.push_back(mod1);
       modifications.push_back(mod2);
 
-      arsc_file.apply_attribute_additions(modifications, {});
+      arsc_file.apply_attribute_removals_and_additions(modifications, {});
     }
     {
       auto final_dump = aapt_dump_and_parse(arsc_path);
@@ -2237,7 +2242,7 @@ TEST(ResourcesArscFile, ApplyAttributeAdditions) {
               android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF123456}};
       modifications.push_back(mod);
 
-      arsc_file.apply_attribute_additions(modifications, {});
+      arsc_file.apply_attribute_removals_and_additions(modifications, {});
     }
     {
       auto unchanged_dump = aapt_dump_and_parse(arsc_path);
@@ -2249,6 +2254,224 @@ TEST(ResourcesArscFile, ApplyAttributeAdditions) {
       EXPECT_EQ(unchanged_values[2].key, 0x010100d4);
       EXPECT_EQ(unchanged_values[3].key, 0x01010100);
       EXPECT_EQ(unchanged_values[4].key, 0x01010101);
+    }
+  });
+}
+
+TEST(ResourcesArscFile, ApplyAttributeRemovalsAndAdditions) {
+  build_arsc_file_and_validate([&](const std::string& /* unused */,
+                                   const std::string& arsc_path) {
+    auto initial_dump = aapt_dump_and_parse(arsc_path);
+    uint32_t resource_id = 0x7f020000;
+    auto initial_values =
+        initial_dump.get_complex_values("xxhdpi", resource_id);
+    ASSERT_EQ(initial_values.size(), 2);
+    EXPECT_EQ(initial_values[0].key, 0x01010098);
+    EXPECT_EQ(initial_values[1].key, 0x010100d4);
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+
+      resources::StyleModificationSpec::Modification removal{resource_id,
+                                                             0x010100d4};
+      modifications.push_back(removal);
+
+      resources::StyleModificationSpec::Modification addition1{
+          resource_id, 0x01010099,
+          resources::StyleResource::Value{
+              android::Res_value::TYPE_INT_COLOR_RGB8, 0xFFFFFFFF}};
+      resources::StyleModificationSpec::Modification addition2{
+          resource_id, 0x01010100,
+          resources::StyleResource::Value{
+              android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF000000}};
+      modifications.push_back(addition1);
+      modifications.push_back(addition2);
+
+      arsc_file.apply_attribute_removals_and_additions(modifications, {});
+    }
+
+    {
+      auto modified_dump = aapt_dump_and_parse(arsc_path);
+      auto modified_values =
+          modified_dump.get_complex_values("xxhdpi", resource_id);
+      ASSERT_EQ(modified_values.size(), 3);
+
+      EXPECT_EQ(modified_values[0].key, 0x01010098);
+
+      EXPECT_EQ(modified_values[1].key, 0x01010099);
+      EXPECT_EQ(modified_values[1].data, 0xFFFFFFFF);
+      EXPECT_EQ(modified_values[2].key, 0x01010100);
+      EXPECT_EQ(modified_values[2].data, 0xFF000000);
+
+      for (const auto& value : modified_values) {
+        EXPECT_NE(value.key, 0x010100d4) << "Removed attribute still present";
+      }
+    }
+  });
+}
+
+TEST(ResourcesArscFile, ApplyStyleMerges) {
+  uint32_t resource_id = 0x7f020000;
+  uint32_t nonexistent_resource_id = 0x7f030000;
+  uint32_t new_parent_id = 0x01010200;
+  uint32_t alternate_parent_id = 0x01010300;
+
+  auto verify_style_attributes = [&new_parent_id](
+                                     const std::vector<ComplexValue>& values,
+                                     uint32_t expected_parent_id) {
+    UnorderedMap<uint32_t, uint32_t> attr_map;
+    for (const auto& value : values) {
+      attr_map[value.key] = value.data;
+    }
+
+    EXPECT_TRUE(attr_map.find(kTextColorAttrId) != attr_map.end())
+        << "Original attribute kTextColorAttrId not found";
+    EXPECT_TRUE(attr_map.find(kBackgroundAttrId) != attr_map.end())
+        << "Original attribute kBackgroundAttrId not found";
+
+    if (expected_parent_id == new_parent_id) {
+      EXPECT_TRUE(attr_map.find(kFloatAttrId) != attr_map.end())
+          << "New attribute kFloatAttrId not found";
+      EXPECT_TRUE(attr_map.find(kTextColorHintAttrId) != attr_map.end())
+          << "New attribute kTextColorHintAttrId not found";
+
+      EXPECT_EQ(attr_map[kFloatAttrId], kColorPurple);
+      EXPECT_EQ(attr_map[kTextColorHintAttrId], kColorTeal);
+    }
+
+    return attr_map.size();
+  };
+
+  build_arsc_file_and_validate([&](const std::string& /* unused */,
+                                   const std::string& arsc_path) {
+    auto initial_dump = aapt_dump_and_parse(arsc_path);
+    auto initial_values =
+        initial_dump.get_complex_values("xxhdpi", resource_id);
+    ASSERT_EQ(initial_values.size(), 2);
+    EXPECT_EQ(initial_values[0].key, kTextColorAttrId);
+    EXPECT_EQ(initial_values[1].key, kBackgroundAttrId);
+
+    auto initial_parent_id =
+        initial_dump.config_to_complex_values["xxhdpi"][resource_id].parent_id;
+    EXPECT_EQ(initial_parent_id, 0);
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+
+      UnorderedMap<uint32_t, resources::StyleResource::Value> attributes;
+      attributes.insert(
+          {kFloatAttrId,
+           resources::StyleResource::Value(
+               android::Res_value::TYPE_INT_COLOR_RGB8, kColorPurple)});
+      attributes.insert(
+          {kTextColorHintAttrId,
+           resources::StyleResource::Value(
+               android::Res_value::TYPE_INT_COLOR_RGB8, kColorTeal)});
+
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+      modifications.emplace_back(resource_id, new_parent_id,
+                                 std::move(attributes));
+
+      arsc_file.apply_style_merges(modifications, {});
+    }
+
+    {
+      auto modified_dump = aapt_dump_and_parse(arsc_path);
+
+      auto modified_parent_id =
+          modified_dump.config_to_complex_values["xxhdpi"][resource_id]
+              .parent_id;
+      EXPECT_EQ(modified_parent_id, new_parent_id);
+
+      auto modified_values =
+          modified_dump.get_complex_values("xxhdpi", resource_id);
+      ASSERT_GE(modified_values.size(), 4);
+      verify_style_attributes(modified_values, new_parent_id);
+    }
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+
+      UnorderedMap<uint32_t, resources::StyleResource::Value> attributes;
+      attributes.insert(
+          {kPaddingAttrId,
+           resources::StyleResource::Value(
+               android::Res_value::TYPE_INT_COLOR_RGB8, kColorBlue)});
+
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+      modifications.emplace_back(nonexistent_resource_id, alternate_parent_id,
+                                 std::move(attributes));
+
+      arsc_file.apply_style_merges(modifications, {});
+    }
+
+    {
+      auto final_dump = aapt_dump_and_parse(arsc_path);
+
+      auto final_parent_id =
+          final_dump.config_to_complex_values["xxhdpi"][resource_id].parent_id;
+      EXPECT_EQ(final_parent_id, new_parent_id);
+
+      auto final_values = final_dump.get_complex_values("xxhdpi", resource_id);
+      ASSERT_GE(final_values.size(), 4);
+      verify_style_attributes(final_values, new_parent_id);
+    }
+  });
+}
+
+TEST(ResourcesArscFile, AddStyles) {
+  build_arsc_file_and_validate([&](const std::string& /* unused */,
+                                   const std::string& arsc_path) {
+    auto initial_dump = aapt_dump_and_parse(arsc_path);
+
+    EXPECT_EQ(initial_dump.get_identifier("foo:style/fourth"), 0x7f020000);
+
+    auto initial_values = initial_dump.get_complex_values("xxhdpi", 0x7f020000);
+    ASSERT_EQ(initial_values.size(), 2);
+    EXPECT_EQ(initial_values[0].key, 0x01010098);
+    EXPECT_EQ(initial_values[1].key, 0x010100d4);
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+
+      resources::StyleModificationSpec::Modification new_style1(0x7f020001);
+      modifications.push_back(new_style1);
+
+      resources::StyleModificationSpec::Modification new_style2(0x7f020002);
+      modifications.push_back(new_style2);
+
+      arsc_file.add_styles(modifications, {});
+    }
+
+    {
+      auto modified_dump = aapt_dump_and_parse(arsc_path);
+
+      EXPECT_EQ(modified_dump.get_identifier("foo:style/fourth"), 0x7f020000);
+      auto original_values =
+          modified_dump.get_complex_values("default", 0x7f020000);
+      ASSERT_EQ(original_values.size(), 2);
+      EXPECT_EQ(original_values[0].key, 0x01010098);
+      EXPECT_EQ(original_values[1].key, 0x010100d4);
+
+      auto style_1_values =
+          modified_dump.get_complex_values("default", 0x7f020001);
+      EXPECT_EQ(style_1_values.size(), 0)
+          << "New style 0x7f020001 should be empty";
+
+      auto style_2_values =
+          modified_dump.get_complex_values("default", 0x7f020002);
+      EXPECT_EQ(style_2_values.size(), 0)
+          << "New style 0x7f020002 should be empty";
+
+      EXPECT_EQ(modified_dump.config_to_complex_values["default"][0x7f020001]
+                    .parent_id,
+                0);
+      EXPECT_EQ(modified_dump.config_to_complex_values["default"][0x7f020002]
+                    .parent_id,
+                0);
     }
   });
 }

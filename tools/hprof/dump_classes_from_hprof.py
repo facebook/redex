@@ -336,6 +336,8 @@ class HprofHeap(object):
 
 
 class SimpleSegment(object):
+    __slots__ = ("heap_tag", "object_id")
+
     def __init__(self, heap_tag, object_id):
         self.heap_tag = heap_tag
         self.object_id = object_id

@@ -7,9 +7,10 @@
 
 #include "DexUtil.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/regex.hpp>
+#include <boost/filesystem/directory.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/regex.hpp> // NOLINT
 #include <string_view>
 
 #include "Debug.h"
@@ -19,13 +20,15 @@
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "UnknownVirtuals.h"
 
 const DexType* get_init_class_type_demand(const IRInstruction* insn) {
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     // It's the resolved method that counts
-    auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto* method =
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     return ((method != nullptr) && !assumenosideeffects(method))
                ? method->get_class()
                : nullptr;
@@ -150,6 +153,7 @@ Scope build_class_scope(const DexStoresVector& stores) {
 }
 
 namespace {
+
 bool starts_with_any_prefix(const DexString* str,
                             const UnorderedSet<std::string>& prefixes) {
   if (str == nullptr) {
@@ -248,7 +252,7 @@ void load_root_dexen(DexStore& store,
     // N.B. throaway stats for now
     DexClasses classes = load_classes_from_dex(
         DexLocation::make_location("dex", dex.string()),
-        /*stats=*/nullptr, balloon,
+        /*stats=*/nullptr, /*input_dex_version=*/nullptr, balloon,
         /* throw_on_balloon_error */ throw_on_balloon_error,
         support_dex_version);
     store.add_classes(std::move(classes));
@@ -354,8 +358,8 @@ struct VisibilityChangeGetter {
         changes.classes.insert(cls);
       }
       auto* current_method =
-          resolve_method(insn->get_method(), opcode_to_search(insn),
-                         effective_caller_resolved_from);
+          resolve_method_deprecated(insn->get_method(), opcode_to_search(insn),
+                                    effective_caller_resolved_from);
       if (current_method != nullptr && current_method->is_concrete() &&
           (scope == nullptr || current_method->get_class() != scope)) {
         if (!is_public(current_method)) {
@@ -367,7 +371,7 @@ struct VisibilityChangeGetter {
         }
       }
     } else if (insn->has_type()) {
-      auto* type = insn->get_type();
+      const auto* type = insn->get_type();
       auto* cls = type_class(type);
       if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
         changes.classes.insert(cls);
@@ -375,8 +379,8 @@ struct VisibilityChangeGetter {
     }
   }
 
-  void process_catch_types(const std::vector<DexType*>& types) {
-    for (auto* type : types) {
+  void process_catch_types(const std::vector<const DexType*>& types) {
+    for (const auto* type : types) {
       auto* cls = type_class(type);
       if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
         changes.classes.insert(cls);
@@ -394,13 +398,12 @@ VisibilityChanges get_visibility_changes(
   always_assert(code != nullptr);
   VisibilityChanges changes;
   VisibilityChangeGetter getter{changes, scope, effective_caller_resolved_from};
-  cfg_adapter::iterate(const_cast<IRCode*>(code),
-                       [&getter](MethodItemEntry& mie) {
-                         getter.process_insn(mie.insn);
-                         return cfg_adapter::LOOP_CONTINUE;
-                       });
+  cfg_adapter::iterate(code, [&getter](const MethodItemEntry& mie) {
+    getter.process_insn(mie.insn);
+    return cfg_adapter::LOOP_CONTINUE;
+  });
 
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   code->gather_catch_types(types);
   getter.process_catch_types(types);
   return changes;
@@ -412,11 +415,10 @@ VisibilityChanges get_visibility_changes(
     const DexMethod* effective_caller_resolved_from) {
   VisibilityChanges changes;
   VisibilityChangeGetter getter{changes, scope, effective_caller_resolved_from};
-  for (auto& mie :
-       cfg::InstructionIterable(const_cast<cfg::ControlFlowGraph&>(cfg))) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     getter.process_insn(mie.insn);
   }
-  std::vector<DexType*> types;
+  std::vector<const DexType*> types;
   cfg.gather_catch_types(types);
   getter.process_catch_types(types);
   return changes;
@@ -436,17 +438,16 @@ bool gather_invoked_methods_that_prevent_relocation(
     auto* insn = mie.insn;
     auto opcode = insn->opcode();
     if (opcode::is_an_invoke(opcode)) {
-      auto* meth =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
+      auto* meth = resolve_method_deprecated(insn->get_method(),
+                                             opcode_to_search(insn), method);
       if ((meth == nullptr) && opcode == OPCODE_INVOKE_VIRTUAL &&
           unknown_virtuals::is_method_known_to_be_public(insn->get_method())) {
         continue;
       }
       if (meth != nullptr) {
         always_assert(meth->is_def());
-        if (meth->is_external() && !is_public(meth)) {
-          meth = nullptr;
-        } else if (opcode == OPCODE_INVOKE_DIRECT && !method::is_init(meth)) {
+        if ((meth->is_external() && !is_public(meth)) ||
+            (opcode == OPCODE_INVOKE_DIRECT && !method::is_init(meth))) {
           meth = nullptr;
         }
       }

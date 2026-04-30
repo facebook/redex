@@ -28,7 +28,7 @@ constexpr const char* METHOD_META =
 constexpr const char* CONST_TYPE_ANNO_ATTR_NAME = "constantTypes";
 constexpr const char* CONST_VALUE_ANNO_ATTR_NAME = "constantValues";
 
-bool overlaps_with_an_existing_virtual_scope(DexType* type,
+bool overlaps_with_an_existing_virtual_scope(const DexType* type,
                                              const DexString* name,
                                              DexProto* proto) {
   if (DexMethod::get_method(type, name, proto) != nullptr) {
@@ -194,7 +194,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     auto* meth = callsite.caller;
     auto* insn = callsite.insn;
     auto* const callee =
-        resolve_method(insn->get_method(), opcode_to_search(insn));
+        resolve_method_deprecated(insn->get_method(), opcode_to_search(insn));
     always_assert(callee != nullptr);
     auto const_vals = lifted_constants.at(callee);
     auto& meth_cfg = meth->get_code()->cfg();
@@ -203,6 +203,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     if (const_vals.needs_stub()) {
       // Insert const load
       std::vector<reg_t> args;
+      args.reserve(insn->srcs_size());
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         args.push_back(insn->src(i));
       }
@@ -215,12 +216,14 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     } else {
       // Make const load
       std::vector<reg_t> const_regs;
+      const_regs.reserve(const_vals.size());
       for (size_t i = 0; i < const_vals.size(); ++i) {
         const_regs.push_back(meth_cfg.allocate_temp());
       }
       auto const_loads = const_vals.make_const_loads(const_regs);
       // Insert const load
       std::vector<reg_t> args;
+      args.reserve(insn->srcs_size());
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         args.push_back(insn->src(i));
       }
