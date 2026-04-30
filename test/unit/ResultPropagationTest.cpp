@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "OptionalIO.h"
 #include <gtest/gtest.h>
 #include <optional>
 

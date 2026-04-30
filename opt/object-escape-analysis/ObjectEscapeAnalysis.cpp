@@ -45,10 +45,10 @@
 
 #include <optional>
 
-#include "ApiLevelChecker.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
+#include "DexClass.h"
 #include "ExpandableMethodParams.h"
 #include "GlobalConfig.h"
 #include "IRInstruction.h"

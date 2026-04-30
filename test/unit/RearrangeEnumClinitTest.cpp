@@ -9,6 +9,7 @@
 #include <memory>
 #include <unordered_set>
 
+#include "IRCode.h"
 #include "RearrangeEnumClinit.h"
 
 #include "Creators.h"
@@ -17,7 +18,6 @@
 #include "MethodUtil.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
-#include "SourceBlocks.h"
 #include "TypeUtil.h"
 
 namespace rearrange_enum_clinit {

@@ -11,23 +11,22 @@
 #include <stdio.h>
 #include <string>
 
+#include "CFGMutation.h"
 #include "CheckCastAnalysis.h"
 #include "CheckCastTransform.h"
 #include "ClassHierarchy.h"
-#include "ConstantPropagationTransform.h"
 #include "Debug.h"
-#include "DexLoader.h"
-#include "DexOutput.h"
 #include "IRCode.h"
 #include "IRList.h"
 #include "LocalDce.h"
+#include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
 #include "Trace.h"
 #include "TypeReference.h"
-#include "Walkers.h"
+#include "WorkQueue.h"
 
 namespace {
 

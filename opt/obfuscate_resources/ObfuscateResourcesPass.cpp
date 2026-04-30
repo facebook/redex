@@ -15,7 +15,6 @@
 #include <cstdio>
 #include <string>
 
-#include "BundleResources.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"

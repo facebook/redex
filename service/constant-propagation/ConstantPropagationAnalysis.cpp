@@ -34,7 +34,6 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 #include "DexInstruction.h"
 #include "Resolver.h"
 #include "Trace.h"
-#include "Transform.h"
 
 // Signed integer overflow is undefined behavior in C++20, but the two's
 // complement wrapping matches the required Java semantics. So silence ubsan.

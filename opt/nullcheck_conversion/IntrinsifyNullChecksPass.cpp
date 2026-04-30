@@ -13,7 +13,6 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "IRTypeChecker.h"
 #include "Show.h"
 #include "Walkers.h"
 

@@ -16,7 +16,7 @@
 #include "CppUtil.h"
 #include "Debug.h"
 #include "DexClass.h"
-#include "DexLoader.h"
+#include "DexUtil.h"
 #include "IOUtil.h"
 #include "IRCode.h"
 #include "InterDexPassPlugin.h"

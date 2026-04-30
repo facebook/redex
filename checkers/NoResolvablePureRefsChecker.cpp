@@ -7,7 +7,6 @@
 
 #include "NoResolvablePureRefsChecker.h"
 
-#include "ApiLevelChecker.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"

@@ -7,12 +7,12 @@
 
 #include "MethodDedup.h"
 
+#include "ControlFlow.h"
 #include "DedupBlocks.h"
 #include "IRCode.h"
 #include "MethodReference.h"
 #include "Show.h"
 #include "Trace.h"
-#include "Walkers.h"
 
 namespace {
 

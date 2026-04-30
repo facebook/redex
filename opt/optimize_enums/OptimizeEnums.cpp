@@ -13,16 +13,17 @@
 #include <set>
 #include <sstream>
 
-#include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
+#include "DexStore.h"
 #include "DexUtil.h"
 #include "EnumAnalyzeGeneratedMethods.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumTransformer.h"
 #include "EnumUpcastAnalysis.h"
 #include "IRCode.h"
+#include "IRInstruction.h"
 #include "MatchFlow.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsUnmap.h"

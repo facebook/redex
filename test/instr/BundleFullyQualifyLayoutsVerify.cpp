@@ -9,7 +9,6 @@
 #include <google/protobuf/message.h>
 #include <gtest/gtest.h>
 
-#include "BundleResources.h"
 #include "FullyQualifyLayoutsVerifyHelper.h"
 #include "ReadMaybeMapped.h"
 #include "protores/Resources.pb.h"

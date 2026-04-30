@@ -12,7 +12,6 @@
 #include <string>
 
 #include "DexClass.h"
-#include "ProguardConfiguration.h"
 #include "ProguardMap.h"
 #include "ProguardObfuscationTest.h"
 #include "RedexTest.h"

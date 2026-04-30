@@ -17,7 +17,6 @@
 #include "LiveRange.h"
 #include "MaterializeResourceConstants.h"
 #include "RClass.h"
-#include "RedexContext.h"
 #include "RedexTest.h"
 #include "Show.h"
 #include "ShowCFG.h"

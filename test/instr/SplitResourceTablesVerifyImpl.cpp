@@ -9,7 +9,6 @@
 #include <gtest/gtest.h>
 #include <map>
 
-#include "ApkResources.h"
 #include "DexClass.h"
 #include "RedexResources.h"
 

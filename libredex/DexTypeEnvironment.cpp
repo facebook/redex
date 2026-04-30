@@ -9,7 +9,6 @@
 
 #include <ostream>
 
-#include "OptionalIO.h"
 #include "Show.h"
 
 namespace dtv_impl {
