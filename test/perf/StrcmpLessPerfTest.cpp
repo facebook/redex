@@ -9,7 +9,6 @@
 #include <gtest/gtest.h>
 
 #include <cstring>
-#include <string>
 #include <sys/time.h>
 
 extern "C" bool strcmp_less(const char* str1, const char* str2);

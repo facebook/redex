@@ -9,7 +9,6 @@
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <memory>
-#include <string>
 
 #include "DexInstruction.h"
 #include "VerifyUtil.h"
