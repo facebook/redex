@@ -17,6 +17,7 @@ jobs:
         - {os: "debian:13", configure_extra: ""}
         - {os: "ubuntu:22.04", configure_extra: ""}
         - {os: "ubuntu:24.04", configure_extra: ""}
+        - {os: "ubuntu:26.04", configure_extra: ""}
         - {os: "gcc:latest", configure_extra: ""}
         build_arch: ["x86_64"]
         include:
