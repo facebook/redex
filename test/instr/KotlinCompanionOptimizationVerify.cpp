@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "Resolver.h"
-#include "Show.h"
 #include "verify/VerifyUtil.h"
 
 namespace {
@@ -66,7 +64,7 @@ TEST_F(PostVerify, CompanionClass) {
   EXPECT_NE(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_STATIC, "getS"));
   // After opt, there is no sfield "Companion" in outer class.
   EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
-  // After opt, method "hello", "hello1" and "getS" are relocated from campanion
+  // After opt, method "hello", "hello1" and "getS" are relocated from companion
   // class to outer class.
   EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "hello"));
   EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "hello"));
@@ -88,15 +86,15 @@ TEST_F(PreVerify, AnotherCompanionClass) {
 
   auto* meth_clinit = find_dmethod_named(*outer_cls, "<clinit>");
   ASSERT_NE(nullptr, meth_clinit);
-  // Before opt, there is a new-instance for LAnotherCompanionClass$Companion;
+  // Before opt, there is a new-instance for LAnotherCompanionClass$Test;
   ASSERT_NE(nullptr, find_instruction(meth_clinit, DOPCODE_NEW_INSTANCE));
   // Before opt, in main fun, there is one virtual invoke for funX, one for
   // hello1.
   auto* meth_main = find_vmethod_named(*foo_cls, "main");
   EXPECT_NE(nullptr, meth_main);
   EXPECT_NE(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_VIRTUAL, "funX"));
-  // Before opt, in LCompanionClass; there should be a sfield "Test" with type
-  // 'LAnotherCompanionClass$Test;'
+  // Before opt, in LAnotherCompanionClass; there should be a sfield "Test" with
+  // type 'LAnotherCompanionClass$Test;'
   auto* field = find_sfield_named(*outer_cls, "Test");
   EXPECT_NE(nullptr, field);
   EXPECT_EQ(field->get_type(), companion_cls->get_type());
@@ -112,7 +110,7 @@ TEST_F(PostVerify, AnotherCompanionClass) {
   EXPECT_NE(nullptr, foo_cls);
   auto* meth_clinit = find_dmethod_named(*outer_cls, "<clinit>");
   ASSERT_NE(nullptr, meth_clinit);
-  // After opt, there is no new-instance for LCompanionClass clinit
+  // After opt, there is no new-instance for LAnotherCompanionClass clinit
   ASSERT_EQ(nullptr, find_instruction(meth_clinit, DOPCODE_NEW_INSTANCE));
   // After opt, in main fun, there should be one static invoke for funX.
   auto* meth_main = find_vmethod_named(*foo_cls, "main");
@@ -121,7 +119,7 @@ TEST_F(PostVerify, AnotherCompanionClass) {
   EXPECT_NE(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_STATIC, "funX"));
   // After opt, there is no sfield "Test" in outer class.
   EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Test"));
-  // After opt, method "funX" is relocated from campanion class to outer class.
+  // After opt, method "funX" is relocated from companion class to outer class.
   EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "funX"));
   EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "funX"));
 }
@@ -136,16 +134,16 @@ TEST_F(PreVerify, ThirdCompanionClass) {
   EXPECT_NE(nullptr, foo_cls);
   auto* meth_clinit = find_dmethod_named(*outer_cls, "<clinit>");
   ASSERT_NE(nullptr, meth_clinit);
-  // Before opt, there is a new-instance for LThirdCompanionClass$Companion;
+  // Before opt, there is a new-instance for LThirdCompanionClass$Test;
   ASSERT_NE(nullptr, find_instruction(meth_clinit, DOPCODE_NEW_INSTANCE));
   // Before opt, in LThirdCompanionClass; there should be a sfield "Test" with
-  // type 'LThirdCompanionClass$Companion;'
+  // type 'LThirdCompanionClass$Test;'
   auto* field = find_sfield_named(*outer_cls, "Test");
   EXPECT_NE(nullptr, field);
   EXPECT_EQ(field->get_type(), companion_cls->get_type());
-  // In 'LThirdCompanionClass$Companion;', since funY is marked as priviate,
-  // another method , a dmethod 'access$funY' is generated for outer class
-  // accesing funY.
+  // In 'LThirdCompanionClass$Test;', since funY is marked as private,
+  // another method, a dmethod 'access$funY' is generated for outer class
+  // accessing funY.
   auto* meth_access_funY = find_dmethod_named(*companion_cls, "access$funY");
   auto* meth_funY = find_dmethod_named(*companion_cls, "funY");
   EXPECT_NE(nullptr, meth_access_funY);
@@ -169,7 +167,7 @@ TEST_F(PostVerify, ThirdCompanionClass) {
   // After opt, in LThirdCompanionClass; sfield "Test" should be removed.
   EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Test"));
   // After opt, method "access$funY" and "funY" should be relocated from
-  // campanion class to outer class.
+  // companion class to outer class.
   EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "access$funY"));
   EXPECT_EQ(nullptr, find_dmethod_named(*companion_cls, "access$funY"));
   EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "funY"));

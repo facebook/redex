@@ -5,16 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "Resolver.h"
-#include "Show.h"
 #include "verify/VerifyUtil.h"
 
 namespace {
 constexpr const char* class_foo = "LFoo;";
 } // namespace
 
-// Test cls LCompanionClass; PreVeirfy has been tested in
-// KtCompanionTestVerify.cpp.
+// Test cls LCompanionClass; PreVerify has been tested in
+// KotlinCompanionOptimizationVerify.cpp.
 TEST_F(PostVerify, CompanionClass) {
   auto* outer_cls = find_class_named(classes, "LCompanionClass;");
   auto* companion_cls = find_class_named(classes, "LCompanionClass$Companion;");
@@ -51,7 +49,7 @@ TEST_F(PostVerify, AnotherCompanionClass) {
 
   auto* meth_clinit = find_dmethod_named(*outer_cls, "<clinit>");
   ASSERT_NE(nullptr, meth_clinit);
-  // After opt, there is no new-instance for LCompanionClass clinit
+  // After opt, there is no new-instance for LAnotherCompanionClass clinit
   ASSERT_EQ(nullptr, find_instruction(meth_clinit, DOPCODE_NEW_INSTANCE));
   // After opt, in main fun, there should be one static invoke for funX.
   auto* meth_main = find_vmethod_named(*foo_cls, "main");
@@ -80,7 +78,7 @@ TEST_F(PostVerify, ThirdCompanionClass) {
   // After opt, in LThirdCompanionClass; sfield "Test" should be removed.
   EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Test"));
   // After opt, method "access$funY" and "funY" should be relocated from
-  // campanion class to outer class and then removed.
+  // companion class to outer class and then removed.
   EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "access$funY"));
   EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "funY"));
 }
