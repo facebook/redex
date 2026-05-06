@@ -7,7 +7,7 @@
 
 import androidx.annotation.IntDef
 
-/* Note: companion object in annotation class will be removed by AnnoKill + RMU pass, NOT KotlinObjectInliner pass*/
+/* Note: companion object in annotation class will be removed by AnnoKill + RMU pass, NOT KotlinCompanionOptimizationPass*/
 @IntDef(AnnoClass.START, AnnoClass.END)
 annotation class AnnoClass {
   companion object {
@@ -16,7 +16,7 @@ annotation class AnnoClass {
   }
 }
 
-/* After KotlinObjectInliner + LocalDce + RMU, class LCompanionClass$Companion; should be removed*/
+/* After KotlinCompanionOptimizationPass + LocalDce + RMU, class LCompanionClass$Companion; should be removed*/
 class CompanionClass(val greeting: String) {
   fun greet(name: String) = "$greeting, $name!"
 

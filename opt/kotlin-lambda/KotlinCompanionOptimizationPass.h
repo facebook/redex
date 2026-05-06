@@ -10,7 +10,7 @@
 #include "DexClass.h"
 #include "Pass.h"
 
-class KotlinObjectInliner : public Pass {
+class KotlinCompanionOptimizationPass : public Pass {
   struct Stats {
     size_t kotlin_candidate_companion_objects{0};
     size_t kotlin_untrackable_companion_objects{0};
@@ -33,7 +33,7 @@ class KotlinObjectInliner : public Pass {
          m_do_not_inline_list,
          "Do not inline these companion objects");
   }
-  KotlinObjectInliner() : Pass("KotlinObjectInlinerPass") {}
+  KotlinCompanionOptimizationPass() : Pass("KotlinCompanionOptimizationPass") {}
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
