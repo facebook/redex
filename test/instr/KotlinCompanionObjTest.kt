@@ -69,6 +69,24 @@ class ThirdCompanionClass {
   }
 }
 
+// Named object declaration (singleton) — must NOT be optimized by this pass
+object NamedObjectDeclaration {
+  var value: Int = 0
+
+  fun increment() {
+    value++
+  }
+}
+
+// Nested named object declaration — must NOT be optimized by this pass
+class OuterWithObject {
+  object NestedObj {
+    var data: String = "test"
+  }
+
+  fun useNested(): String = NestedObj.data
+}
+
 // Companion with outer-class sfields (mutable var, not const) — optimized
 // (the backing field lives on the outer class, not on the companion)
 class CompanionWithSfields {
@@ -110,5 +128,10 @@ class Foo {
     println(CompanionWithSfields.counter)
 
     println(CompanionWithClinit.computed)
+
+    NamedObjectDeclaration.increment()
+    println(NamedObjectDeclaration.value)
+
+    println(OuterWithObject().useNested())
   }
 }
