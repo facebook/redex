@@ -408,6 +408,9 @@ libopt_la_SOURCES = \
 	opt/class-merging/ModelSpecGenerator.cpp \
 	opt/class-reordering/ClassReorderingPass.cpp \
 	opt/class-splitting/ClassSplittingPass.cpp \
+	opt/clinit-batching/ClinitBatchingPass.cpp \
+	opt/clinit-batching/EarlyClassLoadsAnalysis.cpp \
+	opt/clinit-batching/StaticFieldDependencyGraph.cpp \
 	opt/clinit-outliner/ClinitOutlinePass.cpp \
 	opt/const-class-branches/TransformConstClassBranches.cpp \
 	opt/constant-propagation/ConstantPropagationPass.cpp \
