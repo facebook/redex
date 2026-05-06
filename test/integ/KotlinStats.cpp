@@ -42,7 +42,7 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // KotlinCheckNotNull: 1 from !!, 1 from `as` cast to non-null type
   EXPECT_EQ(stats.kotlin_null_check_notnull_insns, 2);
   // +2 from KotlinCheckNotNull (notNullAssert, castToNonNull)
-  EXPECT_EQ(stats.kotlin_public_param_objects, 31);
+  EXPECT_EQ(stats.kotlin_public_param_objects, 32);
 
   // LExample;.$$delegatedProperties:[Lkotlin/reflect/KProperty;
   // LFooDelagates;.lazyValue$delegate:Lkotlin/Lazy;
@@ -85,15 +85,18 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LAnotherCompanionClass$Test;
   // LFooDelagates$lazyValue$2;
   // LFooDelagates;
-  // LKotlinCompanionObjKt;
+  // LKotlinCompanionOptimizationKt;
   // Lfoo;
   // LAnotherCompanionClass;
   // LKotlinCheckNotNull;
-  EXPECT_EQ(stats.kotlin_class, 18);
+  // LCompanionWithMethodCollision;
+  // LCompanionWithMethodCollision$Companion;
+  // LCollisionTestCaller;
+  EXPECT_EQ(stats.kotlin_class, 21);
 
-  // Named companion object is not counted yet
   // LCompanionClass$Companion;
-  EXPECT_EQ(stats.kotlin_companion_class, 1);
+  // LCompanionWithMethodCollision$Companion;
+  EXPECT_EQ(stats.kotlin_companion_class, 2);
 
   // LKotlinLambdaInline$foo$1;
   // LKotlinLambdaInline$bar$1;
