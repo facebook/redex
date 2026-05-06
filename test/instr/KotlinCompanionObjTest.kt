@@ -69,6 +69,29 @@ class ThirdCompanionClass {
   }
 }
 
+// Companion with outer-class sfields (mutable var, not const) — optimized
+// (the backing field lives on the outer class, not on the companion)
+class CompanionWithSfields {
+  companion object {
+    var counter: Int = 0
+
+    fun increment() {
+      counter++
+    }
+  }
+}
+
+// Companion with outer-class <clinit> (lazy init / computed field) — optimized
+// (the <clinit> and backing field live on the outer class, not on the companion)
+class CompanionWithClinit {
+  companion object {
+    val computed: String = buildString {
+      append("Hello")
+      append("World")
+    }
+  }
+}
+
 class Foo {
   fun main() {
 
@@ -82,5 +105,10 @@ class Foo {
 
     val obj = ThirdCompanionClass()
     println(obj.get())
+
+    CompanionWithSfields.increment()
+    println(CompanionWithSfields.counter)
+
+    println(CompanionWithClinit.computed)
   }
 }

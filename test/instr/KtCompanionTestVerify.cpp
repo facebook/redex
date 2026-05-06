@@ -193,3 +193,32 @@ TEST_F(PostVerify, AnnoClass) {
   EXPECT_NE(nullptr, field);
   EXPECT_EQ(field->get_type(), companion_cls->get_type());
 }
+
+// Companion with outer-class sfields — optimized by the pass. The backing
+// field for `counter` lives on the outer class, not on the companion, so
+// the companion has no sfields and is eligible.
+TEST_F(PostVerify, CompanionWithSfields) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithSfields;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithSfields$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  // After opt, the Companion sfield is removed.
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  // After opt, increment is relocated from companion to outer class.
+  EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "increment"));
+  EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "increment"));
+}
+
+// Companion with outer-class <clinit> — optimized by the pass. The <clinit>
+// and backing field for `computed` live on the outer class, not on the
+// companion, so the companion has no clinit and is eligible.
+TEST_F(PostVerify, CompanionWithClinit) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithClinit;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithClinit$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  // After opt, the Companion sfield is removed.
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+}

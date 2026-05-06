@@ -84,3 +84,28 @@ TEST_F(PostVerify, ThirdCompanionClass) {
   EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "access$funY"));
   EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "funY"));
 }
+
+// Companion with outer-class sfields — optimized by the pass (the backing
+// field for `counter` lives on the outer class, not on the companion). With the
+// aggressive pipeline, the companion class is further removed by other passes.
+TEST_F(PostVerify, CompanionWithSfields) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithSfields;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithSfields$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_EQ(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+}
+
+// Companion with outer-class <clinit> — optimized by the pass (the <clinit>
+// and backing field for `computed` live on the outer class, not on the
+// companion). With the aggressive pipeline, the companion class is further
+// removed by other passes.
+TEST_F(PostVerify, CompanionWithClinit) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithClinit;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithClinit$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_EQ(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+}
