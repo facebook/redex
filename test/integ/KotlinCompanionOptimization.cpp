@@ -17,15 +17,15 @@
 class KotlinCompanionOptimizationTest : public RedexIntegrationTest {
  protected:
   void dump_cls(DexClass* cls) {
-    TRACE(KOTLIN_OBJ_INLINE, 5, "Class %s", SHOW(cls));
+    TRACE(KOTLIN_COMPANION, 5, "Class %s", SHOW(cls));
     std::vector<DexMethod*> methods = cls->get_all_methods();
     std::vector<DexField*> fields = cls->get_all_fields();
     for (auto* v : fields) {
-      TRACE(KOTLIN_OBJ_INLINE, 5, "Field %s", SHOW(v));
+      TRACE(KOTLIN_COMPANION, 5, "Field %s", SHOW(v));
     }
     for (auto* v : methods) {
-      TRACE(KOTLIN_OBJ_INLINE, 5, "Method %s", SHOW(v));
-      TRACE(KOTLIN_OBJ_INLINE, 5, "%s", SHOW(v->get_code()));
+      TRACE(KOTLIN_COMPANION, 5, "Method %s", SHOW(v));
+      TRACE(KOTLIN_COMPANION, 5, "%s", SHOW(v->get_code()));
     }
   }
 
