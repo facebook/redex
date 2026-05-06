@@ -160,6 +160,7 @@ bool is_valid_init(DexMethod* meth) {
 enum class RejectionReason {
   kAccepted,
   kRootedOrExternal,
+  kNotCompanion,
   kNotFinal,
   kHasIfields,
   kHasInterfaces,
@@ -189,6 +190,12 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
   if (root(cls) || !can_rename(cls) || !can_delete(cls) ||
       cls->rstate.is_referenced_by_resource_xml() || cls->is_external()) {
     return {RejectionReason::kRootedOrExternal, nullptr};
+  }
+  // Only consider classes whose name ends with "$Companion" — the default
+  // Kotlin companion object naming convention.
+  const auto cls_name = cls->get_name()->str();
+  if (!cls_name.ends_with("$Companion;")) {
+    return {RejectionReason::kNotCompanion, nullptr};
   }
   if (!is_final(cls)) {
     return {RejectionReason::kNotFinal, nullptr};
@@ -386,6 +393,7 @@ bool is_def_trackable(IRInstruction* insn,
 
 // Per-reason rejection counts from structural candidate checks.
 struct RejectionCounts {
+  AtomicStatCounter<size_t> not_companion{0};
   AtomicStatCounter<size_t> not_final{0};
   AtomicStatCounter<size_t> has_sfields{0};
   AtomicStatCounter<size_t> has_clinit{0};
@@ -414,6 +422,9 @@ void collect_candidates(
     }
     auto [reason, outer_cls] = candidate_for_companion_relocation(cls);
     switch (reason) {
+    case RejectionReason::kNotCompanion:
+      ++counts.not_companion;
+      return;
     case RejectionReason::kNotFinal:
       ++counts.not_final;
       return;
@@ -738,6 +749,7 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
   stats.kotlin_untrackable_companion_objects = rejected.size();
   stats.kotlin_companion_objects_relocated = relocated_count;
   stats.kotlin_rejected_not_final = counts.not_final;
+  stats.kotlin_rejected_not_companion = counts.not_companion;
   stats.kotlin_rejected_has_sfields = counts.has_sfields;
   stats.kotlin_rejected_has_clinit = counts.has_clinit;
   stats.kotlin_rejected_has_interfaces = counts.has_interfaces;
@@ -758,6 +770,8 @@ void KotlinCompanionOptimizationPass::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_companion_objects_relocated",
                   kotlin_companion_objects_relocated);
   mgr.incr_metric("kotlin_rejected_not_final", kotlin_rejected_not_final);
+  mgr.incr_metric("kotlin_rejected_not_companion",
+                  kotlin_rejected_not_companion);
   mgr.incr_metric("kotlin_rejected_has_sfields", kotlin_rejected_has_sfields);
   mgr.incr_metric("kotlin_rejected_has_clinit", kotlin_rejected_has_clinit);
   mgr.incr_metric("kotlin_rejected_has_interfaces",
@@ -789,6 +803,10 @@ void KotlinCompanionOptimizationPass::Stats::report(PassManager& mgr) const {
         2,
         "kotlin_rejected_not_final = %zu",
         kotlin_rejected_not_final);
+  TRACE(KOTLIN_COMPANION,
+        2,
+        "kotlin_rejected_not_companion = %zu",
+        kotlin_rejected_not_companion);
   TRACE(KOTLIN_COMPANION,
         2,
         "kotlin_rejected_has_sfields = %zu",

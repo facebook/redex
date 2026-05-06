@@ -45,7 +45,7 @@ class CompanionClass(val greeting: String) {
 }
 
 class AnotherCompanionClass {
-  companion object Test {
+  companion object {
     @JvmStatic var someOtherStr: String = "Bar"
 
     @JvmStatic
@@ -56,7 +56,7 @@ class AnotherCompanionClass {
 }
 
 class ThirdCompanionClass {
-  companion object Test {
+  companion object {
     const val thirdStr: String = "Bar"
 
     private fun funY(): String {
@@ -110,6 +110,18 @@ class CompanionWithClinit {
   }
 }
 
+// Named companion object — must NOT be relocated by the pass because its
+// inner class name (NamedCompanionClass$Custom) does not end with $Companion.
+class NamedCompanionClass {
+  companion object Custom {
+    var someStr: String = "Baz"
+
+    fun funZ(): String {
+      return someStr
+    }
+  }
+}
+
 class Foo {
   fun main() {
 
@@ -133,5 +145,7 @@ class Foo {
     println(NamedObjectDeclaration.value)
 
     println(OuterWithObject().useNested())
+
+    println(NamedCompanionClass.funZ())
   }
 }

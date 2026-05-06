@@ -78,7 +78,7 @@ TEST_F(PostVerify, CompanionClass) {
 TEST_F(PreVerify, AnotherCompanionClass) {
   auto* outer_cls = find_class_named(classes, "LAnotherCompanionClass;");
   auto* companion_cls =
-      find_class_named(classes, "LAnotherCompanionClass$Test;");
+      find_class_named(classes, "LAnotherCompanionClass$Companion;");
   auto* foo_cls = find_class_named(classes, class_foo);
   EXPECT_NE(nullptr, outer_cls);
   EXPECT_NE(nullptr, companion_cls);
@@ -86,16 +86,16 @@ TEST_F(PreVerify, AnotherCompanionClass) {
 
   auto* meth_clinit = find_dmethod_named(*outer_cls, "<clinit>");
   ASSERT_NE(nullptr, meth_clinit);
-  // Before opt, there is a new-instance for LAnotherCompanionClass$Test;
+  // Before opt, there is a new-instance for LAnotherCompanionClass$Companion;
   ASSERT_NE(nullptr, find_instruction(meth_clinit, DOPCODE_NEW_INSTANCE));
   // Before opt, in main fun, there is one virtual invoke for funX, one for
   // hello1.
   auto* meth_main = find_vmethod_named(*foo_cls, "main");
   EXPECT_NE(nullptr, meth_main);
   EXPECT_NE(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_VIRTUAL, "funX"));
-  // Before opt, in LAnotherCompanionClass; there should be a sfield "Test" with
-  // type 'LAnotherCompanionClass$Test;'
-  auto* field = find_sfield_named(*outer_cls, "Test");
+  // Before opt, in LAnotherCompanionClass; there should be a sfield "Companion"
+  // with type 'LAnotherCompanionClass$Companion;'
+  auto* field = find_sfield_named(*outer_cls, "Companion");
   EXPECT_NE(nullptr, field);
   EXPECT_EQ(field->get_type(), companion_cls->get_type());
 }
@@ -103,7 +103,7 @@ TEST_F(PreVerify, AnotherCompanionClass) {
 TEST_F(PostVerify, AnotherCompanionClass) {
   auto* outer_cls = find_class_named(classes, "LAnotherCompanionClass;");
   auto* companion_cls =
-      find_class_named(classes, "LAnotherCompanionClass$Test;");
+      find_class_named(classes, "LAnotherCompanionClass$Companion;");
   auto* foo_cls = find_class_named(classes, class_foo);
   EXPECT_NE(nullptr, outer_cls);
   EXPECT_NE(nullptr, companion_cls);
@@ -117,8 +117,8 @@ TEST_F(PostVerify, AnotherCompanionClass) {
   EXPECT_NE(nullptr, meth_main);
   EXPECT_EQ(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_VIRTUAL, "funX"));
   EXPECT_NE(nullptr, find_invoke(meth_main, DOPCODE_INVOKE_STATIC, "funX"));
-  // After opt, there is no sfield "Test" in outer class.
-  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Test"));
+  // After opt, there is no sfield "Companion" in outer class.
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
   // After opt, method "funX" is relocated from companion class to outer class.
   EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "funX"));
   EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "funX"));
@@ -127,21 +127,22 @@ TEST_F(PostVerify, AnotherCompanionClass) {
 // Test cls LThirdCompanionClass;
 TEST_F(PreVerify, ThirdCompanionClass) {
   auto* outer_cls = find_class_named(classes, "LThirdCompanionClass;");
-  auto* companion_cls = find_class_named(classes, "LThirdCompanionClass$Test;");
+  auto* companion_cls =
+      find_class_named(classes, "LThirdCompanionClass$Companion;");
   auto* foo_cls = find_class_named(classes, class_foo);
   EXPECT_NE(nullptr, outer_cls);
   EXPECT_NE(nullptr, companion_cls);
   EXPECT_NE(nullptr, foo_cls);
   auto* meth_clinit = find_dmethod_named(*outer_cls, "<clinit>");
   ASSERT_NE(nullptr, meth_clinit);
-  // Before opt, there is a new-instance for LThirdCompanionClass$Test;
+  // Before opt, there is a new-instance for LThirdCompanionClass$Companion;
   ASSERT_NE(nullptr, find_instruction(meth_clinit, DOPCODE_NEW_INSTANCE));
-  // Before opt, in LThirdCompanionClass; there should be a sfield "Test" with
-  // type 'LThirdCompanionClass$Test;'
-  auto* field = find_sfield_named(*outer_cls, "Test");
+  // Before opt, in LThirdCompanionClass; there should be a sfield "Companion"
+  // with type 'LThirdCompanionClass$Companion;'
+  auto* field = find_sfield_named(*outer_cls, "Companion");
   EXPECT_NE(nullptr, field);
   EXPECT_EQ(field->get_type(), companion_cls->get_type());
-  // In 'LThirdCompanionClass$Test;', since funY is marked as private,
+  // In 'LThirdCompanionClass$Companion;', since funY is marked as private,
   // another method, a dmethod 'access$funY' is generated for outer class
   // accessing funY.
   auto* meth_access_funY = find_dmethod_named(*companion_cls, "access$funY");
@@ -154,7 +155,8 @@ TEST_F(PreVerify, ThirdCompanionClass) {
 
 TEST_F(PostVerify, ThirdCompanionClass) {
   auto* outer_cls = find_class_named(classes, "LThirdCompanionClass;");
-  auto* companion_cls = find_class_named(classes, "LThirdCompanionClass$Test;");
+  auto* companion_cls =
+      find_class_named(classes, "LThirdCompanionClass$Companion;");
   auto* foo_cls = find_class_named(classes, class_foo);
   EXPECT_NE(nullptr, outer_cls);
   EXPECT_NE(nullptr, companion_cls);
@@ -164,8 +166,8 @@ TEST_F(PostVerify, ThirdCompanionClass) {
   ASSERT_NE(nullptr, meth_clinit);
   // After opt, there is no new-instance in LThirdCompanionClass clinit
   ASSERT_EQ(nullptr, find_instruction(meth_clinit, DOPCODE_NEW_INSTANCE));
-  // After opt, in LThirdCompanionClass; sfield "Test" should be removed.
-  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Test"));
+  // After opt, in LThirdCompanionClass; sfield "Companion" should be removed.
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
   // After opt, method "access$funY" and "funY" should be relocated from
   // companion class to outer class.
   EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "access$funY"));
@@ -237,4 +239,21 @@ TEST_F(PostVerify, NestedObjectDeclaration) {
   EXPECT_NE(nullptr, nested_cls);
   auto* field = find_sfield_named(*nested_cls, "INSTANCE");
   EXPECT_NE(nullptr, field);
+}
+
+// Named companion object — must not be relocated by the pass because the inner
+// class name (NamedCompanionClass$Custom) does not end with $Companion.
+TEST_F(PostVerify, NamedCompanionNotRelocated) {
+  auto* outer_cls = find_class_named(classes, "LNamedCompanionClass;");
+  auto* companion_cls =
+      find_class_named(classes, "LNamedCompanionClass$Custom;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  // The "Custom" sfield should still be present on the outer class.
+  auto* field = find_sfield_named(*outer_cls, "Custom");
+  EXPECT_NE(nullptr, field);
+  EXPECT_EQ(field->get_type(), companion_cls->get_type());
+  // funZ should still be on the companion class, not relocated to outer.
+  EXPECT_NE(nullptr, find_vmethod_named(*companion_cls, "funZ"));
+  EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "funZ"));
 }

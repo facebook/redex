@@ -15,6 +15,7 @@ class KotlinCompanionOptimizationPass : public Pass {
     size_t kotlin_untrackable_companion_objects{0};
     size_t kotlin_companion_objects_relocated{0};
     size_t kotlin_rejected_not_final{0};
+    size_t kotlin_rejected_not_companion{0};
     size_t kotlin_rejected_has_sfields{0};
     size_t kotlin_rejected_has_clinit{0};
     size_t kotlin_rejected_has_interfaces{0};
@@ -32,6 +33,7 @@ class KotlinCompanionOptimizationPass : public Pass {
       kotlin_companion_objects_relocated +=
           that.kotlin_companion_objects_relocated;
       kotlin_rejected_not_final += that.kotlin_rejected_not_final;
+      kotlin_rejected_not_companion += that.kotlin_rejected_not_companion;
       kotlin_rejected_has_sfields += that.kotlin_rejected_has_sfields;
       kotlin_rejected_has_clinit += that.kotlin_rejected_has_clinit;
       kotlin_rejected_has_interfaces += that.kotlin_rejected_has_interfaces;
