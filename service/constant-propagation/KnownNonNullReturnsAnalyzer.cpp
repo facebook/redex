@@ -48,10 +48,54 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
              // Object.getClass: final native, always returns non-null.
              "Ljava/lang/Object;.getClass:()Ljava/lang/Class;",
 
+             // Class accessors: final class, always return non-null per
+             // spec. Note: getCanonicalName() is NOT safe -- it returns
+             // null for local/anonymous classes and for arrays whose
+             // component type lacks a canonical name.
+             "Ljava/lang/Class;.getName:()Ljava/lang/String;",
+             "Ljava/lang/Class;.getSimpleName:()Ljava/lang/String;",
+
+             // Thread.currentThread: static native, always returns non-null.
+             "Ljava/lang/Thread;.currentThread:()Ljava/lang/Thread;",
+
              // Enum.name: final, set by the compiler, always non-null.
              "Ljava/lang/Enum;.name:()Ljava/lang/String;",
 
-             // Java String methods: always return a new String or `this`.
+             // Optional / OptionalInt / OptionalLong / OptionalDouble:
+             // all final classes. Factories are non-null by construction;
+             // `of` throws NPE on null rather than returning null.
+             // `Optional.get()` throws NoSuchElementException on empty,
+             // and the only ways to populate an Optional disallow null
+             // contents, so the returned value is non-null.
+             ("Ljava/util/Optional;.of:"
+              "(Ljava/lang/Object;)Ljava/util/Optional;"),
+             ("Ljava/util/Optional;.ofNullable:"
+              "(Ljava/lang/Object;)Ljava/util/Optional;"),
+             "Ljava/util/Optional;.empty:()Ljava/util/Optional;",
+             "Ljava/util/Optional;.get:()Ljava/lang/Object;",
+             "Ljava/util/OptionalInt;.of:(I)Ljava/util/OptionalInt;",
+             "Ljava/util/OptionalInt;.empty:()Ljava/util/OptionalInt;",
+             "Ljava/util/OptionalLong;.of:(J)Ljava/util/OptionalLong;",
+             "Ljava/util/OptionalLong;.empty:()Ljava/util/OptionalLong;",
+             ("Ljava/util/OptionalDouble;.of:"
+              "(D)Ljava/util/OptionalDouble;"),
+             ("Ljava/util/OptionalDouble;.empty:"
+              "()Ljava/util/OptionalDouble;"),
+
+             // Objects: final class, all entries here are static.
+             // requireNonNull throws NPE on null. toString(Object) returns
+             // the "null" literal for a null arg; the 2-arg overload is
+             // NOT safe because the default can itself be null.
+             ("Ljava/util/Objects;.toString:"
+              "(Ljava/lang/Object;)Ljava/lang/String;"),
+             ("Ljava/util/Objects;.requireNonNull:"
+              "(Ljava/lang/Object;)Ljava/lang/Object;"),
+             ("Ljava/util/Objects;.requireNonNull:"
+              "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
+             ("Ljava/util/Objects;.requireNonNull:(Ljava/lang/Object;"
+              "Ljava/util/function/Supplier;)Ljava/lang/Object;"),
+
+             // String instance methods.
              ("Ljava/lang/String;.toLowerCase:"
               "(Ljava/util/Locale;)Ljava/lang/String;"),
              "Ljava/lang/String;.toLowerCase:()Ljava/lang/String;",
@@ -61,19 +105,35 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
              "Ljava/lang/String;.substring:(I)Ljava/lang/String;",
              "Ljava/lang/String;.substring:(II)Ljava/lang/String;",
              "Ljava/lang/String;.trim:()Ljava/lang/String;",
+             "Ljava/lang/String;.strip:()Ljava/lang/String;",
+             "Ljava/lang/String;.stripLeading:()Ljava/lang/String;",
+             "Ljava/lang/String;.stripTrailing:()Ljava/lang/String;",
+             "Ljava/lang/String;.repeat:(I)Ljava/lang/String;",
+             "Ljava/lang/String;.intern:()Ljava/lang/String;",
+             "Ljava/lang/String;.toCharArray:()[C",
+             "Ljava/lang/String;.replace:(CC)Ljava/lang/String;",
              ("Ljava/lang/String;.replace:(Ljava/lang/CharSequence;"
               "Ljava/lang/CharSequence;)Ljava/lang/String;"),
+             ("Ljava/lang/String;.replaceAll:(Ljava/lang/String;"
+              "Ljava/lang/String;)Ljava/lang/String;"),
+             ("Ljava/lang/String;.replaceFirst:(Ljava/lang/String;"
+              "Ljava/lang/String;)Ljava/lang/String;"),
+             ("Ljava/lang/String;.split:"
+              "(Ljava/lang/String;)[Ljava/lang/String;"),
+             ("Ljava/lang/String;.split:"
+              "(Ljava/lang/String;I)[Ljava/lang/String;"),
              ("Ljava/lang/String;.concat:"
               "(Ljava/lang/String;)Ljava/lang/String;"),
+             ("Ljava/lang/String;.getBytes:"
+              "(Ljava/nio/charset/Charset;)[B"),
+             "Ljava/lang/String;.getBytes:(Ljava/lang/String;)[B",
+             "Ljava/lang/String;.getBytes:()[B",
+
+             // String static methods.
              ("Ljava/lang/String;.format:(Ljava/lang/String;"
               "[Ljava/lang/Object;)Ljava/lang/String;"),
              ("Ljava/lang/String;.format:(Ljava/util/Locale;"
               "Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;"),
-             ("Ljava/lang/String;.getBytes:"
-              "(Ljava/nio/charset/Charset;)[B"),
-             "Ljava/lang/String;.getBytes:()[B",
-
-             // String.valueOf: static, always returns a non-null String.
              ("Ljava/lang/String;.valueOf:"
               "(Ljava/lang/Object;)Ljava/lang/String;"),
              "Ljava/lang/String;.valueOf:(Z)Ljava/lang/String;",
@@ -85,6 +145,13 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
              "Ljava/lang/String;.valueOf:([C)Ljava/lang/String;",
              ("Ljava/lang/String;.valueOf:"
               "([CII)Ljava/lang/String;"),
+             "Ljava/lang/String;.copyValueOf:([C)Ljava/lang/String;",
+             ("Ljava/lang/String;.copyValueOf:"
+              "([CII)Ljava/lang/String;"),
+             ("Ljava/lang/String;.join:(Ljava/lang/CharSequence;"
+              "[Ljava/lang/CharSequence;)Ljava/lang/String;"),
+             ("Ljava/lang/String;.join:(Ljava/lang/CharSequence;"
+              "Ljava/lang/Iterable;)Ljava/lang/String;"),
 
              // Java Collections factories: always return a new collection.
              ("Ljava/util/Collections;.singletonList:"
@@ -102,6 +169,11 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
              "Ljava/util/Collections;.emptyList:()Ljava/util/List;",
              "Ljava/util/Collections;.emptySet:()Ljava/util/Set;",
              "Ljava/util/Collections;.emptyMap:()Ljava/util/Map;",
+
+             // Arrays.asList: static on a final class, returns a fresh
+             // private ArrayList wrapper around the input array.
+             ("Ljava/util/Arrays;.asList:"
+              "([Ljava/lang/Object;)Ljava/util/List;"),
 
              // EnumSet.of: always returns a new EnumSet.
              ("Ljava/util/EnumSet;.of:"
