@@ -384,41 +384,30 @@ bool is_def_trackable(IRInstruction* insn,
   return true;
 }
 
-} // namespace
+// Per-reason rejection counts from structural candidate checks.
+struct RejectionCounts {
+  AtomicStatCounter<size_t> not_final{0};
+  AtomicStatCounter<size_t> has_sfields{0};
+  AtomicStatCounter<size_t> has_clinit{0};
+  AtomicStatCounter<size_t> has_interfaces{0};
+  AtomicStatCounter<size_t> has_ifields{0};
+  AtomicStatCounter<size_t> non_object_super{0};
+  AtomicStatCounter<size_t> no_outer_class{0};
+  AtomicStatCounter<size_t> abstract_outer{0};
+  AtomicStatCounter<size_t> invalid_init{0};
+  AtomicStatCounter<size_t> method_uses_this{0};
+};
 
-void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
-                                               ConfigFiles&,
-                                               PassManager& mgr) {
-
-  const auto scope = build_class_scope(stores);
-
-  InsertOnlyConcurrentMap<DexClass*, DexClass*> map;
-  ConcurrentSet<DexClass*> bad;
-  UnorderedMap<DexClass*, unsigned> outer_cls_count;
-  UnorderedSet<DexType*> do_not_relocate_set;
-  Stats stats;
-  for (auto& p : m_do_not_relocate_list) {
-    auto* do_not_relocate_cls = DexType::get_type(p);
-    if (do_not_relocate_cls != nullptr) {
-      TRACE(KOTLIN_COMPANION,
-            2,
-            "do_not_relocate_cls  : %s",
-            SHOW(do_not_relocate_cls));
-      do_not_relocate_set.insert(do_not_relocate_cls);
-    }
-  }
-
-  // Collect candidates
-  AtomicStatCounter<size_t> rejected_not_final(0);
-  AtomicStatCounter<size_t> rejected_has_sfields(0);
-  AtomicStatCounter<size_t> rejected_has_clinit(0);
-  AtomicStatCounter<size_t> rejected_has_interfaces(0);
-  AtomicStatCounter<size_t> rejected_has_ifields(0);
-  AtomicStatCounter<size_t> rejected_non_object_super(0);
-  AtomicStatCounter<size_t> rejected_no_outer_class(0);
-  AtomicStatCounter<size_t> rejected_abstract_outer(0);
-  AtomicStatCounter<size_t> rejected_invalid_init(0);
-  AtomicStatCounter<size_t> rejected_method_uses_this(0);
+// Phase 1: Structural candidate collection + duplicate outer class filtering.
+// Fills `candidates` with companion->outer mappings that pass structural
+// checks. Adds companions with duplicate outer classes to `rejected`. Populates
+// `counts` with per-reason rejection tallies.
+void collect_candidates(
+    const Scope& scope,
+    const UnorderedSet<DexType*>& do_not_relocate_set,
+    InsertOnlyConcurrentMap<DexClass*, DexClass*>& candidates,
+    ConcurrentSet<DexClass*>& rejected,
+    RejectionCounts& counts) {
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (do_not_relocate_set.count(cls->get_type()) != 0u) {
       return;
@@ -426,34 +415,34 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
     auto [reason, outer_cls] = candidate_for_companion_relocation(cls);
     switch (reason) {
     case RejectionReason::kNotFinal:
-      ++rejected_not_final;
+      ++counts.not_final;
       return;
     case RejectionReason::kHasSfields:
-      ++rejected_has_sfields;
+      ++counts.has_sfields;
       return;
     case RejectionReason::kHasClinit:
-      ++rejected_has_clinit;
+      ++counts.has_clinit;
       return;
     case RejectionReason::kHasInterfaces:
-      ++rejected_has_interfaces;
+      ++counts.has_interfaces;
       return;
     case RejectionReason::kHasIfields:
-      ++rejected_has_ifields;
+      ++counts.has_ifields;
       return;
     case RejectionReason::kNonObjectSuper:
-      ++rejected_non_object_super;
+      ++counts.non_object_super;
       return;
     case RejectionReason::kNoOuterClass:
-      ++rejected_no_outer_class;
+      ++counts.no_outer_class;
       return;
     case RejectionReason::kAbstractOuter:
-      ++rejected_abstract_outer;
+      ++counts.abstract_outer;
       return;
     case RejectionReason::kInvalidInit:
-      ++rejected_invalid_init;
+      ++counts.invalid_init;
       return;
     case RejectionReason::kMethodUsesThis:
-      ++rejected_method_uses_this;
+      ++counts.method_uses_this;
       return;
     case RejectionReason::kRootedOrExternal:
     case RejectionReason::kMultipleCompanionSfields:
@@ -463,45 +452,40 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
     }
     if (do_not_relocate_set.count(outer_cls->get_type()) == 0u) {
       // This is a candidate for relocation
-      map.insert(std::make_pair(cls, outer_cls));
+      candidates.insert(std::make_pair(cls, outer_cls));
       TRACE(KOTLIN_COMPANION, 2, "Candidate cls : %s", SHOW(cls));
     }
   });
-  stats.kotlin_candidate_companion_objects = map.size();
-  stats.kotlin_rejected_not_final = rejected_not_final;
-  stats.kotlin_rejected_has_sfields = rejected_has_sfields;
-  stats.kotlin_rejected_has_clinit = rejected_has_clinit;
-  stats.kotlin_rejected_has_interfaces = rejected_has_interfaces;
-  stats.kotlin_rejected_has_ifields = rejected_has_ifields;
-  stats.kotlin_rejected_non_object_super = rejected_non_object_super;
-  stats.kotlin_rejected_no_outer_class = rejected_no_outer_class;
-  stats.kotlin_rejected_abstract_outer = rejected_abstract_outer;
-  stats.kotlin_rejected_invalid_init = rejected_invalid_init;
-  stats.kotlin_rejected_method_uses_this = rejected_method_uses_this;
 
-  for (auto& iter : UnorderedIterable(map)) {
+  // Filter out companions with duplicate outer classes.
+  UnorderedMap<DexClass*, unsigned> outer_cls_count;
+  for (auto& iter : UnorderedIterable(candidates)) {
     outer_cls_count[iter.second]++;
   }
-
-  for (auto iter : UnorderedIterable(map)) {
-    // We have multiple companion objects. But in each class, there is at most 1
-    // companion object.
+  for (auto iter : UnorderedIterable(candidates)) {
     if (outer_cls_count.find(iter.second)->second != 1) {
-      bad.insert(iter.first);
+      rejected.insert(iter.first);
     }
   }
+}
 
-  // Filter out any instance whose use is not trackable
+// Phase 2: Full-program safety analysis.
+// Scans all methods for unsafe uses of companion instances and adds them to
+// `rejected`.
+void filter_untrackable_usages(
+    const Scope& scope,
+    const InsertOnlyConcurrentMap<DexClass*, DexClass*>& candidates,
+    ConcurrentSet<DexClass*>& rejected) {
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto* code = method->get_code();
     if (code == nullptr) {
       return;
     }
 
-    // we cannot relocate returning companion object.
+    // We cannot relocate returning companion object.
     auto* rtype = type_class(method->get_proto()->get_rtype());
-    if ((rtype != nullptr) && (map.count(rtype) != 0u)) {
-      bad.insert(rtype);
+    if ((rtype != nullptr) && (candidates.count(rtype) != 0u)) {
+      rejected.insert(rtype);
       TRACE(KOTLIN_COMPANION,
             2,
             "Method %s returns companion object %s",
@@ -522,17 +506,17 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
       switch (insn->opcode()) {
       case OPCODE_SPUT_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if ((from == nullptr) || (map.count(from) == 0u) ||
-            (bad.count(from) != 0u)) {
+        if ((from == nullptr) || (candidates.count(from) == 0u) ||
+            (rejected.count(from) != 0u)) {
           break;
         }
         // Should only be set from parent's <clinit>
         // Otherwise add it to bad list.
         if (method::is_clinit(method) &&
-            type_class(method->get_class()) == map.find(from)->second) {
+            type_class(method->get_class()) == candidates.find(from)->second) {
           break;
         }
-        bad.insert(from);
+        rejected.insert(from);
         break;
       }
 
@@ -540,24 +524,24 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
       case OPCODE_IPUT_OBJECT:
       case OPCODE_IGET_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if ((from == nullptr) || (map.count(from) == 0u) ||
-            (bad.count(from) != 0u)) {
+        if ((from == nullptr) || (candidates.count(from) == 0u) ||
+            (rejected.count(from) != 0u)) {
           break;
         }
-        bad.insert(from);
+        rejected.insert(from);
         break;
       }
 
       case OPCODE_SGET_OBJECT: {
         auto* from = type_class(insn->get_field()->get_type());
-        if ((from == nullptr) || (map.count(from) == 0u) ||
-            (bad.count(from) != 0u)) {
+        if ((from == nullptr) || (candidates.count(from) == 0u) ||
+            (rejected.count(from) != 0u)) {
           break;
         }
         // Check we can track the uses of the Companion object instance.
         // i.e. Companion object is only used to invoke methods
         if (!is_def_trackable(insn, from, move_aware_chains)) {
-          bad.insert(from);
+          rejected.insert(from);
         }
         break;
       }
@@ -565,31 +549,32 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
       case OPCODE_INSTANCE_OF:
       case OPCODE_NEW_INSTANCE: {
         auto* from = type_class(insn->get_type());
-        if ((from == nullptr) || (map.count(from) == 0u) ||
-            (bad.count(from) != 0u)) {
+        if ((from == nullptr) || (candidates.count(from) == 0u) ||
+            (rejected.count(from) != 0u)) {
           break;
         }
         if (method::is_clinit(method) &&
-            type_class(method->get_class()) == map.find(from)->second) {
+            type_class(method->get_class()) == candidates.find(from)->second) {
           break;
         }
-        bad.insert(from);
+        rejected.insert(from);
         break;
       }
 
       case OPCODE_INVOKE_DIRECT: {
         auto* from = type_class(insn->get_method()->get_class());
         if (!method::is_init(insn->get_method()) || (from == nullptr) ||
-            (map.count(from) == 0u) || (bad.count(from) != 0u)) {
+            (candidates.count(from) == 0u) || (rejected.count(from) != 0u)) {
           break;
         }
         if ((type_class(method->get_class()) == from &&
              method::is_init(method)) ||
-            ((type_class(method->get_class()) == map.find(from)->second) &&
+            ((type_class(method->get_class()) ==
+              candidates.find(from)->second) &&
              method::is_clinit(method))) {
           break;
         }
-        bad.insert(from);
+        rejected.insert(from);
         break;
       }
 
@@ -611,11 +596,11 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
         }
         // Currently, we don't supporting tracking companion object usage in
         // aget/aput_object. Instead, simply insert it into bad list.
-        if ((from == nullptr) || (map.count(from) == 0u) ||
-            (bad.count(from) != 0u)) {
+        if ((from == nullptr) || (candidates.count(from) == 0u) ||
+            (rejected.count(from) != 0u)) {
           break;
         }
-        bad.insert(from);
+        rejected.insert(from);
         TRACE(KOTLIN_COMPANION,
               2,
               "Adding cls %s to bad list due to insn %s",
@@ -626,11 +611,11 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
       default:
         if (insn->has_type()) {
           auto* from = type_class(insn->get_type());
-          if ((from == nullptr) || (map.count(from) == 0u) ||
-              (bad.count(from) != 0u)) {
+          if ((from == nullptr) || (candidates.count(from) == 0u) ||
+              (rejected.count(from) != 0u)) {
             break;
           }
-          bad.insert(from);
+          rejected.insert(from);
           TRACE(KOTLIN_COMPANION,
                 2,
                 "Adding cls %s to bad list due to insn %s",
@@ -642,14 +627,20 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
       }
     }
   });
-  stats.kotlin_untrackable_companion_objects = bad.size();
+}
 
-  // Relocate companion methods to outer class
+// Phase 3: Relocate companion methods to outer classes.
+// Returns the set of relocated method refs and the count of relocated
+// companions.
+std::pair<UnorderedSet<DexMethodRef*>, size_t> relocate_companions(
+    const InsertOnlyConcurrentMap<DexClass*, DexClass*>& candidates,
+    const ConcurrentSet<DexClass*>& rejected) {
   UnorderedSet<DexMethodRef*> relocated_methods;
-  for (auto& p : UnorderedIterable(map)) {
+  size_t relocated_count = 0;
+  for (const auto& p : UnorderedIterable(candidates)) {
     auto* comp_cls = p.first;
     auto* outer_cls = p.second;
-    if (bad.count(comp_cls) != 0u) {
+    if (rejected.count(comp_cls) != 0u) {
       continue;
     }
     TRACE(KOTLIN_COMPANION,
@@ -658,10 +649,14 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
           SHOW(comp_cls),
           SHOW(outer_cls));
     relocate(comp_cls, outer_cls, relocated_methods);
-    stats.kotlin_companion_objects_relocated++;
+    relocated_count++;
   }
+  return {std::move(relocated_methods), relocated_count};
+}
 
-  // Fix virtual call arguments
+// Phase 4: Rewrite call sites from invoke-virtual/direct to invoke-static.
+void rewrite_call_sites(const Scope& scope,
+                        const UnorderedSet<DexMethodRef*>& relocated_methods) {
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto* code = method->get_code();
     if (code == nullptr) {
@@ -702,7 +697,56 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
       TRACE(KOTLIN_COMPANION, 5, "%s\n", SHOW(cfg));
     }
   });
+}
 
+} // namespace
+
+void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
+                                               ConfigFiles&,
+                                               PassManager& mgr) {
+  const auto scope = build_class_scope(stores);
+
+  UnorderedSet<DexType*> do_not_relocate_set;
+  for (auto& p : m_do_not_relocate_list) {
+    auto* t = DexType::get_type(p);
+    if (t != nullptr) {
+      TRACE(KOTLIN_COMPANION, 2, "do_not_relocate_cls  : %s", SHOW(t));
+      do_not_relocate_set.insert(t);
+    }
+  }
+
+  InsertOnlyConcurrentMap<DexClass*, DexClass*> candidates;
+  ConcurrentSet<DexClass*> rejected;
+
+  // Phase 1: Collect structurally eligible companion objects.
+  RejectionCounts counts;
+  collect_candidates(scope, do_not_relocate_set, candidates, rejected, counts);
+
+  // Phase 2: Filter out companions with untrackable usages.
+  filter_untrackable_usages(scope, candidates, rejected);
+
+  // Phase 3: Relocate accepted companion methods to outer classes.
+  auto [relocated_methods, relocated_count] =
+      relocate_companions(candidates, rejected);
+
+  // Phase 4: Rewrite call sites to use static dispatch.
+  rewrite_call_sites(scope, relocated_methods);
+
+  // Report stats.
+  Stats stats;
+  stats.kotlin_candidate_companion_objects = candidates.size();
+  stats.kotlin_untrackable_companion_objects = rejected.size();
+  stats.kotlin_companion_objects_relocated = relocated_count;
+  stats.kotlin_rejected_not_final = counts.not_final;
+  stats.kotlin_rejected_has_sfields = counts.has_sfields;
+  stats.kotlin_rejected_has_clinit = counts.has_clinit;
+  stats.kotlin_rejected_has_interfaces = counts.has_interfaces;
+  stats.kotlin_rejected_has_ifields = counts.has_ifields;
+  stats.kotlin_rejected_non_object_super = counts.non_object_super;
+  stats.kotlin_rejected_no_outer_class = counts.no_outer_class;
+  stats.kotlin_rejected_abstract_outer = counts.abstract_outer;
+  stats.kotlin_rejected_invalid_init = counts.invalid_init;
+  stats.kotlin_rejected_method_uses_this = counts.method_uses_this;
   stats.report(mgr);
 }
 
