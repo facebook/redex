@@ -120,3 +120,25 @@ class JvmStaticBridgeCaller {
     print(CompanionWithJvmStaticBridge.compute(42))
   }
 }
+
+// Abstract outer class with a companion object: the pass should still relocate
+// the companion's methods to the abstract outer class as static methods.
+// Abstract classes can have static methods, so this is valid.
+abstract class AbstractOuterClass {
+  companion object {
+    fun helperFunc(): String = "abstract_helper"
+  }
+
+  abstract fun doWork(): String
+}
+
+class ConcreteSubclass : AbstractOuterClass() {
+  override fun doWork(): String = helperFunc()
+}
+
+class AbstractOuterCaller {
+  fun main() {
+    print(AbstractOuterClass.helperFunc())
+    print(ConcreteSubclass().doWork())
+  }
+}
