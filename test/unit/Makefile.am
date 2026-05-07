@@ -54,6 +54,7 @@ check_PROGRAMS = \
     class_checker_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
+    clinit_batching_pass_test \
     concurrent_containers_test \
     concurrent_hashtable_test \
     configurable_test \
@@ -227,6 +228,8 @@ cfg_positions_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 check_breadcrumbs_test_SOURCES = CheckBreadCrumbsTest.cpp
 
 check_cast_analysis_test_SOURCES = CheckCastAnalysisTest.cpp
+
+clinit_batching_pass_test_SOURCES = ClinitBatchingPassTest.cpp
 
 class_checker_test_SOURCES = ClassCheckerTest.cpp ScopeHelper.cpp
 
