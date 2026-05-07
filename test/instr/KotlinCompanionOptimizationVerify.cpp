@@ -241,6 +241,21 @@ TEST_F(PostVerify, NestedObjectDeclaration) {
   EXPECT_NE(nullptr, field);
 }
 
+// Companion with const val — the companion has a <clinit> for $$INSTANCE.
+// The sget/sput pattern in the clinit must be allowlisted by is_def_trackable.
+TEST_F(PostVerify, CompanionWithConstVal) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithConstVal;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithConstVal$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  // After opt, the Companion sfield is removed.
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  // After opt, getMagic is relocated from companion to outer class.
+  EXPECT_NE(nullptr, find_dmethod_named(*outer_cls, "getMagic"));
+  EXPECT_EQ(nullptr, find_vmethod_named(*companion_cls, "getMagic"));
+}
+
 // Named companion object — must not be relocated by the pass because the inner
 // class name (NamedCompanionClass$Custom) does not end with $Companion.
 TEST_F(PostVerify, NamedCompanionNotRelocated) {
