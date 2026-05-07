@@ -63,11 +63,11 @@ DexClass* get_outer_class(const DexClass* cls) {
   return nullptr;
 }
 
-// Check if the method uses the first argument (i.e this pointer).
-// if strict == true, any use of this_reg will result in returning true.
-// if strict == false, if his_reg is used just to invoke virtual
-// methods from the same class, this will not be considered a use.
-bool uses_this(const DexMethod* method, bool strict = false) {
+// Check if the method uses the first argument (i.e this pointer) in a
+// meaningful way.  Uses of `this` solely to invoke virtual or direct methods on
+// the same class are not considered meaningful because those call sites will be
+// rewritten to static dispatch after relocation.
+bool uses_this(const DexMethod* method) {
   const auto* code = method->get_code();
   always_assert(code->cfg_built());
   const auto& cfg = code->cfg();
@@ -88,8 +88,7 @@ bool uses_this(const DexMethod* method, bool strict = false) {
   }
 
   for (auto use : UnorderedIterable(first_load_param_uses)) {
-    if (!strict &&
-        (use.insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
+    if ((use.insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
          use.insn->opcode() == OPCODE_INVOKE_DIRECT) &&
         use.insn->get_method()->get_class() == method->get_class()) {
       continue;
@@ -100,14 +99,108 @@ bool uses_this(const DexMethod* method, bool strict = false) {
   return false;
 }
 
-// Make method static (if necessary) and relocate to TO_TYPE
+// Rewrite same-class invoke-virtual/invoke-direct calls on `this` to
+// invoke-static dispatch, stripping the `this` argument.  After rewriting,
+// remove any dead move instructions that still reference the raw `this`
+// register (e.g., `move-object vX, this_reg` that was part of the use chain).
+//
+// Must be called for ALL companion methods BEFORE any are relocated, so that
+// callee method refs still belong to the companion class.
+//
+// Precondition: `uses_this(method)` returned false, meaning the only uses of
+// `this` are same-class invoke-virtual/invoke-direct calls.
+void rewrite_this_calls_to_static(DexMethod* method) {
+  auto* code = method->get_code();
+  if (code == nullptr) {
+    return;
+  }
+  auto& cfg = code->cfg();
+  auto param_insns = InstructionIterable(cfg.get_param_instructions());
+  if (param_insns.empty()) {
+    return;
+  }
+  auto* first_load_param = param_insns.begin()->insn;
+  auto this_reg = first_load_param->dest();
+
+  // Find all end-uses of `this` through move chains and rewrite same-class
+  // invokes to static dispatch.
+  live_range::MoveAwareChains chains(cfg);
+  auto du_chains = chains.get_def_use_chains();
+  auto du_it = du_chains.find(first_load_param);
+  if (du_it == du_chains.end()) {
+    return;
+  }
+
+  for (auto use : UnorderedIterable(du_it->second)) {
+    auto* insn = use.insn;
+    always_assert((insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
+                   insn->opcode() == OPCODE_INVOKE_DIRECT) &&
+                  insn->get_method()->get_class() == method->get_class());
+    insn->set_opcode(OPCODE_INVOKE_STATIC);
+    auto nargs = insn->srcs_size();
+    for (uint16_t i = 0; i < nargs - 1; i++) {
+      insn->set_src(i, insn->src(i + 1));
+    }
+    insn->set_srcs_size(nargs - 1);
+  }
+
+  // Remove dead instructions that still directly reference `this_reg` as a
+  // source (e.g., move-object copies that were part of the `this` use chain).
+  cfg::CFGMutation m(cfg);
+  auto iterable = cfg::InstructionIterable(cfg);
+  for (auto it = iterable.begin(); it != iterable.end(); it++) {
+    auto* insn = it->insn;
+    if (opcode::is_a_load_param(insn->opcode())) {
+      continue;
+    }
+    for (size_t i = 0; i < insn->srcs_size(); i++) {
+      if (insn->src(i) == this_reg) {
+        m.remove(it);
+        break;
+      }
+    }
+  }
+  m.flush();
+}
+
+// Make method static (if necessary) and relocate to TO_TYPE.
+// Drops the `this` parameter because candidate filtering already rejected any
+// companion whose methods use `this` in a meaningful way, and intra-companion
+// `this` calls have been rewritten to static dispatch by the caller.
+//
+// When @JvmStatic creates a bridge on the outer class with the same name and
+// proto, relocate_method would rename the companion method to avoid the
+// collision.  To prevent this, we rename the colliding bridge out of the way
+// first — it simply delegates to the companion and is dead code after
+// relocation.  The companion method then takes its natural name on the outer
+// class, and callers of the bridge's DexMethodRef are unaffected because the
+// bridge retains its own (now renamed) DexMethodRef.
 void make_static_and_relocate_method(DexMethod* method, DexType* to_type) {
   if (!is_static(method)) {
-    mutators::make_static(method,
-                          uses_this(method, true) ? mutators::KeepThis::Yes
-                                                  : mutators::KeepThis::No);
+    mutators::make_static(method, mutators::KeepThis::No);
   }
   change_visibility(method, to_type);
+
+  // @JvmStatic generates a static bridge on the outer class with the same
+  // name and proto as the companion method.  After make_static(KeepThis::No),
+  // the companion method has the same proto, so relocation would collide.
+  // Rename the bridge to free the name for the companion method.
+  // Non-static collisions (e.g., the outer class has its own virtual method
+  // with the same name) are handled by relocate_method's rename_on_collision.
+  auto* existing =
+      DexMethod::get_method(to_type, method->get_name(), method->get_proto());
+  if (existing != nullptr && existing->is_def() &&
+      is_static(existing->as_def())) {
+    TRACE(KOTLIN_COMPANION,
+          5,
+          "Renaming colliding @JvmStatic bridge %s",
+          SHOW(existing));
+    DexMethodSpec rename_spec;
+    rename_spec.name = DexString::make_string(
+        existing->as_def()->get_name()->str() + "$companion_bridge");
+    existing->as_def()->change(rename_spec, true /* rename_on_collision */);
+  }
+
   relocate_method(method, to_type);
 }
 
@@ -330,8 +423,20 @@ void relocate(DexClass* comp_cls,
     outer_cls->remove_field(field);
   }
 
-  // Relocate methods from comp_cls to outer_cls
+  // Relocate methods from comp_cls to outer_cls.
+  // Two passes are needed: first rewrite intra-companion `this` calls to static
+  // dispatch across ALL methods, then make each method static and relocate.
+  // This ordering is critical because `rewrite_this_calls_to_static` checks
+  // that callee methods belong to the same class as the caller — if we
+  // relocated some methods first, their class would already be the outer class,
+  // causing the check to fail.
   std::vector<DexMethod*> methods = comp_cls->get_all_methods();
+  for (auto* method : methods) {
+    if (method::is_init(method)) {
+      continue;
+    }
+    rewrite_this_calls_to_static(method);
+  }
   for (auto* method : methods) {
     if (method::is_init(method)) {
       continue;
