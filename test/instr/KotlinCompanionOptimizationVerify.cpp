@@ -349,6 +349,20 @@ TEST_F(PostVerify, CompanionEscapes) {
   EXPECT_NE(nullptr, find_vmethod_named(*companion_cls, "doWork"));
 }
 
+// Companion with a kept method: must NOT be relocated because the companion
+// has a method with a ProGuard -keep rule (simulating @DoNotStrip / JNI).
+TEST_F(PostVerify, CompanionWithKeptMethodNotRelocated) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithKeptMethod;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithKeptMethod$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  // Companion sfield should still be present — companion not relocated.
+  EXPECT_NE(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  // keptMethod should still be on the companion class.
+  EXPECT_NE(nullptr, find_vmethod_named(*companion_cls, "keptMethod"));
+}
+
 // Named companion object — must not be relocated by the pass because the inner
 // class name (NamedCompanionClass$Custom) does not end with $Companion.
 TEST_F(PostVerify, NamedCompanionNotRelocated) {

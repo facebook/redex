@@ -198,6 +198,17 @@ class CompanionEscapes {
 
 fun getCompanion(): CompanionEscapes.Companion = CompanionEscapes.Companion
 
+// Companion with a @DoNotStrip method: the annotation prevents renaming.
+// The companion must NOT be relocated because relocating would change the
+// method's class, breaking JNI or reflection bindings.
+class CompanionWithKeptMethod {
+  companion object {
+    @com.facebook.proguard.annotations.DoNotStrip fun keptMethod(): String = "kept"
+
+    fun normalMethod(): String = "normal"
+  }
+}
+
 // @Synchronized companion: MONITOR_ENTER on companion instance.
 // Must NOT be relocated — after devirtualization the companion instance
 // becomes an explicit parameter, and MONITOR_ENTER still references it.
@@ -262,6 +273,9 @@ class Foo {
 
     println(CompanionEscapes.doWork())
     println(getCompanion())
+
+    println(CompanionWithKeptMethod.keptMethod())
+    println(CompanionWithKeptMethod.normalMethod())
     val syncObj = CompanionWithSynchronized()
     CompanionWithSynchronized.addItem(syncObj, "test")
     println(CompanionWithSynchronized.getSize(syncObj))
