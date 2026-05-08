@@ -169,6 +169,16 @@ class CompanionWithDefaults {
   }
 }
 
+// T262896337: D8 reuses the new-instance register for getClass() after
+// sput-object.  Phase 5 must not nullify new-instance here — it would NPE.
+class CompanionWithClinitTag {
+  companion object {
+    private val TAG = CompanionWithClinitTag.javaClass.simpleName
+
+    fun work(): String = "work from $TAG"
+  }
+}
+
 // Abstract outer class with a companion object.
 abstract class AbstractOuterClass {
   companion object {
@@ -226,6 +236,7 @@ class CompanionWithSynchronized {
 }
 
 class Foo {
+  @org.junit.Test
   fun main() {
 
     println(CompanionClass.hello().greet("Olive"))
@@ -262,6 +273,9 @@ class Foo {
     println(CompanionWithInterCalls.methodB(3))
 
     println(CompanionWithJvmStaticBridge.compute(42))
+
+    // T262896337: must not crash with NPE in <clinit>
+    println(CompanionWithClinitTag.work())
 
     println(CompanionWithDefaults.greet("World"))
     println(CompanionWithDefaults.greet("World", "Hi"))

@@ -253,3 +253,18 @@ class SynchronizedCaller {
     print(CompanionWithSynchronized.getSize(obj))
   }
 }
+
+class CompanionWithDefaults {
+  companion object {
+    fun greet(name: String, greeting: String = "Hello"): String {
+      return "$greeting, $name!"
+    }
+  }
+}
+
+class DefaultArgsCaller {
+  fun main() {
+    print(CompanionWithDefaults.greet("World"))
+    print(CompanionWithDefaults.greet("World", "Hi"))
+  }
+}

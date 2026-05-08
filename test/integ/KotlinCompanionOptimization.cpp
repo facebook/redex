@@ -795,4 +795,46 @@ TEST_F(KotlinCompanionOptimizationTest, CompanionEscapesNotRelocated) {
             DexType::get_type(
                 "Lcom/facebook/redextest/objtest/CompanionEscapes$Companion;"));
 }
+
+TEST_F(KotlinCompanionOptimizationTest, CompanionWithDefaultArgs) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/DefaultArgsCaller;.main:()V");
+  auto* main_method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/objtest/DefaultArgsCaller;.main:()V")
+          ->as_def();
+  auto* codex = main_method->get_code();
+  ASSERT_NE(nullptr, codex);
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  DexType* outer = DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithDefaults;");
+  ASSERT_NE(nullptr, outer);
+  dump_cls(type_class(outer));
+
+  auto* greet = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithDefaults;"
+      ".greet:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+  ASSERT_NE(nullptr, greet) << "greet not found on outer class";
+  ASSERT_TRUE(greet->is_def());
+  ASSERT_TRUE(is_static(greet->as_def()));
+
+  auto* outer_cls = type_class(outer);
+  DexMethod* default_method = nullptr;
+  for (auto* m : outer_cls->get_dmethods()) {
+    if (m->get_name()->str().find("greet$default") != std::string::npos) {
+      default_method = m;
+      break;
+    }
+  }
+  ASSERT_NE(nullptr, default_method)
+      << "greet$default not found on outer class";
+  ASSERT_TRUE(is_static(default_method));
+  ASSERT_NE(nullptr, default_method->get_code()) << "greet$default has no code";
+}
 } // namespace
