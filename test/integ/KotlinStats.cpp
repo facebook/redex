@@ -42,7 +42,7 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // KotlinCheckNotNull: 1 from !!, 1 from `as` cast to non-null type
   EXPECT_EQ(stats.kotlin_null_check_notnull_insns, 2);
   // +2 from KotlinCheckNotNull (notNullAssert, castToNonNull)
-  EXPECT_EQ(stats.kotlin_public_param_objects, 44);
+  EXPECT_EQ(stats.kotlin_public_param_objects, 46);
 
   // LExample;.$$delegatedProperties:[Lkotlin/reflect/KProperty;
   // LFooDelagates;.lazyValue$delegate:Lkotlin/Lazy;
@@ -111,7 +111,10 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LCompanionEscapes;
   // LCompanionEscapes$Companion;
   // LEscapesCaller;
-  EXPECT_EQ(stats.kotlin_class, 41);
+  // LCompanionWithPureFunction;
+  // LCompanionWithPureFunction$Companion;
+  // LPureFunctionCaller;
+  EXPECT_EQ(stats.kotlin_class, 44);
 
   // LCompanionClass$Companion;
   // LCompanionWithMethodCollision$Companion;
@@ -121,7 +124,8 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LAbstractOuterClass$Companion;
   // LCompanionWithConstVal$Companion;
   // LCompanionEscapes$Companion;
-  EXPECT_EQ(stats.kotlin_companion_class, 8);
+  // LCompanionWithPureFunction$Companion;
+  EXPECT_EQ(stats.kotlin_companion_class, 9);
 
   // LKotlinLambdaInline$foo$1;
   // LKotlinLambdaInline$bar$1;

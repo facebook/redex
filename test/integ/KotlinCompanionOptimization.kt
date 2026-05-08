@@ -177,3 +177,17 @@ class EscapesCaller {
     print(getCompanion())
   }
 }
+
+// Companion with a pure function that takes a parameter but doesn't use `this`.
+// After MethodDevirtualizationPass, this method becomes static with one param.
+class CompanionWithPureFunction {
+  companion object {
+    fun double(x: Int): Int = x * 2
+  }
+}
+
+class PureFunctionCaller {
+  fun main() {
+    print(CompanionWithPureFunction.double(21))
+  }
+}
