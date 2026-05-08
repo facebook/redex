@@ -458,6 +458,31 @@ TEST_F(KotlinCompanionOptimizationTest, NonFinalMethodNoSubclasses) {
   ASSERT_TRUE(is_static(outerCompute->as_def()));
 }
 
+// Test @Synchronized companion method: the companion must NOT be relocated
+// because @Synchronized generates MONITOR_ENTER on the companion instance.
+TEST_F(KotlinCompanionOptimizationTest, SynchronizedCompanionNotRelocated) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/SynchronizedCaller;.main:()V");
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  // addItem should NOT be relocated — @Synchronized uses companion as lock.
+  auto* companion_addItem = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithSynchronized$Companion;"
+      ".addItem:(Lcom/facebook/redextest/objtest/CompanionWithSynchronized;"
+      "Ljava/lang/String;)V");
+  ASSERT_NE(nullptr, companion_addItem)
+      << "addItem should NOT be relocated (@Synchronized uses companion lock)";
+  ASSERT_TRUE(companion_addItem->is_def());
+  ASSERT_EQ(companion_addItem->as_def()->get_class(),
+            DexType::get_type("Lcom/facebook/redextest/objtest/"
+                              "CompanionWithSynchronized$Companion;"));
+}
+
 // Test cross-store rejection: move the companion to a secondary store while
 // keeping the outer class in the root store.  The pass should reject the
 // companion because relocating methods across stores is unsafe.

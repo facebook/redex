@@ -365,3 +365,15 @@ TEST_F(PostVerify, NamedCompanionNotRelocated) {
   EXPECT_NE(nullptr, find_vmethod_named(*companion_cls, "funZ"));
   EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "funZ"));
 }
+
+// @Synchronized companion: must NOT be relocated because @Synchronized
+// generates MONITOR_ENTER on the companion instance.
+TEST_F(PostVerify, CompanionWithSynchronizedNotRelocated) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithSynchronized;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithSynchronized$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  // The Companion sfield should still be present — companion not relocated.
+  EXPECT_NE(nullptr, find_sfield_named(*outer_cls, "Companion"));
+}

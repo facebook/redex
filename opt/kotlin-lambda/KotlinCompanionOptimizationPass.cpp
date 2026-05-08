@@ -43,17 +43,35 @@ void dump_cls(DexClass* cls, int trace_level = 5) {
 // the same class are not considered meaningful because those call sites will be
 // rewritten to static dispatch after relocation.
 bool uses_this(const DexMethod* method) {
-  if (is_static(method)) {
-    // Static methods have no `this` — the first load-param is the first real
-    // parameter.  This matters after MethodDevirtualizationPass, which makes
-    // companion methods static (removing `this`) while keeping them in
-    // vmethods.
-    return false;
-  }
   const auto* code = method->get_code();
   always_assert(code->cfg_built());
   const auto& cfg = code->cfg();
   auto iterable = InstructionIterable(cfg.get_param_instructions());
+  if (is_static(method)) {
+    // MethodDevirtualizationPass may staticize companion methods, removing
+    // the implicit `this` parameter.  However, @Synchronized companion
+    // methods retain the companion instance as an explicit first parameter
+    // (the proto changes to include the companion type).  We must still
+    // analyze these methods for `this` usage (e.g., MONITOR_ENTER).
+    //
+    // Detect the kept companion instance by checking if the first proto
+    // argument type matches the method's declaring class.
+    if (iterable.empty()) {
+      return false;
+    }
+    auto* first_insn = iterable.begin()->insn;
+    if (first_insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+      // First param is a primitive — can't be the companion instance.
+      return false;
+    }
+    auto* args = method->get_proto()->get_args();
+    if (args->empty() || args->at(0) != method->get_class()) {
+      // First proto arg is not the companion type — `this` was truly removed.
+      return false;
+    }
+    // First proto arg IS the companion type — companion instance is kept
+    // as explicit first parameter.  Fall through to analyze.
+  }
   always_assert(!iterable.empty());
   live_range::MoveAwareChains chains(cfg);
   live_range::Uses first_load_param_uses;
