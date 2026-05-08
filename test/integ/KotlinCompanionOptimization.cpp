@@ -286,6 +286,12 @@ TEST_F(KotlinCompanionOptimizationTest, JvmStaticBridgeRename) {
   auto scope = build_class_scope(stores);
   set_root_method(
       "Lcom/facebook/redextest/objtest/JvmStaticBridgeCaller;.main:()V");
+  auto* main_method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/objtest/JvmStaticBridgeCaller;.main:()V")
+          ->as_def();
+  auto* codex = main_method->get_code();
+  ASSERT_NE(nullptr, codex);
 
   auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
   auto dce = std::make_unique<LocalDcePass>();
@@ -312,6 +318,24 @@ TEST_F(KotlinCompanionOptimizationTest, JvmStaticBridgeRename) {
   ASSERT_NE(nullptr, bridge);
   ASSERT_TRUE(bridge->is_def());
   ASSERT_TRUE(is_static(bridge->as_def()));
+
+  // Callers of the renamed bridge must be redirected to the relocated method.
+  // JvmStaticBridgeCaller.main() originally called the @JvmStatic bridge via
+  // invoke-static; after the fix, it should call the relocated compute()
+  // instead of the renamed compute$companion_bridge.
+  auto iterable = InstructionIterable(codex);
+  unsigned static_calls = 0;
+  for (const auto& mie : iterable) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == OPCODE_INVOKE_STATIC &&
+        insn->get_method()->get_class() == outer) {
+      static_calls++;
+      ASSERT_EQ(insn->get_method()->get_name()->str(), "compute")
+          << "Caller should be redirected to relocated compute(), not the "
+             "renamed bridge";
+    }
+  }
+  ASSERT_EQ(static_calls, 1);
 }
 
 // Test abstract outer class: the companion's methods should still be relocated

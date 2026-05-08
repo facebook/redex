@@ -170,9 +170,16 @@ void rewrite_this_calls_to_static(DexMethod* method) {
 // collision.  To prevent this, we rename the colliding bridge out of the way
 // first — it simply delegates to the companion and is dead code after
 // relocation.  The companion method then takes its natural name on the outer
-// class, and callers of the bridge's DexMethodRef are unaffected because the
-// bridge retains its own (now renamed) DexMethodRef.
-void make_static_and_relocate_method(DexMethod* method, DexType* to_type) {
+// class, and callers of the bridge's DexMethodRef are redirected by
+// rewrite_call_sites to the relocated method.
+//
+// bridge_redirects: output map from renamed bridge DexMethodRef to the
+// relocated companion DexMethodRef, used by rewrite_call_sites to redirect
+// INVOKE_STATIC callers of the bridge to the relocated method.
+void make_static_and_relocate_method(
+    DexMethod* method,
+    DexType* to_type,
+    UnorderedMap<DexMethodRef*, DexMethodRef*>& bridge_redirects) {
   if (!is_static(method)) {
     mutators::make_static(method, mutators::KeepThis::No);
   }
@@ -186,8 +193,10 @@ void make_static_and_relocate_method(DexMethod* method, DexType* to_type) {
   // with the same name) are handled by relocate_method's rename_on_collision.
   auto* existing =
       DexMethod::get_method(to_type, method->get_name(), method->get_proto());
+  DexMethodRef* bridge_ref = nullptr;
   if (existing != nullptr && existing->is_def() &&
       is_static(existing->as_def())) {
+    bridge_ref = existing;
     TRACE(KOTLIN_COMPANION,
           5,
           "Renaming colliding @JvmStatic bridge %s",
@@ -199,6 +208,18 @@ void make_static_and_relocate_method(DexMethod* method, DexType* to_type) {
   }
 
   relocate_method(method, to_type);
+
+  // After relocation, `method` is now on `to_type` with the original name.
+  // Record the bridge → relocated method mapping so that callers of the
+  // (now broken) renamed bridge can be redirected to the relocated method.
+  if (bridge_ref != nullptr) {
+    bridge_redirects.emplace(bridge_ref, method);
+    TRACE(KOTLIN_COMPANION,
+          5,
+          "Bridge redirect: %s -> %s",
+          SHOW(bridge_ref),
+          SHOW(method));
+  }
 }
 
 // \returns true if \p meth meets kotlin companion class <init> request.
@@ -402,7 +423,8 @@ std::pair<RejectionReason, DexClass*> candidate_for_companion_relocation(
 
 void relocate(DexClass* comp_cls,
               DexClass* outer_cls,
-              UnorderedSet<DexMethodRef*>& relocated_methods) {
+              UnorderedSet<DexMethodRef*>& relocated_methods,
+              UnorderedMap<DexMethodRef*, DexMethodRef*>& bridge_redirects) {
   always_assert(comp_cls->get_ifields().empty());
   // Companion may have $$INSTANCE sfield (its own singleton); all other
   // sfields should have been rejected by candidate_for_companion_relocation.
@@ -489,7 +511,8 @@ void relocate(DexClass* comp_cls,
           SHOW(method),
           SHOW(comp_cls),
           SHOW(outer_cls));
-    make_static_and_relocate_method(method, outer_cls->get_type());
+    make_static_and_relocate_method(method, outer_cls->get_type(),
+                                    bridge_redirects);
     relocated_methods.insert(method);
   }
 
@@ -841,13 +864,19 @@ void filter_untrackable_usages(
 }
 
 // Phase 3: Relocate companion methods to outer classes.
-// Returns the set of relocated method refs and the count of relocated
+// Returns the set of relocated method refs, a map of renamed @JvmStatic bridge
+// refs to their replacement relocated method refs, and the count of relocated
 // companions.
-std::pair<UnorderedSet<DexMethodRef*>, size_t> relocate_companions(
+struct RelocateResult {
+  UnorderedSet<DexMethodRef*> relocated_methods;
+  UnorderedMap<DexMethodRef*, DexMethodRef*> bridge_redirects;
+  size_t relocated_count{0};
+};
+
+RelocateResult relocate_companions(
     const InsertOnlyConcurrentMap<DexClass*, DexClass*>& candidates,
     const ConcurrentSet<DexClass*>& rejected) {
-  UnorderedSet<DexMethodRef*> relocated_methods;
-  size_t relocated_count = 0;
+  RelocateResult result;
   for (const auto& p : UnorderedIterable(candidates)) {
     auto* comp_cls = p.first;
     auto* outer_cls = p.second;
@@ -859,15 +888,19 @@ std::pair<UnorderedSet<DexMethodRef*>, size_t> relocate_companions(
           "Relocate : %s -> %s",
           SHOW(comp_cls),
           SHOW(outer_cls));
-    relocate(comp_cls, outer_cls, relocated_methods);
-    relocated_count++;
+    relocate(comp_cls, outer_cls, result.relocated_methods,
+             result.bridge_redirects);
+    result.relocated_count++;
   }
-  return {std::move(relocated_methods), relocated_count};
+  return result;
 }
 
-// Phase 4: Rewrite call sites from invoke-virtual/direct to invoke-static.
-void rewrite_call_sites(const Scope& scope,
-                        const UnorderedSet<DexMethodRef*>& relocated_methods) {
+// Phase 4: Rewrite call sites from invoke-virtual/direct to invoke-static,
+// and redirect callers of renamed @JvmStatic bridges to the relocated method.
+void rewrite_call_sites(
+    const Scope& scope,
+    const UnorderedSet<DexMethodRef*>& relocated_methods,
+    const UnorderedMap<DexMethodRef*, DexMethodRef*>& bridge_redirects) {
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto* code = method->get_code();
     if (code == nullptr) {
@@ -879,21 +912,25 @@ void rewrite_call_sites(const Scope& scope,
 
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto* insn = it->insn;
-      if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
-          insn->opcode() != OPCODE_INVOKE_DIRECT) {
-        continue;
+      if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
+          insn->opcode() == OPCODE_INVOKE_DIRECT) {
+        if (relocated_methods.count(insn->get_method()) == 0u) {
+          continue;
+        }
+        insn->set_opcode(OPCODE_INVOKE_STATIC);
+        auto nargs = insn->srcs_size();
+        for (uint16_t i = 0; i < nargs - 1; i++) {
+          insn->set_src(i, insn->src(i + 1));
+        }
+        insn->set_srcs_size(nargs - 1);
+        changed = true;
+      } else if (insn->opcode() == OPCODE_INVOKE_STATIC) {
+        auto br_it = bridge_redirects.find(insn->get_method());
+        if (br_it != bridge_redirects.end()) {
+          insn->set_method(br_it->second);
+          changed = true;
+        }
       }
-      if (relocated_methods.count(insn->get_method()) == 0u) {
-        continue;
-      }
-      // Rewrite to static dispatch and strip the companion `this` argument.
-      insn->set_opcode(OPCODE_INVOKE_STATIC);
-      auto nargs = insn->srcs_size();
-      for (uint16_t i = 0; i < nargs - 1; i++) {
-        insn->set_src(i, insn->src(i + 1));
-      }
-      insn->set_srcs_size(nargs - 1);
-      changed = true;
     }
     if (changed) {
       TRACE(KOTLIN_COMPANION, 5, "After : %s", SHOW(method));
@@ -930,17 +967,16 @@ void KotlinCompanionOptimizationPass::run_pass(DexStoresVector& stores,
   filter_untrackable_usages(scope, candidates, rejected);
 
   // Phase 3: Relocate accepted companion methods to outer classes.
-  auto [relocated_methods, relocated_count] =
-      relocate_companions(candidates, rejected);
+  auto result = relocate_companions(candidates, rejected);
 
   // Phase 4: Rewrite call sites to use static dispatch.
-  rewrite_call_sites(scope, relocated_methods);
+  rewrite_call_sites(scope, result.relocated_methods, result.bridge_redirects);
 
   // Report stats.
   Stats stats;
   stats.kotlin_candidate_companion_objects = candidates.size();
   stats.kotlin_untrackable_companion_objects = rejected.size();
-  stats.kotlin_companion_objects_relocated = relocated_count;
+  stats.kotlin_companion_objects_relocated = result.relocated_count;
   stats.kotlin_rejected_rooted_or_external = counts.rooted_or_external;
   stats.kotlin_rejected_has_subclasses = counts.has_subclasses;
   stats.kotlin_rejected_not_companion = counts.not_companion;
