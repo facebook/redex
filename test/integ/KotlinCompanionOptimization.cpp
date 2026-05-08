@@ -338,6 +338,109 @@ TEST_F(KotlinCompanionOptimizationTest, JvmStaticBridgeRename) {
   ASSERT_EQ(static_calls, 1);
 }
 
+// Test @JvmStatic bridge with a keep rule (simulating reflection).
+// When the bridge has can_rename() == false (e.g., kept by a proguard rule
+// like `-keepclassmembers ... parseData`), the pass must NOT rename it.
+// The companion method should be renamed on collision instead.
+//
+// This reproduces the bug in T262077911 where parseFromJson was renamed to
+// parseFromJson$companion_bridge, breaking Class.getMethod("parseFromJson").
+TEST_F(KotlinCompanionOptimizationTest, JvmStaticKeptBridgeNotRenamed) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/objtest/KeptBridgeCaller;.main:()V");
+
+  // Mark the @JvmStatic bridge on the outer class as a root, simulating a
+  // proguard `-keepclassmembers` rule that prevents renaming.
+  auto* bridge = DexMethod::get_method(
+                     "Lcom/facebook/redextest/objtest/CompanionWithKeptBridge;"
+                     ".parseData:(I)Ljava/lang/String;")
+                     ->as_def();
+  ASSERT_NE(nullptr, bridge);
+  bridge->rstate.set_keepnames();
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  DexType* outer = DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithKeptBridge;");
+  ASSERT_NE(nullptr, outer);
+  dump_cls(type_class(outer));
+
+  // The bridge must keep its original name — reflection depends on it.
+  auto* kept_bridge = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithKeptBridge;"
+      ".parseData:(I)Ljava/lang/String;");
+  ASSERT_NE(nullptr, kept_bridge) << "Kept bridge must not be renamed";
+  ASSERT_TRUE(kept_bridge->is_def());
+  ASSERT_TRUE(is_static(kept_bridge->as_def()));
+
+  // The bridge must NOT be renamed to $companion_bridge.
+  auto* renamed = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithKeptBridge;"
+      ".parseData$companion_bridge:(I)Ljava/lang/String;");
+  ASSERT_EQ(nullptr, renamed)
+      << "Kept bridge must not be renamed to $companion_bridge";
+}
+
+// Test @JvmStatic on a private external fun in a companion.  kotlinc places
+// the actual native method (initNative) on the outer class as a static native
+// bridge with no code.  The pass must NOT rename this native method — JNI
+// registration depends on the exact name.  The companion's non-native method
+// (helper) should still be relocated.
+//
+// Input: CompanionWithNativeMethod has a companion with:
+//   - @JvmStatic private external fun initNative(Int): Long  (native)
+//   - fun helper(): String  (non-native)
+//
+// After optimization:
+//   - The native initNative bridge on the outer class keeps its original name
+//   - helper is relocated from companion to outer class
+//   - The companion's initNative wrapper is renamed on collision
+TEST_F(KotlinCompanionOptimizationTest, JvmStaticNativeMethodNotRenamed) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/objtest/NativeMethodCaller;.main:()V");
+
+  auto klr = std::make_unique<KotlinCompanionOptimizationPass>();
+  auto dce = std::make_unique<LocalDcePass>();
+  std::vector<Pass*> passes{klr.get(), dce.get()};
+  run_passes(passes);
+
+  DexType* outer = DexType::get_type(
+      "Lcom/facebook/redextest/objtest/CompanionWithNativeMethod;");
+  ASSERT_NE(nullptr, outer);
+  dump_cls(type_class(outer));
+
+  // The native initNative method on the outer class must keep its original
+  // name — it must NOT be renamed to initNative$companion_bridge.
+  auto* native_method = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithNativeMethod;"
+      ".initNative:(I)J");
+  ASSERT_NE(nullptr, native_method)
+      << "Native method initNative must keep its original name";
+  ASSERT_TRUE(native_method->is_def());
+  ASSERT_TRUE(is_static(native_method->as_def()));
+  // Native methods have no code.
+  ASSERT_EQ(nullptr, native_method->as_def()->get_code());
+
+  // There must NOT be a renamed native method.
+  auto* renamed = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithNativeMethod;"
+      ".initNative$companion_bridge:(I)J");
+  ASSERT_EQ(nullptr, renamed)
+      << "Native method must not be renamed to $companion_bridge";
+
+  // helper() should be relocated from companion to outer class.
+  auto* helper = DexMethod::get_method(
+      "Lcom/facebook/redextest/objtest/CompanionWithNativeMethod;"
+      ".helper:()Ljava/lang/String;");
+  ASSERT_NE(nullptr, helper);
+  ASSERT_TRUE(helper->is_def());
+  ASSERT_TRUE(is_static(helper->as_def()));
+}
+
 // Test abstract outer class: the companion's methods should still be relocated
 // to the abstract outer class as static methods.  Abstract classes can have
 // static methods, so this is valid.
