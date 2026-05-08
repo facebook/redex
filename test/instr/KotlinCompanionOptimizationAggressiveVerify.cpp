@@ -127,6 +127,74 @@ TEST_F(PostVerify, NestedObjectDeclaration) {
   EXPECT_NE(nullptr, nested_cls);
 }
 
+// Method name collision: after aggressive pipeline, companion class is removed
+// and methods are inlined.
+TEST_F(PostVerify, CompanionWithMethodCollision) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithMethodCollision;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithMethodCollision$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_EQ(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+}
+
+// Companion inter-calls: after aggressive pipeline, companion class is removed.
+TEST_F(PostVerify, CompanionWithInterCalls) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithInterCalls;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithInterCalls$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_EQ(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+}
+
+// @JvmStatic bridge: after aggressive pipeline, companion class is removed.
+// The outer class may also be removed if all its methods are inlined.
+TEST_F(PostVerify, CompanionWithJvmStaticBridge) {
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithJvmStaticBridge$Companion;");
+  EXPECT_EQ(nullptr, companion_cls);
+  auto* outer_cls = find_class_named(classes, "LCompanionWithJvmStaticBridge;");
+  if (outer_cls != nullptr) {
+    EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+  }
+}
+
+// Default args: after aggressive pipeline, companion class is removed.
+TEST_F(PostVerify, CompanionWithDefaults) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithDefaults;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithDefaults$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_EQ(nullptr, companion_cls);
+  EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Companion"));
+}
+
+// Abstract outer class: after aggressive pipeline, companion class is removed.
+TEST_F(PostVerify, AbstractOuterClass) {
+  auto* outer_cls = find_class_named(classes, "LAbstractOuterClass;");
+  auto* companion_cls =
+      find_class_named(classes, "LAbstractOuterClass$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_EQ(nullptr, companion_cls);
+}
+
+// Pure function: after aggressive pipeline, both classes may be removed
+// entirely if all usages are inlined.
+TEST_F(PostVerify, CompanionWithPureFunction) {
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithPureFunction$Companion;");
+  EXPECT_EQ(nullptr, companion_cls);
+}
+
+// Const val: after aggressive pipeline, both classes may be removed
+// entirely if all usages are inlined.
+TEST_F(PostVerify, CompanionWithConstVal) {
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithConstVal$Companion;");
+  EXPECT_EQ(nullptr, companion_cls);
+}
+
 // Named companion object — not relocated by KotlinCompanionOptimizationPass
 // because the inner class name (NamedCompanionClass$Custom) does not end with
 // $Companion. The companion class should survive the aggressive pipeline.

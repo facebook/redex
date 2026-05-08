@@ -133,6 +133,71 @@ class CompanionWithConstVal {
   }
 }
 
+// Method name collision: both the outer class and the companion define get().
+// The pass must rename the relocated companion method to avoid collision.
+class CompanionWithMethodCollision {
+  companion object {
+    fun get(): String = "companion"
+  }
+
+  fun get(): String = "outer"
+}
+
+// Companion methods calling each other via `this`.
+class CompanionWithInterCalls {
+  companion object {
+    fun methodA(x: Int): Int = if (x > 0) methodB(x - 1) else x
+
+    fun methodB(x: Int): Int = if (x > 1) methodA(x - 2) else x
+  }
+}
+
+// @JvmStatic bridge: the companion method compute() has @JvmStatic, which
+// generates a static bridge on the outer class with the same name/proto.
+class CompanionWithJvmStaticBridge {
+  companion object {
+    @JvmStatic fun compute(x: Int): Int = x * 2
+  }
+}
+
+// Companion method with default arguments.
+class CompanionWithDefaults {
+  companion object {
+    fun greet(name: String, greeting: String = "Hello"): String {
+      return "$greeting, $name!"
+    }
+  }
+}
+
+// Abstract outer class with a companion object.
+abstract class AbstractOuterClass {
+  companion object {
+    fun helperFunc(): String = "abstract_helper"
+  }
+
+  abstract fun doWork(): String
+}
+
+class ConcreteSubclass : AbstractOuterClass() {
+  override fun doWork(): String = helperFunc()
+}
+
+// Companion with a pure function that takes a parameter.
+class CompanionWithPureFunction {
+  companion object {
+    fun double(x: Int): Int = x * 2
+  }
+}
+
+// Companion whose instance escapes via a function return.
+class CompanionEscapes {
+  companion object {
+    fun doWork(): String = "work"
+  }
+}
+
+fun getCompanion(): CompanionEscapes.Companion = CompanionEscapes.Companion
+
 class Foo {
   fun main() {
 
@@ -160,5 +225,26 @@ class Foo {
     println(NamedCompanionClass.funZ())
 
     println(CompanionWithConstVal.getMagic())
+
+    // New test classes
+    val collision = CompanionWithMethodCollision()
+    println(collision.get())
+    println(CompanionWithMethodCollision.get())
+
+    println(CompanionWithInterCalls.methodA(5))
+    println(CompanionWithInterCalls.methodB(3))
+
+    println(CompanionWithJvmStaticBridge.compute(42))
+
+    println(CompanionWithDefaults.greet("World"))
+    println(CompanionWithDefaults.greet("World", "Hi"))
+
+    println(AbstractOuterClass.helperFunc())
+    println(ConcreteSubclass().doWork())
+
+    println(CompanionWithPureFunction.double(21))
+
+    println(CompanionEscapes.doWork())
+    println(getCompanion())
   }
 }
