@@ -262,18 +262,100 @@ bool needs_pos(const IRList::iterator& begin, const IRList::iterator& end) {
 
 namespace dedup_blocks_impl {
 
+// Returns the deobfuscated class descriptor for a method ref, surviving
+// RenameClassesPass (which mutates DexType names in place). Falls back to the
+// current type name when no deobfuscated name is available (e.g. before rename
+// passes run, or for types that were not renamed).
+static std::string_view get_deobfuscated_class_name(const DexMethodRef* m) {
+  auto* cls_def = type_class(m->get_class());
+  if (cls_def != nullptr) {
+    auto deob = cls_def->get_deobfuscated_name_or_empty();
+    if (!deob.empty()) {
+      return deob;
+    }
+  }
+  return m->get_class()->str();
+}
+
+// Returns true if this invoke-static targets a helper method whose body
+// is "throw new SomeThrowable(...)". Collapsing multiple callsites of such
+// helpers mis-attributes runtime exceptions -- the callsite PC is what
+// symbolicates in the stack trace.
+//
+// Uses deobfuscated names so the check survives RenameClassesPass (which
+// makes DexType::get_type("Lkotlin/...") return nullptr) and ObfuscatePass
+// (which renames method names, e.g. "throwFoo" -> "A0O").
+//
+// Known producers:
+//   - kotlin.jvm.internal.Intrinsics.throw* -- Kotlin compiler (!!,
+//     lateinit, contract, parameter null-checks).
+//   - com.redex.UnreachableException.createAndThrow -- Redex synthetic.
+static bool check_throw_helper_names(std::string_view cls_name,
+                                     std::string_view method_name) {
+  if (cls_name == "Lkotlin/jvm/internal/Intrinsics;" &&
+      method_name.starts_with("throw")) {
+    return true;
+  }
+  if (cls_name == "Lcom/redex/UnreachableException;" &&
+      method_name == "createAndThrow") {
+    return true;
+  }
+  return false;
+}
+
+static bool is_throw_delegating_helper(const DexMethodRef* m) {
+  // Try the def's fully-deobfuscated name first (works after both
+  // RenameClassesPass + ObfuscatePass; set on method defs including
+  // external methods loaded from JARs like kotlin-stdlib).
+  const DexMethod* def = m->is_def() ? m->as_def() : nullptr;
+  if (def == nullptr) {
+    def = resolve_method_deprecated(const_cast<DexMethodRef*>(m),
+                                    MethodSearch::Static);
+  }
+  if (def != nullptr) {
+    auto deob = def->get_deobfuscated_name_or_empty();
+    if (!deob.empty()) {
+      if (deob.find("Lkotlin/jvm/internal/Intrinsics;.throw") !=
+          std::string_view::npos) {
+        return true;
+      }
+      if (deob.find("Lcom/redex/UnreachableException;.createAndThrow:") !=
+          std::string_view::npos) {
+        return true;
+      }
+      return false;
+    }
+    // Def exists but has no deobfuscated name (pre-rename). Use the def's
+    // simple deobfuscated name for the method part.
+    auto simple = def->get_simple_deobfuscated_name();
+    if (!simple.empty()) {
+      return check_throw_helper_names(get_deobfuscated_class_name(m), simple);
+    }
+  }
+  // Final fallback: deobfuscated class name + current method name.
+  // Only correct before ObfuscatePass renames method names.
+  auto cls_name = get_deobfuscated_class_name(m);
+  const auto* name = m->get_name();
+  if (name == nullptr) {
+    return false;
+  }
+  return check_throw_helper_names(cls_name, name->str());
+}
+
 bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
   auto op = insn->opcode();
   DexMethod* resolved_method{nullptr};
   // Direct call to a constructor whose class derives from Throwable?
   // (It would indirectly call java.lang.Throwable.fillInStackTrace.)
+  // These pointer comparisons are rename-safe: type::java_lang_Throwable()
+  // returns the stable DexType* whose identity persists through rename.
   if (opcode::is_invoke_direct(op) && method::is_init(insn->get_method()) &&
       type::is_subclass(type::java_lang_Throwable(),
                         insn->get_method()->get_class())) {
     return true;
   }
-  // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
-  // method?
+  // Explicit virtual call to Throwable.fillInStackTrace?
+  // (Pointer comparison -- rename-safe.)
   if (opcode::is_invoke_virtual(op)) {
     resolved_method =
         resolve_method_deprecated(insn->get_method(), MethodSearch::Virtual);
@@ -282,13 +364,16 @@ bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
     }
   }
   // An outlined method might invoke one of the above, so we are being
-  // conservative here.
+  // conservative here. Also catch static throw-delegating helpers
+  // (Kotlin Intrinsics.throw*, Redex UnreachableException.createAndThrow)
+  // whose body throws but whose callsite PC is what symbolicates.
   if (opcode::is_invoke_static(op) &&
-      outliner::is_outlined_method(insn->get_method())) {
+      (outliner::is_outlined_method(insn->get_method()) ||
+       is_throw_delegating_helper(insn->get_method()))) {
     return true;
   }
   // We should not collapse the callsites of methods marked as dont-inline to
-  // preserve their stack traces more accurately
+  // preserve their stack traces more accurately.
   if (opcode::is_an_invoke(op)) {
     if (resolved_method == nullptr) {
       if (opcode::is_invoke_super(op)) {

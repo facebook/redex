@@ -1646,6 +1646,150 @@ TEST_F(DedupBlocksTest, dont_dedup_indirect_fill_in_stack_trace) {
   EXPECT_CODE_EQ(expected_code.get(), code);
 }
 
+// Don't dedup blocks calling kotlin.jvm.internal.Intrinsics throw* helpers.
+// These static helpers throw an exception inside their body; their call-site
+// PC is what symbolicates in the resulting stack trace, so collapsing two
+// callers into a single shared call site mis-attributes runtime exceptions
+// (e.g. a lateinit-access UninitializedPropertyAccessException) to whichever
+// caller happened to emit its position MIE just before the dedupped block.
+TEST_F(DedupBlocksTest, dont_dedup_kotlin_intrinsics_throw_helper) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (const-string "fieldA")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.throwUninitializedPropertyAccessException:(Ljava/lang/String;)V")
+      (return-void)
+
+      (:lbl)
+      (const-string "fieldB")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.throwUninitializedPropertyAccessException:(Ljava/lang/String;)V")
+      (return-void)
+    )
+  )");
+  auto* method = get_fresh_method("dont_dedup_kotlin_intrinsics_throw_helper");
+  method->set_code(std::move(input_code));
+  auto* code = method->get_code();
+
+  run_dedup_blocks();
+
+  // The two invoke-static blocks differ only in the const-string they pass.
+  // Even though the (invoke-static + return-void) tail is byte-identical, it
+  // must NOT be merged because each call-site's PC is the throw-site that
+  // surfaces in the stack trace.
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (const-string "fieldA")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.throwUninitializedPropertyAccessException:(Ljava/lang/String;)V")
+      (return-void)
+
+      (:lbl)
+      (const-string "fieldB")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.throwUninitializedPropertyAccessException:(Ljava/lang/String;)V")
+      (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// Same protection applies to other Intrinsics throw* helpers (throwNpe is
+// emitted by Kotlin for `!!` non-null assertions).
+TEST_F(DedupBlocksTest, dont_dedup_kotlin_intrinsics_throw_npe) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (invoke-static () "Lkotlin/jvm/internal/Intrinsics;.throwNpe:()V")
+      (return-void)
+
+      (:lbl)
+      (invoke-static () "Lkotlin/jvm/internal/Intrinsics;.throwNpe:()V")
+      (return-void)
+    )
+  )");
+  auto* method = get_fresh_method("dont_dedup_kotlin_intrinsics_throw_npe");
+  method->set_code(std::move(input_code));
+  auto* code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (invoke-static () "Lkotlin/jvm/internal/Intrinsics;.throwNpe:()V")
+      (return-void)
+
+      (:lbl)
+      (invoke-static () "Lkotlin/jvm/internal/Intrinsics;.throwNpe:()V")
+      (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// Redex's own UnreachableException.createAndThrow synthetic helper has the
+// same property and the same protection requirement.
+TEST_F(DedupBlocksTest, dont_dedup_redex_unreachable_create_and_throw) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
+      (move-result-object v0)
+      (throw v0)
+
+      (:lbl)
+      (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
+      (move-result-object v0)
+      (throw v0)
+    )
+  )");
+  auto* method =
+      get_fresh_method("dont_dedup_redex_unreachable_create_and_throw");
+  method->set_code(std::move(input_code));
+  auto* code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
+      (move-result-object v0)
+      (throw v0)
+
+      (:lbl)
+      (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
+      (move-result-object v0)
+      (throw v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
 // Don't dedup invocations to methods marked as dont-inline
 TEST_F(DedupBlocksTest, dont_dedup_dont_inline) {
   auto callee_code = assembler::ircode_from_string(R"(
