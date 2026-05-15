@@ -4,6 +4,10 @@ on:
     - cron: 0 0 * * *
 env:
   CACHE_VERSION: xxxxx1
+
+permissions:
+  contents: read
+
 jobs:
   build:
     uses: "./.github/workflows/build_and_test.yml"
