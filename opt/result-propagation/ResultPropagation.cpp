@@ -341,10 +341,8 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
 
   // these framework classes implement the "Appendable" interface, with the
   // formal return type being the exact class type
-  if (cls == m_char_buffer_type || cls == m_print_stream_type ||
-      cls == m_print_writer_type || cls == m_string_buffer_type ||
-      cls == m_string_builder_type || cls == m_string_writer_type ||
-      cls == m_writer_type) {
+  if (cls == m_char_buffer_type || cls == m_string_buffer_type ||
+      cls == m_string_builder_type) {
     if (method->get_name() == DexString::make_string("append")) {
       always_assert(returns_compatible_with_receiver(method));
       return true;
@@ -371,15 +369,6 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
         name == DexString::make_string("putInt") ||
         name == DexString::make_string("putLong") ||
         name == DexString::make_string("putShort")) {
-      always_assert(returns_compatible_with_receiver(method));
-      return true;
-    }
-  }
-
-  if (cls == m_print_stream_type || cls == m_print_writer_type) {
-    const auto* name = method->get_name();
-    if (name == DexString::make_string("format") ||
-        name == DexString::make_string("printf")) {
       always_assert(returns_compatible_with_receiver(method));
       return true;
     }
