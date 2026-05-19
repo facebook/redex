@@ -198,14 +198,39 @@ bool Transform::eliminate_redundant_null_check(
   return false;
 }
 
-// Final classes with symmetric equals -- safe to swap areEqual arguments.
+// Membership test for a hardcoded allowlist. Returns true iff T belongs
+// to a set of types whose equals method is symmetric across the whole set. The
+// symmetry nature of these methods isn't tested at runtime.
+//
+// A type T has an equals that is symmetric iff a.equals(b) == b.equals(a) is
+// guaranteed. There are two noticeable traps that can break this symmetry:
+//   1. T must be final. Without finality, a subclass override could break
+//      symmetry -- cf. java.util.Date / java.sql.Timestamp.
+//   2. This must be true even for heterogeneous types, e.g., a
+//      is of a type that is different from that of b.
 bool is_safe_symmetric_equals_type(const DexType* t) {
-  static const std::unordered_set<const DexType*> safe_types = {
-      type::java_lang_Boolean(),   type::java_lang_Byte(),
-      type::java_lang_Character(), type::java_lang_Class(),
-      type::java_lang_Integer(),   type::java_lang_Long(),
-      type::java_lang_Short(),     type::java_lang_String(),
-  };
+  static const std::unordered_set<const DexType*> safe_types = []() {
+    std::unordered_set<const DexType*> s = {
+        type::java_lang_Boolean(),   type::java_lang_Byte(),
+        type::java_lang_Character(), type::java_lang_Class(),
+        type::java_lang_Integer(),   type::java_lang_Long(),
+        type::java_lang_Short(),     type::java_lang_String(),
+    };
+    // Framework / stdlib types only added if present in the dex.
+    using namespace std::string_view_literals;
+    for (std::string_view desc : {
+             "Landroid/graphics/Bitmap;"sv,
+             "Landroid/graphics/Rect;"sv,
+             "Landroid/os/Bundle;"sv,
+             "Landroid/os/Looper;"sv,
+             "Ljava/util/UUID;"sv,
+         }) {
+      if (auto* type = DexType::get_type(desc)) {
+        s.insert(type);
+      }
+    }
+    return s;
+  }();
   always_assert(!safe_types.contains(nullptr));
   return safe_types.contains(t);
 }
