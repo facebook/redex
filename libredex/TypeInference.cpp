@@ -787,13 +787,11 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     always_assert_log(false,
                       "TypeInference::analyze_instruction does not support "
                       "const-method-handle yet");
-    break;
   }
   case OPCODE_CONST_METHOD_TYPE: {
     always_assert_log(false,
                       "TypeInference::analyze_instruction does not support "
                       "const-method-type yet");
-    break;
   }
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT: {
@@ -1206,7 +1204,6 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     not_reached_log(
         "TypeInference::analyze_instruction does not support "
         "invoke-custom yet");
-    break;
   }
   case OPCODE_INVOKE_POLYMORPHIC:
   case OPCODE_INVOKE_VIRTUAL:
