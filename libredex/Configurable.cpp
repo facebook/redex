@@ -247,7 +247,6 @@ Configurable::Reflection Configurable::reflect() {
         default:
           not_reached_log("Invalid Configurable::ReflectionParam::Type: %d",
                           param_type_tag);
-          break;
         }
       };
   m_trait_reflector = [&cr](const std::string& name, const Json::Value& value) {
