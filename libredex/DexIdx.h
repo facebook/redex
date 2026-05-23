@@ -207,6 +207,19 @@ class DexIdx {
     return m_dexbase + offset;
   }
 
+  // Bounds-checked ULEB128 reader. Returns the decoded value and advances
+  // *ptr past the consumed bytes. Throws RedexError::INVALID_DEX if *ptr
+  // is past end() or if the encoded value would read past end().
+  uint32_t read_uleb128_checked(const uint8_t** ptr) {
+    always_assert_type_log(*ptr <= end(), INVALID_DEX,
+                           "ULEB128 ptr past end of dex");
+    std::string_view view{reinterpret_cast<const char*>(*ptr),
+                          static_cast<size_t>(end() - *ptr)};
+    uint32_t result = ::read_uleb128_checked<redex::DexAssert>(view);
+    *ptr = reinterpret_cast<const uint8_t*>(view.data());
+    return result;
+  }
+
   uint32_t get_checksum() const {
     return reinterpret_cast<const dex_header*>(m_dexbase)->checksum;
   }

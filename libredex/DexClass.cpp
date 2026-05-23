@@ -1285,14 +1285,10 @@ void DexClass::load_class_data_item(
     return;
   }
   const uint8_t* encd = idx->get_uleb_data(cdi_off);
-  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
-  uint32_t sfield_count = read_uleb128(&encd);
-  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
-  uint32_t ifield_count = read_uleb128(&encd);
-  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
-  uint32_t dmethod_count = read_uleb128(&encd);
-  always_assert_type_log(encd < idx->end(), INVALID_DEX, "Dex overflow");
-  uint32_t vmethod_count = read_uleb128(&encd);
+  uint32_t sfield_count = idx->read_uleb128_checked(&encd);
+  uint32_t ifield_count = idx->read_uleb128_checked(&encd);
+  uint32_t dmethod_count = idx->read_uleb128_checked(&encd);
+  uint32_t vmethod_count = idx->read_uleb128_checked(&encd);
   uint32_t ndex = 0;
 
   std::vector<std::unique_ptr<DexEncodedValue>> empty{};
@@ -1304,10 +1300,8 @@ void DexClass::load_class_data_item(
 
   m_sfields.reserve(sfield_count);
   for (uint32_t i = 0; i < sfield_count; i++) {
-    always_assert(encd < idx->end());
-    ndex += read_uleb128(&encd);
-    always_assert(encd < idx->end());
-    auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    ndex += idx->read_uleb128_checked(&encd);
+    auto access_flags = (DexAccessFlags)idx->read_uleb128_checked(&encd);
     always_assert_type_log(is_static(access_flags), INVALID_DEX,
                            "Static field not marked static");
     DexField* df = dynamic_cast<DexField*>(idx->get_fieldidx(ndex));
@@ -1325,10 +1319,8 @@ void DexClass::load_class_data_item(
   ndex = 0;
   m_ifields.reserve(ifield_count);
   for (uint32_t i = 0; i < ifield_count; i++) {
-    always_assert(encd < idx->end());
-    ndex += read_uleb128(&encd);
-    always_assert(encd < idx->end());
-    auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    ndex += idx->read_uleb128_checked(&encd);
+    auto access_flags = (DexAccessFlags)idx->read_uleb128_checked(&encd);
     always_assert_type_log(!is_static(access_flags), INVALID_DEX,
                            "Non-Static field marked static");
     DexField* df = dynamic_cast<DexField*>(idx->get_fieldidx(ndex));
@@ -1343,12 +1335,9 @@ void DexClass::load_class_data_item(
 
   auto process_method = [this, &encd, &idx, &method_pointer_cache](
                             uint32_t& ndex, bool is_virtual) {
-    always_assert(encd < idx->end());
-    ndex += read_uleb128(&encd);
-    always_assert(encd < idx->end());
-    auto access_flags = (DexAccessFlags)read_uleb128(&encd);
-    always_assert(encd < idx->end());
-    uint32_t code_off = read_uleb128(&encd);
+    ndex += idx->read_uleb128_checked(&encd);
+    auto access_flags = (DexAccessFlags)idx->read_uleb128_checked(&encd);
+    uint32_t code_off = idx->read_uleb128_checked(&encd);
     // Find method in method index, returns same pointer for same method.
     DexMethod* dm = dynamic_cast<DexMethod*>(idx->get_methodidx(ndex));
     always_assert_type_log(dm->get_class() == get_type(), INVALID_DEX,
