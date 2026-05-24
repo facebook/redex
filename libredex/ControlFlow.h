@@ -1577,9 +1577,13 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
 
   // We might need to propagate source blocks if we create a block.
   // Find the latest source block in the current block in case.
+  // NOTE: when `pos` is `b->end()` we must not dereference it; treat that
+  // case as "no matching position MIE in this block" and scan the entire
+  // block for the latest source block.
+  const bool pos_is_end = (pos == b->end());
   SourceBlock* last_src_block = nullptr;
   for (const auto& mie : *b) {
-    if (mie.pos == pos->pos) {
+    if (!pos_is_end && mie.pos == pos->pos) {
       break;
     }
     if (mie.type == MFLOW_SOURCE_BLOCK) {
