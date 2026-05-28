@@ -27,7 +27,7 @@ runs:
   # it's a bit murkier (looking for some merge commits).
   # For now leave it at that and hope that the fallback does the right thing.
   - name: Cache build
-    uses: actions/cache@v4
+    uses: actions/cache@v5
     with:
       key: v3-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}-${{ github.sha }}
       path: build.tar.zstd
