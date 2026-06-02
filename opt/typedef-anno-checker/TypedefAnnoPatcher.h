@@ -8,7 +8,6 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
-#include "ControlFlow.h"
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
