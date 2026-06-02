@@ -15,6 +15,7 @@
 #include "Debug.h"
 #include "DexUtil.h"
 #include "IFieldAnalysisUtil.h"
+#include "IRCode.h"
 #include "InitDeps.h"
 #include "LocalDce.h"
 #include "PassManager.h"
