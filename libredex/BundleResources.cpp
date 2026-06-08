@@ -1773,7 +1773,8 @@ void reset_pb_source(google::protobuf::Message* message) {
       auto name = field_desc->name();
       if (name == "path_idx" || name == "line_number" ||
           name == "column_number") {
-        TRACE(RES, 9, "resetting uint32 field: %s", name.c_str());
+        TRACE(RES, 9, "resetting uint32 field: %.*s", (int)name.size(),
+              name.data());
         refl->SetUInt32(message, field_desc, 0);
       }
     } else if (cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE) {
