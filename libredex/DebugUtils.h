@@ -10,8 +10,8 @@
 #include "RedexException.h"
 
 #include <cstdint>
+#include <exception>
 #include <iosfwd>
-#include <stdexcept>
 
 namespace redex_debug {
 
