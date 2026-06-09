@@ -12,7 +12,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
-#include <boost/regex/v5/unicode_iterator.hpp>
+#include <boost/regex/pending/unicode_iterator.hpp>
 #include <fstream>
 #include <map>
 #include <mutex>
