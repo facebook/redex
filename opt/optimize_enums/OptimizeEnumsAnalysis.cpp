@@ -51,6 +51,8 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
     MonotonicFixpointIterator::run(ConstantEnvironment::top());
   }
 
+  bool had_unknown_ordinal_arg() const { return m_had_unknown_ordinal_arg; }
+
   void analyze_instruction(const IRInstruction* insn,
                            ConstantEnvironment* env) const override {
     auto op = insn->opcode();
@@ -125,8 +127,18 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
         auto src = insn->src(arg);
         auto cst = env->get<SignedConstantDomain>(src).get_constant();
 
-        always_assert(cst);
-        env->set(insn->src(0), SignedConstantDomain(*cst));
+        // The ordinal argument may not be a known constant if a prior pass
+        // (or non-standard bytecode) flowed a non-literal value into it. In
+        // that case, leave the enum-instance register as top; the downstream
+        // collect_ordinals() bails out for the whole class when any ordinal
+        // can't be determined. Record the cause so callers can attribute the
+        // degradation in pass metrics.
+        if (cst) {
+          env->set(insn->src(0), SignedConstantDomain(*cst));
+        } else {
+          env->set(insn->src(0), ConstantValue::top());
+          m_had_unknown_ordinal_arg = true;
+        }
       }
       break;
     }
@@ -141,6 +153,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
  private:
   const UnorderedMap<const DexMethod*, uint32_t> m_ctor_to_arg_ordinal;
   const DexClass* m_current_enum;
+  mutable bool m_had_unknown_ordinal_arg{false};
 };
 
 } // namespace impl
@@ -164,7 +177,7 @@ OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
  * Collect ordinals for all the enum fields, if all of them can be
  * statically determined. Otherwise, none.
  */
-void OptimizeEnumsAnalysis::collect_ordinals(
+bool OptimizeEnumsAnalysis::collect_ordinals(
     UnorderedMap<DexField*, size_t>& enum_field_to_ordinal) {
   auto& clinit_cfg = m_cls->get_clinit()->get_code()->cfg();
   const auto& env = m_analyzer->get_exit_state_at(clinit_cfg.exit_block());
@@ -194,7 +207,13 @@ void OptimizeEnumsAnalysis::collect_ordinals(
     for (DexField* sfield : m_cls->get_sfields()) {
       enum_field_to_ordinal.erase(sfield);
     }
+    return false;
   }
+  return true;
+}
+
+bool OptimizeEnumsAnalysis::had_unknown_ordinal_arg() const {
+  return m_analyzer->had_unknown_ordinal_arg();
 }
 
 } // namespace optimize_enums

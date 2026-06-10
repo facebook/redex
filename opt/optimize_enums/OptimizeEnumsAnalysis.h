@@ -27,7 +27,17 @@ class OptimizeEnumsAnalysis final {
       const DexClass* enum_cls,
       const UnorderedMap<const DexMethod*, uint32_t>& ctor_to_arg_ordinal);
 
-  void collect_ordinals(UnorderedMap<DexField*, size_t>& enum_field_to_ordinal);
+  // Returns true if all candidate enum-field ordinals were determined.
+  // Returns false if the analysis had to bail because at least one sfield's
+  // value was top at <clinit> exit (in which case any partial entries added
+  // to enum_field_to_ordinal for this class are erased before returning).
+  bool collect_ordinals(UnorderedMap<DexField*, size_t>& enum_field_to_ordinal);
+
+  // True iff the analysis observed an invoke-direct to one of this enum's
+  // constructors whose ordinal argument was not a known constant. This is
+  // the most common reason collect_ordinals() returns false; tracked
+  // separately so callers can attribute degradation.
+  bool had_unknown_ordinal_arg() const;
 
  private:
   std::unique_ptr<impl::Analyzer> m_analyzer;
