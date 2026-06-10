@@ -85,7 +85,14 @@ constexpr const char* METRIC_NUM_REMOVED_GENERATED_METHODS =
  * Here we determine for each constructor, which of the arguments is used
  * to set the ordinal.
  */
-bool analyze_enum_ctors(
+enum class CtorAnalysisResult {
+  Success,
+  CtorNoCode,
+  NonUniqueDelegate,
+  NoUniqueOrdinalParam,
+};
+
+CtorAnalysisResult analyze_enum_ctors(
     const DexClass* cls,
     const DexMethod* java_enum_ctor,
     UnorderedMap<const DexMethod*, uint32_t>& ctor_to_arg_ordinal) {
@@ -115,14 +122,14 @@ bool analyze_enum_ctors(
     for (const auto& ctor : cls->get_ctors()) {
       auto* code = ctor->get_code();
       if (code == nullptr) {
-        return false;
+        return CtorAnalysisResult::CtorNoCode;
       }
 
       auto res = f.find(code->cfg(), inv);
       if (auto* inv_insn = res.matching(inv).unique()) {
         delegating_calls.emplace(ctor, code->cfg(), inv_insn);
       } else {
-        return false;
+        return CtorAnalysisResult::NonUniqueDelegate;
       }
     }
   }
@@ -161,7 +168,7 @@ bool analyze_enum_ctors(
     auto* load_ordinal = res.matching(param).unique();
     if (load_ordinal == nullptr) {
       // Couldn't find a unique parameter flowing into the ordinal argument.
-      return false;
+      return CtorAnalysisResult::NoUniqueOrdinalParam;
     }
 
     // Figure out which param is being loaded.
@@ -177,7 +184,7 @@ bool analyze_enum_ctors(
     ctor_to_arg_ordinal[dc.ctor] = ctor_ordinal;
   }
 
-  return true;
+  return CtorAnalysisResult::Success;
 }
 
 /**
@@ -374,6 +381,18 @@ class OptimizeEnums {
            m_stats.num_removed_generated_methods);
     report("num_all_enum_classes", m_stats.num_all_enum_classes);
     report("num_all_kotlin_enum_classes", m_stats.num_kotlin_enum_classes);
+    report("num_ordinal_collected", m_stats.num_ordinal_collected);
+    report("num_ordinal_bail_no_clinit", m_stats.num_ordinal_bail_no_clinit);
+    report("num_ordinal_bail_ctor_no_code",
+           m_stats.num_ordinal_bail_ctor_no_code);
+    report("num_ordinal_bail_non_unique_delegate",
+           m_stats.num_ordinal_bail_non_unique_delegate);
+    report("num_ordinal_bail_no_unique_param",
+           m_stats.num_ordinal_bail_no_unique_param);
+    report("num_ordinal_bail_sfield_unknown",
+           m_stats.num_ordinal_bail_sfield_unknown);
+    report("num_ordinal_bail_unknown_ctor_arg",
+           m_stats.num_ordinal_bail_unknown_ctor_arg);
   }
 
   /**
@@ -776,16 +795,34 @@ class OptimizeEnums {
 
     auto* clinit = cls->get_clinit();
     if ((clinit == nullptr) || (clinit->get_code() == nullptr)) {
+      ++m_stats.num_ordinal_bail_no_clinit;
       return;
     }
 
     UnorderedMap<const DexMethod*, uint32_t> ctor_to_arg_ordinal;
-    if (!analyze_enum_ctors(cls, m_java_enum_ctor, ctor_to_arg_ordinal)) {
+    switch (analyze_enum_ctors(cls, m_java_enum_ctor, ctor_to_arg_ordinal)) {
+    case CtorAnalysisResult::Success:
+      break;
+    case CtorAnalysisResult::CtorNoCode:
+      ++m_stats.num_ordinal_bail_ctor_no_code;
+      return;
+    case CtorAnalysisResult::NonUniqueDelegate:
+      ++m_stats.num_ordinal_bail_non_unique_delegate;
+      return;
+    case CtorAnalysisResult::NoUniqueOrdinalParam:
+      ++m_stats.num_ordinal_bail_no_unique_param;
       return;
     }
 
     optimize_enums::OptimizeEnumsAnalysis analysis(cls, ctor_to_arg_ordinal);
-    analysis.collect_ordinals(enum_field_to_ordinal);
+    if (analysis.collect_ordinals(enum_field_to_ordinal)) {
+      ++m_stats.num_ordinal_collected;
+    } else {
+      ++m_stats.num_ordinal_bail_sfield_unknown;
+      if (analysis.had_unknown_ordinal_arg()) {
+        ++m_stats.num_ordinal_bail_unknown_ctor_arg;
+      }
+    }
   }
 
   /**
@@ -909,6 +946,19 @@ class OptimizeEnums {
     size_t num_removed_generated_methods{0};
     size_t num_all_enum_classes{0};
     size_t num_kotlin_enum_classes{0};
+    // Per-reason attribution for collect_enum_field_ordinals(). Each enum
+    // class is counted in exactly one of these (or in none, if cls is null
+    // or not actually an enum).
+    size_t num_ordinal_collected{0};
+    size_t num_ordinal_bail_no_clinit{0};
+    size_t num_ordinal_bail_ctor_no_code{0};
+    size_t num_ordinal_bail_non_unique_delegate{0};
+    size_t num_ordinal_bail_no_unique_param{0};
+    size_t num_ordinal_bail_sfield_unknown{0};
+    // Sub-counter of num_ordinal_bail_sfield_unknown: the bail was caused
+    // (at least in part) by an invoke-direct to an enum ctor whose ordinal
+    // argument was not a known constant.
+    size_t num_ordinal_bail_unknown_ctor_arg{0};
   };
   Stats m_stats;
 
