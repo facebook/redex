@@ -259,6 +259,19 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
 
   ParamDomain param = ParamDomain::bottom();
   if (is_abstract(callee)) {
+    // Some compilers emit `invoke-super` to an abstract method as the body
+    // of a synthetic covariant-return bridge (observed in
+    // org.chromium.net.impl.CronetEngineBase shipped with
+    // play-services-cronet). Such a call, if dispatched at runtime, would
+    // throw AbstractMethodError; here we just bail out conservatively so
+    // the rest of the analysis can proceed. This is sister to the upstream
+    // BridgeSynthInlinePass rewrite that normalizes these bridges to an
+    // explicit throw; this branch remains as a defense in depth in case
+    // that pass hasn't run (it runs after this pass in the default config)
+    // or in case a similar pattern reaches us from elsewhere.
+    if (opcode == OPCODE_INVOKE_SUPER) {
+      return boost::none;
+    }
     always_assert(opcode == OPCODE_INVOKE_VIRTUAL ||
                   opcode == OPCODE_INVOKE_INTERFACE);
   } else {
