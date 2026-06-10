@@ -88,7 +88,7 @@ TEST_F(PostVerify, InlineWithFinalField) {
       (sput v0 "Lredex/$StoreFenceHelper;.DUMMY_VOLATILE:I")
       (iget v6 "Lcom/facebook/redexinline/WithFinalField;.finalField:I")
       (move-result-pseudo v0)
-      (invoke-static (v0) "Lorg/assertj/core/api/Assertions;.assertThat:(I)Lorg/assertj/core/api/AbstractIntegerAssert;")
+      (invoke-static (v0) "Lorg/assertj/core/api/AssertionsForClassTypes;.assertThat:(I)Lorg/assertj/core/api/AbstractIntegerAssert;")
       (move-result-object v0)
       (invoke-virtual (v0 v3) "Lorg/assertj/core/api/AbstractIntegerAssert;.isEqualTo:(I)Lorg/assertj/core/api/AbstractIntegerAssert;")
       (return-void)
