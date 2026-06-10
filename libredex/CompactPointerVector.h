@@ -22,6 +22,7 @@
 #pragma once
 
 #include <array>
+#include <bit>
 #include <boost/intrusive/pointer_plus_bits.hpp>
 #include <type_traits>
 #include <vector>
@@ -76,7 +77,7 @@ class CompactPointerVector {
     }
     if (one()) {
       // Transition from one to two
-      m_data = make_data_arr2(static_cast<Ptr>(m_data), ptr);
+      m_data = make_data_arr2(m_data, ptr);
       return;
     }
     if (two()) {
@@ -224,13 +225,13 @@ class CompactPointerVector {
     m_data = make_data_none();
   }
 
-  bool empty() const { return Accessor::get_bits(m_data) == kNone; }
+  bool empty() const { return Accessor::get_bits(as_void()) == kNone; }
 
-  bool one() const { return Accessor::get_bits(m_data) == kOne; }
+  bool one() const { return Accessor::get_bits(as_void()) == kOne; }
 
-  bool two() const { return Accessor::get_bits(m_data) == kTwo; }
+  bool two() const { return Accessor::get_bits(as_void()) == kTwo; }
 
-  bool many() const { return Accessor::get_bits(m_data) == kMany; }
+  bool many() const { return Accessor::get_bits(as_void()) == kMany; }
 
   ~CompactPointerVector() { clear(); }
 
@@ -242,7 +243,7 @@ class CompactPointerVector {
       return as_arr2()->data();
     }
     if (one()) {
-      return reinterpret_cast<iterator>(&m_data);
+      return &m_data;
     }
     return nullptr;
   }
@@ -256,7 +257,7 @@ class CompactPointerVector {
       return as_arr2()->data() + 2;
     }
     if (one()) {
-      return reinterpret_cast<iterator>(&m_data) + 1;
+      return &m_data + 1;
     }
     return nullptr;
   }
@@ -269,7 +270,7 @@ class CompactPointerVector {
       return as_arr2()->data();
     }
     if (one()) {
-      return reinterpret_cast<const_iterator>(&m_data);
+      return &m_data;
     }
     return nullptr;
   }
@@ -283,7 +284,7 @@ class CompactPointerVector {
       return as_arr2()->data() + 2;
     }
     if (one()) {
-      return reinterpret_cast<const_iterator>(&m_data) + 1;
+      return &m_data + 1;
     }
     return nullptr;
   }
@@ -297,7 +298,7 @@ class CompactPointerVector {
       return Vec{(*arr2)[0], (*arr2)[1]};
     }
     if (one()) {
-      return Vec{reinterpret_cast<Ptr>(m_data)};
+      return Vec{m_data};
     }
     return Vec{};
   }
@@ -311,47 +312,53 @@ class CompactPointerVector {
   using Arr2 = std::array<Ptr, 2>;
   using Accessor = boost::intrusive::pointer_plus_bits<void*, 2>;
 
+  // The storage word reinterpreted as the tagged `void*` understood by
+  // `Accessor` (and used by the two/many heap-pointer states). `std::bit_cast`
+  // is the standards-compliant way to reinterpret the object representation
+  // between `Ptr` and `void*`.
+  void* as_void() const { return std::bit_cast<void*>(m_data); }
+
   const Vec* as_vec() const {
     always_assert(many());
-    return static_cast<Vec*>(Accessor::get_pointer(m_data));
+    return static_cast<Vec*>(Accessor::get_pointer(as_void()));
   }
 
   Vec* as_vec() {
     always_assert(many());
-    return static_cast<Vec*>(Accessor::get_pointer(m_data));
+    return static_cast<Vec*>(Accessor::get_pointer(as_void()));
   }
 
   const Arr2* as_arr2() const {
     always_assert(two());
-    return static_cast<Arr2*>(Accessor::get_pointer(m_data));
+    return static_cast<Arr2*>(Accessor::get_pointer(as_void()));
   }
 
   Arr2* as_arr2() {
     always_assert(two());
-    return static_cast<Arr2*>(Accessor::get_pointer(m_data));
+    return static_cast<Arr2*>(Accessor::get_pointer(as_void()));
   }
 
   template <typename... Args>
-  static void* make_data_vec(Args&&... args) {
+  static Ptr make_data_vec(Args&&... args) {
     void* new_data = new Vec{std::forward<Args>(args)...};
     Accessor::set_bits(new_data, kMany);
-    return new_data;
+    return std::bit_cast<Ptr>(new_data);
   }
 
   template <typename... Args>
-  static void* make_data_arr2(Args&&... args) {
+  static Ptr make_data_arr2(Args&&... args) {
     void* new_data = new Arr2{std::forward<Args>(args)...};
     Accessor::set_bits(new_data, kTwo);
-    return new_data;
+    return std::bit_cast<Ptr>(new_data);
   }
 
-  constexpr static void* make_data_none() {
+  static Ptr make_data_none() {
     void* new_data = nullptr;
     Accessor::set_bits(new_data, kNone);
-    return new_data;
+    return std::bit_cast<Ptr>(new_data);
   }
 
-  void* clone_data() const {
+  Ptr clone_data() const {
     if (many()) {
       return make_data_vec(*as_vec());
     }
@@ -361,5 +368,21 @@ class CompactPointerVector {
     return m_data;
   }
 
-  void* m_data{make_data_none()};
+  // The storage word holds one of:
+  //  - the empty/none sentinel (low bits == kNone);
+  //  - in the `one` state, the single inline element itself (low bits == kOne,
+  //    i.e. the element's own aligned address); or
+  //  - in the two/many states, a tagged heap `Arr2*`/`Vec*` (low bits encode
+  //    the state).
+  //
+  // It is declared as `Ptr` (not `void*`) precisely so that begin()/end() can
+  // hand out a real `Ptr*` into the inline one-element storage. Returning a
+  // `reinterpret_cast<Ptr*>(&m_data)` from a `void*` member instead reads a
+  // `void*` object through a `Ptr` lvalue, a strict-aliasing violation that
+  // clang-21's stricter TBAA miscompiled into a wild `edge->src()` crash in
+  // ControlFlowGraph::move_edge. The tagged-`void*` interpretation used by the
+  // Accessor and the heap states is recovered with `std::bit_cast` (see
+  // `as_void()` and `make_data_*`), which reinterprets the object
+  // representation in a fully standards-compliant way.
+  Ptr m_data{make_data_none()};
 };
