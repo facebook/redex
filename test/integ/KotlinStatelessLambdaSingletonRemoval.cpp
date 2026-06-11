@@ -20,7 +20,6 @@
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "Show.h"
-#include "SourceBlocks.h"
 
 namespace {
 using ::testing::Contains;
