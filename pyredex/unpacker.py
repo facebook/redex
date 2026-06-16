@@ -1294,8 +1294,9 @@ class LibraryManager:
                 if lib_to_extract.endswith(xz_lib_name):
                     unpack_xz(lib_to_extract, extract_path)
                 else:
-                    cmd = 'zstd -d "{}" -o "{}"'.format(lib_to_extract, extract_path)
-                    subprocess.check_call(cmd, shell=True)  # noqa: P204
+                    subprocess.check_call(
+                        ["zstd", "-d", lib_to_extract, "-o", extract_path]
+                    )
 
     def __exit__(self, *args: typing.Any) -> None:
         # This dir was just here so we could scan it for classnames, but we don't
