@@ -597,8 +597,7 @@ TEST_F(ConstantPropagationTest, OutOfBoundsWrite) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::intraprocedural::FixpointIterator intra_cp(
-      /* cp_state */ nullptr, cfg, ArrayAnalyzer());
+  cp::intraprocedural::FixpointIterator intra_cp(cfg, ArrayAnalyzer());
   intra_cp.run(ConstantEnvironment());
   EXPECT_TRUE(intra_cp.get_exit_state_at(cfg.exit_block()).is_bottom());
 }
@@ -617,8 +616,7 @@ TEST_F(ConstantPropagationTest, OutOfBoundsRead) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::intraprocedural::FixpointIterator intra_cp(
-      /* cp_state */ nullptr, cfg, ArrayAnalyzer());
+  cp::intraprocedural::FixpointIterator intra_cp(cfg, ArrayAnalyzer());
   intra_cp.run(ConstantEnvironment());
   EXPECT_TRUE(intra_cp.get_exit_state_at(cfg.exit_block()).is_bottom());
 }

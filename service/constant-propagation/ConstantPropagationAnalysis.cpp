@@ -1746,8 +1746,8 @@ void semantically_inline_method(
       [env](ConstantHeap* heap) { *heap = env->get_heap(); });
 
   // Analyze the callee.
-  auto fp_iter = std::make_unique<intraprocedural::FixpointIterator>(
-      /* cp_state */ nullptr, cfg, analyzer);
+  auto fp_iter =
+      std::make_unique<intraprocedural::FixpointIterator>(cfg, analyzer);
   fp_iter->run(call_entry_env);
 
   // Update the caller's environment with the callee's return states.
@@ -1865,13 +1865,13 @@ bool PackageNameAnalyzer::analyze_invoke(const PackageNameState* state,
 namespace intraprocedural {
 
 FixpointIterator::FixpointIterator(
-    const State* state,
     const cfg::ControlFlowGraph& cfg,
     InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
+    InstructionAnalyzer<ConstantEnvironment> no_throw_analyzer,
     bool imprecise_switches)
     : BaseEdgeAwareIRAnalyzer(cfg),
       m_insn_analyzer(std::move(insn_analyzer)),
-      m_state(state),
+      m_no_throw_analyzer(std::move(no_throw_analyzer)),
       m_imprecise_switches(imprecise_switches) {}
 
 void FixpointIterator::analyze_instruction_normal(
@@ -1879,32 +1879,39 @@ void FixpointIterator::analyze_instruction_normal(
   m_insn_analyzer(insn, env);
 }
 
+InstructionAnalyzer<ConstantEnvironment> make_default_no_throw_analyzer(
+    const State* state) {
+  return [state](const IRInstruction* insn, ConstantEnvironment* env) {
+    auto src_index = get_dereferenced_object_src_index(insn);
+    if (!src_index && state != nullptr) {
+      src_index = get_null_check_object_index(insn, *state);
+    }
+    if (!src_index) {
+      if (state == nullptr || insn->opcode() != OPCODE_INVOKE_STATIC ||
+          insn->get_method() != state->redex_null_check_assertion()) {
+        return;
+      }
+      src_index = 0;
+    }
+    if (insn->has_dest()) {
+      auto dest = insn->dest();
+      if ((dest == *src_index) ||
+          (insn->dest_is_wide() && dest + 1 == *src_index)) {
+        return;
+      }
+    }
+    auto src = insn->src(*src_index);
+    auto value = env->get(src);
+    value.meet_with(SignedConstantDomain(sign_domain::Interval::NEZ));
+    env->set(src, value);
+  };
+}
+
 void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
                                         ConstantEnvironment* env) const {
-  auto src_index = get_dereferenced_object_src_index(insn);
-  if (!src_index && (m_state != nullptr)) {
-    src_index = get_null_check_object_index(insn, *m_state);
+  if (m_no_throw_analyzer) {
+    m_no_throw_analyzer(insn, env);
   }
-  if (!src_index) {
-    // Check if it is redex null check.
-    if ((m_state == nullptr) || insn->opcode() != OPCODE_INVOKE_STATIC ||
-        insn->get_method() != m_state->redex_null_check_assertion()) {
-      return;
-    }
-    src_index = 0;
-  }
-
-  if (insn->has_dest()) {
-    auto dest = insn->dest();
-    if ((dest == *src_index) ||
-        (insn->dest_is_wide() && dest + 1 == *src_index)) {
-      return;
-    }
-  }
-  auto src = insn->src(*src_index);
-  auto value = env->get(src);
-  value.meet_with(SignedConstantDomain(sign_domain::Interval::NEZ));
-  env->set(src, value);
 }
 
 /*

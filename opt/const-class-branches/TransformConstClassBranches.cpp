@@ -189,7 +189,7 @@ void gather_possible_transformations(
 
   TRACE(CCB, 3, "Checking for const-class branching in %s", SHOW(method));
   auto fixpoint = std::make_shared<cp::intraprocedural::FixpointIterator>(
-      /* cp_state */ nullptr, cfg, SwitchEquivFinder::Analyzer());
+      cfg, SwitchEquivFinder::Analyzer());
   fixpoint->run(ConstantEnvironment());
 
   std::vector<cfg::Block*> blocks;

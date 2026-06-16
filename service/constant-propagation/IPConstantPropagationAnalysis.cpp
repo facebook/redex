@@ -151,7 +151,9 @@ IntraproceduralAnalysis::IntraproceduralAnalysis(
     InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
     const ConstantEnvironment& env)
     : wps_accessor(std::move(wps_accessor)),
-      fp_iter(cp_state, cfg, std::move(insn_analyzer)) {
+      fp_iter(cfg,
+              std::move(insn_analyzer),
+              intraprocedural::make_default_no_throw_analyzer(cp_state)) {
   fp_iter.run(env);
 }
 

@@ -24,7 +24,7 @@ std::unique_ptr<SwitchEquivFinder> create_switch_equiv_finder(
   // Step 2: Run constant propagation analysis
   auto fixpoint =
       std::make_shared<constant_propagation::intraprocedural::FixpointIterator>(
-          /* cp_state */ nullptr, *cfg, SwitchEquivFinder::Analyzer());
+          *cfg, SwitchEquivFinder::Analyzer());
   fixpoint->run(ConstantEnvironment());
 
   // Step 3: Find the determining register (the one being switched on)

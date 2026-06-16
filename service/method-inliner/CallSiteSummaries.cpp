@@ -304,7 +304,6 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
   InvokeCallSiteSummariesAndDeadBlocks res;
   auto& cfg = code->cfg();
   constant_propagation::intraprocedural::FixpointIterator intra_cp(
-      &m_shrinker.get_cp_state(),
       cfg,
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           m_shrinker.get_immut_analyzer_state(),
@@ -313,7 +312,9 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
           context.boxed_boolean_analyzer_state,
           m_shrinker.get_string_analyzer_state(),
           context.api_level_analyzer_state, m_shrinker.get_package_name_state(),
-          nullptr, m_shrinker.get_immut_analyzer_state(), nullptr, nullptr));
+          nullptr, m_shrinker.get_immut_analyzer_state(), nullptr, nullptr),
+      constant_propagation::intraprocedural::make_default_no_throw_analyzer(
+          &m_shrinker.get_cp_state()));
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
