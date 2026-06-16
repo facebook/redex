@@ -61,6 +61,7 @@ class HotColdMethodSpecializingPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {NeedsAreEqualRefReservation, Establishes},
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
         {SpuriousGetClassCallsInterned, Preserves},

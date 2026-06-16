@@ -18,6 +18,7 @@ class PerfMethodInlinePass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {NeedsAreEqualRefReservation, Establishes},
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
