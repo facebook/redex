@@ -106,6 +106,39 @@ void create_runtime_exception_block(const DexString* except_str,
   block.emplace_back(throwinst);
 }
 
+void create_abstract_method_error_block(const DexString* message,
+                                        std::vector<IRInstruction*>& block,
+                                        uint32_t exception_reg,
+                                        uint32_t message_reg) {
+  auto* ame_type = DexType::make_type("Ljava/lang/AbstractMethodError;");
+  auto* new_inst = (new IRInstruction(OPCODE_NEW_INSTANCE))->set_type(ame_type);
+  auto* mr_new = (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT));
+  mr_new->set_dest(exception_reg);
+  IRInstruction* const_inst =
+      (new IRInstruction(OPCODE_CONST_STRING))->set_string(message);
+  auto* mr_str = (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT));
+  mr_str->set_dest(message_reg);
+  auto* string_arg = DexType::make_type("Ljava/lang/String;");
+  auto* args = DexTypeList::make_type_list({string_arg});
+  auto* proto = DexProto::make_proto(type::_void(), args);
+  auto* ctor =
+      DexMethod::make_method(ame_type, DexString::make_string("<init>"), proto);
+  auto* invk = new IRInstruction(OPCODE_INVOKE_DIRECT);
+  invk->set_method(ctor);
+  invk->set_srcs_size(2);
+  invk->set_src(0, exception_reg);
+  invk->set_src(1, message_reg);
+  IRInstruction* throwinst = new IRInstruction(OPCODE_THROW);
+  throwinst->set_srcs_size(1);
+  throwinst->set_src(0, exception_reg);
+  block.emplace_back(new_inst);
+  block.emplace_back(mr_new);
+  block.emplace_back(const_inst);
+  block.emplace_back(mr_str);
+  block.emplace_back(invk);
+  block.emplace_back(throwinst);
+}
+
 bool passes_args_through(IRInstruction* insn,
                          const IRCode& code,
                          int ignore /* = 0 */

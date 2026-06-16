@@ -143,6 +143,31 @@ void create_runtime_exception_block(const DexString* except_str,
                                     std::vector<IRInstruction*>& block);
 
 /**
+ * Creates an AbstractMethodError-throwing block of instructions. The `message`
+ * string is passed to the AbstractMethodError(String) constructor so it shows
+ * up in the crash stack trace, which is the only signal anyone gets from these
+ * synthesized throws. Callers should put something useful in `message` (e.g.,
+ * the full signature of the abstract method that would have been called).
+ *
+ * The two register arguments default to v0 and v1 for convenience. When
+ * splicing the sequence into an existing method body (e.g. via CFGMutation),
+ * pass fresh registers obtained from `cfg::ControlFlowGraph::allocate_temp()`
+ * so the throw does not clobber registers still live for surrounding code.
+ *
+ * Bytecode emitted:
+ *   new-instance              Ljava/lang/AbstractMethodError;
+ *   move-result-pseudo-object <exception_reg>
+ *   const-string              "<message>"
+ *   move-result-pseudo-object <message_reg>
+ *   invoke-direct             {<exception_reg>, <message_reg>},
+ * AME.<init>:(Ljava/lang/String;)V throw                     <exception_reg>
+ */
+void create_abstract_method_error_block(const DexString* message,
+                                        std::vector<IRInstruction*>& block,
+                                        uint32_t exception_reg = 0,
+                                        uint32_t message_reg = 1);
+
+/**
  * Generates a Scope& object from a set of Dexes.
  *
  */
