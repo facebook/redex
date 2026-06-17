@@ -47,8 +47,8 @@ void ShrinkerPass::bind_config() {
 void ShrinkerPass::eval_pass(DexStoresVector& /*stores*/,
                              ConfigFiles& /*conf*/,
                              PassManager&) {
-  auto string_analyzer_state = constant_propagation::StringAnalyzerState::get();
-  string_analyzer_state.set_methods_as_root();
+  constant_propagation::StringAnalyzerState::make_default()
+      .set_methods_as_root();
 }
 
 void ShrinkerPass::run_pass(DexStoresVector& stores,
