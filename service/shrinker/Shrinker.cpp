@@ -155,7 +155,6 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
     const ConstantEnvironment& initial_env,
     const constant_propagation::Transform::Config& config) {
   constant_propagation::intraprocedural::FixpointIterator fp_iter(
-      &m_cp_state,
       code->cfg(),
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           &m_immut_analyzer_state, &m_immut_analyzer_state,
@@ -163,6 +162,8 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
           &m_string_analyzer_state, m_api_level_analyzer_state,
           &m_package_name_state, nullptr, &m_immut_analyzer_state, nullptr,
           nullptr),
+      constant_propagation::intraprocedural::make_default_no_throw_analyzer(
+          &m_cp_state),
       /* imprecise_switches */ true);
   fp_iter.run(initial_env);
   constant_propagation::Transform tf(config, m_cp_state);

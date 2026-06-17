@@ -218,8 +218,7 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
 
     TRACE(RIP, 1, "Found possible transformations for %s", SHOW(method));
     cp::intraprocedural::FixpointIterator intra_cp(
-        /* cp_state */ nullptr, cfg,
-        CombinedAnalyzer(nullptr, nullptr, nullptr, nullptr));
+        cfg, CombinedAnalyzer(nullptr, nullptr, nullptr, nullptr));
     // Runing the combined analyzer initially
     intra_cp.run(ConstantEnvironment());
 

@@ -31,8 +31,9 @@ struct ConstantPropagationTest : public RedexTest {
       ConstPropMode mode = ConstPropMode::DontForwardTargets) {
     code->build_cfg();
     cp::State state;
-    cp::intraprocedural::FixpointIterator intra_cp(&state, code->cfg(),
-                                                   insn_analyzer);
+    cp::intraprocedural::FixpointIterator intra_cp(
+        code->cfg(), insn_analyzer,
+        cp::intraprocedural::make_default_no_throw_analyzer(&state));
     intra_cp.run(ConstantEnvironment());
     cp::Transform tf(transform_config, state);
     auto constants_and_prune_unreachable = [&]() {
@@ -72,8 +73,9 @@ struct ConstantPropagationTest : public RedexTest {
     auto* code = method->get_code();
     code->build_cfg();
     cp::State state;
-    cp::intraprocedural::FixpointIterator intra_cp(&state, code->cfg(),
-                                                   insn_analyzer);
+    cp::intraprocedural::FixpointIterator intra_cp(
+        code->cfg(), insn_analyzer,
+        cp::intraprocedural::make_default_no_throw_analyzer(&state));
     intra_cp.run(ConstantEnvironment());
     cp::Transform tf(transform_config, state);
     tf.apply(intra_cp, cp::WholeProgramState(), code->cfg(), nullptr,

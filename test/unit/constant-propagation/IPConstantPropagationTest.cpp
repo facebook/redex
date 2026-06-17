@@ -546,8 +546,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto* code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(
-      /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
+  intraprocedural::FixpointIterator intra_cp(code->cfg(),
+                                             ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 
@@ -584,8 +584,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto* code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(
-      /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
+  intraprocedural::FixpointIterator intra_cp(code->cfg(),
+                                             ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
   EXPECT_TRUE(method->get_code()->cfg_built());
   rat.apply(intra_cp, WholeProgramState(), method);
@@ -627,8 +627,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto* code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(
-      /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
+  intraprocedural::FixpointIterator intra_cp(code->cfg(),
+                                             ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 
@@ -664,8 +664,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto* code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(
-      /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
+  intraprocedural::FixpointIterator intra_cp(code->cfg(),
+                                             ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 
