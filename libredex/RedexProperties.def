@@ -24,6 +24,7 @@
 REDEX_PROPS(DexLimitsObeyed,               false,    false,          true,         false)
 REDEX_PROPS(HasSourceBlocks,               false,    false,          false,        true)
 REDEX_PROPS(InitialRenameClass,            false,    false,          false,        false)
+REDEX_PROPS(NeedsAreEqualRefReservation,   true,     false,          false,        false)
 REDEX_PROPS(NeedsEverythingPublic,         true,     false,          false,        false)
 REDEX_PROPS(NeedsInjectionIdLowering,      true,     false,          false,        false)
 REDEX_PROPS(NoInitClassInstructions,       false,    true,           true,         false)

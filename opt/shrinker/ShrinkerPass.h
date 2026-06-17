@@ -19,6 +19,7 @@ class ShrinkerPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {NeedsAreEqualRefReservation, Establishes},
         {DexLimitsObeyed, Preserves},
         {NoResolvablePureRefs, Preserves},
         // This may be too conservative as the shrinker can be configured not to

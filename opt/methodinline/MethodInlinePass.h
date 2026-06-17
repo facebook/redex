@@ -19,6 +19,7 @@ class MethodInlinePass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {NeedsAreEqualRefReservation, Establishes},
         {NoResolvablePureRefs, Preserves},
         // This may be too conservative as the inliner can be configured not to
         // DCE in the shrinker.
