@@ -314,7 +314,7 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
           context.api_level_analyzer_state, m_shrinker.get_package_name_state(),
           nullptr, m_shrinker.get_immut_analyzer_state(), nullptr, nullptr),
       constant_propagation::intraprocedural::make_default_no_throw_analyzer(
-          &m_shrinker.get_cp_state()));
+          &m_shrinker.get_null_check_methods()));
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);

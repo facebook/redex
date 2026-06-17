@@ -30,7 +30,7 @@ struct ConstantPropagationTest : public RedexTest {
       const cp::Transform::Config& transform_config = cp::Transform::Config(),
       ConstPropMode mode = ConstPropMode::DontForwardTargets) {
     code->build_cfg();
-    cp::State state;
+    cp::NullCheckMethods state;
     cp::intraprocedural::FixpointIterator intra_cp(
         code->cfg(), insn_analyzer,
         cp::intraprocedural::make_default_no_throw_analyzer(&state));
@@ -72,7 +72,7 @@ struct ConstantPropagationTest : public RedexTest {
       const cp::Transform::Config& transform_config = cp::Transform::Config()) {
     auto* code = method->get_code();
     code->build_cfg();
-    cp::State state;
+    cp::NullCheckMethods state;
     cp::intraprocedural::FixpointIterator intra_cp(
         code->cfg(), insn_analyzer,
         cp::intraprocedural::make_default_no_throw_analyzer(&state));

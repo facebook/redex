@@ -143,7 +143,9 @@ class Shrinker {
     return &m_package_name_state;
   }
 
-  const constant_propagation::State& get_cp_state() const { return m_cp_state; }
+  const constant_propagation::NullCheckMethods& get_null_check_methods() const {
+    return m_null_check_methods;
+  }
 
   void log_metrics(ScopedMetrics& sm) const;
 
@@ -175,7 +177,7 @@ class Shrinker {
   constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
   constant_propagation::StringAnalyzerState m_string_analyzer_state;
   constant_propagation::PackageNameState m_package_name_state;
-  constant_propagation::State m_cp_state;
+  constant_propagation::NullCheckMethods m_null_check_methods;
 
   // THe mutex protects all other mutable (stats) fields.
   std::mutex m_stats_mutex;

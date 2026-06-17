@@ -12,7 +12,7 @@
 
 namespace constant_propagation {
 
-class State {
+class NullCheckMethods {
  public:
   const UnorderedSet<DexMethodRef*>& kotlin_null_check_assertions() const {
     return m_kotlin_null_check_assertions;
@@ -22,7 +22,7 @@ class State {
     return m_redex_null_check_assertion;
   }
 
-  State();
+  NullCheckMethods();
 
  private:
   UnorderedSet<DexMethodRef*> m_kotlin_null_check_assertions;

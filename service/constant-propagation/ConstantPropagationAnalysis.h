@@ -26,8 +26,8 @@ class DexMethodRef;
 
 namespace constant_propagation {
 
-std::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
-                                                  const State& state);
+std::optional<size_t> get_null_check_object_index(
+    const IRInstruction* insn, const NullCheckMethods& null_check_methods);
 
 namespace intraprocedural {
 
@@ -37,7 +37,7 @@ namespace intraprocedural {
  * forwarded to the returned analyzer.
  */
 InstructionAnalyzer<ConstantEnvironment> make_default_no_throw_analyzer(
-    const State* state = nullptr);
+    const NullCheckMethods* null_check_methods = nullptr);
 
 class FixpointIterator final
     : public ir_analyzer::BaseEdgeAwareIRAnalyzer<ConstantEnvironment> {

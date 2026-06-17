@@ -18,7 +18,7 @@ namespace constant_propagation {
 
 Transform::Stats ConstantPropagation::run(DexMethod* method,
                                           const XStoreRefs* xstores,
-                                          const State& state) {
+                                          const NullCheckMethods& state) {
   if (method->get_code() == nullptr || method->rstate.no_optimizations()) {
     return Transform::Stats();
   }
@@ -43,7 +43,7 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
 
 Transform::Stats ConstantPropagation::run(const Scope& scope,
                                           const XStoreRefs* xstores,
-                                          const State& state) {
+                                          const NullCheckMethods& state) {
   return walk::parallel::methods<Transform::Stats>(
       scope, [&](DexMethod* method) { return run(method, xstores, state); });
 }
