@@ -56,6 +56,7 @@ using CombinedInitAnalyzer =
                                 cp::WholeProgramAwareAnalyzer,
                                 cp::StringAnalyzer,
                                 cp::ConstantClassObjectAnalyzer,
+                                cp::ResourceIdAnalyzer,
                                 cp::PrimitiveAnalyzer>;
 /*
  * Converts a ConstantValue into its equivalent encoded_value. Returns null if
@@ -442,7 +443,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
       cp::intraprocedural::FixpointIterator intra_cp(
           &cp_state, cfg,
           CombinedInitAnalyzer(cls->get_type(), &wps_accessor, nullptr, nullptr,
-                               nullptr));
+                               nullptr, nullptr));
       intra_cp.run(env);
       env = intra_cp.get_exit_state_at(cfg.exit_block());
 
