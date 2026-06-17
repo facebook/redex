@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <memory>
 #include <vector>
 
 #include "ConstantPropagationAnalysis.h"
@@ -16,6 +17,7 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
+#include "SwitchEquivFinder.h"
 #include "Trace.h"
 
 /**
@@ -140,3 +142,20 @@ inline bool find_determining_reg(
       SHOW(b));
   return false;
 }
+
+/**
+ * Creates a SwitchEquivFinder for the given CFG by:
+ * 1. Gathering linear prologue blocks
+ * 2. Running constant propagation analysis
+ * 3. Finding the determining register
+ * 4. Constructing the SwitchEquivFinder
+ *
+ * Returns nullptr if any step fails (e.g., CFG doesn't have expected
+ * structure). Caller should check finder->success() after receiving a non-null
+ * result.
+ */
+std::unique_ptr<SwitchEquivFinder> create_switch_equiv_finder(
+    cfg::ControlFlowGraph* cfg,
+    size_t leaf_dup_threshold,
+    SwitchEquivFinder::DuplicateCaseStrategy duplicates_strategy,
+    std::vector<cfg::Block*>* out_prologue_blocks = nullptr);
