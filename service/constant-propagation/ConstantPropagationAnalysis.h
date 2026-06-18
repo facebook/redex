@@ -31,6 +31,19 @@ std::optional<size_t> get_null_check_object_index(
 
 namespace intraprocedural {
 
+// The default no-throw analyzer's logic, as a composable analyzer class:
+// along an instruction's no-throw successor edge, refine a dereferenced or
+// null-checked source register to non-null.
+class DefaultNoThrowAnalyzer final
+    : public InstructionAnalyzerBase<DefaultNoThrowAnalyzer,
+                                     ConstantEnvironment,
+                                     const NullCheckMethods*> {
+ public:
+  static bool analyze_default(const NullCheckMethods* null_check_methods,
+                              const IRInstruction* insn,
+                              ConstantEnvironment* env);
+};
+
 /*
  * Returns the default no-throw analyzer, which refines source-register values
  * along an instruction's no-throw successor edge. The optional `state` is
