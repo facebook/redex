@@ -151,10 +151,10 @@ IntraproceduralAnalysis::IntraproceduralAnalysis(
     InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
     const ConstantEnvironment& env)
     : wps_accessor(std::move(wps_accessor)),
-      fp_iter(
-          cfg,
-          std::move(insn_analyzer),
-          intraprocedural::make_default_no_throw_analyzer(null_check_methods)) {
+      fp_iter(cfg,
+              std::move(insn_analyzer),
+              make_wps_aware_no_throw_analyzer(null_check_methods,
+                                               this->wps_accessor.get())) {
   fp_iter.run(env);
 }
 
@@ -199,6 +199,12 @@ bool FixpointIterator::method_cache_entry_matches(
   for (auto&& [field, val] :
        UnorderedIterable(mce.wps_accessor_record.field_dependencies)) {
     if (!m_wps->get_field_value(field).equals(val)) {
+      return false;
+    }
+  }
+  for (auto&& [method, val] : UnorderedIterable(
+           mce.wps_accessor_record.method_param_env_dependencies)) {
+    if (!m_wps->get_method_param_env(method).equals(val)) {
       return false;
     }
   }

@@ -491,6 +491,10 @@ class ConstantClassObjectAnalyzer
 // TODO(T257927964): Remove this.
 extern bool known_non_null_returns_enable;
 
+// TODO(T275196808): Remove this once the per-parameter exit-value summary is
+// fully rolled out.
+extern bool enable_param_exit_value_summary;
+
 class KnownNonNullReturnsAnalyzer
     : public InstructionAnalyzerBase<KnownNonNullReturnsAnalyzer,
                                      ConstantEnvironment> {
