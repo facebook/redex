@@ -87,8 +87,8 @@ class Transform final {
     void log_metrics(ScopedMetrics& sm, bool with_scope = true) const;
   };
 
-  explicit Transform(Config config, const State& state)
-      : m_config(config), m_state(state) {}
+  explicit Transform(Config config, const NullCheckMethods& state)
+      : m_config(config), m_null_check_methods(state) {}
 
   // Apply all available transformations on cfg
   // May run cfg.calculate_exit_block as a side-effect.
@@ -196,7 +196,7 @@ class Transform final {
   std::vector<std::tuple<cfg::Block*, cfg::Block*, cfg::EdgeType>> m_edge_adds;
   Stats m_stats;
 
-  const State& m_state;
+  const NullCheckMethods& m_null_check_methods;
 };
 
 /*

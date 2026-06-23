@@ -163,12 +163,12 @@ inline INT_TYPE art_float_to_integral(FLOAT_TYPE f) {
 
 namespace constant_propagation {
 
-boost::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
-                                                    const State& state) {
+boost::optional<size_t> get_null_check_object_index(
+    const IRInstruction* insn, const NullCheckMethods& null_check_methods) {
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     auto* method = insn->get_method();
-    if (state.kotlin_null_check_assertions().count(method) != 0u) {
+    if (null_check_methods.kotlin_null_check_assertions().count(method) != 0u) {
       // Note: We are not assuming here that the first argument is the checked
       // argument of type object, as it might not be. For example,
       // RemoveUnusedArgs may have removed or otherwise reordered the arguments.
@@ -1851,15 +1851,18 @@ void FixpointIterator::analyze_instruction_normal(
 }
 
 InstructionAnalyzer<ConstantEnvironment> make_default_no_throw_analyzer(
-    const State* state) {
-  return [state](const IRInstruction* insn, ConstantEnvironment* env) {
+    const NullCheckMethods* null_check_methods) {
+  return [null_check_methods](const IRInstruction* insn,
+                              ConstantEnvironment* env) {
     auto src_index = get_dereferenced_object_src_index(insn);
-    if (!src_index && state != nullptr) {
-      src_index = get_null_check_object_index(insn, *state);
+    if (!src_index && null_check_methods != nullptr) {
+      src_index = get_null_check_object_index(insn, *null_check_methods);
     }
     if (!src_index) {
-      if (state == nullptr || insn->opcode() != OPCODE_INVOKE_STATIC ||
-          insn->get_method() != state->redex_null_check_assertion()) {
+      if (null_check_methods == nullptr ||
+          insn->opcode() != OPCODE_INVOKE_STATIC ||
+          insn->get_method() !=
+              null_check_methods->redex_null_check_assertion()) {
         return;
       }
       src_index = 0;

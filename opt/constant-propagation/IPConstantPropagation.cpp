@@ -67,7 +67,7 @@ class AnalyzerGenerator {
   EnumFieldAnalyzerState m_enum_field_analyzer_state;
   StringAnalyzerState* m_string_analyzer_state;
   PackageNameState* m_package_name_state;
-  const State& m_cp_state;
+  const NullCheckMethods& m_null_check_methods;
 
  public:
   explicit AnalyzerGenerator(
@@ -75,12 +75,12 @@ class AnalyzerGenerator {
       ApiLevelAnalyzerState* api_level_analyzer_state,
       StringAnalyzerState* string_analyzer_state,
       PackageNameState* package_name_state,
-      const State& cp_state)
+      const NullCheckMethods& null_check_methods)
       : m_immut_analyzer_state(immut_analyzer_state),
         m_api_level_analyzer_state(api_level_analyzer_state),
         m_string_analyzer_state(string_analyzer_state),
         m_package_name_state(package_name_state),
-        m_cp_state(cp_state) {}
+        m_null_check_methods(null_check_methods) {}
 
   std::unique_ptr<IntraproceduralAnalysis> operator()(
       const DexMethod* method,
@@ -108,7 +108,7 @@ class AnalyzerGenerator {
     auto wps_accessor = std::make_unique<WholeProgramStateAccessor>(wps);
     auto* wps_accessor_ptr = wps_accessor.get();
     return std::make_unique<IntraproceduralAnalysis>(
-        &m_cp_state, std::move(wps_accessor), code.cfg(),
+        &m_null_check_methods, std::move(wps_accessor), code.cfg(),
         CombinedAnalyzer(
             class_under_init, m_immut_analyzer_state, wps_accessor_ptr,
             m_enum_field_analyzer_state, m_boxed_boolean_analyzer_state,
@@ -139,7 +139,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     ApiLevelAnalyzerState* api_level_analyzer_state,
     StringAnalyzerState* string_analyzer_state,
     PackageNameState* package_name_state,
-    const State& cp_state) {
+    const NullCheckMethods& null_check_methods) {
   auto method_override_graph = mog::build_graph(scope);
   std::shared_ptr<call_graph::Graph> cg;
   {
@@ -160,7 +160,8 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   auto fp_iter = std::make_unique<FixpointIterator>(
       cg,
       AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state,
-                        string_analyzer_state, package_name_state, cp_state),
+                        string_analyzer_state, package_name_state,
+                        null_check_methods),
       cg_for_wps);
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
@@ -239,7 +240,7 @@ void PassImpl::optimize(
     const XStoreRefs& xstores,
     const FixpointIterator& fp_iter,
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
-    const State& cp_state) {
+    const NullCheckMethods& null_check_methods) {
   const auto& pure_methods = ::get_pure_methods();
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
@@ -261,7 +262,7 @@ void PassImpl::optimize(
           config.getter_methods_for_immutable_fields =
               &immut_analyzer_state->attribute_methods;
           config.pure_methods = &pure_methods;
-          Transform tf(config, cp_state);
+          Transform tf(config, null_check_methods);
           tf.legacy_apply_constants_and_prune_unreachable(
               ipa->fp_iter,
               fp_iter.get_whole_program_state(),
@@ -301,14 +302,14 @@ void PassImpl::run(const DexStoresVector& stores,
   ApiLevelAnalyzerState api_level_analyzer_state{min_sdk};
   auto string_analyzer_state = StringAnalyzerState::make_default();
   auto package_name_state = PackageNameState::make(package_name);
-  State cp_state;
+  NullCheckMethods null_check_methods;
   auto fp_iter =
       analyze(scope, &immut_analyzer_state, &api_level_analyzer_state,
-              &string_analyzer_state, &package_name_state, cp_state);
+              &string_analyzer_state, &package_name_state, null_check_methods);
   m_stats.fp_iter = fp_iter->get_stats();
   TypeSystem type_system(scope);
   optimize(scope, type_system, xstores, *fp_iter, &immut_analyzer_state,
-           cp_state);
+           null_check_methods);
 }
 
 void PassImpl::eval_pass(DexStoresVector& /*stores*/,

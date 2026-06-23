@@ -163,10 +163,10 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
           &m_package_name_state, nullptr, &m_immut_analyzer_state, nullptr,
           nullptr),
       constant_propagation::intraprocedural::make_default_no_throw_analyzer(
-          &m_cp_state),
+          &m_null_check_methods),
       /* imprecise_switches */ true);
   fp_iter.run(initial_env);
-  constant_propagation::Transform tf(config, m_cp_state);
+  constant_propagation::Transform tf(config, m_null_check_methods);
   tf.apply(fp_iter, constant_propagation::WholeProgramState(), code->cfg(),
            &m_xstores, is_static, declaring_type, proto);
   return tf.get_stats();

@@ -173,7 +173,7 @@ bool Transform::eliminate_redundant_null_check(
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     // Kotlin null check.
-    if (auto index = get_null_check_object_index(insn, m_state)) {
+    if (auto index = get_null_check_object_index(insn, m_null_check_methods)) {
       ++m_stats.null_checks_method_calls;
       if (is_known_non_null(env.get(insn->src(*index)))) {
         m_mutation->remove(cfg_it);
@@ -182,7 +182,8 @@ bool Transform::eliminate_redundant_null_check(
       }
     }
     // Redex null check.
-    if (insn->get_method() == m_state.redex_null_check_assertion()) {
+    if (insn->get_method() ==
+        m_null_check_methods.redex_null_check_assertion()) {
       ++m_stats.null_checks_method_calls;
       if (is_known_non_null(env.get(insn->src(0)))) {
         m_mutation->remove(cfg_it);

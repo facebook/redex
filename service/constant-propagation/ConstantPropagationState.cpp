@@ -11,7 +11,7 @@
 
 namespace constant_propagation {
 
-State::State()
+NullCheckMethods::NullCheckMethods()
     : m_kotlin_null_check_assertions(
           kotlin_nullcheck_wrapper::get_kotlin_null_assertions()),
       m_redex_null_check_assertion(

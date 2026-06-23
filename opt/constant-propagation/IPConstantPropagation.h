@@ -106,7 +106,7 @@ class PassImpl : public Pass {
                                             ApiLevelAnalyzerState*,
                                             StringAnalyzerState*,
                                             PackageNameState*,
-                                            const State&);
+                                            const NullCheckMethods&);
 
  private:
   void compute_analysis_stats(const WholeProgramState&,
@@ -117,7 +117,7 @@ class PassImpl : public Pass {
                 const XStoreRefs& xstores,
                 const FixpointIterator&,
                 const ImmutableAttributeAnalyzerState*,
-                const State& cp_state);
+                const NullCheckMethods& null_check_methods);
 
   struct Stats {
     // Number of instance fields that are known to be definitely-assigned, i.e.

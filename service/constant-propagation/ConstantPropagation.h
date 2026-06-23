@@ -23,10 +23,10 @@ class ConstantPropagation final {
 
   Transform::Stats run(DexMethod* method,
                        const XStoreRefs* xstores,
-                       const State& state);
+                       const NullCheckMethods& state);
   Transform::Stats run(const Scope& scope,
                        const XStoreRefs* xstores,
-                       const State& state);
+                       const NullCheckMethods& state);
 
  private:
   const Config& m_config;

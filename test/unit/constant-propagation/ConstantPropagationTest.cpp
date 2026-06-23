@@ -897,10 +897,10 @@ TEST_F(ConstantPropagationTest, WhiteBox1) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::State cp_state;
+  cp::NullCheckMethods null_check_methods;
   cp::intraprocedural::FixpointIterator intra_cp(
       cfg, cp::ConstantPrimitiveAnalyzer(),
-      cp::intraprocedural::make_default_no_throw_analyzer(&cp_state));
+      cp::intraprocedural::make_default_no_throw_analyzer(&null_check_methods));
   intra_cp.run(ConstantEnvironment());
 
   auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());
@@ -934,10 +934,10 @@ TEST_F(ConstantPropagationTest, WhiteBox2) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::State cp_state;
+  cp::NullCheckMethods null_check_methods;
   cp::intraprocedural::FixpointIterator intra_cp(
       cfg, cp::ConstantPrimitiveAnalyzer(),
-      cp::intraprocedural::make_default_no_throw_analyzer(&cp_state));
+      cp::intraprocedural::make_default_no_throw_analyzer(&null_check_methods));
   intra_cp.run(ConstantEnvironment());
 
   auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());
@@ -1780,7 +1780,7 @@ TEST_F(ConstantPropagationTest,
 // PrimitiveAnalyzer, so the value is not a SignedConstantDomain(NEZ). The
 // transform must recognize object domains as non-null.
 TEST_F(ConstantPropagationTest, NewInstanceNullCheckElimination) {
-  // Create the Kotlin null check method so cp::State picks it up.
+  // Create the Kotlin null check method so cp::NullCheckMethods picks it up.
   auto* null_check = DexMethod::make_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:"
       "(Ljava/lang/Object;Ljava/lang/String;)V");

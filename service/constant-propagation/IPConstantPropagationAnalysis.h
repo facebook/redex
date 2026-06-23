@@ -63,7 +63,7 @@ struct IntraproceduralAnalysis {
   std::unique_ptr<WholeProgramStateAccessor> wps_accessor;
   intraprocedural::FixpointIterator fp_iter;
   IntraproceduralAnalysis(
-      const State* cp_state,
+      const NullCheckMethods* null_check_methods,
       std::unique_ptr<WholeProgramStateAccessor> wps_accessor,
       const cfg::ControlFlowGraph& cfg,
       InstructionAnalyzer<ConstantEnvironment> insn_analyzer,

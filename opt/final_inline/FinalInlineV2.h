@@ -60,15 +60,16 @@ class FinalInlinePassV2 : public Pass {
     size_t possible_cycles{0};
     size_t deleted_methods{0};
   };
-  static Stats run(const Scope&,
-                   const ConfigFiles& conf,
-                   int min_sdk,
-                   const init_classes::InitClassesWithSideEffects&
-                       init_classes_with_side_effects,
-                   const XStoreRefs*,
-                   const constant_propagation::State& cp_state,
-                   const Config& config = Config(),
-                   std::optional<DexStoresVector*> stores = std::nullopt);
+  static Stats run(
+      const Scope&,
+      const ConfigFiles& conf,
+      int min_sdk,
+      const init_classes::InitClassesWithSideEffects&
+          init_classes_with_side_effects,
+      const XStoreRefs*,
+      const constant_propagation::NullCheckMethods& null_check_methods,
+      const Config& config = Config(),
+      std::optional<DexStoresVector*> stores = std::nullopt);
   static Stats run_inline_ifields(
       const Scope&,
       const ConfigFiles& conf,
@@ -77,7 +78,7 @@ class FinalInlinePassV2 : public Pass {
           init_classes_with_side_effects,
       const XStoreRefs*,
       const constant_propagation::EligibleIfields& eligible_ifields,
-      const constant_propagation::State& cp_state,
+      const constant_propagation::NullCheckMethods& null_check_methods,
       const Config& config = Config(),
       std::optional<DexStoresVector*> stores = std::nullopt);
 
@@ -96,7 +97,7 @@ constant_propagation::WholeProgramState analyze_and_simplify_clinits(
     const XStoreRefs* xstores,
     const UnorderedSet<const DexType*>& blocklist_types,
     const UnorderedSet<std::string>& allowed_opaque_callee_names,
-    const constant_propagation::State& cp_state,
+    const constant_propagation::NullCheckMethods& null_check_methods,
     size_t* clinit_cycles,
     size_t* deleted_methods);
 

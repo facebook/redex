@@ -83,12 +83,12 @@ void MaterializeResourceConstantsPass::run_pass(DexStoresVector& stores,
   }
   size_t clinit_cycles = 0;
   size_t deleted_clinits = 0;
-  auto cp_state = constant_propagation::State();
+  auto null_check_methods = constant_propagation::NullCheckMethods();
   final_inline::analyze_and_simplify_clinits(
       apply_scope, init_classes_with_side_effects,
       /* xstores= */ nullptr,
       /* blocklist_types= */ {}, /* allowed_opaque_callee_names= */ {},
-      cp_state, &clinit_cycles, &deleted_clinits);
+      null_check_methods, &clinit_cycles, &deleted_clinits);
   always_assert_log(clinit_cycles == 0,
                     "Should not have clinit cycles in R classes!");
 
