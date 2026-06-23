@@ -1986,6 +1986,10 @@ int main(int argc, char* argv[]) {
     constant_propagation::known_non_null_returns_enable =
         args.config.get("enable_known_non_null_returns", false).asBool();
 
+    // TODO(T275196808): Remove this.
+    constant_propagation::enable_param_exit_value_summary =
+        args.config.get("enable_param_exit_value_summary", false).asBool();
+
     // For convenience.
     g_redex->instrument_mode = args.redex_options.instrument_pass_enabled;
     if (g_redex->instrument_mode) {

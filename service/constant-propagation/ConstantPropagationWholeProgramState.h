@@ -8,10 +8,13 @@
 #pragma once
 
 #include <sparta/HashedAbstractPartition.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
 #include "CallGraph.h"
 #include "ConstantEnvironment.h"
+#include "ConstantPropagationAnalysis.h"
 #include "DeterministicContainers.h"
+#include "IRInstruction.h"
 #include "InstructionAnalyzer.h"
 
 namespace constant_propagation {
@@ -31,6 +34,20 @@ using ConstantFieldPartition =
 
 using ConstantMethodPartition =
     sparta::HashedAbstractPartition<const DexMethod*, ConstantValue>;
+
+// Per-parameter abstract value summarizing what holds across every
+// non-throwing exit of a method's body. Computed by joining
+// env.get(param_reg) over all reachable RETURNs, restricted to params whose
+// register is never reassigned inside the body (otherwise the exit value
+// does not reflect the entry value the caller passed).
+//
+// The default value for an unbound key is ConstantValue::top(), matching
+// PatriciaTreeMapAbstractEnvironment semantics.
+using MethodParamEnv =
+    sparta::PatriciaTreeMapAbstractEnvironment<param_index_t, ConstantValue>;
+
+using MethodParamPartition =
+    sparta::HashedAbstractPartition<const DexMethod*, MethodParamEnv>;
 
 /*
  * This class contains flow-insensitive information about fields and method
@@ -79,11 +96,13 @@ class WholeProgramState {
   void set_to_top() {
     m_field_partition.set_to_top();
     m_method_partition.set_to_top();
+    m_method_param_partition.set_to_top();
   }
 
   bool leq(const WholeProgramState& other) const {
     return m_field_partition.leq(other.m_field_partition) &&
-           m_method_partition.leq(other.m_method_partition);
+           m_method_partition.leq(other.m_method_partition) &&
+           m_method_param_partition.leq(other.m_method_param_partition);
   }
 
   /*
@@ -111,12 +130,30 @@ class WholeProgramState {
     return m_method_partition.get(method);
   }
 
+  /*
+   * Returns the per-parameter abstract value summary for `method`: the join
+   * of `env.get(param_reg)` over every reachable non-throwing exit of the
+   * method's body, restricted to params whose register is never reassigned.
+   * Unknown methods return the top environment; a method with no reachable
+   * non-throwing exit returns bottom.
+   */
+  MethodParamEnv get_method_param_env(const DexMethod* method) const {
+    if (m_known_methods.count(method) == 0u) {
+      return MethodParamEnv::top();
+    }
+    return m_method_param_partition.get(method);
+  }
+
   const ConstantFieldPartition& get_field_partition() const {
     return m_field_partition;
   }
 
   const ConstantMethodPartition& get_method_partition() const {
     return m_method_partition;
+  }
+
+  const MethodParamPartition& get_method_param_partition() const {
+    return m_method_param_partition;
   }
 
   bool has_call_graph() const { return !!m_call_graph; }
@@ -144,6 +181,17 @@ class WholeProgramState {
       const ConstantEnvironment& env,
       const DexMethod* method,
       ConcurrentMap<const DexMethod*, ConstantValue>* methods_value_tmp);
+
+  // At each reachable normal-exit point of :method, build a per-param
+  // env from `env.get(param_reg)` (restricted to stable param registers)
+  // and join it into the running per-method binding in :methods_param_env_tmp.
+  void collect_param_exit_values(
+      const IRInstruction* insn,
+      const ConstantEnvironment& env,
+      const DexMethod* method,
+      const std::vector<reg_t>& param_regs,
+      const UnorderedSet<reg_t>& stable_param_regs,
+      ConcurrentMap<const DexMethod*, MethodParamEnv>* methods_param_env_tmp);
 
   std::shared_ptr<const call_graph::Graph> m_call_graph;
 
@@ -174,11 +222,13 @@ class WholeProgramState {
   // Environment to Bottom.
   ConstantFieldPartition m_field_partition;
   ConstantMethodPartition m_method_partition;
+  MethodParamPartition m_method_param_partition;
 };
 
 struct WholeProgramStateAccessorRecord {
   UnorderedMap<const DexField*, ConstantValue> field_dependencies;
   UnorderedMap<const DexMethod*, ConstantValue> method_dependencies;
+  UnorderedMap<const DexMethod*, MethodParamEnv> method_param_env_dependencies;
 };
 
 class WholeProgramStateAccessor {
@@ -234,6 +284,39 @@ class WholeProgramStateAccessor {
     return val;
   }
 
+  MethodParamEnv get_method_param_env(const DexMethod* method) const {
+    auto val = m_wps.get_method_param_env(method);
+    if (m_record != nullptr) {
+      m_record->method_param_env_dependencies.emplace(method, val);
+    }
+    return val;
+  }
+
+  // Like get_return_value_from_cg, but does not fold a bottom result up to top:
+  // a never-returning callee must collapse the caller's no-throw edge.
+  MethodParamEnv get_method_param_env_from_cg(const IRInstruction* insn) const {
+    const auto& callees =
+        call_graph::resolve_callees_in_graph(*m_wps.call_graph(), insn);
+    if (callees.empty()) {
+      return MethodParamEnv::top();
+    }
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
+      if (callee->get_code() == nullptr) {
+        always_assert(is_abstract(callee) || is_native(callee));
+        return MethodParamEnv::top();
+      }
+    }
+    MethodParamEnv ret = MethodParamEnv::bottom();
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
+      const auto& val = m_wps.get_method_param_partition().get(callee);
+      if (m_record != nullptr) {
+        m_record->method_param_env_dependencies.emplace(callee, val);
+      }
+      ret.join_with(val);
+    }
+    return ret;
+  }
+
   void start_recording(WholeProgramStateAccessorRecord* record) {
     m_record = record;
   }
@@ -267,5 +350,23 @@ class WholeProgramAwareAnalyzer final
       const IRInstruction* insn,
       ConstantEnvironment* env);
 };
+
+/*
+ * Returns a no-throw analyzer that additionally consults the IPCP-derived
+ * per-(method, param) exit-value summary in WholeProgramState. At an invoke
+ * whose callee is statically known -- a statically-dispatched call, a
+ * non-overridden virtual, or (with a call graph) any non-dynamic dispatch --
+ * it meets each source register with the summarized value for the
+ * corresponding parameter, then delegates to the default no-throw analyzer.
+ * If `wps_accessor` is null it behaves exactly like the default.
+ *
+ * Why a no-throw analyzer: the summary is the join of a parameter's value over
+ * the callee's normal exits, so it describes the argument only when the call
+ * returns normally -- e.g. a callee that dereferences a parameter throws on
+ * null, so a normal return proves that argument was non-null.
+ */
+InstructionAnalyzer<ConstantEnvironment> make_wps_aware_no_throw_analyzer(
+    const NullCheckMethods* null_check_methods,
+    const WholeProgramStateAccessor* wps_accessor);
 
 } // namespace constant_propagation

@@ -8,6 +8,7 @@
 #include "ConstantPropagationWholeProgramState.h"
 
 #include "IPConstantPropagationAnalysis.h"
+#include "Resolver.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -135,6 +136,10 @@ bool is_non_resource_root(DexField* field) {
 
 namespace constant_propagation {
 
+// TODO(T275196808): Remove this once the per-parameter exit-value summary is
+// fully rolled out. Declared in ConstantPropagationAnalysis.h.
+bool enable_param_exit_value_summary = false;
+
 WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
@@ -183,6 +188,7 @@ void WholeProgramState::collect(
   initialize_ifields(scope, &m_field_partition, definitely_assigned_ifields);
   ConcurrentMap<const DexField*, ConstantValue> fields_value_tmp;
   ConcurrentMap<const DexMethod*, ConstantValue> methods_value_tmp;
+  ConcurrentMap<const DexMethod*, MethodParamEnv> methods_param_env_tmp;
   walk::parallel::methods(scope, [&](DexMethod* method) {
     IRCode* code = method->get_code();
     if (code == nullptr) {
@@ -191,6 +197,49 @@ void WholeProgramState::collect(
     auto& cfg = code->cfg();
     auto ipa = fp_iter.get_intraprocedural_analysis(method);
     auto& intra_cp = ipa->fp_iter;
+    // Param registers in declaration order. Each load-param's dest reg holds
+    // the corresponding entry value at method entry.
+    std::vector<reg_t> param_regs;
+    UnorderedSet<reg_t> stable_param_regs;
+    // TODO(T275196808): Remove this guard once the feature is fully rolled out.
+    if (enable_param_exit_value_summary) {
+      for (const auto& mie :
+           InstructionIterable(code->get_param_instructions())) {
+        param_regs.push_back(mie.insn->dest());
+        stable_param_regs.insert(mie.insn->dest());
+      }
+      // Pre-pass: a param register is "stable" only if no non-load-param
+      // instruction ever writes to it. For unstable regs, the value at a
+      // RETURN does not necessarily reflect the entry value (the param may
+      // have been reassigned), so we cannot derive a "caller passed X"
+      // precondition from "register is X at exit".
+      //
+      // This stability test is deliberately flow-insensitive: one write
+      // anywhere drops the param everywhere. A more precise version is possible
+      // and sound -- snapshot the param's value just before its first
+      // overwrite (it still holds the entry value there), and at each RETURN
+      // use only the value carried along paths that have not yet overwritten
+      // the register. But that requires tracking, per param and at every
+      // program point, the param's value reset to Bottom once its register is
+      // reassigned -- a forward dataflow that must also reproduce CP's own
+      // refinements (e.g. non-null from a dereference), so it would have to
+      // live inside the shared ConstantEnvironment reduced product or duplicate
+      // CP's transfer functions.
+      for (cfg::Block* b : cfg.blocks()) {
+        for (const auto& mie : InstructionIterable(b)) {
+          auto* insn = mie.insn;
+          if (opcode::is_a_load_param(insn->opcode())) {
+            continue;
+          }
+          if (insn->has_dest()) {
+            stable_param_regs.erase(insn->dest());
+            if (insn->dest_is_wide()) {
+              stable_param_regs.erase(insn->dest() + 1);
+            }
+          }
+        }
+      }
+    }
     for (cfg::Block* b : cfg.blocks()) {
       auto env = intra_cp.get_entry_state_at(b);
       auto last_insn = b->get_last_insn();
@@ -202,6 +251,10 @@ void WholeProgramState::collect(
                                                        : nullptr,
                              &fields_value_tmp);
         collect_return_values(insn, env, method, &methods_value_tmp);
+        if (enable_param_exit_value_summary) {
+          collect_param_exit_values(insn, env, method, param_regs,
+                                    stable_param_regs, &methods_param_env_tmp);
+        }
       }
     }
   });
@@ -214,6 +267,9 @@ void WholeProgramState::collect(
     m_method_partition.update(pair.first, [&pair](auto* current_value) {
       current_value->join_with(pair.second);
     });
+  }
+  for (auto& pair : UnorderedIterable(methods_param_env_tmp)) {
+    m_method_param_partition.set(pair.first, std::move(pair.second));
   }
 }
 
@@ -289,6 +345,48 @@ void WholeProgramState::collect_return_values(
           current_value.join_with(value);
         } else {
           current_value = std::move(value);
+        }
+      });
+}
+
+/*
+ * Build a per-param env at one normal exit of :method (using stable param
+ * registers only) and join it into the running per-method binding. Across
+ * exits, this gives the join of env values at every reachable normal exit
+ * -- the abstract value the caller-passed argument MUST belong to whenever
+ * the call returns normally.
+ */
+void WholeProgramState::collect_param_exit_values(
+    const IRInstruction* insn,
+    const ConstantEnvironment& env,
+    const DexMethod* method,
+    const std::vector<reg_t>& param_regs,
+    const UnorderedSet<reg_t>& stable_param_regs,
+    ConcurrentMap<const DexMethod*, MethodParamEnv>* methods_param_env_tmp) {
+  if (!opcode::is_a_return(insn->opcode())) {
+    return;
+  }
+  // Skip unreachable returns.
+  if (env.is_bottom()) {
+    return;
+  }
+  MethodParamEnv exit_env;
+  for (param_index_t i = 0; i < param_regs.size(); ++i) {
+    // Only stable param registers preserve the entry value at exit. For
+    // reassigned params, the exit value does not reflect what the caller
+    // passed in; leave the binding at top so the caller cannot refine.
+    if (stable_param_regs.count(param_regs[i]) == 0) {
+      continue;
+    }
+    exit_env.set(i, env.get(param_regs[i]));
+  }
+  methods_param_env_tmp->update(
+      method,
+      [&exit_env](const DexMethod*, MethodParamEnv& current, bool exists) {
+        if (!exists) {
+          current = std::move(exit_env);
+        } else {
+          current.join_with(exit_env);
         }
       });
 }
@@ -381,6 +479,71 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
   }
   env->set(RESULT_REGISTER, value);
   return true;
+}
+
+namespace {
+
+// Refines an invoke's source registers from the IPCP per-(method, param)
+// exit-value summary on the no-throw edge. Composed before
+// DefaultNoThrowAnalyzer so the hardcoded null-check facts still apply
+// afterward.
+class WpsAwareNoThrowAnalyzer final
+    : public InstructionAnalyzerBase<WpsAwareNoThrowAnalyzer,
+                                     ConstantEnvironment,
+                                     const WholeProgramStateAccessor*> {
+ public:
+  static bool analyze_invoke(const WholeProgramStateAccessor* wps_accessor,
+                             const IRInstruction* insn,
+                             ConstantEnvironment* env) {
+    // TODO(T275196808): Remove the `enable_param_exit_value_summary` guard once
+    // the feature is fully rolled out.
+    if (!enable_param_exit_value_summary || wps_accessor == nullptr) {
+      return false;
+    }
+    auto op = insn->opcode();
+    // Refine only when the callee is statically known. With a call graph,
+    // that is non-dynamic dispatch (the graph resolves the callee set);
+    // otherwise the statically-dispatched opcodes plus invoke-virtual -- an
+    // overridable callee yields a top summary, so nothing unsound is applied.
+    std::optional<MethodParamEnv> param_env;
+    if (wps_accessor->has_call_graph()) {
+      if (!wps_accessor->invoke_is_dynamic(insn)) {
+        param_env = wps_accessor->get_method_param_env_from_cg(insn);
+      }
+    } else if (op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_DIRECT ||
+               op == OPCODE_INVOKE_SUPER || op == OPCODE_INVOKE_VIRTUAL) {
+      auto* method = resolve_method(insn->get_method(), opcode_to_search(insn));
+      if (method != nullptr) {
+        // get_method_param_env yields top for overridable virtuals.
+        param_env = wps_accessor->get_method_param_env(method);
+      }
+    }
+    if (param_env) {
+      assert_log(
+          !insn->has_dest(),
+          "invoke has no dest in Redex IR (result is on the following "
+          "move-result*); every src is an argument, so all are refined here");
+      for (size_t i = 0; i < insn->srcs_size(); ++i) {
+        auto src = insn->src(i);
+        auto value = env->get(src);
+        value.meet_with(param_env->get(i));
+        env->set(src, value);
+      }
+    }
+    return false;
+  }
+};
+
+} // namespace
+
+InstructionAnalyzer<ConstantEnvironment> make_wps_aware_no_throw_analyzer(
+    const NullCheckMethods* null_check_methods,
+    const WholeProgramStateAccessor* wps_accessor) {
+  // WpsAwareNoThrowAnalyzer applies the WPS-driven refinement first, then
+  // DefaultNoThrowAnalyzer applies the hardcoded null-check facts.
+  return InstructionAnalyzerCombiner<WpsAwareNoThrowAnalyzer,
+                                     intraprocedural::DefaultNoThrowAnalyzer>(
+      wps_accessor, null_check_methods);
 }
 
 } // namespace constant_propagation

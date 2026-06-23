@@ -284,6 +284,9 @@ void GlobalConfig::bind_config() {
        "When true, mark return values of well-known external methods as "
        "non-null in constant propagation, enabling removal of redundant "
        "Kotlin null-check intrinsics");
+  bind("enable_param_exit_value_summary", false, bool_param,
+       "When true, infer a per-parameter exit-value summary via IPCP and use "
+       "it to refine no-throw facts on statically-dispatched invoke edges");
   bind("enable_replacing_areequal", false, bool_param,
        "When true, replace Kotlin Intrinsics.areEqual with Object.equals "
        "when the receiver is proven non-null by constant propagation");
