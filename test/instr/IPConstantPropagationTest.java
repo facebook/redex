@@ -384,4 +384,88 @@ public class IPConstantPropagationTest {
     }
     // CHECK: return-void
   }
+
+  // Per-parameter exit-value summary: ParamExitValueSummary.deref(o) dereferences its
+  // parameter, so on the call's no-throw edge o is known non-null and the
+  // following null check in ParamExitValueSummary.redundant_null_check folds away.
+  @Test
+  public void param_exit_value_summary() {
+    ParamExitValueSummary.redundant_null_check(ParamExitValueSummary.objSource());
+  }
+
+  @Test
+  public void param_exit_value_summary_integer_bound() {
+    // intSource() is >= 0 at runtime, so redundant_bound_check returns 1. The
+    // meaningful assertion is the bytecode check on redundant_bound_check below.
+    ParamExitValueSummary.redundant_bound_check(ParamExitValueSummary.intSource());
+  }
+}
+
+// Helper for the param_exit_value_summary test above.
+class ParamExitValueSummary {
+  // Always null, but is opaque to Redex. Not use a random return value to ensure test consistency.
+  static Object objSource() {
+    return Math.random() >= 0 ? null : new Object();
+  }
+
+  // Dereferences its parameter, so on any non-throwing return the parameter was
+  // non-null. IPCP records this in the per-parameter exit-value summary.
+  static void deref(Object o) {
+    o.hashCode();
+  }
+
+  // CHECK: method: direct redex.ParamExitValueSummary.redundant_null_check
+  static void redundant_null_check(Object o) {
+    try {
+      deref(o);
+      // deref(o)'s per-parameter exit-value summary proves o is non-null on the
+      // call's no-throw edge, so this null check is redundant and folds away. The
+      // trailing CHECK bounds the POSTCHECK-NOT to this method's body (the
+      // dexdump spans the whole APK).
+      // PRECHECK: if
+      // POSTCHECK-NOT: if
+      if (o == null) {
+        assertThat(false).isTrue();
+      }
+    }
+    catch (NullPointerException e) {
+      // do nothing
+    }
+    // CHECK: return-void
+    return;
+  }
+
+  // The result is negative, but is opque to Redex. Not use a random return value to ensure test consistency.
+  static int intSource() {
+    return (int) (-Math.random() - 1);
+  }
+
+  // Throws when its parameter is negative, so on any non-throwing return the
+  // parameter was non-negative. IPCP records this bound in the per-parameter
+  // exit-value summary, the same way deref records non-null.
+  static void requireNonNegative(int x) {
+    // Initialize the exception instance here to prevent e from reusing the register of x.
+    IllegalArgumentException e = new IllegalArgumentException();
+    if (x < 0) {
+      throw e;
+    }
+  }
+
+  // CHECK: method: direct redex.ParamExitValueSummary.redundant_bound_check
+  static void redundant_bound_check(int x) {
+    try {
+      requireNonNegative(x);
+      // requireNonNegative(x)'s exit-value summary proves x >= 0 on the call's
+      // no-throw edge, so the x < 0 branch is dead.
+      // PRECHECK: if
+      // POSTCHECK-NOT: if
+      if (x < 0) {
+        assertThat(false).isTrue();
+      }
+    } catch (IllegalArgumentException e) {
+      // do nothing
+    }
+    // CHECK: return-void
+    return;
+  }
 }
