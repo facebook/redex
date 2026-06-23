@@ -1850,35 +1850,41 @@ void FixpointIterator::analyze_instruction_normal(
   m_insn_analyzer(insn, env);
 }
 
+bool DefaultNoThrowAnalyzer::analyze_default(
+    const NullCheckMethods* null_check_methods,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  auto src_index = get_dereferenced_object_src_index(insn);
+  if (!src_index && null_check_methods != nullptr) {
+    src_index = get_null_check_object_index(insn, *null_check_methods);
+  }
+  if (!src_index) {
+    if (null_check_methods == nullptr ||
+        insn->opcode() != OPCODE_INVOKE_STATIC ||
+        insn->get_method() !=
+            null_check_methods->redex_null_check_assertion()) {
+      return false;
+    }
+    src_index = 0;
+  }
+  if (insn->has_dest()) {
+    auto dest = insn->dest();
+    if ((dest == *src_index) ||
+        (insn->dest_is_wide() && dest + 1 == *src_index)) {
+      return false;
+    }
+  }
+  auto src = insn->src(*src_index);
+  auto value = env->get(src);
+  value.meet_with(SignedConstantDomain(sign_domain::Interval::NEZ));
+  env->set(src, value);
+  return false;
+}
+
 InstructionAnalyzer<ConstantEnvironment> make_default_no_throw_analyzer(
     const NullCheckMethods* null_check_methods) {
-  return [null_check_methods](const IRInstruction* insn,
-                              ConstantEnvironment* env) {
-    auto src_index = get_dereferenced_object_src_index(insn);
-    if (!src_index && null_check_methods != nullptr) {
-      src_index = get_null_check_object_index(insn, *null_check_methods);
-    }
-    if (!src_index) {
-      if (null_check_methods == nullptr ||
-          insn->opcode() != OPCODE_INVOKE_STATIC ||
-          insn->get_method() !=
-              null_check_methods->redex_null_check_assertion()) {
-        return;
-      }
-      src_index = 0;
-    }
-    if (insn->has_dest()) {
-      auto dest = insn->dest();
-      if ((dest == *src_index) ||
-          (insn->dest_is_wide() && dest + 1 == *src_index)) {
-        return;
-      }
-    }
-    auto src = insn->src(*src_index);
-    auto value = env->get(src);
-    value.meet_with(SignedConstantDomain(sign_domain::Interval::NEZ));
-    env->set(src, value);
-  };
+  return InstructionAnalyzerCombiner<DefaultNoThrowAnalyzer>(
+      null_check_methods);
 }
 
 void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
