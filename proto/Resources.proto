@@ -240,12 +240,19 @@ message Entry {
 
   // The staged resource ID of this finalized resource.
   StagedId staged_id = 7;
+
+  // The set of values defined for this entry which are behind disabled flags
+  repeated ConfigValue flag_disabled_config_value = 8;
+
+  // The set of values defined for this entry which are behind read/write flags
+  repeated ConfigValue readwrite_flag_config_value = 9;
 }
 
 // A Configuration/Value pair.
 message ConfigValue {
   Configuration config = 1;
   Value value = 2;
+  reserved 3;
 }
 
 // The generic meta-data for every value in a resource table.
@@ -279,6 +286,11 @@ message Item {
     Id id = 6;
     Primitive prim = 7;
   }
+
+  // The status of the flag the value is behind if any
+  uint32 flag_status = 8;
+  bool flag_negated = 9;
+  string flag_name = 10;
 }
 
 // A CompoundValue is an abstract type. It represents a value that is a made of other values.
@@ -293,6 +305,11 @@ message CompoundValue {
     Plural plural = 5;
     MacroBody macro = 6;
   }
+
+  // The status of the flag the value is behind if any
+  uint32 flag_status = 7;
+  bool flag_negated = 8;
+  string flag_name = 9;
 }
 
 // Message holding a boolean, so it can be optionally encoded.

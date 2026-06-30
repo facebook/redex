@@ -202,8 +202,11 @@ message Configuration {
   // (trackball, wheel, dpad, etc.).
   Navigation navigation = 23;
 
-  // The minimum SDK version of the device.
+  // The SDK version of the device.
   uint32 sdk_version = 24;
+
+  // The SDK minor version of the device.
+  uint32 sdk_version_minor = 27;
 
   // Grammatical gender.
   GrammaticalGender grammatical_gender = 26;
@@ -213,4 +216,6 @@ message Configuration {
   //
 
   string product = 25;
+
+  reserved 28 to max;  // Next IDs
 }
