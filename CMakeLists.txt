@@ -77,6 +77,8 @@ file(GLOB_RECURSE redex_srcs
         "opt/*.h"
         "util/CommandProfiling.cpp"
         "util/CommandProfiling.h"
+        "util/Histogram.cpp"
+        "util/Histogram.h"
         "util/JemallocUtil.cpp"
         "util/JemallocUtil.h"
         "util/Sha1.cpp"
