@@ -331,6 +331,7 @@ libredex_la_SOURCES = \
 	service/resources/StaticIds.cpp \
 	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
+	service/switch-partitioning/StringSwitchFinder.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchEquivPrerequisites.cpp \
 	service/type-analysis/GlobalTypeAnalyzer.cpp \
@@ -543,6 +544,7 @@ libopt_la_SOURCES = \
 	opt/object-escape-analysis/ObjectEscapeAnalysis.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_concatenator/StringConcatenator.cpp \
+	opt/string-switch-analysis/StringSwitchTransformPass.cpp \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/optimize_resources/LowerResourceConstants.cpp \

@@ -30,6 +30,7 @@ class SwitchEquivFinder {
  public:
   using Analyzer = InstructionAnalyzerCombiner<
       constant_propagation::ConstantClassObjectAnalyzer,
+      constant_propagation::StringAnalyzer,
       constant_propagation::PrimitiveAnalyzer>;
 
   using DefUseBlocks = UnorderedMap<IRInstruction*, UnorderedSet<cfg::Block*>>;

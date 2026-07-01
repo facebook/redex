@@ -172,6 +172,7 @@ check_PROGRAMS = \
     static_relo_v2_test \
     stringbuilder_outline_test \
     strip_debug_info_test \
+    string_switch_test \
     switch_dispatch_test \
     switch_equiv_test \
     throw_propagation_test \
@@ -523,6 +524,9 @@ string_propagation_test_SOURCES = constant-propagation/StringPropagationTest.cpp
 strip_debug_info_test_SOURCES = StripDebugInfoTest.cpp
 
 switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp
+
+string_switch_test_SOURCES = StringSwitchFinderTest.cpp
+string_switch_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 switch_equiv_test_SOURCES = SwitchEquivFinderTest.cpp
 switch_equiv_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

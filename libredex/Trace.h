@@ -156,6 +156,7 @@ class DexType;
   TM(STATIC_RELO)              \
   TM(STATS)                    \
   TM(STRBUILD)                 \
+  TM(STRSW)                    \
   TM(STR_CAT)                  \
   TM(SUPER)                    \
   TM(SW)                       \
