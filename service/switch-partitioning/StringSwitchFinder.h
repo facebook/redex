@@ -301,10 +301,18 @@ class StringSwitchFinder {
 bool may_contain_string_switch(cfg::ControlFlowGraph& cfg);
 
 /**
- * Driver: find every supported string switch in `cfg`, anchored on
- * String.hashCode() calls. `fixpoint` must be built with
- * StringSwitchFinder::Analyzer and already run(). Overlapping/duplicate regions
- * are de-duplicated. The CFG is not modified.
+ * Driver: find every supported string switch reachable via `ctx`, anchored on
+ * String.hashCode() calls. Overlapping/duplicate regions are de-duplicated. The
+ * CFG is not modified. Use this overload when you already hold a context (e.g.
+ * a transform driver) to avoid rebuilding its (expensive) reaching-def chains.
+ */
+std::vector<StringSwitchInfo> find_string_switches(
+    const StringSwitchCfgContext& ctx);
+
+/**
+ * Convenience overload: builds a StringSwitchCfgContext from `cfg` + `fixpoint`
+ * (which must be built with StringSwitchFinder::Analyzer and already run()) and
+ * delegates to the overload above.
  */
 std::vector<StringSwitchInfo> find_string_switches(
     cfg::ControlFlowGraph& cfg,

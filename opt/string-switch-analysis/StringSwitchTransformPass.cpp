@@ -23,10 +23,13 @@
 #include "DexUtil.h"
 #include "Histogram.h"
 #include "IRCode.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
+#include "Purity.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "StringSwitchFinder.h"
+#include "StringSwitchTransform.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -120,67 +123,121 @@ void render_switch(std::ostream& os, const StringSwitchInfo& info) {
 
 } // namespace
 
+void StringSwitchTransformPass::bind_config() {
+  bind("emit_analysis", m_emit_analysis, m_emit_analysis,
+       "Prints out a metafile showing all string switches found.");
+  bind("min_cases", m_min_cases, m_min_cases,
+       "For use in StringTreeMapTransform, number of case keys which are "
+       "eligible for transformation.");
+  bind("string_tree_lookup_method", m_string_tree_lookup_method,
+       m_string_tree_lookup_method,
+       "For use in StringTreeMapTransform, search method to invoke on encoded "
+       "data.");
+}
+
+std::vector<std::unique_ptr<StringSwitchTransform>>
+StringSwitchTransformPass::build_transforms() const {
+  std::vector<std::unique_ptr<StringSwitchTransform>> transforms;
+  // Concrete transforms (e.g. StringTreeMapTransform) are registered here in
+  // priority order; each self-gates in evaluate(). Empty for now -> the pass
+  // performs analysis only.
+  return transforms;
+}
+
 void StringSwitchTransformPass::run_pass(DexStoresVector& stores,
                                          ConfigFiles& conf,
                                          PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  // PassManager has the editable CFG built for every method before this pass
-  // runs (is_cfg_legacy() == false), so we use code->cfg() directly and the
-  // recovered block pointers remain valid through the report rendering below.
-  auto all_results =
-      walk::parallel::methods<std::vector<MethodResult>, CombineMethodResults>(
-          scope, [&](DexMethod* method, std::vector<MethodResult>* acc) {
-            auto* code = method->get_code();
-            if (code == nullptr) {
-              return;
-            }
-            auto& cfg = code->cfg();
-            // Cheap linear pre-filter: a string switch needs both a
-            // String.hashCode() and a String.equals() call. Skip the expensive
-            // fixpoint iterator and finder for the vast majority of methods
-            // that have neither pair.
-            if (!may_contain_string_switch(cfg)) {
-              return;
-            }
-            TRACE(STRSW, 5, "[StringSwitchTransformPass] candidate %s\n%s",
-                  SHOW(method), SHOW(cfg));
-            auto fixpoint =
-                std::make_shared<cp::intraprocedural::FixpointIterator>(
-                    cfg, StringSwitchFinder::Analyzer());
-            fixpoint->run(ConstantEnvironment());
+  // Phase A: recover string switches and emit the analysis report + histogram.
+  // Read-only and entirely gated on `emit_analysis` -- when disabled we skip
+  // the (redundant) recovery scan altogether. Runs to completion before any
+  // rewrite, so the recovered block pointers stay valid through rendering.
+  if (m_emit_analysis) {
+    auto all_results = walk::parallel::methods<std::vector<MethodResult>,
+                                               CombineMethodResults>(
+        scope, [&](DexMethod* method, std::vector<MethodResult>* acc) {
+          auto* code = method->get_code();
+          if (code == nullptr) {
+            return;
+          }
+          auto& cfg = code->cfg();
+          // Cheap linear pre-filter: a string switch needs both a
+          // String.hashCode() and a String.equals() call. Skip the expensive
+          // fixpoint iterator and finder for the vast majority of methods that
+          // have neither pair.
+          if (!may_contain_string_switch(cfg)) {
+            return;
+          }
+          TRACE(STRSW, 5, "[StringSwitchTransformPass] candidate %s\n%s",
+                SHOW(method), SHOW(cfg));
+          auto fixpoint =
+              std::make_shared<cp::intraprocedural::FixpointIterator>(
+                  cfg, StringSwitchFinder::Analyzer());
+          fixpoint->run(ConstantEnvironment());
 
-            auto switches = find_string_switches(cfg, fixpoint);
-            if (!switches.empty()) {
-              acc->push_back({method, std::move(switches)});
-            }
-          });
+          auto switches = find_string_switches(cfg, fixpoint);
+          if (!switches.empty()) {
+            acc->push_back({method, std::move(switches)});
+          }
+        });
 
-  std::sort(all_results.begin(), all_results.end(),
-            [](const MethodResult& a, const MethodResult& b) {
-              return compare_dexmethods(a.method, b.method);
-            });
+    std::sort(all_results.begin(), all_results.end(),
+              [](const MethodResult& a, const MethodResult& b) {
+                return compare_dexmethods(a.method, b.method);
+              });
 
-  // The case count of each switch (including its default), for the histogram.
-  std::vector<size_t> case_counts;
-  std::string metapath = conf.metafile("string_switch_analysis.txt");
-  std::ofstream ofs(metapath);
-  for (const auto& result : all_results) {
-    ofs << "Method " << show(result.method) << "\n";
-    for (const auto& info : result.switches) {
-      case_counts.push_back(info.key_to_case.size());
-      render_switch(ofs, info);
+    // The case count of each switch (including its default), for the histogram.
+    std::vector<size_t> case_counts;
+    std::ofstream ofs(conf.metafile("string_switch_analysis.txt"));
+    for (const auto& result : all_results) {
+      ofs << "Method " << show(result.method) << "\n";
+      for (const auto& info : result.switches) {
+        case_counts.push_back(info.key_to_case.size());
+        render_switch(ofs, info);
+      }
     }
+
+    mgr.set_metric("num_string_switches", case_counts.size());
+    TRACE(STRSW, 1,
+          "[StringSwitchTransformPass] found %zu string switch(es) in %zu "
+          "method(s)\n%s",
+          case_counts.size(), all_results.size(),
+          histogram::render_histogram(
+              case_counts, "Case-count distribution across string switches", 30)
+              .c_str());
   }
 
-  mgr.set_metric("num_string_switches", case_counts.size());
-  TRACE(STRSW, 1,
-        "[StringSwitchTransformPass] found %zu string switch(es) in %zu "
-        "method(s)\n%s",
-        case_counts.size(), all_results.size(),
-        histogram::render_histogram(
-            case_counts, "Case-count distribution across string switches", 30)
-            .c_str());
+  // Phase B: apply transforms (mutates CFGs). No-op when none are registered.
+  auto transforms = build_transforms();
+  if (transforms.empty()) {
+    return;
+  }
+  // The inputs LocalDce needs are method-independent, so build them once and
+  // share them across every method's driver run: the side-effect-free method
+  // set (notably String.hashCode/equals) and the (empty-scope) init-class info.
+  auto pure_methods = get_pure_methods();
+  init_classes::InitClassesWithSideEffects init_classes(
+      /*scope=*/{}, /*create_init_class_insns=*/false);
+  auto stats = walk::parallel::methods<DriverStats, CombineDriverStats>(
+      scope, [&](DexMethod* method, DriverStats* acc) {
+        if (method->rstate.no_optimizations()) {
+          return;
+        }
+        auto* code = method->get_code();
+        if (code == nullptr) {
+          return;
+        }
+        auto& cfg = code->cfg();
+        if (!may_contain_string_switch(cfg)) {
+          return;
+        }
+        run_string_switch_transforms(method, cfg, transforms, pure_methods,
+                                     init_classes, acc);
+      });
+  for (const auto& [transform_name, count] : stats.applied) {
+    mgr.set_metric("applied." + transform_name, count);
+  }
 }
 
 static StringSwitchTransformPass s_pass;

@@ -722,9 +722,8 @@ bool may_contain_string_switch(cfg::ControlFlowGraph& cfg) {
 }
 
 std::vector<StringSwitchInfo> find_string_switches(
-    cfg::ControlFlowGraph& cfg,
-    const std::shared_ptr<cp::intraprocedural::FixpointIterator>& fixpoint) {
-  StringSwitchCfgContext ctx(cfg, fixpoint);
+    const StringSwitchCfgContext& ctx) {
+  auto& cfg = ctx.cfg();
 
   std::vector<StringSwitchInfo> results;
   UnorderedSet<cfg::Block*> consumed;
@@ -758,4 +757,11 @@ std::vector<StringSwitchInfo> find_string_switches(
     results.push_back(finder.info());
   }
   return results;
+}
+
+std::vector<StringSwitchInfo> find_string_switches(
+    cfg::ControlFlowGraph& cfg,
+    const std::shared_ptr<cp::intraprocedural::FixpointIterator>& fixpoint) {
+  StringSwitchCfgContext ctx(cfg, fixpoint);
+  return find_string_switches(ctx);
 }

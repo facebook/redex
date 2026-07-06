@@ -173,6 +173,7 @@ check_PROGRAMS = \
     stringbuilder_outline_test \
     strip_debug_info_test \
     string_switch_test \
+    string_switch_transform_test \
     switch_dispatch_test \
     switch_equiv_test \
     throw_propagation_test \
@@ -527,6 +528,9 @@ switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp
 
 string_switch_test_SOURCES = StringSwitchFinderTest.cpp
 string_switch_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+string_switch_transform_test_SOURCES = StringSwitchTransformTest.cpp
+string_switch_transform_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 switch_equiv_test_SOURCES = SwitchEquivFinderTest.cpp
 switch_equiv_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

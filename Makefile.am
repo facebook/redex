@@ -332,6 +332,7 @@ libredex_la_SOURCES = \
 	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/StringSwitchFinder.cpp \
+	service/switch-partitioning/StringSwitchTransform.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchEquivPrerequisites.cpp \
 	service/type-analysis/GlobalTypeAnalyzer.cpp \
