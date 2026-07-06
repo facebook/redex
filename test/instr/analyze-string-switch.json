@@ -1,8 +1,11 @@
 {
+  "StringSwitchTransformPass": {
+    "emit_analysis": true,
+    "min_cases": 4,
+    "string_tree_lookup_method": "Lcom/facebook/common/dextricks/StringTreeSet;.searchMap:(Ljava/lang/String;Ljava/lang/String;I)I"
+  },
+  "debug_info_kind": "iodi2",
   "redex": {
-    "StringSwitchTransformPass": {
-      "emit_analysis": true
-    },
     "passes": [
       "StringSwitchTransformPass",
       "RegAllocPass"

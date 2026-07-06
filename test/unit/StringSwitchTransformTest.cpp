@@ -25,6 +25,7 @@
 #include "Purity.h"
 #include "RedexTest.h"
 #include "StringSwitchFinder.h"
+#include "StringSwitchTestUtil.h"
 #include "StringSwitchTransform.h"
 #include "StringTreeMapTransform.h"
 #include "TypeUtil.h"
@@ -319,37 +320,6 @@ std::shared_ptr<cp::intraprocedural::FixpointIterator> make_fixpoint(
   return fixpoint;
 }
 
-// Counts of the opcodes that matter for verifying the rewrite.
-struct OpcodeCounts {
-  size_t hashcode{0};
-  size_t equals{0};
-  size_t invoke_static{0};
-  size_t switches{0};
-  size_t const_string{0};
-};
-
-OpcodeCounts count_opcodes(cfg::ControlFlowGraph& cfg) {
-  OpcodeCounts c;
-  for (auto& mie : cfg::InstructionIterable(cfg)) {
-    auto op = mie.insn->opcode();
-    if (op == OPCODE_SWITCH) {
-      c.switches++;
-    } else if (op == OPCODE_INVOKE_STATIC) {
-      c.invoke_static++;
-    } else if (op == OPCODE_CONST_STRING) {
-      c.const_string++;
-    } else if (op == OPCODE_INVOKE_VIRTUAL) {
-      auto* m = mie.insn->get_method();
-      if (m == method::java_lang_String_hashCode()) {
-        c.hashcode++;
-      } else if (m == method::java_lang_String_equals()) {
-        c.equals++;
-      }
-    }
-  }
-  return c;
-}
-
 // Counts invoke-static instructions whose target is the method `signature`.
 size_t count_invoke_static_to(cfg::ControlFlowGraph& cfg,
                               const std::string& signature) {
@@ -626,7 +596,8 @@ void expect_single_exception_edge(cfg::Block* block) {
 // exactly `expected_dests`. Also confirms the switch is no longer recoverable.
 void verify_tree_map_shape(cfg::ControlFlowGraph& cfg,
                            const std::set<std::string>& expected_dests) {
-  auto counts = count_opcodes(cfg);
+  auto counts = string_switch_test::count_string_switch_opcodes(
+      cfg::InstructionIterable(cfg));
   // The hashCode/equals dispatch machinery is gone (LocalDce removed the now
   // unused pure invokes).
   EXPECT_EQ(counts.hashcode, 0u);
