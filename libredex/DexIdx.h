@@ -121,6 +121,8 @@ class DexIdx {
     return m_field_cache[fidx];
   }
 
+  uint32_t get_field_ids_size() { return m_field_ids_size; }
+
   uint32_t get_method_ids_size() { return m_method_ids_size; }
 
   DexMethodRef* get_methodidx(uint32_t midx) {

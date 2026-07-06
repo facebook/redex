@@ -1287,8 +1287,16 @@ void DexClass::load_class_data_item(
   const uint8_t* encd = idx->get_uleb_data(cdi_off);
   uint32_t sfield_count = idx->read_uleb128_checked(&encd);
   uint32_t ifield_count = idx->read_uleb128_checked(&encd);
+  always_assert_type_log(static_cast<uint64_t>(sfield_count) + ifield_count <=
+                             idx->get_field_ids_size(),
+                         INVALID_DEX,
+                         "class_data_item field count exceeds dex field ids");
   uint32_t dmethod_count = idx->read_uleb128_checked(&encd);
   uint32_t vmethod_count = idx->read_uleb128_checked(&encd);
+  always_assert_type_log(static_cast<uint64_t>(dmethod_count) + vmethod_count <=
+                             idx->get_method_ids_size(),
+                         INVALID_DEX,
+                         "class_data_item method count exceeds dex method ids");
   uint32_t ndex = 0;
 
   std::vector<std::unique_ptr<DexEncodedValue>> empty{};
