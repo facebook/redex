@@ -9,10 +9,12 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "Pass.h"
+#include "PassManager.h"
 #include "StringSwitchTransform.h"
 
 class StringSwitchTransformPass : public Pass {
@@ -36,6 +38,8 @@ class StringSwitchTransformPass : public Pass {
 
   void bind_config() override;
 
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
@@ -50,4 +54,10 @@ class StringSwitchTransformPass : public Pass {
   // Fully-qualified static lookup method for the StringTreeMap transform; empty
   // disables that transform.
   std::string m_string_tree_lookup_method;
+  // Largest trie payload emitted as an inline const-string; larger switches are
+  // left untransformed for now.
+  size_t m_const_string_max_size{8000};
+  // Refs reserved in eval_pass for the configured transforms, released at the
+  // start of run_pass.
+  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };

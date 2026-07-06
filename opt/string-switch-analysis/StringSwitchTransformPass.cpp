@@ -20,6 +20,7 @@
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexStructure.h"
 #include "DexUtil.h"
 #include "Histogram.h"
 #include "IRCode.h"
@@ -30,6 +31,7 @@
 #include "SourceBlocks.h"
 #include "StringSwitchFinder.h"
 #include "StringSwitchTransform.h"
+#include "StringTreeMapTransform.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -133,20 +135,56 @@ void StringSwitchTransformPass::bind_config() {
        m_string_tree_lookup_method,
        "For use in StringTreeMapTransform, search method to invoke on encoded "
        "data.");
+  bind("const_string_max_size", m_const_string_max_size,
+       m_const_string_max_size,
+       "For use in StringTreeMapTransform, a maximum size for encoded data to "
+       "obey (beyond this size will be considered ineligible).");
 }
 
 std::vector<std::unique_ptr<StringSwitchTransform>>
 StringSwitchTransformPass::build_transforms() const {
   std::vector<std::unique_ptr<StringSwitchTransform>> transforms;
-  // Concrete transforms (e.g. StringTreeMapTransform) are registered here in
-  // priority order; each self-gates in evaluate(). Empty for now -> the pass
-  // performs analysis only.
+  // Registered in priority order; each transform self-gates in evaluate(). When
+  // none are configured the pass performs analysis only.
+  //
+  // StringTreeMap re-encoding (SIZE tier): enabled only when a lookup method is
+  // configured AND resolves in the app -- otherwise switches are left as-is.
+  if (!m_string_tree_lookup_method.empty()) {
+    auto* lookup = DexMethod::get_method(m_string_tree_lookup_method);
+    if (lookup != nullptr) {
+      transforms.push_back(std::make_unique<StringTreeMapTransform>(
+          lookup, m_min_cases, m_const_string_max_size));
+    }
+  }
   return transforms;
+}
+
+void StringSwitchTransformPass::eval_pass(DexStoresVector&,
+                                          ConfigFiles&,
+                                          PassManager& mgr) {
+  // Reserve the dex refs the configured transforms may introduce, so earlier
+  // passes leave room. Released at the start of run_pass.
+  RefBudget budget;
+  for (const auto& transform : build_transforms()) {
+    auto refs = transform->reserve_refs();
+    budget.frefs += refs.frefs;
+    budget.mrefs += refs.mrefs;
+    budget.trefs += refs.trefs;
+  }
+  if (budget.frefs != 0 || budget.mrefs != 0 || budget.trefs != 0) {
+    m_reserved_refs_handle = mgr.reserve_refs(
+        name(), ReserveRefsInfo(budget.frefs, budget.trefs, budget.mrefs));
+  }
 }
 
 void StringSwitchTransformPass::run_pass(DexStoresVector& stores,
                                          ConfigFiles& conf,
                                          PassManager& mgr) {
+  if (m_reserved_refs_handle) {
+    mgr.release_reserved_refs(*m_reserved_refs_handle);
+    m_reserved_refs_handle = std::nullopt;
+  }
+
   auto scope = build_class_scope(stores);
 
   // Phase A: recover string switches and emit the analysis report + histogram.
@@ -167,6 +205,9 @@ void StringSwitchTransformPass::run_pass(DexStoresVector& stores,
           // fixpoint iterator and finder for the vast majority of methods that
           // have neither pair.
           if (!may_contain_string_switch(cfg)) {
+            TRACE(STRSW, 9,
+                  "[StringSwitchTransformPass] not a candidate %s\n%s",
+                  SHOW(method), SHOW(cfg));
             return;
           }
           TRACE(STRSW, 5, "[StringSwitchTransformPass] candidate %s\n%s",

@@ -1,5 +1,8 @@
 {
   "redex": {
+    "StringSwitchTransformPass": {
+      "emit_analysis": true
+    },
     "passes": [
       "StringSwitchTransformPass",
       "RegAllocPass"
