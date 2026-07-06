@@ -179,6 +179,24 @@ bool catch_exits_equal(const std::vector<StringSwitchInfo::CatchExit>& a,
   return true;
 }
 
+// The escaping consts a single recovered runtime `path` carries: scanning its
+// blocks in execution order, a later const def shadows an earlier one for the
+// same register. The origin block needs no special-casing -- its consts are
+// never in `escaping` (escape accounting skips the origin, which stays intact).
+SwitchEquivFinder::InstructionSet loads_along_path(
+    const std::vector<cfg::Block*>& path,
+    const UnorderedSet<IRInstruction*>& escaping) {
+  SwitchEquivFinder::InstructionSet loads;
+  for (cfg::Block* b : path) {
+    for (auto& mie : InstructionIterable(b)) {
+      if (escaping.count(mie.insn) != 0u) {
+        loads[mie.insn->dest()] = mie.insn;
+      }
+    }
+  }
+  return loads;
+}
+
 } // namespace
 
 bool StringSwitchInfo::key_comparator::operator()(const StringKey& l,
@@ -237,7 +255,7 @@ bool StringSwitchFinder::ordinal_from_equal_path(
     cfg::Edge* equal_edge,
     cfg::Block* ord_switch_block,
     reg_t ordinal_reg,
-    UnorderedSet<cfg::Block*>* region,
+    std::vector<cfg::Block*>* ordinal_set_blocks,
     int32_t* out) const {
   // From the equal edge, the ordinal-setting plumbing flows (as a BigBlock)
   // into the ordinal switch. The ordinal arriving at the switch is
@@ -255,7 +273,7 @@ bool StringSwitchFinder::ordinal_from_equal_path(
       return false; // not straight-line plumbing into the ordinal switch
     }
     for (cfg::Block* b : big_block->get_blocks()) {
-      region->insert(b);
+      ordinal_set_blocks->push_back(b);
     }
     before_switch = big_block->get_last_block();
   }
@@ -414,9 +432,6 @@ bool StringSwitchFinder::decode_hash_switch(
     return false;
   }
 
-  UnorderedSet<cfg::Block*> region;
-  region.insert(origin_block);
-
   // The ordinal switch is reached by following the hash switch's default
   // (no-match) path: a BigBlock of plumbing that flows into the (multi-pred)
   // ordinal switch. The switch is the big block's tail if it ends there, else
@@ -433,10 +448,6 @@ bool StringSwitchFinder::decode_hash_switch(
       !block_ends_with_switch(ord_switch_block)) {
     return false;
   }
-  for (cfg::Block* b : default_big_block->get_blocks()) {
-    region.insert(b);
-  }
-  region.insert(ord_switch_block);
   auto* ord_switch_insn = ord_switch_block->get_last_insn()->insn;
   reg_t ordinal_reg = ord_switch_insn->src(0);
 
@@ -448,6 +459,27 @@ bool StringSwitchFinder::decode_hash_switch(
       !ord_sef.are_keys_uniform(SwitchEquivFinder::KeyKind::INT) ||
       !ord_sef.default_case()) {
     return false;
+  }
+
+  cfg::Block* default_body = *ord_sef.default_case();
+
+  // Capture, per leaf, the ordered region blocks a real execution traverses to
+  // reach it (origin excluded; it stays intact). The string bodies and the
+  // default each get one path per dispatch route; extra-loads accounting later
+  // replays these instead of re-deriving the ordinal selector.
+  LeafPaths leaf_paths;
+
+  // The hash switch's default arm: origin -> default plumbing -> ordinal switch
+  // -> (no ordinal match) -> default body.
+  {
+    std::vector<cfg::Block*> path;
+    for (cfg::Block* b : default_big_block->get_blocks()) {
+      if (b != ord_switch_block) {
+        path.push_back(b);
+      }
+    }
+    path.push_back(ord_switch_block);
+    leaf_paths[default_body].push_back(std::move(path));
   }
 
   // Decode each hash bucket's equals chain into string -> ordinal -> dest.
@@ -462,6 +494,10 @@ bool StringSwitchFinder::decode_hash_switch(
 
     cfg::Block* cur = bucket_entry;
     bool first = true;
+    // The not-equal chain blocks visited so far in THIS bucket: every later
+    // link (and the bucket's default exit) is reached only after these tests
+    // fail.
+    std::vector<cfg::Block*> prefix;
     // The collision chain advances via not-equal edges (not the happy path).
     CycleGuard guard;
     while (guard.visit(cur)) {
@@ -475,13 +511,17 @@ bool StringSwitchFinder::decode_hash_switch(
           return false; // a bucket must contain at least one equals
         }
         // Collision chain exhausted: the not-equal path's plumbing runs to the
-        // ordinal switch (a multi-pred join the big block stops before). Fold
-        // it.
-        link.add_to_region(&region, /*until=*/ord_switch_block);
+        // ordinal switch (a multi-pred join the big block stops before), then
+        // to the default body. Record the path.
+        auto exhaustion_blocks = link.path_blocks(/*until=*/ord_switch_block);
+        std::vector<cfg::Block*> path = prefix;
+        path.insert(path.end(), exhaustion_blocks.begin(),
+                    exhaustion_blocks.end());
+        path.push_back(ord_switch_block);
+        leaf_paths[default_body].push_back(std::move(path));
         break;
       }
       first = false;
-      link.add_to_region(&region);
 
       if (link.literal->java_hashcode() != hash_key) {
         return false; // decoy / mismatched hash bucket
@@ -495,8 +535,9 @@ bool StringSwitchFinder::decode_hash_switch(
       }
       always_assert(equal_e != nullptr && neq_e != nullptr);
       int32_t ordinal;
+      std::vector<cfg::Block*> ordinal_set_blocks;
       if (!ordinal_from_equal_path(equal_e, ord_switch_block, ordinal_reg,
-                                   &region, &ordinal)) {
+                                   &ordinal_set_blocks, &ordinal)) {
         return false;
       }
       auto dest_it =
@@ -512,6 +553,16 @@ bool StringSwitchFinder::decode_hash_switch(
       }
       key_to_case[StringSwitchInfo::StringKey(link.literal)] = dest_it->second;
 
+      // This matching link's blocks now precede every later link (reached on
+      // its not-equal edge), so fold them into the prefix. The body's runtime
+      // path is that prefix, then the ordinal-setting blocks and the switch.
+      auto link_blocks = link.path_blocks();
+      prefix.insert(prefix.end(), link_blocks.begin(), link_blocks.end());
+      std::vector<cfg::Block*> path = prefix;
+      path.insert(path.end(), ordinal_set_blocks.begin(),
+                  ordinal_set_blocks.end());
+      path.push_back(ord_switch_block);
+      leaf_paths[dest_it->second].push_back(std::move(path));
       // Follow the not-equal path: another equals (collision) or, when the
       // bucket is exhausted, the ordinal switch (handled at loop top).
       cur = neq_e->target();
@@ -520,7 +571,7 @@ bool StringSwitchFinder::decode_hash_switch(
 
   // Default destination = the ordinal switch's default body.
   key_to_case[StringSwitchInfo::StringKey(StringSwitchInfo::DefaultCase{})] =
-      *ord_sef.default_case();
+      default_body;
 
   // Bijection: #literals == #non-default ordinal cases (the ordinal switch is
   // validated to have a default, so non-default count == size - 1).
@@ -528,8 +579,9 @@ bool StringSwitchFinder::decode_hash_switch(
     return false;
   }
 
+  auto region = region_from_leaf_paths(origin_block, leaf_paths);
   cfg::Block* hashcode_block = m_ctx.block_of(hashcode_insn);
-  if (!finalize_region(origin_block, hashcode_block, region)) {
+  if (!finalize_region(origin_block, hashcode_block, region, leaf_paths)) {
     return false;
   }
 
@@ -555,10 +607,15 @@ bool StringSwitchFinder::decode_equals_chain(
   StringSwitchInfo::KeyToCase key_to_case;
   std::vector<const DexString*> chain_order;
   UnorderedSet<const DexString*> seen_literals;
-  UnorderedSet<cfg::Block*> region;
-  region.insert(origin_block);
   IRInstruction* origin_insn = nullptr;
   cfg::Block* default_block = nullptr;
+
+  // Per-leaf runtime paths (origin included but exempt from hauling). The chain
+  // is a single spine, so `prefix` accumulates the failed-test blocks; each
+  // body is reached after its preceding tests fail, and the default after all
+  // do.
+  LeafPaths leaf_paths;
+  std::vector<cfg::Block*> prefix;
 
   cfg::Block* cur = origin_block;
   // The chain advances via not-equal edges (not the happy path).
@@ -572,11 +629,11 @@ bool StringSwitchFinder::decode_equals_chain(
     EqualsLink link = find_equals_link(cur, subject_defs);
     if (!link.found()) {
       // No further equals: `cur` (the last not-equal edge's target) is the
-      // default body entry.
+      // default body entry, reached after every test on the spine failed.
       default_block = cur;
+      leaf_paths[default_block].push_back(prefix);
       break;
     }
-    link.add_to_region(&region);
 
     cfg::Edge* equal_e = nullptr;
     cfg::Edge* neq_e = nullptr;
@@ -597,6 +654,15 @@ bool StringSwitchFinder::decode_equals_chain(
     // distinct.
     key_to_case[StringSwitchInfo::StringKey(link.literal)] = equal_e->target();
     chain_order.push_back(link.literal);
+
+    // This matching link's blocks extend the prefix; the equal edge goes
+    // straight to the body, so the body's runtime path is exactly the prefix so
+    // far. This link also stays in the prefix (later links continue from its
+    // not-equal edge). A shared body accumulates one path per literal reaching
+    // it.
+    auto link_blocks = link.path_blocks();
+    prefix.insert(prefix.end(), link_blocks.begin(), link_blocks.end());
+    leaf_paths[equal_e->target()].push_back(prefix);
     cur = neq_e->target();
   }
 
@@ -606,8 +672,9 @@ bool StringSwitchFinder::decode_equals_chain(
   key_to_case[StringSwitchInfo::StringKey(StringSwitchInfo::DefaultCase{})] =
       default_block;
 
+  auto region = region_from_leaf_paths(origin_block, leaf_paths);
   cfg::Block* hashcode_block = m_ctx.block_of(hashcode_insn);
-  if (!finalize_region(origin_block, hashcode_block, region)) {
+  if (!finalize_region(origin_block, hashcode_block, region, leaf_paths)) {
     return false;
   }
 
@@ -623,10 +690,53 @@ bool StringSwitchFinder::decode_equals_chain(
   return true;
 }
 
+bool StringSwitchFinder::accumulate_leaf_loads(
+    const LeafPaths& leaf_paths,
+    const UnorderedSet<IRInstruction*>& escaping,
+    StringSwitchInfo::ExtraLoads* out) {
+  // The paths are the real (constant-propagation-resolved) dispatch paths, so
+  // this just replays what recovery already learned -- no re-analysis of the
+  // ordinal selector.
+  for (const auto& [leaf, paths] : UnorderedIterable(leaf_paths)) {
+    std::optional<SwitchEquivFinder::InstructionSet> merged;
+    for (const auto& path : paths) {
+      auto loads = loads_along_path(path, escaping);
+      if (!merged) {
+        merged = std::move(loads);
+      } else if (*merged != loads) {
+        return false; // divergent loads reach this leaf
+      }
+    }
+    if (merged && !merged->empty()) {
+      (*out)[leaf] = std::move(*merged);
+    }
+  }
+  return true;
+}
+
+UnorderedSet<cfg::Block*> StringSwitchFinder::region_from_leaf_paths(
+    cfg::Block* origin_block, const LeafPaths& leaf_paths) {
+  // Each leaf path is the ordered run of machinery blocks a real execution
+  // traverses to reach that leaf, so their union is exactly the region. The
+  // origin is added explicitly: the hash-switch paths begin after it, so it is
+  // not necessarily on any path (the equals-chain paths do start at it).
+  UnorderedSet<cfg::Block*> region;
+  region.insert(origin_block);
+  for (const auto& [leaf, paths] : UnorderedIterable(leaf_paths)) {
+    for (const auto& path : paths) {
+      for (cfg::Block* b : path) {
+        region.insert(b);
+      }
+    }
+  }
+  return region;
+}
+
 bool StringSwitchFinder::finalize_region(
     cfg::Block* origin_block,
     cfg::Block* hashcode_block,
-    const UnorderedSet<cfg::Block*>& region) {
+    const UnorderedSet<cfg::Block*>& region,
+    const LeafPaths& leaf_paths) {
   const auto& du = m_ctx.def_use();
 
   // Exceptional exits: the M Throwable handlers shared uniformly by R.
@@ -634,8 +744,8 @@ bool StringSwitchFinder::finalize_region(
     return false;
   }
 
-  // Self-containment + the instruction allowlist + const-only escape/haul
-  // accounting, in a single pass over R.
+  // Self-containment + the instruction allowlist + escape accounting, in a
+  // single pass over R.
   //
   // Self-containment: every region block (except the entry) must be reachable
   // only from within R. Throw edges leaving R (to catch handlers) are
@@ -644,11 +754,12 @@ bool StringSwitchFinder::finalize_region(
   // into R from outside its normal control flow, so R is not a self-contained
   // unit we can rewrite.
   //
-  // Escape: a value defined in R and used outside R must be a constant load
-  // (recorded to be hauled into the destination on rewrite); any other escape
-  // -- e.g. a CSE'd hashCode result reused in a body -- means R is not
-  // self-contained.
-  StringSwitchInfo::ExtraLoads extra_loads;
+  // Escape: a value defined in R and used outside R must be a haulable constant
+  // load (`escaping` collects these). A const-string is NOT haulable -- it can
+  // throw, so relocating it could require new catch handlers -- and any other
+  // escaping value (e.g. a CSE'd hashCode result reused in a body) means R is
+  // not self-contained: reject.
+  UnorderedSet<IRInstruction*> escaping;
   for (auto* b : UnorderedIterable(region)) {
     if (b->is_catch()) {
       return false;
@@ -675,13 +786,9 @@ bool StringSwitchFinder::finalize_region(
       if (it == du.end()) {
         continue;
       }
-      // Only plain literal consts (which carry a real dest) are haulable; any
-      // other value that escapes is rejected. In particular a const-string is
-      // NOT haulable: it can throw, so relocating it closer to a use could
-      // require installing additional catch handlers -- too complex to support
-      // here for now.
       bool haulable =
           opcode::is_a_literal_const(def->opcode()) && def->has_dest();
+      bool escapes = false;
       for (const auto& use : UnorderedIterable(it->second)) {
         auto* ub = m_ctx.block_of(use.insn);
         if (ub != nullptr && region.count(ub) != 0u) {
@@ -695,11 +802,23 @@ bool StringSwitchFinder::finalize_region(
         if (!haulable) {
           return false; // non-haulable value escapes the region
         }
-        // TODO(string-switch): mirror SwitchEquivFinder's leaf hauling exactly
-        // (haul to the destination/leaf) when the transforms are built.
-        extra_loads[ub][def->dest()] = def;
+        escapes = true;
+      }
+      if (escapes) {
+        escaping.insert(def);
       }
     }
+  }
+
+  // Record, per leaf, the escaping consts on the runtime path(s) recovery
+  // captured to reach it. A leaf reached by paths with divergent loads has a
+  // path-dependent value that cannot be hauled, so accumulation fails and we
+  // recover no switch. The common case (no escaping consts) skips this entirely
+  // and leaves `extra_loads` empty.
+  StringSwitchInfo::ExtraLoads extra_loads;
+  if (!escaping.empty() &&
+      !accumulate_leaf_loads(leaf_paths, escaping, &extra_loads)) {
+    return false;
   }
   m_info.extra_loads = std::move(extra_loads);
   return true;

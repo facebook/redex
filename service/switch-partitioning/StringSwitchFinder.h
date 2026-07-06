@@ -203,14 +203,47 @@ class StringSwitchFinder {
       const sparta::PatriciaTreeSet<live_range::Def>& subject_defs,
       cfg::Block* origin_block);
 
+  // Maps each leaf (a case body, including the default) to the runtime path(s)
+  // a real execution traverses to reach it -- the ordered region (machinery)
+  // blocks captured as the dispatch is recovered. The decode routines build
+  // this (they already know, via constant propagation, which body each case
+  // takes), so the extra-loads accounting can replay the exact paths rather
+  // than re-deriving them.
+  using LeafPaths =
+      UnorderedMap<cfg::Block*, std::vector<std::vector<cfg::Block*>>>;
+
   // Shared strict validation over the recovered region: self-containment, the
   // instruction allowlist, const-only escape/haul accounting, and
   // exception-exit collection. Populates `m_info.extra_loads` and
   // `m_info.catch_exits`. The origin block is exempt from the allowlist/pred
   // checks (it stays intact).
+  //
+  // `leaf_paths` are the recovered runtime paths per leaf: the escaping consts
+  // a leaf must haul are exactly those defined along its path (later defs
+  // shadow earlier); a leaf reached by paths carrying divergent loads is
+  // path-dependent and not rewritable, so recovery fails.
   bool finalize_region(cfg::Block* origin_block,
                        cfg::Block* hashcode_block,
-                       const UnorderedSet<cfg::Block*>& region);
+                       const UnorderedSet<cfg::Block*>& region,
+                       const LeafPaths& leaf_paths);
+
+  // Builds `out` (the per-leaf extra loads) from the recovered runtime paths: a
+  // leaf's hauled consts are the escaping consts on its path; a leaf reached by
+  // paths carrying divergent loads is path-dependent and cannot be hauled
+  // (returns false). Leaves with no hauled consts are omitted.
+  static bool accumulate_leaf_loads(
+      const LeafPaths& leaf_paths,
+      const UnorderedSet<IRInstruction*>& escaping,
+      StringSwitchInfo::ExtraLoads* out);
+
+  // Builds the full region (machinery) block set from the recovered runtime
+  // paths: the origin plus the union of every block on every leaf path. Each
+  // LeafPaths entry already lists, in execution order, the blocks a dispatch
+  // traverses to reach that leaf, so the region need not be accumulated
+  // separately (and threaded through mutating helpers) as the decode walks the
+  // CFG.
+  static UnorderedSet<cfg::Block*> region_from_leaf_paths(
+      cfg::Block* origin_block, const LeafPaths& leaf_paths);
 
   // One "link" of the dispatch: the BigBlock beginning at a head block, plus
   // the located `subject.equals(lit)` test within it. Inside a try the
@@ -241,19 +274,20 @@ class StringSwitchFinder {
     // block's last block.
     cfg::Block* branch_block() const { return big_block->get_last_block(); }
 
-    // Adds the big block's constituent blocks to `region`, stopping before
-    // `until` (if given). A no-op when no big block was formed.
-    void add_to_region(UnorderedSet<cfg::Block*>* region,
-                       cfg::Block* until = nullptr) const {
+    // The big block's constituent blocks in execution order, stopping before
+    // `until` (if given). Empty when no big block was formed.
+    std::vector<cfg::Block*> path_blocks(cfg::Block* until = nullptr) const {
+      std::vector<cfg::Block*> blocks;
       if (!big_block) {
-        return;
+        return blocks;
       }
       for (cfg::Block* b : big_block->get_blocks()) {
         if (b == until) {
           break;
         }
-        region->insert(b);
+        blocks.push_back(b);
       }
+      return blocks;
     }
   };
 
@@ -272,16 +306,19 @@ class StringSwitchFinder {
   bool valid_catch_exits(const UnorderedSet<cfg::Block*>& region,
                          cfg::Block* hashcode_block);
 
-  // Follows `equal_edge` (through goto-only blocks, which are added to
-  // `region`) to the ordinal switch, returning the constant ordinal value
-  // arriving there. The ordinal may be set in a block on the path, or preloaded
-  // in a dominating block (in which case the equal edge targets the ordinal
-  // switch directly); in both cases it is read from the exit state of the last
-  // block before the ordinal switch.
+  // Follows `equal_edge` (through goto-only blocks, appended in execution order
+  // to `ordinal_set_blocks`) to the ordinal switch, returning the constant
+  // ordinal value arriving there. The ordinal may be set in a block on the
+  // path, or preloaded in a dominating block (in which case the equal edge
+  // targets the ordinal switch directly); in both cases it is read from the
+  // exit state of the last block before the ordinal switch. The ordinal value
+  // is resolved by the constant-propagation fixpoint, so it is robust to
+  // moves/CSE -- this is the real static analysis the extra-loads path capture
+  // relies on instead of re-deriving it.
   bool ordinal_from_equal_path(cfg::Edge* equal_edge,
                                cfg::Block* ord_switch_block,
                                reg_t ordinal_reg,
-                               UnorderedSet<cfg::Block*>* region,
+                               std::vector<cfg::Block*>* ordinal_set_blocks,
                                int32_t* out) const;
 
   const StringSwitchCfgContext& m_ctx;

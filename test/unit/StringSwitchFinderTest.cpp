@@ -1534,3 +1534,380 @@ TEST_F(StringSwitchFinderTest, hash_switch_shared_destination_block) {
   EXPECT_EQ(first_string_literal(*string_dests.begin()), "yay");
   code->clear_cfg();
 }
+
+// A register (v10) with SEVERAL divergent region defs (0 in the origin, 777 in
+// bucket one, 888 in bucket two, 999 in bucket three) all flowing to a single
+// use outside the region (in the default body). No single constant reproduces
+// the path-dependent value, so this cannot be hauled and the switch must NOT be
+// recovered (a deliberate false negative).
+TEST_F(StringSwitchFinderTest, hash_switch_divergent_extra_loads_rejected) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (const v1 -1)
+      (const v10 0)
+      (switch v0 (:hone :htwo :hthree))
+
+      (:ord)
+      (switch v1 (:body0 :body1 :body2))
+      (const-string "RES_default")
+      (move-result-pseudo-object v4)
+      (invoke-static (v10) "Lfoo;.use:(I)V")
+      (return-object v4)
+
+      (:hone 110182)
+      (const v10 777)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set0)
+      (goto :ord)
+      (:set0)
+      (const v1 0)
+      (goto :ord)
+
+      (:htwo 115276)
+      (const v10 888)
+      (const-string "two")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set1)
+      (goto :ord)
+      (:set1)
+      (const v1 1)
+      (goto :ord)
+
+      (:hthree 110339486)
+      (const v10 999)
+      (const-string "three")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set2)
+      (goto :ord)
+      (:set2)
+      (const v1 2)
+      (goto :ord)
+
+      (:body0 0)
+      (const-string "RES_one")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:body1 1)
+      (const-string "RES_two")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:body2 2)
+      (const-string "RES_three")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+
+  auto switches = find_string_switches(cfg, fp);
+  EXPECT_EQ(switches.size(), 0u);
+
+  code->clear_cfg();
+}
+
+// The representable counterpart (EQUALS_CHAIN): `const v10 777` lives in the
+// second chain block (a non-origin region block) and is consumed in the "b"
+// body. It is on the root->leaf path to BOTH the "b" body (equal edge) and the
+// default (not-equal fall-through), so -- mirroring SwitchEquivFinder's
+// accumulation -- it is recorded on both leaves, even though only the "b" body
+// reads it (the spare copy on the default path is a dead const a later DCE pass
+// removes). The switch IS recovered (no divergence: each leaf sees a consistent
+// load set).
+TEST_F(StringSwitchFinderTest, equals_chain_single_def_extra_load_recorded) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+      (invoke-virtual (v1) "Ljava/lang/String;.hashCode:()I")
+      (const-string "a")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v1 v0) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v0)
+      (if-nez v0 :body_a)
+
+      (const v10 777)
+      (const-string "b")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v1 v0) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v0)
+      (if-nez v0 :body_b)
+
+      (const-string "RES_default")
+      (move-result-pseudo-object v3)
+      (return-object v3)
+
+      (:body_a)
+      (const-string "RES_a")
+      (move-result-pseudo-object v3)
+      (return-object v3)
+
+      (:body_b)
+      (invoke-static (v10) "Lfoo;.use:(I)V")
+      (const-string "RES_b")
+      (move-result-pseudo-object v3)
+      (return-object v3)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+
+  auto switches = find_string_switches(cfg, fp);
+  ASSERT_EQ(switches.size(), 1u);
+  const auto& info = switches[0];
+  EXPECT_EQ(info.form, StringSwitchInfo::Form::EQUALS_CHAIN);
+
+  cfg::Block* body_b = nullptr;
+  for (const auto& [key, block] : info.key_to_case) {
+    if (!std::holds_alternative<StringSwitchInfo::DefaultCase>(key) &&
+        key_string(key)->str() == "b") {
+      body_b = block;
+    }
+  }
+  ASSERT_NE(body_b, nullptr);
+  auto default_block = info.default_case();
+  ASSERT_TRUE(default_block.has_value());
+
+  const auto& extra_loads = info.extra_loads;
+  // `const v10 777` is on the path to both the "b" body and the default.
+  ASSERT_EQ(extra_loads.size(), 2u);
+  auto expect_v10_777 = [&](cfg::Block* leaf) {
+    auto it = extra_loads.find(leaf);
+    ASSERT_TRUE(it != extra_loads.end());
+    const auto& loads = it->second; // std::map<reg_t, IRInstruction*>
+    ASSERT_EQ(loads.size(), 1u);
+    auto load_it = loads.find(10);
+    ASSERT_TRUE(load_it != loads.end());
+    EXPECT_EQ(load_it->second->opcode(), OPCODE_CONST);
+    EXPECT_EQ(load_it->second->get_literal(), 777);
+  };
+  expect_v10_777(body_b);
+  expect_v10_777(*default_block);
+
+  code->clear_cfg();
+}
+
+// HASH_SWITCH where `:set0` sets the ordinal (v1=0) AND v10=777 together, and
+// the "one" body (the v1==0 arm) consumes v10. v10==777 holds there exactly
+// because v1==0 -- the correlation the second-stage ordinal switch encodes. A
+// purely structural walk would fan out from the ordinal switch along infeasible
+// (path, body) pairs and report spurious divergence; the ordinal-aware walk
+// follows only the v1==0 arm, so it proves v10==777 reaches the body and
+// records it. (The other bodies and the default see no v10 def on their paths.)
+TEST_F(StringSwitchFinderTest, hash_switch_correlated_extra_load_recorded) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (const v1 -1)
+      (const v10 0)
+      (switch v0 (:hone :htwo :hthree))
+
+      (:ord)
+      (switch v1 (:body0 :body1 :body2))
+      (const-string "RES_default")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hone 110182)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set0)
+      (goto :ord)
+      (:set0)
+      (const v1 0)
+      (const v10 777)
+      (goto :ord)
+
+      (:htwo 115276)
+      (const-string "two")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set1)
+      (goto :ord)
+      (:set1)
+      (const v1 1)
+      (goto :ord)
+
+      (:hthree 110339486)
+      (const-string "three")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set2)
+      (goto :ord)
+      (:set2)
+      (const v1 2)
+      (goto :ord)
+
+      (:body0 0)
+      (invoke-static (v10) "Lfoo;.use:(I)V")
+      (const-string "RES_one")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:body1 1)
+      (const-string "RES_two")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:body2 2)
+      (const-string "RES_three")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+
+  auto switches = find_string_switches(cfg, fp);
+  ASSERT_EQ(switches.size(), 1u);
+  const auto& info = switches[0];
+  EXPECT_EQ(info.form, StringSwitchInfo::Form::HASH_SWITCH);
+
+  cfg::Block* body_one = nullptr;
+  for (const auto& [key, block] : info.key_to_case) {
+    if (!std::holds_alternative<StringSwitchInfo::DefaultCase>(key) &&
+        key_string(key)->str() == "one") {
+      body_one = block;
+    }
+  }
+  ASSERT_NE(body_one, nullptr);
+
+  // Only the "one" body carries an extra load (v10 = 777); the other bodies and
+  // the default never have v10 defined on their paths.
+  const auto& extra_loads = info.extra_loads;
+  ASSERT_EQ(extra_loads.size(), 1u);
+  auto it = extra_loads.find(body_one);
+  ASSERT_TRUE(it != extra_loads.end());
+  const auto& loads = it->second; // std::map<reg_t, IRInstruction*>
+  ASSERT_EQ(loads.size(), 1u);
+  auto load_it = loads.find(10);
+  ASSERT_TRUE(load_it != loads.end());
+  EXPECT_EQ(load_it->second->opcode(), OPCODE_CONST);
+  EXPECT_EQ(load_it->second->get_literal(), 777);
+
+  code->clear_cfg();
+}
+
+TEST_F(StringSwitchFinderTest,
+       hash_switch_correlated_extra_load_recorded_another) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (const v1 -1)
+      (const v10 0)
+      (const v11 0)
+      (switch v0 (:hone :htwo :hthree))
+
+      (:ord)
+      (switch v1 (:body0 :body1 :body2))
+      (const-string "RES_default")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hone 110182)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set0)
+      (goto :ord)
+      (:set0)
+      (move v1 v11)
+      ; this would be successfully found (const v1 0)
+      (const v10 777)
+      (goto :ord)
+
+      (:htwo 115276)
+      (const-string "two")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set1)
+      (goto :ord)
+      (:set1)
+      (const v1 1)
+      (goto :ord)
+
+      (:hthree 110339486)
+      (const-string "three")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set2)
+      (goto :ord)
+      (:set2)
+      (const v1 2)
+      (goto :ord)
+
+      (:body0 0)
+      (invoke-static (v10) "Lfoo;.use:(I)V")
+      (const-string "RES_one")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:body1 1)
+      (const-string "RES_two")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:body2 2)
+      (const-string "RES_three")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+
+  auto switches = find_string_switches(cfg, fp);
+  ASSERT_EQ(switches.size(), 1u);
+  const auto& info = switches[0];
+  EXPECT_EQ(info.form, StringSwitchInfo::Form::HASH_SWITCH);
+
+  cfg::Block* body_one = nullptr;
+  for (const auto& [key, block] : info.key_to_case) {
+    if (!std::holds_alternative<StringSwitchInfo::DefaultCase>(key) &&
+        key_string(key)->str() == "one") {
+      body_one = block;
+    }
+  }
+  ASSERT_NE(body_one, nullptr);
+
+  // Only the "one" body carries an extra load (v10 = 777); the other bodies and
+  // the default never have v10 defined on their paths.
+  const auto& extra_loads = info.extra_loads;
+  ASSERT_EQ(extra_loads.size(), 1u);
+  auto it = extra_loads.find(body_one);
+  ASSERT_TRUE(it != extra_loads.end());
+  const auto& loads = it->second; // std::map<reg_t, IRInstruction*>
+  ASSERT_EQ(loads.size(), 1u);
+  auto load_it = loads.find(10);
+  ASSERT_TRUE(load_it != loads.end());
+  EXPECT_EQ(load_it->second->opcode(), OPCODE_CONST);
+  EXPECT_EQ(load_it->second->get_literal(), 777);
+
+  code->clear_cfg();
+}
