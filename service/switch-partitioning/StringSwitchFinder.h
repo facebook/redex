@@ -355,3 +355,18 @@ std::vector<StringSwitchInfo> find_string_switches(
     cfg::ControlFlowGraph& cfg,
     const std::shared_ptr<
         constant_propagation::intraprocedural::FixpointIterator>& fixpoint);
+
+/**
+ * Materializes a recovered switch's `extra_loads` by cloning each escaping
+ * constant to the front of the leaf (case body) block that consumes it. After
+ * this, those values are defined locally in the leaves rather than only in the
+ * switching region, so the region can be excised by a transform without
+ * breaking the bodies. It is a semantics-preserving prerequisite: the original
+ * region defs still dominate the (now redundant) copies until a rewrite removes
+ * them, and the copies make the use-def chains consistent once recomputed.
+ * Mutates the CFG. Idempotency is the caller's responsibility (call once per
+ * switch).
+ */
+void copy_extra_loads_to_leaf_blocks(
+    cfg::ControlFlowGraph& cfg,
+    const StringSwitchInfo::ExtraLoads& extra_loads);

@@ -1805,6 +1805,28 @@ TEST_F(StringSwitchFinderTest, hash_switch_correlated_extra_load_recorded) {
   EXPECT_EQ(load_it->second->opcode(), OPCODE_CONST);
   EXPECT_EQ(load_it->second->get_literal(), 777);
 
+  // Materializing the extra loads puts `const v10 777` immediately before the
+  // `use(v10)` that consumes it in the "one" body.
+  copy_extra_loads_to_leaf_blocks(cfg, info.extra_loads);
+  auto* use_method = DexMethod::get_method("Lfoo;.use:(I)V");
+  ASSERT_NE(use_method, nullptr);
+  IRInstruction* prev = nullptr;
+  bool found_use = false;
+  for (auto& mie : InstructionIterable(body_one)) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == OPCODE_INVOKE_STATIC &&
+        insn->get_method() == use_method) {
+      ASSERT_NE(prev, nullptr);
+      EXPECT_EQ(prev->opcode(), OPCODE_CONST);
+      EXPECT_EQ(prev->dest(), 10u);
+      EXPECT_EQ(prev->get_literal(), 777);
+      found_use = true;
+      break;
+    }
+    prev = insn;
+  }
+  EXPECT_TRUE(found_use);
+
   code->clear_cfg();
 }
 
@@ -1908,6 +1930,28 @@ TEST_F(StringSwitchFinderTest,
   ASSERT_TRUE(load_it != loads.end());
   EXPECT_EQ(load_it->second->opcode(), OPCODE_CONST);
   EXPECT_EQ(load_it->second->get_literal(), 777);
+
+  // Materializing the extra loads puts `const v10 777` immediately before the
+  // `use(v10)` that consumes it in the "one" body.
+  copy_extra_loads_to_leaf_blocks(cfg, info.extra_loads);
+  auto* use_method = DexMethod::get_method("Lfoo;.use:(I)V");
+  ASSERT_NE(use_method, nullptr);
+  IRInstruction* prev = nullptr;
+  bool found_use = false;
+  for (auto& mie : InstructionIterable(body_one)) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == OPCODE_INVOKE_STATIC &&
+        insn->get_method() == use_method) {
+      ASSERT_NE(prev, nullptr);
+      EXPECT_EQ(prev->opcode(), OPCODE_CONST);
+      EXPECT_EQ(prev->dest(), 10u);
+      EXPECT_EQ(prev->get_literal(), 777);
+      found_use = true;
+      break;
+    }
+    prev = insn;
+  }
+  EXPECT_TRUE(found_use);
 
   code->clear_cfg();
 }

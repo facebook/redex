@@ -689,3 +689,113 @@ TEST_F(StringSwitchTransformTest,
 
   code->clear_cfg();
 }
+
+// A switch with a region constant (v10 = 777, set alongside the ordinal) that
+// escapes into the "one" body. apply() must haul that const into the body
+// before excising the region, so the body's use(v10) survives. The switch is
+// transformed normally (extra_loads is no longer a rejection reason).
+TEST_F(StringSwitchTransformTest, tree_map_apply_with_extra_load_via_driver) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (const v1 -1)
+      (const v10 0)
+      (switch v0 (:hone :htwo :hthree))
+
+      (:ord)
+      (switch v1 (:body0 :body1 :body2))
+      (const-string "RES_default")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hone 110182)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set0)
+      (goto :ord)
+      (:set0)
+      (const v1 0)
+      (const v10 777)
+      (goto :ord)
+
+      (:htwo 115276)
+      (const-string "two")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set1)
+      (goto :ord)
+      (:set1)
+      (const v1 1)
+      (goto :ord)
+
+      (:hthree 110339486)
+      (const-string "three")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set2)
+      (goto :ord)
+      (:set2)
+      (const v1 2)
+      (goto :ord)
+
+      (:body0 0)
+      (invoke-static (v10) "Lfoo;.use:(I)V")
+      (const-string "RES_one")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:body1 1)
+      (const-string "RES_two")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:body2 2)
+      (const-string "RES_three")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+    )
+  )");
+  code->build_cfg();
+  apply_tree_map(code.get());
+
+  auto& cfg = code->cfg();
+  auto counts = string_switch_test::count_string_switch_opcodes(
+      cfg::InstructionIterable(cfg));
+  // The dispatch machinery is gone; the lookup feeds one switch, and the body's
+  // own use(v10) survives.
+  EXPECT_EQ(counts.hashcode, 0u);
+  EXPECT_EQ(counts.equals, 0u);
+  EXPECT_EQ(counts.switches, 1u);
+  EXPECT_EQ(count_invoke_static_to(cfg, kLookupMethod), 1u);
+  EXPECT_EQ(count_invoke_static_to(cfg, "Lfoo;.use:(I)V"), 1u);
+
+  // The escaping const was hauled to the front of the body that uses it: `const
+  // v10 777` immediately precedes `use(v10)`.
+  auto* use_block = block_of_invoke_static_to(cfg, "Lfoo;.use:(I)V");
+  ASSERT_NE(use_block, nullptr);
+  auto* use_method = DexMethod::get_method("Lfoo;.use:(I)V");
+  IRInstruction* prev = nullptr;
+  bool found_use = false;
+  for (auto& mie : InstructionIterable(use_block)) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == OPCODE_INVOKE_STATIC &&
+        insn->get_method() == use_method) {
+      ASSERT_NE(prev, nullptr);
+      EXPECT_EQ(prev->opcode(), OPCODE_CONST);
+      EXPECT_EQ(prev->dest(), 10u);
+      EXPECT_EQ(prev->get_literal(), 777);
+      found_use = true;
+      break;
+    }
+    prev = insn;
+  }
+  EXPECT_TRUE(found_use);
+
+  code->clear_cfg();
+}

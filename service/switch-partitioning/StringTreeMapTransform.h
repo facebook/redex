@@ -38,8 +38,10 @@
  *   - every case-label string is printable ASCII (the trie encoder requires
  *     chars >= 32, and a clean MUTF-8 <-> UTF-16 round-trip requires ASCII),
  *   - the case count (including the default) is >= min_cases,
- *   - no region constant must be hauled into a body (extra_loads empty) -- V1,
  *   - the encoded payload fits in a single const-string (<= max payload) -- V1.
+ *
+ * Region constants consumed in a case body (extra_loads) are supported: apply()
+ * copies them to the front of those bodies before excising the region.
  *
  * The lookup is the KEY-first searchMap(subject, data, notFound): it
  * dereferences the subject, preserving the original switch's

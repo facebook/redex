@@ -131,11 +131,10 @@ std::optional<TransformScore> StringTreeMapTransform::evaluate(
   if (source_blocks::is_hot(info.origin_block)) {
     return std::nullopt;
   }
-  // V1: a constant defined in the region and consumed in a body would need to
-  // be hauled into the destination; not yet supported.
-  if (!info.extra_loads.empty()) {
-    return std::nullopt;
-  }
+  // Region constants consumed in a body (info.extra_loads) are handled: apply()
+  // copies them into the bodies before excising the region. The finder only
+  // reports representable extra_loads (it bails on divergence), so there is
+  // nothing unsafe to accept here.
   // Case count, including the default (matches the analysis report's CASES).
   if (static_cast<int64_t>(info.key_to_case.size()) < m_min_cases) {
     return std::nullopt;
@@ -172,6 +171,11 @@ void StringTreeMapTransform::apply(
   // evaluate() returned a score, so the plan must rebuild identically.
   always_assert(plan.has_value());
   always_assert(plan->encoded.size() <= m_max_payload_size);
+
+  // Make each body self-contained before excising the region: clone any
+  // escaping region constant to the front of the leaf that consumes it. The
+  // originals die with the region below; the clones keep those bodies correct.
+  copy_extra_loads_to_leaf_blocks(cfg, info.extra_loads);
 
   // The lookup's instructions. `subject_reg` is the hashCode receiver; it is
   // defined before the dispatch branch and never reassigned by the (recovered)

@@ -884,3 +884,11 @@ std::vector<StringSwitchInfo> find_string_switches(
   StringSwitchCfgContext ctx(cfg, fixpoint);
   return find_string_switches(ctx);
 }
+
+void copy_extra_loads_to_leaf_blocks(
+    cfg::ControlFlowGraph& cfg,
+    const StringSwitchInfo::ExtraLoads& extra_loads) {
+  for (const auto& [leaf, loads] : UnorderedIterable(extra_loads)) {
+    SwitchEquivEditor::copy_extra_loads_to_leaf_block(extra_loads, &cfg, leaf);
+  }
+}
