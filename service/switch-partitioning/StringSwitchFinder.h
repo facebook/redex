@@ -260,6 +260,15 @@ class StringSwitchFinder {
     // StringDomain just before it); null if there is no such constant.
     const DexString* literal{nullptr};
 
+    // True iff the subject register is overwritten between this link's equals()
+    // invoke and its consuming branch (find_equals_link already proved the
+    // subject is intact AT the invoke, so that window is the only place a
+    // clobber can hide). d8 reuses the subject's register for the equals result
+    // in a degenerate one-case chain (`move-result vSubject`), leaving the
+    // subject dead at the dispatch branch; decode_equals_chain rejects such a
+    // chain so every transform can read subject_reg at origin_insn unguarded.
+    bool subject_clobbered{false};
+
     // True iff this link is a fully-recovered `subject.equals("constant")`
     // test: a big block was formed, it contains the subject-equals call, and
     // that call's argument is a constant String. When this holds,
@@ -293,9 +302,11 @@ class StringSwitchFinder {
 
   // Builds the BigBlock starting at `start` (a "happy path" run of blocks split
   // only by throw edges) and locates the first `subject.equals(lit)` test in
-  // it.
+  // it. Also records whether `subject_reg` is clobbered after that test (see
+  // EqualsLink::subject_clobbered).
   EqualsLink find_equals_link(
       cfg::Block* start,
+      reg_t subject_reg,
       const sparta::PatriciaTreeSet<live_range::Def>& subject_defs) const;
 
   // Validates the region's exception edges and records its Throwable exits.

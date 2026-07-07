@@ -868,6 +868,71 @@ TEST_F(StringSwitchFinderTest, equals_chain_merge_back_rejected) {
   code->clear_cfg();
 }
 
+// A degenerate one-case equals chain where d8 reuses the subject's register for
+// the sole equals() result: by the dispatch branch the subject register no
+// longer holds the subject. Such a switch can't be transformed into anything
+// smaller or faster, and its origin branch would read a clobbered subject, so
+// recovery rejects it -- keeping subject_reg usable at origin_insn for every
+// transform.
+TEST_F(StringSwitchFinderTest,
+       one_case_chain_reusing_subject_register_rejected) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+      (invoke-virtual (v1) "Ljava/lang/String;.hashCode:()I")
+      (const-string "abc")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v1 v0) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v1)
+      (if-nez v1 :first)
+      (const-string "RES_default")
+      (move-result-pseudo-object v1)
+      (return-object v1)
+      (:first)
+      (const-string "RES_first")
+      (move-result-pseudo-object v1)
+      (return-object v1)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+  EXPECT_TRUE(find_string_switches(cfg, fp).empty());
+  code->clear_cfg();
+}
+
+// The same one case, but the equals() result goes to a scratch register (not
+// the subject's), so the subject survives to the branch and the switch IS
+// recovered. Confirms the rejection above keys on the clobber, not merely the
+// case count.
+TEST_F(StringSwitchFinderTest, one_case_chain_preserving_subject_recovered) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+      (invoke-virtual (v1) "Ljava/lang/String;.hashCode:()I")
+      (const-string "abc")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v1 v0) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :first)
+      (const-string "RES_default")
+      (move-result-pseudo-object v3)
+      (return-object v3)
+      (:first)
+      (const-string "RES_first")
+      (move-result-pseudo-object v3)
+      (return-object v3)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+  auto switches = find_string_switches(cfg, fp);
+  ASSERT_EQ(switches.size(), 1u);
+  EXPECT_EQ(switches[0].form, StringSwitchInfo::Form::EQUALS_CHAIN);
+  code->clear_cfg();
+}
+
 // Form A where d8 preloads a case's ordinal in a dominating block and routes
 // the equals-true edge straight to the ordinal switch (no per-case const-set
 // block). Mirrors what d8 emitted for Example.handleMultiple.

@@ -288,6 +288,7 @@ bool StringSwitchFinder::ordinal_from_equal_path(
 
 StringSwitchFinder::EqualsLink StringSwitchFinder::find_equals_link(
     cfg::Block* start,
+    reg_t subject_reg,
     const sparta::PatriciaTreeSet<live_range::Def>& subject_defs) const {
   const auto& ud = m_ctx.use_def();
   // The dispatch's "happy path" from `start` is exactly a BigBlock: a run of
@@ -304,14 +305,24 @@ StringSwitchFinder::EqualsLink StringSwitchFinder::find_equals_link(
   }
   link.big_block.emplace(std::move(*big_block));
   for (const auto& mie : big_blocks::InstructionIterable(*link.big_block)) {
-    // "Strict value identity": the equals receiver's reaching defs must equal
-    // `subject_defs` exactly (not merely overlap). `subject_defs` is non-empty
-    // (the caller validates the hashCode receiver's defs), so set equality
-    // alone is the right test.
-    if (is_string_equals(mie.insn) &&
-        subject_defs.equals(defs_of(ud, mie.insn, 0))) {
-      link.equals_insn = mie.insn;
-      break;
+    if (link.equals_insn == nullptr) {
+      // "Strict value identity": the equals receiver's reaching defs must equal
+      // `subject_defs` exactly (not merely overlap). `subject_defs` is
+      // non-empty (the caller validates the hashCode receiver's defs), so set
+      // equality alone is the right test.
+      if (is_string_equals(mie.insn) &&
+          subject_defs.equals(defs_of(ud, mie.insn, 0))) {
+        link.equals_insn = mie.insn;
+      }
+    } else {
+      // Past the equals invoke (where the subject is provably intact) up to the
+      // consuming branch that ends the big block: any write to subject_reg here
+      // leaves the subject dead at the dispatch branch. See
+      // EqualsLink::subject_clobbered.
+      if (mie.insn->has_dest() && mie.insn->dest() == subject_reg) {
+        link.subject_clobbered = true;
+        break;
+      }
     }
   }
   if (link.equals_insn == nullptr) {
@@ -505,7 +516,7 @@ bool StringSwitchFinder::decode_hash_switch(
       // is a goto hop or two past `cur` (may-throw const-string/invoke splits),
       // so the BigBlock from `cur` spans the literal, the equals, and the
       // branch.
-      EqualsLink link = find_equals_link(cur, subject_defs);
+      EqualsLink link = find_equals_link(cur, subject_reg, subject_defs);
       if (!link.found()) {
         if (first) {
           return false; // a bucket must contain at least one equals
@@ -626,7 +637,7 @@ bool StringSwitchFinder::decode_equals_chain(
     // hashCode invoke and each const-string/equals end their own blocks, so the
     // equals is one or more goto hops past `cur` -- all spanned by the
     // BigBlock.
-    EqualsLink link = find_equals_link(cur, subject_defs);
+    EqualsLink link = find_equals_link(cur, subject_reg, subject_defs);
     if (!link.found()) {
       // No further equals: `cur` (the last not-equal edge's target) is the
       // default body entry, reached after every test on the spine failed.
@@ -645,6 +656,14 @@ bool StringSwitchFinder::decode_equals_chain(
     if (origin_insn == nullptr) {
       origin_insn =
           link.branch_block()->get_last_insn()->insn; // first dispatch branch
+      // The subject must still occupy subject_reg at this dispatch branch:
+      // every transform reads it there when it splices in the replacement
+      // dispatch. A degenerate one-case chain (d8 reuses subject_reg for the
+      // sole equals() result) fails this and is never worth transforming, so
+      // reject the whole switch rather than burden each transform with it.
+      if (link.subject_clobbered) {
+        return false;
+      }
     }
     if (!seen_literals.insert(link.literal).second) {
       return false; // duplicate literal
