@@ -53,8 +53,9 @@ class MockTransform : public StringSwitchTransform {
     return m_score;
   }
 
-  void apply(const StringSwitchCandidate& /*candidate*/) const override {
+  size_t apply(const StringSwitchCandidate& /*candidate*/) const override {
     ++*m_applied_counter;
+    return 1; // terminal: the switch is no longer recoverable
   }
 
  private:

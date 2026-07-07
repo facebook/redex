@@ -163,7 +163,7 @@ std::optional<TransformScore> StringTreeMapTransform::evaluate(
   return TransformScore{TransformTier::SIZE, magnitude};
 }
 
-void StringTreeMapTransform::apply(
+size_t StringTreeMapTransform::apply(
     const StringSwitchCandidate& candidate) const {
   auto& cfg = candidate.ctx.cfg();
   const auto& info = candidate.info;
@@ -262,4 +262,8 @@ void StringTreeMapTransform::apply(
   // fed them remain reachable in the origin block; the driver clears them with
   // a single LocalDce once all transforms on this method are done.
   cfg.remove_unreachable_blocks();
+
+  // Terminal: the switch is now a lookup, no longer a recoverable string
+  // switch.
+  return 1;
 }

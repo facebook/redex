@@ -93,7 +93,17 @@ class StringSwitchTransform {
 
   // Performs the rewrite. Only ever called on the winning transform for a
   // candidate; mutates candidate.ctx.cfg().
-  virtual void apply(const StringSwitchCandidate& candidate) const = 0;
+  //
+  // Returns how much to decrement the driver's budget (see
+  // run_string_switch_transforms) for this application: 1 for a "terminal"
+  // rewrite that leaves nothing further for the driver to do with this switch,
+  // or 0 to signal that the rewrite deliberately left a recoverable switch
+  // behind for a follow-up transform (e.g. HotCaseExtractTransform leaves a
+  // cold HASH_SWITCH for StringTreeMapTransform). A transform that returns 0
+  // MUST guarantee it will not itself be re-selected for the switch it just
+  // rewrote (otherwise the driver could loop); it does so by rewriting the
+  // switch into a form its own evaluate() no longer matches.
+  virtual size_t apply(const StringSwitchCandidate& candidate) const = 0;
 
   // The dex refs a single application of this transform may introduce.
   virtual RefBudget reserve_refs() const { return {}; }
@@ -123,6 +133,14 @@ struct CombineDriverStats {
  * application the CFG is mutated, so the driver re-recovers the switches and
  * repeats until no transform applies. `transforms` is shared read-only; it may
  * be empty (then this is a no-op). Updates `stats`.
+ *
+ * A budget, initialized to the number of switches first recovered, bounds the
+ * work: each apply() decrements it by that apply()'s return value (1 for a
+ * terminal rewrite, 0 for one that leaves a recoverable switch for a follow-up
+ * transform). The loop stops when the budget is exhausted or no transform
+ * applies. Because every terminal rewrite makes one recovered switch
+ * unrecoverable, at most `switches.size()` of them ever run, so the budget is
+ * both sufficient and a guard against a buggy transform re-applying forever.
  *
  * If any transform was applied, the driver runs LocalDce once at the end to
  * clear the dispatch machinery the rewrites left behind (the dead

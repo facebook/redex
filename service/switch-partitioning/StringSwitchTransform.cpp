@@ -7,6 +7,7 @@
 
 #include "StringSwitchTransform.h"
 
+#include <algorithm>
 #include <memory>
 
 #include "ConstantEnvironment.h"
@@ -40,20 +41,30 @@ void run_string_switch_transforms(
   if (transforms.empty()) {
     return;
   }
-  // Each successful transform should make at least one switch unrecoverable, so
-  // the number of applications is bounded by the initial switch count. This cap
-  // guarantees termination even if a transform fails to do so (a transform
-  // bug): we never re-recover and re-apply forever.
+  // Budget the total rewriting work, starting from the number of switches first
+  // recovered. Each apply() decrements the budget by its return value: a
+  // terminal rewrite returns 1, while a rewrite that intentionally leaves a
+  // recoverable switch for a follow-up transform (e.g. HotCaseExtractTransform
+  // peeling hot cases and leaving a cold HASH_SWITCH for
+  // StringTreeMapTransform) returns 0. Every terminal rewrite makes one
+  // recovered switch unrecoverable, so at most the initial switch count of them
+  // run; a 0-returning transform must leave the switch in a form it no longer
+  // matches, so it cannot be re-selected forever. Together this bounds the loop
+  // even if a transform is buggy.
   std::optional<size_t> budget;
   bool any_applied = false;
   while (true) {
+    // Once the budget is exhausted there are no recoverable switches left (the
+    // budget tracks their count), so stop here -- before rebuilding the
+    // (expensive) fixpoint + reaching-def context and re-recovering. On the
+    // first iteration the budget is not yet known and is seeded below.
+    if (budget && *budget == 0) {
+      break;
+    }
     StringSwitchCfgContext ctx(cfg, run_fixpoint(cfg));
     auto switches = find_string_switches(ctx);
     if (!budget) {
       budget = switches.size();
-    }
-    if (*budget == 0) {
-      break;
     }
 
     // Across all switches and transforms, pick the single best applicable
@@ -78,10 +89,12 @@ void run_string_switch_transforms(
     }
     always_assert(best_info != nullptr);
     StringSwitchCandidate winner{method, ctx, *best_info};
-    best_transform->apply(winner);
+    size_t consumed = best_transform->apply(winner);
     stats->record(best_transform->name());
     any_applied = true;
-    --*budget;
+    // Clamp so a transform returning more than the remaining budget cannot
+    // underflow it.
+    *budget -= std::min(consumed, *budget);
     // The CFG is now mutated; loop to rebuild the context and re-recover. Each
     // apply leaves its now-dead dispatch machinery (the original
     // String.hashCode/equals invokes and the constants that fed them) in place;
