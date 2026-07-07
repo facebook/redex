@@ -62,7 +62,8 @@ class StringTreeMapTransform : public StringSwitchTransform {
   std::optional<TransformScore> evaluate(
       const StringSwitchCandidate& candidate) const override;
 
-  size_t apply(const StringSwitchCandidate& candidate) const override;
+  size_t apply(const StringSwitchCandidate& candidate,
+               const TransformPlan* plan) const override;
 
   // One method ref (the shared lookup method invoke) per dex.
   RefBudget reserve_refs() const override {

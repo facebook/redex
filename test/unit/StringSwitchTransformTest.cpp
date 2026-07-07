@@ -42,25 +42,37 @@ class MockTransform : public StringSwitchTransform {
   MockTransform(std::string name,
                 std::optional<TransformScore> score,
                 int* applied_counter)
-      : m_name(std::move(name)),
-        m_score(score),
-        m_applied_counter(applied_counter) {}
+      : m_name(std::move(name)), m_applied_counter(applied_counter) {
+    if (score) {
+      m_applies = true;
+      m_tier = score->tier;
+      m_magnitude = score->magnitude;
+    }
+  }
 
   std::string_view name() const override { return m_name; }
 
+  // Rebuilds the fixed score each call (TransformScore is move-only, so it
+  // cannot cache and return a copy); MockTransform needs no plan.
   std::optional<TransformScore> evaluate(
       const StringSwitchCandidate& /*candidate*/) const override {
-    return m_score;
+    if (!m_applies) {
+      return std::nullopt;
+    }
+    return TransformScore{m_tier, m_magnitude};
   }
 
-  size_t apply(const StringSwitchCandidate& /*candidate*/) const override {
+  size_t apply(const StringSwitchCandidate& /*candidate*/,
+               const TransformPlan* /*plan*/) const override {
     ++*m_applied_counter;
     return 1; // terminal: the switch is no longer recoverable
   }
 
  private:
   std::string m_name;
-  std::optional<TransformScore> m_score;
+  bool m_applies{false};
+  TransformTier m_tier{TransformTier::SIZE};
+  int64_t m_magnitude{0};
   int* m_applied_counter;
 };
 

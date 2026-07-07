@@ -78,7 +78,7 @@ void run_string_switch_transforms(
       for (const auto& transform : transforms) {
         auto score = transform->evaluate(candidate);
         if (score && (!best_score || is_better(*score, *best_score))) {
-          best_score = score;
+          best_score = std::move(score);
           best_transform = transform.get();
           best_info = &info;
         }
@@ -89,7 +89,7 @@ void run_string_switch_transforms(
     }
     always_assert(best_info != nullptr);
     StringSwitchCandidate winner{method, ctx, *best_info};
-    size_t consumed = best_transform->apply(winner);
+    size_t consumed = best_transform->apply(winner, best_score->plan.get());
     stats->record(best_transform->name());
     any_applied = true;
     // Clamp so a transform returning more than the remaining budget cannot

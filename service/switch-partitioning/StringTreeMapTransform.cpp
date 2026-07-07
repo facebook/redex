@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <variant>
@@ -60,7 +61,7 @@ struct block_id_less {
 // The concrete re-encoding of a recovered switch: the case-label -> ordinal map
 // (already encoded into `encoded`), the switch's (ordinal -> distinct
 // destination) edges, and the default block.
-struct TreeMapPlan {
+struct TreeMapPlan : TransformPlan {
   std::vector<std::pair<int32_t, cfg::Block*>> edges;
   cfg::Block* default_block{nullptr};
   std::string encoded;
@@ -160,17 +161,18 @@ std::optional<TransformScore> StringTreeMapTransform::evaluate(
   int64_t magnitude =
       (static_cast<int64_t>(removed_insns) - added_insns) * APPROX_INSN_BYTES -
       static_cast<int64_t>(plan->encoded.size());
-  return TransformScore{TransformTier::SIZE, magnitude};
+  return TransformScore{TransformTier::SIZE, magnitude,
+                        std::make_unique<TreeMapPlan>(std::move(*plan))};
 }
 
-size_t StringTreeMapTransform::apply(
-    const StringSwitchCandidate& candidate) const {
+size_t StringTreeMapTransform::apply(const StringSwitchCandidate& candidate,
+                                     const TransformPlan* plan_base) const {
   auto& cfg = candidate.ctx.cfg();
   const auto& info = candidate.info;
-  auto plan = build_plan(info);
-  // evaluate() returned a score, so the plan must rebuild identically.
-  always_assert(plan.has_value());
-  always_assert(plan->encoded.size() <= m_max_payload_size);
+  // evaluate() produced this plan for this candidate; reuse it verbatim.
+  always_assert(plan_base != nullptr);
+  const auto* plan = dynamic_cast<const TreeMapPlan*>(plan_base);
+  always_assert(plan != nullptr && plan->encoded.size() <= m_max_payload_size);
 
   // Make each body self-contained before excising the region: clone any
   // escaping region constant to the front of the leaf that consumes it. The
