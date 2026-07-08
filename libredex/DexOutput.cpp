@@ -560,7 +560,7 @@ namespace {
 // Leave 250K empty as a margin to not overrun.
 constexpr uint32_t k_output_red_zone = 250000;
 
-constexpr uint32_t k_default_max_dex_size = 32 * 1024 * 1024;
+constexpr uint32_t k_default_max_dex_size = 64 * 1024 * 1024;
 
 uint32_t get_dex_output_size(const ConfigFiles& conf) {
   size_t output_size;
