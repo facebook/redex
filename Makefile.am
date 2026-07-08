@@ -352,6 +352,7 @@ libredex_la_SOURCES = \
 	shared/DexEncoding.cpp \
 	shared/file-utils.cpp \
 	util/CommandProfiling.cpp \
+	util/Histogram.cpp \
 	util/JemallocUtil.cpp \
 	util/Sha1.cpp
 
