@@ -70,6 +70,12 @@ class PrintKotlinStats : public Pass {
     // Counts of `invoke-interface` to `kotlin.jvm.functions.FunctionN.invoke`
     // for arities 0..3 and 4+. Index 4 holds the aggregate for arities >= 4.
     std::array<size_t, 5> kotlin_invoke_interface_function_insns{};
+    // Count of method parameters typed `kotlin.jvm.functions.FunctionN`
+    // (callback / higher-order-function parameter slots), across all arities
+    // including the vararg `FunctionN`. A method declaring several such
+    // parameters contributes once per parameter; only methods with code are
+    // examined.
+    size_t kotlin_lambda_type_method_params{0};
 
     Stats& operator+=(const Stats& that) {
       unknown_null_check_insns += that.unknown_null_check_insns;
@@ -131,6 +137,7 @@ class PrintKotlinStats : public Pass {
         kotlin_invoke_interface_function_insns[i] +=
             that.kotlin_invoke_interface_function_insns[i];
       }
+      kotlin_lambda_type_method_params += that.kotlin_lambda_type_method_params;
       return *this;
     }
 

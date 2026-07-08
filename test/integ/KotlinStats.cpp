@@ -162,5 +162,9 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   EXPECT_EQ(stats.kotlin_default_arg_method, 2);
   EXPECT_EQ(stats.kotlin_default_arg_check_insns, 3);
   EXPECT_EQ(stats.kotlin_and_lit_insns, 3);
+
+  // LKotlinLambdaInline;.doCalc takes `(Long, Long) -> Long` (Function2).
+  // LKotlinLayzyKt;.lazyFn and LFoo;.<init> each take `() -> T` (Function0).
+  EXPECT_EQ(stats.kotlin_lambda_type_method_params, 3u);
 }
 } // namespace
