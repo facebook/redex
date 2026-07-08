@@ -109,6 +109,7 @@ bool encode_offset(IRList* ir, MethodItemEntry* target_mie, int32_t offset) {
   // fallthrough. The offset is measured in 16 bit code units, not
   // MethodItemEntries
   if (offset == static_cast<int32_t>(insn->size())) {
+    delete branch_op_mie->dex_insn;
     branch_op_mie->type = MFLOW_FALLTHROUGH;
     delete target_mie->target;
     target_mie->type = MFLOW_FALLTHROUGH;
