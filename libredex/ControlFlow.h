@@ -1624,9 +1624,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
           // throwing instruction.
           auto existing_last_op = existing_last->insn->opcode();
           always_assert_log(
-              !opcode::is_branch(existing_last_op) &&
-                  !opcode::is_throw(existing_last_op) &&
-                  !opcode::is_a_return(existing_last_op),
+              !opcode::is_terminal(existing_last_op),
               "Can't add instructions after %s in Block %zu in %s",
               details::show_insn(existing_last->insn).c_str(), b->id(),
               details::show_cfg(*this).c_str());

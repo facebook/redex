@@ -185,8 +185,6 @@ class CFGMutation {
   void flush();
 
  private:
-  static bool is_terminal(IROpcode op);
-
   /// A memento of a change we wish to make to the CFG.
   class ChangeSet {
    public:
@@ -472,11 +470,6 @@ inline void CFGMutation::ChangeSet::add_replace_var(
 inline void CFGMutation::remove(const cfg::InstructionIterator& anchor) {
   always_assert(!anchor.is_end());
   get_change_set(anchor)->add_change(ChangeSet::Insert::Replacing, {});
-}
-
-inline bool CFGMutation::is_terminal(IROpcode op) {
-  return opcode::is_branch(op) || opcode::is_throw(op) ||
-         opcode::is_a_return(op);
 }
 
 } // namespace cfg

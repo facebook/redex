@@ -109,9 +109,16 @@ bool is_commutative(IROpcode opcode);
 bool is_binop64(IROpcode op);
 
 /**
- * Update according to
+ * Whether the opcode can raise an exception that transfers control to a catch
+ * handler. Update according to
  * https://cs.android.com/android/platform/superproject/main/+/main:art/libdexfile/dex/dex_instruction_list.h
- * except OPCODE_THROW, this get covered in can_throw
+ *
+ * NOTE: this is false for OPCODE_THROW itself (that is covered by `can_throw`)
+ * AND for `return-*` opcodes. So `may_throw` is NOT a test for "ends a block /
+ * transfers control": both `throw` and `return` are block terminators yet
+ * `may_throw` is false for them. To test "no instruction may follow in this
+ * block" use `opcode::is_terminal` (branch/throw/return); to test "can raise to
+ * a handler" use `can_throw` (= `may_throw || is_throw`).
  */
 bool may_throw(IROpcode);
 
@@ -163,6 +170,15 @@ constexpr inline bool is_branch(IROpcode op) {
   default:
     return false;
   }
+}
+
+// True for the hard block terminators -- opcodes after which no instruction
+// may follow in a block (a branch, a `throw`, or a `return`). This is the
+// predicate enforced by ControlFlowGraph::insert. Note it deliberately does
+// NOT include `may_throw` instructions: those are not terminators (inserting
+// after one splits the block and copies its throw edges).
+constexpr bool is_terminal(IROpcode op) {
+  return is_branch(op) || is_throw(op) || is_a_return(op);
 }
 
 constexpr inline bool is_div_int_or_long(IROpcode op) {

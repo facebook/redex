@@ -194,7 +194,7 @@ bool CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
                                    cfg::Block* block,
                                    ir_list::InstructionIterator& it) {
   always_assert_log(
-      !is_terminal(it->insn->opcode()) || m_replace.has_value() ||
+      !opcode::is_terminal(it->insn->opcode()) || m_replace.has_value() ||
           m_replace_var.has_value() || m_insert_after.empty(),
       "Insert after terminal operation without replacing it is prohibited.");
   // Save in case of iterator invalidation.
