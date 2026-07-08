@@ -104,10 +104,6 @@ RedexContext::~RedexContext() {
                   s_location_map.clear();
                 },
                 [&] {
-                  Timer timer("release_keep_reasons", /* indent */ false);
-                  keep_reason::Reason::release_keep_reasons();
-                },
-                [&] {
                   Timer timer("m_destruction_tasks", /* indent */ false);
                   for (const Task& t : m_destruction_tasks) {
                     t();
@@ -190,6 +186,15 @@ RedexContext::~RedexContext() {
         return fns;
       }(),
       "Delete DexFields");
+
+  // Must run after all DexClass/DexMethod/DexField deletion above: each
+  // ReferencedState holds non-owning const Reason* aliases into s_keep_reasons,
+  // and release_keep_reasons() deletes the pointed-to Reasons. Freeing them
+  // earlier would leave those still-live holders dangling.
+  {
+    Timer timer("release_keep_reasons", /* indent */ false);
+    keep_reason::Reason::release_keep_reasons();
+  }
 
   parallel_run(
       [&]() {

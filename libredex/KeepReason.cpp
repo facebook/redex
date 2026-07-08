@@ -82,6 +82,16 @@ Reason* Reason::try_insert(std::unique_ptr<Reason> to_insert) {
   return const_cast<Reason*>(*reason_ptr);
 }
 
-void Reason::release_keep_reasons() { s_keep_reasons.reset(); }
+void Reason::release_keep_reasons() {
+  if (s_keep_reasons == nullptr) {
+    return;
+  }
+  // s_keep_reasons owns the interned Reason objects: try_insert() does
+  // to_insert.release() into a set of raw pointers. Reset alone leaks them.
+  for (auto* r : UnorderedIterable(*s_keep_reasons)) {
+    delete r;
+  }
+  s_keep_reasons.reset();
+}
 
 } // namespace keep_reason
