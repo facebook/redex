@@ -810,14 +810,35 @@ UnorderedMap<reg_t, cfg::InstructionIterator> Allocator::find_param_splits(
         idom = doms.intersect(idom, block_uses[index]);
       }
       TRACE(REG, 5, "Inserting param load of v%u in B%zu", param, idom->id());
-      // We need to check insn before end of block to make sure we didn't
-      // insert load after branches.
+      // Record the param reload at the end of the immediate dominator, but
+      // never past a terminator -- appending after one is illegal (asserts in
+      // ControlFlowGraph::insert). Leaving `insn_it` pointing AT the
+      // instruction makes split_params insert the load before it, the correct
+      // dominating spot. An instruction that transfers control via a throw
+      // (EDGE_THROW) edge -- a `throw`, or any `may_throw` insn -- can reach
+      // catch-handler blocks that hold the param's uses, so the load must
+      // precede it too. (This is why a throw block can legitimately be the idom
+      // here: a try-region body whose param is used in its own catch handlers.)
       auto insn_it = idom->get_last_insn();
-      if (insn_it != idom->end() &&
-          !opcode::is_branch(insn_it->insn->opcode()) &&
-          !opcode::may_throw(insn_it->insn->opcode())) {
-        ++insn_it;
-        always_assert(insn_it == idom->end());
+      if (insn_it != idom->end()) {
+        auto last_op = insn_it->insn->opcode();
+        // A `return` block has no real successors (only a ghost edge to the
+        // synthetic exit), so it can never be the immediate dominator of the
+        // >1 distinct use blocks this branch handles (find_first_uses dedups
+        // blocks). Assert the invariant rather than silently guarding it: if it
+        // ever fires, the CFG is malformed and a load placed here would not
+        // dominate the uses.
+        always_assert_log(!opcode::is_a_return(last_op),
+                          "param-split idom B%zu of v%u ends in return",
+                          idom->id(), param);
+        // Advance past the last instruction only when appending after it is
+        // safe -- not a terminator (`opcode::is_terminal`: branch/throw; return
+        // is excluded by the assert above) and not a `may_throw` insn (see the
+        // throw-edge note above).
+        if (!opcode::is_terminal(last_op) && !opcode::may_throw(last_op)) {
+          ++insn_it;
+          always_assert(insn_it == idom->end());
+        }
       }
       auto emplaced =
           load_locations

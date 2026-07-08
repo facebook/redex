@@ -642,6 +642,61 @@ TEST_F(RegAllocTest, Spill) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_F(RegAllocTest, ParamSplitLoadBeforeThrowTerminator) {
+  // Regression test for a RegAlloc crash exposed by aggressive method
+  // splitting. When a spilled object param is used in multiple catch handlers
+  // whose immediate dominator is a block ending in `throw`, the param load must
+  // be inserted BEFORE the throw, not after it: appending after a terminator
+  // trips the assert in ControlFlowGraph::insert ("Can't add instructions after
+  // THROW"). The load before the throw still dominates the uses in the catch
+  // handlers (registers are preserved across exception edges). The idom can
+  // legitimately be a throw block because OPCODE_THROW is not may_throw (it is
+  // covered by can_throw), so find_param_splits must place the load AT the
+  // throw rather than past it.
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (load-param-object v1)
+     (.try_start t)
+     (throw v1)
+     (.try_end t)
+     (.catch (t2))
+     (invoke-static (v0) "LFoo;.a:(Ljava/lang/Object;)V")
+     (return-void)
+     (.catch (t t2) "LMyExc;")
+     (invoke-static (v0) "LFoo;.b:(Ljava/lang/Object;)V")
+     (return-void)
+    )
+)");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(cfg);
+  fixpoint_iter.run(LivenessDomain());
+
+  RangeSet range_set;
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
+
+  graph_coloring::Allocator allocator;
+
+  // v0 is the object param shared by both catch handlers; mark it for
+  // param-split spilling.
+  UnorderedSet<reg_t> param_spills{0};
+
+  // find_param_splits must place the load AT the throw (so the subsequent
+  // insert_before lands before it), not past the block's end.
+  auto load_locations = allocator.find_param_splits(param_spills, cfg);
+  ASSERT_EQ(load_locations.size(), 1u);
+  auto it = load_locations.find(0);
+  ASSERT_NE(it, load_locations.end());
+  EXPECT_EQ(it->second->insn->opcode(), OPCODE_THROW);
+
+  // End-to-end: split_params must not crash (it previously aborted in
+  // ControlFlowGraph::insert when appending after the throw terminator).
+  allocator.split_params(ig, param_spills, cfg);
+}
+
 TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
   auto code = assembler::ircode_from_string(R"(
     (
