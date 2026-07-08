@@ -128,9 +128,6 @@ struct RedexContext {
    */
   void alias_method_name(DexMethodRef* method, const DexString* new_name);
 
-  DexMethodHandle* make_methodhandle();
-  DexMethodHandle* get_methodhandle();
-
   void erase_method(DexMethodRef*);
   void erase_method(const DexType* type,
                     const DexString* name,
@@ -161,6 +158,14 @@ struct RedexContext {
   bool class_already_loaded(DexClass* cls);
 
   void publish_class(DexClass* cls);
+
+  // Call sites and method handles are created by the dex loader (DexIdx) and
+  // referenced by non-owning raw pointers throughout the IR; they are not
+  // interned by value. RedexContext takes ownership of each (as publish_class
+  // does for classes) so it can be freed at teardown. Thread-safe: called from
+  // the parallel dex-load path.
+  void publish_callsite(DexCallSite* callsite);
+  void publish_methodhandle(DexMethodHandle* methodhandle);
 
   DexClass* type_class(const DexType* t) const;
   DexType* class_type(const DexClass* cls) const;
@@ -496,6 +501,11 @@ struct RedexContext {
   InsertOnlyConcurrentSet<DexClass*> m_classes;
   std::mutex m_external_classes_mutex;
   std::vector<DexClass*> m_external_classes;
+
+  // DexCallSite / DexMethodHandle, owned (not interned) so teardown can free
+  // them; see publish_callsite/publish_methodhandle.
+  InsertOnlyConcurrentSet<DexCallSite*> m_callsites;
+  InsertOnlyConcurrentSet<DexMethodHandle*> m_methodhandles;
 
   const std::vector<const DexType*> m_empty_types;
 

@@ -101,6 +101,7 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
                                    linker_method_name,
                                    linker_method_proto,
                                    std::move(linker_args));
+  g_redex->publish_callsite(callsite);
   return callsite;
 }
 
@@ -113,15 +114,18 @@ DexMethodHandle* DexIdx::get_methodhandleidx_fromdex(uint32_t mhidx) {
       INVALID_DEX,
       "Invalid MethodHandle type");
   MethodHandleType method_handle_type = (MethodHandleType)type_uint16;
+  DexMethodHandle* methodhandle;
   if (DexMethodHandle::isInvokeType(method_handle_type)) {
     DexMethodRef* methodref =
         get_methodidx(m_methodhandle_ids[mhidx].field_or_method_id);
-    return new DexMethodHandle(method_handle_type, methodref);
+    methodhandle = new DexMethodHandle(method_handle_type, methodref);
   } else {
     DexFieldRef* fieldref =
         get_fieldidx(m_methodhandle_ids[mhidx].field_or_method_id);
-    return new DexMethodHandle(method_handle_type, fieldref);
+    methodhandle = new DexMethodHandle(method_handle_type, fieldref);
   }
+  g_redex->publish_methodhandle(methodhandle);
+  return methodhandle;
 }
 
 std::string_view DexIdx::get_string_data(uint32_t stridx,

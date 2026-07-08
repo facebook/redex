@@ -14,7 +14,9 @@
 #include <sstream>
 
 #include "Debug.h"
+#include "DexCallSite.h"
 #include "DexClass.h"
+#include "DexMethodHandle.h"
 #include "DexPosition.h"
 #include "DuplicateClasses.h"
 #include "KeepReason.h"
@@ -194,6 +196,23 @@ RedexContext::~RedexContext() {
   {
     Timer timer("release_keep_reasons", /* indent */ false);
     keep_reason::Reason::release_keep_reasons();
+  }
+
+  // Same ordering requirement as release_keep_reasons above: DexCallSite and
+  // DexMethodHandle are referenced by non-owning raw pointers from the IR
+  // (IRInstruction / DexOpcode*), from DexCallSite's linker method handle, and
+  // from DexEncodedValueMethodHandle. Delete them only after every such holder
+  // (DexClass/DexMethod/DexField and their IRCode) is already gone.
+  {
+    Timer timer("Delete DexCallSites and DexMethodHandles", /* indent */ false);
+    for (auto* callsite : UnorderedIterable(m_callsites)) {
+      delete callsite;
+    }
+    m_callsites.clear();
+    for (auto* methodhandle : UnorderedIterable(m_methodhandles)) {
+      delete methodhandle;
+    }
+    m_methodhandles.clear();
   }
 
   parallel_run(
@@ -931,6 +950,14 @@ bool RedexContext::class_already_loaded(DexClass* cls) {
     }
     return true;
   }
+}
+
+void RedexContext::publish_callsite(DexCallSite* callsite) {
+  m_callsites.insert(callsite);
+}
+
+void RedexContext::publish_methodhandle(DexMethodHandle* methodhandle) {
+  m_methodhandles.insert(methodhandle);
 }
 
 void RedexContext::publish_class(DexClass* cls) {
