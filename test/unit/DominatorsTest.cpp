@@ -250,3 +250,25 @@ TEST(GraphUtilTest, postdominator) {
     EXPECT_EQ(post_doms.get_idom(100), 100);
   }
 }
+
+// The SimpleFastPostDominators alias must be exactly the verbose
+// SimpleFastDominators<BackwardsFixpointIterationAdaptor<...>> spelling used by
+// the GraphUtilTest.postdominator case above.
+TEST(PostDominatorsAliasTest, matchesVerboseSpelling) {
+  GraphInterface::Graph graph;
+  graph.add_edge(0, 1);
+  graph.add_edge(1, 2);
+  graph.add_edge(2, 1);
+  graph.add_edge(0, 3);
+  graph.add_edge(3, 4);
+  graph.add_edge(4, 3);
+  graph.add_edge(4, 100);
+  graph.add_edge(2, 100);
+  dominators::SimpleFastPostDominators<GraphInterfaceWithExit> post_doms(graph);
+  EXPECT_EQ(post_doms.get_idom(0), 100);
+  EXPECT_EQ(post_doms.get_idom(1), 2);
+  EXPECT_EQ(post_doms.get_idom(3), 4);
+  EXPECT_EQ(post_doms.get_idom(2), 100);
+  EXPECT_EQ(post_doms.get_idom(4), 100);
+  EXPECT_EQ(post_doms.get_idom(100), 100);
+}

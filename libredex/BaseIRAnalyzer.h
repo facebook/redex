@@ -121,6 +121,16 @@ class BaseEdgeAwareIRAnalyzer
                               Domain* /*current_state*/) const {}
 };
 
+// Base for backward IR dataflow analyses (e.g. liveness). The iteration is
+// rooted at the method's EXIT, i.e. cfg.exit_block().
+//
+// PRECONDITION: the caller must have computed the exit block via
+// cfg.calculate_exit_block() (the exit block is NOT computed on CFG
+// construction — see ControlFlow.h). Constructing/running a backward analysis
+// on a CFG whose exit block is null dereferences null and crashes. Most callers
+// get this for free because an earlier transform already called
+// calculate_exit_block(); a caller operating on a freshly built CFG must call
+// it explicitly first.
 template <typename Domain>
 class BaseBackwardsIRAnalyzer
     : public sparta::MonotonicFixpointIterator<

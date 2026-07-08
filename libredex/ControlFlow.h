@@ -517,6 +517,12 @@ class ControlFlowGraph {
   // blocks in the sorted output.
   std::vector<Block*> blocks_reverse_post_deprecated() const;
 
+  // Invariant: an *empty* block (no instructions) may have at most one
+  // successor edge — `remove_empty_blocks` asserts `succs.size() == 1`
+  // ("too many successors for empty block"). So when a freshly created
+  // block needs multiple successors (a conditional or switch), it must
+  // carry the governing branch instruction: build it with
+  // `create_branch` rather than `create_block` + multiple `add_edge`s.
   Block* create_block();
 
   // Create a new block (with a unique ID) that has a copy of the code inside
@@ -525,6 +531,17 @@ class ControlFlowGraph {
   Block* duplicate_block(Block* original);
 
   Block* entry_block() const { return m_entry_block; }
+  // The exit block is NOT computed upon CFG creation; this returns
+  // nullptr until `calculate_exit_block()` (below) has been called.
+  // Many post-dominator-consuming analyses require it; if you forget
+  // to call `calculate_exit_block()`, your post-dominator query path
+  // will see nullptr as the root and produce garbage or crash.
+  //
+  // When the method has a SINGLE return point, the returned block IS
+  // the real block containing that return — NOT a synthetic "ghost"
+  // node. Only when there are MULTIPLE return points does
+  // `calculate_exit_block()` synthesize a ghost successor. Don't assume
+  // "exit block == ghost" universally.
   Block* exit_block() const { return m_exit_block; }
   void set_entry_block(Block* b) { m_entry_block = b; }
   void set_exit_block(Block* b) { m_exit_block = b; }
@@ -948,6 +965,13 @@ class ControlFlowGraph {
 
   reg_t get_registers_size() const { return m_registers_size; }
 
+  // A freshly-constructed ControlFlowGraph starts with m_registers_size == 0;
+  // it is NOT inferred from the instructions you add. If you build a CFG and
+  // push instructions referencing registers vN, you MUST set the size to cover
+  // them (e.g. copy the source CFG's `get_registers_size()`). A size smaller
+  // than a referenced register is only caught by `sanity_check` when the code
+  // is lowered to dex (e.g. through PassManager) -- NOT during in-memory IR
+  // construction, so unit tests that never lower will silently pass.
   void set_registers_size(reg_t sz) { m_registers_size = sz; }
 
   // Find the highest register in use and set m_registers_size
@@ -996,6 +1020,18 @@ class ControlFlowGraph {
    * clear and fill `new_cfg` with a copy of `this`. Copies of all instructions
    * will be made, and are owned by the caller. Consider calling
    * set_insn_ownership on the new cfg to have it own the instructions.
+   *
+   * NOTE: this copies ALL blocks and ALL edges verbatim -- including a block's
+   * outgoing edges to blocks you may intend to exclude (e.g. when extracting a
+   * sub-region, the region-exit edges to the continuation). A bare deep_copy
+   * does NOT trim anything: callers extracting a subset must afterward remove
+   * the out-of-region blocks and re-point or synthesize the boundary edges,
+   * otherwise the excluded continuation remains reachable and executes inside
+   * the copy. The source's register width carries over: `registers_size` is
+   * copied verbatim (a stored field, not re-inferred from the copied
+   * instructions), so the new cfg is immediately well-formed -- you need NOT
+   * call set_registers_size after a deep_copy. That setter is only for cfgs
+   * built by other means (see set_registers_size below).
    */
   void deep_copy(ControlFlowGraph* new_cfg) const;
 

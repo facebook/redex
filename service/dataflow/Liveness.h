@@ -14,6 +14,8 @@
 
 using LivenessDomain = sparta::PatriciaTreeSetAbstractDomain<reg_t>;
 
+// Backward analysis: requires cfg.calculate_exit_block() to have been called
+// first (see BaseBackwardsIRAnalyzer), else construction/run crashes.
 class LivenessFixpointIterator final
     : public ir_analyzer::BaseBackwardsIRAnalyzer<LivenessDomain> {
  public:
