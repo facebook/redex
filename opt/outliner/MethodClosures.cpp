@@ -6,8 +6,10 @@
  */
 
 /*
- * This pass sorts non-perf sensitive classes according to their inheritance
- * hierarchies in each dex. This improves compressibility.
+ * MethodClosures discovers the splittable closures of a method: suffix
+ * closures (the reachable set running to a return) and cold regions (SESE
+ * hammocks embedded in hot methods). It builds the reduced CFG and runs the
+ * dominator / post-dominator analysis that region detection relies on.
  */
 #include "MethodClosures.h"
 
@@ -134,6 +136,17 @@ std::shared_ptr<const ReducedControlFlowGraph> reduce_cfg(
     DexMethod* method, std::optional<uint64_t> split_block_size) {
   auto* code = method->get_code();
   auto& cfg = code->cfg();
+  // TEST-AUTHOR TRAP: the loop below merges any return-only successor
+  // block into its sole predecessor (then deletes the successor's
+  // incoming edge). For test fixtures built via the S-expression
+  // assembler, this means a rejoin block whose only instruction is
+  // `(return v0)` (or similar) silently DISAPPEARS — the return gets
+  // appended to the cold predecessor, the predecessor's
+  // branchingness becomes BRANCH_RETURN, and downstream analyses
+  // (e.g. cold-region discovery's "non-return entry" filter) reject
+  // it without ever surfacing a useful error. To keep the rejoin
+  // intact, include at least one non-return instruction in it (e.g.
+  // an `add-int v0 v0 v0` before the return). Outliner pitfall #49.
   for (auto* block : cfg.blocks()) {
     auto* goes_to_block = block->goes_to_only_edge();
     if (goes_to_block == nullptr) {

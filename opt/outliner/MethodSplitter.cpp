@@ -285,6 +285,19 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
       std::make_unique<IRCode>(std::make_unique<cfg::ControlFlowGraph>());
   auto& split_cfg = split_code->cfg();
   split_code->set_debug_item(std::make_unique<DexDebugItem>());
+  // NOTE for callers building non-suffix splits (e.g. cold mid-method
+  // regions): `deep_copy` preserves ALL edges of the original cfg —
+  // including those crossing what the caller may consider a region
+  // boundary. The split body will continue to execute past that
+  // boundary unless the caller explicitly truncates it. For suffix
+  // splits the boundary IS the original method's return so no
+  // truncation is needed. For region splits, the caller must walk
+  // the region's exit edges in `split_cfg`, delete them, and append
+  // a `return-*` instruction — otherwise the split body double-
+  // executes the rejoin code AND the launchpad's `goto rejoin`
+  // executes it again. See pitfall #47 in the cold-region-outlining
+  // catalog and `apply_code_changes` below for the canonical
+  // truncation pattern.
   cfg.deep_copy(&split_cfg);
   auto* split_entry_block = split_cfg.create_block();
   for (const auto& arg : splittable_closure.args) {

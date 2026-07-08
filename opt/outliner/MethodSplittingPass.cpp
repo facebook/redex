@@ -6,8 +6,9 @@
  */
 
 /*
- * This pass sorts non-perf sensitive classes according to their inheritance
- * hierarchies in each dex. This improves compressibility.
+ * MethodSplittingPass splits large methods, relocating suffixes and cold
+ * regions into separate helper methods. This entry point binds config and
+ * emits metrics; the splitting machinery lives in MethodSplitter.
  */
 #include "MethodSplittingPass.h"
 
