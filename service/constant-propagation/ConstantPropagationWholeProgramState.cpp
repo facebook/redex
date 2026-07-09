@@ -102,7 +102,9 @@ bool analyze_gets_helper(const WholeProgramStateAccessor* whole_program_state,
 
 bool is_eligible_ifield(const DexField* field) {
   return !is_static(field) && !field->is_external() && can_delete(field) &&
-         !is_volatile(field);
+         !is_volatile(field) &&
+         // A transient field may be null after deserialization.
+         !is_transient(field);
 }
 
 /**
