@@ -54,6 +54,7 @@ check_PROGRAMS = \
     cfg_positions_test \
     chrome_trace_writer_test \
     class_checker_test \
+    class_order_sample_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
     clinit_batching_pass_test \
@@ -238,6 +239,8 @@ chrome_trace_writer_test_SOURCES = ChromeTraceWriterTest.cpp
 check_breadcrumbs_test_SOURCES = CheckBreadCrumbsTest.cpp
 
 check_cast_analysis_test_SOURCES = CheckCastAnalysisTest.cpp
+
+class_order_sample_test_SOURCES = ClassOrderSampleTest.cpp
 
 clinit_batching_pass_test_SOURCES = ClinitBatchingPassTest.cpp
 EXTRA_clinit_batching_pass_test_DEPENDENCIES = clinit_batching_pass_test.env

@@ -41,6 +41,7 @@
 
 #include "AggregateException.h"
 #include "ChromeTraceWriter.h"
+#include "ClassOrderSample.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h" // To set s_DEBUG.
@@ -1033,6 +1034,87 @@ Json::Value get_output_stats(
   return d;
 }
 
+// Emit a segment-aware, stratified fingerprint of the main APK's class
+// placement, for per-regime cross-build comparison. Only root stores are
+// considered (Voltron modules are excluded); classes are visited in emission
+// order (faithful to the on-disk class_defs order) and bucketed by dex-ordering
+// regime: the primary dex, the betamap-ordered coldstart region, the cold
+// (cross-dex-ref-minimized) region, and the likely-dead (Halfnosis) tail.
+Json::Value get_class_order_sample(const DexStoresVector& stores,
+                                   int cold_cap) {
+  size_t num_root_classes = 0;
+  for (const auto& store : stores) {
+    if (!store.is_root_store()) {
+      continue;
+    }
+    for (const auto& dex : store.get_dexen()) {
+      num_root_classes += dex.size();
+    }
+  }
+  std::vector<class_order_sample::ClassEntry> classes;
+  classes.reserve(num_root_classes);
+
+  // Monotonic across all root stores so dex indices are globally unique (dex 0
+  // is the one true primary dex) even in the unusual multi-root-store case.
+  uint32_t dex_index = 0;
+  for (const auto& store : stores) {
+    if (!store.is_root_store()) {
+      continue;
+    }
+    for (const auto& dex : store.get_dexen()) {
+      for (auto* cls : dex) {
+        // classify() owns the (precedence-sensitive) bucketing rule; here we
+        // just extract the primitive facts it needs from the class.
+        const auto segment = class_order_sample::classify(
+            cls->is_dynamically_dead(),
+            cls->get_perf_sensitive() == PerfSensitiveGroup::BETAMAP_ORDERED,
+            dex_index);
+        classes.push_back({cls->get_deobfuscated_name_or_empty(),
+                           cls->rstate.is_generated(), segment, dex_index});
+      }
+      dex_index++;
+    }
+  }
+
+  // Guard against a non-positive cap: casting a negative int straight to
+  // uint64_t would yield an enormous cap, making threshold() keep the entire
+  // cold segment unsampled and silently defeat the sampling intent. Treat any
+  // non-positive value as "sample no cold classes" instead.
+  const uint64_t cold_cap_bound =
+      cold_cap > 0 ? static_cast<uint64_t>(cold_cap) : 0;
+  auto sample = class_order_sample::build(classes, cold_cap_bound);
+
+  auto seg_to_json = [](const class_order_sample::SegmentSample& seg) {
+    Json::Value hashes(Json::objectValue);
+    for (const auto& sc : seg.sampled) {
+      Json::Value pair(Json::arrayValue);
+      pair.append((Json::UInt)sc.seg_index);
+      pair.append((Json::UInt)sc.dex);
+      hashes[std::to_string(sc.name_hash)] = std::move(pair);
+    }
+    Json::Value v(Json::objectValue);
+    v["hashes"] = std::move(hashes);
+    v["num_classes"] = (Json::UInt)seg.num_classes;
+    v["collisions"] = (Json::UInt)seg.collisions;
+    return v;
+  };
+
+  Json::Value segments(Json::objectValue);
+  segments["primary"] = seg_to_json(sample.primary);
+  segments["betamap"] = seg_to_json(sample.betamap);
+  segments["cold"] = seg_to_json(sample.cold);
+  Json::Value dead(Json::objectValue);
+  dead["num_classes"] = (Json::UInt)sample.dead_num_classes;
+  segments["dead"] = std::move(dead);
+
+  Json::Value val(Json::objectValue);
+  // Report the effective (clamped) cap actually used for sampling, not the raw
+  // configured value, so the metadata matches what the fingerprint reflects.
+  val["cold_cap"] = (Json::UInt64)cold_cap_bound;
+  val["segments"] = std::move(segments);
+  return val;
+}
+
 Json::Value get_threads_stats() {
   Json::Value d;
   d["used"] = (Json::UInt64)redex_parallel::default_num_threads();
@@ -1752,6 +1834,10 @@ void redex_backend(ConfigFiles& conf,
       stats["output_stats"] =
           get_output_stats(output_totals, output_dexes_stats, manager,
                            instruction_lowering_stats, pos_mapper.get());
+      if (dex_output_config.emit_class_order_sample) {
+        stats["output_stats"]["class_order_sample"] = get_class_order_sample(
+            stores, dex_output_config.class_order_sample_cap);
+      }
     });
     print_warning_summary();
 
