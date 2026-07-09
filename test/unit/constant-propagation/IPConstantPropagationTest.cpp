@@ -2497,6 +2497,71 @@ TEST_F(InterproceduralConstantPropagationTest,
 }
 
 TEST_F(InterproceduralConstantPropagationTest,
+       nezConstantFieldAfterInit_transient_field_not_inferred) {
+  // Like nezConstantFieldAfterInit_simple, but the field is transient, so it
+  // may be null/0 after deserialization and IPCP must not infer its value.
+  auto* cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  auto* field_f = DexField::make_field("LFoo;.f:I")
+                      ->make_concrete(ACC_PUBLIC | ACC_TRANSIENT);
+  creator.add_field(field_f);
+
+  auto* init = assembler::method_from_string(R"(
+    (method (public constructor) "LFoo;.<init>:()V"
+     (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (const v1 42)
+      (iput v1 v0 "LFoo;.f:I")
+      (return-void)
+     )
+    )
+  )");
+  init->rstate.set_root(); // Make this an entry point
+  creator.add_method(init);
+
+  auto* m = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:(LFoo;)I"
+     (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )");
+  m->rstate.set_root(); // Make this an entry point
+  creator.add_method(m);
+
+  Scope scope{creator.create()};
+
+  // Capture baz's IR to assert IPCP leaves it unchanged (it reads the field).
+  auto expected = assembler::to_s_expr(m->get_code());
+
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg();
+    code.cfg().calculate_exit_block();
+  });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 2;
+
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
+      &m_string_analyzer_state, &m_package_name_state, m_null_check_methods);
+  const auto& wps = fp_iter->get_whole_program_state();
+  EXPECT_TRUE(wps.get_field_value(field_f).is_top());
+
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope),
+                                                     conf);
+
+  m->get_code()->clear_cfg();
+  EXPECT_EQ(assembler::to_s_expr(m->get_code()), expected);
+}
+
+TEST_F(InterproceduralConstantPropagationTest,
        nezConstantFieldAfterInit_branching) {
   auto* cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
