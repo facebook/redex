@@ -14,6 +14,8 @@
 
 #include <boost/functional/hash.hpp>
 
+#include "Debug.h"
+
 // Utilities for emitting a compact, segment-aware, sampled fingerprint of the
 // class placement (the linearized order of classes across dexes) of the main
 // APK, so that two builds' placements can be compared per dex-ordering regime.
@@ -83,15 +85,16 @@ inline uint32_t name_hash(std::string_view name) {
 // uniformly distributed hashes this keeps ~cap classes; when the segment has no
 // more than cap classes, everything is kept (threshold covers the whole space).
 inline uint64_t threshold(uint64_t num_classes, uint64_t cap) {
-  const uint64_t k_space = uint64_t(1) << 32;
   if (num_classes <= cap) {
-    return k_space;
+    return uint64_t(1) << 32;
   }
-  // Widen the product: k_space * cap overflows uint64_t for caps above 2^32.
-  // The result always fits in uint64_t here because num_classes > cap, so it is
-  // strictly less than k_space.
-  return static_cast<uint64_t>(static_cast<unsigned __int128>(k_space) * cap /
-                               num_classes);
+  // Scale the hash space by cap/num_classes to keep ~cap classes. A dex holds
+  // at most 2^16 type refs and Redex handles nowhere near 2^31 classes, so
+  // num_classes < 2^31; with cap < num_classes here, cap < 2^31, hence
+  // cap << 32 < 2^63 fits in uint64_t with no overflow and the division is
+  // exact.
+  always_assert(num_classes < (uint64_t(1) << 31));
+  return (cap << 32) / num_classes;
 }
 
 // One class input, in emission order: deobfuscated name, whether it is
