@@ -475,6 +475,7 @@ libopt_la_SOURCES = \
 	opt/optimize_enums/EnumAnalyzeGeneratedMethods.cpp \
 	opt/optimize_enums/EnumTransformer.cpp \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \
+	opt/optimize_enums/InlineEnumValues.cpp \
 	opt/optimize_enums/OptimizeEnumsAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnums.cpp \
 	opt/optimize_enums/OptimizeEnumsUnmap.cpp \

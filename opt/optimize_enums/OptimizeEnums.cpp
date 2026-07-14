@@ -26,6 +26,7 @@
 #include "EnumUpcastAnalysis.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "InlineEnumValues.h"
 #include "MatchFlow.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsUnmap.h"
@@ -986,11 +987,23 @@ void OptimizeEnumsPass::bind_config() {
   bind("skip_sanity_check", false, m_skip_sanity_check, "May skip some check.");
   bind("support_kt_19_enum_entries", false, m_support_kt_19_enum_entries,
        "Try to optimize Kotlin 1.9 Enums with EnumEntries feature.");
+  bind("inline_enum_values", false, m_inline_enum_values,
+       "Inline the synthetic $values() method javac 15+ emits back into "
+       "<clinit> and delete it, restoring the pre-JDK-15 enum shape to reduce "
+       "dex size.");
 }
 
 void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
                                  ConfigFiles& conf,
                                  PassManager& mgr) {
+  if (m_inline_enum_values) {
+    auto stats = inline_enum_values::run(build_class_scope(stores));
+    mgr.set_metric("inline_enum_values.enums", stats.enums);
+    mgr.set_metric("inline_enum_values.changed", stats.changed);
+    mgr.set_metric("inline_enum_values.ineligible", stats.ineligible);
+    mgr.set_metric("inline_enum_values.inline_failed", stats.inline_failed);
+  }
+
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
   UnorderedMap<UnsafeType, size_t> unsafe_counts;
