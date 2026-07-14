@@ -12,7 +12,6 @@
 #include <limits>
 #include <map>
 #include <optional>
-#include <set>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -24,7 +23,6 @@
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "Inliner.h"
-#include "InlinerConfig.h"
 #include "LoopInfo.h"
 #include "RedexContext.h"
 #include "ScopedMetrics.h"

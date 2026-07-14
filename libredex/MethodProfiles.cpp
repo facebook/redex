@@ -12,8 +12,10 @@
 #include "Debug.h"
 #include "RedexContext.h"
 
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/regex.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <charconv>
 #include <fstream>
 #include <iostream>

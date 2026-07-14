@@ -10,7 +10,6 @@
 #include <fstream>
 
 #include <sparta/AbstractDomain.h>
-#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 #include <sparta/PatriciaTreeMapAbstractPartition.h>
 
 #include "CallGraph.h"

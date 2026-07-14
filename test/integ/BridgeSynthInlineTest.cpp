@@ -5,16 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <cstdint>
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <iostream>
-#include <memory>
 #include <string>
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 

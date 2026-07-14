@@ -5,19 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <list>
-
+#include "Obfuscate.h"
 #include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "IRCode.h"
-#include "Obfuscate.h"
 #include "ObfuscateUtils.h"
 #include "PassManager.h"
-#include "ReachableClasses.h"
-#include "Resolver.h"
 #include "Trace.h"
 #include "VirtualRenamer.h"
 #include "Walkers.h"

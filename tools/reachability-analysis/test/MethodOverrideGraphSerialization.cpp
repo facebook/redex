@@ -9,7 +9,6 @@
 
 #include <fstream>
 
-#include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "RedexContext.h"

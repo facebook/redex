@@ -7,8 +7,6 @@
 
 #include "CheckCastAnalysis.h"
 
-#include <sstream>
-
 #include "Debug.h"
 #include "FrameworkApi.h"
 #include "ReachingDefinitions.h"

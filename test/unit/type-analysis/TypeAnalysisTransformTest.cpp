@@ -8,7 +8,6 @@
 #include "TypeAnalysisTransform.h"
 #include "GlobalTypeAnalyzer.h"
 
-#include "CallGraph.h"
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "KotlinNullCheckMethods.h"

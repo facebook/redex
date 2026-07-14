@@ -8,10 +8,8 @@
 #include "RemoveRedundantCheckCasts.h"
 
 #include <gtest/gtest.h>
-#include <iterator>
 #include <utility>
 
-#include "ControlFlow.h"
 #include "Creators.h"
 #include "DexAsm.h"
 #include "IRAssembler.h"

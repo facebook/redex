@@ -8,8 +8,6 @@
 // This is a hack. Simplify testing, and also test an important use case.
 #include "PGIForest.h"
 
-#include <sstream>
-
 #include <gtest/gtest.h>
 
 namespace random_forest {

@@ -15,7 +15,6 @@
 
 #pragma once
 
-#include <cstdint>
 #include <iosfwd>
 #include <memory>
 #include <string>

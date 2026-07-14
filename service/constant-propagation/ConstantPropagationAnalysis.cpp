@@ -12,8 +12,6 @@
 #include <cinttypes>
 #include <cstring>
 #include <limits>
-#include <mutex>
-#include <set>
 #include <type_traits>
 
 #include "ControlFlow.h"
@@ -40,7 +38,6 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 #include "DexInstruction.h"
 #include "Resolver.h"
 #include "Trace.h"
-#include "Transform.h"
 
 // While undefined behavior C++-wise, the two's complement implementation of
 // modern processors matches the required Java semantics. So silence ubsan.

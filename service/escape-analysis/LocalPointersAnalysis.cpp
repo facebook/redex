@@ -9,8 +9,6 @@
 
 #include <ostream>
 
-#include <sparta/PatriciaTreeSet.h>
-
 #include "Debug.h"
 #include "Show.h"
 #include "Walkers.h"

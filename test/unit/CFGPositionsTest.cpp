@@ -7,15 +7,12 @@
 
 #include <gtest/gtest.h>
 
-#include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DexAsm.h"
 #include "IRAssembler.h"
-#include "IRInstruction.h"
 #include "RedexTest.h"
 
 #include <functional>
-#include <iterator>
 
 using namespace cfg;
 using namespace dex_asm;

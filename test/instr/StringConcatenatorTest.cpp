@@ -6,7 +6,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <string>
 
 #include "DexAnnotation.h"
 #include "VerifyUtil.h"

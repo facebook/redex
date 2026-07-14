@@ -13,6 +13,7 @@
 #include "Debug.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"

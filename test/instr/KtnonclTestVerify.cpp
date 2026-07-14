@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "Resolver.h"
 #include "verify/VerifyUtil.h"
 
 namespace {

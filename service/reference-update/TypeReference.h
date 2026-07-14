@@ -11,7 +11,6 @@
 #include <optional>
 
 #include "ClassHierarchy.h"
-#include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 

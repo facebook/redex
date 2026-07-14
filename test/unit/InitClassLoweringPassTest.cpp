@@ -7,8 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include <sstream>
-
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "DeterministicContainers.h"
+#include "DexClass.h"
 #include "Pass.h"
 
 struct DevirtualizerConfigs {

@@ -7,10 +7,8 @@
 
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/program_options.hpp>
-#include <fstream>
 #include <iostream>
 
-#include "androidfw/ResourceTypes.h"
 #include "utils/Visitor.h"
 
 namespace {

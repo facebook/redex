@@ -9,8 +9,6 @@
 #include <json/json.h>
 
 #include "ConfigFiles.h"
-#include "ControlFlow.h"
-#include "DexInstruction.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "InstructionLowering.h"

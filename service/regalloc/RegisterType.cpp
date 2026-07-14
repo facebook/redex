@@ -8,7 +8,6 @@
 #include "RegisterType.h"
 
 #include "Debug.h"
-#include "DexClass.h"
 #include "Show.h"
 #include "TypeUtil.h"
 

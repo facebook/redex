@@ -7,7 +7,6 @@
 
 #include "ControlFlow.h"
 
-#include <boost/numeric/conversion/cast.hpp>
 #include <iterator>
 #include <queue>
 #include <stack>

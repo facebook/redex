@@ -6,7 +6,6 @@
  */
 
 #include <memory>
-#include <unordered_map>
 
 #include <gtest/gtest.h>
 
@@ -17,7 +16,6 @@
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "Show.h"
-#include "Walkers.h"
 
 class HotColdMethodSpecializingTest : public RedexTest {
  public:

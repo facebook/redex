@@ -11,8 +11,6 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 
-#include <memory>
-#include <sstream>
 #include <utility>
 
 MappedFile* MappedFile::mmap_file(size_t byte_count,

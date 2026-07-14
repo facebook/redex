@@ -11,7 +11,6 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
-#include "Walkers.h"
 
 #include "PartialApplication.h"
 

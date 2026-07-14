@@ -8,9 +8,9 @@
 #include <gtest/gtest.h>
 #include <set>
 
-#include "ApkResources.h"
 #include "ObfuscateXmlVerifyHelper.h"
 
+#include "RedexMappedFile.h"
 #include "androidfw/ResourceTypes.h"
 
 namespace {

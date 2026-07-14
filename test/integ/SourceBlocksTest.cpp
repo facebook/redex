@@ -14,8 +14,6 @@
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
-#include "DexLoader.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
 #include "RedexContext.h"

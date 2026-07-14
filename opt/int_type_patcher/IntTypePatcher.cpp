@@ -7,6 +7,7 @@
 
 #include "IntTypePatcher.h"
 #include "Debug.h"
+#include "DexUtil.h"
 #include "IROpcode.h"
 #include "PassManager.h"
 #include "Show.h"

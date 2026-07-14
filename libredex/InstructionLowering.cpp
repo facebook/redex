@@ -13,6 +13,7 @@
 #include "DexInstruction.h"
 #include "DexOpcodeDefs.h"
 #include "DexStore.h"
+#include "DexUtil.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"
 #include "Show.h"

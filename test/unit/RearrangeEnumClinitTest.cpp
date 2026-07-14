@@ -7,8 +7,8 @@
 
 #include "gtest/gtest.h"
 #include <memory>
-#include <unordered_set>
 
+#include "IRCode.h"
 #include "RearrangeEnumClinit.h"
 
 #include "Creators.h"
@@ -18,7 +18,6 @@
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "TypeUtil.h"
-#include "Walkers.h"
 
 namespace rearrange_enum_clinit {
 

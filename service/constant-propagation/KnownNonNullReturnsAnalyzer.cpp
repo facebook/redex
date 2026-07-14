@@ -9,7 +9,6 @@
 
 #include <unordered_set>
 
-#include "Resolver.h"
 #include "SignedConstantDomain.h"
 
 namespace constant_propagation {

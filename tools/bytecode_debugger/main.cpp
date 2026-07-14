@@ -6,13 +6,16 @@
  */
 
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
 
 #include <sys/stat.h> // mkdir
 
-#include <boost/program_options.hpp> // arg parsing
+#include <boost/program_options/options_description.hpp>
+#include <boost/program_options/parsers.hpp>
+#include <boost/program_options/positional_options.hpp>
+#include <boost/program_options/value_semantic.hpp>
+#include <boost/program_options/variables_map.hpp>
 
 #include "InjectDebug.h"
 #include "ToolsCommon.h" // redex::dir_is_writable

@@ -9,16 +9,12 @@
 
 #include <memory>
 
-#include <optional>
-
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexMethodHandle.h"
 #include "DexStats.h"
-#include "DexUtil.h"
 #include "GlobalConfig.h"
-#include "Pass.h"
 
 #include <locator.h>
 using facebook::Locator;

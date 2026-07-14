@@ -6,7 +6,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <istream>
 #include <memory>
 #include <string>
 

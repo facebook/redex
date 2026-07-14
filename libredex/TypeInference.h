@@ -9,8 +9,6 @@
 
 #include <ostream>
 
-#include "OptionalIO.h"
-
 #include <sparta/FiniteAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 #include <sparta/ReducedProductAbstractDomain.h>

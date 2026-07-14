@@ -6,9 +6,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <string>
 
-#include "DexInstruction.h"
 #include "TypeUtil.h"
 #include "VerifyUtil.h"
 

@@ -11,7 +11,6 @@
 #include <assert.h>
 #include <bitset>
 #include <boost/filesystem.hpp>
-#include <exception>
 #include <fcntl.h>
 #include <fstream>
 #include <functional>
@@ -57,7 +56,6 @@
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
-#include "WorkQueue.h"
 
 /*
  * For adler32...

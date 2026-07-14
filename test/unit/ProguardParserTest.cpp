@@ -9,7 +9,6 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
-#include <istream>
 #include <vector>
 
 #include "ProguardConfiguration.h"

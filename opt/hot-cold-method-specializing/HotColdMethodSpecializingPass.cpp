@@ -7,8 +7,11 @@
 
 #include "HotColdMethodSpecializingPass.h"
 
-#include "ConfigFiles.h"
 #include "Debug.h"
+#include <boost/algorithm/string/predicate.hpp>
+
+#include "ConfigFiles.h"
+#include "DexUtil.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "RedexContext.h"

@@ -11,7 +11,6 @@
 #include "Debug.h"
 #include "PriorityThreadPoolDAGScheduler.h"
 #include "Timer.h"
-#include "WorkQueue.h"
 
 std::string CallSiteSummary::get_key() const {
   always_assert(!arguments.is_bottom());

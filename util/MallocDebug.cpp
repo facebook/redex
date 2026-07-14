@@ -28,7 +28,6 @@
 #include <dlfcn.h>
 #endif
 
-#include <algorithm>
 #include <array>
 
 #include <cstdio>

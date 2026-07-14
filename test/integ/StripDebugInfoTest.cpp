@@ -9,7 +9,6 @@
 
 #include <functional>
 
-#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "RedexTest.h"

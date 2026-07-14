@@ -9,7 +9,6 @@
 #include "Creators.h"
 #include "DexUtil.h"
 #include "RedexTest.h"
-#include "VirtualScope.h"
 #include <gtest/gtest.h>
 
 class DexStructureTest : public RedexTest {};

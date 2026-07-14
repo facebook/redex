@@ -8,7 +8,6 @@
 #include "ObjectSensitiveDcePass.h"
 
 #include <fstream>
-#include <functional>
 
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"

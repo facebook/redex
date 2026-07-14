@@ -5,12 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <memory>
-
-#include "Creators.h"
+#include "DexAccess.h"
 #include "DexClass.h"
 #include "RedexContext.h"
 #include "ScopeHelper.h"
+#include "TypeUtil.h"
 
 //
 // Scopes

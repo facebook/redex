@@ -5,14 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ConstantPropagationPass.h"
-
 #include <gtest/gtest.h>
 
 #include "AbstractDomainPropertyTest.h"
-#include "ConstantPropagationTestUtil.h"
+#include "ConstantEnvironment.h"
 #include "RedexTest.h"
-#include "SignedConstantDomain.h"
 
 struct Constants {
   ConstantValue one{SignedConstantDomain(1)};

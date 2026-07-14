@@ -6,10 +6,10 @@
  */
 
 #include "TypeUtil.h"
-#include "Debug.h"
+#include "ClassUtil.h"
 #include <boost/algorithm/string/predicate.hpp>
 
-#include "ClassUtil.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "Lazy.h"

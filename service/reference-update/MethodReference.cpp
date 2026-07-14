@@ -9,6 +9,7 @@
 
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DexUtil.h"
 #include "IRList.h"
 #include "Resolver.h"
 #include "Show.h"

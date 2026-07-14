@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gmock/gmock.h>
-
 #include "verify/VerifyUtil.h"
 
 using namespace testing;

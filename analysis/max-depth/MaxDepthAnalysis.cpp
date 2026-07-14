@@ -8,12 +8,12 @@
 #include "MaxDepthAnalysis.h"
 
 #include <sparta/AbstractDomain.h>
-#include <sparta/ConstantAbstractDomain.h>
 #include <sparta/HashedSetAbstractDomain.h>
 
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 
 #include "IRInstruction.h"
 #include "Resolver.h"

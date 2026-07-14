@@ -9,7 +9,6 @@
 
 #include "Debug.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "DexOpcode.h"
 #include "Show.h"
 #include "TypeUtil.h"

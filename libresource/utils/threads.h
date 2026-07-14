@@ -8,7 +8,6 @@
 #ifndef _FB_THREADS_REIMPLEMENTATION
 #define _FB_THREADS_REIMPLEMENTATION
 
-#include "utils/Errors.h"
 #include "utils/Mutex.h"
 
 #endif // _FB_THREADS_REIMPLEMENTATION

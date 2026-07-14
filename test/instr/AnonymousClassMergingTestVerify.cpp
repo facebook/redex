@@ -7,7 +7,6 @@
 
 #include <boost/regex.hpp>
 
-#include "Show.h"
 #include "verify/VerifyUtil.h"
 
 TEST_F(PreVerify, MergeablesExist) {

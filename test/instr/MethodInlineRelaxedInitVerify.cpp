@@ -5,11 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <algorithm>
 #include <gtest/gtest.h>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "VerifyUtil.h"
 
 /*

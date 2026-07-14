@@ -6,10 +6,11 @@
  */
 
 #include "TypedefAnnoPatcher.h"
+#include "ClassUtil.h"
+#include "ControlFlow.h"
 #include <optional>
 
 #include "AnnoUtils.h"
-#include "ClassUtil.h"
 #include "Debug.h"
 #include "KotlinNullCheckMethods.h"
 #include "PassManager.h"

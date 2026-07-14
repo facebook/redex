@@ -5,15 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <cstdint>
 #include <cstdlib>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <memory>
 #include <string>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "JarLoader.h"
 #include "ProguardConfiguration.h"

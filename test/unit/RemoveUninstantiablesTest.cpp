@@ -14,7 +14,6 @@
 #include "RemoveUninstantiablesImpl.h"
 #include "ScopeHelper.h"
 #include "TypeUtil.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 namespace {

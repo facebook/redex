@@ -7,7 +7,6 @@
 
 #include "CheckBreadcrumbs.h"
 
-#include <algorithm>
 #include <fstream>
 #include <iosfwd>
 

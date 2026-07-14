@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include <istream>
 #include <vector>
 
 #include "ProguardLexer.h"

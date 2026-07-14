@@ -10,7 +10,6 @@
 #include <boost/algorithm/string.hpp>
 #include <fstream>
 #include <iostream>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -19,10 +18,10 @@
 #include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
+#include "DexStructure.h"
 #include "DexUtil.h"
 #include "IRList.h"
 #include "InitClassesWithSideEffects.h"
-#include "InterDexPass.h"
 #include "InterDexPassPlugin.h"
 #include "JsonWrapper.h"
 #include "Match.h"

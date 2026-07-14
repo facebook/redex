@@ -57,7 +57,6 @@
 #include "PassManager.h"
 #include "Resolver.h"
 #include "SourceBlocks.h"
-#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {

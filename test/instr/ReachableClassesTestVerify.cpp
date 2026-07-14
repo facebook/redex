@@ -6,11 +6,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <string>
 
-#include "ControlFlow.h"
 #include "VerifyUtil.h"
-#include "Walkers.h"
 
 void verify_class_kept(const DexClasses& classes, const char* name) {
   auto* cls = find_class_named(classes, name);

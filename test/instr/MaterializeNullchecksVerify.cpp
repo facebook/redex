@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "Show.h"
 #include "verify/VerifyUtil.h"
 
 // Notes: IntrinsifyNullchecksVerify.cpp checkes null_check can be propertly

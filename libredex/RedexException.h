@@ -8,10 +8,7 @@
 #pragma once
 
 #include <map>
-#include <sstream>
 #include <string>
-#include <utility>
-#include <vector>
 
 enum RedexError {
   // Error codes here may also be referenced from py runner scripts for

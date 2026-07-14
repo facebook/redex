@@ -7,19 +7,17 @@
 
 #include "SingleImpl.h"
 
-#include <functional>
 #include <memory>
 #include <stdio.h>
 #include <string>
 
 #include "ClassHierarchy.h"
 #include "Debug.h"
-#include "DexOutput.h"
 #include "DexUtil.h"
 #include "PassManager.h"
+#include "Resolver.h"
 #include "SingleImplDefs.h"
 #include "Trace.h"
-#include "Walkers.h"
 
 size_t SingleImplPass::s_invoke_intf_count = 0;
 

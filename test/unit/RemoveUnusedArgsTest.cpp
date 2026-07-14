@@ -7,10 +7,8 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <iterator>
 
 #include "ControlFlow.h"
-#include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"

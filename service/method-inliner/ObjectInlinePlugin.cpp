@@ -9,7 +9,6 @@
 
 #include <utility>
 
-#include "CFGInliner.h"
 #include "CFGMutation.h"
 #include "IROpcode.h"
 #include "MethodUtil.h"

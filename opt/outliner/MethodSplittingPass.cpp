@@ -15,7 +15,6 @@
 #include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "InterDexPassMetrics.h"
-#include "MethodProfiles.h"
 #include "MethodSplitter.h"
 #include "PassManager.h"
 #include "Show.h"

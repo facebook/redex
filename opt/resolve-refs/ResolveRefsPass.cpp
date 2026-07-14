@@ -13,6 +13,7 @@
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexUtil.h"
+#include "OptionalIO.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"

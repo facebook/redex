@@ -14,6 +14,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexPosition.h"
+#include "DexStore.h"
 #include "InstructionLowering.h"
 #include "PassManager.h"
 #include "RedexContext.h"

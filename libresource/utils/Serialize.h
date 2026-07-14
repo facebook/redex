@@ -21,12 +21,10 @@
 
 #include "androidfw/ResourceTypes.h"
 #include "utils/ByteOrder.h"
-#include "utils/Debug.h"
 #include "utils/Log.h"
 #include "utils/String16.h"
 #include "utils/String8.h"
 #include "utils/TypeHelpers.h"
-#include "utils/Unicode.h"
 #include "utils/Vector.h"
 
 namespace arsc {

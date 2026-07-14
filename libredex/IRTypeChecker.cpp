@@ -16,6 +16,7 @@
 #include "DexPosition.h"
 #include "MethodUtil.h"
 #include "MonitorCount.h"
+#include "OptionalIO.h"
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"

@@ -8,7 +8,6 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "Show.h"
 #include "verify/VerifyUtil.h"
 
 TEST_F(PostVerify, SinkCommonCtorInvocation) {

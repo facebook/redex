@@ -19,6 +19,7 @@
 #include "DexClass.h"
 #include "DexLimits.h"
 #include "DexStore.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPassMetrics.h"

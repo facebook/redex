@@ -6,7 +6,6 @@
  */
 
 #include <fstream>
-#include <sstream>
 #include <type_traits>
 
 #include "ConcurrentContainers.h"

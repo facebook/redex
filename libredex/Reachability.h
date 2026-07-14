@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <sparta/WorkQueue.h>
+
 #include <WorkQueue.h>
 
 #include "ConcurrentContainers.h"

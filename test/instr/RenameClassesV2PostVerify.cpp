@@ -8,12 +8,9 @@
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <iostream>
-#include <memory>
 #include <string>
 
 #include "ApkResources.h"
-#include "DexInstruction.h"
-#include "Match.h"
 #include "RedexResources.h"
 #include "VerifyUtil.h"
 

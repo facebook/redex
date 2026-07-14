@@ -8,6 +8,7 @@
 #include "BranchPrefixHoistingPass.h"
 
 #include "BranchPrefixHoisting.h"
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Walkers.h"

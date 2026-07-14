@@ -90,6 +90,7 @@
 #include "Creators.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
+#include "DexUtil.h"
 #include "LiveRange.h"
 #include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
@@ -98,7 +99,6 @@
 #include "ReachableClasses.h"
 #include "RefChecker.h"
 #include "Shrinker.h"
-#include "SourceBlocks.h"
 #include "Walkers.h"
 
 using namespace inliner;

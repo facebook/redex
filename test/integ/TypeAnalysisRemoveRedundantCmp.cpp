@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "GlobalTypeAnalysisPass.h"
-#include "GlobalTypeAnalyzer.h"
 #include "LocalDcePass.h"
 #include "Show.h"
 #include "TypeAnalysisTestBase.h"

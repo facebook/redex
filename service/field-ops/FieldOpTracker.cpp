@@ -9,9 +9,6 @@
 
 #include <optional>
 
-#include <sparta/ConstantAbstractDomain.h>
-#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
-
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "Debug.h"

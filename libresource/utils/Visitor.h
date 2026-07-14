@@ -9,7 +9,6 @@
 #define _FB_ANDROID_VISITOR_H
 
 #include <optional>
-#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>

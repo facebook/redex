@@ -13,8 +13,6 @@
 #include "DexClass.h"
 #include "DexStoreUtil.h"
 #include "InitClassesWithSideEffects.h"
-#include "Pass.h"
-#include "Util.h"
 
 unsigned estimate_linear_alloc(const DexClass* clazz);
 

@@ -8,12 +8,12 @@
 #include "StringBuilderOutliner.h"
 
 #include "CFGMutation.h"
-#include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "Creators.h"
 #include "Debug.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"

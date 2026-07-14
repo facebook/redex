@@ -7,14 +7,12 @@
 
 #include "ReflectionAnalysis.h"
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <sstream>
 #include <unordered_map>
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "DexLoader.h"
 #include "DexStore.h"
 #include "DexUtil.h"
 #include "IRCode.h"

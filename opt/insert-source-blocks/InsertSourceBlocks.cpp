@@ -8,7 +8,6 @@
 #include "InsertSourceBlocks.h"
 
 #include <algorithm>
-#include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <cstdint>
 #include <deque>
@@ -30,7 +29,7 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexStore.h"
+#include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "IRCode.h"
 #include "Macros.h"

@@ -15,6 +15,7 @@
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "PassManager.h"
 #include "Resolver.h"

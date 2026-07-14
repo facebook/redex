@@ -5,16 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <array>
-#include <cstdint>
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <string>
 
 #include "DexClass.h"
-#include "Match.h"
-#include "ProguardConfiguration.h"
-#include "ProguardMap.h"
 #include "ProguardObfuscationTest.h"
 #include "RedexTest.h"
 

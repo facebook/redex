@@ -7,8 +7,6 @@
 
 #include "DexTypeEnvironment.h"
 
-#include "OptionalIO.h"
-
 #include <sparta/PatriciaTreeSet.h>
 
 #include "Creators.h"

@@ -9,8 +9,6 @@
 
 #include <gtest/gtest.h>
 
-#include <algorithm>
-
 void test_iterators(StringSplitterIterable ssi,
                     const std::vector<std::string_view>& expected) {
   auto it = expected.begin();

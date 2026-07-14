@@ -8,7 +8,6 @@
 #include <fstream>
 #include <gtest/gtest.h>
 #include <json/json.h>
-#include <sstream>
 
 #include "AccessMarking.h"
 #include "Debug.h"

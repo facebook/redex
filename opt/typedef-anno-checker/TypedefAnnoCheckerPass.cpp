@@ -6,13 +6,15 @@
  */
 
 #include "TypedefAnnoCheckerPass.h"
+#include "ClassUtil.h"
 #include <boost/algorithm/string/predicate.hpp>
 #include <optional>
 
 #include "AnnoUtils.h"
-#include "ClassUtil.h"
 #include "Debug.h"
+#include "DexUtil.h"
 #include "KotlinNullCheckMethods.h"
+#include "OptionalIO.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"

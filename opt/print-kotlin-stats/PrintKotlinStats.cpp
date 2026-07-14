@@ -14,8 +14,6 @@
 #include "MethodProfiles.h"
 #include "MethodUtil.h"
 #include "PassManager.h"
-#include "Show.h"
-#include "TypeUtil.h"
 #include "UniqueMethodTracker.h"
 #include "Walkers.h"
 

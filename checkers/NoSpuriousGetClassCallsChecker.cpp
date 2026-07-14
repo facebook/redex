@@ -9,6 +9,7 @@
 
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "Walkers.h"

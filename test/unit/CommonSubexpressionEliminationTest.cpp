@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "CommonSubexpressionElimination.h"
-#include "ControlFlow.h"
 #include "Creators.h"
 #include "Debug.h"
 #include "IRAssembler.h"

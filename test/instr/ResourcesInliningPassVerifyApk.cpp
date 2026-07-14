@@ -10,7 +10,6 @@
 #include "verify/VerifyUtil.h"
 
 #include "ApkResources.h"
-#include "ResourcesInliningPass.h"
 #include "ResourcesInliningPassVerifyImpl.h"
 
 TEST_F(PreVerify, ResourcesInliningPassTest) {

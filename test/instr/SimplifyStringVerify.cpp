@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <algorithm>
 #include <string>
 #include <unordered_map>
 

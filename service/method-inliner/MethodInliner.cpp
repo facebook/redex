@@ -8,8 +8,6 @@
 #include "MethodInliner.h"
 
 #include <algorithm>
-#include <map>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -27,7 +25,6 @@
 #include "IRInstruction.h"
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
-#include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "Resolver.h"

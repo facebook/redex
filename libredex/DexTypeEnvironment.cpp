@@ -7,7 +7,6 @@
 
 #include "DexTypeEnvironment.h"
 
-#include "OptionalIO.h"
 #include <ostream>
 
 #include "Debug.h"

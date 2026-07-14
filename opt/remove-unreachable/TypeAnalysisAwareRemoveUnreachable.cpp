@@ -7,7 +7,6 @@
 
 #include "TypeAnalysisAwareRemoveUnreachable.h"
 
-#include "ControlFlow.h"
 #include "Debug.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"

@@ -11,7 +11,6 @@
 
 #include "Debug.h"
 #include "DexClass.h"
-#include "EditableCfgAdapter.h"
 #include "MethodReference.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"

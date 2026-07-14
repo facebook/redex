@@ -10,7 +10,6 @@
 #include "DedupBlocksPass.h"
 #include "InsertSourceBlocks.h"
 
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp>
 
 #include <gtest/gtest.h>

@@ -7,8 +7,6 @@
 
 #include "CopyPropagation.h"
 
-#include <mutex>
-
 #include <sparta/MonotonicFixpointIterator.h>
 
 #include "AliasedRegisters.h"

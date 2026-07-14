@@ -8,7 +8,6 @@
 #include "GraphUtil.h"
 
 #include <gtest/gtest.h>
-#include <unordered_map>
 
 #include "SimpleGraph.h"
 

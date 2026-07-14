@@ -18,8 +18,6 @@
 #include <limits>
 #include <list>
 #include <sstream>
-#include <thread>
-#include <typeinfo>
 #include <utility>
 
 #ifdef __linux__

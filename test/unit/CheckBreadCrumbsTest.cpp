@@ -15,7 +15,6 @@
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
-#include "Walkers.h"
 
 // Create the following hierarchy
 //

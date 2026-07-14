@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "AliasedRegisters.h"
-#include <unordered_map>
 
 using namespace aliased_registers;
 using namespace sparta;

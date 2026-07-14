@@ -7,7 +7,6 @@
 
 #include "ClassMergingPass.h"
 
-#include "ClassAssemblingUtils.h"
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
 #include "ConfigUtils.h"

@@ -14,6 +14,7 @@
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"

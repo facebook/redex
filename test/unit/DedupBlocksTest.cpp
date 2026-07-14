@@ -6,10 +6,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <iterator>
 #include <utility>
 
-#include "ControlFlow.h"
 #include "Creators.h"
 #include "DedupBlocks.h"
 #include "DexAsm.h"

@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "ApkResources.h"
-#include "RedexResources.h"
 #include "SplitResourceTablesVerifyImpl.h"
 #include "androidfw/ResourceTypes.h"
 #include "verify/VerifyUtil.h"

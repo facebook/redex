@@ -15,7 +15,6 @@
 #include "ConstantPropagationWholeProgramState.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "IRCode.h"
 #include "InitClassesWithSideEffects.h"
 #include "Pass.h"
 

@@ -10,7 +10,6 @@
 #include <string>
 
 #include "Debug.h"
-#include "DexAnnotation.h"
 #include "Show.h"
 #include "SingleImplDefs.h"
 #include "TypeUtil.h"

@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include "BundleResources.h"
-#include "RedexResources.h"
 #include "SplitResourceTablesVerifyImpl.h"
 #include "verify/VerifyUtil.h"
 

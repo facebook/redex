@@ -7,7 +7,6 @@
 
 #include "Timer.h"
 
-#include <list>
 #include <utility>
 
 #include "Trace.h"

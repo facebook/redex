@@ -7,8 +7,6 @@
 
 #include "ObjectSensitiveDce.h"
 
-#include <functional>
-
 #include "CFGMutation.h"
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"

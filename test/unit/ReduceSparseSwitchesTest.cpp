@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include "Creators.h"
 #include "RedexTest.h"
 #include "ReduceSparseSwitchesPass.h"
 

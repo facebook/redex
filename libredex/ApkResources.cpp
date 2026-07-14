@@ -36,12 +36,10 @@
 
 #include "Debug.h"
 #include "GlobalConfig.h"
-#include "IOUtil.h"
 #include "ReadMaybeMapped.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "Trace.h"
-#include "WorkQueue.h"
 
 // Workaround for inclusion order, when compiling on Windows (#defines NO_ERROR
 // as 0).

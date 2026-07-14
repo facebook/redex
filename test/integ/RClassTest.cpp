@@ -19,7 +19,6 @@
 #include "IRCode.h"
 #include "LiveRange.h"
 #include "RClass.h"
-#include "RedexContext.h"
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "Show.h"

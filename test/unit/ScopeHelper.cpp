@@ -7,8 +7,6 @@
 
 #include "ScopeHelper.h"
 
-#include <utility>
-
 #include "Creators.h"
 
 namespace {

@@ -7,14 +7,11 @@
 
 #pragma once
 
-#include <optional>
-
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "FrameworkApi.h"
 #include "MethodOverrideGraph.h"
-#include "TypeUtil.h"
 
 namespace cfg {
 class ControlFlowGraph;

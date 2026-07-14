@@ -6,7 +6,7 @@
  */
 
 #include "Debug.h"
-#include <sstream>
+#include "DexClass.h"
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"

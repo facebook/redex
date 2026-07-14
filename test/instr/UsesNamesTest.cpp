@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include "Resolver.h"
 #include "VerifyUtil.h"
 
 namespace {

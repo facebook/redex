@@ -17,7 +17,6 @@
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "ResourcesTestDefs.h"
-#include "androidfw/ResourceTypes.h"
 
 using std::operator""sv;
 using ::testing::UnorderedElementsAre;

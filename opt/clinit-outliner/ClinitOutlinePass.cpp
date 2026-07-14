@@ -15,7 +15,6 @@
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "IRCode.h"
-#include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "SourceBlocks.h"

@@ -9,7 +9,6 @@
 #include <boost/filesystem/path.hpp>
 #include <fstream>
 #include <gtest/gtest.h>
-#include <sstream>
 
 #include "RedexTest.h"
 #include "Verifier.h"

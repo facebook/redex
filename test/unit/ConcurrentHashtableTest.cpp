@@ -7,12 +7,9 @@
 
 #include "ConcurrentContainers.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <gtest/gtest.h>
-#include <string>
-#include <utility>
 #include <vector>
 
 #include <boost/thread/thread.hpp> // NOLINT

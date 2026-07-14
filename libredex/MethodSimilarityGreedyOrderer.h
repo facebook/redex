@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <set>
-
 #include <boost/dynamic_bitset.hpp>
 #include <optional>
 

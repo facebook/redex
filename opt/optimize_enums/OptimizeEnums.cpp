@@ -13,12 +13,13 @@
 #include <set>
 #include <sstream>
 
-#include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
+#include "DexStore.h"
+#include "DexUtil.h"
 #include "EnumAnalyzeGeneratedMethods.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumTransformer.h"
@@ -31,7 +32,6 @@
 #include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
-#include "SwitchEquivFinder.h"
 #include "Trace.h"
 #include "Walkers.h"
 

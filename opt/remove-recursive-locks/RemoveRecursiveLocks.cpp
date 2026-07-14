@@ -20,6 +20,7 @@
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
+#include "DexUtil.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"

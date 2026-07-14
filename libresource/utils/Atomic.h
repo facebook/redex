@@ -12,7 +12,6 @@
 
 #include <atomic>
 #include <stdint.h>
-#include <sys/types.h>
 
 static inline int32_t android_atomic_inc(volatile int32_t* addr) {
     volatile std::atomic_int_least32_t* a = (volatile std::atomic_int_least32_t*)addr;

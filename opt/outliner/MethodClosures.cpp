@@ -12,7 +12,6 @@
 #include "MethodClosures.h"
 
 #include "Lazy.h"
-#include "LiveRange.h"
 #include "MethodUtil.h"
 #include "MonitorCount.h"
 #include "Resolver.h"

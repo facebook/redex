@@ -5,17 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <sstream>
 #include <string>
-#include <unordered_set>
 
-#include "Creators.h"
 #include "DexClass.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "LocalDce.h"
 #include "RedexTest.h"
 #include "ReflectionAnalysis.h"
 #include "Show.h"

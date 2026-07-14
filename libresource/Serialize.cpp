@@ -8,13 +8,11 @@
 #include <algorithm>
 #include <boost/functional/hash.hpp>
 #include <cstddef>
-#include <iostream>
 #include <limits>
 #include <vector>
 
 #include "androidfw/TypeWrappers.h"
 #include "utils/ByteOrder.h"
-#include "utils/Debug.h"
 #include "utils/Log.h"
 #include "utils/Serialize.h"
 #include "utils/String16.h"

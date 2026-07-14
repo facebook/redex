@@ -9,6 +9,7 @@
 
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DexUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 

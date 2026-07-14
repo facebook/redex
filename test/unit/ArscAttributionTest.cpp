@@ -12,7 +12,6 @@
 #include "Debug.h"
 #include "androidfw/ResourceTypes.h"
 #include "arsc/TestStructures.h"
-#include "utils/Errors.h"
 #include "utils/Serialize.h"
 
 namespace {

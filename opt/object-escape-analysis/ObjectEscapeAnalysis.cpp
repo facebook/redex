@@ -45,16 +45,15 @@
 
 #include <optional>
 
-#include "ApiLevelChecker.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
+#include "DexClass.h"
 #include "ExpandableMethodParams.h"
 #include "GlobalConfig.h"
 #include "IRInstruction.h"
 #include "Inliner.h"
-#include "InlinerConfig.h"
 #include "LinearScan.h"
 #include "MutablePriorityQueue.h"
 #include "ObjectEscapeAnalysisImpl.h"
