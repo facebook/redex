@@ -59,7 +59,7 @@ bool CFGMutation::reduce_block_changes(cfg::Block* block,
       if (primary_change && primary_change->has_replace()) {
         if (!change->is_simple_empty_replace()) {
           TRACE(CFG, 1,
-                "WARNING: Perfoming a non-simple-empty-replace on a "
+                "WARNING: Performing a non-simple-empty-replace on a "
                 "move-result-any whose primary is being replaced should "
                 "not be done as it will be ignored:\n%s\n%s",
                 SHOW(primary_change->get_iterator()->insn), SHOW(insn));

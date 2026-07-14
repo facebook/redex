@@ -62,7 +62,7 @@ class PriorityThreadPoolDAGScheduler {
     }
     auto* continuations = m_concurrent_continuations->get_and_erase(task);
     if (continuations) {
-      // Since the current wait-count is 0, there are not other threads that may
+      // Since the current wait-count is 0, there are no other threads that may
       // read from or append to the continuations of this task.
       always_assert(!continuations->empty());
       auto priority = m_priorities->at(task);

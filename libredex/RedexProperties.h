@@ -54,7 +54,7 @@ inline const PropertyInteraction Requires =
     PropertyInteraction(false, true, false, false);
 // Establishes a property for passes. DefaultInitial property
 // will be established at beginning by default.
-// In deep check mode, after each pass eastablished property
+// In deep check mode, after each pass established property
 // will be running their own checks.
 inline const PropertyInteraction Establishes =
     PropertyInteraction(true, false, false, false);

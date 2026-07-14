@@ -50,7 +50,7 @@ using namespace sparta;
 // It does so by examinining all the writes to registers in a basic block, if vA
 // is moved into vB, then vA and vB are aliases until one of them is written
 // with a different value. Any move between registers that are already aliased
-// is unneccesary. Eliminate them.
+// is unnecessary. Eliminate them.
 //
 // It can also do the same thing with constant loads, if generally enabled by
 // the config, or if selectively enabled when deemed safe by our own

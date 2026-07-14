@@ -155,7 +155,7 @@ class IRCode {
   // Build a Control Flow Graph
   //  * A CFG's blocks each own a small IRList (with
   //    MethodItemEntries taken from IRCode)
-  // Changes to an CFG are reflected in IRCode after `clear_cfg` is
+  // Changes to a CFG are reflected in IRCode after `clear_cfg` is
   // called. For cfg, it is only rebuilt when the flag
   // rebuild_even_if_already_built is true. Otherwise, the current
   // cfg will be kept.
@@ -272,7 +272,7 @@ class IRCode {
   }
 
   /*
-   * Returns an estimated of the number of 2-byte code units needed to encode
+   * Returns an estimate of the number of 2-byte code units needed to encode
    * all the instructions.
    */
   size_t sum_opcode_sizes() const;

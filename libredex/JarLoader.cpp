@@ -871,7 +871,7 @@ void decompress_class(jar_entry& file,
   jar_uncompress(outbuffer, &dlen, lfile, pkf.comp_size,
                  file.cd_entry.comp_method);
   always_assert_type_log(dlen == pkf.ucomp_size, RedexError::INVALID_JAVA,
-                         "mis-match on uncompressed size");
+                         "mismatch on uncompressed size");
 }
 
 constexpr size_t kStartBufferSize = static_cast<size_t>(128 * 1024);

@@ -146,7 +146,7 @@ DexMethod* find_most_specific_interface_method(const DexClass* cls,
   std::vector<DexMethod*> filtered_candidates;
   for (auto* candidate : candidates) {
     // If candidate is one of super_intfs's method, it means it will get
-    // overriden by a more specific interface method
+    // overridden by a more specific interface method
     if (super_intfs.find(candidate->get_class()) == super_intfs.end()) {
       filtered_candidates.emplace_back(candidate);
     }

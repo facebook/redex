@@ -543,7 +543,7 @@ Result check_uninitialized(DexMethod* method, bool relaxed_init_check) {
             };
             if (!check_type(init_method->get_class(), object_ir->get_type())) {
               return Result::make_error("Variable " + show(object_ir) +
-                                        "initialized with the wrong type at " +
+                                        " initialized with the wrong type at " +
                                         show(*it) + " in \n" + show(cfg));
             }
             for (auto reg :
@@ -574,7 +574,7 @@ Result check_uninitialized(DexMethod* method, bool relaxed_init_check) {
           remove_from_uninitialized_list(insn->dest());
         }
       }
-      // get the the next block.
+      // get the next block.
       if (current_block == big_block->get_last_block()) {
         break;
       }

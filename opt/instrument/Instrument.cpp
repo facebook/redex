@@ -94,7 +94,7 @@ void instrument_onMethodBegin(DexMethod* method,
   invoke_inst->set_src(0, reg_dest);
 
   // Try to find a right insertion point: the entry point of the method.
-  // We skip any fall throughs and IOPCODE_LOAD_PARRM*.
+  // We skip any fall throughs and IOPCODE_LOAD_PARAM*.
   auto* entry_block = cfg.entry_block();
   auto insert_point = entry_block->get_first_non_param_loading_insn();
   auto cfg_insert_point =

@@ -68,7 +68,7 @@
  * ultimate escape mechanism to expose the raw unordered collection, or simply
  * passes through any other collection. Use at your own risk.
  *
- * The new unordered collection wrapper types  doesn't provide wrappers for all
+ * The new unordered collection wrapper types don't provide wrappers for all
  * members yet; filling that in is a work-in-progress.
  *
  * TODO: An intention of the design is to largely keep open the option of
@@ -91,9 +91,9 @@
  *     - `auto&& ui = UnorderedIterable(my_unordered_set);`
  *        `auto it = ui.begin();`
  *        `while (it != ui.end()) ...`
- * - Avoid storing `UnorderedIterable(...)` in an local variable.
+ * - Avoid storing `UnorderedIterable(...)` in a local variable.
  *     - Instead, prefer using any of the `unordered_...` helper functions.
- *     - If you must store the result of `UnorderedIterable(...)` in an local
+ *     - If you must store the result of `UnorderedIterable(...)` in a local
  *       variable, always use `auto&&` to deal with the possibility that
  *       `UnorderedIterable(...)` returns a reference to the original collection
  *       that you don't want to copy.

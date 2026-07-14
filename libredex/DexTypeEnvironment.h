@@ -51,7 +51,7 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
    * Bottom but not an actual Bottom in an AbstractDomain.
    *
    * The reason we need this special case is because in Sparta, we cannot assign
-   * a Bottom to an Environment or a ReduceProductAbstractDomain. Doing so will
+   * a Bottom to an Environment or a ReducedProductAbstractDomain. Doing so will
    * mark the entire thing as Bottom. A Bottom environment or domain carries a
    * different meaning in the analysis. Therefore, we need something that is not
    * a Bottom to denote an empty or uninitialized DexType value.

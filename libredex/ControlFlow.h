@@ -32,11 +32,11 @@
  * connected to their predecessors and successors by `Edge`s that specify
  * the type of connection.
  *
- * An CFG's blocks each own a small IRList (with MethodItemEntries
+ * A CFG's blocks each own a small IRList (with MethodItemEntries
  * taken from IRCode)
  *
  * In the future, CFGs will replace
- * IRCode entirely as the primary code representation. To build an CFG,
+ * IRCode entirely as the primary code representation. To build a CFG,
  * call
  *
  * `code->build_cfg()`
@@ -139,7 +139,7 @@ class Edge final {
     // Edge owns this ThrowInfo and is responsible for deleting it.
     ThrowInfo* m_throw_info;
     // If `m_type` is not EDGE_THROW then this union is an optional case key.
-    // If this edge is a non-default outgoing edge of a OPCODE_SWITCH, then
+    // If this edge is a non-default outgoing edge of an OPCODE_SWITCH, then
     // this is not `boost::none`.
     MaybeCaseKey m_case_key;
   };
@@ -498,7 +498,7 @@ class ControlFlowGraph {
   // NOTE: this function copies pointers to blocks from m_blocks.
   // If a block is created or destroyed while we're iterating on a copy, the
   // copy is now stale. That stale copy may have a pointer to a deleted block or
-  // it may be incomplete (not iterating over the newly creating block).
+  // it may be incomplete (not iterating over the newly created block).
   //
   // TODO: We should probably have an API to offer iterators into the blocks map
   // instead for reads or some mutations since insertion and erasure of elements
@@ -546,7 +546,7 @@ class ControlFlowGraph {
    *
    * The exit blocks are not computed upon creation. It is left up to the user
    * to call this method if they plan to use the exit block. If you make
-   * significant changes to this CFG that effect the exit
+   * significant changes to this CFG that affect the exit
    * points of the method, you need to call this method again.
    * TODO: detect changes and recompute when necessary.
    */
@@ -570,7 +570,7 @@ class ControlFlowGraph {
   // copies all edges of a certain type from one block to another
   void copy_succ_edges_of_type(Block* from, Block* to, EdgeType type);
 
-  // copes all edges that match the predicate from one block to another
+  // copies all edges that match the predicate from one block to another
   template <typename EdgePredicate>
   void copy_succ_edges_if(Block* from, Block* to, EdgePredicate edge_predicate);
 

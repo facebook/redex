@@ -684,7 +684,7 @@ namespace {
    (ENTRY_MASK_BIT & (entry)))
 
 /**
- * write_serialized_data don't support growing arsc file, so use
+ * write_serialized_data doesn't support growing arsc file, so use
  * ofstream to write to arsc file for input bigger than original
  * file size.
  */
@@ -1942,7 +1942,7 @@ void add_string_idx_to_builder(
   }
 }
 
-// Copies the string data for the kept indicies from the given pool to the
+// Copies the string data for the kept indices from the given pool to the
 // builder in the order specified. If needed, a remapper function can be run
 // against the spans required by a kept index.
 void rebuild_string_pool(
@@ -1977,7 +1977,7 @@ void rebuild_string_pool(
   }
 }
 
-// Copies the string data for the kept indicies from the given pool to the
+// Copies the string data for the kept indices from the given pool to the
 // builder in the order specified.
 void rebuild_string_pool(
     const android::ResStringPool& string_pool,
@@ -2063,7 +2063,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
   TRACE(RES, 9, "Global string pool has %zu styles and %zu total strings",
         string_pool.styleCount(), string_pool.size());
 
-  // 1) Collect all referenced global string indicies and key string indicies.
+  // 1) Collect all referenced global string indices and key string indices.
   PackageStringRefCollector collector;
   collector.visit(m_f.data(), m_arsc_len);
   UnorderedSet<uint32_t> used_global_strings;
@@ -2074,7 +2074,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     used_global_strings.emplace(dtohl(value->index));
   }
 
-  // 2) Build the compacted map of old -> new indicies for used global strings.
+  // 2) Build the compacted map of old -> new indices for used global strings.
   UnorderedMap<uint32_t, uint32_t> global_old_to_new;
   project_string_mapping(used_global_strings, string_pool, &global_old_to_new);
 
@@ -2120,7 +2120,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     std::shared_ptr<arsc::ResPackageBuilder> package_builder =
         std::make_shared<arsc::ResPackageBuilder>(package);
 
-    // Build new key string pool indicies.
+    // Build new key string pool indices.
     std::set<android::ResStringPool_ref*> refs;
     for (const auto& package_entry_pairs : package_entries.second) {
       const auto& package_type_entries = package_entry_pairs.second;
@@ -2982,7 +2982,7 @@ ResourcesArscFile::get_inlinable_resource_values() {
   }
 
   // If a reference is found, check if the referenced value is inlinable and add
-  // it's actual value to the map (instead of the reference).
+  // its actual value to the map (instead of the reference).
   resources::resources_inlining_find_refs(past_refs, &inlinable_resources);
   return inlinable_resources;
 }

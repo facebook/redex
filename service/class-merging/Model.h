@@ -54,7 +54,7 @@ enum TypeLikeStringConfig {
   // Type like strings are safe to be replaced with the name of the new
   // shape class. The assumption is that the reflections against the type like
   // strings still work after merging. This usually means type tags exist in the
-  // targeted input. Merging only changes class names not intiantiation pattern.
+  // targeted input. Merging only changes class names not instantiation pattern.
   REPLACE = 0,
   // Do not merge classes potentially reflected using the type like string. It's
   // more conservative. We do not have the full knowledge about the reflection

@@ -12,12 +12,12 @@
  *   made less conservative)
  * - we omit virtual methods that might be involved in unresolved
  *   invoke-virtuals.
- * - of, course the usual `can_rename` and not `root` conditions.
+ * - of course, the usual `can_rename` and not `root` conditions.
  * - the overriding method must be inlinable into the overridden method (using
  *   standard inliner functionality)
  *
  * When overriding an abstract method, the body of the overriding method is
- * essentially just moved into the formerly abstract method, with a preceeding
+ * essentially just moved into the formerly abstract method, with a preceding
  * cast-class instruction to make the type checker happy. (The actual
  * implementation is a special case of the below, using the inliner.)
  *
@@ -313,7 +313,7 @@ struct SimpleOrderingProvider {
 
 template <typename OrderingProvider>
 class MergePairsBuilder {
-  using MergablesMap = UnorderedMap<const DexMethod*, const DexMethod*>;
+  using MergeablesMap = UnorderedMap<const DexMethod*, const DexMethod*>;
 
  public:
   using PairSeq = std::vector<std::pair<const DexMethod*, const DexMethod*>>;
@@ -335,7 +335,7 @@ class MergePairsBuilder {
       return std::nullopt;
     }
 
-    MergablesMap mergeable_pairs_map =
+    MergeablesMap mergeable_pairs_map =
         find_overrides(mergeable_methods, xstores, xdexes);
 
     if (mergeable_pairs_map.empty()) {
@@ -366,11 +366,11 @@ class MergePairsBuilder {
     return true;
   }
 
-  MergablesMap find_overrides(
+  MergeablesMap find_overrides(
       const UnorderedSet<const DexMethod*>& mergeable_methods,
       const XStoreRefs& xstores,
       const XDexRefs& xdexes) {
-    MergablesMap mergeable_pairs_map;
+    MergeablesMap mergeable_pairs_map;
     // sorting to make things deterministic
     std::sort(methods.begin(), methods.end(), dexmethods_comparator());
     for (DexMethod* overriding_method : methods) {
@@ -441,7 +441,7 @@ class MergePairsBuilder {
   }
 
   PairSeq create_merge_pair_sequence(
-      const MergablesMap& mergeable_pairs_map,
+      const MergeablesMap& mergeable_pairs_map,
       const method_profiles::MethodProfiles& profiles,
       VirtualMerging::Strategy strategy) {
     // we do a depth-first traversal of the subtype structure, adding
@@ -656,7 +656,7 @@ class MergePairsBuilder {
 // Part 3: For each virtual scope, identify all pairs of methods where
 //         one can be merged with another. The list of pairs is ordered in
 //         way that it can be later processed sequentially.
-VirtualMerging::MergablePairsByVirtualScope
+VirtualMerging::MergeablePairsByVirtualScope
 VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
     const method_profiles::MethodProfiles& profiles,
     Strategy strategy,
@@ -703,7 +703,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
   stats.annotated_methods =
       stats.mergeable_virtual_methods - overriding_methods;
 
-  MergablePairsByVirtualScope out;
+  MergeablePairsByVirtualScope out;
   for (auto& p : UnorderedIterable(mergeable_pairs_by_virtual_scopes)) {
     const auto& mergeable_pairs = p.second;
     stats.mergeable_pairs += mergeable_pairs.size();
@@ -725,7 +725,7 @@ using MethodData = std::pair<
     std::vector<std::pair<const VirtualScope*, std::vector<const DexMethod*>>>>;
 
 std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
-    const VirtualMerging::MergablePairsByVirtualScope& mergable_pairs,
+    const VirtualMerging::MergeablePairsByVirtualScope& mergeable_pairs,
     size_t max_overriding_method_instructions,
     MultiMethodInliner& inliner) {
   std::vector<MethodData> ordering;
@@ -735,10 +735,10 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
   {
     UnorderedMap<const DexMethod*, size_t> method_idx;
 
-    for (const auto& p : mergable_pairs) {
+    for (const auto& p : mergeable_pairs) {
       const auto* virtual_scope = p.first;
-      const auto& mergeable_pairs = p.second;
-      for (const auto& q : mergeable_pairs) {
+      const auto& scope_pairs = p.second;
+      for (const auto& q : scope_pairs) {
         const auto* overridden_method = q.first;
         const auto* overriding_method = q.second;
 
@@ -1375,7 +1375,7 @@ VirtualMergingStats apply_ordering(
 //         constraints. Record set of methods in each class which can be
 //         removed.
 void VirtualMerging::merge_methods(
-    const MergablePairsByVirtualScope& mergeable_pairs,
+    const MergeablePairsByVirtualScope& mergeable_pairs,
     InsertionStrategy insertion_strategy) {
   auto ordering_pair = create_ordering(
       mergeable_pairs, m_max_overriding_method_instructions, *m_inliner);

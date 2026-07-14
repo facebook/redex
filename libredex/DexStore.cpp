@@ -42,14 +42,14 @@ DexStoresDependencies build_transitive_resolved_dependencies(
     const DexStoresVector& stores) {
   DexStoresDependencies transitive_resolved_dependencies;
   if (stores.size() == 1) {
-    // special case to accomodate tests with non-standard store names
+    // special case to accommodate tests with non-standard store names
     const auto& store = stores.front();
     transitive_resolved_dependencies.emplace(&store, DexStoreDependencies());
     return transitive_resolved_dependencies;
   }
 
-  // We handle the root store separately, as it may appear twist in the list
-  // of stores (a quick to handle the primary dex).
+  // We handle the root store separately, as it may appear twice in the list
+  // of stores (a quirk to handle the primary dex).
   const auto& root_store = stores.front();
   always_assert_log(
       root_store.get_name() == ROOT_STORE_NAME,
@@ -93,7 +93,7 @@ DexStoresDependencies build_reverse_dependencies(
     const DexStoresVector& stores) {
   DexStoresDependencies reverse_dependencies;
   if (stores.size() == 1) {
-    // special case to accomodate tests with non-standard store names
+    // special case to accommodate tests with non-standard store names
     const auto& store = stores.front();
     reverse_dependencies.emplace(&store, DexStoreDependencies());
     return reverse_dependencies;

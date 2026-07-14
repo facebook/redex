@@ -174,23 +174,23 @@ void WrappedPrimitivesPass::run_pass(DexStoresVector& /*stores*/,
   TRACE(WP, 1, "check-cast instructions inserted: %zu", casts);
   mgr.set_metric(METRIC_CASTS_INSERTED, casts);
 
-  // Clear state so that no futher work gets done from multiple rounds of IPCP
+  // Clear state so that no further work gets done from multiple rounds of IPCP
   wp::initialize({});
 }
 
 namespace {
-using PreceedingSourceBlockMap = UnorderedMap<IRInstruction*, SourceBlock*>;
+using PrecedingSourceBlockMap = UnorderedMap<IRInstruction*, SourceBlock*>;
 
-PreceedingSourceBlockMap build_preceeding_source_block_map(
+PrecedingSourceBlockMap build_preceding_source_block_map(
     cfg::ControlFlowGraph& cfg) {
-  PreceedingSourceBlockMap result;
+  PrecedingSourceBlockMap result;
   for (auto* b : cfg.blocks()) {
-    SourceBlock* preceeding_source_block{nullptr};
+    SourceBlock* preceding_source_block{nullptr};
     for (const auto& mie : *b) {
       if (mie.type == MFLOW_SOURCE_BLOCK) {
-        preceeding_source_block = mie.src_block.get();
+        preceding_source_block = mie.src_block.get();
       } else if (mie.type == MFLOW_OPCODE) {
-        result.emplace(mie.insn, preceeding_source_block);
+        result.emplace(mie.insn, preceding_source_block);
       }
     }
   }
@@ -276,8 +276,8 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
     auto& cfg = code->cfg();
     Lazy<live_range::LazyLiveRanges> live_ranges(
         [&]() { return std::make_unique<live_range::LazyLiveRanges>(cfg); });
-    Lazy<PreceedingSourceBlockMap> sb_lookup(
-        [&]() { return build_preceeding_source_block_map(cfg); });
+    Lazy<PrecedingSourceBlockMap> sb_lookup(
+        [&]() { return build_preceding_source_block_map(cfg); });
     for (MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
       if (mie.type != MFLOW_OPCODE) {
         continue;
@@ -298,13 +298,13 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
                 // to the original location of the usage before optimizations.
                 auto field_name = show_deobfuscated(def);
                 for (const auto& use : UnorderedIterable(search->second)) {
-                  SourceBlock* preceeding_source_block{nullptr};
+                  SourceBlock* preceding_source_block{nullptr};
                   auto sb = sb_lookup->find(use.insn);
                   if (sb != sb_lookup->end() && sb->second != nullptr) {
-                    preceeding_source_block = sb->second;
+                    preceding_source_block = sb->second;
                   }
                   trace_field_usage(field_name, method_name, insn,
-                                    preceeding_source_block);
+                                    preceding_source_block);
                 }
               }
             }

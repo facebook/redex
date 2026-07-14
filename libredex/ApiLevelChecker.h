@@ -45,7 +45,7 @@ class LevelChecker {
    * Annotations that have a value less than s_min_level are interpreted to mean
    * s_min_level.
    *
-   * In an attempt to mimimize restrictions on optimizations, this method groups
+   * In an attempt to minimize restrictions on optimizations, this method groups
    * inner classes into the api level of their outer class. This isn't strictly
    * correct but it seems like most developers just forgot (or were too lazy) to
    * put the annotation on all the inner classes (especially anonymous ones).
@@ -96,7 +96,7 @@ class LevelChecker {
           // the future" but as a first step, try to munge an abnormally high
           // value that falls in the range of SDK_INT_FULL to what would likely
           // be the comparable SDK_INT value that would include it, for
-          // compatability purposes with the rest of our logic.
+          // compatibility purposes with the rest of our logic.
           auto inc = result % 100000 == 0 ? 0 : 1;
           result = result / 100000 + inc;
         }
@@ -127,7 +127,7 @@ bool is_android_sdk_type(const DexType* type);
 
 /*
  * Support library and Android X are designed to handle incompatibility and
- * disrepancies between different Android versions. It's riskier to change the
+ * discrepancies between different Android versions. It's riskier to change the
  * external method references in these libraries based on the one version of
  * external API we are building against.
  *
@@ -138,7 +138,7 @@ bool is_android_sdk_type(const DexType* type);
  * theory, issues like this can be covered by the exclusion list. But in
  * practice is hard to enumerate the entire list of external classes that should
  * be excluded. Given that the support libraries are dedicated to handle this
- * kind discrepancies. It's safer to not touch it.
+ * kind of discrepancies. It's safer to not touch it.
  */
 bool is_support_lib_type(const DexType* type);
 

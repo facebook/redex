@@ -27,7 +27,7 @@ using ClassHierarchy = UnorderedMap<const DexType*, TypeSet>;
 ClassHierarchy build_internal_type_hierarchy(const Scope& scope);
 
 /**
- * Given a scope it builds all the parent-children relationship known.
+ * Given a scope it builds all the parent-children relationships known.
  * The walk stops once a DexClass is not found.
  * If all the code is known all classes will root to java.lang.Object.
  * If not some hierarchies will be "unknown" (not completed)

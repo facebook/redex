@@ -12,7 +12,7 @@
 #include "Util.h"
 
 /*
- * The the dex spec can be found here:
+ * The dex spec can be found here:
  * https://source.android.com/devices/tech/dalvik/dex-format.html
  *
  * The values here can be found within the spec.  Naming is

@@ -137,7 +137,7 @@ class DexStructure {
                           const TypeRefs& pending_init_class_types);
 
   /* Remove \p clazz from current dex, and update the refs.
-This implementation is conservative, in that it leave behind the counters in a
+This implementation is conservative, in that it leaves behind the counters in a
 way that would allow detecting any later illegal addition of classes, but may
 also reject some legal cases.
    */

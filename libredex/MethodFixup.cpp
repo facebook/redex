@@ -31,7 +31,7 @@ void fixup_references_to_removed_methods(
     forward(it);
   }
 
-  // Fixup references in code to deleted vmathods to point to the base one.
+  // Fixup references in code to deleted vmethods to point to the base one.
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
     cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
       auto* insn = mie.insn;

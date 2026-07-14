@@ -120,7 +120,7 @@ inline size_t hash_value(const std::unique_ptr<KeepSpec>& spec) {
 
 /*
  * This is a simple implementation of a set that preserves insertion order. The
- * insertion order of keep rules reflects their order in the input .pro files.
+ * insertion order of keep rules reflects their order in the input .pro
  * files. At present, the effects of keep rule application on the
  * ReferencedState are order-sensitive, hence the need for this.
  *

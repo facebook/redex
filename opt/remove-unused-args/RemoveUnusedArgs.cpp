@@ -35,7 +35,7 @@ using namespace opt_metadata;
  * method body, removes those unused arguments from the method signature, and
  * removes the corresponding argument registers from invocations of that
  * method.
- * As an extra bonus, it also removes unused result types, and it reorderes
+ * As an extra bonus, it also removes unused result types, and it reorders
  * argument types to reduce the number of needed protos and shorty strings.
  */
 namespace remove_unused_args {

@@ -155,7 +155,7 @@ class walk {
    * -------
    *
    * The following code (taken from ReachableClasses) visits all opcode
-   * sequences that match the the form "const-string, invoke-static" where
+   * sequences that match the form "const-string, invoke-static" where
    * invoke-static is specifically invoking Class.forName that takes one
    * argument.
    *
@@ -693,7 +693,7 @@ class walk {
     }
 
     // Call `walker` on all given virtual scopes in parallel.
-    //   WalkerFn should `const VirtualScope*`.
+    //   WalkerFn should accept `const VirtualScope*`.
     template <class VirtualScopes, typename WalkerFn>
     static void virtual_scopes(
         const VirtualScopes& virtual_scopes,

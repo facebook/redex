@@ -10,7 +10,7 @@
  This ProGuard lexer is designed to lex only the output of
  running -printconfiguration from ProGuard which produces a single
  ProGuard configuration file which has the total merged configuration
- for the application. This will not contain ant Ant directives like
+ for the application. This will not contain any Ant directives like
  <java.home> which are expanded and it will not contain directives
  like -include since all the included files will have been inlined
  and merged.

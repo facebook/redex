@@ -89,7 +89,7 @@
  *                           have been rejected by the Android verifier). This
  *                           operation is therefore well typed.
  *
- *   We don't know if the the first use of a register with SCALAR type in a
+ *   We don't know if the first use of a register with SCALAR type in a
  *   typed context is correct. However, after that first use, the register's
  *   type is fully determined. If the first use of the register was erroneous it
  *   would be rejected by the Android verifier and hence, all subsequent uses

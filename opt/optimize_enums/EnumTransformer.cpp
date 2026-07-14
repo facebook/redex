@@ -218,7 +218,7 @@ struct EnumUtil {
    * String.valueOf:(Object) while the argument is a candidate enum object.
    * Store the method ref at the same time.
    *
-   * The implemmentation of the substitute method depends on the substitute
+   * The implementation of the substitute method depends on the substitute
    * method of LCandidateEnum;.toString:()String.
    */
   DexMethodRef* add_substitute_of_stringvalueof(const DexType* enum_type,
@@ -1139,7 +1139,7 @@ class EnumTransformer final {
           continue;
         } else {
           TRACE(ENUM, 2,
-                "\tOptimimze %s (%zu values) but object equality is not "
+                "\tOptimize %s (%zu values) but object equality is not "
                 "guaranteed",
                 SHOW(enum_cls), num_enum_constants);
         }

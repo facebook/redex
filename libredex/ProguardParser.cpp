@@ -157,7 +157,7 @@ std::string parse_single_filepath_command(TokenIndex& idx) {
   // Fail without consumption if this is a command token.
   if (idx.it->is_command()) {
     std::cerr << "Expecting a file path argument but got command " << idx.show()
-              << " at line  " << idx.line() << '\n'
+              << " at line " << idx.line() << '\n'
               << idx.show_context(2) << '\n';
     return "";
   }
@@ -204,7 +204,7 @@ std::vector<std::string> parse_filepath_command(TokenIndex& idx,
   // Fail without consumption if this is a command token.
   if (idx.it->is_command()) {
     std::cerr << "Expecting a file path argument but got command " << idx.show()
-              << " at line  " << idx.line() << '\n'
+              << " at line " << idx.line() << '\n'
               << idx.show_context(2) << '\n';
     return {};
   }
@@ -260,7 +260,7 @@ std::vector<std::string> parse_filter_list_command(TokenIndex& idx) {
 }
 
 bool parse_optimizationpasses_command(TokenIndex& idx) {
-  // Comsume the next token.
+  // Consume the next token.
   if (idx.type() == TokenType::eof_token) {
     return false;
   }
@@ -1035,7 +1035,7 @@ void parse(const std::vector<Token>& vec,
     case TokenType::dontskipnonpubliclibraryclasses: {
       // -skipnonpubliclibraryclasses not supported
       // -dontskipnonpubliclibraryclassmembers not supported
-      // Silenty ignore the dontskipnonpubliclibraryclasses option.
+      // Silently ignore the dontskipnonpubliclibraryclasses option.
       continue;
     }
     case TokenType::keep:
@@ -1253,7 +1253,7 @@ Stats parse(const std::string_view& config,
   }
 
   if (!ok) {
-    std::cerr << "Found " << ret.unknown_tokens << " unkown tokens in "
+    std::cerr << "Found " << ret.unknown_tokens << " unknown tokens in "
               << filename << "\n";
     pg_config->ok = false;
     return ret;

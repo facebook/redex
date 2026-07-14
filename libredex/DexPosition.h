@@ -83,7 +83,7 @@ class PositionPatternSwitchManager {
  public:
   PositionPatternSwitchManager();
 
-  // TODO: Enable the following flag. It's off for now to ensures that the
+  // TODO: Enable the following flag. It's off for now to ensure that the
   // inliner and outliner never produce an outlined method that invokes an
   // outlined method, a limitation imposed by symbolication infrastructure.
   static constexpr bool CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD = false;

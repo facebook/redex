@@ -15,7 +15,7 @@
 
 class Pass;
 
-// An AnalysisID is a string that represent the type of the pass.
+// An AnalysisID is a string that represents the type of the pass.
 using AnalysisID = std::string;
 
 template <typename AnalysisPass>

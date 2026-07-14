@@ -72,7 +72,7 @@ void InlinerConfig::bind_config() {
        "across classes. Avoid this annotation, prefer using "
        "no_inline_blocklist.");
   bind("caller_blocklist", {}, caller_blocklist,
-       "Any method defined in a class matching any given prefix will not t "
+       "Any method defined in a class matching any given prefix will not be "
        "inlined at all callsite if possible. This is problematic as Redex may "
        "move methods across classes.");
   bind("intradex_allowlist", {}, intradex_allowlist,
@@ -155,10 +155,10 @@ void IRTypeCheckerConfig::bind_config() {
   }
   bind("external_check_allowlist_prefixes", {},
        external_check_allowlist_prefixes,
-       "Allow classes that starts with given prefixes bypass external_check");
+       "Allow classes that start with given prefixes bypass external_check");
   bind("definition_check_allowlist_prefixes", {},
        definition_check_allowlist_prefixes,
-       "Allow classes that starts with given prefixes bypass "
+       "Allow classes that start with given prefixes bypass "
        "definition_check");
 }
 
@@ -207,7 +207,7 @@ void ProguardConfig::bind_config() {
        fail_on_unknown_commands);
   bind("frozen_basedirectory", frozen_basedirectory, frozen_basedirectory,
        "When set, ignore -basedirectory directives in the proguard "
-       "configuration file and use the give value instead.");
+       "configuration file and use the given value instead.");
 }
 
 void PassManagerConfig::bind_config() {

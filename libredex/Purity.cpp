@@ -404,11 +404,11 @@ bool process_base_and_overriding_methods_impl(
        !handler_func(const_cast<DexMethod*>(method)))) {
     return false;
   }
-  // When the method isn't virtual, there are no overriden methods to consider.
+  // When the method isn't virtual, there are no overridden methods to consider.
   if (!method->is_virtual()) {
     return true;
   }
-  // But even if there are overriden methods, don't look further when the
+  // But even if there are overridden methods, don't look further when the
   // method is to be ignored.
   if (methods_to_ignore && methods_to_ignore->count(method)) {
     return true;

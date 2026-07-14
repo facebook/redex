@@ -186,13 +186,13 @@ class PassManager {
     std::vector<std::unique_ptr<Pass>> cloned_passes;
   };
   static ActivatedPasses compute_activated_passes(
-      std::vector<Pass*> m_registered_passes,
+      std::vector<Pass*> registered_passes,
       const ConfigFiles& config,
       PassManagerConfig* pm_config_override = nullptr);
 
   // Reserves refs in every dex, effectively lowering the capacity of each dex.
   // This is applied uniformly (e.g., cannot be a per-dex value).
-  // All reserved refs must eventually released.
+  // All reserved refs must eventually be released.
   ReserveRefsInfoHandle reserve_refs(const std::string& name,
                                      const ReserveRefsInfo& info);
 

@@ -77,7 +77,7 @@
  * `true` if it believes subsequent analyses will not be able to further refine
  * the environment.
  *
- * All sub-analyzers should inherit from this class, which uses CRTP to mimick
+ * All sub-analyzers should inherit from this class, which uses CRTP to mimic
  * virtual dispatch on static methods. It provides a default implementation for
  * all opcode group analyses, which is simply a dispatch to the analyze_default
  * method in the derived class.

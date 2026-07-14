@@ -35,7 +35,7 @@
  * OVERRIDE | FINAL: a leaf method
  * TOP_DEF | FINAL: a method that is virtual only because
  *    of visibility but could be made static (FIXME: This flag currently seems
- *    to be erroroneously applied to external non-final methods, which we cannot
+ *    to be erroneously applied to external non-final methods, which we cannot
  *    safely conclude are final)
  * IMPL | <one of the above>: the method contributes (lexically) to
  *    interface resolution

@@ -599,9 +599,9 @@ void IRList::replace_branch(IRInstruction* from, IRInstruction* to) {
 void IRList::insert_after(IRInstruction* position,
                           const std::vector<IRInstruction*>& opcodes) {
   /* The nullptr case handling is strange-ish..., this will not work as expected
-   * if a method has a branch target as it's first instruction.
+   * if a method has a branch target as its first instruction.
    *
-   * To handle this case sanely, we'd need to export a interface based on
+   * To handle this case sanely, we'd need to export an interface based on
    * MEI's probably.
    */
   for (auto const& mei : m_list) {

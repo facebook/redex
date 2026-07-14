@@ -129,7 +129,7 @@ std::string FbjniMarker::to_internal_type(std::string_view str) {
     }
 
     // error: No matching type
-    not_reached_log("Can not resolve type %s", SHOW(str));
+    not_reached_log("Cannot resolve type %s", SHOW(str));
   }
 }
 

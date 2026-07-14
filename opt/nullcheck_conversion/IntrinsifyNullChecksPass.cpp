@@ -35,7 +35,7 @@ void IntrinsifyNullChecksPass::create_null_check_class(
   cls->rstate.set_clinit_has_no_side_effects();
   cls->rstate.set_name_used();
   cls->rstate.set_dont_rename();
-  // Crate method for null check.
+  // Create method for null check.
   const auto* meth_name = DexString::make_string("null_check");
   DexProto* proto = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::java_lang_Object()}));
@@ -88,7 +88,7 @@ void IntrinsifyNullChecksPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  // Create a null-check class in primiary dex.
+  // Create a null-check class in primary dex.
   create_null_check_class(&stores);
   m_null_check_ref = DexMethod::get_method(
       "Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V");

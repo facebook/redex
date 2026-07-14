@@ -49,7 +49,7 @@ void sanity_check_method_summary(const DexMethodRef* method,
     // To improve:
     // 1. `equals` method is final on Integer and Enum, we can specialize equals
     // call.
-    // 2. Run the method summary analysis muliple times until no new discovery.
+    // 2. Run the method summary analysis multiple times until no new discovery.
     TRACE(ENUM, 9, "%s is not external but its method summary is hardcoded",
           SHOW(method));
     const auto* code = method->as_def()->get_code();

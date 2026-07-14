@@ -315,7 +315,7 @@ void build_interface_scope(const DexType* type,
 /**
  * Merge 2 signatures map. The map from derived_sig_map is copied in
  * base_sig_map.
- * Interface methods in base don't have an entry yet, that will be build later
+ * Interface methods in base don't have an entry yet, that will be built later
  * because it's a straight copy of the class virtual scope.
  */
 void merge(const BaseSigs& base_sigs,
@@ -542,7 +542,7 @@ bool get_interface_methods(const DexType* type, BaseIntfSigs& intf_methods) {
 }
 
 /**
- * Make sure all the intereface methods are added to the SignatureMap.
+ * Make sure all the interface methods are added to the SignatureMap.
  * SignatureMap in input contains only scopes for virtual in the class.
  * After this step a type is fully specified with all its virtual methods
  * and all interface methods that did not have an implementation created
@@ -711,8 +711,8 @@ const VirtualScope* find_rooted_scope(const SignatureMap& sig_map,
  * Find all interface scopes rooted at the class provided.
  * Those are the scope rooted at a MIRANDA method as in
  * interface I { void m(); }
- * abstract class A imlements I {}
- * class B entends A { public void m() {} }
+ * abstract class A implements I {}
+ * class B extends A { public void m() {} }
  * Class A will have a virtual scope for m().
  */
 void get_rooted_interface_scope(const SignatureMap& sig_map,

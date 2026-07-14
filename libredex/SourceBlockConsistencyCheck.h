@@ -31,7 +31,7 @@ class DexString;
 // blocks in a way which is inconsistent with the source blocks' dominator
 // tree.
 //
-// It is off by default.  It runs as part of the assessor, and may be emabled
+// It is off by default.  It runs as part of the assessor, and may be enabled
 // by adding '"run_sb_consistency": true' under "assessor" properties in the
 // config JSON.
 //

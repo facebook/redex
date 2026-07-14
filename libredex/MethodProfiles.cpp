@@ -556,9 +556,10 @@ IntType parse_int(std::string_view tok) {
   auto [ptr, ec]{std::from_chars(tok.data(), tok.data() + tok.size(), result)};
   std::string_view rest(ptr, tok.size() - (ptr - tok.data()));
 
-  always_assert_log(ec == std::errc(), "can't parse %s into a int: %s",
+  always_assert_log(ec == std::errc(), "can't parse %s into an int: %s",
                     SHOW(tok), std::make_error_condition(ec).message().c_str());
-  always_assert_log(empty_column(rest), "can't parse %s into a int", SHOW(tok));
+  always_assert_log(empty_column(rest), "can't parse %s into an int",
+                    SHOW(tok));
   return result;
 }
 

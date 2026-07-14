@@ -304,7 +304,7 @@ void RtypeSpecialization::specialize_true_virtuals(
   const auto& overridings =
       method_override_graph::get_overriding_methods(override_graph, meth, true);
   if (!overridings.empty()) {
-    // If a candidate is overriden by another concrete method, we give up.
+    // If a candidate is overridden by another concrete method, we give up.
     // We try to avoid more complex cases here. We can potentially expand on
     // this.
     stats.num_rtype_specialized_virtual_more_override++;
@@ -317,7 +317,7 @@ void RtypeSpecialization::specialize_true_virtuals(
     return;
   }
   if (overriddens.size() == 1) {
-    // For now, we only focus on methods with one abstract overriden here.
+    // For now, we only focus on methods with one abstract overridden here.
     DexMethod* overridden = const_cast<DexMethod*>(*unordered_any(overriddens));
     if (!is_safe_to_specialize(overridden) || overridden->is_external()) {
       // Overridden has code or is external. Give up
@@ -327,7 +327,7 @@ void RtypeSpecialization::specialize_true_virtuals(
     }
 
     if (!shares_identical_rtype_candidate(overridden, better_rtype)) {
-      // The overriden has to share the identical `better_rtype` to be
+      // The overridden has to share the identical `better_rtype` to be
       // specialized
       return;
     }

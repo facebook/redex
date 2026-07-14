@@ -63,7 +63,7 @@ std::string form_type_regex(const std::string& proguard_regex) {
   r.reserve(2 * regex.size());
   for (size_t i = 0; i < regex.size(); i++) {
     const char ch = regex[i];
-    // Convert % to a match against primvitive types without
+    // Convert % to a match against primitive types without
     // creating a capture group.
     if (ch == '%') {
       r += "(?:B|S|I|J|Z|F|D|C|V)";
@@ -74,7 +74,7 @@ std::string form_type_regex(const std::string& proguard_regex) {
       r += "\\$";
       continue;
     }
-    // Escape a path slash to it is not part of the regex syntax.
+    // Escape a path slash so it is not part of the regex syntax.
     if (ch == '/') {
       r += "\\/";
       continue;
@@ -93,7 +93,7 @@ std::string form_type_regex(const std::string& proguard_regex) {
       r += "\\[";
       continue;
     }
-    // ?: match any character except the class seperator or array prefix
+    // ?: match any character except the class separator or array prefix
     if (ch == '?') {
       r += "[^\\/\\[]";
       continue;
@@ -106,7 +106,7 @@ std::string form_type_regex(const std::string& proguard_regex) {
           i = i + 2;
           continue;
         }
-        // **: Match any part of a class name including any number of seperators
+        // **: Match any part of a class name including any number of separators
         // Note that this does not match an array type
         r += "(?:[^\\[]*)";
         i++;
@@ -158,7 +158,7 @@ bool has_special_char(const std::string& proguard_regex) {
   return false;
 }
 
-// Convert a ProGuard Java type type which may use wildcards to
+// Convert a ProGuard Java type which may use wildcards to
 // an internal JVM type descriptor with the wildcards preserved.
 std::string convert_wildcard_type(const std::string& typ) {
   return convert_wildcard_type(std::string_view(typ));

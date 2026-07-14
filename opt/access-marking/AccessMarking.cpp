@@ -81,7 +81,7 @@ size_t mark_fields_final(const Scope& scope,
         continue;
       }
       // Note: There is one more thing that javac enforces around final fields:
-      // That there's at most one write to the field along any constrol-flow
+      // That there's at most one write to the field along any control-flow
       // path. We skip the complexities of checking that here, as the JVM spec
       // doesn't call this out as a requirement.
       //

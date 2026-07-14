@@ -89,8 +89,8 @@ void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
   auto result =
       evaluate_branch(last_insn->opcode(), domain.get_nullness().element());
   if (result == ALWAYS_TAKEN) {
-    // In cfg, there is no OPCODE_GOTO. We just put an tempary GOTO
-    // insn here, and will be handled during actual code tranform.
+    // In cfg, there is no OPCODE_GOTO. We just put a temporary GOTO
+    // insn here, and will be handled during actual code transform.
     m_replacements.push_back({block->to_cfg_instruction_iterator(insn_it),
                               new IRInstruction(OPCODE_GOTO)});
     stats.null_check_removed++;

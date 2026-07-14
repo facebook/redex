@@ -36,7 +36,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
   // Collect all the types which are of Kotlin classes which sets INSTANCE
   // variable.
   // Get all the uses of the INSTANCE variables whose <init> does not have
-  // sideeffets
+  // side effects
   KotlinInstanceRewriter::Stats stats{};
   AtomicStatCounter<size_t> excludable_count{0};
   walk::parallel::classes(scope, [&](DexClass* cls) {

@@ -19,8 +19,8 @@ Pass::Pass(std::string name, Kind kind)
 }
 
 void Pass::set_analysis_usage(AnalysisUsage& analysis_usage) const {
-  // By default, analysis passes preserves all existing analysis while
-  // transformation passes preserves none.
+  // By default, analysis passes preserve all existing analysis while
+  // transformation passes preserve none.
   if (m_kind == ANALYSIS) {
     analysis_usage.set_preserve_all();
   }

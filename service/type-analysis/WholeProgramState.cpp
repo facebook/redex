@@ -22,7 +22,7 @@ std::ostream& operator<<(std::ostream& out, const DexMethod& method) {
   return out << show(static_cast<const DexMethodRef*>(&method));
 }
 
-/* Map of method to known return type - Esepecially for the Boxed values. TODO
+/* Map of method to known return type - Especially for the Boxed values. TODO
  * construct the list.*/
 UnorderedMap<const char*, const char*> STATIC_METHOD_TO_TYPE_MAP = {
     {"Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;",
@@ -104,8 +104,8 @@ void set_sfields_in_partition(const DexClass* cls,
 
 /*
  * If an instance field is not populated in ctor, it is implicitly null.
- * Note that a class can have multipl ctors. If an instance field is not
- * initialized in any ctor, it is nullalbe. That's why we need to join the type
+ * Note that a class can have multiple ctors. If an instance field is not
+ * initialized in any ctor, it is nullable. That's why we need to join the type
  * mapping across all ctors.
  */
 void set_ifields_in_partition(

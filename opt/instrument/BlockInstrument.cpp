@@ -663,7 +663,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
     const InstrumentPass::Options& options) {
   std::vector<IRInstruction*> invokes;
   size_t num_exit_blocks = 0;
-  // If reg_vectors is emptry (methods with a single entry block), no need to
+  // If reg_vectors is empty (methods with a single entry block), no need to
   // instrument onMethodExit.
   if (reg_vectors.empty()) {
     return std::make_tuple(num_exit_blocks, invokes);

@@ -92,7 +92,7 @@ struct Node {
   // Whether the current Node's method is an interface method.
   bool is_interface{false};
 
-  // Checks whther the current method's class, or any other implementation
+  // Checks whether the current method's class, or any other implementation
   // class, can be cast to the given base type.
   bool overrides(const DexMethod* current, const DexType* base_type) const;
 

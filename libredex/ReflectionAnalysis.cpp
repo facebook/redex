@@ -440,7 +440,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     // be interpreted separately.
     //
     // Note that we do not try to infer them as STRINGs.
-    // Since we don't have the the actual value of the string other than their
+    // Since we don't have the actual value of the string other than their
     // type being String. Also for CLASSes, the exact Java type they refer to is
     // not available here.
     auto init_state = AbstractObjectEnvironment::top();
@@ -565,7 +565,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       auto obj = aobj.get_object();
       // Append the referenced type here to the potential dex types list.
       // Doing this increases the type information we have at the reflection
-      // site. It's up to the user of the analysis  how to interpret this
+      // site. It's up to the user of the analysis how to interpret this
       // information.
       if (obj && (obj->is_object()) && (obj->dex_type != nullptr)) {
         const auto* dex_type = insn->get_type();

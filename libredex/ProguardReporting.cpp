@@ -71,7 +71,7 @@ std::string_view extract_member_name(const std::string_view qualified) {
 
 // Convert a type descriptor that may contain obfuscated class names
 // into the corresponding type descriptor with the class types deobfuscated.
-// The incomming type descriptor is a chain of types which may be primitive
+// The incoming type descriptor is a chain of types which may be primitive
 // types, array types or class types. For example [[A; -> [[Lcom.wombat.Numbat;
 std::string deobfuscate_type_descriptor(const ProguardMap& pg_map,
                                         const std::string& desc) {
@@ -126,7 +126,7 @@ void redex::print_method(std::ostream& output,
                          const std::string& class_name,
                          const DexMethod* method) {
   std::string_view method_name = extract_member_name(method->get_name()->str());
-  // Record if this is a constructor to supress return value printing
+  // Record if this is a constructor to suppress return value printing
   // before the method name.
   bool is_constructor = method::is_init(method);
   if (is_constructor) {
@@ -193,7 +193,7 @@ void redex::print_class(std::ostream& output,
     if (!deob.empty()) {
       return deob;
     }
-    std::cerr << "WARNING: this class has no deobu name: "
+    std::cerr << "WARNING: this class has no deobfuscated name: "
               << cls->get_name()->c_str() << '\n';
     return cls->get_name()->str();
   }();

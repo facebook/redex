@@ -128,7 +128,7 @@ const DexType* find_common_array_type(const DexType* l, const DexType* r) {
 }
 
 /*
- * Partially mimicing the Dalvik bytecode structural verifier:
+ * Partially mimicking the Dalvik bytecode structural verifier:
  * https://android.googlesource.com/platform/dalvik/+/android-cts-4.4_r4/vm/analysis/CodeVerify.cpp#2462
  */
 sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {

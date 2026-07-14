@@ -52,7 +52,7 @@ class DexInstruction : public Gatherable {
 
   // Ref-less opcodes, largest size is 5 insns.
   // If the constructor is called with a non-numeric
-  // count, we'll have to add a assert here.
+  // count, we'll have to add an assert here.
   // Holds formats:
   // 10x 11x 11n 12x 22x 21s 21h 31i 32x 51l
   DexInstruction(const uint16_t* opcodes, int count) {

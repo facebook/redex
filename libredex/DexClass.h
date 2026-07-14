@@ -321,7 +321,7 @@ class DexFieldRef {
 
   dex_member_refs::FieldDescriptorTokens get_descriptor_tokens() const;
 
-  // This method frees the given `DexFieldRed` - different from `erase_field`,
+  // This method frees the given `DexFieldRef` - different from `erase_field`,
   // which only removes the field from the `RedexContext`.
   //
   // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures

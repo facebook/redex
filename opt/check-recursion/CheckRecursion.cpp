@@ -25,7 +25,7 @@ constexpr const char* METRIC_METHODS_PATCHED = "methods_patched";
 
 enum class CheckRecursionResult { NotFound, SafeRecursion, Patched };
 
-// Check bad recursion and aplly fix for the method. CFG should be built before
+// Check bad recursion and apply fix for the method. CFG should be built before
 // calling this function.
 static CheckRecursionResult do_check_recursion(DexMethod* method,
                                                IRCode& code,
@@ -60,7 +60,7 @@ static CheckRecursionResult do_check_recursion(DexMethod* method,
     if (it->is_catch()) {
       // Catch handlers disables inlining, so if the method already has
       // catch handlers there is nothing to do.
-      TRACE(CHECKRECURSION, 2, "Skip method %s with catches, recusrion %d",
+      TRACE(CHECKRECURSION, 2, "Skip method %s with catches, recursion %d",
             SHOW(method), self_recursion_count);
       return CheckRecursionResult::SafeRecursion;
     }
@@ -87,7 +87,7 @@ static CheckRecursionResult do_check_recursion(DexMethod* method,
         code.cfg().split_block(block->to_cfg_instruction_iterator(split_insn));
     call_insn = block->to_cfg_instruction_iterator(block->get_first_insn());
   }
-  // Also have to split block after the call becuase overwise, if the
+  // Also have to split block after the call because otherwise, if the
   // block has return, it cannot have exception edge.
   code.cfg().split_block(call_insn);
 

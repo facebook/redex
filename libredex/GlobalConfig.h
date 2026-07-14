@@ -18,7 +18,7 @@ struct InlinerConfig : public inliner::InlinerConfig, Configurable {
   void bind_config() override;
   std::string get_config_name() override { return "InlinerConfig"; }
   std::string get_config_doc() override {
-    return "This configuration is used to configure the inlinining which "
+    return "This configuration is used to configure the inlining which "
            "occurs in several Redex passes.";
   }
 };

@@ -47,7 +47,7 @@ class Lazy {
   void init() {
     if (!m_value) {
       m_value = m_creator();
-      // Release whatever memory is asssociated with creator
+      // Release whatever memory is associated with creator
       m_creator = std::function<std::unique_ptr<T>()>();
     }
   }

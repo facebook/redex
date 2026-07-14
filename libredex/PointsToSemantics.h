@@ -156,7 +156,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToVariable& v);
  * counterparts in Dex bytecode. Note that we do not attempt to model exceptions
  * precisely. The `PTS_GET_EXCEPTION` operation stands for `move-exception`, but
  * assumes that any exception can be caught. This also explains why we have no
- * operation corresponding to `throw`. As for the disjuction, it's simply the
+ * operation corresponding to `throw`. As for the disjunction, it's simply the
  * union of points-to variables (V = V1 U V2 U ... U Vn). We also introduce a
  * special operation `PTS_GET_CLASS` for java.lang.Object#getClass(), since
  * java.lang.Class objects need to be handled specially by the analyzer.
@@ -437,7 +437,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a);
  * points-to equations because either the code is unavailable (external
  * libraries, native methods), the code doesn't exist (abstract methods) or the
  * code exists but has no effect on pointers. Each case may be subject to a
- * different semantic intepretation.
+ * different semantic interpretation.
  */
 enum MethodKind {
   PTS_APK, // Regular method defined in the APK
@@ -501,8 +501,8 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s);
 /*
  * This represents the points-to semantics of all methods inside a given scope.
  *
- * IMPORTANT: the procedure used to generate the points-to sematics assumes that
- * invoke-* instructions are in denormalized form, i.e., wide arguments are
+ * IMPORTANT: the procedure used to generate the points-to semantics assumes
+ * that invoke-* instructions are in denormalized form, i.e., wide arguments are
  * explicitly represented by a pair of consecutive registers. The generation of
  * the points-to semantics doesn't modify the IR and hence, can be used anywhere
  * in Redex.

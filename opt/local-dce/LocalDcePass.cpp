@@ -142,7 +142,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   TRACE(DCE, 1,
         "instructions removed -- npe: %zu, dead: %zu, init-class added: %zu, "
         "unreachable: %zu; "
-        "normalized %zu new-instance instructions, %zu aliasaed",
+        "normalized %zu new-instance instructions, %zu aliased",
         stats.npe_instruction_count, stats.dead_instruction_count,
         stats.init_class_instructions_added,
         stats.unreachable_instruction_count, stats.normalized_new_instances,

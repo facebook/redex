@@ -23,7 +23,7 @@ namespace {
 /**
  * Summary example of a simple constructor whose parameters are only used to
  * initialize a fraction of its instance fields or only being passed to the
- * super constructor. Some or all instsance fields are initialised from args,
+ * super constructor. Some or all instance fields are initialised from args,
  * however every argument must initialise either a field or be passed to
  * the super constructor. The super constructor is also allowed to receive
  * values from const-literal instructions.

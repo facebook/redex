@@ -43,9 +43,9 @@ void MergeabilityChecker::exclude_unsupported_cls_property(
     // Why uninstantiable classes are not mergeable?
     // Class Merging is good at merging virtual methods horizontally by
     // supporting virtual dispatches. There's no benefit to merge uninstantiable
-    // classes and no proper way to merge uninstatiable and instantiable classes
-    // together. Exclude the uninstantiable classes from ClassMerging and
-    // RemoveUnreachablePass should properly handle parts of them.
+    // classes and no proper way to merge uninstantiable and instantiable
+    // classes together. Exclude the uninstantiable classes from ClassMerging
+    // and RemoveUnreachablePass should properly handle parts of them.
     bool has_ctor = false;
     for (const auto& method : cls->get_dmethods()) {
       if (is_constructor(method) && method::is_init(method)) {

@@ -280,7 +280,7 @@ void RealPositionMapper::process_pattern_switch_positions() {
   //
   // (some line): method Lredex/$Position;.switch:()V, line 101
   //
-  // Note that the callsite remain unchanged, still referencing the pattern-id,
+  // Note that the callsite remains unchanged, still referencing the pattern-id,
   // e.g.
   //
   // (some line): method Lredex/$Position;.pattern:()V, line 12345
@@ -426,7 +426,7 @@ void RealPositionMapper::write_map_v2() {
 
   std::ofstream ofs(m_filename_v2.c_str(),
                     std::ofstream::out | std::ofstream::trunc);
-  uint32_t magic = 0xfaceb000; // serves as endianess check
+  uint32_t magic = 0xfaceb000; // serves as endianness check
   ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
   uint32_t version = 2;
   ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));

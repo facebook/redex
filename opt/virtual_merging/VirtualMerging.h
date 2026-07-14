@@ -154,7 +154,7 @@ class VirtualMerging {
       m_mergeable_scope_methods;
 
  public:
-  using MergablePairsByVirtualScope =
+  using MergeablePairsByVirtualScope =
       std::map<const VirtualScope*,
                std::vector<std::pair<const DexMethod*, const DexMethod*>>,
                virtualscopes_comparator>;
@@ -162,12 +162,12 @@ class VirtualMerging {
   void flush();
 
  private:
-  MergablePairsByVirtualScope compute_mergeable_pairs_by_virtual_scopes(
+  MergeablePairsByVirtualScope compute_mergeable_pairs_by_virtual_scopes(
       const method_profiles::MethodProfiles&,
       Strategy strategy,
       VirtualMergingStats&) const;
 
-  void merge_methods(const MergablePairsByVirtualScope& mergeable_pairs,
+  void merge_methods(const MergeablePairsByVirtualScope& mergeable_pairs,
                      InsertionStrategy insertion_strategy);
   UnorderedMap<DexClass*, std::vector<const DexMethod*>>
       m_virtual_methods_to_remove;

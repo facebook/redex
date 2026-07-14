@@ -16,7 +16,7 @@
 
 /*
  * Stringification functions for core types.  Definitions are in DexClass.cpp
- * to avoid circular dependences.
+ * to avoid circular dependencies.
  */
 class DexString;
 class DexType;

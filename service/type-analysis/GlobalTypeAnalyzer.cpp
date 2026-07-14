@@ -367,7 +367,7 @@ bool is_leaking_this_in_ctor(const DexMethod* caller, const DexMethod* callee) {
  * The nullness analysis has an issue. That is in a method reachable from a
  * clinit or ctor in the call graph, a read of a field that is not yet
  * initialized by the 'init' method does not yield the matching nullness result
- * with the analysis. We will run into errors if we didn't handle this issue.
+ * with the analysis. We will run into errors if we don't handle this issue.
  *
  * The method provides a simple workaround. We gather all methods reachable
  * from a clinit or ctor in the call graph. We put the reachable set into

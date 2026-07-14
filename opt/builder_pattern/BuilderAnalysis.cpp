@@ -139,7 +139,7 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
 
     case OPCODE_CONST:
       if (insn->get_literal() == 0) {
-        // NULL const is a spcial case required for conditional creation.
+        // NULL const is a special case required for conditional creation.
         current_state->set(insn->dest(), IRInstructionConstantDomain(insn));
       } else {
         default_case();
