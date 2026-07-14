@@ -148,7 +148,7 @@ void build_allowed_violations(const Scope& scope,
   UnorderedMap<std::string, bool> allowed_class_names;
   std::string line;
   while (std::getline(input, line)) {
-    if (line.empty() || boost::algorithm::starts_with(line, "#")) {
+    if (line.empty() || line.starts_with("#")) {
       continue;
     }
     if (boost::algorithm::ends_with(line, ";")) {
@@ -429,7 +429,7 @@ bool Breadcrumbs::should_allow_violations(const DexType* type) {
   }
   auto dname = show_deobfuscated(type);
   for (const auto& s : UnorderedIterable(m_allow_violation_type_prefixes)) {
-    if (boost::algorithm::starts_with(dname, s)) {
+    if (dname.starts_with(s)) {
       m_types_with_allowed_violations.emplace(type);
       m_type_prefixes_with_allowed_violations.emplace(s);
       return true;

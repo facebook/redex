@@ -178,10 +178,10 @@ void ClassChecker::run(const Scope& scope) {
   auto match_allowlist_prefix =
       [&](const UnorderedSet<std::string>& allowlist_prefixes,
           const DexType* type) -> bool {
-    return unordered_find_if(
-               allowlist_prefixes, [type](const std::string& name) {
-                 return boost::starts_with(type->get_name()->str(), name);
-               }) != allowlist_prefixes.end();
+    return unordered_find_if(allowlist_prefixes,
+                             [type](const std::string& name) {
+                               return type->get_name()->str().starts_with(name);
+                             }) != allowlist_prefixes.end();
   };
 
   auto check_class_defined = [&](const DexType* type) -> bool {

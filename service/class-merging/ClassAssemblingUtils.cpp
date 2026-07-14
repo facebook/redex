@@ -7,8 +7,6 @@
 
 #include "ClassAssemblingUtils.h"
 
-#include <boost/algorithm/string.hpp>
-
 #include "Creators.h"
 #include "DexStore.h"
 #include "Show.h"
@@ -33,9 +31,8 @@ std::string_view get_merger_package_name(const DexType* root_type) {
   auto pkg_name = type::get_package_name(root_type);
   // Avoid an Android OS like package name, which might confuse the custom class
   // loader. See T34120391 for details.
-  if (boost::starts_with(pkg_name, "Landroid/") ||
-      boost::starts_with(pkg_name, "Ldalvik/") ||
-      boost::starts_with(pkg_name, "Ljava/")) {
+  if (pkg_name.starts_with("Landroid/") || pkg_name.starts_with("Ldalvik/") ||
+      pkg_name.starts_with("Ljava/")) {
     auto* cls = type_class(root_type);
     if ((cls != nullptr) && cls->is_external()) {
       return "Lcom/facebook/redex/";

@@ -7,8 +7,6 @@
 
 #include "ApiLevelChecker.h"
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -140,13 +138,13 @@ constexpr const char* ANDROID_SUPPORT_LIB_PREFIX = "Landroid/support/";
 
 bool is_android_sdk_type(const DexType* type) {
   const auto name = type->str();
-  return boost::starts_with(name, ANDROID_SDK_PREFIX);
+  return name.starts_with(ANDROID_SDK_PREFIX);
 }
 
 bool is_support_lib_type(const DexType* type) {
   const auto name = type->str();
-  return boost::starts_with(name, ANDROID_X_PREFIX) ||
-         boost::starts_with(name, ANDROID_SUPPORT_LIB_PREFIX);
+  return name.starts_with(ANDROID_X_PREFIX) ||
+         name.starts_with(ANDROID_SUPPORT_LIB_PREFIX);
 }
 
 namespace {

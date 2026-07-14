@@ -7,7 +7,6 @@
 
 #include "InlinerConfig.h"
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <mutex>
 
 #include "AnnoUtils.h"
@@ -27,19 +26,19 @@ void InlinerConfig::populate(const Scope& scope) {
 
   walk::classes(scope, [&](DexClass* cls) {
     for (const std::string& type_str : blocklist) {
-      if (boost::starts_with(cls->get_name()->str(), type_str)) {
+      if (cls->get_name()->str().starts_with(type_str)) {
         m_blocklist.emplace(cls->get_type());
         break;
       }
     }
     for (const std::string& type_str : caller_blocklist) {
-      if (boost::starts_with(cls->get_name()->str(), type_str)) {
+      if (cls->get_name()->str().starts_with(type_str)) {
         m_caller_blocklist.emplace(cls->get_type());
         break;
       }
     }
     for (const std::string& type_str : intradex_allowlist) {
-      if (boost::starts_with(cls->get_name()->str(), type_str)) {
+      if (cls->get_name()->str().starts_with(type_str)) {
         m_intradex_allowlist.emplace(cls->get_type());
         break;
       }
@@ -48,9 +47,9 @@ void InlinerConfig::populate(const Scope& scope) {
       std::string_view class_str = cls->get_name()->str();
       std::string_view class_prefix_str = std::string_view(str).substr(
           0, std::min(str.size(), class_str.size()));
-      if (boost::starts_with(class_str, class_prefix_str)) {
+      if (class_str.starts_with(class_prefix_str)) {
         for (auto* method : cls->get_all_methods()) {
-          if (boost::starts_with(show(method), str)) {
+          if (show(method).starts_with(str)) {
             method->rstate.set_dont_inline();
           }
         }

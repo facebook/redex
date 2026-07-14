@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include "DexClass.h"
 
 namespace outliner {
@@ -22,13 +20,10 @@ inline bool is_outlined_method(const DexMethodRef* method) {
       method->as_def() != nullptr
           ? method->as_def()->get_simple_deobfuscated_name()
           : "";
-  return boost::algorithm::starts_with(name, OUTLINED_METHOD_NAME_PREFIX) ||
-         boost::algorithm::starts_with(name,
-                                       OUTLINED_METHOD_SHORT_NAME_PREFIX) ||
-         boost::algorithm::starts_with(deobfuscated_name,
-                                       OUTLINED_METHOD_NAME_PREFIX) ||
-         boost::algorithm::starts_with(deobfuscated_name,
-                                       OUTLINED_METHOD_SHORT_NAME_PREFIX);
+  return name.starts_with(OUTLINED_METHOD_NAME_PREFIX) ||
+         name.starts_with(OUTLINED_METHOD_SHORT_NAME_PREFIX) ||
+         deobfuscated_name.starts_with(OUTLINED_METHOD_NAME_PREFIX) ||
+         deobfuscated_name.starts_with(OUTLINED_METHOD_SHORT_NAME_PREFIX);
 }
 
 } // namespace outliner

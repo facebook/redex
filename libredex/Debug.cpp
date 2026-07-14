@@ -45,7 +45,6 @@
 #include <sys/syscall.h>
 #endif
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/exception/all.hpp>
 #ifdef __APPLE__
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
@@ -388,7 +387,7 @@ VmStats get_mem_stats() {
   while (std::getline(ifs, line)) {
     const auto* it_relevant_stat = std::find_if(
         relevant_stats.begin(), relevant_stats.end(),
-        [&line](const auto& rs) { return boost::starts_with(line, rs.first); });
+        [&line](const auto& rs) { return line.starts_with(rs.first); });
 
     if (it_relevant_stat != relevant_stats.end()) {
       const auto& [stat_name, stat_field_ptr] = *it_relevant_stat;

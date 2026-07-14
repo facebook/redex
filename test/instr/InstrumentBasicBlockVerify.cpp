@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <gtest/gtest.h>
 
 #include "DexClass.h"
@@ -22,7 +21,7 @@ static const char* kNamePrefix =
     "Lcom/facebook/redextest/InstrumentBasicBlockTarget;.testFunc";
 
 auto matcher = [](const DexMethod* method) {
-  return boost::starts_with(show(method), kNamePrefix);
+  return show(method).starts_with(kNamePrefix);
 };
 } // namespace
 

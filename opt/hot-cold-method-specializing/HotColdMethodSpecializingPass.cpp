@@ -7,8 +7,6 @@
 
 #include "HotColdMethodSpecializingPass.h"
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include "ConfigFiles.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
@@ -511,7 +509,7 @@ void HotColdMethodSpecializingPass::run_pass(DexStoresVector& stores,
       specialized_methods_by_class;
   walk::parallel::classes(scope, [&](DexClass* cls) {
     for (auto& str : m_config.blocklist) {
-      if (boost::starts_with(cls->get_deobfuscated_name_or_empty(), str)) {
+      if (cls->get_deobfuscated_name_or_empty().starts_with(str)) {
         return;
       }
     }

@@ -6,6 +6,7 @@
  */
 
 #include "TypedefAnnoCheckerPass.h"
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "AnnoUtils.h"
 #include "ClassUtil.h"
@@ -127,7 +128,7 @@ bool TypedefAnnoChecker::is_generated(const DexMethod* m) const {
 
 bool TypedefAnnoChecker::should_not_check(const DexMethod* m) const {
   for (const auto& prefix : UnorderedIterable(m_config.do_not_check_list)) {
-    if (boost::starts_with(m->get_deobfuscated_name_or_empty_copy(), prefix)) {
+    if (m->get_deobfuscated_name_or_empty_copy().starts_with(prefix)) {
       return true;
     }
   }
@@ -164,8 +165,7 @@ bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
           continue;
         }
         // find methods that delegate with $$delegate_ P1697234372
-        if (boost::starts_with(field->get_simple_deobfuscated_name(),
-                               "$$delegate_")) {
+        if (field->get_simple_deobfuscated_name().starts_with("$$delegate_")) {
           delegate = field;
         } else {
           // find methods that delegate without $$delegate_ P1698648093

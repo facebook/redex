@@ -7,7 +7,6 @@
 
 #include "ReBindRefs.h"
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <string>
 #include <vector>
 
@@ -187,7 +186,7 @@ struct Rebinder {
 
   bool is_excluded_external(const std::string& name) {
     for (auto& excluded : m_excluded_externals) {
-      if (boost::starts_with(name, excluded)) {
+      if (name.starts_with(excluded)) {
         return true;
       }
     }
