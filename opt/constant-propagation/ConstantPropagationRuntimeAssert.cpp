@@ -8,6 +8,7 @@
 #include "ConstantPropagationRuntimeAssert.h"
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
 

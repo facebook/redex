@@ -10,6 +10,7 @@
 #include <type_traits>
 
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexPosition.h"
 #include "DexUtil.h"

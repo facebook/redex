@@ -7,6 +7,7 @@
 
 #include "IntraDexInlinePass.h"
 
+#include "Debug.h"
 #include "MethodInliner.h"
 
 void IntraDexInlinePass::bind_config() {

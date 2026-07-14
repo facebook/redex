@@ -6,6 +6,7 @@
  */
 
 #include "AliasedRegisters.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 
 #include <algorithm>

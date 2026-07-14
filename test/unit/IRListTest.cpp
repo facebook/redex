@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Debug.h"
 #include "IRCode.h"
 #include "IRList.h"
 #include "RedexTest.h"

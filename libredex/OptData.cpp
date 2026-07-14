@@ -13,6 +13,7 @@
 #include <string>
 #include <utility>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexPosition.h"
 #include "EditableCfgAdapter.h"

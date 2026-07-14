@@ -9,6 +9,7 @@
 
 #include <fstream>
 
+#include "Debug.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Trace.h"

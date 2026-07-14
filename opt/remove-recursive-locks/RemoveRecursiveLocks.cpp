@@ -18,6 +18,7 @@
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"

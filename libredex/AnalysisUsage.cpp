@@ -7,6 +7,7 @@
 
 #include "AnalysisUsage.h"
 
+#include "Debug.h"
 #include "Pass.h"
 
 AnalysisID get_analysis_id_by_pass(const Pass* pass) {

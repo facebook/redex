@@ -7,6 +7,7 @@
 
 #include "TypeAnalysisCallGraphGenerationPass.h"
 
+#include "Debug.h"
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"

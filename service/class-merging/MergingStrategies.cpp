@@ -8,6 +8,7 @@
 #include "MergingStrategies.h"
 
 #include "CrossDexRefMinimizer.h"
+#include "Debug.h"
 #include "IRCode.h"
 #include "Show.h"
 #include "Trace.h"

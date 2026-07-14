@@ -8,6 +8,7 @@
 #include "ExpandableMethodParams.h"
 #include "ApiLevelChecker.h"
 #include "CFGMutation.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "LiveRange.h"
 #include "Resolver.h"

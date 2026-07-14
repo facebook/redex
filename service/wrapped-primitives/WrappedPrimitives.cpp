@@ -13,6 +13,7 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationWholeProgramState.h"
+#include "Debug.h"
 #include "Lazy.h"
 #include "LiveRange.h"
 #include "RedexContext.h"

@@ -9,6 +9,7 @@
 
 #include <utility>
 
+#include "Debug.h"
 #include "DexClass.h"
 
 namespace builder_pattern {

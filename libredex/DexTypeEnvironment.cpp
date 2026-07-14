@@ -10,6 +10,7 @@
 #include <boost/optional/optional_io.hpp>
 #include <ostream>
 
+#include "Debug.h"
 #include "Show.h"
 
 namespace dtv_impl {

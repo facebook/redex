@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 
+#include "Debug.h"
 #include "DexLoader.h"
 #include "DexUtil.h"
 #include "JarLoader.h"

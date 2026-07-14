@@ -9,6 +9,7 @@
 #include "ConcurrentContainers.h"
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "IFieldAnalysisUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"

@@ -22,6 +22,7 @@
 #include "ControlFlow.h"
 #include "CppUtil.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexCallSite.h"
 #include "DexClass.h"

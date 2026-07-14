@@ -9,6 +9,7 @@
 
 #include "ConfigFiles.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexStoreUtil.h"
 #include "DexUtil.h"
 #include "PassManager.h"

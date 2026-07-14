@@ -7,6 +7,7 @@
 
 #include "Configurable.h"
 
+#include "Debug.h"
 #include "DexClass.h"
 
 template <typename T>

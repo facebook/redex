@@ -6,6 +6,8 @@
  */
 
 #include "DexLimitsInfo.h"
+#include "Debug.h"
+#include "InitClassesWithSideEffects.h"
 #include "Show.h"
 
 DexLimitsInfo::DexLimitsInfo(

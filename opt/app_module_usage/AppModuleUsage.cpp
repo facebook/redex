@@ -18,6 +18,7 @@
 
 #include "ConfigFiles.h"
 #include "CppUtil.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"

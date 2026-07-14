@@ -7,6 +7,7 @@
 
 #include "BlamingAnalysis.h"
 
+#include "Debug.h"
 #include "IRAssembler.h"
 #include "Macros.h"
 #include "RedexTest.h"

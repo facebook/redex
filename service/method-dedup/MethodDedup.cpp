@@ -7,6 +7,7 @@
 
 #include "MethodDedup.h"
 
+#include "Debug.h"
 #include "DedupBlocks.h"
 #include "DexOpcode.h"
 #include "IRCode.h"

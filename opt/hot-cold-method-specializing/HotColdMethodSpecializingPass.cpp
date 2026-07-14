@@ -8,6 +8,7 @@
 #include "HotColdMethodSpecializingPass.h"
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "RedexContext.h"

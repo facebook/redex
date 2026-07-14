@@ -7,6 +7,7 @@
 
 #include "NativeNames.h"
 
+#include "Debug.h"
 #include <boost/algorithm/string.hpp>
 #include <cctype>
 #include <sstream>

@@ -7,6 +7,7 @@
 
 #include "ConstantPropagationWholeProgramState.h"
 
+#include "Debug.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "Resolver.h"
 #include "Trace.h"

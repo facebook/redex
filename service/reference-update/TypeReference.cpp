@@ -8,6 +8,7 @@
 #include "TypeReference.h"
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "MethodReference.h"
 #include "Resolver.h"
 #include "Show.h"

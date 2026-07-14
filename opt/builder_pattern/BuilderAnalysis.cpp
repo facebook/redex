@@ -11,6 +11,7 @@
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
 #include "BaseIRAnalyzer.h"
+#include "Debug.h"
 #include "Liveness.h"
 #include "MethodUtil.h"
 #include "Resolver.h"

@@ -9,6 +9,7 @@
 
 #include "AnnoUtils.h"
 #include "ClassUtil.h"
+#include "Debug.h"
 #include "KotlinNullCheckMethods.h"
 #include "PassManager.h"
 #include "Resolver.h"

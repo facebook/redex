@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "Debug.h"
+#include "DeterministicContainers.h"
 #include <algorithm>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

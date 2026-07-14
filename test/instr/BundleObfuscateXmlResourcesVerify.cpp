@@ -11,6 +11,7 @@
 #include <set>
 
 #include "BundleResources.h"
+#include "Debug.h"
 #include "ObfuscateXmlVerifyHelper.h"
 #include "ReadMaybeMapped.h"
 #include "protores/Resources.pb.h"

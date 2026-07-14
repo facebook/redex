@@ -46,6 +46,7 @@
  */
 
 #include "DedupBlocks.h"
+#include "Debug.h"
 #include "DedupBlockValueNumbering.h"
 
 #include <algorithm>

@@ -7,6 +7,7 @@
 
 #include "DexAccess.h"
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"

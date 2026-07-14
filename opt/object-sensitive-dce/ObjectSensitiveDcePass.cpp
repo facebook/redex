@@ -13,6 +13,7 @@
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "InitClassPruner.h"
 #include "InitClassesWithSideEffects.h"

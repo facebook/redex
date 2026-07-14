@@ -16,6 +16,7 @@
 
 #include "BlockInstrument.h"
 #include "CFGMutation.h"
+#include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"

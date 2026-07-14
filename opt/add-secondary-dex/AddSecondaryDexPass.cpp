@@ -6,6 +6,7 @@
  */
 
 #include "AddSecondaryDexPass.h"
+#include "Debug.h"
 #include "DexStoreUtil.h"
 
 void AddSecondaryDexPass::run_pass(DexStoresVector& stores,

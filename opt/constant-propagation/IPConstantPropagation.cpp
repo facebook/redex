@@ -12,6 +12,7 @@
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationState.h"
 #include "ConstructorParams.h"
+#include "Debug.h"
 #include "DefinitelyAssignedIFields.h"
 #include "DexUtil.h"
 #include "IPConstantPropagationAnalysis.h"

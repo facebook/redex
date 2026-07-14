@@ -10,6 +10,7 @@
 #include <cinttypes>
 #include <utility>
 
+#include "Debug.h"
 #include "Show.h"
 #include "Trace.h"
 

@@ -13,6 +13,7 @@
 #include <unordered_set>
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IRCode.h"

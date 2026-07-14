@@ -12,6 +12,7 @@
 #include <sstream>
 
 #include "AnnoUtils.h"
+#include "Debug.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeUtil.h"

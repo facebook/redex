@@ -11,6 +11,7 @@
 #include "CFGMutation.h"
 #include "ConstantValue.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexAsm.h"
 #include "IRCode.h"
 #include "MethodReference.h"

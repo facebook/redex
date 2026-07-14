@@ -6,6 +6,7 @@
  */
 
 #include "PassManager.h"
+#include "Debug.h"
 #include "DexAssessments.h"
 
 #include <cstdio>
@@ -56,6 +57,7 @@
 #include "SourceBlocks.h"
 #include "ThreadPool.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

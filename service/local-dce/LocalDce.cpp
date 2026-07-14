@@ -12,6 +12,7 @@
 
 #include "CFGMutation.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"

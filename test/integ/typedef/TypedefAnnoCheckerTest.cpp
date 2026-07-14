@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include <string>
 
+#include "Debug.h"
 #include "RedexTest.h"
 #include "Show.h"
 #include "TypedefAnnoCheckerPass.h"

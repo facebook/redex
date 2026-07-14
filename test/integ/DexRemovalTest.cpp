@@ -10,6 +10,7 @@
 #include <json/reader.h>
 #include <json/value.h>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexLimits.h"
 #include "RedexTest.h"

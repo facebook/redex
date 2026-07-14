@@ -10,6 +10,7 @@
 #include <regex>
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"

@@ -8,6 +8,7 @@
 #include "MaterializeNullChecksPass.h"
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"

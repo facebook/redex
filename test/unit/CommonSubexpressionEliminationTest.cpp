@@ -10,6 +10,7 @@
 #include "CommonSubexpressionElimination.h"
 #include "ControlFlow.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"

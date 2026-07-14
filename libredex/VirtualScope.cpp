@@ -11,6 +11,7 @@
 #include <set>
 
 #include "Creators.h"
+#include "Debug.h"
 #include "DexAccess.h"
 #include "MethodUtil.h"
 #include "ReachableClasses.h"

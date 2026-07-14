@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 #include <json/json.h>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"

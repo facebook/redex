@@ -6,6 +6,7 @@
  */
 
 #include "TypeUtil.h"
+#include "Debug.h"
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "ClassUtil.h"

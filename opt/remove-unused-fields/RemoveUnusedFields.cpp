@@ -12,6 +12,7 @@
 
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"

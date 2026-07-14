@@ -8,6 +8,7 @@
 #include "TypeTagUtils.h"
 
 #include "AnnoUtils.h"
+#include "Debug.h"
 
 namespace class_merging {
 

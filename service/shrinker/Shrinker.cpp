@@ -12,6 +12,7 @@
 #include "BranchPrefixHoisting.h"
 #include "ConstantUses.h"
 #include "ConstructorParams.h"
+#include "Debug.h"
 #include "LinearScan.h"
 #include "RandomForest.h"
 #include "RegisterAllocation.h"

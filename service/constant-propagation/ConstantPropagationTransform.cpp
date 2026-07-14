@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "Debug.h"
 #include "IRCode.h"
 #include "Match.h"
 #include "ReachableClasses.h"

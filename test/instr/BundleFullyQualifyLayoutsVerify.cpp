@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "BundleResources.h"
+#include "Debug.h"
 #include "FullyQualifyLayoutsVerifyHelper.h"
 #include "ReadMaybeMapped.h"
 #include "protores/Resources.pb.h"

@@ -14,6 +14,7 @@
 #include <vector>
 #include <zlib.h>
 
+#include "Debug.h"
 #include "Macros.h"
 
 #if IS_WINDOWS

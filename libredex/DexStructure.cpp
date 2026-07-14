@@ -10,6 +10,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <vector>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexLimits.h"
 #include "Show.h"

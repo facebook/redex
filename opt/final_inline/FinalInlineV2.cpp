@@ -14,6 +14,7 @@
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "ConstantPropagationState.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "IFieldAnalysisUtil.h"
 #include "InitDeps.h"

@@ -8,6 +8,7 @@
 #include "MethodDevirtualizer.h"
 
 #include "AnnoUtils.h"
+#include "Debug.h"
 #include "MethodOverrideGraph.h"
 #include "MethodUtil.h"
 #include "Mutators.h"

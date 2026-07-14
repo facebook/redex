@@ -7,6 +7,7 @@
 
 #include "ResourceValueMergingPass.h"
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "PassManager.h"
 #include "RedexResources.h"

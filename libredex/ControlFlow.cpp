@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "CppUtil.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"

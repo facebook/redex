@@ -9,6 +9,7 @@
 
 #include "AnnoUtils.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "MethodReference.h"
 #include "PassManager.h"
 #include "Show.h"

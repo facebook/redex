@@ -9,6 +9,7 @@
 
 #include "ApiLevelChecker.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexAsm.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"

@@ -8,6 +8,7 @@
 #include "MethodReference.h"
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "IRList.h"
 #include "Resolver.h"
 #include "Show.h"

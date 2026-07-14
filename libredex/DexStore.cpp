@@ -13,6 +13,7 @@
 
 #include "ControlFlow.h"
 #include "CppUtil.h"
+#include "Debug.h"
 #include "DexStore.h"
 #include "Show.h"
 #include "WorkQueue.h"

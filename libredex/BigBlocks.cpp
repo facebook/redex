@@ -7,6 +7,7 @@
 
 #include "BigBlocks.h"
 
+#include "Debug.h"
 namespace {
 
 static bool is_big_block_successor(cfg::Block* block,

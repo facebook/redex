@@ -9,6 +9,8 @@
 
 #include <boost/optional/optional.hpp>
 
+#include <functional>
+
 #include "ClassHierarchy.h"
 
 class DexType;

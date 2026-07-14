@@ -12,6 +12,7 @@
 
 #include "ApiLevelChecker.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "Dominators.h"

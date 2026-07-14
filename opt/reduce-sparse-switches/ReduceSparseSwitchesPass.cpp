@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "InstructionLowering.h"
 #include "ScopedCFG.h"
 #include "Show.h"

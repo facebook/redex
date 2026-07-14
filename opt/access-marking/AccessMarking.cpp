@@ -8,6 +8,7 @@
 #include "AccessMarking.h"
 
 #include "ClassHierarchy.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"

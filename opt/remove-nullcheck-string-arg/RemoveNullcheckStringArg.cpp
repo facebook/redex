@@ -9,6 +9,7 @@
 
 #include "CFGMutation.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"

@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "Debug.h"
 #include "DexPosition.h"
 #include "IRList.h"
 #include "IROpcode.h"

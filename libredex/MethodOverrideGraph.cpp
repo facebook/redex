@@ -13,6 +13,7 @@
 
 #include "BinarySerialization.h"
 #include "CppUtil.h"
+#include "Debug.h"
 #include "Show.h"
 #include "Timer.h"
 #include "Walkers.h"

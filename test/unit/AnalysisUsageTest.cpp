@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Debug.h"
 #include "RedexTest.h"
 
 #include "AnalysisUsage.h"

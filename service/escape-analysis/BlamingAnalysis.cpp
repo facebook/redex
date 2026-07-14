@@ -7,6 +7,7 @@
 
 #include "BlamingAnalysis.h"
 
+#include "Debug.h"
 using namespace ir_analyzer;
 
 namespace {

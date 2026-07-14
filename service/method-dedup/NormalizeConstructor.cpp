@@ -7,6 +7,7 @@
 
 #include "NormalizeConstructor.h"
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "EditableCfgAdapter.h"
 #include "MethodReference.h"

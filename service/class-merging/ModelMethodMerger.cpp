@@ -10,6 +10,7 @@
 #include "CFGMutation.h"
 #include "ConstantLifting.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"

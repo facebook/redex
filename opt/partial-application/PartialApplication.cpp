@@ -88,6 +88,7 @@
 #include "CallSiteSummaries.h"
 #include "ConfigFiles.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "LiveRange.h"
 #include "MethodProfiles.h"

@@ -9,6 +9,7 @@
 
 #include "ConfigFiles.h"
 #include "Dataflow.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "IRCode.h"

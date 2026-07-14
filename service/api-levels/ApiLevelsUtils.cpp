@@ -7,6 +7,7 @@
 
 #include "ApiLevelsUtils.h"
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"

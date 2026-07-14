@@ -16,6 +16,7 @@
 #include <sparta/ReducedProductAbstractDomain.h>
 
 #include "BaseIRAnalyzer.h"
+#include "Debug.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"

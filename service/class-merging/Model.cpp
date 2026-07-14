@@ -15,6 +15,7 @@
 #include "ApproximateShapeMerging.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "MergeabilityCheck.h"
 #include "MergingStrategies.h"
 #include "MethodUtil.h"

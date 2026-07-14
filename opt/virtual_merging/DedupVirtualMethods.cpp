@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "Debug.h"
 #include "DexUtil.h"
 #include "MethodFixup.h"
 #include "MethodOverrideGraph.h"

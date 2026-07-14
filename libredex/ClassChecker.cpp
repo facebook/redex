@@ -9,6 +9,7 @@
 
 #include "ClassChecker.h"
 #include "ClassHierarchy.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Show.h"

@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "ConfigFiles.h"
 #include "DexClass.h"
 

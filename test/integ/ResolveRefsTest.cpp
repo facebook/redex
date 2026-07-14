@@ -9,6 +9,7 @@
 #include <json/value.h>
 
 #include "Creators.h"
+#include "Debug.h"
 #include "JarLoader.h"
 #include "RedexOptions.h"
 #include "RedexTest.h"

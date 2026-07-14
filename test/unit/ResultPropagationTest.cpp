@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"

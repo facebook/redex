@@ -18,6 +18,7 @@
 #include "ClassUtil.h"
 #include "ConfigFiles.h"
 #include "ConstructorAnalysis.h"
+#include "Debug.h"
 #include "Deleter.h"
 #include "DexClass.h"
 #include "DexUtil.h"

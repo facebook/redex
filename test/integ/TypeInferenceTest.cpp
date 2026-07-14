@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Debug.h"
 #include "DedupBlocks.h"
 #include "DexClass.h"
 #include "IRAssembler.h"

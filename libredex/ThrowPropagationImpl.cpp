@@ -7,6 +7,7 @@
 
 #include "ThrowPropagationImpl.h"
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "MethodUtil.h"
 #include "Show.h"

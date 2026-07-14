@@ -9,6 +9,7 @@
 
 #include <array>
 
+#include "Debug.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"

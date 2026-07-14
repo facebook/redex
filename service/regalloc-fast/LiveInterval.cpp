@@ -7,6 +7,7 @@
 
 #include "LiveInterval.h"
 
+#include "Debug.h"
 namespace fastregalloc {
 
 LiveIntervals init_live_intervals(

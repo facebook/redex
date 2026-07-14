@@ -7,6 +7,7 @@
 
 #include "MethodInlinePass.h"
 
+#include "Debug.h"
 void MethodInlinePass::bind_config() {
   size_t cost_invoke;
   bind("cost_invoke",

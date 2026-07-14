@@ -7,6 +7,7 @@
 
 #include "Mutators.h"
 
+#include "Debug.h"
 #include "DexUtil.h"
 #include "ScopedCFG.h"
 #include "Show.h"

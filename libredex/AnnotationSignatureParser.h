@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "DexAnnotation.h"
 #include "DexClass.h"
 

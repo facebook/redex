@@ -6,6 +6,7 @@
  */
 
 #include "SourceBlocks.h"
+#include "Debug.h"
 
 #include <atomic>
 #include <regex>

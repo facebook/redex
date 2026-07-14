@@ -11,6 +11,7 @@
 #include <boost/property_map/property_map.hpp>
 
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "IRCode.h"
 #include "ScopedCFG.h"
 #include "Show.h"

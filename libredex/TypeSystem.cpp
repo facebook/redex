@@ -7,6 +7,7 @@
 
 #include "TypeSystem.h"
 
+#include "Debug.h"
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"

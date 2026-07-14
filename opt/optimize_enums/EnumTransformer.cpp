@@ -11,6 +11,7 @@
 
 #include "CFGMutation.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAsm.h"
 #include "DexClass.h"

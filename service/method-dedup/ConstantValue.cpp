@@ -10,6 +10,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include "Creators.h"
+#include "Debug.h"
 #include "DexAsm.h"
 #include "Show.h"
 #include "Trace.h"

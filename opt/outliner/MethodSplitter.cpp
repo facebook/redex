@@ -9,6 +9,7 @@
 
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexLimits.h"
 #include "InitClassesWithSideEffects.h"
 #include "MethodClosures.h"

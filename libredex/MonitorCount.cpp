@@ -9,6 +9,7 @@
 
 #include <algorithm>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "Show.h"
 

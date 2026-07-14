@@ -11,6 +11,7 @@
 
 #include "AggregateException.h"
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexCallSite.h"

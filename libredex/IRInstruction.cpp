@@ -7,6 +7,7 @@
 
 #include "IRInstruction.h"
 
+#include "Debug.h"
 #include "DexCallSite.h"
 #include "DexClass.h"
 #include "DexInstruction.h"

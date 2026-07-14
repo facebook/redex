@@ -7,6 +7,7 @@
 
 #include "Interference.h"
 
+#include "Debug.h"
 #include "DexOpcode.h"
 #include "Show.h"
 

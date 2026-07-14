@@ -6,6 +6,7 @@
  */
 
 #include "LoopInfo.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 
 using namespace loop_impl;

@@ -12,6 +12,7 @@
 #include <set>
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
 #include "InitClassesWithSideEffects.h"

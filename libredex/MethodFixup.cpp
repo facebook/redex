@@ -7,6 +7,7 @@
 
 #include "MethodFixup.h"
 
+#include "Debug.h"
 #include "IRCode.h"
 #include "Show.h"
 #include "Walkers.h"

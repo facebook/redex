@@ -7,6 +7,7 @@
 
 #include "IFieldAnalysisUtil.h"
 
+#include "Debug.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 

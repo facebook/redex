@@ -10,6 +10,7 @@
 #include <iostream>
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "ModelMerger.h"
 #include "NormalizeConstructor.h"
 #include "PassManager.h"

@@ -11,6 +11,7 @@
 #include <fstream>
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "Trace.h"
 
 using namespace class_merging;

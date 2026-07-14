@@ -8,6 +8,7 @@
 #include "KotlinInstanceRewriter.h"
 #include "AtomicStatCounter.h"
 #include "CFGMutation.h"
+#include "Debug.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "TypeUtil.h"

@@ -11,6 +11,7 @@
 #include <random>
 
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexStoreUtil.h"
 #include "DexStructure.h"

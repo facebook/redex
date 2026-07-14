@@ -15,6 +15,7 @@
 
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexLimits.h"
 #include "DexStore.h"

@@ -9,6 +9,7 @@
 
 #include <limits>
 
+#include "Debug.h"
 #include "DexAnnotation.h"
 #include "DexCallSite.h"
 #include "DexClass.h"

@@ -11,6 +11,7 @@
 #include <sstream>
 #include <vector>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexInstruction.h"

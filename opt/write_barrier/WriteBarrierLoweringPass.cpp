@@ -10,6 +10,7 @@
 #include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexAsm.h"
 #include "DexStructure.h"
 #include "Show.h"

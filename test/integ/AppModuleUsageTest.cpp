@@ -10,6 +10,7 @@
 #include <json/json.h>
 
 #include "AppModuleUsage.h"
+#include "Debug.h"
 #include "DexAccess.h"
 #include "RedexTest.h"
 

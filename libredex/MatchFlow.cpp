@@ -7,6 +7,7 @@
 
 #include "MatchFlow.h"
 
+#include "Debug.h"
 #include "DeterministicContainers.h"
 #include "Show.h"
 #include "Trace.h"

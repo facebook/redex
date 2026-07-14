@@ -11,6 +11,7 @@
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
 #include "ConfigUtils.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "InterDexGrouping.h"
 #include "MergingStrategies.h"

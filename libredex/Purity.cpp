@@ -12,6 +12,7 @@
 #include <sstream>
 #include <vector>
 
+#include "Debug.h"
 #include <sparta/WeakTopologicalOrdering.h>
 
 #include "ConfigFiles.h"

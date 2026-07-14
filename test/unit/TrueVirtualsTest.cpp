@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
 #include "RedexTest.h"

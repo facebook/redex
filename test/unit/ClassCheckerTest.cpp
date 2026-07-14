@@ -6,6 +6,7 @@
  */
 
 #include "ClassChecker.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"

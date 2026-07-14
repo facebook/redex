@@ -9,6 +9,7 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "MethodUtil.h"
 
 namespace {

@@ -8,6 +8,7 @@
 #include "ResolveProguardAssumeValues.h"
 
 #include "CFGMutation.h"
+#include "Debug.h"
 #include "ProguardConfiguration.h"
 #include "RedexContext.h"
 #include "Resolver.h"

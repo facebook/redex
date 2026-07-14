@@ -64,6 +64,7 @@
  */
 
 #include "ConstantUses.h"
+#include "Debug.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
 #include "Trace.h"
