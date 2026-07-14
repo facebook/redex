@@ -11,6 +11,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <cctype>
 #include <functional>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -277,7 +278,7 @@ inline const std::string* primitive_desc_to_name(char desc) {
   }
 }
 
-inline boost::optional<char> primitive_name_to_desc(std::string_view name) {
+inline std::optional<char> primitive_name_to_desc(std::string_view name) {
   const static UnorderedMap<std::string_view, char> conversion_table{
       {"void", 'V'},    {"byte", 'B'},  {"char", 'C'},
       {"short", 'S'},   {"int", 'I'},   {"long", 'J'},
@@ -287,7 +288,7 @@ inline boost::optional<char> primitive_name_to_desc(std::string_view name) {
   if (it != conversion_table.end()) {
     return it->second;
   } else {
-    return boost::none;
+    return std::nullopt;
   }
 }
 

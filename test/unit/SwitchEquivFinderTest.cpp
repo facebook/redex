@@ -6,7 +6,7 @@
  */
 
 #include "Debug.h"
-#include <boost/optional/optional_io.hpp>
+#include "OptionalIO.h"
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -650,7 +650,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch) {
   EXPECT_EQ(key_to_case.size(), 3);
 
   auto default_case = finder.default_case();
-  EXPECT_NE(default_case, boost::none);
+  EXPECT_NE(default_case, std::nullopt);
   EXPECT_EQ(get_first_instruction_literal(*default_case), -1);
 
   auto* bar_type = DexType::get_type("LBar;");
@@ -877,7 +877,7 @@ TEST_F(SwitchEquivFinderTest, test_unsupported_insn) {
   EXPECT_EQ(key_to_case.size(), 2);
 
   auto default_case = finder.default_case();
-  EXPECT_NE(default_case, boost::none);
+  EXPECT_NE(default_case, std::nullopt);
   EXPECT_EQ((*default_case)->get_first_insn()->insn->opcode(),
             OPCODE_CONST_CLASS);
 
@@ -939,7 +939,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_different_regs) {
   EXPECT_EQ(key_to_case.size(), 2);
 
   auto default_case = finder.default_case();
-  EXPECT_NE(default_case, boost::none);
+  EXPECT_NE(default_case, std::nullopt);
   EXPECT_EQ(get_first_instruction_literal(*default_case), 999);
 
   auto* bar_type = DexType::get_type("LBar;");
@@ -1075,7 +1075,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_duplicate_keys) {
     EXPECT_EQ(key_to_case.size(), 5);
 
     auto default_case = finder.default_case();
-    EXPECT_NE(default_case, boost::none);
+    EXPECT_NE(default_case, std::nullopt);
     EXPECT_EQ(get_first_instruction_literal(*default_case), -1);
 
     auto* bar_type = DexType::get_type("LBar;");
@@ -1248,7 +1248,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_move_duplicate) {
   EXPECT_EQ(key_to_case.size(), 5);
 
   auto default_case = finder.default_case();
-  EXPECT_NE(default_case, boost::none);
+  EXPECT_NE(default_case, std::nullopt);
   EXPECT_EQ(get_first_instruction_literal(*default_case), -1);
 
   auto* bar_type = DexType::get_type("LBar;");

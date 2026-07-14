@@ -10,7 +10,7 @@
 #include "CFGInliner.h"
 #include "ControlFlow.h"
 
-#include <boost/optional.hpp>
+#include <optional>
 
 using namespace cfg;
 namespace object_inliner_plugin {
@@ -25,8 +25,8 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
       FieldSetMap field_sets,
       const UnorderedMap<DexFieldRef*, DexFieldRef*>& field_swaps,
       std::vector<reg_t> srcs,
-      boost::optional<reg_t> value_register,
-      boost::optional<reg_t> caller_this,
+      std::optional<reg_t> value_register,
+      std::optional<reg_t> caller_this,
       DexType* callee_type);
 
   /*
@@ -40,8 +40,9 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
                                ControlFlowGraph* callee) override;
   bool update_after_reg_remap(ControlFlowGraph* caller,
                               ControlFlowGraph* callee) override;
-  boost::optional<const std::vector<reg_t>&> inline_srcs() override;
-  boost::optional<reg_t> reg_for_return() override;
+  std::optional<std::reference_wrapper<const std::vector<reg_t>>> inline_srcs()
+      override;
+  std::optional<reg_t> reg_for_return() override;
   bool inline_after() override;
   bool remove_inline_site() override;
 
@@ -56,7 +57,7 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
   FieldSetMap m_set_field_sets;
   const UnorderedMap<DexFieldRef*, DexFieldRef*> m_field_swaps;
   std::vector<reg_t> m_srcs;
-  boost::optional<reg_t> m_value_reg;
-  boost::optional<reg_t> m_caller_this_reg;
+  std::optional<reg_t> m_value_reg;
+  std::optional<reg_t> m_caller_this_reg;
 };
 } // namespace object_inliner_plugin

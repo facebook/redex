@@ -9,7 +9,8 @@
 
 #include "ControlFlow.h"
 
-#include <boost/optional.hpp>
+#include <functional>
+#include <optional>
 
 namespace cfg {
 
@@ -113,7 +114,7 @@ class CFGInliner {
    * Convert returns to moves.
    */
   static void move_return_reg(ControlFlowGraph* callee,
-                              const boost::optional<reg_t>& ret_reg);
+                              const std::optional<reg_t>& ret_reg);
 
   /*
    * Callees that were not in a try region when their CFGs were created, need to
@@ -184,8 +185,9 @@ class CFGInlinerPlugin {
   // Optionally provide a set of registers for the sources of callee's
   // parameters If none is returned, inliner extracts registers from the sources
   // of the instruction within the instruction iterator
-  virtual boost::optional<const std::vector<reg_t>&> inline_srcs() {
-    return boost::none;
+  virtual std::optional<std::reference_wrapper<const std::vector<reg_t>>>
+  inline_srcs() {
+    return std::nullopt;
   }
 
   // Optionally provide a register from caller to move a returned value from
@@ -193,7 +195,7 @@ class CFGInlinerPlugin {
   // instruction iterator's instruction has a move result, this register
   // will be used instead. If it does not have a move result, the value will
   // be discarded on 'return'.
-  virtual boost::optional<reg_t> reg_for_return() { return boost::none; }
+  virtual std::optional<reg_t> reg_for_return() { return std::nullopt; }
 
   // Overriding this to return false will cause callee's blocks to be inserted
   // before the instruction of the instruction iterator, instead of after

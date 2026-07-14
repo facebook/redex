@@ -8,9 +8,9 @@
 #pragma once
 
 #include <atomic>
-#include <boost/optional/optional.hpp>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <string>
 
 #include "Debug.h"
@@ -458,7 +458,7 @@ class ReferencedState {
   void set_whyareyoukeeping() { inner_struct.m_whyareyoukeeping = true; }
 
   void set_interdex_subgroup(
-      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup) {
+      const std::optional<InterdexSubgroupIdx>& interdex_subgroup) {
     m_interdex_subgroup = interdex_subgroup ? *interdex_subgroup : kNoSubgroup;
   }
   InterdexSubgroupIdx get_interdex_subgroup() const {

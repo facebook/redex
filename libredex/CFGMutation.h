@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <optional>
 #include <vector>
 
 #include "ControlFlow.h"
@@ -236,7 +237,7 @@ class CFGMutation {
     IRList::iterator m_it;
 
     std::vector<IRInstruction*> m_insert_before;
-    boost::optional<std::vector<IRInstruction*>> m_replace;
+    std::optional<std::vector<IRInstruction*>> m_replace;
     std::vector<IRInstruction*> m_insert_after;
 
     std::vector<std::unique_ptr<DexPosition>> m_insert_pos_before;

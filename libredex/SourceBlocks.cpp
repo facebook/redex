@@ -107,7 +107,7 @@ bool is_less_than_for_any_value(
   auto limit =
       std::min(std::min(lhs->vals_size, rhs->vals_size), max_interaction);
   for (size_t i = 0; i != limit; ++i) {
-    if (lhs->get_val(i).get_value_or(0) < rhs->get_val(i).get_value_or(0)) {
+    if (lhs->get_val(i).value_or(0) < rhs->get_val(i).value_or(0)) {
       return true;
     }
   }

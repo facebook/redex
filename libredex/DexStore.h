@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -82,7 +83,7 @@ class DexStore {
    */
   static void add_class(DexClass* new_cls,
                         DexStoresVector& stores,
-                        boost::optional<size_t> dex_id);
+                        std::optional<size_t> dex_id);
 };
 
 class DexStoreClassesIterator {

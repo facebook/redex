@@ -10,6 +10,7 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <typeinfo>
 #include <utility>
@@ -75,7 +76,7 @@ class PassManager {
     std::string name;
     UnorderedMap<std::string, int64_t> metrics;
     JsonWrapper config;
-    boost::optional<hashing::DexHash> hash;
+    std::optional<hashing::DexHash> hash;
     redex_properties::PropertyInteractions property_interactions;
   };
 
@@ -127,7 +128,7 @@ class PassManager {
 
   int64_t get_metric(const std::string& key);
   const std::vector<PassManager::PassInfo>& get_pass_info() const;
-  boost::optional<hashing::DexHash> get_initial_hash() const {
+  std::optional<hashing::DexHash> get_initial_hash() const {
     return m_initial_hash;
   }
   const RedexOptions& get_redex_options() const { return m_redex_options; }
@@ -227,9 +228,9 @@ class PassManager {
   PassInfo* m_current_pass_info;
 
   std::unique_ptr<const keep_rules::ProguardConfiguration> m_pg_config;
-  boost::optional<bool> m_has_dex37_features;
-  boost::optional<bool> m_has_dex38_features;
-  boost::optional<bool> m_has_dex39_features;
+  std::optional<bool> m_has_dex37_features;
+  std::optional<bool> m_has_dex38_features;
+  std::optional<bool> m_has_dex39_features;
   const RedexOptions m_redex_options;
   bool m_regalloc_has_run{false};
   bool m_nopper_has_run{false};
@@ -240,7 +241,7 @@ class PassManager {
   ReserveRefsInfoList m_reserved_ref_infos;
   Pass* m_malloc_profile_pass{nullptr};
 
-  boost::optional<hashing::DexHash> m_initial_hash;
+  std::optional<hashing::DexHash> m_initial_hash;
 
   std::vector<std::unique_ptr<Pass>> m_cloned_passes;
 

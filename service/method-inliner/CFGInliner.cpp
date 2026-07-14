@@ -8,6 +8,7 @@
 #include "CFGInliner.h"
 
 #include <memory>
+#include <optional>
 
 #include "Debug.h"
 #include "DexPosition.h"
@@ -201,8 +202,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     return_reg = return_reg
                      ? return_reg
                      : (move_res.is_end()
-                            ? boost::none
-                            : boost::optional<reg_t>{move_res->insn->dest()});
+                            ? std::nullopt
+                            : std::optional<reg_t>{move_res->insn->dest()});
     // delete the move-result if there is one to remove, before connecting the
     // cfgs because it's in a block that may be merged into another
     if (plugin.remove_inline_site() && !move_res.is_end()) {
@@ -466,7 +467,7 @@ void CFGInliner::move_arg_regs(cfg::ControlFlowGraph* callee,
  * Convert returns to moves.
  */
 void CFGInliner::move_return_reg(cfg::ControlFlowGraph* callee,
-                                 const boost::optional<reg_t>& ret_reg) {
+                                 const std::optional<reg_t>& ret_reg) {
   std::vector<cfg::InstructionIterator> to_delete;
   auto iterable = cfg::InstructionIterable(*callee);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {

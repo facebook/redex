@@ -497,8 +497,8 @@ bool is_subclass(const DexType* parent, const DexType* child) {
   return false;
 }
 
-boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
-                                             const DexType* test_type) {
+std::optional<int32_t> evaluate_type_check(const DexType* src_type,
+                                           const DexType* test_type) {
   if (test_type == src_type) {
     // Trivial.
     return 1;
@@ -511,18 +511,18 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
 
   auto* test_cls = type_class(test_type);
   if (test_cls == nullptr) {
-    return boost::none;
+    return std::nullopt;
   }
 
   auto* src_cls = type_class(src_type);
   if (src_cls == nullptr) {
-    return boost::none;
+    return std::nullopt;
   }
 
   // OK, let's simplify for now. While some SDK classes should be set in
   // stone, let's only work on internals.
   if (test_cls->is_external() || src_cls->is_external()) {
-    return boost::none;
+    return std::nullopt;
   }
 
   // Class vs class, for simplicity.
@@ -534,10 +534,10 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
       // The check can never succeed, as the test class is not a subtype.
       return 0;
     }
-    return boost::none;
+    return std::nullopt;
   }
 
-  return boost::none;
+  return std::nullopt;
 }
 
 /*

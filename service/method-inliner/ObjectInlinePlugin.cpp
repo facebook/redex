@@ -24,8 +24,8 @@ ObjectInlinePlugin::ObjectInlinePlugin(
     FieldSetMap field_sets,
     const UnorderedMap<DexFieldRef*, DexFieldRef*>& field_swaps,
     std::vector<reg_t> srcs,
-    boost::optional<reg_t> value_register,
-    boost::optional<reg_t> caller_this,
+    std::optional<reg_t> value_register,
+    std::optional<reg_t> caller_this,
     DexType* /*callee_type*/)
     : m_initial_field_sets(std::move(field_sets)),
       m_field_swaps(field_swaps),
@@ -33,11 +33,12 @@ ObjectInlinePlugin::ObjectInlinePlugin(
       m_value_reg(value_register),
       m_caller_this_reg(caller_this) {}
 
-boost::optional<const std::vector<reg_t>&> ObjectInlinePlugin::inline_srcs() {
+std::optional<std::reference_wrapper<const std::vector<reg_t>>>
+ObjectInlinePlugin::inline_srcs() {
   return m_srcs;
 }
 
-boost::optional<reg_t> ObjectInlinePlugin::reg_for_return() {
+std::optional<reg_t> ObjectInlinePlugin::reg_for_return() {
   return m_value_reg;
 }
 

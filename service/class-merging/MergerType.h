@@ -111,17 +111,17 @@ struct MergerType {
         const ConstTypeVector& mergeables_set,
         const TypeSet& intf_set,
         size_t group_count,
-        const boost::optional<size_t>& opt_dex_id,
-        const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+        const std::optional<size_t>& opt_dex_id,
+        const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
         UnorderedSet<size_t>& hash_cache) const;
 
     std::string build_type_name_legacy(
         const std::string& prefix,
         const DexType* root_type,
         const TypeSet& intf_set,
-        const boost::optional<size_t>& opt_dex_id,
+        const std::optional<size_t>& opt_dex_id,
         size_t count,
-        const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+        const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
         const InterdexSubgroupIdx subgroup_idx) const;
 
     /**
@@ -216,7 +216,7 @@ struct MergerType {
   // backed by a DexClass already
   const DexType* type;
   // Suggested dex to store the merger class.
-  boost::optional<size_t> dex_id;
+  std::optional<size_t> dex_id;
   // The set of mergeable types. Those are effectively the types that
   // will be erased.
   // Notice: a merger may be defined that does not have any mergeable types
@@ -284,7 +284,7 @@ struct MergerType {
   // Check InterfaceMethod above for details.
   std::vector<InterfaceMethod> intfs_methods;
   // InterDex subgroup id, if any.
-  boost::optional<InterdexSubgroupIdx> interdex_subgroup;
+  std::optional<InterdexSubgroupIdx> interdex_subgroup;
 
   /**
    * Return whether this MergerType is a shape or not.

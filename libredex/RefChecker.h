@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <optional>
 
 #include "ConcurrentContainers.h"
 #include "DexClass.h"

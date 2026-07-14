@@ -9,8 +9,6 @@
 
 #include "Pass.h"
 
-#include <boost/optional.hpp>
-
 #include "Model.h"
 
 namespace class_merging {
@@ -39,7 +37,7 @@ class ClassMergingPass : public Pass {
  private:
   std::string m_merged_type_mapping_file;
   std::vector<ModelSpec> m_model_specs;
-  boost::optional<size_t> m_max_num_dispatch_target = boost::none;
+  std::optional<size_t> m_max_num_dispatch_target = std::nullopt;
 };
 
 } // namespace class_merging

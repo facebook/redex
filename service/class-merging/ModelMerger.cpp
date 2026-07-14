@@ -48,7 +48,7 @@ TypeTags collect_type_tags(const std::vector<const MergerType*>& mergers) {
   for (const auto* merger : mergers) {
     for (const auto* const type : merger->mergeables) {
       auto type_tag = type_tag_utils::parse_model_type_tag(type_class(type));
-      always_assert_log(type_tag != boost::none,
+      always_assert_log(type_tag != std::nullopt,
                         "Type tag is missing from %s\n", SHOW(type));
       type_tags.set_type_tag(type, *type_tag);
     }
@@ -409,7 +409,8 @@ void update_refs_to_mergeable_types(
       scope,
       mergeable_to_merger,
       parent_to_children,
-      boost::optional<UnorderedMap<DexMethod*, std::string>&>(
+      std::optional<
+          std::reference_wrapper<UnorderedMap<DexMethod*, std::string>>>(
           method_debug_map));
   type_reference::update_field_type_references(scope, mergeable_to_merger);
   // Fix INSTANCE_OF
@@ -614,7 +615,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
     // recognize those coldstart_pct markers.
     bool uses_coldstart_pct_marker = conf.get_recognize_coldstart_pct_marker();
     auto subgroup_idx = merger.interdex_subgroup;
-    if (uses_coldstart_pct_marker && subgroup_idx != boost::none) {
+    if (uses_coldstart_pct_marker && subgroup_idx != std::nullopt) {
       if (*subgroup_idx < conf.get_num_interdex_groups() - 1) {
         subgroup_idx = 0;
       } else {
@@ -685,8 +686,8 @@ std::vector<DexClass*> ModelMerger::merge_model(
       model.get_model_spec(),
       model.get_model_spec().max_num_dispatch_target,
       update_method_profiles_stats
-          ? boost::optional<method_profiles::MethodProfiles*>(&method_profile)
-          : boost::none);
+          ? std::optional<method_profiles::MethodProfiles*>(&method_profile)
+          : std::nullopt);
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
 

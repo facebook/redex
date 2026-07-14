@@ -698,7 +698,7 @@ void ClassCFGStream::add_pass(const std::string& pass_name, Options o) {
     m.stream.add_pass(pass_name,
                       (Options)(o | (!m.removed ? Options::PRINT_CODE : 0)),
                       m.removed ? optional<std::string>("REMOVED ")
-                                : boost::none);
+                                : std::nullopt);
   }
 }
 

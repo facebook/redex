@@ -9,7 +9,7 @@
 
 #include <iosfwd>
 
-#include <boost/optional.hpp>
+#include <optional>
 
 #include <sparta/AbstractDomain.h>
 #include <sparta/ConstantAbstractDomain.h>
@@ -140,11 +140,11 @@ class SingletonDexTypeDomain final
       : sparta::AbstractDomainScaffolding<dtv_impl::DexTypeValue,
                                           SingletonDexTypeDomain>(kind) {}
 
-  boost::optional<const DexType*> get_dex_type() const {
+  std::optional<const DexType*> get_dex_type() const {
     if (this->kind() != sparta::AbstractValueKind::Value || this->is_none()) {
-      return boost::none;
+      return std::nullopt;
     }
-    return boost::optional<const DexType*>(this->get_value()->get_dex_type());
+    return std::optional<const DexType*>(this->get_value()->get_dex_type());
   }
 
   static SingletonDexTypeDomain bottom() {
@@ -239,7 +239,7 @@ class SmallSetDexTypeDomain final
  */
 class DexAnnoType {
  public:
-  explicit DexAnnoType(const boost::optional<const DexType*>& type) {
+  explicit DexAnnoType(const std::optional<const DexType*>& type) {
     m_type = type ? *type : nullptr;
   }
 
@@ -353,22 +353,22 @@ class DexTypeDomain final
     return get<3>();
   }
 
-  boost::optional<const DexType*> get_dex_type() const {
+  std::optional<const DexType*> get_dex_type() const {
     return get<1>().get_dex_type();
   }
 
-  boost::optional<const DexType*> get_annotation_type() const {
+  std::optional<const DexType*> get_annotation_type() const {
     return get<3>().get_dex_type();
   }
 
-  boost::optional<const DexClass*> get_dex_cls() const {
+  std::optional<const DexClass*> get_dex_cls() const {
     auto dex_type = get<1>().get_dex_type();
     if (!dex_type) {
-      return boost::none;
+      return std::nullopt;
     }
     auto* dex_cls = type_class(*dex_type);
-    return dex_cls != nullptr ? boost::optional<const DexClass*>(dex_cls)
-                              : boost::none;
+    return dex_cls != nullptr ? std::optional<const DexClass*>(dex_cls)
+                              : std::nullopt;
   }
 
   const SmallSetDexTypeDomain& get_set_domain() const { return get<2>(); }

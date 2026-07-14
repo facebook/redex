@@ -1189,8 +1189,8 @@ int ensure_attribute_in_xml_doc(const void* const_data,
 
   auto attributes_header_offset = parser.attributes_header_offset();
   auto attributes_data_size = parser.attributes_data_size();
-  if (attributes_header_offset != boost::none &&
-      attributes_data_size != boost::none) {
+  if (attributes_header_offset != std::nullopt &&
+      attributes_data_size != std::nullopt) {
     auto attributes_off = data + *attributes_header_offset;
     manipulator.delete_at(attributes_off, *attributes_data_size);
   }

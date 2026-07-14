@@ -966,7 +966,7 @@ TEST_F(MethodSplitterTest, DuplicateSourceBlocksWithReturn) {
   auto [cls, m] = create("(II)I", code_str);
   m->get_code()->build_cfg();
   auto profile = std::vector<source_blocks::ProfileData>{
-      std::make_pair("(1:1 g(0:0 g(1:1)) b)", boost::none)};
+      std::make_pair("(1:1 g(0:0 g(1:1)) b)", std::nullopt)};
   auto res =
       source_blocks::insert_source_blocks(m, &m->get_code()->cfg(), profile,
                                           /*serialize=*/true);

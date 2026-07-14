@@ -41,8 +41,8 @@ void update_call_refs(
     always_assert(callee != nullptr && type_tags.count(callee) > 0);
     auto* new_callee_method = old_to_new_callee.at(callee);
     auto type_tag_arg = with_type_tag
-                            ? boost::optional<uint32_t>(type_tags.at(callee))
-                            : boost::none;
+                            ? std::optional<uint32_t>(type_tags.at(callee))
+                            : std::nullopt;
     method_reference::NewCallee new_callee(new_callee_method, type_tag_arg);
     patch_callsite(callsite, new_callee);
   }
@@ -95,9 +95,9 @@ void fix_visibility_helper(DexMethod* method, T& vmethods_created) {
   change_visibility(method);
 }
 
-boost::optional<size_t> get_ctor_type_tag_param_idx(
+std::optional<size_t> get_ctor_type_tag_param_idx(
     const bool pass_type_tag_param, const DexProto* ctor_proto) {
-  boost::optional<size_t> type_tag_param_idx = boost::none;
+  std::optional<size_t> type_tag_param_idx = std::nullopt;
   if (pass_type_tag_param) {
     return type_tag_param_idx;
   }
@@ -107,7 +107,7 @@ boost::optional<size_t> get_ctor_type_tag_param_idx(
     if (type == type::_int()) {
       always_assert_log(!type_tag_param_idx,
                         "More than one potential type tag param found!");
-      type_tag_param_idx = boost::optional<size_t>(idx);
+      type_tag_param_idx = std::optional<size_t>(idx);
     }
     ++idx;
   }
@@ -237,8 +237,8 @@ ModelMethodMerger::ModelMethodMerger(
     const TypeTags* type_tags,
     const UnorderedMap<DexMethod*, std::string>& method_debug_map,
     const ModelSpec& model_spec,
-    boost::optional<size_t> max_num_dispatch_target,
-    boost::optional<method_profiles::MethodProfiles*> method_profiles)
+    std::optional<size_t> max_num_dispatch_target,
+    std::optional<method_profiles::MethodProfiles*> method_profiles)
     : m_scope(scope),
       m_mergers(mergers),
       m_type_tag_fields(type_tag_fields),
@@ -582,7 +582,7 @@ void ModelMethodMerger::merge_virtual_methods(
                         str_copy(name),  dispatch_proto,
                         access,          type_tag_field,
                         overridden_meth, m_max_num_dispatch_target,
-                        boost::none,     m_model_spec.keep_debug_info};
+                        std::nullopt,    m_model_spec.keep_debug_info};
     dispatch::DispatchMethod dispatch = create_dispatch_method(spec, meth_lst);
     for (auto* const sub_dispatch : dispatch.sub_dispatches) {
       sub_dispatch->get_code()->build_cfg();
@@ -595,10 +595,10 @@ void ModelMethodMerger::merge_virtual_methods(
       dispatch.main_dispatch->combine_annotations_with(m);
       dispatch.main_dispatch->rstate.join_with(m->rstate);
     }
-    if (m_method_profiles != boost::none) {
+    if (m_method_profiles != std::nullopt) {
       m_stats.m_updated_profile_method +=
-          m_method_profiles.get()->substitute_stats(dispatch.main_dispatch,
-                                                    meth_lst);
+          (*m_method_profiles)
+              ->substitute_stats(dispatch.main_dispatch, meth_lst);
     }
     // Populating method dedup map
     for (auto& type_to_sig : UnorderedIterable(meth_signatures)) {
@@ -700,9 +700,9 @@ void ModelMethodMerger::merge_ctors() {
       for (const auto& m : ctors) {
         old_to_new_callee[m] = dispatch;
       }
-      if (m_method_profiles != boost::none) {
+      if (m_method_profiles != std::nullopt) {
         m_stats.m_updated_profile_method +=
-            m_method_profiles.get()->substitute_stats(dispatch, ctors);
+            (*m_method_profiles)->substitute_stats(dispatch, ctors);
       }
       std::vector<std::pair<DexType*, DexMethod*>> not_inlined_ctors;
       type_class(target_type)->add_method(dispatch);
@@ -790,7 +790,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     std::vector<DexMethod*> replacements;
     UnorderedMap<DexMethod*, MethodOrderedSet> new_to_old;
     auto new_to_old_optional =
-        boost::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>(new_to_old);
+        std::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>(new_to_old);
     m_stats.m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
         m_scope, to_dedup, m_model_spec.dedup_fill_in_stack_trace, replacements,
         new_to_old_optional);
@@ -820,10 +820,10 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     // Update method dedup map
     for (auto& pair : UnorderedIterable(new_to_old)) {
       auto old_list = pair.second;
-      if (m_method_profiles != boost::none) {
+      if (m_method_profiles != std::nullopt) {
         std::vector<DexMethod*> old_list_vec{old_list.begin(), old_list.end()};
         m_stats.m_updated_profile_method +=
-            m_method_profiles.get()->substitute_stats(pair.first, old_list_vec);
+            (*m_method_profiles)->substitute_stats(pair.first, old_list_vec);
       }
       for (auto* old_meth : old_list) {
         auto* type = old_meth->get_class();

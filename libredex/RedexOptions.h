@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <optional>
 
 #include <cstdint>
 #include <string>
@@ -56,7 +56,7 @@ class RedexOptions {
   Architecture arch{Architecture::UNKNOWN};
   DebugInfoKind debug_info_kind{DebugInfoKind::NoCustomSymbolication};
   std::string jni_summary_path;
-  boost::optional<std::string> package_name{boost::none};
+  std::optional<std::string> package_name{std::nullopt};
 
   /*
    * Overwriting the `this` register breaks the verifier before Android M and

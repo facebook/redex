@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ConstantPropagationAnalysis.h"
@@ -66,14 +66,14 @@ class known_visitor : public boost::static_visitor<bool> {
     if (dom.is_top()) {
       return false;
     }
-    return dom.get_constant() != boost::none;
+    return dom.get_constant() != std::nullopt;
   }
 
   bool operator()(const ConstantClassObjectDomain& dom) const {
     if (dom.is_top()) {
       return false;
     }
-    return dom.get_constant() != boost::none;
+    return !!dom.get_constant();
   }
 
   template <typename Domain>
@@ -95,7 +95,8 @@ inline bool find_determining_reg(
   auto* last = last_it->insn;
   always_assert_log(opcode::is_branch(last->opcode()),
                     "%s is not a branch instruction", SHOW(last));
-  boost::optional<reg_t> candidate_reg;
+  std::optional<reg_t> candidate_reg;
+  (void)candidate_reg;
   auto srcs_size = last->srcs_size();
   if (srcs_size == 1) {
     // SWITCH_* or IF_*Z

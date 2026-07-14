@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include <boost/optional/optional.hpp>
+#include <optional>
 
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"

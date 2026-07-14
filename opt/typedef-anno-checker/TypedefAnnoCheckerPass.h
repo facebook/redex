@@ -13,6 +13,7 @@
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
+#include <optional>
 
 #include "TypeInference.h"
 #include <utility>
@@ -125,16 +126,15 @@ class TypedefAnnoChecker {
 
   void run(DexMethod* m);
 
-  void check_instruction(
-      DexMethod* m,
-      const type_inference::TypeInference* inference,
-      IRInstruction* insn,
-      const boost::optional<const DexType*>& return_annotation,
-      live_range::UseDefChains* ud_chains,
-      TypeEnvironments& envs);
+  void check_instruction(DexMethod* m,
+                         const type_inference::TypeInference* inference,
+                         IRInstruction* insn,
+                         const std::optional<const DexType*>& return_annotation,
+                         live_range::UseDefChains* ud_chains,
+                         TypeEnvironments& envs);
 
   bool check_typedef_value(DexMethod* m,
-                           const boost::optional<const DexType*>& annotation,
+                           const std::optional<const DexType*>& annotation,
                            live_range::UseDefChains* ud_chains,
                            IRInstruction* insn,
                            const src_index_t src,

@@ -6,6 +6,7 @@
  */
 
 #include "TypedefAnnoPatcher.h"
+#include <optional>
 
 #include "AnnoUtils.h"
 #include "ClassUtil.h"
@@ -27,14 +28,14 @@ constexpr const char* OBJ_REF_FIELD =
 
 namespace typedef_anno {
 bool is_int(const type_inference::TypeEnvironment& env, reg_t reg) {
-  return env.get_dex_type(reg) != boost::none &&
+  return env.get_dex_type(reg) != std::nullopt &&
          type::is_int(*env.get_dex_type(reg));
 }
 
 // if there's no dex type, the value is null, and the checker does not enforce
 // nullability
 bool is_string(const type_inference::TypeEnvironment& env, reg_t reg) {
-  return env.get_dex_type(reg) != boost::none
+  return env.get_dex_type(reg) != std::nullopt
              ? *env.get_dex_type(reg) == type::java_lang_String()
              : true;
 }
@@ -44,7 +45,7 @@ bool is_not_str_nor_int(const type_inference::TypeEnvironment& env, reg_t reg) {
 }
 
 bool is_int_or_obj_ref(const type_inference::TypeEnvironment& env, reg_t reg) {
-  return env.get_dex_type(reg) != boost::none
+  return env.get_dex_type(reg) != std::nullopt
              ? (*env.get_dex_type(reg) == DexType::make_type(INT_REF_CLS) ||
                 *env.get_dex_type(reg) == DexType::make_type(OBJ_REF_CLS))
              : true;
@@ -63,7 +64,7 @@ bool has_typedef_annos(
     auto& anno_set = anno.second;
     auto typedef_anno = type_inference::get_typedef_annotation(
         anno_set->get_annotations(), typedef_annos);
-    if (typedef_anno != boost::none) {
+    if (typedef_anno != std::nullopt) {
       return true;
     }
   }
@@ -386,7 +387,7 @@ void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
     for (const auto& panno : *param_annos) {
       auto annotation = type_inference::get_typedef_annotation(
           panno.second->get_annotations(), m_typedef_annos);
-      if (annotation == boost::none) {
+      if (annotation == std::nullopt) {
         continue;
       }
       size_t patch_idx = panno.first + 2;
@@ -423,7 +424,7 @@ bool TypedefAnnoPatcher::patch_if_overriding_annotated_methods(
     auto return_anno = type_inference::get_typedef_anno_from_member(
         overridden, m_typedef_annos);
 
-    if (return_anno != boost::none) {
+    if (return_anno != std::nullopt) {
       add_annotation(m, *return_anno, m_anno_patching_mutex, class_stats);
     }
 
@@ -433,7 +434,7 @@ bool TypedefAnnoPatcher::patch_if_overriding_annotated_methods(
     for (auto const& param_anno : *overridden->get_param_anno()) {
       auto annotation = type_inference::get_typedef_annotation(
           param_anno.second->get_annotations(), m_typedef_annos);
-      if (annotation == boost::none) {
+      if (annotation == std::nullopt) {
         continue;
       }
       add_param_annotation(m, *annotation, param_anno.first, class_stats);
@@ -606,7 +607,7 @@ void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
     DexAnnotationSet* anno_set = field->get_anno_set();
     if ((anno_set != nullptr) &&
         type_inference::get_typedef_annotation(
-            anno_set->get_annotations(), m_typedef_annos) != boost::none) {
+            anno_set->get_annotations(), m_typedef_annos) != std::nullopt) {
       has_annotated_fields = true;
     }
   }
@@ -636,7 +637,7 @@ void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
         }
         param_idx++;
         auto param_anno = ctor_envs.at(insn).get_annotation(insn->dest());
-        if (param_anno != boost::none) {
+        if (param_anno != std::nullopt) {
           continue;
         }
         auto& env = ctor_envs.at(insn);
@@ -657,7 +658,7 @@ void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
           }
           auto field_anno = type_inference::get_typedef_anno_from_member(
               use_insn->get_field(), ctor_inference.get_annotations());
-          if (field_anno == boost::none) {
+          if (field_anno == std::nullopt) {
             continue;
           }
           add_param_annotation(ctor, *field_anno, param_idx - 2, class_stats);
@@ -745,7 +746,7 @@ void annotate_local_var_field_from_callee(
   for (auto const& param_anno : *callee->get_param_anno()) {
     auto annotation = type_inference::get_typedef_annotation(
         param_anno.second->get_annotations(), inference.get_annotations());
-    if (annotation != boost::none) {
+    if (annotation != std::nullopt) {
       patch_synthetic_field_from_local_var_lambda(
           ud_chains, insn, param_anno.first + 1, *annotation, patched_fields,
           candidates, anno_patching_mutex, class_stats);
@@ -792,7 +793,7 @@ void TypedefAnnoPatcher::patch_lambdas(
           for (auto const& param_anno : *static_method->get_param_anno()) {
             auto annotation = type_inference::get_typedef_annotation(
                 param_anno.second->get_annotations(), m_typedef_annos);
-            if (annotation != boost::none) {
+            if (annotation != std::nullopt) {
               patch_synthetic_field_from_local_var_lambda(
                   ud_chains, insn, param_anno.first, *annotation,
                   patched_fields, candidates, m_anno_patching_mutex,
@@ -859,7 +860,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
         continue;
       }
       auto annotation = env.get_annotation(insn->src(0));
-      if (annotation != boost::none) {
+      if (annotation != std::nullopt) {
         // We have to patch the field here now. Otherwise, the getter won't be
         // considered as candidate by the collection logic down below.
         add_annotation(field, *annotation, m_anno_patching_mutex, class_stats);
@@ -929,7 +930,7 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(const DexClass* anon_cls,
       }
       auto typedef_anno = type_inference::get_typedef_anno_from_member(
           patched_field, m_typedef_annos);
-      always_assert(typedef_anno != boost::none);
+      always_assert(typedef_anno != std::nullopt);
       TRACE(TAC, 2,
             "[patcher] patching enclosing field %s from patched field %s",
             SHOW(enclosing_field_name), SHOW(patched_field));
@@ -993,7 +994,7 @@ void TypedefAnnoPatcher::collect_return_candidates(
   inference.run(m);
 
   TypeEnvironments& envs = inference.get_type_environments();
-  boost::optional<const TypedefAnnoType*> anno = boost::none;
+  std::optional<const TypedefAnnoType*> anno = std::nullopt;
   bool patch_return = true;
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
@@ -1001,8 +1002,8 @@ void TypedefAnnoPatcher::collect_return_candidates(
       IROpcode opcode = insn->opcode();
       if ((opcode == OPCODE_RETURN_OBJECT || opcode == OPCODE_RETURN)) {
         auto return_anno = envs.at(insn).get_annotation(insn->src(0));
-        if (return_anno == boost::none ||
-            (anno != boost::none && return_anno != anno)) {
+        if (return_anno == std::nullopt ||
+            (anno != std::nullopt && return_anno != anno)) {
           patch_return = false;
         } else {
           anno = return_anno;
@@ -1011,7 +1012,7 @@ void TypedefAnnoPatcher::collect_return_candidates(
     }
   }
 
-  if (patch_return && anno != boost::none) {
+  if (patch_return && anno != std::nullopt) {
     candidates.add_method_candidate(m, *anno);
     auto class_name = type_class(m->get_class())->str();
     auto class_name_prefix = class_name.substr(0, class_name.size() - 1);

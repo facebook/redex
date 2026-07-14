@@ -7,6 +7,7 @@
 
 #include "TypedefAnnoCheckerPass.h"
 #include <boost/algorithm/string/predicate.hpp>
+#include <optional>
 
 #include "AnnoUtils.h"
 #include "ClassUtil.h"
@@ -218,7 +219,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   live_range::MoveAwareChains chains(cfg);
   live_range::UseDefChains ud_chains = chains.get_use_def_chains();
 
-  boost::optional<const DexType*> return_annotation = boost::none;
+  std::optional<const DexType*> return_annotation = std::nullopt;
   DexAnnotationSet* return_annos = m->get_anno_set();
   if (return_annos != nullptr) {
     return_annotation = type_inference::get_typedef_annotation(
@@ -261,7 +262,7 @@ void TypedefAnnoChecker::check_instruction(
     DexMethod* m,
     const type_inference::TypeInference* inference,
     IRInstruction* insn,
-    const boost::optional<const DexType*>& return_annotation,
+    const std::optional<const DexType*>& return_annotation,
     live_range::UseDefChains* ud_chains,
     TypeEnvironments& envs) {
   // if the invoked method's arguments have annotations with the
@@ -294,7 +295,7 @@ void TypedefAnnoChecker::check_instruction(
       for (auto const& param_anno : *callee->get_param_anno()) {
         auto annotation = type_inference::get_typedef_annotation(
             param_anno.second->get_annotations(), inference->get_annotations());
-        if (annotation == boost::none) {
+        if (annotation == std::nullopt) {
           continue;
         }
         int param_index = insn->opcode() == OPCODE_INVOKE_STATIC
@@ -370,7 +371,7 @@ void TypedefAnnoChecker::check_instruction(
     auto env_anno = env.get_annotation(insn->src(0));
     auto field_anno = type_inference::get_typedef_anno_from_member(
         insn->get_field(), inference->get_annotations());
-    if (env_anno != boost::none && field_anno != boost::none &&
+    if (env_anno != std::nullopt && field_anno != std::nullopt &&
         env_anno.value() != field_anno.value()) {
       std::ostringstream out;
       out << "TypedefAnnoCheckerPass: The method " << show(m)
@@ -379,7 +380,7 @@ void TypedefAnnoChecker::check_instruction(
           << "\n to a value with annotation " << show(env_anno)
           << ".\n failed instruction: " << show(insn);
       add_error(out.str());
-    } else if (env_anno == boost::none && field_anno != boost::none) {
+    } else if (env_anno == std::nullopt && field_anno != std::nullopt) {
       bool good = check_typedef_value(m, field_anno, ud_chains, insn, 0,
                                       inference, envs);
       if (!good) {
@@ -450,7 +451,7 @@ void TypedefAnnoChecker::check_instruction(
 
 bool TypedefAnnoChecker::check_typedef_value(
     DexMethod* m,
-    const boost::optional<const DexType*>& annotation,
+    const std::optional<const DexType*>& annotation,
     live_range::UseDefChains* ud_chains,
     IRInstruction* insn,
     const src_index_t src,
@@ -556,7 +557,7 @@ bool TypedefAnnoChecker::check_typedef_value(
         break;
       }
       auto anno = env->second.get_annotation(def->dest());
-      if (anno == boost::none || anno != annotation) {
+      if (anno == std::nullopt || anno != annotation) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << show(m)
             << "\n one of the parameters needs to have the typedef annotation "
@@ -596,10 +597,10 @@ bool TypedefAnnoChecker::check_typedef_value(
       }
       callees.insert(def_method);
       for (const DexMethod* callee : UnorderedIterable(callees)) {
-        boost::optional<const DexType*> anno =
+        std::optional<const DexType*> anno =
             type_inference::get_typedef_anno_from_member(
                 callee, inference->get_annotations());
-        if (anno == boost::none || anno != annotation) {
+        if (anno == std::nullopt || anno != annotation) {
           DexType* return_type = callee->get_proto()->get_rtype();
           // constant folding might cause the source to be the invoked boolean
           // method https://fburl.com/code/h3dn0ft0

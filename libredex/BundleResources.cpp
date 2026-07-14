@@ -132,7 +132,7 @@ std::string get_string_attribute_value(const aapt::pb::XmlElement& element,
   return std::string("");
 }
 
-boost::optional<resources::StringOrReference>
+std::optional<resources::StringOrReference>
 get_string_or_reference_from_attribute(const aapt::pb::XmlAttribute& pb_attr) {
   if (pb_attr.has_compiled_item()) {
     const auto& item = pb_attr.compiled_item();
@@ -147,7 +147,7 @@ get_string_or_reference_from_attribute(const aapt::pb::XmlAttribute& pb_attr) {
     if (id > 0) {
       return resources::StringOrReference(id);
     }
-    return boost::none;
+    return std::nullopt;
   } else {
     return resources::StringOrReference(pb_attr.value());
   }
@@ -769,11 +769,11 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
 
 using StyleResource = resources::StyleResource;
 using StyleModificationSpec = resources::StyleModificationSpec;
-boost::optional<int32_t> BundleResources::get_min_sdk() {
+std::optional<int32_t> BundleResources::get_min_sdk() {
   std::string base_manifest = (boost::filesystem::path(m_directory) /
                                "base/manifest/AndroidManifest.xml")
                                   .string();
-  boost::optional<int32_t> result = boost::none;
+  std::optional<int32_t> result = std::nullopt;
   if (!boost::filesystem::exists(base_manifest)) {
     return result;
   }
@@ -795,7 +795,7 @@ boost::optional<int32_t> BundleResources::get_min_sdk() {
                         pb_element,
                         "minSdkVersion",
                         aapt::pb::Primitive::kIntDecimalValue)) {
-                  result = boost::optional<int32_t>(
+                  result = std::optional<int32_t>(
                       get_int_attribute_value(pb_element, "minSdkVersion"));
                   return;
                 }
@@ -820,11 +820,11 @@ ManifestClassInfo BundleResources::get_manifest_class_info() {
   return manifest_classes;
 }
 
-boost::optional<std::string> BundleResources::get_manifest_package_name() {
+std::optional<std::string> BundleResources::get_manifest_package_name() {
   std::string base_manifest = (boost::filesystem::path(m_directory) /
                                "base/manifest/AndroidManifest.xml")
                                   .string();
-  boost::optional<std::string> result = boost::none;
+  std::optional<std::string> result = std::nullopt;
   if (!boost::filesystem::exists(base_manifest)) {
     return result;
   }

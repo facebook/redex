@@ -6,6 +6,7 @@
  */
 
 #include "ResultPropagation.h"
+#include <optional>
 
 #include <vector>
 
@@ -235,7 +236,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
+std::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     const IRInstruction* insn,
     const UnorderedMap<const DexMethod*, ParamIndex>&
         methods_which_return_parameter,
@@ -245,7 +246,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
   auto* const proto = method->get_proto();
   if (proto->is_void()) {
     // No point in doing any further analysis
-    return boost::none;
+    return std::nullopt;
   }
 
   const auto opcode = insn->opcode();
@@ -255,7 +256,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
 
   auto* callee = resolve_invoke_method_deprecated(insn, resolved_refs);
   if (callee == nullptr) {
-    return boost::none;
+    return std::nullopt;
   }
 
   ParamDomain param = ParamDomain::bottom();
@@ -271,14 +272,14 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     // that pass hasn't run (it runs after this pass in the default config)
     // or in case a similar pattern reaches us from elsewhere.
     if (opcode == OPCODE_INVOKE_SUPER) {
-      return boost::none;
+      return std::nullopt;
     }
     always_assert(opcode == OPCODE_INVOKE_VIRTUAL ||
                   opcode == OPCODE_INVOKE_INTERFACE);
   } else {
     const auto& mwrpit = methods_which_return_parameter.find(callee);
     if (mwrpit == methods_which_return_parameter.end()) {
-      return boost::none;
+      return std::nullopt;
     }
     param = ParamDomain(mwrpit->second);
   }
@@ -292,12 +293,12 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
       // We cannot rule out that there are dynamically added classes, created
       // via Proxy.newProxyInstance, that override this method.
       // So we assume the worst.
-      return boost::none;
+      return std::nullopt;
     }
 
     if (opcode == OPCODE_INVOKE_INTERFACE &&
         is_annotation(type_class(callee->get_class()))) {
-      return boost::none;
+      return std::nullopt;
     }
 
     auto* static_base_type = method->get_class();
@@ -310,12 +311,12 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
       }
       const auto& mwrpit = methods_which_return_parameter.find(overriding);
       if (mwrpit == methods_which_return_parameter.end()) {
-        return boost::none;
+        return std::nullopt;
       }
       param.join_with(ParamDomain(mwrpit->second));
       if (param.is_top()) {
         // Bail out early if possible; it's the common case
-        return boost::none;
+        return std::nullopt;
       }
     }
 
@@ -324,7 +325,8 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     always_assert(!param.is_bottom() || is_abstract(callee));
   }
 
-  return param.get_constant();
+  auto c = param.get_constant();
+  return c ? std::make_optional(*c) : std::nullopt;
 }
 
 bool ReturnParamResolver::returns_compatible_with_receiver(
@@ -408,7 +410,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
   return false;
 }
 
-boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
+std::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     const cfg::ControlFlowGraph& cfg,
     const UnorderedMap<const DexMethod*, ParamIndex>&
         methods_which_return_parameter) const {
@@ -426,7 +428,8 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     return_param_index.join_with(block_return_param_index);
   }
 
-  return return_param_index.get_constant();
+  auto c = return_param_index.get_constant();
+  return c ? std::make_optional(*c) : std::nullopt;
 }
 
 void ResultPropagation::patch(PassManager& mgr, cfg::ControlFlowGraph& cfg) {

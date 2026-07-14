@@ -7,9 +7,9 @@
 
 #pragma once
 
+#include <optional>
 #include <sstream>
 
-#include <boost/optional.hpp>
 #include <boost/variant.hpp>
 
 #include <sparta/AbstractDomain.h>
@@ -143,7 +143,7 @@ class DisjointUnionWithSignedConstantDomain final
   }
 
   template <typename Domain>
-  boost::optional<Domain> maybe_get() const {
+  std::optional<Domain> maybe_get() const {
     if (is_top()) {
       return Domain::top();
     }
@@ -152,7 +152,7 @@ class DisjointUnionWithSignedConstantDomain final
     }
     auto* dom = boost::get<Domain>(&m_variant);
     if (dom == nullptr) {
-      return boost::none;
+      return std::nullopt;
     }
     return *dom;
   }
@@ -168,9 +168,9 @@ class DisjointUnionWithSignedConstantDomain final
   /*
    * Return a numeric index representing the current type, if any.
    */
-  boost::optional<int> which() const {
+  std::optional<int> which() const {
     if (is_top() || is_bottom()) {
-      return boost::none;
+      return std::nullopt;
     }
     return m_variant.which();
   }

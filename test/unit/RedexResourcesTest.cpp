@@ -256,7 +256,7 @@ TEST(RedexResources, StyleResourceValueGetters) {
   EXPECT_EQ(string_val.get_data_type(), string_type);
   EXPECT_EQ(string_val.get_value_bytes(), 0);
   EXPECT_TRUE(string_val.get_value_string().has_value());
-  EXPECT_EQ(string_val.get_value_string().get(), str_value);
+  EXPECT_EQ(*string_val.get_value_string(), str_value);
   EXPECT_TRUE(string_val.get_styled_string().empty());
   const uint8_t styled_type = 3;
   const std::string styled_string = "Hello world!";
@@ -266,7 +266,7 @@ TEST(RedexResources, StyleResourceValueGetters) {
   EXPECT_EQ(styled_val.get_data_type(), styled_type);
   EXPECT_EQ(styled_val.get_value_bytes(), 0);
   EXPECT_TRUE(styled_val.get_value_string().has_value());
-  EXPECT_EQ(styled_val.get_value_string().get(), styled_string);
+  EXPECT_EQ(*styled_val.get_value_string(), styled_string);
   EXPECT_EQ(styled_val.get_styled_string().size(), 2);
   EXPECT_EQ(styled_val.get_styled_string()[0].tag, "bold");
   EXPECT_EQ(styled_val.get_styled_string()[0].first_char, 0);
@@ -597,7 +597,7 @@ TEST(RedexResources, StyleInfoDeepCopy) {
   EXPECT_EQ(copied.styles.at(0x7f010001)[0]
                 .attributes.at(0x01010002)
                 .get_value_string()
-                .get(),
+                .value(),
             "test_value");
   EXPECT_EQ(copied.styles.at(0x7f010002)[0]
                 .attributes.at(0x01010003)

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ControlFlow.h"
+#include <optional>
 
 namespace throw_propagation_impl {
 
@@ -26,7 +27,7 @@ class ThrowPropagator {
 
   cfg::ControlFlowGraph& m_cfg;
   DexMethod* m_method;
-  boost::optional<reg_t> m_reg;
+  std::optional<reg_t> m_reg;
 };
 
 } // namespace throw_propagation_impl

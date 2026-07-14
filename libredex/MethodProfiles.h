@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <optional>
 #include <string_view>
 
 #include "BaselineProfileConfig.h"
@@ -111,12 +111,12 @@ class MethodProfiles {
 
   const AllInteractions& all_interactions() const { return m_method_stats; }
 
-  boost::optional<Stats> get_method_stat(const std::string& interaction_id,
-                                         const DexMethodRef* m) const {
+  std::optional<Stats> get_method_stat(const std::string& interaction_id,
+                                       const DexMethodRef* m) const {
     const auto& stats = method_stats(interaction_id);
     auto it = stats.find(m);
     if (it == stats.end()) {
-      return boost::none;
+      return std::nullopt;
     }
     return it->second;
   }
@@ -125,7 +125,7 @@ class MethodProfiles {
                         const DexMethodRef* m,
                         Stats stats);
 
-  boost::optional<uint32_t> get_interaction_count(
+  std::optional<uint32_t> get_interaction_count(
       const std::string& interaction_id) const;
 
   // Try to resolve previously unresolved lines
