@@ -12,6 +12,7 @@
 
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
+#include "ClassUtil.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstructorAnalysis.h"
 #include "DexInstruction.h"

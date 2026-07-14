@@ -15,6 +15,7 @@
 
 #include "AnnoUtils.h"
 #include "BaselineProfile.h"
+#include "ClassUtil.h"
 #include "ConfigFiles.h"
 #include "ConstructorAnalysis.h"
 #include "Deleter.h"

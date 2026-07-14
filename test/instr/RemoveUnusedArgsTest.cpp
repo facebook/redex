@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include "MethodUtil.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "VerifyUtil.h"

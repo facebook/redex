@@ -14,6 +14,7 @@
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexPosition.h"
+#include "MethodUtil.h"
 #include "MonitorCount.h"
 #include "RedexContext.h"
 #include "Resolver.h"

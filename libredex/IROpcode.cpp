@@ -11,8 +11,8 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexOpcode.h"
-#include "DexUtil.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 std::ostream& operator<<(std::ostream& os, const IROpcode& op) {
   os << show(op);

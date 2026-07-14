@@ -55,6 +55,7 @@
 #include "DexPosition.h"
 #include "Lazy.h"
 #include "LiveRange.h"
+#include "MethodUtil.h"
 #include "OutlinedMethods.h"
 #include "RedexContext.h"
 #include "Resolver.h"

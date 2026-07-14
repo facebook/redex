@@ -10,6 +10,7 @@
 #include "ControlFlow.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "MethodUtil.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
 

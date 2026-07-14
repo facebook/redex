@@ -17,6 +17,7 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "EditableCfgAdapter.h"
+#include "MethodUtil.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Trace.h"

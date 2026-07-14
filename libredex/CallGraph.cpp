@@ -11,6 +11,7 @@
 
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
+#include "MethodUtil.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"

@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include "ControlFlow.h"
 #include "verify/VerifyUtil.h"
 
 TEST_F(PostVerify, ResourcesInliningPassTest_DexPatching) {

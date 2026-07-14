@@ -17,6 +17,7 @@
 #include "OpcodeList.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 class IRInstructionTest : public RedexTest {};
 

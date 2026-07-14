@@ -9,6 +9,7 @@
 
 #include "Debug.h"
 #include "DexClass.h"
+#include "IRCode.h"
 #include "MethodReference.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"

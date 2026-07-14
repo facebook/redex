@@ -8,10 +8,10 @@
 #pragma once
 
 #include "ControlFlow.h"
-#include "DexUtil.h"
 #include "IRCode.h"
 #include "MethodReference.h"
 #include "TypeTags.h"
+#include "TypeUtil.h"
 
 class ConstantValue {
 

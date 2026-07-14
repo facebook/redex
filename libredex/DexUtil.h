@@ -14,15 +14,12 @@
 #include <string_view>
 #include <vector>
 
-#include "ClassUtil.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IRInstruction.h"
-#include "MethodUtil.h"
 #include "StringUtil.h"
-#include "TypeUtil.h"
 
 /**
  * Given an instruction, determine which class' would get initialized, if any.

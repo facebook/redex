@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "IRAssembler.h"
+#include "IRCode.h"
 #include "RedexTest.h"
 
 class RemoveRecursiveLocksTest : public RedexTest {

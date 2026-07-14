@@ -50,6 +50,7 @@
 #include "MethodProfiles.h"
 #include "MethodSimilarityCompressionConsciousOrderer.h"
 #include "MethodSimilarityGreedyOrderer.h"
+#include "MethodUtil.h"
 #include "RedexOptions.h" // For DebugInfoKind
 #include "Resolver.h"
 #include "Sha1.h"

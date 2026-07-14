@@ -7,6 +7,7 @@
 
 #include "DexClass.h"
 
+#include "ControlFlow.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAccess.h"
@@ -26,6 +27,7 @@
 #include "Show.h"
 #include "StringBuilder.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Util.h"
 #include "Warning.h"
 

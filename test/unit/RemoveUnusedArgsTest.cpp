@@ -17,6 +17,7 @@
 #include "RedexTest.h"
 #include "RemoveUnusedArgs.h"
 #include "ScopeHelper.h"
+#include "TypeUtil.h"
 
 struct RemoveUnusedArgsTest : public RedexTest {
   remove_unused_args::RemoveArgs* m_remove_args;

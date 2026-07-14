@@ -15,6 +15,7 @@
 #include "ResolveProguardAssumeValues.h"
 #include "ScopeHelper.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 class ResolveProguardAssumeValuesTest : public RedexTest {
 

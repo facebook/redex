@@ -12,6 +12,7 @@
 #include <sstream>
 #include <unordered_map>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexStore.h"
@@ -67,7 +68,7 @@ TEST_F(SimpleReflectionAnalysisTest, nominalCases) {
           method->get_code()->build_cfg();
           auto& cfg = method->get_code()->cfg();
           ReflectionAnalysis analysis(method);
-          for (auto& mie : InstructionIterable(cfg)) {
+          for (auto& mie : cfg::InstructionIterable(cfg)) {
             IRInstruction* insn = mie.insn;
             if (insn->opcode() == OPCODE_INVOKE_STATIC &&
                 insn->get_method()->get_name()->str() == "check") {

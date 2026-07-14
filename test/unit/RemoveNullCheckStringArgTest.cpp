@@ -13,6 +13,7 @@
 #include "ScopeHelper.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 class RemoveNullcheckStringArgTest : public RedexTest {
  public:
