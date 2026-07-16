@@ -42,6 +42,7 @@
 #include "Show.h"
 #include "SourceBlockConsistencyCheck.h"
 #include "SourceBlocks.h"
+#include "SourceBlocksViolations.h"
 #include "Trace.h"
 #include "Walkers.h"
 

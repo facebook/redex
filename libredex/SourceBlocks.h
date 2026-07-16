@@ -266,18 +266,9 @@ struct SourceBlockMetric {
 
 SourceBlockMetric gather_source_block_metrics(ControlFlowGraph* cfg);
 
-void fix_chain_violations(ControlFlowGraph* cfg);
-
-void fix_idom_violations(ControlFlowGraph* cfg);
-
-void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg);
-
 bool has_source_block_positive_val(const SourceBlock* sb);
 
 bool has_source_block_undefined_val(const SourceBlock* sb);
-
-size_t compute_method_violations(const call_graph::Graph& call_graph,
-                                 const Scope& scope);
 
 void scale_source_blocks(cfg::Block* block);
 
@@ -609,49 +600,8 @@ inline void normalize(ControlFlowGraph& cfg,
 
 } // namespace normalize
 
-void track_source_block_coverage(ScopedMetrics& sm,
-                                 const DexStoresVector& stores);
-
 class SourceBlockConsistencyCheck;
 SourceBlockConsistencyCheck& get_sbcc();
-
-struct ViolationsHelper {
-  struct ViolationsHelperImpl;
-  std::unique_ptr<ViolationsHelperImpl> impl;
-  bool track_intermethod_violations{false};
-  bool print_all_violations{false};
-  bool ignore_undefined{false};
-
-  enum class Violation {
-    kHotImmediateDomNotHot = 0,
-    kChainAndDom = 1,
-    kUncoveredSourceBlocks = 2,
-    kHotMethodColdEntry = 3,
-    kHotNoHotPred = 4,
-    KHotAllChildrenCold = 5,
-    kUncoveredThrowDelineatedBlocks = 6,
-    ViolationSize = 7,
-  };
-
-  ViolationsHelper(Violation v,
-                   const Scope& scope,
-                   size_t top_n,
-                   std::vector<std::string> to_vis,
-                   bool track_intermethod_violations,
-                   bool print_all_violations,
-                   bool ignore_undefined);
-  ~ViolationsHelper();
-
-  void process(ScopedMetrics* sm);
-  void silence();
-
-  ViolationsHelper(ViolationsHelper&& other) noexcept;
-  ViolationsHelper& operator=(ViolationsHelper&& rhs) noexcept;
-};
-
-size_t compute(ViolationsHelper::Violation v,
-               cfg::ControlFlowGraph& cfg,
-               bool ignore_undefined = false);
 
 SourceBlock* get_first_source_block_of_method(const DexMethod* m);
 

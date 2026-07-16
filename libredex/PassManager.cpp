@@ -53,6 +53,7 @@
 #include "ScopedMetrics.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "SourceBlocksViolations.h"
 #include "ThreadPool.h"
 #include "Timer.h"
 #include "Trace.h"
