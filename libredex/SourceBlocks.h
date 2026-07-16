@@ -6,10 +6,10 @@
  */
 
 #pragma once
+#include <optional>
 
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <vector>
 
 #include "CallGraph.h"
