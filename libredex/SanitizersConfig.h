@@ -43,7 +43,9 @@ const char* kAsanDefaultOptions =
 #endif
 
 extern "C" NO_SANITIZE VISIBLE __attribute__((__weak__)) const char*
+// NOLINTBEGIN(bugprone-reserved-identifier)
 // NOLINTNEXTLINE(misc-definitions-in-headers)
-_asan_default_options() {
+__asan_default_options() {
   return kAsanDefaultOptions;
 }
+// NOLINTEND(bugprone-reserved-identifier)
