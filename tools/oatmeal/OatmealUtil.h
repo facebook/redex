@@ -11,10 +11,12 @@
 #include "DexOpcodeDefs.h"
 #include "file-utils.h"
 
+#include <bit>
 #include <cstdio>
 #include <limits>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -73,8 +75,7 @@ template <typename T>
 inline T clz(T in) {
   static_assert(sizeof(T) == sizeof(uint64_t) || sizeof(T) == sizeof(uint32_t),
                 "Unsupported size");
-  return (sizeof(T) == sizeof(uint32_t)) ? __builtin_clz(in)
-                                         : __builtin_clzll(in);
+  return std::countl_zero(static_cast<std::make_unsigned_t<T>>(in));
 };
 
 // This is a non-standard definition.

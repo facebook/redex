@@ -7,6 +7,7 @@
 
 #include "RemoveRecursiveLocks.h"
 
+#include <bit>
 #include <bitset>
 #include <iostream>
 #include <variant>
@@ -76,7 +77,7 @@ using LockEnvironment =
 
 size_t clz(LockType val) {
   static_assert(sizeof(val) == 4 || sizeof(val) == 8, "Unsupported type");
-  return sizeof(val) == 4 ? __builtin_clz(val) : __builtin_clzll(val);
+  return std::countl_zero(val);
 }
 
 size_t get_max_depth(LockType val) {
