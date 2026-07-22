@@ -760,9 +760,7 @@ class AfterPassSizes {
         if (m_debug) {
           std::cerr << "Running " << pass_name << '\n';
         }
-        if (!pass->is_cfg_legacy()) {
-          ensure_cfg(*stores);
-        }
+        ensure_cfg(*stores);
         pass->run_pass(*stores, *conf, *m_mgr);
       }
     };
@@ -1456,13 +1454,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
     ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
     ConcurrentSet<DexMethod*> unique_methods;
-    bool is_cfg_friendly = !pass->is_cfg_legacy();
     walk::parallel::code(
         build_class_scope(stores), [&](DexMethod* m, IRCode& code) {
-          if (is_cfg_friendly) {
-            always_assert_log(code.cfg_built(), "%s has a cfg!", SHOW(m));
-            code.cfg().reset_exit_block();
-          }
+          always_assert_log(code.cfg_built(), "%s has a cfg!", SHOW(m));
+          code.cfg().reset_exit_block();
           if (slow_invariants_debug) {
             std::vector<DexMethodRef*> methods;
             methods.reserve(1000);
@@ -1572,22 +1567,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
           violatios_tracking.maybe_track(this, stores);
       double cpu_time_start = ((double)std::clock()) / CLOCKS_PER_SEC;
       auto wall_time_start = std::chrono::steady_clock::now();
-      if (pass->is_cfg_legacy()) {
-        // if this pass hasn't been updated to cfg yet, clear_cfg. In
-        // the future, once all cfg updates are done, this branch will
-        // be removed.
-        auto temp_scope = build_class_scope(stores);
-        walk::parallel::code(
-            temp_scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
-        TRACE(PM, 2, "%s Pass has not been updated to cfg.\n",
-              SHOW(pass->name()));
-      } else {
-        // Run build_cfg() in case any newly added methods by previous passes
-        // are not built as cfg. But if cfg is already built,
-        // no need to rebuild it.
-        ensure_cfg(stores);
-        TRACE(PM, 2, "%s Pass uses cfg.\n", SHOW(pass->name()));
-      }
+      // Run build_cfg() in case any newly added methods by previous passes
+      // are not built as cfg. But if cfg is already built,
+      // no need to rebuild it.
+      ensure_cfg(stores);
+      TRACE(PM, 2, "%s Pass uses cfg.\n", SHOW(pass->name()));
 
       if (pass->pass_support_dex_version() <
           m_redex_options.input_dex_version) {
@@ -1647,7 +1631,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         }
       }
       // Ensure the CFG is clean, e.g., no unreachable blocks.
-      if (!pass->is_cfg_legacy()) {
+      {
         auto temp_scope = build_class_scope(stores);
         walk::parallel::code(temp_scope, [&](DexMethod* method, IRCode& code) {
           always_assert_log(code.cfg_built(),

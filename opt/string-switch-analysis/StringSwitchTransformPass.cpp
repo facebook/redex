@@ -40,7 +40,7 @@ namespace {
 namespace cp = constant_propagation;
 
 // The string switches found in one method. PassManager keeps the editable CFGs
-// built for the whole pass (is_cfg_legacy() is false), so the block pointers in
+// built for the whole pass, so the block pointers in
 // StringSwitchInfo stay valid until the pass returns -- and these are the real
 // details future transforms will act on, not just rendered text.
 struct MethodResult {
