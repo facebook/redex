@@ -79,21 +79,21 @@ pub fn derive_disjoint_union(input: TokenStream) -> TokenStream {
                 }
 
                 return match (self, rhs) {
-                    #( (#enum_name::#variant_idents(ref ldom), #enum_name::#variant_idents(rdom)) => ldom.leq(rdom), )*
+                    #( (#enum_name::#variant_idents(ldom), #enum_name::#variant_idents(rdom)) => ldom.leq(rdom), )*
                     _ => false,
                 };
             }
 
             fn join_with(&mut self, rhs: Self) {
                 match (self, rhs) {
-                    #( (#enum_name::#variant_idents(ref mut ldom), #enum_name::#variant_idents(rdom)) => ldom.join_with(rdom), )*
+                    #( (#enum_name::#variant_idents(ldom), #enum_name::#variant_idents(rdom)) => ldom.join_with(rdom), )*
                     (s, _) => *s = Self::top(),
                 }
             }
 
             fn meet_with(&mut self, rhs: Self) {
                 match (self, rhs) {
-                    #( (#enum_name::#variant_idents(ref mut ldom), #enum_name::#variant_idents(rdom)) => ldom.meet_with(rdom), )*
+                    #( (#enum_name::#variant_idents(ldom), #enum_name::#variant_idents(rdom)) => ldom.meet_with(rdom), )*
                     (s, _) => *s = Self::bottom(),
                 }
             }
