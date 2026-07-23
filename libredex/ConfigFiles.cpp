@@ -408,6 +408,25 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
     TRACE(CF, 1, "coldstart class: 20 pct %zu", coldstart_20pct_classes.size());
     TRACE(CF, 1, "coldstart class: 1 pct %zu", coldstart_1pct_classes.size());
 
+    if (traceEnabled(CF, 3)) {
+      for (const auto* type : coldstart_20pct_classes) {
+        auto* appended_cls = type_class(type);
+        TRACE(CF, 3, "coldstart appended 20pct %s: %s",
+              (appended_cls && klass::maybe_anonymous_class(appended_cls))
+                  ? "anon"
+                  : "general",
+              type->c_str());
+      }
+      for (const auto* type : coldstart_1pct_classes) {
+        auto* appended_cls = type_class(type);
+        TRACE(CF, 3, "coldstart appended 1pct %s: %s",
+              (appended_cls && klass::maybe_anonymous_class(appended_cls))
+                  ? "anon"
+                  : "general",
+              type->c_str());
+      }
+    }
+
     std::vector<std::string> coldstart_classes_with_method_profile_symbols;
 
     for (auto& cls_name : coldstart_classes) {
