@@ -122,6 +122,13 @@ struct SourceBlock {
   // Large methods exist, but a 32-bit integer is safe.
   // Use the maximum for things that we do not want to emit at this point.
   static constexpr uint32_t kSyntheticId = std::numeric_limits<uint32_t>::max();
+  // Per-method source-block id, assigned by one of three mechanisms:
+  //  - source_blocks::insert_source_blocks (the profiling-insertion flow) hands
+  //    out dense ids 0,1,2,... in visit_in_order/DFS order;
+  //    SourceBlockConsistencyCheck relies on that density (id < num_src_blks).
+  //  - the IRAssembler preserves an authored id verbatim (it never renumbers),
+  //    so ids in assembled test fixtures are stable handles.
+  //  - clone helpers stamp kSyntheticId on copies.
   uint32_t id{0};
   // Float has enough precision.
   class Val {
