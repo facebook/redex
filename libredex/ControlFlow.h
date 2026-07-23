@@ -56,6 +56,15 @@
  * and MFLOW_CATCHes are deleted and their information is moved to the edges of
  * the CFG.
  *
+ * Source-block folding: once gotos become edges, a block whose only real
+ * content was a bare goto becomes instruction-empty and is folded into an edge
+ * by simplify()/remove_empty_blocks() (run from build_cfg and from post-pass
+ * cleanups). Its source blocks are carried into the successor only when the
+ * successor has a single predecessor (or, under instrument_mode, the whole
+ * block is kept). Otherwise the source blocks are dropped, so any source block
+ * you need to survive must live on a block that also contains a real
+ * instruction.
+ *
  * TODO: Add useful CFG editing methods
  * TODO: phase out edits to the IRCode and move them all to the CFG
  * TODO: remove non-CFG option
@@ -1160,7 +1169,11 @@ class ControlFlowGraph {
   // Used while turning back into a linear representation.
   void insert_try_catch_markers(const std::vector<Block*>& ordering);
 
-  // remove blocks with no entries
+  // Remove instruction-empty blocks by folding each into its single successor.
+  // Source blocks on a folded block are moved into the successor only when the
+  // successor has a single predecessor (or the whole block is kept under
+  // instrument_mode); otherwise they are dropped. Positions are preserved via
+  // fix_dangling_parents.
   void remove_empty_blocks();
 
   // Re-insert any parent pointer that got deleted. This is a useful
