@@ -264,6 +264,13 @@ float Configurable::as<float>(const Json::Value& value, bindflags_t bindflags) {
 }
 
 template <>
+double Configurable::as<double>(const Json::Value& value,
+                                bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(double);
+  return value.asDouble();
+}
+
+template <>
 int Configurable::as<int>(const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(int);
   return value.asInt();
@@ -538,6 +545,7 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
 // NOLINTEND(bugprone-macro-parentheses)
 
 IMPLEMENT_REFLECTOR(float)
+IMPLEMENT_REFLECTOR(double)
 IMPLEMENT_REFLECTOR_WITH_DFLT_VALUE(bool)
 IMPLEMENT_REFLECTOR_EX(std::optional<bool>, "bool")
 IMPLEMENT_REFLECTOR_EX(int, "int")

@@ -17,6 +17,7 @@ struct Base : public Configurable {
   std::string get_config_name() override { return ""; }
   int m_int_param;
   float m_float_param;
+  double m_double_param;
   bool m_bool_param;
   unsigned int m_uint_param;
   int64_t m_int64_param;
@@ -115,6 +116,7 @@ struct PrimitiveBindings : public Base {
   void bind_config() override {
     bind("int_param", 0, m_int_param);
     bind("float_param", 0, m_float_param);
+    bind("double_param", 0, m_double_param);
     bind("bool_param", false, m_bool_param);
     bind("uint_param", 0, m_uint_param);
     bind("int64_param", 0, m_int64_param);
@@ -167,6 +169,9 @@ TEST_F(ConfigurableTest, PrimitiveBindings) {
   Json::Value json;
   json["int_param"] = 10;
   json["float_param"] = 11.0f;
+  // A value that is not representable in float, to prove double precision is
+  // preserved through bind (i.e. asDouble() is used, not asFloat()).
+  json["double_param"] = 0.1234567890123;
   json["bool_param"] = true;
   json["uint_param"] = 0xffffffff;
   json["int64_param"] = Json::Int64(-5000000000);
@@ -182,6 +187,7 @@ TEST_F(ConfigurableTest, PrimitiveBindings) {
   c.parse_config(JsonWrapper(json));
   EXPECT_EQ(10, c.m_int_param);
   EXPECT_EQ(11.0f, c.m_float_param);
+  EXPECT_EQ(0.1234567890123, c.m_double_param);
   EXPECT_EQ(true, c.m_bool_param);
   EXPECT_EQ(0xffffffff, c.m_uint_param);
   EXPECT_EQ(-5000000000, c.m_int64_param);
@@ -198,6 +204,7 @@ struct DefaultBindings : public Base {
   void bind_config() override {
     bind("int_param", 10, m_int_param);
     bind("float_param", 11.0f, m_float_param);
+    bind("double_param", 0.1234567890123, m_double_param);
     bind("bool_param", true, m_bool_param);
     bind("uint_param", 0xffffffff, m_uint_param);
     bind("int64_param", -5000000000, m_int64_param);
@@ -217,6 +224,7 @@ TEST_F(ConfigurableTest, DefaultBindings) {
   c.parse_config(JsonWrapper(json));
   EXPECT_EQ(10, c.m_int_param);
   EXPECT_EQ(11.0f, c.m_float_param);
+  EXPECT_EQ(0.1234567890123, c.m_double_param);
   EXPECT_EQ(true, c.m_bool_param);
   EXPECT_EQ(0xffffffff, c.m_uint_param);
   EXPECT_EQ(-5000000000, c.m_int64_param);
@@ -244,6 +252,7 @@ TEST_F(ConfigurableTest, CompositeBindings) {
   c.parse_config(JsonWrapper(json));
   EXPECT_EQ(10, c.m_contained.m_int_param);
   EXPECT_EQ(11.0f, c.m_contained.m_float_param);
+  EXPECT_EQ(0.1234567890123, c.m_contained.m_double_param);
   EXPECT_EQ(true, c.m_contained.m_bool_param);
   EXPECT_EQ(0xffffffff, c.m_contained.m_uint_param);
   EXPECT_EQ(-5000000000, c.m_contained.m_int64_param);
