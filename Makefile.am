@@ -393,7 +393,6 @@ libopt_la_SOURCES = \
 	checkers/NoUnreachableInstructionsChecker.cpp \
 	checkers/NoSpuriousGetClassCallsChecker.cpp \
 	checkers/RenameClassChecker.cpp \
-	analysis/max-depth/MaxDepthAnalysis.cpp \
 	analysis/ip-reflection-analysis/IPReflectionAnalysis.cpp \
 	opt/access-marking/AccessMarking.cpp \
 	opt/add-secondary-dex/AddSecondaryDexPass.cpp \
