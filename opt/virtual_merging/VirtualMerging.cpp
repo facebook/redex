@@ -1031,7 +1031,7 @@ struct SBHelper {
             if (first_sb->get_val(i)) {
               const auto& first_val = first_sb->get_at(i);
               val->val += first_val->val;
-              val->appear100 = std::max(val->appear100, first_val->val);
+              val->appear100 = std::max(val->appear100, first_val->appear100);
             }
           });
         }

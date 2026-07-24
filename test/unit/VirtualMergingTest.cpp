@@ -49,32 +49,43 @@ class VirtualMergingTest : public RedexTest {
       }
       // Should add a super call here, but...
 
-      auto make_code = [](int32_t val, auto mref, float sb_val) {
+      auto make_code = [](int32_t val, auto mref, float sb_val,
+                          float sb_appear100) {
         std::string src = R"(
             (
               (load-param-object v1)
-              (.src_block "Y" 0 (Z Z))
+              (.src_block "Y" 0 (V A))
               (const v0 X)
               (return v0)
             ))";
         src.replace(src.find('X'), 1, std::to_string(val));
-        src.replace(src.find('Z'), 1, std::to_string(sb_val));
-        src.replace(src.find('Z'), 1, std::to_string(sb_val));
+        src.replace(src.find('V'), 1, std::to_string(sb_val));
+        src.replace(src.find('A'), 1, std::to_string(sb_appear100));
         src.replace(src.find('Y'), 1, show(mref));
         return assembler::ircode_from_string(src);
       };
+      // Deliberately keep the source-block `val` (here == idx, up to 33) larger
+      // than `appear100` (idx/100, at most 0.33). This asymmetry is what the
+      // MergedFooAppear100NotPollutedByVal regression relies on to catch a
+      // merge that maxes appear100 against the val field.
       auto* foo_ref = DexMethod::make_method(std::string(name) + ".foo:()I");
-      auto* foo =
-          foo_ref->make_concrete(ACC_PUBLIC,
-                                 make_code(foo_val, foo_ref, idx / 100.0f),
-                                 /*is_virtual=*/true);
+      auto* foo = foo_ref->make_concrete(
+          ACC_PUBLIC,
+          make_code(foo_val,
+                    foo_ref,
+                    /*sb_val=*/static_cast<float>(idx),
+                    /*sb_appear100=*/static_cast<float>(idx) / 100.0f),
+          /*is_virtual=*/true);
       cls_creator.add_method(foo);
       foo->get_code()->build_cfg();
       auto* bar_ref = DexMethod::make_method(std::string(name) + ".bar:()I");
-      auto* bar =
-          bar_ref->make_concrete(ACC_PUBLIC,
-                                 make_code(bar_val, bar_ref, idx / 100.0f),
-                                 /*is_virtual=*/true);
+      auto* bar = bar_ref->make_concrete(
+          ACC_PUBLIC,
+          make_code(bar_val,
+                    bar_ref,
+                    /*sb_val=*/static_cast<float>(idx),
+                    /*sb_appear100=*/static_cast<float>(idx) / 100.0f),
+          /*is_virtual=*/true);
       cls_creator.add_method(bar);
       bar->get_code()->build_cfg();
       DexClass* res = cls_creator.create();
@@ -585,4 +596,49 @@ TEST_F(VirtualMergingTest, PerfConfig) {
   EXPECT_EQ(get_method(31, "foo"), nullptr);
   EXPECT_EQ(get_method(32, "foo"), nullptr);
   EXPECT_EQ(get_method(33, "foo"), nullptr);
+}
+
+// Regression: merging source blocks during a virtual-merge split must combine
+// `appear100` with `appear100` (a percentage, always <= 100), never with the
+// `val` field. The fixture pins each block's SB val == idx (up to 33) but its
+// appear100 == idx/100 (at most 0.33); a correct merge therefore keeps every
+// resulting appear100 well under 1.0, whereas the old typo
+// (`max(appear100, first_val->val)`) would push it up to a val magnitude.
+TEST_F(VirtualMergingTest, MergedFooAppear100NotPollutedByVal) {
+  auto scope = build_class_scope(stores);
+
+  api::LevelChecker::init(19, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+
+  UnorderedMap<const DexMethodRef*, method_profiles::Stats> profile_data;
+  auto make_call_count_stat = [](double call_count) {
+    method_profiles::Stats stats{};
+    stats.call_count = call_count;
+    return stats;
+  };
+  profile_data.emplace(get_method(23, "foo"), make_call_count_stat(100));
+  profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50));
+  profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100));
+
+  VirtualMerging vm{stores, conf, inliner_config, 100};
+  vm.run(method_profiles::MethodProfiles::initialize(
+             method_profiles::COLD_START, std::move(profile_data)),
+         VirtualMerging::Strategy::kLexicographical,
+         VirtualMerging::InsertionStrategy::kJumpTo);
+
+  const auto* a_foo = get_method(0, "foo");
+  ASSERT_NE(nullptr, a_foo);
+  ASSERT_NE(nullptr, a_foo->get_code());
+
+  cfg::ScopedCFG cfg(const_cast<DexMethod*>(a_foo)->get_code());
+  for (auto* block : cfg->blocks()) {
+    source_blocks::foreach_source_block(block, [&block](const SourceBlock* sb) {
+      auto appear100 = sb->get_appear100(0);
+      if (appear100) {
+        EXPECT_LE(*appear100, 1.0f)
+            << "appear100 polluted by val in block " << block->id();
+      }
+    });
+  }
 }
