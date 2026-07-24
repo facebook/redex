@@ -34,9 +34,6 @@ class Pass : public Configurable {
 
   bool is_analysis_pass() const { return m_kind == ANALYSIS; }
 
-  // \returns True means this pass is NOT guaranteed to fully use cfg.
-  virtual bool is_cfg_legacy() { return false; }
-
   virtual int pass_support_dex_version() { return 35; }
 
   bool need_dex_version_support(int input_dex_version,
