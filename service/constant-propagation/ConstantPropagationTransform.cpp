@@ -138,6 +138,14 @@ bool Transform::replace_with_const(const ConstantEnvironment& env,
   }
   if (opcode::is_a_move_result_pseudo(insn->opcode())) {
     auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
+    // Materializing a constant into a move-result-pseudo's dest replaces -- and
+    // therefore deletes -- the primary instruction. A check-cast with a
+    // non-null operand can throw ClassCastException, so deleting it would drop
+    // that exception; keep the cast. A null operand's cast never throws, so
+    // folding that to `const 0` remains safe.
+    if (opcode::is_check_cast(primary_it->insn->opcode()) && !value.is_zero()) {
+      return false;
+    }
     always_assert(!replacement.empty());
     if (replacement.size() == 1) {
       IROpcode opcode = replacement.front()->opcode();
