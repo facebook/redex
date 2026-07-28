@@ -176,6 +176,79 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgumentClass) {
   EXPECT_CODE_EQ(m2->get_code(), expected_code2.get());
 }
 
+// The caller passes callee the constant "" (a String), but only on a path
+// guarded by a check-cast to Item that always throws (a String is never an
+// Item):
+//   (const-string "")
+//   (move-result-pseudo-object v1)
+//   (check-cast v1 "LItem;")  ; always throws
+//   (invoke-direct (v0 v1) "LFoo;.callee:(LItem;)V")  ; unreachable
+//
+// callee thus has no reachable call and must be left unchanged. If IPCP took
+// v1 == "" as callee's argument, it would materialize that constant over
+// callee's Item parameter, producing an ill-typed body:
+//   (const-string "")
+//   (move-result-pseudo-object v1)  ; v1 is now a String, not an Item
+//   (iput-object v1 v0 "LFoo;.item:LItem;")  ; String into an Item field
+// which the type checker rejects.
+TEST_F(InterproceduralConstantPropagationTest,
+       provablyFailingCheckCastNotFoldedIntoCallee) {
+  Scope scope;
+  auto* item_ty = DexType::make_type("LItem;");
+  ClassCreator item_creator(item_ty);
+  item_creator.set_super(type::java_lang_Object());
+  scope.push_back(item_creator.create());
+
+  auto* cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+  auto* field =
+      dynamic_cast<DexField*>(DexField::make_field("LFoo;.item:LItem;"));
+  field->make_concrete(ACC_PUBLIC);
+  creator.add_field(field);
+
+  auto* m1 = assembler::method_from_string(R"(
+    (method (public) "LFoo;.caller:()V"
+     (
+      (load-param-object v0)
+      (const-string "")
+      (move-result-pseudo-object v1)
+      (check-cast v1 "LItem;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v0 v1) "LFoo;.callee:(LItem;)V")
+      (return-void)
+     )
+    )
+  )");
+  m1->rstate.set_root();
+  creator.add_method(m1);
+  m1->get_code()->build_cfg();
+
+  const auto* callee_str = R"(
+    (
+     (load-param-object v0)
+     (load-param-object v1)
+     (iput-object v1 v0 "LFoo;.item:LItem;")
+     (return-void)
+    )
+  )";
+  auto* m2 = DexMethod::make_method("LFoo;.callee:(LItem;)V")
+                 ->make_concrete(ACC_PRIVATE,
+                                 assembler::ircode_from_string(callee_str),
+                                 /* is_virtual */ false);
+  creator.add_method(m2);
+  m2->get_code()->build_cfg();
+  scope.push_back(creator.create());
+
+  InterproceduralConstantPropagationPass().run(make_simple_stores(scope), conf);
+
+  // Only callee is checked, not the caller: IPCP finds the caller's path dead
+  // but leaves deleting it to DCE, which this unit test does not run.
+  m2->get_code()->clear_cfg();
+  auto expected_code = assembler::ircode_from_string(callee_str);
+  EXPECT_CODE_EQ(m2->get_code(), expected_code.get());
+}
+
 TEST_F(InterproceduralConstantPropagationTest, constantArgumentClassXStore) {
   // Let bar() be the only method calling baz(...)V, passing it a constant
   // argument. However, that argument is a type defined in a different storre
