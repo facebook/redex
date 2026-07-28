@@ -2159,6 +2159,7 @@ int main(int argc, char* argv[]) {
     slow_invariants_debug =
         args.config.get("slow_invariants_debug", false).asBool();
     g_redex->slow_invariants_debug = slow_invariants_debug;
+    g_redex->insert_remarks = args.config.get("insert_remarks", false).asBool();
     cfg::ControlFlowGraph::s_DEBUG =
         cfg::ControlFlowGraph::s_DEBUG || slow_invariants_debug;
     if (slow_invariants_debug) {

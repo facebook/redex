@@ -1454,32 +1454,54 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
     ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
     ConcurrentSet<DexMethod*> unique_methods;
-    walk::parallel::code(
-        build_class_scope(stores), [&](DexMethod* m, IRCode& code) {
-          always_assert_log(code.cfg_built(), "%s has a cfg!", SHOW(m));
-          code.cfg().reset_exit_block();
-          if (slow_invariants_debug) {
-            std::vector<DexMethodRef*> methods;
-            methods.reserve(1000);
-            methods.push_back(m);
-            code.gather_methods(methods);
-            for (auto* mref : methods) {
-              always_assert_log(
-                  DexMethod::get_method(mref->get_class(), mref->get_name(),
-                                        mref->get_proto()) != nullptr,
-                  "Did not find %s in the context, referenced from %s!",
-                  SHOW(mref), SHOW(m));
-              all_code_referenced_methods.insert(mref);
-            }
-            if (!unique_methods.insert(m)) {
-              not_reached_log("Duplicate method: %s", SHOW(m));
-            }
-          }
-        });
+    // Build the class scope once and reuse it for the verifier and remark
+    // walks.
+    auto verifier_scope = build_class_scope(stores);
+    walk::parallel::code(verifier_scope, [&](DexMethod* m, IRCode& code) {
+      always_assert_log(code.cfg_built(), "%s has a cfg!", SHOW(m));
+      code.cfg().reset_exit_block();
+      if (slow_invariants_debug) {
+        std::vector<DexMethodRef*> methods;
+        methods.reserve(1000);
+        methods.push_back(m);
+        code.gather_methods(methods);
+        for (auto* mref : methods) {
+          always_assert_log(
+              DexMethod::get_method(mref->get_class(), mref->get_name(),
+                                    mref->get_proto()) != nullptr,
+              "Did not find %s in the context, referenced from %s!", SHOW(mref),
+              SHOW(m));
+          all_code_referenced_methods.insert(mref);
+        }
+        if (!unique_methods.insert(m)) {
+          not_reached_log("Duplicate method: %s", SHOW(m));
+        }
+      }
+    });
     if (slow_invariants_debug) {
       ScopedMetrics sm(*this);
       sm.set_metric("num_code_referenced_methods",
                     all_code_referenced_methods.size());
+    }
+
+    if (g_redex->insert_remarks) {
+      std::atomic<size_t> remark_count{0};
+      walk::parallel::code(verifier_scope, [&](DexMethod*, IRCode& code) {
+        always_assert(code.cfg_built());
+        size_t local = 0;
+        for (auto* block : code.cfg().blocks()) {
+          for (const auto& mie : *block) {
+            if (mie.type == MFLOW_REMARK) {
+              ++local;
+            }
+          }
+        }
+        if (local != 0) {
+          remark_count.fetch_add(local, std::memory_order_relaxed);
+        }
+      });
+      ScopedMetrics sm(*this);
+      sm.set_metric("remarks_count", remark_count.load());
     }
 
     bool run_hasher = run_hasher_after_each_pass;
