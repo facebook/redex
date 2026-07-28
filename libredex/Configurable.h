@@ -195,17 +195,24 @@ class Configurable {
 
   /**
    * Configurables should override this function in order to declare their
-   * bindings.
+   * bindings. Keep the body purely declarative -- only bind() calls.
    *
-   * bind_config is called in both reflection and configuration parsing
-   * scenarios; implementations should NOT assume that the code is only called
-   * in order to parse the configuration.
+   * bind_config() is called in TWO scenarios:
+   *   1. Configuration parsing: your fields are populated from the config, then
+   *      the after_configuration() callback (if any) is run.
+   *   2. Reflection (e.g. config-doc generation): the body is called ONLY to
+   *      enumerate the bindings. Your fields are NOT populated (they hold their
+   *      defaults / whatever they were constructed with), and
+   * after_configuration is NOT called.
    *
-   * Typically, you should only be calling the bind() function in bind_config().
-   * If you wish to execute imperative code during the configuration parsing
-   * scenario, but not the reflection scenario, then call "after_configuration"
-   * in bind_config. The function supplied to after_configuration will be called
-   * immediately after bind_config has been called.
+   * Because of (2), do NOT validate config values or run any assert / side
+   * effect directly in the bind_config() body: during reflection it executes
+   * against unpopulated data and an always_assert can spuriously abort doc
+   * generation. Put ALL config-value validation (numeric ranges, cross-field
+   * invariants, enum-string parsing, etc.) inside a callback registered via
+   * after_configuration([this]{ ... }) -- it runs only when a real config is
+   * consumed (scenario 1), after every bind() has populated the fields. See
+   * after_configuration() below.
    */
   virtual void bind_config() {}
 
@@ -236,8 +243,11 @@ class Configurable {
    * be called/ in the case where we are merely reflecting.) So, you should use
    * the function to perform any non-declarative work, such as registering
    * plugins with interdex, performing any complicated validations or
-   * transformations, etc. Typically speaking, avoid needing to use this
-   * function. bind_config() is intended to be as declarative as possible.
+   * transformations, etc. Keep bind_config() itself as declarative as possible
+   * (only bind() calls) and put imperative work here -- in particular, ALL
+   * config-value validation (numeric ranges, cross-field invariants, enum
+   * parsing) belongs here, NEVER in the bind_config() body, since the body also
+   * runs during reflection where the fields are not populated.
    */
   void after_configuration(std::function<void()> after_configuration_fn) {
     always_assert_log(!m_after_configuration,
