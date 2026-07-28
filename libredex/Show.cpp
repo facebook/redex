@@ -1628,6 +1628,7 @@ std::string show(DexIdx* p) {
      << "----------------------------------------\n";
   for (uint32_t i = 0; i < p->m_string_ids_size; i++) {
     always_assert(i < p->m_string_cache.size());
+    // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
     ss << show(p->m_string_cache[i]) << "\n";
   }
   ss << "----------------------------------------\n"
@@ -1635,6 +1636,7 @@ std::string show(DexIdx* p) {
      << "----------------------------------------\n";
   for (uint32_t i = 0; i < p->m_type_ids_size; i++) {
     always_assert(i < p->m_type_cache.size());
+    // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
     ss << show(p->m_type_cache[i]) << "\n";
   }
   ss << "----------------------------------------\n"
@@ -1642,6 +1644,7 @@ std::string show(DexIdx* p) {
      << "----------------------------------------\n";
   for (uint32_t i = 0; i < p->m_field_ids_size; i++) {
     always_assert(i < p->m_field_cache.size());
+    // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
     ss << show(p->m_field_cache[i]) << "\n";
   }
   ss << "----------------------------------------\n"
@@ -1649,6 +1652,7 @@ std::string show(DexIdx* p) {
      << "----------------------------------------\n";
   for (uint32_t i = 0; i < p->m_method_ids_size; i++) {
     always_assert(i < p->m_method_cache.size());
+    // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
     ss << show(p->m_method_cache[i]) << "\n";
   }
   return ss.str();
