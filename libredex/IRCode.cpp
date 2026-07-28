@@ -588,6 +588,9 @@ std::unique_ptr<IRList> deep_copy_ir_list(IRList* old_ir_list) {
       new (&copy_mie->src_block)
           std::unique_ptr<SourceBlock>(new SourceBlock(*mie.src_block));
       break;
+    case MFLOW_REMARK:
+      new (&copy_mie->remark) std::unique_ptr<Remark>(new Remark(*mie.remark));
+      break;
     case MFLOW_FALLTHROUGH:
       break;
     case MFLOW_DEX_OPCODE:
@@ -1112,21 +1115,34 @@ bool IRCode::try_sync(DexCode* code) {
   always_assert(invoke_ids.empty());
   DexPosition* last_position{nullptr};
   SourceBlock* last_src_block{nullptr};
-  std::vector<IRList::iterator> src_blocks;
+  // Source blocks (after being consumed for invoke ids) and remarks are both
+  // redex-internal and never serialized to dex; collect them here to dispose
+  // once the loop is done.
+  std::vector<IRList::iterator> miters_to_dispose;
   for (auto miter = m_ir_list->begin(); miter != m_ir_list->end(); ++miter) {
     MethodItemEntry* mentry = &*miter;
-    if (mentry->type == MFLOW_POSITION) {
+    switch (mentry->type) {
+    case MFLOW_POSITION:
       last_position = mentry->pos.get();
       continue;
-    }
-    if (mentry->type == MFLOW_SOURCE_BLOCK) {
+    case MFLOW_SOURCE_BLOCK:
       last_src_block = mentry->src_block.get();
-      src_blocks.push_back(miter);
+      miters_to_dispose.push_back(miter);
+      continue;
+    case MFLOW_DEX_OPCODE:
+      break;
+    case MFLOW_REMARK:
+      miters_to_dispose.push_back(miter);
+      continue;
+    case MFLOW_TRY:
+    case MFLOW_CATCH:
+    case MFLOW_OPCODE:
+    case MFLOW_TARGET:
+    case MFLOW_DEBUG:
+    case MFLOW_FALLTHROUGH:
       continue;
     }
-    if (mentry->type != MFLOW_DEX_OPCODE) {
-      continue;
-    }
+    always_assert(mentry->type == MFLOW_DEX_OPCODE);
     auto* dex_insn = mentry->dex_insn;
     auto opcode = dex_insn->opcode();
     if (!dex_opcode::is_invoke(opcode)) {
@@ -1146,8 +1162,8 @@ bool IRCode::try_sync(DexCode* code) {
                                               last_position, last_src_block));
   }
 
-  // Remove any source blocks. They are no longer necessary.
-  for (const auto& miter : src_blocks) {
+  // Dispose the collected source blocks and remarks.
+  for (const auto& miter : miters_to_dispose) {
     m_ir_list->erase_and_dispose(miter);
   }
 

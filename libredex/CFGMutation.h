@@ -16,6 +16,7 @@
 #include "IRInstruction.h"
 
 struct SourceBlock;
+struct Remark;
 
 namespace cfg {
 
@@ -102,6 +103,11 @@ class CFGMutation {
   void insert_before(const cfg::InstructionIterator& anchor,
                      std::unique_ptr<SourceBlock> sb);
 
+  /// Insert a new remark before \p anchor. \p remark is block-anchored,
+  /// redex-internal metadata that is inserted as part of the change.
+  void insert_before(const cfg::InstructionIterator& anchor,
+                     std::unique_ptr<Remark> remark);
+
   /// Insert a new change after \p anchor.
   /// \p anchor is the instruction that the change is made relative to. If at
   ///     the time the change is applied, the anchor does not exist, the change
@@ -148,6 +154,11 @@ class CFGMutation {
   ///     change.
   void insert_after(const cfg::InstructionIterator& anchor,
                     std::unique_ptr<SourceBlock> sb);
+
+  /// Insert a new remark after \p anchor. \p remark is block-anchored,
+  /// redex-internal metadata that is inserted as part of the change.
+  void insert_after(const cfg::InstructionIterator& anchor,
+                    std::unique_ptr<Remark> remark);
 
   /// Replace with a new change at this \p anchor.
   /// replace behaves like either Before or After followed by removing the
@@ -435,6 +446,18 @@ inline void CFGMutation::insert_after(const cfg::InstructionIterator& anchor,
   always_assert(!anchor.is_end());
   get_change_set(anchor)->add_source_block(ChangeSet::Insert::After,
                                            std::move(sb));
+}
+
+inline void CFGMutation::insert_before(const cfg::InstructionIterator& anchor,
+                                       std::unique_ptr<Remark> remark) {
+  always_assert(!anchor.is_end());
+  get_change_set(anchor)->add_var(ChangeSet::Insert::Before, std::move(remark));
+}
+
+inline void CFGMutation::insert_after(const cfg::InstructionIterator& anchor,
+                                      std::unique_ptr<Remark> remark) {
+  always_assert(!anchor.is_end());
+  get_change_set(anchor)->add_var(ChangeSet::Insert::After, std::move(remark));
 }
 
 inline void CFGMutation::replace(const cfg::InstructionIterator& anchor,

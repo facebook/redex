@@ -2707,6 +2707,75 @@ OPCODE: GOTO
 )");
 }
 
+// Remarks follow the source-block policy in remove_empty_blocks: when the
+// emptied block's successor is reached only via it, the remarks move onto the
+// successor's head, preserving their original order.
+TEST_F(ControlFlowTest, empty_block_moves_remark_to_single_pred_succ) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (.remark "P" "s" 1)
+      (.remark "P" "s" 2)
+      (goto :next)
+
+      (:next)
+      (return-void)
+    )
+  )");
+
+  {
+    ScopedCFG cfg(code.get());
+    cfg->entry_block()->remove_insn(cfg->entry_block()->get_first_insn());
+  }
+
+  std::vector<int64_t> remarks;
+  for (const auto& mie : *code) {
+    if (mie.type == MFLOW_REMARK) {
+      remarks.push_back(mie.remark->val_int);
+    }
+  }
+  // Both remarks survive on the merged block, in original order (not reversed).
+  EXPECT_EQ(remarks, (std::vector<int64_t>{1, 2}));
+}
+
+// The drop-guard mirror of empty_block_not_move_source_blocks_complex: the loop
+// block has two predecessors, so the emptied entry block's remarks (1, 2) must
+// be dropped rather than mis-attributed; only the loop block's own remark (3)
+// remains.
+TEST_F(ControlFlowTest, empty_block_does_not_move_remark_into_multi_pred_succ) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.remark "P" "s" 1)
+      (const v0 0)
+      (.remark "P" "s" 2)
+      (goto :loop)
+
+      (:true)
+      (add-int/lit v0 v0 1)
+
+      (:loop)
+      (.remark "P" "s" 3)
+      (if-eqz v0 :true)
+
+      (:exit)
+      (return-void)
+    )
+  )");
+
+  {
+    ScopedCFG cfg(code.get());
+    cfg->entry_block()->remove_insn(cfg->entry_block()->get_first_insn());
+  }
+
+  std::vector<int64_t> remarks;
+  for (const auto& mie : *code) {
+    if (mie.type == MFLOW_REMARK) {
+      remarks.push_back(mie.remark->val_int);
+    }
+  }
+  EXPECT_EQ(remarks, (std::vector<int64_t>{3}));
+}
+
 TEST_F(ControlFlowTest, non_cfg_case_keys) {
   auto code = assembler::ircode_from_string(R"(
     (

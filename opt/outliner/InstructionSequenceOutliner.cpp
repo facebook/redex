@@ -1846,7 +1846,7 @@ class OutlinedMethodCreator {
       cfg::Block* last_block{nullptr};
       for (const auto& csi : cn.insns) {
         for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
-               it->type == MFLOW_SOURCE_BLOCK;
+               it->type == MFLOW_SOURCE_BLOCK || it->type == MFLOW_REMARK;
              it++) {
           if (it->type == MFLOW_POSITION && (it->pos->file != nullptr)) {
             dbg_pos = it->pos.get();

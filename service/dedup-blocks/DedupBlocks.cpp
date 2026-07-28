@@ -208,8 +208,11 @@ struct BlockSuccHasher {
 
 struct MIEHasher {
   hash_t operator()(MethodItemEntry* mie) const {
-    return mie->type == MFLOW_OPCODE ? mie->insn->hash()
-                                     : mie->src_block->hash_ids();
+    if (mie->type == MFLOW_OPCODE) {
+      return mie->insn->hash();
+    }
+    always_assert(mie->type == MFLOW_SOURCE_BLOCK);
+    return mie->src_block->hash_ids();
   }
 };
 struct MIEEquals {
@@ -546,6 +549,13 @@ class DedupBlocksImpl {
 
       case MFLOW_SOURCE_BLOCK: {
         src_block->max(*cur_it->src_block);
+        block->remove_mie(cur_it);
+        ++cnt;
+      } break;
+
+      // Remarks are block-anchored metadata with no merge op; drop the
+      // duplicate block's remarks (never blocks a legitimate merge).
+      case MFLOW_REMARK: {
         block->remove_mie(cur_it);
         ++cnt;
       } break;
@@ -931,20 +941,32 @@ class DedupBlocksImpl {
     return splitGroupMap;
   }
 
+  // The first entry that is not a redex-internal remark. Remarks are stripped
+  // before dex emission and must stay transparent to dedup, so a remark at a
+  // block's head must not hide the source block (or move-result) behind it.
+  IRList::iterator first_non_remark(cfg::Block* b) {
+    auto it = b->begin();
+    while (it != b->end() && it->type == MFLOW_REMARK) {
+      ++it;
+    }
+    return it;
+  }
+
   // copy over the last source block of the main block to the commmon block
   void copy_last_source_block(cfg::Block* block, cfg::Block* split_block) {
     SourceBlock* last_src_blk = source_blocks::get_last_source_block(block);
-    if (last_src_blk != nullptr) {
-      auto new_sb = std::make_unique<SourceBlock>(*last_src_blk);
-      new_sb->id = SourceBlock::kSyntheticId;
-      new_sb->next = nullptr;
-      auto split_block_it = split_block->begin();
-      if (split_block_it != split_block->end() &&
-          opcode::is_move_result_any(split_block_it->insn->opcode())) {
-        split_block->insert_after(split_block_it, std::move(new_sb));
-      } else {
-        split_block->insert_before(split_block_it, std::move(new_sb));
-      }
+    if (last_src_blk == nullptr) {
+      return;
+    }
+    auto new_sb = std::make_unique<SourceBlock>(*last_src_blk);
+    new_sb->id = SourceBlock::kSyntheticId;
+    new_sb->next = nullptr;
+    auto it = first_non_remark(split_block);
+    if (it != split_block->end() && it->type == MFLOW_OPCODE &&
+        opcode::is_move_result_any(it->insn->opcode())) {
+      split_block->insert_after(it, std::move(new_sb));
+    } else {
+      split_block->insert_before(it, std::move(new_sb));
     }
   }
 
@@ -968,6 +990,19 @@ class DedupBlocksImpl {
     // The split block's copy becomes a synthetic marker.
     sb->id = SourceBlock::kSyntheticId;
     sb->next = nullptr;
+  }
+
+  // After a postfix split, keep a source block in both halves for coverage.
+  // A leading remark is transparent, so skip it when checking whether the
+  // split block already begins with a source block.
+  void restore_source_blocks_after_split(cfg::Block* block,
+                                         cfg::Block* split_block) {
+    auto head = first_non_remark(split_block);
+    if (head == split_block->end() || head->type != MFLOW_SOURCE_BLOCK) {
+      copy_last_source_block(block, split_block);
+    } else {
+      copy_first_source_block(block, split_block);
+    }
   }
 
   // When instrumenting, do not deduplicate catch handler head blocks. If
@@ -1041,13 +1076,7 @@ class DedupBlocksImpl {
             split_block = cfg.split_block(block, fwd_ir_it);
           }
           // add a source block in the beginning if there isn't one already
-          if (split_block->begin()->type != MFLOW_SOURCE_BLOCK) {
-            copy_last_source_block(block, split_block);
-          } else {
-            // The first entry moved was a source block — clone it back into
-            // the original block so both blocks retain coverage.
-            copy_first_source_block(block, split_block);
-          }
+          restore_source_blocks_after_split(block, split_block);
           continue;
         }
 
@@ -1077,13 +1106,7 @@ class DedupBlocksImpl {
         // Split the block and add a source block in the beginning if there
         // isn't one already
         auto* split_block = cfg.split_block(cfg_it);
-        if (split_block->begin()->type != MFLOW_SOURCE_BLOCK) {
-          copy_last_source_block(block, split_block);
-        } else {
-          // The first entry moved was a source block — clone it back into
-          // the original block so both blocks retain coverage.
-          copy_first_source_block(block, split_block);
-        }
+        restore_source_blocks_after_split(block, split_block);
 
         TRACE(DEDUP_BLOCKS, 4,
               "split_postfix: split block : old = %zu, new = %zu", block->id(),
