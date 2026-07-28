@@ -71,6 +71,8 @@ namespace constant_propagation {
 extern bool known_non_null_returns_enable;
 // TODO(T275196808): Remove this.
 extern bool enable_param_exit_value_summary;
+// TODO(T279417132): Remove this.
+extern bool enable_check_cast_value_preservation;
 } // namespace constant_propagation
 
 struct RedexTest : public testing::Test {
@@ -87,6 +89,8 @@ struct RedexTest : public testing::Test {
     constant_propagation::known_non_null_returns_enable = true;
     // TODO(T275196808): Remove this.
     constant_propagation::enable_param_exit_value_summary = true;
+    // TODO(T279417132): Remove this.
+    constant_propagation::enable_check_cast_value_preservation = true;
   }
 
   ~RedexTest() { delete g_redex; }

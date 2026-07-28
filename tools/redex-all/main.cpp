@@ -2125,6 +2125,9 @@ int main(int argc, char* argv[]) {
     constant_propagation::known_non_null_returns_enable =
         args.config.get("enable_known_non_null_returns", false).asBool();
 
+    constant_propagation::enable_check_cast_value_preservation =
+        args.config.get("enable_check_cast_value_preservation", false).asBool();
+
     // TODO(T275196808): Remove this.
     constant_propagation::enable_param_exit_value_summary =
         args.config.get("enable_param_exit_value_summary", false).asBool();

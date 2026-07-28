@@ -495,6 +495,9 @@ extern bool known_non_null_returns_enable;
 // fully rolled out.
 extern bool enable_param_exit_value_summary;
 
+// TODO(T279417132): Remove this once the behavior is fully rolled out.
+extern bool enable_check_cast_value_preservation;
+
 class KnownNonNullReturnsAnalyzer
     : public InstructionAnalyzerBase<KnownNonNullReturnsAnalyzer,
                                      ConstantEnvironment> {

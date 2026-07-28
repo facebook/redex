@@ -184,6 +184,95 @@ TEST_F(ConstantPropagationTest, NullCheckCastYieldsNull) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+// A non-null value (from new-instance, which is NEZ) retains its non-nullness
+// through a check-cast, so the following null check folds to the non-null path.
+TEST_F(ConstantPropagationTest, NonNullSurvivesCheckCast) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+     (check-cast v0 "LFoo;")
+     (move-result-pseudo-object v1)
+     (if-eqz v1 :next)
+     (const v2 1)
+     (goto :end)
+     (:next)
+     (const v2 2)
+     (:end)
+     (return v2)
+    )
+  )");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      (check-cast v0 "LFoo;")
+      (move-result-pseudo-object v1)
+      (const v2 1)
+      (return v2)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+// A check-cast applied to a known object constant (e.g. from const-string or
+// const-class) is kept, not deleted -- removing a cast that can throw at
+// runtime would change behavior.
+TEST_F(ConstantPropagationTest, CheckCastPreservedWhenOperandIsConstant) {
+  const auto* code_str = R"(
+    (
+     (const-string "foo")
+     (move-result-pseudo-object v0)
+     (check-cast v0 "LBar;")
+     (move-result-pseudo-object v1)
+     (return-object v1)
+    )
+  )";
+  auto code = assembler::ircode_from_string(code_str);
+
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(
+      code.get(),
+      InstructionAnalyzerCombiner<cp::StringAnalyzer, cp::PrimitiveAnalyzer>(
+          &state, nullptr));
+
+  auto expected_code = assembler::ircode_from_string(code_str);
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+// The exact string constant reaches the check-cast's result register in the
+// abstract state, not merely non-nullness.
+TEST_F(ConstantPropagationTest, CheckCastResultRetainsExactConstant) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const-string "foo")
+     (move-result-pseudo-object v0)
+     (check-cast v0 "LBar;")
+     (move-result-pseudo-object v1)
+     (return-object v1)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  cp::NullCheckMethods null_check_methods;
+  auto state = cp::StringAnalyzerState::make_default();
+  cp::intraprocedural::FixpointIterator intra_cp(
+      cfg,
+      InstructionAnalyzerCombiner<cp::StringAnalyzer, cp::PrimitiveAnalyzer>(
+          &state, nullptr),
+      cp::intraprocedural::make_default_no_throw_analyzer(&null_check_methods));
+  intra_cp.run(ConstantEnvironment());
+
+  auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());
+  auto v1 = exit_state.get(1u).maybe_get<StringDomain>();
+  ASSERT_TRUE(v1 && v1->get_constant());
+  EXPECT_EQ(*v1->get_constant(), DexString::make_string("foo"));
+}
+
 TEST_F(ConstantPropagationTest, JumpToImmediateNext) {
   auto code = assembler::ircode_from_string(R"(
     (
