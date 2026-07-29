@@ -373,6 +373,39 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentMapTest) {
   EXPECT_EQ(m_data_set.size(), map.size());
 }
 
+// Regression: the rvalue-key overload of get_or_create_and_assert_equal must
+// not move `key` into the creator and then again into the map. A creator that
+// consumes its argument by value would otherwise leave a moved-from key stored.
+TEST_F(ConcurrentContainersTest, getOrCreateRvalueKeyIsNotMovedFrom) {
+  InsertOnlyConcurrentMap<std::string, size_t> map;
+  // Long enough to defeat small-string optimization, so a moved-from husk is
+  // reliably distinct from the original key.
+  const std::string original = "a_reasonably_long_key_that_avoids_sso_buffer";
+
+  std::string key = original;
+  auto [ptr, created] =
+      map.get_or_create_and_assert_equal(std::move(key), [](std::string k) {
+        // Genuinely consume the key by move: this models a consuming creator
+        // (a const-ref parameter would not reproduce the pre-fix double-move)
+        // and avoids performance-unnecessary-value-param.
+        const std::string consumed = std::move(k);
+        return consumed.size();
+      });
+
+  EXPECT_TRUE(created);
+  ASSERT_NE(ptr, nullptr);
+  EXPECT_EQ(original.size(), *ptr); // sanity check; the value is correct even
+                                    // with the bug (the creator sees the key
+                                    // before it is stored).
+  // These are the assertions that distinguish buggy from fixed: with the
+  // double-move the stored key is a moved-from husk, so a lookup of the
+  // original key fails.
+  EXPECT_EQ(1, map.count(original));
+  auto it = map.find(original);
+  ASSERT_NE(map.end(), it);
+  EXPECT_EQ(original, it->first);
+}
+
 TEST_F(ConcurrentContainersTest, move) {
   ConcurrentMap<void*, void*> map1;
   map1.emplace(nullptr, nullptr);

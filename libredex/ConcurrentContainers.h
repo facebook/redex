@@ -1918,8 +1918,12 @@ class InsertOnlyConcurrentMap final
     if (ptr) {
       return {ptr, false};
     }
-    return get_or_emplace_and_assert_equal<ValueEqual>(
-        std::move(key), creator(std::move(key), std::forward<Args>(args)...));
+    // Build the value from `key` before moving `key` into the emplace; passing
+    // std::move(key) to both the creator and the emplace would leave a
+    // moved-from key stored in the map.
+    auto value = creator(key, std::forward<Args>(args)...);
+    return get_or_emplace_and_assert_equal<ValueEqual>(std::move(key),
+                                                       std::move(value));
   }
 
   template <
@@ -1972,7 +1976,10 @@ class AtomicMap final
 
   AtomicMap() = default;
 
-  AtomicMap(const AtomicMap& container) noexcept : Base(container) {}
+  // Values are std::atomic, which is neither copyable nor movable-by-copy, so
+  // an AtomicMap cannot be copied. Move transfers storage ownership without
+  // copying elements.
+  AtomicMap(const AtomicMap& container) = delete;
 
   AtomicMap(AtomicMap&& container) noexcept : Base(std::move(container)) {}
 
@@ -1981,12 +1988,7 @@ class AtomicMap final
     return *this;
   }
 
-  AtomicMap& operator=(const AtomicMap& container) noexcept {
-    if (this != &container) {
-      Base::operator=(container);
-    }
-    return *this;
-  }
+  AtomicMap& operator=(const AtomicMap& container) = delete;
 
   /*
    * This operation is always thread-safe.
@@ -2018,7 +2020,7 @@ class AtomicMap final
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
     auto insertion_result = map.try_emplace(std::move(key), std::move(arg));
-    if (!insertion_result->success) {
+    if (!insertion_result.success) {
       auto* constructed_value =
           insertion_result.incidentally_constructed_value();
       if (constructed_value) {
@@ -2107,7 +2109,7 @@ class AtomicMap final
   Value fetch_sub(const Key& key, Value arg, Value default_value = 0) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result = map.try_insert(key, default_value);
+    auto insertion_result = map.try_emplace(key, default_value);
     return insertion_result.stored_value_ptr->second.fetch_sub(arg);
   }
 
@@ -2117,7 +2119,7 @@ class AtomicMap final
   Value fetch_and(const Key& key, Value arg, Value default_value = 0) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result = map.try_insert(key, default_value);
+    auto insertion_result = map.try_emplace(key, default_value);
     return insertion_result.stored_value_ptr->second.fetch_and(arg);
   }
 
@@ -2127,7 +2129,7 @@ class AtomicMap final
   Value fetch_or(const Key& key, Value arg, Value default_value = 0) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result = map.try_insert(key, default_value);
+    auto insertion_result = map.try_emplace(key, default_value);
     return insertion_result.stored_value_ptr->second.fetch_or(arg);
   }
 
@@ -2137,7 +2139,7 @@ class AtomicMap final
   Value fetch_xor(const Key& key, Value arg, Value default_value = 0) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result = map.try_insert(key, default_value);
+    auto insertion_result = map.try_emplace(key, default_value);
     return insertion_result.stored_value_ptr->second.fetch_xor(arg);
   }
 };
