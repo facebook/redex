@@ -1509,7 +1509,12 @@ SourceBlockToLinesMappingCollectionResult collect_source_block_to_lines_mapping(
 
       auto name = segment_name(next);
       std::ifstream ifs(name, std::ios_base::binary);
-      ofs << ifs.rdbuf();
+      // Skip empty segment files (a segment whose methods produced no rows).
+      // `ofs << ifs.rdbuf()` sets the output stream's failbit when zero
+      // characters are inserted, which would silently drop every later segment.
+      if (ifs && ifs.peek() != std::ifstream::traits_type::eof()) {
+        ofs << ifs.rdbuf();
+      }
       std::filesystem::remove(name);
     }
   });
@@ -1551,6 +1556,11 @@ SourceBlockToLinesMappingCollectionResult collect_source_block_to_lines_mapping(
               }
             }
           }
+
+          // Fully flush and close the segment file before signaling
+          // completion; otherwise the merger may read (and delete) a
+          // partially written file, losing rows.
+          ofs.close();
 
           {
             std::unique_lock<std::mutex> lock{finished_segments_mutex};
