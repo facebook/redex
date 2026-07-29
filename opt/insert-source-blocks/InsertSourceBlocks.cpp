@@ -1399,20 +1399,18 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   inj.write_unresolved_methods(
       conf.metafile("redex-isb-unresolved-methods.txt"));
 
-  {
-    Timer timer{"run_source_blocks"};
+  Timer::scope("run_source_blocks", [&] {
     inj.run_source_blocks(stores, mgr,
                           /* serialize= */ m_force_serialize || is_instr_mode,
                           m_insert_after_excs, m_block_appear100_threshold);
-  }
+  });
 
   for (auto&& [interaction_id, index] :
        UnorderedIterable(g_redex->get_sb_interaction_indices())) {
     mgr.set_metric("interaction_" + interaction_id, index);
   }
 
-  {
-    Timer timer("Compute method violations");
+  Timer::scope("Compute method violations", [&] {
     auto scope = build_class_scope(stores);
     auto method_override_graph = method_override_graph::build_graph(scope);
     auto call_graph = std::make_unique<call_graph::Graph>(
@@ -1420,13 +1418,12 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
 
     auto val = source_blocks::compute_method_violations(*call_graph, scope);
     mgr.set_metric("method~violation~hot~callee~cold~callers", val);
-  }
+  });
 
-  {
-    Timer timer{"Collect Source Block To Lines Mapping"};
+  Timer::scope("Collect Source Block To Lines Mapping", [&] {
     collect_source_block_to_lines_mapping(
         stores, conf.metafile("redex-isb-sb-to-lines-mapping.jsonl"));
-  }
+  });
 }
 
 static InsertSourceBlocksPass s_pass;

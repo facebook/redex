@@ -199,8 +199,7 @@ void ClassChecker::run(const Scope& scope) {
     return true;
   };
 
-  {
-    Timer t("ClassChecker_walk");
+  Timer::scope("ClassChecker_walk", [&] {
     walk::parallel::classes(scope, [&](DexClass* cls) {
       if (!is_interface(cls) && !is_abstract(cls)) {
         for (auto* m : cls->get_all_methods()) {
@@ -252,9 +251,8 @@ void ClassChecker::run(const Scope& scope) {
         }
       }
     });
-  }
-  {
-    Timer t("ClassChecker_hierarchy_traverse");
+  });
+  Timer::scope("ClassChecker_hierarchy_traverse", [&] {
     for (auto&& [cls, final_methods] : class_to_final_methods) {
       auto child_types = get_all_children(hierarchy, cls->get_type());
       for (const auto& child_type : child_types) {
@@ -266,7 +264,7 @@ void ClassChecker::run(const Scope& scope) {
         }
       }
     }
-  }
+  });
 }
 
 std::ostringstream ClassChecker::print_failed_classes() {
