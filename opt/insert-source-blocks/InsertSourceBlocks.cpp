@@ -1399,9 +1399,12 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   inj.write_unresolved_methods(
       conf.metafile("redex-isb-unresolved-methods.txt"));
 
-  inj.run_source_blocks(stores, mgr,
-                        /* serialize= */ m_force_serialize || is_instr_mode,
-                        m_insert_after_excs, m_block_appear100_threshold);
+  {
+    Timer timer{"run_source_blocks"};
+    inj.run_source_blocks(stores, mgr,
+                          /* serialize= */ m_force_serialize || is_instr_mode,
+                          m_insert_after_excs, m_block_appear100_threshold);
+  }
 
   for (auto&& [interaction_id, index] :
        UnorderedIterable(g_redex->get_sb_interaction_indices())) {
