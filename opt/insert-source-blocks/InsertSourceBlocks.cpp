@@ -8,6 +8,7 @@
 #include "InsertSourceBlocks.h"
 
 #include <algorithm>
+#include <array>
 #include <boost/algorithm/string/split.hpp>
 #include <cstdint>
 #include <deque>
@@ -18,6 +19,7 @@
 #include <optional>
 #include <set>
 #include <string_view>
+#include <variant>
 
 #include <boost/format.hpp>
 #include <json/value.h>
@@ -254,6 +256,30 @@ is_traditional_access_method(const DexMethodRef* mref) {
     return std::nullopt;
   }
   return std::make_pair(mref->get_class(), access_name);
+}
+
+// Computes the identifier used for a method's source blocks. For traditional
+// Javac access methods this is a body-hashed, build-stable name (see the note
+// at the top of this file); for everything else it is the deobfuscated name.
+// Both the serialized source-block CSV and the source-block-to-lines JSONL must
+// use this same identifier so their rows can be joined. `stable_hash` hashes
+// only MFLOW_OPCODE entries, so the result is independent of whether source
+// blocks have already been inserted into `cfg`.
+const DexString* compute_source_block_name(DexMethod* m,
+                                           ControlFlowGraph& cfg) {
+  auto access_method = is_traditional_access_method(m);
+  if (!access_method) {
+    return &m->get_deobfuscated_name();
+  }
+  auto hash_value = hasher::stable_hash(cfg);
+  auto access_method_hash_name =
+      hasher::hashed_name(hash_value, access_method->second);
+  std::string new_name = show_deobfuscated(m->get_class());
+  new_name.append(".access$");
+  new_name.append(access_method_hash_name);
+  new_name.append(":");
+  new_name.append(show_deobfuscated(m->get_proto()));
+  return DexString::make_string(new_name);
 }
 
 struct ProfileFile {
@@ -710,17 +736,7 @@ struct Injector {
     }
 
     // Build the source block name - use hashed name for access methods.
-    const auto* sb_name = [&]() {
-      if (!access_method) {
-        return &method->get_deobfuscated_name();
-      }
-      std::string new_name = show_deobfuscated(method->get_class());
-      new_name.append(".access$");
-      new_name.append(access_method_hash_name);
-      new_name.append(":");
-      new_name.append(show_deobfuscated(method->get_proto()));
-      return DexString::make_string(new_name);
-    }();
+    const auto* sb_name = compute_source_block_name(method, cfg);
 
     // Look up profile data for this method.
     // NOLINTBEGIN(facebook-hte-NullableDereference)
@@ -1147,82 +1163,191 @@ void InsertSourceBlocksPass::bind_config() {
 
 namespace {
 
-std::optional<std::string> collect_source_block_to_lines_mapping_method(
-    DexMethod* m) {
+// Classifies every way a source-block-to-lines mapping can fail to generate,
+// be degraded, or be skipped. Some variants are terminal (no mapping row is
+// emitted for the method); others ride along as degradation events on an
+// otherwise-emitted row (default-file fallbacks and per-source-block empty
+// line sets). Keep this in sync with `kSourceBlockToLinesMappingFailureCount`
+// and `kSourceBlockToLinesMappingFailureMetricNames`.
+enum class SourceBlockToLinesMappingFailure {
+  // Terminal: no mapping row emitted for the method.
+  NoCode,
+  NoSourceBlocks,
+  NoPositionData,
+  // Degraded default file (row still emitted).
+  DefaultFileFallbackClassSourceAllPositionsFileless,
+  DefaultFileFallbackUnknownSourceAllPositionsFileless,
+  DefaultFileFallbackClassSourceAmbiguousMajority,
+  DefaultFileFallbackUnknownSourceAmbiguousMajority,
+  // Per-source-block: an emitted row contains a block with an empty line set.
+  SourceBlockUnmappedNoOpcode,
+  SourceBlockUnmappedPreemptedByNextSourceBlock,
+  SourceBlockUnmappedNoMatchingLineAtOpcode,
+  // Terminal: serialization invariant violated (previously an assert).
+  SourceBlockIdsDontStartAtZero,
+  SourceBlockIdsNonContiguous,
+};
+
+constexpr size_t kSourceBlockToLinesMappingFailureCount = 12;
+
+constexpr std::array<const char*, kSourceBlockToLinesMappingFailureCount>
+    kSourceBlockToLinesMappingFailureMetricNames = {
+        "sb_to_lines~no_code",
+        "sb_to_lines~no_source_blocks",
+        "sb_to_lines~no_position_data",
+        "sb_to_lines~default_file_fallback_class_source_all_positions_fileless",
+        "sb_to_lines~"
+        "default_file_fallback_unknown_source_all_positions_fileless",
+        "sb_to_lines~default_file_fallback_class_source_ambiguous_majority",
+        "sb_to_lines~default_file_fallback_unknown_source_ambiguous_majority",
+        "sb_to_lines~source_block_unmapped_no_opcode",
+        "sb_to_lines~source_block_unmapped_preempted_by_next_source_block",
+        "sb_to_lines~source_block_unmapped_no_matching_line_at_opcode",
+        "sb_to_lines~source_block_ids_dont_start_at_zero",
+        "sb_to_lines~source_block_ids_non_contiguous",
+};
+
+struct SourceBlockToLinesMappingStats {
+  std::array<uint32_t, kSourceBlockToLinesMappingFailureCount> counts{};
+
+  void record(SourceBlockToLinesMappingFailure failure, uint32_t delta = 1) {
+    counts[static_cast<size_t>(failure)] += delta;
+  }
+
+  SourceBlockToLinesMappingStats& operator+=(
+      const SourceBlockToLinesMappingStats& other) {
+    for (size_t i = 0; i != counts.size(); ++i) {
+      counts[i] += other.counts[i];
+    }
+    return *this;
+  }
+};
+
+// Outcome of resolving the default (majority) source file for a method. On
+// success `file` is the resolved file (nullptr means emit "UnknownSource"),
+// with an optional degradation to record. The failure alternative is terminal
+// and only ever `NoSourceBlocks` or `NoPositionData`.
+struct DefaultFileResolution {
+  const DexString* file;
+  std::optional<SourceBlockToLinesMappingFailure> degradation;
+};
+
+using DefaultFileResolutionResult =
+    std::variant<DefaultFileResolution, SourceBlockToLinesMappingFailure>;
+
+struct SourceBlockToLinesMappingMethodSuccess {
+  std::string jsonl;
+  SourceBlockToLinesMappingStats stats;
+};
+
+// Result of mapping a single method. The failure alternative is terminal
+// (no row emitted): `NoCode`, `NoSourceBlocks`, `NoPositionData`,
+// `SourceBlockIdsDontStartAtZero`, or `SourceBlockIdsNonContiguous`.
+using SourceBlockToLinesMappingMethodResult =
+    std::variant<SourceBlockToLinesMappingMethodSuccess,
+                 SourceBlockToLinesMappingFailure>;
+
+struct SourceBlockToLinesMappingCollectionResult {
+  SourceBlockToLinesMappingStats stats;
+};
+
+DefaultFileResolutionResult resolve_default_file(DexMethod* m,
+                                                 ControlFlowGraph& cfg) {
+  UnorderedMap<const DexString*, size_t> file_counts;
+  size_t no_file_count{0};
+  bool has_source_blocks{false};
+  for (auto* b : cfg.blocks()) {
+    for (auto& mie : *b) {
+      if (mie.type == MFLOW_POSITION) {
+        auto* dex_pos = mie.pos.get();
+        if (dex_pos->file != nullptr) {
+          ++file_counts[dex_pos->file];
+        } else {
+          ++no_file_count;
+        }
+      }
+      has_source_blocks |= mie.type == MFLOW_SOURCE_BLOCK;
+    }
+  }
+
+  if (!has_source_blocks) {
+    // No source blocks, no mapping necessary.
+    return SourceBlockToLinesMappingFailure::NoSourceBlocks;
+  }
+
+  if (file_counts.empty() && no_file_count == 0) {
+    // Absolutely no source file data. :-(
+    return SourceBlockToLinesMappingFailure::NoPositionData;
+  }
+
+  redex_assert(type_class(m->get_class()) != nullptr);
+  const auto* cls_source_file = type_class(m->get_class())->get_source_file();
+
+  if (file_counts.empty()) {
+    return DefaultFileResolution{
+        cls_source_file,
+        cls_source_file == nullptr
+            ? SourceBlockToLinesMappingFailure::
+                  DefaultFileFallbackUnknownSourceAllPositionsFileless
+            : SourceBlockToLinesMappingFailure::
+                  DefaultFileFallbackClassSourceAllPositionsFileless};
+  }
+  auto max_it =
+      unordered_max_element(file_counts, [](const auto& lhs, const auto& rhs) {
+        if (lhs.second < rhs.second) {
+          return true;
+        }
+        if (lhs.second > rhs.second) {
+          return false;
+        }
+        return compare_dexstrings(lhs.first, rhs.first);
+      });
+  redex_assert(max_it != file_counts.cend());
+
+  if (max_it->second <= no_file_count) {
+    return DefaultFileResolution{
+        cls_source_file,
+        cls_source_file == nullptr
+            ? SourceBlockToLinesMappingFailure::
+                  DefaultFileFallbackUnknownSourceAmbiguousMajority
+            : SourceBlockToLinesMappingFailure::
+                  DefaultFileFallbackClassSourceAmbiguousMajority};
+  }
+
+  return DefaultFileResolution{max_it->first, std::nullopt};
+}
+
+SourceBlockToLinesMappingMethodResult
+collect_source_block_to_lines_mapping_method(DexMethod* m) {
   auto* code = m->get_code();
   if (code == nullptr) {
-    return std::nullopt;
+    return SourceBlockToLinesMappingFailure::NoCode;
   }
 
   ScopedCFG cfg{code};
 
+  SourceBlockToLinesMappingStats stats;
+
   // Multiple passes are just conceptually simpler.
 
   // 1. Find majority file.
-  auto majority_file_opt = [&]() -> std::optional<const DexString*> {
-    UnorderedMap<const DexString*, size_t> file_counts;
-    size_t no_file_count{0};
-    bool has_source_blocks{false};
-    for (auto* b : cfg->blocks()) {
-      for (auto& mie : *b) {
-        if (mie.type == MFLOW_POSITION) {
-          auto* dex_pos = mie.pos.get();
-          if (dex_pos->file != nullptr) {
-            ++file_counts[dex_pos->file];
-          } else {
-            ++no_file_count;
-          }
-        }
-        has_source_blocks |= mie.type == MFLOW_SOURCE_BLOCK;
-      }
-    }
-
-    if (!has_source_blocks) {
-      // No source blocks, no mapping necessary.
-      return std::nullopt;
-    }
-
-    if (file_counts.empty() && no_file_count == 0) {
-      // Absolutely no source file data. :-(
-      return std::nullopt;
-    }
-
-    redex_assert(type_class(m->get_class()) != nullptr);
-    const auto* cls_source_file = type_class(m->get_class())->get_source_file();
-
-    if (file_counts.empty()) {
-      return cls_source_file;
-    }
-    auto max_it = unordered_max_element(
-        file_counts, [](const auto& lhs, const auto& rhs) {
-          if (lhs.second < rhs.second) {
-            return true;
-          }
-          if (lhs.second > rhs.second) {
-            return false;
-          }
-          return compare_dexstrings(lhs.first, rhs.first);
-        });
-    redex_assert(max_it != file_counts.cend());
-
-    if (max_it->second <= no_file_count) {
-      return cls_source_file;
-    }
-
-    return max_it->first;
-  }();
-  if (!majority_file_opt) {
-    // No file data at all, give up.
-    return std::nullopt;
+  auto file_resolution = resolve_default_file(m, *cfg);
+  if (auto* failure =
+          std::get_if<SourceBlockToLinesMappingFailure>(&file_resolution)) {
+    return *failure;
   }
+  const auto& resolution = std::get<DefaultFileResolution>(file_resolution);
+  if (resolution.degradation) {
+    stats.record(*resolution.degradation);
+  }
+  const auto* majority_file = resolution.file;
 
   Json::Value root;
 
-  root["name"] = show(m);
+  root["name"] = show(compute_source_block_name(m, *cfg));
 
-  root["default_file"] = *majority_file_opt == nullptr
-                             ? "UnknownSource"
-                             : (*majority_file_opt)->str_copy();
+  root["default_file"] =
+      majority_file == nullptr ? "UnknownSource" : majority_file->str_copy();
 
   // Now find the data for all source blocks.
   struct SBIdCompare {
@@ -1232,15 +1357,43 @@ std::optional<std::string> collect_source_block_to_lines_mapping_method(
   };
   std::map<const SourceBlock*, std::set<uint32_t>, SBIdCompare> sb_data;
 
+  // Tracks the source block currently receiving lines within a block, so that
+  // an empty emitted line set can be classified deterministically.
+  struct ActiveSourceBlock {
+    std::set<uint32_t>* lines;
+    bool saw_opcode{false};
+  };
+
+  // Classify a source block whose active span just ended. Precedence: a block
+  // that received at least one line is a success; otherwise an opcode without a
+  // matching line dominates, then preemption by a following source block, then
+  // a plain lack of any opcode.
+  auto finalize_active = [&stats](const ActiveSourceBlock& active,
+                                  bool preempted) {
+    if (!active.lines->empty()) {
+      return;
+    }
+    if (active.saw_opcode) {
+      stats.record(SourceBlockToLinesMappingFailure::
+                       SourceBlockUnmappedNoMatchingLineAtOpcode);
+    } else if (preempted) {
+      stats.record(SourceBlockToLinesMappingFailure::
+                       SourceBlockUnmappedPreemptedByNextSourceBlock);
+    } else {
+      stats.record(
+          SourceBlockToLinesMappingFailure::SourceBlockUnmappedNoOpcode);
+    }
+  };
+
   // Assume any following block immediately contains a source block. No
   // cross-block tracking necessary.
   // But deal with not-so-nice MIEs.
   for (auto* b : cfg->blocks()) {
-    std::optional<std::set<uint32_t>*> last;
+    std::optional<ActiveSourceBlock> active;
     std::optional<uint32_t> last_line;
     for (auto& mie : *b) {
       if (mie.type == MFLOW_POSITION) {
-        if (majority_file_opt == mie.pos->file) {
+        if (majority_file == mie.pos->file) {
           last_line = mie.pos->line;
         } else {
           last_line = std::nullopt;
@@ -1249,15 +1402,24 @@ std::optional<std::string> collect_source_block_to_lines_mapping_method(
       }
 
       if (mie.type == MFLOW_SOURCE_BLOCK) {
-        last = &sb_data[mie.src_block.get()];
+        if (active) {
+          finalize_active(*active, /*preempted=*/true);
+        }
+        active = ActiveSourceBlock{&sb_data[mie.src_block.get()]};
         continue;
       }
 
       // We only apply the line number of there is an actual instruction.
       // The set will deduplicate.
-      if (mie.type == MFLOW_OPCODE && last && last_line) {
-        (*last)->insert(*last_line);
+      if (mie.type == MFLOW_OPCODE && active) {
+        active->saw_opcode = true;
+        if (last_line) {
+          active->lines->insert(*last_line);
+        }
       }
+    }
+    if (active) {
+      finalize_active(*active, /*preempted=*/false);
     }
   }
 
@@ -1266,10 +1428,11 @@ std::optional<std::string> collect_source_block_to_lines_mapping_method(
   for (auto& [sb_ptr, data] : sb_data) {
     // Integrity check for the array/indexed format.
     if (last_sb_id) {
-      always_assert_log(sb_ptr->id == *last_sb_id + 1,
-                        "Missing element: %u -> %u", *last_sb_id, sb_ptr->id);
-    } else {
-      always_assert(sb_ptr->id == 0);
+      if (sb_ptr->id != *last_sb_id + 1) {
+        return SourceBlockToLinesMappingFailure::SourceBlockIdsNonContiguous;
+      }
+    } else if (sb_ptr->id != 0) {
+      return SourceBlockToLinesMappingFailure::SourceBlockIdsDontStartAtZero;
     }
     last_sb_id = sb_ptr->id;
 
@@ -1288,14 +1451,12 @@ std::optional<std::string> collect_source_block_to_lines_mapping_method(
   auto writer = std::unique_ptr<Json::StreamWriter>(builder.newStreamWriter());
   std::ostringstream oss;
   writer->write(root, &oss);
-  return oss.str();
+  return SourceBlockToLinesMappingMethodSuccess{oss.str(), stats};
 }
 
-void collect_source_block_to_lines_mapping(DexStoresVector& stores,
-                                           const std::string& output_file) {
+SourceBlockToLinesMappingCollectionResult collect_source_block_to_lines_mapping(
+    DexStoresVector& stores, const std::string& output_file) {
   auto scope = build_class_scope(stores);
-  std::unordered_map<std::string, std::unordered_set<int32_t>>
-      source_block_to_lines_mapping;
 
   // To have deterministic output have the classes (and methods) sorted. For
   // performance parallelize the stringification. A standard workqueue and
@@ -1309,6 +1470,10 @@ void collect_source_block_to_lines_mapping(DexStoresVector& stores,
   constexpr size_t kThreadFactor = 5u; // For "work balancing."
   const size_t segments = std::min(
       scope.size(), kThreadFactor * redex_parallel::default_num_threads());
+
+  // Each segment is processed by exactly one worker, so its stats slot needs
+  // no synchronization; they are merged after the workqueue completes.
+  std::vector<SourceBlockToLinesMappingStats> segment_stats(segments);
 
   auto segment_name = [&](size_t idx) {
     return output_file + "." + std::to_string(idx);
@@ -1347,6 +1512,7 @@ void collect_source_block_to_lines_mapping(DexStoresVector& stores,
     workqueue_run<size_t>(
         [&](size_t idx) {
           std::ofstream ofs{segment_name(idx)};
+          auto& stats = segment_stats[idx];
 
           auto segment_size = scope.size() / items.size();
           redex_assert(segment_size > 0);
@@ -1363,9 +1529,15 @@ void collect_source_block_to_lines_mapping(DexStoresVector& stores,
             auto methods = cls->get_all_methods();
             std::sort(methods.begin(), methods.end(), compare_dexmethods);
             for (auto* m : methods) {
-              auto str_opt = collect_source_block_to_lines_mapping_method(m);
-              if (str_opt) {
-                ofs << *str_opt << "\n";
+              auto result = collect_source_block_to_lines_mapping_method(m);
+              if (auto* success =
+                      std::get_if<SourceBlockToLinesMappingMethodSuccess>(
+                          &result)) {
+                ofs << success->jsonl << "\n";
+                stats += success->stats;
+              } else {
+                stats.record(
+                    std::get<SourceBlockToLinesMappingFailure>(result));
               }
             }
           }
@@ -1381,6 +1553,12 @@ void collect_source_block_to_lines_mapping(DexStoresVector& stores,
 
   // Wait for the merging to complete.
   merger_thread.join();
+
+  SourceBlockToLinesMappingCollectionResult result;
+  for (const auto& s : segment_stats) {
+    result.stats += s;
+  }
+  return result;
 }
 
 } // namespace
@@ -1421,8 +1599,12 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   });
 
   Timer::scope("Collect Source Block To Lines Mapping", [&] {
-    collect_source_block_to_lines_mapping(
+    auto mapping_result = collect_source_block_to_lines_mapping(
         stores, conf.metafile("redex-isb-sb-to-lines-mapping.jsonl"));
+    for (size_t i = 0; i != kSourceBlockToLinesMappingFailureCount; ++i) {
+      mgr.set_metric(kSourceBlockToLinesMappingFailureMetricNames[i],
+                     mapping_result.stats.counts[i]);
+    }
   });
 }
 
