@@ -21,9 +21,17 @@ namespace {
 using namespace optimize_enums;
 using namespace ir_analyzer;
 
+// Whether the method references any candidate enum, and therefore must be
+// analyzed. This intentionally does NOT skip methods whose candidate enums are
+// already rejected: rejection is accumulated concurrently, so gating on it
+// makes which method records which rejection reason depend on thread
+// scheduling. That does not change which enums are ultimately rejected
+// (analyzing a method whose candidates are all already rejected cannot reject a
+// fresh enum), but it does make the per-reason stats non-deterministic.
+// Analyzing every referencing method yields the complete, order-independent set
+// of reasons per enum.
 bool need_analyze(const DexMethod* method,
-                  const ConcurrentSet<const DexType*>& candidate_enums,
-                  const ConcurrentSet<const DexType*>& rejected_enums) {
+                  const ConcurrentSet<const DexType*>& candidate_enums) {
   const IRCode* code = method->get_code();
   if (code == nullptr) {
     return false;
@@ -34,8 +42,7 @@ bool need_analyze(const DexMethod* method,
     if (type::is_array(t)) {
       t = type::get_array_element_type(t);
     }
-    if ((candidate_enums.count_unsafe(t) != 0u) &&
-        (rejected_enums.count(t) == 0u)) {
+    if (candidate_enums.count_unsafe(t) != 0u) {
       return true;
     }
   }
@@ -795,9 +802,13 @@ void reject_unsafe_enums(
 
   walk::parallel::methods(classes, [&](DexMethod* method) {
     // When doing static analysis, simply skip some javac-generated enum
-    // methods <init>, values(), and valueOf(String).
+    // methods <init>, values(), and valueOf(String). Skip unconditionally:
+    // these methods have known-safe patterns and are only ever analyzed (under
+    // the old rejected-class gate) once the enum is already rejected, so
+    // skipping them never changes which enums are rejected -- it only avoids
+    // recording spurious, scheduling-dependent reasons against an
+    // already-rejected enum.
     if ((candidate_enums->count_unsafe(method->get_class()) != 0u) &&
-        (rejected_enums.count(method->get_class()) == 0u) &&
         (method::is_init(method) || is_enum_values(method) ||
          is_enum_valueof(method))) {
       return;
@@ -832,7 +843,7 @@ void reject_unsafe_enums(
       reject_proto_types(method, UnsafeType::kUsageAnnotationMethodRef);
     }
 
-    if (!need_analyze(method, *candidate_enums, rejected_enums)) {
+    if (!need_analyze(method, *candidate_enums)) {
       return;
     }
 

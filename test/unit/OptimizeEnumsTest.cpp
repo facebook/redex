@@ -9,13 +9,19 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <mutex>
+#include <set>
+
 #include "ControlFlow.h"
 #include "Creators.h"
 #include "EnumConfig.h"
+#include "EnumUpcastAnalysis.h"
 #include "IRAssembler.h"
 #include "OptimizeEnums.h"
+#include "OptimizeEnumsUnsafeType.h"
 #include "RedexTest.h"
 #include "TypeUtil.h"
+#include "Walkers.h"
 
 using namespace testing;
 
@@ -322,4 +328,79 @@ TEST_F(OptimizeEnumsTest, analyzeRConstMembers) {
   }
   EXPECT_EQ(const_count, 0);
   EXPECT_EQ(rconst_count, 2);
+}
+
+// When a candidate enum is unsafe for several reasons across different methods,
+// every reason must be recorded -- not just whichever one a worker thread
+// happened to observe first. `reject_unsafe_enums` runs the usage analysis in
+// parallel; before it stopped gating analysis on rejection progress, once Bar
+// was rejected by one method the other referencing method was skipped and its
+// reason was dropped, making the reported reasons depend on thread scheduling.
+TEST_F(OptimizeEnumsTest, rejectionReasonsAreComplete) {
+  auto store = create_enum_store();
+
+  // `LUser;` uses Bar unsafely in two separate methods, each triggering a
+  // distinct rejection reason: const-class -> kUsageUsedAsClassObject and
+  // instance-of -> kUsageUsedInInstanceOf.
+  ClassCreator uc(DexType::make_type("LUser;"));
+  uc.set_super(type::java_lang_Object());
+  uc.set_access(ACC_PUBLIC);
+  uc.add_method(assembler::method_from_string(R"(
+    (method (public static) "LUser;.use_as_class:()Ljava/lang/Class;"
+      (
+        (const-class "LBar;")
+        (move-result-pseudo-object v0)
+        (return-object v0)
+      )
+    )
+  )"));
+  uc.add_method(assembler::method_from_string(R"(
+    (method (public static) "LUser;.use_instance_of:(Ljava/lang/Object;)Z"
+      (
+        (load-param-object v0)
+        (instance-of v0 "LBar;")
+        (move-result-pseudo v1)
+        (return v1)
+      )
+    )
+  )"));
+  store.add_classes({uc.create()});
+
+  DexStoresVector stores({std::move(store)});
+  auto scope = build_class_scope(stores);
+  // reject_unsafe_enums (via reject_enums_for_relaxed_inits) walks the code of
+  // every method, so all must have their CFG built.
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+
+  auto* bar_type = DexType::get_type("LBar;");
+  ASSERT_NE(bar_type, nullptr);
+
+  const std::set<optimize_enums::UnsafeType> kExpectedReasons = {
+      optimize_enums::UnsafeType::kUsageUsedAsClassObject,
+      optimize_enums::UnsafeType::kUsageUsedInInstanceOf};
+
+  // The reasons are collected by a parallel walk, so repeat the analysis many
+  // times: the fix must yield the same complete reason set on every run, not a
+  // scheduling-dependent subset.
+  for (size_t iteration = 0; iteration < 100; ++iteration) {
+    optimize_enums::Config config(100, false, false, {});
+    config.candidate_enums.insert(bar_type);
+
+    std::mutex reasons_mutex;
+    std::set<optimize_enums::UnsafeType> bar_reasons;
+    auto reject_fn = [&](const DexType* type, optimize_enums::UnsafeType u) {
+      if (type != bar_type) {
+        return;
+      }
+      std::lock_guard<std::mutex> lock(reasons_mutex);
+      bar_reasons.insert(u);
+    };
+
+    optimize_enums::reject_unsafe_enums(scope, &config, reject_fn);
+
+    EXPECT_EQ(bar_reasons, kExpectedReasons) << "iteration " << iteration;
+    // The enum is rejected -- outcome is unchanged by the determinism fix.
+    EXPECT_EQ(config.candidate_enums.count_unsafe(bar_type), 0u)
+        << "iteration " << iteration;
+  }
 }
