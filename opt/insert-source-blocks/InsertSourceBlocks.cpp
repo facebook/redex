@@ -957,23 +957,23 @@ struct Injector {
       return;
     }
 
+    std::sort(smi.data.begin(), smi.data.end(),
+              [](const auto& lhs, const auto& rhs) {
+                return compare_dexstrings(lhs.method, rhs.method);
+              });
+
     // Collect unique idom maps and build a sorted vector for lookup.
-    std::set<std::string> unique_idom_maps_set;
+    std::set<std::string_view> unique_idom_maps_set;
     for (const auto& s : smi.data) {
-      unique_idom_maps_set.insert(s.idom_map);
+      unique_idom_maps_set.emplace(s.idom_map);
     }
-    std::vector<std::string> unique_idom_maps(unique_idom_maps_set.begin(),
-                                              unique_idom_maps_set.end());
+    std::vector<std::string_view> unique_idom_maps(unique_idom_maps_set.begin(),
+                                                   unique_idom_maps_set.end());
 
     std::ofstream ofs_uim(conf.metafile("unique-idom-maps.txt"));
     for (const auto& uim : unique_idom_maps) {
       ofs_uim << uim << "\n";
     }
-
-    std::sort(smi.data.begin(), smi.data.end(),
-              [](const auto& lhs, const auto& rhs) {
-                return compare_dexstrings(lhs.method, rhs.method);
-              });
 
     std::ofstream ofs_rsb(conf.metafile("redex-source-blocks.csv"));
     ofs_rsb << "type,version\nredex-source-blocks,1\nname,serialized\n";
