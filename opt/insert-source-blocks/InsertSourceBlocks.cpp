@@ -150,20 +150,9 @@ uint64_t stable_hash(ControlFlowGraph& cfg) {
     // Handle outgoing edges.
     auto succs = source_blocks::impl::get_sorted_edges(cur);
     for (auto* e : succs) {
+      // Hash the edge type.
       hash = hash * 7 + static_cast<uint64_t>(e->type());
-      hash = hash * 3 + [e]() {
-        switch (e->type()) {
-        case EDGE_GOTO:
-          return 0;
-        case EDGE_BRANCH:
-          return 1;
-        case EDGE_THROW:
-          return 2;
-        case EDGE_GHOST:
-        case EDGE_TYPE_SIZE:
-          not_reached();
-        }
-      }();
+      // Hash edge-specific data (case key for branches, throw info for throws).
       hash = hash * 23 + [e]() -> uint64_t {
         switch (e->type()) {
         case EDGE_GOTO:
@@ -257,7 +246,10 @@ is_traditional_access_method(const DexMethodRef* mref) {
     return std::nullopt;
   }
   auto access_name = name.substr(7);
-  // Note: we do not rename the methods, so this should be a Java-style number.
+  // When checking actual methods in the IR, only numeric suffixes are valid.
+  // Hashed names (redexXXXX$NN format) are only checked when parsing profile
+  // files via the string_view overload, since those may contain already-
+  // processed names from previous runs.
   if (!is_numeric(access_name)) {
     return std::nullopt;
   }
@@ -586,11 +578,6 @@ struct Injector {
   struct MethodFuzzingMetadata {
     size_t indegrees{0};
     size_t insertion_id{0};
-    bool has_values{false};
-    int hit;
-
-    MethodFuzzingMetadata(size_t indegrees, size_t insertion_id)
-        : indegrees(indegrees), insertion_id(insertion_id) {}
 
     bool operator<(const MethodFuzzingMetadata& r) const {
       if (indegrees == r.indegrees) {
@@ -679,32 +666,6 @@ struct Injector {
     size_t elided_vals{0};
     size_t unelided_vals{0};
 
-    InsertResult() = default;
-    InsertResult(size_t skipped, size_t access_methods)
-        : skipped(skipped), access_methods(access_methods) {}
-    InsertResult(size_t access_methods,
-                 size_t blocks,
-                 size_t profile_count,
-                 size_t profile_failed,
-                 size_t hot_src_block_count,
-                 size_t cold_src_block_count,
-                 size_t hot_throw_cold_block_count,
-                 size_t normalized_blocks,
-                 size_t denormalized_blocks,
-                 size_t elided_vals,
-                 size_t unelided_vals)
-        : blocks(blocks),
-          profile_count(profile_count),
-          profile_failed(profile_failed),
-          access_methods(access_methods),
-          hot_src_block_count(hot_src_block_count),
-          cold_src_block_count(cold_src_block_count),
-          hot_throw_cold_block_count(hot_throw_cold_block_count),
-          normalized_blocks(normalized_blocks),
-          denormalized_blocks(denormalized_blocks),
-          elided_vals(elided_vals),
-          unelided_vals(unelided_vals) {}
-
     InsertResult& operator+=(const InsertResult& other) {
       skipped += other.skipped;
       blocks += other.blocks;
@@ -732,94 +693,96 @@ struct Injector {
       int32_t block_appear100_threshold,
       bool must_be_cold = false) {
     auto* code = method->get_code();
-    if (code != nullptr) {
-      auto access_method = is_traditional_access_method(method);
-      const DexType* access_method_type = nullptr;
-      std::string_view access_method_name;
-      std::string access_method_hash_name;
-
-      always_assert(code->cfg_built());
-      auto& cfg = code->cfg();
-      if (access_method) {
-        access_method_type = access_method->first;
-        access_method_name = access_method->second;
-
-        auto hash_value = hasher::stable_hash(cfg);
-
-        access_method_hash_name =
-            hasher::hashed_name(hash_value, access_method_name);
-      }
-
-      const auto* sb_name = [&]() {
-        if (!access_method) {
-          return &method->get_deobfuscated_name();
-        }
-        // Emulate show.
-        std::string new_name = show_deobfuscated(method->get_class());
-        new_name.append(".access$");
-        new_name.append(access_method_hash_name);
-        new_name.append(":");
-        new_name.append(show_deobfuscated(method->get_proto()));
-        return DexString::make_string(new_name);
-      }();
-
-      source_blocks::InsertResult res;
-      // NOLINTBEGIN(facebook-hte-NullableDereference)
-      auto profiles =
-          find_profiles(method, access_method_type, access_method_name,
-                        access_method_hash_name);
-      // NOLINTEND(facebook-hte-NullableDereference)
-      if (!profiles.second && !always_inject) {
-        // Skip without profile.
-        return InsertResult(access_method ? 1 : 0, 1);
-      }
-
-      if (use_default_value || use_fuzzing_values) {
-
-        res = source_blocks::insert_custom_source_blocks(
-            sb_name, &cfg, profiles.first, serialize, exc_inject,
-            use_fuzzing_values, must_be_cold);
-      } else {
-        res = source_blocks::insert_source_blocks(sb_name, &cfg, profiles.first,
-                                                  serialize, exc_inject);
-      }
-
-      if (fix_violations) {
-        source_blocks::fix_hot_method_cold_entry_violations(&cfg);
-        source_blocks::fix_chain_violations(&cfg);
-        source_blocks::fix_idom_violations(&cfg);
-      }
-
-      if (block_appear100_threshold > 0) {
-        always_assert(block_appear100_threshold <= 100);
-        source_blocks::adjust_block_hits_with_appear100_threshold(
-            &cfg, block_appear100_threshold);
-      }
-
-      smi.add({sb_name, std::move(res.serialized),
-               std::move(res.serialized_idom_map)});
-
-      if (!res.profile_success) {
-        std::unique_lock<std::mutex> lock{failed_methods_mutex};
-        failed_methods.push_back(method);
-      }
-
-      auto source_block_metrics =
-          source_blocks::gather_source_block_metrics(&cfg);
-      size_t hot_src_block_current_count = source_block_metrics.hot_block_count;
-      size_t cold_src_block_current_count =
-          source_block_metrics.cold_block_count;
-      size_t hot_throw_cold_block_count =
-          source_block_metrics.hot_throw_cold_count;
-
-      return InsertResult(
-          access_method ? 1 : 0, res.block_count, profiles.second ? 1 : 0,
-          res.profile_success ? 0 : 1, hot_src_block_current_count,
-          cold_src_block_current_count, hot_throw_cold_block_count,
-          res.normalized_count, res.denormalized_count, res.elided_vals,
-          res.unelided_vals);
+    if (code == nullptr) {
+      return InsertResult{};
     }
-    return InsertResult();
+
+    always_assert(code->cfg_built());
+    auto& cfg = code->cfg();
+
+    // Check if this is a traditional Javac access method (access$NNN pattern).
+    auto access_method = is_traditional_access_method(method);
+    std::string access_method_hash_name;
+    if (access_method) {
+      auto hash_value = hasher::stable_hash(cfg);
+      access_method_hash_name =
+          hasher::hashed_name(hash_value, access_method->second);
+    }
+
+    // Build the source block name - use hashed name for access methods.
+    const auto* sb_name = [&]() {
+      if (!access_method) {
+        return &method->get_deobfuscated_name();
+      }
+      std::string new_name = show_deobfuscated(method->get_class());
+      new_name.append(".access$");
+      new_name.append(access_method_hash_name);
+      new_name.append(":");
+      new_name.append(show_deobfuscated(method->get_proto()));
+      return DexString::make_string(new_name);
+    }();
+
+    // Look up profile data for this method.
+    // NOLINTBEGIN(facebook-hte-NullableDereference)
+    auto profiles = find_profiles(
+        method,
+        access_method ? access_method->first : nullptr,
+        access_method ? access_method->second : std::string_view{},
+        access_method_hash_name);
+    // NOLINTEND(facebook-hte-NullableDereference)
+
+    if (!profiles.second && !always_inject) {
+      return InsertResult{
+          .skipped = 1,
+          .access_methods = access_method ? 1u : 0u,
+      };
+    }
+
+    // Insert source blocks using the appropriate method.
+    source_blocks::InsertResult res =
+        (use_default_value || use_fuzzing_values)
+            ? source_blocks::insert_custom_source_blocks(
+                  sb_name, &cfg, profiles.first, serialize, exc_inject,
+                  use_fuzzing_values, must_be_cold)
+            : source_blocks::insert_source_blocks(sb_name, &cfg, profiles.first,
+                                                  serialize, exc_inject);
+
+    if (fix_violations) {
+      source_blocks::fix_hot_method_cold_entry_violations(&cfg);
+      source_blocks::fix_chain_violations(&cfg);
+      source_blocks::fix_idom_violations(&cfg);
+    }
+
+    if (block_appear100_threshold > 0) {
+      always_assert(block_appear100_threshold <= 100);
+      source_blocks::adjust_block_hits_with_appear100_threshold(
+          &cfg, block_appear100_threshold);
+    }
+
+    smi.add({sb_name, std::move(res.serialized),
+             std::move(res.serialized_idom_map)});
+
+    if (!res.profile_success) {
+      std::unique_lock<std::mutex> lock{failed_methods_mutex};
+      failed_methods.push_back(method);
+    }
+
+    auto source_block_metrics =
+        source_blocks::gather_source_block_metrics(&cfg);
+
+    return InsertResult{
+        .blocks = res.block_count,
+        .profile_count = profiles.second ? 1u : 0u,
+        .profile_failed = res.profile_success ? 0u : 1u,
+        .access_methods = access_method ? 1u : 0u,
+        .hot_src_block_count = source_block_metrics.hot_block_count,
+        .cold_src_block_count = source_block_metrics.cold_block_count,
+        .hot_throw_cold_block_count = source_block_metrics.hot_throw_cold_count,
+        .normalized_blocks = res.normalized_count,
+        .denormalized_blocks = res.denormalized_count,
+        .elided_vals = res.elided_vals,
+        .unelided_vals = res.unelided_vals,
+    };
   }
 
   InsertResult run_fuzzing_on_source_blocks(
@@ -838,7 +801,7 @@ struct Injector {
     // Set up and count indegrees
     call_graph->visit_by_levels([&](call_graph::NodeId node) {
       if (method_metadata.find(node) == method_metadata.end()) {
-        method_metadata.insert({node, MethodFuzzingMetadata(0, 0)});
+        method_metadata.insert({node, MethodFuzzingMetadata{}});
       }
       method_metadata.at(node).indegrees = node->callers().size();
     });
@@ -918,7 +881,7 @@ struct Injector {
                                                 failed_methods_mutex, serialize,
                                                 exc_inject, 0);
       } else {
-        return InsertResult();
+        return InsertResult{};
       }
     });
     return res;
@@ -994,19 +957,13 @@ struct Injector {
       return;
     }
 
-    // Put all unique idom maps into a file.
-    std::vector<std::string> unique_idom_maps;
-    {
-      std::set<std::string> unique_idom_maps_set;
-      std::transform(
-          smi.data.begin(), smi.data.end(),
-          std::inserter(unique_idom_maps_set, unique_idom_maps_set.begin()),
-          [](const auto& s) { return s.idom_map; });
-      unique_idom_maps.reserve(unique_idom_maps_set.size());
-      unique_idom_maps.insert(unique_idom_maps.end(),
-                              unique_idom_maps_set.begin(),
-                              unique_idom_maps_set.end());
+    // Collect unique idom maps and build a sorted vector for lookup.
+    std::set<std::string> unique_idom_maps_set;
+    for (const auto& s : smi.data) {
+      unique_idom_maps_set.insert(s.idom_map);
     }
+    std::vector<std::string> unique_idom_maps(unique_idom_maps_set.begin(),
+                                              unique_idom_maps_set.end());
 
     std::ofstream ofs_uim(conf.metafile("unique-idom-maps.txt"));
     for (const auto& uim : unique_idom_maps) {
