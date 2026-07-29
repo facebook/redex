@@ -1210,6 +1210,12 @@ constexpr std::array<const char*, kSourceBlockToLinesMappingFailureCount>
 struct SourceBlockToLinesMappingStats {
   std::array<uint32_t, kSourceBlockToLinesMappingFailureCount> counts{};
 
+  // Not failures: total methods handed to the per-method collector, and how
+  // many produced an emitted JSONL row. Tracked separately so the visited set
+  // can be compared against run_source_blocks.
+  uint32_t methods_visited{0};
+  uint32_t rows_emitted{0};
+
   void record(SourceBlockToLinesMappingFailure failure, uint32_t delta = 1) {
     counts[static_cast<size_t>(failure)] += delta;
   }
@@ -1219,6 +1225,8 @@ struct SourceBlockToLinesMappingStats {
     for (size_t i = 0; i != counts.size(); ++i) {
       counts[i] += other.counts[i];
     }
+    methods_visited += other.methods_visited;
+    rows_emitted += other.rows_emitted;
     return *this;
   }
 };
@@ -1529,11 +1537,13 @@ SourceBlockToLinesMappingCollectionResult collect_source_block_to_lines_mapping(
             auto methods = cls->get_all_methods();
             std::sort(methods.begin(), methods.end(), compare_dexmethods);
             for (auto* m : methods) {
+              stats.methods_visited++;
               auto result = collect_source_block_to_lines_mapping_method(m);
               if (auto* success =
                       std::get_if<SourceBlockToLinesMappingMethodSuccess>(
                           &result)) {
                 ofs << success->jsonl << "\n";
+                stats.rows_emitted++;
                 stats += success->stats;
               } else {
                 stats.record(
@@ -1605,6 +1615,10 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
       mgr.set_metric(kSourceBlockToLinesMappingFailureMetricNames[i],
                      mapping_result.stats.counts[i]);
     }
+    mgr.set_metric("sb_to_lines~methods_visited",
+                   mapping_result.stats.methods_visited);
+    mgr.set_metric("sb_to_lines~rows_emitted",
+                   mapping_result.stats.rows_emitted);
   });
 }
 
