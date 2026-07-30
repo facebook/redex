@@ -406,6 +406,34 @@ bool LocalArrayAnalyzer::analyze_fill_array_data(const IRInstruction* insn,
   return false;
 }
 
+namespace {
+
+template <typename T>
+bool try_constant_type(ConstantEnvironment* env,
+                       const ConstantValue& val,
+                       size_t idx) {
+  auto t_val = val.maybe_get<T>();
+  if (!t_val) {
+    return false;
+  }
+  if (t_val->is_top() || t_val->is_bottom()) {
+    env->set_array_binding(RESULT_REGISTER, idx, SignedConstantDomain());
+    return true;
+  }
+
+  env->set_array_binding(RESULT_REGISTER, idx, val);
+  return true;
+}
+
+template <typename... T>
+bool try_constant_types(ConstantEnvironment* env,
+                        const ConstantValue& val,
+                        size_t idx) {
+  return (try_constant_type<T>(env, val, idx) || ...);
+}
+
+} // namespace
+
 bool LocalArrayAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
                                                   ConstantEnvironment* env) {
   auto array_size = insn->srcs_size();
@@ -415,11 +443,9 @@ bool LocalArrayAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
     env->new_heap_value(RESULT_REGISTER, insn,
                         ConstantValueArrayDomain(array_size));
     for (src_index_t i = 0; i < array_size; i++) {
-      auto value = env->get(insn->src(i)).maybe_get<SignedConstantDomain>();
-      if (value && !value->is_top() && !value->is_bottom()) {
-        env->set_array_binding(RESULT_REGISTER, i,
-                               SignedConstantDomain(*value->get_constant()));
-      } else {
+      if (!try_constant_types<SignedConstantDomain, ConstantInjectionIdDomain,
+                              ConstantResourceIdDomain>(
+              env, env->get(insn->src(i)), i)) {
         env->set_array_binding(RESULT_REGISTER, i, SignedConstantDomain());
       }
     }
