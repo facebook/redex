@@ -125,6 +125,9 @@ constexpr size_t CP_CONST_INVOKEDYN =   18;
 constexpr size_t CP_CONST_MODULE =      19;
 constexpr size_t CP_CONST_PACKAGE =     20;
 
+// Since Java 11
+constexpr size_t CP_CONST_DYNAMIC =     17;
+
 /* clang-format on */
 
 cp_entry parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end) {
@@ -142,6 +145,12 @@ cp_entry parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end) {
   case CP_CONST_METHOD:
   case CP_CONST_INTERFACE:
   case CP_CONST_NAMEANDTYPE:
+  // CONSTANT_Dynamic (Java 11) and CONSTANT_InvokeDynamic (emitted since Java 9
+  // for string concatenation, JEP 280) share the field/method-ref layout: two
+  // u2 indices. We load jars only for their external symbols and never resolve
+  // invokedynamic bootstrap info, so just consume the indices and move on.
+  case CP_CONST_DYNAMIC:
+  case CP_CONST_INVOKEDYN:
     cpe.s0 = read16(buffer, buffer_end);
     cpe.s1 = read16(buffer, buffer_end);
     return cpe;
@@ -165,11 +174,6 @@ cp_entry parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end) {
     always_assert_type_log(buffer <= buffer_end, BUFFER_END_EXCEEDED,
                            "Buffer overflow");
     return cpe;
-  case CP_CONST_INVOKEDYN:
-    always_assert_type_log(cpe.tag != CP_CONST_INVOKEDYN,
-                           RedexError::INVALID_JAVA,
-                           "INVOKEDYN constant unsupported");
-    UNREACHABLE();
   default:
     always_assert_type_log(false, RedexError::INVALID_JAVA,
                            "Unrecognized constant pool tag 0x%x", cpe.tag);

@@ -109,6 +109,7 @@ check_PROGRAMS = \
     ir_instruction_test \
     ir_list_test \
     ir_typechecker_test \
+    jar_loader_test \
     java_parser_util_test \
     kotlin_lambda_analyzer_test \
     kotlin_lambda_dedup_pass_test \
@@ -369,6 +370,8 @@ ir_list_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 ir_typechecker_test_SOURCES = IRTypeCheckerTest.cpp
 ir_typechecker_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+jar_loader_test_SOURCES = JarLoaderTest.cpp
 
 java_parser_util_test_SOURCES = JavaParserUtilTest.cpp
 java_parser_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
