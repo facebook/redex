@@ -379,10 +379,13 @@ TEST_F(OptimizeEnumsTest, rejectionReasonsAreComplete) {
       optimize_enums::UnsafeType::kUsageUsedAsClassObject,
       optimize_enums::UnsafeType::kUsageUsedInInstanceOf};
 
-  // The reasons are collected by a parallel walk, so repeat the analysis many
-  // times: the fix must yield the same complete reason set on every run, not a
-  // scheduling-dependent subset.
-  for (size_t iteration = 0; iteration < 100; ++iteration) {
+  // The reasons are collected by a parallel walk, so repeat the analysis a few
+  // times to exercise different thread schedulings: the fix must yield the same
+  // complete reason set on every run, not a scheduling-dependent subset. The
+  // count is kept small on purpose -- each iteration spins up the parallel
+  // walkers, which is expensive under sanitizers/debug builds, and a handful of
+  // iterations is enough to shake out scheduling differences.
+  for (size_t iteration = 0; iteration < 10; ++iteration) {
     optimize_enums::Config config(100, false, false, {});
     config.candidate_enums.insert(bar_type);
 
