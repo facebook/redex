@@ -119,6 +119,18 @@ struct Transform::Context {
   ClassLiteralMethodsReplacerContext clmr;
 };
 
+// Whether the check-cast `primary`, whose result holds `value`, may throw
+// ClassCastException.
+static bool is_possibly_throwing_check_cast(const IRInstruction* primary,
+                                            const ConstantValue& value) {
+  if (!opcode::is_check_cast(primary->opcode()) || value.is_zero()) {
+    return false;
+  }
+  const DexType* src_type = get_object_constant_type(value);
+  return src_type == nullptr ||
+         !type::check_cast(src_type, primary->get_type());
+}
+
 /*
  * Replace an instruction that has a single destination register with a `const`
  * load. `env` holds the state of the registers after `insn` has been
@@ -139,11 +151,9 @@ bool Transform::replace_with_const(const ConstantEnvironment& env,
   if (opcode::is_a_move_result_pseudo(insn->opcode())) {
     auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
     // Materializing a constant into a move-result-pseudo's dest replaces -- and
-    // therefore deletes -- the primary instruction. A check-cast with a
-    // non-null operand can throw ClassCastException, so deleting it would drop
-    // that exception; keep the cast. A null operand's cast never throws, so
-    // folding that to `const 0` remains safe.
-    if (opcode::is_check_cast(primary_it->insn->opcode()) && !value.is_zero()) {
+    // therefore deletes -- the primary instruction. Keep a check-cast that
+    // could throw, since deleting it would drop the exception.
+    if (is_possibly_throwing_check_cast(primary_it->insn, value)) {
       return false;
     }
     always_assert(!replacement.empty());

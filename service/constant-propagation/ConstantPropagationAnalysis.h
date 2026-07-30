@@ -29,6 +29,10 @@ namespace constant_propagation {
 std::optional<size_t> get_null_check_object_index(
     const IRInstruction* insn, const NullCheckMethods& null_check_methods);
 
+// The exact runtime type of an object constant -- String for a const-string,
+// Class for a const-class -- or nullptr when the value is not such a constant.
+const DexType* get_object_constant_type(const ConstantValue& value);
+
 namespace intraprocedural {
 
 // The default no-throw analyzer's logic, as a composable analyzer class:
