@@ -557,6 +557,25 @@ std::optional<int> pass_dex_version_to_check(Pass* pass,
   return std::nullopt;
 }
 
+// Abort if the activated passes are ordered in a way that violates their
+// declared property interactions.
+void verify_pass_order(const PassManager& mgr, ConfigFiles& conf) {
+  std::vector<std::pair<std::string, redex_properties::PropertyInteractions>>
+      pass_interactions;
+  const auto& pass_info = mgr.get_pass_info();
+  pass_interactions.reserve(pass_info.size());
+  for (const auto& info : pass_info) {
+    pass_interactions.emplace_back(info.pass->name(),
+                                   info.property_interactions);
+  }
+  auto failure = redex_properties::Manager::verify_pass_interactions(
+      pass_interactions, conf);
+  if (failure) {
+    fprintf(stderr, "ABORT! Illegal pass order:\n%s", failure->c_str());
+    exit(EXIT_FAILURE);
+  }
+}
+
 void maybe_write_hashes_incoming(const ConfigFiles& conf, const Scope& scope) {
   if (conf.emit_incoming_hashes()) {
     TRACE(PM, 1, "Writing incoming hashes...");
@@ -1482,21 +1501,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   AfterPassSizes after_pass_size(this, conf);
 
   if (pm_config->check_pass_order_properties) {
-    std::vector<std::pair<std::string, redex_properties::PropertyInteractions>>
-        pass_interactions;
-    pass_interactions.reserve(m_activated_passes.size());
-    for (size_t i = 0; i < m_activated_passes.size(); ++i) {
-      Pass* pass = m_activated_passes[i];
-      auto* pass_info = &m_pass_info[i];
-      pass_interactions.emplace_back(pass->name(),
-                                     pass_info->property_interactions);
-    }
-    auto failure = redex_properties::Manager::verify_pass_interactions(
-        pass_interactions, conf);
-    if (failure) {
-      fprintf(stderr, "ABORT! Illegal pass order:\n%s", failure->c_str());
-      exit(EXIT_FAILURE);
-    }
+    verify_pass_order(*this, conf);
   }
 
   // For core loop legibility, have a lambda here.
