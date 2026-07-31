@@ -113,11 +113,13 @@ bool is_reference_array(const DexType* type);
 char type_shorty(const DexType* type);
 
 /**
- * Check whether a type can be cast to another type.
- * That is, if 'base_type' is an ancestor or an interface implemented by 'type'.
- * However the check is only within classes known to the app. So
- * you may effectively get false for a check_cast that would succeed at
- * runtime. Otherwise 'true' implies the type can cast.
+ * Check whether a type is provably castable to another type.
+ * That is, if `base_type` is an ancestor or an interface implemented by `type`.
+ * However, if this function returns false, `type` may still be castable to
+ * `base_type`.
+ *
+ * A return value of false indicates uncastability if `base_type` is
+ * app-internal.
  */
 bool check_cast(const DexType* type, const DexType* base_type);
 
