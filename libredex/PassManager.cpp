@@ -576,6 +576,21 @@ void verify_pass_order(const PassManager& mgr, ConfigFiles& conf) {
   }
 }
 
+void set_pass_timing_metrics(PassManager& mgr,
+                             double cpu_time,
+                             std::chrono::duration<double> wall_time) {
+  mgr.set_metric("timing.cpu_time.100", (int64_t)(cpu_time * 100));
+  mgr.set_metric("timing.wall_time.100", (int64_t)(wall_time.count() * 100));
+  if (wall_time.count() != 0) {
+    mgr.set_metric("timing.speedup.100",
+                   (int64_t)(100.0 * cpu_time / wall_time.count()));
+    mgr.set_metric(
+        "timing.utilization.100",
+        (int64_t)(100.0 * cpu_time / wall_time.count() /
+                  static_cast<double>(redex_parallel::default_num_threads())));
+  }
+}
+
 void maybe_write_hashes_incoming(const ConfigFiles& conf, const Scope& scope) {
   if (conf.emit_incoming_hashes()) {
     TRACE(PM, 1, "Writing incoming hashes...");
@@ -1711,16 +1726,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       break;
     }
 
-    set_metric("timing.cpu_time.100", (int64_t)(cpu_time * 100));
-    set_metric("timing.wall_time.100", (int64_t)(wall_time.count() * 100));
-    if (wall_time.count() != 0) {
-      set_metric("timing.speedup.100",
-                 (int64_t)(100.0 * cpu_time / wall_time.count()));
-      set_metric("timing.utilization.100",
-                 (int64_t)(100.0 * cpu_time / wall_time.count() /
-                           static_cast<double>(
-                               redex_parallel::default_num_threads())));
-    }
+    set_pass_timing_metrics(*this, cpu_time, wall_time);
 
     m_current_pass_info = nullptr;
   }
