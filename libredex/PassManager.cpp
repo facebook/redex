@@ -541,6 +541,22 @@ void set_root_store_metrics(PassManager& mgr,
   }
 }
 
+// Returns the highest dex version whose features must be validated as absent
+// before running `pass`, or std::nullopt if no validation is needed.
+std::optional<int> pass_dex_version_to_check(Pass* pass,
+                                             int32_t input_dex_version) {
+  if (pass->pass_support_dex_version() >= input_dex_version) {
+    return std::nullopt;
+  }
+  always_assert(input_dex_version <= 39);
+  for (int version : {39, 38, 37}) {
+    if (pass->need_dex_version_support(input_dex_version, version)) {
+      return version;
+    }
+  }
+  return std::nullopt;
+}
+
 void maybe_write_hashes_incoming(const ConfigFiles& conf, const Scope& scope) {
   if (conf.emit_incoming_hashes()) {
     TRACE(PM, 1, "Writing incoming hashes...");
@@ -1635,19 +1651,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       ensure_cfg(stores);
       TRACE(PM, 2, "%s Pass uses cfg.\n", SHOW(pass->name()));
 
-      if (pass->pass_support_dex_version() <
-          m_redex_options.input_dex_version) {
-        always_assert(m_redex_options.input_dex_version <= 39);
-        if (pass->need_dex_version_support(m_redex_options.input_dex_version,
-                                           39)) {
-          check_no_new_dex_features(stores, pass, 39);
-        } else if (pass->need_dex_version_support(
-                       m_redex_options.input_dex_version, 38)) {
-          check_no_new_dex_features(stores, pass, 38);
-        } else if (pass->need_dex_version_support(
-                       m_redex_options.input_dex_version, 37)) {
-          check_no_new_dex_features(stores, pass, 37);
-        }
+      auto version =
+          pass_dex_version_to_check(pass, m_redex_options.input_dex_version);
+      if (version.has_value()) {
+        check_no_new_dex_features(stores, pass, version.value());
       }
 
       pass->run_pass(stores, conf, *this);
