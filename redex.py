@@ -1639,6 +1639,18 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             CompressionLevel.FAST,  # Large, and not much difference to default size.
         ),
         CompressionEntry(
+            "Redex Debug Line Map",
+            lambda args: not _is_preserve_input_dexes(args),
+            # Many services still expect the uncompressed file.
+            False,
+            # Only written when addresses are needed, i.e. no-positions or IODI.
+            [],
+            ["redex-debug-line-map-v2"],
+            "redex-debug-line-map-v2.zst",
+            None,
+            CompressionLevel.FAST,  # Large, and not much difference to default size.
+        ),
+        CompressionEntry(
             "Redex ISB SB To Line Map",
             lambda args: True,
             True,
