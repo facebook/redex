@@ -1627,6 +1627,18 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             CompressionLevel.BETTER,  # Usually small.
         ),
         CompressionEntry(
+            "Redex Line Number Map",
+            lambda args: not _is_preserve_input_dexes(args),
+            # Many services still expect the uncompressed file.
+            False,
+            # Not written in no-custom-symbolication mode, too complicated to filter.
+            [],
+            ["redex-line-number-map-v2"],
+            "redex-line-number-map-v2.zst",
+            None,
+            CompressionLevel.FAST,  # Large, and not much difference to default size.
+        ),
+        CompressionEntry(
             "Redex ISB SB To Line Map",
             lambda args: True,
             True,
