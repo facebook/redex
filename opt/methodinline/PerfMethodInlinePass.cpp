@@ -129,17 +129,19 @@ void InlineForSpeedMethodProfiles::compute_hot_methods() {
         ++popular_set_size;
       }
     }
-    // Methods in the top PERCENTILE of call counts will be considered warm/hot.
-    constexpr double WARM_PERCENTILE = 0.25;
-    constexpr double HOT_PERCENTILE = 0.1;
-    // Find the lowest score that is within the given percentile
+    // Methods at or above the Nth percentile of call counts are warm/hot -- the
+    // hottest (100 - N)% of the popular set. High N = hotter (the usual, LLVM
+    // percentile convention). NFC: 75/90 reproduce the previous 0.25/0.10.
+    constexpr int WARM_PERCENTILE = 75;
+    constexpr int HOT_PERCENTILE = 90;
+    // Size of the warm/hot tail = |popular set| * (100 - percentile) / 100.
     constexpr size_t MIN_SIZE = 1;
     size_t warm_size = std::max(
         MIN_SIZE, static_cast<size_t>(static_cast<double>(popular_set_size) *
-                                      WARM_PERCENTILE));
+                                      (100 - WARM_PERCENTILE) / 100.0));
     size_t hot_size = std::max(
         MIN_SIZE, static_cast<size_t>(static_cast<double>(popular_set_size) *
-                                      HOT_PERCENTILE));
+                                      (100 - HOT_PERCENTILE) / 100.0));
     // the "top" of the queue is actually the minimum warm/hot score
     using pq =
         std::priority_queue<double, std::vector<double>, std::greater<double>>;
