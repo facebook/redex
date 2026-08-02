@@ -146,11 +146,13 @@ class TypedefAnnoCheckerKtTest {
 
   @TestStringDef
   fun testLambdaCall(@TestStringDef param: String): String {
-    return call_lambda({
-      var_field = param
-      assign_and_print(param)
-      param
-    })
+    return call_lambda(
+        {
+          var_field = param
+          assign_and_print(param)
+          param
+        },
+    )
   }
 
   @TestIntDef
@@ -168,19 +170,23 @@ class TypedefAnnoCheckerKtTest {
   @TestStringDef
   fun testLambdaCallLocalVal(): String {
     val local_val = "two"
-    return call_lambda({
-      assign_and_print_default(local_val)
-      local_val
-    })
+    return call_lambda(
+        {
+          assign_and_print_default(local_val)
+          local_val
+        },
+    )
   }
 
   @TestStringDef
   fun testLambdaCallLocalValInvalid(): String {
     val local_val = "randomval"
-    return call_lambda({
-      assign_and_print_default(local_val)
-      local_val
-    })
+    return call_lambda(
+        {
+          assign_and_print_default(local_val)
+          local_val
+        },
+    )
   }
 
   @TestStringDef
@@ -189,10 +195,12 @@ class TypedefAnnoCheckerKtTest {
     if (var_field == "one") {
       local_var = "one"
     }
-    return call_lambda({
-      assign_and_print(local_var)
-      local_var
-    })
+    return call_lambda(
+        {
+          assign_and_print(local_var)
+          local_var
+        },
+    )
   }
 
   @TestStringDef
@@ -201,10 +209,12 @@ class TypedefAnnoCheckerKtTest {
     if (var_field == "one") {
       local_var = "eight"
     }
-    return call_lambda({
-      assign_and_print(local_var)
-      local_var
-    })
+    return call_lambda(
+        {
+          assign_and_print(local_var)
+          local_var
+        },
+    )
   }
 
   @TestStringDef
@@ -213,10 +223,12 @@ class TypedefAnnoCheckerKtTest {
     if (var_field == "one") {
       local_var = "one"
     }
-    return call_lambda({
-      assign_and_print_default(local_var)
-      local_var
-    })
+    return call_lambda(
+        {
+          assign_and_print_default(local_var)
+          local_var
+        },
+    )
   }
 
   @TestStringDef
@@ -225,10 +237,12 @@ class TypedefAnnoCheckerKtTest {
     if (var_field == "one") {
       local_var = "eight"
     }
-    return call_lambda({
-      assign_and_print_default(local_var)
-      local_var
-    })
+    return call_lambda(
+        {
+          assign_and_print_default(local_var)
+          local_var
+        },
+    )
   }
 
   @TestIntDef
@@ -237,10 +251,12 @@ class TypedefAnnoCheckerKtTest {
     if (var_field == "one") {
       local_var = 1
     }
-    return call_lambda_int({
-      assign_and_print_int(local_var)
-      local_var
-    })
+    return call_lambda_int(
+        {
+          assign_and_print_int(local_var)
+          local_var
+        },
+    )
   }
 
   @TestIntDef
@@ -249,10 +265,12 @@ class TypedefAnnoCheckerKtTest {
     if (var_field == "one") {
       local_var = 9
     }
-    return call_lambda_int({
-      assign_and_print_int(local_var)
-      local_var
-    })
+    return call_lambda_int(
+        {
+          assign_and_print_int(local_var)
+          local_var
+        },
+    )
   }
 
   @TestIntDef
@@ -261,10 +279,12 @@ class TypedefAnnoCheckerKtTest {
     if (var_field == "one") {
       local_var = 1
     }
-    return call_lambda_int({
-      assign_and_print_default_int(local_var)
-      local_var
-    })
+    return call_lambda_int(
+        {
+          assign_and_print_default_int(local_var)
+          local_var
+        },
+    )
   }
 
   @TestIntDef
@@ -273,10 +293,12 @@ class TypedefAnnoCheckerKtTest {
     if (var_field == "one") {
       local_var = 9
     }
-    return call_lambda_int({
-      assign_and_print_default_int(local_var)
-      local_var
-    })
+    return call_lambda_int(
+        {
+          assign_and_print_default_int(local_var)
+          local_var
+        },
+    )
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////
