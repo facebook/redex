@@ -51,6 +51,8 @@ class RedexOptions {
   bool is_art_build{false};
   bool disable_dex_hasher{false};
   bool instrument_pass_enabled{false};
+  // Emit the dexvt build-side export (symbolicated disassembly + PGO + sizes).
+  bool emit_dexvt{false};
   int32_t min_sdk{0};
   int32_t input_dex_version{35};
   Architecture arch{Architecture::UNKNOWN};

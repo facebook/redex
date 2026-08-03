@@ -202,6 +202,11 @@ struct DexOutputConfig : public Configurable {
 
   bool write_class_sizes{false};
 
+  // When enabled, record the authoritative post-lowering per-method code_item
+  // byte size (return of DexMethod code->encode()) into
+  // enhanced_dex_stats_t::method_size. Forced on by --emit-dexvt.
+  bool write_method_sizes{false};
+
   // When enabled, emit a segment-aware, sampled class-placement fingerprint for
   // root-store (main-APK) classes into output_stats.class_order_sample, used to
   // compare class placement across two builds per dex-ordering regime. On by

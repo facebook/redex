@@ -116,10 +116,14 @@ class GatheredTypes;
 
 struct enhanced_dex_stats_t : public dex_stats_t {
   UnorderedMap<const DexClass*, size_t> class_size;
+  // Authoritative post-lowering per-method code_item byte size (return of
+  // DexMethod code->encode()); populated only when write_method_sizes is set.
+  UnorderedMap<const DexMethod*, size_t> method_size;
 
   enhanced_dex_stats_t& operator+=(const enhanced_dex_stats_t& rhs) {
     dex_stats_t::operator+=(rhs);
     insert_unordered_iterable(class_size, rhs.class_size);
+    insert_unordered_iterable(method_size, rhs.method_size);
     return *this;
   }
 };

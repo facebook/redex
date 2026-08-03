@@ -229,6 +229,9 @@ void ResourceConfig::bind_config() {
 
 void DexOutputConfig::bind_config() {
   bind("write_class_sizes", write_class_sizes, write_class_sizes);
+  bind("write_method_sizes", write_method_sizes, write_method_sizes,
+       "Record the authoritative post-lowering per-method code_item byte size "
+       "into enhanced_dex_stats_t::method_size. Forced on by --emit-dexvt.");
   bind(
       "emit_class_order_sample", emit_class_order_sample,
       emit_class_order_sample,
