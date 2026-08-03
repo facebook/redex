@@ -17,14 +17,8 @@
 #include <iostream>
 #include <json/value.h>
 #include <limits>
-#include <list>
 #include <sstream>
 #include <utility>
-
-#ifdef __linux__
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
 
 #include "AnalysisUsage.h"
 #include "ApiLevelChecker.h"
@@ -696,209 +690,6 @@ void simplify_cfgs_after_pass(DexStoresVector& stores, const Pass* pass) {
     code.cfg().simplify();
   });
 }
-
-class AfterPassSizes {
- private:
-  PassManager* m_mgr;
-
-  // Would be nice to do things multi-threaded, but then we cannot
-  // fork and can have only one job in flight. Instead store pids
-  // and use non-blocking waits.
-  struct Job {
-    PassManager::PassInfo* pass_info;
-    std::string tmp_dir;
-    pid_t pid;
-    Job(PassManager::PassInfo* pass_info, std::string tmp_dir, pid_t pid)
-        : pass_info(pass_info), tmp_dir(std::move(tmp_dir)), pid(pid) {}
-  };
-  std::list<Job> m_open_jobs;
-
-  bool m_enabled{false};
-  bool m_run_interdex{true};
-  bool m_debug{false};
-  size_t m_max_jobs{4};
-
- public:
-  AfterPassSizes(PassManager* mgr, const ConfigFiles& conf) : m_mgr(mgr) {
-    const auto& json = conf.get_json_config();
-    m_enabled = json.get("after_pass_size", m_enabled);
-    m_run_interdex = json.get("after_pass_size_interdex", m_run_interdex);
-    m_debug = json.get("after_pass_size_debug", m_debug);
-    json.get("after_pass_size_queue", m_max_jobs, m_max_jobs);
-  }
-
-  bool handle(PassManager::PassInfo* pass_info,
-              DexStoresVector* stores,
-              ConfigFiles* conf) {
-    if (!m_enabled) {
-      return false;
-    }
-
-#ifdef __linux__
-    for (;;) {
-      check_open_jobs(/*no_hang=*/true);
-      if (m_open_jobs.size() < m_max_jobs) {
-        break;
-      }
-      sleep(1); // Wait a bit.
-    }
-
-    // Create a temp dir.
-    std::string tmp_dir;
-    {
-      auto tmp_path = boost::filesystem::temp_directory_path();
-      tmp_path /= "redex.after_pass_size.XXXXXX";
-      const auto& tmp_str = tmp_path.string();
-      std::unique_ptr<char[]> c_str =
-          std::make_unique<char[]>(tmp_str.length() + 1);
-      strcpy(c_str.get(), tmp_str.c_str());
-      char* dir_name = mkdtemp(c_str.get());
-      if (dir_name == nullptr) {
-        std::cerr << "Could not create temporary directory!";
-        return false;
-      }
-      tmp_dir = dir_name;
-    }
-
-    auto* thread_pool_instance = redex_thread_pool::ThreadPool::get_instance();
-    if (thread_pool_instance != nullptr) {
-      thread_pool_instance->join();
-    }
-
-    pid_t p = fork();
-
-    if (p < 0) {
-      std::cerr << "Fork failed!" << strerror(errno) << '\n';
-      return false;
-    }
-
-    if (p > 0) {
-      // Parent (=this).
-      m_open_jobs.emplace_back(pass_info, tmp_dir, p);
-      return false;
-    }
-
-    // Child.
-    return handle_child(tmp_dir, stores, conf);
-#else
-    (void)pass_info;
-    return false;
-#endif
-  }
-
-  void wait() {
-#ifdef __linux__
-    check_open_jobs(/*no_hang=*/false);
-#endif
-  }
-
- private:
-#ifdef __linux__
-  void check_open_jobs(bool no_hang) {
-    for (auto it = m_open_jobs.begin(); it != m_open_jobs.end();) {
-      int stat;
-      pid_t wait_res;
-      for (;;) {
-        wait_res = waitpid(it->pid, &stat, no_hang ? WNOHANG : 0);
-        if (wait_res != -1 || errno != EINTR) {
-          break;
-        }
-      }
-      if (wait_res == 0) {
-        // Not done.
-        ++it;
-        continue;
-      }
-      if (wait_res == -1) {
-        std::cerr << "Failed " << it->pass_info->name << '\n';
-      } else {
-        if (WIFEXITED(stat) && WEXITSTATUS(stat) == 0) {
-          handle_parent(*it);
-        } else {
-          std::cerr << "AfterPass child failed: " << std::hex << stat
-                    << std::dec << '\n';
-        }
-      }
-      boost::filesystem::remove_all(it->tmp_dir);
-      it = m_open_jobs.erase(it);
-    }
-  }
-
-  void handle_parent(const Job& job) {
-    // Collect dex file sizes in the temp directory.
-    // Discover dex files
-    namespace fs = boost::filesystem;
-    auto end = fs::directory_iterator();
-    uint64_t sum{0};
-    for (fs::directory_iterator it{job.tmp_dir}; it != end; ++it) {
-      const auto& file = it->path();
-      if (fs::is_regular_file(file) &&
-          (file.extension().compare(std::string(".dex")) == 0)) {
-        sum += fs::file_size(file);
-      }
-    }
-    job.pass_info->metrics["after_pass_size"] = static_cast<int64_t>(sum);
-    if (m_debug) {
-      std::cerr << "Got " << sum << " for " << job.pass_info->name << '\n';
-    }
-  }
-
-  bool handle_child(const std::string& tmp_dir,
-                    DexStoresVector* stores,
-                    ConfigFiles* conf) {
-    // Change output directory.
-    if (m_debug) {
-      std::cerr << "After-pass-size to " << tmp_dir << '\n';
-    }
-    conf->set_outdir(tmp_dir);
-
-    // Close output. No noise. (Maybe make this configurable)
-    if (!m_debug) {
-      close(STDOUT_FILENO);
-      close(STDERR_FILENO);
-    }
-
-    // Ensure that aborts work correctly.
-    set_abort_if_not_this_thread();
-
-    auto maybe_run = [&](const char* pass_name) {
-      auto* pass = m_mgr->find_pass(pass_name);
-      if (pass != nullptr) {
-        if (m_debug) {
-          std::cerr << "Running " << pass_name << '\n';
-        }
-        ensure_cfg(*stores);
-        pass->run_pass(*stores, *conf, *m_mgr);
-      }
-    };
-
-    // If configured with InterDexPass, better run that. Expensive, but may be
-    // required for dex constraints.
-    if (m_run_interdex && !m_mgr->interdex_has_run()) {
-      maybe_run("InterDexPass");
-    }
-    // Better run MakePublicPass.
-    maybe_run("MakePublicPass");
-    // Run ReBindRefsPass to not get a 'trying to encode too many method refs in
-    // dex' error
-    maybe_run("ReBindRefsPass");
-    // May need register allocation. Run InjectionIdLoweringPass too so
-    // RegAllocPass doesn't fail on injection-id opcodes
-    if (!m_mgr->regalloc_has_run()) {
-      maybe_run("IntrinsifyInjectionIdsPass");
-      maybe_run("InjectionIdLoweringPass");
-      maybe_run("RegAllocPass");
-    }
-
-    // Ensure we do not wait for anything copied from the parent.
-    m_open_jobs.clear();
-    m_enabled = false;
-
-    // Make the PassManager skip further passes.
-    return true;
-  }
-#endif
-};
 
 void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
   TRACE(PM, 2, "Running assessor...");
@@ -1673,8 +1464,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // Abort if the analysis pass dependencies are not satisfied.
   AnalysisUsage::check_dependencies(m_activated_passes);
 
-  AfterPassSizes after_pass_size(this, conf);
-
   if (pm_config->check_pass_order_properties) {
     verify_pass_order(*this, conf);
   }
@@ -1711,7 +1500,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   /////////////////////
   // MAIN PASS LOOP. //
   /////////////////////
-  bool handled_child = false;
   bool after_interdex = false;
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
@@ -1783,18 +1571,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
     process_method_profiles(*this, conf);
 
-    handled_child = after_pass_size.handle(m_current_pass_info, &stores, &conf);
-    if (handled_child) {
-      // Measuring child. Return to write things out.
-      break;
-    }
-
     set_pass_timing_metrics(*this, cpu_time, wall_time);
 
     m_current_pass_info = nullptr;
   }
-
-  after_pass_size.wait();
 
   // Always clear cfg and run the type checker before generating the optimized
   // dex code.
@@ -1809,9 +1589,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   jni_native_context_helper.post_passes(scope, conf);
 
   check_unique_deobfuscated.run_finally(scope);
-  if (!handled_child) {
-    check_unreleased_reserved_refs();
-  }
+  check_unreleased_reserved_refs();
 
   graph_visualizer.finalize();
 

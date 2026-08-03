@@ -1475,10 +1475,6 @@ void finalize_resource_table(ConfigFiles& conf) {
   if (!conf.finalize_resource_table()) {
     return;
   }
-  const auto& json = conf.get_json_config();
-  if (json.get("after_pass_size", false)) {
-    return;
-  }
 
   std::string apk_dir;
   conf.get_json_config().get("apk_dir", "", apk_dir);
