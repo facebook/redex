@@ -1308,6 +1308,54 @@ struct PassVerifiers {
   }
 };
 
+// Owns the invariant per-run profiling configuration. scope() builds the RAII
+// bundle of scoped profilers that stay active for one pass's execution,
+// mirroring the ViolationsTracking/Handler pattern.
+struct PassProfiling {
+  const std::optional<ScopedCommandProfiling::ProfilerInfo>& profiler_info;
+  const std::optional<ScopedCommandProfiling::ProfilerInfo>& profiler_all_info;
+  const Pass* profiler_info_pass;
+  const Pass* malloc_profile_pass;
+  ViolationsTracking& violations_tracking;
+
+  // RAII bundle: constructs the scoped profilers for one pass and tears them
+  // down (in reverse declaration order) when the pass finishes.
+  struct Scope {
+    std::optional<ScopedCommandProfiling> command_prof;
+    std::optional<ScopedCommandProfiling> command_all_prof;
+    jemalloc_util::ScopedProfiling malloc_prof;
+    std::optional<ViolationsTracking::Handler> violations;
+
+    // Builds every scoped profiler in place, in declaration order, so their
+    // constructor side effects run in the intended sequence: command
+    // profiling, then jemalloc scoped profiling, then violations tracking
+    // (whose constructor allocates and must run while malloc profiling is
+    // active). Taking the ingredients rather than pre-built members avoids
+    // relying on the unspecified evaluation order of constructor arguments.
+    Scope(PassProfiling& pp,
+          PassManager* mgr,
+          Pass* pass,
+          DexStoresVector& stores)
+        : command_prof(pp.profiler_info_pass == pass
+                           ? ScopedCommandProfiling::maybe_from_info(
+                                 pp.profiler_info, &pass->name())
+                           : std::nullopt),
+          command_all_prof(ScopedCommandProfiling::maybe_from_info(
+              pp.profiler_all_info, &pass->name())),
+          malloc_prof(pp.malloc_profile_pass == pass),
+          violations(pp.violations_tracking.maybe_track(mgr, stores)) {}
+
+    Scope(const Scope&) = delete;
+    Scope& operator=(const Scope&) = delete;
+    Scope(Scope&&) = delete;
+    Scope& operator=(Scope&&) = delete;
+  };
+
+  Scope scope(PassManager* mgr, Pass* pass, DexStoresVector& stores) {
+    return Scope(*this, mgr, pass, stores);
+  }
+};
+
 } // namespace
 
 void PassManager::check_no_new_dex_features(const DexStoresVector& stores,
@@ -1656,6 +1704,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                             return run_hasher(pass_name, s);
                           }};
 
+  PassProfiling pass_profiling{profiler_info, profiler_all_info,
+                               profiler_info_pass, m_malloc_profile_pass,
+                               violatios_tracking};
+
   /////////////////////
   // MAIN PASS LOOP. //
   /////////////////////
@@ -1682,15 +1734,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     std::chrono::duration<double> wall_time;
 
     {
-      auto scoped_command_prof = profiler_info_pass == pass
-                                     ? ScopedCommandProfiling::maybe_from_info(
-                                           profiler_info, &pass->name())
-                                     : std::nullopt;
-      auto scoped_command_all_prof = ScopedCommandProfiling::maybe_from_info(
-          profiler_all_info, &pass->name());
-      jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
-      auto maybe_track_violations =
-          violatios_tracking.maybe_track(this, stores);
+      auto profiling_scope = pass_profiling.scope(this, pass, stores);
       double cpu_time_start = ((double)std::clock()) / CLOCKS_PER_SEC;
       auto wall_time_start = std::chrono::steady_clock::now();
       // Run build_cfg() in case any newly added methods by previous passes
