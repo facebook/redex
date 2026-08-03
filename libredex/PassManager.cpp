@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <json/value.h>
 #include <limits>
@@ -1201,6 +1202,100 @@ struct ViolationsTracking {
   }
 };
 
+// Runs the configured verifiers around each pass. The stable collaborators are
+// bound once at construction; pre_pass/post_pass take only the per-pass inputs.
+struct PassVerifiers {
+  PassManager& mgr;
+  DexStoresVector& stores;
+  std::vector<PassManager::PassInfo>& pass_info;
+  CheckerConfig& checker_conf;
+  const AssessorConfig* assessor_config;
+  CheckUniqueDeobfuscatedNames& check_unique_deobfuscated;
+  const PassManagerConfig* pm_config;
+  redex_properties::Manager* properties_manager;
+  bool run_hasher_after_each_pass;
+  std::function<hashing::DexHash(const char*, const Scope&)> run_hasher_fn;
+
+  // Runs verifiers before a pass; currently only the initial assessor run.
+  void pre_pass(size_t i, const Scope& scope) {
+    if (i == 0 && assessor_config->run_initially) {
+      run_assessor(mgr, scope, /* initially */ true);
+    }
+  }
+
+  // Runs verifiers after a pass: CFG/reference invariants, then (as configured)
+  // the hasher, assessor, type checker, and unique-deobfuscated-name check on a
+  // freshly built scope, and finally the deep property check.
+  void post_pass(Pass* pass, size_t i) {
+    auto* current_pass_info = &pass_info[i];
+    ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
+    ConcurrentSet<DexMethod*> unique_methods;
+    walk::parallel::code(
+        build_class_scope(stores), [&](DexMethod* m, IRCode& code) {
+          always_assert_log(code.cfg_built(), "%s has a cfg!", SHOW(m));
+          code.cfg().reset_exit_block();
+          if (slow_invariants_debug) {
+            std::vector<DexMethodRef*> methods;
+            methods.reserve(1000);
+            methods.push_back(m);
+            code.gather_methods(methods);
+            for (auto* mref : methods) {
+              always_assert_log(
+                  DexMethod::get_method(mref->get_class(), mref->get_name(),
+                                        mref->get_proto()) != nullptr,
+                  "Did not find %s in the context, referenced from %s!",
+                  SHOW(mref), SHOW(m));
+              all_code_referenced_methods.insert(mref);
+            }
+            if (!unique_methods.insert(m)) {
+              not_reached_log("Duplicate method: %s", SHOW(m));
+            }
+          }
+        });
+    if (slow_invariants_debug) {
+      ScopedMetrics sm(mgr);
+      sm.set_metric("num_code_referenced_methods",
+                    all_code_referenced_methods.size());
+    }
+
+    bool run_hasher = run_hasher_after_each_pass;
+    bool run_assessor =
+        assessor_config->run_after_each_pass ||
+        (assessor_config->run_finally && i == pass_info.size() - 1);
+    bool run_type_checker = checker_conf.run_after_pass(pass);
+
+    if (run_hasher || run_assessor || run_type_checker ||
+        check_unique_deobfuscated.m_after_each_pass) {
+      auto scope = build_class_scope(stores);
+
+      if (run_hasher) {
+        current_pass_info->hash = std::optional<hashing::DexHash>(
+            run_hasher_fn(pass->name().c_str(), scope));
+      }
+      if (run_assessor) {
+        ::run_assessor(mgr, scope);
+        ScopedMetrics sm(mgr);
+        source_blocks::track_source_block_coverage(sm, stores);
+      }
+      if (run_type_checker) {
+        // It's OK to overwrite the `this` register if we are not yet at the
+        // output phase -- the register allocator can fix it up later.
+        checker_conf.check_no_overwrite_this(false)
+            .validate_access(false)
+            .run_verifier(scope);
+      }
+      auto timer = m_check_unique_deobfuscateds_timer.scope();
+      check_unique_deobfuscated.run_after_pass(pass, scope);
+    }
+    if (pm_config->check_properties_deep && properties_manager != nullptr) {
+      TRACE(PM, 2, "Checking established properties of %s...",
+            current_pass_info->pass->name().c_str());
+      properties_manager->apply_and_check(
+          current_pass_info->property_interactions, stores, mgr);
+    }
+  }
+};
+
 } // namespace
 
 void PassManager::check_no_new_dex_features(const DexStoresVector& stores,
@@ -1524,81 +1619,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     verify_pass_order(*this, conf);
   }
 
-  // For core loop legibility, have a lambda here.
-
-  auto pre_pass_verifiers = [&](Pass* /*pass*/, size_t i) {
-    if (i == 0 && assessor_config->run_initially) {
-      ::run_assessor(*this, scope, /* initially */ true);
-    }
-  };
-
-  auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
-    ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
-    ConcurrentSet<DexMethod*> unique_methods;
-    walk::parallel::code(
-        build_class_scope(stores), [&](DexMethod* m, IRCode& code) {
-          always_assert_log(code.cfg_built(), "%s has a cfg!", SHOW(m));
-          code.cfg().reset_exit_block();
-          if (slow_invariants_debug) {
-            std::vector<DexMethodRef*> methods;
-            methods.reserve(1000);
-            methods.push_back(m);
-            code.gather_methods(methods);
-            for (auto* mref : methods) {
-              always_assert_log(
-                  DexMethod::get_method(mref->get_class(), mref->get_name(),
-                                        mref->get_proto()) != nullptr,
-                  "Did not find %s in the context, referenced from %s!",
-                  SHOW(mref), SHOW(m));
-              all_code_referenced_methods.insert(mref);
-            }
-            if (!unique_methods.insert(m)) {
-              not_reached_log("Duplicate method: %s", SHOW(m));
-            }
-          }
-        });
-    if (slow_invariants_debug) {
-      ScopedMetrics sm(*this);
-      sm.set_metric("num_code_referenced_methods",
-                    all_code_referenced_methods.size());
-    }
-
-    bool run_hasher = run_hasher_after_each_pass;
-    bool run_assessor = assessor_config->run_after_each_pass ||
-                        (assessor_config->run_finally && i == size - 1);
-    bool run_type_checker = checker_conf.run_after_pass(pass);
-
-    if (run_hasher || run_assessor || run_type_checker ||
-        check_unique_deobfuscated.m_after_each_pass) {
-      scope = build_class_scope(it);
-
-      if (run_hasher) {
-        m_current_pass_info->hash = std::optional<hashing::DexHash>(
-            this->run_hasher(pass->name().c_str(), scope));
-      }
-      if (run_assessor) {
-        ::run_assessor(*this, scope);
-        ScopedMetrics sm(*this);
-        source_blocks::track_source_block_coverage(sm, stores);
-      }
-      if (run_type_checker) {
-        // It's OK to overwrite the `this` register if we are not yet at the
-        // output phase -- the register allocator can fix it up later.
-        checker_conf.check_no_overwrite_this(false)
-            .validate_access(false)
-            .run_verifier(scope);
-      }
-      auto timer = m_check_unique_deobfuscateds_timer.scope();
-      check_unique_deobfuscated.run_after_pass(pass, scope);
-    }
-    if (pm_config->check_properties_deep && m_properties_manager != nullptr) {
-      TRACE(PM, 2, "Checking established properties of %s...",
-            m_current_pass_info->pass->name().c_str());
-      m_properties_manager->apply_and_check(
-          m_current_pass_info->property_interactions, stores, *this);
-    }
-  };
-
   if (pm_config->check_properties_deep && m_properties_manager != nullptr) {
     TRACE(PM, 2, "Checking initial properties of...");
     m_properties_manager->check(stores, *this);
@@ -1610,6 +1630,19 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   JemallocStats jemalloc_stats{this, conf};
 
   UnorderedMap<const Pass*, size_t> runs;
+
+  PassVerifiers verifiers{*this,
+                          stores,
+                          m_pass_info,
+                          checker_conf,
+                          assessor_config,
+                          check_unique_deobfuscated,
+                          pm_config,
+                          m_properties_manager,
+                          run_hasher_after_each_pass,
+                          [this](const char* pass_name, const Scope& s) {
+                            return run_hasher(pass_name, s);
+                          }};
 
   /////////////////////
   // MAIN PASS LOOP. //
@@ -1631,7 +1664,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     Timer t(pass->name() + " " + std::to_string(pass_run) + " (run)");
     m_current_pass_info = &m_pass_info[i];
 
-    pre_pass_verifiers(pass, i);
+    verifiers.pre_pass(i, scope);
 
     double cpu_time;
     std::chrono::duration<double> wall_time;
@@ -1697,7 +1730,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
     graph_visualizer.add_pass(pass, i);
 
-    post_pass_verifiers(pass, i, m_activated_passes.size());
+    verifiers.post_pass(pass, i);
 
     analysis_usage_helper.post_pass(pass);
 
