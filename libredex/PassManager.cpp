@@ -505,6 +505,46 @@ void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {
                  conf.get_method_profiles().unresolved_size());
 }
 
+// Collect dex info metrics for the root store after InterDexPass has run.
+void set_root_store_metrics(PassManager& mgr,
+                            DexStoresVector& stores,
+                            const PassManagerConfig* pm_config) {
+  auto& root_store = stores.at(0);
+  auto& root_dexen = root_store.get_dexen();
+  mgr.set_metric("~rootstore.num_dexes", root_dexen.size());
+  size_t idx = 0;
+  size_t total_methods = 0;
+  for (auto& dex : root_dexen) {
+    mgr.set_metric("~rootstore.dex_" + std::to_string(++idx) + ".num_classes",
+                   dex.size());
+    for (auto& cls : dex) {
+      total_methods += cls->get_all_methods().size();
+    }
+  }
+  mgr.set_metric("~rootstore.total_class_num", total_methods);
+  if (pm_config->dump_mrefs) {
+    // dump number of mrefs in each dex in root_store.
+    idx = 0;
+    size_t total_mrefs = 0;
+    for (auto& dex : root_dexen) {
+      std::vector<DexMethodRef*> mrefs;
+      UnorderedSet<DexMethodRef*> mrefs_set;
+      for (DexClass* cls : dex) {
+        cls->gather_methods(mrefs);
+      }
+      for (auto& elem : mrefs) {
+        mrefs_set.insert(elem);
+      }
+      mgr.set_metric("~~rootstore.dex_" + std::to_string(++idx) + ".num_mrefs",
+                     mrefs_set.size());
+      total_mrefs += mrefs_set.size();
+    }
+    mgr.set_metric("~~rootstore.total_mrefs", total_mrefs);
+    mgr.set_metric("~~rootstore.total_cross_dex_mrefs",
+                   total_mrefs - total_methods);
+  }
+}
+
 void maybe_write_hashes_incoming(const ConfigFiles& conf, const Scope& scope) {
   if (conf.emit_incoming_hashes()) {
     TRACE(PM, 1, "Writing incoming hashes...");
@@ -1598,41 +1638,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
       // Collect dex info metrics after InterDexPass.
       if (after_interdex) {
-        auto& root_store = stores.at(0);
-        auto& root_dexen = root_store.get_dexen();
-        set_metric("~rootstore.num_dexes", root_dexen.size());
-        size_t idx = 0;
-        size_t total_methods = 0;
-        for (auto& dex : root_dexen) {
-          set_metric("~rootstore.dex_" + std::to_string(++idx) + ".num_classes",
-                     dex.size());
-          for (auto& cls : dex) {
-            total_methods += cls->get_all_methods().size();
-          }
-        }
-        set_metric("~rootstore.total_class_num", total_methods);
-        if (pm_config->dump_mrefs) {
-          // dump number of mrefs in each dex in root_store.
-          idx = 0;
-          size_t total_mrefs = 0;
-          for (auto& dex : root_dexen) {
-            std::vector<DexMethodRef*> mrefs;
-            UnorderedSet<DexMethodRef*> mrefs_set;
-            for (DexClass* cls : dex) {
-              cls->gather_methods(mrefs);
-            }
-            for (auto& elem : mrefs) {
-              mrefs_set.insert(elem);
-            }
-            set_metric(
-                "~~rootstore.dex_" + std::to_string(++idx) + ".num_mrefs",
-                mrefs_set.size());
-            total_mrefs += mrefs_set.size();
-          }
-          set_metric("~~rootstore.total_mrefs", total_mrefs);
-          set_metric("~~rootstore.total_cross_dex_mrefs",
-                     total_mrefs - total_methods);
-        }
+        set_root_store_metrics(*this, stores, pm_config);
       }
       // Ensure the CFG is clean, e.g., no unreachable blocks.
       {
