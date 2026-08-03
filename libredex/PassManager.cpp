@@ -685,6 +685,18 @@ void ensure_cfg(DexStoresVector& stores) {
   });
 }
 
+// Ensure the CFG is clean, e.g., no unreachable blocks, after a cfg-friendly
+// pass has run.
+void simplify_cfgs_after_pass(DexStoresVector& stores, const Pass* pass) {
+  auto temp_scope = build_class_scope(stores);
+  walk::parallel::code(temp_scope, [&](DexMethod* method, IRCode& code) {
+    always_assert_log(code.cfg_built(),
+                      "%s has no cfg after cfg-friendly pass %s", SHOW(method),
+                      pass->name().c_str());
+    code.cfg().simplify();
+  });
+}
+
 class AfterPassSizes {
  private:
   PassManager* m_mgr;
@@ -1701,16 +1713,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (after_interdex) {
         set_root_store_metrics(*this, stores, pm_config);
       }
-      // Ensure the CFG is clean, e.g., no unreachable blocks.
-      {
-        auto temp_scope = build_class_scope(stores);
-        walk::parallel::code(temp_scope, [&](DexMethod* method, IRCode& code) {
-          always_assert_log(code.cfg_built(),
-                            "%s has no cfg after cfg-friendly pass %s",
-                            SHOW(method), pass->name().c_str());
-          code.cfg().simplify();
-        });
-      }
+      simplify_cfgs_after_pass(stores, pass);
 
       g_redex->compact();
 
