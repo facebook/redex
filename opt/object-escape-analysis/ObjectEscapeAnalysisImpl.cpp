@@ -22,17 +22,10 @@ const IRInstruction* ZERO = new IRInstruction(OPCODE_CONST);
 namespace object_escape_analysis_impl {
 
 bool Callees::operator==(const Callees& other) const {
-  if (with_code.size() != other.with_code.size() ||
-      any_unknown != other.any_unknown) {
-    return false;
-  }
-  UnorderedSet<DexMethod*> set(with_code.begin(), with_code.end());
-  for (auto* method : other.with_code) {
-    if (set.count(method) == 0u) {
-      return false;
-    }
-  }
-  return true;
+  // with_code holds distinct methods in a non-deterministic order, so compare
+  // it as a set.
+  return any_unknown == other.any_unknown &&
+         unordered_equal(with_code, other.with_code);
 }
 
 DexMethod* resolve_invoke_method_if_unambiguous(

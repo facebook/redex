@@ -1780,3 +1780,72 @@ struct UnorderedMergeContainers {
     insert_unordered_iterable(*accumulator, addend);
   }
 };
+
+// Order-independent (multiset) equality of two unordered collections of the
+// same type: they are equal iff they hold the same elements with the same
+// multiplicities, regardless of iteration order. Use this instead of `==` when
+// comparing collections whose element order is non-deterministic (e.g.
+// UnorderedBag, or the mapped values of a concurrent map).
+//
+// Default (hashing) form, O(n):
+//  - For associative Unordered wrappers (UnorderedSet/UnorderedMap/
+//    UnorderedMultiMap), whose own `operator==` is already order-independent,
+//    this delegates to it (so it also works for maps, whose element type isn't
+//    hashable).
+//  - Otherwise (UnorderedBag, or a plain hashable sequence), it compares
+//  element
+//    multiplicities via a hash map, so it requires the element type to be
+//    hashable and equality-comparable (pointers, ints, strings, ...). For
+//    interned pointers (e.g. DexMethod*) this is pointer identity.
+template <class Collection>
+bool unordered_equal(const Collection& a, const Collection& b) {
+  if constexpr (std::is_base_of_v<UnorderedBase<Collection>, Collection> &&
+                !std::is_base_of_v<UnorderedBagBase, Collection>) {
+    return a == b;
+  } else {
+    if (a.size() != b.size()) {
+      return false;
+    }
+    UnorderedMap<typename Collection::value_type, size_t> counts;
+    counts.reserve(a.size());
+    for (const auto& x : UnorderedIterable(a)) {
+      ++counts[x];
+    }
+    for (const auto& x : UnorderedIterable(b)) {
+      auto it = counts.find(x);
+      if (it == counts.end() || it->second == 0) {
+        return false;
+      }
+      --it->second;
+    }
+    return true;
+  }
+}
+
+// Comparator form, O(n log n): for element types that are orderable but not
+// hashable, or when a specific canonical order is wanted. `comp` is a strict
+// weak ordering over elements.
+template <class Collection, class Compare>
+bool unordered_equal(const Collection& a, const Collection& b, Compare comp) {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  return unordered_to_ordered(a, comp) == unordered_to_ordered(b, comp);
+}
+
+// Default-constructible functor form of `unordered_equal`, for APIs that take
+// an equality *type* rather than a callable -- e.g. the `ValueEqual` template
+// parameter of `InsertOnlyConcurrentMap::get_or_create_and_assert_equal` when
+// the mapped value is an unordered collection. `Compare = void` selects the
+// hashing form; otherwise a default-constructed `Compare` selects the
+// comparator form.
+template <class Collection, class Compare = void>
+struct UnorderedEqual {
+  bool operator()(const Collection& a, const Collection& b) const {
+    if constexpr (std::is_void_v<Compare>) {
+      return unordered_equal(a, b);
+    } else {
+      return unordered_equal(a, b, Compare());
+    }
+  }
+};
