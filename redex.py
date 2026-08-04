@@ -27,7 +27,6 @@ from shlex import quote
 
 import pyredex.bintools as bintools
 import pyredex.logger as logger
-from pyredex.buck import BuckConnectionScope, BuckPartScope
 from pyredex.packer import compress_entries, CompressionEntry, CompressionLevel
 from pyredex.unpacker import (
     LibraryManager,
@@ -49,6 +48,7 @@ from pyredex.utils import (
     relocate_dexen_to_directories,
     remove_comments,
     sign_apk,
+    timed_scope,
     verify_dexes,
     with_temp_cleanup,
 )
@@ -1136,7 +1136,7 @@ def _handle_profiles(
     if not args.packed_profiles:
         return
 
-    with BuckPartScope("redex::UnpackProfiles", "Unpacking Profiles"):
+    with timed_scope("Unpacking Profiles"):
         directory = make_temp_dir(".redex_profiles", False)
         unpack_tar_xz(args.packed_profiles, directory)
 
@@ -1232,7 +1232,7 @@ def _handle_profiles(
 def _handle_class_frequencies(args: argparse.Namespace) -> None:
     if not args.class_frequencies:
         return
-    with BuckPartScope("redex::UnpackClassFreqs", "Unpacking Class Frequencies"):
+    with timed_scope("Unpacking Class Frequencies"):
         class_freq_directory = make_temp_dir(".redex_class_frequencies", False)
         with zipfile.ZipFile(args.class_frequencies, "r") as class_freq_zip:
             class_freq_zip.extractall(path=class_freq_directory)
@@ -1330,8 +1330,8 @@ def prepare_redex(args: argparse.Namespace) -> State:
             if e.errno != errno.EEXIST:
                 raise e
 
-    with BuckPartScope("redex::Unpacking", "Unpacking Redex input"):
-        with BuckPartScope("redex::UnpackApk", "Unpacking APK"):
+    with timed_scope("Unpacking Redex input"):
+        with timed_scope("Unpacking APK"):
             LOGGER.debug("Unpacking...")
             if not extracted_apk_dir:
                 extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
@@ -1665,7 +1665,6 @@ def get_compression_list() -> typing.List[CompressionEntry]:
 
 def finalize_redex(state: State) -> None:
     if state.args.verify_dexes:
-        # with BuckPartScope("Redex::VerifyDexes", "Verifying output dex files"):
         verify_dexes(state.dex_dir, state.args.verify_dexes)
 
     if state.dexen_initial_state is not None:
@@ -1676,8 +1675,8 @@ def finalize_redex(state: State) -> None:
 
     _assert_val(state.lib_manager).__exit__(*sys.exc_info())
 
-    with BuckPartScope("Redex::OutputAPK", "Creating output APK"):
-        with BuckPartScope("Redex::UnUnpack", "Undoing unpack"):
+    with timed_scope("Creating output APK"):
+        with timed_scope("Undoing unpack"):
             _assert_val(state.unpack_manager).__exit__(*sys.exc_info())
 
         meta_file_dir = join(state.dex_dir, "meta/")
@@ -1685,7 +1684,7 @@ def finalize_redex(state: State) -> None:
             "meta dir %s does not exist" % meta_file_dir
         )
 
-        with BuckPartScope("Redex::ReZip", "Rezipping"):
+        with timed_scope("Rezipping"):
             resource_file_mapping = join(meta_file_dir, "resource-mapping.txt")
             if os.path.exists(resource_file_mapping):
                 _assert_val(state.zip_manager).set_resource_file_mapping(
@@ -1693,7 +1692,7 @@ def finalize_redex(state: State) -> None:
                 )
             _assert_val(state.zip_manager).__exit__(*sys.exc_info())
 
-        with BuckPartScope("Redex::AlignAndSign", "Aligning and signing"):
+        with timed_scope("Aligning and signing"):
             page_align = PageAlignment.from_args(
                 state.args.page_align_libs,
                 state.args.page_align_libs_16kb,
@@ -1711,7 +1710,7 @@ def finalize_redex(state: State) -> None:
                 page_align,
             )
 
-    with BuckPartScope("Redex::OutputDir", "Arranging output dir"):
+    with timed_scope("Arranging output dir"):
         compress_entries(
             get_compression_list(),
             meta_file_dir,
@@ -1802,27 +1801,26 @@ def run_redex(
     exception_formatter: typing.Optional[ExceptionMessageFormatter] = None,
     output_line_handler: typing.Optional[typing.Callable[[str], str]] = None,
 ) -> None:
-    with BuckConnectionScope():
-        if exception_formatter is None:
-            exception_formatter = ExceptionMessageFormatter()
+    if exception_formatter is None:
+        exception_formatter = ExceptionMessageFormatter()
 
-        if args.outdir or args.dex_files:
-            run_redex_passthrough(args, exception_formatter, output_line_handler)
-            return
-        else:
-            assert args.input_apk
+    if args.outdir or args.dex_files:
+        run_redex_passthrough(args, exception_formatter, output_line_handler)
+        return
+    else:
+        assert args.input_apk
 
-        with BuckPartScope("redex::Preparing", "Prepare to run redex"):
-            state = prepare_redex(args)
+    with timed_scope("Prepare to run redex"):
+        state = prepare_redex(args)
 
-        with BuckPartScope("redex::Run redex-all", "Actually run redex binary"):
-            run_redex_binary(state, exception_formatter, output_line_handler)
+    with timed_scope("Actually run redex binary"):
+        run_redex_binary(state, exception_formatter, output_line_handler)
 
-        if args.stop_pass:
-            # Do not remove temp dirs
-            sys.exit()
+    if args.stop_pass:
+        # Do not remove temp dirs
+        sys.exit()
 
-        finalize_redex(state)
+    finalize_redex(state)
 
 
 def early_apply_args(args: argparse.Namespace) -> None:
