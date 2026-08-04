@@ -123,21 +123,30 @@ AC_ARG_WITH([android-sdk],
         [AC_PATH_PROG([PROTOC], [protoc], [no])])
     ]
 )
-# Look for dx & android.jar.
+# The R8 jar is pinned rather than taken from the SDK: the d8 bundled with the
+# Android build-tools tracks the SDK release train, not the Android Gradle
+# Plugin, and its dex output is years behind the d8 that ships in AGP.
+AC_ARG_WITH([r8],
+    [AS_HELP_STRING([--with-r8=/path/to/r8.jar],
+        [Location of the R8 jar, which provides d8, for testing.])],
+    [R8_JAR="$withval"],
+    []
+)
+# Look for java, the R8 jar & android.jar.
 AS_IF([test "x$NO_ANDROID_HOME" = "xno"],
     [],
     [
-        # Do not assume a totally new SDK. Try platform 29.
-        AC_PATH_PROG(
-            DX,
-            dx,
-            no,
-            "$ANDROID_HOME/build-tools/29.0.2:$PATH"
-        )
-        AS_IF([test "x$DX" = "xno"],
-            [AC_MSG_ERROR([--with-android-sdk option was specified but does not seem to point at a valid Android SDK installation])]
+        AC_PATH_PROG([JAVA], [java], [no])
+        AS_IF([test "x$JAVA" = "xno"],
+            [AC_MSG_ERROR([java is required to run d8])]
             []
         )
+        AC_CHECK_FILE(
+            "$R8_JAR",
+            [AC_SUBST(R8_JAR,"$R8_JAR")],
+            [AC_MSG_ERROR([--with-r8 must point at an R8 jar providing com.android.tools.r8.D8])]
+        )
+        # Do not assume a totally new SDK. Try platform 29.
         AC_CHECK_FILE(
             "$ANDROID_HOME/platforms/android-29/android.jar",
             [

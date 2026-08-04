@@ -18,12 +18,12 @@ runs:
       path: sdk.tar.zstd
   - name: Check/Install (SDK)
     run: |-
-      if [ -e sdk/build-tools/29.0.2/dx ] ; then echo "Found SDK." ; exit 0 ; fi
+      if [ -e sdk/build-tools/29.0.2/aapt2 ] ; then echo "Found SDK." ; exit 0 ; fi
 
-      # Check whether cache file exists, then check dx again.
+      # Check whether cache file exists, then check aapt2 again.
       if [ -f "sdk.tar.zstd" ] ; then
         zstd --decompress --stdout sdk.tar.zstd | tar xf -
-        if [ -e sdk/build-tools/29.0.2/dx ] ; then echo "Unpacked SDK." ; exit 0 ; fi
+        if [ -e sdk/build-tools/29.0.2/aapt2 ] ; then echo "Unpacked SDK." ; exit 0 ; fi
       fi
 
       # Download.
@@ -41,4 +41,20 @@ runs:
       # We do not need the emulator and it is large. Delete.
       rm -rf sdk/emulator 2>/dev/null
       tar cf - sdk | zstd -T0 -9 > sdk.tar.zstd
+    shell: bash
+  # d8 is pinned to an R8 release instead of taken from the SDK: the build-tools
+  # d8 tracks the SDK release train rather than the Android Gradle Plugin, and
+  # lags it by years. Keep this version aligned with the AGP release Redex is
+  # expected to consume the output of.
+  - name: Cache R8
+    uses: actions/cache@v5
+    with:
+      key: v1-r8-8.8.34
+      path: r8.jar
+  - name: Check/Install (R8)
+    run: |-
+      if [ -f r8.jar ] ; then echo "Found R8." ; exit 0 ; fi
+
+      echo "R8 missing, downloading..."
+      wget -O r8.jar https://maven.google.com/com/android/tools/r8/8.8.34/r8-8.8.34.jar
     shell: bash

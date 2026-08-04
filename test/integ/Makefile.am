@@ -1,10 +1,12 @@
 include $(top_srcdir)/Makefile.inc
 include $(top_srcdir)/test/Makefile.inc
 
-DX = @DX@
+JAVA = @JAVA@
+R8_JAR = @R8_JAR@
 
 ANDROID_SDK = @ANDROID_SDK@
 ANDROID_PLATFORM_VERSION = @ANDROID_PLATFORM_VERSION@
+ANDROID_JAR = $(ANDROID_SDK)/platforms/$(ANDROID_PLATFORM_VERSION)/android.jar
 
 AM_CXXFLAGS = --std=gnu++20
 AM_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES)
@@ -215,8 +217,10 @@ EXTRA_uses_app_module_annotation_test_DEPENDENCIES = uses_app_module_annotation-
 verifier_artifacts_test_SOURCES = VerifierTest.cpp
 EXTRA_verifier_artifacts_test_DEPENDENCIES = verifier_artifacts_test-class.dex
 
-# Note: Should switch to d8, instead.
-javac_source_target = -source 8 -target 8
+javac_source_target = -source 11 -target 11
+
+# Matches the platform the tests are compiled and run against.
+d8_min_api = 29
 
 define create_jar
 	mkdir -p $@.tmp
@@ -226,8 +230,13 @@ endef
 
 SUFFIXES = .dex
 
+# d8 only writes into a directory or a zip, always naming the result
+# classes.dex, so the single-dex output has to be moved into place.
 .jar.dex:
-	$(DX) --dex --output=$@ $^
+	mkdir -p $@.tmp
+	$(JAVA) -cp $(R8_JAR) com.android.tools.r8.D8 --min-api $(d8_min_api) \
+		--lib $(ANDROID_JAR) --output $@.tmp $^
+	mv $@.tmp/classes.dex $@
 
 app_module_usage_test-class.jar: AppModuleUsageClass.java
 	$(create_jar)
