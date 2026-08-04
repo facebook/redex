@@ -39,9 +39,10 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
   auto lta = gta->get_replayable_local_analysis(meth_foo);
   auto* code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
+  // v0 holds local `one`, v1 holds local `two`.
   EXPECT_EQ(foo_exit_env.get_reg_environment().get(0),
             get_type_domain("SubOne"));
-  EXPECT_EQ(foo_exit_env.get_reg_environment().get(2),
+  EXPECT_EQ(foo_exit_env.get_reg_environment().get(1),
             get_type_domain("SubTwo"));
 }
 

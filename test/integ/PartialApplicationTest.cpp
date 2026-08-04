@@ -52,7 +52,6 @@ TEST_F(PartialApplicationTest, basic) {
   // call_fooX gets foo$spa$
   auto expected_code = assembler::ircode_from_string(R"(
     (
-     (.dbg DBG_SET_PROLOGUE_END)
      (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication;.call_foo4:()V" PartialApplication.java 30)
      (invoke-static () "Lcom/facebook/redextest/PartialApplication$Callees;.foo$spa$0$3b9e1bb0b5617ee4$0:()V")
      (.pos:dbg_1 "Lcom/facebook/redextest/PartialApplication;.call_foo4:()V" PartialApplication.java 31)
@@ -86,10 +85,9 @@ TEST_F(PartialApplicationTest, basic) {
   // call_barX gets bar$spa$
   expected_code = assembler::ircode_from_string(R"(
     (
-     (.dbg DBG_SET_PROLOGUE_END)
      (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication;.call_bar4:()V" PartialApplication.java 52)
-     (const v2 1)
-     (invoke-static (v2) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+     (const v0 1)
+     (invoke-static (v0) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
      (invoke-static () "Lcom/facebook/redextest/PartialApplication$Callees;.bar$spa$0$8477e08f7d55cc6f$0:()V")
      (.pos:dbg_1 "Lcom/facebook/redextest/PartialApplication;.call_bar4:()V" PartialApplication.java 53)
      (return-void)
@@ -124,15 +122,14 @@ TEST_F(PartialApplicationTest, basic) {
   // call_bazX gets baz$spa$
   expected_code = assembler::ircode_from_string(R"(
     (
-     (.dbg DBG_SET_PROLOGUE_END)
      (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication;.call_baz4:()I" PartialApplication.java 80)
      (new-instance "Lcom/facebook/redextest/PartialApplication$MoreCallees;")
      (move-result-pseudo-object v0)
      (invoke-direct (v0) "Lcom/facebook/redextest/PartialApplication$MoreCallees;.<init>:()V")
      (.pos:dbg_1 "Lcom/facebook/redextest/PartialApplication;.call_baz4:()I" PartialApplication.java 81)
      (.dbg DBG_START_LOCAL 0 "mc" "Lcom/facebook/redextest/PartialApplication$MoreCallees;")
-     (const v1 103)
      (const v8 203)
+     (const v1 103)
      (invoke-virtual (v0 v1 v8) "Lcom/facebook/redextest/PartialApplication$MoreCallees;.baz$ipa$0$310a286dd75824f4$0:(II)I")
      (move-result v1)
      (return v1)

@@ -13,148 +13,155 @@ class InstructionSequenceOutlinerTest {
     static void distraction3() {}
     static void println(String s, String t, String u) {}
 
+    // Read through fields rather than string literals: D8 assigns one register
+    // per distinct constant and reuses it, which would collapse a repeated
+    // block into bare invokes and leave nothing for the outliner to match.
+    static String SA, SB, SC, SD, SE, SF, SG, SH, SI, SJ, SK, SL, SM, SN, SO;
+    static String S1, S2, S3, S4, S5, S6, S7;
+    static String SBIG;
+
     public void basic1() {
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", "h", "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, SH, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
     }
 
     public void basic2() {
       distraction1();
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", "h", "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, SH, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
     }
 
     public void basic3() {
       distraction1();
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", "h", "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, SH, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
       distraction2();
     }
 
     public void basic4() {
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", "h", "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, SH, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
       distraction2();
     }
 
     public void in_try() {
       try {
-        println("a", "b", "c");
-        println("d", "e", "f");
-        println("g", "h", "i");
-        println("j", "k", "l");
-        println("m", "n", "o");
+        println(SA, SB, SC);
+        println(SD, SE, SF);
+        println(SG, SH, SI);
+        println(SJ, SK, SL);
+        println(SM, SN, SO);
       } catch (Exception e) {}
     }
 
     public void in_try_ineligible_due_to_different_catches() {
       try {
-        println("a", "b", "c");
-        println("d", "e", "f");
-        println("g", "h", "i");
+        println(SA, SB, SC);
+        println(SD, SE, SF);
+        println(SG, SH, SI);
       } catch (Exception e) {}
       try {
-        println("j", "k", "l");
-        println("m", "n", "o");
+        println(SJ, SK, SL);
+        println(SM, SN, SO);
       } catch (Exception e) {}
     }
 
     public void in_try_ineligible_due_to_conditional_branch(boolean b) {
       try {
-        println("a", "b", "c");
-        println("d", "e", "f");
-        println("g", "h", "i");
+        println(SA, SB, SC);
+        println(SD, SE, SF);
+        println(SG, SH, SI);
         if (b) return;
-        println("j", "k", "l");
-        println("m", "n", "o");
+        println(SJ, SK, SL);
+        println(SM, SN, SO);
       } catch (Exception e) {}
     }
 
     public void twice1() {
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", "h", "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, SH, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
 
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", "h", "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, SH, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
     }
 
     public void twice2() {
       distraction1();
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", "h", "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, SH, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
       distraction2();
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", "h", "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, SH, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
       distraction3();
     }
 
     public void param1() {
       String s = "param1";
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", s, "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, s, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
     }
 
     public void param2() {
       String s = "param2";
-      println("a", "b", "c");
-      println("d", "e", "f");
-      println("g", s, "i");
-      println("j", "k", "l");
-      println("m", "n", "o");
+      println(SA, SB, SC);
+      println(SD, SE, SF);
+      println(SG, s, SI);
+      println(SJ, SK, SL);
+      println(SM, SN, SO);
     }
 
     public int result1() {
-      println("a", "b", "c");
+      println(SA, SB, SC);
       int x = 1;
-      println("d", "e", "f");
+      println(SD, SE, SF);
       x++;
-      println("g", "h", "i");
+      println(SG, SH, SI);
       x++;
-      println("j", "k", "l");
+      println(SJ, SK, SL);
       x++;
-      println("m", "n", "o");
+      println(SM, SN, SO);
       // outlining ends here
       x += 27;
       return x;
     }
 
     public int result2() {
-      println("a", "b", "c");
+      println(SA, SB, SC);
       int x = 1;
-      println("d", "e", "f");
+      println(SD, SE, SF);
       x++;
-      println("g", "h", "i");
+      println(SG, SH, SI);
       x++;
-      println("j", "k", "l");
+      println(SJ, SK, SL);
       x++;
-      println("m", "n", "o");
+      println(SM, SN, SO);
       // outlining ends here
       x += 77;
       return x;
@@ -210,7 +217,7 @@ class InstructionSequenceOutlinerTest {
     public int defined_reg_escapes_to_catch(int x) {
       try {
         // Something that can actually throw
-        println("a", "b", "c");
+        println(SA, SB, SC);
         // outlining potentially starts here
         x+=1;
         x+=2;
@@ -232,7 +239,7 @@ class InstructionSequenceOutlinerTest {
         x+=-1;
         // outlining potentially ends here
         // Something that can actually throw
-        println("a", "b", "c");
+        println(SA, SB, SC);
         return x;
       } catch (Exception e) {
         return x;
@@ -242,7 +249,7 @@ class InstructionSequenceOutlinerTest {
     public int big_block_can_end_with_no_tries1(int x) {
       try {
         // outlining potentially starts here
-        println("big_block_can_end_with_no_tries", "b", "c");
+        println(SBIG, SB, SC);
         x+=1;
         x+=2;
         x+=3;
@@ -270,7 +277,7 @@ class InstructionSequenceOutlinerTest {
     public int big_block_can_end_with_no_tries2(int x) {
       try {
         // outlining potentially starts here
-        println("big_block_can_end_with_no_tries", "b", "c");
+        println(SBIG, SB, SC);
         x+=1;
         x+=2;
         x+=3;
@@ -357,14 +364,14 @@ class InstructionSequenceOutlinerTest {
           if (c == 3) {
             if (d == 4) {
               if (e == 5) {
-                println("1", "2", "3");
+                println(S1, S2, S3);
                 return ;
               } else {
-                println("2", "3", "4");
+                println(S2, S3, S4);
                 return;
               }
             } else {
-              println("3", "4", "5");
+              println(S3, S4, S5);
               return;
             }
           } else {
@@ -391,14 +398,14 @@ class InstructionSequenceOutlinerTest {
           if (c == 3) {
             if (d == 4) {
               if (e == 5) {
-                println("1", "2", "3");
+                println(S1, S2, S3);
                 return ;
               } else {
-                println("2", "3", "4");
+                println(S2, S3, S4);
                 return;
               }
             } else {
-              println("3", "4", "5");
+              println(S3, S4, S5);
               return;
             }
           } else {
@@ -416,16 +423,16 @@ class InstructionSequenceOutlinerTest {
       int x = 100;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return;
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return;
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return;
         case 4:
-          println("4", "5", "6");
+          println(S4, S5, S6);
           return;
       }
     }
@@ -434,16 +441,16 @@ class InstructionSequenceOutlinerTest {
       int x = 200;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return;
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return;
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return;
         case 4:
-          println("4", "5", "6");
+          println(S4, S5, S6);
           return;
       }
     }
@@ -452,13 +459,13 @@ class InstructionSequenceOutlinerTest {
       int x = 100;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return y + 1;
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return y + 2;
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return y + 3;
       }
       return y + 5;
@@ -468,13 +475,13 @@ class InstructionSequenceOutlinerTest {
       int x = 200;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return y + 1;
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return y + 2;
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return y + 3;
       }
       return y + 5;
@@ -488,13 +495,13 @@ class InstructionSequenceOutlinerTest {
       // type constraints.
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return 0x3f800000; // floating-point 1.0
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return 0x40000000; // floating-point 2.0
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return 0x40400000; // floating-point 3.0
       }
       return 0x40800000; // floating-point 4.0
@@ -504,13 +511,13 @@ class InstructionSequenceOutlinerTest {
       int x = 200;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return 0x3f800000; // floating-point 1.0
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return 0x40000000; // floating-point 2.0
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return 0x40400000; // floating-point 3.0
       }
       return 0x40800000; // floating-point 4.0
@@ -520,13 +527,13 @@ class InstructionSequenceOutlinerTest {
       int x = 300;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return 1.0f;
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return 2.0f;
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return 3.0f;
       }
       return 4.0f;
@@ -536,13 +543,13 @@ class InstructionSequenceOutlinerTest {
       int x = 400;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return 1.0f;
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return 2.0f;
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return 3.0f;
       }
       return 4.0f;
@@ -562,13 +569,13 @@ class InstructionSequenceOutlinerTest {
       int x = 500;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return new Sub1();
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return new Sub2();
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return new Sub3();
       }
       return new Base();
@@ -578,13 +585,13 @@ class InstructionSequenceOutlinerTest {
       int x = 600;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return new Sub1();
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return new Sub2();
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return new Sub3();
       }
       return new Base();
@@ -594,13 +601,13 @@ class InstructionSequenceOutlinerTest {
       int x = 500;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return new Sub1();
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return new Sub2();
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return new Sub3();
       }
       return null;
@@ -610,13 +617,13 @@ class InstructionSequenceOutlinerTest {
       int x = 600;
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           return new Sub1();
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           return new Sub2();
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           return new Sub3();
       }
       return null;
@@ -627,19 +634,19 @@ class InstructionSequenceOutlinerTest {
       Sub3 s = new Sub3();
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           demandBase(s);
           break;
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           demandSub1(s);
           break;
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           demandBase(s);
           break;
         case 4:
-          println("4", "5", "6");
+          println(S4, S5, S6);
           demandSub1(s);
           break;
       }
@@ -650,19 +657,19 @@ class InstructionSequenceOutlinerTest {
       Sub4 s = new Sub4();
       switch (x) {
         case 1:
-          println("1", "2", "3");
+          println(S1, S2, S3);
           demandBase(s);
           break;
         case 2:
-          println("2", "3", "4");
+          println(S2, S3, S4);
           demandSub1(s);
           break;
         case 3:
-          println("3", "4", "5");
+          println(S3, S4, S5);
           demandBase(s);
           break;
         case 4:
-          println("4", "5", "6");
+          println(S4, S5, S6);
           demandSub1(s);
           break;
       }
@@ -670,21 +677,21 @@ class InstructionSequenceOutlinerTest {
 
     static class Nested1 {
       public static void distributed() {
-        println("1", "2", "3");
-        println("2", "3", "4");
-        println("3", "4", "5");
-        println("4", "5", "6");
-        println("5", "6", "7");
+        println(S1, S2, S3);
+        println(S2, S3, S4);
+        println(S3, S4, S5);
+        println(S4, S5, S6);
+        println(S5, S6, S7);
       }
     }
 
     static class Nested2 {
       public static void distributed() {
-        println("1", "2", "3");
-        println("2", "3", "4");
-        println("3", "4", "5");
-        println("4", "5", "6");
-        println("5", "6", "7");
+        println(S1, S2, S3);
+        println(S2, S3, S4);
+        println(S3, S4, S5);
+        println(S4, S5, S6);
+        println(S5, S6, S7);
       }
     }
 

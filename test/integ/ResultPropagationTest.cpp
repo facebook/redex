@@ -31,14 +31,15 @@ std::optional<ParamIndex> find_return_param_index(cfg::ControlFlowGraph& cfg) {
   }
   auto return_reg = it->insn->src(0);
   TRACE(RP, 2, "  returns v%d", return_reg);
+  // The propagated parameter either reaches the return via a move, or already
+  // sits in the returned register. D8 coalesces the two when the input carries
+  // no local variable debug info, leaving no move behind.
+  auto src_reg = return_reg;
   ++it;
-  if (it == exit_block->rend() || !opcode::is_a_move(it->insn->opcode())) {
-    return std::nullopt;
-  }
-  auto src_reg = it->insn->src(0);
-  TRACE(RP, 2, "  move v%d, v%d", it->insn->dest(), src_reg);
-  if (it->insn->dest() != return_reg) {
-    return std::nullopt;
+  if (it != exit_block->rend() && opcode::is_a_move(it->insn->opcode()) &&
+      it->insn->dest() == return_reg) {
+    src_reg = it->insn->src(0);
+    TRACE(RP, 2, "  move v%d, v%d", it->insn->dest(), src_reg);
   }
   // let's see if it came from a unique load-param
   IRInstruction* load_param = nullptr;
