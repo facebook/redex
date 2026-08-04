@@ -168,6 +168,14 @@ class UnorderedMap : UnorderedBase<UnorderedMap<Key, Value, Hash, KeyEqual>> {
     explicit ConstFixedIterator(typename Type::const_iterator entry)
         : m_entry(entry) {}
 
+    // Allows a mutable end()/find() FixedIterator to be used where a
+    // ConstFixedIterator is expected (e.g. as a hint to insert), mirroring the
+    // STL's mutable-to-const iterator conversion. Intentionally non-explicit,
+    // and intentionally one-directional (no const-to-mutable conversion).
+    // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+    /* implicit */ ConstFixedIterator(const FixedIterator& other)
+        : m_entry(other._internal_unsafe_unwrap()) {}
+
     typename Type::const_iterator _internal_unsafe_unwrap() const {
       return m_entry;
     }
@@ -326,15 +334,14 @@ class UnorderedMap : UnorderedBase<UnorderedMap<Key, Value, Hash, KeyEqual>> {
     return FixedIterator(it);
   }
 
-  std::pair<FixedIterator, bool> insert(ConstFixedIterator hint,
-                                        std::pair<Key, Value>&& value) {
+  FixedIterator insert(ConstFixedIterator hint, std::pair<Key, Value>&& value) {
     auto it = m_data.insert(hint._internal_unsafe_unwrap(),
                             std::forward<std::pair<Key, Value>>(value));
     return FixedIterator(it);
   }
 
   template <typename P>
-  std::pair<FixedIterator, bool> insert(ConstFixedIterator hint, P&& value) {
+  FixedIterator insert(ConstFixedIterator hint, P&& value) {
     auto it =
         m_data.insert(hint._internal_unsafe_unwrap(), std::forward<P>(value));
     return FixedIterator(it);
@@ -345,9 +352,7 @@ class UnorderedMap : UnorderedBase<UnorderedMap<Key, Value, Hash, KeyEqual>> {
     m_data.insert(first, last);
   }
 
-  void insert(std::initializer_list<std::pair<Key, Value>> ilist) {
-    m_data.insert(ilist);
-  }
+  void insert(std::initializer_list<value_type> ilist) { m_data.insert(ilist); }
 
   Value& operator[](const Key& key) { return m_data[key]; }
 
@@ -481,6 +486,14 @@ class UnorderedMultiMap
 
     explicit ConstFixedIterator(typename Type::const_iterator entry)
         : m_entry(entry) {}
+
+    // Allows a mutable end()/find() FixedIterator to be used where a
+    // ConstFixedIterator is expected (e.g. as a hint to insert), mirroring the
+    // STL's mutable-to-const iterator conversion. Intentionally non-explicit,
+    // and intentionally one-directional (no const-to-mutable conversion).
+    // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+    /* implicit */ ConstFixedIterator(const FixedIterator& other)
+        : m_entry(other._internal_unsafe_unwrap()) {}
 
     typename Type::const_iterator _internal_unsafe_unwrap() const {
       return m_entry;
@@ -649,9 +662,7 @@ class UnorderedMultiMap
     m_data.insert(first, last);
   }
 
-  void insert(std::initializer_list<std::pair<Key, Value>> ilist) {
-    m_data.insert(ilist);
-  }
+  void insert(std::initializer_list<value_type> ilist) { m_data.insert(ilist); }
 
   FixedIterator _internal_unordered_any() {
     return FixedIterator(m_data.begin());
@@ -796,6 +807,14 @@ class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
 
     explicit ConstFixedIterator(typename Type::const_iterator entry)
         : m_entry(entry) {}
+
+    // Allows a mutable end()/find() FixedIterator to be used where a
+    // ConstFixedIterator is expected (e.g. as a hint to insert), mirroring the
+    // STL's mutable-to-const iterator conversion. Intentionally non-explicit,
+    // and intentionally one-directional (no const-to-mutable conversion).
+    // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+    /* implicit */ ConstFixedIterator(const FixedIterator& other)
+        : m_entry(other._internal_unsafe_unwrap()) {}
 
     typename Type::const_iterator _internal_unsafe_unwrap() const {
       return m_entry;
@@ -961,17 +980,13 @@ class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
   Type& _internal_unsafe_unwrap() { return m_data; }
 };
 
-template <class Value>
-bool operator==(const UnorderedBag<Value>& lhs,
-                const UnorderedBag<Value>& rhs) {
-  return lhs._internal_unsafe_unwrap() == rhs._internal_unsafe_unwrap();
-}
-
-template <class Value>
-bool operator!=(const UnorderedBag<Value>& lhs,
-                const UnorderedBag<Value>& rhs) {
-  return lhs._internal_unsafe_unwrap() != rhs._internal_unsafe_unwrap();
-}
+// UnorderedBag intentionally provides no operator==/operator!=. A bag's element
+// order is non-deterministic, so sequence equality (delegating to the backing
+// std::vector) would depend on that order, and there is no meaningful
+// order-independent default. Callers that need to compare bags must pick
+// explicit semantics (e.g. compare unordered_to_ordered(...) results, or pass a
+// custom order-independent equality to APIs like
+// InsertOnlyConcurrentMap::get_or_create_and_assert_equal).
 
 template <class Key,
           class Hash = std::hash<Key>,
@@ -1019,6 +1034,14 @@ class UnorderedSet : UnorderedBase<UnorderedSet<Key, Hash, KeyEqual>> {
 
     explicit ConstFixedIterator(typename Type::const_iterator entry)
         : m_entry(entry) {}
+
+    // Allows a mutable end()/find() FixedIterator to be used where a
+    // ConstFixedIterator is expected (e.g. as a hint to insert), mirroring the
+    // STL's mutable-to-const iterator conversion. Intentionally non-explicit,
+    // and intentionally one-directional (no const-to-mutable conversion).
+    // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+    /* implicit */ ConstFixedIterator(const FixedIterator& other)
+        : m_entry(other._internal_unsafe_unwrap()) {}
 
     typename Type::const_iterator _internal_unsafe_unwrap() const {
       return m_entry;
@@ -1277,6 +1300,20 @@ auto unordered_any(const Collection& collection) {
   return collection.begin();
 }
 
+// Reject rvalues: an iterator into a temporary would dangle once the enclosing
+// full-expression ends. Callers must bind the collection to a variable first.
+// (Safe inline uses such as `*unordered_any(x)` where x is an lvalue are
+// unaffected, as they select the lvalue overloads above.)
+template <class Collection, bool skip_assert = false>
+auto unordered_any(Collection&& collection) {
+  static_assert(skip_assert,
+                "unordered_any from an rvalue collection would return an "
+                "iterator into a destroyed temporary; store the collection in "
+                "a variable first.");
+  // Only present so that a return type can be inferred; never reached.
+  return collection.end();
+}
+
 template <class UnorderedCollection,
           std::enable_if_t<std::is_base_of_v<UnorderedBase<UnorderedCollection>,
                                              UnorderedCollection>,
@@ -1299,11 +1336,12 @@ template <class UnorderedCollection,
                            bool> = true,
           bool skip_assert = false>
 auto UnorderedIterable(UnorderedCollection&& collection) {
-  // This templated function get selected in an expression like the following:
-  // for (auto x : UnorderedIterable(new UnorderedMap(...))) { ... }
-  // However, the temporary collection may get destroyed before the end of the
-  // loop. We want to avoid that, as the UnorderedIterable() only captures a
-  // reference to the collection.
+  // This templated function gets selected in an expression like the following,
+  // where the argument is a temporary (an rvalue) collection:
+  // for (auto x : UnorderedIterable(make_unordered_map())) { ... }
+  // The temporary collection may get destroyed before the end of the loop. We
+  // want to avoid that, as the UnorderedIterable() only captures a reference to
+  // the collection.
   static_assert(
       skip_assert,
       "Creating an UnorderedIterable from an rvalue is not implemented. Store "
@@ -1328,6 +1366,24 @@ template <
     std::enable_if_t<!std::is_base_of_v<UnorderedBase<Collection>, Collection>,
                      bool> = true>
 const Collection& UnorderedIterable(const Collection& collection) {
+  return collection;
+}
+
+// Reject rvalues of ordinary (non-wrapper) collections too: returning a
+// reference to a temporary would dangle (the wrapper overload above already
+// rejects wrapper rvalues). The !is_base_of constraint keeps this disjoint from
+// that wrapper rvalue overload so the two never overlap.
+template <
+    class Collection,
+    std::enable_if_t<!std::is_base_of_v<UnorderedBase<Collection>, Collection>,
+                     bool> = true,
+    bool skip_assert = false>
+Collection& UnorderedIterable(Collection&& collection) {
+  static_assert(skip_assert,
+                "Creating an UnorderedIterable from an rvalue ordinary "
+                "collection would return a reference to a destroyed temporary; "
+                "store the collection in a variable first.");
+  // Only present so that a return type can be inferred; never reached.
   return collection;
 }
 
@@ -1429,6 +1485,13 @@ template <class Collection,
                                std::is_base_of_v<UnorderedBagBase, Collection>,
                            bool> = true>
 std::vector<Value> unordered_to_ordered(Collection& collection) {
+  static_assert(
+      !std::is_pointer_v<Value>,
+      "unordered_to_ordered on a collection of raw pointers would order by "
+      "address, which is non-deterministic across runs; pass an explicit "
+      "comparator (e.g. compare_dexmethods) to the two-argument overload. Note "
+      "this guard only catches raw pointers, not smart pointers or "
+      "pointer-containing pairs/tuples.");
   std::vector<Value> result;
   result.reserve(collection.size());
   for (auto& entry : UnorderedIterable(collection)) {
@@ -1460,6 +1523,12 @@ template <
     class Collection,
     class Key = typename std::remove_const<typename Collection::key_type>::type>
 std::vector<Key> unordered_to_ordered_keys(Collection& collection) {
+  static_assert(
+      !std::is_pointer_v<Key>,
+      "unordered_to_ordered_keys on raw pointer keys would order by address, "
+      "which is non-deterministic across runs; pass an explicit comparator to "
+      "the two-argument overload. Note this guard only catches raw pointers, "
+      "not smart pointers or pointer-containing pairs/tuples.");
   std::vector<Key> result;
   result.reserve(collection.size());
   for (auto& entry : UnorderedIterable(collection)) {
@@ -1530,8 +1599,7 @@ bool unordered_none_of(const Collection& collection, UnaryPred p) {
 template <class Collection, class UnaryFunc>
 UnaryFunc unordered_for_each(const Collection& collection, UnaryFunc f) {
   auto&& ui = UnorderedIterable(collection);
-  std::for_each(ui.begin(), ui.end(), std::move(f));
-  return f;
+  return std::for_each(ui.begin(), ui.end(), std::move(f));
 }
 
 template <class Collection, class OutputIt>
@@ -1630,6 +1698,11 @@ typename Collection::difference_type unordered_count_if(
 
 template <class Collection>
 auto unordered_min_element(Collection& collection) {
+  static_assert(
+      !std::is_pointer_v<typename Collection::value_type>,
+      "unordered_min_element on raw pointers selects by address, which is "
+      "non-deterministic across runs; pass an explicit comparator to the "
+      "overload that takes one.");
   auto&& ui = UnorderedIterable(collection);
   return unordered_to_fixed_iterator(collection,
                                      std::min_element(ui.begin(), ui.end()));
@@ -1637,6 +1710,11 @@ auto unordered_min_element(Collection& collection) {
 
 template <class Collection>
 auto unordered_min_element(const Collection& collection) {
+  static_assert(
+      !std::is_pointer_v<typename Collection::value_type>,
+      "unordered_min_element on raw pointers selects by address, which is "
+      "non-deterministic across runs; pass an explicit comparator to the "
+      "overload that takes one.");
   auto&& ui = UnorderedIterable(collection);
   return unordered_to_fixed_iterator(collection,
                                      std::min_element(ui.begin(), ui.end()));
@@ -1674,6 +1752,11 @@ auto unordered_min_element(Collection&& collection, Compare) {
 
 template <class Collection>
 auto unordered_max_element(Collection& collection) {
+  static_assert(
+      !std::is_pointer_v<typename Collection::value_type>,
+      "unordered_max_element on raw pointers selects by address, which is "
+      "non-deterministic across runs; pass an explicit comparator to the "
+      "overload that takes one.");
   auto&& ui = UnorderedIterable(collection);
   return unordered_to_fixed_iterator(collection,
                                      std::max_element(ui.begin(), ui.end()));
@@ -1681,6 +1764,11 @@ auto unordered_max_element(Collection& collection) {
 
 template <class Collection>
 auto unordered_max_element(const Collection& collection) {
+  static_assert(
+      !std::is_pointer_v<typename Collection::value_type>,
+      "unordered_max_element on raw pointers selects by address, which is "
+      "non-deterministic across runs; pass an explicit comparator to the "
+      "overload that takes one.");
   auto&& ui = UnorderedIterable(collection);
   return unordered_to_fixed_iterator(collection,
                                      std::max_element(ui.begin(), ui.end()));
