@@ -1906,7 +1906,8 @@ bool DefaultNoThrowAnalyzer::analyze_default(
   // materialize it into a target-typed slot it cannot hold -- ill-typed code.
   // External targets are skipped: their class hierarchy may be incomplete to
   // decide castability.
-  if (insn->opcode() == OPCODE_CHECK_CAST) {
+  if (enable_check_cast_value_preservation &&
+      insn->opcode() == OPCODE_CHECK_CAST) {
     const DexType* const_type =
         get_object_constant_type(env->get(insn->src(0)));
     if (const_type != nullptr) {
