@@ -273,6 +273,38 @@ TEST_F(ConstantPropagationTest, CheckCastResultRetainsExactConstant) {
   EXPECT_EQ(*v1->get_constant(), DexString::make_string("foo"));
 }
 
+// A non-null object constant whose type is castable to the target passes the
+// check-cast, so the cast never throws and is deleted (its result
+// materialized).
+TEST_F(ConstantPropagationTest, CheckCastDeletedWhenProvablySucceeds) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const-string "foo")
+     (move-result-pseudo-object v0)
+     (check-cast v0 "Ljava/lang/String;")
+     (move-result-pseudo-object v1)
+     (return-object v1)
+    )
+  )");
+
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(
+      code.get(),
+      InstructionAnalyzerCombiner<cp::StringAnalyzer, cp::PrimitiveAnalyzer>(
+          &state, nullptr));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const-string "foo")
+     (move-result-pseudo-object v0)
+     (const-string "foo")
+     (move-result-pseudo-object v1)
+     (return-object v1)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 TEST_F(ConstantPropagationTest, JumpToImmediateNext) {
   auto code = assembler::ircode_from_string(R"(
     (

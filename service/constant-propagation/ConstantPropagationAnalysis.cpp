@@ -571,9 +571,7 @@ bool PrimitiveAnalyzer::analyze_check_cast(const IRInstruction* insn,
     return analyze_default(insn, env);
   }
   // A successful check-cast returns its operand unchanged, so the result holds
-  // the operand's value. Recording the exact value is safe because
-  // replace_with_const never materializes -- and so never deletes -- a
-  // check-cast whose result is a non-null constant.
+  // the operand's value.
   env->set(RESULT_REGISTER, src);
   return true;
 }
@@ -1871,6 +1869,17 @@ bool PackageNameAnalyzer::analyze_invoke(const PackageNameState* state,
   return false;
 }
 
+const DexType* get_object_constant_type(const ConstantValue& value) {
+  if (auto s = value.maybe_get<StringDomain>(); s && s->get_constant()) {
+    return type::java_lang_String();
+  }
+  if (auto c = value.maybe_get<ConstantClassObjectDomain>();
+      c && c->get_constant()) {
+    return type::java_lang_Class();
+  }
+  return nullptr;
+}
+
 namespace intraprocedural {
 
 FixpointIterator::FixpointIterator(
@@ -1886,19 +1895,6 @@ FixpointIterator::FixpointIterator(
 void FixpointIterator::analyze_instruction_normal(
     const IRInstruction* insn, ConstantEnvironment* env) const {
   m_insn_analyzer(insn, env);
-}
-
-// The exact runtime type of an object constant -- String for a const-string,
-// Class for a const-class -- or nullptr when the value is not such a constant.
-static const DexType* get_object_constant_type(const ConstantValue& value) {
-  if (auto s = value.maybe_get<StringDomain>(); s && s->get_constant()) {
-    return type::java_lang_String();
-  }
-  if (auto c = value.maybe_get<ConstantClassObjectDomain>();
-      c && c->get_constant()) {
-    return type::java_lang_Class();
-  }
-  return nullptr;
 }
 
 bool DefaultNoThrowAnalyzer::analyze_default(
