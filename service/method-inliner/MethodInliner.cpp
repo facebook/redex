@@ -489,13 +489,18 @@ void gather_true_virtual_methods(
       return hash;
     }
   };
+  // The value is an (unordered) bag of overriding methods; two threads racing
+  // to create the same key may build it in a different element order, so the
+  // concurrency sanity-check compares the bags as sets (interned DexMethod
+  // pointers => pointer identity), not as ordered sequences.
   InsertOnlyConcurrentMap<Key, UnorderedBag<const DexMethod*>, Hash>
       concurrent_overriding_methods;
   auto get_overriding_methods =
       [&](DexMethod* callee,
           DexType* static_base_type) -> const UnorderedBag<const DexMethod*>& {
     return *concurrent_overriding_methods
-                .get_or_create_and_assert_equal(
+                .get_or_create_and_assert_equal<
+                    UnorderedEqual<UnorderedBag<const DexMethod*>>>(
                     Key{callee, static_base_type},
                     [&](const Key&) {
                       auto overriding_methods = mog::get_overriding_methods(
