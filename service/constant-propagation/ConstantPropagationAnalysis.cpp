@@ -1888,10 +1888,40 @@ void FixpointIterator::analyze_instruction_normal(
   m_insn_analyzer(insn, env);
 }
 
+// The exact runtime type of an object constant -- String for a const-string,
+// Class for a const-class -- or nullptr when the value is not such a constant.
+static const DexType* get_object_constant_type(const ConstantValue& value) {
+  if (auto s = value.maybe_get<StringDomain>(); s && s->get_constant()) {
+    return type::java_lang_String();
+  }
+  if (auto c = value.maybe_get<ConstantClassObjectDomain>();
+      c && c->get_constant()) {
+    return type::java_lang_Class();
+  }
+  return nullptr;
+}
+
 bool DefaultNoThrowAnalyzer::analyze_default(
     const NullCheckMethods* null_check_methods,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
+  // This case is an unconditional throw, so the no-throw successor is dead.
+  // Pruning it stops the constant from reaching a downstream pass that would
+  // materialize it into a target-typed slot it cannot hold -- ill-typed code.
+  // External targets are skipped: their class hierarchy may be incomplete to
+  // decide castability.
+  if (insn->opcode() == OPCODE_CHECK_CAST) {
+    const DexType* const_type =
+        get_object_constant_type(env->get(insn->src(0)));
+    if (const_type != nullptr) {
+      auto* target_cls = type_class(insn->get_type());
+      if (target_cls != nullptr && !target_cls->is_external() &&
+          !type::check_cast(const_type, insn->get_type())) {
+        env->set_to_bottom();
+      }
+    }
+    return false;
+  }
   auto src_index = get_dereferenced_object_src_index(insn);
   if (!src_index && null_check_methods != nullptr) {
     src_index = get_null_check_object_index(insn, *null_check_methods);
