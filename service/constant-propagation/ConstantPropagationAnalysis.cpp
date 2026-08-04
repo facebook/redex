@@ -556,14 +556,26 @@ bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
   return true;
 }
 
+// TODO(T279417132): Remove this once the behavior is fully rolled out.
+bool enable_check_cast_value_preservation = false;
+
 bool PrimitiveAnalyzer::analyze_check_cast(const IRInstruction* insn,
                                            ConstantEnvironment* env) {
   auto src = env->get(insn->src(0));
-  if (src.is_zero()) {
-    env->set(RESULT_REGISTER, SignedConstantDomain(0));
-    return true;
+  if (!enable_check_cast_value_preservation) {
+    // Carry a null operand through as null; leave everything else unknown.
+    if (src.is_zero()) {
+      env->set(RESULT_REGISTER, SignedConstantDomain(0));
+      return true;
+    }
+    return analyze_default(insn, env);
   }
-  return analyze_default(insn, env);
+  // A successful check-cast returns its operand unchanged, so the result holds
+  // the operand's value. Recording the exact value is safe because
+  // replace_with_const never materializes -- and so never deletes -- a
+  // check-cast whose result is a non-null constant.
+  env->set(RESULT_REGISTER, src);
+  return true;
 }
 
 bool PrimitiveAnalyzer::analyze_instance_of(const IRInstruction* insn,

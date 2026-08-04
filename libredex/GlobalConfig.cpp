@@ -281,6 +281,9 @@ void GlobalConfig::bind_config() {
   bind("enable_object_domain_null_check_elim", false, bool_param,
        "When true, enable null check elimination for object domains "
        "(NewObjectDomain, SingletonObjectDomain, ObjectWithImmutAttrDomain)");
+  bind("enable_check_cast_value_preservation", false, bool_param,
+       "When true, constant propagation keeps a `check-cast` operand's value "
+       "across the cast, instead of carrying only null");
   bind("enable_known_non_null_returns", false, bool_param,
        "When true, mark return values of well-known external methods as "
        "non-null in constant propagation, enabling removal of redundant "
