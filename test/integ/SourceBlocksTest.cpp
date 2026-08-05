@@ -251,7 +251,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
 
     std::string bar_str = assembler::to_string(bar->get_code());
     EXPECT_EQ(bar_str,
-              "((load-param-object v1) (.dbg DBG_SET_PROLOGUE_END) (.pos:dbg_0 "
+              "((load-param-object v1) (.pos:dbg_0 "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V\" "
               "SourceBlocksTest.java 18) (.src_block "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V\" 0 ())"
@@ -313,6 +313,13 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
        "String;)Ljava/lang/String;",
        2},
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V", 2},
+      // D8 desugars javac 11+ nestmates into these bridges; javac 8 emits the
+      // access$NNN pair above instead. Both forms are listed so the map stays
+      // exhaustive whichever javac target the fixture is compiled with.
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$sfputmWorld:(Ljava/"
+       "lang/String;)V",
+       2},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$smbazzz:()V", 2},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -508,6 +515,14 @@ TEST_F(SourceBlocksTest, source_blocks_profile) {
        "B0: 0(0:0)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
        "B0: 0(0:0)"},
+      // D8 desugars javac 11+ nestmates into these bridges; javac 8 emits the
+      // access$NNN pair above instead. Both forms are listed so the map stays
+      // exhaustive whichever javac target the fixture is compiled with.
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$sfputmWorld:(Ljava/"
+       "lang/String;)V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$smbazzz:()V",
+       "B0: 0(0:0)"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -568,6 +583,13 @@ TEST_F(SourceBlocksTest, source_blocks_profile_no_always_inject) {
        "String;)Ljava/lang/String;",
        "B0:"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V", "B0:"},
+      // D8 desugars javac 11+ nestmates into these bridges; javac 8 emits the
+      // access$NNN pair above instead. Both forms are listed so the map stays
+      // exhaustive whichever javac target the fixture is compiled with.
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$sfputmWorld:(Ljava/"
+       "lang/String;)V",
+       "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$smbazzz:()V", "B0:"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -633,6 +655,14 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc) {
        "B0: 0(0:0) 1(0:0)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
        "B0: 0(0:0) 1(0:0)"},
+      // D8 desugars javac 11+ nestmates into these bridges; javac 8 emits the
+      // access$NNN pair above instead. Both forms are listed so the map stays
+      // exhaustive whichever javac target the fixture is compiled with.
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$sfputmWorld:(Ljava/"
+       "lang/String;)V",
+       "B0: 0(0:0) 1(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$smbazzz:()V",
+       "B0: 0(0:0) 1(0:0)"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -695,6 +725,13 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc_no_always_inject) {
        "String;)Ljava/lang/String;",
        "B0:"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V", "B0:"},
+      // D8 desugars javac 11+ nestmates into these bridges; javac 8 emits the
+      // access$NNN pair above instead. Both forms are listed so the map stays
+      // exhaustive whichever javac target the fixture is compiled with.
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$sfputmWorld:(Ljava/"
+       "lang/String;)V",
+       "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$smbazzz:()V", "B0:"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -767,6 +804,14 @@ TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
        "String;)Ljava/lang/String;",
        "B0: 0(0:0)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       "B0: 0(0:0)"},
+      // D8 desugars javac 11+ nestmates into these bridges; javac 8 emits the
+      // access$NNN pair above instead. Both forms are listed so the map stays
+      // exhaustive whichever javac target the fixture is compiled with.
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$sfputmWorld:(Ljava/"
+       "lang/String;)V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.-$$Nest$smbazzz:()V",
        "B0: 0(0:0)"},
   };
 

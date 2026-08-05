@@ -2,7 +2,7 @@ include $(top_srcdir)/Makefile.inc
 include $(top_srcdir)/test/Makefile.inc
 include $(top_srcdir)/test/samples/Makefile.inc
 
-DX = @DX@
+D8 = @D8@
 
 ANDROID_SDK = @ANDROID_SDK@
 ANDROID_PLATFORM_VERSION = @ANDROID_PLATFORM_VERSION@

@@ -226,15 +226,15 @@ TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42B) {
   auto expected = assembler::ircode_from_string(R"(
    (
       (new-instance "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$H;")
-      (move-result-pseudo-object v1)
-      (invoke-direct (v1) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$H;.<init>:()V")
-      (new-instance "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$G;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0 v1) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$G;.<init>:(Lcom/facebook/redextest/ObjectEscapeAnalysisTest$H;)V")
-      (invoke-virtual (v1) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$H;.getX:()I")
+      (invoke-direct (v0) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$H;.<init>:()V")
+      (new-instance "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$G;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1 v0) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$G;.<init>:(Lcom/facebook/redextest/ObjectEscapeAnalysisTest$H;)V")
+      (invoke-virtual (v0) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$H;.getX:()I")
       (move-result v2)
       (return v2)
-    )
+   )
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
@@ -302,6 +302,8 @@ TEST_F(ObjectEscapeAnalysisTest, optionalReduceTo42Override) {
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
 
+// The reduced code keeps an always-true `if-nez` on the nullness flag; the
+// object is still fully reduced away, and later passes fold the branch.
 TEST_F(ObjectEscapeAnalysisTest, optionalReduceTo42CheckCast) {
   run();
 
@@ -311,14 +313,19 @@ TEST_F(ObjectEscapeAnalysisTest, optionalReduceTo42CheckCast) {
   auto expected = assembler::ircode_from_string(R"(
    (
       (load-param v2)
-      (if-eqz v2 :L1)
-      (const v1 0)
+      (const v15 1)
+      (if-eqz v2 :L2)
       (:L0)
-      (return v1)
+      (const v1 0)
       (:L1)
-      (const v1 42)
+      (return v1)
+      (:L2)
+      (if-nez v15 :L3)
       (goto :L0)
-    )
+      (:L3)
+      (const v1 42)
+      (goto :L1)
+   )
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
@@ -379,18 +386,18 @@ TEST_F(ObjectEscapeAnalysisTest, optionalLoopyReduceTo42) {
   auto expected = assembler::ircode_from_string(R"(
    (
       (const v11 0)
-      (const v0 0)
+      (const v1 0)
       (:L0)
-      (if-eqz v0 :L2)
+      (if-eqz v1 :L2)
       (const v2 2)
-      (if-ne v0 v2 :L1)
+      (if-ne v1 v2 :L1)
       (return v11)
       (:L1)
       (const v11 42)
       (:L2)
-      (add-int/lit v0 v0 1)
+      (add-int/lit v1 v1 1)
       (goto :L0)
-    )
+   )
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
@@ -618,10 +625,10 @@ TEST_F(ObjectEscapeAnalysisTest, reduceIncompleteInlinableType) {
   auto expected = assembler::ircode_from_string(R"(
    (
       (load-param v5)
-      (const v8 42)
-      (invoke-static (v8) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;.allocator:(I)Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;")
-      (move-result-object v6)
-      (invoke-virtual (v6) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;.getX:()I")
+      (const v6 42)
+      (invoke-static (v6) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;.allocator:(I)Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;")
+      (move-result-object v7)
+      (invoke-virtual (v7) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;.getX:()I")
       (if-eqz v5 :L1)
       (const v23 42)
       (:L0)
@@ -629,7 +636,7 @@ TEST_F(ObjectEscapeAnalysisTest, reduceIncompleteInlinableType) {
       (:L1)
       (const v23 23)
       (goto :L0)
-    )
+   )
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }

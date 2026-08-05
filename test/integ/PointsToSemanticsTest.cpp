@@ -86,9 +86,9 @@ std::array<std::set<std::string>, 2u> get_expected_method_semantics() {
       " V0 = PARAM 0\n"
       " V1 = CAST<Lcom/facebook/redextest/PointsToSemantics$X;>(V0)\n"
       " V2 = V1.{V}Lcom/facebook/redextest/PointsToSemantics$X;#g()\n"
-      " V4 = V2 U V3\n"
-      " RETURN V4\n"
+      " RETURN V2\n"
       " V3 = V0.{I}Lcom/facebook/redextest/PointsToSemantics$I;#f()\n"
+      " RETURN V3\n"
       "}\n",
       // A's constructor 1
       "Lcom/facebook/redextest/PointsToSemantics$A;#<init>: "
@@ -199,10 +199,10 @@ std::array<std::set<std::string>, 2u> get_expected_method_semantics() {
       // PointsToSemantics#arrayOfX()
       "Lcom/facebook/redextest/PointsToSemantics;#arrayOfX: "
       "(I)[Lcom/facebook/redextest/PointsToSemantics$X; {\n"
-      " V1 = EXCEPTION\n"
-      " V1.{D}Lcom/facebook/redextest/PointsToSemantics$AnException;#<init>()\n"
-      " V2 = NEW [Lcom/facebook/redextest/PointsToSemantics$X;\n"
-      " RETURN V2\n"
+      " V1 = NEW [Lcom/facebook/redextest/PointsToSemantics$X;\n"
+      " RETURN V1\n"
+      " V2 = EXCEPTION\n"
+      " V2.{D}Lcom/facebook/redextest/PointsToSemantics$AnException;#<init>()\n"
       "}\n",
       // PointsToSemantics#runOnArrayOfX()
       "Lcom/facebook/redextest/PointsToSemantics;#runOnArrayOfX: "
@@ -212,16 +212,17 @@ std::array<std::set<std::string>, 2u> get_expected_method_semantics() {
       " V3 = Lcom/facebook/redextest/PointsToSemantics;#cast(0 => V2)\n"
       " ARRAY_ELEM(V1) = V3\n"
       " V4 = ARRAY_ELEM(V1)\n"
-      " V9 = V4 U V8\n"
-      " RETURN V9\n"
+      " RETURN V4\n"
       " V5 = EXCEPTION\n"
       " V6 = Ljava/lang/System;#out\n"
-      " V7 = V5.{V}Lcom/facebook/redextest/"
+      " V7 = "
+      "V5.{V}Lcom/facebook/redextest/"
       "PointsToSemantics$AnException;#getMessage()\n"
       " V6.{V}Ljava/io/PrintStream;#println(0 => V7)\n"
       " V8 = NEW Lcom/facebook/redextest/PointsToSemantics$Base;\n"
       " V8.{D}Lcom/facebook/redextest/PointsToSemantics$Base;#<init>(0 => "
       "THIS)\n"
+      " RETURN V8\n"
       "}\n",
       // PointsToSemantics#longMethod()
       "Lcom/facebook/redextest/PointsToSemantics;#longMethod: (JJJJJI[J)[J {\n"
