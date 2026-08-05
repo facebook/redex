@@ -168,12 +168,12 @@ commands:
       - run:
           name: Check/Install (SDK)
           command: |
-            if [ -e sdk/build-tools/29.0.2/dx ] ; then echo "Found SDK." ; exit 0 ; fi
+            if [ -e sdk/build-tools/29.0.2/d8 ] ; then echo "Found SDK." ; exit 0 ; fi
 
-            # Check whether cache file exists, then check dx again.
+            # Check whether cache file exists, then check d8 again.
             if [ -f "sdk.tar.zstd" ] ; then
               zstd --decompress --stdout sdk.tar.zstd | tar xf -
-              if [ -e sdk/build-tools/29.0.2/dx ] ; then echo "Unpacked SDK." ; exit 0 ; fi
+              if [ -e sdk/build-tools/29.0.2/d8 ] ; then echo "Unpacked SDK." ; exit 0 ; fi
             fi
 
             # Download.

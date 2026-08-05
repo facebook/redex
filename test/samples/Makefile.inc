@@ -6,9 +6,14 @@ compiled/$(2): res/$(1)
 
 endef
 
+# -parameters keeps javac 21+ from emitting a nameless MethodParameters entry
+# for a mandated parameter, which the pinned build-tools 29.0.2 D8 cannot read.
+# See test/integ/Makefile.am. D8 discards the attribute, so the dex is unchanged.
+javac_source_target = -source 8 -target 8 -parameters
+
 define compile_java_source
 build/$(2): src/$(1) build/com/facebook/R.class
-	$$(JAVAC) -source 8 -target 8 -cp build:$$(ANDROID_JAR) -d build -sourcepath $$(src_dir)/src $$<
+	$$(JAVAC) $$(javac_source_target) -cp build:$$(ANDROID_JAR) -d build -sourcepath $$(src_dir)/src $$<
 
 endef
 
@@ -35,7 +40,7 @@ linked.apk java/com/facebook/R.java: $(foreach res,$(1),compiled/$(subst .xml,,$
 
 build/com/facebook/R.class: java/com/facebook/R.java
 	mkdir -p build
-	$$(JAVAC) -source 8 -target 8 -cp build -d build -sourcepath java $$^
+	$$(JAVAC) $$(javac_source_target) -cp build -d build -sourcepath java $$^
 
 $(foreach jsrc,$(4),$(call compile_java_source,$(jsrc),$(5)/$(subst .java,.class,$(jsrc))))
 
@@ -43,7 +48,7 @@ classes.jar: build/com/facebook/R.class $(foreach jsrc,$(4),build/$(5)/$(subst .
 	jar cf $$@ -C build .
 
 classes.dex: classes.jar
-	$$(DX) --dex --output=$$@ $$^
+	$$(D8) --intermediate --output . --lib $$(ANDROID_JAR) $$^
 
 unsigned.apk: linked.apk classes.dex
 	cp -f linked.apk unsigned.apk
