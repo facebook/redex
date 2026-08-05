@@ -7,6 +7,7 @@
 
 #include "ReflectionAnalysis.h"
 
+#include <atomic>
 #include <functional>
 #include <iomanip>
 #include <ostream>
@@ -159,8 +160,8 @@ std::ostream& operator<<(std::ostream& out,
 namespace reflection {
 
 AbstractHeapAddress allocate_heap_address() {
-  static AbstractHeapAddress addr = 1;
-  return addr++;
+  static std::atomic<AbstractHeapAddress> addr{1};
+  return addr.fetch_add(1, std::memory_order_relaxed);
 }
 
 bool is_not_reflection_output(const AbstractObject& obj) {
