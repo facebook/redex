@@ -72,6 +72,12 @@ class SimpleFastDominators {
 
   NodeId get_idom(NodeId node) const { return m_idoms.at(node); }
 
+  // True when `node` has a recorded immediate dominator. Nodes absent from the
+  // computation (for the post-dominator instantiation, blocks that cannot reach
+  // the exit) return false; query this before `get_idom` rather than catching
+  // the throwing `at()` lookup.
+  bool has_idom(NodeId node) const { return m_idoms.count(node) != 0u; }
+
   // Find the common dominator block that is closest to both blocks.
   NodeId intersect(NodeId finger1, NodeId finger2) {
     while (finger1 != finger2) {
