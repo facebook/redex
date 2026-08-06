@@ -65,6 +65,12 @@ void MethodSplittingPass::bind_config() {
        "Maximum number of live-in registers");
   bind("max_iteration", m_config.max_iteration, m_config.max_iteration,
        "Maximum number of top-level iterations");
+  bind("fix_new_hot_split_registration",
+       m_config.fix_new_hot_split_registration,
+       m_config.fix_new_hot_split_registration,
+       "Register a newly created Hot split in the hot-method set, so later "
+       "iterations treat it as the compiled host it actually is. Fixes a "
+       "no-op insert of the root method. Off by default.");
   bind("excluded_prefices", m_config.excluded_prefices,
        m_config.excluded_prefices);
 }
