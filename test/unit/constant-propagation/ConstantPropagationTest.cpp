@@ -366,6 +366,60 @@ TEST_F(ConstantPropagationTest, InstanceOfNull) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_F(ConstantPropagationTest, InstanceOfEvaluatedToTrueWhenEvaluableToTrue) {
+  // There is no evaluated-to-false counterpart test case when v0 is a nonnull
+  // constant: an object constant is only ever a java.lang.String or a
+  // java.lang.Class, and evaluate_type_check returns nullopt for external
+  // types, so instance-of on one never folds to 0.
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const-string "foo")
+     (move-result-pseudo-object v0)
+     (instance-of v0 "Ljava/lang/String;")
+     (move-result-pseudo v1)
+     (return v1)
+    )
+  )");
+
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(
+      code.get(),
+      InstructionAnalyzerCombiner<cp::StringAnalyzer, cp::PrimitiveAnalyzer>(
+          &state, nullptr));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const-string "foo")
+     (move-result-pseudo-object v0)
+     (const v1 1)
+     (return v1)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantPropagationTest, InstanceOfPreservedWhenRelationUndecidable) {
+  const auto* code_str = R"(
+    (
+     (const-string "foo")
+     (move-result-pseudo-object v0)
+     (instance-of v0 "LBar;")
+     (move-result-pseudo v1)
+     (return v1)
+    )
+  )";
+  auto code = assembler::ircode_from_string(code_str);
+
+  auto state = cp::StringAnalyzerState::make_default();
+  do_const_prop(
+      code.get(),
+      InstructionAnalyzerCombiner<cp::StringAnalyzer, cp::PrimitiveAnalyzer>(
+          &state, nullptr));
+
+  auto expected_code = assembler::ircode_from_string(code_str);
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 // A typical case where a non-default block is uniquely reachable.
 TEST_F(ConstantPropagationTest, Switch1) {
   auto code = assembler::ircode_from_string(R"(

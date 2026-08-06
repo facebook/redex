@@ -581,6 +581,12 @@ bool PrimitiveAnalyzer::analyze_instance_of(const IRInstruction* insn,
     env->set(RESULT_REGISTER, SignedConstantDomain(0));
     return true;
   }
+  if (const DexType* src_type = get_object_constant_type(src)) {
+    if (auto res = type::evaluate_type_check(src_type, insn->get_type())) {
+      env->set(RESULT_REGISTER, SignedConstantDomain(*res));
+      return true;
+    }
+  }
   return analyze_default(insn, env);
 }
 
