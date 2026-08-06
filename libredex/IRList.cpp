@@ -719,9 +719,11 @@ uint32_t IRList::estimate_code_units() const {
     if (mie.type == MFLOW_OPCODE) {
       code_units += mie.insn->size();
       if (opcode::is_fill_array_data(mie.insn->opcode())) {
-        // fill-array-data-payload
+        // DexOpcodeData::size() is the size of the entire
+        // fill-array-data-payload, already including its four header code
+        // units (ident, element_width, and the two size words).
         auto* data = mie.insn->get_data();
-        code_units += 4 + data->size();
+        code_units += data->size();
       }
     }
   }
