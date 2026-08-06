@@ -109,6 +109,37 @@ TEST_F(IRListTest, remove_when_register_not_used) {
             assembler::to_string(code.get()));
 }
 
+namespace {
+
+struct Tally {
+  uint32_t opcode_code_units{0};
+  std::vector<const DexOpcodeData*> payloads;
+};
+
+Tally tally_opcodes(const IRCode& code) {
+  Tally tally;
+  for (const auto& mie : code) {
+    if (mie.type != MFLOW_OPCODE) {
+      continue;
+    }
+    tally.opcode_code_units += mie.insn->size();
+    if (opcode::is_fill_array_data(mie.insn->opcode())) {
+      tally.payloads.push_back(mie.insn->get_data());
+    }
+  }
+  return tally;
+}
+
+uint32_t sum_payload_sizes(const Tally& tally) {
+  uint32_t sum{0};
+  for (const auto* payload : tally.payloads) {
+    sum += payload->size();
+  }
+  return sum;
+}
+
+} // namespace
+
 TEST_F(IRListTest, estimate_code_units_fill_array_data) {
   const auto* const s_insns = R"(
     (
@@ -121,28 +152,73 @@ TEST_F(IRListTest, estimate_code_units_fill_array_data) {
   )";
   auto code = assembler::ircode_from_string(s_insns);
 
-  uint32_t opcode_code_units{0};
-  const DexOpcodeData* payload{nullptr};
-  for (const auto& mie : *code) {
-    if (mie.type != MFLOW_OPCODE) {
-      continue;
-    }
-    opcode_code_units += mie.insn->size();
-    if (opcode::is_fill_array_data(mie.insn->opcode())) {
-      payload = mie.insn->get_data();
-    }
-  }
-  ASSERT_NE(payload, nullptr);
+  auto tally = tally_opcodes(*code);
+  ASSERT_EQ(tally.payloads.size(), 1);
 
   // 3 elements of 4 bytes = 6 code units of data, plus the 4 header code units
   // (ident, element_width, and the two size words) that DexOpcodeData::size()
   // already accounts for.
-  EXPECT_EQ(payload->size(), 10);
-  EXPECT_EQ(code->estimate_code_units(), opcode_code_units + payload->size());
+  EXPECT_EQ(tally.payloads.at(0)->size(), 10);
+  EXPECT_EQ(code->estimate_code_units(),
+            tally.opcode_code_units + sum_payload_sizes(tally));
 
   // Every in-pass caller goes through the CFG, which must agree.
   code->build_cfg();
-  EXPECT_EQ(code->estimate_code_units(), opcode_code_units + payload->size());
+  EXPECT_EQ(code->estimate_code_units(),
+            tally.opcode_code_units + sum_payload_sizes(tally));
+}
+
+// The data words are `(bytes + 1) / 2`, so a payload whose elements do not fill
+// a whole code unit rounds up.
+TEST_F(IRListTest, estimate_code_units_fill_array_data_odd_byte_count) {
+  const auto* const s_insns = R"(
+    (
+      (const v0 3)
+      (new-array v0 "[B")
+      (move-result-pseudo-object v1)
+      (fill-array-data v1 #1 (1 2 3))
+      (return-void)
+    )
+  )";
+  auto code = assembler::ircode_from_string(s_insns);
+
+  auto tally = tally_opcodes(*code);
+  ASSERT_EQ(tally.payloads.size(), 1);
+
+  // 3 elements of 1 byte round up to 2 code units of data, plus 4 header ones.
+  EXPECT_EQ(tally.payloads.at(0)->size(), 6);
+  EXPECT_EQ(code->estimate_code_units(),
+            tally.opcode_code_units + sum_payload_sizes(tally));
+}
+
+// Each payload must be counted once and in full; a single-payload test cannot
+// tell a per-payload contribution apart from a per-method one.
+TEST_F(IRListTest, estimate_code_units_multiple_fill_array_data) {
+  const auto* const s_insns = R"(
+    (
+      (const v0 3)
+      (new-array v0 "[I")
+      (move-result-pseudo-object v1)
+      (fill-array-data v1 #4 (63 64 65))
+      (const v2 5)
+      (new-array v2 "[S")
+      (move-result-pseudo-object v3)
+      (fill-array-data v3 #2 (1 2 3 4 5))
+      (return-void)
+    )
+  )";
+  auto code = assembler::ircode_from_string(s_insns);
+
+  auto tally = tally_opcodes(*code);
+  ASSERT_EQ(tally.payloads.size(), 2);
+
+  EXPECT_EQ(tally.payloads.at(0)->size(), 10); // 3 x 4 bytes -> 6 + 4
+  EXPECT_EQ(tally.payloads.at(1)->size(), 9); // 5 x 2 bytes -> 5 + 4
+  EXPECT_EQ(sum_payload_sizes(tally), 19);
+  EXPECT_EQ(code->estimate_code_units(), tally.opcode_code_units + 19);
+
+  code->build_cfg();
+  EXPECT_EQ(code->estimate_code_units(), tally.opcode_code_units + 19);
 }
 
 TEST_F(IRListTest, keep_valid_regs) {
