@@ -1192,7 +1192,7 @@ class NodeAttributeTransformer : public XmlElementCollector {
 
   NodeAttributeTransformer(
       const UnorderedMap<std::string, std::string>& element_to_class_name,
-      const UnorderedMap<std::string, uint32_t>& class_name_to_idx,
+      const std::unordered_map<std::string, uint32_t>& class_name_to_idx,
       uint32_t class_attr_idx,
       uint32_t view_idx)
       : m_element_to_class_name(element_to_class_name),
@@ -1282,7 +1282,7 @@ class NodeAttributeTransformer : public XmlElementCollector {
 
   // Offset information about the string pool of the document
   const UnorderedMap<std::string, std::string>& m_element_to_class_name;
-  const UnorderedMap<std::string, uint32_t>& m_class_name_to_idx;
+  const std::unordered_map<std::string, uint32_t>& m_class_name_to_idx;
   // This is the string pool index for the string "class"
   uint32_t m_class_attr_idx;
   // This is the string pool index for the string "view"
@@ -1315,7 +1315,14 @@ void ApkResources::fully_qualify_layout(
   // string pool, along with the replacement element name and attribute name
   // that we'll need.
   std::set<std::string> strings_to_add;
-  UnorderedMap<std::string, uint32_t> string_to_idx;
+  // Plain std::unordered_map, not the deterministic wrapper: this is an in/out
+  // buffer for arsc::ensure_strings_in_xml_pool, and arsc/ sits below libredex
+  // in the build graph (it cannot see DeterministicContainers.h), so that
+  // signature spells the plain type. Under REDEX_PERTURB_UNORDERED the
+  // wrapper's underlying hasher is salted, so it would no longer match. Only
+  // ever looked up by key below, never iterated, so nothing is lost by not
+  // wrapping it.
+  std::unordered_map<std::string, uint32_t> string_to_idx;
   bool needs_changes = false;
   android::Vector<char> file_vec;
 
@@ -1333,9 +1340,8 @@ void ApkResources::fully_qualify_layout(
     if (needs_changes) {
       strings_to_add.emplace("class");
       strings_to_add.emplace("view");
-      auto result = arsc::ensure_strings_in_xml_pool(
-          data, size, strings_to_add, &file_vec,
-          &unordered_unsafe_unwrap(string_to_idx));
+      auto result = arsc::ensure_strings_in_xml_pool(data, size, strings_to_add,
+                                                     &file_vec, &string_to_idx);
       always_assert_log(result == android::OK,
                         "Failed to edit file %s; it may not be valid",
                         file_path.c_str());
@@ -2626,12 +2632,18 @@ size_t ResourcesArscFile::serialize() {
                          type_strings_builder.get());
     package_builder->set_type_strings(type_strings_builder);
     // Copy existing types
+    // arsc::ResTableTypeProjector::remove_ids spells a plain std::unordered_set
+    // because arsc/ sits below libredex and cannot see
+    // DeterministicContainers.h. Under REDEX_PERTURB_UNORDERED the wrapper's
+    // underlying hasher is salted, so it is no longer that type; materialize a
+    // plain set here. Once per package.
+    std::unordered_set<uint32_t> ids_to_remove;
+    insert_unordered_iterable(ids_to_remove, m_ids_to_remove);
     auto& type_infos = table_parser.m_package_types.at(package);
     for (auto& type_info : type_infos) {
       auto type_builder = std::make_shared<arsc::ResTableTypeProjector>(
           package_id, type_info.spec, type_info.configs);
-      type_builder->remove_ids(unordered_unsafe_unwrap(m_ids_to_remove),
-                               m_nullify_removed);
+      type_builder->remove_ids(ids_to_remove, m_nullify_removed);
       package_builder->add_type(type_builder);
     }
     // Append any new types
