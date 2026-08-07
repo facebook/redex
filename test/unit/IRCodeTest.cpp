@@ -20,6 +20,53 @@
 
 struct IRCodeTest : public RedexTest {};
 
+// Lowering a check-cast whose move-result-pseudo targets a different register
+// emits `move; check-cast`. The MethodItemEntry that survives holds the MOVE --
+// the first emitted instruction -- and the cast goes in a newly inserted entry.
+// Anything holding an entry pointer across lowering therefore still points at
+// the start of what that instruction became.
+TEST_F(IRCodeTest, checkCastLoweringKeepsTheEntryOnTheFirstEmittedInstruction) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LCc;.m:(Ljava/lang/Object;)V"
+      (
+        (load-param-object v1)
+        (check-cast v1 "Ljava/lang/String;")
+        (move-result-pseudo-object v0)
+        (return-void)
+      )
+    )
+  )");
+  auto* code = method->get_code();
+  const MethodItemEntry* cast_entry = nullptr;
+  for (const auto& mie : *code) {
+    if (mie.type == MFLOW_OPCODE && mie.insn->opcode() == OPCODE_CHECK_CAST) {
+      cast_entry = &mie;
+      break;
+    }
+  }
+  ASSERT_NE(cast_entry, nullptr);
+
+  instruction_lowering::lower(method);
+
+  const MethodItemEntry* next = nullptr;
+  bool seen = false;
+  for (const auto& mie : *code) {
+    if (seen && mie.type == MFLOW_DEX_OPCODE) {
+      next = &mie;
+      break;
+    }
+    if (&mie == cast_entry) {
+      seen = true;
+    }
+  }
+  ASSERT_TRUE(seen) << "the entry must survive lowering";
+  ASSERT_EQ(cast_entry->type, MFLOW_DEX_OPCODE);
+  EXPECT_TRUE(dex_opcode::is_move(cast_entry->dex_insn->opcode()))
+      << "the surviving entry must hold the move, not the cast";
+  ASSERT_NE(next, nullptr);
+  EXPECT_EQ(next->dex_insn->opcode(), DOPCODE_CHECK_CAST);
+}
+
 TEST_F(IRCodeTest, LoadParamInstructionsDirect) {
   using namespace dex_asm;
 
