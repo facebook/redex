@@ -147,7 +147,12 @@ size_t dest_bit_width(const cfg::InstructionIterator& it) {
     auto primary_op =
         it.cfg().primary_instruction_of_move_result(it)->insn->opcode();
     if (primary_op == OPCODE_CHECK_CAST) {
-      return 4;
+      // check-cast is Dex format 21c: one 8-bit register field acting as both
+      // src and dest, so the value can live anywhere in v0-v255. When the IR
+      // dest differs from the src, lowering prepends a move-object;
+      // select_move_opcode picks move-object/from16, whose dest field is also
+      // 8 bits, so the move imposes no tighter bound.
+      return 8;
     } else {
       return dex_opcode::dest_bit_width(opcode::to_dex_opcode(primary_op));
     }
