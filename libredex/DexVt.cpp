@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <fstream>
 #include <map>
+#include <unordered_map>
 
 #include <boost/io/quoted.hpp>
 #include <json/value.h>
@@ -22,14 +23,18 @@
 #include <vector>
 
 #include "BaselineProfile.h"
+#include "BlockOffsetSink.h"
 #include "CallGraph.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "IRList.h"
+#include "IROpcode.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "RedexContext.h"
@@ -261,7 +266,63 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
     // structurally in rec.blocks rather than double-encoded in the text.
     rec.disasm = render_disasm(code.cfg());
 
+    UnorderedMap<const MethodItemEntry*, uint32_t> leaders;
     for (auto* block : code.cfg().blocks()) {
+      // Anchor each block by its first DEX-EMITTING opcode MethodItemEntry ->
+      // cfg block id. An instruction entry lowers in place (dex_insn set on the
+      // SAME object) and splices through CFG teardown with stable pointer
+      // identity, so IRCode::sync resolves it to the block's final code-unit
+      // offset.
+      //
+      // Two entry kinds must NOT be the anchor, both because they fail to reach
+      // sync -- leaving the block with no offset at all:
+      //
+      //  - &*block->begin(): for a source-blocked block that is a leading
+      //    MFLOW_SOURCE_BLOCK, whose MIE does not survive to sync (exactly the
+      //    hot, source-blocked blocks we care most about).
+      //  - any INTERNAL opcode (IOPCODE_*): these emit no DEX, so anchoring on
+      //    one records the address of whatever follows. A block whose only
+      //    opcodes are internal then aliases the next block's start_cu, and the
+      //    dex-pc -> block lookup resolves the tie arbitrarily. In particular:
+      //  - a load-param (IOPCODE_LOAD_PARAM*): for a NON-STATIC method,
+      //    instruction_lowering's check_load_params erase_and_dispose()s the
+      //    leading `this` load-param outright, so the captured pointer dangles
+      //    and its block -- always the ENTRY block -- silently loses its
+      //    offset. (A static method's load-params are merely retyped in place
+      //    to MFLOW_FALLTHROUGH by remove_opcode, so anchoring one happens to
+      //    work there -- an accident we must not rely on. Worse, a disposed
+      //    MIE's address can be reused by a later allocation and produce a
+      //    WRONG match.) Load-params emit no DEX, so the block's true start_cu
+      //    is its first real opcode either way.
+      //
+      // INVARIANT this relies on: nothing runs between here and DexOutput's
+      // sync pass except instruction lowering. An anchor is a raw
+      // MethodItemEntry*, so a pass that DISPOSED an anchored opcode would
+      // leave it dangling -- and because the lookup only compares the pointer,
+      // a reused address yields a wrong offset rather than a crash. Lowering is
+      // the only such pass today and load-params are the only entries it
+      // disposes, which is why they are skipped above. Anything inserted into
+      // that window must either preserve anchored opcodes or re-run the
+      // capture.
+      //
+      // Non-opcode entries before the first opcode share its code-unit address,
+      // so the recorded start_cu is still the true block start. Anchoring every
+      // block -- not only source-blocked ones -- lets a block's three levels
+      // (IR/true-DEX/native) slice to exactly the same region. A block with no
+      // DEX-emitting opcode is skipped: it has no DEX to show and its offset
+      // would alias the next block's start_cu.
+      const MethodItemEntry* first_op = nullptr;
+      for (const auto& mie : *block) {
+        if (mie.type == MFLOW_OPCODE &&
+            !opcode::is_an_internal(mie.insn->opcode())) {
+          first_op = &mie;
+          break;
+        }
+      }
+      if (first_op != nullptr) {
+        leaders.emplace(first_op, static_cast<uint32_t>(block->id()));
+      }
+      // Source-blocked blocks additionally carry hotness.
       const auto* sb = source_blocks::get_first_source_block(block);
       if (sb == nullptr) {
         continue;
@@ -277,6 +338,9 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
         rec.blocks.push_back(BlockHotness{static_cast<uint32_t>(block->id()),
                                           static_cast<uint32_t>(i), v, a});
       }
+    }
+    if (!leaders.empty()) {
+      block_offset_sink::set_leaders(method, std::move(leaders));
     }
 
     for (const auto& interaction : mp.all_interactions()) {
@@ -326,6 +390,10 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
 
     m_records.emplace(method, std::move(rec));
   });
+
+  // Enable the block-offset sink so IRCode::sync (driven later by DexOutput)
+  // records each SourceBlock's final code-unit offset; emit() drains it.
+  block_offset_sink::enable();
 
   TRACE(MAIN,
         1,
@@ -415,9 +483,14 @@ void Exporter::emit(ConfigFiles& conf,
   Json::Value manifest;
   manifest["record"] = "manifest";
   manifest["schema_version"] =
-      5; // v5 adds kind:"class" records (super + interfaces); v4 interned
-         // caller lists into callersets.tsv referenced per method via
-         // caller_set
+      // This is the on-disk EXPORT format version, independent of the derived
+      // SQLite catalog's `sqlite._USER_VERSION` -- the two count separately and
+      // are expected to differ (see facebook/dexvt/ARCHITECTURE.md).
+      8; // v8 carries block_offsets for every block with code, entry block
+         // included, so a block's three levels slice to the same region; v7
+         // and v6 carry them for a narrower set of blocks; v5 adds
+         // kind:"class" records (super + interfaces); v4 interns caller lists
+         // into callersets.tsv, referenced per method via caller_set
   manifest["method_count"] = static_cast<Json::UInt64>(m_records.size());
   manifest["field_count"] = static_cast<Json::UInt64>(m_fields.size());
   manifest["class_count"] = static_cast<Json::UInt64>(m_classes.size());
@@ -503,6 +576,31 @@ void Exporter::emit(ConfigFiles& conf,
       blocks["val"] = val;
       blocks["a100"] = a100;
       r["blocks"] = blocks;
+    }
+    // block_offsets: [blk, start_code_unit] for EVERY cfg block. The
+    // BlockOffsetSink resolved each block's first-MethodItemEntry anchor
+    // (registered pre-lowering) to its final code-unit offset during
+    // IRCode::sync, so every block -- source-blocked or not -- is addressable
+    // by its shipped-DEX offset and its three levels (IR/true-DEX/native) slice
+    // to exactly the same region. Sorted by (offset, blk) to match the read
+    // side. Empty unless a sync pass ran under the enabled sink (the real
+    // backend, or a driving test).
+    if (const auto* offs = block_offset_sink::get(method); offs != nullptr) {
+      std::vector<std::pair<uint32_t, uint32_t>> sorted(offs->begin(),
+                                                        offs->end());
+      std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+        return a.second != b.second ? a.second < b.second : a.first < b.first;
+      });
+      Json::Value block_offsets(Json::arrayValue);
+      for (const auto& [blk, off] : sorted) {
+        Json::Value pair(Json::arrayValue);
+        pair.append(static_cast<Json::UInt>(blk));
+        pair.append(static_cast<Json::UInt>(off));
+        block_offsets.append(pair);
+      }
+      if (!block_offsets.empty()) {
+        r["block_offsets"] = block_offsets;
+      }
     }
     if (!rec.pgo.empty()) {
       Json::Value pgo(Json::objectValue);
@@ -655,6 +753,10 @@ void Exporter::emit(ConfigFiles& conf,
       m_fields.size(),
       sets_by_id.size(),
       output_totals.method_size.size());
+
+  // Drop the (whole-app-sized) recorded offsets now they are emitted, and
+  // disable the sink so any later IRCode::sync in the process is a no-op.
+  block_offset_sink::clear();
 }
 
 } // namespace dexvt
