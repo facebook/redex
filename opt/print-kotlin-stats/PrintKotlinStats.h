@@ -76,6 +76,12 @@ class PrintKotlinStats : public Pass {
     // parameters contributes once per parameter; only methods with code are
     // examined.
     size_t kotlin_lambda_type_method_params{0};
+    // Atomic{Reference,Integer,Long}FieldUpdater usage: number of
+    // `newUpdater(...)` allocations and number of operation call sites
+    // (`get`/`set`/`compareAndSet`/...). Sizes the AtomicFieldUpdater
+    // optimization opportunity.
+    size_t atomic_field_updater_newupdater_insns{0};
+    size_t atomic_field_updater_op_insns{0};
 
     Stats& operator+=(const Stats& that) {
       unknown_null_check_insns += that.unknown_null_check_insns;
@@ -132,6 +138,9 @@ class PrintKotlinStats : public Pass {
           that.kotlin_trivial_non_capturing_lambdas;
       kotlin_unique_trivial_non_capturing_lambdas +=
           that.kotlin_unique_trivial_non_capturing_lambdas;
+      atomic_field_updater_newupdater_insns +=
+          that.atomic_field_updater_newupdater_insns;
+      atomic_field_updater_op_insns += that.atomic_field_updater_op_insns;
       for (size_t i = 0; i < kotlin_invoke_interface_function_insns.size();
            ++i) {
         kotlin_invoke_interface_function_insns[i] +=
@@ -187,5 +196,9 @@ class PrintKotlinStats : public Pass {
   // `FunctionN.invoke(Object[])` for arities >= 23 at index 23. Entries are
   // null when the corresponding ref is absent from the program.
   std::array<DexMethodRef*, 24> m_kotlin_function_invokes{};
+  // The Atomic{Reference,Integer,Long}FieldUpdater types present in the
+  // program.
+  UnorderedSet<const DexType*> m_atomic_field_updaters;
+  const DexString* m_new_updater = nullptr;
   Stats m_stats;
 };
