@@ -498,11 +498,10 @@ std::unique_ptr<SourceBlock> source_block_from_s_expr(const s_expr& e) {
     s_expr head;
     s_patn({s_patn(head)}, tail)
         .must_match(val_expr, "Expected 3rd and 4th arg to be a value string");
-    redex_assert(head.is_list() || head.is_nil());
-    if (head.is_nil()) {
-      break; // Should only happen first loop.
-    }
+    redex_assert(head.is_list());
     if (head.size() == 0) {
+      // `()` is a Val::none(), not a terminator: a none may sit between two
+      // defined vals, so the loop has to keep going.
       vals.emplace_back(SourceBlock::Val::none());
     } else {
       std::string val_str;
@@ -736,17 +735,17 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
   result.emplace_back(show(src->src));
   result.emplace_back(std::to_string(src->id));
 
-  std::vector<s_expr> vals;
+  // The vals are siblings of the method and id, not one nested list:
+  // source_block_from_s_expr consumes them one argument at a time.
   src->foreach_val([&](const auto& val) {
     if (val) {
-      vals.emplace_back(
+      result.emplace_back(
           std::vector<s_expr>{s_expr(std::to_string(val->val)),
                               s_expr(std::to_string(val->appear100))});
     } else {
-      vals.emplace_back();
+      result.emplace_back();
     }
   });
-  result.emplace_back(std::move(vals));
 
   return s_expr(result);
 }

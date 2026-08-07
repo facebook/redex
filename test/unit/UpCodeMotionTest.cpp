@@ -377,7 +377,7 @@ TEST_F(UpCodeMotionTest, hot_branch) {
     (return v1)
 
     (:L1)
-    (.src_block "LFoo;.m:()V" 2 ())
+    (.src_block "LFoo;.m:()V" 2)
     (const v2 1)
     (goto :L0))
 

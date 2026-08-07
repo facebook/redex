@@ -9,8 +9,13 @@
 
 #include <cstdint>
 #include <gtest/gtest.h>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "DexAnnotation.h"
+#include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
@@ -21,6 +26,53 @@
 #include "TypeUtil.h"
 
 struct IRAssemblerTest : public RedexTest {};
+
+namespace {
+
+SourceBlock* first_source_block(IRCode* code) {
+  for (auto& mie : *code) {
+    if (mie.type == MFLOW_SOURCE_BLOCK) {
+      return mie.src_block.get();
+    }
+  }
+  return nullptr;
+}
+
+// Renders only the vals of a source block, so that a failure reports the
+// values that differ instead of just a size.
+std::string show_vals(const SourceBlock* sb) {
+  std::ostringstream oss;
+  sb->foreach_val([&oss](const auto& val) {
+    if (val) {
+      oss << "(" << val->val << " " << val->appear100 << ")";
+    } else {
+      oss << "()";
+    }
+  });
+  return oss.str();
+}
+
+// Serializes `code`, parses the result back and checks that the source block
+// came through unchanged. ASSERT_* only returns from the function it appears
+// in, so keeping this out of the test body lets a caller check several cases.
+void check_source_block_round_trips(IRCode* code) {
+  const auto* sb = first_source_block(code);
+  ASSERT_NE(sb, nullptr);
+
+  auto serialized = assembler::to_string(code);
+  SCOPED_TRACE(serialized);
+
+  std::unique_ptr<IRCode> reparsed;
+  ASSERT_NO_THROW(reparsed = assembler::ircode_from_string(serialized));
+
+  const auto* reparsed_sb = first_source_block(reparsed.get());
+  ASSERT_NE(reparsed_sb, nullptr);
+  EXPECT_EQ(reparsed_sb->vals_size, sb->vals_size);
+  EXPECT_EQ(show_vals(reparsed_sb), show_vals(sb));
+  EXPECT_EQ(assembler::to_string(reparsed.get()), serialized);
+}
+
+} // namespace
 
 TEST_F(IRAssemblerTest, disassembleCode) {
   auto code = assembler::ircode_from_string(R"(
@@ -79,6 +131,58 @@ TEST_F(IRAssemblerTest, sourceBlockIdRoundTrips) {
     EXPECT_EQ(assembler::to_string(code.get()),
               assembler::to_string(assembler::ircode_from_string(s).get()));
   }
+}
+
+// A genuine round trip -- parse(to_string(x)) -- over 0, 1 and 3 vals. The
+// serializer's own output has to be something the parser accepts, and the vals
+// have to come back unchanged. sourceBlockIdRoundTrips cannot check this
+// because both of its sides are to_string(parse(s)).
+TEST_F(IRAssemblerTest, sourceBlockValsSurviveSerializeThenParse) {
+  for (const auto* vals : {"", "(1.0 1.0)", "(1.0 1.0) (0.5 0.4) (0.0 0.0)"}) {
+    auto s = std::string("((.src_block \"LFoo;.bar:()V\" 0 ") + vals +
+             ") (return-void))";
+    check_source_block_round_trips(assembler::ircode_from_string(s).get());
+  }
+}
+
+// The vals must be emitted as flat siblings -- the shape the parser accepts and
+// that every .src_block test input in the tree uses -- and not wrapped in one
+// extra list.
+TEST_F(IRAssemblerTest, sourceBlockValsSerializeAsFlatSiblings) {
+  auto one_val = assembler::ircode_from_string(
+      R"(((.src_block "LFoo;.bar:()V" 0 (1.0 1.0)) (return-void)))");
+  EXPECT_EQ(assembler::to_string(one_val.get()),
+            "((.src_block \"LFoo;.bar:()V\" 0 (1.000000 1.000000)) "
+            "(return-void))");
+
+  auto multi_val = assembler::ircode_from_string(
+      R"(((.src_block "LFoo;.bar:()V" 0 (1.0 1.0) (0.5 0.4) (0.0 0.0))
+          (return-void)))");
+  EXPECT_EQ(assembler::to_string(multi_val.get()),
+            "((.src_block \"LFoo;.bar:()V\" 0 (1.000000 1.000000) "
+            "(0.500000 0.400000) (0.000000 0.000000)) (return-void))");
+}
+
+// Val::none() is a third state distinct from a 0.0 val, serialized as "()".
+// The vals are built in C++ rather than parsed from a fixture string so that
+// the none is ground truth: a text fixture would take its meaning from the very
+// parser this test is checking.
+TEST_F(IRAssemblerTest, sourceBlockNoneValSurvivesSerializeThenParse) {
+  auto code = assembler::ircode_from_string(
+      R"(((.src_block "LFoo;.bar:()V" 0 (0.0 0.0)) (return-void)))");
+  const std::vector<SourceBlock::Val> vals{SourceBlock::Val(1.0f, 1.0f),
+                                           SourceBlock::Val::none(),
+                                           SourceBlock::Val(0.5f, 0.4f)};
+  for (auto& mie : *code) {
+    if (mie.type == MFLOW_SOURCE_BLOCK) {
+      mie.src_block = std::make_unique<SourceBlock>(
+          DexString::make_string("LFoo;.bar:()V"), 0, vals);
+    }
+  }
+  EXPECT_EQ(assembler::to_string(code.get()),
+            "((.src_block \"LFoo;.bar:()V\" 0 (1.000000 1.000000) () "
+            "(0.500000 0.400000)) (return-void))");
+  check_source_block_round_trips(code.get());
 }
 
 TEST_F(IRAssemblerTest, assembleMethod) {
