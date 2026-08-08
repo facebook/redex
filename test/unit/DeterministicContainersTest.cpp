@@ -783,6 +783,16 @@ TEST_F(DeterministicContainersTest, UnorderedMultiMap_insert_initializer_list) {
   EXPECT_EQ(1u, map.count(2));
 }
 
+TEST_F(DeterministicContainersTest, UnorderedSet_contains_present_key_is_true) {
+  const UnorderedSet<int> set{1, 2, 3};
+  EXPECT_TRUE(set.contains(2));
+}
+
+TEST_F(DeterministicContainersTest, UnorderedSet_contains_absent_key_is_false) {
+  const UnorderedSet<int> set{1, 2, 3};
+  EXPECT_FALSE(set.contains(4));
+}
+
 TEST_F(DeterministicContainersTest, unordered_equal_bag_hashing_form) {
   UnorderedBag<int> a{1, 2, 3};
   UnorderedBag<int> same_other_order{3, 1, 2};

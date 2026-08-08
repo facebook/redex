@@ -1227,6 +1227,8 @@ class UnorderedSet : UnorderedBase<UnorderedSet<Key, Hash, KeyEqual>> {
 
   size_t count(const Key& key) const { return m_data.count(key); }
 
+  bool contains(const Key& key) const { return m_data.count(key) != 0; }
+
   void reserve(size_t size) { m_data.reserve(size); }
 
   size_t size() const { return m_data.size(); }
