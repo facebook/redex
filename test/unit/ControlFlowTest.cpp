@@ -2443,7 +2443,7 @@ TEST_F(ControlFlowTest, no_crash_on_remove_insn) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
-      (invoke-virtual (v) "LFoo;.bar:()V")
+      (invoke-virtual (v0) "LFoo;.bar:()V")
     )
   )");
   code->build_cfg();

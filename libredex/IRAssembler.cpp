@@ -50,7 +50,12 @@ using LabelRefs = UnorderedMap<const IRInstruction*, std::vector<std::string>>;
 reg_t reg_from_str(const std::string& reg_str) {
   always_assert(reg_str.at(0) == 'v');
   reg_t reg;
-  sscanf(&reg_str.c_str()[1], "%u", &reg);
+  const auto* first = reg_str.data() + 1;
+  const auto* last = reg_str.data() + reg_str.size();
+  auto [ptr, ec] = std::from_chars(first, last, reg);
+  always_assert_log(ec == std::errc() && ptr == last,
+                    "malformed register, expected v<uint32>: %s",
+                    reg_str.c_str());
   return reg;
 }
 
