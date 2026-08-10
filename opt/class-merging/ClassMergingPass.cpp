@@ -288,6 +288,10 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
   TypeSystem type_system(scope);
+  // Built once, before the spec loop, and shared across specs -- like
+  // type_system -- so every spec reads the same pre-merge scope even though
+  // merge_model mutates `scope` between iterations.
+  virtual_scope::VirtualScopes vscopes(scope);
   ModelStats total_stats;
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {
@@ -306,8 +310,8 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
     if (model_spec.merging_targets.empty()) {
       continue;
     }
-    total_stats += class_merging::merge_model(type_system, scope, conf, mgr,
-                                              stores, model_spec, false);
+    total_stats += class_merging::merge_model(type_system, vscopes, scope, conf,
+                                              mgr, stores, model_spec, false);
   }
   post_dexen_changes(scope, stores);
   total_stats.update_redex_stats(" total", mgr);

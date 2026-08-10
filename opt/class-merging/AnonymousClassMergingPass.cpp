@@ -72,7 +72,8 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
   find_all_mergeables_and_roots(type_system, scope, m_global_min_count, mgr,
                                 &m_merging_spec);
   if (!m_merging_spec.roots.empty()) {
-    class_merging::merge_model(type_system, scope, conf, mgr, stores,
+    virtual_scope::VirtualScopes vscopes(scope);
+    class_merging::merge_model(type_system, vscopes, scope, conf, mgr, stores,
                                m_merging_spec, false);
     post_dexen_changes(scope, stores);
   } else {
