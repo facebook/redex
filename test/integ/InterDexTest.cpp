@@ -26,7 +26,8 @@ class InterDexTest : public RedexIntegrationTest {
                    bool minimize_cross_dex_refs_explore_alternatives = false,
                    bool order_interdex = true,
                    bool define_dynamically_dead_classes = false,
-                   bool last_dexes_only = false) {
+                   bool last_dexes_only = false,
+                   bool fill_last_coldstart_dex = false) {
     if (define_dynamically_dead_classes) {
       for (auto& cls : *classes) {
         if (cls->get_name() ==
@@ -57,6 +58,10 @@ class InterDexTest : public RedexIntegrationTest {
           static_cast<uint64_t>(kOldMaxTypeRefs) - 16;
       cfg["InterDexPass"]["minimize_cross_dex_refs_explore_alternatives"] = 24;
       cfg["InterDexPass"]["order_interdex"] = order_interdex;
+    }
+
+    if (fill_last_coldstart_dex) {
+      cfg["InterDexPass"]["fill_last_coldstart_dex"] = true;
     }
 
     if (define_dynamically_dead_classes && last_dexes_only) {
@@ -138,6 +143,90 @@ TEST_F(InterDexTest, interdex_noscroll_nobg_noext) {
     "Lsecondary/dex01/Canary;,ordinal=1,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
     "Lsecondary/dex02/Canary;,ordinal=2,coldstart=0,extended=0,primary=0,scroll=0,background=0\n"
   );
+
+  EXPECT_EQ(stores.size(), 1);
+  EXPECT_EQ(stores[0].get_dexen().size(), 3);
+  // The last dex end marker terminates dex01 right where it appears, so only
+  // C1 and C2 (plus the canary) land there. Contrast
+  // interdex_fill_last_coldstart_dex below.
+  EXPECT_EQ(stores[0].get_dexen()[1].size(), 3);
+}
+
+// Same betamap as interdex_noscroll_nobg_noext with fill_last_coldstart_dex on.
+// The last dex end marker no longer flushes where it appears; the dex keeps
+// filling with the rest of the betamap and is flushed once the betamap runs
+// out, so it ends up holding C3..C9 as well. It is still the last dex of the
+// cold-start set, and the dex after it is still the first that is not -- the
+// deferral moves the boundary, it does not remove or duplicate it.
+TEST_F(InterDexTest, interdex_fill_last_coldstart_dex) {
+  define_test({
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "DexEndMarker0.class",
+      "com/facebook/redextest/C1.class",
+      "com/facebook/redextest/C2.class",
+      "DexEndMarker1.class",
+      "com/facebook/redextest/C3.class",
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
+      "com/facebook/redextest/C6.class",
+      "com/facebook/redextest/C7.class",
+      "com/facebook/redextest/C8.class",
+      "com/facebook/redextest/C9.class"
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex02/Canary;,ordinal=2,coldstart=0,extended=0,primary=0,scroll=0,background=0\n",
+    /* minimize_cross_dex_refs_explore_alternatives */ false,
+    /* order_interdex */ true,
+    /* define_dynamically_dead_classes */ false,
+    /* last_dexes_only */ false,
+    /* fill_last_coldstart_dex */ true
+  );
+
+  EXPECT_EQ(stores.size(), 1);
+  EXPECT_EQ(stores[0].get_dexen().size(), 3);
+  // C1, C2, C3..C9 and the canary: the deferred marker let the dex keep
+  // filling instead of ending it at 3 classes.
+  EXPECT_EQ(stores[0].get_dexen()[1].size(), 10);
+}
+
+// fill_last_coldstart_dex where the dex overflows before the betamap ends. The
+// overflow supplies the boundary the deferred marker was owed, so reaching the
+// end of the betamap must not flush a second time -- that would cut an extra,
+// nearly empty dex. Dexes are shrunk here to force the overflow.
+TEST_F(InterDexTest, interdex_fill_last_coldstart_dex_overflow) {
+  define_test({
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "DexEndMarker0.class",
+      "com/facebook/redextest/C1.class",
+      "com/facebook/redextest/C2.class",
+      "DexEndMarker1.class",
+      "com/facebook/redextest/C3.class",
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
+      "com/facebook/redextest/C6.class",
+      "com/facebook/redextest/C7.class",
+      "com/facebook/redextest/C8.class",
+      "com/facebook/redextest/C9.class",
+      "com/facebook/redextest/C10.class",
+      "com/facebook/redextest/C11.class",
+      "com/facebook/redextest/C12.class"
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex02/Canary;,ordinal=2,coldstart=0,extended=0,primary=0,scroll=0,background=0\n",
+    /* minimize_cross_dex_refs_explore_alternatives */ true,
+    /* order_interdex */ true,
+    /* define_dynamically_dead_classes */ false,
+    /* last_dexes_only */ false,
+    /* fill_last_coldstart_dex */ true
+  );
+
+  EXPECT_EQ(stores.size(), 1);
+  // Three dexes, not four: the end of the betamap added no boundary of its own.
+  EXPECT_EQ(stores[0].get_dexen().size(), 3);
 }
 
 TEST_F(InterDexTest, interdex_noscroll_nobg_ext) {
@@ -319,6 +408,178 @@ TEST_F(InterDexTest, interdex_scroll_bg_ext) {
     "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
     "Lsecondary/dex01/Canary;,ordinal=1,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
     "Lsecondary/dex02/Canary;,ordinal=2,coldstart=0,extended=1,primary=0,scroll=1,background=1\n"
+  );
+}
+
+// Control for interdex_coldstart_end_marker_without_dex_end_markers: with no
+// marker at all, nothing ever ends the cold-start set, so every emitted dex
+// stays coldstart=1. This is the pre-fix Instagram behavior.
+TEST_F(InterDexTest, interdex_no_end_markers_at_all) {
+  define_test({
+      "INTERACTION_ID_ColdStart_Start.class",
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "com/facebook/redextest/C1.class",
+      "com/facebook/redextest/C2.class",
+      "com/facebook/redextest/C3.class",
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
+      "com/facebook/redextest/C6.class",
+      "com/facebook/redextest/C7.class",
+      "com/facebook/redextest/C8.class",
+      "com/facebook/redextest/C9.class"
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+  );
+}
+
+// Betamaps without any DexEndMarker (e.g. Instagram) end the cold-start set
+// with the ColdStart interaction end marker instead. The marker forces no dex
+// boundary, so with dexes large enough to hold everything the layout is exactly
+// the one produced without it: same single dex, byte-identical manifest to
+// interdex_no_end_markers_at_all above. There is no dex after the marker for
+// the reset to land on, and the only dex there is holds cold-start classes, so
+// it stays coldstart=1.
+TEST_F(InterDexTest, interdex_coldstart_end_marker_without_dex_end_markers) {
+  define_test({
+      "INTERACTION_ID_ColdStart_Start.class",
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "com/facebook/redextest/C1.class",
+      "com/facebook/redextest/C2.class",
+      "INTERACTION_ID_ColdStart_End.class",
+      "com/facebook/redextest/C3.class",
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
+      "com/facebook/redextest/C6.class",
+      "com/facebook/redextest/C7.class",
+      "com/facebook/redextest/C8.class",
+      "com/facebook/redextest/C9.class"
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+  );
+
+  EXPECT_EQ(stores.size(), 1);
+  EXPECT_EQ(stores[0].get_dexen().size(), 1);
+  // Every class plus the canary: neither the marker nor the end of the betamap
+  // split them.
+  EXPECT_EQ(stores[0].get_dexen()[0].size(), 16);
+}
+
+// The marker only ends the cold-start set once a dex boundary comes along on
+// its own. Here dexes are small enough that the betamap still overflows after
+// the marker: the dex in flight when the marker is hit stays coldstart=1
+// because it holds classes from before it, and the dex that overflow opens is
+// the first that is not. Both boundaries come from overflow, never from the
+// marker.
+TEST_F(InterDexTest, interdex_coldstart_end_marker_overflow) {
+  define_test({
+      "INTERACTION_ID_ColdStart_Start.class",
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "com/facebook/redextest/C1.class",
+      "com/facebook/redextest/C2.class",
+      "com/facebook/redextest/C3.class",
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
+      "com/facebook/redextest/C6.class",
+      "com/facebook/redextest/C7.class",
+      "com/facebook/redextest/C8.class",
+      "INTERACTION_ID_ColdStart_End.class",
+      "com/facebook/redextest/C9.class",
+      "com/facebook/redextest/C10.class",
+      "com/facebook/redextest/C11.class",
+      "com/facebook/redextest/C12.class"
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=0,extended=0,primary=0,scroll=0,background=0\n",
+    /* minimize_cross_dex_refs_explore_alternatives */ true
+  );
+}
+
+// Same betamap and same small dexes, but the marker now sits past the point
+// where the classes overflow, so the only boundary precedes it. Both dexes hold
+// cold-start classes and both stay coldstart=1, and -- the regression this
+// guards -- running out of betamap with the reset still pending adds no third
+// dex of its own.
+TEST_F(InterDexTest, interdex_coldstart_end_marker_overflow_before_marker) {
+  define_test({
+      "INTERACTION_ID_ColdStart_Start.class",
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "com/facebook/redextest/C1.class",
+      "com/facebook/redextest/C2.class",
+      "com/facebook/redextest/C3.class",
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
+      "com/facebook/redextest/C6.class",
+      "com/facebook/redextest/C7.class",
+      "com/facebook/redextest/C8.class",
+      "com/facebook/redextest/C9.class",
+      "com/facebook/redextest/C10.class",
+      "com/facebook/redextest/C11.class",
+      "INTERACTION_ID_ColdStart_End.class",
+      "com/facebook/redextest/C12.class"
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=1,extended=0,primary=0,scroll=0,background=0\n",
+    /* minimize_cross_dex_refs_explore_alternatives */ true
+  );
+}
+
+// The fblite shape, and the case the deferred reset exists for: the marker sits
+// near the end of a betamap that is too short to overflow again, so nothing
+// ends the cold-start set before emit_interdex_classes returns. The reset must
+// survive that and land on the first dex the remaining classes overflow into.
+// Reaching the end of the betamap must not flush by itself -- dex00 keeps
+// filling with classes that are not in the betamap at all, which is what pins
+// down that no boundary was introduced there.
+TEST_F(InterDexTest,
+       interdex_coldstart_end_marker_overflow_in_remaining_classes) {
+  define_test({
+      "INTERACTION_ID_ColdStart_Start.class",
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "com/facebook/redextest/C1.class",
+      "com/facebook/redextest/C2.class",
+      "INTERACTION_ID_ColdStart_End.class"
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=0,extended=0,primary=0,scroll=0,background=0\n",
+    /* minimize_cross_dex_refs_explore_alternatives */ true
+  );
+
+  EXPECT_EQ(stores.size(), 1);
+  EXPECT_EQ(stores[0].get_dexen().size(), 2);
+  // 4 betamap classes plus the canary would be 5. Anything above that is a
+  // class the betamap never mentioned, sharing the last cold-start dex.
+  EXPECT_GT(stores[0].get_dexen()[0].size(), 5);
+}
+
+// When DexEndMarkers are present they keep defining the cold-start section, so
+// the ColdStart interaction end marker is a no-op. Same expectation as
+// interdex_noscroll_nobg_noext.
+TEST_F(InterDexTest, interdex_coldstart_end_marker_with_dex_end_markers) {
+  define_test({
+      "INTERACTION_ID_ColdStart_Start.class",
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "DexEndMarker0.class",
+      "com/facebook/redextest/C1.class",
+      "com/facebook/redextest/C2.class",
+      "DexEndMarker1.class",
+      "INTERACTION_ID_ColdStart_End.class",
+      "com/facebook/redextest/C3.class",
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
+      "com/facebook/redextest/C6.class",
+      "com/facebook/redextest/C7.class",
+      "com/facebook/redextest/C8.class",
+      "com/facebook/redextest/C9.class"
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex02/Canary;,ordinal=2,coldstart=0,extended=0,primary=0,scroll=0,background=0\n"
   );
 }
 
