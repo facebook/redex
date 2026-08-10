@@ -312,7 +312,13 @@ class XStoreRefs {
     }
     // Temporary HACK: optimizations may leave references to dead classes and
     // if we just call get_store_idx() - as we should - the assert will fire...
-    if (store_idx >= m_store_idx_by_type.size()) {
+    //
+    // The bound is `store_count()`, the size of the vector a store index
+    // indexes into. It previously read `m_xstores.size()`, the size of the
+    // type->store map, which is a count of TYPES: orders of magnitude larger
+    // than any valid store index, so the guard accepted every index and this
+    // escape hatch never opened.
+    if (store_idx >= store_count()) {
       return false;
     }
     const auto* res = m_store_idx_by_type.get(type);
