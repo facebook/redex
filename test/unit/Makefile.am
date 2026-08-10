@@ -196,6 +196,8 @@ check_PROGRAMS = \
     used_vars_test \
     virt_scope_test \
     virtual_merging_test \
+    virtual_scopes_differential_test \
+    virtual_scopes_test \
     walkers_test \
     work_queue_test \
     xstorerefs_test \
@@ -588,6 +590,12 @@ virt_scope_test_SOURCES = VirtScopeTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
 virt_scope_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 virtual_merging_test_SOURCES = VirtualMergingTest.cpp
+
+virtual_scopes_differential_test_SOURCES = VirtualScopesDifferentialTest.cpp ScopeHelper.cpp
+virtual_scopes_differential_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+virtual_scopes_test_SOURCES = VirtualScopesTest.cpp ScopeHelper.cpp
+virtual_scopes_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 walkers_test_SOURCES = WalkersTest.cpp
 walkers_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
