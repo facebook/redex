@@ -248,6 +248,7 @@ libredex_la_SOURCES = \
 	libredex/UniqueMethodTracker.cpp \
 	libredex/UnknownVirtuals.cpp \
 	libredex/VirtualScope.cpp \
+	libredex/VirtualScopes.cpp \
 	libredex/Warning.cpp \
 	libredex/WorkQueue.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \
