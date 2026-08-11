@@ -157,6 +157,7 @@ ModelStats merge_model(const TypeSystem& type_system,
 }
 
 Model construct_model(const TypeSystem& type_system,
+                      const virtual_scope::VirtualScopes& vscopes,
                       Scope& scope,
                       ConfigFiles& conf,
                       PassManager& mgr,
@@ -173,7 +174,6 @@ Model construct_model(const TypeSystem& type_system,
   XStoreRefs xstores(stores, conf.normal_primary_dex());
   auto refchecker =
       create_ref_checker(spec.per_dex_grouping, &xstores, conf, min_sdk);
-  virtual_scope::VirtualScopes vscopes(scope);
   auto model = Model::build_model(scope, stores, conf, spec, type_system,
                                   vscopes, *refchecker);
   return model;
