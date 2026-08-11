@@ -156,6 +156,38 @@ class SyntheticBlockCountsPass : public Pass {
                        const std::vector<std::string>& inv_slot,
                        PassManager& mgr);
 
+  // Result of the re-flow post-pass (for metrics + tests).
+  struct ReflowStats {
+    size_t reflow_blocks_capped{0}; // blocks in an SCC whose flow was routed
+                                    // down
+    double reflow_sink_spill_total{0.0}; // flow no successor could absorb
+    size_t reflow_methods_spilled{0}; // methods with any sink spill
+    ReflowStats& operator+=(const ReflowStats& o) {
+      reflow_blocks_capped += o.reflow_blocks_capped;
+      reflow_sink_spill_total += o.reflow_sink_spill_total;
+      reflow_methods_spilled += o.reflow_methods_spilled;
+      return *this;
+    }
+  };
+
+  // Scope-scoped core (no PassManager), directly drivable
+  // from unit tests: the two-sweep capacity DP on the SCC condensation. Per
+  // method, per interaction, anchored on the WRITTEN entry count, it routes
+  // flow away from over-capped blocks toward siblings with headroom (entry
+  // pinned; a block's own value is never truncated -- the clamp is the hard
+  // backstop) and overwrites covered blocks with the routed frequency. Runs on
+  // whatever the producer wrote (per-method OR inter-method).
+  ReflowStats reflow_post_pass_core(
+      const Scope& scope,
+      const method_profiles::MethodProfiles& profiles,
+      const std::vector<std::string>& inv_slot);
+
+  // Thin metric wrapper around reflow_post_pass_core.
+  void reflow_post_pass(const Scope& scope,
+                        const method_profiles::MethodProfiles& profiles,
+                        const std::vector<std::string>& inv_slot,
+                        PassManager& mgr);
+
   // Summary of what the inter-method engine did (for metrics + tests).
   struct InterStats {
     // PASS C runs once per (method, interaction), so these four count
@@ -231,6 +263,14 @@ class SyntheticBlockCountsPass : public Pass {
   // there is no config knob; it is a friend-test-only toggle that defaults on
   // (the whole pass is gated by the pass list).
   bool m_callsite_clamp{true};
+
+  // Tier-1 callsite re-flow: the flow-aware variant of the
+  // clamp. A two-sweep capacity DP on the SCC condensation routes flow away
+  // from over-capped blocks toward siblings with headroom (no iteration,
+  // deterministic), then the clamp truncates as the hard backstop. UNBOUND
+  // friend-test-only toggle; defaults on (the whole pass is gated by the pass
+  // list).
+  bool m_callsite_reflow{true};
 
   // Inter-method engine knobs.
   bool m_intermethod{false};
