@@ -55,6 +55,7 @@
 #include "Inliner.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
+#include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -991,6 +992,36 @@ struct SBHelper {
     };
   }
 
+  // The synthesized callsite for a dispatch arm, carrying `callee`'s own entry
+  // count: the arm is taken exactly as often as that method was called.
+  //
+  // The plain creator above fills one SCALAR across every interaction, which
+  // was adequate when a val meant "hot" but is meaningless as a count -- so the
+  // values are copied per interaction here, bounded by the shorter of the two
+  // as SourceBlock::add/max/min all do.
+  //
+  // A callee with no SourceBlock gives no basis for a count, so it falls back
+  // to the historical literal rather than inventing one or writing `none`,
+  // which would propagate as NaN through inlining's normalization.
+  std::function<std::unique_ptr<SourceBlock>()> get_source_block_creator_from(
+      const DexMethod* callee) const {
+    return [overridden_method = this->overridden,
+            template_sb = get_arbitrary_first_sb(), callee]() {
+      auto* callee_sb = source_blocks::get_first_source_block_of_method(callee);
+      if (callee_sb == nullptr) {
+        return source_blocks::clone_as_synthetic(template_sb, overridden_method,
+                                                 SourceBlock::Val{1.0, 0});
+      }
+      auto new_sb =
+          source_blocks::clone_as_synthetic(template_sb, overridden_method);
+      const size_t len = std::min(new_sb->vals_size, callee_sb->vals_size);
+      for (size_t i = 0; i < len; ++i) {
+        new_sb->apply_at(i, [&](auto& val) { val = callee_sb->get_at(i); });
+      }
+      return new_sb;
+    };
+  }
+
   struct ScopedSplitHelper {
     cfg::Block* block{nullptr};
     SourceBlock* first_sb{nullptr};
@@ -1286,9 +1317,16 @@ VirtualMergingStats apply_ordering(
         }
 
         if (sb_helper.create_source_blocks) {
-          // Insert source block with val == 1.0 so that inlining normalizes
-          // source-blocks properly
-          push_sb(sb_helper.get_source_block_creator(/* val */ 1.0)());
+          // The literal 1.0 was the coverage era's "hot": inlining's factor is
+          // callsite/callee_entry, so 1.0 over a callee entry of 1.0 was a
+          // no-op. Once vals carry counts, 1.0 means ONE execution and the
+          // factor collapses to 1/callee_entry -- a callee with entry 50000
+          // has its whole inlined body scaled by 2e-5 and pinned to the
+          // positive floor. Take the arm's count from the profile instead.
+          push_sb(
+              g_redex->preserve_count_integrity
+                  ? sb_helper.get_source_block_creator_from(overriding_method)()
+                  : sb_helper.get_source_block_creator(/* val */ 1.0)());
         }
 
         always_assert(1 + proto->get_args()->size() == param_regs.size());
