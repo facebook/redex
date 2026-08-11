@@ -157,6 +157,30 @@ TEST_F(ConcurrentContainersTest, concurrentSetTest) {
   EXPECT_EQ(0, set.size());
 }
 
+// End-to-end wrapper check: iterating a populated ConcurrentSet (via
+// UnorderedIterable, which concatenates its shards) visits every inserted
+// element exactly once and skips none, regardless of perturbation. Confirms the
+// public wrapper composes the shard tables (perturbed under
+// REDEX_PERTURB_UNORDERED) correctly.
+TEST_F(ConcurrentContainersTest, unorderedIterableVisitsEveryElementOnce) {
+  ConcurrentSet<uint32_t> set;
+  run_on_samples([&set](const std::vector<uint32_t>& sample) {
+    for (uint32_t x : sample) {
+      set.insert(x);
+    }
+  });
+  ASSERT_EQ(m_data_set.size(), set.size());
+
+  std::unordered_set<uint32_t> seen;
+  size_t count = 0;
+  for (uint32_t x : UnorderedIterable(set)) {
+    EXPECT_TRUE(seen.insert(x).second) << "element visited twice: " << x;
+    ++count;
+  }
+  EXPECT_EQ(set.size(), count);
+  EXPECT_EQ(m_data_set, seen);
+}
+
 TEST_F(ConcurrentContainersTest, insertOnlyConcurrentSetTest) {
   InsertOnlyConcurrentSet<uint32_t> set;
 

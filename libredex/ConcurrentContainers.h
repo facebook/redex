@@ -169,7 +169,7 @@ class ConcurrentHashtable final {
    * operations (concurrent or synchronous) invalidate all iterators.
    */
   iterator find(const key_type& key) {
-    auto hash = hasher()(key);
+    auto hash = m_hasher(key);
     auto* storage = m_storage.load();
     auto* ptrs = storage->ptrs;
     size_t i = hash % storage->size;
@@ -190,7 +190,7 @@ class ConcurrentHashtable final {
    * operations (concurrent or synchronous) invalidate all iterators.
    */
   const_iterator find(const key_type& key) const {
-    auto hash = hasher()(key);
+    auto hash = m_hasher(key);
     auto* storage = m_storage.load();
     auto* ptrs = storage->ptrs;
     size_t i = hash % storage->size;
@@ -248,7 +248,11 @@ class ConcurrentHashtable final {
   ConcurrentHashtable(ConcurrentHashtable&& container) noexcept
       : m_storage(container.m_storage.exchange(Storage::create())),
         m_count(container.m_count.exchange(0)),
-        m_erased(container.m_erased.exchange(nullptr)) {
+        m_erased(container.m_erased.exchange(nullptr)),
+        // Storage is transplanted without rehashing, so the source's salt must
+        // come with it or post-move lookups would recompute a mismatched
+        // bucket.
+        m_hasher(container.m_hasher) {
     compact();
   }
 
@@ -260,6 +264,10 @@ class ConcurrentHashtable final {
     container.compact();
     m_storage.store(container.m_storage.exchange(m_storage.load()));
     m_count.store(container.m_count.exchange(0));
+    // `this` adopts the source's storage, so it must adopt the source's salt
+    // too; the source keeps its own salt, consistent with the emptied storage
+    // it took.
+    m_hasher = container.m_hasher;
     return *this;
   }
 
@@ -293,7 +301,7 @@ class ConcurrentHashtable final {
    * This operation is always thread-safe.
    */
   value_type* get(const key_type& key) {
-    auto hash = hasher()(key);
+    auto hash = m_hasher(key);
     auto* storage = m_storage.load();
     do {
       auto* ptrs = storage->ptrs;
@@ -314,7 +322,7 @@ class ConcurrentHashtable final {
    * This operation is always thread-safe.
    */
   const value_type* get(const key_type& key) const {
-    auto hash = hasher()(key);
+    auto hash = m_hasher(key);
     auto* storage = m_storage.load();
     do {
       auto* ptrs = storage->ptrs;
@@ -341,7 +349,7 @@ class ConcurrentHashtable final {
   template <typename... Args>
   insertion_result try_emplace(const key_type& key, Args&&... args) {
     Node* new_node = nullptr;
-    auto hash = hasher()(key);
+    auto hash = m_hasher(key);
     auto* storage = m_storage.load();
     while (true) {
       auto* ptrs = storage->ptrs;
@@ -388,7 +396,7 @@ class ConcurrentHashtable final {
   template <typename... Args>
   insertion_result try_emplace(key_type&& key, Args&&... args) {
     Node* new_node = nullptr;
-    auto hash = hasher()(key);
+    auto hash = m_hasher(key);
     auto* storage = m_storage.load();
     const key_type* key_ptr = &key;
     while (true) {
@@ -436,7 +444,7 @@ class ConcurrentHashtable final {
    */
   insertion_result try_insert(const value_type& value) {
     Node* new_node = nullptr;
-    auto hash = hasher()(const_key_projection()(value));
+    auto hash = m_hasher(const_key_projection()(value));
     auto* storage = m_storage.load();
     while (true) {
       auto* ptrs = storage->ptrs;
@@ -482,7 +490,7 @@ class ConcurrentHashtable final {
    */
   insertion_result try_insert(value_type&& value) {
     Node* new_node = nullptr;
-    auto hash = hasher()(const_key_projection()(value));
+    auto hash = m_hasher(const_key_projection()(value));
     auto* storage = m_storage.load();
     auto* value_ptr = &value;
     while (true) {
@@ -574,7 +582,7 @@ class ConcurrentHashtable final {
         prev_loc = &node->prev;
         prev_ptr = prev_loc->load();
         always_assert(prev_ptr == nullptr || is_moved_or_locked(prev_ptr));
-        auto new_hash = hasher()(const_key_projection()(node->value));
+        auto new_hash = m_hasher(const_key_projection()(node->value));
         auto* new_loc = &new_storage->ptrs[new_hash % new_storage->size];
         auto* new_ptr = new_loc->load();
         // Rewiring the node happens in three steps:
@@ -605,7 +613,7 @@ class ConcurrentHashtable final {
    * This operation is always thread-safe.
    */
   value_type* erase(const key_type& key) {
-    auto hash = hasher()(key);
+    auto hash = m_hasher(key);
     auto* storage = m_storage.load();
     while (true) {
       auto* ptrs = storage->ptrs;
@@ -764,6 +772,17 @@ class ConcurrentHashtable final {
     Erased* prev;
   };
   std::atomic<Erased*> m_erased;
+
+  // Per-table salted hasher for iteration-order perturbation. Off
+  // (REDEX_PERTURB_UNORDERED unset), EffectiveHash_t<Hash> is exactly Hash --
+  // an empty stateless functor -- so bucket assignment, iteration order, and
+  // codegen are unchanged and this is zero-cost. On, each table draws its own
+  // salt at construction, re-bucketing keys so iteration order varies per table
+  // per run and code that leaks it is caught. The salt is set once before the
+  // table is shared and read-only thereafter, so the lock-free get/insert/erase
+  // read it without synchronization; the move ctor and move assignment MUST
+  // carry it across, since they transplant storage without rehashing.
+  EffectiveHash_t<Hash> m_hasher{};
 
   bool load_factor_exceeded(const Storage* storage) const {
     return m_count.load() > storage->size * LOAD_FACTOR;
