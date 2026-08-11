@@ -106,6 +106,9 @@ std::ostream& operator<<(std::ostream&, const MethodItemEntry&);
 std::ostream& operator<<(std::ostream&, const DexCallSite&);
 std::ostream& operator<<(std::ostream&, const DexMethodHandle&);
 
+// The entry as `operator<<` above renders it, minus the leading `[<address>] `.
+std::string show_mie_plain(const MethodItemEntry&);
+
 std::string show(const DexFieldRef*);
 std::string show(const DexDebugEntry*);
 std::string show(const DexTypeList*);

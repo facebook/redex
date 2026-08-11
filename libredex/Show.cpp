@@ -1500,8 +1500,8 @@ std::string show(const SwitchIndices& si) {
   return ss.str();
 }
 
-std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
-  o << "[" << &mie << "] ";
+std::string show_mie_plain(const MethodItemEntry& mie) {
+  std::ostringstream o;
   switch (mie.type) {
   case MFLOW_OPCODE:
     o << "OPCODE: " << show(mie.insn);
@@ -1539,6 +1539,11 @@ std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
     o << "FALLTHROUGH";
     break;
   }
+  return o.str();
+}
+
+std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
+  o << "[" << &mie << "] " << show_mie_plain(mie);
   return o;
 }
 
@@ -1577,6 +1582,8 @@ std::string show(const IRList* ir, bool code_only) {
 namespace {
 
 struct NoneSpecial {
+  std::string show_mie(const MethodItemEntry& mie) const { return show(mie); }
+
   void mie_before(std::ostream&, const MethodItemEntry&) {}
   void mie_after(std::ostream&, const MethodItemEntry&) {}
   void start_block(std::ostream&, const cfg::Block*) {}
