@@ -14,6 +14,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/analyze-pure-method \
 	-I$(top_srcdir)/opt/app_module_usage \
 	-I$(top_srcdir)/opt/art-profile-writer \
+	-I$(top_srcdir)/opt/atomic-field-updater-lowering \
 	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
 	-I$(top_srcdir)/opt/basic-block \
