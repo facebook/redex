@@ -181,21 +181,40 @@ std::map<SwitchIndices, MethodBlock*> get_switch_cases(
   return cases;
 }
 
-SourceBlock* get_template_source_block(
+// Builds the SourceBlock stamped onto the dispatch method's blocks, folding the
+// entry SourceBlock of every callee the dispatch serves.
+//
+// Returns an OWNED copy. It previously returned
+// `get_any_first_source_block_of_methods(...)` -- a live pointer into whichever
+// callee happened to have SourceBlocks first -- and folded the others into it
+// with `sb->max(...)`, permanently altering that shipping method's own entry
+// SourceBlock as a side effect of building a dispatch. Every consumer only ever
+// reads the template (they copy it via clone_as_synthetic), so ownership is the
+// honest signature.
+//
+// Callees without SourceBlocks are filtered out rather than dereferenced:
+// `get_any_first_source_block_of_methods` returns the first NON-NULL, but the
+// old fold ran over EVERY callee, so a mixed set dereferenced a null
+// SourceBlock inside `max`.
+//
+// Values are unchanged: clone_as_synthetic(sb, ref, many) starts from
+// `Val::none()` and maxes over `many`, which is what the in-place fold
+// computed.
+std::unique_ptr<SourceBlock> get_template_source_block(
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
-  std::vector<const DexMethod*> methods;
-  methods.reserve(indices_to_callee.size());
+  std::vector<SourceBlock*> entries;
+  entries.reserve(indices_to_callee.size());
   for (auto&& [_, m] : indices_to_callee) {
-    methods.push_back(m);
-  }
-  auto* sb = source_blocks::get_any_first_source_block_of_methods(methods);
-  if (sb != nullptr) {
-    for (const auto* m : methods) {
-      sb->max(*source_blocks::get_first_source_block_of_method(m));
+    auto* sb = source_blocks::get_first_source_block_of_method(m);
+    if (sb != nullptr) {
+      entries.push_back(sb);
     }
-    return sb;
   }
-  return sb;
+  if (entries.empty()) {
+    return nullptr;
+  }
+  return source_blocks::clone_as_synthetic(entries.front(), /* ref */ nullptr,
+                                           entries);
 }
 
 // add the template source block to all dispatch blocks that don't have
@@ -322,8 +341,8 @@ DexMethod* create_simple_switch_dispatch(
   if (is_single_target_case(spec, indices_to_callee)) {
     invoke_static(spec, args, ret_loc, orig_method, mb, mc);
     mb->ret(spec.proto->get_rtype(), ret_loc);
-    auto* template_sb = get_template_source_block(indices_to_callee);
-    return materialize_dispatch(orig_method, mc, template_sb);
+    auto template_sb = get_template_source_block(indices_to_callee);
+    return materialize_dispatch(orig_method, mc, template_sb.get());
   }
 
   mb->iget(spec.type_tag_field, self_loc, type_tag_loc);
@@ -344,8 +363,8 @@ DexMethod* create_simple_switch_dispatch(
     invoke_static(spec, args, ret_loc, callee, case_block, mc);
   }
 
-  auto* template_sb = get_template_source_block(indices_to_callee);
-  return materialize_dispatch(orig_method, mc, template_sb);
+  auto template_sb = get_template_source_block(indices_to_callee);
+  return materialize_dispatch(orig_method, mc, template_sb.get());
 }
 
 dispatch::DispatchMethod create_two_level_switch_dispatch(
@@ -412,7 +431,7 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
     case_index++;
   }
 
-  auto* template_sb = get_template_source_block(indices_to_callee);
+  auto template_sb = get_template_source_block(indices_to_callee);
   auto* dispatch_meth = materialize_dispatch(orig_method, mc, nullptr);
 
   /////////////////////////////////////////////////////////////////////////////
@@ -483,7 +502,7 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
   }
 
   if (template_sb != nullptr) {
-    add_remaining_source_blocks_to_dispatch(dispatch_meth, template_sb);
+    add_remaining_source_blocks_to_dispatch(dispatch_meth, template_sb.get());
   }
 
   TRACE(SDIS, 9, "dispatch: split dispatch %s\n%s", SHOW(dispatch_meth),
@@ -657,8 +676,8 @@ DexMethod* create_ctor_or_static_dispatch(
   if (is_single_target_case(spec, indices_to_callee)) {
     invoke_static(spec, args, ret_loc, orig_method, mb, mc);
     mb->ret(spec.proto->get_rtype(), ret_loc);
-    auto* template_sb = get_template_source_block(indices_to_callee);
-    return materialize_dispatch(orig_method, mc, template_sb);
+    auto template_sb = get_template_source_block(indices_to_callee);
+    return materialize_dispatch(orig_method, mc, template_sb.get());
   }
 
   auto cases = get_switch_cases(indices_to_callee, is_ctor(spec));
@@ -675,8 +694,8 @@ DexMethod* create_ctor_or_static_dispatch(
     invoke_static(spec, args, ret_loc, callee, case_block, mc);
   }
 
-  auto* template_sb = get_template_source_block(indices_to_callee);
-  return materialize_dispatch(orig_method, mc, template_sb);
+  auto template_sb = get_template_source_block(indices_to_callee);
+  return materialize_dispatch(orig_method, mc, template_sb.get());
 }
 
 // TODO(fengliu): There are some redundant logic with other dispatch creating
