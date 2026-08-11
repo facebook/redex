@@ -2255,6 +2255,7 @@ int main(int argc, char* argv[]) {
     }
 
     g_redex->disable_violation_fixes = conf.disable_violation_fixes();
+    g_redex->preserve_count_integrity = conf.preserve_count_integrity();
 
     if (conf.evaluate_package_name()) {
       args.redex_options.package_name = resources->get_manifest_package_name();

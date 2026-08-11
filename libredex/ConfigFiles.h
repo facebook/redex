@@ -253,6 +253,7 @@ struct ConfigFiles {
   bool enforce_class_order() const;
 
   bool disable_violation_fixes() const;
+  bool preserve_count_integrity() const;
 
   // If true, classes.dex is treated like any other dex file in the root of
   // the input program. This is derived from InterDexPass configuration, which

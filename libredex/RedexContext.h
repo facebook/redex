@@ -230,6 +230,28 @@ struct RedexContext {
   bool instrument_mode{false};
   bool slow_invariants_debug{false};
   bool disable_violation_fixes{false};
+
+  // Off by default while the corrected behaviour is being measured; a
+  // supported flag for as long as both behaviours need to coexist.
+  // When set, transforms preserve the INTEGRITY of SourceBlock execution
+  // counts rather than treating `val` as 0/1 coverage: a duplicated block has
+  // its count apportioned across the copies instead of copied verbatim, a
+  // block that loses a predecessor sheds the inflow that departed instead of
+  // being clamped to the MAX over the survivors, and a synthesized callsite
+  // takes its count from the profile instead of a literal. All three are
+  // correct for coverage and wrong once vals carry counts.
+  //
+  // Named to pair with `run_count_integrity_after_each_pass`, which checks the
+  // same invariant this maintains.
+  //
+  // Global rather than per-pass, following disable_violation_fixes above,
+  // because the affected code is shared services with several owners:
+  // constant propagation runs in ConstantPropagationPass,
+  // InterproceduralConstantPropagationPass AND the inliner's shrinker, and
+  // SwitchEquivFinder has no owning pass at all. A per-pass knob could also be
+  // left half-set by a local `-J` arm override, silently measuring a
+  // partially-corrected state.
+  bool preserve_count_integrity{false};
   bool insert_remarks{false};
 
   bool ordering_changes_allowed() const { return m_ordering_changes_allowed; }
