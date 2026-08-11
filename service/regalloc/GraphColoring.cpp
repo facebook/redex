@@ -894,10 +894,18 @@ void Allocator::split_params(const interference::Graph& ig,
       param_to_temp[dest] = temp;
     }
   }
-  // Insert the loads
-  for (const auto& param_pair : UnorderedIterable(load_locations)) {
-    auto dest = param_pair.first;
-    auto first_use_it = param_pair.second;
+  // Insert the loads, in ascending symreg order rather than in the map's hash
+  // order. Several params routinely share one insertion point: every param
+  // overwritten by a later instruction is recorded at the same `pend` in
+  // find_param_splits, and params can also share an idom end or a first use. At
+  // a shared point, whichever move is inserted first ends up first, so hash
+  // order would decide the emitted instruction order and the output would vary
+  // between runs. The moves are mutually independent -- each dest is a distinct
+  // param and each src a freshly allocated temp, so no move's src is another's
+  // dest -- hence any fixed order is semantically equivalent, and symreg order
+  // is a deterministic one.
+  for (auto dest : unordered_to_ordered_keys(load_locations)) {
+    const auto& first_use_it = load_locations.at(dest);
     cfg.insert_before(
         first_use_it,
         gen_move(ig.get_node(dest).type(), dest, param_to_temp.at(dest)));
