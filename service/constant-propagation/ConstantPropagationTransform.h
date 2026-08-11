@@ -32,6 +32,11 @@ namespace constant_propagation {
 // Returns std::nullopt on success, or an error message on failure.
 std::optional<std::string> verify_areequal_semantics();
 
+/*
+ * Whether a value is known to be non-null.
+ */
+bool is_known_non_null(const ConstantValue& val);
+
 /**
  * Optimize the given code by:
  *   - removing dead branches
