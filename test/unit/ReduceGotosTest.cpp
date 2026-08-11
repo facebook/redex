@@ -9,8 +9,11 @@
 
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "IROpcode.h"
 #include "RedexTest.h"
 #include "ReduceGotos.h"
+#include "Show.h"
+#include "SourceBlocks.h"
 
 class ReduceGotosTest : public RedexTest {};
 
@@ -592,8 +595,242 @@ TEST_F(ReduceGotosTest, replace_return_src_blk) {
       (:true)
       (.src_block "LFoo;.bar:()V" 2 (1 1))
       (const v2 1)
-      (return v2)      
+      (return v2)
     )
   )";
   test(code_str, expected_str, 1, 0, 0);
+}
+
+// A return block reached ONLY by gotos (no fall-through) is inlined into its
+// goto-predecessors, and the now-predecessor-less original is simplified away.
+//
+// NOTE: both goto-preds here have only GOTO successor edges, so both take the
+// `insns_to_add` path -- this case does NOT reach the block-duplication path
+// that copies the SourceBlock. The `.src_block 3` below is the original return
+// block surviving as a fall-through, and the second `return` deliberately
+// carries no SourceBlock. See `clone_return_block_carries_src_block` for the
+// duplication path.
+TEST_F(ReduceGotosTest, clone_return_keeps_src_block_per_goto_pred) {
+  const auto& code_str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1 1))
+      (if-eqz v0 :true)
+
+      (.src_block "LFoo;.bar:()V" 1 (1 1))
+      (const v2 0)
+      (goto :end)
+
+      (:true)
+      (.src_block "LFoo;.bar:()V" 2 (1 1))
+      (const v2 1)
+      (goto :end)
+
+      (:end)
+      (.src_block "LFoo;.bar:()V" 3 (1 1))
+      (return v2)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1 1))
+      (if-eqz v0 :true)
+
+      (.src_block "LFoo;.bar:()V" 1 (1 1))
+      (const v2 0)
+      (.src_block "LFoo;.bar:()V" 3 (1 1))
+      (return v2)
+
+      (:true)
+      (.src_block "LFoo;.bar:()V" 2 (1 1))
+      (const v2 1)
+      (return v2)
+    )
+  )";
+  test(code_str, expected_str, 1, 0, 0);
+}
+
+// The block-duplication path (`new_block`) only runs for a goto-predecessor
+// that ALSO has a BRANCH or THROW successor edge; a pred whose only successor
+// is the goto takes the cheaper `insns_to_add` path instead. Here the first
+// goto-pred sits inside a try region, so it carries a THROW edge and the
+// duplication path runs. Every resulting return block must carry a SourceBlock
+// -- without the copy the duplicate comes out bare, leaving is_hot inconsistent
+// with is_not_cold/maybe_hot.
+TEST_F(ReduceGotosTest, clone_return_block_carries_src_block) {
+  const auto& code_str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1 1))
+      (const v2 0)
+      (if-eqz v0 :true)
+
+      (.src_block "LFoo;.bar:()V" 1 (1 1))
+      (.try_start a)
+      (sget "LFoo;.b:I")
+      (goto :end)
+      (.try_end a)
+
+      (:true)
+      (.src_block "LFoo;.bar:()V" 2 (1 1))
+      (const v2 1)
+      (goto :end)
+
+      (:end)
+      (.src_block "LFoo;.bar:()V" 3 (1 1))
+      (return v2)
+
+      (.catch (a))
+      (.src_block "LFoo;.bar:()V" 4 (1 1))
+      (return v2)
+    )
+  )";
+  auto code = assembler::ircode_from_string(code_str);
+  code->build_cfg();
+  ReduceGotosPass::process_code(code.get());
+
+  auto& cfg = code->cfg();
+  size_t return_blocks = 0;
+  for (auto* b : cfg.blocks()) {
+    auto last_it = b->get_last_insn();
+    if (last_it == b->end() || !opcode::is_a_return(last_it->insn->opcode())) {
+      continue;
+    }
+    return_blocks++;
+    EXPECT_NE(source_blocks::get_first_source_block(b), nullptr)
+        << "return block B" << b->id() << " has no SourceBlock:\n"
+        << show(cfg);
+  }
+  // The duplication must actually have happened: the original single return
+  // block became several.
+  EXPECT_GE(return_blocks, 2u) << show(cfg);
+}
+
+// With `split_source_block_counts`, a duplicated return block must carry its
+// predecessor's SHARE of the original's execution count rather than a verbatim
+// copy: N clones each claiming the full count would multiply the block's
+// execution mass. Here the return block runs 40 times, reached from the
+// try-region predecessor (30) and the plain goto predecessor (10), so the clone
+// created for the try-region pred must come out at 40 * 30/40 == 30.
+// The apportionment reads each predecessor's LAST source block, so a
+// predecessor whose count drops inside the block contributes only the flow
+// that actually leaves it. The `:true` predecessor enters at 10 and exits at
+// 4, so the try-region predecessor's share is 30/(30+4) rather than 30/(30+10)
+// -- clone 40 * 30/34 == 35.29, not 40 * 30/40 == 30.
+//
+// n.b. the second source block has to sit in a NON-try predecessor: a
+// `.src_block` placed between an instruction and the `goto` inside a
+// `.try_start`/`.try_end` region is dropped during assembly, which would
+// silently turn this back into a single-source-block fixture.
+TEST_F(ReduceGotosTest, clone_return_block_uses_predecessor_exit_count) {
+  const auto& code_str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (40 100))
+      (const v2 0)
+      (if-eqz v0 :true)
+
+      (.src_block "LFoo;.bar:()V" 1 (30 100))
+      (.try_start a)
+      (sget "LFoo;.b:I")
+      (goto :end)
+      (.try_end a)
+
+      (:true)
+      (.src_block "LFoo;.bar:()V" 2 (10 100))
+      (const v2 1)
+      (.src_block "LFoo;.bar:()V" 6 (4 100))
+      (goto :end)
+
+      (:end)
+      (.src_block "LFoo;.bar:()V" 3 (40 100))
+      (return v2)
+
+      (.catch (a))
+      (.src_block "LFoo;.bar:()V" 4 (0 100))
+      (return v2)
+    )
+  )";
+  auto code = assembler::ircode_from_string(code_str);
+  code->build_cfg();
+  ReduceGotosPass::process_code(code.get(), /* for_performance */ false,
+                                /* split_source_block_counts */ true);
+
+  auto& cfg = code->cfg();
+  bool found_clone = false;
+  for (auto* b : cfg.blocks()) {
+    auto last_it = b->get_last_insn();
+    if (last_it == b->end() || !opcode::is_a_return(last_it->insn->opcode())) {
+      continue;
+    }
+    auto* sb = source_blocks::get_first_source_block(b);
+    ASSERT_NE(sb, nullptr) << show(cfg);
+    if (sb->id != SourceBlock::kSyntheticId) {
+      continue;
+    }
+    auto val = sb->get_val(0);
+    ASSERT_TRUE(val.has_value()) << show(cfg);
+    // 40 * 30/34. Reading the predecessor's ENTRY count would give 30.
+    EXPECT_NEAR(*val, 35.2941f, 0.01f)
+        << "clone did not apportion on the predecessor's exit count:\n"
+        << show(cfg);
+    found_clone = true;
+  }
+  EXPECT_TRUE(found_clone) << "no synthetic clone found:\n" << show(cfg);
+}
+
+TEST_F(ReduceGotosTest, clone_return_block_splits_src_block_counts) {
+  const auto& code_str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (40 100))
+      (const v2 0)
+      (if-eqz v0 :true)
+
+      (.src_block "LFoo;.bar:()V" 1 (30 100))
+      (.try_start a)
+      (sget "LFoo;.b:I")
+      (goto :end)
+      (.try_end a)
+
+      (:true)
+      (.src_block "LFoo;.bar:()V" 2 (10 100))
+      (const v2 1)
+      (goto :end)
+
+      (:end)
+      (.src_block "LFoo;.bar:()V" 3 (40 100))
+      (return v2)
+
+      (.catch (a))
+      (.src_block "LFoo;.bar:()V" 4 (0 100))
+      (return v2)
+    )
+  )";
+  auto code = assembler::ircode_from_string(code_str);
+  code->build_cfg();
+  ReduceGotosPass::process_code(code.get(), /* for_performance */ false,
+                                /* split_source_block_counts */ true);
+
+  auto& cfg = code->cfg();
+  bool found_split_clone = false;
+  for (auto* b : cfg.blocks()) {
+    auto last_it = b->get_last_insn();
+    if (last_it == b->end() || !opcode::is_a_return(last_it->insn->opcode())) {
+      continue;
+    }
+    auto* sb = source_blocks::get_first_source_block(b);
+    ASSERT_NE(sb, nullptr) << "return block B" << b->id()
+                           << " has no SourceBlock:\n"
+                           << show(cfg);
+    auto val = sb->get_val(0);
+    ASSERT_TRUE(val.has_value()) << show(cfg);
+    // No return block may still claim the undivided 40 -- that is the
+    // mass-duplication bug this option fixes.
+    EXPECT_LT(*val, 40.0f) << "return block B" << b->id()
+                           << " kept the undivided count:\n"
+                           << show(cfg);
+    if (*val > 29.9f && *val < 30.1f) {
+      found_split_clone = true;
+    }
+  }
+  EXPECT_TRUE(found_split_clone)
+      << "expected a clone carrying 40 * 30/40 == 30:\n"
+      << show(cfg);
 }

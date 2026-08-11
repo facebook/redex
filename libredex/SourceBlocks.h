@@ -600,6 +600,53 @@ inline void normalize(ControlFlowGraph& cfg,
 
 } // namespace normalize
 
+namespace apportion {
+
+// Count-conserving apportionment, shared by every transform that duplicates a
+// block or drops one of its predecessors.
+//
+// Needs only PREDECESSOR counts, never edge counts: Redex does not track edge
+// hotness, and a predecessor's share of a block's inflow is the standard
+// estimate when block counts are known and edge counts are not. It is an
+// estimate -- a predecessor with branch successors does not send all its flow
+// to one successor -- but it never invents mass.
+//
+// `appear100` is never scaled by any of these: it is an appearance
+// probability, MAX-unioned across copies, so a verbatim carry is right for it.
+
+// Per-interaction sum of the LAST SourceBlock val over every predecessor of
+// `b` -- the last one, because that is a predecessor's outflow, which is what
+// its successors receive.
+//
+// A predecessor with no SourceBlock contributes nothing, so it also does not
+// widen the denominator: the shares below describe the inflow we have evidence
+// for, not all of it. Where some predecessors are unprofiled the remaining
+// shares are correspondingly larger, which errs towards moving too much count
+// onto a copy rather than leaving mass stranded on a block that no longer
+// receives it.
+std::vector<double> predecessor_totals(const cfg::Block* b, size_t n_slots);
+
+// Share of `b`'s inflow attributable to `src`, given `b`'s predecessor totals.
+// Returns -1.0 for "no count evidence for this slot", which callers must treat
+// as "leave alone": a predecessor whose SourceBlock reads 0 IS evidence (it
+// correctly yields a cold share), whereas a predecessor with no SourceBlock is
+// absence. Conflating the two turns copies of unprofiled predecessors cold.
+double share_of(const std::vector<double>& pred_total,
+                const cfg::Block* src,
+                size_t i);
+
+// sb->val[i] *= f. Leaves a `none` val and appear100 untouched.
+void scale_val(SourceBlock* sb, size_t i, double f);
+
+// Scale every SourceBlock of `b` -- chain included, since they annotate the
+// same program point and so describe the same execution count -- by
+// clamp(1 - leaving_share[i], 0, 1). The counterpart to handing
+// `leaving_share` to the copies that took it.
+void shrink_by_departed(cfg::Block* b,
+                        const std::vector<double>& leaving_share);
+
+} // namespace apportion
+
 class SourceBlockConsistencyCheck;
 SourceBlockConsistencyCheck& get_sbcc();
 

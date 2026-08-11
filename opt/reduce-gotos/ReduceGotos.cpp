@@ -25,6 +25,9 @@
 
 #include "ReduceGotos.h"
 
+#include "RedexContext.h"
+
+#include <algorithm>
 #include <vector>
 
 #include "BaselineProfile.h"
@@ -307,7 +310,8 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
     cfg::ControlFlowGraph& cfg,
     const BlockFilter& block_filter,
     const OpcodeFilter& opcode_filter,
-    const ForceBlockCheck& force_block_check) {
+    const ForceBlockCheck& force_block_check,
+    bool split_source_block_counts) {
   bool rerun = false;
   size_t removed_trailing_moves = 0;
   size_t replaced_gotos = 0;
@@ -331,6 +335,46 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
     }
 
     std::vector<std::pair<cfg::Block*, IRInstruction*>> insns_to_add;
+
+    // Count-preserving redistribution of `b`'s execution mass.
+    //
+    // Every goto predecessor we process takes its inflow away from `b`: into a
+    // clone (a new block that runs exactly when that edge is taken), or into
+    // `src` itself (the return is appended there, and `src`'s own count already
+    // covers those executions). Copying `b`'s SourceBlock verbatim onto N
+    // clones and leaving `b` untouched multiplies the block's execution count
+    // once vals are real counts rather than 0/1 coverage.
+    //
+    // Work in SHARES: apportion `b`'s inflow across ALL its predecessors (any
+    // edge type -- branch preds are untouched and keep feeding `b`) in
+    // proportion to their counts. A predecessor is read at its LAST source
+    // block, not its first: what reaches `b` is the flow leaving the
+    // predecessor, and a block whose count drops internally (a may-throw
+    // splitting it, or an inlined callee) sends only its tail count down the
+    // goto edge. Both the per-predecessor share and the `pred_total` it is
+    // divided by must use the same end of the block, or the shares stop
+    // summing to 1. Each clone is scaled by its predecessor's
+    // share, `b` by what remains. The shares sum to 1, so the total is
+    // conserved. It is an estimate -- a predecessor with branch successors does
+    // not send all its flow here -- but it is the standard apportionment when
+    // block counts are known and edge counts are not, and it never invents
+    // mass.
+    //
+    // `appear100` is never scaled: it is an appearance probability, MAX-unioned
+    // across the clones, so a verbatim copy is right for it.
+    auto* b_sb = source_blocks::get_first_source_block(b);
+    const size_t n_slots =
+        (split_source_block_counts && b_sb != nullptr) ? b_sb->vals_size : 0;
+    // Shared with the other count-apportioning transforms; see
+    // source_blocks::apportion, including why a -1.0 share ("no count
+    // evidence") must be left alone rather than treated as zero.
+    const auto pred_total =
+        source_blocks::apportion::predecessor_totals(b, n_slots);
+    std::vector<double> leaving_share(n_slots, 0.0);
+    auto share_of = [&pred_total](const cfg::Block* src, size_t i) -> double {
+      return source_blocks::apportion::share_of(pred_total, src, i);
+    };
+
     for (cfg::Edge* e : cfg.get_pred_edges_of_type(b, cfg::EDGE_GOTO)) {
       cfg::Block* src = e->src();
 
@@ -394,6 +438,25 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
         // blocks is worth the extra goto.
         auto* new_block = cfg.create_block();
         new_block->push_back(cloned_insn.release());
+        // Seed the duplicated block with a verbatim copy of `b`'s SourceBlock
+        // so the clones aren't left without one (otherwise the original return
+        // block can lose all its goto-preds and be simplified away, dropping
+        // its SB, while the clones carry none -- leaving is_hot inconsistent
+        // with is_not_cold/maybe_hot). Verbatim is correct for appear100
+        // (MAX-union across the N clones).
+        if (auto* template_sb = source_blocks::get_first_source_block(b)) {
+          auto new_sb = source_blocks::clone_as_synthetic(template_sb);
+          for (size_t i = 0; i < n_slots; ++i) {
+            const double share = share_of(src, i);
+            if (share < 0.0) {
+              continue;
+            }
+            leaving_share[i] += share;
+            source_blocks::apportion::scale_val(new_sb.get(), i, share);
+          }
+          source_blocks::impl::BlockAccessor::push_source_block(
+              new_block, std::move(new_sb));
+        }
         cfg.set_edge_target(e, new_block);
       } else {
         // `src` has no other outgoing edges, we will add a return to this
@@ -402,6 +465,15 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
         // deletes the outgoing edges of `src`. If we deleted this edge now we
         // might reach a stale Edge pointer that has been deleted.
         insns_to_add.emplace_back(src, cloned_insn.release());
+        // The return moves into `src`, whose own count already covers these
+        // executions, so there is no SourceBlock to write -- but the inflow
+        // still leaves `b`.
+        for (size_t i = 0; i < n_slots; ++i) {
+          const double share = share_of(src, i);
+          if (share >= 0.0) {
+            leaving_share[i] += share;
+          }
+        }
       }
 
       replaced_gotos++;
@@ -420,7 +492,17 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
     // The profiling data in `b` was valid when `b` had more predecessors,
     // but becomes inconsistent after predecessor paths are eliminated.
     // Only normalize if `b` still has predecessors (is still reachable).
-    if (!insns_to_add.empty() && !b->preds().empty()) {
+    // Scale `b` down by exactly the inflow that left it. Every SourceBlock in
+    // the block is scaled, chain included: they annotate the same program
+    // point, so they all describe the same reduced execution count.
+    //
+    // This supersedes the idom-normalize below rather than stacking with it:
+    // `normalize(idom_sb, sb, ...)` has factor `caller_val / callee_val`, so it
+    // sets `b`'s val equal to its dominator's -- the `count(b) ==
+    // count(idom(b))` assumption that is false for loop headers.
+    if (n_slots > 0 && !b->preds().empty()) {
+      source_blocks::apportion::shrink_by_departed(b, leaving_share);
+    } else if (!insns_to_add.empty() && !b->preds().empty()) {
       auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
       auto* idom = doms.get_idom(b);
       if (idom != nullptr) {
@@ -442,7 +524,8 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
 
 void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
                                        Stats& stats,
-                                       bool for_performance) {
+                                       bool for_performance,
+                                       bool split_source_block_counts) {
   // Optimization #1: Invert conditional branch conditions and swap goto/branch
   // targets if this may lead to more fallthrough cases where no additional
   // goto instruction is needed
@@ -514,7 +597,8 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
           [](IROpcode op) { return opcode::is_a_return(op); },
           [](const cfg::Block* /*to*/, const cfg::Block* /*from*/) {
             return false;
-          });
+          },
+          split_source_block_counts);
       rerun = std::get<0>(return_res);
       stats.removed_trailing_moves += std::get<1>(return_res);
       stats.replaced_gotos_with_returns += std::get<2>(return_res);
@@ -528,7 +612,8 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
           [](IROpcode op) { return op == OPCODE_THROW; },
           [&cfg](const cfg::Block* /*to*/, const cfg::Block* from) {
             return !cfg.get_succ_edges_of_type(from, cfg::EDGE_THROW).empty();
-          });
+          },
+          split_source_block_counts);
       rerun |= std::get<0>(throw_res);
       stats.removed_trailing_moves += std::get<1>(throw_res);
       stats.replaced_gotos_with_throws += std::get<2>(throw_res);
@@ -536,14 +621,14 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
   } while (rerun);
 }
 
-ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code,
-                                                     bool for_performance) {
+ReduceGotosPass::Stats ReduceGotosPass::process_code(
+    IRCode* code, bool for_performance, bool split_source_block_counts) {
   Stats stats;
   always_assert(code->cfg_built());
   code->cfg().calculate_exit_block();
   auto& cfg = code->cfg();
   process_code_switches(cfg, stats);
-  process_code_ifs(cfg, stats, for_performance);
+  process_code_ifs(cfg, stats, for_performance, split_source_block_counts);
 
   return stats;
 }
@@ -566,29 +651,39 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
                     conf.get_method_profiles()))
           : std::nullopt;
 
-  Stats stats = walk::parallel::methods<Stats>(scope, [&baseline_profile](
-                                                          DexMethod* method) {
-    auto* const code = method->get_code();
-    if ((code == nullptr) || method->rstate.no_optimizations()) {
-      return Stats{};
-    }
+  // Sourced from the global rather than a pass option: the same apportionment
+  // is needed in shared services with several owners (const-prop's Transform
+  // runs from two passes AND the inliner's shrinker; SwitchEquivFinder has no
+  // owning pass), so one switch has to cover them all -- including local `-J`
+  // arm overrides, where a per-pass knob left half-set would silently measure a
+  // partially-corrected state. Read once here and threaded down, so the
+  // transform stays testable without touching global state.
+  const bool split_source_block_counts = g_redex->preserve_count_integrity;
 
-    auto for_performance =
-        baseline_profile && is_compiled(*baseline_profile, method);
+  Stats stats = walk::parallel::methods<Stats>(
+      scope, [&baseline_profile, split_source_block_counts](DexMethod* method) {
+        auto* const code = method->get_code();
+        if ((code == nullptr) || method->rstate.no_optimizations()) {
+          return Stats{};
+        }
 
-    Stats local_stats = ReduceGotosPass::process_code(code, for_performance);
-    if ((local_stats.replaced_gotos_with_returns != 0u) ||
-        (local_stats.inverted_conditional_branches != 0u)) {
-      TRACE(RG, 3,
-            "[reduce gotos] Replaced %zu gotos with returns, "
-            "removed %zu trailing moves, "
-            "inverted %zu conditional branches in {%s}",
-            local_stats.replaced_gotos_with_returns,
-            local_stats.removed_trailing_moves,
-            local_stats.inverted_conditional_branches, SHOW(method));
-    }
-    return local_stats;
-  });
+        auto for_performance =
+            baseline_profile && is_compiled(*baseline_profile, method);
+
+        Stats local_stats = ReduceGotosPass::process_code(
+            code, for_performance, split_source_block_counts);
+        if ((local_stats.replaced_gotos_with_returns != 0u) ||
+            (local_stats.inverted_conditional_branches != 0u)) {
+          TRACE(RG, 3,
+                "[reduce gotos] Replaced %zu gotos with returns, "
+                "removed %zu trailing moves, "
+                "inverted %zu conditional branches in {%s}",
+                local_stats.replaced_gotos_with_returns,
+                local_stats.removed_trailing_moves,
+                local_stats.inverted_conditional_branches, SHOW(method));
+        }
+        return local_stats;
+      });
 
   mgr.incr_metric(METRIC_REMOVED_SWITCHES, stats.removed_switches);
   mgr.incr_metric(METRIC_REDUCED_SWITCHES, stats.reduced_switches);

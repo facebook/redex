@@ -1234,6 +1234,54 @@ size_t num_interactions(const cfg::ControlFlowGraph& cfg,
 
 } // namespace normalize
 
+namespace apportion {
+
+std::vector<double> predecessor_totals(const cfg::Block* b, size_t n_slots) {
+  std::vector<double> pred_total(n_slots, 0.0);
+  for (const cfg::Edge* pe : b->preds()) {
+    const auto* psb = source_blocks::get_last_source_block(pe->src());
+    if (psb == nullptr) {
+      continue;
+    }
+    for (size_t i = 0; i < n_slots; ++i) {
+      pred_total[i] += psb->get_val(i).value_or(0.0f);
+    }
+  }
+  return pred_total;
+}
+
+double share_of(const std::vector<double>& pred_total,
+                const cfg::Block* src,
+                size_t i) {
+  const auto* psb = source_blocks::get_last_source_block(src);
+  if (psb == nullptr || i >= pred_total.size() || pred_total[i] <= 0.0) {
+    return -1.0;
+  }
+  return psb->get_val(i).value_or(0.0f) / pred_total[i];
+}
+
+void scale_val(SourceBlock* sb, size_t i, double f) {
+  if (i >= sb->vals_size) {
+    return;
+  }
+  sb->apply_at(i, [f](auto& val) {
+    if (val) {
+      val->val = static_cast<float>(val->val * f);
+    }
+  });
+}
+
+void shrink_by_departed(cfg::Block* b,
+                        const std::vector<double>& leaving_share) {
+  source_blocks::foreach_source_block(b, [&](auto* sb) {
+    for (size_t i = 0; i < leaving_share.size() && i < sb->vals_size; ++i) {
+      scale_val(sb, i, std::clamp(1.0 - leaving_share[i], 0.0, 1.0));
+    }
+  });
+}
+
+} // namespace apportion
+
 SourceBlock* get_first_source_block_of_method(const DexMethod* m) {
   const auto* code = m->get_code();
   if (code->cfg_built()) {
