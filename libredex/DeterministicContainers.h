@@ -108,13 +108,143 @@
 #pragma once
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <iterator>
 #include <numeric>
+#include <random>
+#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "TemplateUtil.h"
+
+// Redex must produce bit-for-bit reproducible APKs: reproducible builds, build
+// caching, and verifiable releases all rely on the same input always yielding
+// the same output. Iterating a hash container in its incidental order is a
+// silent way to break that -- the output can then change from one run to the
+// next for no visible reason, surfacing later as a flaky build or a cache miss.
+//
+// The Unordered* wrappers already force such iteration to be spelled out (via
+// UnorderedIterable) so it gets reviewed, but they cannot verify the reviewer's
+// "order doesn't matter here" judgment. With REDEX_PERTURB_UNORDERED on
+// (CI/debug only), we deliberately scramble that order per container per run,
+// so any code that still depends on it diverges and is caught by Redex's
+// reproducibility signals in CI -- before it ships. Off by default =>
+// byte-identical, zero-cost.
+#ifndef REDEX_PERTURB_UNORDERED
+#define REDEX_PERTURB_UNORDERED 0
+#endif
+inline constexpr bool kPerturbUnordered = REDEX_PERTURB_UNORDERED;
+
+namespace det_perturb {
+inline uint64_t splitmix64(uint64_t x) {
+  x ^= x >> 30;
+  x *= 0xbf58476d1ce4e5b9ULL;
+  x ^= x >> 27;
+  x *= 0x94d049bb133111ebULL;
+  x ^= x >> 31;
+  return x;
+}
+// The base seed for a thread's salt counter. When REDEX_PERTURB_SEED is set it
+// is used verbatim (strtoull base 0 accepts decimal and 0x-hex) AND the
+// thread-id is deliberately dropped, so a single-threaded run reproduces an
+// identical salt stream. Otherwise every thread seeds from random_device XOR
+// its thread-id for per-run, per-thread variation. Note: even with a fixed seed
+// a full run is only best-effort reproducible -- pointer-keyed containers hash
+// raw addresses (ASLR/allocator) and parallel walkers draw salts in a
+// nondeterministic order. The seed's real value is detection variety plus
+// partial, value-keyed reproducibility.
+inline uint64_t perturb_base_seed() {
+  if (const char* env = std::getenv("REDEX_PERTURB_SEED")) {
+    // strtoull returns 0 for unparseable input and does not distinguish that
+    // from a literal "0", so a typo would silently pin every thread to seed 0
+    // -- a reproducible run that is not the one asked for, which is worse than
+    // no seed at all for the debugging this exists to serve. Require the whole
+    // string to parse, and say so loudly otherwise rather than guessing.
+    char* end = nullptr;
+    errno = 0;
+    const unsigned long long parsed = std::strtoull(env, &end, 0);
+    const bool ok =
+        *env != '\0' && end != nullptr && *end == '\0' && errno == 0;
+    if (ok) {
+      return static_cast<uint64_t>(parsed);
+    }
+    fprintf(
+        stderr,
+        "[redex] WARNING: REDEX_PERTURB_SEED=\"%s\" is not a valid integer; "
+        "ignoring it and seeding randomly. Runs will NOT be reproducible.\n",
+        env);
+  }
+  return std::random_device{}() ^
+         static_cast<uint64_t>(
+             std::hash<std::thread::id>{}(std::this_thread::get_id()));
+}
+
+// Per-container salt from a thread_local splitmix64 counter (~0.7ns/draw, no
+// large RNG state). Only ever called when perturbation is enabled.
+inline uint64_t new_salt() {
+  // The per-thread counter is intentional: an inline function's thread_local
+  // has one instance per thread across all TUs ([dcl.fct.spec]), which is
+  // exactly the reproducible per-thread salt stream we want.
+  // NOLINTNEXTLINE(facebook-hte-InlinedStaticLocalVariableWarning)
+  thread_local uint64_t state = perturb_base_seed();
+  state += 0x9e3779b97f4a7c15ULL;
+  return splitmix64(state);
+}
+
+} // namespace det_perturb
+
+// A hasher that salts and avalanche-mixes the underlying hash. The salt is
+// drawn once at construction and is read-only afterwards, so it is safe to hash
+// on any thread. operator() MUST be noexcept: libstdc++ caches hash codes for
+// non-noexcept hashers, and a code cached under one container's salt would make
+// cross-container operator== (which re-buckets into the other container)
+// spuriously report inequality.
+template <class Hash>
+struct PerturbHasher {
+  Hash base{};
+  uint64_t salt{det_perturb::new_salt()};
+
+  PerturbHasher() = default;
+  // Implicit so the wrappers' (bucket_count, const Hash&) ctors keep compiling
+  // when EffectiveHash_t<Hash> resolves to PerturbHasher<Hash>.
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+  /* implicit */ PerturbHasher(const Hash& h) : base(h) {}
+
+  // The noexcept below is UNCONDITIONAL, deliberately, even though `base(k)`
+  // is not noexcept for every Hash: `boost::hash<...>` and some hand-written
+  // ones (e.g. `keep_reason::ReasonPtrHash`) lack the annotation, so a throwing
+  // base hasher would std::terminate here rather than propagate.
+  //
+  // Accepted rather than fixed, having tried both alternatives:
+  //   - Propagating instead, via `noexcept(noexcept(base(k)))`, makes
+  //     PerturbHasher non-noexcept for exactly those hashers, which re-enables
+  //     the libstdc++ hash-code caching described above and with it the
+  //     cross-container operator== bug. That trades a theoretical terminate for
+  //     a real wrong-answer bug.
+  //   - Demanding noexcept via static_assert does not compile: it fires on the
+  //     boost hashers, which are third-party and not ours to annotate.
+  //
+  // Safe in practice: the hashers concerned hash pointers and integers and
+  // cannot throw, they merely lack the annotation. And this code only exists in
+  // perturbed builds, which are debug/CI tools that never ship.
+  template <class K>
+  size_t operator()(const K& k) const noexcept {
+    return static_cast<size_t>(
+        det_perturb::splitmix64(static_cast<uint64_t>(base(k)) ^ salt));
+  }
+};
+
+// The hasher actually installed in the underlying std::unordered_* container:
+// the plain Hash in normal builds, its salted form when perturbation is on.
+template <class Hash>
+using EffectiveHash_t =
+    std::conditional_t<kPerturbUnordered, PerturbHasher<Hash>, Hash>;
 
 template <class UnorderedDerived>
 class UnorderedBase {};
@@ -124,7 +254,7 @@ template <class Key,
           class Hash = std::hash<Key>,
           class KeyEqual = std::equal_to<Key>>
 class UnorderedMap : UnorderedBase<UnorderedMap<Key, Value, Hash, KeyEqual>> {
-  using Type = std::unordered_map<Key, Value, Hash, KeyEqual>;
+  using Type = std::unordered_map<Key, Value, EffectiveHash_t<Hash>, KeyEqual>;
   Type m_data;
 
  public:
@@ -133,8 +263,8 @@ class UnorderedMap : UnorderedBase<UnorderedMap<Key, Value, Hash, KeyEqual>> {
   using value_type = typename Type::value_type;
   using size_type = typename Type::size_type;
   using difference_type = typename Type::difference_type;
-  using hasher = typename Type::hasher;
-  using key_equal = typename Type::key_equal;
+  using hasher = Hash;
+  using key_equal = KeyEqual;
   using reference = typename Type::reference;
   using const_reference = typename Type::const_reference;
   using pointer = typename Type::pointer;
@@ -443,7 +573,8 @@ template <class Key,
           class KeyEqual = std::equal_to<Key>>
 class UnorderedMultiMap
     : UnorderedBase<UnorderedMultiMap<Key, Value, Hash, KeyEqual>> {
-  using Type = std::unordered_multimap<Key, Value, Hash, KeyEqual>;
+  using Type =
+      std::unordered_multimap<Key, Value, EffectiveHash_t<Hash>, KeyEqual>;
   Type m_data;
 
  public:
@@ -452,8 +583,8 @@ class UnorderedMultiMap
   using value_type = typename Type::value_type;
   using size_type = typename Type::size_type;
   using difference_type = typename Type::difference_type;
-  using hasher = typename Type::hasher;
-  using key_equal = typename Type::key_equal;
+  using hasher = Hash;
+  using key_equal = KeyEqual;
   using reference = typename Type::reference;
   using const_reference = typename Type::const_reference;
   using pointer = typename Type::pointer;
@@ -722,6 +853,18 @@ class UnorderedMultiMap
 
   bool empty() const { return m_data.empty(); }
 
+  // Not perturbed: the order ACROSS keys is already perturbed by the salted
+  // EffectiveHash_t, but the order of values WITHIN one key's equal_range is
+  // left in insertion order.
+  //
+  // This is a deliberate limitation rather than an oversight, so it is stated
+  // here rather than tracked as work to do. Perturbing the within-key order
+  // would require this pair-of-iterators contract to become an owning range
+  // holding a shuffled buffer -- a bare iterator pair owns nothing, so
+  // iterators into a temporary buffer would dangle -- which is a
+  // caller-visible API change. Intra-equal-key-group order dependence is rare
+  // and UnorderedMultiMap is itself uncommon, so the payoff does not justify
+  // that churn. Revisit if a real divergence is ever traced to this gap.
   std::pair<typename Type::const_iterator, typename Type::const_iterator>
   _internal_unordered_equal_range(const Key& key) const {
     return m_data.equal_range(key);
@@ -764,12 +907,18 @@ bool operator!=(const UnorderedMultiMap<Key, Value, Hash, KeyEqual>& lhs,
 
 // A forward-only iterator over an UnorderedBag's elements. A bag's iteration
 // order carries no meaning, so its view deliberately exposes only forward
-// traversal (no random access): this keeps callers from taking a dependency on
-// element position, and gives the bag view a single consistent iterator type
-// (which the iteration-order perturbation can later specialize without changing
-// the public category). The pass-through form holds and advances the real
-// vector iterator, so ++/*/== compile to exactly the same code as iterating the
-// backing vector directly.
+// traversal (no random access), in both build modes: code that would depend on
+// element position fails to compile everywhere rather than only under
+// perturbation in CI. When perturbation is off it is a zero-cost pass-through
+// that holds and advances the real vector iterator, so ++/*/== compile to
+// exactly the same code as iterating the backing vector directly. When on it
+// walks the range [base, base + n) from a salted offset and wraps around,
+// visiting every element exactly once but in a rotated order (a bag is a
+// std::vector, so it has no hasher to salt like the hash-based wrappers).
+//
+// Forward-only is sufficient: no bag consumer needs random access -- min/max/
+// find/copy/accumulate are all single-pass, and callers that sort go through
+// unordered_to_ordered, which copies into a fresh vector first.
 template <class VecIter>
 class BagViewIterator {
  public:
@@ -781,6 +930,45 @@ class BagViewIterator {
   using reference = typename std::iterator_traits<VecIter>::reference;
 
   BagViewIterator() = default;
+
+#if REDEX_PERTURB_UNORDERED
+  BagViewIterator(VecIter base, size_t n, size_t off, size_t pos)
+      : m_base(base), m_n(n), m_off(off), m_pos(pos) {}
+
+  reference operator*() const { return *underlying(); }
+  pointer operator->() const { return &*underlying(); }
+
+  BagViewIterator& operator++() {
+    ++m_pos;
+    return *this;
+  }
+  BagViewIterator operator++(int) {
+    BagViewIterator tmp = *this;
+    ++m_pos;
+    return tmp;
+  }
+
+  bool operator==(const BagViewIterator& other) const {
+    return m_pos == other.m_pos;
+  }
+  bool operator!=(const BagViewIterator& other) const {
+    return m_pos != other.m_pos;
+  }
+
+  // The real range iterator for the current logical position. A past-the-end
+  // position maps to base + n (the range's real end()), so a not-found result
+  // maps back to the container's end().
+  VecIter underlying() const {
+    size_t phys = m_pos >= m_n ? m_n : (m_off + m_pos) % m_n;
+    return m_base + static_cast<difference_type>(phys);
+  }
+
+ private:
+  VecIter m_base{};
+  size_t m_n{0};
+  size_t m_off{0};
+  size_t m_pos{0};
+#else
   explicit BagViewIterator(VecIter it) : m_it(it) {}
 
   reference operator*() const { return *m_it; }
@@ -809,6 +997,7 @@ class BagViewIterator {
 
  private:
   VecIter m_it{};
+#endif
 };
 
 template <class T>
@@ -824,6 +1013,14 @@ template <class Value>
 class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
   using Type = std::vector<Value>;
   Type m_data;
+#if REDEX_PERTURB_UNORDERED
+  // Per-bag salt for iteration-order perturbation (a bag has no hasher to salt,
+  // unlike the hash-based wrappers). Absent -> byte-identical when off. It
+  // perturbs only iteration order, not the bag's value, so it does not affect
+  // unordered_equal (which compares the raw elements as an order-independent
+  // multiset).
+  uint64_t m_salt{det_perturb::new_salt()};
+#endif
 
  public:
   using key_type = void;
@@ -908,11 +1105,38 @@ class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
 
   class UnorderedIterable {
     Type& m_data;
+#if REDEX_PERTURB_UNORDERED
+    uint64_t m_salt;
+
+    size_t offset() const {
+      size_t n = m_data.size();
+      return n == 0 ? 0 : m_salt % n;
+    }
+#endif
 
    public:
     using iterator = BagViewIterator<typename Type::iterator>;
     using const_iterator = BagViewIterator<typename Type::const_iterator>;
 
+#if REDEX_PERTURB_UNORDERED
+    UnorderedIterable(Type& data, uint64_t salt) : m_data(data), m_salt(salt) {}
+
+    iterator begin() {
+      return iterator(m_data.begin(), m_data.size(), offset(), 0);
+    }
+    iterator end() {
+      return iterator(m_data.begin(), m_data.size(), offset(), m_data.size());
+    }
+    const_iterator begin() const {
+      return const_iterator(m_data.cbegin(), m_data.size(), offset(), 0);
+    }
+    const_iterator end() const {
+      return const_iterator(m_data.cbegin(), m_data.size(), offset(),
+                            m_data.size());
+    }
+    const_iterator cbegin() const { return begin(); }
+    const_iterator cend() const { return end(); }
+#else
     explicit UnorderedIterable(Type& data) : m_data(data) {}
 
     iterator begin() { return iterator(m_data.begin()); }
@@ -926,14 +1150,37 @@ class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
     const_iterator cbegin() const { return const_iterator(m_data.cbegin()); }
 
     const_iterator cend() const { return const_iterator(m_data.cend()); }
+#endif
   };
 
   class ConstUnorderedIterable {
     const Type& m_data;
+#if REDEX_PERTURB_UNORDERED
+    uint64_t m_salt;
+
+    size_t offset() const {
+      size_t n = m_data.size();
+      return n == 0 ? 0 : m_salt % n;
+    }
+#endif
 
    public:
     using const_iterator = BagViewIterator<typename Type::const_iterator>;
 
+#if REDEX_PERTURB_UNORDERED
+    ConstUnorderedIterable(const Type& data, uint64_t salt)
+        : m_data(data), m_salt(salt) {}
+
+    const_iterator begin() const {
+      return const_iterator(m_data.begin(), m_data.size(), offset(), 0);
+    }
+    const_iterator end() const {
+      return const_iterator(m_data.begin(), m_data.size(), offset(),
+                            m_data.size());
+    }
+    const_iterator cbegin() const { return begin(); }
+    const_iterator cend() const { return end(); }
+#else
     explicit ConstUnorderedIterable(const Type& data) : m_data(data) {}
 
     const_iterator begin() const { return const_iterator(m_data.begin()); }
@@ -943,6 +1190,7 @@ class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
     const_iterator cbegin() const { return const_iterator(m_data.cbegin()); }
 
     const_iterator cend() const { return const_iterator(m_data.cend()); }
+#endif
   };
 
   UnorderedBag() : m_data() {}
@@ -986,10 +1234,22 @@ class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
   }
 
   FixedIterator _internal_unordered_any() {
+#if REDEX_PERTURB_UNORDERED
+    if (!m_data.empty()) {
+      return FixedIterator(m_data.begin() + static_cast<difference_type>(
+                                                m_salt % m_data.size()));
+    }
+#endif
     return FixedIterator(m_data.begin());
   }
 
   ConstFixedIterator _internal_unordered_any() const {
+#if REDEX_PERTURB_UNORDERED
+    if (!m_data.empty()) {
+      return ConstFixedIterator(m_data.begin() + static_cast<difference_type>(
+                                                     m_salt % m_data.size()));
+    }
+#endif
     return ConstFixedIterator(m_data.begin());
   }
 
@@ -1012,11 +1272,19 @@ class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
   bool empty() const { return m_data.empty(); }
 
   UnorderedIterable _internal_unordered_iterable() {
+#if REDEX_PERTURB_UNORDERED
+    return UnorderedIterable(m_data, m_salt);
+#else
     return UnorderedIterable(m_data);
+#endif
   }
 
   ConstUnorderedIterable _internal_unordered_iterable() const {
+#if REDEX_PERTURB_UNORDERED
+    return ConstUnorderedIterable(m_data, m_salt);
+#else
     return ConstUnorderedIterable(m_data);
+#endif
   }
 
   template <typename possibly_const_iterator>
@@ -1056,7 +1324,7 @@ template <class Key,
           class Hash = std::hash<Key>,
           class KeyEqual = std::equal_to<Key>>
 class UnorderedSet : UnorderedBase<UnorderedSet<Key, Hash, KeyEqual>> {
-  using Type = std::unordered_set<Key, Hash, KeyEqual>;
+  using Type = std::unordered_set<Key, EffectiveHash_t<Hash>, KeyEqual>;
   Type m_data;
 
  public:
@@ -1064,8 +1332,8 @@ class UnorderedSet : UnorderedBase<UnorderedSet<Key, Hash, KeyEqual>> {
   using value_type = typename Type::value_type;
   using size_type = typename Type::size_type;
   using difference_type = typename Type::difference_type;
-  using hasher = typename Type::hasher;
-  using key_equal = typename Type::key_equal;
+  using hasher = Hash;
+  using key_equal = KeyEqual;
   using reference = typename Type::reference;
   using const_reference = typename Type::const_reference;
   using pointer = typename Type::pointer;
