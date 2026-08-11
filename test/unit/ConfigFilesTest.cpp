@@ -223,19 +223,19 @@ TEST_F(ConfigFilesTest, dead_class_list_empty_file) {
   std::remove(path.c_str());
 }
 
-// Relocated class suffix — should go to live_class_split_list, not dead list.
+// A "$relocated" row is filtered out of the dead-class list rather than being
+// treated as a dead class in its own right.
 TEST_F(ConfigFilesTest, dead_class_list_relocated_class) {
   auto path = write_temp_dead_class_file(
       "com.facebook.Alive$relocated\t100\t50\t10\t3\t86400\n"
       "com.facebook.Dead\t200\t0\t0\t8\t172800\n");
   auto conf = make_config_with_dead_class_list(path);
   const auto& dead = conf.get_dead_class_list();
-  const auto& live = conf.get_live_class_split_list();
 
   EXPECT_EQ(dead.size(), 1);
   EXPECT_NE(dead.find("Lcom/facebook/Dead;"), dead.end());
-
-  EXPECT_NE(live.find("Lcom/facebook/Alive;"), live.end());
+  EXPECT_EQ(dead.find("Lcom/facebook/Alive;"), dead.end());
+  EXPECT_EQ(dead.find("Lcom/facebook/Alive$relocated;"), dead.end());
 
   std::remove(path.c_str());
 }
