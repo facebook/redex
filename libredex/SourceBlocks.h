@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -22,6 +24,7 @@
 #include "IRList.h"
 #include "SourceBlocksUtils.h"
 
+class DexClass;
 class DexMethod;
 class DexStore;
 class ScopedMetrics;
@@ -400,6 +403,107 @@ inline bool method_is_not_cold(const DexMethod* method) {
   const auto& cfg = method->get_code()->cfg();
   return is_not_cold(cfg.entry_block());
 }
+
+// The execution count a consumer reads from a single source block: the max over
+// interactions of its `val` (nullopt when `sb` is null or records no vals).
+// Callers wanting a plain float use `.value_or(0.0f)`. Intended as the single
+// definition of "a block's count" for the count-guided passes (outliner,
+// inliner, ArtProfileWriter) to share, so they can't drift apart.
+inline std::optional<float> max_val_over_interactions(const SourceBlock* sb) {
+  if (sb == nullptr) {
+    return std::nullopt;
+  }
+  std::optional<float> max_val;
+  for (size_t i = 0; i < sb->vals_size; i++) {
+    auto v = sb->get_val(i);
+    if (v && (!max_val || *v > *max_val)) {
+      max_val = v;
+    }
+  }
+  return max_val;
+}
+
+// Two ways to pick a count cutoff from a set of block counts. They answer
+// DIFFERENT questions, so they are separate, named helpers -- don't mix them
+// up:
+//
+//   rank_cutoff_for_percentile(counts, p) = "the hottest (100 - p)% OF THE
+//     ITEMS." A rank percentile p in [0, 100], high = hot (LLVM convention):
+//     p = 95 keeps items at or above the 95th-percentile count -- the hottest
+//     5% of callsites. Every item counts once, no matter how big; a rarely-run
+//     callsite and a red-hot one each count as one. Test with `count >=
+//     cutoff`. Used by the inliner and ArtProfileWriter.
+//
+//   mass_coverage_cutoff(vals, c) = "the blocks that do c OF THE WORK."
+//     Items are weighted by their count, so a few very hot blocks can make up
+//     the fraction c -- e.g. the blocks where 90% of execution actually
+//     happens. Test with `val > cutoff` (boundary excluded: blocks exactly at
+//     the cutoff are NOT kept, so realized coverage can dip below c if many
+//     counts tie on it). Used by the outliner.
+//
+// In short: rank = "the hottest (100 - p)% of items"; mass = "the items that
+// do X% of the work."
+//
+// `counts` is sorted in place. Returns +inf when empty or p >= 100 (nothing is
+// "top") and -inf when p <= 0 (everything is).
+inline float rank_cutoff_for_percentile(std::vector<float>& counts,
+                                        int percentile) {
+  const float fraction = static_cast<float>(100 - percentile) / 100.0f;
+  if (counts.empty() || fraction <= 0.0f) {
+    return std::numeric_limits<float>::infinity();
+  }
+  if (fraction >= 1.0f) {
+    return -std::numeric_limits<float>::infinity();
+  }
+  std::sort(counts.begin(), counts.end());
+  auto idx = static_cast<size_t>((1.0f - fraction) *
+                                 static_cast<float>(counts.size()));
+  if (idx >= counts.size()) {
+    idx = counts.size() - 1;
+  }
+  return counts[idx];
+}
+
+// The execution-mass counterpart of rank_cutoff_for_percentile (see the
+// comparison above it). `vals` is sorted in place. Returns 0 when empty or
+// coverage >= 1 (protect every covered block) and max(vals) when coverage <= 0
+// (protect nothing).
+inline float mass_coverage_cutoff(std::vector<float>& vals, float coverage) {
+  if (vals.empty() || coverage >= 1.0f) {
+    return 0.0f;
+  }
+  // Sort hottest-first and walk down until the accumulated mass reaches the
+  // covered fraction; the count where we cross is the gate.
+  std::sort(vals.begin(), vals.end(), [](float a, float b) { return a > b; });
+  if (coverage <= 0.0f) {
+    return vals.front();
+  }
+  double total = 0.0;
+  for (float v : vals) {
+    total += v;
+  }
+  double target = coverage * total;
+  double acc = 0.0;
+  float gate = vals.back();
+  for (float v : vals) {
+    acc += v;
+    if (acc >= target) {
+      gate = v;
+      break;
+    }
+  }
+  return gate;
+}
+
+// Parallel gather of every block's execution count (its first source block's
+// max-over-interactions `val`), kept only when > 0, across `scope` --
+// optionally filtered by a per-(method, block) predicate (a null `include`
+// keeps every covered block). The pooled vector is ready to feed
+// `rank_cutoff_for_percentile` or `mass_coverage_cutoff`. Definition in
+// SourceBlocks.cpp (needs Walkers).
+std::vector<float> gather_block_counts(
+    const std::vector<DexClass*>& scope,
+    const std::function<bool(DexMethod*, cfg::Block*)>& include = {});
 
 template <typename Iterator>
 inline SourceBlock* find_between(const Iterator& start, const Iterator& end) {

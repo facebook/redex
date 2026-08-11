@@ -141,6 +141,78 @@ class SourceBlocksTest : public RedexTest {
 };
 std::atomic<size_t> SourceBlocksTest::s_counter{0};
 
+// The shared count-cutoff helpers underpin both the inliner's hot-callsite
+// lever and the ArtProfileWriter NeverInline veto (rank), and the outliner's
+// block_count_hot_coverage (mass); these tests pin their numeric core.
+TEST_F(SourceBlocksTest, rank_cutoff_for_percentile) {
+  const float kInf = std::numeric_limits<float>::infinity();
+  // percentile >= 100 selects nothing (+inf); <= 0 selects all (-inf); empty ->
+  // +inf.
+  {
+    std::vector<float> v{1, 2, 3, 4};
+    EXPECT_EQ(rank_cutoff_for_percentile(v, 100), kInf);
+  }
+  {
+    std::vector<float> v{1, 2, 3, 4};
+    EXPECT_EQ(rank_cutoff_for_percentile(v, 0), -kInf);
+  }
+  {
+    std::vector<float> v;
+    EXPECT_EQ(rank_cutoff_for_percentile(v, 50), kInf);
+  }
+  // p95 = hottest 5%... here p75 = hottest 25% of {1,2,3,4}: idx =
+  // floor(0.75*4) = 3 -> sorted[3] = 4.
+  {
+    std::vector<float> v{4, 1, 3, 2};
+    EXPECT_FLOAT_EQ(rank_cutoff_for_percentile(v, 75), 4.0f);
+  }
+  // p50 = hottest 50%: idx = floor(0.5*4) = 2 -> sorted[2] = 3.
+  {
+    std::vector<float> v{4, 1, 3, 2};
+    EXPECT_FLOAT_EQ(rank_cutoff_for_percentile(v, 50), 3.0f);
+  }
+  // Single element: any in-range percentile -> that element (idx clamps to 0).
+  {
+    std::vector<float> v{7};
+    EXPECT_FLOAT_EQ(rank_cutoff_for_percentile(v, 50), 7.0f);
+  }
+}
+
+TEST_F(SourceBlocksTest, mass_coverage_cutoff) {
+  // vals 100,10,1,1,1 (mass 113). At 0.9 the target is 101.7: 100 alone is
+  // short, +10 reaches 110 -> gate 10 (only val > 10 stays protected).
+  {
+    std::vector<float> v{1, 100, 1, 10, 1};
+    EXPECT_FLOAT_EQ(mass_coverage_cutoff(v, 0.9f), 10.0f);
+  }
+  // coverage >= 1 -> protect every covered block -> gate 0.
+  {
+    std::vector<float> v{1, 10, 100};
+    EXPECT_FLOAT_EQ(mass_coverage_cutoff(v, 1.0f), 0.0f);
+  }
+  // coverage <= 0 -> protect nothing -> gate = max val.
+  {
+    std::vector<float> v{1, 10, 100};
+    EXPECT_FLOAT_EQ(mass_coverage_cutoff(v, 0.0f), 100.0f);
+  }
+  // empty distribution -> gate 0.
+  {
+    std::vector<float> v;
+    EXPECT_FLOAT_EQ(mass_coverage_cutoff(v, 0.5f), 0.0f);
+  }
+}
+
+TEST_F(SourceBlocksTest, max_val_over_interactions) {
+  // No source block -> nullopt.
+  EXPECT_FALSE(max_val_over_interactions(nullptr).has_value());
+  // Max over ALL interaction slots, not just slot 0.
+  using Val = SourceBlock::Val;
+  SourceBlock sb(nullptr, 0, {Val(1, 1), Val(5, 1), Val(3, 1)});
+  auto m = max_val_over_interactions(&sb);
+  ASSERT_TRUE(m.has_value());
+  EXPECT_FLOAT_EQ(*m, 5.0f);
+}
+
 TEST_F(SourceBlocksTest, minimal_serialize) {
   auto* method = create_method();
   method->get_code()->build_cfg();

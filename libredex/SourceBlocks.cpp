@@ -15,6 +15,7 @@
 
 #include <sparta/S_Expression.h>
 
+#include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -26,6 +27,7 @@
 #include "Show.h"
 #include "SourceBlockConsistencyCheck.h"
 #include "Trace.h"
+#include "Walkers.h"
 
 namespace source_blocks {
 
@@ -1414,6 +1416,35 @@ void adjust_block_hits_with_appear100_threshold(
       }
     }
   }
+}
+
+std::vector<float> gather_block_counts(
+    const std::vector<DexClass*>& scope,
+    const std::function<bool(DexMethod*, cfg::Block*)>& include) {
+  InsertOnlyConcurrentMap<DexMethod*, std::vector<float>> per_method;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    if (!code.cfg_built()) {
+      return;
+    }
+    std::vector<float> counts;
+    for (auto* b : code.cfg().blocks()) {
+      if (include && !include(method, b)) {
+        continue;
+      }
+      auto c = max_val_over_interactions(get_first_source_block(b));
+      if (c && *c > 0.0f) {
+        counts.push_back(*c);
+      }
+    }
+    if (!counts.empty()) {
+      per_method.emplace(method, std::move(counts));
+    }
+  });
+  std::vector<float> all;
+  for (auto&& p : UnorderedIterable(per_method)) {
+    all.insert(all.end(), p.second.begin(), p.second.end());
+  }
+  return all;
 }
 
 } // namespace source_blocks
