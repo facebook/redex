@@ -10,6 +10,7 @@
 #include "SourceBlocksViolations.h"
 
 #include <atomic>
+#include <limits>
 #include <regex>
 #include <sstream>
 
@@ -1715,4 +1716,53 @@ TEST_F(SourceBlocksTest,
   }
   ASSERT_TRUE(seen_ids.count(11));
   ASSERT_TRUE(seen_ids.count(10));
+}
+
+TEST_F(SourceBlocksTest, source_block_add) {
+  const auto* s = DexString::make_string("x");
+  SourceBlock a(s, 0, std::vector<SourceBlock::Val>{SourceBlock::Val(10, 30)});
+  SourceBlock b(s, 0, std::vector<SourceBlock::Val>{SourceBlock::Val(5, 70)});
+  a.add(b);
+  ASSERT_TRUE(a.get_val(0).has_value());
+  EXPECT_FLOAT_EQ(*a.get_val(0), 15.0f); // val sums
+  EXPECT_FLOAT_EQ(*a.get_appear100(0), 70.0f); // appear100 maxes, never sums
+
+  // Adding into a "none" val copies the other value in (matches max()'s
+  // NaN-aware behavior).
+  SourceBlock none(s, 0,
+                   std::vector<SourceBlock::Val>{SourceBlock::Val::none()});
+  none.add(b);
+  ASSERT_TRUE(none.get_val(0).has_value());
+  EXPECT_FLOAT_EQ(*none.get_val(0), 5.0f);
+  EXPECT_FLOAT_EQ(*none.get_appear100(0), 70.0f);
+}
+
+TEST_F(SourceBlocksTest, source_block_add_none_other_leaves_receiver) {
+  // The NaN-aware behavior is symmetric: adding a "none" other must leave the
+  // receiver untouched (not zero it, not turn it into none).
+  const auto* s = DexString::make_string("x");
+  SourceBlock a(s, 0, std::vector<SourceBlock::Val>{SourceBlock::Val(5, 30)});
+  SourceBlock none(s, 0,
+                   std::vector<SourceBlock::Val>{SourceBlock::Val::none()});
+  a.add(none);
+  ASSERT_TRUE(a.get_val(0).has_value());
+  EXPECT_FLOAT_EQ(*a.get_val(0), 5.0f);
+  EXPECT_FLOAT_EQ(*a.get_appear100(0), 30.0f);
+}
+
+TEST_F(SourceBlocksTest, source_block_add_multi_interaction) {
+  // add() combines every interaction slot independently: vals sum, appear100
+  // maxes, per index.
+  const auto* s = DexString::make_string("x");
+  SourceBlock a(s, 0,
+                std::vector<SourceBlock::Val>{SourceBlock::Val(1, 10),
+                                              SourceBlock::Val(2, 20)});
+  SourceBlock b(s, 0,
+                std::vector<SourceBlock::Val>{SourceBlock::Val(3, 40),
+                                              SourceBlock::Val(4, 5)});
+  a.add(b);
+  EXPECT_FLOAT_EQ(*a.get_val(0), 4.0f); // 1 + 3
+  EXPECT_FLOAT_EQ(*a.get_appear100(0), 40.0f); // max(10, 40)
+  EXPECT_FLOAT_EQ(*a.get_val(1), 6.0f); // 2 + 4
+  EXPECT_FLOAT_EQ(*a.get_appear100(1), 20.0f); // max(20, 5)
 }

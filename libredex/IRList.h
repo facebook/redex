@@ -430,6 +430,12 @@ struct SourceBlock {
 
   void min(const SourceBlock& other);
 
+  // Additive combine: sums `val` (a count) and maxes `appear100` (an appearance
+  // probability, which must never be summed). Use when combining the counts of
+  // distinct control-flow paths that accumulate (a true merge / outline over N
+  // sites); use `max` when reconciling two observations of the SAME point.
+  void add(const SourceBlock& other);
+
   bool normalize(size_t* elided_vals, size_t* unelided_vals);
 
  private:

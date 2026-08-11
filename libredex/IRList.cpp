@@ -1256,6 +1256,22 @@ void SourceBlock::max(const SourceBlock& other) {
   }
 }
 
+void SourceBlock::add(const SourceBlock& other) {
+  size_t len = std::min(vals_size, other.vals_size);
+  auto add_val = [](Val& val, const Val& other_val) {
+    if (!val) {
+      val = other_val;
+    } else if (other_val) {
+      val->val += other_val->val;
+      // appear100 is an appearance probability in [0,100]: max, never sum.
+      val->appear100 = std::max(val->appear100, other_val->appear100);
+    }
+  };
+  for (size_t i = 0; i != len; ++i) {
+    apply_at(i, [&](auto& val) { add_val(val, other.get_at(i)); });
+  }
+}
+
 void SourceBlock::min(const SourceBlock& other) {
   size_t len = std::min(vals_size, other.vals_size);
   auto min_val = [](Val& val, const Val& other_val) {
