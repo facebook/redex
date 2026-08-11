@@ -103,6 +103,8 @@
 #include "RefChecker.h"
 #include "Show.h"
 #include "Shrinker.h"
+#include "SourceBlocks.h"
+#include "SourceBlocksUtils.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -924,6 +926,11 @@ IROpcode get_invoke_opcode(const DexMethod* callee) {
 }
 
 using PaCallers = ConcurrentMap<DexMethodRef*, std::vector<DexMethod*>>;
+// Per helper method, a copy of the source block covering each call-site it will
+// serve. These are copies rather than pointers because `shrink_method` below
+// may free the blocks they live in.
+using PaCallSiteSourceBlocks =
+    ConcurrentMap<DexMethodRef*, std::vector<SourceBlock>>;
 
 // Given the analysis results, rewrite all callers to invoke the new helper
 // methods with bound arguments.
@@ -936,7 +943,8 @@ void rewrite_callers(
     const UnorderedSet<DexMethod*>& selected_callers,
     PaMethodRefs& pa_method_refs,
     std::atomic<size_t>* removed_args,
-    PaCallers* pa_callers) {
+    PaCallers* pa_callers,
+    PaCallSiteSourceBlocks* pa_call_site_source_blocks) {
   Timer t("rewrite_callers");
 
   auto make_partial_application_invoke_insn =
@@ -989,12 +997,35 @@ void rewrite_callers(
       if (!move_result_it.is_end()) {
         new_insns.push_back(new IRInstruction(*move_result_it->insn));
       }
-      mutation.replace(it, new_insns);
       auto* pa = new_invoke_insn->get_method();
       if (pas.insert(pa).second) {
         pa_callers->update(
             pa, [caller](auto*, auto& vec, bool) { vec.push_back(caller); });
       }
+      // Remember how hot this particular call-site is, so that the helper
+      // method can be given a matching source block. The block covering the
+      // call-site is a much better estimate than the caller's entry block: a
+      // hot method may well reach this callee only from a cold path. Unlike
+      // pa_callers, this is deliberately not deduplicated per caller: the
+      // helper runs once per call-site execution, so every call-site
+      // contributes its own count.
+      if (pa_call_site_source_blocks != nullptr) {
+        auto* call_site_sb = source_blocks::get_last_source_block_before(
+            it.block(), it.unwrap());
+        if (call_site_sb != nullptr) {
+          // Copy outside the update callback, which holds a lock. Dropping the
+          // chain first keeps that copy to a single source block; the chain is
+          // irrelevant here, as the synthetic clone drops it anyway.
+          SourceBlock sb_copy(*call_site_sb);
+          sb_copy.next.reset();
+          pa_call_site_source_blocks->update(
+              pa,
+              [&sb_copy](auto*, auto& vec, bool) { vec.push_back(sb_copy); });
+        }
+      }
+      // Scheduled last: the source-block read above must see the block as it
+      // is now, rather than relying on CFGMutation deferring its edits.
+      mutation.replace(it, new_insns);
       any_changes = true;
     }
     mutation.flush();
@@ -1062,8 +1093,10 @@ void push_callee_arg(EnumUtilsCache& enum_utils_cache,
 }
 
 // Create all new helper methods that bind constant arguments
-void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
-                                        PaMethodRefs& pa_method_refs) {
+void create_partial_application_methods(
+    EnumUtilsCache& enum_utils_cache,
+    PaMethodRefs& pa_method_refs,
+    PaCallSiteSourceBlocks& pa_call_site_source_blocks) {
   Timer t("create_partial_application_methods");
   std::map<DexMethodRef*, const CalleeCallSiteSummary*, dexmethods_comparator>
       inverse_ordered_pa_method_refs;
@@ -1120,6 +1153,27 @@ void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
     }
     pa_method->set_deobfuscated_name(show_deobfuscated(pa_method));
     pa_method->get_code()->build_cfg();
+    // The helper method is only ever reached from the call-sites we rewrote, so
+    // derive its hotness from theirs. Without source blocks, later passes and
+    // profile-guided layout would have no hotness information at all for these
+    // methods, even though they sit on the path of every call-site they serve.
+    // Empty unless the fix is enabled, in which case rewrite_callers gathered
+    // a source block per call-site this helper serves.
+    auto* call_site_sbs = pa_call_site_source_blocks.get_unsafe(pa_method_ref);
+    if (call_site_sbs != nullptr && !call_site_sbs->empty()) {
+      std::vector<SourceBlock*> sbs;
+      sbs.reserve(call_site_sbs->size());
+      for (auto& sb : *call_site_sbs) {
+        sbs.push_back(&sb);
+      }
+      source_blocks::insert_synthetic_source_blocks_in_method(
+          pa_method, [pa_method, &sbs]() {
+            // N:1: the helper method is reached from every call-site it serves,
+            // so its count is about the SUM of theirs, not the max.
+            return source_blocks::clone_as_synthetic_summing(sbs.front(),
+                                                             pa_method, sbs);
+          });
+    }
     cls->add_method(pa_method);
     TRACE(PA, 5, "[PartialApplication] Created %s binding %s:\n%s",
           SHOW(pa_method), css->get_key().c_str(),
@@ -1186,6 +1240,14 @@ void PartialApplicationPass::bind_config() {
        pg.method_profiles_warm_call_count,
        pg.method_profiles_warm_call_count,
        "Loops are not outlined from warm methods");
+  bind("fix_missing_source_blocks",
+       m_fix_missing_source_blocks,
+       m_fix_missing_source_blocks,
+       "Whether to fix up generated helper methods to have source blocks, "
+       "derived from the call-sites they serve. Off by default, as it makes "
+       "the helpers visible to profile-guided decisions such as inlining, "
+       "which can move size and performance. TODO: Remove this option, and "
+       "always fix up the source blocks, once the impact has been assessed");
   bind("derive_method_profiles_stats",
        m_derive_method_profiles_stats,
        m_derive_method_profiles_stats,
@@ -1327,10 +1389,14 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
 
   std::atomic<size_t> removed_args{0};
   PaCallers pa_callers;
+  PaCallSiteSourceBlocks pa_call_site_source_blocks;
   rewrite_callers(scope, shrinker, get_callee_fn, selected_invokes,
-                  selected_callers, pa_method_refs, &removed_args, &pa_callers);
+                  selected_callers, pa_method_refs, &removed_args, &pa_callers,
+                  m_fix_missing_source_blocks ? &pa_call_site_source_blocks
+                                              : nullptr);
 
-  create_partial_application_methods(enum_utils_cache, pa_method_refs);
+  create_partial_application_methods(enum_utils_cache, pa_method_refs,
+                                     pa_call_site_source_blocks);
 
   if (m_derive_method_profiles_stats) {
     size_t derived_method_profile_stats =

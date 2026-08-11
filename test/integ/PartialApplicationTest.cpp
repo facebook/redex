@@ -7,17 +7,67 @@
 
 #include <gtest/gtest.h>
 
+#include "ControlFlow.h"
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "SourceBlocks.h"
+#include "Walkers.h"
 
+#include "InsertSourceBlocks.h"
 #include "PartialApplication.h"
 
 static IRCode* get_code(const std::string& s) {
   auto* method = DexMethod::get_method(s);
   return method->as_def()->get_code();
 }
+
+namespace {
+
+// Stamps a known execution count of 1 onto every source block, so that a
+// helper method's derived count is exactly the number of call-sites it serves.
+// Without profile files InsertSourceBlocksPass leaves no interaction slots at
+// all, so there would otherwise be no counts to sum.
+class SetSourceBlockCountsPass : public Pass {
+ public:
+  SetSourceBlockCountsPass() : Pass("SetSourceBlockCountsPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, RequiresAndPreserves}};
+  }
+
+  void run_pass(DexStoresVector& stores, ConfigFiles&, PassManager&) override {
+    walk::code(build_class_scope(stores), [](DexMethod*, IRCode& code) {
+      for (auto* block : code.cfg().blocks()) {
+        for (auto& mie : *block) {
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            mie.src_block = with_unit_count(mie.src_block.get());
+          }
+        }
+      }
+    });
+  }
+
+ private:
+  // `vals_size` is immutable, so a source block carrying an interaction has to
+  // be built rather than filled in place.
+  static std::unique_ptr<SourceBlock> with_unit_count(const SourceBlock* sb) {
+    if (sb == nullptr) {
+      return nullptr;
+    }
+    auto res = std::make_unique<SourceBlock>(
+        sb->src, sb->id,
+        std::vector<SourceBlock::Val>{SourceBlock::Val(1.0f, 100.0f)});
+    res->next = with_unit_count(sb->next.get());
+    return res;
+  }
+};
+
+} // namespace
 
 class PartialApplicationTest : public RedexIntegrationTest {
  public:
@@ -39,6 +89,24 @@ class PartialApplicationTest : public RedexIntegrationTest {
     creator.add_method(value);
 
     creator.create();
+  }
+
+ protected:
+  // Runs InsertSourceBlocksPass, then `middle`, then PartialApplicationPass
+  // with source-block derivation enabled.
+  void run_with_source_blocks(const std::vector<Pass*>& middle) {
+    // The loading code in integ-test does not insert deobfuscated names, which
+    // InsertSourceBlocksPass needs.
+    walk::methods(*classes, [](auto* m) { m->set_deobfuscated_name(show(m)); });
+
+    Json::Value config(Json::objectValue);
+    config["PartialApplicationPass"] = Json::objectValue;
+    config["PartialApplicationPass"]["fix_missing_source_blocks"] = true;
+
+    std::vector<Pass*> passes = {new InsertSourceBlocksPass()};
+    passes.insert(passes.end(), middle.begin(), middle.end());
+    passes.push_back(new PartialApplicationPass());
+    run_passes(passes, /* pg_config */ nullptr, config);
   }
 };
 
@@ -160,5 +228,123 @@ TEST_F(PartialApplicationTest, basic) {
       get_code(
           "Lcom/facebook/redextest/"
           "PartialApplication$MoreCallees;.baz$ipa$0$310a286dd75824f4$0:(II)I"),
+      expected_code.get());
+}
+
+// The generated helper methods sit on the path of every call-site they serve,
+// so with the fix enabled each one gets a synthetic source block (id
+// 4294967295 is SourceBlock::kSyntheticId) attributed to the helper itself.
+//
+// Its count is the SUM of the counts of the call-sites it serves, because the
+// helper runs once per execution of any of them. SetSourceBlockCountsPass
+// gives every call-site a count of 1, so the counts below are exactly the
+// number of call-sites each helper serves -- 7, 5 and 6. Maxing over the
+// call-sites instead of summing would make all three 1. `appear100` is a
+// probability, so it maxes rather than accumulating, and stays at 100.
+TEST_F(PartialApplicationTest, generated_methods_sum_call_site_counts) {
+  run_with_source_blocks({new SetSourceBlockCountsPass()});
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication$Callees;.foo$spa$0$3b9e1bb0b5617ee4$0:()V" RedexGenerated 0)
+     (.src_block "Lcom/facebook/redextest/PartialApplication$Callees;.foo$spa$0$3b9e1bb0b5617ee4$0:()V" 4294967295 (7.0 100.0))
+     (const v0 0)
+     (const v1 1)
+     (const v2 2)
+     (const v3 3)
+     (const v4 4)
+     (const v5 5)
+     (const v6 6)
+     (const v7 7)
+     (invoke-static (v0 v1 v2 v3 v4 v5 v6 v7) "Lcom/facebook/redextest/PartialApplication$Callees;.foo:(IIIIIIII)V")
+     (return-void)
+    )
+)");
+  EXPECT_CODE_EQ(
+      get_code("Lcom/facebook/redextest/"
+               "PartialApplication$Callees;.foo$spa$0$3b9e1bb0b5617ee4$0:()V"),
+      expected_code.get());
+
+  expected_code = assembler::ircode_from_string(R"(
+    (
+     (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication$Callees;.bar$spa$0$8477e08f7d55cc6f$0:()V" RedexGenerated 0)
+     (.src_block "Lcom/facebook/redextest/PartialApplication$Callees;.bar$spa$0$8477e08f7d55cc6f$0:()V" 4294967295 (5.0 100.0))
+     (const v0 0)
+     (const v1 65)
+     (const v2 1)
+     (invoke-static (v2) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+     (move-result-object v3)
+     (const v4 0)
+     (const v5 3)
+     (const v6 4)
+     (const v7 5)
+     (const v8 6)
+     (invoke-static (v0 v1 v3 v4 v5 v6 v7 v8) "Lcom/facebook/redextest/PartialApplication$Callees;.bar:(SCLjava/lang/Integer;Ljava/lang/String;IIII)I")
+     (return-void)
+    )
+)");
+  EXPECT_CODE_EQ(
+      get_code("Lcom/facebook/redextest/"
+               "PartialApplication$Callees;.bar$spa$0$8477e08f7d55cc6f$0:()V"),
+      expected_code.get());
+
+  // Instance helper: the source block goes after the parameter loads.
+  expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v7)
+     (load-param v8)
+     (load-param v9)
+     (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication$MoreCallees;.baz$ipa$0$310a286dd75824f4$0:(II)I" RedexGenerated 0)
+     (.src_block "Lcom/facebook/redextest/PartialApplication$MoreCallees;.baz$ipa$0$310a286dd75824f4$0:(II)I" 4294967295 (6.0 100.0))
+     (const v0 1111)
+     (const v1 2222)
+     (const v2 3333)
+     (const v3 4444)
+     (const v4 5555)
+     (const v5 6666)
+     (invoke-virtual (v7 v8 v0 v1 v2 v3 v4 v5 v9) "Lcom/facebook/redextest/PartialApplication$MoreCallees;.baz:(IIIIIIII)I")
+     (move-result v6)
+     (return v6)
+    )
+)");
+  EXPECT_CODE_EQ(
+      get_code(
+          "Lcom/facebook/redextest/"
+          "PartialApplication$MoreCallees;.baz$ipa$0$310a286dd75824f4$0:(II)I"),
+      expected_code.get());
+}
+
+// The fix is off by default, so that turning it on -- which makes the helper
+// methods visible to profile-guided decisions such as inlining -- is a
+// separate, measurable change. Source blocks exist everywhere else here, but
+// the helper method gets none.
+TEST_F(PartialApplicationTest, source_blocks_are_off_by_default) {
+  walk::methods(*classes, [](auto* m) { m->set_deobfuscated_name(show(m)); });
+
+  std::vector<Pass*> passes = {
+      new InsertSourceBlocksPass(),
+      new PartialApplicationPass(),
+  };
+
+  run_passes(passes);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication$Callees;.foo$spa$0$3b9e1bb0b5617ee4$0:()V" RedexGenerated 0)
+     (const v0 0)
+     (const v1 1)
+     (const v2 2)
+     (const v3 3)
+     (const v4 4)
+     (const v5 5)
+     (const v6 6)
+     (const v7 7)
+     (invoke-static (v0 v1 v2 v3 v4 v5 v6 v7) "Lcom/facebook/redextest/PartialApplication$Callees;.foo:(IIIIIIII)V")
+     (return-void)
+    )
+)");
+  EXPECT_CODE_EQ(
+      get_code("Lcom/facebook/redextest/"
+               "PartialApplication$Callees;.foo$spa$0$3b9e1bb0b5617ee4$0:()V"),
       expected_code.get());
 }
