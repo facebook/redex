@@ -556,7 +556,26 @@ inline float get_factor(SourceBlock* dominating,
 inline void normalize(SourceBlock* sb, size_t idx, float factor) {
   sb->apply_at(idx, [&](auto& val) {
     if (val) {
+      // Captured BEFORE the multiply: the product of two positives can flush
+      // to exactly 0.0f (1e-30 * 1e-20 == 1e-50, unrepresentable), and a `> 0`
+      // test on the RESULT cannot tell that underflow apart from a genuine
+      // zero. Guarding on the result is what the old 1e-3 floor did, which is
+      // why it never actually prevented an underflow.
+      const bool was_positive = val->val > 0.0f;
       val->val *= factor;
+      // A NaN `factor` (e.g. an unprofiled/none dominating block) turns `val`
+      // into "none" here, flipping `operator bool()` to false; re-guard before
+      // dereferencing again so the guard below never trips Val's operator->
+      // assertion.
+      //
+      // Underflow guard only: a positive val scaled by a positive factor must
+      // stay positive, or a hot block is silently reclassified as cold. A zero
+      // factor still yields a hard zero (cold caller zeroes the inlined body),
+      // and a NaN factor still yields "none" -- `factor > 0` excludes both.
+      if (val && was_positive && factor > 0.0f &&
+          val->val < kMinPositiveCount) {
+        val->val = kMinPositiveCount;
+      }
     }
   });
 }

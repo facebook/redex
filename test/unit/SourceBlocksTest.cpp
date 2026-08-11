@@ -712,6 +712,95 @@ TEST_F(SourceBlocksTest, normalize_cfg_clamps_factor_at_one) {
   EXPECT_EQ(get_blocks_as_txt(bar_cfg.blocks()), before);
 }
 
+// A zero factor must survive the floor: inlining a HOT callee into a COLD
+// caller has to leave the inlined blocks cold. `kMinPositiveCount` only lifts
+// values that are still positive after the scale, so `val * 0 == 0` is left
+// alone -- the floor can raise a small value, never resurrect a zeroed one.
+TEST_F(SourceBlocksTest, inline_normalization_cold_caller_stays_cold) {
+  auto* foo_method = create_method("LFoo");
+  auto* bar_method = create_method("LBar");
+
+  constexpr const char* kCode = R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :true)
+      (goto :end)
+
+      (:true)
+      (invoke-static () "LBarX;.bar:()I")
+
+      (:end)
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LBarX;", show(bar_method->get_class()))));
+  foo_method->get_code()->build_cfg();
+  auto& foo_cfg = foo_method->get_code()->cfg();
+  // The block holding the invoke has val 0: a COLD callsite.
+  auto foo_profile = single_profile("(1.0:0.1 g(0.6:0.2) b(0:0.3 g))");
+  auto res = insert_source_blocks(foo_method, &foo_cfg, foo_profile,
+                                  /*serialize=*/true);
+  EXPECT_TRUE(res.profile_success);
+
+  bar_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LBarX;", show(bar_method->get_class()))));
+  bar_method->get_code()->build_cfg();
+  auto& bar_cfg = bar_method->get_code()->cfg();
+  // The callee is HOT.
+  auto bar_profile = single_profile("(1:0.1 g(0.4:0.2) b(0.2:0.3 g))");
+  auto bar_res = insert_source_blocks(bar_method, &bar_cfg, bar_profile,
+                                      /*serialize=*/true);
+  EXPECT_TRUE(bar_res.profile_success);
+
+  IRInstruction* invoke_insn = nullptr;
+  for (auto& mie : cfg::InstructionIterable(foo_cfg)) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_STATIC) {
+      invoke_insn = mie.insn;
+      break;
+    }
+  }
+  ASSERT_NE(invoke_insn, nullptr);
+  inliner::inline_with_cfg(foo_method, bar_method, invoke_insn,
+                           /* needs_receiver_cast */ nullptr,
+                           /* needs_init_class */ nullptr, 1);
+
+  // Every inlined LBar; block is 0, not kMinPositiveCount. appear100 is not
+  // scaled, so it is carried over untouched.
+  EXPECT_EQ(get_blocks_as_txt(foo_cfg.blocks()), R"(B0: LFoo;.bar:()V@0(1:0.1)
+B2: LFoo;.bar:()V@2(0:0.3)
+B3: LFoo;.bar:()V@1(0.6:0.2)
+B4: LBar;.bar:()V@0(0:0.1)
+B5: LBar;.bar:()V@2(0:0.3)
+B6: LBar;.bar:()V@1(0:0.2))");
+}
+
+// The post-scaling guard exists only to stop an underflow from turning a hot
+// block cold; it must NOT distort the magnitude. A factor small enough to
+// underflow the product to 0.0f leaves a strictly-positive val, and one far
+// below the old 1e-3 floor.
+TEST_F(SourceBlocksTest,
+       normalize_guard_prevents_underflow_without_distorting) {
+  const auto* s = DexString::make_string("x");
+
+  // 1e-30 * 1e-20 == 1e-50, which is not representable and flushes to 0.0f.
+  SourceBlock sb(s, 0,
+                 std::vector<SourceBlock::Val>{SourceBlock::Val(1e-30f, 50)});
+  source_blocks::normalize::normalize(&sb, 0, 1e-20f);
+  ASSERT_TRUE(sb.get_val(0).has_value());
+  EXPECT_GT(*sb.get_val(0), 0.0f); // guarded: still hot
+  EXPECT_LT(*sb.get_val(0), 1e-3f); // not pinned to the old floor
+  EXPECT_FLOAT_EQ(*sb.get_appear100(0), 50.0f); // appear100 is never scaled
+
+  // An ordinary small factor is left exactly alone -- no floor, no rounding.
+  SourceBlock sb2(s, 0,
+                  std::vector<SourceBlock::Val>{SourceBlock::Val(1.0f, 50)});
+  source_blocks::normalize::normalize(&sb2, 0, 1e-6f);
+  ASSERT_TRUE(sb2.get_val(0).has_value());
+  EXPECT_FLOAT_EQ(*sb2.get_val(0), 1e-6f);
+}
+
 TEST_F(SourceBlocksTest, serialize_exc_injected) {
   auto* foo_method = create_method("LFoo");
 
