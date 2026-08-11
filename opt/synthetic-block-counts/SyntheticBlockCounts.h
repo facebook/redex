@@ -105,6 +105,17 @@ class SyntheticBlockCountsPass : public Pass {
                               const method_profiles::MethodProfiles& profiles,
                               const std::vector<std::string>& inv_slot);
 
+  // Per interaction (index into inv_slot), the number
+  // of methods that are covered (>=1 val>0) yet have no usable call_count
+  // (absent profile row, or a non-finite or negative call_count; call_count ==
+  // 0 is a usable cold anchor) -- the covered-but-unprofiled population the
+  // inter-method forward-fill exists to heat. Pure (no pass state); run_pass
+  // emits the values as `missing_hit_methods_<interaction>`.
+  static std::vector<int64_t> count_missing_hit_methods(
+      const Scope& scope,
+      const method_profiles::MethodProfiles& profiles,
+      const std::vector<std::string>& inv_slot);
+
   friend class SyntheticBlockCountsTest;
 
   float m_handler_cold_factor{0.01f};
