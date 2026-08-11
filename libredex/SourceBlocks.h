@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -578,7 +580,22 @@ inline void normalize(ControlFlowGraph& cfg,
   std::vector<float> factors;
   factors.reserve(interactions);
   for (size_t i = 0; i != interactions; ++i) {
-    factors.push_back(get_factor(dominating, dominated, i));
+    // Whole-CFG scaling (the inlining path): `dominating` is the callsite and
+    // `dominated` the callee entry, so the factor is this callsite's SHARE of
+    // the callee's executions and is at most 1. Two things push it above 1 --
+    // incomplete tracking, which get_factor already anticipates, and a
+    // denominator sitting on a positive-magnitude floor, which turns an
+    // ordinary numerator into a large multiplier on EVERY block of the inlined
+    // body. Clamp it; this also absorbs an overflow-to-inf quotient.
+    //
+    // Deliberately NOT inside get_factor: the two-SourceBlock overload uses
+    // that same helper for `dominated := dominating` assignment semantics,
+    // where a factor above 1 is meaningful and must not be clamped.
+    //
+    // NaN is passed through rather than collapsed by std::min's ordering, so
+    // an unprofiled dominating block still yields "no data" instead of 1.
+    const float f = get_factor(dominating, dominated, i);
+    factors.push_back(std::isnan(f) ? f : std::min(f, 1.0f));
   }
   for (auto* b : cfg.blocks()) {
     source_blocks::foreach_source_block(b, [&](auto* sb) {
