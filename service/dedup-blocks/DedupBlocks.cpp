@@ -668,29 +668,46 @@ class DedupBlocksImpl {
         auto num_canon_sb = canon_source_blocks.size();
 
         for (cfg::Block* block : group) {
-          if (block != canon) {
-            always_assert(canon->id() < block->id());
-
-            blocks_to_replace.emplace_back(block, canon);
-            ++cnt;
+          // canon's own counts are already the starting values in
+          // `canon_source_blocks`; skip it so we don't add it to itself (the
+          // old `max` was idempotent on canon, but `add` is not). This mirrors
+          // the instrument path, which also skips canon.
+          if (block == canon) {
+            continue;
           }
+          always_assert(canon->id() < block->id());
+
+          blocks_to_replace.emplace_back(block, canon);
+          ++cnt;
+
+          // Each duplicate block ran independently; folding it into canon means
+          // canon is now reached by the union of predecessors, so the counts
+          // accumulate (SUM). `add` also maxes `appear100` (a probability,
+          // never summed).
           std::vector<SourceBlock*> source_blocks =
               source_blocks::gather_source_blocks(block);
           auto num_sb = source_blocks.size();
           if (num_sb == num_canon_sb) {
             for (size_t source_blk_idx = 0; source_blk_idx < num_sb;
                  source_blk_idx++) {
-              canon_source_blocks[source_blk_idx]->max(
+              canon_source_blocks[source_blk_idx]->add(
                   *source_blocks[source_blk_idx]);
             }
           } else if (num_sb >= 1 && num_canon_sb >= 1) {
-            source_blocks::get_first_source_block(canon)->max(
+            // Rare defensive fallback for a structural mismatch: identical
+            // blocks normally carry the same NUMBER of source blocks (identical
+            // instruction sequences get identical SB structure), so the paired
+            // branch above is the norm. Here the two counts differ, so we can't
+            // pair 1:1 -- add the duplicate's first SB to canon's first, then
+            // broadcast its last SB across canon's remaining tail (approximate,
+            // inherited from the prior `max` code).
+            source_blocks::get_first_source_block(canon)->add(
                 *source_blocks::get_first_source_block(block));
             auto last_source_block =
                 *source_blocks::get_last_source_block(block);
             for (size_t source_blk_idx = 1; source_blk_idx < num_canon_sb;
                  source_blk_idx++) {
-              canon_source_blocks[source_blk_idx]->max(last_source_block);
+              canon_source_blocks[source_blk_idx]->add(last_source_block);
             }
           }
         }
