@@ -131,6 +131,25 @@ static void split_sparse_switch_into_packed_and_sparse(
       break;
     }
     auto* secondary_switch_block = cfg.create_block();
+    // Seed the sparse-remainder dispatch block with a synthetic SourceBlock so
+    // it isn't left without one (a missing SB gives it no appear100 and an
+    // inconsistent is_hot/is_not_cold). This is a 1:1 edge move (no
+    // duplication), so summing the moved targets' counts is exact.
+    if (auto* template_sb = source_blocks::get_last_source_block_before(
+            block, switch_insn_it)) {
+      auto new_sb = source_blocks::clone_as_synthetic(template_sb, nullptr,
+                                                      SourceBlock::Val(0, 0));
+      for (const auto& kv : secondary_switch_case_to_block) {
+        if (auto* t = source_blocks::get_first_source_block(kv.second)) {
+          new_sb->add(*t);
+        }
+      }
+      if (auto* d = source_blocks::get_first_source_block(goto_block)) {
+        new_sb->add(*d);
+      }
+      source_blocks::impl::BlockAccessor::push_source_block(
+          secondary_switch_block, std::move(new_sb));
+    }
     always_assert(default_edge != nullptr);
     cfg.set_edge_target(default_edge, secondary_switch_block);
     cfg.delete_edges(sparse_edges.begin(), sparse_edges.end());
@@ -192,7 +211,22 @@ static void multiplex_sparse_switch_into_packed_and_sparse(
     }
     auto* block = cfg.create_block();
     if (template_sb) {
-      auto new_sb = source_blocks::clone_as_synthetic(template_sb);
+      // Each bucket is entered only by the selectors that map to it, so its
+      // count is the SUM of the counts of the case targets this bucket routes
+      // to (plus the shared default) -- not the whole switch's count. Seed a
+      // zero-count SourceBlock and add those, exactly as the split/expand
+      // transforms do; a verbatim clone would stamp the full switch count onto
+      // every one of the M buckets and inflate total execution mass by ~M.
+      auto new_sb = source_blocks::clone_as_synthetic(template_sb, nullptr,
+                                                      SourceBlock::Val(0, 0));
+      for (auto* e : cases) {
+        if (auto* t = source_blocks::get_first_source_block(e->target())) {
+          new_sb->add(*t);
+        }
+      }
+      if (auto* d = source_blocks::get_first_source_block(goto_block)) {
+        new_sb->add(*d);
+      }
       block->insert_before(block->end(), std::move(new_sb));
     }
     if (cases.size() == 1) {
@@ -272,15 +306,19 @@ static void expand_switch(
               switch_sb, nullptr, SourceBlock::Val(0, 0));
           // While quadratic, we'll only ever going to "expand" relatively small
           // switches
+          // This fall-through block carries all traffic that did not match
+          // case i, i.e. everyone continuing on to a later case or the
+          // default, so its count is the SUM of those targets' counts
+          // (appear100 maxes).
           for (size_t j = i + 1; j < cases.size(); j++) {
             auto* later_target_sb =
                 source_blocks::get_first_source_block(cases[j].second);
             if (later_target_sb != nullptr) {
-              next_sb->max(*later_target_sb);
+              next_sb->add(*later_target_sb);
             }
           }
           if (default_sb != nullptr) {
-            next_sb->max(*default_sb);
+            next_sb->add(*default_sb);
           }
           source_blocks::impl::BlockAccessor::push_source_block(
               next_block, std::move(next_sb));
