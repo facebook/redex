@@ -12,6 +12,9 @@
 #include "IRList.h"
 #include "Show.h"
 
+// A Special renders each entry through its `show_mie`, so that it can print
+// them differently from the stock `show(mie)`. Specials that don't care just
+// delegate to `show(mie)`.
 template <typename Special>
 std::string show(const cfg::Block* block,
                  Special& special,
@@ -20,7 +23,7 @@ std::string show(const cfg::Block* block,
   for (const auto& mie : *block) {
     special.mie_before(ss, mie);
     if (!code_only || shown_in_code_only(mie.type)) {
-      ss << "   " << show(mie) << "\n";
+      ss << "   " << special.show_mie(mie) << "\n";
     }
     special.mie_after(ss, mie);
   }
@@ -70,6 +73,8 @@ struct IteratorSpecial {
 
   explicit IteratorSpecial(const Iterator& iter) : iter(iter) {}
 
+  std::string show_mie(const MethodItemEntry& mie) const { return show(mie); }
+
   void mie_before(std::ostream& os, const MethodItemEntry& mie) {
     if (mie.type != MFLOW_OPCODE) {
       return;
@@ -90,6 +95,8 @@ struct IteratorSpecial {
 };
 
 struct ArraysAndResIds {
+  std::string show_mie(const MethodItemEntry& mie) const { return show(mie); }
+
   void mie_before(std::ostream&, const MethodItemEntry&) {}
   void mie_after(std::ostream& oss, const MethodItemEntry& mie) {
     const static std::string block_indent(3, ' ');

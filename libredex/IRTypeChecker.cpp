@@ -1985,6 +1985,11 @@ std::string IRTypeChecker::dump_annotated_cfg_reduced_impl(
       }
     }
 
+    // Entry addresses are noise when debugging a type error.
+    std::string show_mie(const MethodItemEntry& mie) const {
+      return error_insn == nullptr ? show(mie) : show_mie_plain(mie);
+    }
+
     void mie_before(std::ostream& /* os */, const MethodItemEntry& /* mie */) {}
     void mie_after(std::ostream& os, const MethodItemEntry& mie) {
       if (mie.type != MFLOW_OPCODE) {

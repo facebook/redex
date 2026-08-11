@@ -1415,6 +1415,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
     bool ignore_undefined{false};
 
    public:
+    std::string show_mie(const MethodItemEntry& mie) const { return show(mie); }
+
     void mie_before(std::ostream&, const MethodItemEntry&) {}
 
     void start_block(std::ostream& os, cfg::Block* b) {
