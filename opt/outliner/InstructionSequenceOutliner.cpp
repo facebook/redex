@@ -1034,16 +1034,27 @@ static MethodCandidates find_method_candidates(
                     ? liveness_fp_iter->get_live_in_vars_at(next_block)
                     : live_outs[it.block()].at(it->insn);
             auto first_block_throw_live_out = throw_live_out[first_block];
-            for (auto& p : UnorderedIterable(pc.root.defined_regs)) {
-              if (first_block_throw_live_out.contains(p.first)) {
+            // Visit registers in a fixed order. The three bail-outs below are
+            // competing reasons to reject this candidate, and whichever
+            // register is reached first decides which one is charged: with one
+            // live-out register uninitialized and another initialized, seeing
+            // the initialized one first yields live_out_multiple, seeing the
+            // other first yields live_out_initialized_not. The outcome is the
+            // same either way -- every branch returns, so the candidate is
+            // rejected regardless, which is why this never affected the emitted
+            // code -- but the counters land in redex-stats.txt, and a metric
+            // that varies between runs makes stats comparisons flaky.
+            for (auto reg : unordered_to_ordered_keys(pc.root.defined_regs)) {
+              const auto& defined_reg = pc.root.defined_regs.at(reg);
+              if (first_block_throw_live_out.contains(reg)) {
                 TRACE(ISO, 4,
                       "[invoke sequence outliner] [bail out] Cannot return "
                       "value that's live-in to a throw edge");
                 lstats.live_out_to_throw_edge++;
                 return;
               }
-              if (live_out.contains(p.first)) {
-                always_assert(p.second.state != RegState::INCONSISTENT);
+              if (live_out.contains(reg)) {
+                always_assert(defined_reg.state != RegState::INCONSISTENT);
                 if (out_reg) {
                   TRACE(ISO, 4,
                         "[invoke sequence outliner] [bail out] Cannot have "
@@ -1051,15 +1062,15 @@ static MethodCandidates find_method_candidates(
                   lstats.live_out_multiple++;
                   return;
                 }
-                if (p.second.state == RegState::UNINITIALIZED) {
+                if (defined_reg.state == RegState::UNINITIALIZED) {
                   TRACE(ISO, 4,
                         "[invoke sequence outliner] [bail out] Cannot return "
                         "uninitialized");
                   lstats.live_out_initialized_not++;
                   return;
                 }
-                always_assert(p.second.state == RegState::INITIALIZED);
-                out_reg = std::make_pair(p.first, p.second.wide);
+                always_assert(defined_reg.state == RegState::INITIALIZED);
+                out_reg = std::make_pair(reg, defined_reg.wide);
               }
             }
           }
