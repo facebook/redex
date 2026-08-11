@@ -10,9 +10,12 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "CppUtil.h"
 #include "Creators.h"
 #include "IRAssembler.h"
+#include "RedexContext.h"
 #include "RedexTest.h"
+#include "Show.h"
 #include "SourceBlocks.h"
 #include "SwitchEquivFinder.h"
 
@@ -79,6 +82,139 @@ cfg::InstructionIterator get_first_occurrence(cfg::ControlFlowGraph& cfg,
 } // namespace
 
 class SwitchEquivFinderTest : public RedexTest {};
+
+// A sled -- a block holding only SourceBlocks -- is replaced by a copy of its
+// successor, so the successor's count ends up in two places. Total execution
+// mass across the copies must equal what the original block had.
+TEST_F(SwitchEquivFinderTest, sled_normalization_splits_the_successors_count) {
+  g_redex->preserve_count_integrity = true;
+  ScopeGuard restore_count_integrity{
+      []() { g_redex->preserve_count_integrity = false; }};
+
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LSled;.m:(I)V"
+      (
+        (load-param v0)
+        (.src_block "LSled;.m:(I)V" 0 (10.0 1.0))
+        (if-eqz v0 :other)
+
+        (.src_block "LSled;.m:(I)V" 1 (4.0 1.0))
+        ; placeholder so the block survives cfg construction; removed below to
+        ; leave a block holding only a SourceBlock, as seen in the wild
+        (const-class "LBar;")
+        (goto :dest)
+
+        (:other)
+        (.src_block "LSled;.m:(I)V" 2 (6.0 1.0))
+        (const v1 1)
+        (goto :dest)
+
+        (:dest)
+        (.src_block "LSled;.m:(I)V" 3 (10.0 1.0))
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  for (auto it = cfg::InstructionIterator(cfg, true); !it.is_end(); ++it) {
+    if (opcode::is_const_class(it->insn->opcode())) {
+      cfg.remove_insn(it);
+      break;
+    }
+  }
+
+  constexpr uint32_t kLeafDupThreshold = 50;
+  SwitchEquivEditor::normalize_sled_blocks(&cfg, kLeafDupThreshold);
+
+  // Sum every copy of the successor's SourceBlock (id 3). The successor ran 10
+  // times; duplicating it must not manufacture more executions.
+  float total = 0.0f;
+  for (auto* b : cfg.blocks()) {
+    for (auto* sb : source_blocks::gather_source_blocks(b)) {
+      if (sb->id == 3) {
+        auto v = sb->get_val(0);
+        ASSERT_TRUE(v.has_value());
+        total += *v;
+      }
+    }
+  }
+  EXPECT_FLOAT_EQ(total, 10.0f);
+}
+
+// Two sleds sharing one successor run the split twice against the same
+// original, which shrinks in between. This path duplicates inside the loop, so
+// each copy is taken from the already-reduced `dest` and the shares compose --
+// pinning that here, since `move_edges` reaches the same helper with copies
+// made up front, where they do not.
+TEST_F(SwitchEquivFinderTest, two_sleds_sharing_a_successor_conserve_mass) {
+  g_redex->preserve_count_integrity = true;
+  ScopeGuard restore_count_integrity{
+      []() { g_redex->preserve_count_integrity = false; }};
+
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LSled2;.m:(I)V"
+      (
+        (load-param v0)
+        (.src_block "LSled2;.m:(I)V" 0 (10.0 1.0))
+        (switch v0 (:a :b))
+
+        (.src_block "LSled2;.m:(I)V" 1 (2.0 1.0))
+        (const v1 1)
+        (goto :dest)
+
+        (:a 0)
+        (.src_block "LSled2;.m:(I)V" 2 (3.0 1.0))
+        ; placeholders so the blocks survive cfg construction; both removed
+        ; below to leave two blocks holding only a SourceBlock
+        (const-class "LBar;")
+        (goto :dest)
+
+        (:b 1)
+        (.src_block "LSled2;.m:(I)V" 3 (5.0 1.0))
+        (const-class "LBaz;")
+        (goto :dest)
+
+        (:dest)
+        (.src_block "LSled2;.m:(I)V" 4 (10.0 1.0))
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  // Remove BOTH placeholders, leaving two sleds.
+  bool removed_any = true;
+  while (removed_any) {
+    removed_any = false;
+    for (auto it = cfg::InstructionIterator(cfg, true); !it.is_end(); ++it) {
+      if (opcode::is_const_class(it->insn->opcode())) {
+        cfg.remove_insn(it);
+        removed_any = true;
+        break;
+      }
+    }
+  }
+
+  constexpr uint32_t kLeafDupThreshold = 50;
+  SwitchEquivEditor::normalize_sled_blocks(&cfg, kLeafDupThreshold);
+
+  // The successor ran 10 times, reached 3 + 5 + 2. Duplicating it once per sled
+  // must redistribute that count, not manufacture more.
+  float total = 0.0f;
+  for (auto* b : cfg.blocks()) {
+    for (auto* sb : source_blocks::gather_source_blocks(b)) {
+      if (sb->id == 4) {
+        auto v = sb->get_val(0);
+        ASSERT_TRUE(v.has_value());
+        total += *v;
+      }
+    }
+  }
+  EXPECT_FLOAT_EQ(total, 10.0f);
+}
 
 TEST_F(SwitchEquivFinderTest, if_chain) {
   setup();
