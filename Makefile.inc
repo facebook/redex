@@ -137,6 +137,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/remove_redundant_check_casts \
 	-I$(top_srcdir)/service/resources \
 	-I$(top_srcdir)/service/shrinker \
+	-I$(top_srcdir)/service/stringbuilder \
 	-I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/service/switch-partitioning \
 	-I$(top_srcdir)/service/type-analysis \
