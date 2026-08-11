@@ -217,15 +217,16 @@ class CheckerConfig {
         return checker;
       });
     };
-    auto run_checker_error = [&](DexMethod* dex_method) {
+    // Takes the checker that already failed on `dex_method`, so that the dump
+    // can point at the instruction it tripped over.
+    auto run_checker_error = [&](DexMethod* dex_method,
+                                 const IRTypeChecker& checker) {
       if (m_config.annotated_cfg_on_error) {
-        return run_checker_tmpl(dex_method, [&](auto checker) {
-          if (m_config.annotated_cfg_on_error_reduced) {
-            return checker.dump_annotated_cfg_reduced(dex_method);
-          } else {
-            return checker.dump_annotated_cfg(dex_method);
-          }
-        });
+        if (m_config.annotated_cfg_on_error_reduced) {
+          return checker.dump_annotated_cfg_on_error(dex_method);
+        } else {
+          return checker.dump_annotated_cfg(dex_method);
+        }
       }
       auto* code = dex_method->get_code();
       return code->cfg_built() ? show(code->cfg()) : show(code);
@@ -250,7 +251,7 @@ class CheckerConfig {
           << show(res.smallest_error_method) << '\n'
           << " " << checker.what() << '\n'
           << "Code:" << '\n'
-          << run_checker_error(res.smallest_error_method);
+          << run_checker_error(res.smallest_error_method, checker);
 
       if (res.errors > 1) {
         oss << "\n(" << (res.errors - 1) << " more issues!)";

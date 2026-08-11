@@ -1077,6 +1077,7 @@ void IRTypeChecker::run() {
       check_instruction(insn, &it->second);
     } catch (const TypeCheckingException& e) {
       m_good = false;
+      m_error_insn = insn;
       std::ostringstream out;
       out << "Type error in method "
           << m_dex_method->get_deobfuscated_name_or_empty()
@@ -1921,17 +1922,56 @@ std::string IRTypeChecker::dump_annotated_cfg(DexMethod* method) const {
 }
 
 std::string IRTypeChecker::dump_annotated_cfg_reduced(DexMethod* method) const {
+  return dump_annotated_cfg_reduced_impl(method, /* error_insn */ nullptr);
+}
+
+std::string IRTypeChecker::dump_annotated_cfg_on_error(
+    DexMethod* method) const {
+  return dump_annotated_cfg_reduced_impl(method, error_insn());
+}
+
+namespace {
+
+constexpr const char* ERROR_MARKER = ">>>  ";
+
+// `what()` is multi-line, so prefix every line to keep the whole message
+// visually attached to the instruction it belongs to.
+std::string marked_error_message(const std::string& what) {
+  std::istringstream in(what);
+  std::ostringstream out;
+  std::string line;
+  const char* separator = "";
+  while (std::getline(in, line)) {
+    out << separator << ERROR_MARKER << line;
+    separator = "\n";
+  }
+  return out.str();
+}
+
+} // namespace
+
+std::string IRTypeChecker::dump_annotated_cfg_reduced_impl(
+    DexMethod* method, const IRInstruction* error_insn) const {
   cfg::ScopedCFG cfg{method->get_code()};
 
   TypeInference inf{method->get_code()->cfg()};
   inf.run(m_dex_method);
 
+  std::string error_message;
+  if (error_insn != nullptr) {
+    error_message = marked_error_message("ERROR: " + what());
+  }
+
   struct TypeInferenceReducedSpecial {
     TypeEnvironment cur;
     const TypeInference& iter;
+    const IRInstruction* error_insn;
+    const std::string& error_message;
 
-    explicit TypeInferenceReducedSpecial(const TypeInference& iter)
-        : iter(iter) {}
+    TypeInferenceReducedSpecial(const TypeInference& iter,
+                                const IRInstruction* error_insn,
+                                const std::string& error_message)
+        : iter(iter), error_insn(error_insn), error_message(error_message) {}
 
     void add_reg(std::ostream& os, reg_t r) const {
       os << " v" << r << "=";
@@ -1969,6 +2009,10 @@ std::string IRTypeChecker::dump_annotated_cfg_reduced(DexMethod* method) const {
         add_reg(os, mie.insn->dest());
         os << "\n";
       }
+
+      if (error_insn != nullptr && mie.insn == error_insn) {
+        os << error_message << "\n";
+      }
     }
 
     void start_block(std::ostream& os, cfg::Block* b) {
@@ -1978,6 +2022,6 @@ std::string IRTypeChecker::dump_annotated_cfg_reduced(DexMethod* method) const {
     void end_block(std::ostream& /* os */, cfg::Block* /* b */) {}
   };
 
-  TypeInferenceReducedSpecial special(inf);
+  TypeInferenceReducedSpecial special(inf, error_insn, error_message);
   return show(method->get_code()->cfg(), special);
 }
