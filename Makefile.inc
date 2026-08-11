@@ -93,6 +93,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/string_concatenator \
 	-I$(top_srcdir)/opt/strip-debug-info \
 	-I$(top_srcdir)/opt/synth \
+	-I$(top_srcdir)/opt/synthetic-block-counts \
 	-I$(top_srcdir)/opt/test_cfg \
 	-I$(top_srcdir)/opt/throw-propagation \
 	-I$(top_srcdir)/opt/track_resources \
