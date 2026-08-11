@@ -24,7 +24,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
 	-I$(top_srcdir)/opt/class-merging \
 	-I$(top_srcdir)/opt/class-reordering \
-	-I$(top_srcdir)/opt/class-splitting \
 	-I$(top_srcdir)/opt/clinit-batching \
 	-I$(top_srcdir)/opt/constant-propagation \
 	-I$(top_srcdir)/opt/copy-propagation \
@@ -111,7 +110,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/branch-prefix-hoisting \
 	-I$(top_srcdir)/service/class-init \
 	-I$(top_srcdir)/service/class-merging \
-	-I$(top_srcdir)/service/class-splitting \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/copy-propagation \
 	-I$(top_srcdir)/service/cross-dex-ref-minimizer \

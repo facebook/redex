@@ -26,7 +26,6 @@ using Scope = std::vector<DexClass*>;
 
 constexpr const char* CLASS_SPLITTING_RELOCATED_SUFFIX = "$relocated";
 constexpr const size_t CLASS_SPLITTING_RELOCATED_SUFFIX_LEN = 10;
-constexpr const char* CLASS_SPLITTING_RELOCATED_SUFFIX_SEMI = "$relocated;";
 
 namespace Json {
 class Value;

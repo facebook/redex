@@ -265,7 +265,6 @@ libredex_la_SOURCES = \
 	service/class-merging/ModelMethodMerger.cpp \
 	service/class-merging/Model.cpp \
 	service/class-merging/TypeTagUtils.cpp \
-	service/class-splitting/ClassSplitting.cpp \
 	service/cross-dex-ref-minimizer/CrossDexRefMinimizer.cpp \
 	service/constant-propagation/ConstantPropagation.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
@@ -430,7 +429,6 @@ libopt_la_SOURCES = \
 	opt/class-merging/IntraDexClassMergingPass.cpp \
 	opt/class-merging/ModelSpecGenerator.cpp \
 	opt/class-reordering/ClassReorderingPass.cpp \
-	opt/class-splitting/ClassSplittingPass.cpp \
 	opt/clinit-batching/ClinitBatchingPass.cpp \
 	opt/clinit-batching/EarlyClassLoadsAnalysis.cpp \
 	opt/clinit-batching/StaticFieldDependencyGraph.cpp \
