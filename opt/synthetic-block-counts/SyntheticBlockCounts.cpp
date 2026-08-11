@@ -14,12 +14,13 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "CallGraph.h"
+#include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "Debug.h"
@@ -29,7 +30,9 @@
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "IRCode.h"
+#include "IRInstruction.h"
 #include "LoopInfo.h"
+#include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "RedexContext.h"
@@ -120,6 +123,91 @@
 // a caller by an exact profiled callee's `call_count`), but does NOT fully
 // reconcile a caller's invoke count with a profiled callee's own `call_count`
 // -- that gap persists even with the engine on.
+// ----------------------------------------------------------------------------
+// SECTION B -- Inter-method estimate (`intermethod=true`; `run_intermethod*`)
+// ----------------------------------------------------------------------------
+// The per-method estimate can only heat a method that has its own profile. Many
+// methods have no `call_count` of their own -- they were fully inlined or
+// otherwise transformed away in the instrumentation build that produced the
+// profile, so no per-method counter was ever recorded for them. Per-method
+// leaves such methods cold even when their callers are red-hot. Section B lets
+// counts flow across the call graph.
+//
+// The per-method solve is LINEAR in its entry anchor: solving at anchor 1.0
+// yields a per-block "shape" (each block's frequency relative to entry). So
+// each method is solved ONCE at anchor 1.0 (this is why `solve_block_freq`
+// takes the anchor as a parameter) and the shape is cached and scaled. Per
+// interaction slot (each slot is independent):
+//
+// 1. SHAPE. For every relevant method, solve the shape once and cache it.
+//    Record, for every call instruction, k = shape[block containing the call] =
+//    how many times that call fires per one entry to its method.
+// 2. PIN. A method WITH a profile is pinned: its scale is its own `call_count`,
+//    and it is a pure source -- it never takes inflow and is never adjusted. On
+//    pinned methods the result equals the per-method result, so turning the
+//    engine on cannot regress any method that already has ground truth.
+// 3. FORWARD FLOW. A method WITHOUT a profile gets scale(M) = sum over
+//    callers C of scale(C) * k(C->M): if C runs scale(C) times and the call
+//    site to M runs k times per entry to C, then M is invoked scale(C)*k times
+//    from C.
+//    Solved by repeated sweeps in caller-before-callee order (a bounded
+//    relaxation): the acyclic majority settles in one sweep; recursion cycles
+//    re-iterate until the per-sweep change falls below
+//    `intermethod_converge_eps` or a fixed sweep cap.
+//    This is call-graph propagation of synthetic entry counts in the spirit of
+//    LLVM's `SyntheticCountsUtils`, solved as standard worklist dataflow
+//    iteration (Kildall, "A Unified Approach to Global Program Optimization,"
+//    POPL 1973): caller-before-callee order settles the acyclic majority in one
+//    sweep, and dirty propagation confines later sweeps to the recursive
+//    frontier. It differs in that measured methods are immutable pins, each
+//    call edge is weighted by the caller's unit-entry shape k(C->M), and an
+//    exact profiled callee imposes a backward upper bound (step 4).
+// 4. UPPER BOUND. An exact (single-target) call C->T to a PROFILED callee T can
+//    fire at most call_count(T) times, so scale(C) <= call_count(T)/k(C->T).
+//    Each scale is clamped to the smallest such bound; where no exact profiled
+//    callee constrains a method (unprofiled recursion), the bound defaults to
+//    the per-interaction data-derived ceiling
+//    `intermethod_max_scale_factor * max(usable call_count)`, which keeps
+//    cycles bounded. This is a sound cap: it can lower a fabricated
+//    over-estimate but never mislabels a hot method cold.
+// 5. VIRTUAL CALLS. A call with several possible targets splits its
+//    contribution evenly across them. A call with more than
+//    `kBigOverrideThreshold` targets (megamorphic) is dropped from the graph
+//    entirely -- it behaves as a sink and contributes nothing, rather than
+//    inventing a wide fan-out.
+//    Possible targets come from class-hierarchy analysis (Dean, Grove &
+//    Chambers, "Optimization of Object-Oriented Programs Using Static Class
+//    Hierarchy Analysis," ECOOP 1995): CHA yields which targets are POSSIBLE,
+//    not the receiver-type distribution, so the even 1/N split is an explicit
+//    structural prior, not a measured dispatch frequency. This is a known
+//    limitation: when the true receiver distribution is skewed (one dominant
+//    target), 1/N materially misattributes flow -- over-heating the rare
+//    targets and under-heating the hot one. Refining it with receiver-type
+//    profiles is left for future work.
+// 6. WRITE-BACK. Each block's count is scale(M) * shape[block], written with
+//    the same support-preserving guard and `epsilon` floor as Section A, as a
+//    float (no representation ceiling). A method that ends with scale 0
+//    (unprofiled and unreached) is skipped, leaving its boolean coverage
+//    untouched.
+//
+// Only methods reachable from a profiled method can ever get a nonzero count,
+// so the expensive shape solve runs only for that "relevance set"; every other
+// method's write is a guaranteed no-op and is skipped. The per-method phases
+// (shape, write-back) run in parallel across methods; the cross-method flow
+// (step 3) is a single sequential pass because it walks the call graph.
+//
+// EXAMPLE. `caller` runs 1,000,000 times and calls unprofiled `log()` once per
+// entry (k = 1). Per-method leaves `log()` cold (no profile). Inter-method
+// gives it scale ~1,000,000, so a size pass can see `log()` is actually hot and
+// avoid hoisting it out of line.
+//
+// NOT a conservation solve. This engine only ADDS counts to unprofiled methods;
+// a profiled method stays pinned to its own `call_count` and is never adjusted.
+// The sum of caller invoke counts flowing into a profiled callee is therefore
+// NOT reconciled with that callee's `call_count` -- the two can disagree, and
+// this engine does not close that gap. The backward bound (step 4) only caps
+// unprofiled callers on exact edges; it does not make callsite sums equal
+// callee totals.
 
 namespace {
 
@@ -467,6 +555,29 @@ void SyntheticBlockCountsPass::bind_config() {
        m_epsilon,
        "Floor for a covered block whose solved frequency underflowed; keeps "
        "covered blocks strictly > 0.");
+  bind("intermethod",
+       m_intermethod,
+       m_intermethod,
+       "Enable the inter-method call-graph engine: profiled methods are "
+       "pinned to their own call_count and unprofiled methods are heated by "
+       "forward propagation of caller invoke-block frequencies over the call "
+       "graph. When false, the per-method solve runs unchanged.");
+  bind("intermethod_max_sweeps",
+       m_intermethod_max_sweeps,
+       m_intermethod_max_sweeps,
+       "Max forward relaxation sweeps for the inter-method solve.");
+  bind("intermethod_max_scale_factor",
+       m_intermethod_max_scale_factor,
+       m_intermethod_max_scale_factor,
+       "Multiplier for the widening-to-hi cap on any forward-filled scale: the "
+       "per-interaction ceiling is factor * max(usable call_count), bounding "
+       "recursion/SCC cycles (then tightened by the step-4 backward callee "
+       "bound).");
+  bind("intermethod_converge_eps",
+       m_intermethod_converge_eps,
+       m_intermethod_converge_eps,
+       "Relative convergence tolerance for the inter-method Gauss-Seidel "
+       "solve.");
 
   // Validate config values HERE, never in the bind_config() body above:
   // bind_config() is also run for config reflection (doc generation), where the
@@ -711,13 +822,16 @@ void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
 
-  // Per-method producer wall-clock, emitted as a `*_ms` metric into the redex
-  // stats so the pass cost stays observable.
+  // Per-phase wall-clock timers, emitted as `*_ms` metrics into the redex stats
+  // so the producer cost stays observable.
   using clk = std::chrono::steady_clock;
+  auto ms_since = [](clk::time_point t0) {
+    return (int64_t)std::chrono::duration<double, std::milli>(clk::now() - t0)
+        .count();
+  };
 
-  // Emitted before the producer so it lands on the
-  // per-method path (and on the inter-method path once that engine lands later
-  // in the stack). Metric-only, NFC.
+  // Emitted before the producer branch so it lands on
+  // BOTH the per-method and inter-method paths. Metric-only, NFC.
   {
     const auto missing_hit =
         count_missing_hit_methods(scope, profiles, inv_slot);
@@ -727,6 +841,13 @@ void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
       total += missing_hit[i];
     }
     mgr.set_metric("missing_hit_methods_total", total);
+  }
+
+  if (m_intermethod) {
+    const auto t0 = clk::now();
+    run_intermethod(stores, profiles, inv_slot, mgr);
+    mgr.set_metric("intermethod_solve_ms", ms_since(t0));
+    return;
   }
 
   const auto t0 = clk::now();
@@ -754,10 +875,674 @@ void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("pairs_total", (int64_t)res.pairs_total);
   mgr.set_metric("pairs_covered", (int64_t)res.pairs_covered);
   mgr.set_metric("pairs_uncovered", (int64_t)res.pairs_uncovered);
-  mgr.set_metric(
-      "permethod_solve_ms",
-      (int64_t)std::chrono::duration<double, std::milli>(clk::now() - t0)
-          .count());
+  mgr.set_metric("permethod_solve_ms", ms_since(t0));
+}
+
+void SyntheticBlockCountsPass::run_intermethod(
+    DexStoresVector& stores,
+    const method_profiles::MethodProfiles& profiles,
+    const std::vector<std::string>& inv_slot,
+    PassManager& mgr) {
+  auto scope = build_class_scope(stores);
+  auto st = run_intermethod_core(scope, profiles, inv_slot);
+  mgr.set_metric("intermethod_enabled", 1);
+  mgr.set_metric("pairs_pinned", (int64_t)st.pairs_pinned);
+  mgr.set_metric("pairs_forward_filled", (int64_t)st.pairs_forward_filled);
+  mgr.set_metric("pairs_skipped_zero_scale", (int64_t)st.pairs_skipped);
+  mgr.set_metric("intermethod_blocks_written", (int64_t)st.blocks_written);
+  mgr.set_metric("intermethod_forward_blocks_written",
+                 (int64_t)st.forward_blocks_written);
+  mgr.set_metric("pairs_hit_ceiling", (int64_t)st.pairs_hit_ceiling);
+  mgr.set_metric("methods_not_in_graph", (int64_t)st.methods_not_in_graph);
+  mgr.set_metric("intermethod_pairs_total", (int64_t)st.pairs_total);
+  mgr.set_metric("intermethod_pairs_covered", (int64_t)st.pairs_covered);
+  mgr.set_metric("intermethod_pairs_uncovered", (int64_t)st.pairs_uncovered);
+  mgr.set_metric("intermethod_shape_solves", (int64_t)st.shape_solves);
+  mgr.set_metric("intermethod_shape_cache_misses",
+                 (int64_t)st.shape_cache_misses);
+  mgr.set_metric("intermethod_shape_cache_entries",
+                 (int64_t)st.shape_cache_entries);
+  mgr.set_metric("intermethod_relevance_set_size",
+                 (int64_t)st.relevance_set_size);
+  mgr.set_metric("intermethod_zero_outflow_sinks",
+                 (int64_t)st.zero_outflow_sinks);
+  mgr.set_metric("intermethod_irreducible", (int64_t)st.irreducible);
+  mgr.set_metric("intermethod_sweeps_total", (int64_t)st.sweeps_total);
+  mgr.set_metric("intermethod_sweeps_max", (int64_t)st.sweeps_max);
+  mgr.set_metric("intermethod_interactions_hit_cap",
+                 (int64_t)st.interactions_hit_cap);
+  mgr.set_metric("intermethod_methods_unconverged",
+                 (int64_t)st.methods_unconverged);
+  // Worst final-sweep relative change, in parts-per-million (converge_eps is
+  // 1e-4 == 100 ppm): ~100 means barely-unconverged drift, a large value means
+  // a cycle is genuinely oscillating.
+  mgr.set_metric("intermethod_final_rel_max_ppm",
+                 (int64_t)(st.final_rel_max * 1e6));
+  mgr.set_metric("intermethod_p1_ms", (int64_t)st.p1_ms);
+  mgr.set_metric("intermethod_phase_b_ms", (int64_t)st.phase_b_ms);
+  mgr.set_metric("intermethod_phase_c_ms", (int64_t)st.phase_c_ms);
+  mgr.set_metric("intermethod_forward_methods_mutated",
+                 (int64_t)st.forward_methods_mutated);
+  // Name-carrying metrics: the biggest forward-mutated methods, keyed by rank +
+  // deobfuscated signature, value = dex code units. (The metric key is abused
+  // to communicate the method name, as SourceBlocksViolations does for
+  // top_changes.)
+  for (size_t i = 0; i < st.top_forward_mutated.size(); ++i) {
+    const auto& [m, sz] = st.top_forward_mutated[i];
+    mgr.set_metric("intermethod_top_forward_mutated." + std::to_string(i) +
+                       "." + show_deobfuscated(m),
+                   (int64_t)sz);
+  }
+}
+
+// Deterministic solve order: call-graph BFS (callers before callees) so the
+// acyclic majority settles in ~one sweep. `visit_by_levels` is non-recursive
+// (stack-safe at whole-app scale, unlike a recursive WTO build) and
+// deterministic (FIFO queue over already-sorted callees()). Methods with a
+// built CFG but unreachable from the call-graph entry are appended in stable id
+// order. `id_of` maps method -> dense id; `nm` is the id count.
+static std::vector<size_t> compute_sweep_order(
+    const call_graph::Graph& cg,
+    const UnorderedMap<const DexMethod*, size_t>& id_of,
+    size_t nm) {
+  std::vector<size_t> sweep_order;
+  sweep_order.reserve(nm);
+  std::vector<bool> in_order(nm, false); // scratch: dedups the level walk
+  cg.visit_by_levels([&](const call_graph::Node* n) {
+    const DexMethod* cm = n->method();
+    if (cm == nullptr) {
+      return; // ghost entry/exit
+    }
+    auto it = id_of.find(cm);
+    if (it != id_of.end() && !in_order[it->second]) {
+      in_order[it->second] = true;
+      sweep_order.push_back(it->second);
+    }
+  });
+  for (size_t idx = 0; idx < nm; ++idx) {
+    if (!in_order[idx]) {
+      sweep_order.push_back(idx);
+    }
+  }
+  return sweep_order;
+}
+
+// Dense, deterministic method ids over all methods with a built CFG, ordered by
+// a stable key (never pointer identity). Fills `methods` (id -> method) and
+// `id_of` (method -> id).
+static void build_method_ids(const Scope& scope,
+                             std::vector<DexMethod*>& methods,
+                             UnorderedMap<const DexMethod*, size_t>& id_of) {
+  walk::code(scope, [&](DexMethod* m, IRCode& code) {
+    if (code.cfg_built()) {
+      methods.push_back(m);
+    }
+  });
+  std::sort(methods.begin(), methods.end(), compare_dexmethods);
+  id_of.reserve(methods.size());
+  for (size_t idx = 0; idx < methods.size(); ++idx) {
+    id_of[methods[idx]] = idx;
+  }
+}
+
+// ntargets(insn) = number of resolved call-graph targets for each invoke on a
+// cg edge. Call-graph-structural (interaction-independent), so it is resolved
+// once and reused across interactions and sweeps.
+static UnorderedMap<const IRInstruction*, size_t> compute_invoke_target_counts(
+    const call_graph::Graph& cg) {
+  UnorderedMap<const IRInstruction*, size_t> ntargets_by_insn;
+  cg.visit_by_levels([&](const call_graph::Node* n) {
+    for (const auto* e : n->callees()) {
+      auto* insn = e->invoke_insn();
+      if (insn != nullptr && ntargets_by_insn.count(insn) == 0u) {
+        ntargets_by_insn.emplace(
+            insn, call_graph::resolve_callees_in_graph(cg, insn).size());
+      }
+    }
+  });
+  return ntargets_by_insn;
+}
+
+// A profiled call_count usable as an anchor or bound: present, finite, and
+// non-negative. A NaN/inf/negative row is invalid profile data (it would seed
+// NaN/inf or a negative scale into the flow), so it reads as "no usable count".
+// (call_count == 0 is usable: a genuinely cold anchor.)
+static std::optional<double> usable_call_count(
+    const method_profiles::MethodProfiles& profiles,
+    const std::string& interaction,
+    const DexMethod* m) {
+  auto stat = profiles.get_method_stat(interaction, m);
+  if (!stat || !std::isfinite(stat->call_count) || stat->call_count < 0.0) {
+    return std::nullopt;
+  }
+  return stat->call_count;
+}
+
+// Backward upper bound (Phase 1.5): an exact call C->T fires at most
+// call_count(T) times, so scale_C <= call_count(T) / k(C->T) for every exact
+// out-edge to a profiled callee T -- a SOUND cap a forward over-estimate can
+// never legitimately exceed. Defaults to `max_scale` (the widening safety net),
+// refined downward by exact-callee bounds; keeps cycles bounded. Only relevant,
+// non-pinned methods get a meaningful bound.
+static std::vector<double> compute_hi_scale(
+    const std::vector<DexMethod*>& methods,
+    const std::vector<bool>& pinned,
+    const std::vector<bool>& relevant,
+    const call_graph::Graph& cg,
+    const method_profiles::MethodProfiles& profiles,
+    const std::string& interaction,
+    const UnorderedMap<const IRInstruction*, size_t>& ntargets_by_insn,
+    const InsertOnlyConcurrentMap<const IRInstruction*, double>& k_by_insn,
+    double max_scale) {
+  const size_t nm = methods.size();
+  std::vector<double> hi_scale(nm, max_scale);
+  for (size_t idx = 0; idx < nm; ++idx) {
+    if (pinned[idx] || !relevant[idx]) {
+      continue; // non-relevant scale stays 0 -> hi_scale[idx] unused
+    }
+    DexMethod* m = methods[idx];
+    if (!cg.has_node(m)) {
+      continue;
+    }
+    double hi = max_scale;
+    for (const auto* e : cg.node(m)->callees()) {
+      const DexMethod* t = e->callee()->method();
+      auto* insn = e->invoke_insn();
+      if (t == nullptr || insn == nullptr) {
+        continue; // ghost exit edge
+      }
+      auto tcc = usable_call_count(profiles, interaction, t);
+      if (!tcc) {
+        continue; // only a finite, non-negative profiled callee yields a sound
+                  // backward bound (see usable_call_count)
+      }
+      // Sound only for exact (single-target) invokes; a true-virtual invoke's
+      // bound needs the sum over ALL its targets' counts (deferred), so skip.
+      auto ntit = ntargets_by_insn.find(insn);
+      if (ntit == ntargets_by_insn.end() || ntit->second != 1) {
+        continue;
+      }
+      const double* kp = k_by_insn.get(insn);
+      const double k = (kp != nullptr) ? *kp : 0.0;
+      if (k > 0.0) {
+        hi = std::min(hi, *tcc / k);
+      }
+    }
+    hi_scale[idx] = hi;
+  }
+  return hi_scale;
+}
+
+// Rank forward-mutated methods by dex size (desc), stable tie-break by method
+// key for determinism; keep at most `top_n` for name-carrying metrics.
+static std::vector<std::pair<const DexMethod*, uint32_t>>
+rank_top_forward_mutated(
+    const InsertOnlyConcurrentMap<const DexMethod*, uint32_t>&
+        forward_mutated_sizes,
+    size_t top_n) {
+  auto forward_mutated =
+      unordered_to_ordered(forward_mutated_sizes,
+                           [](const std::pair<const DexMethod*, uint32_t>& a,
+                              const std::pair<const DexMethod*, uint32_t>& b) {
+                             if (a.second != b.second) {
+                               return a.second > b.second;
+                             }
+                             return compare_dexmethods(a.first, b.first);
+                           });
+  if (forward_mutated.size() > top_n) {
+    forward_mutated.resize(top_n);
+  }
+  return forward_mutated;
+}
+
+// Pins + RelevanceSet for one interaction. A method WITH a usable profiled
+// call_count is PINNED: seeded to its own count and treated as a pure source.
+// RelevanceSet = pinned UNION their forward-callee closure over the call graph
+// -- the only methods PASS B can give scale > 0, so PASS 0a can skip the rest.
+// Fills scale/pinned/relevant (assumed sized to nm, zero/false-initialized).
+static void compute_pins_and_relevance(
+    const std::vector<DexMethod*>& methods,
+    const UnorderedMap<const DexMethod*, size_t>& id_of,
+    const call_graph::Graph& cg,
+    const method_profiles::MethodProfiles& profiles,
+    const std::string& interaction,
+    std::vector<double>& scale,
+    std::vector<bool>& pinned,
+    std::vector<bool>& relevant) {
+  const size_t nm = methods.size();
+  redex_assert(scale.size() == nm && pinned.size() == nm &&
+               relevant.size() == nm);
+  for (size_t idx = 0; idx < nm; ++idx) {
+    if (auto cc = usable_call_count(profiles, interaction, methods[idx])) {
+      scale[idx] = *cc;
+      pinned[idx] = true;
+    }
+  }
+  std::vector<size_t> stk;
+  for (size_t idx = 0; idx < nm; ++idx) {
+    if (pinned[idx]) {
+      relevant.at(idx) = true;
+      stk.push_back(idx);
+    }
+  }
+  while (!stk.empty()) {
+    const size_t idx = stk.back();
+    stk.pop_back();
+    DexMethod* m = methods[idx];
+    if (!cg.has_node(m)) {
+      continue;
+    }
+    for (const auto* e : cg.node(m)->callees()) {
+      const DexMethod* t = e->callee()->method();
+      if (t == nullptr) {
+        continue;
+      }
+      auto it = id_of.find(t);
+      if (it != id_of.end() && !relevant.at(it->second)) {
+        relevant.at(it->second) = true;
+        stk.push_back(it->second);
+      }
+    }
+  }
+}
+
+SyntheticBlockCountsPass::InterStats
+SyntheticBlockCountsPass::run_intermethod_core(
+    const Scope& scope,
+    const method_profiles::MethodProfiles& profiles,
+    const std::vector<std::string>& inv_slot) {
+  auto mog = method_override_graph::build_graph(scope);
+  // Multiple-callee graph: exact single edges for static/direct/super/
+  // non-true-virtual, plus base+overrider edges for true virtuals. Megamorphic
+  // sites (> kBigOverrideThreshold overriders) get NO fan-out edges, so they
+  // contribute nothing -> they behave as the metered sink.
+  constexpr uint32_t kBigOverrideThreshold = 5;
+  auto cg =
+      call_graph::multiple_callee_graph(*mog, scope, kBigOverrideThreshold);
+
+  std::vector<DexMethod*> methods;
+  UnorderedMap<const DexMethod*, size_t> id_of;
+  build_method_ids(scope, methods, id_of);
+  const size_t nm = methods.size();
+
+  const std::vector<size_t> sweep_order = compute_sweep_order(cg, id_of, nm);
+
+  const float hcf = m_handler_cold_factor, lic = m_loop_iteration_cap,
+              dbp = m_default_backedge_prob;
+  const float epsilon = m_epsilon;
+  const double max_scale_factor = m_intermethod_max_scale_factor;
+  const double converge_eps = m_intermethod_converge_eps;
+
+  std::atomic<size_t> pairs_pinned{0}, pairs_forward_filled{0},
+      pairs_skipped{0}, blocks_written{0}, pairs_hit_ceiling{0},
+      forward_blocks_written{0}; // blocks written to forward-filled
+                                 // (unprofiled) methods == the delta over the
+                                 // per-method path
+  // distinct forward-filled methods actually mutated (>=1 block written),
+  // deduped across interactions, paired with dex size so the biggest few can be
+  // emitted as name-carrying metrics. Recorded in PASS C (a per-method event,
+  // not per-block) and ranked single-threaded afterward. The dex size is
+  // computed by the first-insert `creator` OUTSIDE the map's slot lock (and
+  // only once per method), so the O(n) `estimate_code_units()` never runs under
+  // a lock.
+  InsertOnlyConcurrentMap<const DexMethod*, uint32_t> forward_mutated_sizes;
+  // (method, interaction) sparsity counters.
+  std::atomic<size_t> im_pairs_total{0}, im_pairs_covered{0};
+  // engine-cost + parity counters.
+  std::atomic<size_t> im_shape_solves{0}, im_shape_cache_misses{0},
+      im_zero_outflow{0}, im_irreducible{0};
+  size_t im_relevance_set_size = 0, im_shape_cache_entries = 0,
+         im_sweeps_total = 0, im_interactions_hit_cap = 0,
+         im_methods_unconverged = 0;
+  uint32_t im_sweeps_max = 0;
+  double im_final_rel_max = 0.0; // worst final-sweep relative change, any slot
+  double p1_ms = 0.0, phaseB_ms = 0.0, phaseC_ms = 0.0;
+  using clk = std::chrono::steady_clock;
+  auto ms_since = [](clk::time_point t0) {
+    return std::chrono::duration<double, std::milli>(clk::now() - t0).count();
+  };
+
+  const UnorderedMap<const IRInstruction*, size_t> ntargets_by_insn =
+      compute_invoke_target_counts(cg);
+
+  // Parity check: profiled-but-call-graph-unreachable methods are still pinned
+  // + instantiated over the full method list (NFC); they just get no
+  // relaxation.
+  size_t methods_not_in_graph = 0;
+  for (size_t idx = 0; idx < nm; ++idx) {
+    if (!cg.has_node(methods[idx])) {
+      methods_not_in_graph++;
+    }
+  }
+
+  // Interaction-outer loop. PASS 0a (shape) and PASS C (write) are parallel
+  // over methods; PASS B (cross-method scale propagation) is a single
+  // sequential call-graph sweep. Each interaction touches only its own
+  // SourceBlock slot, so the interactions are independent.
+  for (size_t i = 0; i < inv_slot.size(); ++i) {
+    const std::string& interaction = inv_slot[i];
+
+    // Pins + RelevanceSet, computed BEFORE the solve so PASS 0a can skip every
+    // method that can never receive scale. See compute_pins_and_relevance.
+    std::vector<double> scale(nm, 0.0);
+    std::vector<bool> pinned(nm, false);
+    std::vector<bool> relevant(nm, false);
+    compute_pins_and_relevance(methods, id_of, cg, profiles, interaction, scale,
+                               pinned, relevant);
+    // Data-derived recursion-widening ceiling for this interaction: pins hold
+    // the usable call_count (others 0), so this is factor * max(call_count).
+    // All-cold (max 0) is benign -- inflow is 0, so every non-pinned scale
+    // stays 0; step-4 (compute_hi_scale) then tightens this per method.
+    // `scale` is sized by `nm`, so an empty method list would make
+    // `max_element` return `end()`; 0 is the same benign all-cold ceiling.
+    const double max_scale =
+        scale.empty()
+            ? 0.0
+            : max_scale_factor * *std::max_element(scale.begin(), scale.end());
+    std::vector<bool> hit_ceiling(nm, false); // value limited by max_scale
+    for (size_t idx = 0; idx < nm; ++idx) {
+      im_relevance_set_size += relevant[idx] ? 1 : 0;
+    }
+
+    // PASS 0a: per-method shape (unit anchor); record k = shape[block(invoke)]
+    // for every invoke. The cheap coverage scan runs for all methods (metric +
+    // PASS C cache-miss canary); the expensive geometry+Wu-Larus solve runs
+    // ONLY for RelevanceSet members, whose covered shapes are cached so PASS C
+    // reads them instead of re-solving (kills the 0a/C double-solve).
+    // Per-method independent -> parallel.
+    InsertOnlyConcurrentMap<const IRInstruction*, double> k_by_insn;
+    InsertOnlyConcurrentMap<const DexMethod*,
+                            UnorderedMap<const cfg::Block*, double>>
+        shape_cache;
+    InsertOnlyConcurrentSet<const DexMethod*> covered_methods;
+    auto t_p1 = clk::now();
+    walk::parallel::methods(scope, [&](DexMethod* m) {
+      auto* code = m->get_code();
+      if (code == nullptr || !code->cfg_built()) {
+        return;
+      }
+      auto& cfg = code->cfg();
+      // Annotation-only: never mutate the CFG (this is why the pass is safe
+      // over `no_optimizations` and leaves bytecode byte-identical). The shape
+      // solve visits only reachable blocks (RPO from entry) and PASS C skips
+      // any block absent from the shape, so unreachable blocks need no removal.
+      // Cached Block* keys stay valid because the CFG is not rebuilt before
+      // PASS C.
+      bool covered_i = false;
+      for (auto* b : cfg.blocks()) {
+        source_blocks::foreach_source_block(b, [&](SourceBlock* sb) {
+          auto v = sb->get_val(i);
+          if (v && *v > 0.0f) {
+            covered_i = true;
+          }
+        });
+        if (covered_i) {
+          break;
+        }
+      }
+      im_pairs_total.fetch_add(1, std::memory_order_relaxed);
+      if (covered_i) {
+        im_pairs_covered.fetch_add(1, std::memory_order_relaxed);
+        covered_methods.insert(m);
+      }
+      auto iit = id_of.find(m);
+      if (iit == id_of.end() || !relevant[iit->second]) {
+        return; // scale stays 0 -> no k contribution, write-skipped. Byte-safe.
+      }
+      const cfg::ControlFlowGraph& ccfg = cfg;
+      loop_impl::LoopInfo loops(ccfg);
+      std::vector<cfg::Block*> rpo;
+      UnorderedMap<const cfg::Block*, size_t> rpo_index;
+      build_rpo(cfg, rpo, rpo_index);
+      auto* entry = cfg.entry_block();
+      size_t z = 0, ir = 0;
+      auto shape = solve_block_freq(cfg, i, /*entry_anchor=*/1.0, loops, rpo,
+                                    rpo_index, entry, hcf, lic, dbp, &z, &ir);
+      im_shape_solves.fetch_add(1, std::memory_order_relaxed);
+      im_zero_outflow.fetch_add(z, std::memory_order_relaxed);
+      im_irreducible.fetch_add(ir, std::memory_order_relaxed);
+      for (auto* b : cfg.blocks()) {
+        const double bf = (shape.count(b) != 0u) ? shape[b] : 0.0;
+        for (const auto& mie : *b) {
+          if (mie.type == MFLOW_OPCODE &&
+              opcode::is_an_invoke(mie.insn->opcode())) {
+            k_by_insn.emplace(mie.insn, bf);
+          }
+        }
+      }
+      if (covered_i) {
+        shape_cache.emplace(m, std::move(shape));
+      }
+    });
+    p1_ms += ms_since(t_p1);
+    im_shape_cache_entries =
+        std::max(im_shape_cache_entries, shape_cache.size());
+
+    // Backward upper bound (Phase 1.5) -- see compute_hi_scale. Timed together
+    // with the forward sweep below as phase B.
+    auto t_b = clk::now();
+    const std::vector<double> hi_scale =
+        compute_hi_scale(methods, pinned, relevant, cg, profiles, interaction,
+                         ntargets_by_insn, k_by_insn, max_scale);
+
+    // Worklist over the BFS `sweep_order`. Sweep 0 seeds every relevant
+    // non-pinned method, so the acyclic majority settles in that one caller-
+    // before-callee pass; afterwards a method is re-evaluated only when one of
+    // its callers actually moved (by more than converge_eps), which it signals
+    // by marking its callees dirty for the next sweep. Same fixpoint as a full
+    // Gauss-Seidel sweep, but sweeps past the first touch only the shrinking
+    // non-converged frontier (recursion cycles) instead of all ~N methods --
+    // this is what keeps the inter-method solve off an O(sweeps · N) floor.
+    uint32_t sweeps_used = 0;
+    bool converged = false;
+    double last_max_rel = 0.0;
+    size_t last_changed = 0;
+    std::vector<bool> dirty(nm, false);
+    std::vector<bool> next_dirty(nm, false);
+    for (size_t idx = 0; idx < nm; ++idx) {
+      dirty[idx] = !pinned[idx] && relevant[idx];
+    }
+    for (uint32_t sweep = 0; sweep < m_intermethod_max_sweeps; ++sweep) {
+      sweeps_used = sweep + 1;
+      double max_rel = 0.0;
+      size_t changed = 0; // methods still moving by more than converge_eps
+      std::fill(next_dirty.begin(), next_dirty.end(), false);
+      for (size_t oi = 0; oi < sweep_order.size(); ++oi) {
+        const size_t idx = sweep_order[oi];
+        if (pinned[idx] || !relevant[idx] || !dirty[idx]) {
+          continue; // pinned read-only; non-relevant stay 0; clean == settled
+        }
+        DexMethod* m = methods[idx];
+        if (!cg.has_node(m)) {
+          continue;
+        }
+        double s = 0.0;
+        // NOTE: this cross-method sum is deterministic only because callers()
+        // is a stable, compare_dexmethods-ordered vector (CallGraph invariant).
+        for (const auto* e : cg.node(m)->callers()) {
+          const DexMethod* c = e->caller()->method();
+          auto* insn = e->invoke_insn();
+          if (c == nullptr || insn == nullptr) {
+            continue; // ghost entry edge
+          }
+          auto cit = id_of.find(c);
+          if (cit == id_of.end()) {
+            continue;
+          }
+          const double* kp = k_by_insn.get(insn);
+          const double k = (kp != nullptr) ? *kp : 0.0;
+          // True-virtual split: divide the caller's contribution uniformly
+          // among the invoke's resolved targets (structural prior). Exact
+          // (static/direct/super/non-true-virtual) invokes have N==1.
+          auto ntit = ntargets_by_insn.find(insn);
+          const size_t ntargets =
+              ntit != ntargets_by_insn.end() ? ntit->second : 0;
+          const double share = ntargets > 0 ? k / (double)ntargets : 0.0;
+          s += scale[cit->second] * share;
+        }
+        // Fold the sound backward upper bound into the iteration (box clamp).
+        const double raw = s;
+        s = std::min(s, hi_scale[idx]);
+        // Flag ONLY the overall-ceiling case (hi_scale untightened by any exact
+        // callee bound): there the true fixpoint exceeded the ceiling and the
+        // magnitude is fabricated. A reduction to a *backward* bound
+        // (hi_scale < max_scale) is a SOUND cap, not fabricated -- don't flag
+        // it.
+        if (s < raw && hi_scale[idx] >= max_scale) {
+          hit_ceiling[idx] = true;
+        }
+        const double prev = scale[idx];
+        if (s != prev) {
+          const double denom =
+              std::max((double)epsilon, std::max(std::abs(prev), std::abs(s)));
+          const double rel = std::abs(s - prev) / denom;
+          if (rel > converge_eps) {
+            changed++;
+            // This method moved: its callees' inflow changed, so they must be
+            // re-evaluated next sweep. (Callees earlier than `idx` in the BFS
+            // order -- i.e. cycle back-edges -- are precisely why we iterate.)
+            for (const auto* e : cg.node(m)->callees()) {
+              const DexMethod* t = e->callee()->method();
+              if (t == nullptr) {
+                continue;
+              }
+              auto tit = id_of.find(t);
+              if (tit != id_of.end()) {
+                next_dirty[tit->second] = true;
+              }
+            }
+          }
+          max_rel = std::max(max_rel, rel);
+          scale[idx] = s;
+        }
+      }
+      last_max_rel = max_rel;
+      last_changed = changed;
+      if (changed == 0) {
+        // No method moved by more than converge_eps: fixpoint reached (this is
+        // exactly the old `max_rel <= converge_eps` stop).
+        converged = true;
+        break;
+      }
+      dirty.swap(next_dirty);
+    }
+    im_sweeps_total += sweeps_used;
+    im_sweeps_max = std::max(im_sweeps_max, sweeps_used);
+    // Convergence diagnostics: the worst final-sweep relative change across all
+    // interactions, and how many methods were still moving when the sweep cap
+    // was hit (breadth of non-convergence -- a few cycles vs broad drift).
+    im_final_rel_max = std::max(im_final_rel_max, last_max_rel);
+    if (!converged) {
+      im_interactions_hit_cap++;
+      im_methods_unconverged += last_changed;
+    }
+    for (size_t idx = 0; idx < nm; ++idx) {
+      if (hit_ceiling[idx]) {
+        pairs_hit_ceiling.fetch_add(1, std::memory_order_relaxed);
+      }
+    }
+    phaseB_ms += ms_since(t_b);
+
+    // PASS C: instantiate val = scale_M * shape_M(b) from the cached shape (NO
+    // re-solve; CFG frozen since PASS 0a). Parallel per method; profiled
+    // methods reproduce the per-method magnitude, scale==0 is skipped (NFC).
+    auto t_c = clk::now();
+    walk::parallel::methods(scope, [&](DexMethod* m) {
+      auto iit = id_of.find(m);
+      if (iit == id_of.end()) {
+        return;
+      }
+      const size_t idx = iit->second;
+      const double s = scale[idx];
+      if (s <= 0.0) {
+        pairs_skipped.fetch_add(1, std::memory_order_relaxed);
+        return; // NFC: leave the boolean support untouched
+      }
+      if (pinned[idx]) {
+        pairs_pinned.fetch_add(1, std::memory_order_relaxed);
+      } else {
+        pairs_forward_filled.fetch_add(1, std::memory_order_relaxed);
+      }
+      // A cache miss means this method is uncovered for `i` (every write below
+      // is a no-op under the support guard) -- unless it is covered, which
+      // would be a RelevanceSet gap (canary metric, must stay 0).
+      const auto* shape = shape_cache.get(m);
+      if (shape == nullptr) {
+        if (covered_methods.count(m) != 0u) {
+          im_shape_cache_misses.fetch_add(1, std::memory_order_relaxed);
+        }
+        return;
+      }
+      auto* code = m->get_code();
+      auto& cfg = code->cfg();
+      size_t local_forward_writes = 0; // this method's forward-fill writes
+      for (auto* b : cfg.blocks()) {
+        const double f = s * (shape->count(b) != 0u ? shape->at(b) : 0.0);
+        source_blocks::foreach_source_block(b, [&](SourceBlock* sb) {
+          sb->apply_at(i, [&](SourceBlock::Val& v) {
+            if (!v || !(v->val > 0.0f)) {
+              // preserve 0 / NaN; never resurrect the support. `!(val > 0)`
+              // (not `val <= 0`) so a NaN val also takes the skip path.
+              return;
+            }
+            float mval = (float)f;
+            if (mval < epsilon) {
+              mval = epsilon; // keep covered blocks strictly > 0
+            }
+            v->val = mval;
+            blocks_written.fetch_add(1, std::memory_order_relaxed);
+            if (!pinned[idx]) {
+              forward_blocks_written.fetch_add(1, std::memory_order_relaxed);
+              local_forward_writes++;
+            }
+          });
+        });
+      }
+      // Record the method the FIRST time a forward-fill mutates it (a
+      // per-method event; deduped across interactions by the map key). The
+      // creator computes the dex size only on first insert and OUTSIDE the
+      // map's slot lock, so the O(n) estimate_code_units() never runs under a
+      // lock.
+      if (!pinned[idx] && local_forward_writes > 0) {
+        forward_mutated_sizes.get_or_create_and_assert_equal(
+            m, [&cfg](const DexMethod*) { return cfg.estimate_code_units(); });
+      }
+    });
+    phaseC_ms += ms_since(t_c);
+  }
+
+  constexpr size_t kTopMutated = 10;
+  auto forward_mutated =
+      rank_top_forward_mutated(forward_mutated_sizes, kTopMutated);
+
+  InterStats st;
+  st.forward_methods_mutated = forward_mutated_sizes.size();
+  st.top_forward_mutated = std::move(forward_mutated);
+  st.pairs_pinned = pairs_pinned.load();
+  st.pairs_forward_filled = pairs_forward_filled.load();
+  st.pairs_skipped = pairs_skipped.load();
+  st.blocks_written = blocks_written.load();
+  st.pairs_hit_ceiling = pairs_hit_ceiling.load();
+  st.methods_not_in_graph = methods_not_in_graph;
+  st.pairs_total = im_pairs_total.load();
+  st.pairs_covered = im_pairs_covered.load();
+  st.pairs_uncovered = st.pairs_total - st.pairs_covered;
+  st.shape_solves = im_shape_solves.load();
+  st.shape_cache_misses = im_shape_cache_misses.load();
+  st.zero_outflow_sinks = im_zero_outflow.load();
+  st.irreducible = im_irreducible.load();
+  st.relevance_set_size = im_relevance_set_size;
+  st.shape_cache_entries = im_shape_cache_entries;
+  st.sweeps_total = im_sweeps_total;
+  st.sweeps_max = im_sweeps_max;
+  st.interactions_hit_cap = im_interactions_hit_cap;
+  st.forward_blocks_written = forward_blocks_written.load();
+  st.methods_unconverged = im_methods_unconverged;
+  st.final_rel_max = im_final_rel_max;
+  st.p1_ms = p1_ms;
+  st.phase_b_ms = phaseB_ms;
+  st.phase_c_ms = phaseC_ms;
+  return st;
 }
 
 static SyntheticBlockCountsPass s_pass;
