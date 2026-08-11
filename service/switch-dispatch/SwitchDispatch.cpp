@@ -12,6 +12,7 @@
 #include "Creators.h"
 #include "Debug.h"
 #include "MethodUtil.h"
+#include "RedexContext.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -212,6 +213,16 @@ std::unique_ptr<SourceBlock> get_template_source_block(
   }
   if (entries.empty()) {
     return nullptr;
+  }
+  if (g_redex->preserve_count_integrity) {
+    // The dispatch is entered once for each case that would have been taken,
+    // so its entry runs about the SUM of the callees' counts. MAX was right
+    // while a val meant "was this hot" -- the dispatch is hot if any case is --
+    // and under-counts once vals are executions. Same N:1 shape
+    // clone_as_synthetic_summing was added for (appear100 still maxes, being a
+    // probability, not a count).
+    return source_blocks::clone_as_synthetic_summing(
+        entries.front(), /* ref */ nullptr, entries);
   }
   return source_blocks::clone_as_synthetic(entries.front(), /* ref */ nullptr,
                                            entries);
