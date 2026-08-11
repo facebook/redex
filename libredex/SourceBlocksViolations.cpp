@@ -382,12 +382,29 @@ ViolationsAndPotentialViolations hot_no_hot_pred(
       }
     }
   }
+  // [count-integrity] Relative tolerance for this backward conservation check
+  // (count(B) <= sum of pred counts). `summed_values[i]` is a float sum over
+  // all preds, so it carries ~n * 2^-23 relative rounding error regardless of
+  // the counts' magnitude; `kCountMagnitudeRelEps` -- the same tolerance the
+  // dominator magnitude check uses, so the two agree on what counts as noise --
+  // absorbs that while keeping zero tolerance at sum == 0 (a genuine covered
+  // block with all-cold preds still fires). It covers FLOAT NOISE ONLY, and is
+  // intentionally not
+  // a clamp exemption. This check is reflow-safe (reflow is a conservative
+  // allocation that preserves the bound), but it is not clamp-safe: once a
+  // callee-cap clamp lands that lowers callee-bearing blocks to their callee's
+  // call_count without cascading, and runs last, it will shrink a successor's
+  // pred sum and this check will then report real true-positive violations at
+  // hot-caller -> cold-callee boundaries. Those are intended signal; do NOT
+  // widen the epsilon or add a clamp/sfac exemption to hide them. NFC on 0/1
+  // data (the epsilon never flips an integer sum compare).
   for (uint32_t i = 0; i < first_sb_current_b->vals_size; i++) {
     if (ignore_undefined &&
         first_sb_current_b->get_at(i) == SourceBlock::Val::none()) {
       return {0, 1};
     }
-    if (summed_values[i] < first_sb_current_b->get_val(i).value_or(0)) {
+    if (summed_values[i] * (1.0f + kCountMagnitudeRelEps) <
+        first_sb_current_b->get_val(i).value_or(0)) {
       return {1, 1};
     }
   }
