@@ -36,7 +36,7 @@ struct IRTypeCheckerConfig : public Configurable {
   bool verify_moves{true};
   bool validate_invoke_super{true};
   bool check_no_overwrite_this{false};
-  bool annotated_cfg_on_error{false};
+  bool annotated_cfg_on_error{true};
   bool annotated_cfg_on_error_reduced{true};
   bool check_classes{true};
   bool run_on_input{true};
