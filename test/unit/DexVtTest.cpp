@@ -23,7 +23,6 @@
 #include "DexClass.h"
 #include "DexOutput.h"
 #include "DexStore.h"
-#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
