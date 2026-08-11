@@ -1171,11 +1171,17 @@ TEST_F(SourceBlocksTest, test_counting_with_idom_violations) {
       source_blocks::ViolationsHelper::Violation::kChainAndDom,
       method->get_code()->cfg());
 
-  // The fixture's dominated block has a higher execution count (val 2) than its
-  // dominator (val 1) -- legitimate loop-style amplification, not a coverage
-  // inversion. The boolean-ized first-in-block predicate does not fire here
-  // because the dominator is covered, so no violation is reported.
-  ASSERT_EQ(violations, 0);
+  // The fixture is a plain if/else diamond (see `IDomBlockCounting.idom`) --
+  // there is no loop in it. The synthetic profile gives the branch block val 1
+  // and one arm val 2, and an arm of an `if` has exactly one predecessor, which
+  // is also its immediate dominator. An arm cannot run more often than the
+  // branch that guards it, so this is a genuine inconsistency rather than the
+  // loop amplification `dom_cold_block_hot` was introduced to stop
+  // false-positiving on.
+  //
+  // The straight-line magnitude check therefore fires here, and should: with a
+  // single predecessor there is no back edge to amplify the block.
+  ASSERT_EQ(violations, 1);
 }
 
 // Positive counterpart to test_counting_with_idom_violations: a genuine

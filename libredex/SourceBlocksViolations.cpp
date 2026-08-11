@@ -41,11 +41,21 @@ using namespace sparta;
 
 namespace {
 
+// [count-integrity] Relative tolerance for magnitude compares between counts.
+// Counts stop being integers as soon as a pass apportions them -- ReduceGotos
+// splits a duplicated block's count across its predecessors by share -- so a
+// compare that should be an equality at the boundary can land a ulp the wrong
+// way. Covers FLOAT NOISE ONLY: it is orders of magnitude below any real count
+// difference, and is shared with the backward conservation check so the two
+// magnitude checks in this file agree on what counts as noise.
+constexpr float kCountMagnitudeRelEps = 1e-3f;
+
 bool is_less_than_for_any_value(
     const SourceBlock* lhs,
     const SourceBlock* rhs,
     uint32_t max_interaction = std::numeric_limits<uint32_t>::max(),
-    bool ignore_undefined = false) {
+    bool ignore_undefined = false,
+    float rel_eps = 0.0f) {
   always_assert(lhs != nullptr && rhs != nullptr);
   auto limit =
       std::min(std::min(lhs->vals_size, rhs->vals_size), max_interaction);
@@ -54,7 +64,8 @@ bool is_less_than_for_any_value(
                              rhs->get_at(i) == SourceBlock::Val::none())) {
       return false;
     }
-    if (lhs->get_val(i).value_or(0) < rhs->get_val(i).value_or(0)) {
+    if (lhs->get_val(i).value_or(0) * (1.0f + rel_eps) <
+        rhs->get_val(i).value_or(0)) {
       return true;
     }
   }
@@ -72,6 +83,29 @@ bool is_less_than_for_any_value(
 // the same way `is_less_than_for_any_value` does (an undefined val on either
 // side suppresses the compare), so the counted violations cannot drift from the
 // ones `log_cfg_violations` prints.
+// A block whose SINGLE predecessor is its immediate dominator sits on a
+// straight-line edge: it has no back edge of its own, and every execution
+// reaches it directly from the dominator, so `count(block) <= count(dom)` must
+// hold. Amplification above the dominator requires some other predecessor, so
+// keeping the magnitude compare in this narrow case costs no loop
+// false-positives while retaining signal `dom_cold_block_hot` alone drops -- a
+// straight-line block that outruns its dominator is a genuine inconsistency,
+// not loop amplification.
+//
+// Deliberately narrow. With any other predecessor the block may be a loop
+// header, or be fed by one, and bounding those is the job of the
+// sum-over-predecessors backward-conservation check further down. `dom` may
+// also be a TRANSITIVE dominator, where the caller walked up past blocks with
+// no source block; this then returns false and no magnitude check is applied,
+// which is the safe direction.
+bool sole_inflow_is_dom(const cfg::Block* block, const cfg::Block* dom) {
+  if (block == nullptr || dom == nullptr) {
+    return false;
+  }
+  const auto& preds = block->preds();
+  return preds.size() == 1 && preds.front()->src() == dom;
+}
+
 bool dom_cold_block_hot(
     const SourceBlock* dom_sb,
     const SourceBlock* block_sb,
@@ -297,9 +331,15 @@ ViolationsAndPotentialViolations hot_immediate_dom_not_hot_impl(
       source_blocks::get_first_source_block(immediate_dominator);
   if ((first_sb_current_b != nullptr) &&
       (first_sb_immediate_dominator != nullptr) &&
-      dom_cold_block_hot(first_sb_immediate_dominator, first_sb_current_b,
-                         std::numeric_limits<uint32_t>::max(),
-                         ignore_undefined)) {
+      (dom_cold_block_hot(first_sb_immediate_dominator, first_sb_current_b,
+                          std::numeric_limits<uint32_t>::max(),
+                          ignore_undefined) ||
+       (sole_inflow_is_dom(block, immediate_dominator) &&
+        is_less_than_for_any_value(first_sb_immediate_dominator,
+                                   first_sb_current_b,
+                                   std::numeric_limits<uint32_t>::max(),
+                                   ignore_undefined,
+                                   kCountMagnitudeRelEps)))) {
     return {1, 1};
   } else {
     return {0, 1};
@@ -572,15 +612,27 @@ void chain_and_dom_update(
     bool ignore_undefined) {
   if (first_in_block) {
     state.last = nullptr;
+    // Reset alongside `last`: the two must describe the same block, and a walk
+    // that finds nothing must not leave a block from an earlier iteration
+    // behind for `sole_inflow_is_dom` to test against.
+    state.dom_block = nullptr;
     for (auto* b = dom.get_idom(block); state.last == nullptr && b != nullptr;
          b = dom.get_idom(b)) {
       if (b == block) {
-        state.dom_block = nullptr;
         break;
       }
       state.last = get_last_source_block(b);
-      if (b == b->cfg().entry_block()) {
+      if (state.last != nullptr) {
+        // Record WHICH dominator `last` came from. Previously this was only
+        // assigned when the walk happened to reach the entry block, so on the
+        // ordinary path -- an immediate dominator that has a SourceBlock -- the
+        // loop exited via its `state.last == nullptr` condition with
+        // `dom_block` never set, and the magnitude comparison below, which is
+        // guarded on `sole_inflow_is_dom(block, state.dom_block)`, could not
+        // run at all.
         state.dom_block = b;
+      }
+      if (b == b->cfg().entry_block()) {
         break;
       }
     }
@@ -598,10 +650,15 @@ void chain_and_dom_update(
     // count-correct. Thread kMaxInteraction through so the `.cold_start`
     // (impl<1>) variant still restricts to slot 0.
     bool cold_precedes_hot =
-        first_in_block ? dom_cold_block_hot(state.last, sb, kMaxInteraction,
-                                            ignore_undefined)
-                       : is_less_than_for_any_value(
-                             state.last, sb, kMaxInteraction, ignore_undefined);
+        first_in_block
+            ? (dom_cold_block_hot(state.last, sb, kMaxInteraction,
+                                  ignore_undefined) ||
+               (sole_inflow_is_dom(block, state.dom_block) &&
+                is_less_than_for_any_value(state.last, sb, kMaxInteraction,
+                                           ignore_undefined,
+                                           kCountMagnitudeRelEps)))
+            : is_less_than_for_any_value(state.last, sb, kMaxInteraction,
+                                         ignore_undefined);
     bool hot_precedes_cold =
         is_less_than_for_any_value(sb, state.last, kMaxInteraction,
                                    ignore_undefined) &&

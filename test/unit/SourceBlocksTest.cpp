@@ -7,6 +7,7 @@
 
 #include "SourceBlocks.h"
 #include "Debug.h"
+#include "SourceBlocksViolations.h"
 
 #include <atomic>
 #include <regex>
@@ -629,6 +630,44 @@ B3: LFoo;.bar:()V@1(0.6:0.2)
 B4: LBar;.bar:()V@0(0.5:0.1)
 B5: LBar;.bar:()V@2(0.1:0.3)
 B6: LBar;.bar:()V@1(0.2:0.2))");
+}
+
+// The kChainAndDom magnitude check compares a block against its immediate
+// dominator, guarded on the block's sole inflow BEING that dominator. The
+// guard reads `state.dom_block`, which the walk must set to whichever
+// dominator supplied the SourceBlock it compares against.
+//
+// The existing integ fixture (IDomBlockCounting.idom) is a single top-level
+// if/else, so its arms' immediate dominator IS the entry block -- the one case
+// the walk always handled. This pins the ordinary case: an inner `if` whose
+// branch block is NOT the entry. B3 below has exactly one predecessor, the
+// inner branch block that dominates it, and runs twice as often, which cannot
+// happen and must be reported.
+TEST_F(SourceBlocksTest, chain_and_dom_magnitude_fires_below_entry_block) {
+  auto* method = create_method("LChainDom");
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.src_block "LChainDom;.bar:()V" 0 (1.0 1.0))
+      (if-eqz v0 :end)
+
+      (.src_block "LChainDom;.bar:()V" 1 (1.0 1.0))
+      (if-eqz v0 :end)
+
+      (.src_block "LChainDom;.bar:()V" 2 (2.0 1.0))
+      (const v1 0)
+
+      (:end)
+      (.src_block "LChainDom;.bar:()V" 3 (1.0 1.0))
+      (return-void)
+    )
+  )"));
+  method->get_code()->build_cfg();
+
+  auto violations = source_blocks::compute(
+      source_blocks::ViolationsHelper::Violation::kChainAndDom,
+      method->get_code()->cfg());
+  EXPECT_EQ(violations, 1u);
 }
 
 TEST_F(SourceBlocksTest, serialize_exc_injected) {
