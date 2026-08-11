@@ -91,6 +91,26 @@ static std::vector<cfg::Edge*> get_branch_or_goto_succs(
   return succs;
 }
 
+// Describe a successor target independently of which block we reached it from:
+// a self-edge becomes a sentinel, anything else stays the target itself.
+//
+// Must be canonical, not a pairwise "…or both point at themselves" test.
+// `collect_duplicates` uses successor equality as the key equality of a hash
+// map, so it must be a true equivalence relation. The pairwise form is not
+// transitive: with three identical-code blocks where A and B self-loop and C
+// branches to A, A~B holds (both self-loop) and A~C holds (targets are both A),
+// but B~C does not. Under a non-transitive equality, which group a block joins
+// depends on the order the map compares it against representatives -- not part
+// of the container's contract, and it shifts with the hash function.
+//
+// Two self-looping blocks still match. Mixed self-loop/branch-to-it pairs do
+// not, so equivalence classes can only shrink: this never admits a merge that
+// stricter matching would reject.
+static const cfg::Block* canonical_succ_target(const cfg::Block* owner,
+                                               const cfg::Block* target) {
+  return target == owner ? nullptr : target;
+}
+
 // The blocks must also have the exact same branch and goto successors.
 static bool same_branch_and_goto_successors(const cfg::Block* b1,
                                             const cfg::Block* b2) {
@@ -117,12 +137,8 @@ static bool same_branch_and_goto_successors(const cfg::Block* b1,
           b1_succ->case_key().value_or(0) != b2_succ->case_key().value_or(0)) {
         return false;
       }
-      auto* b1_succ_target = b1_succ->target();
-      auto* b2_succ_target = b2_succ->target();
-      // Either targets need to be the same, or both targets must be pointing
-      // to same block (to support deduping of simple self-loops).
-      if (b1_succ_target != b2_succ_target &&
-          (b1_succ_target != b1 || b2_succ_target != b2)) {
+      if (canonical_succ_target(b1, b1_succ->target()) !=
+          canonical_succ_target(b2, b2_succ->target())) {
         return false;
       }
     }
@@ -130,11 +146,11 @@ static bool same_branch_and_goto_successors(const cfg::Block* b1,
   }
 
   using Key = std::pair<cfg::EdgeType, cfg::Edge::CaseKey>;
-  UnorderedMap<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
+  UnorderedMap<Key, const cfg::Block*, boost::hash<Key>> b2_succs_map;
   for (auto* b2_succ : b2_succs) {
     b2_succs_map.emplace(
         std::make_pair(b2_succ->type(), b2_succ->case_key().value_or(0)),
-        b2_succ->target());
+        canonical_succ_target(b2, b2_succ->target()));
   }
   for (auto* b1_succ : b1_succs) {
     // For successors being the same, we need to find a matching entry for
@@ -144,11 +160,7 @@ static bool same_branch_and_goto_successors(const cfg::Block* b1,
     if (it == b2_succs_map.end()) {
       return false;
     }
-    auto* b2_succ_target = it->second;
-    // Either targets need to be the same, or both targets must be pointing to
-    // same block (to support deduping of simple self-loops).
-    if (b1_succ->target() != b2_succ_target &&
-        (b1_succ->target() != b1 || b2_succ_target != b2)) {
+    if (canonical_succ_target(b1, b1_succ->target()) != it->second) {
       return false;
     }
   }
