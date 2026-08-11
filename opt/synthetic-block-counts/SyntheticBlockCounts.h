@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "Pass.h"
 #include "SourceBlocksUtils.h"
@@ -127,6 +128,34 @@ class SyntheticBlockCountsPass : public Pass {
       const method_profiles::MethodProfiles& profiles,
       const std::vector<std::string>& inv_slot);
 
+  // Result of the clamp post-pass (for metrics + tests).
+  struct ClampStats {
+    size_t clamp_vals_lowered{0}; // covered SourceBlock vals the clamp lowered
+    double clamp_val_removed_total{0.0}; // sum of (old-new) over lowered vals
+    size_t clamp_exact_invokes_seen{0}; // exact invokes inspected
+    size_t clamp_unresolved_invokes{0}; // exact opcode, target not resolvable
+    size_t clamp_unprofiled_callees{0}; // resolved callee, no row (per i)
+    size_t clamp_throw_gated_invokes{0}; // invoke skipped: a may-throw precedes
+                                         // it
+  };
+
+  // Scope-scoped core (no PassManager), directly drivable from
+  // unit tests: cap each covered block's `val` at the sound min-profiled-callee
+  // bound (min over the block's distinct exact callees of
+  // floor(call_count / in-block multiplicity)), floored at epsilon. Only
+  // lowers; no re-solve. The hard soundness backstop. Runs on whatever the
+  // producer wrote (per-method OR inter-method).
+  ClampStats clamp_post_pass_core(
+      const Scope& scope,
+      const method_profiles::MethodProfiles& profiles,
+      const std::vector<std::string>& inv_slot);
+
+  // Thin metric wrapper around clamp_post_pass_core.
+  void clamp_post_pass(const Scope& scope,
+                       const method_profiles::MethodProfiles& profiles,
+                       const std::vector<std::string>& inv_slot,
+                       PassManager& mgr);
+
   // Summary of what the inter-method engine did (for metrics + tests).
   struct InterStats {
     // PASS C runs once per (method, interaction), so these four count
@@ -195,6 +224,14 @@ class SyntheticBlockCountsPass : public Pass {
   // dominate a consumer threshold.
   float m_epsilon{source_blocks::kMinPositiveCount};
 
+  // Tier-1 callsite-count clamp: standalone post-pass over
+  // BOTH producer paths, capping each covered block at the min profiled
+  // call_count over its exact (invoke-static/-direct/-super) callees (divided
+  // by in-block multiplicity). Sound, deterministic, no call graph. UNBOUND --
+  // there is no config knob; it is a friend-test-only toggle that defaults on
+  // (the whole pass is gated by the pass list).
+  bool m_callsite_clamp{true};
+
   // Inter-method engine knobs.
   bool m_intermethod{false};
   uint32_t m_intermethod_max_sweeps{32};
@@ -205,4 +242,12 @@ class SyntheticBlockCountsPass : public Pass {
   float m_intermethod_max_scale_factor{10.0f};
   // Relative convergence tolerance for the Gauss-Seidel solve.
   float m_intermethod_converge_eps{1e-4f};
+
+  // Per-method bitmask of the interaction slots the producer actually wrote, so
+  // the callsite clamp only caps producer-synthesized counts and never lowers
+  // the original boolean vals of methods/interactions the producer left
+  // untouched. Bit i set => producer wrote `method` for inv_slot[i] (i < 64).
+  // Populated by process_method / run_intermethod_core, read by
+  // clamp_post_pass_core; cleared at the top of run_pass.
+  ConcurrentMap<const DexMethod*, uint64_t> m_producer_written;
 };
