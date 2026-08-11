@@ -7,6 +7,7 @@
 
 #include "ConstantPropagationTransform.h"
 
+#include <algorithm>
 #include <optional>
 #include <unordered_set>
 #include <vector>
@@ -1449,6 +1450,40 @@ void Transform::forward_targets(
     if (new_target == nullptr) {
       continue;
     }
+    // Computed BEFORE the retarget below: afterwards `block` is no longer a
+    // predecessor of the first skipped target and its share of that block's
+    // inflow is unrecoverable.
+    //
+    // `unconditional_targets.front()` is the block currently on this edge (it
+    // is seeded from `succ_edge->target()`), so it is the only one that
+    // actually loses a predecessor. The rest of the chain keeps its
+    // predecessors -- but each link is the sole FEASIBLE successor of the one
+    // before it, so all of the flow lost at the head propagates unchanged down
+    // the chain. Shed the same ABSOLUTE amount from each, not the same
+    // fraction: a later block with additional predecessors loses the same
+    // executions but a smaller share of its own count.
+    //
+    // Estimate, not exact: `share_of` divides `block`'s outflow by the target's
+    // predecessor total, and `block` may send only part of its flow here, so
+    // this can over-shed. It cannot go negative -- shares are clamped to [0,1].
+    const bool preserve_counts = g_redex->preserve_count_integrity;
+    std::vector<double> departed_abs;
+    if (preserve_counts && !unconditional_targets.empty()) {
+      auto* head = unconditional_targets.front().target;
+      auto* head_sb = source_blocks::get_first_source_block(head);
+      const size_t n_slots = head_sb != nullptr ? head_sb->vals_size : 0;
+      const auto pred_total =
+          source_blocks::apportion::predecessor_totals(head, n_slots);
+      departed_abs.reserve(n_slots);
+      for (size_t i = 0; i < n_slots; ++i) {
+        const double share =
+            source_blocks::apportion::share_of(pred_total, block, i);
+        // A negative share means no count evidence for this slot: shed nothing.
+        departed_abs.push_back(
+            share < 0.0 ? 0.0 : head_sb->get_val(i).value_or(0.0f) * share);
+      }
+    }
+
     // Found (last) successor where no assigned reg is live -- forward to
     // there
     cfg.set_edge_target(succ_edge, new_target);
@@ -1473,7 +1508,24 @@ void Transform::forward_targets(
           break;
         }
         if (source_blocks::has_source_blocks(target)) {
-          source_blocks::scale_source_blocks(target);
+          if (preserve_counts) {
+            // Re-express the absolute departed flow as this block's own
+            // fraction, so every SourceBlock in it -- they annotate the same
+            // program point -- is scaled consistently.
+            auto* t_sb = source_blocks::get_first_source_block(target);
+            std::vector<double> leaving;
+            leaving.reserve(departed_abs.size());
+            size_t slot = 0;
+            for (const double departed : departed_abs) {
+              const double v =
+                  t_sb != nullptr ? t_sb->get_val(slot).value_or(0.0f) : 0.0;
+              leaving.push_back(v > 0.0 ? std::min(1.0, departed / v) : 0.0);
+              ++slot;
+            }
+            source_blocks::apportion::shrink_by_departed(target, leaving);
+          } else {
+            source_blocks::scale_source_blocks(target);
+          }
         }
       }
     }
