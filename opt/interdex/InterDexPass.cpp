@@ -167,9 +167,6 @@ void InterDexPass::run_pass(
     const ReserveRefsInfo& refs_info,
     ClassReferencesCache& cache) {
   mgr.set_metric(METRIC_LINEAR_ALLOC_LIMIT, m_linear_alloc_limit);
-  mgr.set_metric(METRIC_RESERVED_FREFS, refs_info.frefs);
-  mgr.set_metric(METRIC_RESERVED_TREFS, refs_info.trefs);
-  mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
   mgr.set_metric(METRIC_EMIT_CANARIES, static_cast<int64_t>(m_emit_canaries));
   mgr.set_metric(METRIC_ORDER_INTERDEX, static_cast<int64_t>(m_order_interdex));
 
@@ -373,6 +370,21 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   for (const auto& plugin : plugins) {
     root_refs_info += plugin->get_reserve_refs();
   }
+
+  // Publish refs_info, not root_refs_info: passes after InterDex read these as
+  // headroom that is still free in every dex, and the plugin share is not. The
+  // plugins' cleanup() spends it -- as real methods and types in the emitted
+  // dexes -- before InterDex returns, so advertising it would make those refs
+  // count twice against a downstream pass's budget.
+  mgr.set_metric(METRIC_RESERVED_FREFS, refs_info.frefs);
+  mgr.set_metric(METRIC_RESERVED_TREFS, refs_info.trefs);
+  mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
+  mgr.set_metric(METRIC_PLUGIN_RESERVED_FREFS,
+                 root_refs_info.frefs - refs_info.frefs);
+  mgr.set_metric(METRIC_PLUGIN_RESERVED_TREFS,
+                 root_refs_info.trefs - refs_info.trefs);
+  mgr.set_metric(METRIC_PLUGIN_RESERVED_MREFS,
+                 root_refs_info.mrefs - refs_info.mrefs);
 
   ClassReferencesCache cache(original_scope);
 
