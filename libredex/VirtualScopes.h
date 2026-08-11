@@ -95,6 +95,12 @@ class VirtualScopes {
   // for the lifetime of this object.
   const std::vector<const VirtualScope*>& at(const DexType* type) const;
 
+  // The virtual scope `meth` belongs to -- the scope rooted at the highest
+  // ancestor along `meth`'s superclass chain that introduces its signature --
+  // or nullptr if `meth` belongs to no scope. Reproduces legacy
+  // `TypeSystem::find_virtual_scope`.
+  const VirtualScope* find(const DexMethod* meth) const;
+
  private:
   std::vector<std::unique_ptr<VirtualScope>> m_storage;
   UnorderedMap<const DexType*, std::vector<const VirtualScope*>> m_by_root;

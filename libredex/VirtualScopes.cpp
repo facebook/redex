@@ -350,4 +350,28 @@ const std::vector<const VirtualScope*>& VirtualScopes::at(
   return empty;
 }
 
+const VirtualScope* VirtualScopes::find(const DexMethod* meth) const {
+  // Climb `meth`'s superclass chain; at each level return the scope rooted at
+  // that type whose top def matches `meth` by name+proto. Since `at(type)`
+  // reproduces legacy `ClassScopes::get(type)` exactly, this is byte-for-byte
+  // legacy `TypeSystem::find_virtual_scope` (same climb, same match, same
+  // nullptr exits).
+  const auto* type = meth->get_class();
+  while (type != nullptr) {
+    for (const auto* scope : at(type)) {
+      const auto* td = scope->top_def();
+      if (td->get_name() == meth->get_name() &&
+          td->get_proto() == meth->get_proto()) {
+        return scope;
+      }
+    }
+    const auto* cls = type_class(type);
+    if (cls == nullptr) {
+      break;
+    }
+    type = cls->get_super_class();
+  }
+  return nullptr;
+}
+
 } // namespace virtual_scope

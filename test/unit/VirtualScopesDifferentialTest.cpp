@@ -27,6 +27,7 @@
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 #include "Show.h"
+#include "TypeSystem.h" // legacy TypeSystem::find_virtual_scope
 #include "TypeUtil.h"
 #include "VirtualScope.h" // legacy virt_scope
 #include "VirtualScopes.h" // new virtual_scope
@@ -135,14 +136,51 @@ std::string new_summary(const virtual_scope::VirtualScopes& vs,
   return join(lines);
 }
 
+// Content signature of a scope for find-parity: root + top def + sorted member
+// set. Compared as a string across the two impls (pointers differ, contents
+// must not). "<null>" for a not-found method.
+std::string find_sig_legacy(const virt_scope::VirtualScope* s) {
+  if (s == nullptr) {
+    return "<null>";
+  }
+  std::vector<std::string> ms;
+  ms.reserve(s->methods.size());
+  for (const auto& m : s->methods) {
+    ms.emplace_back(SHOW(m.first));
+  }
+  std::sort(ms.begin(), ms.end());
+  return std::string(SHOW(s->type)) + " top=" + SHOW(s->methods[0].first) +
+         " " + join(ms);
+}
+
+std::string find_sig_new(const virtual_scope::VirtualScope* s) {
+  if (s == nullptr) {
+    return "<null>";
+  }
+  std::vector<std::string> ms;
+  ms.reserve(s->methods().size());
+  for (const auto* m : s->methods()) {
+    ms.emplace_back(SHOW(m));
+  }
+  std::sort(ms.begin(), ms.end());
+  return std::string(SHOW(s->root())) + " top=" + SHOW(s->top_def()) + " " +
+         join(ms);
+}
+
 // Compare legacy vs new for every non-interface class in `scope`, INCLUDING
 // external classes -- at(externalType) (e.g. java.lang.Object) must match
 // legacy get(externalType), since ClassMerging's distribute walks parent_chain
 // up to Object. Skipping external types here is the hole that hid a non-NFC
 // gap.
+//
+// Also checks find-parity: for every vmethod of every non-interface class,
+// VirtualScopes::find(m) must resolve to the same scope legacy
+// TypeSystem::find_virtual_scope(m) does. This is the accessor VirtualMerging
+// uses (by-method scope lookup), so it is on the NFC path for that migration.
 void expect_parity(Scope& scope) {
   virt_scope::ClassScopes cs(scope);
   virtual_scope::VirtualScopes vs(scope);
+  TypeSystem ts(scope);
   for (auto* cls : scope) {
     if (is_interface(cls)) {
       continue;
@@ -154,6 +192,17 @@ void expect_parity(Scope& scope) {
               legacy_summary(cs, t).c_str(), new_summary(vs, t).c_str());
     }
     EXPECT_EQ(legacy_summary(cs, t), new_summary(vs, t));
+    // find-parity is checked on internal methods only (get_vmethods asserts on
+    // external classes, and VirtualMerging never calls find on external
+    // methods).
+    if (cls->is_external()) {
+      continue;
+    }
+    for (auto* m : cls->get_vmethods()) {
+      SCOPED_TRACE(std::string("find ") + SHOW(m));
+      EXPECT_EQ(find_sig_legacy(ts.find_virtual_scope(m)),
+                find_sig_new(vs.find(m)));
+    }
   }
 }
 
