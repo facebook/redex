@@ -125,6 +125,19 @@ class IRTypeChecker final {
   }
 
   /*
+   * Returns the instruction that failed to type-check, or nullptr if the method
+   * is well typed or the failure is not attributable to a single instruction
+   * (e.g., a structural or signature check).
+   *
+   * Rebuilding the CFG can free instructions that linearization elides, so this
+   * is only safe to compare by identity, never to dereference.
+   */
+  const IRInstruction* error_insn() const {
+    check_completion();
+    return m_error_insn;
+  }
+
+  /*
    * Returns the type of a register at the given instruction. Note that the type
    * returned is that of the register _before_ the instruction is executed. For
    * example, if we query the type of v0 in the following instruction:
@@ -142,8 +155,18 @@ class IRTypeChecker final {
   std::string dump_annotated_cfg(DexMethod* method) const;
   std::string dump_annotated_cfg_reduced(DexMethod* method) const;
 
+  /*
+   * Same as `dump_annotated_cfg_reduced`, but additionally marks the
+   * instruction reported by `error_insn` with the message from `what`, so the
+   * error site can be found without scanning the whole method.
+   */
+  std::string dump_annotated_cfg_on_error(DexMethod* method) const;
+
  private:
   void check_completion() const;
+
+  std::string dump_annotated_cfg_reduced_impl(
+      DexMethod* method, const IRInstruction* error_insn) const;
 
   void assume_scalar(TypeEnvironment* state,
                      reg_t reg,
@@ -165,6 +188,7 @@ class IRTypeChecker final {
   bool m_relaxed_init_check;
   bool m_good;
   std::string m_what;
+  const IRInstruction* m_error_insn{nullptr};
   std::unique_ptr<type_inference::TypeInference> m_type_inference;
 
   friend std::ostream& operator<<(std::ostream&, const IRTypeChecker&);
