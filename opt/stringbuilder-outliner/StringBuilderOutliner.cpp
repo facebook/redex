@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "MethodProfiles.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -31,13 +32,11 @@ Outliner::Outliner(Config config)
           DexMethod::get_method("Ljava/lang/StringBuilder;.<init>:()V")),
       m_stringbuilder_capacity_ctor(
           DexMethod::get_method("Ljava/lang/StringBuilder;.<init>:(I)V")),
-      m_stringbuilder_tostring(DexMethod::get_method(
-          "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")) {
+      m_stringbuilder_tostring(method::java_lang_StringBuilder_toString()) {
   always_assert(m_append_str);
   always_assert(m_stringbuilder);
   always_assert(m_stringbuilder_default_ctor);
   always_assert(m_stringbuilder_capacity_ctor);
-  always_assert(m_stringbuilder_tostring);
 }
 
 /*

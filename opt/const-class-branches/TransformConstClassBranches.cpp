@@ -17,6 +17,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexStructure.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
 #include "Show.h"
@@ -331,8 +332,7 @@ Stats apply_transform(const PassState& pass_state,
         (new IRInstruction(OPCODE_INVOKE_VIRTUAL))
             ->set_srcs_size(1)
             ->set_src(0, sb_reg)
-            ->set_method(DexMethod::get_method(
-                "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;"));
+            ->set_method(method::java_lang_StringBuilder_toString());
     instructions.push_back(to_string);
     auto* move_result =
         (new IRInstruction(OPCODE_MOVE_RESULT_OBJECT))->set_dest(sb_reg);

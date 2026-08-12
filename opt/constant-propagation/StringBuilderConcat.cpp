@@ -19,6 +19,7 @@
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "MethodUtil.h"
 #include "StringBuilderAnalysis.h"
 
 namespace constant_propagation::stringbuilder_concat {
@@ -62,9 +63,7 @@ size_t reduce_two_append_concats(
   // that have no builder to reduce.
   auto tostring_instructions =
       stringbuilder_analysis::find_tostring_instructions(
-          cfg,
-          DexMethod::get_method(
-              "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;"));
+          cfg, method::java_lang_StringBuilder_toString());
   if (tostring_instructions.empty()) {
     return 0;
   }
