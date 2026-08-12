@@ -140,6 +140,9 @@ class PassImpl : public Pass {
     FixpointIterator::Stats fp_iter;
   } m_stats;
   Transform::Stats m_transform_stats;
+  // Defaults to true: `run()` never sets it, and treating an unknown pipeline
+  // position as post-InterDex keeps ref-adding transformations off.
+  bool m_interdex_has_run{true};
   Config m_config;
 };
 

@@ -342,6 +342,8 @@ void PassImpl::run_pass(DexStoresVector& stores,
         RuntimeAssertTransform::Config(config.get_proguard_map());
   }
 
+  m_interdex_has_run = mgr.interdex_has_run();
+
   const auto& options = mgr.get_redex_options();
   run(stores, config, options.min_sdk, options.package_name);
 
