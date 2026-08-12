@@ -69,9 +69,7 @@ def with_temp_cleanup(
         success = True
     finally:
         if success:
-            from pyredex.buck import BuckPartScope  # Circular dependency...
-
-            with BuckPartScope("Redex::TempDirs", "Cleaning up temporary directories"):
+            with timed_scope("Cleaning up temporary directories"):
                 remove_temp_dirs()
 
 
@@ -631,3 +629,18 @@ def time_it_logger(
                 return logger
 
     return None
+
+
+@contextmanager
+def timed_scope(
+    desc: str,
+    timed_start: bool = True,
+) -> typing.Generator[None, None, None]:
+    # start_depth=2 skips this frame and contextlib's __enter__, so the LOGGER
+    # lookup lands on the calling module.
+    with time_it(
+        f"{desc} took {{time:.2f}} seconds",
+        logger=time_it_logger(start_depth=2, max_depth=5),
+        **({"start": desc} if timed_start else {}),
+    ):
+        yield

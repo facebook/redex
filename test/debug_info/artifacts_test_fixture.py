@@ -26,12 +26,7 @@ class ArtifactsTestFixture(unittest.TestCase):
         with open(config_file, "w") as f:
             json.dump(self.config, f)
 
-        # Remove BUCK_EVENT_PIPE if set.
-        if "BUCK_EVENT_PIPE" in os.environ:
-            env = os.environ.copy()
-            del env["BUCK_EVENT_PIPE"]
-        else:
-            env = os.environ
+        env = os.environ
 
         try:
             subprocess.run(
