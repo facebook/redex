@@ -9,6 +9,7 @@
 
 #include <future>
 
+#include "AtomicStatCounter.h"
 #include "ConfigFiles.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
@@ -23,6 +24,7 @@
 #include "Purity.h"
 #include "ScopedMetrics.h"
 #include "Show.h"
+#include "StringBuilderConcat.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WrappedPrimitives.h"
@@ -247,6 +249,11 @@ void PassImpl::optimize(
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
     const NullCheckMethods& null_check_methods) {
   const auto& pure_methods = ::get_pure_methods();
+  // The reduction can add a String.concat ref, which there is no room for once
+  // InterDex has packed the dexes.
+  const bool reduce_concat =
+      m_config.reduce_stringbuilder_concat && !m_interdex_has_run;
+  AtomicStatCounter<size_t> concat_reduced{0};
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
         if (method->get_code() == nullptr ||
@@ -280,9 +287,14 @@ void PassImpl::optimize(
           wrapped_primitives::optimize_method(type_system, ipa->fp_iter,
                                               fp_iter.get_whole_program_state(),
                                               method, code.cfg());
+          if (reduce_concat) {
+            concat_reduced += stringbuilder_concat::reduce_two_append_concats(
+                ipa->fp_iter, code.cfg());
+          }
           return tf.get_stats();
         }
       });
+  m_concat_reduced = concat_reduced.load();
 }
 
 void PassImpl::run(const DexStoresVector& stores,
@@ -367,6 +379,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
 
   mgr.set_metric("config.max_heap_analysis_iterations",
                  m_config.max_heap_analysis_iterations);
+  mgr.incr_metric("stringbuilder_concat_reduced", m_concat_reduced);
 }
 
 static PassImpl s_pass;

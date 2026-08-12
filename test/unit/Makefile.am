@@ -106,6 +106,7 @@ check_PROGRAMS = \
     instruction_sequence_outliner_test \
     int_type_patcher_test \
     interprocedural_constant_propagation_test \
+    ipcp_stringbuilder_concat_test \
     intraprocedural_constant_propagation_test \
     ir_assembler_test \
     ir_code_test \
@@ -368,6 +369,8 @@ int_type_patcher_test_SOURCES = IntTypePatcherTest.cpp
 instruction_sequence_outliner_test_SOURCES = InstructionSequenceOutlinerTest.cpp ScopeHelper.cpp
 
 interprocedural_constant_propagation_test_SOURCES = constant-propagation/IPConstantPropagationTest.cpp
+
+ipcp_stringbuilder_concat_test_SOURCES = constant-propagation/IPCPStringBuilderConcatTest.cpp
 
 intraprocedural_constant_propagation_test_SOURCES = constant-propagation/ConstantPropagationTest.cpp
 intraprocedural_constant_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

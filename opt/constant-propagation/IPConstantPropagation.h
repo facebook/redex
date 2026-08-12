@@ -34,6 +34,7 @@ class PassImpl : public Pass {
     uint32_t big_override_threshold{5};
     UnorderedSet<const DexType*> field_blocklist;
     bool compute_definitely_assigned_ifields{true};
+    bool reduce_stringbuilder_concat{false};
 
     Transform::Config transform;
     RuntimeAssertTransform::Config runtime_assert;
@@ -80,6 +81,10 @@ class PassImpl : public Pass {
          m_config.compute_definitely_assigned_ifields,
          "Whether to predict which instance fields are always written before "
          "they are read, in order to ignore the default value 0.");
+    bind("reduce_stringbuilder_concat", false,
+         m_config.reduce_stringbuilder_concat,
+         "Rewrite two-append String concatenations to String.concat where both "
+         "operands are proven non-null. Has no effect once InterDex has run.");
   }
 
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -140,6 +145,8 @@ class PassImpl : public Pass {
     FixpointIterator::Stats fp_iter;
   } m_stats;
   Transform::Stats m_transform_stats;
+  // Number of two-append concatenations rewritten to String.concat.
+  size_t m_concat_reduced{0};
   // Defaults to true: `run()` never sets it, and treating an unknown pipeline
   // position as post-InterDex keeps ref-adding transformations off.
   bool m_interdex_has_run{true};
