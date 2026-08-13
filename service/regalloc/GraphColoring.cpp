@@ -881,36 +881,44 @@ void Allocator::split_params(const interference::Graph& ig,
     return;
   }
 
-  // Remap the operands of the load-param opcodes
+  // Remap each load-param's dest to a fresh temp and emit its reload, walking
+  // the load-param instructions in order.
+  //
+  // Several params routinely share one insertion point: every param overwritten
+  // by a later instruction is recorded at the same `pend` in find_param_splits,
+  // and params can also share an idom end or a first use. At a shared point,
+  // whichever move is inserted first ends up first, so this walk decides the
+  // emitted instruction order. The moves are mutually independent -- each dest
+  // is a distinct param and each src a freshly allocated temp, so no move's src
+  // is another's dest -- hence any fixed order is semantically equivalent, and
+  // the load-param sequence is a deterministic one.
+  //
+  // The `pend` reloads land at the end boundary of the very range being walked,
+  // so a move inserted here is visited by this loop. Its dest is the param
+  // symreg, still a key in load_locations, so without the load-param guard it
+  // would be remapped as if it were a param and emit another move, forever.
   auto params = cfg.get_param_instructions();
   auto param_insns = InstructionIterable(params);
-  UnorderedMap<reg_t, reg_t> param_to_temp;
+  size_t emitted = 0;
   for (auto& mie : param_insns) {
     auto* insn = mie.insn;
-    auto dest = insn->dest();
-    if (load_locations.find(dest) != load_locations.end()) {
-      auto temp = cfg.allocate_temp();
-      insn->set_dest(temp);
-      param_to_temp[dest] = temp;
+    if (!opcode::is_a_load_param(insn->opcode())) {
+      continue;
     }
-  }
-  // Insert the loads, in ascending symreg order rather than in the map's hash
-  // order. Several params routinely share one insertion point: every param
-  // overwritten by a later instruction is recorded at the same `pend` in
-  // find_param_splits, and params can also share an idom end or a first use. At
-  // a shared point, whichever move is inserted first ends up first, so hash
-  // order would decide the emitted instruction order and the output would vary
-  // between runs. The moves are mutually independent -- each dest is a distinct
-  // param and each src a freshly allocated temp, so no move's src is another's
-  // dest -- hence any fixed order is semantically equivalent, and symreg order
-  // is a deterministic one.
-  for (auto dest : unordered_to_ordered_keys(load_locations)) {
-    const auto& first_use_it = load_locations.at(dest);
-    cfg.insert_before(
-        first_use_it,
-        gen_move(ig.get_node(dest).type(), dest, param_to_temp.at(dest)));
+    auto dest = insn->dest();
+    auto it = load_locations.find(dest);
+    if (it == load_locations.end()) {
+      continue;
+    }
+    auto temp = cfg.allocate_temp();
+    insn->set_dest(temp);
+    cfg.insert_before(it->second,
+                      gen_move(ig.get_node(dest).type(), dest, temp));
     ++m_stats.param_spill_moves;
+    ++emitted;
   }
+  // Every split's param is a load-param dest.
+  always_assert(emitted == load_locations.size());
 }
 
 /*
