@@ -51,13 +51,16 @@ class ReduceGotosPass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  static Stats process_code(IRCode*, bool for_performance = false);
+  static Stats process_code(IRCode*,
+                            bool for_performance = false,
+                            bool split_source_block_counts = false);
 
  private:
   static void process_code_switches(cfg::ControlFlowGraph&, Stats&);
   static void process_code_ifs(cfg::ControlFlowGraph&,
                                Stats&,
-                               bool for_performance);
+                               bool for_performance,
+                               bool split_source_block_counts);
 
   static void shift_registers(cfg::ControlFlowGraph* cfg, uint32_t* reg);
   bool m_for_performance;
