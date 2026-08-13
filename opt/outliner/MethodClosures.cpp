@@ -136,17 +136,13 @@ std::shared_ptr<const ReducedControlFlowGraph> reduce_cfg(
     DexMethod* method, std::optional<uint64_t> split_block_size) {
   auto* code = method->get_code();
   auto& cfg = code->cfg();
-  // TEST-AUTHOR TRAP: the loop below merges any return-only successor
-  // block into its sole predecessor (then deletes the successor's
-  // incoming edge). For test fixtures built via the S-expression
-  // assembler, this means a rejoin block whose only instruction is
-  // `(return v0)` (or similar) silently DISAPPEARS — the return gets
-  // appended to the cold predecessor, the predecessor's
-  // branchingness becomes BRANCH_RETURN, and downstream analyses
-  // (e.g. cold-region discovery's "non-return entry" filter) reject
-  // it without ever surfacing a useful error. To keep the rejoin
-  // intact, include at least one non-return instruction in it (e.g.
-  // an `add-int v0 v0 v0` before the return). Outliner pitfall #49.
+  // The loop below merges any return-only successor block into its sole
+  // predecessor and deletes the successor's incoming edge. A rejoin block whose
+  // only instruction is a `return` therefore does not survive: the return is
+  // appended to the cold predecessor, whose branchingness becomes
+  // BRANCH_RETURN, and cold-region discovery's non-return-entry filter then
+  // rejects it without surfacing a useful error. A rejoin needs at least one
+  // non-return instruction to survive this.
   for (auto* block : cfg.blocks()) {
     auto* goes_to_block = block->goes_to_only_edge();
     if (goes_to_block == nullptr) {

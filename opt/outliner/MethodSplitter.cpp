@@ -301,8 +301,7 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
   // the region's exit edges in `split_cfg`, delete them, and append
   // a `return-*` instruction — otherwise the split body double-
   // executes the rejoin code AND the launchpad's `goto rejoin`
-  // executes it again. See pitfall #47 in the cold-region-outlining
-  // catalog and `apply_code_changes` below for the canonical
+  // executes it again. See `apply_code_changes` below for the canonical
   // truncation pattern.
   cfg.deep_copy(&split_cfg);
   auto* split_entry_block = split_cfg.create_block();
