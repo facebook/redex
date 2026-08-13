@@ -180,14 +180,16 @@ TEST_F(TailDuplicationTest, basic_shrink_undo_hot_hot) {
         (:false)
         (.src_block "LTail;.duplication:(I)V" 0 (1.0 1.0))
         (const v0 0)
+        (.src_block "LTail;.duplication:(I)V" 2 (1.0 1.0))
 
         (:common)
-        (.src_block "LTail;.duplication:(I)V" 2 (1.0 1.0))
+        (.src_block "LTail;.duplication:(I)V" 4294967295 (1.0 1.0))
         (return v0)
 
         (:true)
         (.src_block "LTail;.duplication:(I)V" 1 (1.0 1.0))
         (const v0 1)
+        (.src_block "LTail;.duplication:(I)V" 2 (1.0 1.0))
         (goto :common)
   ))");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
@@ -231,14 +233,16 @@ TEST_F(TailDuplicationTest, basic_shrink_undo_hot_cold) {
         (:false)
         (.src_block "LTail;.duplication:(I)V" 0 (1.0 1.0))
         (const v0 0)
+        (.src_block "LTail;.duplication:(I)V" 2 (1.0 1.0))
 
         (:common)
-        (.src_block "LTail;.duplication:(I)V" 2 (1.0 1.0))
+        (.src_block "LTail;.duplication:(I)V" 4294967295 (1.0 1.0))
         (return v0)
 
         (:true)
         (.src_block "LTail;.duplication:(I)V" 1 (0.0 0.0))
         (const v0 1)
+        (.src_block "LTail;.duplication:(I)V" 2 (0.0 0.0))
         (goto :common)
   ))");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
