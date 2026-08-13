@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <algorithm>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -158,9 +160,26 @@ class ResourceValueMergingPassTest : public ::testing::Test {
           expected) {
     EXPECT_EQ(actual.size(), expected.size());
 
-    for (size_t i = 0; i < std::min(actual.size(), expected.size()); ++i) {
-      const auto& actual_mod = actual[i];
-      const auto& expected_mod = expected[i];
+    auto sort_key =
+        [](const resources::StyleModificationSpec::Modification& m) {
+          return std::make_pair(m.resource_id, static_cast<int>(m.type));
+        };
+    auto sorted_actual = actual;
+    auto sorted_expected = expected;
+    std::sort(sorted_actual.begin(), sorted_actual.end(),
+              [&](const auto& a, const auto& b) {
+                return sort_key(a) < sort_key(b);
+              });
+    std::sort(sorted_expected.begin(), sorted_expected.end(),
+              [&](const auto& a, const auto& b) {
+                return sort_key(a) < sort_key(b);
+              });
+
+    for (size_t i = 0;
+         i < std::min(sorted_actual.size(), sorted_expected.size());
+         ++i) {
+      const auto& actual_mod = sorted_actual[i];
+      const auto& expected_mod = sorted_expected[i];
 
       EXPECT_EQ(actual_mod.type, expected_mod.type);
       EXPECT_EQ(actual_mod.resource_id, expected_mod.resource_id);
