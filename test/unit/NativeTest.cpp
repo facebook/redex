@@ -72,8 +72,10 @@ TEST_F(NativeTest, testBuildingContext) {
       return {};
     };
 
-    EXPECT_EQ(init_hybrid, *unordered_any(java_decl_of("init_hybrid_impl")));
-    EXPECT_EQ(foo, *unordered_any(java_decl_of("foo_impl")));
+    auto init_hybrid_decls = java_decl_of("init_hybrid_impl");
+    EXPECT_EQ(init_hybrid, *unordered_any(init_hybrid_decls));
+    auto foo_decls = java_decl_of("foo_impl");
+    EXPECT_EQ(foo, *unordered_any(foo_decls));
   }
 
   {

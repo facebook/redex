@@ -723,3 +723,118 @@ TEST_F(DeterministicContainersTest, unordered_multimap_unordered_equal_range) {
   auto empty_range = unordered_equal_range(map, 3);
   EXPECT_EQ(empty_range.first, empty_range.second);
 }
+
+TEST_F(DeterministicContainersTest,
+       unordered_for_each_returns_applied_functor) {
+  UnorderedSet<int> set{1, 2, 3, 4, 5};
+  struct Sum {
+    int total = 0;
+    void operator()(int x) { total += x; }
+  };
+  // std::for_each accumulates state in the functor it returns; the helper must
+  // forward that object rather than the moved-from original.
+  auto result = unordered_for_each(set, Sum{});
+  EXPECT_EQ(1 + 2 + 3 + 4 + 5, result.total);
+}
+
+TEST_F(DeterministicContainersTest, UnorderedMap_insert_with_hint) {
+  UnorderedMap<int, std::string> map{{1, "one"}};
+  // rvalue-pair hint overload returns a FixedIterator to the inserted element;
+  // mutable end() is accepted as the hint (implicit FixedIterator ->
+  // ConstFixedIterator conversion).
+  auto it_rvalue = map.insert(map.end(), std::pair<int, std::string>{2, "two"});
+  EXPECT_EQ(2, it_rvalue->first);
+  EXPECT_EQ("two", it_rvalue->second);
+  // forwarding (P&&) template hint overload: the arg type
+  // (pair<int, const char*>) differs from value_type, so the template overload
+  // is strictly the best match (the non-template pair&& one would need a
+  // conversion).
+  auto it_fwd = map.insert(map.end(), std::make_pair(3, "three"));
+  EXPECT_EQ(3, it_fwd->first);
+  EXPECT_EQ("three", it_fwd->second);
+  // const-lvalue hint overload
+  const std::pair<int, std::string> value{4, "four"};
+  auto it_const = map.insert(map.end(), value);
+  EXPECT_EQ(4, it_const->first);
+  ASSERT_THAT(map, SizeIs(4u));
+}
+
+TEST_F(DeterministicContainersTest, UnorderedMultiMap_insert_with_hint) {
+  UnorderedMultiMap<int, std::string> map{{1, "one"}};
+  auto it = map.insert(map.end(), std::pair<int, std::string>{1, "uno"});
+  EXPECT_EQ(1, it->first);
+  ASSERT_THAT(map, SizeIs(2u));
+  EXPECT_EQ(2u, map.count(1));
+}
+
+TEST_F(DeterministicContainersTest, UnorderedMap_insert_initializer_list) {
+  UnorderedMap<int, int> map;
+  map.insert({{1, 10}, {2, 20}});
+  ASSERT_THAT(map, SizeIs(2u));
+  EXPECT_EQ(10, map.at(1));
+  EXPECT_EQ(20, map.at(2));
+}
+
+TEST_F(DeterministicContainersTest, UnorderedMultiMap_insert_initializer_list) {
+  UnorderedMultiMap<int, int> map;
+  map.insert({{1, 10}, {1, 11}, {2, 20}});
+  ASSERT_THAT(map, SizeIs(3u));
+  EXPECT_EQ(2u, map.count(1));
+  EXPECT_EQ(1u, map.count(2));
+}
+
+TEST_F(DeterministicContainersTest, unordered_equal_bag_hashing_form) {
+  UnorderedBag<int> a{1, 2, 3};
+  UnorderedBag<int> same_other_order{3, 1, 2};
+  UnorderedBag<int> different_element{1, 2, 4};
+  UnorderedBag<int> different_size{1, 2};
+  EXPECT_TRUE(unordered_equal(a, same_other_order));
+  EXPECT_FALSE(unordered_equal(a, different_element));
+  EXPECT_FALSE(unordered_equal(a, different_size));
+  // Multiset semantics: same elements and size but different multiplicities.
+  UnorderedBag<int> two_ones{1, 1, 2};
+  UnorderedBag<int> two_twos{1, 2, 2};
+  EXPECT_FALSE(unordered_equal(two_ones, two_twos));
+}
+
+TEST_F(DeterministicContainersTest, unordered_equal_comparator_form) {
+  UnorderedBag<int> a{1, 2, 3};
+  UnorderedBag<int> same_other_order{3, 1, 2};
+  UnorderedBag<int> different_element{1, 2, 4};
+  auto less = [](int x, int y) { return x < y; };
+  EXPECT_TRUE(unordered_equal(a, same_other_order, less));
+  EXPECT_FALSE(unordered_equal(a, different_element, less));
+}
+
+TEST_F(DeterministicContainersTest, unordered_equal_generic_over_set) {
+  UnorderedSet<int> a{1, 2, 3};
+  UnorderedSet<int> b{3, 2, 1};
+  UnorderedSet<int> c{1, 2, 4};
+  EXPECT_TRUE(unordered_equal(a, b));
+  EXPECT_FALSE(unordered_equal(a, c));
+}
+
+TEST_F(DeterministicContainersTest, unordered_equal_generic_over_map) {
+  // Maps use the associative fast-path (native order-independent operator==);
+  // their element type isn't hashable, so the default form must not go through
+  // the hashing path.
+  UnorderedMap<int, int> a{{1, 10}, {2, 20}};
+  UnorderedMap<int, int> same_other_order{{2, 20}, {1, 10}};
+  UnorderedMap<int, int> different_value{{1, 10}, {2, 21}};
+  EXPECT_TRUE(unordered_equal(a, same_other_order));
+  EXPECT_FALSE(unordered_equal(a, different_value));
+}
+
+TEST_F(DeterministicContainersTest, UnorderedEqual_functor) {
+  UnorderedBag<int> a{1, 2, 3};
+  UnorderedBag<int> same_other_order{3, 1, 2};
+  UnorderedBag<int> different_element{1, 2, 4};
+  // Default (hashing) form, usable as a default-constructible ValueEqual.
+  UnorderedEqual<UnorderedBag<int>> equal;
+  EXPECT_TRUE(equal(a, same_other_order));
+  EXPECT_FALSE(equal(a, different_element));
+  // Comparator form via the second template parameter.
+  UnorderedEqual<UnorderedBag<int>, std::less<int>> equal_by;
+  EXPECT_TRUE(equal_by(a, same_other_order));
+  EXPECT_FALSE(equal_by(a, different_element));
+}
