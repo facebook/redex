@@ -43,21 +43,9 @@ bool operator==(const Escapes& a, const Escapes& b) {
          a.invoked_ctors == b.invoked_ctors && a.other == b.other;
 }
 
-bool operator==(const InstructionEscapes& a, const InstructionEscapes& b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  for (auto&& [insn, escapes] : UnorderedIterable(a)) {
-    auto it = b.find(insn);
-    if (it == b.end()) {
-      return false;
-    }
-    if (!(it->second == escapes)) {
-      return false;
-    }
-  }
-  return true;
-};
+// InstructionEscapes (an UnorderedMap) is compared with the wrapper's built-in
+// order-independent operator==, which matches keys and compares per-key
+// `Escapes` values via the operator== above.
 
 class WritesAnalyzer {
  private:
