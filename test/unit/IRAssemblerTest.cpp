@@ -16,6 +16,7 @@
 #include "DexPosition.h"
 #include "IRCode.h"
 #include "IRList.h"
+#include "RedexException.h"
 #include "RedexTest.h"
 #include "Show.h"
 #include "TypeUtil.h"
@@ -59,6 +60,17 @@ TEST_F(IRAssemblerTest, empty) {
 // The assembler preserves the authored source-block id verbatim: it does not
 // renumber (DFS renumbering only happens in insert_source_blocks). Cover a
 // mid-range id, 0, and the reserved kSyntheticId (UINT32_MAX).
+// A register index that is missing, non-numeric, only partially numeric, or
+// out of range must be rejected rather than assembled against an arbitrary
+// register. All of these tokens lex as a single s-expression symbol, so they
+// do reach the register parser rather than failing earlier.
+TEST_F(IRAssemblerTest, rejectsMalformedRegister) {
+  for (const auto* reg : {"v", "vx", "v0x1", "v-1", /* 2^32 */ "v4294967296"}) {
+    auto s = std::string("((load-param ") + reg + "))";
+    EXPECT_THROW(assembler::ircode_from_string(s), RedexException) << s;
+  }
+}
+
 TEST_F(IRAssemblerTest, sourceBlockIdRoundTrips) {
   for (uint32_t want_id : {0u, 7u, SourceBlock::kSyntheticId}) {
     auto s = std::string("((.src_block \"LFoo;.bar:()V\" ") +
