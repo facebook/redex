@@ -27,7 +27,6 @@
 class DexClass;
 class DexMethod;
 class DexStore;
-class ScopedMetrics;
 
 // Must match DexStore.
 using DexStoresVector = std::vector<DexStore>;
