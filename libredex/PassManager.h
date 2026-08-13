@@ -215,8 +215,6 @@ class PassManager {
                                  const Pass* pass,
                                  int check_against_version);
 
-  hashing::DexHash run_hasher(const char* name, const Scope& scope);
-
   void check_unreleased_reserved_refs();
 
   AssetManager m_asset_mgr;

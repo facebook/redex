@@ -1005,7 +1005,13 @@ struct ViolationsTracking {
 
 // Runs the configured verifiers around each pass. The stable collaborators are
 // bound once at construction; pre_pass/post_pass take only the per-pass inputs.
+//
+// Templated on the context type only to break a definition-order cycle:
+// RunPassesContext holds a PassVerifiers member, so it is defined below and
+// cannot be named here. Ctx is always RunPassesContext.
+template <typename Ctx>
 struct PassVerifiers {
+  Ctx& ctx;
   PassManager& mgr;
   DexStoresVector& stores;
   std::vector<PassManager::PassInfo>& pass_info;
@@ -1015,7 +1021,6 @@ struct PassVerifiers {
   const PassManagerConfig* pm_config;
   redex_properties::Manager* properties_manager;
   bool run_hasher_after_each_pass;
-  std::function<hashing::DexHash(const char*, const Scope&)> run_hasher_fn;
 
   // Runs verifiers before a pass; currently only the initial assessor run.
   void pre_pass(size_t i, const Scope& scope) {
@@ -1093,7 +1098,7 @@ struct PassVerifiers {
 
       if (run_hasher) {
         current_pass_info->hash = std::optional<hashing::DexHash>(
-            run_hasher_fn(pass->name().c_str(), scope));
+            ctx.run_hasher(pass->name().c_str(), scope));
       }
       if (run_assessor) {
         ::run_assessor(mgr, scope);
@@ -1330,36 +1335,6 @@ void PassManager::init(const ConfigFiles& config) {
   }
 }
 
-hashing::DexHash PassManager::run_hasher(const char* pass_name,
-                                         const Scope& scope) {
-  TRACE(PM, 2, "Running hasher...");
-  Timer t("Hasher");
-  auto timer = m_hashers_timer.scope();
-  hashing::DexScopeHasher hasher(scope);
-  auto hash = hasher.run();
-  if (pass_name != nullptr) {
-    // log metric value in a way that fits into JSON number value
-    set_metric("~result~code~hash~",
-               hash.code_hash & ((((size_t)1) << 52) - 1));
-    set_metric("~result~registers~hash~",
-               hash.registers_hash & ((((size_t)1) << 52) - 1));
-    set_metric("~result~positions~hash~",
-               hash.positions_hash & ((((size_t)1) << 52) - 1));
-    set_metric("~result~signature~hash~",
-               hash.signature_hash & ((((size_t)1) << 52) - 1));
-  }
-  auto positions_hash_string = hashing::hash_to_string(hash.positions_hash);
-  auto registers_hash_string = hashing::hash_to_string(hash.registers_hash);
-  auto code_hash_string = hashing::hash_to_string(hash.code_hash);
-  auto signature_hash_string = hashing::hash_to_string(hash.signature_hash);
-  TRACE(PM, 3,
-        "[scope hash] %s: positions#%s, registers#%s, code#%s, signature#%s",
-        pass_name ? pass_name : "(initial)", positions_hash_string.c_str(),
-        registers_hash_string.c_str(), code_hash_string.c_str(),
-        signature_hash_string.c_str());
-  return hash;
-}
-
 // Everything whose lifetime spans a single run_passes() call: the constructor
 // performs all pre-loop setup, run_pass() one iteration of the main loop, and
 // the destructor all post-loop teardown.
@@ -1399,7 +1374,8 @@ class PassManager::RunPassesContext {
                        conf.get_json_config().get("mem_stats", true)),
         hwm_per_pass(conf.get_json_config().get("mem_stats_per_pass", true)),
         jemalloc_stats(&mgr, conf),
-        verifiers{mgr,
+        verifiers{*this,
+                  mgr,
                   stores,
                   mgr.m_pass_info,
                   checker_conf,
@@ -1407,10 +1383,7 @@ class PassManager::RunPassesContext {
                   check_unique_deobfuscated,
                   pm_config,
                   mgr.m_properties_manager,
-                  run_hasher_after_each_pass,
-                  [this](const char* pass_name, const Scope& s) {
-                    return this->mgr.run_hasher(pass_name, s);
-                  }},
+                  run_hasher_after_each_pass},
         pass_profiling{profiler_info, profiler_all_info, profiler_info_pass,
                        mgr.m_malloc_profile_pass, violations_tracking} {
     // Clear stale data. Make sure we start fresh.
@@ -1444,7 +1417,7 @@ class PassManager::RunPassesContext {
     if (run_hasher_after_each_pass) {
       // The null pass name keeps run_hasher from emitting metrics, which would
       // assert: there is no current pass during setup.
-      mgr.m_initial_hash = mgr.run_hasher(nullptr, scope);
+      mgr.m_initial_hash = run_hasher(nullptr, scope);
     }
 
     check_unique_deobfuscated.run_initially(scope);
@@ -1614,6 +1587,42 @@ class PassManager::RunPassesContext {
     }
   }
 
+  // PassVerifiers::post_pass hashes the scope it builds.
+  friend struct PassVerifiers<RunPassesContext>;
+
+  // Hashes the scope and traces the result. A null pass_name means the initial
+  // hash, taken during setup, and suppresses the metrics: there is no current
+  // pass yet, and emitting one without it asserts.
+  hashing::DexHash run_hasher(const char* pass_name,
+                              const Scope& scope_to_hash) {
+    TRACE(PM, 2, "Running hasher...");
+    Timer t("Hasher");
+    auto timer = m_hashers_timer.scope();
+    hashing::DexScopeHasher hasher(scope_to_hash);
+    auto hash = hasher.run();
+    if (pass_name != nullptr) {
+      // log metric value in a way that fits into JSON number value
+      mgr.set_metric("~result~code~hash~",
+                     hash.code_hash & ((((size_t)1) << 52) - 1));
+      mgr.set_metric("~result~registers~hash~",
+                     hash.registers_hash & ((((size_t)1) << 52) - 1));
+      mgr.set_metric("~result~positions~hash~",
+                     hash.positions_hash & ((((size_t)1) << 52) - 1));
+      mgr.set_metric("~result~signature~hash~",
+                     hash.signature_hash & ((((size_t)1) << 52) - 1));
+    }
+    auto positions_hash_string = hashing::hash_to_string(hash.positions_hash);
+    auto registers_hash_string = hashing::hash_to_string(hash.registers_hash);
+    auto code_hash_string = hashing::hash_to_string(hash.code_hash);
+    auto signature_hash_string = hashing::hash_to_string(hash.signature_hash);
+    TRACE(PM, 3,
+          "[scope hash] %s: positions#%s, registers#%s, code#%s, signature#%s",
+          pass_name ? pass_name : "(initial)", positions_hash_string.c_str(),
+          registers_hash_string.c_str(), code_hash_string.c_str(),
+          signature_hash_string.c_str());
+    return hash;
+  }
+
   // Records each pass's declared property interactions, dropping the ones for
   // properties that are not enabled.
   void init_property_interactions() {
@@ -1691,7 +1700,7 @@ class PassManager::RunPassesContext {
   std::optional<JNINativeContextHelper> jni_native_context_helper;
   JemallocStats jemalloc_stats;
   UnorderedMap<const Pass*, size_t> runs;
-  PassVerifiers verifiers;
+  PassVerifiers<RunPassesContext> verifiers;
   PassProfiling pass_profiling;
 };
 
