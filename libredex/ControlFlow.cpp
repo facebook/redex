@@ -148,6 +148,7 @@ void remove_redundant_positions(IRList* ir) {
       break;
     }
     case MFLOW_SOURCE_BLOCK:
+    case MFLOW_REMARK:
     case MFLOW_DEBUG:
     case MFLOW_FALLTHROUGH:
       // ignore
@@ -1145,18 +1146,23 @@ void ControlFlowGraph::remove_empty_blocks() {
         continue;
       }
 
-      // Does it have source blocks, and the successor does have multiple
-      // predecessors?
+      // The successor is reached only through this block when it has a single
+      // predecessor (this block) and is not the entry block (which carries a
+      // virtual in-edge). Only then is it correct to move b's block-anchored
+      // metadata (source blocks, remarks) onto succ; otherwise moving would
+      // mis-attribute it to code reached via succ's other predecessors, so we
+      // let it drop with the block instead.
+      const bool succ_reached_only_via_b =
+          succ->preds().size() == 1 && succ != m_entry_block;
+
+      // Move source blocks forward when it is safe; if it is not but we are
+      // instrumenting, keep the whole block instead so its source blocks
+      // survive for coverage.
       bool move_source_blocks{false};
       if (source_blocks::has_source_blocks(b)) {
-        // The entry block has a virtual in-edge, don't merge on a single
-        // back-edge.
-        if (succ->preds().size() == 1 && succ != m_entry_block) {
-          // Good case: just move the source blocks forward.
+        if (succ_reached_only_via_b) {
           move_source_blocks = true;
         } else if (g_redex->instrument_mode) {
-          // If we are instrumenting, it is necessary to keep the block for its
-          // source-blocks.
           ++it;
           continue;
         }
@@ -1199,22 +1205,31 @@ void ControlFlowGraph::remove_empty_blocks() {
         }
       }
 
-      // Move all source blocks.
-      // Note: the order of source blocks does not really matter.
-      if (move_source_blocks) {
+      // Move every block-anchored MIE of the given kind from b onto the head of
+      // succ, preserving their order (`take` extracts the moved-out payload).
+      // Advancing the insertion point matters: inserting each one after
+      // succ->begin() would reverse all but the first.
+      auto move_to_succ_head = [&](MethodItemType type, auto take) {
+        auto pos = succ->begin();
         bool first = true;
         for (auto& mie : *b) {
-          if (mie.type == MFLOW_SOURCE_BLOCK) {
-            if (first) {
-              succ->m_entries.insert_before(succ->begin(),
-                                            std::move(mie.src_block));
-            } else {
-              succ->m_entries.insert_after(succ->begin(),
-                                           std::move(mie.src_block));
-            }
-            first = false;
+          if (mie.type != type) {
+            continue;
           }
+          pos = first ? succ->m_entries.insert_before(succ->begin(), take(mie))
+                      : succ->m_entries.insert_after(pos, take(mie));
+          first = false;
         }
+      };
+      if (move_source_blocks) {
+        move_to_succ_head(MFLOW_SOURCE_BLOCK, [](MethodItemEntry& mie) {
+          return std::move(mie.src_block);
+        });
+      }
+      if (succ_reached_only_via_b) {
+        move_to_succ_head(MFLOW_REMARK, [](MethodItemEntry& mie) {
+          return std::move(mie.remark);
+        });
       }
     }
     if (b == m_entry_block) {
@@ -2853,6 +2868,16 @@ void Block::insert_after(const IRList::iterator& it,
   m_entries.insert_after(it, std::move(sb));
 }
 
+void Block::insert_before(const IRList::iterator& it,
+                          std::unique_ptr<Remark> remark) {
+  m_entries.insert_before(it, std::move(remark));
+}
+
+void Block::insert_after(const IRList::iterator& it,
+                         std::unique_ptr<Remark> remark) {
+  m_entries.insert_after(it, std::move(remark));
+}
+
 void ControlFlowGraph::insert_before(const InstructionIterator& it,
                                      std::unique_ptr<SourceBlock> sb) {
   Block* block = it.block();
@@ -2863,6 +2888,18 @@ void ControlFlowGraph::insert_after(const InstructionIterator& it,
                                     std::unique_ptr<SourceBlock> sb) {
   Block* block = it.block();
   block->m_entries.insert_after(it.unwrap(), std::move(sb));
+}
+
+void ControlFlowGraph::insert_before(const InstructionIterator& it,
+                                     std::unique_ptr<Remark> remark) {
+  Block* block = it.block();
+  block->m_entries.insert_before(it.unwrap(), std::move(remark));
+}
+
+void ControlFlowGraph::insert_after(const InstructionIterator& it,
+                                    std::unique_ptr<Remark> remark) {
+  Block* block = it.block();
+  block->m_entries.insert_after(it.unwrap(), std::move(remark));
 }
 
 void ControlFlowGraph::create_branch(Block* b,

@@ -537,6 +537,42 @@ struct SourceBlock {
 static_assert(sizeof(void*) != 8 || sizeof(SourceBlock) == 32);
 
 /*
+ * A Remark is a redex-internal, block-anchored breadcrumb that optimization
+ * passes can stamp onto the code they touch and later passes can read. Like a
+ * SourceBlock it rides through the whole pipeline (cloned by deep_copy, carried
+ * through split/inline/merge) and is NEVER serialized to dex -- the strings are
+ * deliberately excluded from gather_strings and the MIE is stripped in
+ * IRCode::try_sync before emission. The fields carry no baked-in semantics
+ * beyond `producer`; their meaning is defined by the producing/consuming pass:
+ *   - producer: the producing pass, e.g. "InsertRemarksForTracingPass".
+ *   - val_str:  a producer-defined label, e.g. the deobfuscated method name.
+ *   - val_int:  a producer-defined integer, e.g. the block id.
+ *
+ * The strings are `const DexString*` (not std::string) to reuse Redex's
+ * existing string interning: producers hand us already-interned DexStrings, so
+ * a Remark stores a single pooled pointer instead of owning a heap buffer, and
+ * equality is a cheap pointer compare. (The interned strings are still excluded
+ * from gather_strings, so nothing new is emitted to the dex string pool.)
+ */
+struct Remark {
+  const DexString* producer{nullptr};
+  const DexString* val_str{nullptr};
+  int64_t val_int{0};
+  // ~8 bytes of headroom: a Remark is heap-allocated and, at 24 bytes, rounds
+  // up to a 32-byte allocation, so a future field (another int64_t or a
+  // DexString*) can be added here at no allocation cost.
+
+  Remark(const DexString* producer, const DexString* val_str, int64_t val_int)
+      : producer(producer), val_str(val_str), val_int(val_int) {}
+
+  bool operator==(const Remark& other) const {
+    return producer == other.producer && val_str == other.val_str &&
+           val_int == other.val_int;
+  }
+  bool operator!=(const Remark& other) const { return !(*this == other); }
+};
+
+/*
  * MethodItemEntry (and the IRLists that it gets linked into) is a data
  * structure of DEX methods that is easier to modify than DexMethod.
  *
@@ -568,11 +604,29 @@ enum MethodItemType {
   // This holds information about the source block.
   MFLOW_SOURCE_BLOCK,
 
+  // A redex-internal breadcrumb; never serialized to dex (see struct Remark).
+  MFLOW_REMARK,
+
   // A no-op
   MFLOW_FALLTHROUGH,
 };
 
 std::ostream& operator<<(std::ostream&, const MethodItemType& type);
+
+// A metadata entry annotates the following instruction but is itself neither
+// code nor control flow: debug info, source position, source block, or remark.
+// These are skipped when comparing two IRLists for structural equality.
+inline bool is_metadata(MethodItemType type) {
+  return type == MFLOW_DEBUG || type == MFLOW_POSITION ||
+         type == MFLOW_SOURCE_BLOCK || type == MFLOW_REMARK;
+}
+
+// Whether a `code_only` show() view prints this entry. Such views drop the
+// source-position / redex-internal annotations (position, source block, remark)
+// but keep debug info and everything else.
+inline bool shown_in_code_only(MethodItemType type) {
+  return !is_metadata(type) || type == MFLOW_DEBUG;
+}
 
 struct MethodItemEntry {
   boost::intrusive::list_member_hook<> list_hook_;
@@ -589,6 +643,7 @@ struct MethodItemEntry {
     std::unique_ptr<DexDebugInstruction> dbgop;
     std::unique_ptr<DexPosition> pos;
     std::unique_ptr<SourceBlock> src_block;
+    std::unique_ptr<Remark> remark;
   };
   MethodItemEntry(const MethodItemEntry&);
   MethodItemEntry& operator=(const MethodItemEntry&);
@@ -611,6 +666,7 @@ struct MethodItemEntry {
   explicit MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop);
   explicit MethodItemEntry(std::unique_ptr<DexPosition> pos);
   explicit MethodItemEntry(std::unique_ptr<SourceBlock> src_block);
+  explicit MethodItemEntry(std::unique_ptr<Remark> remark);
 
   bool operator==(const MethodItemEntry&) const;
 

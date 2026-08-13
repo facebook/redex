@@ -75,6 +75,9 @@ std::ostream& operator<<(std::ostream& os, const MethodItemType& type) {
   case MFLOW_SOURCE_BLOCK:
     os << "source-block";
     return os;
+  case MFLOW_REMARK:
+    os << "remark";
+    return os;
   case MFLOW_FALLTHROUGH:
     os << "fallthrough";
     return os;
@@ -91,6 +94,9 @@ MethodItemEntry::MethodItemEntry(std::unique_ptr<DexPosition> pos)
 
 MethodItemEntry::MethodItemEntry(std::unique_ptr<SourceBlock> src_block)
     : type(MFLOW_SOURCE_BLOCK), src_block(std::move(src_block)) {}
+
+MethodItemEntry::MethodItemEntry(std::unique_ptr<Remark> remark)
+    : type(MFLOW_REMARK), remark(std::move(remark)) {}
 
 MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
     : type(that.type) {
@@ -120,6 +126,9 @@ MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
     new (&src_block)
         std::unique_ptr<SourceBlock>(new SourceBlock(*that.src_block));
     break;
+  case MFLOW_REMARK:
+    new (&remark) std::unique_ptr<Remark>(new Remark(*that.remark));
+    break;
   case MFLOW_FALLTHROUGH:
     break;
   }
@@ -146,6 +155,9 @@ void free_mie_contents(MethodItemEntry& mie) {
     break;
   case MFLOW_SOURCE_BLOCK:
     mie.src_block.~unique_ptr<SourceBlock>();
+    break;
+  case MFLOW_REMARK:
+    mie.remark.~unique_ptr<Remark>();
     break;
   case MFLOW_DEX_OPCODE:
     delete mie.dex_insn;
@@ -191,6 +203,9 @@ MethodItemEntry& MethodItemEntry::operator=(const MethodItemEntry& that) {
     new (&src_block)
         std::unique_ptr<SourceBlock>(new SourceBlock(*that.src_block));
     break;
+  case MFLOW_REMARK:
+    new (&remark) std::unique_ptr<Remark>(new Remark(*that.remark));
+    break;
   case MFLOW_FALLTHROUGH:
     break;
   }
@@ -229,6 +244,10 @@ void MethodItemEntry::gather_strings(
     // way into the APK
     break;
   case MFLOW_SOURCE_BLOCK:
+  // A Remark's strings (producer and val_str) are redex-internal and MUST NOT
+  // be interned into the dex string pool -- deliberately not gathered (see
+  // struct Remark).
+  case MFLOW_REMARK:
   case MFLOW_FALLTHROUGH:
     break;
   }
@@ -244,6 +263,8 @@ void MethodItemEntry::gather_methods(
   case MFLOW_TARGET:
   // SourceBlock does not keep the method reachable.
   case MFLOW_SOURCE_BLOCK:
+  // Remark does not keep the method reachable.
+  case MFLOW_REMARK:
   // DexDebugInstruction does not have method reference.
   case MFLOW_DEBUG:
     break;
@@ -265,6 +286,7 @@ void MethodItemEntry::gather_callsites(
   case MFLOW_FALLTHROUGH:
   case MFLOW_TARGET:
   case MFLOW_SOURCE_BLOCK:
+  case MFLOW_REMARK:
     break;
   case MFLOW_OPCODE:
     insn->gather_callsites(lcallsite);
@@ -300,6 +322,8 @@ void MethodItemEntry::gather_methodhandles(
     break;
   case MFLOW_SOURCE_BLOCK:
     break;
+  case MFLOW_REMARK:
+    break;
   case MFLOW_FALLTHROUGH:
     break;
   }
@@ -325,6 +349,8 @@ void MethodItemEntry::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   case MFLOW_POSITION:
     break;
   case MFLOW_SOURCE_BLOCK:
+    break;
+  case MFLOW_REMARK:
     break;
   case MFLOW_FALLTHROUGH:
     break;
@@ -354,6 +380,8 @@ void MethodItemEntry::gather_types(std::vector<const DexType*>& ltype) const {
   case MFLOW_POSITION:
     break;
   case MFLOW_SOURCE_BLOCK:
+    break;
+  case MFLOW_REMARK:
     break;
   case MFLOW_FALLTHROUGH:
     break;
@@ -432,6 +460,10 @@ MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mie) {
     return cloned_mie;
   case MFLOW_SOURCE_BLOCK:
     return cloned_mie;
+  case MFLOW_REMARK:
+    // The MethodItemEntry copy ctor already deep-copied the payload; unlike
+    // MFLOW_POSITION, a block-anchored Remark has no parent chain to remap.
+    return cloned_mie;
   case MFLOW_DEX_OPCODE:
     not_reached_log("DexInstructions not expected here");
   }
@@ -487,6 +519,8 @@ bool MethodItemEntry::operator==(const MethodItemEntry& that) const {
       other_cur = other_cur->next.get();
     }
   }
+  case MFLOW_REMARK:
+    return *remark == *that.remark;
   case MFLOW_FALLTHROUGH:
     return true;
   };
@@ -746,12 +780,8 @@ bool IRList::structural_equals(
   UnorderedMap<const MethodItemEntry*, const MethodItemEntry*> delayed_matches;
   auto may_match = [&](const MethodItemEntry* mie1,
                        const MethodItemEntry* mie2) {
-    always_assert(mie1 && mie1->type != MFLOW_DEBUG &&
-                  mie1->type != MFLOW_POSITION &&
-                  mie1->type != MFLOW_SOURCE_BLOCK);
-    always_assert(mie2 && mie2->type != MFLOW_DEBUG &&
-                  mie2->type != MFLOW_POSITION &&
-                  mie2->type != MFLOW_SOURCE_BLOCK);
+    always_assert(mie1 && !is_metadata(mie1->type));
+    always_assert(mie2 && !is_metadata(mie2->type));
     auto it = matches.find(mie1);
     if (it != matches.end()) {
       return it->second == mie2;
@@ -762,15 +792,13 @@ bool IRList::structural_equals(
   for (; it1 != m_list.end() && it2 != other.end();) {
     always_assert(it1->type != MFLOW_DEX_OPCODE);
     always_assert(it2->type != MFLOW_DEX_OPCODE);
-    // Skip debug, position, and source block
-    if (it1->type == MFLOW_DEBUG || it1->type == MFLOW_POSITION ||
-        it1->type == MFLOW_SOURCE_BLOCK) {
+    // Skip metadata (debug, position, source block, remark).
+    if (is_metadata(it1->type)) {
       ++it1;
       continue;
     }
 
-    if (it2->type == MFLOW_DEBUG || it2->type == MFLOW_POSITION ||
-        it2->type == MFLOW_SOURCE_BLOCK) {
+    if (is_metadata(it2->type)) {
       ++it2;
       continue;
     }
@@ -1303,8 +1331,9 @@ IRList::ConsecutiveStyle IRList::CONSECUTIVE_STYLE =
 void IRList::chain_consecutive_source_blocks(ConsecutiveStyle style) {
   std::optional<IRList::iterator> last_it = std::nullopt;
   for (auto it = begin(); it != end(); ++it) {
-    if (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG) {
-      // We can move over debug info. Otherwise, reset.
+    if (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
+        it->type == MFLOW_REMARK) {
+      // We can move over debug info and remarks. Otherwise, reset.
       continue;
     }
     if (it->type != MFLOW_SOURCE_BLOCK) {

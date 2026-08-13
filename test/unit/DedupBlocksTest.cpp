@@ -15,6 +15,7 @@
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "RedexTest.h"
+#include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
 
@@ -2339,4 +2340,181 @@ TEST_F(DedupBlocksTest, splitPostfixNormalBehaviorPreserved) {
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+// A Remark must be transparent to DedupBlocks' merge decision: two blocks that
+// are structurally identical except for their redex-internal remark must merge
+// exactly as they would with no remark present, and the discarded duplicate's
+// remark must not survive. Guards structural_equals/is_metadata transparency
+// and the remove_instructions MFLOW_REMARK handling.
+TEST_F(DedupBlocksTest, remarksAreTransparentToWholeBlockMerge) {
+  DexMethod* with = get_fresh_method("remarksMergeWith");
+  with->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      (mul-int v0 v0 v0)
+      (goto :C)
+
+      (:E)
+      (return-void)
+
+      (:C)
+      (.remark "P" "c" 1)
+      (add-int v0 v0 v0)
+      (goto :E)
+
+      (:D)
+      (.remark "P" "d" 2)
+      (add-int v0 v0 v0)
+      (goto :E)
+    )
+  )"));
+
+  DexMethod* without = get_fresh_method("remarksMergeWithout");
+  without->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      (mul-int v0 v0 v0)
+      (goto :C)
+
+      (:E)
+      (return-void)
+
+      (:C)
+      (add-int v0 v0 v0)
+      (goto :E)
+
+      (:D)
+      (add-int v0 v0 v0)
+      (goto :E)
+    )
+  )"));
+
+  run_dedup_blocks();
+
+  // Opcodes/structure must be identical with and without the remarks;
+  // structural_equals ignores metadata (incl. remarks), so this asserts the
+  // merge decision was unaffected by the differing remarks.
+  EXPECT_TRUE(with->get_code()->structural_equals(*without->get_code()));
+
+  // The merged-away duplicate's remark is gone; exactly one remark survives.
+  size_t remarks = 0;
+  for (const auto& mie : *with->get_code()) {
+    if (mie.type == MFLOW_REMARK) {
+      ++remarks;
+    }
+  }
+  EXPECT_EQ(remarks, 1u);
+}
+
+// Regression test for the remark-transparency of split_postfix source-block
+// restoration. A leading MFLOW_REMARK at a split boundary must not derail the
+// restoration: the pre-fix code did split_block->begin()->insn->opcode() and
+// keyed off begin()->type, both of which misread a leading remark (the MIE
+// union aliases IRInstruction* with unique_ptr<Remark>). Mirrors
+// splitPostfixPreservesSourceBlockCoverage, but places a remark immediately
+// before the throw-delineated source block so it heads the moved segment.
+TEST_F(DedupBlocksTest, splitPostfixSourceBlockRestorationSkipsLeadingRemark) {
+  DexMethod* method =
+      get_fresh_method("splitPostfixSourceBlockRestorationSkipsLeadingRemark");
+  method->set_deobfuscated_name(show(method));
+
+  const auto* str = R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :C)
+
+      (invoke-static () "LFoo;.bar:()V")
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return-void)
+
+      (:C)
+      (const v1 1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return-void)
+    )
+  )";
+  method->set_code(assembler::ircode_from_string(str));
+
+  auto& code_ref = *method->get_code();
+  code_ref.build_cfg();
+  auto& cfg = code_ref.cfg();
+
+  // A source block at every non-exit block head.
+  for (auto* block : cfg.blocks()) {
+    if (block == cfg.exit_block()) {
+      continue;
+    }
+    auto sb = std::make_unique<SourceBlock>(
+        method->get_deobfuscated_name_or_null(), block->id(),
+        std::vector<SourceBlock::Val>{SourceBlock::Val(1.0f, 1.0f)});
+    source_blocks::impl::BlockAccessor::push_source_block(block, std::move(sb));
+  }
+
+  // A second source block after the may-throw invoke, with a remark placed
+  // immediately BEFORE it so the throw-delineated segment begins [remark, sb].
+  const auto* producer = DexString::make_string("P");
+  const auto* val_str = DexString::make_string("");
+  for (auto* block : cfg.blocks()) {
+    for (auto it = block->begin(); it != block->end(); ++it) {
+      if (it->type == MFLOW_OPCODE &&
+          it->insn->opcode() == OPCODE_INVOKE_STATIC) {
+        auto* first_sb = source_blocks::get_first_source_block(block);
+        if (first_sb != nullptr) {
+          auto sb_after = std::make_unique<SourceBlock>(*first_sb);
+          sb_after->id = 100;
+          sb_after->next = nullptr;
+          source_blocks::impl::BlockAccessor::insert_source_block_after(
+              block, it, std::move(sb_after));
+          // Put the remark between the invoke and sb@100 so it leads the moved
+          // segment after the split.
+          block->insert_before(std::next(IRList::iterator(it)),
+                               std::make_unique<Remark>(producer, val_str, 7));
+        }
+        break;
+      }
+    }
+  }
+
+  dedup_blocks_impl::Config config;
+  dedup_blocks_impl::DedupBlocks impl(&config, method);
+  impl.run();
+
+  // Every non-exit block still has source-block coverage, and any may-throw
+  // block still has a source block after the throwing instruction -- proving
+  // the leading remark did not derail restoration (and did not crash on the
+  // union).
+  for (auto* block : cfg.blocks()) {
+    if (block == cfg.exit_block()) {
+      continue;
+    }
+    EXPECT_NE(source_blocks::get_first_source_block(block), nullptr)
+        << "Block B" << block->id() << " missing source block";
+
+    auto last_it = block->get_last_insn();
+    if (last_it != block->end() && opcode::can_throw(last_it->insn->opcode())) {
+      bool found_sb_after = false;
+      for (auto check_it = std::next(IRList::iterator(last_it));
+           check_it != block->end();
+           ++check_it) {
+        if (check_it->type == MFLOW_SOURCE_BLOCK) {
+          found_sb_after = true;
+          break;
+        }
+      }
+      EXPECT_TRUE(found_sb_after)
+          << "Block B" << block->id()
+          << " missing source block after may-throw instruction";
+    }
+  }
+
+  code_ref.clear_cfg();
 }

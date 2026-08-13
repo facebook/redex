@@ -162,8 +162,9 @@ bool is_insn_eligible(const IRInstruction* insn) {
 // Other types will block hoisting further instructions.
 void skip_handled_method_item_entries(IRList::iterator& it,
                                       const IRList::iterator& end) {
-  while (it != end && (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
-                       it->type == MFLOW_SOURCE_BLOCK)) {
+  while (it != end &&
+         (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
+          it->type == MFLOW_SOURCE_BLOCK || it->type == MFLOW_REMARK)) {
     it++;
   }
 }
@@ -451,6 +452,10 @@ size_t hoist_insns_for_block(
           case MFLOW_POSITION:
             last_position = it->pos.get();
             break;
+          case MFLOW_REMARK:
+            // Block-anchored metadata; leave remarks in the block (not
+            // hoisted).
+            break;
           default:
             not_reached();
           }
@@ -500,7 +505,7 @@ size_t hoist_insns_for_block(
     const auto& end = p.second;
     for (auto it = p.first->begin(); it != end; ++it) {
       redex_assert(it->type == MFLOW_DEBUG || it->type == MFLOW_POSITION ||
-                   it->type == MFLOW_SOURCE_BLOCK);
+                   it->type == MFLOW_SOURCE_BLOCK || it->type == MFLOW_REMARK);
     }
   }
 

@@ -147,7 +147,7 @@ bool is_sled(cfg::Block* b) {
     return false;
   }
   for (auto it = b->begin(); it != b->end(); it++) {
-    if (it->type != MFLOW_SOURCE_BLOCK) {
+    if (it->type != MFLOW_SOURCE_BLOCK && it->type != MFLOW_REMARK) {
       return false;
     }
   }

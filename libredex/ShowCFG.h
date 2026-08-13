@@ -22,8 +22,7 @@ std::string show(const cfg::Block* block,
   std::ostringstream ss;
   for (const auto& mie : *block) {
     special.mie_before(ss, mie);
-    if (!code_only || (code_only && mie.type != MFLOW_POSITION &&
-                       mie.type != MFLOW_SOURCE_BLOCK)) {
+    if (!code_only || shown_in_code_only(mie.type)) {
       ss << "   " << special.show_mie(mie) << "\n";
     }
     special.mie_after(ss, mie);

@@ -1535,6 +1535,10 @@ std::string show_mie_plain(const MethodItemEntry& mie) {
   case MFLOW_SOURCE_BLOCK:
     o << "SOURCE-BLOCKS: " << mie.src_block->show();
     break;
+  case MFLOW_REMARK:
+    o << "REMARK: " << show(mie.remark->producer) << " "
+      << show(mie.remark->val_str) << " " << mie.remark->val_int;
+    break;
   case MFLOW_FALLTHROUGH:
     o << "FALLTHROUGH";
     break;
@@ -1570,8 +1574,7 @@ std::ostream& operator<<(std::ostream& o, const DexCallSite& cs) {
 std::string show(const IRList* ir, bool code_only) {
   std::string ret;
   for (auto const& mie : *ir) {
-    if (!code_only || (code_only && mie.type != MFLOW_POSITION &&
-                       mie.type != MFLOW_SOURCE_BLOCK)) {
+    if (!code_only || shown_in_code_only(mie.type)) {
       ret += show(mie);
       ret += "\n";
     }

@@ -384,6 +384,14 @@ void Impl::hash_code_init(
         }
       }
       break;
+    case MFLOW_REMARK:
+      if (!m_code_only) {
+        hash((uint8_t)MFLOW_REMARK);
+        hash(mie.remark->producer);
+        hash(mie.remark->val_str);
+        hash(static_cast<uint64_t>(mie.remark->val_int));
+      }
+      break;
     case MFLOW_FALLTHROUGH:
       hash((uint8_t)MFLOW_FALLTHROUGH);
       break;

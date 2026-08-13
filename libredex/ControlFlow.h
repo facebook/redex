@@ -430,6 +430,10 @@ class Block final {
   void insert_after(const IRList::iterator& it,
                     std::unique_ptr<SourceBlock> sb);
 
+  void insert_before(const IRList::iterator& it,
+                     std::unique_ptr<Remark> remark);
+  void insert_after(const IRList::iterator& it, std::unique_ptr<Remark> remark);
+
   bool structural_equals(const Block* other) const;
   bool structural_equals(const Block* other,
                          const InstructionEquality& instruction_equals) const;
@@ -755,6 +759,11 @@ class ControlFlowGraph {
   void insert_after(const InstructionIterator& it,
                     std::unique_ptr<SourceBlock> sb);
 
+  void insert_before(const InstructionIterator& it,
+                     std::unique_ptr<Remark> remark);
+  void insert_after(const InstructionIterator& it,
+                    std::unique_ptr<Remark> remark);
+
   // Insertion Methods (insert_before/after and push_front/back):
   //  * These methods add instructions to the CFG
   //  * They do not add branch (if-*, switch-*) instructions to the cfg (use
@@ -780,10 +789,12 @@ class ControlFlowGraph {
   // * IRInstruction*
   // * std::unique_ptr<SourceBlock>
   // * std::unique_ptr<DexPosition>
+  // * std::unique_ptr<Remark>
   // * InsertVariant, std::variant of the previous types
   using InsertVariant = std::variant<IRInstruction*,
                                      std::unique_ptr<SourceBlock>,
-                                     std::unique_ptr<DexPosition>>;
+                                     std::unique_ptr<DexPosition>,
+                                     std::unique_ptr<Remark>>;
 
   template <class ForwardIt>
   bool insert_before(const InstructionIterator& position,
@@ -1756,6 +1767,10 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       }
       b->m_entries.insert_before(
           pos, std::get<std::unique_ptr<DexPosition>>(std::move(v)));
+    } else if (std::holds_alternative<std::unique_ptr<Remark>>(v)) {
+      // Block-anchored metadata; insert in place, no cross-split propagation.
+      b->m_entries.insert_before(
+          pos, std::get<std::unique_ptr<Remark>>(std::move(v)));
     } else {
       not_reached();
     }

@@ -311,6 +311,7 @@ class CodeVisualizer : public TaggedBase {
     case MFLOW_DEX_OPCODE:
     case MFLOW_TARGET:
     case MFLOW_DEBUG:
+    case MFLOW_REMARK:
     case MFLOW_FALLTHROUGH:
       m_output << mie.type;
       return;
