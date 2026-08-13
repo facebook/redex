@@ -128,6 +128,7 @@ const DexString* get_split_method_name(
 }
 
 ConcurrentSet<DexMethod*> split_splittable_closures(
+    const Config& config,
     const std::vector<DexClasses*>& dexen,
     int32_t min_sdk,
     const init_classes::InitClassesWithSideEffects&
@@ -245,7 +246,13 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
         }
         if ((concurrent_hot_methods != nullptr) &&
             (concurrent_hot_methods->count(method) != 0u)) {
-          concurrent_hot_methods->insert(method);
+          // The split inherits the root's profile stats via
+          // `concurrent_new_hot_split_methods` above, so it is compiled too and
+          // must join the hot set for later iterations to see it as one.
+          // Re-inserting `method` (the historical behaviour, kept when the flag
+          // is off) is a no-op: the guard has already proven it present.
+          concurrent_hot_methods->insert(
+              config.fix_new_hot_split_registration ? new_method : method);
         }
         break;
       }
@@ -550,7 +557,7 @@ void split_methods_in_stores(
         concurrent_splittable_no_optimizations_methods);
     ConcurrentSet<DexMethod*> concurrent_added_methods;
     methods = split_splittable_closures(
-        dexen, min_sdk, init_classes_with_side_effects, reserved_trefs,
+        config, dexen, min_sdk, init_classes_with_side_effects, reserved_trefs,
         reserved_mrefs, splittable_closures, name_infix, &uniquifiers, stats,
         &dex_states, &concurrent_added_methods, concurrent_hot_methods,
         concurrent_new_hot_split_methods);
