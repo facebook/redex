@@ -8,8 +8,11 @@
 #include <gtest/gtest.h>
 
 #include "Debug.h"
+#include "DexInstruction.h"
 #include "IRCode.h"
+#include "IRInstruction.h"
 #include "IRList.h"
+#include "IROpcode.h"
 #include "RedexTest.h"
 
 class IRListTest : public RedexTest {};
@@ -104,6 +107,42 @@ TEST_F(IRListTest, remove_when_register_not_used) {
 
   EXPECT_EQ(assembler::to_string(expected_code.get()),
             assembler::to_string(code.get()));
+}
+
+TEST_F(IRListTest, estimate_code_units_fill_array_data) {
+  const auto* const s_insns = R"(
+    (
+      (const v0 3)
+      (new-array v0 "[I")
+      (move-result-pseudo-object v1)
+      (fill-array-data v1 #4 (63 64 65))
+      (return-void)
+    )
+  )";
+  auto code = assembler::ircode_from_string(s_insns);
+
+  uint32_t opcode_code_units{0};
+  const DexOpcodeData* payload{nullptr};
+  for (const auto& mie : *code) {
+    if (mie.type != MFLOW_OPCODE) {
+      continue;
+    }
+    opcode_code_units += mie.insn->size();
+    if (opcode::is_fill_array_data(mie.insn->opcode())) {
+      payload = mie.insn->get_data();
+    }
+  }
+  ASSERT_NE(payload, nullptr);
+
+  // 3 elements of 4 bytes = 6 code units of data, plus the 4 header code units
+  // (ident, element_width, and the two size words) that DexOpcodeData::size()
+  // already accounts for.
+  EXPECT_EQ(payload->size(), 10);
+  EXPECT_EQ(code->estimate_code_units(), opcode_code_units + payload->size());
+
+  // Every in-pass caller goes through the CFG, which must agree.
+  code->build_cfg();
+  EXPECT_EQ(code->estimate_code_units(), opcode_code_units + payload->size());
 }
 
 TEST_F(IRListTest, keep_valid_regs) {
