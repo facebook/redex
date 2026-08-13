@@ -261,6 +261,10 @@ class InterDex {
 
   std::vector<DexType*> m_end_markers;
   std::vector<DexType*> m_scroll_markers;
+  // Ends the cold-start set without terminating a dex; the reset takes effect
+  // once the dex being filled is flushed. Only consulted when m_end_markers is
+  // empty, as otherwise the last dex end marker already ends the set.
+  DexType* m_coldstart_end_marker{nullptr};
 
   cross_dex_ref_minimizer::CrossDexRefMinimizer m_cross_dex_ref_minimizer;
   const Scope& m_original_scope;

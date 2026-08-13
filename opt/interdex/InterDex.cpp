@@ -45,6 +45,12 @@ constexpr const char* COLD_START_1PCT_END_FORMAT = "LColdStart1PctEnd";
 constexpr const char* INTERACTION_ID_FORMAT = "LINTERACTION_ID_";
 constexpr const char* START_FORMAT = "_Start;";
 
+// Betamaps that carry no LDexEndMarker at all (e.g. Instagram) delimit the
+// cold-start section with this interaction marker instead. Unlike a dex end
+// marker it only ends the cold-start set; it does not terminate a dex.
+constexpr const char* COLD_START_END_MARKER_FORMAT =
+    "LINTERACTION_ID_ColdStart_End;";
+
 static DexInfo EMPTY_DEX_INFO;
 
 UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
@@ -554,6 +560,11 @@ void InterDex::emit_interdex_classes(
   size_t cls_skipped_in_secondary = 0;
   std::string curr_interaction = "ColdStart";
 
+  // The reset itself always rides on dex_info.pending_coldstart_reset, which
+  // flush_out_dex consumes at whichever dex boundary comes first. This says the
+  // deferral came from a dex end marker, which owes one thing more than the
+  // reset: the dex boundary whose flush was skipped to let the dex keep
+  // filling. Only that case may force a flush at the end of the betamap.
   bool reset_coldstart_on_overflow = false;
   for (auto it = interdex_types.begin(); it != interdex_types.end(); ++it) {
     const DexType* type = *it;
@@ -593,6 +604,16 @@ void InterDex::emit_interdex_classes(
             "Background end marker discovered without background start marker");
         m_emitting_bg_set = false;
         m_emitted_bg_set = true;
+      } else if (m_end_markers.empty() && type == m_coldstart_end_marker) {
+        // Ends the cold-start set. This is not a dex end marker: it forces no
+        // dex boundary and advances no interdex group, so the current dex keeps
+        // being filled. That dex still holds cold-start classes from before the
+        // marker, so the reset is deferred until it is flushed -- only the
+        // dexes that follow it are not cold start. Unlike a dex end marker it
+        // leaves no boundary owed, so it sets nothing beyond the reset and the
+        // dex may well stay open past the end of the betamap.
+        TRACE(IDEX, 2, "Ending cold start set at %s", SHOW(type));
+        dex_info.pending_coldstart_reset = true;
       } else {
         auto end_marker =
             std::find(m_end_markers.begin(), m_end_markers.end(), type);
@@ -617,6 +638,7 @@ void InterDex::emit_interdex_classes(
               dex_info.coldstart = false;
             }
           } else {
+            dex_info.pending_coldstart_reset = true;
             reset_coldstart_on_overflow = true;
             TRACE(IDEX, 2, "Not flushing out marker %s to fill dex.",
                   SHOW(type));
@@ -653,34 +675,20 @@ void InterDex::emit_interdex_classes(
           dex_info.class_freqs_moved_classes += 1;
         }
       }
-      auto res =
-          emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
-                     /* perf_sensitive */ true, canary_cls);
-
-      if (res.overflowed && reset_coldstart_on_overflow) {
-        dex_info.coldstart = false;
-        reset_coldstart_on_overflow = false;
-        TRACE(IDEX, 2, "Flushing cold-start after non-flushed end marker.");
-      }
+      emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
+                 /* perf_sensitive */ true, canary_cls);
     }
   }
 
   // Now emit the classes we omitted from the original coldstart set.
-  TRACE(IDEX, 2, "Emitting %zu interdex types (reset_coldstart_on_overflow=%d)",
-        interdex_types.size(), reset_coldstart_on_overflow);
+  TRACE(IDEX, 2, "Emitting %zu interdex types (pending_coldstart_reset=%d)",
+        interdex_types.size(), dex_info.pending_coldstart_reset);
   for (const DexType* type : interdex_types) {
     DexClass* cls = type_class(type);
 
     if ((cls != nullptr) && (unreferenced_classes.count(cls) != 0u)) {
-      auto res =
-          emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
-                     /* perf_sensitive */ false, canary_cls);
-
-      if (res.overflowed && reset_coldstart_on_overflow) {
-        dex_info.coldstart = false;
-        reset_coldstart_on_overflow = false;
-        TRACE(IDEX, 2, "Flushing cold-start after non-flushed end marker.");
-      }
+      emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
+                 /* perf_sensitive */ false, canary_cls);
     }
   }
 
@@ -695,12 +703,14 @@ void InterDex::emit_interdex_classes(
 
   m_emitting_extended = false;
 
-  if (reset_coldstart_on_overflow) {
+  // Honor the boundary the deferred dex end marker still owes. If an overflow
+  // got there first it already created one and consumed the pending reset with
+  // it, so there is nothing left to do.
+  if (reset_coldstart_on_overflow && dex_info.pending_coldstart_reset) {
     TRACE(IDEX, 2, "No overflow after cold-start dex, flushing now.");
     auto fodr = flush_out_dex(m_emitting_state, dex_info, *canary_cls);
     post_process_dex(m_emitting_state, fodr);
     *canary_cls = get_canary_cls(m_emitting_state, dex_info);
-    dex_info.coldstart = false;
   }
 }
 
@@ -803,6 +813,12 @@ void InterDex::load_interdex_types() {
         type = DexType::make_type(entry);
         TRACE(IDEX, 4,
               "[interdex order]: Found 1pct cold start end class marker %s.",
+              entry.c_str());
+      } else if (entry == COLD_START_END_MARKER_FORMAT) {
+        type = DexType::make_type(entry);
+        m_coldstart_end_marker = type;
+        TRACE(IDEX, 4,
+              "[interdex order]: Found cold start end class marker %s.",
               entry.c_str());
         // trim off the _Start suffix to get the interaction name
       } else if (is_interaction_id_start_marker(entry)) {
@@ -1475,6 +1491,12 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
     DexInfo& dex_info,
     DexClass* canary_cls) const {
 
+  // This dex is the last one of the cold-start set, so it is still recorded as
+  // cold start below; the reset only applies from the next dex on. Take it off
+  // dex_info first so that it never reaches a recorded dex.
+  const bool ends_coldstart_set = dex_info.pending_coldstart_reset;
+  dex_info.pending_coldstart_reset = false;
+
   if (dex_info.primary) {
     TRACE(IDEX, 2, "Writing out primary dex with %zu classes.",
           emitting_state.dexes_structure.get_current_dex().size());
@@ -1526,6 +1548,9 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
   }
   if (!m_emitting_extended) {
     dex_info.extended = false;
+  }
+  if (ends_coldstart_set) {
+    dex_info.coldstart = false;
   }
 
   // This is false by default and set to true everytime

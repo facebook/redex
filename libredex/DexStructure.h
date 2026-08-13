@@ -48,6 +48,10 @@ struct DexInfo {
   bool extended{false};
   bool scroll{false};
   bool betamap_ordered{false};
+  // Transient: the dex currently being filled is the last one of the cold-start
+  // set, but no dex boundary is owed, so `coldstart` must only be cleared once
+  // that dex is flushed. Always false on a recorded (flushed) dex.
+  bool pending_coldstart_reset{false};
   size_t class_freqs_moved_classes{0};
 };
 
