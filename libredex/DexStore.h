@@ -175,12 +175,17 @@ class XStoreRefs {
   /**
    * Map of classes to their logical store index. A primary DEX goes in its own
    * bucket (first element in the array).
+   *
+   * NOTE the size of this map is a count of TYPES, not of stores. The number of
+   * stores is `m_stores.size()`, exposed as `store_count()`. The old name of
+   * this member (`m_xstores`) read as "the stores" and invited that confusion.
    */
-  InsertOnlyConcurrentMap<const DexType*, size_t> m_xstores;
+  InsertOnlyConcurrentMap<const DexType*, size_t> m_store_idx_by_type;
 
   /**
    * Pointers to original stores in the same order as used to populate
-   * m_xstores
+   * m_store_idx_by_type. This is what a store index indexes into, and its
+   * size is the number of stores.
    */
   std::vector<const DexStore*> m_stores;
 
@@ -249,7 +254,7 @@ class XStoreRefs {
    * api.
    */
   size_t get_store_idx(const DexType* type) const {
-    const auto* res = m_xstores.get(type);
+    const auto* res = m_store_idx_by_type.get(type);
     if (res != nullptr) {
       return *res;
     }
@@ -263,12 +268,12 @@ class XStoreRefs {
    * the current scope.
    */
   bool is_in_root_store(const DexType* type) const {
-    const auto* res = m_xstores.get(type);
+    const auto* res = m_store_idx_by_type.get(type);
     return (res != nullptr) && *res < m_root_stores;
   }
 
   bool is_in_primary_dex(const DexType* type) const {
-    const auto* res = m_xstores.get(type);
+    const auto* res = m_store_idx_by_type.get(type);
     return (res != nullptr) && *res == 0;
   }
 
@@ -307,10 +312,10 @@ class XStoreRefs {
     }
     // Temporary HACK: optimizations may leave references to dead classes and
     // if we just call get_store_idx() - as we should - the assert will fire...
-    if (store_idx >= m_xstores.size()) {
+    if (store_idx >= m_store_idx_by_type.size()) {
       return false;
     }
-    const auto* res = m_xstores.get(type);
+    const auto* res = m_store_idx_by_type.get(type);
     if (res == nullptr) {
       return true;
     }
@@ -369,7 +374,10 @@ class XStoreRefs {
     return illegal_ref(store_idx, callee->get_class());
   }
 
-  size_t size() const { return m_xstores.size(); }
+  /**
+   * Number of stores. This is what a store index is bounded by.
+   */
+  size_t store_count() const { return m_stores.size(); }
 };
 
 /**
