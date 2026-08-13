@@ -9,7 +9,7 @@
 #include "Debug.h"
 
 #include <algorithm>
-#include <boost/thread.hpp>
+#include <boost/thread.hpp> // NOLINT(facebook-unused-include-check): boost::thread is used
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -45,6 +45,7 @@ class ConcurrentContainersTest : public ::testing::Test {
 
   std::vector<uint32_t> generate_random_data() {
     std::vector<uint32_t> s;
+    s.reserve(m_size);
     for (size_t i = 0; i < m_size; ++i) {
       s.push_back(m_elem_dist(m_generator));
     }
@@ -54,7 +55,8 @@ class ConcurrentContainersTest : public ::testing::Test {
   std::vector<uint32_t> generate_random_subset(
       const std::vector<uint32_t>& data) {
     auto new_data = data;
-    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+    unsigned seed = static_cast<unsigned>(
+        std::chrono::system_clock::now().time_since_epoch().count());
     std::shuffle(
         new_data.begin(), new_data.end(), std::default_random_engine(seed));
     new_data.erase(new_data.begin(), new_data.begin() + m_size / 2);
@@ -205,6 +207,8 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentSetTest) {
 
   for (uint32_t x : m_subset_data) {
     const uint32_t* p = moved.insert(x).first;
+    ASSERT_NE(nullptr, p);
+    // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
     EXPECT_EQ(*p, x);
     pointers.push_back(Pair{p, x});
   }
@@ -219,6 +223,8 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentSetTest) {
   EXPECT_EQ(m_data_set.size(), moved.size());
 
   for (const auto& pair : pointers) {
+    ASSERT_NE(nullptr, pair.p);
+    // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
     EXPECT_EQ(*pair.p, pair.x);
     EXPECT_EQ(pair.p, moved.insert(pair.x).first);
     EXPECT_EQ(pair.p, moved.get(pair.x));
@@ -430,7 +436,8 @@ TEST_F(ConcurrentContainersTest, insert_or_assign) {
   for (uint32_t x : m_data) {
     EXPECT_TRUE(map.count(x));
     auto& p = map.at_unsafe(x);
-    EXPECT_TRUE(p);
+    ASSERT_TRUE(p);
+    // @lint-ignore NULLSAFECLANG (guarded by ASSERT_TRUE above)
     EXPECT_EQ(x, *p);
   }
 
@@ -444,7 +451,8 @@ TEST_F(ConcurrentContainersTest, insert_or_assign) {
   for (uint32_t x : m_data) {
     EXPECT_TRUE(map.count(x));
     auto& p = map.at_unsafe(x);
-    EXPECT_TRUE(p);
+    ASSERT_TRUE(p);
+    // @lint-ignore NULLSAFECLANG (guarded by ASSERT_TRUE above)
     EXPECT_EQ(x + 1, *p);
   }
 }
