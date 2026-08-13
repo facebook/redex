@@ -337,6 +337,9 @@ size_t lower_check_cast(DexMethod*, IRCode* code, IRList::iterator* it_) {
   const auto* insn = it->insn;
   size_t extra_instructions{0};
   auto* move = ir_list::move_result_pseudo_of(it);
+  // Built before any replace_ir_with_dex, which deletes `insn`.
+  auto* dex_insn = new DexOpcodeType(DOPCODE_CHECK_CAST, insn->get_type());
+  dex_insn->set_src(0, move->dest());
   if (move->dest() != insn->src(0)) {
     // convert check-cast v1; move-result-pseudo v0 into
     //
@@ -349,12 +352,17 @@ size_t lower_check_cast(DexMethod*, IRCode* code, IRList::iterator* it_) {
     auto* dex_mov = new DexInstruction(select_move_opcode(move_template.get()));
     dex_mov->set_dest(move->dest());
     dex_mov->set_src(0, insn->src(0));
-    code->insert_before(it, dex_mov);
+    // The emitted order is move, then check-cast, either way. The MOVE goes in
+    // the EXISTING MethodItemEntry and the cast in the new one, so the entry
+    // that survives lowering is the one holding the FIRST emitted instruction.
+    // Output is unchanged -- same opcodes, same order, same addresses; only
+    // which entry owns which DexInstruction differs.
+    it->replace_ir_with_dex(dex_mov);
+    it = code->insert_after(it, dex_insn);
     ++extra_instructions;
+  } else {
+    it->replace_ir_with_dex(dex_insn);
   }
-  auto* dex_insn = new DexOpcodeType(DOPCODE_CHECK_CAST, insn->get_type());
-  dex_insn->set_src(0, move->dest());
-  it->replace_ir_with_dex(dex_insn);
   remove_move_result_pseudo(++it);
 
   return extra_instructions;
