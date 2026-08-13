@@ -58,24 +58,8 @@ namespace stringbuilder_concat {
  * that are non-null across all callers -- e.g. a method parameter -- are proven
  * non-null too, which a purely intraprocedural run cannot see.
  *
- * ## Semantic Change
- *
- * There is a semantics change, in reference identity only. Where b is empty,
- * `concat` is documented to return its receiver, so a concatenation that could
- * only have produced a new object now produces a itself:
- *
- *   String a = readName();       // "foo", not a compile-time constant
- *   String s = a + "";
- *   s.equals(a);                 // true, before and after
- *   s == a;                      // before: false. after: true.
- *
- * The pre-reduction `false` is guaranteed rather than incidental: JLS 15.18.1
- * specifies the result of `+` to be a newly created String unless the
- * expression is constant.
- *
- * Only identity-sensitive code can observe the change: `==`,
- * `identityHashCode`, `IdentityHashMap`, a monitor held on the result, or a
- * weak reference to it.
+ * The rewrite introduces a semantic change; see
+ * `InterproceduralConstantPropagationPass::get_config_doc`.
  */
 size_t reduce_two_append_concats(
     const intraprocedural::FixpointIterator& fp_iter,

@@ -52,6 +52,30 @@ class PassImpl : public Pass {
     };
   }
 
+  std::string get_config_doc() override {
+    return trim(R"(
+Runs the constant-propagation abstract interpretation over the whole program.
+
+#### Semantic changes in reduce_stringbuilder_concat
+
+The rewrite changes reference identity. `String.concat` returns its receiver
+when the argument is empty, where `toString()` allocated a new String, so a
+concatenation that could only have produced a new object now produces one of its
+operands:
+```java
+  String a = readName();       // "foo", not a compile-time constant
+  String s = a + "";
+  s.equals(a);                 // true, before and after
+  s == a;                      // before: false. after: true.
+```
+The old `false` is guaranteed rather than incidental: JLS 15.18.1 specifies the
+result of `+` to be a newly created String unless the expression is constant.
+Contents never differ; only identity-sensitive code can observe the change --
+`==`, `identityHashCode`, `IdentityHashMap`, a monitor held on the result, or a
+weak reference to it.
+    )");
+  }
+
   explicit PassImpl(Config config)
       : Pass("InterproceduralConstantPropagationPass"),
         m_config(std::move(config)) {}
@@ -83,8 +107,15 @@ class PassImpl : public Pass {
          "they are read, in order to ignore the default value 0.");
     bind("reduce_stringbuilder_concat", false,
          m_config.reduce_stringbuilder_concat,
-         "Rewrite two-append String concatenations to String.concat where both "
-         "operands are proven non-null. Has no effect once InterDex has run.");
+         "Rewrite two-append String concatenations to String.concat: "
+         "`new StringBuilder().append(a).append(b).toString()` becomes "
+         "`a.concat(b)`, when both operands are proven non-null, because "
+         "`concat` throws on null where `append` writes the text \"null\". The "
+         "builder this orphans is only removed by a later "
+         "ObjectSensitiveDcePass "
+         "run, which is where the saving comes from. Introduces a semantic "
+         "change -- see this pass's documentation. Has no effect once InterDex "
+         "has run.");
   }
 
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
