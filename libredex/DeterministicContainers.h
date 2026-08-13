@@ -762,6 +762,62 @@ bool operator!=(const UnorderedMultiMap<Key, Value, Hash, KeyEqual>& lhs,
   return lhs._internal_unsafe_unwrap() != rhs._internal_unsafe_unwrap();
 }
 
+// A forward-only iterator over an UnorderedBag's elements. A bag's iteration
+// order carries no meaning, so its view deliberately exposes only forward
+// traversal (no random access): this keeps callers from taking a dependency on
+// element position, and gives the bag view a single consistent iterator type
+// (which the iteration-order perturbation can later specialize without changing
+// the public category). The pass-through form holds and advances the real
+// vector iterator, so ++/*/== compile to exactly the same code as iterating the
+// backing vector directly.
+template <class VecIter>
+class BagViewIterator {
+ public:
+  using iterator_category = std::forward_iterator_tag;
+  using value_type = typename std::iterator_traits<VecIter>::value_type;
+  using difference_type =
+      typename std::iterator_traits<VecIter>::difference_type;
+  using pointer = typename std::iterator_traits<VecIter>::pointer;
+  using reference = typename std::iterator_traits<VecIter>::reference;
+
+  BagViewIterator() = default;
+  explicit BagViewIterator(VecIter it) : m_it(it) {}
+
+  reference operator*() const { return *m_it; }
+  pointer operator->() const { return &*m_it; }
+
+  BagViewIterator& operator++() {
+    ++m_it;
+    return *this;
+  }
+  BagViewIterator operator++(int) {
+    BagViewIterator tmp = *this;
+    ++m_it;
+    return tmp;
+  }
+
+  bool operator==(const BagViewIterator& other) const {
+    return m_it == other.m_it;
+  }
+  bool operator!=(const BagViewIterator& other) const {
+    return m_it != other.m_it;
+  }
+
+  // The underlying vector iterator for the current position, used to map a view
+  // iterator back to a (non-steppable) FixedIterator.
+  VecIter underlying() const { return m_it; }
+
+ private:
+  VecIter m_it{};
+};
+
+template <class T>
+struct is_bag_view_iterator : std::false_type {};
+template <class VecIter>
+struct is_bag_view_iterator<BagViewIterator<VecIter>> : std::true_type {};
+template <class T>
+inline constexpr bool is_bag_view_iterator_v = is_bag_view_iterator<T>::value;
+
 class UnorderedBagBase {};
 
 template <class Value>
@@ -850,45 +906,43 @@ class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
     typename Type::iterator _internal_unsafe_unwrap() const { return m_entry; }
   };
 
-  // TODO: Make extra non-deterministic in debug builds
   class UnorderedIterable {
     Type& m_data;
 
    public:
-    using iterator = typename Type::iterator;
-    using const_iterator = typename Type::const_iterator;
+    using iterator = BagViewIterator<typename Type::iterator>;
+    using const_iterator = BagViewIterator<typename Type::const_iterator>;
 
     explicit UnorderedIterable(Type& data) : m_data(data) {}
 
-    iterator begin() { return m_data.begin(); }
+    iterator begin() { return iterator(m_data.begin()); }
 
-    iterator end() { return m_data.end(); }
+    iterator end() { return iterator(m_data.end()); }
 
-    const_iterator begin() const { return m_data.begin(); }
+    const_iterator begin() const { return const_iterator(m_data.cbegin()); }
 
-    const_iterator end() const { return m_data.end(); }
+    const_iterator end() const { return const_iterator(m_data.cend()); }
 
-    const_iterator cbegin() const { return m_data.cbegin(); }
+    const_iterator cbegin() const { return const_iterator(m_data.cbegin()); }
 
-    const_iterator cend() const { return m_data.cend(); }
+    const_iterator cend() const { return const_iterator(m_data.cend()); }
   };
 
-  // TODO: Make extra non-deterministic in debug builds
   class ConstUnorderedIterable {
     const Type& m_data;
 
    public:
-    using const_iterator = typename Type::const_iterator;
+    using const_iterator = BagViewIterator<typename Type::const_iterator>;
 
     explicit ConstUnorderedIterable(const Type& data) : m_data(data) {}
 
-    const_iterator begin() const { return m_data.begin(); }
+    const_iterator begin() const { return const_iterator(m_data.begin()); }
 
-    const_iterator end() const { return m_data.end(); }
+    const_iterator end() const { return const_iterator(m_data.end()); }
 
-    const_iterator cbegin() const { return m_data.cbegin(); }
+    const_iterator cbegin() const { return const_iterator(m_data.cbegin()); }
 
-    const_iterator cend() const { return m_data.cend(); }
+    const_iterator cend() const { return const_iterator(m_data.cend()); }
   };
 
   UnorderedBag() : m_data() {}
@@ -967,8 +1021,18 @@ class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
 
   template <typename possibly_const_iterator>
   auto _internal_to_fixed_iterator(possibly_const_iterator it) const {
-    if constexpr (std::is_same_v<possibly_const_iterator,
-                                 typename Type::const_iterator>) {
+    if constexpr (is_bag_view_iterator_v<possibly_const_iterator>) {
+      // A bag view yields BagViewIterators; map back to the real vector
+      // iterator before building the (non-steppable) FixedIterator.
+      auto entry = it.underlying();
+      if constexpr (std::is_same_v<decltype(entry),
+                                   typename Type::const_iterator>) {
+        return ConstFixedIterator(entry);
+      } else {
+        return FixedIterator(entry);
+      }
+    } else if constexpr (std::is_same_v<possibly_const_iterator,
+                                        typename Type::const_iterator>) {
       return ConstFixedIterator(it);
     } else {
       return FixedIterator(it);
