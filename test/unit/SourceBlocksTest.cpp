@@ -23,6 +23,8 @@
 #include "ControlFlow.h"
 #include "Creators.h"
 #include "DexClass.h"
+#include "DexStore.h"
+#include "GlobalConfig.h"
 #include "IRAssembler.h"
 #include "Inliner.h"
 #include "MetricsSink.h"
@@ -2038,4 +2040,76 @@ TEST_F(SourceBlocksTest, violations_helper_reports_nothing_without_a_sink) {
   // The nullable contract the destructor relies on: no sink, no crash, and the
   // subsequent destructor must not report a second time either.
   vh.process(nullptr);
+}
+
+namespace {
+
+DexStoresVector make_stores(DexClass* cls) {
+  DexStoresVector stores;
+  DexStore store("classes");
+  store.add_classes({cls});
+  stores.emplace_back(store);
+  return stores;
+}
+
+} // namespace
+
+TEST_F(SourceBlocksTest, violations_tracking_handler_reports_under_its_scope) {
+  auto* method = create_method("LFoo");
+  ASSERT_NE(method, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  method->set_code(assembler::ircode_from_string(kBranchWithSourceBlocks));
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto* code = method->get_code();
+  ASSERT_NE(code, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto stores = make_stores(type_class(method->get_class()));
+
+  ViolationsTrackingConfig config;
+  config.enabled = true;
+  config.violation_kinds = {"UncoveredSourceBlocks"};
+  ViolationsTracking tracking(config);
+
+  RecordingSink sink;
+  int64_t expected_violations = 0;
+  {
+    auto handler = tracking.maybe_track(&sink, stores);
+    ASSERT_TRUE(handler.has_value());
+
+    code->build_cfg();
+    strip_source_blocks(code->cfg());
+    expected_violations = static_cast<int64_t>(compute(
+        ViolationsHelper::Violation::kUncoveredSourceBlocks, code->cfg()));
+    code->clear_cfg();
+    ASSERT_GT(expected_violations, 0);
+
+    // Nothing is reported until the handler goes away.
+    EXPECT_TRUE(sink.metrics.empty());
+  }
+
+  EXPECT_EQ(sink.get("~violation~tracking.new_violations"),
+            expected_violations);
+  EXPECT_EQ(sink.get("~violation~tracking.new_method_violations"), 0);
+}
+
+TEST_F(SourceBlocksTest, violations_tracking_is_inert_when_disabled) {
+  auto* method = create_method("LFoo");
+  ASSERT_NE(method, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  method->set_code(assembler::ircode_from_string(kBranchWithSourceBlocks));
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto stores = make_stores(type_class(method->get_class()));
+
+  // A kind that cannot be parsed: a disabled tracker must not even look at it,
+  // let alone abort the run.
+  ViolationsTrackingConfig config;
+  config.violation_kinds = {"NotAViolation"};
+  ViolationsTracking tracking(config);
+
+  RecordingSink sink;
+  {
+    auto handler = tracking.maybe_track(&sink, stores);
+    EXPECT_FALSE(handler.has_value());
+  }
+  EXPECT_TRUE(sink.metrics.empty());
 }

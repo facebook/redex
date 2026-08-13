@@ -969,85 +969,6 @@ struct JemallocStats {
   }
 };
 
-// Resolves the configured violation kind names. Aborts on an unknown name
-// rather than silently tracking nothing.
-source_blocks::ViolationsHelper::Violation parse_violation_kind(
-    const ViolationsTrackingConfig& config) {
-  always_assert_log(
-      config.violation_kinds.size() == 1,
-      "violations_tracking.violation_kinds must name exactly one kind, got "
-      "%zu; ViolationsHelper tracks a single kind per instance",
-      config.violation_kinds.size());
-  const auto& name = config.violation_kinds.front();
-  auto kind = source_blocks::violation_name_to_enum(name);
-  always_assert_log(kind.has_value(),
-                    "Unknown violations_tracking.violation_kinds entry \"%s\"; "
-                    "valid names are: %s",
-                    name.c_str(),
-                    source_blocks::get_violation_names().c_str());
-  return *kind;
-}
-
-struct ViolationsTracking {
-  const ViolationsTrackingConfig& config;
-  // Only meaningful when config.enabled; parsing an unset/invalid kind while
-  // tracking is off must not abort a run that never asked for tracking.
-  source_blocks::ViolationsHelper::Violation violation{
-      source_blocks::ViolationsHelper::Violation::kChainAndDom};
-
-  explicit ViolationsTracking(const ViolationsTrackingConfig& config)
-      : config(config) {
-    if (config.enabled) {
-      violation = parse_violation_kind(config);
-    }
-  }
-
-  struct Handler {
-    PassManager* pm;
-    std::unique_ptr<source_blocks::ViolationsHelper> vh;
-    Handler(PassManager* pm,
-            DexStoresVector& stores,
-            const ViolationsTrackingConfig& config,
-            source_blocks::ViolationsHelper::Violation violation)
-        : pm(pm),
-          vh(std::make_unique<source_blocks::ViolationsHelper>(
-              violation,
-              build_class_scope(stores),
-              config.top_n,
-              config.methods_to_vis,
-              config.track_intermethod_violations,
-              config.print_all_violations,
-              config.ignore_undefined)) {}
-    ~Handler() {
-      if (vh != nullptr) {
-        ScopedMetrics sm(*pm);
-        auto scope = sm.scope("~violation~tracking");
-        vh->process(&sm);
-      }
-    }
-
-    Handler(const Handler&) = delete;
-    Handler& operator=(const Handler&) = delete;
-
-    Handler(Handler&& other) noexcept : pm(other.pm), vh(std::move(other.vh)) {}
-    [[maybe_unused]] Handler& operator=(Handler&& rhs) noexcept {
-      if (vh != nullptr) {
-        vh->silence();
-      }
-      vh = std::move(rhs.vh);
-      pm = rhs.pm;
-      return *this;
-    }
-  };
-
-  std::optional<Handler> maybe_track(PassManager* pm, DexStoresVector& stores) {
-    if (!config.enabled) {
-      return std::nullopt;
-    }
-    return Handler(pm, stores, config, violation);
-  }
-};
-
 // Runs the configured verifiers around each pass. The stable collaborators are
 // bound once at construction; pre_pass/post_pass take only the per-pass inputs.
 //
@@ -1177,7 +1098,7 @@ struct PassProfiling {
   const std::optional<ScopedCommandProfiling::ProfilerInfo>& profiler_all_info;
   const Pass* profiler_info_pass;
   const Pass* malloc_profile_pass;
-  ViolationsTracking& violations_tracking;
+  source_blocks::ViolationsTracking& violations_tracking;
 
   // RAII bundle: constructs the scoped profilers for one pass and tears them
   // down (in reverse declaration order) when the pass finishes.
@@ -1185,14 +1106,18 @@ struct PassProfiling {
     std::optional<ScopedCommandProfiling> command_prof;
     std::optional<ScopedCommandProfiling> command_all_prof;
     jemalloc_util::ScopedProfiling malloc_prof;
-    std::optional<ViolationsTracking::Handler> violations;
+    // Declared before `violations`, and therefore destroyed after it, because
+    // the handler reports into this sink from its own destructor.
+    ScopedMetrics metrics;
+    std::optional<source_blocks::ViolationsTracking::Handler> violations;
 
     // Builds every scoped profiler in place, in declaration order, so their
     // constructor side effects run in the intended sequence: command
-    // profiling, then jemalloc scoped profiling, then violations tracking
-    // (whose constructor allocates and must run while malloc profiling is
-    // active). Taking the ingredients rather than pre-built members avoids
-    // relying on the unspecified evaluation order of constructor arguments.
+    // profiling, then jemalloc scoped profiling, then the metrics sink (which
+    // allocates nothing), then violations tracking (whose constructor
+    // allocates and must run while malloc profiling is active). Taking the
+    // ingredients rather than pre-built members avoids relying on the
+    // unspecified evaluation order of constructor arguments.
     Scope(PassProfiling& pp,
           PassManager* mgr,
           Pass* pass,
@@ -1204,7 +1129,8 @@ struct PassProfiling {
           command_all_prof(ScopedCommandProfiling::maybe_from_info(
               pp.profiler_all_info, &pass->name())),
           malloc_prof(pp.malloc_profile_pass == pass),
-          violations(pp.violations_tracking.maybe_track(mgr, stores)) {}
+          metrics(*mgr),
+          violations(pp.violations_tracking.maybe_track(&metrics, stores)) {}
 
     Scope(const Scope&) = delete;
     Scope& operator=(const Scope&) = delete;
@@ -1757,7 +1683,7 @@ class PassManager::RunPassesContext {
   // walking every method -- and so have to run after eval_passes(), which an
   // initializer list cannot express.
   std::optional<VisualizerHelper> graph_visualizer;
-  ViolationsTracking violations_tracking;
+  source_blocks::ViolationsTracking violations_tracking;
   const bool mem_pass_stats;
   const bool hwm_per_pass;
   std::optional<JNINativeContextHelper> jni_native_context_helper;

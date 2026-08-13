@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -14,6 +15,7 @@
 #include "SourceBlocks.h"
 
 class MetricsSink;
+struct ViolationsTrackingConfig;
 
 namespace source_blocks {
 
@@ -81,5 +83,46 @@ std::optional<ViolationsHelper::Violation> violation_name_to_enum(
 // Every name get_violation_name can return, comma-separated, for error
 // messages and documentation.
 std::string get_violation_names();
+
+/*
+ * Per-pass violations tracking, as driven by the `violations_tracking` global
+ * configuration.
+ *
+ * Construct one instance per Redex run. Each `Handler` then brackets a single
+ * pass: its constructor snapshots the current per-method violation counts, and
+ * its destructor recounts, diffs against the snapshot, and reports the
+ * increase under a `~violation~tracking` scope of the given metrics sink.
+ */
+class ViolationsTracking {
+ public:
+  explicit ViolationsTracking(const ViolationsTrackingConfig& config);
+
+  class Handler {
+   public:
+    Handler(const ViolationsTracking& tracking,
+            MetricsSink* sink,
+            const DexStoresVector& stores);
+    ~Handler();
+
+    Handler(const Handler&) = delete;
+    Handler& operator=(const Handler&) = delete;
+
+    Handler(Handler&& other) noexcept;
+    Handler& operator=(Handler&& rhs) noexcept;
+
+   private:
+    MetricsSink* m_sink;
+    std::unique_ptr<ViolationsHelper> m_vh;
+  };
+
+  // std::nullopt when tracking is not enabled, so that a caller can hold the
+  // result unconditionally.
+  std::optional<Handler> maybe_track(MetricsSink* sink,
+                                     const DexStoresVector& stores) const;
+
+ private:
+  const ViolationsTrackingConfig& m_config;
+  ViolationsHelper::Violation m_violation;
+};
 
 } // namespace source_blocks
