@@ -229,6 +229,16 @@ void ResourceConfig::bind_config() {
 
 void DexOutputConfig::bind_config() {
   bind("write_class_sizes", write_class_sizes, write_class_sizes);
+  bind(
+      "emit_class_order_sample", emit_class_order_sample,
+      emit_class_order_sample,
+      "Emit a segment-aware, sampled class-placement fingerprint for "
+      "root-store (main-APK) classes into output_stats.class_order_sample, "
+      "used to compare class placement across builds per dex-ordering regime.");
+  bind("class_order_sample_cap", class_order_sample_cap, class_order_sample_cap,
+       "Target number of sampled classes in the cold (cross-dex-ref-minimized) "
+       "segment when emit_class_order_sample is set; the primary and betamap "
+       "segments are always kept in full.");
 }
 
 void JarLoaderConfig::bind_config() {

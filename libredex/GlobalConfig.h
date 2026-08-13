@@ -201,6 +201,16 @@ struct DexOutputConfig : public Configurable {
   }
 
   bool write_class_sizes{false};
+
+  // When enabled, emit a segment-aware, sampled class-placement fingerprint for
+  // root-store (main-APK) classes into output_stats.class_order_sample, used to
+  // compare class placement across two builds per dex-ordering regime. On by
+  // default.
+  bool emit_class_order_sample{true};
+  // Target number of sampled classes in the cold (cross-dex-ref-minimized)
+  // segment when emit_class_order_sample is set; the primary and betamap
+  // segments are always kept in full, so this only bounds the cold segment.
+  int class_order_sample_cap{1000};
 };
 
 struct JarLoaderConfig : public Configurable {
