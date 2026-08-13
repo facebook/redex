@@ -969,25 +969,55 @@ struct JemallocStats {
   }
 };
 
-struct ViolationsTracking {
-  bool enabled{false};
+// Resolves the configured violation kind names. Aborts on an unknown name
+// rather than silently tracking nothing.
+source_blocks::ViolationsHelper::Violation parse_violation_kind(
+    const ViolationsTrackingConfig& config) {
+  always_assert_log(
+      config.violation_kinds.size() == 1,
+      "violations_tracking.violation_kinds must name exactly one kind, got "
+      "%zu; ViolationsHelper tracks a single kind per instance",
+      config.violation_kinds.size());
+  const auto& name = config.violation_kinds.front();
+  auto kind = source_blocks::violation_name_to_enum(name);
+  always_assert_log(kind.has_value(),
+                    "Unknown violations_tracking.violation_kinds entry \"%s\"; "
+                    "valid names are: %s",
+                    name.c_str(),
+                    source_blocks::get_violation_names().c_str());
+  return *kind;
+}
 
-  explicit ViolationsTracking(bool enabled) : enabled(enabled) {}
+struct ViolationsTracking {
+  const ViolationsTrackingConfig& config;
+  // Only meaningful when config.enabled; parsing an unset/invalid kind while
+  // tracking is off must not abort a run that never asked for tracking.
+  source_blocks::ViolationsHelper::Violation violation{
+      source_blocks::ViolationsHelper::Violation::kChainAndDom};
+
+  explicit ViolationsTracking(const ViolationsTrackingConfig& config)
+      : config(config) {
+    if (config.enabled) {
+      violation = parse_violation_kind(config);
+    }
+  }
 
   struct Handler {
     PassManager* pm;
     std::unique_ptr<source_blocks::ViolationsHelper> vh;
-    Handler(PassManager* pm, DexStoresVector& stores)
+    Handler(PassManager* pm,
+            DexStoresVector& stores,
+            const ViolationsTrackingConfig& config,
+            source_blocks::ViolationsHelper::Violation violation)
         : pm(pm),
           vh(std::make_unique<source_blocks::ViolationsHelper>(
-              source_blocks::ViolationsHelper::Violation::kChainAndDom,
+              violation,
               build_class_scope(stores),
-              /*top_n=*/10,
-              /*to_vis=*/
-              std::vector<std::string>{},
-              /*track_intermethod_violations=*/false,
-              /*print_all_violations=*/false,
-              /*ignore_undefined*/ false)) {}
+              config.top_n,
+              config.methods_to_vis,
+              config.track_intermethod_violations,
+              config.print_all_violations,
+              config.ignore_undefined)) {}
     ~Handler() {
       if (vh != nullptr) {
         ScopedMetrics sm(*pm);
@@ -1011,10 +1041,10 @@ struct ViolationsTracking {
   };
 
   std::optional<Handler> maybe_track(PassManager* pm, DexStoresVector& stores) {
-    if (!enabled) {
+    if (!config.enabled) {
       return std::nullopt;
     }
-    return Handler(pm, stores);
+    return Handler(pm, stores, config, violation);
   }
 };
 
@@ -1300,7 +1330,7 @@ class PassManager::RunPassesContext {
         // Retrieve the type checker's settings.
         checker_conf(conf, mgr.m_checker_disabled),
         check_unique_deobfuscated(conf),
-        violations_tracking(pm_config->violations_tracking),
+        violations_tracking(*get_violations_tracking_config(conf)),
         mem_pass_stats(traceEnabled(STATS, 1) ||
                        conf.get_json_config().get("mem_stats", true)),
         hwm_per_pass(conf.get_json_config().get("mem_stats_per_pass", true)),
@@ -1678,6 +1708,15 @@ class PassManager::RunPassesContext {
             "pass_manager");
     redex_assert(pm_config != nullptr);
     return pm_config;
+  }
+
+  static const ViolationsTrackingConfig* get_violations_tracking_config(
+      const ConfigFiles& conf) {
+    const auto* config =
+        conf.get_global_config().get_config_by_name<ViolationsTrackingConfig>(
+            "violations_tracking");
+    redex_assert(config != nullptr);
+    return config;
   }
 
   // Squashes the dexes before handing out the iterator, so that it and the

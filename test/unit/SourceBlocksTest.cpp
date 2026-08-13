@@ -11,8 +11,10 @@
 
 #include <atomic>
 #include <limits>
+#include <optional>
 #include <regex>
 #include <sstream>
+#include <string>
 
 #include <gtest/gtest.h>
 
@@ -24,6 +26,7 @@
 #include "RedexContext.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "SourceBlocksViolations.h"
 
 using namespace cfg;
 using namespace source_blocks;
@@ -1859,4 +1862,65 @@ TEST_F(SourceBlocksTest, clone_as_synthetic_summing) {
   // Contrast: the plain (max) clone maxes val -- would undercount an outline.
   auto maxed = source_blocks::clone_as_synthetic(&s1, nullptr, many);
   EXPECT_FLOAT_EQ(*maxed->get_val(0), 30.0f); // max, not 60
+}
+TEST_F(SourceBlocksTest, violation_name_round_trip) {
+  for (size_t i = 0;
+       i != static_cast<size_t>(ViolationsHelper::Violation::ViolationSize);
+       ++i) {
+    auto v = static_cast<ViolationsHelper::Violation>(i);
+    auto name = get_violation_name(v);
+    SCOPED_TRACE(std::string(name));
+    EXPECT_EQ(violation_name_to_enum(name), v);
+  }
+}
+
+TEST_F(SourceBlocksTest, violation_name_to_enum_rejects_unknown_names) {
+  EXPECT_EQ(violation_name_to_enum("NotAViolation"), std::nullopt);
+  // Matching is exact, so a plausible-looking alternative spelling has to be
+  // rejected rather than silently tracking nothing.
+  EXPECT_EQ(violation_name_to_enum("chain_and_dom"), std::nullopt);
+  EXPECT_EQ(violation_name_to_enum(""), std::nullopt);
+}
+
+// Reporting no top-N list at all is a reasonable thing to configure. Before
+// `top_n` became configurable it was the literal 10, so the ranking code never
+// saw an empty list; now `top_n: 0` reaches `back()` on one.
+TEST_F(SourceBlocksTest, violations_helper_tolerates_zero_top_n) {
+  constexpr const char* kCode = R"(
+    (
+      (.src_block "LZero;.bar:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (.src_block "LZero;.bar:()V" 1 (1.0 1.0))
+      (return-void)
+    )
+  )";
+
+  auto* method = create_method("LZeroTopN");
+  ASSERT_NE(method, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  method->set_code(assembler::ircode_from_string(kCode));
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto* code = method->get_code();
+  ASSERT_NE(code, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  ::Scope scope{type_class(method->get_class())};
+
+  ViolationsHelper vh(ViolationsHelper::Violation::kUncoveredSourceBlocks,
+                      scope,
+                      /*top_n=*/0,
+                      /*to_vis=*/{},
+                      /*track_intermethod_violations=*/false,
+                      /*print_all_violations=*/false,
+                      /*ignore_undefined=*/false);
+
+  code->build_cfg();
+  strip_source_blocks(code->cfg());
+  ASSERT_GT(
+      compute(ViolationsHelper::Violation::kUncoveredSourceBlocks, code->cfg()),
+      0u);
+  code->clear_cfg();
+
+  // The regressed method has nowhere to be ranked. Without the guard this
+  // dereferences back() on an empty vector, whose data() is null.
+  vh.process(nullptr);
 }
