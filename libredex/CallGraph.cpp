@@ -584,8 +584,12 @@ CallgraphStats get_num_nodes_edges(const Graph& graph) {
 }
 
 const MethodBag& Graph::get_callers(const DexMethod* callee) const {
+  // The caller set is stored as an (unordered) MethodBag, so two threads racing
+  // to create the entry for the same callee may build it in a different element
+  // order; compare them as sets (interned DexMethod pointers => pointer
+  // identity), not as ordered sequences. Only runs on the rare insert race.
   return *m_callee_to_callers
-              .get_or_create_and_assert_equal(
+              .get_or_create_and_assert_equal<UnorderedEqual<MethodBag>>(
                   callee,
                   [&](const DexMethod*) {
                     UnorderedSet<const DexMethod*> set;
