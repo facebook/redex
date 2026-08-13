@@ -843,6 +843,10 @@ bool ConfigFiles::disable_violation_fixes() const {
   return m_json.get("disable_violation_fixes", false);
 }
 
+bool ConfigFiles::preserve_count_integrity() const {
+  return m_json.get("preserve_count_integrity", false);
+}
+
 bool ConfigFiles::emit_incoming_hashes() const {
   return m_json.get("emit_incoming_hashes", false);
 }
