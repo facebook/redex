@@ -1174,85 +1174,6 @@ struct PassProfiling {
 
 } // namespace
 
-void PassManager::check_no_new_dex_features(const DexStoresVector& stores,
-                                            const Pass* pass,
-                                            int check_against_version) {
-  always_assert_log(check_against_version <= 39 && check_against_version >= 35,
-                    "Checking on unknown version %d", check_against_version);
-  if ((check_against_version >= 37 && m_has_dex37_features == std::nullopt) ||
-      (check_against_version >= 38 && m_has_dex38_features == std::nullopt) ||
-      (check_against_version >= 39 && m_has_dex39_features == std::nullopt)) {
-    // We run the feature check once in the full pass run and store the value
-    std::atomic<bool> has_dex37_features{false};
-    std::atomic<bool> has_dex38_features{false};
-    std::atomic<bool> has_dex39_features{false};
-    walk::parallel::classes(build_class_scope(stores), [&](DexClass* cls) {
-      if (is_interface(cls)) {
-        for (auto* m : cls->get_vmethods()) {
-          if (m->get_code() != nullptr) {
-            has_dex37_features = true;
-          }
-        }
-      }
-      for (auto* m : cls->get_all_methods()) {
-        if (m->get_code() == nullptr) {
-          continue;
-        }
-        for (auto& mie : InstructionIterable(m->get_code()->cfg())) {
-          auto* insn = mie.insn;
-          const auto& op = insn->opcode();
-          if (op == OPCODE_INVOKE_CUSTOM || op == OPCODE_INVOKE_POLYMORPHIC) {
-            has_dex38_features = true;
-          }
-          if (op == OPCODE_CONST_METHOD_HANDLE ||
-              op == OPCODE_CONST_METHOD_TYPE) {
-            has_dex39_features = true;
-          }
-          if (op == OPCODE_INVOKE_SUPER || op == OPCODE_INVOKE_DIRECT) {
-            // invoke-super and invoke-direct on interface methods need
-            // additional support.
-            if (insn->get_method() == nullptr) {
-              continue;
-            }
-            auto* insn_method_cls = type_class(insn->get_method()->get_class());
-            if (insn_method_cls != nullptr && is_interface(insn_method_cls)) {
-              has_dex37_features = true;
-            }
-          }
-        }
-      }
-    });
-    m_has_dex37_features = has_dex37_features;
-    m_has_dex38_features = has_dex38_features;
-    m_has_dex39_features = has_dex39_features;
-  }
-
-  switch (check_against_version) {
-  case 39:
-    always_assert_log(
-        !m_has_dex39_features,
-        "Input APK has dex39 features that this pass %s doesn't support",
-        pass->name().c_str());
-    [[fallthrough]];
-  case 38:
-    always_assert_log(
-        !m_has_dex38_features,
-        "Input APK has dex38 features that this pass %s doesn't support",
-        pass->name().c_str());
-    [[fallthrough]];
-  case 37:
-    always_assert_log(
-        !m_has_dex37_features,
-        "Input APK has dex37 features that this pass %s doesn't support",
-        pass->name().c_str());
-    [[fallthrough]];
-  case 35:
-    return;
-  default:
-    not_reached();
-  }
-}
-
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
   return std::make_unique<keep_rules::ProguardConfiguration>();
 }
@@ -1520,7 +1441,7 @@ class PassManager::RunPassesContext {
       auto version = pass_dex_version_to_check(
           pass, mgr.m_redex_options.input_dex_version);
       if (version.has_value()) {
-        mgr.check_no_new_dex_features(stores, pass, version.value());
+        check_no_new_dex_features(pass, version.value());
       }
 
       pass->run_pass(stores, conf, mgr);
@@ -1584,6 +1505,88 @@ class PassManager::RunPassesContext {
       mgr.m_current_pass_info = &mgr.m_pass_info[i];
       pass->eval_pass(stores, conf, mgr);
       mgr.m_current_pass_info = nullptr;
+    }
+  }
+
+  // Aborts if the input uses dex features that `pass` cannot handle. The
+  // feature scan walks every method, so its result is memoized in the
+  // has_dex3*_features members for the rest of the run.
+  void check_no_new_dex_features(const Pass* pass, int check_against_version) {
+    always_assert_log(check_against_version <= 39 &&
+                          check_against_version >= 35,
+                      "Checking on unknown version %d", check_against_version);
+    if ((check_against_version >= 37 && has_dex37_features == std::nullopt) ||
+        (check_against_version >= 38 && has_dex38_features == std::nullopt) ||
+        (check_against_version >= 39 && has_dex39_features == std::nullopt)) {
+      // We run the feature check once in the full pass run and store the value
+      std::atomic<bool> found_dex37_features{false};
+      std::atomic<bool> found_dex38_features{false};
+      std::atomic<bool> found_dex39_features{false};
+      walk::parallel::classes(build_class_scope(stores), [&](DexClass* cls) {
+        if (is_interface(cls)) {
+          for (auto* m : cls->get_vmethods()) {
+            if (m->get_code() != nullptr) {
+              found_dex37_features = true;
+            }
+          }
+        }
+        for (auto* m : cls->get_all_methods()) {
+          if (m->get_code() == nullptr) {
+            continue;
+          }
+          for (auto& mie : InstructionIterable(m->get_code()->cfg())) {
+            auto* insn = mie.insn;
+            const auto& op = insn->opcode();
+            if (op == OPCODE_INVOKE_CUSTOM || op == OPCODE_INVOKE_POLYMORPHIC) {
+              found_dex38_features = true;
+            }
+            if (op == OPCODE_CONST_METHOD_HANDLE ||
+                op == OPCODE_CONST_METHOD_TYPE) {
+              found_dex39_features = true;
+            }
+            if (op == OPCODE_INVOKE_SUPER || op == OPCODE_INVOKE_DIRECT) {
+              // invoke-super and invoke-direct on interface methods need
+              // additional support.
+              if (insn->get_method() == nullptr) {
+                continue;
+              }
+              auto* insn_method_cls =
+                  type_class(insn->get_method()->get_class());
+              if (insn_method_cls != nullptr && is_interface(insn_method_cls)) {
+                found_dex37_features = true;
+              }
+            }
+          }
+        }
+      });
+      has_dex37_features = found_dex37_features;
+      has_dex38_features = found_dex38_features;
+      has_dex39_features = found_dex39_features;
+    }
+
+    switch (check_against_version) {
+    case 39:
+      always_assert_log(
+          !has_dex39_features,
+          "Input APK has dex39 features that this pass %s doesn't support",
+          pass->name().c_str());
+      [[fallthrough]];
+    case 38:
+      always_assert_log(
+          !has_dex38_features,
+          "Input APK has dex38 features that this pass %s doesn't support",
+          pass->name().c_str());
+      [[fallthrough]];
+    case 37:
+      always_assert_log(
+          !has_dex37_features,
+          "Input APK has dex37 features that this pass %s doesn't support",
+          pass->name().c_str());
+      [[fallthrough]];
+    case 35:
+      return;
+    default:
+      not_reached();
     }
   }
 
@@ -1702,6 +1705,13 @@ class PassManager::RunPassesContext {
   UnorderedMap<const Pass*, size_t> runs;
   PassVerifiers<RunPassesContext> verifiers;
   PassProfiling pass_profiling;
+
+  // Memoized by check_no_new_dex_features, which is the only user. Scoped to
+  // the run: a second run_passes call re-scans rather than reusing a result
+  // that the first run's passes may have invalidated.
+  std::optional<bool> has_dex37_features;
+  std::optional<bool> has_dex38_features;
+  std::optional<bool> has_dex39_features;
 };
 
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
