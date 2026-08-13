@@ -1910,7 +1910,7 @@ TEST_F(SourceBlocksTest, violations_helper_tolerates_zero_top_n) {
   // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
   ::Scope scope{type_class(method->get_class())};
 
-  ViolationsHelper vh(ViolationsHelper::Violation::kUncoveredSourceBlocks,
+  ViolationsHelper vh({ViolationsHelper::Violation::kUncoveredSourceBlocks},
                       scope,
                       /*top_n=*/0,
                       /*to_vis=*/{},
@@ -1987,7 +1987,7 @@ TEST_F(SourceBlocksTest, violations_helper_reports_to_metrics_sink) {
   ::Scope scope{type_class(method->get_class())};
   // Every block carries a source block, so the baseline is zero uncovered
   // blocks.
-  ViolationsHelper vh(ViolationsHelper::Violation::kUncoveredSourceBlocks,
+  ViolationsHelper vh({ViolationsHelper::Violation::kUncoveredSourceBlocks},
                       scope,
                       /*top_n=*/10,
                       /*to_vis=*/{},
@@ -2025,7 +2025,7 @@ TEST_F(SourceBlocksTest, violations_helper_reports_nothing_without_a_sink) {
 
   // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
   ::Scope scope{type_class(method->get_class())};
-  ViolationsHelper vh(ViolationsHelper::Violation::kUncoveredSourceBlocks,
+  ViolationsHelper vh({ViolationsHelper::Violation::kUncoveredSourceBlocks},
                       scope,
                       /*top_n=*/10,
                       /*to_vis=*/{},
@@ -2112,4 +2112,47 @@ TEST_F(SourceBlocksTest, violations_tracking_is_inert_when_disabled) {
     EXPECT_FALSE(handler.has_value());
   }
   EXPECT_TRUE(sink.metrics.empty());
+}
+
+TEST_F(SourceBlocksTest, violations_tracking_reports_each_kind_separately) {
+  auto* method = create_method("LFoo");
+  ASSERT_NE(method, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  method->set_code(assembler::ircode_from_string(kBranchWithSourceBlocks));
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto* code = method->get_code();
+  ASSERT_NE(code, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto stores = make_stores(type_class(method->get_class()));
+
+  ViolationsTrackingConfig config;
+  config.enabled = true;
+  config.violation_kinds = {"UncoveredSourceBlocks", "ChainAndDom"};
+  ViolationsTracking tracking(config);
+
+  RecordingSink sink;
+  int64_t expected_uncovered = 0;
+  {
+    auto handler = tracking.maybe_track(&sink, stores);
+    ASSERT_TRUE(handler.has_value());
+
+    code->build_cfg();
+    strip_source_blocks(code->cfg());
+    expected_uncovered = static_cast<int64_t>(compute(
+        ViolationsHelper::Violation::kUncoveredSourceBlocks, code->cfg()));
+    code->clear_cfg();
+    ASSERT_GT(expected_uncovered, 0);
+  }
+
+  // Each kind gets its own scope, named the way the config names it.
+  EXPECT_EQ(
+      sink.get("~violation~tracking.UncoveredSourceBlocks.new_violations"),
+      expected_uncovered);
+  EXPECT_TRUE(
+      sink.get("~violation~tracking.ChainAndDom.new_violations").has_value());
+  // ...and the single-kind flat key must not also appear, or a consumer could
+  // not tell which kind it belonged to.
+  EXPECT_FALSE(sink.get("~violation~tracking.new_violations").has_value());
+  // Inter-method violations are not one of the kinds, so they stay top-level.
+  EXPECT_EQ(sink.get("~violation~tracking.new_method_violations"), 0);
 }

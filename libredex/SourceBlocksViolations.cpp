@@ -8,6 +8,7 @@
 #include "SourceBlocksViolations.h"
 
 #include <array>
+#include <bitset>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -1094,8 +1095,28 @@ size_t compute_method_violations(const call_graph::Graph& call_graph,
 }
 
 struct ViolationsHelper::ViolationsHelperImpl {
+  using Violation = ViolationsHelper::Violation;
+  using Dominators = dominators::SimpleFastDominators<cfg::GraphInterface>;
+
+  static constexpr size_t kViolationCount =
+      static_cast<size_t>(Violation::ViolationSize);
+  // Which kinds are tracked, and one count per kind. Indexed by the enum
+  // value, so iteration order is the enum order -- stable, which the metric
+  // keys rely on.
+  using ViolationSet = std::bitset<kViolationCount>;
+  using ViolationCounts = std::array<size_t, kViolationCount>;
+
+  template <typename Fn>
+  static void for_each_kind(const ViolationSet& kinds, Fn fn) {
+    for (size_t i = 0; i != kViolationCount; ++i) {
+      if (kinds.test(i)) {
+        fn(static_cast<Violation>(i));
+      }
+    }
+  }
+
   size_t top_n;
-  UnorderedMap<DexMethod*, size_t> violations_start;
+  UnorderedMap<DexMethod*, ViolationCounts> violations_start;
   size_t method_violations{0};
   std::vector<std::string> print;
   Scope scope;
@@ -1104,8 +1125,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
   bool print_all_violations{false};
   bool ignore_undefined{false};
 
-  using Violation = ViolationsHelper::Violation;
-  const Violation v;
+  const ViolationSet kinds;
 
   struct MethodDelta {
     DexMethod* method;
@@ -1146,7 +1166,18 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
   };
 
-  ViolationsHelperImpl(Violation v,
+  static ViolationSet to_set(const std::vector<Violation>& violations) {
+    always_assert_log(!violations.empty(),
+                      "ViolationsHelper needs at least one violation kind");
+    ViolationSet res;
+    for (auto v : violations) {
+      always_assert(v < Violation::ViolationSize);
+      res.set(static_cast<size_t>(v));
+    }
+    return res;
+  }
+
+  ViolationsHelperImpl(const std::vector<Violation>& violations,
                        const Scope& scope,
                        size_t top_n,
                        std::vector<std::string> to_vis,
@@ -1159,21 +1190,21 @@ struct ViolationsHelper::ViolationsHelperImpl {
         track_intermethod_violations(track_intermethod_violations),
         print_all_violations(print_all_violations),
         ignore_undefined(ignore_undefined),
-        v(v) {
+        kinds(to_set(violations)) {
     {
       std::mutex lock;
-      walk::parallel::methods(scope,
-                              [this, &lock, v, ignore_undefined](DexMethod* m) {
-                                if (m->get_code() == nullptr) {
-                                  return;
-                                }
-                                cfg::ScopedCFG cfg(m->get_code());
-                                auto val = compute(v, *cfg, ignore_undefined);
-                                {
-                                  std::unique_lock<std::mutex> ulock{lock};
-                                  violations_start[m] = val;
-                                }
-                              });
+      walk::parallel::methods(
+          scope, [this, &lock, ignore_undefined](DexMethod* m) {
+            if (m->get_code() == nullptr) {
+              return;
+            }
+            cfg::ScopedCFG cfg(m->get_code());
+            auto vals = compute_all(kinds, *cfg, ignore_undefined);
+            {
+              std::unique_lock<std::mutex> ulock{lock};
+              violations_start[m] = vals;
+            }
+          });
     }
 
     if (track_intermethod_violations) {
@@ -1188,28 +1219,126 @@ struct ViolationsHelper::ViolationsHelperImpl {
     print_all();
   }
 
-  static size_t compute(Violation v,
-                        cfg::ControlFlowGraph& cfg,
-                        bool ignore_undefined) {
+  // Whether a kind's counter needs unreachable blocks removed first. Some
+  // passes leave them around and the fast-dom does not deal well with them.
+  static bool needs_unreachable_removal(Violation v) {
     switch (v) {
     case Violation::kHotImmediateDomNotHot:
-      return hot_immediate_dom_not_hot_cfg(cfg, ignore_undefined);
     case Violation::kChainAndDom:
-      return chain_and_dom_violations_cfg(cfg, ignore_undefined);
-    case Violation::kUncoveredSourceBlocks:
-      return uncovered_source_blocks_violations_cfg(cfg);
-    case Violation::kHotMethodColdEntry:
-      return hot_method_cold_entry_violations_cfg(cfg, ignore_undefined);
     case Violation::kHotNoHotPred:
-      return hot_no_hot_pred_cfg(cfg, ignore_undefined);
     case Violation::KHotAllChildrenCold:
-      return hot_all_children_cold_cfg(cfg, ignore_undefined);
+      return true;
+    case Violation::kUncoveredSourceBlocks:
+    case Violation::kHotMethodColdEntry:
     case Violation::kUncoveredThrowDelineatedBlocks:
-      return uncovered_throw_delineated_blocks_violations_cfg(cfg);
+      return false;
     case Violation::ViolationSize:
       not_reached();
     }
     not_reached();
+  }
+
+  static bool needs_dominators(Violation v) {
+    switch (v) {
+    case Violation::kHotImmediateDomNotHot:
+    case Violation::kChainAndDom:
+    case Violation::kHotNoHotPred:
+    case Violation::kUncoveredThrowDelineatedBlocks:
+      return true;
+    case Violation::kUncoveredSourceBlocks:
+    case Violation::kHotMethodColdEntry:
+    case Violation::KHotAllChildrenCold:
+      return false;
+    case Violation::ViolationSize:
+      not_reached();
+    }
+    not_reached();
+  }
+
+  // Counts one kind over an already-prepared CFG.
+  static size_t count_violations(Violation v,
+                                 cfg::ControlFlowGraph& cfg,
+                                 const std::optional<Dominators>& dom,
+                                 bool ignore_undefined) {
+    // compute_all builds the dominators whenever any requested kind needs
+    // them, so every kind that reaches a `*dom` below finds them here.
+    always_assert(dom.has_value() || !needs_dominators(v));
+    size_t sum{0};
+    switch (v) {
+    case Violation::kHotImmediateDomNotHot:
+      for (auto* b : cfg.blocks()) {
+        sum += hot_immediate_dom_not_hot(b, *dom, ignore_undefined).violations;
+      }
+      return sum;
+    case Violation::kChainAndDom:
+      for (auto* b : cfg.blocks()) {
+        sum += chain_and_dom_violations(b, *dom, ignore_undefined).violations;
+      }
+      return sum;
+    case Violation::kUncoveredSourceBlocks:
+      for (auto* b : cfg.blocks()) {
+        // Do not count ghost blocks in this violation
+        if (!is_ghost_block(b) && get_first_source_block(b) == nullptr) {
+          sum++;
+        }
+      }
+      return sum;
+    case Violation::kHotMethodColdEntry:
+      return hot_method_cold_entry_violations_cfg(cfg, ignore_undefined);
+    case Violation::kHotNoHotPred:
+      for (auto* b : cfg.blocks()) {
+        sum += hot_no_hot_pred(b, *dom, ignore_undefined).violations;
+      }
+      return sum;
+    case Violation::KHotAllChildrenCold:
+      for (auto* b : cfg.blocks()) {
+        sum += hot_all_children_cold(b, ignore_undefined).violations;
+      }
+      return sum;
+    case Violation::kUncoveredThrowDelineatedBlocks:
+      for (auto* b : cfg.blocks()) {
+        sum += count_throw_delineated_no_sbs(b, *dom);
+      }
+      return sum;
+    case Violation::ViolationSize:
+      not_reached();
+    }
+    not_reached();
+  }
+
+  // Counts every requested kind over one method, doing the CFG normalization
+  // and the dominator computation once for all of them. Only the entries for
+  // the requested kinds are meaningful; the rest stay zero.
+  static ViolationCounts compute_all(const ViolationSet& kinds,
+                                     cfg::ControlFlowGraph& cfg,
+                                     bool ignore_undefined) {
+    ViolationCounts counts{};
+    bool any_removal = false;
+    bool any_dominators = false;
+    for_each_kind(kinds, [&](Violation v) {
+      any_removal |= needs_unreachable_removal(v);
+      any_dominators |= needs_dominators(v);
+    });
+    if (any_removal) {
+      cfg.remove_unreachable_blocks();
+    }
+    std::optional<Dominators> dom;
+    if (any_dominators) {
+      dom.emplace(cfg);
+    }
+    for_each_kind(kinds, [&](Violation v) {
+      counts[static_cast<size_t>(v)] =
+          count_violations(v, cfg, dom, ignore_undefined);
+    });
+    return counts;
+  }
+
+  static size_t compute(Violation v,
+                        cfg::ControlFlowGraph& cfg,
+                        bool ignore_undefined) {
+    ViolationSet kinds;
+    kinds.set(static_cast<size_t>(v));
+    return compute_all(kinds, cfg, ignore_undefined)[static_cast<size_t>(v)];
   }
 
   // NOLINTNEXTLINE(bugprone-exception-escape)
@@ -1222,43 +1351,57 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
     processed = true;
 
-    std::atomic<size_t> change_sum{0};
+    std::array<std::atomic<size_t>, kViolationCount> change_sums{};
     long long method_violation_change_sum{0};
 
     {
       std::mutex lock;
-      std::vector<MethodDelta> top_changes;
+      std::array<std::vector<MethodDelta>, kViolationCount> top_changes;
 
-      workqueue_run<std::pair<DexMethod*, size_t>>(
-          [&](const std::pair<DexMethod*, size_t>& p) {
+      workqueue_run<std::pair<DexMethod*, ViolationCounts>>(
+          [&](const std::pair<DexMethod*, ViolationCounts>& p) {
             auto* m = p.first;
-            if (m->get_code() == nullptr) {
+            // Keys come from violations_start, which walk::parallel::methods
+            // filled, so they are never null.
+            // @lint-ignore NULLSAFECLANG
+            auto* code = m->get_code();
+            if (code == nullptr) {
               return;
             }
-            cfg::ScopedCFG cfg(m->get_code());
-            auto val = compute(v, *cfg, ignore_undefined);
-            if (val <= p.second) {
-              return;
-            }
-            change_sum.fetch_add(val - p.second);
+            cfg::ScopedCFG cfg(code);
+            auto vals = compute_all(kinds, *cfg, ignore_undefined);
 
-            if (top_n == 0) {
-              // No ranking asked for; the totals above are the whole report.
-              // Bailing here also keeps the comparison below off an empty list.
-              return;
-            }
+            // Only methods that regressed pay for their size, and only once
+            // however many kinds they regressed in.
+            std::optional<size_t> method_size;
+            for (size_t i = 0; i != kViolationCount; ++i) {
+              if (!kinds.test(i) || vals[i] <= p.second[i]) {
+                continue;
+              }
+              auto m_delta = vals[i] - p.second[i];
+              change_sums[i].fetch_add(m_delta);
 
-            auto m_delta = val - p.second;
-            size_t s = m->get_code()->sum_opcode_sizes();
-            std::unique_lock<std::mutex> ulock{lock};
-            if (top_changes.size() < top_n) {
-              top_changes.emplace_back(m, m_delta, s);
-              return;
-            }
-            MethodDelta m_t{m, m_delta, s};
-            if (m_t < top_changes.back()) {
-              top_changes.back() = m_t;
-              std::sort(top_changes.begin(), top_changes.end());
+              if (top_n == 0) {
+                // No ranking asked for; the totals above are the whole
+                // report. Bailing here also keeps the comparison below
+                // off an empty list.
+                continue;
+              }
+
+              if (!method_size) {
+                method_size = code->sum_opcode_sizes();
+              }
+              auto& top = top_changes[i];
+              std::unique_lock<std::mutex> ulock{lock};
+              if (top.size() < top_n) {
+                top.emplace_back(m, m_delta, *method_size);
+                continue;
+              }
+              MethodDelta m_t{m, m_delta, *method_size};
+              if (m_t < top.back()) {
+                top.back() = m_t;
+                std::sort(top.begin(), top.end());
+              }
             }
           },
           violations_start);
@@ -1282,28 +1425,44 @@ struct ViolationsHelper::ViolationsHelperImpl {
         }
       };
       MaybeMetrics mm(sm);
-      auto mm_top_changes = mm.sub_scope("top_changes");
-      for (size_t i = 0; i != top_changes.size(); ++i) {
-        auto& t = top_changes[i];
-        TRACE(MMINL, 0, "%s (size %zu): +%zu", SHOW(t.method), t.method_size,
-              t.violations_delta);
-        auto mm_top_changes_i = mm_top_changes.sub_scope(std::to_string(i));
+      // With a single kind the keys stay flat, which is both the default and
+      // what existing dashboards read; a per-kind scope only appears once
+      // there is more than one kind to tell apart.
+      const bool name_the_kind = kinds.count() > 1;
+      for_each_kind(kinds, [&](Violation v) {
+        auto name = get_violation_name(v);
+        MaybeMetrics kind_mm =
+            name_the_kind ? mm.sub_scope(std::string(name)) : MaybeMetrics(sm);
         {
-          auto mm_top_changes_i_size = mm_top_changes_i.sub_scope("size");
-          mm_top_changes_i_size.set_metric(show(t.method),
-                                           static_cast<int64_t>(t.method_size));
+          auto mm_top_changes = kind_mm.sub_scope("top_changes");
+          const auto& top = top_changes[static_cast<size_t>(v)];
+          for (size_t i = 0; i != top.size(); ++i) {
+            const auto& t = top[i];
+            TRACE(MMINL, 0, "[%s] %s (size %zu): +%zu",
+                  std::string(name).c_str(), SHOW(t.method), t.method_size,
+                  t.violations_delta);
+            auto mm_top_changes_i = mm_top_changes.sub_scope(std::to_string(i));
+            {
+              auto mm_top_changes_i_size = mm_top_changes_i.sub_scope("size");
+              mm_top_changes_i_size.set_metric(
+                  show(t.method), static_cast<int64_t>(t.method_size));
+            }
+            {
+              auto mm_top_changes_i_size = mm_top_changes_i.sub_scope("delta");
+              mm_top_changes_i_size.set_metric(
+                  show(t.method), static_cast<int64_t>(t.violations_delta));
+            }
+          }
         }
-        {
-          auto mm_top_changes_i_size = mm_top_changes_i.sub_scope("delta");
-          mm_top_changes_i_size.set_metric(
-              show(t.method), static_cast<int64_t>(t.violations_delta));
-        }
-      }
+        auto sum = change_sums[static_cast<size_t>(v)].load();
+        kind_mm.set_metric("new_violations", static_cast<int64_t>(sum));
+        TRACE(MMINL, 0, "Introduced %zu %s violations.", sum,
+              std::string(name).c_str());
+      });
     }
 
     print_all();
 
-    TRACE(MMINL, 0, "Introduced %zu violations.", change_sum.load());
     if (track_intermethod_violations) {
       auto method_override_graph = method_override_graph::build_graph(scope);
       auto call_graph = std::make_unique<call_graph::Graph>(
@@ -1315,65 +1474,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
             method_violation_change_sum);
     }
     if (sm != nullptr) {
-      sm->set_metric("new_violations", change_sum.load());
+      // Inter-method violations are a single rule of their own rather than one
+      // of the kinds, so they stay outside any per-kind scope.
       sm->set_metric("new_method_violations", method_violation_change_sum);
     }
-  }
-
-  static size_t hot_immediate_dom_not_hot_cfg(cfg::ControlFlowGraph& cfg,
-                                              bool ignore_undefined) {
-    size_t sum{0};
-
-    // Some passes may leave around unreachable blocks which the fast-dom
-    // does not deal well with.
-    cfg.remove_unreachable_blocks();
-    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
-
-    for (auto* b : cfg.blocks()) {
-      sum += hot_immediate_dom_not_hot(b, dom, ignore_undefined).violations;
-    }
-    return sum;
-  }
-
-  static size_t chain_and_dom_violations_cfg(cfg::ControlFlowGraph& cfg,
-                                             bool ignore_undefined) {
-    size_t sum{0};
-
-    // Some passes may leave around unreachable blocks which the fast-dom
-    // does not deal well with.
-    cfg.remove_unreachable_blocks();
-    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
-
-    for (auto* b : cfg.blocks()) {
-      sum += chain_and_dom_violations(b, dom, ignore_undefined).violations;
-    }
-    return sum;
-  }
-
-  static size_t uncovered_throw_delineated_blocks_violations_cfg(
-      cfg::ControlFlowGraph& cfg) {
-    size_t num_violations = 0;
-    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
-    for (auto* cur : cfg.blocks()) {
-      num_violations += count_throw_delineated_no_sbs(cur, dom);
-    }
-    return num_violations;
-  }
-
-  static size_t uncovered_source_blocks_violations_cfg(
-      cfg::ControlFlowGraph& cfg) {
-    size_t sum{0};
-    for (auto* b : cfg.blocks()) {
-      if (is_ghost_block(b)) {
-        // Do not count ghost blocks in this violation
-        continue;
-      }
-      auto* sb = get_first_source_block(b);
-      if (sb == nullptr) {
-        sum++;
-      }
-    }
-    return sum;
   }
 
   static size_t hot_method_cold_entry_violations_cfg(cfg::ControlFlowGraph& cfg,
@@ -1398,38 +1502,15 @@ struct ViolationsHelper::ViolationsHelperImpl {
     return sum;
   }
 
-  static size_t hot_no_hot_pred_cfg(cfg::ControlFlowGraph& cfg,
-                                    bool ignore_undefined) {
-    size_t sum{0};
-
-    cfg.remove_unreachable_blocks();
-    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
-
-    for (auto* b : cfg.blocks()) {
-      sum += hot_no_hot_pred(b, dom, ignore_undefined).violations;
-    }
-    return sum;
-  }
-
-  static size_t hot_all_children_cold_cfg(cfg::ControlFlowGraph& cfg,
-                                          bool ignore_undefined) {
-    size_t sum{0};
-
-    cfg.remove_unreachable_blocks();
-
-    for (auto* b : cfg.blocks()) {
-      sum += hot_all_children_cold(b, ignore_undefined).violations;
-    }
-    return sum;
-  }
-
   void print_all() const {
     for (const auto& m_str : print) {
       auto* m = DexMethod::get_method(m_str);
       if (m != nullptr) {
         redex_assert(m != nullptr && m->is_def());
         auto* m_def = m->as_def();
-        log_cfg_violations(v, m_def, ignore_undefined);
+        for_each_kind(kinds, [&](Violation v) {
+          log_cfg_violations(v, m_def, ignore_undefined);
+        });
         if (print_all_violations) {
           print_cfg_with_all_violating_blocks(m_def, ignore_undefined);
         }
@@ -1450,7 +1531,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
           if (it != std::end(print) && *it != cur_method_name) {
             TRACE(MMINL, 0, "### METHOD %s HAS SOURCE BLOCKS FROM %s ###",
                   cur_method_name.c_str(), (*it).c_str());
-            log_cfg_violations(v, m->as_def(), ignore_undefined);
+            auto* m_def = m->as_def();
+            for_each_kind(kinds, [&](Violation v) {
+              log_cfg_violations(v, m_def, ignore_undefined);
+            });
             return;
           }
         }
@@ -2109,14 +2193,14 @@ struct ViolationsHelper::ViolationsHelperImpl {
   }
 };
 
-ViolationsHelper::ViolationsHelper(Violation v,
+ViolationsHelper::ViolationsHelper(const std::vector<Violation>& kinds,
                                    const Scope& scope,
                                    size_t top_n,
                                    std::vector<std::string> to_vis,
                                    bool track_intermethod_violations,
                                    bool print_all_violations,
                                    bool ignore_undefined)
-    : impl(std::make_unique<ViolationsHelperImpl>(v,
+    : impl(std::make_unique<ViolationsHelperImpl>(kinds,
                                                   scope,
                                                   top_n,
                                                   std::move(to_vis),
@@ -2153,22 +2237,25 @@ size_t compute(ViolationsHelper::Violation v,
 
 namespace {
 
-// Resolves the configured violation kind name. Aborts on an unknown name
+// Resolves the configured violation kind names. Aborts on an unknown name
 // rather than silently tracking nothing.
-ViolationsHelper::Violation parse_violation_kind(
+std::vector<ViolationsHelper::Violation> parse_violation_kinds(
     const ViolationsTrackingConfig& config) {
-  always_assert_log(
-      config.violation_kinds.size() == 1,
-      "violations_tracking.violation_kinds must name exactly one kind, got "
-      "%zu; ViolationsHelper tracks a single kind per instance",
-      config.violation_kinds.size());
-  const auto& name = config.violation_kinds.front();
-  auto kind = violation_name_to_enum(name);
-  always_assert_log(kind.has_value(),
-                    "Unknown violations_tracking.violation_kinds entry \"%s\"; "
-                    "valid names are: %s",
-                    name.c_str(), get_violation_names().c_str());
-  return *kind;
+  always_assert_log(!config.violation_kinds.empty(),
+                    "violations_tracking is enabled but violation_kinds is "
+                    "empty; there would be nothing to track");
+  std::vector<ViolationsHelper::Violation> res;
+  res.reserve(config.violation_kinds.size());
+  for (const auto& name : config.violation_kinds) {
+    auto kind = violation_name_to_enum(name);
+    always_assert_log(
+        kind.has_value(),
+        "Unknown violations_tracking.violation_kinds entry \"%s\"; "
+        "valid names are: %s",
+        name.c_str(), get_violation_names().c_str());
+    res.push_back(*kind);
+  }
+  return res;
 }
 
 } // namespace
@@ -2177,15 +2264,16 @@ ViolationsTracking::ViolationsTracking(const ViolationsTrackingConfig& config)
     : m_config(config),
       // Parsing only when enabled keeps an unset or invalid kind from aborting
       // a run that never asked for tracking.
-      m_violation(config.enabled ? parse_violation_kind(config)
-                                 : ViolationsHelper::Violation::kChainAndDom) {}
+      m_violations(config.enabled
+                       ? parse_violation_kinds(config)
+                       : std::vector<ViolationsHelper::Violation>{}) {}
 
 ViolationsTracking::Handler::Handler(const ViolationsTracking& tracking,
                                      MetricsSink* sink,
                                      const DexStoresVector& stores)
     : m_sink(sink),
       m_vh(std::make_unique<ViolationsHelper>(
-          tracking.m_violation,
+          tracking.m_violations,
           build_class_scope(stores),
           tracking.m_config.top_n,
           tracking.m_config.methods_to_vis,

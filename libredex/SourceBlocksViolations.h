@@ -49,7 +49,13 @@ struct ViolationsHelper {
     ViolationSize = 7,
   };
 
-  ViolationsHelper(Violation v,
+  // Tracks every kind in `kinds` in one pass over the scope, sharing the
+  // per-method CFG normalization and dominator computation between them.
+  //
+  // Note that a kind whose counter needs unreachable blocks removed does so
+  // for the whole method, so mixing it with a kind that would otherwise see
+  // them counts the latter on the normalized CFG too.
+  ViolationsHelper(const std::vector<Violation>& kinds,
                    const Scope& scope,
                    size_t top_n,
                    std::vector<std::string> to_vis,
@@ -122,7 +128,7 @@ class ViolationsTracking {
 
  private:
   const ViolationsTrackingConfig& m_config;
-  ViolationsHelper::Violation m_violation;
+  std::vector<ViolationsHelper::Violation> m_violations;
 };
 
 } // namespace source_blocks

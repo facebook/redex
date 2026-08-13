@@ -239,8 +239,15 @@ void ViolationsTrackingConfig::bind_config() {
        "Which kinds of violation to track. Valid names are ChainAndDom, "
        "HotImmediateDomNotHot, HotAllChildrenCold, HotMethodColdEntry, "
        "UncoveredSourceBlocks, HotNoHotPred and "
-       "UncoveredThrowDelineatedBlocks. Exactly one kind is supported for "
-       "now.");
+       "UncoveredThrowDelineatedBlocks. Several kinds share one pass over the "
+       "scope, so naming more than one costs little extra. With a single kind "
+       "the metrics are reported flat; with several, each kind gets a "
+       "sub-scope named after it. Note that sharing the pass also shares the "
+       "CFG: kinds whose counters need unreachable blocks removed do so for "
+       "the whole method, so a kind that would otherwise see those blocks "
+       "counts fewer violations when co-configured with one of them. Counts "
+       "are therefore only comparable between runs that name the same set of "
+       "kinds.");
   bind("top_n", top_n, top_n,
        "How many of the worst-offending methods to report per pass.");
   bind("methods_to_vis", methods_to_vis, methods_to_vis,
