@@ -1399,7 +1399,7 @@ class PassManager::RunPassesContext {
     jni_native_context_helper->post_passes(scope, conf);
 
     check_unique_deobfuscated.run_finally(scope);
-    mgr.check_unreleased_reserved_refs();
+    check_unreleased_reserved_refs();
 
     graph_visualizer->finalize();
 
@@ -1597,6 +1597,16 @@ class PassManager::RunPassesContext {
       return;
     default:
       not_reached();
+    }
+  }
+
+  // Every reservation a pass makes has to be released before the run ends.
+  void check_unreleased_reserved_refs() {
+    if (!mgr.m_reserved_ref_infos.empty()) {
+      const auto& [name, info] = mgr.m_reserved_ref_infos.front();
+      fprintf(stderr, "ABORT! Unreleased reserved refs: %s(%zu, %zu, %zu)\n",
+              name.c_str(), info.frefs, info.trefs, info.mrefs);
+      exit(EXIT_FAILURE);
     }
   }
 
@@ -1875,13 +1885,4 @@ ReserveRefsInfo PassManager::get_reserved_refs() const {
     res += info;
   }
   return res;
-}
-
-void PassManager::check_unreleased_reserved_refs() {
-  if (!m_reserved_ref_infos.empty()) {
-    const auto& [name, info] = m_reserved_ref_infos.front();
-    fprintf(stderr, "ABORT! Unreleased reserved refs: %s(%zu, %zu, %zu)\n",
-            name.c_str(), info.frefs, info.trefs, info.mrefs);
-    exit(EXIT_FAILURE);
-  }
 }
