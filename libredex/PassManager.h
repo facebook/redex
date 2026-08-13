@@ -217,8 +217,6 @@ class PassManager {
 
   hashing::DexHash run_hasher(const char* name, const Scope& scope);
 
-  void init_property_interactions(ConfigFiles& conf);
-
   void check_unreleased_reserved_refs();
 
   AssetManager m_asset_mgr;
