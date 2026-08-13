@@ -203,6 +203,40 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
   }
 }
 
+/*
+ * check-cast lowers to Dex format 21c: a single 8-bit register field that acts
+ * as both src and dest. The IR src and the IR dest therefore denote the same
+ * physical operand, and both must be bounded by v255 -- not v15, which would
+ * pin the whole live range low once the two coalesce.
+ */
+TEST_F(RegAllocTest, CheckCastMaxVreg) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (check-cast v0 "LFoo;")
+     (move-result-pseudo-object v1)
+     (return-object v1)
+    )
+)");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(cfg);
+  fixpoint_iter.run(LivenessDomain());
+
+  RangeSet range_set;
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
+
+  EXPECT_EQ(ig.get_node(0).max_vreg(), 255);
+  EXPECT_EQ(ig.get_node(1).max_vreg(), 255);
+
+  // combine() takes the min of the two bounds, and coalesce() whitelists
+  // check-cast, so this is the shape the merged live range actually gets.
+  ig.combine(0, 1);
+  EXPECT_EQ(ig.get_node(0).max_vreg(), 255);
+}
+
 TEST_F(RegAllocTest, CombineNonAdjacentNodes) {
   using namespace interference::impl;
   auto ig = GraphBuilder::create_empty();
@@ -680,6 +714,90 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
      (neg-int v1 v2)
      (invoke-static (v0) "Lfoo;.baz:(I)V")
      (return-void)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+// The two tests below share a body whose only 8-bit-constrained operand is the
+// check-cast's own register field: v1 is consumed by a move-object, which can
+// always be encoded as move-object/16 and so never forces a spill of its own.
+TEST_F(RegAllocTest, NoSpillCheckCastDestWithinEightBits) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (check-cast v0 "LFoo;")
+     (move-result-pseudo-object v1)
+     (move-object v2 v1)
+     (return-object v2)
+    )
+)");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(cfg);
+  fixpoint_iter.run(LivenessDomain());
+
+  RangeSet range_set;
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
+
+  graph_coloring::SpillPlan spill_plan;
+  // v16 is encodable: check-cast's operand field is 8 bits, and the move that
+  // materializes a differing dest widens to move-object/from16.
+  spill_plan.global_spills = UnorderedMap<reg_t, vreg_t>{{1, 16}};
+  graph_coloring::Allocator allocator;
+  allocator.spill(ig, spill_plan, range_set, cfg);
+
+  code->clear_cfg();
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (check-cast v0 "LFoo;")
+     (move-result-pseudo-object v1)
+     (move-object v2 v1)
+     (return-object v2)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(RegAllocTest, SpillCheckCastDestBeyondEightBits) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (check-cast v0 "LFoo;")
+     (move-result-pseudo-object v1)
+     (move-object v2 v1)
+     (return-object v2)
+    )
+)");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(cfg);
+  fixpoint_iter.run(LivenessDomain());
+
+  RangeSet range_set;
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
+
+  graph_coloring::SpillPlan spill_plan;
+  // v256 does not fit check-cast's 8-bit operand field, so the dest has to be
+  // spilled into a temp.
+  spill_plan.global_spills = UnorderedMap<reg_t, vreg_t>{{1, 256}};
+  graph_coloring::Allocator allocator;
+  allocator.spill(ig, spill_plan, range_set, cfg);
+
+  code->clear_cfg();
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (check-cast v0 "LFoo;")
+     (move-result-pseudo-object v3)
+     (move-object v1 v3)
+     (move-object v2 v1)
+     (return-object v2)
     )
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());

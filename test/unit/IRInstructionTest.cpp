@@ -233,6 +233,34 @@ TEST_F(IRInstructionTest, SelectCheckCast) {
                  ->set_src(0, 0));
 }
 
+/*
+ * check-cast's single register field is 8 bits wide, so a dest in v16-v255 is
+ * encodable; the materializing move just widens to /from16 rather than needing
+ * the dest to fit in 4 bits.
+ */
+TEST_F(IRInstructionTest, SelectCheckCastHighDest) {
+  using namespace dex_asm;
+
+  DexMethod* method = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "high_dest", "V", {}));
+  method->make_concrete(ACC_STATIC, false);
+  method->set_code(std::make_unique<IRCode>(method, 0));
+  auto* code = method->get_code();
+  code->push_back(dasm(OPCODE_CHECK_CAST, type::java_lang_Object(), {1_v}));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {200_v}));
+  instruction_lowering::lower(method);
+
+  auto it = code->begin();
+  EXPECT_EQ(*it->dex_insn,
+            *(new DexInstruction(DOPCODE_MOVE_OBJECT_FROM16))
+                 ->set_dest(200)
+                 ->set_src(0, 1));
+  ++it;
+  EXPECT_EQ(*it->dex_insn,
+            *(new DexOpcodeType(DOPCODE_CHECK_CAST, type::java_lang_Object()))
+                 ->set_src(0, 200));
+}
+
 TEST_F(IRInstructionTest, SelectMove) {
   using namespace dex_asm;
   using namespace instruction_lowering::impl;
