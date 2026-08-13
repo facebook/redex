@@ -1910,13 +1910,10 @@ TEST_F(SourceBlocksTest, violations_helper_tolerates_zero_top_n) {
   // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
   ::Scope scope{type_class(method->get_class())};
 
-  ViolationsHelper vh({ViolationsHelper::Violation::kUncoveredSourceBlocks},
-                      scope,
-                      /*top_n=*/0,
-                      /*to_vis=*/{},
-                      /*track_intermethod_violations=*/false,
-                      /*print_all_violations=*/false,
-                      /*ignore_undefined=*/false);
+  ViolationsHelper::Params params;
+  params.kinds = {ViolationsHelper::Violation::kUncoveredSourceBlocks};
+  params.top_n = 0;
+  ViolationsHelper vh(params, scope);
 
   code->build_cfg();
   strip_source_blocks(code->cfg());
@@ -1987,13 +1984,9 @@ TEST_F(SourceBlocksTest, violations_helper_reports_to_metrics_sink) {
   ::Scope scope{type_class(method->get_class())};
   // Every block carries a source block, so the baseline is zero uncovered
   // blocks.
-  ViolationsHelper vh({ViolationsHelper::Violation::kUncoveredSourceBlocks},
-                      scope,
-                      /*top_n=*/10,
-                      /*to_vis=*/{},
-                      /*track_intermethod_violations=*/false,
-                      /*print_all_violations=*/false,
-                      /*ignore_undefined=*/false);
+  ViolationsHelper::Params params;
+  params.kinds = {ViolationsHelper::Violation::kUncoveredSourceBlocks};
+  ViolationsHelper vh(params, scope);
 
   code->build_cfg();
   strip_source_blocks(code->cfg());
@@ -2025,13 +2018,9 @@ TEST_F(SourceBlocksTest, violations_helper_reports_nothing_without_a_sink) {
 
   // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
   ::Scope scope{type_class(method->get_class())};
-  ViolationsHelper vh({ViolationsHelper::Violation::kUncoveredSourceBlocks},
-                      scope,
-                      /*top_n=*/10,
-                      /*to_vis=*/{},
-                      /*track_intermethod_violations=*/false,
-                      /*print_all_violations=*/false,
-                      /*ignore_undefined=*/false);
+  ViolationsHelper::Params params;
+  params.kinds = {ViolationsHelper::Violation::kUncoveredSourceBlocks};
+  ViolationsHelper vh(params, scope);
 
   code->build_cfg();
   strip_source_blocks(code->cfg());
@@ -2155,4 +2144,296 @@ TEST_F(SourceBlocksTest, violations_tracking_reports_each_kind_separately) {
   EXPECT_FALSE(sink.get("~violation~tracking.new_violations").has_value());
   // Inter-method violations are not one of the kinds, so they stay top-level.
   EXPECT_EQ(sink.get("~violation~tracking.new_method_violations"), 0);
+}
+
+TEST_F(SourceBlocksTest, parse_source_block_descriptor_round_trips_show) {
+  SourceBlock sb(DexString::make_string("LFoo;.bar:()V"), 3,
+                 {SourceBlock::Val(1.0f, 2.0f)});
+
+  // Exactly what a trace line carries, values and all.
+  auto from_show = parse_source_block_descriptor(sb.show(/*quoted_src=*/false));
+  ASSERT_TRUE(from_show.has_value());
+  EXPECT_EQ(from_show->method, sb.src);
+  EXPECT_EQ(from_show->id, 3u);
+  EXPECT_EQ(from_show->str(), "LFoo;.bar:()V@3");
+
+  // ...and the same with the method quoted, which show also emits.
+  auto quoted = parse_source_block_descriptor(sb.show(/*quoted_src=*/true));
+  ASSERT_TRUE(quoted.has_value());
+  EXPECT_EQ(quoted->method, sb.src);
+  EXPECT_EQ(quoted->id, 3u);
+
+  // str() is what the config accepts, so it has to survive a second pass.
+  auto reparsed = parse_source_block_descriptor(from_show->str());
+  ASSERT_TRUE(reparsed.has_value());
+  EXPECT_EQ(reparsed->method, from_show->method);
+  EXPECT_EQ(reparsed->id, from_show->id);
+}
+
+TEST_F(SourceBlocksTest, parse_source_block_descriptor_bare_method) {
+  auto bare = parse_source_block_descriptor("LFoo;.bar:()V");
+  ASSERT_TRUE(bare.has_value());
+  EXPECT_EQ(bare->method, DexString::make_string("LFoo;.bar:()V"));
+  EXPECT_FALSE(bare->id.has_value());
+  EXPECT_EQ(bare->str(), "LFoo;.bar:()V");
+
+  // No id means every block attributed to the method.
+  SourceBlock zero(DexString::make_string("LFoo;.bar:()V"), 0);
+  SourceBlock seven(DexString::make_string("LFoo;.bar:()V"), 7);
+  SourceBlock other(DexString::make_string("LFoo;.baz:()V"), 0);
+  EXPECT_TRUE(bare->matches(zero));
+  EXPECT_TRUE(bare->matches(seven));
+  EXPECT_FALSE(bare->matches(other));
+
+  auto with_id = parse_source_block_descriptor("LFoo;.bar:()V@7");
+  ASSERT_TRUE(with_id.has_value());
+  EXPECT_FALSE(with_id->matches(zero));
+  EXPECT_TRUE(with_id->matches(seven));
+}
+
+TEST_F(SourceBlocksTest, parse_source_block_descriptor_rejects_bad_input) {
+  EXPECT_FALSE(parse_source_block_descriptor("").has_value());
+  EXPECT_FALSE(parse_source_block_descriptor("@3").has_value());
+  EXPECT_FALSE(parse_source_block_descriptor("LFoo;.bar:()V@").has_value());
+  EXPECT_FALSE(parse_source_block_descriptor("LFoo;.bar:()V@abc").has_value());
+  EXPECT_FALSE(parse_source_block_descriptor("LFoo;.bar:()V@-1").has_value());
+  EXPECT_FALSE(
+      parse_source_block_descriptor("LFoo;.bar:()V@3junk").has_value());
+  // Every cloned block carries the synthetic id, so it cannot name one.
+  EXPECT_FALSE(parse_source_block_descriptor(
+                   "LFoo;.bar:()V@" + std::to_string(SourceBlock::kSyntheticId))
+                   .has_value());
+}
+
+namespace {
+
+// The `src` of every block is the literal name passed in, independent of the
+// method that ends up holding the code -- which is exactly the post-inlining
+// shape a descriptor has to cope with.
+std::string branch_code_attributed_to(const std::string& src) {
+  std::string res = R"(
+    (
+      (.src_block ")" +
+                    src + R"(" 0 (1.0 1.0))
+      (const v0 0)
+      (if-eqz v0 :true)
+
+      (.src_block ")" +
+                    src + R"(" 1 (1.0 1.0))
+      (const v1 1)
+      (goto :end)
+
+      (:true)
+      (.src_block ")" +
+                    src + R"(" 2 (1.0 1.0))
+      (const v1 2)
+
+      (:end)
+      (.src_block ")" +
+                    src + R"(" 3 (1.0 1.0))
+      (return-void)
+    )
+  )";
+  return res;
+}
+
+DexMethod* method_attributed_to(const std::string& class_name,
+                                const std::string& src) {
+  auto* m = SourceBlocksTest::create_method(class_name);
+  // @lint-ignore NULLSAFECLANG (create_method always returns a method)
+  m->set_code(assembler::ircode_from_string(branch_code_attributed_to(src)));
+  return m;
+}
+
+DexStoresVector make_stores(const std::vector<DexMethod*>& methods) {
+  DexStoresVector stores;
+  DexStore store("classes");
+  std::vector<DexClass*> classes;
+  classes.reserve(methods.size());
+  for (auto* m : methods) {
+    // @lint-ignore NULLSAFECLANG (callers pass methods they just created)
+    classes.push_back(type_class(m->get_class()));
+  }
+  store.add_classes(classes);
+  stores.emplace_back(store);
+  return stores;
+}
+
+int64_t strip_and_count_uncovered(DexMethod* m) {
+  // @lint-ignore NULLSAFECLANG (callers pass methods they just created)
+  auto* code = m->get_code();
+  code->build_cfg();
+  SourceBlocksTest::strip_source_blocks(code->cfg());
+  auto count = static_cast<int64_t>(compute(
+      ViolationsHelper::Violation::kUncoveredSourceBlocks, code->cfg()));
+  code->clear_cfg();
+  return count;
+}
+
+} // namespace
+
+TEST_F(SourceBlocksTest, targeted_tracking_ignores_untargeted_methods) {
+  auto* targeted = method_attributed_to("LTargeted", "LTargetSrc;.bar:()V");
+  auto* other = method_attributed_to("LOther", "LOtherSrc;.bar:()V");
+  auto stores = make_stores({targeted, other});
+
+  ViolationsTrackingConfig config;
+  config.enabled = true;
+  config.violation_kinds = {"UncoveredSourceBlocks"};
+  config.source_blocks_to_track = {"LTargetSrc;.bar:()V@0"};
+  ViolationsTracking tracking(config);
+
+  RecordingSink sink;
+  int64_t targeted_violations = 0;
+  {
+    auto handler = tracking.maybe_track(&sink, stores);
+    ASSERT_TRUE(handler.has_value());
+
+    // Both methods regress; only the targeted one may be counted.
+    targeted_violations = strip_and_count_uncovered(targeted);
+    auto other_violations = strip_and_count_uncovered(other);
+    ASSERT_GT(targeted_violations, 0);
+    ASSERT_GT(other_violations, 0);
+  }
+
+  EXPECT_EQ(sink.get("~violation~tracking.new_violations"),
+            targeted_violations);
+  EXPECT_EQ(sink.get("~violation~tracking.targets.LTargetSrc;.bar:()V@0"
+                     ".new_violations"),
+            targeted_violations);
+  EXPECT_EQ(sink.get("~violation~tracking.targets.LTargetSrc;.bar:()V@0"
+                     ".methods"),
+            1);
+  // The untargeted method must not show up in the ranking either.
+  EXPECT_FALSE(
+      sink.get("~violation~tracking.top_changes.0.delta." + show(other))
+          .has_value());
+}
+
+TEST_F(SourceBlocksTest, targeted_tracking_reports_clean_targets) {
+  auto* targeted = method_attributed_to("LClean", "LCleanSrc;.bar:()V");
+  auto stores = make_stores({targeted});
+
+  ViolationsTrackingConfig config;
+  config.enabled = true;
+  config.violation_kinds = {"UncoveredSourceBlocks"};
+  config.source_blocks_to_track = {"LCleanSrc;.bar:()V@0"};
+  ViolationsTracking tracking(config);
+
+  RecordingSink sink;
+  {
+    // Nothing at all happens to the method while the handler is alive.
+    auto handler = tracking.maybe_track(&sink, stores);
+    ASSERT_TRUE(handler.has_value());
+  }
+
+  // A descriptor that introduced no violations is still reported, rather than
+  // silently absent.
+  EXPECT_EQ(sink.get("~violation~tracking.targets.LCleanSrc;.bar:()V@0"
+                     ".new_violations"),
+            0);
+  EXPECT_EQ(sink.get("~violation~tracking.targets.LCleanSrc;.bar:()V@0"
+                     ".methods"),
+            1);
+}
+
+TEST_F(SourceBlocksTest, targeted_tracking_finds_inlined_copies) {
+  // Two different methods carrying blocks attributed to the same source, which
+  // is what inlining leaves behind.
+  auto* home = method_attributed_to("LHome", "LSharedSrc;.bar:()V");
+  auto* copy = method_attributed_to("LCopy", "LSharedSrc;.bar:()V");
+  auto* unrelated = method_attributed_to("LUnrelated", "LOtherSrc;.bar:()V");
+  auto stores = make_stores({home, copy, unrelated});
+
+  ViolationsTrackingConfig config;
+  config.enabled = true;
+  config.violation_kinds = {"UncoveredSourceBlocks"};
+  config.source_blocks_to_track = {"LSharedSrc;.bar:()V@0"};
+  ViolationsTracking tracking(config);
+
+  RecordingSink sink;
+  int64_t expected = 0;
+  {
+    auto handler = tracking.maybe_track(&sink, stores);
+    ASSERT_TRUE(handler.has_value());
+
+    expected += strip_and_count_uncovered(home);
+    expected += strip_and_count_uncovered(copy);
+    strip_and_count_uncovered(unrelated);
+  }
+
+  // Both carriers were found and counted; the unrelated method was not.
+  EXPECT_EQ(sink.get("~violation~tracking.targets.LSharedSrc;.bar:()V@0"
+                     ".methods"),
+            2);
+  EXPECT_EQ(sink.get("~violation~tracking.new_violations"), expected);
+}
+
+TEST_F(SourceBlocksTest, parse_source_block_descriptor_rejects_chained_show) {
+  // A chained block prints as several space-separated entries. rfind('@')
+  // lands on the last one, so without a whitespace check the method half
+  // swallows everything before it and yields a descriptor that silently
+  // matches nothing.
+  SourceBlock sb(DexString::make_string("LFoo;.bar:()V"), 0,
+                 {SourceBlock::Val(1.0f, 1.0f)});
+  sb.next =
+      std::make_unique<SourceBlock>(DexString::make_string("LFoo;.bar:()V"), 1);
+  auto chained = sb.show(/*quoted_src=*/false);
+  ASSERT_NE(chained.find(' '), std::string::npos);
+
+  EXPECT_EQ(parse_source_block_descriptor(chained), std::nullopt);
+  // The same block on its own is still fine.
+  EXPECT_TRUE(
+      parse_source_block_descriptor("LFoo;.bar:()V@1(1:1|)").has_value());
+}
+
+TEST_F(SourceBlocksTest, params_default_kinds_are_usable) {
+  auto* method = create_method("LDefaultKinds");
+  ASSERT_NE(method, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  method->set_code(assembler::ircode_from_string(kBranchWithSourceBlocks));
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  ::Scope scope{type_class(method->get_class())};
+
+  // A default-constructed Params has to be valid; an empty `kinds` aborts.
+  ViolationsHelper vh(ViolationsHelper::Params{}, scope);
+  vh.process(nullptr);
+}
+
+TEST_F(SourceBlocksTest, targeted_tracking_skips_home_method_missing_the_id) {
+  // The descriptor has to NAME a real method for the direct-lookup step to
+  // find it, which is the step under test -- so attribute the blocks to the
+  // method's own signature and build the descriptor from it.
+  auto* method = create_method("LHomeMethod");
+  ASSERT_NE(method, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto name = show(method);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  method->set_code(
+      assembler::ircode_from_string(branch_code_attributed_to(name)));
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto stores = make_stores({method});
+  ASSERT_NE(DexMethod::get_method(name), nullptr);
+
+  auto track = [&](const std::string& descriptor) {
+    ViolationsTrackingConfig config;
+    config.enabled = true;
+    config.violation_kinds = {"UncoveredSourceBlocks"};
+    config.source_blocks_to_track = {descriptor};
+    ViolationsTracking tracking(config);
+    RecordingSink sink;
+    {
+      auto handler = tracking.maybe_track(&sink, stores);
+    }
+    return sink.get("~violation~tracking.targets." + descriptor + ".methods");
+  };
+
+  // The method carries ids 0..3, so naming one of them resolves to it.
+  EXPECT_EQ(track(name + "@0"), 1);
+  // It does not carry 99. Counting the home method anyway would report
+  // "methods: 1, new_violations: 0", which reads as "carried and clean" when
+  // the truth is "that block is not here".
+  EXPECT_EQ(track(name + "@99"), 0);
+  // A descriptor with no id still keeps the method it names.
+  EXPECT_EQ(track(name), 1);
 }
