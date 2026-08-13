@@ -1360,26 +1360,6 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
   return hash;
 }
 
-void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
-  if (m_redex_options.input_dex_version >= 37) {
-    always_assert_log(
-        std::find_if(m_activated_passes.begin(), m_activated_passes.end(),
-                     [](const Pass* pass) {
-                       return pass->name() == CLASS_REORDERING_PASS_NAME;
-                     }) != m_activated_passes.end(),
-        "Dex version 37+ has stricter class order requirement. Enable "
-        "ClassReorderingPass to fulfill the requirement.");
-  }
-  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
-    Pass* pass = m_activated_passes[i];
-    TRACE(PM, 1, "Evaluating %s...", pass->name().c_str());
-    Timer t(pass->name() + " (eval)");
-    m_current_pass_info = &m_pass_info[i];
-    pass->eval_pass(stores, conf, *this);
-    m_current_pass_info = nullptr;
-  }
-}
-
 void PassManager::init_property_interactions(ConfigFiles& /*conf*/) {
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
@@ -1473,7 +1453,7 @@ class PassManager::RunPassesContext {
 
     sanitizers::lsan_do_recoverable_leak_check();
 
-    mgr.eval_passes(stores, conf);
+    eval_passes();
 
     mgr.init_property_interactions(conf);
 
@@ -1632,6 +1612,30 @@ class PassManager::RunPassesContext {
   }
 
  private:
+  // Gives every activated pass a chance to prepare before the main loop, in
+  // pass order. Each pass gets a current pass info for the duration of its own
+  // eval_pass so that it can record metrics, and none afterwards.
+  void eval_passes() {
+    if (mgr.m_redex_options.input_dex_version >= 37) {
+      always_assert_log(
+          std::find_if(mgr.m_activated_passes.begin(),
+                       mgr.m_activated_passes.end(),
+                       [](const Pass* pass) {
+                         return pass->name() == CLASS_REORDERING_PASS_NAME;
+                       }) != mgr.m_activated_passes.end(),
+          "Dex version 37+ has stricter class order requirement. Enable "
+          "ClassReorderingPass to fulfill the requirement.");
+    }
+    for (size_t i = 0; i < mgr.m_activated_passes.size(); ++i) {
+      Pass* pass = mgr.m_activated_passes[i];
+      TRACE(PM, 1, "Evaluating %s...", pass->name().c_str());
+      Timer t(pass->name() + " (eval)");
+      mgr.m_current_pass_info = &mgr.m_pass_info[i];
+      pass->eval_pass(stores, conf, mgr);
+      mgr.m_current_pass_info = nullptr;
+    }
+  }
+
   static const PassManagerConfig* get_pass_manager_config(
       const ConfigFiles& conf) {
     const auto* pm_config =
