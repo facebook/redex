@@ -225,6 +225,7 @@ struct RedexContext {
   bool instrument_mode{false};
   bool slow_invariants_debug{false};
   bool disable_violation_fixes{false};
+  bool insert_remarks{false};
 
   bool ordering_changes_allowed() const { return m_ordering_changes_allowed; }
   void set_ordering_changes_allowed(bool new_val) {

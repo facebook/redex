@@ -433,6 +433,7 @@ libopt_la_SOURCES = \
 	opt/fully-qualify-layouts/FullyQualifyLayouts.cpp \
 	opt/init-classes/InitClassLoweringPass.cpp \
 	opt/insert_debug_info/InsertDebugInfoPass.cpp \
+	opt/insert-remarks-for-tracing/InsertRemarksForTracing.cpp \
 	opt/insert-source-blocks/InsertSourceBlocks.cpp \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
