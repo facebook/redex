@@ -15,6 +15,7 @@
 #include "DexInstruction.h"
 #include "DexPosition.h"
 #include "IRCode.h"
+#include "IRList.h"
 #include "RedexTest.h"
 #include "Show.h"
 #include "TypeUtil.h"
@@ -53,6 +54,31 @@ TEST_F(IRAssemblerTest, empty) {
     (return-void)
   ))");
   EXPECT_EQ(code->get_registers_size(), 0);
+}
+
+// The assembler preserves the authored source-block id verbatim: it does not
+// renumber (DFS renumbering only happens in insert_source_blocks). Cover a
+// mid-range id, 0, and the reserved kSyntheticId (UINT32_MAX).
+TEST_F(IRAssemblerTest, sourceBlockIdRoundTrips) {
+  for (uint32_t want_id : {0u, 7u, SourceBlock::kSyntheticId}) {
+    auto s = std::string("((.src_block \"LFoo;.bar:()V\" ") +
+             std::to_string(want_id) + " (1.0 1.0)) (return-void))";
+    auto code = assembler::ircode_from_string(s);
+
+    SourceBlock* sb = nullptr;
+    for (auto& mie : *code) {
+      if (mie.type == MFLOW_SOURCE_BLOCK) {
+        sb = mie.src_block.get();
+        break;
+      }
+    }
+    ASSERT_NE(sb, nullptr);
+    EXPECT_EQ(sb->id, want_id);
+
+    // The id also survives a serialize -> parse -> serialize round trip.
+    EXPECT_EQ(assembler::to_string(code.get()),
+              assembler::to_string(assembler::ircode_from_string(s).get()));
+  }
 }
 
 TEST_F(IRAssemblerTest, assembleMethod) {
