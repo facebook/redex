@@ -56,10 +56,7 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
                                              original_scope.end());
   auto new_scope = build_class_scope(stores);
   UnorderedSet<DexClass*> new_scope_set(new_scope.begin(), new_scope.end());
-  always_assert(original_scope_set.size() == new_scope_set.size());
-  for (auto* cls : UnorderedIterable(original_scope_set)) {
-    always_assert(new_scope_set.count(cls));
-  }
+  always_assert(unordered_equal(original_scope_set, new_scope_set));
 }
 
 static InterDexReshufflePass s_pass;

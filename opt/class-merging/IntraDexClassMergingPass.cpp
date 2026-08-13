@@ -159,10 +159,7 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
     UnorderedSet<DexClass*> original_scope_set(scope.begin(), scope.end());
     scope = build_class_scope(stores);
     UnorderedSet<DexClass*> new_scope_set(scope.begin(), scope.end());
-    always_assert(original_scope_set.size() == new_scope_set.size());
-    for (auto* cls : UnorderedIterable(original_scope_set)) {
-      always_assert(new_scope_set.count(cls));
-    }
+    always_assert(unordered_equal(original_scope_set, new_scope_set));
   }
 
   mgr.set_metric("num_spec_merging_targets",
