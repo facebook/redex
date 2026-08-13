@@ -232,7 +232,6 @@ class PassManager {
   bool m_interdex_has_run{false};
   bool m_unreliable_virtual_scopes{false};
   ReserveRefsInfoList m_reserved_ref_infos;
-  Pass* m_malloc_profile_pass{nullptr};
 
   std::optional<hashing::DexHash> m_initial_hash;
 
