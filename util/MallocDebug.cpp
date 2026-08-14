@@ -22,6 +22,14 @@
  * very similarly, which can hide non determinisms caused by pointers. This
  * allocator is intended to make such non determinisms happen *every* time,
  * instead of only once in a while.
+ *
+ * redex-all-malloc-dbg is also the only binary built with
+ * REDEX_PERTURB_UNORDERED=1 (see build_defs.bzl), which scrambles Unordered*
+ * iteration order per container per run. So a difference between two runs can
+ * equally well be an iteration-order dependence rather than a pointer-value
+ * one. REDEX_PERTURB_SEED varies (or, best-effort, pins) that second source the
+ * way MALLOC_SEED does the first; to tell the two apart, hold one seed fixed
+ * while varying the other.
  */
 
 #ifdef __APPLE__
