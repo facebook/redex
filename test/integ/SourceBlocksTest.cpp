@@ -1171,6 +1171,45 @@ TEST_F(SourceBlocksTest, test_counting_with_idom_violations) {
       source_blocks::ViolationsHelper::Violation::kChainAndDom,
       method->get_code()->cfg());
 
+  // The fixture's dominated block has a higher execution count (val 2) than its
+  // dominator (val 1) -- legitimate loop-style amplification, not a coverage
+  // inversion. The boolean-ized first-in-block predicate does not fire here
+  // because the dominator is covered, so no violation is reported.
+  ASSERT_EQ(violations, 0);
+}
+
+// Positive counterpart to test_counting_with_idom_violations: a genuine
+// cold->hot coverage inversion (the entry, i.e. the immediate dominator, is
+// UNCOVERED while a block it dominates is covered) MUST still be reported by
+// the boolean-ized kChainAndDom check. Guards against the fix silencing real
+// violations.
+TEST_F(SourceBlocksTest, test_counting_with_idom_chain_dom_violation) {
+  auto* profile_path = std::getenv("idom-chain-dom-violation");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto* type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$IDomBlockCounting;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+  });
+
+  auto* method = cls->find_method_from_simple_deobfuscated_name("idom");
+  method->get_code()->build_cfg();
+  auto violations = source_blocks::compute(
+      source_blocks::ViolationsHelper::Violation::kChainAndDom,
+      method->get_code()->cfg());
+
+  // Exactly one inversion: the single covered (val 1) block whose immediate
+  // dominator (the entry) is uncovered (val 0). The other blocks are uncovered,
+  // so the boolean predicate does not fire for them.
   ASSERT_EQ(violations, 1);
 }
 

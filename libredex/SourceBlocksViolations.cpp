@@ -61,6 +61,38 @@ bool is_less_than_for_any_value(
   return false;
 }
 
+// Per-slot "dominator cold but block hot" predicate: a violation iff for some
+// interaction slot the dominator's val is 0 while the block's val is > 0.
+// Unlike `is_less_than_for_any_value` (a magnitude `<` compare that a hot loop
+// header legitimately trips once vals are execution counts rather than 0/1
+// coverage), this fires only on a genuine cold->hot coverage inversion, so it
+// is correct in the count world and stays byte-identical on 0/1 data (where
+// `dom < block` iff `dom == 0 && block == 1`). The equivalence to the old
+// magnitude compare holds for `ignore_undefined == false`; the flag is honored
+// the same way `is_less_than_for_any_value` does (an undefined val on either
+// side suppresses the compare), so the counted violations cannot drift from the
+// ones `log_cfg_violations` prints.
+bool dom_cold_block_hot(
+    const SourceBlock* dom_sb,
+    const SourceBlock* block_sb,
+    uint32_t max_interaction = std::numeric_limits<uint32_t>::max(),
+    bool ignore_undefined = false) {
+  always_assert(dom_sb != nullptr && block_sb != nullptr);
+  auto limit = std::min(std::min(dom_sb->vals_size, block_sb->vals_size),
+                        max_interaction);
+  for (size_t i = 0; i != limit; ++i) {
+    if (ignore_undefined && (dom_sb->get_at(i) == SourceBlock::Val::none() ||
+                             block_sb->get_at(i) == SourceBlock::Val::none())) {
+      return false;
+    }
+    if (dom_sb->get_val(i).value_or(0) == 0 &&
+        block_sb->get_val(i).value_or(0) > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool is_ghost_block(Block* block) {
   for (const auto& edge : block->preds()) {
     if (edge->type() == cfg::EDGE_GHOST) {
@@ -141,10 +173,9 @@ ViolationsAndPotentialViolations hot_immediate_dom_not_hot_impl(
       source_blocks::get_first_source_block(immediate_dominator);
   if ((first_sb_current_b != nullptr) &&
       (first_sb_immediate_dominator != nullptr) &&
-      is_less_than_for_any_value(first_sb_immediate_dominator,
-                                 first_sb_current_b,
-                                 std::numeric_limits<uint32_t>::max(),
-                                 ignore_undefined)) {
+      dom_cold_block_hot(first_sb_immediate_dominator, first_sb_current_b,
+                         std::numeric_limits<uint32_t>::max(),
+                         ignore_undefined)) {
     return {1, 1};
   } else {
     return {0, 1};
@@ -434,8 +465,19 @@ void chain_and_dom_update(
   }
 
   if (state.last != nullptr) {
-    bool cold_precedes_hot = is_less_than_for_any_value(
-        state.last, sb, kMaxInteraction, ignore_undefined);
+    // First-in-block compares against the dominator's last SB: use the
+    // count-correct boolean predicate, because a dominator (e.g. a loop
+    // pre-header) can legitimately have a smaller magnitude than the hot loop
+    // header it dominates, so a magnitude `<` compare would false-positive on
+    // every hot loop once vals are execution counts. Within-block compares
+    // (state.last = previous SB in this block) stay magnitude -- they are
+    // count-correct. Thread kMaxInteraction through so the `.cold_start`
+    // (impl<1>) variant still restricts to slot 0.
+    bool cold_precedes_hot =
+        first_in_block ? dom_cold_block_hot(state.last, sb, kMaxInteraction,
+                                            ignore_undefined)
+                       : is_less_than_for_any_value(
+                             state.last, sb, kMaxInteraction, ignore_undefined);
     bool hot_precedes_cold =
         is_less_than_for_any_value(sb, state.last, kMaxInteraction,
                                    ignore_undefined) &&
