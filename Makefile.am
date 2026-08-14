@@ -151,6 +151,7 @@ libredex_la_SOURCES = \
 	libredex/DexTypeEnvironment.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
+	libredex/DexVt.cpp \
 	libredex/DuplicateClasses.cpp \
 	libredex/FbjniMarker.cpp \
 	libredex/FrameworkApi.cpp \

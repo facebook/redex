@@ -49,6 +49,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexPosition.h"
+#include "DexVt.h"
 #include "DuplicateClasses.h"
 #include "GlobalConfig.h"
 #include "IODIMetadata.h"
@@ -58,6 +59,7 @@
 #include "KeepReason.h"
 #include "Macros.h"
 #include "MallocDebug.h"
+#include "MethodProfiles.h"
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
@@ -432,6 +434,12 @@ Arguments parse_args(int argc, char* argv[]) {
       "run redex in verify-none mode\n"
       "  \tThis will activate optimization passes or code in some passes that "
       "wouldn't normally operate with verification enabled.");
+  od.add_options()(
+      "emit-dexvt",
+      po::bool_switch(&args.redex_options.emit_dexvt)->default_value(false),
+      "Emit the dexvt build-side export (symbolicated disassembly + per-method "
+      "PGO + authoritative sizes + xref) as NDJSON in the output metadata "
+      "dir.");
   od.add_options()(
       "is-art-build",
       po::bool_switch(&args.redex_options.is_art_build)->default_value(false),
@@ -1617,8 +1625,24 @@ void redex_backend(ConfigFiles& conf,
   const RedexOptions& redex_options = manager.get_redex_options();
   const auto& output_dir = conf.get_outdir();
 
+  // dexvt is enabled either as a redex-all CLI switch (--emit-dexvt, for
+  // redex.py direct runs) or via the JSON config key emit_dexvt=true -- the
+  // latter lets an app build turn it on through the standard
+  // `redex.extra_args=-J emit_dexvt=true` path without a bespoke passthrough.
+  const bool emit_dexvt = redex_options.emit_dexvt ||
+                          conf.get_json_config().get("emit_dexvt", false);
+
   finalize_resource_table(conf);
   check_required_resources(conf, false);
+
+  // dexvt: pre-lowering capture (disasm + per-block SourceBlocks + PGO + xref).
+  // Must run before instruction_lowering::run — the CFG is cleared by
+  // PassManager before the backend, so the capture rebuilds it per method.
+  dexvt::Exporter dexvt_exporter;
+  if (emit_dexvt) {
+    Timer t("dexvt pre-lowering capture");
+    dexvt_exporter.capture_pre_lowering(stores, conf);
+  }
 
   instruction_lowering::Stats instruction_lowering_stats;
   {
@@ -1672,9 +1696,16 @@ void redex_backend(ConfigFiles& conf,
     iodi_mem_stats.trace_log("Compute initial IODI metadata");
   }
 
-  const auto& dex_output_config =
+  auto& dex_output_config =
       *conf.get_global_config().get_config_by_name<DexOutputConfig>(
           "dex_output");
+
+  // dexvt needs the authoritative per-class and per-method sizes, both gated
+  // off by default. Force them on so output_totals carries the size maps.
+  if (emit_dexvt) {
+    dex_output_config.write_class_sizes = true;
+    dex_output_config.write_method_sizes = true;
+  }
 
   auto string_sort_mode = get_string_sort_mode(conf);
 
@@ -1752,6 +1783,18 @@ void redex_backend(ConfigFiles& conf,
   }
 
   sanitizers::lsan_do_recoverable_leak_check();
+
+  // dexvt: post-lowering emit. output_totals carries the authoritative
+  // per-class and per-method sizes accumulated across dexes.
+  if (emit_dexvt) {
+    Timer t("dexvt emit");
+    // Retry lazy method-profile resolution so the manifest's resolution counts
+    // are final. Note: PassManager::set_metric is pass-scoped and must NOT be
+    // called here (no active pass in redex_backend); resolution health is
+    // reported in the artifact manifest instead (see Exporter::emit).
+    conf.process_unresolved_method_profile_lines();
+    dexvt_exporter.emit(conf, output_totals);
+  }
 
   std::vector<DexMethod*> needs_debug_line_mapping;
 

@@ -989,6 +989,9 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     align_output();
     int size = code->encode(&m_dodx, (uint32_t*)(m_output.get() + m_offset));
     check_method_instruction_size_limit(m_config_files, size, SHOW(meth));
+    if (m_dex_output_config.write_method_sizes) {
+      m_stats.method_size[meth] = (size_t)size;
+    }
     m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
     m_code_item_emits.emplace_back(meth, code,
                                    (dex_code_item*)(m_output.get() + m_offset));

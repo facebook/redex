@@ -80,6 +80,7 @@ check_PROGRAMS = \
     dex_mutate_test \
     dex_output_test \
     dex_store_test \
+    dexvt_test \
     dex_structure_test \
     dex_type_environment_test \
     dex_util_test \
@@ -302,6 +303,8 @@ dex_output_test_SOURCES = DexOutputTest.cpp
 dex_store_test_SOURCES = DexStoreTest.cpp
 
 dex_structure_test_SOURCES = DexStructureTest.cpp
+
+dexvt_test_SOURCES = DexVtTest.cpp
 
 dex_type_environment_test_SOURCES = type-analysis/DexTypeEnvironmentTest.cpp
 
