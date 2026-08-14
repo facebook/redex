@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <array>
 #include <gtest/gtest.h>
 #include <utility>
 
@@ -2290,6 +2291,128 @@ TEST_F(DedupBlocksTest, splitPostfixPreservesSourceBlockCoverage) {
   }
 
   code_ref.clear_cfg();
+}
+
+namespace {
+// The two duplicate arms of the diamond fixture both define v1; find them.
+std::vector<cfg::Block*> v1_defining_blocks(cfg::ControlFlowGraph& cfg) {
+  std::vector<cfg::Block*> out;
+  for (auto* b : cfg.blocks()) {
+    for (auto& mie : *b) {
+      if (mie.type == MFLOW_OPCODE && mie.insn->opcode() == OPCODE_CONST &&
+          mie.insn->dest() == 1) {
+        out.push_back(b);
+        break;
+      }
+    }
+  }
+  return out;
+}
+} // namespace
+
+// Golden: DedupBlocks folds two identical arms into one; the survivor's count
+// is the SUM of the merged duplicates (10 + 3 = 13), not the MAX (10). This is
+// the non-instrument path (`max`->`add`, M11).
+TEST_F(DedupBlocksTest, DedupMergesSourceBlockCountsBySum) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :left)
+      (goto :right)
+      (:left)
+      (const v1 1)
+      (goto :middle)
+      (:right)
+      (const v1 1)
+      (:middle)
+      (return-void)
+    )
+  )");
+  auto* method = get_fresh_method("DedupMergesSourceBlockCountsBySum");
+  method->set_deobfuscated_name(show(method));
+  method->set_code(std::move(input_code));
+  auto* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+
+  auto arms = v1_defining_blocks(cfg);
+  ASSERT_EQ(arms.size(), 2u);
+  std::sort(arms.begin(), arms.end(),
+            [](cfg::Block* a, cfg::Block* b) { return a->id() < b->id(); });
+  const std::array<float, 2> vals = {10.0f, 3.0f};
+  for (size_t i = 0; i < 2; i++) {
+    auto sb = std::make_unique<SourceBlock>(
+        method->get_deobfuscated_name_or_null(), arms[i]->id(),
+        std::vector<SourceBlock::Val>{SourceBlock::Val(vals[i], 100.0f)});
+    source_blocks::impl::BlockAccessor::push_source_block(arms[i],
+                                                          std::move(sb));
+  }
+
+  dedup_blocks_impl::Config config;
+  dedup_blocks_impl::DedupBlocks impl(&config, method);
+  impl.run();
+
+  auto survivors = v1_defining_blocks(cfg);
+  ASSERT_EQ(survivors.size(), 1u); // the two arms merged into one
+  auto* sb = source_blocks::get_first_source_block(survivors[0]);
+  ASSERT_NE(sb, nullptr);
+  EXPECT_FLOAT_EQ(sb->get_val(0).value_or(-1.0f), 13.0f); // SUM, not MAX (10)
+}
+
+// Binary-NFC: on today's 0/1 data the same merge preserves support (`add>0` iff
+// `max>0`) -- the merged arm stays covered and no surviving SB is zeroed.
+TEST_F(DedupBlocksTest, DedupSourceBlockMergeIsBinaryNfc) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :left)
+      (goto :right)
+      (:left)
+      (const v1 1)
+      (goto :middle)
+      (:right)
+      (const v1 1)
+      (:middle)
+      (return-void)
+    )
+  )");
+  auto* method = get_fresh_method("DedupSourceBlockMergeIsBinaryNfc");
+  method->set_deobfuscated_name(show(method));
+  method->set_code(std::move(input_code));
+  auto* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+
+  // Boolean data: every block covered at val = 1.
+  for (auto* b : cfg.blocks()) {
+    if (b == cfg.exit_block()) {
+      continue;
+    }
+    auto sb = std::make_unique<SourceBlock>(
+        method->get_deobfuscated_name_or_null(), b->id(),
+        std::vector<SourceBlock::Val>{SourceBlock::Val(1.0f, 1.0f)});
+    source_blocks::impl::BlockAccessor::push_source_block(b, std::move(sb));
+  }
+
+  dedup_blocks_impl::Config config;
+  dedup_blocks_impl::DedupBlocks impl(&config, method);
+  impl.run();
+
+  // Support preserved: no surviving SB is zeroed, and the merged arm is covered
+  // (val = 1 + 1 = 2 > 0 -- the point is `>0`, not the magnitude).
+  auto survivors = v1_defining_blocks(cfg);
+  ASSERT_EQ(survivors.size(), 1u);
+  auto* merged = source_blocks::get_first_source_block(survivors[0]);
+  ASSERT_NE(merged, nullptr);
+  EXPECT_GT(merged->get_val(0).value_or(-1.0f), 0.0f); // still covered
+  for (auto* b : cfg.blocks()) {
+    source_blocks::foreach_source_block(b, [&](SourceBlock* sb) {
+      auto v = sb->get_val(0);
+      if (v) {
+        EXPECT_GT(*v, 0.0f) << "a covered SB was zeroed by the merge";
+      }
+    });
+  }
 }
 
 // Verify that normal dedup behavior (postfix deduplication) is not regressed

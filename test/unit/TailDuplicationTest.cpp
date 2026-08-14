@@ -142,6 +142,12 @@ TEST_F(TailDuplicationTest, basic) {
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
+// Note: the shrink pass re-runs DedupBlocks, which now SUMS the counts of the
+// duplicated copies it folds back together (SourceBlock count-safety fix). So a
+// re-merged block's synthetic SB carries the sum of the copies' vals (e.g.
+// 1 + 1 = 2), not their max. This is binary-NFC (support unchanged); the exact
+// round-trip magnitude would need duplicate-side SPLIT (standalone follow-up).
+// This applies to the *_shrink_undo_hot_hot / specialize / specialize2 tests.
 TEST_F(TailDuplicationTest, basic_shrink_undo_hot_hot) {
   // When there is nothing to specialize, shrinking will effectively undo the
   // duplication.
@@ -183,7 +189,7 @@ TEST_F(TailDuplicationTest, basic_shrink_undo_hot_hot) {
         (.src_block "LTail;.duplication:(I)V" 2 (1.0 1.0))
 
         (:common)
-        (.src_block "LTail;.duplication:(I)V" 4294967295 (1.0 1.0))
+        (.src_block "LTail;.duplication:(I)V" 4294967295 (2.0 1.0))
         (return v0)
 
         (:true)
@@ -289,7 +295,7 @@ TEST_F(TailDuplicationTest, specialize) {
         (const v0 1)
 
         (:common)
-        (.src_block "LTail;.duplication:(I)V" 4294967295 (1.0 1.0))
+        (.src_block "LTail;.duplication:(I)V" 4294967295 (2.0 1.0))
         (return v0)
 
         (:true)
@@ -346,7 +352,7 @@ TEST_F(TailDuplicationTest, specialize2) {
         (const v0 1)
 
         (:common)
-        (.src_block "LTail;.duplication:(I)V" 4294967295 (1.0 1.0))
+        (.src_block "LTail;.duplication:(I)V" 4294967295 (2.0 1.0))
         (return v0)
 
         (:true)
