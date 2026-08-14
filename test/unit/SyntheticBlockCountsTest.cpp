@@ -8,6 +8,7 @@
 #include "SyntheticBlockCounts.h"
 
 #include <atomic>
+#include <limits>
 #include <map>
 #include <string>
 
@@ -47,6 +48,22 @@ class SyntheticBlockCountsTest : public RedexTest {
     return m;
   }
 
+  // Like make() but with an explicit class name, so the body can self-reference
+  // (e.g. a recursive invoke of its own LREC;.f:()V).
+  DexMethod* make_named(const std::string& cls, const std::string& body) {
+    ClassCreator cc{DexType::make_type(cls)};
+    cc.set_super(type::java_lang_Object());
+    auto* m = DexMethod::make_method(cls + ".f:()V")
+                  ->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                                  assembler::ircode_from_string(body),
+                                  /*is_virtual=*/false);
+    m->set_deobfuscated_name(show(m));
+    cc.add_method(m);
+    cc.create();
+    m->get_code()->build_cfg();
+    return m;
+  }
+
   SyntheticBlockCountsPass::MethodResult run(
       DexMethod* m,
       const method_profiles::MethodProfiles& profiles,
@@ -68,17 +85,46 @@ class SyntheticBlockCountsTest : public RedexTest {
     return scope;
   }
 
-  static method_profiles::MethodProfiles profiles_of(
-      const std::vector<std::pair<DexMethod*, double>>& entries) {
-    UnorderedMap<const DexMethodRef*, method_profiles::Stats> data;
-    for (const auto& e : entries) {
-      data.emplace(e.first,
-                   method_profiles::Stats{/*appear_percent=*/100.0,
-                                          /*call_count=*/e.second,
-                                          /*order_percent=*/0.0,
-                                          /*min_api_level=*/0});
-    }
-    return method_profiles::MethodProfiles::initialize("Fake", std::move(data));
+  // A caller (make()d as LD<n>) whose body invokes `callee` once on its entry
+  // path, plus a covered entry source block.
+  DexMethod* make_caller(DexMethod* callee) {
+    std::string code =
+        "(\n"
+        "  (.src_block \"LC;.f:()V\" 0 (1.0 1.0))\n"
+        "  (invoke-static () \"" +
+        show(callee) +
+        "\")\n"
+        "  (return-void)\n"
+        ")";
+    auto* caller = make(code);
+    // The call graph is root-seeded BFS; mark the caller a root so its
+    // callsites (the invoke of `callee`) are explored and the edge is built.
+    caller->rstate.set_root();
+    return caller;
+  }
+
+  // A concrete virtual method `g:()V` in class `cls_name` extending `super`.
+  DexMethod* make_vmethod(const std::string& cls_name,
+                          DexType* super,
+                          const std::string& body) {
+    ClassCreator cc{DexType::make_type(cls_name)};
+    cc.set_super(super);
+    auto* m = DexMethod::make_method(cls_name + ".g:()V")
+                  ->make_concrete(ACC_PUBLIC,
+                                  assembler::ircode_from_string(body),
+                                  /*is_virtual=*/true);
+    m->set_deobfuscated_name(show(m));
+    cc.add_method(m);
+    cc.create();
+    m->get_code()->build_cfg();
+    return m;
+  }
+
+  SyntheticBlockCountsPass::InterStats run_inter(
+      const Scope& scope,
+      const method_profiles::MethodProfiles& profiles,
+      const std::vector<std::string>& inv_slot = {"Fake"}) {
+    return m_pass.run_intermethod_core(scope, profiles, inv_slot);
   }
 
   // Fixture is the friend; TEST_F bodies (a derived class) are not, so private
@@ -98,6 +144,19 @@ class SyntheticBlockCountsTest : public RedexTest {
                                         /*call_count=*/call_count,
                                         /*order_percent=*/0.0,
                                         /*min_api_level=*/0});
+    return method_profiles::MethodProfiles::initialize("Fake", std::move(data));
+  }
+
+  static method_profiles::MethodProfiles profiles_of(
+      const std::vector<std::pair<DexMethod*, double>>& entries) {
+    UnorderedMap<const DexMethodRef*, method_profiles::Stats> data;
+    for (const auto& e : entries) {
+      data.emplace(e.first,
+                   method_profiles::Stats{/*appear_percent=*/100.0,
+                                          /*call_count=*/e.second,
+                                          /*order_percent=*/0.0,
+                                          /*min_api_level=*/0});
+    }
     return method_profiles::MethodProfiles::initialize("Fake", std::move(data));
   }
 
@@ -456,6 +515,7 @@ TEST_F(SyntheticBlockCountsTest, DeterministicIdempotent) {
   auto second = all_vals(m->get_code()->cfg());
   EXPECT_EQ(first, second);
 }
+
 // A covered method with no usable call_count anchor -- an absent profile row,
 // or a non-finite / negative call_count -- is counted. A properly-profiled
 // method is not; and, consistent with `usable_call_count`, neither is a method
@@ -477,4 +537,464 @@ TEST_F(SyntheticBlockCountsTest, MissingHitMethodsCountsCoveredUnprofiled) {
   auto counts = missing_hit(scope, profiles);
   ASSERT_EQ(counts.size(), 1u);
   EXPECT_EQ(counts[0], 1); // only the unprofiled method
+}
+
+// Inter-method: a profiled caller's call_count forward-fills an UNPROFILED
+// callee. The callee's entry, boolean before, is heated to the caller's count.
+TEST_F(SyntheticBlockCountsTest, InterMethodForwardFillsUnprofiledCallee) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  auto profiles = profile_with(caller, 100.0); // callee is unprofiled
+  auto scope = scope_of({caller, callee});
+
+  auto st = run_inter(scope, profiles);
+
+  auto& caller_cfg = caller->get_code()->cfg();
+  auto& callee_cfg = callee->get_code()->cfg();
+  // Profiled caller pinned to its own call_count (strict superset of naive).
+  EXPECT_FLOAT_EQ(fv(caller_cfg.entry_block()), 100.0f);
+  // Unprofiled callee forward-filled: entry heated from boolean 1.0 to ~100.
+  EXPECT_GT(fv(callee_cfg.entry_block()), 1.0f);
+  EXPECT_FLOAT_EQ(fv(callee_cfg.entry_block()), 100.0f);
+  EXPECT_GE(st.pairs_pinned, 1u);
+  EXPECT_GE(st.pairs_forward_filled, 1u);
+}
+
+// Fan-in: two profiled callers each invoke the same unprofiled callee once on
+// their entry path (k == 1). The callee's scale is the SUM over its callers,
+// 100 + 30 == 130. Every other forward test is a single-caller chain; this is
+// the only one exercising the sum-over-callers term of the forward formula.
+TEST_F(SyntheticBlockCountsTest, InterMethodSumsOverMultipleCallers) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* a = make_caller(callee);
+  auto* b = make_caller(callee);
+  auto profiles = profiles_of({{a, 100.0}, {b, 30.0}});
+  auto scope = scope_of({a, b, callee});
+
+  run_inter(scope, profiles);
+
+  EXPECT_FLOAT_EQ(fv(a->get_code()->cfg().entry_block()), 100.0f); // pinned
+  EXPECT_FLOAT_EQ(fv(b->get_code()->cfg().entry_block()), 30.0f); // pinned
+  // Unprofiled callee = scale(a)*k + scale(b)*k = 100*1 + 30*1 == 130.
+  EXPECT_FLOAT_EQ(fv(callee->get_code()->cfg().entry_block()), 130.0f);
+}
+
+// Forward k > 1: the caller invokes the helper from its loop header, which the
+// per-method shape runs twice (p_back 0.5 -> x2), so k(caller->helper) == 2.
+// The unprofiled helper is therefore heated ABOVE the caller's own count,
+// 100 * 2 == 200 -- the "hot helper called in a loop" case, the headline
+// benefit of inter-method flow, which the single-call-on-entry tests (k == 1)
+// never reach.
+TEST_F(SyntheticBlockCountsTest,
+       InterMethodLoopCallSiteHeatsHelperAboveCaller) {
+  auto* helper = make(R"((
+      (.src_block "LH;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  std::string code =
+      "(\n"
+      "  (.src_block \"LC;.f:()V\" 0 (1.0 1.0))\n"
+      "  (const v0 0)\n"
+      "  (:head)\n"
+      "  (.src_block \"LC;.f:()V\" 1 (1.0 1.0))\n"
+      "  (invoke-static () \"" +
+      show(helper) +
+      "\")\n"
+      "  (if-eqz v0 :exit)\n"
+      "  (.src_block \"LC;.f:()V\" 2 (1.0 1.0))\n"
+      "  (goto :head)\n"
+      "  (:exit)\n"
+      "  (.src_block \"LC;.f:()V\" 3 (1.0 1.0))\n"
+      "  (return-void)\n"
+      ")";
+  auto* caller = make(code);
+  caller->rstate.set_root();
+  auto profiles = profile_with(caller, 100.0);
+  auto scope = scope_of({caller, helper});
+
+  run_inter(scope, profiles);
+
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()),
+                  100.0f); // pinned
+  // k > 1 at the loop-header call site: the helper is hotter than its caller.
+  EXPECT_GT(fv(helper->get_code()->cfg().entry_block()), 100.0f);
+  EXPECT_NEAR(fv(helper->get_code()->cfg().entry_block()), 200.0f, 1.0f);
+}
+
+// Inter-method RelevanceSet prune: a method NOT reachable from any profiled
+// root (here an isolated, unprofiled method) is left byte-identical -- it is
+// never solved (shape_solves counts only the pinned+reachable set) and never
+// written, while a reachable callee is still forward-filled. The cache-miss
+// canary stays 0. This guards the coverage-gate/RelevanceSet perf rewrite (see
+// intermethod-perf-plan.md).
+TEST_F(SyntheticBlockCountsTest, InterMethodRelevanceSetPrunesUnreachable) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  // Isolated: covered (boolean 1.0) but called by nobody -> non-relevant.
+  auto* isolated = make(R"((
+      (.src_block "LY;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto profiles = profile_with(caller, 100.0);
+  auto scope = scope_of({caller, callee, isolated});
+
+  auto st = run_inter(scope, profiles);
+
+  auto& callee_cfg = callee->get_code()->cfg();
+  auto& isolated_cfg = isolated->get_code()->cfg();
+  // Reachable callee still forward-filled...
+  EXPECT_FLOAT_EQ(fv(callee_cfg.entry_block()), 100.0f);
+  // ...but the unreachable method is byte-identical (boolean 1.0 preserved).
+  EXPECT_FLOAT_EQ(fv(isolated_cfg.entry_block()), 1.0f);
+  // Only the relevant set (caller + callee) is solved; isolated is pruned.
+  EXPECT_EQ(st.shape_solves, 2u);
+  EXPECT_EQ(st.relevance_set_size, 2u);
+  EXPECT_EQ(st.shape_cache_misses, 0u); // canary
+}
+
+// Inter-method NFC + determinism on the heated (unprofiled) callee: a pinned
+// cold block stays 0, appear100 is untouched, and a second run is identical.
+TEST_F(SyntheticBlockCountsTest, InterMethodNfcAndDeterministic) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 5.0))
+      (const v0 0)
+      (if-eqz v0 :cold)
+      (.src_block "LX;.f:()V" 1 (1.0 6.0))
+      (const v1 1)
+      (goto :end)
+      (:cold)
+      (.src_block "LX;.f:()V" 2 (0.0 0.0))
+      (const v1 2)
+      (goto :end)
+      (:end)
+      (.src_block "LX;.f:()V" 3 (1.0 7.0))
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  auto profiles = profile_with(caller, 100.0);
+  auto scope = scope_of({caller, callee});
+
+  auto appear_before = all_appear(callee->get_code()->cfg());
+  run_inter(scope, profiles);
+  auto vals1 = all_vals(callee->get_code()->cfg());
+  auto appear_after = all_appear(callee->get_code()->cfg());
+
+  EXPECT_EQ(appear_before, appear_after); // appear100 never touched
+  size_t cold = 0;
+  for (float v : vals1) {
+    if (v == 0.0f) {
+      cold++;
+    } else {
+      EXPECT_GT(v, 0.0f); // every covered block stays strictly > 0
+    }
+  }
+  EXPECT_EQ(cold, 1u); // exactly the one pinned-cold block stays 0
+
+  run_inter(scope, profiles);
+  auto vals2 = all_vals(callee->get_code()->cfg());
+  EXPECT_EQ(vals1, vals2); // deterministic / idempotent
+}
+
+// Backward upper bound: caller(100) -> mid(unprofiled) -> leaf(3). Forward
+// alone would heat mid to 100, but mid calls the cold profiled leaf on its
+// entry path, so the sound backward cap (count(invoke) <= call_count(leaf))
+// limits mid to 3.
+TEST_F(SyntheticBlockCountsTest, InterMethodBackwardUpperBoundCapsForward) {
+  auto* leaf = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* mid = make_caller(leaf); // unprofiled; invokes leaf on entry path
+  auto* caller = make_caller(mid); // invokes mid on entry path
+  auto profiles = profiles_of({{caller, 100.0}, {leaf, 3.0}});
+  auto scope = scope_of({caller, mid, leaf});
+
+  run_inter(scope, profiles);
+
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()),
+                  100.0f); // pinned
+  EXPECT_FLOAT_EQ(fv(leaf->get_code()->cfg().entry_block()), 3.0f); // pinned
+  // mid: forward=100, capped by leaf's total to 3.
+  EXPECT_FLOAT_EQ(fv(mid->get_code()->cfg().entry_block()), 3.0f);
+}
+
+// Same shape, but leaf's call_count is +inf. A non-finite count is not a usable
+// backward bound: it must be skipped (not divided into hi_scale), so mid keeps
+// its forward value 100 rather than being capped or poisoned with NaN/inf. The
+// EXPECT_FLOAT_EQ(100) also fails if any NaN/inf leaked into mid's blocks.
+TEST_F(SyntheticBlockCountsTest, InterMethodNonFiniteCalleeBoundIgnored) {
+  auto* leaf = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* mid = make_caller(leaf); // unprofiled; invokes leaf on entry path
+  auto* caller = make_caller(mid); // invokes mid on entry path
+  auto profiles = profiles_of(
+      {{caller, 100.0}, {leaf, std::numeric_limits<double>::infinity()}});
+  auto scope = scope_of({caller, mid, leaf});
+
+  run_inter(scope, profiles);
+
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()),
+                  100.0f); // pinned
+  // Non-finite leaf bound ignored: mid stays at its forward value, uncapped.
+  EXPECT_FLOAT_EQ(fv(mid->get_code()->cfg().entry_block()), 100.0f);
+}
+
+// Same shape, but leaf's call_count is NEGATIVE -- invalid profile data. It
+// must not pin leaf to a negative scale and must not be used as a backward
+// bound (a negative bound would drag mid's scale below 0). Both are rejected:
+// leaf is forward-filled (finite, positive) and mid keeps its uncapped forward
+// value.
+TEST_F(SyntheticBlockCountsTest, InterMethodNegativeCalleeCountIgnored) {
+  auto* leaf = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* mid = make_caller(leaf); // unprofiled; invokes leaf on entry path
+  auto* caller = make_caller(mid); // invokes mid on entry path
+  auto profiles = profiles_of({{caller, 100.0}, {leaf, -5.0}}); // invalid
+  auto scope = scope_of({caller, mid, leaf});
+
+  run_inter(scope, profiles);
+
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()),
+                  100.0f); // pinned
+  // Negative leaf neither pins a negative scale nor caps mid: mid stays 100 and
+  // leaf is forward-filled to a finite, positive value.
+  EXPECT_FLOAT_EQ(fv(mid->get_code()->cfg().entry_block()), 100.0f);
+  EXPECT_GT(fv(leaf->get_code()->cfg().entry_block()), 0.0f);
+}
+
+// Annotation-only contract: inter-method mode must not mutate the CFG. An
+// unreachable block (injected via create_block, since the assembler prunes dead
+// code at build) is left in place -- no dead-block removal, matching the
+// per-method path and keeping the pass byte-identical on bytecode.
+TEST_F(SyntheticBlockCountsTest, InterMethodDoesNotRemoveUnreachableBlocks) {
+  auto* m = make(R"((
+      (.src_block "LD;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  m->rstate.set_root();
+  m->get_code()->cfg().create_block(); // orphan: no predecessors -> unreachable
+  auto profiles = profile_with(m, 100.0);
+  auto scope = scope_of({m});
+  const size_t before = m->get_code()->cfg().blocks().size();
+  ASSERT_GE(before, 2u); // entry + the injected unreachable block
+  run_inter(scope, profiles);
+  EXPECT_EQ(m->get_code()->cfg().blocks().size(), before); // nothing removed
+}
+
+// no_optimizations methods must never have their bytecode changed. Inter-method
+// mode only annotates SourceBlocks, so the CFG of such a method (even with an
+// unreachable block) is left intact.
+TEST_F(SyntheticBlockCountsTest, InterMethodLeavesNoOptimizationsCfgUnchanged) {
+  auto* m = make(R"((
+      (.src_block "LD;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  m->rstate.set_root();
+  m->rstate.set_no_optimizations();
+  m->get_code()->cfg().create_block(); // orphan unreachable block
+  auto profiles = profile_with(m, 100.0);
+  auto scope = scope_of({m});
+  const size_t before = m->get_code()->cfg().blocks().size();
+  ASSERT_GE(before, 2u);
+  run_inter(scope, profiles);
+  EXPECT_EQ(m->get_code()->cfg().blocks().size(), before);
+}
+
+// True-virtual split: a profiled caller invoke-virtuals a base method with two
+// overriders. The 3 resolved targets (base + 2 overriders) each receive an
+// even 1/3 share of the caller's count.
+TEST_F(SyntheticBlockCountsTest, InterMethodTrueVirtualUniformSplit) {
+  std::string body = R"((
+      (.src_block "LX;.g:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))";
+  auto* base = make_vmethod("LVBase;", type::java_lang_Object(), body);
+  auto* s1 = make_vmethod("LVSub1;", base->get_class(), body);
+  auto* s2 = make_vmethod("LVSub2;", base->get_class(), body);
+  auto* caller = make(R"((
+      (.src_block "LC;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (invoke-virtual (v0) "LVBase;.g:()V")
+      (return-void)
+    ))");
+  caller->rstate.set_root();
+  auto profiles = profile_with(caller, 90.0);
+  auto scope = scope_of({caller, base, s1, s2});
+
+  run_inter(scope, profiles);
+
+  // 3 targets, uniform split: 90 / 3 = 30 each.
+  EXPECT_FLOAT_EQ(fv(base->get_code()->cfg().entry_block()), 30.0f);
+  EXPECT_FLOAT_EQ(fv(s1->get_code()->cfg().entry_block()), 30.0f);
+  EXPECT_FLOAT_EQ(fv(s2->get_code()->cfg().entry_block()), 30.0f);
+}
+
+// Recursion / SCC: a self-recursive unprofiled method called by a hot profiled
+// caller stays BOUNDED (no divergence), converges to the geometric fixpoint,
+// and is deterministic. Its self-invoke sits on a taken-half branch
+// (k_self=0.5), so scale = 100 + 0.5*scale => 200.
+TEST_F(SyntheticBlockCountsTest, InterMethodRecursionBoundedAndConverges) {
+  auto* rec = make_named("LREC;", R"((
+      (.src_block "LREC;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (if-eqz v0 :done)
+      (.src_block "LREC;.f:()V" 1 (1.0 1.0))
+      (invoke-static () "LREC;.f:()V")
+      (:done)
+      (.src_block "LREC;.f:()V" 2 (1.0 1.0))
+      (return-void)
+    ))");
+  auto* caller = make_caller(rec);
+  auto profiles = profile_with(caller, 100.0);
+  auto scope = scope_of({caller, rec});
+
+  run_inter(scope, profiles);
+  auto& rc = rec->get_code()->cfg();
+  const float e = fv(rc.entry_block());
+  EXPECT_GT(e, 100.0f); // amplified by the recursion beyond a single call
+  // Bounded by the data-derived widening ceiling
+  // factor(default 10.0) * max(usable call_count)(100) = 1000; the p_back=0.5
+  // fixpoint (200) is well under it, so the ceiling does not bite here.
+  EXPECT_LT(e, 1000.0f);
+  EXPECT_NEAR(e, 200.0f, 1.0f); // geometric fixpoint 100/(1-0.5)
+
+  auto v1 = all_vals(rc);
+  run_inter(scope, profiles);
+  EXPECT_EQ(v1, all_vals(rec->get_code()->cfg())); // deterministic / idempotent
+}
+
+TEST_F(SyntheticBlockCountsTest,
+       InterMethodRecursionHighBackEdgePinnedAtCeiling) {
+  // A recursion whose back-edge probability is ~0.99 (the `:done` exit is
+  // nearly uncovered via appear100=0.01), so the geometric fixpoint
+  // 100/(1-0.99) would diverge toward ~10000. The data-derived widening ceiling
+  // factor(default 10.0) * max(usable call_count)(100) = 1000 pins it instead,
+  // and the method is flagged as having hit the ceiling.
+  auto* rec = make_named("LREC;", R"((
+      (.src_block "LREC;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (if-eqz v0 :done)
+      (.src_block "LREC;.f:()V" 1 (1.0 1.0))
+      (invoke-static () "LREC;.f:()V")
+      (:done)
+      (.src_block "LREC;.f:()V" 2 (1.0 0.01))
+      (return-void)
+    ))");
+  auto* caller = make_caller(rec);
+  auto profiles = profile_with(caller, 100.0);
+  auto scope = scope_of({caller, rec});
+
+  auto st = run_inter(scope, profiles);
+  auto& rc = rec->get_code()->cfg();
+  const float e = fv(rc.entry_block());
+  // Pinned at the data-derived ceiling, not the divergent geometric fixpoint.
+  EXPECT_NEAR(e, 1000.0f, 5.0f);
+  EXPECT_GE(st.pairs_hit_ceiling, 1u);
+}
+
+// A deep call chain: BFS order is non-recursive (no stack overflow on depth),
+// and callers-before-callees propagates the whole chain in a single sweep.
+TEST_F(SyntheticBlockCountsTest, InterMethodDeepChainOneSweepNoCrash) {
+  const size_t N = 2000;
+  std::vector<DexMethod*> chain(N);
+  for (size_t j = N; j-- > 0;) {
+    std::string cls = "LCHAIN" + std::to_string(j) + ";";
+    std::string body;
+    if (j + 1 < N) {
+      body = "(\n  (.src_block \"" + cls + ".f:()V\" 0 (1.0 1.0))\n" +
+             "  (invoke-static () \"LCHAIN" + std::to_string(j + 1) +
+             ";.f:()V\")\n  (return-void)\n)";
+    } else {
+      body = "(\n  (.src_block \"" + cls +
+             ".f:()V\" 0 (1.0 1.0))\n  (const v0 0)\n  (return-void)\n)";
+    }
+    chain[j] = make_named(cls, body);
+  }
+  chain[0]->rstate.set_root();
+  auto profiles = profile_with(chain[0], 100.0);
+  run_inter(scope_of(chain), profiles);
+  EXPECT_FLOAT_EQ(fv(chain[0]->get_code()->cfg().entry_block()), 100.0f);
+  EXPECT_FLOAT_EQ(fv(chain[N - 1]->get_code()->cfg().entry_block()), 100.0f);
+}
+
+// The result is independent of the order methods are handed to the pass (the
+// solve sorts internally and walks the call graph from its entry).
+TEST_F(SyntheticBlockCountsTest, InterMethodDeterministicAcrossInputOrder) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  auto profiles = profile_with(caller, 77.0);
+
+  run_inter(scope_of({caller, callee}), profiles);
+  auto v1 = all_vals(callee->get_code()->cfg());
+  run_inter(scope_of({callee, caller}), profiles); // reversed input order
+  auto v2 = all_vals(callee->get_code()->cfg());
+  EXPECT_EQ(v1, v2);
+}
+
+// A non-finite call_count is not a usable anchor: the per-method
+// solve leaves the block vals untouched (no NaN written) and reports it as a
+// no-profile fallback, exactly like an absent row.
+TEST_F(SyntheticBlockCountsTest, NonFiniteCallCountSkipsSlotPerMethod) {
+  auto* m = make(R"((
+      (.src_block "LD;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto profiles = profile_with(m, std::numeric_limits<double>::quiet_NaN());
+  auto before = all_vals(m->get_code()->cfg());
+  auto res = run(m, profiles);
+  auto after = all_vals(m->get_code()->cfg());
+  EXPECT_EQ(before, after); // untouched -- no NaN written
+  EXPECT_EQ(res.solve_fallback_no_profile, 1u);
+  EXPECT_EQ(res.methods_with_usable_profile, 0u);
+}
+
+// Same for the inter-method pin loop: a "profiled" method whose
+// call_count is non-finite is NOT pinned, so it seeds no NaN/inf into the flow
+// and nothing is forward-filled.
+TEST_F(SyntheticBlockCountsTest, NonFiniteCallCountNotPinnedInterMethod) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  auto profiles =
+      profile_with(caller, std::numeric_limits<double>::quiet_NaN());
+  auto scope = scope_of({caller, callee});
+
+  auto st = run_inter(scope, profiles);
+
+  EXPECT_EQ(st.pairs_pinned, 0u); // non-finite count is not a valid pin
+  // Both stay boolean 1.0 -- no NaN/inf written anywhere.
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 1.0f);
+  EXPECT_FLOAT_EQ(fv(callee->get_code()->cfg().entry_block()), 1.0f);
 }

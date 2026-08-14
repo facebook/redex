@@ -7,9 +7,12 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "DexClass.h"
 #include "Pass.h"
 #include "SourceBlocksUtils.h"
 
@@ -44,6 +47,14 @@ class MethodProfiles;
 //   - A positive result is floored to a small `epsilon`, so a covered block can
 //     never underflow below a consumer's threshold.
 // Whether the pass runs is controlled by its entry in the Redex pass list.
+//
+// Two modes, selected by the `intermethod` config knob:
+//   - PER-METHOD (default): each method is estimated on its own, anchored to
+//   its
+//     own `call_count`. See SyntheticBlockCounts.cpp, ALGORITHM section A.
+//   - INTER-METHOD (`intermethod=true`): counts also flow across method
+//     boundaries along the call graph, so a method with no profile of its own
+//     is still heated by its hot callers. See ALGORITHM section B.
 class SyntheticBlockCountsPass : public Pass {
  public:
   SyntheticBlockCountsPass() : Pass("SyntheticBlockCountsPass") {}
@@ -116,6 +127,63 @@ class SyntheticBlockCountsPass : public Pass {
       const method_profiles::MethodProfiles& profiles,
       const std::vector<std::string>& inv_slot);
 
+  // Summary of what the inter-method engine did (for metrics + tests).
+  struct InterStats {
+    // PASS C runs once per (method, interaction), so these four count
+    // (method, interaction) pairs, NOT distinct methods -- a method pinned in
+    // every slot contributes `inv_slot.size()` to `pairs_pinned`. Use
+    // `forward_methods_mutated` below for a distinct-method count.
+    size_t pairs_pinned{0};
+    size_t pairs_forward_filled{0};
+    size_t pairs_skipped{0};
+    size_t pairs_hit_ceiling{0}; // value limited by the max_scale ceiling
+    size_t blocks_written{0};
+    // blocks written to forward-filled (unprofiled) methods only == the delta
+    // over the per-method path (per-method leaves unprofiled methods boolean).
+    size_t forward_blocks_written{0};
+    size_t methods_not_in_graph{0}; // profiled-but-unreachable (pinned anyway)
+    // (method, interaction) sparsity (see run_intermethod_core).
+    size_t pairs_total{0};
+    size_t pairs_covered{0};
+    size_t pairs_uncovered{0};
+    // engine cost + parity.
+    size_t shape_solves{0}; // actual solve_block_freq calls (~= RelevanceSet)
+    size_t shape_cache_misses{0}; // canary: covered+scale>0 not solved. MUST be
+                                  // 0
+    size_t zero_outflow_sinks{0}; // restored from the discarded solve out-param
+    size_t irreducible{0}; // restored from the discarded solve out-param
+    size_t relevance_set_size{0}; // summed over interactions
+    size_t shape_cache_entries{0}; // peak covered-shape cache size
+    size_t sweeps_total{0}; // PASS B sweeps summed over interactions
+    uint32_t sweeps_max{0}; // max sweeps any single interaction needed
+    size_t interactions_hit_cap{0}; // interactions that exhausted max_sweeps
+    size_t methods_unconverged{0}; // methods still moving on the final sweep,
+                                   // summed over non-converged interactions
+    double final_rel_max{0.0}; // worst final-sweep relative change, any slot
+    // distinct forward-filled methods with >=1 block written (deduped over
+    // interaction slots), and the biggest few by dex size -- the latter emitted
+    // as name-carrying metrics (key = rank + method name, value = dex size).
+    size_t forward_methods_mutated{0};
+    std::vector<std::pair<const DexMethod*, uint32_t>> top_forward_mutated;
+    double p1_ms{0.0}; // PASS 0a wall time (driving thread)
+    double phase_b_ms{0.0}; // PASS B wall time
+    double phase_c_ms{0.0}; // PASS C wall time
+  };
+
+  // Inter-method engine entry point. Runs only when `m_intermethod`
+  // is set; otherwise `run_pass` uses the per-method `process_method` path.
+  void run_intermethod(DexStoresVector& stores,
+                       const method_profiles::MethodProfiles& profiles,
+                       const std::vector<std::string>& inv_slot,
+                       PassManager& mgr);
+
+  // Scope-scoped core of the inter-method engine (no PassManager / stores
+  // dependency), so it is directly drivable from unit tests.
+  InterStats run_intermethod_core(
+      const Scope& scope,
+      const method_profiles::MethodProfiles& profiles,
+      const std::vector<std::string>& inv_slot);
+
   friend class SyntheticBlockCountsTest;
 
   float m_handler_cold_factor{0.01f};
@@ -126,4 +194,15 @@ class SyntheticBlockCountsPass : public Pass {
   // source_blocks::kMinPositiveCount for why this is no longer sized to
   // dominate a consumer threshold.
   float m_epsilon{source_blocks::kMinPositiveCount};
+
+  // Inter-method engine knobs.
+  bool m_intermethod{false};
+  uint32_t m_intermethod_max_sweeps{32};
+  // Widening-to-hi safety net multiplier: every forward-filled scale is capped
+  // at `factor * max(usable call_count)` per interaction, so a recursion/SCC
+  // cycle is provably bounded by a data-derived ceiling (then tightened by the
+  // step-4 backward callee bound).
+  float m_intermethod_max_scale_factor{10.0f};
+  // Relative convergence tolerance for the Gauss-Seidel solve.
+  float m_intermethod_converge_eps{1e-4f};
 };
