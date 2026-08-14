@@ -30,6 +30,10 @@ class PartialApplicationPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        // Read through CanOutlineBlockDecider to keep hot blocks alone, and to
+        // give the generated helper methods a hotness matching their
+        // call-sites.
+        {HasSourceBlocks, RequiresAndPreserves},
         {NoResolvablePureRefs, Preserves},
         {SpuriousGetClassCallsInterned, RequiresAndPreserves},
     };
@@ -41,6 +45,9 @@ class PartialApplicationPass : public Pass {
 
  private:
   size_t m_iteration{0};
+  // Provisional: the option exists so the impact of fixing up source blocks
+  // can be assessed before the fix-up is made unconditional.
+  bool m_fix_missing_source_blocks{false};
   outliner::ProfileGuidanceConfig m_profile_guidance_config;
   bool m_derive_method_profiles_stats{false};
   PartialApplicationConfig m_cost_config;
