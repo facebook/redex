@@ -537,6 +537,7 @@ libopt_la_SOURCES = \
 	opt/string-switch-analysis/StringSwitchTransformPass.cpp \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
+	opt/synthetic-block-counts/SyntheticBlockCounts.cpp \
 	opt/optimize_resources/LowerResourceConstants.cpp \
 	opt/optimize_resources/MaterializeResourceConstants.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
