@@ -7,8 +7,10 @@
 
 #include <gtest/gtest.h>
 
+#include "ControlFlow.h"
 #include "RedexTest.h"
 #include "ReduceSparseSwitchesPass.h"
+#include "SourceBlocks.h"
 
 struct ReduceSparseSwitchesTest : public RedexTest {};
 
@@ -469,6 +471,62 @@ TEST_F(ReduceSparseSwitchesTest, multiplexing_shr) {
   EXPECT_CODE_EQ(expected.get(), method->get_code());
 }
 
+TEST_F(ReduceSparseSwitchesTest, multiplexing_sums_source_block_counts) {
+  // Same shape as the `multiplexing` test, but with per-block SourceBlock
+  // counts. Multiplexing splits the switch's traffic into M disjoint buckets,
+  // so each bucket's synthetic SourceBlock must carry the SUM of the counts of
+  // the case targets it routes to (plus the shared default) -- NOT a verbatim
+  // copy of the whole switch's count, which would inflate total mass by ~M.
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+        (.src_block "LtestClass;.testMethod(:(I)V" 1 (100.0 1.0))
+        (switch v0 (:L0 :L1 :L2 :L3 :L4))
+        (.src_block "LtestClass;.testMethod(:(I)V" 2 (1.0 1.0))
+        (return-void)
+
+        (:L0 0)
+        (.src_block "LtestClass;.testMethod(:(I)V" 3 (10.0 1.0))
+        (return-void)
+        (:L1 3)
+        (.src_block "LtestClass;.testMethod(:(I)V" 4 (3.0 1.0))
+        (return-void)
+        (:L2 6)
+        (.src_block "LtestClass;.testMethod(:(I)V" 5 (6.0 1.0))
+        (return-void)
+        (:L3 9)
+        (.src_block "LtestClass;.testMethod(:(I)V" 6 (9.0 1.0))
+        (return-void)
+        (:L4 12)
+        (.src_block "LtestClass;.testMethod(:(I)V" 7 (12.0 1.0))
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  auto stats = ReduceSparseSwitchesPass::multiplexing_transformation(5, cfg);
+  EXPECT_EQ(stats.multiplexing.size(), 1);
+
+  // Buckets by (key & 3): {0,12}, {9}, {6}, {3}; each bucket also routes to the
+  // default. The synthetic bucket counts therefore sum to the traffic through
+  // the buckets: (10+12) + 9 + 6 + 3 + 4*default(1) = 44 -- not 4*100 = 400,
+  // which a verbatim clone of the switch's own count would produce.
+  float synthetic_sum = 0;
+  for (auto* b : cfg.blocks()) {
+    source_blocks::foreach_source_block(b, [&](auto* sb) {
+      if (sb->id == SourceBlock::kSyntheticId) {
+        if (auto v = sb->get_val(0)) {
+          synthetic_sum += *v;
+        }
+      }
+    });
+  }
+  EXPECT_FLOAT_EQ(synthetic_sum, 44.0f);
+}
+
 TEST_F(ReduceSparseSwitchesTest, splittingIntoLog2ManyChunks) {
   auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) ")LtestClass;.testMethod(:(I)V"
@@ -838,7 +896,7 @@ TEST_F(ReduceSparseSwitchesTest, expand_sparse_hot_source_blocks) {
       (.src_block "LtestClass;.testMethod(:(I)V" 1 (1.0 1.0))
       (if-eqz v0 :L2)
       (.src_block "LtestClass;.testMethod(:(I)V" )"
-      << SourceBlock::kSyntheticId << R"( (1.0 1.0))
+      << SourceBlock::kSyntheticId << R"( (2.0 1.0))
       (const v1 11)
       (if-eq v0 v1 :L1)
       (.src_block "LtestClass;.testMethod(:(I)V" )"
