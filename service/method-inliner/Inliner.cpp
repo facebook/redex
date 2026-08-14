@@ -7,9 +7,13 @@
 
 #include "Inliner.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <utility>
+#include <vector>
 
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
@@ -46,6 +50,14 @@ constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = UINT64_C(1) << 32;
 
 // TODO: Make configurable.
 const uint64_t MAX_HOT_COLD_CALLEE_SIZE = 27;
+
+// A block's execution count: the max-over-interactions synthetic `val` of its
+// first source block (0 when unprofiled / no source block).
+float block_max_count(cfg::Block* block) {
+  return source_blocks::max_val_over_interactions(
+             source_blocks::get_first_source_block(block))
+      .value_or(0.0f);
+}
 
 /*
  * Given a method, gather all resolved init-class instruction types. This
@@ -292,6 +304,10 @@ MultiMethodInliner::MultiMethodInliner(
           }
         },
         methods);
+  }
+
+  if (m_inliner_cost_config.inline_hot_callsite_count_percentile > 0) {
+    build_hot_callsite_count_ramp();
   }
 }
 
@@ -2648,14 +2664,103 @@ void MultiMethodInliner::delayed_invoke_direct_to_static() {
   m_delayed_make_static.clear();
 }
 
+// 4096 buckets is ~0.024 percentile of resolution -- far finer than the ramp's
+// curvature -- and keeps the table at 32KB no matter how large the app is.
+constexpr size_t HOT_CALLSITE_QUANTILES = 4096;
+
+void MultiMethodInliner::build_hot_callsite_count_ramp() {
+  const auto& cc = m_inliner_cost_config;
+  // The distribution is one entry per profiled, positive-count block that holds
+  // a callsite (invoke). `gather_block_counts` reduces each block to its
+  // source-block execution count; the filter keeps only invoke blocks.
+  std::vector<float> counts = source_blocks::gather_block_counts(
+      m_scope, [](DexMethod*, cfg::Block* block) {
+        for (const auto& mie : InstructionIterable(block)) {
+          if (opcode::is_an_invoke(mie.insn->opcode())) {
+            return true;
+          }
+        }
+        return false;
+      });
+  // Sorts `counts` in place, which the quantile table below relies on.
+  m_hot_callsite_count_cutoff = source_blocks::rank_cutoff_for_percentile(
+      counts, cc.inline_hot_callsite_count_percentile);
+
+  const int p_start = cc.inline_hot_callsite_count_percentile;
+  const int p_top = cc.inline_hot_callsite_count_top_percentile;
+  const float d_start = cc.inline_hot_callsite_count_discount;
+  const float d_top = cc.inline_hot_callsite_count_top_discount;
+  always_assert_log(
+      (p_top > 0) == (d_top > 0.0f),
+      "inline_hot_callsite_count_top_percentile and _top_discount must be set "
+      "together; got %d and %f",
+      p_top, d_top);
+  if (p_top <= 0) {
+    // No ramp configured: flat step at d_start for everything above the cutoff.
+    return;
+  }
+  always_assert_log(p_top > p_start && p_top <= 100,
+                    "inline_hot_callsite_count_top_percentile must be in (%d, "
+                    "100], got %d",
+                    p_start, p_top);
+  always_assert_log(d_top <= d_start && d_start <= 1.0f,
+                    "need 0 < d_top <= d_start <= 1, got %f and %f", d_top,
+                    d_start);
+  if (counts.empty()) {
+    return;
+  }
+  m_hot_callsite_count_quantiles.reserve(HOT_CALLSITE_QUANTILES);
+  m_hot_callsite_count_discounts.reserve(HOT_CALLSITE_QUANTILES);
+  const double span = HOT_CALLSITE_QUANTILES - 1;
+  for (size_t i = 0; i != HOT_CALLSITE_QUANTILES; ++i) {
+    auto idx = static_cast<size_t>((static_cast<double>(i) / span) *
+                                   static_cast<double>(counts.size() - 1));
+    m_hot_callsite_count_quantiles.push_back(counts[idx]);
+    double p = 100.0 * static_cast<double>(i) / span;
+    double x = std::clamp((p - p_start) / static_cast<double>(p_top - p_start),
+                          0.0, 1.0);
+    m_hot_callsite_count_discounts.push_back(
+        static_cast<float>(d_start * std::pow(d_top / d_start, x)));
+  }
+}
+
+float MultiMethodInliner::hot_callsite_count_discount(float count) const {
+  // Require a positive count: an unprofiled/cold callsite (count 0) must never
+  // qualify, even when the cutoff degenerates to -inf (percentile <= 0).
+  if (count <= 0.0f || count < m_hot_callsite_count_cutoff) {
+    return 1.0f;
+  }
+  if (m_hot_callsite_count_quantiles.empty()) {
+    return m_inliner_cost_config.inline_hot_callsite_count_discount;
+  }
+  auto it = std::upper_bound(m_hot_callsite_count_quantiles.begin(),
+                             m_hot_callsite_count_quantiles.end(), count);
+  auto i = static_cast<size_t>(it - m_hot_callsite_count_quantiles.begin());
+  return m_hot_callsite_count_discounts[std::min(
+      i, m_hot_callsite_count_discounts.size() - 1)];
+}
+
 float MultiMethodInliner::compute_profile_guided_discount(
     DexMethod* caller,
     DexMethod* callee,
     float inline_cost,
     cfg::Block* caller_block,
     ReducedCode* reduced_callee) {
+  float discount = 1.0f;
+
+  // [experimental] Callsite-count-percentile lever, independent of the
+  // baseline-profile discount below: the hotter a callsite is within the
+  // profiled (positive-count) callsite distribution, the more its local inline
+  // cost is scaled down, so a genuinely hot callsite inlines a callee the flat
+  // cost model would otherwise reject. NFC when the lever is off -- the cutoff
+  // stays +inf, so nothing qualifies.
+  if (m_inliner_cost_config.inline_hot_callsite_count_percentile > 0 &&
+      caller_block != nullptr) {
+    discount *= hot_callsite_count_discount(block_max_count(caller_block));
+  }
+
   if (!m_baseline_profile) {
-    return 1.0f;
+    return discount;
   }
 
   // Discounts only given to calls found to be hot with a high enough appear
@@ -2666,7 +2771,7 @@ float MultiMethodInliner::compute_profile_guided_discount(
           m_inliner_cost_config.profile_guided_block_appear_threshold) ||
       m_baseline_profile->methods.count(caller) == 0 ||
       !m_baseline_profile->methods.at(caller).hot) {
-    return 1.0;
+    return discount;
   }
 
   const auto* full_cost = get_fully_inlined_cost(callee);
@@ -2674,7 +2779,7 @@ float MultiMethodInliner::compute_profile_guided_discount(
   // inlined by the ART compiler, so we do not try to bias Redex into inlining.
   constexpr size_t size_threshold = 32;
   if (full_cost->full_code <= size_threshold) {
-    return 1.0f;
+    return discount;
   }
 
   // Bias toward inlining if the inlined code is smaller than the original.
@@ -2712,7 +2817,7 @@ float MultiMethodInliner::compute_profile_guided_discount(
     heat_discount += 1.0;
   }
 
-  return static_cast<float>(shrink_discount * heat_discount);
+  return static_cast<float>(discount * shrink_discount * heat_discount);
 }
 
 namespace inliner {
