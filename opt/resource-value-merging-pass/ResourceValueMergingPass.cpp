@@ -871,10 +871,14 @@ ResourceValueMergingPass::find_intra_graph_hoistings(
     }
   }
 
-  // Only hoist attributes to the parent from children that are not ambiguous
+  // Only hoist attributes to the parent from children that are not ambiguous.
+  // `directly_reachable_hoistings` is an UnorderedMap, and the order these
+  // groups are emitted in decides which synthetic resource id each one draws
+  // from the counter in `get_new_resource_id()`. Emit in resource-id order so
+  // that assignment is the same on every run.
   std::vector<std::vector<uint32_t>> valid_hoistings;
-  for (const auto& [resource_id, attr_map] :
-       UnorderedIterable(directly_reachable_hoistings)) {
+  for (uint32_t resource_id :
+       unordered_to_ordered_keys(directly_reachable_hoistings)) {
     bool all_children_valid = true;
 
     for (const auto& child_id : style_info.get_children(resource_id)) {
@@ -1008,6 +1012,12 @@ std::vector<uint32_t> ResourceValueMergingPass::find_inter_graph_hoistings(
     }
   }
 
+  // `get_roots()` is an UnorderedSet, so `valid_roots` arrives in hash order --
+  // and `find_best_hoisting_combination` breaks ties with a strict `>`, so the
+  // first-encountered maximum wins. That makes the SET it returns, not merely
+  // its order, depend on iteration order. Sort by resource id so equal-savings
+  // ties resolve the same way on every run.
+  std::sort(valid_roots.begin(), valid_roots.end());
   return find_best_hoisting_combination(valid_roots, style_info);
 }
 
