@@ -308,9 +308,11 @@ void census_ops(const Scope& scope, PassManager& mgr) {
 }
 
 // The members synthesized for lowering: the shared `Unsafe` instance every
-// rewritten call site loads from.
+// rewritten call site loads from, and the holder check called where
+// non-nullness could not be proven.
 struct Helpers {
   DexField* s_unsafe{nullptr};
+  DexMethod* check_holder{nullptr};
 };
 
 // The JDK symbols the synthesized `<clinit>`s reach for. Interned in one place
@@ -421,6 +423,38 @@ Helpers synthesize_unsafe_holder(DexStoresVector& stores) {
   clinit->rstate.set_generated();
   cc.add_method(clinit);
 
+  // `static void checkHolder(Object o) { if (o == null) throw new
+  // ClassCastException(); }`
+  //
+  // AtomicReferenceFieldUpdater.accessCheck throws ClassCastException for a
+  // null holder -- `cclass.isInstance(null)` is false -- so that, not NPE, is
+  // the behaviour to preserve. Emitting this as a call keeps the rewrite
+  // straight-line; the inliner flattens it into the branch later.
+  auto* cce_type = DexType::make_type("Ljava/lang/ClassCastException;");
+  auto* cce_init = DexMethod::make_method(
+      cce_type, DexString::make_string("<init>"),
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({})));
+  MethodCreator cm(
+      synth_type, DexString::make_string("checkHolder"),
+      DexProto::make_proto(type::_void(),
+                           DexTypeList::make_type_list({object_type})),
+      ACC_PUBLIC | ACC_STATIC);
+  auto holder_loc = cm.get_local(0);
+  auto* cb = cm.get_main_block();
+  // if_testz returns the block taken when the condition fails, so testing
+  // "holder != null" hands back the null path.
+  auto* null_block = cb->if_testz(OPCODE_IF_NEZ, holder_loc);
+  auto ex_loc = cm.make_local(cce_type);
+  null_block->new_instance(cce_type, ex_loc);
+  null_block->invoke(OPCODE_INVOKE_DIRECT, cce_init, {ex_loc});
+  null_block->throwex(ex_loc);
+  cb->ret_void();
+  auto* check_holder = cm.create();
+  check_holder->set_deobfuscated_name(show(check_holder));
+  check_holder->rstate.set_generated();
+  check_holder->get_code()->build_cfg();
+  cc.add_method(check_holder);
+
   auto* cls = cc.create();
   cls->set_deobfuscated_name(show(cls));
   // Nothing here has a source counterpart: no stable name to preserve, and no
@@ -434,7 +468,7 @@ Helpers synthesize_unsafe_holder(DexStoresVector& stores) {
   auto& dexen = stores.at(0).get_dexen();
   redex_assert(!dexen.empty());
   dexen.at(0).push_back(cls);
-  return Helpers{s_unsafe};
+  return Helpers{s_unsafe, check_holder};
 }
 
 // Give each recognized updater a `static final long` offset *in its own holder
@@ -863,6 +897,9 @@ struct Rewrite {
   IRInstruction* insn;
   const UpdaterInfo* info;
   Op op;
+  // The holder could not be proven non-null, so emission precedes the rewrite
+  // with a check that throws what `accessCheck` would have.
+  bool needs_guard;
 };
 
 // Filled from many threads, read from one. Keyed by method, so the serial
@@ -1089,13 +1126,10 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
 
   stats->feasible[{insn->get_method(), holder_null_proven}]++;
 
-  // A holder reachable only behind a null check is counted above but not
-  // emitted: without the check, `Unsafe` on a null holder is a raw memory
-  // access rather than the ClassCastException `accessCheck` would throw.
-  if (!emittable || !holder_null_proven) {
+  if (!emittable) {
     return std::nullopt;
   }
-  return Rewrite{insn, info, op};
+  return Rewrite{insn, info, op, !holder_null_proven};
 }
 
 // Reads the whole program for lowerable sites and records them in `rewrites`.
@@ -1170,9 +1204,18 @@ std::vector<IRInstruction*> build_replacement(
   IRInstruction* insn = rewrite.insn;
   const Op op = rewrite.op;
 
+  std::vector<IRInstruction*> repl;
+  if (rewrite.needs_guard) {
+    // Preserve the ClassCastException `accessCheck` would have thrown.
+    auto* chk = new IRInstruction(OPCODE_INVOKE_STATIC);
+    chk->set_method(helpers.check_holder);
+    chk->set_srcs_size(1);
+    chk->set_src(0, insn->src(1));
+    repl.push_back(chk);
+  }
+
   reg_t unsafe_reg = cfg.allocate_temp();
   reg_t offset_reg = cfg.allocate_wide_temp();
-  std::vector<IRInstruction*> repl;
   emit_sget(&repl, OPCODE_SGET_OBJECT, IOPCODE_MOVE_RESULT_PSEUDO_OBJECT,
             helpers.s_unsafe, unsafe_reg);
   emit_sget(&repl, OPCODE_SGET_WIDE, IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
@@ -1216,6 +1259,7 @@ std::vector<IRInstruction*> build_replacement(
 // What emission did, for the metrics.
 struct EmitStats {
   size_t rewritten{0};
+  size_t null_checks{0};
 };
 
 // Applies the plan. Single threaded and in scope order: emission is
@@ -1261,6 +1305,9 @@ EmitStats emit_rewrites(const Scope& scope,
       }
       mutation.replace(it, build_replacement(cfg, it, rewrite, helpers));
       emitted.rewritten++;
+      if (rewrite.needs_guard) {
+        emitted.null_checks++;
+      }
     }
     mutation.flush();
   });
@@ -1272,6 +1319,7 @@ void report(PassManager& mgr,
             const EmitStats& emitted,
             const UnorderedMap<const DexType*, Kind>& updater_kinds) {
   mgr.set_metric("calls_rewritten", emitted.rewritten);
+  mgr.set_metric("null_checks_emitted", emitted.null_checks);
   mgr.set_metric("calls_skipped_unresolved_updater", totals.skipped_unresolved);
   mgr.set_metric("calls_skipped_unproven_types", totals.skipped_unproven);
 
@@ -1320,21 +1368,22 @@ void report(PassManager& mgr,
   // What a full lowering would reach: proven sites plus those a null check
   // makes safe.
   mgr.set_metric("rewritable_total", feasible_total + needs_null_check_total);
-  TRACE(
-      ATOMUP, 1,
-      "SUMMARY rewritten=%zu rewritable=%zu (proven=%zu needs_null_check=%zu) "
-      "unresolved=%zu blocked_holder_type=%zu blocked_value_type=%zu "
-      "unmodeled_op=%zu",
-      emitted.rewritten, feasible_total + needs_null_check_total,
-      feasible_total, needs_null_check_total, totals.skipped_unresolved,
-      totals.blocked_holder_type, totals.blocked_value_type,
-      totals.blocked_unmodeled_op);
+  TRACE(ATOMUP, 1,
+        "SUMMARY rewritten=%zu null_checks=%zu rewritable=%zu (proven=%zu "
+        "needs_null_check=%zu) "
+        "unresolved=%zu blocked_holder_type=%zu blocked_value_type=%zu "
+        "unmodeled_op=%zu",
+        emitted.rewritten, emitted.null_checks,
+        feasible_total + needs_null_check_total, feasible_total,
+        needs_null_check_total, totals.skipped_unresolved,
+        totals.blocked_holder_type, totals.blocked_value_type,
+        totals.blocked_unmodeled_op);
 }
 
-// `ensure_helpers` synthesizes the shared `Unsafe` holder and the per-field
-// offsets, and is called only if the analysis finds a site to emit. An app with
-// updaters it cannot lower should not be given an unreachable class whose
-// <clinit> reflects over `sun.misc.Unsafe`.
+// `ensure_helpers` synthesizes the shared `Unsafe` holder, the null-check
+// method and the per-field offsets, and is called only if the analysis finds a
+// site to emit. An app with updaters it cannot lower should not be given an
+// unreachable class whose <clinit> reflects over `sun.misc.Unsafe`.
 void lower_calls(const Scope& scope,
                  const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
                  const std::function<const Helpers&()>& ensure_helpers,
