@@ -80,6 +80,8 @@ uint16_t field_name_arg_index(Kind kind) {
 
 bool has_value_check(Kind kind) { return kind == Kind::REFERENCE; }
 
+bool is_wide(Kind kind) { return kind == Kind::LONG; }
+
 DexType* value_type(Kind kind) {
   switch (kind) {
   case Kind::REFERENCE:

@@ -803,37 +803,114 @@ size_t inline_updater_accessors(DexStoresVector& stores,
   return inlined;
 }
 
-// Which updater operation a call site invokes. Only the reference flavor's
-// three basic operations are lowered; other flavors and operations are counted
-// and left in place.
-enum class Op { GET, SET, COMPARE_AND_SET };
+// How one updater operation lowers to sun.misc.Unsafe.
+//
+// `value_srcs` are taken from the original call site, after the holder.
+// `literal` supplies a constant value argument instead (getAndIncrement is
+// getAndAdd(+1)). `add_result` means Unsafe returns the *old* value and the
+// updater's contract wants the new one, so the addend is applied afterwards.
+struct UnsafePlan {
+  // The flavor the operation belongs to. Carried here rather than passed
+  // alongside, since every use of a plan needs it: it picks the Unsafe method
+  // name, the value type, and whether the value is wide.
+  Kind kind;
+  // sun.misc.Unsafe method name, with `%s` standing in for the flavor suffix
+  // that `unsafe_ref` substitutes: getObjectVolatile / getIntVolatile / ...
+  const char* name;
+  int value_srcs{0};
+  std::optional<int64_t> literal;
+  bool add_result{false};
+  bool needs_api24{false}; // getAndAdd*/getAndSet* arrived in Android N
+};
 
-// The sun.misc.Unsafe operation a given updater operation lowers to.
-DexMethodRef* unsafe_op_ref(Op op) {
-  auto* object_type = type::java_lang_Object();
-  auto* long_type = type::_long();
-  auto* bool_type = type::_boolean();
-  switch (op) {
-  case Op::GET:
-    return DexMethod::make_method(
-        unsafe_type(), DexString::make_string("getObjectVolatile"),
-        DexProto::make_proto(object_type, DexTypeList::make_type_list(
-                                              {object_type, long_type})));
-  case Op::SET:
-    return DexMethod::make_method(
-        unsafe_type(), DexString::make_string("putObjectVolatile"),
-        DexProto::make_proto(type::_void(),
-                             DexTypeList::make_type_list(
-                                 {object_type, long_type, object_type})));
-  case Op::COMPARE_AND_SET:
-    return DexMethod::make_method(
-        unsafe_type(), DexString::make_string("compareAndSwapObject"),
-        DexProto::make_proto(
-            bool_type,
-            DexTypeList::make_type_list(
-                {object_type, long_type, object_type, object_type})));
+// Suffix of the Unsafe method name for a flavor: getObjectVolatile /
+// getIntVolatile / getLongVolatile.
+const char* unsafe_suffix(Kind kind) {
+  switch (kind) {
+  case Kind::REFERENCE:
+    return "Object";
+  case Kind::INTEGER:
+    return "Int";
+  case Kind::LONG:
+    return "Long";
   }
   not_reached();
+}
+
+// The plan for an updater method, or nullopt if this pass does not lower it.
+std::optional<UnsafePlan> plan_for(Kind kind, std::string_view op) {
+  const bool numeric = kind != Kind::REFERENCE;
+  if (op == "get") {
+    return UnsafePlan{kind, "get%sVolatile", 0, std::nullopt, false, false};
+  }
+  if (op == "set") {
+    return UnsafePlan{kind, "put%sVolatile", 1, std::nullopt, false, false};
+  }
+  if (op == "lazySet") {
+    return UnsafePlan{kind, "putOrdered%s", 1, std::nullopt, false, false};
+  }
+  if (op == "compareAndSet" || op == "weakCompareAndSet") {
+    // libcore implements the weak form identically to the strong one.
+    return UnsafePlan{kind, "compareAndSwap%s", 2, std::nullopt, false, false};
+  }
+  if (op == "getAndSet") {
+    return UnsafePlan{kind, "getAndSet%s", 1, std::nullopt, false, true};
+  }
+  if (!numeric) {
+    return std::nullopt;
+  }
+  if (op == "getAndAdd") {
+    return UnsafePlan{kind, "getAndAdd%s", 1, std::nullopt, false, true};
+  }
+  if (op == "getAndIncrement") {
+    return UnsafePlan{kind, "getAndAdd%s", 0, 1, false, true};
+  }
+  if (op == "getAndDecrement") {
+    return UnsafePlan{kind, "getAndAdd%s", 0, -1, false, true};
+  }
+  if (op == "addAndGet") {
+    return UnsafePlan{kind, "getAndAdd%s", 1, std::nullopt, true, true};
+  }
+  if (op == "incrementAndGet") {
+    return UnsafePlan{kind, "getAndAdd%s", 0, 1, true, true};
+  }
+  if (op == "decrementAndGet") {
+    return UnsafePlan{kind, "getAndAdd%s", 0, -1, true, true};
+  }
+  return std::nullopt;
+}
+
+// Resolve a plan's name template and build the Unsafe method reference.
+DexMethodRef* unsafe_ref(const UnsafePlan& plan) {
+  std::string n{plan.name};
+  auto at = n.find("%s");
+  always_assert_log(at != std::string::npos,
+                    "Unsafe method template %s has no flavor placeholder",
+                    plan.name);
+  n.replace(at, 2, unsafe_suffix(plan.kind));
+  auto* object_type = type::java_lang_Object();
+  auto* long_type = type::_long();
+  auto* vtype = atomic_field_updaters::value_type(plan.kind);
+
+  DexType* rtype;
+  if (n.rfind("put", 0) == 0) {
+    rtype = type::_void();
+  } else if (n.rfind("compareAndSwap", 0) == 0) {
+    rtype = type::_boolean();
+  } else {
+    rtype = vtype;
+  }
+  // (receiver-object, offset) followed by however many value arguments the
+  // plan supplies, whether from the call site or as a literal.
+  DexTypeList::ContainerType args{object_type, long_type};
+  const int n_values = plan.value_srcs + (plan.literal.has_value() ? 1 : 0);
+  for (int i = 0; i < n_values; ++i) {
+    args.push_back(vtype);
+  }
+  return DexMethod::make_method(
+      unsafe_type(), DexString::make_string(n),
+      DexProto::make_proto(rtype,
+                           DexTypeList::make_type_list(std::move(args))));
 }
 
 // Build a static-field load (sget + pseudo) into `dst`.
@@ -896,7 +973,7 @@ bool writes_only_values(const DexMethodRef* mref, Kind kind) {
 struct Rewrite {
   IRInstruction* insn;
   const UpdaterInfo* info;
-  Op op;
+  UnsafePlan plan;
   // The holder could not be proven non-null, so emission precedes the rewrite
   // with a check that throws what `accessCheck` would have.
   bool needs_guard;
@@ -920,6 +997,7 @@ struct Stats {
   size_t blocked_holder_type{0};
   size_t blocked_value_type{0};
   size_t blocked_unmodeled_op{0};
+  size_t blocked_min_sdk{0};
   // Breakdown of why resolution failed, to tell a fixable receiver pattern
   // apart from a fundamentally untrackable one.
   size_t no_defs{0};
@@ -937,6 +1015,7 @@ struct Stats {
     blocked_holder_type += that.blocked_holder_type;
     blocked_value_type += that.blocked_value_type;
     blocked_unmodeled_op += that.blocked_unmodeled_op;
+    blocked_min_sdk += that.blocked_min_sdk;
     no_defs += that.no_defs;
     def_not_sget += that.def_not_sget;
     field_not_def += that.field_not_def;
@@ -958,6 +1037,9 @@ struct MethodAnalysis {
   // method's receiver is non-null on entry -- the invoke that got us here would
   // already have thrown otherwise -- but TypeInference does not encode that.
   IRInstruction* receiver_insn;
+  // Run-wide, but read where an operation is judged: some Unsafe methods do
+  // not exist on every platform the app targets.
+  int min_sdk;
 };
 
 // The updater behind a call's receiver, or null if the receiver does not
@@ -1056,20 +1138,14 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
     return std::nullopt;
   }
 
-  // Only the reference flavor's get/set/compareAndSet are lowered so far.
-  // Every site is still judged against the obligations below, so the metrics
-  // report the full reachable opportunity rather than only what is acted on.
-  Op op = Op::GET;
-  bool emittable = kind == Kind::REFERENCE;
-  if (name->str() == "get") {
-    op = Op::GET;
-  } else if (name->str() == "set") {
-    op = Op::SET;
-  } else if (name->str() == "compareAndSet") {
-    op = Op::COMPARE_AND_SET;
-  } else {
-    emittable = false;
-  }
+  auto plan = plan_for(kind, name->str());
+  // Whether this pass knows how to express the operation at all.
+  const bool emittable = plan.has_value();
+  // Whether the platform provides the Unsafe method: getAndAdd*/getAndSet*
+  // only exist on sun.misc.Unsafe from Android N. Checked below, after the
+  // obligations, so the buckets stay disjoint.
+  const bool platform_supports =
+      !plan.has_value() || !plan->needs_api24 || ma.min_sdk >= 24;
 
   const UpdaterInfo* info = resolve_updater(insn, ma, stats);
   if (info == nullptr) {
@@ -1124,12 +1200,20 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
     }
   }
 
+  // `getAndAdd`/`getAndSet` arrived in Android N. On an older min_sdk the
+  // site is not reachable however complete this pass becomes, so it is
+  // counted apart from the reachable set rather than inflating it.
+  if (!platform_supports) {
+    stats->blocked_min_sdk++;
+    return std::nullopt;
+  }
+
   stats->feasible[{insn->get_method(), holder_null_proven}]++;
 
   if (!emittable) {
     return std::nullopt;
   }
-  return Rewrite{insn, info, op, !holder_null_proven};
+  return Rewrite{insn, info, *plan, !holder_null_proven};
 }
 
 // Reads the whole program for lowerable sites and records them in `rewrites`.
@@ -1138,6 +1222,7 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
 Stats analyze_calls(const Scope& scope,
                     const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
                     const UnorderedMap<const DexType*, Kind>& updater_kinds,
+                    int min_sdk,
                     RewritePlan* rewrites) {
   return walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
     Stats stats;
@@ -1169,8 +1254,8 @@ Stats analyze_calls(const Scope& scope,
         receiver_insn = first->insn;
       }
     }
-    MethodAnalysis ma{method, by_field, ti.get_type_environments(), use_defs,
-                      receiver_insn};
+    MethodAnalysis ma{method,   by_field,      ti.get_type_environments(),
+                      use_defs, receiver_insn, min_sdk};
 
     std::vector<Rewrite> planned;
     for (auto& mie : cfg::InstructionIterable(cfg)) {
@@ -1202,7 +1287,8 @@ std::vector<IRInstruction*> build_replacement(
     const Rewrite& rewrite,
     const Helpers& helpers) {
   IRInstruction* insn = rewrite.insn;
-  const Op op = rewrite.op;
+  const UnsafePlan& plan = rewrite.plan;
+  const bool wide = atomic_field_updaters::is_wide(plan.kind);
 
   std::vector<IRInstruction*> repl;
   if (rewrite.needs_guard) {
@@ -1221,36 +1307,65 @@ std::vector<IRInstruction*> build_replacement(
   emit_sget(&repl, OPCODE_SGET_WIDE, IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
             rewrite.info->offset_field, offset_reg);
 
-  auto* inv = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-  inv->set_method(unsafe_op_ref(op));
-  switch (op) {
-  case Op::GET:
-    inv->set_srcs_size(3);
-    break;
-  case Op::SET:
-    inv->set_srcs_size(4);
-    inv->set_src(3, insn->src(2)); // new value
-    break;
-  case Op::COMPARE_AND_SET:
-    inv->set_srcs_size(5);
-    inv->set_src(3, insn->src(2)); // expected
-    inv->set_src(4, insn->src(3)); // update
-    break;
+  // A literal value argument, for the increment/decrement forms.
+  reg_t lit_reg = 0;
+  if (plan.literal.has_value()) {
+    lit_reg = wide ? cfg.allocate_wide_temp() : cfg.allocate_temp();
+    auto* c = new IRInstruction(wide ? OPCODE_CONST_WIDE : OPCODE_CONST);
+    c->set_literal(*plan.literal);
+    c->set_dest(lit_reg);
+    repl.push_back(c);
   }
+
+  auto* unsafe_method = unsafe_ref(plan);
+  auto* inv = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
+  inv->set_method(unsafe_method);
+  const size_t n_values = plan.value_srcs + (plan.literal.has_value() ? 1 : 0);
+  inv->set_srcs_size(3 + n_values);
   inv->set_src(0, unsafe_reg);
   inv->set_src(1, insn->src(1)); // holder
   inv->set_src(2, offset_reg);
+  for (int i = 0; i < plan.value_srcs; ++i) {
+    // Value arguments follow the holder at the original call site.
+    inv->set_src(3 + i, insn->src(2 + i));
+  }
+  if (plan.literal.has_value()) {
+    inv->set_src(3 + plan.value_srcs, lit_reg);
+  }
   repl.push_back(inv);
 
-  // CFGMutation::replace drops the replaced invoke's move-result, so
-  // re-emit one unless the result was discarded.
-  if (op != Op::SET) {
-    auto mr_it = cfg.move_result_of(it);
-    if (!mr_it.is_end()) {
-      auto* mr = new IRInstruction(op == Op::GET ? OPCODE_MOVE_RESULT_OBJECT
-                                                 : OPCODE_MOVE_RESULT);
-      mr->set_dest(mr_it->insn->dest());
+  // Propagate the result. `CFGMutation::replace` drops the replaced invoke's
+  // move-result, so it is re-emitted here. Unsafe's getAndAdd returns the *old*
+  // value, so the addAndGet/incrementAndGet family needs the addend applied
+  // after.
+  auto mr_it = cfg.move_result_of(it);
+  auto* unsafe_rtype = unsafe_method->get_proto()->get_rtype();
+  const bool returns_void = unsafe_rtype == type::_void();
+  if (!returns_void && !mr_it.is_end()) {
+    const reg_t final_dest = mr_it->insn->dest();
+    IROpcode mr_op =
+        plan.kind == Kind::REFERENCE && !plan.add_result
+            ? OPCODE_MOVE_RESULT_OBJECT
+            : (wide ? OPCODE_MOVE_RESULT_WIDE : OPCODE_MOVE_RESULT);
+    if (unsafe_rtype == type::_boolean()) {
+      mr_op = OPCODE_MOVE_RESULT;
+    }
+    if (!plan.add_result) {
+      auto* mr = new IRInstruction(mr_op);
+      mr->set_dest(final_dest);
       repl.push_back(mr);
+    } else {
+      reg_t old_reg = wide ? cfg.allocate_wide_temp() : cfg.allocate_temp();
+      auto* mr = new IRInstruction(mr_op);
+      mr->set_dest(old_reg);
+      repl.push_back(mr);
+      reg_t addend = plan.literal.has_value() ? lit_reg : insn->src(2);
+      auto* add = new IRInstruction(wide ? OPCODE_ADD_LONG : OPCODE_ADD_INT);
+      add->set_srcs_size(2);
+      add->set_src(0, old_reg);
+      add->set_src(1, addend);
+      add->set_dest(final_dest);
+      repl.push_back(add);
     }
   }
   return repl;
@@ -1320,6 +1435,7 @@ void report(PassManager& mgr,
             const UnorderedMap<const DexType*, Kind>& updater_kinds) {
   mgr.set_metric("calls_rewritten", emitted.rewritten);
   mgr.set_metric("null_checks_emitted", emitted.null_checks);
+  mgr.set_metric("blocked_min_sdk", totals.blocked_min_sdk);
   mgr.set_metric("calls_skipped_unresolved_updater", totals.skipped_unresolved);
   mgr.set_metric("calls_skipped_unproven_types", totals.skipped_unproven);
 
@@ -1372,12 +1488,12 @@ void report(PassManager& mgr,
         "SUMMARY rewritten=%zu null_checks=%zu rewritable=%zu (proven=%zu "
         "needs_null_check=%zu) "
         "unresolved=%zu blocked_holder_type=%zu blocked_value_type=%zu "
-        "unmodeled_op=%zu",
+        "unmodeled_op=%zu blocked_min_sdk=%zu",
         emitted.rewritten, emitted.null_checks,
         feasible_total + needs_null_check_total, feasible_total,
         needs_null_check_total, totals.skipped_unresolved,
         totals.blocked_holder_type, totals.blocked_value_type,
-        totals.blocked_unmodeled_op);
+        totals.blocked_unmodeled_op, totals.blocked_min_sdk);
 }
 
 // `ensure_helpers` synthesizes the shared `Unsafe` holder, the null-check
@@ -1387,13 +1503,15 @@ void report(PassManager& mgr,
 void lower_calls(const Scope& scope,
                  const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
                  const std::function<const Helpers&()>& ensure_helpers,
+                 int min_sdk,
                  PassManager& mgr) {
   const auto updater_kinds = atomic_field_updaters::present_kinds();
   if (updater_kinds.empty()) {
     return;
   }
   RewritePlan rewrites;
-  const Stats totals = analyze_calls(scope, by_field, updater_kinds, &rewrites);
+  const Stats totals =
+      analyze_calls(scope, by_field, updater_kinds, min_sdk, &rewrites);
   const EmitStats emitted = emit_rewrites(scope, rewrites, ensure_helpers);
   report(mgr, totals, emitted, updater_kinds);
 }
@@ -1455,7 +1573,8 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
     }
     return *helpers;
   };
-  lower_calls(scope, by_field, ensure_helpers, mgr);
+  lower_calls(scope, by_field, ensure_helpers, mgr.get_redex_options().min_sdk,
+              mgr);
 }
 
 static AtomicFieldUpdaterLoweringPass s_pass;

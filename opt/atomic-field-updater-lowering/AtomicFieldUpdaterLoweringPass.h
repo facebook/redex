@@ -40,19 +40,27 @@
  *                                                "next");
  *   }
  *
- * Reference-flavored `get`, `set` and `compareAndSet` are rewritten to the
- * corresponding `Unsafe` primitive. Each field offset lives on the class that
- * declares the field and is computed in that class's own `<clinit>`; only the
- * `Unsafe` instance is shared. A holder whose non-nullness cannot be proven
- * gets an explicit check that throws ClassCastException, matching what
- * `accessCheck` would have done. Other flavors and operations are counted and
- * left in place.
+ * All three flavors are lowered, across the full operation set: `get`, `set`,
+ * `lazySet`, `compareAndSet`, `weakCompareAndSet`, `getAndSet`, and the
+ * arithmetic forms (`getAndAdd`, `addAndGet`, `getAndIncrement` and friends,
+ * which reduce to `getAndAdd` with a constant, plus a fixup where the caller
+ * wants the new value). `getAndSet` and `getAndAdd` require API 24, so below
+ * that min_sdk those sites are counted and skipped.
+ *
+ * Each field offset lives on the class that declares the field and is computed
+ * in that class's own `<clinit>`; only the `Unsafe` instance is shared. A
+ * holder whose non-nullness cannot be proven gets an explicit check that throws
+ * ClassCastException, matching what `accessCheck` would have done.
  *
  * Before any of that the pass inlines the synthetic accessors that would
  * otherwise hide an updater from the analysis: Kotlin keeps the updater in a
  * private field and reads it through a generated getter, behind an `access$`
  * bridge when the use is from a nested class, so the receiver of an operation
  * is defined by an invoke rather than by the field load resolution looks for.
+ *
+ * A receiver the pass cannot trace back to a static updater field -- one passed
+ * in as a parameter, say -- has no offset to substitute and is left alone.
+ *
  */
 class AtomicFieldUpdaterLoweringPass : public Pass {
  public:
