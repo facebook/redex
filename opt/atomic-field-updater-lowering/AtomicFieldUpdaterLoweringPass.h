@@ -40,10 +40,18 @@
  *                                                "next");
  *   }
  *
- * This stage recognizes such updaters, reports how many operation call sites
- * exist per flavor and operation, and inlines the synthetic accessors that
- * would otherwise hide an updater from that analysis. No operation is
- * rewritten yet.
+ * Reference-flavored `get`, `set` and `compareAndSet` on a provably non-null
+ * holder are rewritten to the corresponding `Unsafe` primitive. Each field
+ * offset lives on the class that declares the field and is computed in that
+ * class's own `<clinit>`; only the `Unsafe` instance is shared. Other flavors
+ * and operations, and holders whose non-nullness is unproven, are counted and
+ * left in place.
+ *
+ * Before any of that the pass inlines the synthetic accessors that would
+ * otherwise hide an updater from the analysis: Kotlin keeps the updater in a
+ * private field and reads it through a generated getter, behind an `access$`
+ * bridge when the use is from a nested class, so the receiver of an operation
+ * is defined by an invoke rather than by the field load resolution looks for.
  */
 class AtomicFieldUpdaterLoweringPass : public Pass {
  public:

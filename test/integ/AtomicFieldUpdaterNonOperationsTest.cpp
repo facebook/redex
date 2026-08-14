@@ -64,3 +64,14 @@ TEST_F(AtomicFieldUpdaterNonOperationsTest, onlyRealOperationsAreCounted) {
   EXPECT_EQ(metric("rewritable_total"), 0);
   EXPECT_EQ(metric("feasible_total"), 0);
 }
+
+// With a recognized updater but no site to emit, the shared holder class is
+// never created. It exists only to supply the `Unsafe` instance a rewrite
+// loads, and its <clinit> reflects over `sun.misc.Unsafe` -- not something to
+// put in the primary dex for an app that gets no rewrites out of it.
+TEST_F(AtomicFieldUpdaterNonOperationsTest, holderClassIsNotSynthesized) {
+  run();
+  EXPECT_EQ(metric("calls_rewritten"), 0);
+  EXPECT_EQ(type_class(DexType::get_type("Lredex/AtomicFieldUpdaterUnsafe;")),
+            nullptr);
+}

@@ -48,6 +48,19 @@ extern const char* const REFERENCE_DESC;
 extern const char* const INTEGER_DESC;
 extern const char* const LONG_DESC;
 
+// The lowering target: `sun.misc.Unsafe`, and the class Redex synthesizes to
+// hold the shared instance of it. Shared so that a test asserting on what the
+// lowering emitted names the same type the lowering names -- a test spelling
+// the descriptor itself would keep passing if the two drifted apart.
+//
+// Deliberately not in `WellKnownTypes`: membership there is not just a cached
+// accessor, it opts a type into `IRTypeChecker`'s assignability checking, which
+// is skipped for external types outside the set. Unsafe is hidden platform API
+// whose class definition is usually absent, so that is not a property to claim
+// for it.
+extern const char* const UNSAFE_DESC;
+extern const char* const SYNTH_HOLDER_DESC;
+
 // The factory every recognizer matches on. Each flavor declares exactly one
 // `newUpdater` overload, so the name identifies it uniquely once the receiver
 // class is pinned to one of the descriptors above -- match on both, never on
