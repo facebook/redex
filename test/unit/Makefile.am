@@ -46,6 +46,7 @@ check_PROGRAMS = \
     assert_test \
     atomic_map_test \
     blaming_escape_test \
+    block_offset_sink_test \
     boxed_boolean_propagation_test \
     branch_prefix_hoisting_test \
     bridge_synth_inline_pass_test \
@@ -218,6 +219,8 @@ assert_test_SOURCES = AssertTest.cpp
 atomic_stat_counter_test_SOURCES = AtomicStatCounterTest.cpp
 
 blaming_escape_test_SOURCES = BlamingEscapeTest.cpp
+
+block_offset_sink_test_SOURCES = BlockOffsetSinkTest.cpp
 blaming_escape_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 boxed_boolean_propagation_test_SOURCES = constant-propagation/BoxedBooleanPropagationTest.cpp

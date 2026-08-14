@@ -26,7 +26,9 @@ class IRCode {
    * changes the opcode in question, and returns false.  It's intended to be
    * called multiple times until it returns true.
    */
-  bool try_sync(DexCode*);
+  bool try_sync(DexCode*,
+                UnorderedMap<const MethodItemEntry*, uint32_t>*
+                    entry_addresses = nullptr);
 
   void split_and_insert_try_regions(
       uint32_t start,

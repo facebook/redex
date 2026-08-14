@@ -15,6 +15,7 @@
 #include <limits>
 #include <memory>
 
+#include "BlockOffsetSink.h"
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DebugUtils.h"
@@ -806,7 +807,7 @@ void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
  */
 void gather_debug_entries(
     IRList* ir_list,
-    const UnorderedMap<MethodItemEntry*, uint32_t>& entry_to_addr,
+    const UnorderedMap<const MethodItemEntry*, uint32_t>& entry_to_addr,
     std::vector<DexDebugEntry>* entries) {
   bool next_pos_is_root{false};
   // A root is the first DexPosition that precedes an opcode
@@ -892,12 +893,17 @@ void IRCode::split_and_insert_try_regions(
 
 std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
   auto dex_code = std::make_unique<DexCode>();
+  // dexvt: the sink wants each MethodItemEntry's final code-unit address, which
+  // try_sync builds internally anyway. Off by default -- one relaxed atomic
+  // load per method, no map allocated, no per-instruction work.
+  const bool capture = block_offset_sink::enabled();
+  UnorderedMap<const MethodItemEntry*, uint32_t> entry_addresses;
   try {
     calculate_ins_size(method, &*dex_code);
     dex_code->set_registers_size(m_registers_size);
     dex_code->set_outs_size(calc_outs_size(this));
     dex_code->set_debug_item(std::move(m_dbg));
-    while (!try_sync(dex_code.get())) {
+    while (!try_sync(dex_code.get(), capture ? &entry_addresses : nullptr)) {
       ;
     }
   } catch (const std::exception& e) {
@@ -913,11 +919,16 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
     }
   }
 
+  if (capture) {
+    block_offset_sink::resolve(method, entry_addresses);
+  }
   return dex_code;
 }
 
-bool IRCode::try_sync(DexCode* code) {
-  UnorderedMap<MethodItemEntry*, uint32_t> entry_to_addr;
+bool IRCode::try_sync(
+    DexCode* code,
+    UnorderedMap<const MethodItemEntry*, uint32_t>* entry_addresses) {
+  UnorderedMap<const MethodItemEntry*, uint32_t> entry_to_addr;
   uint32_t addr = 0;
   // Step 1, regenerate opcode list for the method, and
   // and calculate the opcode entries address offsets.
@@ -1222,6 +1233,11 @@ bool IRCode::try_sync(DexCode* code) {
                const std::unique_ptr<DexTryItem>& b) {
               return a->m_start_addr < b->m_start_addr;
             });
+  if (entry_addresses != nullptr) {
+    // Only the successful pass gets here, so a caller sees the layout that was
+    // actually emitted.
+    *entry_addresses = std::move(entry_to_addr);
+  }
   return true;
 }
 

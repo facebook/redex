@@ -114,6 +114,7 @@ libredex_la_SOURCES = \
 	libredex/BalancedPartitioning.cpp \
 	libredex/BaselineProfile.cpp \
 	libredex/BigBlocks.cpp \
+	libredex/BlockOffsetSink.cpp \
 	libredex/BundleResources.cpp \
 	libredex/CFGMutation.cpp \
 	libredex/CallGraph.cpp \
