@@ -631,6 +631,48 @@ B5: LBar;.bar:()V@2(0.1:0.3)
 B6: LBar;.bar:()V@1(0.2:0.2))");
 }
 
+// The whole-CFG scale is a SHARE of the dominated block's executions, so it is
+// at most 1. A dominating value larger than the dominated one -- incomplete
+// tracking, or a denominator pinned to a positive-magnitude floor -- must not
+// inflate the scaled body.
+TEST_F(SourceBlocksTest, normalize_cfg_clamps_factor_at_one) {
+  auto* bar_method = create_method("LBar");
+
+  constexpr const char* kCode = R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :true)
+      (goto :end)
+
+      (:true)
+      (const v1 1)
+
+      (:end)
+      (return-void)
+    )
+  )";
+
+  bar_method->set_code(assembler::ircode_from_string(kCode));
+  bar_method->get_code()->build_cfg();
+  auto& bar_cfg = bar_method->get_code()->cfg();
+  auto bar_profile = single_profile("(1:0.1 g(0.4:0.2) b(0.2:0.3 g))");
+  auto res = insert_source_blocks(bar_method, &bar_cfg, bar_profile,
+                                  /*serialize=*/true);
+  EXPECT_TRUE(res.profile_success);
+
+  const auto before = get_blocks_as_txt(bar_cfg.blocks());
+
+  // Entry reads 1.0, so an unclamped factor would be 1000 and every block in
+  // the CFG would be multiplied by it.
+  const auto* s = DexString::make_string("dominating");
+  SourceBlock dominating(
+      s, 0, std::vector<SourceBlock::Val>{SourceBlock::Val(1000, 0.1)});
+  source_blocks::normalize::normalize(bar_cfg, &dominating,
+                                      /*interactions=*/1);
+
+  EXPECT_EQ(get_blocks_as_txt(bar_cfg.blocks()), before);
+}
+
 TEST_F(SourceBlocksTest, serialize_exc_injected) {
   auto* foo_method = create_method("LFoo");
 
