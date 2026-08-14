@@ -6,6 +6,12 @@
  */
 
 #include "ResourcesInliningPass.h"
+
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "ConstantEnvironment.h"
@@ -16,6 +22,23 @@
 #include "Trace.h"
 #include "Walkers.h"
 #include "androidfw/ResourceTypes.h"
+
+namespace {
+
+// get_type_names() describes the application package only, while id_to_name and
+// a resource id read out of bytecode can name any package in the table, so the
+// type id is not an index this vector is guaranteed to hold. Type id 0 would
+// underflow the documented "element i is type id i + 1" numbering.
+std::optional<std::string_view> get_type_name(
+    const std::vector<std::string>& type_names, uint32_t id) {
+  uint32_t type_id = (id & TYPE_MASK_BIT) >> TYPE_INDEX_BIT_SHIFT;
+  if (type_id == 0 || type_id > type_names.size()) {
+    return std::nullopt;
+  }
+  return type_names[type_id - 1];
+}
+
+} // namespace
 
 UnorderedMap<uint32_t, resources::InlinableValue>
 ResourcesInliningPass::filter_inlinable_resources(
@@ -35,15 +58,15 @@ ResourcesInliningPass::filter_inlinable_resources(
   const auto& id_to_name = res_table->id_to_name;
   if (traceEnabled(RIP, 1)) {
     for (const auto& val : id_to_name) {
-      auto id = val.first;
-      auto masked_type = id & 0x00FF0000;
-      const std::string& type_name =
-          type_names.at((masked_type >> TYPE_INDEX_BIT_SHIFT) - 1);
-      if (type_name == "color") {
+      auto type_name = get_type_name(type_names, val.first);
+      if (type_name == std::nullopt) {
+        continue;
+      }
+      if (*type_name == "color") {
         num_colors++;
-      } else if (type_name == "integer") {
+      } else if (*type_name == "integer") {
         num_ints++;
-      } else if (type_name == "bool") {
+      } else if (*type_name == "bool") {
         num_bools++;
       }
     }
@@ -58,12 +81,14 @@ ResourcesInliningPass::filter_inlinable_resources(
     const auto& id = pair.first;
     const auto& value = pair.second;
 
-    auto masked_type = id & 0x00FF0000;
+    auto masked_type = id & TYPE_MASK_BIT;
     const auto& id_name = id_to_name.at(id);
 
-    const std::string& type_name =
-        type_names.at((masked_type >> TYPE_INDEX_BIT_SHIFT) - 1);
-    std::string entry_name_formatted = type_name + "/" + id_name;
+    auto type_name = get_type_name(type_names, id);
+    if (type_name == std::nullopt) {
+      continue;
+    }
+    std::string entry_name_formatted = std::string(*type_name) + "/" + id_name;
 
     if (type_ids.find(masked_type) != type_ids.end() ||
         resource_entry_names.find(entry_name_formatted) !=
@@ -275,14 +300,12 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
         if (method_ref == getResourceEntryName) {
           insertable.inlinable = id_to_name.at(elem_id);
         } else {
-          auto masked_type = elem_id & 0x00FF0000;
-          const std::string& type_name =
-              type_names.at((masked_type >> TYPE_INDEX_BIT_SHIFT) - 1);
-          if (package_name == std::nullopt) {
+          auto type_name = get_type_name(type_names, elem_id);
+          if (type_name == std::nullopt || package_name == std::nullopt) {
             return;
           }
-          insertable.inlinable =
-              *package_name + ":" + type_name + "/" + id_to_name.at(elem_id);
+          insertable.inlinable = *package_name + ":" + std::string(*type_name) +
+                                 "/" + id_to_name.at(elem_id);
         }
         transforms.push_back(insertable);
       }
