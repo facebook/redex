@@ -44,4 +44,9 @@ class IntraDexInlinePass : public Pass {
 
   HotColdInliningBehavior m_hot_cold_inlining_behavior;
   bool m_partial_hot_hot;
+
+  int m_inline_hot_callsite_count_percentile;
+  float m_inline_hot_callsite_count_discount;
+  int m_inline_hot_callsite_count_top_percentile;
+  float m_inline_hot_callsite_count_top_discount;
 };

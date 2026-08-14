@@ -20,6 +20,32 @@ void IntraDexInlinePass::bind_config() {
   bind("profile_guided_shrink_bias", 0.0f, m_profile_guided_shrink_bias);
   bind("profile_guided_block_appear_threshold", 0.0f,
        m_profile_guided_block_appear_threshold);
+  bind("inline_hot_callsite_count_percentile",
+       DEFAULT_COST_CONFIG.inline_hot_callsite_count_percentile,
+       m_inline_hot_callsite_count_percentile,
+       "If in (0,100], a callsite whose block execution count is at or above "
+       "this rank percentile (high = hot; 95 = hottest 5%) of profiled "
+       "(positive-count) callsites gets its local inline cost scaled by "
+       "inline_hot_callsite_count_discount. Any value <= 0 (the default, -1) "
+       "disables (NFC).");
+  bind("inline_hot_callsite_count_discount",
+       DEFAULT_COST_CONFIG.inline_hot_callsite_count_discount,
+       m_inline_hot_callsite_count_discount,
+       "Multiplier (< 1 favors inlining) applied to the local inline cost of a "
+       "callsite selected as hot by inline_hot_callsite_count_percentile; only "
+       "used when that lever is > 0. With a ramp configured this is the "
+       "discount at inline_hot_callsite_count_percentile, not a flat value.");
+  bind("inline_hot_callsite_count_top_percentile",
+       DEFAULT_COST_CONFIG.inline_hot_callsite_count_top_percentile,
+       m_inline_hot_callsite_count_top_percentile,
+       "Percentile at which inline_hot_callsite_count_top_discount is reached. "
+       "Between it and inline_hot_callsite_count_percentile the discount ramps "
+       "geometrically. Unset (-1) gives a flat step instead of a ramp.");
+  bind("inline_hot_callsite_count_top_discount",
+       DEFAULT_COST_CONFIG.inline_hot_callsite_count_top_discount,
+       m_inline_hot_callsite_count_top_discount,
+       "Discount at inline_hot_callsite_count_top_percentile, i.e. the cap. "
+       "Must be <= inline_hot_callsite_count_discount.");
   after_configuration([this, hot_cold_inlining_behavior_str =
                                  std::move(hot_cold_inlining_behavior_str)]() {
     always_assert(!hot_cold_inlining_behavior_str.empty());
@@ -42,6 +68,18 @@ void IntraDexInlinePass::run_pass(DexStoresVector& stores,
     inliner_cost_config.profile_guided_block_appear_threshold =
         m_profile_guided_block_appear_threshold;
   }
+
+  // Hot-callsite count-percentile lever (same as MethodInlinePass, here scoped
+  // to the intra-dex inliner run). Defaults reproduce DEFAULT_COST_CONFIG
+  // (percentile -1 = off), so this is NFC unless a config sets it.
+  inliner_cost_config.inline_hot_callsite_count_percentile =
+      m_inline_hot_callsite_count_percentile;
+  inliner_cost_config.inline_hot_callsite_count_discount =
+      m_inline_hot_callsite_count_discount;
+  inliner_cost_config.inline_hot_callsite_count_top_percentile =
+      m_inline_hot_callsite_count_top_percentile;
+  inliner_cost_config.inline_hot_callsite_count_top_discount =
+      m_inline_hot_callsite_count_top_discount;
 
   inliner::run_inliner(stores, mgr, conf, inliner_cost_config,
                        m_hot_cold_inlining_behavior, m_partial_hot_hot,
