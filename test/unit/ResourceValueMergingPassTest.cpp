@@ -2932,9 +2932,11 @@ TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsMultipleRoots) {
   auto result = m_pass.find_intra_graph_hoistings(
       style_info, directly_reachable_styles, ambiguous_styles);
 
-  EXPECT_THAT(result.size(), 2);
-  EXPECT_THAT(result[0], ::testing::UnorderedElementsAre(child2_id));
-  EXPECT_THAT(result[1], ::testing::UnorderedElementsAre(child1_id));
+  // Groups are emitted in ascending order of the resource they hoist to, so
+  // root1's group precedes root2's.
+  ASSERT_EQ(result.size(), 2);
+  EXPECT_THAT(result[0], ::testing::UnorderedElementsAre(child1_id));
+  EXPECT_THAT(result[1], ::testing::UnorderedElementsAre(child2_id));
 }
 
 TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsAmbiguousRoot) {
