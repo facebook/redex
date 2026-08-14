@@ -106,7 +106,7 @@ check_PROGRAMS = \
     instruction_sequence_outliner_test \
     int_type_patcher_test \
     interprocedural_constant_propagation_test \
-    ipcp_stringbuilder_concat_test \
+    ipcp_stringbuilder_append_chain_test \
     intraprocedural_constant_propagation_test \
     ir_assembler_test \
     ir_code_test \
@@ -179,7 +179,7 @@ check_PROGRAMS = \
     split_huge_switch_test \
     static_field_dependency_graph_test \
     static_relo_v2_test \
-    stringbuilder_concat_test \
+    stringbuilder_append_chain_test \
     stringbuilder_outline_test \
     strip_debug_info_test \
     string_switch_test \
@@ -371,7 +371,7 @@ instruction_sequence_outliner_test_SOURCES = InstructionSequenceOutlinerTest.cpp
 
 interprocedural_constant_propagation_test_SOURCES = constant-propagation/IPConstantPropagationTest.cpp
 
-ipcp_stringbuilder_concat_test_SOURCES = constant-propagation/IPCPStringBuilderConcatTest.cpp
+ipcp_stringbuilder_append_chain_test_SOURCES = constant-propagation/IPCPStringBuilderAppendChainTest.cpp
 
 intraprocedural_constant_propagation_test_SOURCES = constant-propagation/ConstantPropagationTest.cpp
 intraprocedural_constant_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -548,7 +548,7 @@ static_field_dependency_graph_test_SOURCES = StaticFieldDependencyGraphTest.cpp
 
 static_relo_v2_test_SOURCES = StaticReloV2Test.cpp
 
-stringbuilder_concat_test_SOURCES = StringBuilderConcatTest.cpp
+stringbuilder_append_chain_test_SOURCES = StringBuilderAppendChainTest.cpp
 
 stringbuilder_outline_test_SOURCES = StringBuilderOutlinerTest.cpp
 

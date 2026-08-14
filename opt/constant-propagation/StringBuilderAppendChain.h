@@ -19,7 +19,7 @@ namespace intraprocedural {
 class FixpointIterator;
 } // namespace intraprocedural
 
-namespace stringbuilder_concat {
+namespace stringbuilder_append_chain {
 
 /**
  * For every two-append `new StringBuilder().append(a).append(b).toString()`
@@ -65,6 +65,6 @@ size_t reduce_two_append_concats(
     const intraprocedural::FixpointIterator& fp_iter,
     cfg::ControlFlowGraph& cfg);
 
-} // namespace stringbuilder_concat
+} // namespace stringbuilder_append_chain
 
 } // namespace constant_propagation

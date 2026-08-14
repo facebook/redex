@@ -73,9 +73,9 @@ bool has_string_concat(DexMethod* method) {
 
 } // namespace
 
-struct IPCPStringBuilderConcatTest : public RedexTest {
+struct IPCPStringBuilderAppendChainTest : public RedexTest {
  public:
-  IPCPStringBuilderConcatTest() {
+  IPCPStringBuilderAppendChainTest() {
     // Mirrors InterproceduralConstantPropagationTest: get_vmethods initializes
     // the object class, which is needed to build a proper scope.
     virt_scope::get_vmethods(type::java_lang_Object());
@@ -200,7 +200,7 @@ struct IPCPStringBuilderConcatTest : public RedexTest {
  * With only the const-string caller reachable, IPCP's whole-program state
  * proves both of the callee's parameters non-null and the reduction fires.
  */
-TEST_F(IPCPStringBuilderConcatTest, interproceduralNonNullParamsReduced) {
+TEST_F(IPCPStringBuilderAppendChainTest, interproceduralNonNullParamsReduced) {
   Scope scope;
   auto methods = create_callers_and_callee(scope);
   methods.const_string_caller->rstate.set_root();
@@ -214,7 +214,7 @@ TEST_F(IPCPStringBuilderConcatTest, interproceduralNonNullParamsReduced) {
  * The reduction is skipped when the PassManager reports InterDex as already
  * run.
  */
-TEST_F(IPCPStringBuilderConcatTest, notReducedAfterInterDex) {
+TEST_F(IPCPStringBuilderAppendChainTest, notReducedAfterInterDex) {
   Scope scope;
   auto methods = create_callers_and_callee(scope);
   methods.const_string_caller->rstate.set_root();
@@ -229,7 +229,8 @@ TEST_F(IPCPStringBuilderConcatTest, notReducedAfterInterDex) {
  * caller's own parameter, which IPCP cannot prove non-null, so the builder is
  * left intact.
  */
-TEST_F(IPCPStringBuilderConcatTest, nullableInterproceduralParamNotReduced) {
+TEST_F(IPCPStringBuilderAppendChainTest,
+       nullableInterproceduralParamNotReduced) {
   Scope scope;
   auto methods = create_callers_and_callee(scope);
   methods.nullable_caller->rstate.set_root();
