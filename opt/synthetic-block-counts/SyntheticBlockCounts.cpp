@@ -634,6 +634,69 @@ SyntheticBlockCountsPass::MethodResult SyntheticBlockCountsPass::process_method(
   return res;
 }
 
+// Per interaction, count methods that ARE covered (>=1 SourceBlock val > 0) yet
+// have NO usable call_count anchor -- no profile row, or a non-finite /
+// negative call_count (a call_count of 0 counts as a usable anchor, per
+// `usable_call_count`). This is the covered-but-unprofiled population the
+// inter-method forward-fill exists to heat -- often produced by inlining a hot
+// callee into a method with no profile of its own. Pure: no pass state, writes
+// nothing; run_pass emits the values as metrics.
+std::vector<int64_t> SyntheticBlockCountsPass::count_missing_hit_methods(
+    const Scope& scope,
+    const method_profiles::MethodProfiles& profiles,
+    const std::vector<std::string>& inv_slot) {
+  const size_t n = inv_slot.size();
+  // Array (not vector) of atomics: std::vector<std::atomic<>> is ill-formed
+  // (atomics are not movable). make_unique<T[]> value-initializes to 0.
+  auto counts = std::make_unique<std::atomic<size_t>[]>(n);
+  walk::parallel::methods(scope, [&](DexMethod* m) {
+    auto* code = m->get_code();
+    if (code == nullptr || !code->cfg_built()) {
+      return;
+    }
+    auto& cfg = code->cfg();
+    // A (method, interaction) is "covered" if any block's representative
+    // SourceBlock has val > 0 for that interaction (the coverage notion the
+    // solve uses). One scan over blocks fills every interaction.
+    std::vector<bool> covered(n, false);
+    for (auto* b : cfg.blocks()) {
+      // Covered if ANY source block in the block ran for this interaction --
+      // the same `foreach_source_block` predicate the write-back uses, so this
+      // metric measures the exact population the solve writes to (a block may
+      // carry several source blocks after inlining, not just a representative).
+      source_blocks::foreach_source_block(b, [&](SourceBlock* sb) {
+        for (size_t i = 0; i < n; ++i) {
+          if (covered[i]) {
+            continue;
+          }
+          const auto v = sb->get_val(i);
+          if (v && *v > 0.0f) {
+            covered[i] = true;
+          }
+        }
+      });
+    }
+    for (size_t i = 0; i < n; ++i) {
+      if (!covered[i]) {
+        continue;
+      }
+      auto stat = profiles.get_method_stat(inv_slot[i], m);
+      // Covered but no usable anchor: absent row, or a non-finite / negative
+      // call_count. A call_count of exactly 0 IS usable (a genuinely cold but
+      // profiled method, which the solve floors to epsilon), matching
+      // `usable_call_count` -- so it is a real anchor, not a "missing hit".
+      if (!stat || !std::isfinite(stat->call_count) || stat->call_count < 0.0) {
+        counts[i].fetch_add(1, std::memory_order_relaxed);
+      }
+    }
+  });
+  std::vector<int64_t> out(n);
+  for (size_t i = 0; i < n; ++i) {
+    out[i] = (int64_t)counts[i].load(std::memory_order_relaxed);
+  }
+  return out;
+}
+
 void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,
                                         PassManager& mgr) {
@@ -651,6 +714,21 @@ void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
   // Per-method producer wall-clock, emitted as a `*_ms` metric into the redex
   // stats so the pass cost stays observable.
   using clk = std::chrono::steady_clock;
+
+  // Emitted before the producer so it lands on the
+  // per-method path (and on the inter-method path once that engine lands later
+  // in the stack). Metric-only, NFC.
+  {
+    const auto missing_hit =
+        count_missing_hit_methods(scope, profiles, inv_slot);
+    int64_t total = 0;
+    for (size_t i = 0; i < inv_slot.size(); ++i) {
+      mgr.set_metric("missing_hit_methods_" + inv_slot[i], missing_hit[i]);
+      total += missing_hit[i];
+    }
+    mgr.set_metric("missing_hit_methods_total", total);
+  }
+
   const auto t0 = clk::now();
   auto res = walk::parallel::methods<MethodResult>(
       scope, [&](DexMethod* m) -> MethodResult {

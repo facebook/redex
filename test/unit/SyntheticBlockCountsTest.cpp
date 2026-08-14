@@ -54,6 +54,42 @@ class SyntheticBlockCountsTest : public RedexTest {
     return m_pass.process_method(m, m->get_code()->cfg(), profiles, inv_slot);
   }
 
+  // Build a Scope (distinct classes) from a set of methods.
+  static Scope scope_of(const std::vector<DexMethod*>& ms) {
+    Scope scope;
+    UnorderedSet<DexClass*> seen;
+    for (auto* m : ms) {
+      auto* cls = type_class(m->get_class());
+      if (cls != nullptr && seen.count(cls) == 0) {
+        seen.insert(cls);
+        scope.push_back(cls);
+      }
+    }
+    return scope;
+  }
+
+  static method_profiles::MethodProfiles profiles_of(
+      const std::vector<std::pair<DexMethod*, double>>& entries) {
+    UnorderedMap<const DexMethodRef*, method_profiles::Stats> data;
+    for (const auto& e : entries) {
+      data.emplace(e.first,
+                   method_profiles::Stats{/*appear_percent=*/100.0,
+                                          /*call_count=*/e.second,
+                                          /*order_percent=*/0.0,
+                                          /*min_api_level=*/0});
+    }
+    return method_profiles::MethodProfiles::initialize("Fake", std::move(data));
+  }
+
+  // Fixture is the friend; TEST_F bodies (a derived class) are not, so private
+  // members are reached through helpers like this.
+  std::vector<int64_t> missing_hit(
+      const Scope& scope,
+      const method_profiles::MethodProfiles& profiles,
+      const std::vector<std::string>& inv_slot = {"Fake"}) {
+    return m_pass.count_missing_hit_methods(scope, profiles, inv_slot);
+  }
+
   static method_profiles::MethodProfiles profile_with(DexMethod* m,
                                                       double call_count) {
     UnorderedMap<const DexMethodRef*, method_profiles::Stats> data;
@@ -419,4 +455,26 @@ TEST_F(SyntheticBlockCountsTest, DeterministicIdempotent) {
   run(m, profiles);
   auto second = all_vals(m->get_code()->cfg());
   EXPECT_EQ(first, second);
+}
+// A covered method with no usable call_count anchor -- an absent profile row,
+// or a non-finite / negative call_count -- is counted. A properly-profiled
+// method is not; and, consistent with `usable_call_count`, neither is a method
+// whose call_count is exactly 0 (a usable, genuinely-cold anchor, not a missing
+// hit).
+TEST_F(SyntheticBlockCountsTest, MissingHitMethodsCountsCoveredUnprofiled) {
+  const std::string body = R"((
+      (.src_block "LD;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))";
+  auto* profiled = make(body); // covered + call_count 100 -> NOT counted
+  auto* unprofiled = make(body); // covered + no row       -> counted
+  auto* zero_count =
+      make(body); // covered + call_count 0  -> usable, NOT counted
+  auto profiles = profiles_of({{profiled, 100.0}, {zero_count, 0.0}});
+  auto scope = scope_of({profiled, unprofiled, zero_count});
+
+  auto counts = missing_hit(scope, profiles);
+  ASSERT_EQ(counts.size(), 1u);
+  EXPECT_EQ(counts[0], 1); // only the unprofiled method
 }
