@@ -76,6 +76,11 @@ struct AssessorConfig : public Configurable {
   bool run_initially{false};
   bool run_finally{false};
   bool run_sb_consistency{false};
+  // Twist B: run ONLY the interprocedural count-integrity check
+  // (track_exact_call_cap_violations) after each pass, without the full
+  // assessor bundle (no DexScopeAssessor, no CFG-rebuilding coverage scan).
+  // Cheap per-pass count-soundness signal with per-pass fault localization.
+  bool run_count_integrity_after_each_pass{false};
 };
 
 struct CheckUniqueDeobfuscatedNamesConfig : public Configurable {

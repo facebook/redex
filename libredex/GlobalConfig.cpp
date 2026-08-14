@@ -172,6 +172,9 @@ void AssessorConfig::bind_config() {
   bind("run_initially", run_initially, run_initially);
   bind("run_finally", run_finally, run_finally);
   bind("run_sb_consistency", run_sb_consistency, run_sb_consistency);
+  bind("run_count_integrity_after_each_pass",
+       run_count_integrity_after_each_pass,
+       run_count_integrity_after_each_pass);
 }
 
 void CheckUniqueDeobfuscatedNamesConfig::bind_config() {

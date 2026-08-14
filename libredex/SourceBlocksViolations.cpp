@@ -7,17 +7,20 @@
 
 #include "SourceBlocksViolations.h"
 
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <sparta/S_Expression.h>
 
 #include "CallGraph.h"
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Dominators.h"
@@ -25,6 +28,9 @@
 #include "IROpcode.h"
 #include "Macros.h"
 #include "MethodOverrideGraph.h"
+#include "MethodProfiles.h"
+#include "RedexContext.h"
+#include "Resolver.h"
 #include "ScopedCFG.h"
 #include "ScopedMetrics.h"
 #include "Show.h"
@@ -833,6 +839,148 @@ void track_source_block_coverage(ScopedMetrics& sm,
     data_metric(gViolationCountersNonEntry[i].first,
                 stats.non_entry_violations[i], true);
   }
+}
+
+namespace {
+// [count-integrity] Per-thread accumulator for the exact-call cap assessment,
+// reduced after the parallel walk via operator+= (no shared atomic/mutex).
+struct ExactCallCapStats {
+  size_t methods_scanned{0};
+  size_t overflow_count{0};
+  double max_overflow_ratio{0.0};
+
+  ExactCallCapStats& operator+=(const ExactCallCapStats& other) {
+    methods_scanned += other.methods_scanned;
+    overflow_count += other.overflow_count;
+    max_overflow_ratio = std::max(max_overflow_ratio, other.max_overflow_ratio);
+    return *this;
+  }
+};
+} // namespace
+
+void track_exact_call_cap_violations(
+    ScopedMetrics& sm,
+    const DexStoresVector& stores,
+    const method_profiles::MethodProfiles& profiles) {
+  // Invert the global SourceBlock interaction index (interaction id -> slot) so
+  // a val slot `i` maps to the MethodProfiles interaction id used at SB
+  // insertion.
+  const auto& slot_map = g_redex->get_sb_interaction_indices();
+  const size_t n = g_redex->num_sb_interaction_indices();
+  std::vector<std::string> inv_slot(n);
+  for (const auto& kv : UnorderedIterable(slot_map)) {
+    always_assert(kv.second < n);
+    inv_slot[kv.second] = kv.first;
+  }
+
+  // Block counts are epsilon-floored / clamped estimates, so allow a small
+  // relative + absolute slack over the profiled cap before flagging.
+  constexpr double kRelEps = 1e-3;
+  constexpr double kAbsEps = 1e-3;
+
+  // `get_method_stat()` re-hashes the interaction-id STRING on every call, and
+  // `inv_slot[i]` is invariant for the whole walk -- so hoist the per-slot map
+  // out of the (method x block x invoke x slot) inner loop below. The returned
+  // reference is stable (a missing id yields a static empty map) and the maps
+  // do not mutate during the walk. This assessment can run after every pass,
+  // so the innermost lookup is worth paying for once.
+  std::vector<const method_profiles::StatsMap*> slot_stats(n);
+  for (size_t i = 0; i < n; ++i) {
+    slot_stats[i] = &profiles.method_stats(inv_slot[i]);
+  }
+
+  auto stats = walk::parallel::methods<ExactCallCapStats>(
+      build_class_scope(stores), [&](DexMethod* method) -> ExactCallCapStats {
+        ExactCallCapStats ret;
+        auto* code = method->get_code();
+        if (code == nullptr) {
+          return ret;
+        }
+        // The assessor runs between passes; build/clear our own CFG.
+        ScopedCFG cfg(code);
+        ret.methods_scanned = 1;
+        // Reused across blocks to avoid per-block allocation in this parallel
+        // walk; reset at the top of each processed block below.
+        std::vector<double> cap(n);
+        std::vector<bool> have_cap(n);
+        for (auto* block : cfg->blocks()) {
+          auto* sb = source_blocks::get_first_source_block(block);
+          if (sb == nullptr || sb->vals_size == 0) {
+            continue;
+          }
+          // Per-slot cap = min over this block's exact profiled callees of
+          // call_count. In-block multiplicity is treated as 1 (looser but
+          // sound: min never inflates the cap).
+          std::fill(cap.begin(), cap.end(),
+                    std::numeric_limits<double>::infinity());
+          std::fill(have_cap.begin(), have_cap.end(), false);
+          for (const auto& mie : *block) {
+            if (mie.type != MFLOW_OPCODE) {
+              continue;
+            }
+            const auto op = mie.insn->opcode();
+            // Exact single-target calls only. Virtual/interface resolve to the
+            // static base target, whose call_count omits runtime overrides and
+            // is not a sound bound -- skip them.
+            if (!opcode::is_invoke_static(op) &&
+                !opcode::is_invoke_direct(op) && !opcode::is_invoke_super(op)) {
+              continue;
+            }
+            DexMethod* callee = resolve_invoke_method(mie.insn, method);
+            if (callee == nullptr) {
+              continue;
+            }
+            for (size_t i = 0; i < n; ++i) {
+              const auto& stats_map = *slot_stats[i];
+              auto it = stats_map.find(callee);
+              if (it == stats_map.end()) {
+                continue; // unprofiled callee: no bound for this slot
+              }
+              const double cc = it->second.call_count;
+              if (!std::isfinite(cc) || cc < 0.0) {
+                continue;
+              }
+              cap[i] = std::min(cap[i], cc);
+              have_cap[i] = true;
+            }
+          }
+          for (size_t i = 0; i < n; ++i) {
+            if (!have_cap[i]) {
+              continue;
+            }
+            const auto v = sb->get_val(i);
+            if (!v) {
+              continue;
+            }
+            const double val = *v;
+            if (val > cap[i] * (1.0 + kRelEps) + kAbsEps) {
+              ret.overflow_count++;
+              const double ratio =
+                  cap[i] > 0.0 ? val / cap[i]
+                               : std::numeric_limits<double>::infinity();
+              ret.max_overflow_ratio = std::max(ret.max_overflow_ratio, ratio);
+            }
+          }
+        }
+        return ret;
+      });
+
+  int64_t max_ratio_milli;
+  if (std::isfinite(stats.max_overflow_ratio)) {
+    // ratio >= 0, but a tiny callee call_count can make it a huge finite
+    // double; clamp before the cast (float->int64 overflow is UB).
+    const double milli = stats.max_overflow_ratio * 1000.0;
+    max_ratio_milli =
+        milli >= static_cast<double>(std::numeric_limits<int64_t>::max())
+            ? std::numeric_limits<int64_t>::max()
+            : static_cast<int64_t>(milli);
+  } else {
+    max_ratio_milli = std::numeric_limits<int64_t>::max();
+  }
+  sm.set_metric("~count~overflow~exact~call", (int64_t)stats.overflow_count);
+  sm.set_metric("~count~overflow~exact~call~max~ratio~milli", max_ratio_milli);
+  sm.set_metric("~count~overflow~exact~call~methods~scanned",
+                (int64_t)stats.methods_scanned);
 }
 
 size_t compute_method_violations(const call_graph::Graph& call_graph,

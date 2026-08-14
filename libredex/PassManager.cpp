@@ -1020,6 +1020,7 @@ struct PassVerifiers {
   redex_properties::Manager* properties_manager;
   bool run_hasher_after_each_pass;
   std::function<hashing::DexHash(const char*, const Scope&)> run_hasher_fn;
+  ConfigFiles& conf;
 
   // Runs verifiers before a pass; currently only the initial assessor run.
   void pre_pass(size_t i, const Scope& scope) {
@@ -1089,9 +1090,14 @@ struct PassVerifiers {
     bool run_assessor =
         assessor_config->run_after_each_pass ||
         (assessor_config->run_finally && i == pass_info.size() - 1);
+    // Twist B: cheap per-pass count-integrity gate. Runs ONLY the
+    // interprocedural exact-call cap check, without the full assessor bundle
+    // (no DexScopeAssessor, no CFG-rebuilding track_source_block_coverage).
+    bool run_count_integrity =
+        assessor_config->run_count_integrity_after_each_pass;
     bool run_type_checker = checker_conf.run_after_pass(pass);
 
-    if (run_hasher || run_assessor || run_type_checker ||
+    if (run_hasher || run_assessor || run_count_integrity || run_type_checker ||
         check_unique_deobfuscated.m_after_each_pass) {
       auto scope = build_class_scope(stores);
 
@@ -1103,6 +1109,13 @@ struct PassVerifiers {
         ::run_assessor(mgr, scope);
         ScopedMetrics sm(mgr);
         source_blocks::track_source_block_coverage(sm, stores);
+        source_blocks::track_exact_call_cap_violations(
+            sm, stores, conf.get_method_profiles());
+      }
+      if (run_count_integrity && !run_assessor) {
+        ScopedMetrics sm(mgr);
+        source_blocks::track_exact_call_cap_violations(
+            sm, stores, conf.get_method_profiles());
       }
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
@@ -1515,7 +1528,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                           run_hasher_after_each_pass,
                           [this](const char* pass_name, const Scope& s) {
                             return run_hasher(pass_name, s);
-                          }};
+                          },
+                          conf};
 
   PassProfiling pass_profiling{profiler_info, profiler_all_info,
                                profiler_info_pass, m_malloc_profile_pass,

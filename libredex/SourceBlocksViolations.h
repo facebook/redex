@@ -9,6 +9,10 @@
 
 #include "SourceBlocks.h"
 
+namespace method_profiles {
+class MethodProfiles;
+} // namespace method_profiles
+
 namespace source_blocks {
 
 void fix_chain_violations(ControlFlowGraph* cfg);
@@ -22,6 +26,18 @@ size_t compute_method_violations(const call_graph::Graph& call_graph,
 
 void track_source_block_coverage(ScopedMetrics& sm,
                                  const DexStoresVector& stores);
+
+// [count-integrity] Interprocedural exact-call cap assessment. For each covered
+// block that makes an exact single-target call (invoke-static/-direct/-super)
+// to a profiled callee, per interaction slot the block's synthetic execution
+// count must not exceed the callee's profiled call_count -- a block cannot run
+// more often than a method it unconditionally calls. Sound in both the 0/1 and
+// count worlds. Read-only; emits `~count~overflow~exact~call` and a max-ratio
+// metric.
+void track_exact_call_cap_violations(
+    ScopedMetrics& sm,
+    const DexStoresVector& stores,
+    const method_profiles::MethodProfiles& profiles);
 
 struct ViolationsHelper {
   struct ViolationsHelperImpl;
