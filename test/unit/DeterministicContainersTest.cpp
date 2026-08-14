@@ -8,9 +8,11 @@
 #include "DeterministicContainers.h"
 #include "RedexTest.h"
 
+#include <cstdlib>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <map>
+#include <string>
 #include <vector>
 
 using ::testing::ElementsAre;
@@ -838,3 +840,131 @@ TEST_F(DeterministicContainersTest, UnorderedEqual_functor) {
   EXPECT_TRUE(equal_by(a, same_other_order));
   EXPECT_FALSE(equal_by(a, different_element));
 }
+
+// --- Perturbation (REDEX_PERTURB_UNORDERED) ----------------------------------
+
+#if !REDEX_PERTURB_UNORDERED
+// With perturbation OFF the wrappers must be byte-identical to plain std: the
+// effective hasher is exactly the template Hash (zero-cost).
+static_assert(std::is_same_v<EffectiveHash_t<std::hash<int>>, std::hash<int>>,
+              "perturb OFF must leave EffectiveHash_t equal to the plain Hash");
+#endif
+
+// The internal hasher may be salted (a different salt per container), but
+// set/map equality must stay order- and salt-independent. This is the
+// regression that catches a dropped `noexcept` on PerturbHasher::operator()
+// (which would let libstdc++ cache salted hash codes and break cross-container
+// ==).
+TEST_F(DeterministicContainersTest, perturb_cross_container_equality) {
+  UnorderedMap<int, int> a;
+  UnorderedMap<int, int> b;
+  for (int i = 0; i < 64; i++) {
+    a.emplace(i, i * 2);
+    b.emplace(i, i * 2);
+  }
+  EXPECT_TRUE(a == b);
+
+  UnorderedSet<std::string> s1;
+  UnorderedSet<std::string> s2;
+  for (int i = 0; i < 64; i++) {
+    s1.insert("k" + std::to_string(i));
+    s2.insert("k" + std::to_string(i));
+  }
+  EXPECT_TRUE(s1 == s2);
+
+  b.emplace(999, 1);
+  EXPECT_TRUE(a != b);
+}
+
+// REDEX_PERTURB_SEED, when set, is parsed verbatim (base 0: decimal and 0x-hex)
+// and used as the salt-stream base seed, dropping the thread-id term so a
+// single-threaded run is reproducible.
+TEST_F(DeterministicContainersTest, perturb_seed_env_is_honored) {
+  ::setenv("REDEX_PERTURB_SEED", "0x1234", /* overwrite */ 1);
+  EXPECT_EQ(det_perturb::perturb_base_seed(), 0x1234u);
+  ::setenv("REDEX_PERTURB_SEED", "42", /* overwrite */ 1);
+  EXPECT_EQ(det_perturb::perturb_base_seed(), 42u);
+  ::unsetenv("REDEX_PERTURB_SEED");
+}
+
+#if REDEX_PERTURB_UNORDERED
+// With perturbation ON, two independently-constructed containers holding the
+// same elements iterate in different orders (per-container salt) while still
+// comparing equal.
+TEST_F(DeterministicContainersTest, perturb_on_scrambles_order_per_container) {
+  auto iteration_order = [](const UnorderedSet<int>& s) {
+    std::vector<int> v;
+    for (int x : UnorderedIterable(s)) {
+      v.push_back(x);
+    }
+    return v;
+  };
+  UnorderedSet<int> a;
+  UnorderedSet<int> b;
+  for (int i = 0; i < 64; i++) {
+    a.insert(i);
+    b.insert(i);
+  }
+  EXPECT_TRUE(a == b);
+  EXPECT_NE(iteration_order(a), iteration_order(b));
+}
+
+// A bag has no hasher to salt, so it carries its own per-bag salt:
+// unordered_any is no longer pinned to the first inserted element.
+TEST_F(DeterministicContainersTest, perturb_on_bag_unordered_any_varies) {
+  bool saw_non_first = false;
+  for (int t = 0; t < 100 && !saw_non_first; t++) {
+    UnorderedBag<int> bag;
+    for (int i = 0; i < 64; i++) {
+      bag.insert(i);
+    }
+    if (*unordered_any(bag) != 0) {
+      saw_non_first = true;
+    }
+  }
+  EXPECT_TRUE(saw_non_first);
+}
+
+// The full bag iteration (UnorderedIterable) is perturbed via a per-bag salted
+// rotation: every element is still visited exactly once, but starting from a
+// salted offset, so at least some bags iterate in a non-insertion order.
+TEST_F(DeterministicContainersTest, perturb_on_bag_iteration_rotates) {
+  std::vector<int> inserted;
+  for (int i = 0; i < 64; i++) {
+    inserted.push_back(i);
+  }
+  bool saw_rotation = false;
+  for (int t = 0; t < 100 && !saw_rotation; t++) {
+    UnorderedBag<int> bag;
+    for (int i : inserted) {
+      bag.insert(i);
+    }
+    std::vector<int> order;
+    for (int x : UnorderedIterable(bag)) {
+      order.push_back(x);
+    }
+    EXPECT_THAT(order, UnorderedElementsAreArray(inserted));
+    if (order != inserted) {
+      saw_rotation = true;
+    }
+  }
+  EXPECT_TRUE(saw_rotation);
+}
+
+// The rotated (forward-only) bag view must not break the single-pass helpers:
+// find locates the right element, a miss maps back to end(), and min/max are
+// still correct.
+TEST_F(DeterministicContainersTest,
+       perturb_on_bag_helpers_correct_under_rotation) {
+  UnorderedBag<int> bag;
+  for (int i = 0; i < 64; i++) {
+    bag.insert(i);
+  }
+  auto it = unordered_find(bag, 37);
+  ASSERT_TRUE(it != bag.end());
+  EXPECT_EQ(*it, 37);
+  EXPECT_TRUE(unordered_find(bag, 999) == bag.end());
+  EXPECT_EQ(*unordered_min_element(bag), 0);
+  EXPECT_EQ(*unordered_max_element(bag), 63);
+}
+#endif
