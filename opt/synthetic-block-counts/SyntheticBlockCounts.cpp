@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -31,11 +32,13 @@
 #include "GraphUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "IROpcode.h"
 #include "LoopInfo.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "RedexContext.h"
+#include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
@@ -518,6 +521,126 @@ void build_rpo(cfg::ControlFlowGraph& cfg,
   }
 }
 
+// Diagnostic counters for the callsite cap, accumulated by the clamp post-pass.
+// (The re-flow post-pass calls the shared cap helpers but passes cc=nullptr, so
+// it does not accumulate these.) Atomic so a parallel per-method walk can
+// accumulate them.
+struct CapCounters {
+  std::atomic<size_t> exact_invokes_seen{0};
+  std::atomic<size_t> unresolved_invokes{0}; // exact opcode, target
+                                             // unresolvable
+  std::atomic<size_t> unprofiled_callees{0}; // resolved callee, no row (per
+                                             // i)
+  std::atomic<size_t> throw_gated_invokes{0}; // invoke not counted: a
+                                              // may-throw insn precedes it in
+                                              // the block
+};
+
+// Distinct EXACT single-target callees of a block, mapped to the
+// number of GUARANTEED invokes of each -- calls that every entry to the block
+// is certain to execute. Fills `mult` (cleared first) so callers can reuse
+// one map across the blocks of a method instead of allocating per block.
+// Interaction- independent -- computed once per block.
+// invoke-static/-direct/-super only; virtual/interface need a call graph to
+// resolve and are skipped.
+//
+// Multiplicity underpins the cap `call_count(M) / mult`: a block that is
+// certain to call M `mult` times can run at most call_count(M)/mult times.
+// "Certain" matters -- the bound is an UPPER bound on the block frequency
+// only if every entry completes all `mult` calls. A may-throw instruction can
+// abort the block early, so an invoke is counted only while no earlier
+// instruction in the block could throw. Because an invoke can itself throw, a
+// repeated call to the same M contributes just its first (guaranteed)
+// occurrence; the trailing ones are throw-gated. Counting guaranteed calls
+// only keeps `call_count(M)/mult` an upper bound instead of the lower bound a
+// raw invoke count would give -- best-effort, not strictly sound, since the
+// guaranteed invoke can still throw before entering M (see
+// callsite_cap_for_interaction).
+void exact_callee_multiplicity(const cfg::Block* b,
+                               DexMethod* caller,
+                               CapCounters* cc,
+                               UnorderedMap<DexMethod*, uint32_t>& mult) {
+  mult.clear();
+  bool blocked = false; // an earlier instruction in this block could throw
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_OPCODE) {
+      continue;
+    }
+    const IROpcode op = mie.insn->opcode();
+    if (opcode::is_invoke_static(op) || opcode::is_invoke_direct(op) ||
+        opcode::is_invoke_super(op)) {
+      if (cc != nullptr) {
+        cc->exact_invokes_seen.fetch_add(1, std::memory_order_relaxed);
+      }
+      // `caller` is required for correct invoke-super resolution.
+      DexMethod* callee = resolve_invoke_method(mie.insn, caller);
+      if (callee == nullptr) {
+        if (cc != nullptr) {
+          cc->unresolved_invokes.fetch_add(1, std::memory_order_relaxed);
+        }
+      } else if (blocked) {
+        // A prior may-throw means not every entry reaches this invoke, so it
+        // cannot raise the callee's guaranteed multiplicity (metered only).
+        if (cc != nullptr) {
+          cc->throw_gated_invokes.fetch_add(1, std::memory_order_relaxed);
+        }
+      } else {
+        mult[callee]++;
+      }
+    }
+    // The invoke's own call still executes before the invoke can throw, so
+    // only instructions AFTER a may-throw are unguaranteed: update `blocked`
+    // once the current instruction has been accounted for.
+    if (opcode::can_throw(op)) {
+      blocked = true;
+    }
+  }
+}
+
+// Best-effort upper bound on how often a block can run in interaction
+// `interaction`, from its exact callees: min over DISTINCT profiled callees
+// of floor(call_count / multiplicity). Returns +inf when no exact profiled
+// callee bounds the block (fail-open, counted). min is commutative, so map
+// iteration order does not affect the result -> deterministic.
+//
+// NOT strictly sound: it assumes reaching an exact invoke implies one entry
+// to the resolved callee, but a dex invoke can throw BEFORE the callee is
+// entered (class-init failure / NoClassDefFoundError for invoke-static; a
+// null receiver for invoke-direct/-super), so a block can execute more often
+// than its callee's `call_count`. Treated as a heuristic cap: it may
+// under-count such a block down to epsilon. `MethodProfiles::call_count` is a
+// method-ENTRY count, not an attempted-callsite count, so no strictly-sound
+// block bound is available.
+double callsite_cap_for_interaction(
+    const UnorderedMap<DexMethod*, uint32_t>& callee_mult,
+    const std::string& interaction,
+    const method_profiles::MethodProfiles& profiles,
+    CapCounters* cc) {
+  double u = std::numeric_limits<double>::infinity();
+  bool have = false;
+  for (const auto& [callee, mult] : UnorderedIterable(callee_mult)) {
+    auto cstat = profiles.get_method_stat(interaction, callee);
+    if (!cstat) {
+      if (cc != nullptr) {
+        cc->unprofiled_callees.fetch_add(1, std::memory_order_relaxed);
+      }
+      continue;
+    }
+    const double cc_val = cstat->call_count;
+    if (!std::isfinite(cc_val) || cc_val < 0.0) {
+      // A non-finite (NaN/inf) or negative call_count is invalid profile
+      // data, not a usable bound: a negative `per` would clamp covered blocks
+      // down to epsilon. (cc_val == 0 stays usable -- a callee that never ran
+      // caps the block at 0, which floors to epsilon.)
+      continue;
+    }
+    const double per = std::floor(cc_val / (double)mult);
+    u = have ? std::min(u, per) : per;
+    have = true;
+  }
+  return have ? u : std::numeric_limits<double>::infinity();
+}
+
 } // namespace
 
 std::string SyntheticBlockCountsPass::get_config_doc() {
@@ -665,6 +788,7 @@ SyntheticBlockCountsPass::MethodResult SyntheticBlockCountsPass::process_method(
   }
 
   bool any_slot_used = false;
+  uint64_t written_mask = 0; // interaction slots this method actually wrote
 
   for (size_t i = 0; i < inv_slot.size(); ++i) {
     auto stat = profiles.get_method_stat(inv_slot[i], method);
@@ -734,11 +858,19 @@ SyntheticBlockCountsPass::MethodResult SyntheticBlockCountsPass::process_method(
           // never fire), so it is intentionally omitted.
           v->val = m;
           res.blocks_written++;
+          written_mask |= (uint64_t{1} << i);
         });
       });
     }
   }
 
+  if (written_mask != 0) {
+    // Record what this producer path wrote so the callsite clamp only caps
+    // these (method, interaction) slots, not the boolean vals of skipped ones.
+    m_producer_written.update(method,
+                              [written_mask](const DexMethod*, uint64_t& mask,
+                                             bool) { mask |= written_mask; });
+  }
   if (any_slot_used) {
     res.methods_with_usable_profile = 1;
   }
@@ -820,6 +952,11 @@ void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
     inv_slot[kv.second] = kv.first;
   }
 
+  // The callsite clamp gates on a per-method uint64_t bitmask of producer-
+  // written interaction slots; cap the slot count at 64 and reset the map.
+  always_assert(n <= 64);
+  m_producer_written.clear();
+
   auto scope = build_class_scope(stores);
 
   // Per-phase wall-clock timers, emitted as `*_ms` metrics into the redex stats
@@ -843,39 +980,158 @@ void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
     mgr.set_metric("missing_hit_methods_total", total);
   }
 
+  // Producer step: fill per-block counts on ONE of the two paths. No early
+  // return -- the post-passes below run over whichever output was produced.
   if (m_intermethod) {
     const auto t0 = clk::now();
     run_intermethod(stores, profiles, inv_slot, mgr);
     mgr.set_metric("intermethod_solve_ms", ms_since(t0));
-    return;
+  } else {
+    const auto t0 = clk::now();
+    auto res = walk::parallel::methods<MethodResult>(
+        scope, [&](DexMethod* m) -> MethodResult {
+          auto* code = m->get_code();
+          if (code == nullptr || !code->cfg_built()) {
+            return MethodResult{};
+          }
+          return process_method(m, code->cfg(), profiles, inv_slot);
+        });
+
+    mgr.set_metric("methods_seen", (int64_t)res.methods_seen);
+    mgr.set_metric("methods_with_usable_profile",
+                   (int64_t)res.methods_with_usable_profile);
+    mgr.set_metric("blocks_written", (int64_t)res.blocks_written);
+    mgr.set_metric("solve_fallback_no_profile",
+                   (int64_t)res.solve_fallback_no_profile);
+    mgr.set_metric("solve_fallback_irreducible",
+                   (int64_t)res.solve_fallback_irreducible);
+    mgr.set_metric("solve_fallback_entry_is_header",
+                   (int64_t)res.solve_fallback_entry_is_header);
+    mgr.set_metric("epsilon_clamped_blocks",
+                   (int64_t)res.epsilon_clamped_blocks);
+    mgr.set_metric("zero_outflow_sinks", (int64_t)res.zero_outflow_sinks);
+    mgr.set_metric("pairs_total", (int64_t)res.pairs_total);
+    mgr.set_metric("pairs_covered", (int64_t)res.pairs_covered);
+    mgr.set_metric("pairs_uncovered", (int64_t)res.pairs_uncovered);
+    mgr.set_metric("permethod_solve_ms", ms_since(t0));
   }
 
-  const auto t0 = clk::now();
-  auto res = walk::parallel::methods<MethodResult>(
-      scope, [&](DexMethod* m) -> MethodResult {
-        auto* code = m->get_code();
-        if (code == nullptr || !code->cfg_built()) {
-          return MethodResult{};
-        }
-        return process_method(m, code->cfg(), profiles, inv_slot);
-      });
+  // Tier-1 callsite-count clamp: unconditional post-pass over whatever the
+  // producer wrote (per-method OR inter-method), capping each covered block at
+  // the min-profiled-callee bound. The final backstop (best-effort, not
+  // strictly sound -- see callsite_cap_for_interaction).
+  if (m_callsite_clamp) {
+    const auto t0 = clk::now();
+    clamp_post_pass(scope, profiles, inv_slot, mgr);
+    mgr.set_metric("callsite_clamp_ms", ms_since(t0));
+  }
+}
 
-  mgr.set_metric("methods_seen", (int64_t)res.methods_seen);
-  mgr.set_metric("methods_with_usable_profile",
-                 (int64_t)res.methods_with_usable_profile);
-  mgr.set_metric("blocks_written", (int64_t)res.blocks_written);
-  mgr.set_metric("solve_fallback_no_profile",
-                 (int64_t)res.solve_fallback_no_profile);
-  mgr.set_metric("solve_fallback_irreducible",
-                 (int64_t)res.solve_fallback_irreducible);
-  mgr.set_metric("solve_fallback_entry_is_header",
-                 (int64_t)res.solve_fallback_entry_is_header);
-  mgr.set_metric("epsilon_clamped_blocks", (int64_t)res.epsilon_clamped_blocks);
-  mgr.set_metric("zero_outflow_sinks", (int64_t)res.zero_outflow_sinks);
-  mgr.set_metric("pairs_total", (int64_t)res.pairs_total);
-  mgr.set_metric("pairs_covered", (int64_t)res.pairs_covered);
-  mgr.set_metric("pairs_uncovered", (int64_t)res.pairs_uncovered);
-  mgr.set_metric("permethod_solve_ms", ms_since(t0));
+// Tier-1 callsite-count clamp (post-pass over both producers): cap each covered
+// block's synthesized `val` at the best-effort bound
+// `callsite_cap_for_interaction`
+// -- the min over the block's distinct exact profiled callees of
+// floor(call_count / multiplicity). Only lowers already-covered blocks, never
+// below epsilon (cap==0 -> epsilon, support pin wins). No re-solve: it reads
+// and rewrites the vals the producer already wrote. Deterministic; per-method
+// parallel with order-independent atomic counters.
+SyntheticBlockCountsPass::ClampStats
+SyntheticBlockCountsPass::clamp_post_pass_core(
+    const Scope& scope,
+    const method_profiles::MethodProfiles& profiles,
+    const std::vector<std::string>& inv_slot) {
+  const size_t n = inv_slot.size();
+  std::atomic<size_t> clamp_vals_lowered{0};
+  // Accumulate the removed magnitude in double: individual (old-new) drops are
+  // often < 1.0 and would each truncate to 0 in an integer counter.
+  std::atomic<double> clamp_val_removed_total{0.0};
+  CapCounters cc;
+  const float epsilon = m_epsilon;
+  walk::parallel::methods(scope, [&](DexMethod* method) {
+    auto* code = method->get_code();
+    if (code == nullptr || !code->cfg_built()) {
+      return;
+    }
+    auto& cfg = code->cfg();
+    // Only clamp (method, interaction) slots the producer actually wrote; a
+    // method/interaction the producer skipped keeps its original boolean vals.
+    //
+    // The mask is (method, interaction)-granular, NOT per block: it is set as
+    // soon as the producer wrote ANY block of the slot. So a covered block the
+    // producer deliberately left alone -- e.g. one unreachable from the entry
+    // in `solve_block_freq`, which `process_method` skips rather than floor --
+    // is still clamped if it shares a written slot. That is intentional: the
+    // cap is a sound bound on how often the block can run (it is derived from
+    // the block's own exact callees' call_counts), so it holds whether or not
+    // the producer synthesized that block, and the epsilon floor below keeps
+    // the coverage support intact either way.
+    const uint64_t written_mask = m_producer_written.get(method, 0);
+    if (written_mask == 0) {
+      return;
+    }
+    UnorderedMap<DexMethod*, uint32_t> callee_mult; // reused across blocks
+    for (auto* b : cfg.blocks()) {
+      exact_callee_multiplicity(b, method, &cc, callee_mult);
+      if (callee_mult.empty()) {
+        continue;
+      }
+      for (size_t i = 0; i < n; ++i) {
+        if (((written_mask >> i) & 1) == 0) {
+          continue; // producer left this interaction boolean; don't clamp it
+        }
+        const double u = callsite_cap_for_interaction(callee_mult, inv_slot[i],
+                                                      profiles, &cc);
+        if (!std::isfinite(u)) {
+          continue; // no exact profiled callee bounds this block -> no-op
+        }
+        const float cap = (float)u;
+        source_blocks::foreach_source_block(b, [&](SourceBlock* sb) {
+          sb->apply_at(i, [&](SourceBlock::Val& v) {
+            // Only lower already-covered vals; never resurrect support, never
+            // write below epsilon (cap==0 -> epsilon: support pin wins). A NaN
+            // val takes the skip path (every ordered compare is false).
+            if (!v || !(v->val > 0.0f)) {
+              return;
+            }
+            const float capped = std::max(epsilon, std::min(v->val, cap));
+            if (capped < v->val) {
+              clamp_val_removed_total.fetch_add((double)(v->val - capped),
+                                                std::memory_order_relaxed);
+              clamp_vals_lowered.fetch_add(1, std::memory_order_relaxed);
+              v->val = capped;
+            }
+          });
+        });
+      }
+    }
+  });
+  ClampStats st;
+  st.clamp_vals_lowered = clamp_vals_lowered.load();
+  st.clamp_val_removed_total = clamp_val_removed_total.load();
+  st.clamp_exact_invokes_seen = cc.exact_invokes_seen.load();
+  st.clamp_unresolved_invokes = cc.unresolved_invokes.load();
+  st.clamp_unprofiled_callees = cc.unprofiled_callees.load();
+  st.clamp_throw_gated_invokes = cc.throw_gated_invokes.load();
+  return st;
+}
+
+void SyntheticBlockCountsPass::clamp_post_pass(
+    const Scope& scope,
+    const method_profiles::MethodProfiles& profiles,
+    const std::vector<std::string>& inv_slot,
+    PassManager& mgr) {
+  const ClampStats st = clamp_post_pass_core(scope, profiles, inv_slot);
+  mgr.set_metric("clamp_vals_lowered", (int64_t)st.clamp_vals_lowered);
+  mgr.set_metric("clamp_val_removed_total",
+                 (int64_t)std::llround(st.clamp_val_removed_total));
+  mgr.set_metric("clamp_exact_invokes_seen",
+                 (int64_t)st.clamp_exact_invokes_seen);
+  mgr.set_metric("clamp_unresolved_invokes",
+                 (int64_t)st.clamp_unresolved_invokes);
+  mgr.set_metric("clamp_unprofiled_callees",
+                 (int64_t)st.clamp_unprofiled_callees);
+  mgr.set_metric("clamp_throw_gated_invokes",
+                 (int64_t)st.clamp_throw_gated_invokes);
 }
 
 void SyntheticBlockCountsPass::run_intermethod(
@@ -1476,6 +1732,7 @@ SyntheticBlockCountsPass::run_intermethod_core(
       auto* code = m->get_code();
       auto& cfg = code->cfg();
       size_t local_forward_writes = 0; // this method's forward-fill writes
+      bool wrote_slot = false; // wrote >=1 block for this interaction
       for (auto* b : cfg.blocks()) {
         const double f = s * (shape->count(b) != 0u ? shape->at(b) : 0.0);
         source_blocks::foreach_source_block(b, [&](SourceBlock* sb) {
@@ -1490,6 +1747,7 @@ SyntheticBlockCountsPass::run_intermethod_core(
               mval = epsilon; // keep covered blocks strictly > 0
             }
             v->val = mval;
+            wrote_slot = true;
             blocks_written.fetch_add(1, std::memory_order_relaxed);
             if (!pinned[idx]) {
               forward_blocks_written.fetch_add(1, std::memory_order_relaxed);
@@ -1497,6 +1755,12 @@ SyntheticBlockCountsPass::run_intermethod_core(
             }
           });
         });
+      }
+      if (wrote_slot) {
+        // Record this (method, interaction) as producer-written so the callsite
+        // clamp caps it, not the boolean slots this producer left untouched.
+        m_producer_written.update(m, [i](const DexMethod*, uint64_t& mask,
+                                         bool) { mask |= (uint64_t{1} << i); });
       }
       // Record the method the FIRST time a forward-fill mutates it (a
       // per-method event; deduped across interactions by the map key). The

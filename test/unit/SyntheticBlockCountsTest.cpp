@@ -136,6 +136,13 @@ class SyntheticBlockCountsTest : public RedexTest {
     return m_pass.count_missing_hit_methods(scope, profiles, inv_slot);
   }
 
+  SyntheticBlockCountsPass::ClampStats clamp(
+      const Scope& scope,
+      const method_profiles::MethodProfiles& profiles,
+      const std::vector<std::string>& inv_slot = {"Fake"}) {
+    return m_pass.clamp_post_pass_core(scope, profiles, inv_slot);
+  }
+
   static method_profiles::MethodProfiles profile_with(DexMethod* m,
                                                       double call_count) {
     UnorderedMap<const DexMethodRef*, method_profiles::Stats> data;
@@ -997,4 +1004,173 @@ TEST_F(SyntheticBlockCountsTest, NonFiniteCallCountNotPinnedInterMethod) {
   // Both stay boolean 1.0 -- no NaN/inf written anywhere.
   EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 1.0f);
   EXPECT_FLOAT_EQ(fv(callee->get_code()->cfg().entry_block()), 1.0f);
+}
+
+// The clamp caps an over-cap covered block at the callee's
+// profiled call_count, on BOTH producer outputs. caller(100) invokes a cold
+// callee(5) on its entry block, so the solve makes entry=100 but the sound cap
+// is 5.
+TEST_F(SyntheticBlockCountsTest, ClampCapsOverCapBlockBothProducers) {
+  const std::string leaf = R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))";
+  // Per-method producer.
+  auto* calleeA = make(leaf);
+  auto* callerA = make_caller(calleeA);
+  auto profilesA = profiles_of({{callerA, 100.0}, {calleeA, 5.0}});
+  auto scopeA = scope_of({callerA, calleeA});
+  run(callerA, profilesA);
+  EXPECT_FLOAT_EQ(fv(callerA->get_code()->cfg().entry_block()), 100.0f);
+  auto stA = clamp(scopeA, profilesA);
+  EXPECT_FLOAT_EQ(fv(callerA->get_code()->cfg().entry_block()), 5.0f);
+  EXPECT_GE(stA.clamp_vals_lowered, 1u);
+
+  // Inter-method producer.
+  auto* calleeB = make(leaf);
+  auto* callerB = make_caller(calleeB);
+  auto profilesB = profiles_of({{callerB, 100.0}, {calleeB, 5.0}});
+  auto scopeB = scope_of({callerB, calleeB});
+  run_inter(scopeB, profilesB);
+  EXPECT_FLOAT_EQ(fv(callerB->get_code()->cfg().entry_block()), 100.0f);
+  clamp(scopeB, profilesB);
+  EXPECT_FLOAT_EQ(fv(callerB->get_code()->cfg().entry_block()), 5.0f);
+}
+
+// A method the producer SKIPS (no usable profile anchor) keeps its boolean
+// vals: the callsite clamp must not lower them even though the method calls a
+// profiled low-count callee. (Regression: the clamp used to cap covered blocks
+// of producer-untouched methods, corrupting their boolean coverage.)
+TEST_F(SyntheticBlockCountsTest, ClampSkipsProducerUntouchedMethod) {
+  const std::string leaf = R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))";
+  auto* callee = make(leaf);
+  auto* caller = make_caller(callee);
+  // Only the callee is profiled, with a low count that would cap the caller's
+  // block well below its boolean 1.0. The caller has NO profile, so the
+  // per-method producer skips it and leaves its boolean vals untouched.
+  auto profiles = profiles_of({{callee, 0.3}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles); // producer skips the caller (no usable anchor)
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 1.0f);
+  const auto st = clamp(scope, profiles);
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 1.0f);
+  EXPECT_EQ(st.clamp_vals_lowered, 0u);
+}
+
+// Repeated-callee soundness: only GUARANTEED calls raise the
+// multiplicity. The first invoke of M can itself throw, so the second invoke is
+// not reached on every entry -> it is throw-gated and the cap stays
+// floor(call_count(M)/1) = 100, NOT floor(100/2) = 50 (which would be an
+// unsound lower bound: if the first call always threw, the block would still
+// run 1000x).
+TEST_F(SyntheticBlockCountsTest,
+       ClampRepeatedThrowingCalleeCountsGuaranteedOnce) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  const std::string body =
+      "(\n  (.src_block \"LC;.f:()V\" 0 (1.0 1.0))\n"
+      "  (invoke-static () \"" +
+      show(callee) + "\")\n  (invoke-static () \"" + show(callee) +
+      "\")\n  (return-void)\n)";
+  auto* caller = make(body);
+  caller->rstate.set_root();
+  auto profiles = profiles_of({{caller, 1000.0}, {callee, 100.0}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles); // entry = 1000
+  auto st = clamp(scope, profiles);
+  // Guaranteed multiplicity is 1 (second invoke throw-gated), cap = 100.
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 100.0f);
+  EXPECT_GE(st.clamp_throw_gated_invokes, 1u);
+}
+
+// Soundness: a may-throw instruction (here a div, which may
+// raise ArithmeticException) BEFORE the sole invoke means the callee is not
+// reached on every entry -- so its call_count is not a sound cap. The invoke is
+// throw-gated and the over-cap block is left untouched (fail-open), rather than
+// clamped down to an unsound bound.
+TEST_F(SyntheticBlockCountsTest, ClampThrowGatesCalleeAfterMayThrow) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  const std::string body =
+      "(\n  (.src_block \"LC;.f:()V\" 0 (1.0 1.0))\n"
+      "  (const v1 10)\n  (const v2 2)\n  (div-int v1 v2)\n"
+      "  (move-result-pseudo v0)\n"
+      "  (invoke-static () \"" +
+      show(callee) + "\")\n  (return-void)\n)";
+  auto* caller = make(body);
+  caller->rstate.set_root();
+  auto profiles = profiles_of({{caller, 1000.0}, {callee, 100.0}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles); // entry = 1000
+  auto st = clamp(scope, profiles);
+  // Callee throw-gated: no sound cap, entry stays at its synthesized 1000.
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 1000.0f);
+  EXPECT_GE(st.clamp_throw_gated_invokes, 1u);
+}
+
+// cap==0 on a covered block resolves to epsilon (support pin
+// wins over the zero cap) -- it is lowered but never to 0.
+TEST_F(SyntheticBlockCountsTest, ClampZeroCapFloorsToEpsilon) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  auto profiles = profiles_of({{caller, 100.0}, {callee, 0.0}}); // callee cold
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles); // entry = 100
+  clamp(scope, profiles);
+  const float e = fv(caller->get_code()->cfg().entry_block());
+  EXPECT_GT(e, 0.0f); // support pin: covered block stays > 0
+  EXPECT_LT(e, 1.0f); // but it WAS lowered from 100 toward the zero cap
+}
+
+// A negative callee call_count is invalid profile data, not a
+// usable cap: it is ignored (fail-open), leaving the covered block untouched,
+// rather than lowering it to epsilon from a negative bound. (Contrast
+// ClampZeroCapFloorsToEpsilon, where a valid 0 count DOES lower to epsilon.)
+TEST_F(SyntheticBlockCountsTest, ClampNegativeCalleeCountIgnored) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  auto profiles = profiles_of({{caller, 100.0}, {callee, -5.0}}); // invalid
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles); // entry = 100
+  clamp(scope, profiles);
+  // Negative callee bound ignored: entry keeps its synthesized 100, not
+  // epsilon.
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 100.0f);
+}
+
+// Deterministic + idempotent: a second clamp changes nothing.
+TEST_F(SyntheticBlockCountsTest, ClampDeterministicIdempotent) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  auto profiles = profiles_of({{caller, 100.0}, {callee, 5.0}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles);
+  clamp(scope, profiles);
+  auto v1 = all_vals(caller->get_code()->cfg());
+  clamp(scope, profiles);
+  auto v2 = all_vals(caller->get_code()->cfg());
+  EXPECT_EQ(v1, v2);
 }
