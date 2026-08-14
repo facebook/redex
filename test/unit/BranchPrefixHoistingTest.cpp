@@ -8,11 +8,14 @@
 #include <gtest/gtest.h>
 
 #include "BranchPrefixHoisting.h"
+#include "CppUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "RedexContext.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 
 class BranchPrefixHoistingTest : public RedexTest {};
 
@@ -59,6 +62,114 @@ void test(const std::string& code_str,
 
     EXPECT_EQ(assembler::to_s_expr(code), assembler::to_s_expr(expected.get()));
   }
+}
+
+// When a hoisted instruction may throw, the prefix keeps SourceBlocks so the
+// new control flow stays annotated. Those instructions now live in the parent,
+// so they run exactly as often as it does -- one SourceBlock carrying the
+// parent's count. Copying every successor's verbatim annotated the prefix once
+// per arm, each copy claiming the whole of it.
+TEST_F(BranchPrefixHoistingTest, hoisted_prefix_carries_this_blocks_count) {
+  g_redex->preserve_count_integrity = true;
+  ScopeGuard restore_count_integrity{
+      []() { g_redex->preserve_count_integrity = false; }};
+
+  DexType* type = DexType::make_type("LHoistSB;");
+  auto* cls = create_class(type, type::java_lang_Object(), {}, ACC_PUBLIC);
+  auto* args = DexTypeList::make_type_list({type::_int()});
+  auto* proto = DexProto::make_proto(type::_void(), args);
+  auto* method =
+      DexMethod::make_method(type, DexString::make_string("test"), proto)
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  cls->add_method(method);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.src_block "LHoistSB;.test:(I)V" 0 (10.0 1.0))
+      (if-eqz v0 :true)
+
+      (.src_block "LHoistSB;.test:(I)V" 1 (4.0 1.0))
+      (sget "LHoistSB;.f:I")
+      (move-result-pseudo v1)
+      (return-void)
+
+      (:true)
+      (.src_block "LHoistSB;.test:(I)V" 2 (6.0 1.0))
+      (sget "LHoistSB;.f:I")
+      (move-result-pseudo v1)
+      (return-void)
+    )
+  )"));
+  auto* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+
+  Lazy<const constant_uses::ConstantUses> constant_uses([&] {
+    return std::make_unique<const constant_uses::ConstantUses>(
+        cfg, method, /* force_type_inference */ true);
+  });
+  branch_prefix_hoisting_impl::process_cfg(cfg, constant_uses,
+                                           /* can_allocate_regs */ true);
+
+  auto sbs = source_blocks::gather_source_blocks(cfg.entry_block());
+  // The block's own SourceBlock, plus exactly one for the hoisted prefix --
+  // not one per arm.
+  ASSERT_EQ(sbs.size(), 2u);
+  auto v = sbs.back()->get_val(0);
+  ASSERT_TRUE(v.has_value());
+  EXPECT_FLOAT_EQ(*v, 10.0f);
+}
+
+// Same, but the hoisting block has no SourceBlock of its own, so the prefix
+// falls back to a verbatim copy of a successor's. The fallback still annotates
+// the prefix, so it must count as "annotated": one copy, not one per arm.
+TEST_F(BranchPrefixHoistingTest, hoisted_prefix_falls_back_to_a_single_copy) {
+  g_redex->preserve_count_integrity = true;
+  ScopeGuard restore_count_integrity{
+      []() { g_redex->preserve_count_integrity = false; }};
+
+  DexType* type = DexType::make_type("LHoistSBNone;");
+  auto* cls = create_class(type, type::java_lang_Object(), {}, ACC_PUBLIC);
+  auto* args = DexTypeList::make_type_list({type::_int()});
+  auto* proto = DexProto::make_proto(type::_void(), args);
+  auto* method =
+      DexMethod::make_method(type, DexString::make_string("test"), proto)
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  cls->add_method(method);
+  // No .src_block before the branch: the hoisting block has no count of its
+  // own.
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+
+      (.src_block "LHoistSBNone;.test:(I)V" 1 (4.0 1.0))
+      (sget "LHoistSBNone;.f:I")
+      (move-result-pseudo v1)
+      (return-void)
+
+      (:true)
+      (.src_block "LHoistSBNone;.test:(I)V" 2 (6.0 1.0))
+      (sget "LHoistSBNone;.f:I")
+      (move-result-pseudo v1)
+      (return-void)
+    )
+  )"));
+  auto* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+
+  Lazy<const constant_uses::ConstantUses> constant_uses([&] {
+    return std::make_unique<const constant_uses::ConstantUses>(
+        cfg, method, /* force_type_inference */ true);
+  });
+  branch_prefix_hoisting_impl::process_cfg(cfg, constant_uses,
+                                           /* can_allocate_regs */ true);
+
+  // Exactly one. Leaving the fallback's guard unset let the next arm's
+  // SourceBlock annotate the prefix a second time.
+  auto sbs = source_blocks::gather_source_blocks(cfg.entry_block());
+  EXPECT_EQ(sbs.size(), 1u);
 }
 
 TEST_F(BranchPrefixHoistingTest, simple_insn_hoisting) {
