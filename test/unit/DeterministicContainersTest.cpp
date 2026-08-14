@@ -887,6 +887,19 @@ TEST_F(DeterministicContainersTest, perturb_seed_env_is_honored) {
   ::unsetenv("REDEX_PERTURB_SEED");
 }
 
+// Guardrail for the perturbation CI job: REDEX_PERTURB_ASSERT_ON is set via a
+// config independent of redex.perturb_unordered, so if the perturb mode is ever
+// dropped from the job this fails to compile rather than silently testing
+// perturbation OFF.
+#ifndef REDEX_PERTURB_ASSERT_ON
+#define REDEX_PERTURB_ASSERT_ON 0
+#endif
+#if REDEX_PERTURB_ASSERT_ON
+static_assert(kPerturbUnordered,
+              "REDEX_PERTURB_ASSERT_ON is set but perturbation is OFF: the "
+              "redex.perturb_unordered wiring was dropped from the CI job");
+#endif
+
 #if REDEX_PERTURB_UNORDERED
 // With perturbation ON, two independently-constructed containers holding the
 // same elements iterate in different orders (per-container salt) while still
