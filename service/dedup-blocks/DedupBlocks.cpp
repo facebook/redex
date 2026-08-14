@@ -542,9 +542,14 @@ class DedupBlocksImpl {
     return duplicates;
   }
 
-  static size_t remove_instructions(SourceBlock* src_block,
+  // `src_block` is a reference because the caller has already filtered out
+  // canon blocks without one; passing it as a raw pointer forced the
+  // nullability analysis to re-prove that across the call boundary, which it
+  // cannot do.
+  static size_t remove_instructions(SourceBlock& src_block,
                                     cfg::Block* block,
                                     const cfg::ControlFlowGraph& cfg) {
+    always_assert(block != nullptr);
     size_t cnt{0};
 
     auto it = block->begin();
@@ -560,7 +565,9 @@ class DedupBlocksImpl {
       } break;
 
       case MFLOW_SOURCE_BLOCK: {
-        src_block->max(*cur_it->src_block);
+        // This block is a duplicate being folded into the survivor `src_block`;
+        // both ran independently, so their counts accumulate (appear100 maxes).
+        src_block.add(*cur_it->src_block);
         block->remove_mie(cur_it);
         ++cnt;
       } break;
@@ -642,7 +649,7 @@ class DedupBlocksImpl {
 
           // Undercounts branch instructions.
           m_stats.insns_removed +=
-              static_cast<int>(remove_instructions(src_block, block, cfg));
+              static_cast<int>(remove_instructions(*src_block, block, cfg));
 
           cfg.add_edge(block, canon, cfg::EDGE_GOTO);
 
