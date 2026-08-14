@@ -468,8 +468,11 @@ void Outliner::set_hot_method_from_callsite() {
       auto* template_sb = source_blocks_callsites[0];
       source_blocks::insert_synthetic_source_blocks_in_method(
           target, [target, template_sb, &source_blocks_callsites]() {
-            return source_blocks::clone_as_synthetic(template_sb, target,
-                                                     source_blocks_callsites);
+            // The outlined `target` is reached from every (hot) call site, so
+            // its synthetic count is the SUM of those sites' counts, not the
+            // max.
+            return source_blocks::clone_as_synthetic_summing(
+                template_sb, target, source_blocks_callsites);
           });
     }
   }

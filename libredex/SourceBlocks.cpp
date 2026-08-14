@@ -3323,6 +3323,25 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
   return new_sb;
 }
 
+std::unique_ptr<SourceBlock> clone_as_synthetic_summing(
+    SourceBlock* sb,
+    const DexMethod* ref,
+    const std::vector<SourceBlock*>& many) {
+  std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
+  new_sb->next.reset();
+  new_sb->id = SourceBlock::kSyntheticId;
+  if (ref != nullptr) {
+    new_sb->src = ref->get_deobfuscated_name_or_null();
+  }
+  new_sb->fill(SourceBlock::Val::none());
+  for (const auto& other : many) {
+    // N:1 outline: the body runs about the sum of its call sites' counts, so
+    // accumulate `val` (appear100 maxes, since it is a probability).
+    new_sb->add(*other);
+  }
+  return new_sb;
+}
+
 void adjust_block_hits_with_appear100_threshold(
     ControlFlowGraph* cfg, int32_t block_appear100_threshold) {
   for (auto* block : cfg->blocks()) {

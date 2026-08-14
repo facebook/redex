@@ -60,4 +60,13 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
     const DexMethod* ref,
     const std::vector<SourceBlock*>& many);
 
+// Like the `many` overload above, but SUMS the inputs' `val` instead of maxing
+// (appear100 still maxes). Use for an N:1 OUTLINE where a body shared by N call
+// sites runs about the sum of those sites' counts; use the `max` overload only
+// when stamping a single representative onto many blocks (TEMPLATE-CLONE).
+std::unique_ptr<SourceBlock> clone_as_synthetic_summing(
+    SourceBlock* sb,
+    const DexMethod* ref,
+    const std::vector<SourceBlock*>& many);
+
 } // namespace source_blocks

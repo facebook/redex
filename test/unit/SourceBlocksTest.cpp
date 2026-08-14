@@ -1727,3 +1727,25 @@ TEST_F(SourceBlocksTest, source_block_add_multi_interaction) {
   EXPECT_FLOAT_EQ(*a.get_val(1), 6.0f); // 2 + 4
   EXPECT_FLOAT_EQ(*a.get_appear100(1), 20.0f); // max(20, 5)
 }
+
+// Golden for the N:1 outline root: clone_as_synthetic_summing SUMS `val` across
+// the inputs (an outlined body runs about the sum of its call sites' counts)
+// and maxes appear100 -- unlike the plain clone_as_synthetic(many), which maxes
+// val.
+TEST_F(SourceBlocksTest, clone_as_synthetic_summing) {
+  const auto* s = DexString::make_string("x");
+  SourceBlock s1(s, 7, std::vector<SourceBlock::Val>{SourceBlock::Val(10, 5)});
+  SourceBlock s2(s, 8, std::vector<SourceBlock::Val>{SourceBlock::Val(20, 90)});
+  SourceBlock s3(s, 9, std::vector<SourceBlock::Val>{SourceBlock::Val(30, 10)});
+  std::vector<SourceBlock*> many{&s1, &s2, &s3};
+
+  auto summed = source_blocks::clone_as_synthetic_summing(&s1, nullptr, many);
+  ASSERT_TRUE(summed->get_val(0).has_value());
+  EXPECT_FLOAT_EQ(*summed->get_val(0), 60.0f); // 10 + 20 + 30 (SUM)
+  EXPECT_FLOAT_EQ(*summed->get_appear100(0), 90.0f); // max(5, 90, 10)
+  EXPECT_EQ(summed->id, SourceBlock::kSyntheticId);
+
+  // Contrast: the plain (max) clone maxes val -- would undercount an outline.
+  auto maxed = source_blocks::clone_as_synthetic(&s1, nullptr, many);
+  EXPECT_FLOAT_EQ(*maxed->get_val(0), 30.0f); // max, not 60
+}
