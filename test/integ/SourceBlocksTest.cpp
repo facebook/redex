@@ -21,6 +21,7 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "SourceBlocksViolations.h"
 #include "Walkers.h"
 
 class SourceBlocksTest : public RedexIntegrationTest {
