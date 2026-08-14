@@ -7,10 +7,12 @@
 
 #include "SyntheticBlockCounts.h"
 
+#include <algorithm>
 #include <atomic>
 #include <limits>
 #include <map>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -141,6 +143,24 @@ class SyntheticBlockCountsTest : public RedexTest {
       const method_profiles::MethodProfiles& profiles,
       const std::vector<std::string>& inv_slot = {"Fake"}) {
     return m_pass.clamp_post_pass_core(scope, profiles, inv_slot);
+  }
+
+  SyntheticBlockCountsPass::ReflowStats reflow(
+      const Scope& scope,
+      const method_profiles::MethodProfiles& profiles,
+      const std::vector<std::string>& inv_slot = {"Fake"}) {
+    return m_pass.reflow_post_pass_core(scope, profiles, inv_slot);
+  }
+
+  // Non-ghost successors of a block, as a value list.
+  static std::vector<float> arm_vals(cfg::Block* b) {
+    std::vector<float> out;
+    for (auto* e : b->succs()) {
+      if (e->type() != cfg::EDGE_GHOST) {
+        out.push_back(fv(e->target()));
+      }
+    }
+    return out;
   }
 
   static method_profiles::MethodProfiles profile_with(DexMethod* m,
@@ -1173,4 +1193,301 @@ TEST_F(SyntheticBlockCountsTest, ClampDeterministicIdempotent) {
   clamp(scope, profiles);
   auto v2 = all_vals(caller->get_code()->cfg());
   EXPECT_EQ(v1, v2);
+}
+
+// The real win: flow freed from an over-capped arm is
+// rerouted to a hot sibling with headroom, not truncated. A->{B(cap 10),
+// C(uncapped)}: baseline splits 50/50; re-flow leaves B=10 and moves the freed
+// 40 to C=90.
+TEST_F(SyntheticBlockCountsTest, ReflowReroutesFreedFlowToHotSibling) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  const std::string body =
+      "(\n"
+      "  (.src_block \"LC;.f:()V\" 0 (1.0 1.0))\n"
+      "  (const v0 0)\n"
+      "  (if-eqz v0 :cee)\n"
+      "  (.src_block \"LC;.f:()V\" 1 (1.0 1.0))\n"
+      "  (invoke-static () \"" +
+      show(callee) +
+      "\")\n" // B: capped by callee(10)
+      "  (goto :end)\n"
+      "  (:cee)\n"
+      "  (.src_block \"LC;.f:()V\" 2 (1.0 1.0))\n"
+      "  (const v1 1)\n" // C: uncapped
+      "  (goto :end)\n"
+      "  (:end)\n"
+      "  (.src_block \"LC;.f:()V\" 3 (1.0 1.0))\n"
+      "  (return-void)\n)";
+  auto* caller = make(body);
+  auto profiles = profiles_of({{caller, 100.0}, {callee, 10.0}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles); // baseline: entry=100, arms=50/50
+  auto st = reflow(scope, profiles);
+  auto& cfg = caller->get_code()->cfg();
+  EXPECT_FLOAT_EQ(fv(cfg.entry_block()), 100.0f); // entry pinned
+  auto arms = arm_vals(cfg.entry_block());
+  ASSERT_EQ(arms.size(), 2u);
+  std::sort(arms.begin(), arms.end());
+  EXPECT_FLOAT_EQ(arms[0], 10.0f); // capped arm
+  EXPECT_FLOAT_EQ(arms[1], 90.0f); // sibling absorbed the freed 40
+  EXPECT_GE(st.reflow_blocks_capped, 1u);
+}
+
+// Re-flow must conserve flow when TWO finite-headroom siblings can jointly
+// absorb a capped block's freed flow -- it must not spill what fits. Regression
+// for the non-proportional pass-2 allocation that multiplied the *shrinking*
+// leftover by the *original* rem_finite proportion, under-allocating the second
+// sibling and falsely spilling. The absorbers are FINITE (not the +inf fast
+// path the other reflow test exercises).
+TEST_F(SyntheticBlockCountsTest, ReflowSpillsNothingWhenTwoFiniteSiblingsFit) {
+  auto* cold = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* absA = make(R"((
+      (.src_block "LY;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* absB = make(R"((
+      (.src_block "LZ;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  // entry switches 3 ways: default arm calls cold (capped low, frees flow); the
+  // two case arms call absA/absB (finite caps with ample joint headroom).
+  const std::string body =
+      "(\n"
+      "  (.src_block \"LC;.f:()V\" 0 (1.0 1.0))\n"
+      "  (const v0 0)\n"
+      "  (switch v0 (:a :b))\n"
+      "  (.src_block \"LC;.f:()V\" 1 (1.0 1.0))\n"
+      "  (invoke-static () \"" +
+      show(cold) +
+      "\")\n" // default arm: capped by cold(6)
+      "  (goto :end)\n"
+      "  (:a)\n"
+      "  (.src_block \"LC;.f:()V\" 2 (1.0 1.0))\n"
+      "  (invoke-static () \"" +
+      show(absA) +
+      "\")\n" // capped by absA(60)
+      "  (goto :end)\n"
+      "  (:b)\n"
+      "  (.src_block \"LC;.f:()V\" 3 (1.0 1.0))\n"
+      "  (invoke-static () \"" +
+      show(absB) +
+      "\")\n" // capped by absB(60)
+      "  (goto :end)\n"
+      "  (:end)\n"
+      "  (.src_block \"LC;.f:()V\" 4 (1.0 1.0))\n"
+      "  (return-void)\n)";
+  auto* caller = make(body);
+  auto profiles =
+      profiles_of({{caller, 90.0}, {cold, 6.0}, {absA, 60.0}, {absB, 60.0}});
+  auto scope = scope_of({caller, cold, absA, absB});
+  run(caller, profiles); // baseline: entry=90, three arms ~30 each
+  auto st = reflow(scope, profiles);
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 90.0f); // pinned
+  // Default arm capped at 6 frees ~24; absA+absB headroom (~60) easily fits it,
+  // so nothing spills. The bug would falsely spill part of the freed flow.
+  EXPECT_FLOAT_EQ(st.reflow_sink_spill_total, 0.0);
+}
+
+// A per-block execution cap inside a loop must be converted to SCC-ENTRY-flow
+// units before it bounds the SCC. A self-loop head runs ~2x per entry (p_back
+// 0.5 -> amplified to 200 at anchor 100) and calls a callee capped at 50. The
+// cap is on head EXECUTIONS, so the loop's entry cap is 50 * 100/200 = 25
+// entries, which keeps head at 50. The buggy raw-cap code compared the block
+// cap (50) directly against entry flow (100), leaving head at 100 and
+// under-enforcing the callee.
+TEST_F(SyntheticBlockCountsTest, ReflowConvertsLoopBlockCapToEntryUnits) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  const std::string body =
+      "(\n"
+      "  (.src_block \"LC;.f:()V\" 0 (1.0 1.0))\n"
+      "  (const v0 0)\n"
+      "  (:head)\n"
+      "  (.src_block \"LC;.f:()V\" 1 (1.0 1.0))\n"
+      "  (invoke-static () \"" +
+      show(callee) +
+      "\")\n" // head: runs ~2x/entry, capped by callee(50)
+      "  (if-eqz v0 :head)\n"
+      "  (.src_block \"LC;.f:()V\" 2 (1.0 1.0))\n"
+      "  (return-void)\n)";
+  auto* caller = make(body);
+  auto profiles = profiles_of({{caller, 100.0}, {callee, 50.0}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles);
+  auto& cfg = caller->get_code()->cfg();
+  auto* head = single_succ(cfg.entry_block());
+  ASSERT_NE(head, nullptr);
+  EXPECT_FLOAT_EQ(fv(head), 200.0f); // baseline geometric amplification
+  reflow(scope, profiles);
+  EXPECT_FLOAT_EQ(fv(cfg.entry_block()), 100.0f); // entry pinned
+  EXPECT_FLOAT_EQ(fv(head),
+                  50.0f); // converted cap; raw-cap bug leaves it at 100
+}
+
+// Entry is PINNED: even when the entry block invokes a cold
+// callee, re-flow does NOT truncate the entry below the method's anchor (that
+// is the clamp's job, which runs after). A(1000) invoking callee(100) -> A
+// stays 1000 after re-flow.
+TEST_F(SyntheticBlockCountsTest, ReflowPinsEntryNoDeAnchor) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  auto profiles = profiles_of({{caller, 1000.0}, {callee, 100.0}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles);
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 1000.0f);
+  reflow(scope, profiles);
+  // Re-flow must not de-anchor the entry (Fix #12); the clamp would cap it.
+  EXPECT_FLOAT_EQ(fv(caller->get_code()->cfg().entry_block()), 1000.0f);
+}
+
+// Regression guard for loop-latch zeroing (Fix #10): a loop
+// header with no binding cap keeps its geometric-amplified count after re-flow,
+// it is NOT floored to epsilon.
+TEST_F(SyntheticBlockCountsTest, ReflowDoesNotZeroLoopLatch) {
+  auto* m = make(R"((
+      (.src_block "LD;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (:head)
+      (.src_block "LD;.f:()V" 1 (1.0 1.0))
+      (if-eqz v0 :head)
+      (.src_block "LD;.f:()V" 2 (1.0 1.0))
+      (return-void)
+    ))");
+  auto profiles = profile_with(m, 100.0);
+  run(m, profiles); // head amplified to 200 (p_back 0.5 -> x2)
+  auto scope = scope_of({m});
+  auto& cfg = m->get_code()->cfg();
+  auto* head = single_succ(cfg.entry_block());
+  ASSERT_NE(head, nullptr);
+  EXPECT_FLOAT_EQ(fv(head), 200.0f);
+  reflow(scope, profiles);
+  EXPECT_FLOAT_EQ(fv(cfg.entry_block()), 100.0f); // entry pinned
+  EXPECT_FLOAT_EQ(fv(head), 200.0f); // header NOT zeroed (no cap binds)
+}
+
+// Capped diamond: the profile is internally contradictory
+// (everything funnels through a capped merge, but the entry is pinned). Re-flow
+// routes what it can and honestly spills the rest (metered); the merge ends at
+// or below its cap.
+TEST_F(SyntheticBlockCountsTest, ReflowCappedDiamondSpills) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  const std::string body =
+      "(\n"
+      "  (.src_block \"LC;.f:()V\" 0 (1.0 1.0))\n"
+      "  (const v0 0)\n"
+      "  (if-eqz v0 :right)\n"
+      "  (.src_block \"LC;.f:()V\" 1 (1.0 1.0))\n"
+      "  (const v1 1)\n"
+      "  (goto :merge)\n"
+      "  (:right)\n"
+      "  (.src_block \"LC;.f:()V\" 2 (1.0 1.0))\n"
+      "  (const v1 2)\n"
+      "  (goto :merge)\n"
+      "  (:merge)\n"
+      "  (.src_block \"LC;.f:()V\" 3 (1.0 1.0))\n"
+      "  (invoke-static () \"" +
+      show(callee) +
+      "\")\n" // merge D: capped by callee(10)
+      "  (return-void)\n)";
+  auto* caller = make(body);
+  auto profiles = profiles_of({{caller, 100.0}, {callee, 10.0}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles); // baseline: entry=100, arms=50/50, merge=100
+  auto st = reflow(scope, profiles);
+  auto& cfg = caller->get_code()->cfg();
+  EXPECT_FLOAT_EQ(fv(cfg.entry_block()), 100.0f); // entry pinned
+  auto arms = arm_vals(cfg.entry_block());
+  ASSERT_EQ(arms.size(), 2u);
+  auto* merge = single_succ(cfg.entry_block()->succs().front()->target());
+  ASSERT_NE(merge, nullptr);
+  EXPECT_LE(fv(merge), 10.0f + 1e-3f); // funnel bound honored
+  EXPECT_GT(st.reflow_sink_spill_total, 0.0); // contradiction spilled, metered
+  EXPECT_EQ(st.reflow_methods_spilled, 1u);
+}
+
+// Deterministic + idempotent: a second re-flow (entry pinned,
+// recomputed from the same anchor) produces identical values.
+TEST_F(SyntheticBlockCountsTest, ReflowDeterministicIdempotent) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  auto* caller = make_caller(callee);
+  auto profiles = profiles_of({{caller, 100.0}, {callee, 5.0}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles);
+  reflow(scope, profiles);
+  auto v1 = all_vals(caller->get_code()->cfg());
+  reflow(scope, profiles);
+  auto v2 = all_vals(caller->get_code()->cfg());
+  EXPECT_EQ(v1, v2);
+}
+
+// Escape via THROW (not just return): a covered block whose terminator is an
+// explicit `throw` caught by a handler has the handler as an inter-SCC
+// successor
+// -- so it is NOT a condensation sink, and only `block_exits`' throw case makes
+// it escape. The handler here is capped (call_count 5); without throw-as-escape
+// the throwing block would be wrongly bounded by that cap instead of shedding
+// its flow out the throw. It should keep ~its entry flow.
+TEST_F(SyntheticBlockCountsTest, ReflowThrowIsAnEscape) {
+  auto* callee = make(R"((
+      (.src_block "LX;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (return-void)
+    ))");
+  const std::string body =
+      "(\n"
+      "  (.src_block \"LC;.f:()V\" 0 (1.0 1.0))\n"
+      "  (const v0 0)\n"
+      "  (.try_start t)\n"
+      "  (.src_block \"LC;.f:()V\" 1 (1.0 1.0))\n"
+      "  (throw v0)\n"
+      "  (.try_end t)\n"
+      "  (.catch (t))\n"
+      "  (.src_block \"LC;.f:()V\" 2 (1.0 1.0))\n"
+      "  (invoke-static () \"" +
+      show(callee) +
+      "\")\n"
+      "  (return-void)\n)";
+  auto* caller = make(body);
+  auto profiles = profiles_of({{caller, 100.0}, {callee, 5.0}});
+  auto scope = scope_of({caller, callee});
+  run(caller, profiles);
+  reflow(scope, profiles);
+  auto& cfg = caller->get_code()->cfg();
+  EXPECT_FLOAT_EQ(fv(cfg.entry_block()), 100.0f); // entry pinned
+  cfg::Block* thrower = nullptr;
+  for (auto* b : cfg.blocks()) {
+    auto it = b->get_last_insn();
+    if (it != b->end() && it->insn->opcode() == OPCODE_THROW) {
+      thrower = b;
+    }
+  }
+  ASSERT_NE(thrower, nullptr);
+  // Escapes via the throw -> keeps its flow, not clamped to the handler cap
+  // (5).
+  EXPECT_GT(fv(thrower), 5.0f);
 }

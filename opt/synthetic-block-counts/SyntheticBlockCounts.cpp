@@ -20,6 +20,8 @@
 #include <utility>
 #include <vector>
 
+#include <sparta/WeakTopologicalOrdering.h>
+
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
@@ -211,6 +213,36 @@
 // this engine does not close that gap. The backward bound (step 4) only caps
 // unprofiled callers on exact edges; it does not make callsite sums equal
 // callee totals.
+// ----------------------------------------------------------------------------
+// SECTION C -- Callsite-cap reconciliation (`reflow_block_freq`)
+// ----------------------------------------------------------------------------
+// Sections A and B can hand a call block more executions than an exact profiled
+// callee's `call_count` permits. Reconciling block/edge counts, observations,
+// and flow conservation is, in full generality, a global constrained-flow
+// optimization; LLVM's `SampleProfileInference` is a production example of that
+// approach.
+//
+// This pass deliberately takes a cheaper route: collapse CFG cycles into their
+// SCC condensation DAG, bound each SCC's downstream capacity in one reverse
+// sweep, then place the pinned entry flow in one forward sweep -- preserving
+// the producer's prior split wherever capacity allows and metering the
+// remainder as spill. It is deterministic and O(V+E), NOT a max-flow /
+// min-cost-flow solve: reconvergent paths can double-count shared downstream
+// capacity, so the result is an approximation, not a globally consistent flow.
+//
+// EXAMPLE. A capped reconvergent diamond:
+//     void caller() {           // profiled, so pinned at 1000 entries
+//       if (cond) foo();
+//       else      bar();
+//       log();                  // both arms reconverge here; log()'s own
+//     }                         // call_count caps this merge at 600
+// The profile is internally contradictory: 1000 entries must funnel through the
+// merge, but it caps at 600 -- no flow satisfies both. The one-sweep capacity
+// DP also credits the merge's 600 to BOTH arms (shared downstream is double-
+// counted), so cap_eff upstream is only an upper bound. Re-flow places the 600
+// it can and SPILLS the remaining 400 to the return sink (metered as
+// `sink_spill`) instead of fabricating a consistent 1000 through a 600 merge.
+// A global min-cost flow would resolve it; we deliberately did not build one.
 
 namespace {
 
@@ -641,6 +673,283 @@ double callsite_cap_for_interaction(
   return have ? u : std::numeric_limits<double>::infinity();
 }
 
+// Per-method result of the two-sweep capacity DP.
+struct ReflowMethodStats {
+  size_t blocks_capped{0}; // blocks in an SCC whose flow was routed down (cap
+                           // bit)
+  double sink_spill{0.0}; // flow no successor could absorb (metered, not
+                          // placed)
+};
+
+// A block "exits" the method here (return/throw terminal), so
+// its SCC can shed flow to the return sink -> escape=+inf in the capacity DP.
+bool block_exits(const cfg::Block* b) {
+  auto it = b->get_last_insn();
+  if (it == b->end()) {
+    return false;
+  }
+  const IROpcode op = it->insn->opcode();
+  return opcode::is_a_return(op) || opcode::is_throw(op);
+}
+
+// Two-sweep capacity DP on the SCC condensation. Returns the
+// per-block frequency: baseline forward solve rescaled per-SCC by how much flow
+// the DP could route into that SCC given the callsite caps. The entry is PINNED
+// to `anchor` (never truncated); a block's own value is never truncated by
+// cap_eff (the clamp post-pass is the hard per-block backstop). Deterministic:
+// SCCs come from the WTO in topological order; condensation successors are kept
+// in stable first-encounter order.
+UnorderedMap<const cfg::Block*, double> reflow_block_freq(
+    cfg::ControlFlowGraph& cfg,
+    size_t i,
+    DexMethod* method,
+    double anchor,
+    loop_impl::LoopInfo& loops,
+    const std::vector<cfg::Block*>& rpo,
+    const UnorderedMap<const cfg::Block*, size_t>& rpo_index,
+    cfg::Block* entry,
+    const method_profiles::MethodProfiles& profiles,
+    const std::string& interaction,
+    float handler_cold_factor,
+    float loop_iteration_cap,
+    float default_backedge_prob,
+    size_t* zero_outflow_sinks,
+    size_t* irreducible,
+    ReflowMethodStats* out) {
+  constexpr double kInf = std::numeric_limits<double>::infinity();
+  const auto edge_prob =
+      compute_edge_prob(cfg, i, handler_cold_factor, zero_outflow_sinks);
+  const auto baseline =
+      forward_propagate(i, anchor, loops, rpo, rpo_index, entry, edge_prob,
+                        loop_iteration_cap, default_backedge_prob, irreducible);
+
+  // ---- SCC condensation via WTO (component order == topological order) ----
+  // Cycles collapse into the standard SCC condensation DAG (Tarjan,
+  // "Depth-First Search and Linear Graph Algorithms," SIAM J. Comput. 1(2),
+  // 1972, is the classic linear-time SCC construction). This does not run
+  // Tarjan directly: it uses Sparta's Bourdoncle-style
+  // `WeakTopologicalOrdering` (Bourdoncle, "Efficient Chaotic Iteration
+  // Strategies with Widenings," FMPA 1993), whose nested components give both
+  // the SCC grouping and a deterministic acyclic schedule for the two sweeps
+  // below.
+  UnorderedMap<const cfg::Block*, size_t> scc_id;
+  std::vector<std::vector<const cfg::Block*>> scc_blocks;
+  sparta::WeakTopologicalOrdering<cfg::Block*> wto(entry, [](cfg::Block* b) {
+    std::vector<cfg::Block*> out;
+    UnorderedSet<cfg::Block*> seen;
+    for (auto* e : b->succs()) {
+      auto* t = e->target();
+      if (t != nullptr && t != b && seen.insert(t).second) {
+        out.push_back(t);
+      }
+    }
+    return out;
+  });
+  for (const auto& comp : wto) {
+    const size_t id = scc_blocks.size();
+    scc_blocks.emplace_back();
+    std::function<void(const sparta::WtoComponent<cfg::Block*>&)> collect =
+        [&](const sparta::WtoComponent<cfg::Block*>& w) {
+          if (scc_id.emplace(w.head_node(), id).second) {
+            scc_blocks[id].push_back(w.head_node());
+          }
+          if (w.is_scc()) {
+            for (const auto& inner : w) {
+              collect(inner);
+            }
+          }
+        };
+    collect(comp);
+  }
+  const size_t n_scc = scc_blocks.size();
+
+  // ---- per-SCC caps, escape, condensation successors + baseline inflow ----
+  std::vector<double> node_cap(n_scc, kInf);
+  // Per-SCC min of (block cap / block baseline freq); scaled by baseline_inflow
+  // into node_cap once inflow is known (see below). Kept separate because a raw
+  // block-execution cap is in the wrong units to compare against SCC entry
+  // flow.
+  std::vector<double> inv_cap(n_scc, kInf);
+  std::vector<bool> escape(n_scc, false);
+  std::vector<std::vector<std::pair<size_t, double>>> cond_succ(n_scc);
+  std::vector<double> baseline_inflow(n_scc, 0.0);
+  UnorderedMap<DexMethod*, uint32_t> mult; // reused across blocks
+  for (size_t s = 0; s < n_scc; ++s) {
+    bool has_cond_succ = false;
+    bool has_exit = false;
+    for (const auto* b : scc_blocks[s]) {
+      const double bf = (baseline.count(b) != 0u) ? baseline.at(b) : 0.0;
+      exact_callee_multiplicity(b, method, /*cc=*/nullptr, mult);
+      if (!mult.empty() && bf > 0.0) {
+        const double c = callsite_cap_for_interaction(mult, interaction,
+                                                      profiles, /*cc=*/nullptr);
+        // Convert the per-block execution cap `c` into an SCC-ENTRY cap: block
+        // b runs bf / baseline_inflow[s] times per entry to its SCC, so the
+        // entry count is bounded by c * baseline_inflow[s] / bf -- not by `c`
+        // directly (they are equal only for an acyclic singleton).
+        // baseline_inflow[s] is not final until this loop ends, so accumulate
+        // the unit-carrying min(c / bf) now and scale by baseline_inflow[s]
+        // afterward. A zero-baseline block (bf == 0) never runs in baseline and
+        // imposes no entry constraint, so it is skipped.
+        inv_cap[s] = std::min(inv_cap[s], c / bf);
+      }
+      if (block_exits(b)) {
+        has_exit = true;
+      }
+      for (auto* e : b->succs()) {
+        auto* t = e->target();
+        if (t == nullptr) {
+          continue;
+        }
+        auto tit = scc_id.find(t);
+        if (tit == scc_id.end() || tit->second == s) {
+          continue; // intra-SCC (or unreachable) edge
+        }
+        has_cond_succ = true;
+        auto epit = edge_prob.find(e);
+        const double flow =
+            bf * ((epit != edge_prob.end()) ? epit->second : 0.0);
+        // accumulate into cond_succ[s] in stable first-encounter order
+        auto& succs = cond_succ[s];
+        bool found = false;
+        for (auto& pr : succs) {
+          if (pr.first == tit->second) {
+            pr.second += flow;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          succs.emplace_back(tit->second, flow);
+        }
+        baseline_inflow[tit->second] += flow;
+      }
+    }
+    // Escape (flow can leave the method here) if the SCC returns/throws OR is a
+    // condensation sink. Over-estimating escape only loosens caps (the clamp
+    // still backstops); under-estimating would wrongly zero a sink SCC.
+    escape[s] = has_exit || !has_cond_succ;
+  }
+  const size_t entry_scc = scc_id.at(entry);
+  baseline_inflow[entry_scc] = anchor; // entry inflow is the pinned anchor
+
+  // Finalize node_cap in SCC-entry-flow units now that baseline_inflow is
+  // known: node_cap[s] = min over capped blocks b of c(b) * baseline_inflow[s]
+  // / baseline[b]. An SCC with no capped block (inv_cap == +inf) stays
+  // uncapped; guarding on that also avoids 0 * +inf when an SCC has zero
+  // baseline inflow.
+  for (size_t s = 0; s < n_scc; ++s) {
+    if (inv_cap[s] != kInf) {
+      node_cap[s] = baseline_inflow[s] * inv_cap[s];
+    }
+  }
+
+  // ---- reverse sweep: effective downstream capacity (UPPER BOUND) ----
+  std::vector<double> cap_eff(n_scc, kInf);
+  for (size_t s = n_scc; s-- > 0;) {
+    double down = escape[s] ? kInf : 0.0;
+    if (!escape[s]) {
+      for (const auto& [t, flow] : cond_succ[s]) {
+        down += cap_eff[t];
+        if (down == kInf) {
+          break;
+        }
+      }
+    }
+    cap_eff[s] = std::min(node_cap[s], down);
+  }
+
+  // ---- forward sweep: allocate inflow per SCC; entry pinned; route by prior
+  //      capped at successor headroom; spill the remainder ----
+  std::vector<double> alloc_inflow(n_scc, 0.0);
+  std::vector<double> sfac(n_scc, 0.0);
+  alloc_inflow[entry_scc] = anchor;
+  double sink_spill = 0.0;
+  for (size_t s = 0; s < n_scc; ++s) {
+    const double bin = baseline_inflow[s];
+    // bin == 0 means no condensation predecessor routed baseline flow into this
+    // SCC, so every block in it has baseline bf == 0 (and alloc_inflow[s] == 0
+    // too) -- the write below is bf * sfac == 0 regardless. The guard only
+    // avoids 0/0; it drops no flow. The entry SCC always has bin == anchor > 0.
+    sfac[s] = (bin > 0.0) ? (alloc_inflow[s] / bin) : 0.0;
+    double want_total = 0.0;
+    for (const auto& [t, flow] : cond_succ[s]) {
+      want_total += flow * sfac[s];
+    }
+    // pass 1: prior split, each successor capped at remaining headroom.
+    double routed = 0.0;
+    for (const auto& [t, flow] : cond_succ[s]) {
+      const double want = flow * sfac[s];
+      const double headroom = std::max(0.0, cap_eff[t] - alloc_inflow[t]);
+      const double give = std::min(want, headroom);
+      alloc_inflow[t] += give;
+      routed += give;
+    }
+    // pass 2: spill leftover to successors that still have headroom, weighted
+    // by
+    //         remaining headroom (route toward genuine absorbers). Any block
+    //         with unbounded (escape) downstream soaks the rest.
+    double leftover = want_total - routed;
+    if (leftover > 1e-9) {
+      double rem_finite = 0.0;
+      bool has_inf = false;
+      for (const auto& [t, flow] : cond_succ[s]) {
+        if (!std::isfinite(cap_eff[t])) {
+          has_inf = true;
+        } else {
+          rem_finite += std::max(0.0, cap_eff[t] - alloc_inflow[t]);
+        }
+      }
+      if (has_inf) {
+        for (const auto& [t, flow] : cond_succ[s]) {
+          if (!std::isfinite(cap_eff[t])) {
+            alloc_inflow[t] += leftover;
+            leftover = 0.0;
+            break;
+          }
+        }
+      } else if (rem_finite > 0.0) {
+        // Split the leftover across finite headroom in proportion to each
+        // successor's headroom. Use the ORIGINAL leftover as the numerator, not
+        // the running one: decrementing `leftover` while keeping the fixed
+        // `rem_finite` denominator would under-allocate later successors and
+        // falsely spill flow that the combined headroom could absorb. `give` is
+        // still clamped to `h`, and rem_finite > 0 rules out the divide.
+        const double orig_leftover = leftover;
+        for (const auto& [t, flow] : cond_succ[s]) {
+          const double h = std::max(0.0, cap_eff[t] - alloc_inflow[t]);
+          if (h <= 0.0) {
+            continue;
+          }
+          const double give = std::min(h, orig_leftover * (h / rem_finite));
+          alloc_inflow[t] += give;
+          leftover -= give;
+        }
+      }
+    }
+    if (leftover > 1e-9) {
+      sink_spill += leftover;
+    }
+  }
+
+  // ---- write per-block freq = baseline * per-SCC rescale ----
+  UnorderedMap<const cfg::Block*, double> out_freq;
+  out_freq.reserve(baseline.size());
+  size_t blocks_capped = 0;
+  for (size_t s = 0; s < n_scc; ++s) {
+    if (sfac[s] < 1.0 - 1e-9) {
+      blocks_capped += scc_blocks[s].size();
+    }
+    for (const auto* b : scc_blocks[s]) {
+      const double bf = (baseline.count(b) != 0u) ? baseline.at(b) : 0.0;
+      out_freq[b] = bf * sfac[s];
+    }
+  }
+  out->blocks_capped += blocks_capped;
+  out->sink_spill += sink_spill;
+  return out_freq;
+}
+
 } // namespace
 
 std::string SyntheticBlockCountsPass::get_config_doc() {
@@ -960,7 +1269,10 @@ void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   // Per-phase wall-clock timers, emitted as `*_ms` metrics into the redex stats
-  // so the producer cost stays observable.
+  // (same shape as the inter-method engine's p1_ms/phase_b_ms/phase_c_ms). The
+  // PassManager already records the pass's total runtime; these attribute it to
+  // the producer solve and each callsite post-pass so the cost stays
+  // observable.
   using clk = std::chrono::steady_clock;
   auto ms_since = [](clk::time_point t0) {
     return (int64_t)std::chrono::duration<double, std::milli>(clk::now() - t0)
@@ -1016,10 +1328,17 @@ void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
     mgr.set_metric("permethod_solve_ms", ms_since(t0));
   }
 
-  // Tier-1 callsite-count clamp: unconditional post-pass over whatever the
-  // producer wrote (per-method OR inter-method), capping each covered block at
-  // the min-profiled-callee bound. The final backstop (best-effort, not
-  // strictly sound -- see callsite_cap_for_interaction).
+  // Tier-1 callsite reconciliation, as post-passes over whatever the producer
+  // wrote (per-method OR inter-method). Re-flow ROUTES flow away from
+  // over-capped blocks toward siblings with headroom (best-effort); the clamp
+  // then TRUNCATES each covered block at the best-effort cap. Order matters:
+  // reflow reads the un-clamped producer anchor, and the clamp must run LAST as
+  // the hard per-block backstop for whatever reflow could only upper-bound.
+  if (m_callsite_reflow) {
+    const auto t0 = clk::now();
+    reflow_post_pass(scope, profiles, inv_slot, mgr);
+    mgr.set_metric("callsite_reflow_ms", ms_since(t0));
+  }
   if (m_callsite_clamp) {
     const auto t0 = clk::now();
     clamp_post_pass(scope, profiles, inv_slot, mgr);
@@ -1132,6 +1451,115 @@ void SyntheticBlockCountsPass::clamp_post_pass(
                  (int64_t)st.clamp_unprofiled_callees);
   mgr.set_metric("clamp_throw_gated_invokes",
                  (int64_t)st.clamp_throw_gated_invokes);
+}
+
+// Scope-scoped core (no PassManager), directly drivable from
+// unit tests. Per method, per interaction: anchor on the WRITTEN entry count,
+// run the two-sweep capacity DP, and overwrite covered blocks with the routed
+// per-block frequency (support pin + epsilon floor; non-positive/NaN rejected).
+// The clamp still runs after this as the hard per-block backstop.
+SyntheticBlockCountsPass::ReflowStats
+SyntheticBlockCountsPass::reflow_post_pass_core(
+    const Scope& scope,
+    const method_profiles::MethodProfiles& profiles,
+    const std::vector<std::string>& inv_slot) {
+  const size_t n = inv_slot.size();
+  const float epsilon = m_epsilon;
+  const float handler_cold_factor = m_handler_cold_factor;
+  const float loop_iteration_cap = m_loop_iteration_cap;
+  const float default_backedge_prob = m_default_backedge_prob;
+  return walk::parallel::methods<ReflowStats>(
+      scope, [&](DexMethod* method) -> ReflowStats {
+        auto* code = method->get_code();
+        if (code == nullptr || !code->cfg_built()) {
+          return ReflowStats{};
+        }
+        // Gate on the producer-written slots exactly as the clamp post-pass
+        // does. Without this, a slot the producer never synthesized still has
+        // boolean coverage on its entry block, and `*av > 0` below would accept
+        // that 1.0 as if it were a real execution count -- re-flowing, and
+        // overwriting, the very coverage values this pass promises to leave
+        // alone on unsynthesized slots.
+        const uint64_t written_mask = m_producer_written.get(method, 0);
+        if (written_mask == 0) {
+          return ReflowStats{};
+        }
+        auto& cfg = code->cfg();
+        // Same solve scaffolding as process_method.
+        const cfg::ControlFlowGraph& ccfg = cfg;
+        loop_impl::LoopInfo loops(ccfg);
+        std::vector<cfg::Block*> rpo;
+        UnorderedMap<const cfg::Block*, size_t> rpo_index;
+        build_rpo(cfg, rpo, rpo_index);
+        auto* entry = cfg.entry_block();
+
+        ReflowStats st;
+        bool spilled = false;
+        size_t zero_outflow_sinks =
+            0; // discarded (already counted by producer)
+        size_t irreducible = 0; // discarded (already counted by producer)
+        for (size_t i = 0; i < n; ++i) {
+          if (((written_mask >> i) & 1) == 0) {
+            continue; // producer left this interaction boolean; don't reflow it
+          }
+          // Anchor on the WRITTEN entry count (recovers the producer's
+          // scale_M).
+          auto* esb = source_blocks::get_first_source_block(entry);
+          const auto av = (esb != nullptr) ? esb->get_val(i) : std::nullopt;
+          // DeMorgan-expanded; keep `!(x > 0)` (NOT `x <= 0`) so a NaN anchor
+          // is also rejected (NaN <= 0 is false, which would let NaN through).
+          if (!av || !(*av > 0.0f)) {
+            continue; // entry uncovered / no anchor for this interaction
+          }
+          const double anchor = *av;
+          ReflowMethodStats ms;
+          const auto freq = reflow_block_freq(
+              cfg, i, method, anchor, loops, rpo, rpo_index, entry, profiles,
+              inv_slot[i], handler_cold_factor, loop_iteration_cap,
+              default_backedge_prob, &zero_outflow_sinks, &irreducible, &ms);
+          for (auto* b : cfg.blocks()) {
+            auto fit = freq.find(b);
+            if (fit == freq.end()) {
+              continue;
+            }
+            const double f = fit->second;
+            source_blocks::foreach_source_block(b, [&](SourceBlock* sb) {
+              sb->apply_at(i, [&](SourceBlock::Val& v) {
+                // Support pin: only rewrite already-covered blocks. Reject a
+                // non-positive/NaN routed value (keep the producer's value).
+                if (!v || !(v->val > 0.0f)) {
+                  return;
+                }
+                if (!(f > 0.0)) {
+                  return;
+                }
+                v->val = std::max(epsilon, (float)f);
+              });
+            });
+          }
+          st.reflow_blocks_capped += ms.blocks_capped;
+          if (ms.sink_spill > 0.0) {
+            st.reflow_sink_spill_total += ms.sink_spill;
+            spilled = true;
+          }
+        }
+        if (spilled) {
+          st.reflow_methods_spilled = 1;
+        }
+        return st;
+      });
+}
+
+void SyntheticBlockCountsPass::reflow_post_pass(
+    const Scope& scope,
+    const method_profiles::MethodProfiles& profiles,
+    const std::vector<std::string>& inv_slot,
+    PassManager& mgr) {
+  const ReflowStats st = reflow_post_pass_core(scope, profiles, inv_slot);
+  mgr.set_metric("reflow_blocks_capped", (int64_t)st.reflow_blocks_capped);
+  mgr.set_metric("reflow_sink_spill_total",
+                 (int64_t)std::floor(st.reflow_sink_spill_total));
+  mgr.set_metric("reflow_methods_spilled", (int64_t)st.reflow_methods_spilled);
 }
 
 void SyntheticBlockCountsPass::run_intermethod(
@@ -1593,6 +2021,14 @@ SyntheticBlockCountsPass::run_intermethod_core(
     bool converged = false;
     double last_max_rel = 0.0;
     size_t last_changed = 0;
+    // Worklist over the same BFS `sweep_order`. Sweep 0 seeds every relevant
+    // non-pinned method, so the acyclic majority settles in that one caller-
+    // before-callee pass; afterwards a method is re-evaluated only when one of
+    // its callers actually moved (by more than converge_eps), which it signals
+    // by marking its callees dirty for the next sweep. Same fixpoint as a full
+    // Gauss-Seidel sweep, but sweeps past the first touch only the shrinking
+    // non-converged frontier (recursion cycles) instead of all ~N methods --
+    // this is what keeps the inter-method solve off an O(sweeps · N) floor.
     std::vector<bool> dirty(nm, false);
     std::vector<bool> next_dirty(nm, false);
     for (size_t idx = 0; idx < nm; ++idx) {
