@@ -466,9 +466,18 @@ void parse_manual_files(
     AllInteractions& method_stats,
     std::vector<MethodProfiles::ManualProfileLine>& unresolved_manual_lines) {
   Timer t("parse_manual_files");
-  for (const auto& [manual_file, config_name] :
-       UnorderedIterable(manual_file_to_config_names)) {
-    parse_manual_file(manual_file, config_name, baseline_profile_method_map,
+  // Two of the writes below are order-sensitive, so the files have to be
+  // visited in a fixed order rather than in the map's iteration order:
+  // parse_manual_file assigns baseline_manual_interactions[config] with
+  // last-write-wins, and a config may be listed in more than one file; and the
+  // rows it contributes to the shared method_stats are emplaced first-wins, so
+  // when two files name the same method and interaction, whichever file is
+  // parsed first decides the stats that survive.
+  auto ordered_files = unordered_to_ordered_keys(manual_file_to_config_names);
+  for (const auto& manual_file : ordered_files) {
+    auto it = manual_file_to_config_names.find(manual_file);
+    always_assert(it != manual_file_to_config_names.end());
+    parse_manual_file(manual_file, it->second, baseline_profile_method_map,
                       baseline_manual_interactions, manual_profile_interactions,
                       method_stats, unresolved_manual_lines);
   }
