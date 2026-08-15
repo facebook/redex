@@ -212,8 +212,6 @@ class PassManager {
 
   void init(const ConfigFiles& config);
 
-  void check_unreleased_reserved_refs();
-
   AssetManager m_asset_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
