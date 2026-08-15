@@ -79,6 +79,21 @@ const Pass* get_profiled_pass(const PassManager& mgr) {
   return pass;
 }
 
+// Returns the pass named by MALLOC_PROFILE_PASS, or nullptr when the variable
+// is unset. Like get_profiled_pass, this resolves the name up front so typos
+// are caught before any pass runs.
+const Pass* get_malloc_profile_pass(const PassManager& mgr) {
+  const auto* malloc_profile_pass_name = getenv("MALLOC_PROFILE_PASS");
+  if (malloc_profile_pass_name == nullptr) {
+    return nullptr;
+  }
+  const auto* pass = mgr.find_pass(malloc_profile_pass_name);
+  always_assert_log(pass != nullptr, "Could not find pass named %s",
+                    malloc_profile_pass_name);
+  fprintf(stderr, "Will run jemalloc profiler for %s\n", pass->name().c_str());
+  return pass;
+}
+
 std::string get_apk_dir(const ConfigFiles& config) {
   auto apkdir = config.get_json_config()["apk_dir"].asString();
   apkdir.erase(std::remove(apkdir.begin(), apkdir.end(), '"'), apkdir.end());
@@ -1221,12 +1236,6 @@ PassManager::PassManager(
       m_internal_fields(new InternalFields()),
       m_properties_manager(properties_manager) {
   init(config);
-  if (getenv("MALLOC_PROFILE_PASS") != nullptr) {
-    m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
-    always_assert(m_malloc_profile_pass != nullptr);
-    fprintf(stderr, "Will run jemalloc profiler for %s\n",
-            m_malloc_profile_pass->name().c_str());
-  }
 }
 
 PassManager::~PassManager() {}
@@ -1291,6 +1300,7 @@ class PassManager::RunPassesContext {
         profiler_info_pass(profiler_info ? get_profiled_pass(mgr) : nullptr),
         profiler_all_info(
             ScopedCommandProfiling::maybe_info_from_env("ALL_PASSES_")),
+        malloc_profile_pass(get_malloc_profile_pass(mgr)),
         it(squash_and_iterate(stores, conf)),
         scope(build_class_scope(it)),
         // Retrieve the hasher's settings.
@@ -1320,7 +1330,7 @@ class PassManager::RunPassesContext {
                   run_hasher_after_each_pass,
                   conf},
         pass_profiling{profiler_info, profiler_all_info, profiler_info_pass,
-                       mgr.m_malloc_profile_pass, violations_tracking} {
+                       malloc_profile_pass, violations_tracking} {
     // Clear stale data. Make sure we start fresh.
     mgr.m_preserved_analysis_passes.clear();
 
@@ -1697,6 +1707,7 @@ class PassManager::RunPassesContext {
   std::optional<ScopedCommandProfiling::ProfilerInfo> profiler_info;
   const Pass* profiler_info_pass;
   std::optional<ScopedCommandProfiling::ProfilerInfo> profiler_all_info;
+  const Pass* malloc_profile_pass;
   DexStoreClassesIterator it;
   // Rebuilt during teardown, and therefore not const. Inside the loop this is
   // the *initial* scope; per-pass work rebuilds its own from `stores`.
