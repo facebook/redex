@@ -205,6 +205,11 @@ class PassManager {
   void disable_checker() { m_checker_disabled = true; }
 
  private:
+  // Owns everything whose lifetime spans a single run_passes() call. Defined in
+  // PassManager.cpp; nested here rather than made file-local because its setup,
+  // per-pass, and teardown steps all reach into PassManager's private state.
+  class RunPassesContext;
+
   void init(const ConfigFiles& config);
   void check_no_new_dex_features(const DexStoresVector& stores,
                                  const Pass* pass,

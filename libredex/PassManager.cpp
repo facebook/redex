@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <exception>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -1414,129 +1415,165 @@ void PassManager::init_property_interactions(ConfigFiles& /*conf*/) {
   }
 }
 
-void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
-  const auto* pm_config =
-      conf.get_global_config().get_config_by_name<PassManagerConfig>(
-          "pass_manager");
-  redex_assert(pm_config != nullptr);
+// Everything whose lifetime spans a single run_passes() call: the constructor
+// performs all pre-loop setup, run_pass() one iteration of the main loop, and
+// the destructor all post-loop teardown.
+//
+// Member declaration order is load-bearing, and matches the order the objects
+// were created in when this was one long function. Several members hold
+// non-owning references to earlier ones -- PassVerifiers to checker_conf and
+// check_unique_deobfuscated, PassProfiling to profiler_info, profiler_all_info
+// and violations_tracking -- so reverse-order destruction is what keeps the
+// referents alive until after the referrers are gone.
+class PassManager::RunPassesContext {
+ public:
+  RunPassesContext(PassManager& mgr, DexStoresVector& stores, ConfigFiles& conf)
+      : mgr(mgr),
+        stores(stores),
+        conf(conf),
+        uncaught_on_entry(std::uncaught_exceptions()),
+        pm_config(get_pass_manager_config(conf)),
+        profiler_info(ScopedCommandProfiling::maybe_info_from_env("")),
+        profiler_info_pass(profiler_info ? get_profiled_pass(mgr) : nullptr),
+        profiler_all_info(
+            ScopedCommandProfiling::maybe_info_from_env("ALL_PASSES_")),
+        it(squash_and_iterate(stores, conf)),
+        scope(build_class_scope(it)),
+        // Retrieve the hasher's settings.
+        run_hasher_after_each_pass(
+            is_run_hasher_after_each_pass(conf, mgr.get_redex_options())),
+        // Retrieve the assessor's settings.
+        assessor_config(
+            conf.get_global_config().get_config_by_name<AssessorConfig>(
+                "assessor")),
+        // Retrieve the type checker's settings.
+        checker_conf(conf, mgr.m_checker_disabled),
+        check_unique_deobfuscated(conf),
+        violations_tracking(pm_config->violations_tracking),
+        mem_pass_stats(traceEnabled(STATS, 1) ||
+                       conf.get_json_config().get("mem_stats", true)),
+        hwm_per_pass(conf.get_json_config().get("mem_stats_per_pass", true)),
+        jemalloc_stats(&mgr, conf),
+        verifiers{mgr,
+                  stores,
+                  mgr.m_pass_info,
+                  checker_conf,
+                  assessor_config,
+                  check_unique_deobfuscated,
+                  pm_config,
+                  mgr.m_properties_manager,
+                  run_hasher_after_each_pass,
+                  [this](const char* pass_name, const Scope& s) {
+                    return this->mgr.run_hasher(pass_name, s);
+                  },
+                  conf},
+        pass_profiling{profiler_info, profiler_all_info, profiler_info_pass,
+                       mgr.m_malloc_profile_pass, violations_tracking} {
+    // Clear stale data. Make sure we start fresh.
+    mgr.m_preserved_analysis_passes.clear();
 
-  auto profiler_info = ScopedCommandProfiling::maybe_info_from_env("");
-  const Pass* profiler_info_pass = nullptr;
-  if (profiler_info) {
-    profiler_info_pass = get_profiled_pass(*this);
+    Timer::scope("API Level Checker", [&] {
+      api::LevelChecker::init(mgr.m_redex_options.min_sdk, scope);
+    });
+
+    maybe_write_env_seeds_file(conf, scope);
+    maybe_print_seeds_incoming(conf, scope, mgr.m_pg_config);
+    maybe_write_hashes_incoming(conf, scope);
+
+    maybe_enable_opt_data(conf);
+
+    // Load configurations regarding the scope.
+    conf.load(scope);
+
+    sanitizers::lsan_do_recoverable_leak_check();
+
+    mgr.eval_passes(stores, conf);
+
+    mgr.init_property_interactions(conf);
+
+    checker_conf.on_input(scope);
+
+    // Pull on method-profiles, so that they get initialized, and are matched
+    // against the *initial* methods
+    conf.get_method_profiles();
+
+    if (run_hasher_after_each_pass) {
+      // The null pass name keeps run_hasher from emitting metrics, which would
+      // assert: there is no current pass during setup.
+      mgr.m_initial_hash = mgr.run_hasher(nullptr, scope);
+    }
+
+    check_unique_deobfuscated.run_initially(scope);
+
+    graph_visualizer.emplace(conf);
+
+    sanitizers::lsan_do_recoverable_leak_check();
+
+    // Abort if the analysis pass dependencies are not satisfied.
+    AnalysisUsage::check_dependencies(mgr.m_activated_passes);
+
+    if (pm_config->check_pass_order_properties) {
+      verify_pass_order(mgr, conf);
+    }
+
+    if (pm_config->check_properties_deep &&
+        mgr.m_properties_manager != nullptr) {
+      TRACE(PM, 2, "Checking initial properties of...");
+      mgr.m_properties_manager->check(stores, mgr);
+    }
+
+    jni_native_context_helper.emplace(scope,
+                                      mgr.m_redex_options.jni_summary_path);
   }
-  auto profiler_all_info =
-      ScopedCommandProfiling::maybe_info_from_env("ALL_PASSES_");
 
-  if (conf.force_single_dex()) {
-    // Squash the dexes into one, so that the passes all see only one dex and
-    // all the cross-dex reference checking are accurate.
-    squash_into_one_dex(stores);
+  // Teardown. Declared `noexcept(false)` because the final type check reports
+  // failures by throwing, and that has to keep reaching run_passes' caller.
+  ~RunPassesContext() noexcept(false) {
+    // Skip teardown while unwinding. Every step below can throw or exit(), and
+    // running them over a half-optimized program would replace whatever went
+    // wrong with a std::terminate. Before this was a struct, an exception out
+    // of the loop simply never reached the post-loop code.
+    if (std::uncaught_exceptions() != uncaught_on_entry) {
+      return;
+    }
+
+    // Always clear cfg and run the type checker before generating the
+    // optimized dex code.
+    scope = build_class_scope(it);
+    walk::parallel::code(scope,
+                         [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
+    TRACE(PM, 1, "All opt passes are done, clear cfg\n");
+    checker_conf
+        .check_no_overwrite_this(mgr.get_redex_options().no_overwrite_this())
+        .validate_access(true)
+        .run_verifier(scope);
+
+    jni_native_context_helper->post_passes(scope, conf);
+
+    check_unique_deobfuscated.run_finally(scope);
+    mgr.check_unreleased_reserved_refs();
+
+    graph_visualizer->finalize();
+
+    maybe_print_seeds_outgoing(conf, it);
+    maybe_write_hashes_outgoing(conf, scope);
+
+    sanitizers::lsan_do_recoverable_leak_check();
+
+    for (auto& [name, seconds] : AccumulatingTimer::get_times()) {
+      Timer::add_timer(std::move(name), seconds);
+    }
   }
 
-  DexStoreClassesIterator it(stores);
-  Scope scope = build_class_scope(it);
+  RunPassesContext(const RunPassesContext&) = delete;
+  RunPassesContext& operator=(const RunPassesContext&) = delete;
 
-  // Clear stale data. Make sure we start fresh.
-  m_preserved_analysis_passes.clear();
-
-  Timer::scope("API Level Checker", [&] {
-    api::LevelChecker::init(m_redex_options.min_sdk, scope);
-  });
-
-  maybe_write_env_seeds_file(conf, scope);
-  maybe_print_seeds_incoming(conf, scope, m_pg_config);
-  maybe_write_hashes_incoming(conf, scope);
-
-  maybe_enable_opt_data(conf);
-
-  // Load configurations regarding the scope.
-  conf.load(scope);
-
-  sanitizers::lsan_do_recoverable_leak_check();
-
-  eval_passes(stores, conf);
-
-  init_property_interactions(conf);
-
-  // Retrieve the hasher's settings.
-  bool run_hasher_after_each_pass =
-      is_run_hasher_after_each_pass(conf, get_redex_options());
-
-  // Retrieve the assessor's settings.
-  const auto* assessor_config =
-      conf.get_global_config().get_config_by_name<AssessorConfig>("assessor");
-
-  // Retrieve the type checker's settings.
-  CheckerConfig checker_conf{conf, m_checker_disabled};
-  checker_conf.on_input(scope);
-
-  // Pull on method-profiles, so that they get initialized, and are matched
-  // against the *initial* methods
-  conf.get_method_profiles();
-
-  if (run_hasher_after_each_pass) {
-    m_initial_hash = run_hasher(nullptr, scope);
-  }
-
-  CheckUniqueDeobfuscatedNames check_unique_deobfuscated{conf};
-  check_unique_deobfuscated.run_initially(scope);
-
-  VisualizerHelper graph_visualizer(conf);
-  ViolationsTracking violatios_tracking(pm_config->violations_tracking);
-
-  sanitizers::lsan_do_recoverable_leak_check();
-
-  const bool mem_pass_stats =
-      traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
-  const bool hwm_per_pass =
-      conf.get_json_config().get("mem_stats_per_pass", true);
-
-  // Abort if the analysis pass dependencies are not satisfied.
-  AnalysisUsage::check_dependencies(m_activated_passes);
-
-  if (pm_config->check_pass_order_properties) {
-    verify_pass_order(*this, conf);
-  }
-
-  if (pm_config->check_properties_deep && m_properties_manager != nullptr) {
-    TRACE(PM, 2, "Checking initial properties of...");
-    m_properties_manager->check(stores, *this);
-  }
-
-  JNINativeContextHelper jni_native_context_helper(
-      scope, m_redex_options.jni_summary_path);
-
-  JemallocStats jemalloc_stats{this, conf};
-
-  UnorderedMap<const Pass*, size_t> runs;
-
-  PassVerifiers verifiers{*this,
-                          stores,
-                          m_pass_info,
-                          checker_conf,
-                          assessor_config,
-                          check_unique_deobfuscated,
-                          pm_config,
-                          m_properties_manager,
-                          run_hasher_after_each_pass,
-                          [this](const char* pass_name, const Scope& s) {
-                            return run_hasher(pass_name, s);
-                          },
-                          conf};
-
-  PassProfiling pass_profiling{profiler_info, profiler_all_info,
-                               profiler_info_pass, m_malloc_profile_pass,
-                               violatios_tracking};
-
-  /////////////////////
-  // MAIN PASS LOOP. //
-  /////////////////////
-  bool after_interdex = false;
-  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
-    Pass* pass = m_activated_passes[i];
+  // Runs the i-th activated pass, along with the profiling, metrics and
+  // verification that surround it.
+  void run_pass(size_t i, bool& after_interdex) {
+    Pass* pass = mgr.m_activated_passes[i];
     const size_t pass_run = ++runs[pass];
-    AnalysisUsageHelper analysis_usage_helper{m_preserved_analysis_passes};
+    AnalysisUsageHelper analysis_usage_helper{mgr.m_preserved_analysis_passes};
     analysis_usage_helper.pre_pass(pass);
 
     if (!after_interdex && pass->name() == "InterDexPass") {
@@ -1546,7 +1583,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
     ScopedMemStats scoped_mem_stats{mem_pass_stats, hwm_per_pass};
     Timer t(pass->name() + " " + std::to_string(pass_run) + " (run)");
-    m_current_pass_info = &m_pass_info[i];
+    mgr.m_current_pass_info = &mgr.m_pass_info[i];
 
     verifiers.pre_pass(i, scope);
 
@@ -1554,7 +1591,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     std::chrono::duration<double> wall_time;
 
     {
-      auto profiling_scope = pass_profiling.scope(this, pass, stores);
+      auto profiling_scope = pass_profiling.scope(&mgr, pass, stores);
       double cpu_time_start = ((double)std::clock()) / CLOCKS_PER_SEC;
       auto wall_time_start = std::chrono::steady_clock::now();
       // Run build_cfg() in case any newly added methods by previous passes
@@ -1563,19 +1600,19 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       ensure_cfg(stores);
       TRACE(PM, 2, "%s Pass uses cfg.\n", SHOW(pass->name()));
 
-      auto version =
-          pass_dex_version_to_check(pass, m_redex_options.input_dex_version);
+      auto version = pass_dex_version_to_check(
+          pass, mgr.m_redex_options.input_dex_version);
       if (version.has_value()) {
-        check_no_new_dex_features(stores, pass, version.value());
+        mgr.check_no_new_dex_features(stores, pass, version.value());
       }
 
-      pass->run_pass(stores, conf, *this);
+      pass->run_pass(stores, conf, mgr);
       auto wall_time_end = std::chrono::steady_clock::now();
       double cpu_time_end = ((double)std::clock()) / CLOCKS_PER_SEC;
 
       // Collect dex info metrics after InterDexPass.
       if (after_interdex) {
-        set_root_store_metrics(*this, stores, pm_config);
+        set_root_store_metrics(mgr, stores, pm_config);
       }
       simplify_cfgs_after_pass(stores, pass);
 
@@ -1587,51 +1624,94 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       wall_time = wall_time_end - wall_time_start;
     }
 
-    scoped_mem_stats.trace_log(this, pass);
+    scoped_mem_stats.trace_log(&mgr, pass);
 
     jemalloc_stats.process_jemalloc_stats_for_pass(pass, pass_run);
 
-    set_metric("~redex_context.leaked_methods", g_redex->leaked_methods());
+    mgr.set_metric("~redex_context.leaked_methods", g_redex->leaked_methods());
 
     sanitizers::lsan_do_recoverable_leak_check();
 
-    graph_visualizer.add_pass(pass, i);
+    graph_visualizer->add_pass(pass, i);
 
     verifiers.post_pass(pass, i);
 
     analysis_usage_helper.post_pass(pass);
 
-    process_method_profiles(*this, conf);
+    process_method_profiles(mgr, conf);
 
-    set_pass_timing_metrics(*this, cpu_time, wall_time);
+    set_pass_timing_metrics(mgr, cpu_time, wall_time);
 
-    m_current_pass_info = nullptr;
+    mgr.m_current_pass_info = nullptr;
   }
 
-  // Always clear cfg and run the type checker before generating the optimized
-  // dex code.
-  scope = build_class_scope(it);
-  walk::parallel::code(scope,
-                       [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
-  TRACE(PM, 1, "All opt passes are done, clear cfg\n");
-  checker_conf.check_no_overwrite_this(get_redex_options().no_overwrite_this())
-      .validate_access(true)
-      .run_verifier(scope);
+ private:
+  static const PassManagerConfig* get_pass_manager_config(
+      const ConfigFiles& conf) {
+    const auto* pm_config =
+        conf.get_global_config().get_config_by_name<PassManagerConfig>(
+            "pass_manager");
+    redex_assert(pm_config != nullptr);
+    return pm_config;
+  }
 
-  jni_native_context_helper.post_passes(scope, conf);
+  // Squashes the dexes before handing out the iterator, so that it and the
+  // scope built from it see the final dex layout.
+  static DexStoreClassesIterator squash_and_iterate(DexStoresVector& stores,
+                                                    ConfigFiles& conf) {
+    if (conf.force_single_dex()) {
+      // Squash the dexes into one, so that the passes all see only one dex and
+      // all the cross-dex reference checking are accurate.
+      squash_into_one_dex(stores);
+    }
+    return DexStoreClassesIterator(stores);
+  }
 
-  check_unique_deobfuscated.run_finally(scope);
-  check_unreleased_reserved_refs();
+  PassManager& mgr;
+  DexStoresVector& stores;
+  ConfigFiles& conf;
 
-  graph_visualizer.finalize();
+  // Compared against std::uncaught_exceptions() in the destructor to tell a
+  // normal scope exit from unwinding.
+  const int uncaught_on_entry;
+  const PassManagerConfig* pm_config;
+  std::optional<ScopedCommandProfiling::ProfilerInfo> profiler_info;
+  const Pass* profiler_info_pass;
+  std::optional<ScopedCommandProfiling::ProfilerInfo> profiler_all_info;
+  DexStoreClassesIterator it;
+  // Rebuilt during teardown, and therefore not const. Inside the loop this is
+  // the *initial* scope; per-pass work rebuilds its own from `stores`.
+  Scope scope;
+  bool run_hasher_after_each_pass;
+  const AssessorConfig* assessor_config;
+  CheckerConfig checker_conf;
+  CheckUniqueDeobfuscatedNames check_unique_deobfuscated;
+  // graph_visualizer and jni_native_context_helper are optional so that the
+  // constructor body can emplace them at the right point in the setup
+  // sequence: both constructors inspect the program -- resolving class names,
+  // walking every method -- and so have to run after eval_passes(), which an
+  // initializer list cannot express.
+  std::optional<VisualizerHelper> graph_visualizer;
+  ViolationsTracking violations_tracking;
+  const bool mem_pass_stats;
+  const bool hwm_per_pass;
+  std::optional<JNINativeContextHelper> jni_native_context_helper;
+  JemallocStats jemalloc_stats;
+  UnorderedMap<const Pass*, size_t> runs;
+  PassVerifiers verifiers;
+  PassProfiling pass_profiling;
+};
 
-  maybe_print_seeds_outgoing(conf, it);
-  maybe_write_hashes_outgoing(conf, scope);
+void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
+  // Setup runs here; teardown runs when `ctx` goes out of scope.
+  RunPassesContext ctx{*this, stores, conf};
 
-  sanitizers::lsan_do_recoverable_leak_check();
-
-  for (auto& [name, seconds] : AccumulatingTimer::get_times()) {
-    Timer::add_timer(std::move(name), seconds);
+  /////////////////////
+  // MAIN PASS LOOP. //
+  /////////////////////
+  bool after_interdex = false;
+  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+    ctx.run_pass(i, after_interdex);
   }
 }
 
