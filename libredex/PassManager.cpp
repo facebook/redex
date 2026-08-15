@@ -1373,28 +1373,6 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
   return hash;
 }
 
-void PassManager::init_property_interactions(ConfigFiles& /*conf*/) {
-  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
-    Pass* pass = m_activated_passes[i];
-    auto* pass_info = &m_pass_info[i];
-    auto m = pass->get_property_interactions();
-    unordered_erase_if(m, [&](auto& p) {
-      auto&& [name, property_interaction] = p;
-
-      if (m_properties_manager != nullptr &&
-          !m_properties_manager->property_is_enabled(name)) {
-        return true;
-      }
-
-      always_assert_log(property_interaction.is_valid(),
-                        "%s has an invalid property interaction for %s",
-                        pass->name().c_str(), redex_properties::get_name(name));
-      return false;
-    });
-    pass_info->property_interactions = std::move(m);
-  }
-}
-
 // Everything whose lifetime spans a single run_passes() call: the constructor
 // performs all pre-loop setup, run_pass() one iteration of the main loop, and
 // the destructor all post-loop teardown.
@@ -1469,7 +1447,7 @@ class PassManager::RunPassesContext {
 
     eval_passes();
 
-    mgr.init_property_interactions(conf);
+    init_property_interactions();
 
     checker_conf.on_input(scope);
 
@@ -1647,6 +1625,31 @@ class PassManager::RunPassesContext {
       mgr.m_current_pass_info = &mgr.m_pass_info[i];
       pass->eval_pass(stores, conf, mgr);
       mgr.m_current_pass_info = nullptr;
+    }
+  }
+
+  // Records each pass's declared property interactions, dropping the ones for
+  // properties that are not enabled.
+  void init_property_interactions() {
+    for (size_t i = 0; i < mgr.m_activated_passes.size(); ++i) {
+      Pass* pass = mgr.m_activated_passes[i];
+      auto* pass_info = &mgr.m_pass_info[i];
+      auto m = pass->get_property_interactions();
+      unordered_erase_if(m, [&](auto& p) {
+        auto&& [name, property_interaction] = p;
+
+        if (mgr.m_properties_manager != nullptr &&
+            !mgr.m_properties_manager->property_is_enabled(name)) {
+          return true;
+        }
+
+        always_assert_log(property_interaction.is_valid(),
+                          "%s has an invalid property interaction for %s",
+                          pass->name().c_str(),
+                          redex_properties::get_name(name));
+        return false;
+      });
+      pass_info->property_interactions = std::move(m);
     }
   }
 
