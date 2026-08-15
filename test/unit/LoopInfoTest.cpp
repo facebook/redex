@@ -9,10 +9,56 @@
 
 #include <sparta/WeakTopologicalOrdering.h>
 
+#include "IRAssembler.h"
+#include "IRCode.h"
 #include "LoopInfo.h"
 #include "RedexTest.h"
 
 class LoopInfoTest : public RedexTest {};
+
+namespace {
+// A method with a single self-loop: the block with `if-eqz` is a loop header
+// with a back-edge to itself and an external predecessor (the entry block).
+std::unique_ptr<IRCode> loop_code() {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (:loop)
+      (if-eqz v0 :loop)
+      (return-void)
+    )
+  )");
+  code->build_cfg();
+  return code;
+}
+} // namespace
+
+// Passing a non-const cfg now binds the analysis-only constructor (the mutating
+// path moved to make_with_preheaders), so no preheader block is inserted. This
+// is the behavior the existing callers rely on.
+TEST_F(LoopInfoTest, nonConstCfgBindsReadOnlyConstructor) {
+  auto code = loop_code();
+  auto& cfg = code->cfg();
+  size_t blocks_before = cfg.num_blocks();
+
+  loop_impl::LoopInfo info(cfg);
+
+  EXPECT_EQ(info.num_loops(), 1);
+  EXPECT_EQ(cfg.num_blocks(), blocks_before);
+}
+
+// make_with_preheaders inserts a dedicated preheader block before the loop
+// header.
+TEST_F(LoopInfoTest, withPreheadersInsertsPreheader) {
+  auto code = loop_code();
+  auto& cfg = code->cfg();
+  size_t blocks_before = cfg.num_blocks();
+
+  auto info = loop_impl::LoopInfo::make_with_preheaders(cfg);
+
+  EXPECT_EQ(info.num_loops(), 1);
+  EXPECT_EQ(cfg.num_blocks(), blocks_before + 1);
+}
 
 class SimpleGraph final {
  public:

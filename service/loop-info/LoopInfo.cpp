@@ -112,7 +112,7 @@ LoopInfo::LoopInfo(const cfg::ControlFlowGraph& cfg) {
   init(cfg, [](auto&, auto&, auto&) { return nullptr; });
 }
 
-LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
+LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg, PreheaderTag) {
   init(cfg, [&](auto& cfg, const auto& block_set, auto loop_header) {
     auto loop_header_preds = loop_header->preds();
     auto loop_preheader = cfg.create_block();
@@ -130,8 +130,12 @@ LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
   });
 }
 
-template <typename T, typename Fn>
-void LoopInfo::init(T& cfg, Fn preheader_fn) {
+LoopInfo LoopInfo::make_with_preheaders(cfg::ControlFlowGraph& cfg) {
+  return LoopInfo(cfg, PreheaderTag{});
+}
+
+template <typename Cfg, typename Fn>
+void LoopInfo::init(Cfg& cfg, Fn preheader_fn) {
   sparta::WeakTopologicalOrdering<cfg::Block*> wto(
       cfg.entry_block(),
       [](const cfg::Block* block) -> std::vector<cfg::Block*> {

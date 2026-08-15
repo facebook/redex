@@ -129,7 +129,10 @@ class LoopInfo {
   using iterator = std::deque<Loop>::iterator;
   using reverse_iterator = std::deque<Loop>::reverse_iterator;
   explicit LoopInfo(const cfg::ControlFlowGraph& cfg);
-  explicit LoopInfo(cfg::ControlFlowGraph& cfg);
+  // Analyzes loops AND mutates `cfg`: inserts a dedicated preheader block
+  // before every loop header, redirecting external predecessor edges through
+  // it. For analysis only, use the const-ref constructor above.
+  static LoopInfo make_with_preheaders(cfg::ControlFlowGraph& cfg);
   Loop* get_loop_for(cfg::Block* block);
   size_t num_loops();
   iterator begin();
@@ -138,6 +141,11 @@ class LoopInfo {
   reverse_iterator rend();
 
  private:
+  // Tag for the private preheader-inserting constructor; use
+  // make_with_preheaders().
+  struct PreheaderTag {};
+  LoopInfo(cfg::ControlFlowGraph& cfg, PreheaderTag);
+
   template <typename Cfg, typename Fn>
   void init(Cfg& cfg, Fn fn);
 
