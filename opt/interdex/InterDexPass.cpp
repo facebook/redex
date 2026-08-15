@@ -388,13 +388,21 @@ void InterDexPass::run_pass(DexStoresVector& stores,
 
   ClassReferencesCache cache(original_scope);
 
-  std::vector<DexStore*> parallel_stores;
+  // `run_pass` on the root store reaches `treat_generated_stores`, which
+  // erases from `stores`; walking the vector across that erase would leave the
+  // loop running against an invalidated end iterator.
   for (auto& store : stores) {
     if (store.is_root_store()) {
       run_pass(original_scope, xstore_refs, init_classes_with_side_effects,
                stores, store.get_dexen(), plugins, conf, mgr, root_refs_info,
                cache);
-    } else if (!store.is_generated()) {
+      break;
+    }
+  }
+
+  std::vector<DexStore*> parallel_stores;
+  for (auto& store : stores) {
+    if (!store.is_root_store() && !store.is_generated()) {
       parallel_stores.push_back(&store);
     }
   }
