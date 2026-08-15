@@ -211,9 +211,6 @@ class PassManager {
   class RunPassesContext;
 
   void init(const ConfigFiles& config);
-  void check_no_new_dex_features(const DexStoresVector& stores,
-                                 const Pass* pass,
-                                 int check_against_version);
 
   void check_unreleased_reserved_refs();
 
@@ -227,9 +224,6 @@ class PassManager {
   PassInfo* m_current_pass_info;
 
   std::unique_ptr<const keep_rules::ProguardConfiguration> m_pg_config;
-  std::optional<bool> m_has_dex37_features;
-  std::optional<bool> m_has_dex38_features;
-  std::optional<bool> m_has_dex39_features;
   const RedexOptions m_redex_options;
   bool m_regalloc_has_run{false};
   bool m_nopper_has_run{false};
