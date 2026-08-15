@@ -523,29 +523,6 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (m_min_sdk < 21 && type::is_array(element_type)) {
-      // The Dalvik verifier had a bug for this case:
-      // It retrieves the "element class" to check if the elements are of the
-      // right type:
-      // https://android.googlesource.com/platform/dalvik/+/android-cts-4.4_r4/vm/analysis/CodeVerify.cpp#3191
-      // But as this comment for aget-object indicates, this is wrong for
-      // multi-dimensional arrays:
-      // https://android.googlesource.com/platform/dalvik/+/android-cts-4.4_r4/vm/analysis/CodeVerify.cpp#4577
-      m_stats.remaining_buggy_arrays++;
-      m_stats.remaining_buggy_array_elements += aput_insns.size();
-      continue;
-    }
-
-    if (m_min_sdk < 19 &&
-        (m_arch == Architecture::UNKNOWN || m_arch == Architecture::X86) &&
-        !type::is_primitive(element_type)) {
-      // Before Kitkat, the Dalvik x86-atom backend had a bug for this case.
-      // https://android.googlesource.com/platform/dalvik/+/ics-mr0/vm/mterp/out/InterpAsm-x86-atom.S#25106
-      m_stats.remaining_buggy_arrays++;
-      m_stats.remaining_buggy_array_elements += aput_insns.size();
-      continue;
-    }
-
     if (type::is_primitive(element_type) && element_type != type::_int()) {
       // Somewhat surprising random implementation limitation in all known
       // ART versions:

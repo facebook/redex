@@ -1895,7 +1895,6 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
                     // stack trace in a way that is sensitive to inlining.
                     bool relaxed =
                         m_config.relaxed_init_inline &&
-                        m_shrinker.min_sdk() >= 21 &&
                         !klass::maybe_anonymous_class(
                             type_class(init_method->get_class())) &&
                         !is_finalizable(init_method->get_class()) &&

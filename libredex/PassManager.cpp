@@ -86,10 +86,8 @@ std::string get_apk_dir(const ConfigFiles& config) {
 
 class CheckerConfig {
  public:
-  explicit CheckerConfig(const ConfigFiles& conf,
-                         bool relaxed_init_check,
-                         bool disabled = false)
-      : m_relaxed_init_check(relaxed_init_check), m_disabled(disabled) {
+  explicit CheckerConfig(const ConfigFiles& conf, bool disabled = false)
+      : m_disabled(disabled) {
     const auto& global_config = conf.get_global_config();
     always_assert(global_config.has_config_by_name("ir_type_checker"));
     m_config = *global_config.get_config_by_name<IRTypeCheckerConfig>(
@@ -210,9 +208,7 @@ class CheckerConfig {
       if (m_config.check_no_overwrite_this) {
         checker.check_no_overwrite_this();
       }
-      if (m_relaxed_init_check) {
-        checker.relaxed_init_check();
-      }
+      checker.relaxed_init_check();
       return fn(std::move(checker));
     };
     auto run_checker = [&](DexMethod* dex_method) {
@@ -282,7 +278,6 @@ class CheckerConfig {
  private:
   // TODO(fengliu): Kill the `validate_access` flag.
   bool m_validate_access{true};
-  bool m_relaxed_init_check;
   bool m_disabled;
   IRTypeCheckerConfig m_config;
 };
@@ -1473,8 +1468,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       conf.get_global_config().get_config_by_name<AssessorConfig>("assessor");
 
   // Retrieve the type checker's settings.
-  bool relaxed_init_check = m_redex_options.min_sdk >= 21;
-  CheckerConfig checker_conf{conf, relaxed_init_check, m_checker_disabled};
+  CheckerConfig checker_conf{conf, m_checker_disabled};
   checker_conf.on_input(scope);
 
   // Pull on method-profiles, so that they get initialized, and are matched

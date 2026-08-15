@@ -54,7 +54,7 @@ class IODIMetadata {
   explicit IODIMetadata(uint32_t min_sdk,
                         IODILayerMode layer_mode = IODILayerMode::kFull)
       : min_sdk{min_sdk} {
-    this->layer_mode = min_sdk <= 19 ? IODILayerMode::kFull : layer_mode;
+    this->layer_mode = layer_mode;
   }
 
   // This fills the internal map of stack trace name -> method. This must be
