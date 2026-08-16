@@ -98,6 +98,7 @@ constexpr const char* IODI_METADATA = "iodi-metadata";
 constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
 constexpr const char* CLASS_METHOD_INFO_MAP = "redex-class-method-info-map.txt";
 constexpr const char* STRING_LOCALE_DUMP = "redex-string-locales.txt";
+constexpr const char* CLASS_TO_FILES_MAP = "redex-class-to-files-map.txt";
 
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
@@ -1398,6 +1399,31 @@ ProguardConfig load_early_pg_config(ConfigFiles& conf) {
   return pg_conf;
 }
 
+// Emits `<deobfuscated class name>,<source file>` for every class that carries
+// a source file. Must run in the frontend: StripDebugInfoPass clears the source
+// file of every class (drop_src_files defaults to true) and
+// ShortenSrcStringsPass replaces it with an unrelated recycled string, so the
+// mapping is only recoverable at load time.
+void dump_class_to_files_map(const std::string& file_path,
+                             const DexStoresVector& stores) {
+  std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);
+  for (const auto& store : stores) {
+    for (const auto& classes : store.get_dexen()) {
+      for (const auto* cls : classes) {
+        const auto* source_file = cls->get_source_file();
+        if (source_file == nullptr) {
+          continue;
+        }
+        auto name = cls->get_deobfuscated_name_or_empty();
+        if (name.empty()) {
+          name = cls->get_name()->str();
+        }
+        ofs << name << "," << source_file->str() << '\n';
+      }
+    }
+  }
+}
+
 /**
  * Pre processing steps: load dex and configurations
  */
@@ -1508,6 +1534,9 @@ void redex_frontend(ConfigFiles& conf, /* input */
     for (auto& store : stores) {
       apply_deobfuscated_names(store.get_dexen(), conf.get_proguard_map());
     }
+  });
+  Timer::scope("Writing class to files map", [&] {
+    dump_class_to_files_map(conf.metafile(CLASS_TO_FILES_MAP), stores);
   });
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);

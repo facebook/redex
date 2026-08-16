@@ -1476,6 +1476,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             CompressionLevel.DEFAULT,  # May be large.
         ),
         CompressionEntry(
+            "Redex Class to Files Map",
+            lambda args: True,
+            True,
+            [],
+            ["redex-class-to-files-map.txt"],
+            "redex-class-to-files-map.txt.zst",
+            None,
+            CompressionLevel.FAST,  # May be quite large.
+        ),
+        CompressionEntry(
             "Redex Stats",
             lambda args: True,
             False,
