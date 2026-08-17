@@ -1416,8 +1416,12 @@ class RootMethodReducer {
         mutation.remove(it);
       } else if (opcode::is_instance_of(opcode)) {
         auto move_result_it = cfg.move_result_of(it);
+        // The allocated object's runtime type is exactly the new-instance
+        // type, so the test reduces to whether that type is assignable to the
+        // tested type. This must consider implemented interfaces, not just the
+        // superclass chain.
         auto* new_insn =
-            (type::is_subclass(insn->get_type(), new_instance_insn->get_type())
+            (type::check_cast(new_instance_insn->get_type(), insn->get_type())
                  ? (new IRInstruction(OPCODE_MOVE))
                        ->set_src(0, get_created_reg(insn->src(0)))
                  : (new IRInstruction(OPCODE_CONST))->set_literal(0))

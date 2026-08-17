@@ -695,3 +695,18 @@ TEST_F(ObjectEscapeAnalysisTest, nothingToReduce) {
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
+
+TEST_F(ObjectEscapeAnalysisTest, reduceInstanceOfInterface) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceInstanceOfInterface:()Z");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (const v1 1)
+      (return v1)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}

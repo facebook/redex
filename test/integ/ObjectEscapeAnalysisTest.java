@@ -521,4 +521,25 @@ public class ObjectEscapeAnalysisTest {
   public static void nothingToReduce() {
     Q.allocator();
   }
+
+  interface R {}
+
+  static class S implements R {
+    int x;
+
+    public S(int x) {
+      this.x = x;
+    }
+
+    public static S allocator(int x) {
+      return new S(x);
+    }
+  }
+
+  // The allocated type implements the tested interface, so the instance-of
+  // must fold to true, not false.
+  public static boolean reduceInstanceOfInterface() {
+    Object s = S.allocator(42);
+    return s instanceof R;
+  }
 }
