@@ -130,6 +130,22 @@ ConcurrentMap<const DexType*, InlineAnchorsOfType> compute_inline_anchors(
   return inline_anchors;
 }
 
+// Whether a `check-cast` to `cast_type`, applied to a tracked object of
+// `anchor_type`, is guaranteed to succeed.
+//
+// `get_augmented_du_chains` below needs this answer in two places, and they
+// MUST agree. One tracks a cast that can succeed as another def of the object;
+// the other treats a cast that cannot succeed as unconditionally throwing and
+// gives up on the whole reduced variant. Should they ever disagree, a cast can
+// be kept by one and untracked by the other: `stackify` rewrites the cast to
+// write a register it created, while the uses of the original destination were
+// never followed, so that destination is left read but never written. Ask the
+// question here, once, so the two cannot drift apart.
+bool check_cast_always_succeeds(const DexType* anchor_type,
+                                const DexType* cast_type) {
+  return type::is_subclass(cast_type, anchor_type);
+}
+
 live_range::DefUseChains get_augmented_du_chains(
     const method_override_graph::Graph& method_override_graph,
     DexMethod* method,
@@ -142,7 +158,7 @@ live_range::DefUseChains get_augmented_du_chains(
   auto is_inlinable_check_cast = [&](const auto* insn) {
     if (insn->opcode() == OPCODE_CHECK_CAST) {
       for (const auto* t : inline_anchor_types) {
-        if (type::is_subclass(insn->get_type(), t)) {
+        if (check_cast_always_succeeds(t, insn->get_type())) {
           return true;
         }
       }
@@ -185,7 +201,8 @@ live_range::DefUseChains get_augmented_du_chains(
       for (auto& use : UnorderedIterable(uses)) {
         if (opcode::is_check_cast(use.insn->opcode())) {
           if (throwing_check_cast &&
-              !type::is_subclass(use.insn->get_type(), inline_anchor_type)) {
+              !check_cast_always_succeeds(inline_anchor_type,
+                                          use.insn->get_type())) {
             *throwing_check_cast = true;
           }
           stack.push(use);
