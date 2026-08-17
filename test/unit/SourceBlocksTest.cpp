@@ -31,7 +31,6 @@
 #include "RedexContext.h"
 #include "RedexTest.h"
 #include "Show.h"
-#include "SourceBlocksViolations.h"
 
 using namespace cfg;
 using namespace source_blocks;
