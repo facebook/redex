@@ -291,12 +291,6 @@ class InlinedEstimator {
   }
 
  public:
-  // Sentinel for the case where we encounter an unconditionally throwing cast.
-  // In this case, we'll abort and not consider this for inlining, as we don't
-  // want to bother modeling this rare case.
-  static constexpr const int64_t THROWING_CHECK_CAST =
-      std::numeric_limits<int64_t>::max();
-
   InlinedEstimator(const ObjectEscapeConfig& config,
                    const method_override_graph::Graph& method_override_graph,
                    const DexType* inline_anchor_type,
@@ -347,9 +341,6 @@ class InlinedEstimator {
                 m_method_summaries.at(callee).allocation_insn();
             always_assert(callee_allocation_insn);
             auto callee_delta = get_delta(callee, callee_allocation_insn);
-            if (callee_delta == THROWING_CHECK_CAST) {
-              return THROWING_CHECK_CAST;
-            }
             delta += 10 * (int64_t)m_inlined_code_sizes[callee] + callee_delta -
                      config.cost_invoke - config.cost_move_result;
           } else if (allocation_insn->opcode() == OPCODE_NEW_INSTANCE) {
@@ -376,9 +367,6 @@ class InlinedEstimator {
               always_assert(
                   opcode::is_load_param_object(load_param_insn->opcode()));
               auto callee_delta = get_delta(callee, load_param_insn);
-              if (callee_delta == THROWING_CHECK_CAST) {
-                return THROWING_CHECK_CAST;
-              }
               delta +=
                   10 * (int64_t)m_inlined_code_sizes[callee] + callee_delta;
               if (!callee->get_proto()->is_void()) {
@@ -479,7 +467,6 @@ UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
   std::atomic<size_t> num_recursive{0};
   std::atomic<size_t> num_no_optimizations{0};
   std::atomic<size_t> num_returning{0};
-  std::atomic<size_t> num_throwing_check_casts{0};
 
   InsertOnlyConcurrentSet<DexMethod*> concurrent_inlinable_methods_kept;
   auto concurrent_add_root_methods = [&](const DexType* type, bool complete) {
@@ -527,18 +514,7 @@ UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
         int64_t delta = 0;
         const auto& allocation_insns = inline_anchors_of_type.at(method);
         for (auto allocation_insn : UnorderedIterable(allocation_insns)) {
-          auto method_delta =
-              inlined_estimator.get_delta(method, allocation_insn);
-          if (method_delta == InlinedEstimator::THROWING_CHECK_CAST) {
-            delta = InlinedEstimator::THROWING_CHECK_CAST;
-            break;
-          }
-          delta += method_delta;
-        }
-        if (delta == InlinedEstimator::THROWING_CHECK_CAST) {
-          num_throwing_check_casts++;
-          keep(inlinable_methods);
-          return true;
+          delta += inlined_estimator.get_delta(method, allocation_insn);
         }
         if (delta > config.incomplete_estimated_delta_threshold) {
           // Skipping, as it's highly unlikely to result in an overall size
@@ -647,8 +623,6 @@ UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
   mgr.incr_metric("root_methods_returning", (size_t)num_returning);
   mgr.incr_metric("root_methods_no_optimizations",
                   (size_t)num_no_optimizations);
-  mgr.incr_metric("root_methods_throwing_check_casts",
-                  (size_t)num_throwing_check_casts);
   return root_methods;
 }
 
