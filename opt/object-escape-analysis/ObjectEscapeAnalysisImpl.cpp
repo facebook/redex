@@ -223,16 +223,17 @@ void analyze_scope(
 
 // A benign method invocation can be ignored during the escape analysis.
 bool is_benign(const DexMethodRef* method_ref) {
-  static const UnorderedSet<std::string> methods = {
+  static const UnorderedSet<std::string_view> methods = {
       // clang-format off
       "Ljava/lang/Object;.<init>:()V",
       // clang-format on
   };
 
+  // Deliberately the non-copying accessor: this runs for every invoke on every
+  // fixpoint iteration, and _copy allocates a std::string each time.
   return method_ref->is_def() &&
          (methods.count(
-              method_ref->as_def()->get_deobfuscated_name_or_empty_copy()) !=
-          0u);
+              method_ref->as_def()->get_deobfuscated_name_or_empty()) != 0u);
 }
 
 const MethodSummary* get_or_create_method_summary(

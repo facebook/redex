@@ -295,7 +295,11 @@ DexMethodRef* ExpandableMethodParams::get_expanded_method_ref(
   }
   auto* type = method->get_class();
   auto deob = show_deobfuscated(type, name, proto);
-  if (m_deobfuscated_method_names.count(DexString::make_string(deob)) != 0u) {
+  // Probe with get_string, not make_string: this is a pure predicate, and
+  // interning here would permanently add a never-used name to the global
+  // string pool on every call. A name that is not interned cannot be in the
+  // set, whose insert site skips null.
+  if (m_deobfuscated_method_names.count(DexString::get_string(deob)) != 0u) {
     // Some other method ref already has the synthetic deobfuscated name that
     // we'd later want to give to the new generated method.
     return nullptr;
