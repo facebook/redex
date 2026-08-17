@@ -6,7 +6,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <set>
 #include <string>
 
 #include "AtomicFieldUpdaterLoweringPass.h"
@@ -16,7 +15,6 @@
 #include "DexClass.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "IROpcode.h"
 #include "IRTemplate.h"
 #include "PassManager.h"
 #include "RedexTest.h"
