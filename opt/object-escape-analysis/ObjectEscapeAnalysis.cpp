@@ -607,8 +607,11 @@ UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
                             concurrent_inlinable_methods_kept);
   TRACE(OEA,
         1,
-        "[object escape analysis] candidate types: %zu",
-        candidate_types.size());
+        "[object escape analysis] candidate types: %zu complete-single-root, "
+        "%zu complete-multiple-roots, %zu incomplete",
+        candidate_types[(size_t)InlinableTypeKind::CompleteSingleRoot],
+        candidate_types[(size_t)InlinableTypeKind::CompleteMultipleRoots],
+        candidate_types[(size_t)InlinableTypeKind::Incomplete]);
   mgr.incr_metric(
       "candidate types CompleteSingleRoot",
       candidate_types[(size_t)InlinableTypeKind::CompleteSingleRoot]);
