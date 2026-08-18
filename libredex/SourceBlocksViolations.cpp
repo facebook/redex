@@ -7,12 +7,14 @@
 
 #include "SourceBlocksViolations.h"
 
+#include <array>
 #include <cmath>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <sparta/S_Expression.h>
@@ -55,6 +57,82 @@ namespace {
 // difference, and is shared with the backward conservation check so the two
 // magnitude checks in this file agree on what counts as noise.
 constexpr float kCountMagnitudeRelEps = 1e-3f;
+
+// The single source of truth for violation kind names, in both directions.
+// One entry per kind, in enum order -- see the static_assert below. Lookups
+// are linear over these few entries.
+constexpr std::array<std::pair<ViolationsHelper::Violation, std::string_view>,
+                     static_cast<size_t>(
+                         ViolationsHelper::Violation::ViolationSize)>
+    kViolationNames{{
+        {ViolationsHelper::Violation::kHotImmediateDomNotHot,
+         "HotImmediateDomNotHot"},
+        {ViolationsHelper::Violation::kChainAndDom, "ChainAndDom"},
+        {ViolationsHelper::Violation::kUncoveredSourceBlocks,
+         "UncoveredSourceBlocks"},
+        {ViolationsHelper::Violation::kHotMethodColdEntry,
+         "HotMethodColdEntry"},
+        {ViolationsHelper::Violation::kHotNoHotPred, "HotNoHotPred"},
+        {ViolationsHelper::Violation::KHotAllChildrenCold,
+         "HotAllChildrenCold"},
+        {ViolationsHelper::Violation::kUncoveredThrowDelineatedBlocks,
+         "UncoveredThrowDelineatedBlocks"},
+    }};
+
+// The array is sized off the enum but written out by hand, so adding a kind
+// without adding its name still compiles: the extra slot value-initializes to
+// {Violation(0), ""}, which would make an empty config string parse as a valid
+// kind and leave the new kind nameless. Check it at compile time instead.
+constexpr bool violation_names_are_complete() {
+  for (size_t i = 0; i != kViolationNames.size(); ++i) {
+    if (kViolationNames[i].first !=
+        static_cast<ViolationsHelper::Violation>(i)) {
+      return false;
+    }
+    if (kViolationNames[i].second.empty()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(violation_names_are_complete(),
+              "kViolationNames needs one entry per Violation, in enum order. "
+              "Adding a kind means adding its name here too.");
+
+} // namespace
+
+std::string_view get_violation_name(ViolationsHelper::Violation v) {
+  for (const auto& [kind, name] : kViolationNames) {
+    if (kind == v) {
+      return name;
+    }
+  }
+  not_reached_log("Unknown violation kind %d", static_cast<int>(v));
+}
+
+std::optional<ViolationsHelper::Violation> violation_name_to_enum(
+    std::string_view name) {
+  for (const auto& [kind, kind_name] : kViolationNames) {
+    if (kind_name == name) {
+      return kind;
+    }
+  }
+  return std::nullopt;
+}
+
+std::string get_violation_names() {
+  std::string res;
+  for (const auto& [_, name] : kViolationNames) {
+    if (!res.empty()) {
+      res.append(", ");
+    }
+    res.append(name);
+  }
+  return res;
+}
+
+namespace {
 
 bool is_less_than_for_any_value(
     const SourceBlock* lhs,
@@ -1187,6 +1265,12 @@ struct ViolationsHelper::ViolationsHelperImpl {
             }
             change_sum.fetch_add(val - p.second);
 
+            if (top_n == 0) {
+              // No ranking asked for; the totals above are the whole report.
+              // Bailing here also keeps the comparison below off an empty list.
+              return;
+            }
+
             auto m_delta = val - p.second;
             size_t s = m->get_code()->sum_opcode_sizes();
             std::unique_lock<std::mutex> ulock{lock};
@@ -1430,36 +1514,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
       }
       special.end_block(ss, b);
     }
-  }
-
-  static std::string_view get_violation_name(Violation v) {
-    switch (v) {
-    case Violation::kChainAndDom: {
-      return "ChainAndDom";
-    }
-    case Violation::kHotImmediateDomNotHot: {
-      return "HotImmediateDomNotHot";
-    }
-    case Violation::KHotAllChildrenCold: {
-      return "HotAllChildrenCold";
-    }
-    case Violation::kHotMethodColdEntry: {
-      return "HotMethodColdEntry";
-    }
-    case Violation::kUncoveredSourceBlocks: {
-      return "UncoveredSourceBlocks";
-    }
-    case Violation::kHotNoHotPred: {
-      return "HotNoHotPred";
-    }
-    case Violation::kUncoveredThrowDelineatedBlocks: {
-      return "UncoveredThrowDelineatedBlocks";
-    }
-    case Violation::ViolationSize: {
-      not_reached();
-    }
-    }
-    not_reached();
   }
 
   static void print_cfg_with_all_violating_blocks(DexMethod* m,

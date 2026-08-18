@@ -217,11 +217,47 @@ void ProguardConfig::bind_config() {
 void PassManagerConfig::bind_config() {
   bind("pass_aliases", pass_aliases, pass_aliases);
   bind("jemalloc_full_stats", jemalloc_full_stats, jemalloc_full_stats);
-  bind("violations_tracking", violations_tracking, violations_tracking);
   bind("check_pass_order_properties", check_pass_order_properties,
        check_pass_order_properties);
   bind("check_properties_deep", check_properties_deep, check_properties_deep);
   bind("dump_mrefs", dump_mrefs, dump_mrefs);
+
+  // This setting moved to its own config. Unbound keys are silently dropped by
+  // Configurable, so without this an old config would keep parsing and quietly
+  // stop tracking anything -- the worst outcome for a diagnostic feature.
+  bool moved_violations_tracking = false;
+  bind("violations_tracking", false, moved_violations_tracking,
+       "Removed: set `violations_tracking.enabled` at the top level instead.");
+  always_assert_log(!moved_violations_tracking,
+                    "pass_manager.violations_tracking has moved. Set "
+                    "violations_tracking.enabled instead:\n"
+                    "  \"violations_tracking\": { \"enabled\": true }");
+}
+
+void ViolationsTrackingConfig::bind_config() {
+  bind("enabled", enabled, enabled,
+       "Track how many source-block violations each pass introduces, and "
+       "report them as `~violation~tracking` metrics of that pass.");
+  bind("violation_kinds", violation_kinds, violation_kinds,
+       "Which kinds of violation to track. Valid names are ChainAndDom, "
+       "HotImmediateDomNotHot, HotAllChildrenCold, HotMethodColdEntry, "
+       "UncoveredSourceBlocks, HotNoHotPred and "
+       "UncoveredThrowDelineatedBlocks. Exactly one kind is supported for "
+       "now.");
+  bind("top_n", top_n, top_n,
+       "How many of the worst-offending methods to report per pass.");
+  bind("methods_to_vis", methods_to_vis, methods_to_vis,
+       "Methods whose violating blocks are printed in full, in addition to "
+       "the aggregate counts.");
+  bind("track_intermethod_violations", track_intermethod_violations,
+       track_intermethod_violations,
+       "Also track inter-method (hot callee with all-cold callers) "
+       "violations. This builds a call graph twice per pass.");
+  bind("print_all_violations", print_all_violations, print_all_violations,
+       "Print every violating block of every method, not just the ones named "
+       "by methods_to_vis.");
+  bind("ignore_undefined", ignore_undefined, ignore_undefined,
+       "Do not count source blocks with undefined values as violations.");
 }
 
 void ResourceConfig::bind_config() {
@@ -378,6 +414,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<MethodSimilarityOrderingConfig>("method_similarity_order"),
       register_as<ProguardConfig>("proguard"),
       register_as<PassManagerConfig>("pass_manager"),
+      register_as<ViolationsTrackingConfig>("violations_tracking"),
       register_as<ResourceConfig>("resources"),
       register_as<DexOutputConfig>("dex_output"),
       register_as<JarLoaderConfig>("jar_loader"),

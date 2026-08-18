@@ -170,10 +170,28 @@ struct PassManagerConfig : public Configurable {
 
   UnorderedMap<std::string, std::string> pass_aliases;
   bool jemalloc_full_stats{false};
-  bool violations_tracking{false};
   bool check_pass_order_properties{false};
   bool check_properties_deep{false};
   bool dump_mrefs{false};
+};
+
+struct ViolationsTrackingConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override { return "ViolationsTrackingConfig"; }
+  std::string get_config_doc() override {
+    return "Controls the source-block violations tracking that runs around "
+           "every pass, reporting how many violations each pass introduces.";
+  }
+
+  bool enabled{false};
+  // Names as spelled by source_blocks::get_violation_name.
+  std::vector<std::string> violation_kinds{"ChainAndDom"};
+  unsigned int top_n{10};
+  std::vector<std::string> methods_to_vis;
+  bool track_intermethod_violations{false};
+  bool print_all_violations{false};
+  bool ignore_undefined{false};
 };
 
 struct ResourceConfig : public Configurable {

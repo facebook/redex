@@ -7,6 +7,10 @@
 
 #pragma once
 
+#include <optional>
+#include <string>
+#include <string_view>
+
 #include "SourceBlocks.h"
 
 namespace method_profiles {
@@ -76,5 +80,18 @@ struct ViolationsHelper {
 size_t compute(ViolationsHelper::Violation v,
                cfg::ControlFlowGraph& cfg,
                bool ignore_undefined = false);
+
+// The canonical name of a violation kind. Used both for trace output and as
+// the spelling accepted in the `violations_tracking.violation_kinds` JSON
+// configuration.
+std::string_view get_violation_name(ViolationsHelper::Violation v);
+
+// Inverse of get_violation_name; std::nullopt for an unrecognized name.
+std::optional<ViolationsHelper::Violation> violation_name_to_enum(
+    std::string_view name);
+
+// Every name get_violation_name can return, comma-separated, for error
+// messages and documentation.
+std::string get_violation_names();
 
 } // namespace source_blocks
