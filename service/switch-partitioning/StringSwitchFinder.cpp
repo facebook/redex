@@ -226,8 +226,19 @@ StringSwitchCfgContext::StringSwitchCfgContext(
     cfg::ControlFlowGraph& cfg,
     std::shared_ptr<cp::intraprocedural::FixpointIterator> fixpoint)
     : m_cfg(cfg), m_fixpoint(std::move(fixpoint)) {
-  MoveAwareChains chains(m_cfg);
-  m_use_def = chains.get_use_def_chains();
+  // Move-AWARE for use-def: the decode wants the value's origin, so that a
+  // branch is attributed to the equals() whose result it tests, and the equals
+  // receiver's reaching defs can be compared against the subject's for identity
+  // (see equal_neq_edges / find_equals_link).
+  MoveAwareChains move_aware_chains(m_cfg);
+  m_use_def = move_aware_chains.get_use_def_chains();
+  // Move-UNAWARE for def-use: finalize_region asks the opposite question --
+  // "does anything defined in the region escape it?" -- and there every write
+  // must count as a definition, moves included. Move-aware chains propagate a
+  // move's source definition instead of recording the move, so a move is never
+  // a key and its escape is invisible; that blind spot shipped a miscompile
+  // (region excised, leaving the register holding a stale String.hashCode()).
+  Chains chains(m_cfg);
   m_def_use = chains.get_def_use_chains();
   for (auto* b : m_cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {

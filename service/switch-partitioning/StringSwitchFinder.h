@@ -125,7 +125,11 @@ class StringSwitchCfgContext {
   fixpoint() const {
     return m_fixpoint;
   }
+  // Move-AWARE: a use maps to the value's originating definition.
   const live_range::UseDefChains& use_def() const { return m_use_def; }
+  // Move-UNAWARE: every write is a definition, moves included. Escape checking
+  // needs this -- move-aware chains never key a move as a definition, so an
+  // escape through one cannot be seen.
   const live_range::DefUseChains& def_use() const { return m_def_use; }
   cfg::Block* block_of(IRInstruction* insn) const;
 

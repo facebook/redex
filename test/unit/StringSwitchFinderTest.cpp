@@ -731,6 +731,154 @@ TEST_F(StringSwitchFinderTest, external_pred_into_region_rejected) {
   code->clear_cfg();
 }
 
+// A machinery block that reuses the (finished) hash register to carry a live
+// value past the dispatch. This MUST be rejected: the block is part of the
+// region, so a transform excises it, deleting the only definition of a value
+// the case bodies still read -- while the hashCode's own move-result survives
+// and leaves the stale hash in that register.
+//
+// This is the shape that shipped as a StringIndexOutOfBoundsException from
+// com.meta.deeplinks.DfaUriMap: `move v0 v5` below is the query parser's
+// "pos = amp + 1", and v0 retained "viewas".hashCode() instead.
+//
+// It is invisible to the escape accounting in finalize_region, which walks
+// move-aware def-use chains: those propagate a move's source definition rather
+// than recording the move as one, so the move is never a key and its escape is
+// never seen. Only a liveness query catches it.
+TEST_F(StringSwitchFinderTest, region_move_carrying_live_value_out_rejected) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (load-param v5)
+
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (const v1 -1)
+      (switch v0 (:hone :htwo))
+
+      (move v0 v5)
+      (goto :ord)
+
+      (:ord)
+      (switch v1 (:body0 :body1))
+      (return v0)
+
+      (:hone 110182)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set0)
+      (goto :ord)
+      (:set0)
+      (const v1 0)
+      (goto :ord)
+
+      (:htwo 115276)
+      (const-string "two")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set1)
+      (goto :ord)
+      (:set1)
+      (const v1 1)
+      (goto :ord)
+
+      (:body0 0)
+      (return v0)
+      (:body1 1)
+      (return v0)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+  EXPECT_TRUE(find_string_switches(cfg, fp).empty());
+  code->clear_cfg();
+}
+
+// The same machinery move, but nothing downstream reads what it defines. The
+// region is then genuinely self-contained and must still be recovered -- the
+// liveness guard above rejects escaping values, not moves as such.
+TEST_F(StringSwitchFinderTest, region_move_with_dead_dest_still_recovered) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (load-param v5)
+
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (const v1 -1)
+      (switch v0 (:hone :htwo))
+
+      (move v0 v5)
+      (goto :ord)
+
+      (:ord)
+      (switch v1 (:body0 :body1))
+      (const-string "RES_default")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hone 110182)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set0)
+      (goto :ord)
+      (:set0)
+      (const v1 0)
+      (goto :ord)
+
+      (:htwo 115276)
+      (const-string "two")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :set1)
+      (goto :ord)
+      (:set1)
+      (const v1 1)
+      (goto :ord)
+
+      (:body0 0)
+      (const-string "RES_one")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+      (:body1 1)
+      (const-string "RES_two")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+
+  auto switches = find_string_switches(cfg, fp);
+  ASSERT_EQ(switches.size(), 1u);
+  const auto& info = switches[0];
+  EXPECT_EQ(info.form, StringSwitchInfo::Form::HASH_SWITCH);
+  EXPECT_EQ(info.key_to_case.size(), 3u);
+
+  std::map<std::string, std::string> string_to_dest;
+  for (const auto& [key, block] : info.key_to_case) {
+    if (std::holds_alternative<StringSwitchInfo::DefaultCase>(key)) {
+      string_to_dest["<default>"] = first_string_literal(block);
+    } else {
+      string_to_dest[std::string(key_string(key)->str())] =
+          first_string_literal(block);
+    }
+  }
+  EXPECT_EQ(string_to_dest["one"], "RES_one");
+  EXPECT_EQ(string_to_dest["two"], "RES_two");
+  EXPECT_EQ(string_to_dest["<default>"], "RES_default");
+
+  code->clear_cfg();
+}
+
 // Form B: the linear equals-chain shape d8 emits for small switches -- a
 // (discarded) hashCode null-guard followed by `if (s.equals(lit))` checks
 // branching directly to bodies. Mirrors AnotherExample.lookup.
