@@ -26,6 +26,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Dominators.h"
+#include "GlobalConfig.h"
 #include "IRList.h"
 #include "IROpcode.h"
 #include "Macros.h"
@@ -2173,6 +2174,86 @@ size_t compute(ViolationsHelper::Violation v,
                bool ignore_undefined) {
   return ViolationsHelper::ViolationsHelperImpl::compute(v, cfg,
                                                          ignore_undefined);
+}
+
+namespace {
+
+// Resolves the configured violation kind name. Aborts on an unknown name
+// rather than silently tracking nothing.
+ViolationsHelper::Violation parse_violation_kind(
+    const ViolationsTrackingConfig& config) {
+  always_assert_log(
+      config.violation_kinds.size() == 1,
+      "violations_tracking.violation_kinds must name exactly one kind, got "
+      "%zu; ViolationsHelper tracks a single kind per instance",
+      config.violation_kinds.size());
+  const auto& name = config.violation_kinds.front();
+  auto kind = violation_name_to_enum(name);
+  always_assert_log(kind.has_value(),
+                    "Unknown violations_tracking.violation_kinds entry \"%s\"; "
+                    "valid names are: %s",
+                    name.c_str(), get_violation_names().c_str());
+  return *kind;
+}
+
+} // namespace
+
+ViolationsTracking::ViolationsTracking(const ViolationsTrackingConfig& config)
+    : m_config(config),
+      // Parsing only when enabled keeps an unset or invalid kind from aborting
+      // a run that never asked for tracking.
+      m_violation(config.enabled ? parse_violation_kind(config)
+                                 : ViolationsHelper::Violation::kChainAndDom) {}
+
+ViolationsTracking::Handler::Handler(const ViolationsTracking& tracking,
+                                     MetricsSink* sink,
+                                     const DexStoresVector& stores)
+    : m_sink(sink),
+      m_vh(std::make_unique<ViolationsHelper>(
+          tracking.m_violation,
+          build_class_scope(stores),
+          tracking.m_config.top_n,
+          tracking.m_config.methods_to_vis,
+          tracking.m_config.track_intermethod_violations,
+          tracking.m_config.print_all_violations,
+          tracking.m_config.ignore_undefined)) {}
+
+// Reporting is what this destructor is for, and process() can throw from deep
+// inside the inter-method walk; same trade-off as ~ViolationsHelperImpl above.
+// NOLINTNEXTLINE(bugprone-exception-escape)
+ViolationsTracking::Handler::~Handler() {
+  if (m_vh == nullptr) {
+    // Moved from; the new owner reports.
+    return;
+  }
+  if (m_sink == nullptr) {
+    m_vh->process(nullptr);
+    return;
+  }
+  auto scope = m_sink->scope("~violation~tracking");
+  m_vh->process(m_sink);
+}
+
+ViolationsTracking::Handler::Handler(Handler&& other) noexcept
+    : m_sink(other.m_sink), m_vh(std::move(other.m_vh)) {}
+
+ViolationsTracking::Handler& ViolationsTracking::Handler::operator=(
+    Handler&& rhs) noexcept {
+  if (m_vh != nullptr) {
+    // Whatever this handler was tracking is being dropped, not reported.
+    m_vh->silence();
+  }
+  m_vh = std::move(rhs.m_vh);
+  m_sink = rhs.m_sink;
+  return *this;
+}
+
+std::optional<ViolationsTracking::Handler> ViolationsTracking::maybe_track(
+    MetricsSink* sink, const DexStoresVector& stores) const {
+  if (!m_config.enabled) {
+    return std::nullopt;
+  }
+  return Handler(*this, sink, stores);
 }
 
 } // namespace source_blocks

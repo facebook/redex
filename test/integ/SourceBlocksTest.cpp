@@ -1423,3 +1423,41 @@ INSTANTIATE_TEST_SUITE_P(
          "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.8:0."
          "9)"}}),
     [](const auto& info) { return info.param.profile; });
+
+// End-to-end check that `violations_tracking.enabled` reaches the per-pass
+// metrics through PassManager: config -> ViolationsTracking -> the per-pass
+// Handler -> ScopedMetrics -> PassManager::set_metric.
+TEST_F(SourceBlocksTest, violations_tracking_emits_per_pass_metrics) {
+  Json::Value tracking = Json::objectValue;
+  tracking["enabled"] = true;
+  Json::Value conf_val = Json::objectValue;
+  conf_val["violations_tracking"] = tracking;
+
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, conf_val, [&](const auto&) {
+    enable_pass(isbp);
+    enable_always_inject(isbp);
+  });
+
+  const auto& pass_info = pass_manager->get_pass_info();
+  ASSERT_EQ(pass_info.size(), 1u);
+  const auto& metrics = pass_info.front().metrics;
+  EXPECT_NE(metrics.find("~violation~tracking.new_violations"), metrics.end());
+  EXPECT_NE(metrics.find("~violation~tracking.new_method_violations"),
+            metrics.end());
+}
+
+// The same run without the flag must not report anything, so that enabling
+// tracking is what adds the metrics rather than the other way around.
+TEST_F(SourceBlocksTest, violations_tracking_is_off_by_default) {
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    enable_always_inject(isbp);
+  });
+
+  const auto& pass_info = pass_manager->get_pass_info();
+  ASSERT_EQ(pass_info.size(), 1u);
+  const auto& metrics = pass_info.front().metrics;
+  EXPECT_EQ(metrics.find("~violation~tracking.new_violations"), metrics.end());
+}
