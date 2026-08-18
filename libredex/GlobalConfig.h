@@ -189,6 +189,9 @@ struct ViolationsTrackingConfig : public Configurable {
   std::vector<std::string> violation_kinds{"ChainAndDom"};
   unsigned int top_n{10};
   std::vector<std::string> methods_to_vis;
+  // "<method>@<id>" descriptors, or a bare "<method>" for every block
+  // attributed to it. Non-empty switches on targeted mode.
+  std::vector<std::string> source_blocks_to_track;
   bool track_intermethod_violations{false};
   bool print_all_violations{false};
   bool ignore_undefined{false};

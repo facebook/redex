@@ -7,10 +7,12 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "SourceBlocks.h"
 
@@ -47,6 +49,35 @@ void track_exact_call_cap_violations(
     const DexStoresVector& stores,
     const method_profiles::MethodProfiles& profiles);
 
+/*
+ * Names one source block, or every source block attributed to one method.
+ *
+ * `method` is matched against `SourceBlock::src`, which is the method a block
+ * was attributed to when it was inserted -- not necessarily the one holding it
+ * now. Inlining moves blocks between methods and duplicates them into several,
+ * so a descriptor identifies a block, not a location, and may resolve to zero,
+ * one or many carrier methods.
+ */
+struct SourceBlockDescriptor {
+  const DexString* method{nullptr};
+  // std::nullopt matches every block attributed to `method`.
+  std::optional<uint32_t> id;
+
+  bool matches(const SourceBlock& sb) const;
+  // Round-trips back to the spelling parse_source_block_descriptor accepts.
+  std::string str() const;
+};
+
+/*
+ * Parses `<method>@<id>`, as printed by SourceBlock::show, or a bare
+ * `<method>`. The method may be double-quoted, matching show's quoted form,
+ * and a trailing value list -- show's `(1:0.5|)` -- is accepted and ignored,
+ * so a descriptor copied out of a trace line works verbatim. std::nullopt for
+ * anything else, including the ambiguous synthetic id.
+ */
+std::optional<SourceBlockDescriptor> parse_source_block_descriptor(
+    std::string_view descriptor);
+
 struct ViolationsHelper {
   struct ViolationsHelperImpl;
   std::unique_ptr<ViolationsHelperImpl> impl;
@@ -65,19 +96,27 @@ struct ViolationsHelper {
     ViolationSize = 7,
   };
 
-  // Tracks every kind in `kinds` in one pass over the scope, sharing the
-  // per-method CFG normalization and dominator computation between them.
-  //
-  // Note that a kind whose counter needs unreachable blocks removed does so
-  // for the whole method, so mixing it with a kind that would otherwise see
-  // them counts the latter on the normalized CFG too.
-  ViolationsHelper(const std::vector<Violation>& kinds,
-                   const Scope& scope,
-                   size_t top_n,
-                   std::vector<std::string> to_vis,
-                   bool track_intermethod_violations,
-                   bool print_all_violations,
-                   bool ignore_undefined);
+  struct Params {
+    // Every kind here is tracked in one pass over the scope, sharing the
+    // per-method CFG normalization and dominator computation.
+    //
+    // Note that a kind whose counter needs unreachable blocks removed does so
+    // for the whole method, so mixing it with a kind that would otherwise see
+    // them counts the latter on the normalized CFG too.
+    std::vector<Violation> kinds{Violation::kChainAndDom};
+    // How many of the worst-regressing methods to report per kind.
+    size_t top_n{10};
+    // Methods whose violations are logged in full.
+    std::vector<std::string> to_vis;
+    // When non-empty, only the methods carrying these source blocks are
+    // tracked, and each of them is reported even with no violations.
+    std::vector<SourceBlockDescriptor> targets;
+    bool track_intermethod_violations{false};
+    bool print_all_violations{false};
+    bool ignore_undefined{false};
+  };
+
+  ViolationsHelper(Params params, const Scope& scope);
   ~ViolationsHelper();
 
   // A null sink reports nothing; the destructor uses that to fall back to
@@ -145,6 +184,7 @@ class ViolationsTracking {
  private:
   const ViolationsTrackingConfig& m_config;
   std::vector<ViolationsHelper::Violation> m_violations;
+  std::vector<SourceBlockDescriptor> m_targets;
 };
 
 } // namespace source_blocks

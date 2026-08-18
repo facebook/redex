@@ -9,6 +9,7 @@
 
 #include <array>
 #include <bitset>
+#include <charconv>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -122,6 +123,65 @@ std::optional<ViolationsHelper::Violation> violation_name_to_enum(
     }
   }
   return std::nullopt;
+}
+
+bool SourceBlockDescriptor::matches(const SourceBlock& sb) const {
+  return sb.src == method && (!id.has_value() || *id == sb.id);
+}
+
+std::string SourceBlockDescriptor::str() const {
+  std::string res = method == nullptr ? "" : method->str_copy();
+  if (id.has_value()) {
+    res.append("@").append(std::to_string(*id));
+  }
+  return res;
+}
+
+std::optional<SourceBlockDescriptor> parse_source_block_descriptor(
+    std::string_view descriptor) {
+  auto at = descriptor.rfind('@');
+  auto method = descriptor.substr(
+      0, at == std::string_view::npos ? descriptor.size() : at);
+  // SourceBlock::show(quoted_src=true) wraps the method in quotes, so a
+  // pasted descriptor may carry them.
+  if (method.size() >= 2 && method.front() == '"' && method.back() == '"') {
+    method = method.substr(1, method.size() - 2);
+  }
+  // A chained block's show() is space-separated ("M@0(..) M@1(..)"), so
+  // rfind lands on the last '@' and the method half swallows the earlier
+  // blocks. No dex method signature contains whitespace, so rejecting it here
+  // turns that from a descriptor that silently matches nothing into an error.
+  if (method.empty() ||
+      method.find_first_of(" \t\n\r") != std::string_view::npos) {
+    return std::nullopt;
+  }
+
+  SourceBlockDescriptor res;
+  res.method = DexString::make_string(method);
+  if (at == std::string_view::npos) {
+    return res;
+  }
+
+  auto id_str = descriptor.substr(at + 1);
+  uint32_t id;
+  auto [end, ec] =
+      std::from_chars(id_str.data(), id_str.data() + id_str.size(), id);
+  if (ec != std::errc()) {
+    return std::nullopt;
+  }
+  // SourceBlock::show appends the values as "(1:0.5|)", so a descriptor
+  // pasted straight out of a trace carries them. Accept and ignore exactly
+  // that, and nothing else, so a typo is still an error.
+  std::string_view rest(end, id_str.data() + id_str.size() - end);
+  if (!rest.empty() && (rest.front() != '(' || rest.back() != ')')) {
+    return std::nullopt;
+  }
+  if (id == SourceBlock::kSyntheticId) {
+    // Every cloned block carries this id, so it cannot single one out.
+    return std::nullopt;
+  }
+  res.id = id;
+  return res;
 }
 
 std::string get_violation_names() {
@@ -1152,6 +1212,14 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
   const ViolationSet kinds;
 
+  // Empty unless targeted mode is on.
+  std::vector<SourceBlockDescriptor> targets;
+  // Parallel to `targets`: the methods each descriptor resolved to when the
+  // baseline was taken. `target_union` is their deduplicated union, which is
+  // exactly the set of methods tracked instead of the whole scope.
+  std::vector<std::vector<DexMethod*>> target_methods;
+  std::vector<DexMethod*> target_union;
+
   struct MethodDelta {
     DexMethod* method;
     size_t violations_delta;
@@ -1191,6 +1259,105 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
   };
 
+  static bool carries(DexMethod* m, const SourceBlockDescriptor& d) {
+    // @lint-ignore NULLSAFECLANG (callers resolved m from get_method)
+    auto* code = m->get_code();
+    if (code == nullptr) {
+      return false;
+    }
+    cfg::ScopedCFG cfg(code);
+    for (auto* b : cfg->blocks()) {
+      for (auto* sb : gather_source_blocks(b)) {
+        // @lint-ignore NULLSAFECLANG (blocks yield non-null)
+        if (d.matches(*sb)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // The methods that carry a block matching `d`. A descriptor naming a whole
+  // method also keeps that method even with no blocks left, so the method
+  // still gets reported; one naming a specific id does not, because "the id
+  // is gone" and "the method is clean" are the two answers a reader most
+  // needs to tell apart.
+  static std::vector<std::vector<DexMethod*>> resolve_targets(
+      const std::vector<SourceBlockDescriptor>& targets, const Scope& scope) {
+    std::vector<std::vector<DexMethod*>> res(targets.size());
+    always_assert(res.size() == targets.size());
+
+    // A block is usually still in its own method, so start there: no walk
+    // needed to find it.
+    for (size_t i = 0; i != targets.size(); ++i) {
+      auto* ref = DexMethod::get_method(targets[i].method->str());
+      if (ref == nullptr || !ref->is_def()) {
+        continue;
+      }
+      auto* m = ref->as_def();
+      // @lint-ignore NULLSAFECLANG (is_def() checked above)
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      if (targets[i].id.has_value() && !carries(m, targets[i])) {
+        continue;
+      }
+      res[i].push_back(m);
+    }
+
+    // Then find the copies inlining moved or duplicated elsewhere. One walk
+    // for all descriptors, and no dominators -- far cheaper than the counting
+    // walk it replaces.
+    std::mutex lock;
+    walk::parallel::methods(scope, [&](DexMethod* m) {
+      auto* code = m->get_code();
+      if (code == nullptr) {
+        return;
+      }
+      // Collect outside the lock; only the O(1) appends are guarded.
+      std::vector<size_t> hits;
+      {
+        cfg::ScopedCFG cfg(code);
+        for (auto* b : cfg->blocks()) {
+          for (auto* sb : gather_source_blocks(b)) {
+            for (size_t i = 0; i != targets.size(); ++i) {
+              // @lint-ignore NULLSAFECLANG (blocks yield non-null)
+              if (targets[i].matches(*sb)) {
+                hits.push_back(i);
+              }
+            }
+          }
+        }
+      }
+      if (hits.empty()) {
+        return;
+      }
+      std::sort(hits.begin(), hits.end());
+      hits.erase(std::unique(hits.begin(), hits.end()), hits.end());
+      std::unique_lock<std::mutex> ulock{lock};
+      for (auto i : hits) {
+        res[i].push_back(m);
+      }
+    });
+
+    for (auto& methods : res) {
+      std::sort(methods.begin(), methods.end(), compare_dexmethods);
+      methods.erase(std::unique(methods.begin(), methods.end()), methods.end());
+    }
+    return res;
+  }
+
+  static std::vector<DexMethod*> flatten(
+      const std::vector<std::vector<DexMethod*>>& per_descriptor) {
+    std::vector<DexMethod*> res;
+    for (const auto& methods : per_descriptor) {
+      res.insert(res.end(), methods.begin(), methods.end());
+    }
+    std::sort(res.begin(), res.end(), compare_dexmethods);
+    res.erase(std::unique(res.begin(), res.end()), res.end());
+    return res;
+  }
+
   static ViolationSet to_set(const std::vector<Violation>& violations) {
     always_assert_log(!violations.empty(),
                       "ViolationsHelper needs at least one violation kind");
@@ -1202,34 +1369,52 @@ struct ViolationsHelper::ViolationsHelperImpl {
     return res;
   }
 
-  ViolationsHelperImpl(const std::vector<Violation>& violations,
-                       const Scope& scope,
-                       size_t top_n,
-                       std::vector<std::string> to_vis,
-                       bool track_intermethod_violations,
-                       bool print_all_violations,
-                       bool ignore_undefined)
-      : top_n(top_n),
-        print(std::move(to_vis)),
+  ViolationsHelperImpl(ViolationsHelper::Params params, const Scope& scope)
+      : top_n(params.top_n),
+        print(std::move(params.to_vis)),
         scope(scope),
-        track_intermethod_violations(track_intermethod_violations),
-        print_all_violations(print_all_violations),
-        ignore_undefined(ignore_undefined),
-        kinds(to_set(violations)) {
-    {
+        track_intermethod_violations(params.track_intermethod_violations),
+        print_all_violations(params.print_all_violations),
+        ignore_undefined(params.ignore_undefined),
+        kinds(to_set(params.kinds)),
+        targets(std::move(params.targets)) {
+    always_assert_log(
+        targets.empty() || !track_intermethod_violations,
+        "violations_tracking cannot combine source_blocks_to_track with "
+        "track_intermethod_violations: the latter builds call graphs over the "
+        "whole scope, which is what targeting is there to avoid");
+
+    if (targets.empty()) {
       std::mutex lock;
-      walk::parallel::methods(
-          scope, [this, &lock, ignore_undefined](DexMethod* m) {
-            if (m->get_code() == nullptr) {
+      walk::parallel::methods(scope, [this, &lock](DexMethod* m) {
+        if (m->get_code() == nullptr) {
+          return;
+        }
+        cfg::ScopedCFG cfg(m->get_code());
+        auto vals = compute_all(kinds, *cfg, ignore_undefined);
+        {
+          std::unique_lock<std::mutex> ulock{lock};
+          violations_start[m] = vals;
+        }
+      });
+    } else {
+      target_methods = resolve_targets(targets, scope);
+      target_union = flatten(target_methods);
+      std::mutex lock;
+      workqueue_run<DexMethod*>(
+          [this, &lock](DexMethod* m) {
+            auto* code = m->get_code();
+            if (code == nullptr) {
               return;
             }
-            cfg::ScopedCFG cfg(m->get_code());
+            cfg::ScopedCFG cfg(code);
             auto vals = compute_all(kinds, *cfg, ignore_undefined);
             {
               std::unique_lock<std::mutex> ulock{lock};
               violations_start[m] = vals;
             }
-          });
+          },
+          target_union);
     }
 
     if (track_intermethod_violations) {
@@ -1242,6 +1427,48 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
 
     print_all();
+  }
+
+  // Reports one entry per configured descriptor, whether or not it moved or
+  // regressed: a descriptor that has gone quiet is itself the answer someone
+  // debugging is looking for.
+  template <typename MaybeMetrics>
+  void report_targets(MaybeMetrics& mm,
+                      const UnorderedMap<DexMethod*, ViolationCounts>& deltas,
+                      bool name_the_kind) const {
+    if (targets.empty()) {
+      return;
+    }
+    always_assert(target_methods.size() == targets.size());
+    auto mm_targets = mm.sub_scope("targets");
+    for (size_t t = 0; t != targets.size(); ++t) {
+      // Counted where the baseline was taken, so it agrees with the violation
+      // numbers below, which can only come from methods that had one. Watching
+      // it go 1 -> 2 from pass to pass is how inlining shows up.
+      auto carriers = target_methods[t].size();
+      auto descriptor = targets[t].str();
+      TRACE(MMINL, 0, "Target %s was carried by %zu method(s).",
+            descriptor.c_str(), carriers);
+      auto mm_target = mm_targets.sub_scope(std::move(descriptor));
+      mm_target.set_metric("methods", static_cast<int64_t>(carriers));
+      for_each_kind(kinds, [&](Violation v) {
+        auto i = static_cast<size_t>(v);
+        int64_t sum = 0;
+        for (auto* m : target_methods[t]) {
+          auto it = deltas.find(m);
+          if (it != deltas.end()) {
+            sum += static_cast<int64_t>(it->second[i]);
+          }
+        }
+        if (name_the_kind) {
+          auto mm_kind =
+              mm_target.sub_scope(std::string(get_violation_name(v)));
+          mm_kind.set_metric("new_violations", sum);
+        } else {
+          mm_target.set_metric("new_violations", sum);
+        }
+      });
+    }
   }
 
   // Whether a kind's counter needs unreachable blocks removed first. Some
@@ -1378,6 +1605,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
     std::array<std::atomic<size_t>, kViolationCount> change_sums{};
     long long method_violation_change_sum{0};
+    UnorderedMap<DexMethod*, ViolationCounts> target_deltas;
 
     {
       std::mutex lock;
@@ -1399,11 +1627,13 @@ struct ViolationsHelper::ViolationsHelperImpl {
             // Only methods that regressed pay for their size, and only once
             // however many kinds they regressed in.
             std::optional<size_t> method_size;
+            ViolationCounts deltas{};
             for (size_t i = 0; i != kViolationCount; ++i) {
               if (!kinds.test(i) || vals[i] <= p.second[i]) {
                 continue;
               }
               auto m_delta = vals[i] - p.second[i];
+              deltas[i] = m_delta;
               change_sums[i].fetch_add(m_delta);
 
               if (top_n == 0) {
@@ -1427,6 +1657,13 @@ struct ViolationsHelper::ViolationsHelperImpl {
                 top.back() = m_t;
                 std::sort(top.begin(), top.end());
               }
+            }
+
+            if (!targets.empty()) {
+              // The tracked set is small in targeted mode, so keeping every
+              // method's deltas around to aggregate per descriptor is cheap.
+              std::unique_lock<std::mutex> ulock{lock};
+              target_deltas.emplace(m, deltas);
             }
           },
           violations_start);
@@ -1484,6 +1721,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
         TRACE(MMINL, 0, "Introduced %zu %s violations.", sum,
               std::string(name).c_str());
       });
+
+      report_targets(mm, target_deltas, name_the_kind);
     }
 
     print_all();
@@ -1528,6 +1767,18 @@ struct ViolationsHelper::ViolationsHelperImpl {
   }
 
   void print_all() const {
+    // Every carrier of a tracked descriptor is logged whether or not it has
+    // violations -- the point of naming one is to watch it, including while
+    // it is clean.
+    for (auto* m : target_union) {
+      for_each_kind(kinds, [&](Violation v) {
+        log_cfg_violations(v, m, ignore_undefined);
+      });
+      if (print_all_violations) {
+        print_cfg_with_all_violating_blocks(m, ignore_undefined);
+      }
+    }
+
     for (const auto& m_str : print) {
       auto* m = DexMethod::get_method(m_str);
       if (m != nullptr) {
@@ -1542,6 +1793,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
       }
     }
 
+    if (print.empty()) {
+      // Nothing to hunt for, and the walk below is over the whole scope.
+      return;
+    }
     walk::methods(scope, [this](DexMethod* m) {
       auto* code = m->get_code();
       if (code == nullptr) {
@@ -2218,20 +2473,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
   }
 };
 
-ViolationsHelper::ViolationsHelper(const std::vector<Violation>& kinds,
-                                   const Scope& scope,
-                                   size_t top_n,
-                                   std::vector<std::string> to_vis,
-                                   bool track_intermethod_violations,
-                                   bool print_all_violations,
-                                   bool ignore_undefined)
-    : impl(std::make_unique<ViolationsHelperImpl>(kinds,
-                                                  scope,
-                                                  top_n,
-                                                  std::move(to_vis),
-                                                  track_intermethod_violations,
-                                                  print_all_violations,
-                                                  ignore_undefined)) {}
+ViolationsHelper::ViolationsHelper(Params params, const Scope& scope)
+    : impl(std::make_unique<ViolationsHelperImpl>(std::move(params), scope)) {}
 ViolationsHelper::~ViolationsHelper() {}
 
 void ViolationsHelper::process(MetricsSink* sm) {
@@ -2283,28 +2526,49 @@ std::vector<ViolationsHelper::Violation> parse_violation_kinds(
   return res;
 }
 
+// Resolves the configured descriptors. A malformed one is a config bug and
+// aborts; a well-formed one that matches nothing is not, and is reported as
+// zero at run time.
+std::vector<SourceBlockDescriptor> parse_source_block_descriptors(
+    const ViolationsTrackingConfig& config) {
+  std::vector<SourceBlockDescriptor> res;
+  res.reserve(config.source_blocks_to_track.size());
+  for (const auto& descriptor : config.source_blocks_to_track) {
+    auto parsed = parse_source_block_descriptor(descriptor);
+    always_assert_log(
+        parsed.has_value(),
+        "Cannot parse violations_tracking.source_blocks_to_track entry "
+        "\"%s\"; expected \"<method>@<id>\" as printed by SourceBlock::show, "
+        "or a bare \"<method>\"",
+        descriptor.c_str());
+    res.push_back(*parsed);
+  }
+  return res;
+}
+
 } // namespace
 
 ViolationsTracking::ViolationsTracking(const ViolationsTrackingConfig& config)
     : m_config(config),
       // Parsing only when enabled keeps an unset or invalid kind from aborting
       // a run that never asked for tracking.
-      m_violations(config.enabled
-                       ? parse_violation_kinds(config)
-                       : std::vector<ViolationsHelper::Violation>{}) {}
+      m_violations(config.enabled ? parse_violation_kinds(config)
+                                  : std::vector<ViolationsHelper::Violation>{}),
+      m_targets(config.enabled ? parse_source_block_descriptors(config)
+                               : std::vector<SourceBlockDescriptor>{}) {}
 
 ViolationsTracking::Handler::Handler(const ViolationsTracking& tracking,
                                      MetricsSink* sink,
                                      const DexStoresVector& stores)
     : m_sink(sink),
       m_vh(std::make_unique<ViolationsHelper>(
-          tracking.m_violations,
-          build_class_scope(stores),
-          tracking.m_config.top_n,
-          tracking.m_config.methods_to_vis,
-          tracking.m_config.track_intermethod_violations,
-          tracking.m_config.print_all_violations,
-          tracking.m_config.ignore_undefined)) {}
+          ViolationsHelper::Params{
+              tracking.m_violations, tracking.m_config.top_n,
+              tracking.m_config.methods_to_vis, tracking.m_targets,
+              tracking.m_config.track_intermethod_violations,
+              tracking.m_config.print_all_violations,
+              tracking.m_config.ignore_undefined},
+          build_class_scope(stores))) {}
 
 // Reporting is what this destructor is for, and process() can throw from deep
 // inside the inter-method walk; same trade-off as ~ViolationsHelperImpl above.

@@ -256,6 +256,13 @@ void ViolationsTrackingConfig::bind_config() {
   bind("methods_to_vis", methods_to_vis, methods_to_vis,
        "Methods whose violating blocks are printed in full, in addition to "
        "the aggregate counts.");
+  bind("source_blocks_to_track", source_blocks_to_track, source_blocks_to_track,
+       "Track only the methods that carry these source blocks, instead of the "
+       "whole scope. Each entry is a `<method>@<id>` descriptor as printed by "
+       "SourceBlock::show, or a bare `<method>` to match every block "
+       "attributed to it. Descriptors are re-resolved every pass, so a block "
+       "is followed as inlining moves or duplicates it, and every carrier "
+       "method is reported even when it has no violations.");
   bind("track_intermethod_violations", track_intermethod_violations,
        track_intermethod_violations,
        "Also track inter-method (hot callee with all-cold callers) "

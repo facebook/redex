@@ -260,6 +260,7 @@ TEST_F(ConfigFilesTest, violations_tracking_config_defaults) {
   EXPECT_EQ(config->violation_kinds, std::vector<std::string>{"ChainAndDom"});
   EXPECT_EQ(config->top_n, 10u);
   EXPECT_TRUE(config->methods_to_vis.empty());
+  EXPECT_TRUE(config->source_blocks_to_track.empty());
   EXPECT_FALSE(config->track_intermethod_violations);
   EXPECT_FALSE(config->print_all_violations);
   EXPECT_FALSE(config->ignore_undefined);
@@ -274,6 +275,7 @@ TEST_F(ConfigFilesTest, violations_tracking_config_from_json) {
       "violation_kinds": ["HotImmediateDomNotHot"],
       "top_n": 5,
       "methods_to_vis": ["LFoo;.bar:()V", "LFoo;.baz:()V"],
+      "source_blocks_to_track": ["LFoo;.bar:()V@3"],
       "track_intermethod_violations": true,
       "print_all_violations": true,
       "ignore_undefined": true
@@ -293,6 +295,8 @@ TEST_F(ConfigFilesTest, violations_tracking_config_from_json) {
   EXPECT_EQ(config->top_n, 5u);
   EXPECT_EQ(config->methods_to_vis,
             (std::vector<std::string>{"LFoo;.bar:()V", "LFoo;.baz:()V"}));
+  EXPECT_EQ(config->source_blocks_to_track,
+            std::vector<std::string>{"LFoo;.bar:()V@3"});
   EXPECT_TRUE(config->track_intermethod_violations);
   EXPECT_TRUE(config->print_all_violations);
   EXPECT_TRUE(config->ignore_undefined);
