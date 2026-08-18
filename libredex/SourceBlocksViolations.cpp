@@ -31,6 +31,7 @@
 #include "Macros.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
+#include "MetricsSink.h"
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
@@ -835,7 +836,7 @@ struct SourceBlocksStats {
 
 } // namespace
 
-void track_source_block_coverage(ScopedMetrics& sm,
+void track_source_block_coverage(MetricsSink& sm,
                                  const DexStoresVector& stores) {
   Timer opt_timer("Calculate SourceBlock Coverage");
   auto stats = walk::parallel::methods<SourceBlocksStats>(
@@ -1239,7 +1240,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
   ~ViolationsHelperImpl() { process(nullptr); }
 
   void silence() { processed = true; }
-  void process(ScopedMetrics* sm) {
+  void process(MetricsSink* sm) {
     if (processed) {
       return;
     }
@@ -1287,10 +1288,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
           violations_start);
 
       struct MaybeMetrics {
-        ScopedMetrics* root{nullptr};
-        std::optional<ScopedMetrics::Scope> scope;
-        explicit MaybeMetrics(ScopedMetrics* root) : root(root) {}
-        explicit MaybeMetrics(ScopedMetrics* root, ScopedMetrics::Scope sc)
+        MetricsSink* root{nullptr};
+        std::optional<MetricsSink::Scope> scope;
+        explicit MaybeMetrics(MetricsSink* root) : root(root) {}
+        explicit MaybeMetrics(MetricsSink* root, MetricsSink::Scope sc)
             : root(root), scope(std::move(sc)) {}
         void set_metric(const std::string_view& key, int64_t value) {
           if (root != nullptr) {
@@ -2148,7 +2149,7 @@ ViolationsHelper::ViolationsHelper(Violation v,
                                                   ignore_undefined)) {}
 ViolationsHelper::~ViolationsHelper() {}
 
-void ViolationsHelper::process(ScopedMetrics* sm) {
+void ViolationsHelper::process(MetricsSink* sm) {
   if (impl) {
     impl->process(sm);
   }

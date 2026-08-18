@@ -15,6 +15,8 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -23,6 +25,7 @@
 #include "DexClass.h"
 #include "IRAssembler.h"
 #include "Inliner.h"
+#include "MetricsSink.h"
 #include "RedexContext.h"
 #include "RedexTest.h"
 #include "Show.h"
@@ -1922,5 +1925,117 @@ TEST_F(SourceBlocksTest, violations_helper_tolerates_zero_top_n) {
 
   // The regressed method has nowhere to be ranked. Without the guard this
   // dereferences back() on an empty vector, whose data() is null.
+  vh.process(nullptr);
+}
+namespace {
+
+// A MetricsSink that is not backed by a PassManager, which is the point: after
+// the sink was abstracted, violations reporting no longer needs one.
+class RecordingSink : public MetricsSink {
+ public:
+  std::optional<int64_t> get(const std::string& key) const {
+    for (const auto& [k, v] : metrics) {
+      if (k == key) {
+        return v;
+      }
+    }
+    return std::nullopt;
+  }
+
+  std::vector<std::pair<std::string, int64_t>> metrics;
+
+ protected:
+  void report_metric(const std::string& key, int64_t value) override {
+    metrics.emplace_back(key, value);
+  }
+};
+
+constexpr const char* kBranchWithSourceBlocks = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (if-eqz v0 :true)
+
+      (.src_block "LFoo;.bar:()V" 1 (1.0 1.0))
+      (const v1 1)
+      (goto :end)
+
+      (:true)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 1.0))
+      (const v1 2)
+
+      (:end)
+      (.src_block "LFoo;.bar:()V" 3 (1.0 1.0))
+      (return-void)
+    )
+  )";
+
+} // namespace
+
+TEST_F(SourceBlocksTest, violations_helper_reports_to_metrics_sink) {
+  auto* method = create_method("LFoo");
+  ASSERT_NE(method, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  method->set_code(assembler::ircode_from_string(kBranchWithSourceBlocks));
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto* code = method->get_code();
+  ASSERT_NE(code, nullptr);
+
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  ::Scope scope{type_class(method->get_class())};
+  // Every block carries a source block, so the baseline is zero uncovered
+  // blocks.
+  ViolationsHelper vh(ViolationsHelper::Violation::kUncoveredSourceBlocks,
+                      scope,
+                      /*top_n=*/10,
+                      /*to_vis=*/{},
+                      /*track_intermethod_violations=*/false,
+                      /*print_all_violations=*/false,
+                      /*ignore_undefined=*/false);
+
+  code->build_cfg();
+  strip_source_blocks(code->cfg());
+  auto expected_violations = static_cast<int64_t>(compute(
+      ViolationsHelper::Violation::kUncoveredSourceBlocks, code->cfg()));
+  code->clear_cfg();
+  ASSERT_GT(expected_violations, 0);
+
+  RecordingSink sink;
+  vh.process(&sink);
+
+  EXPECT_EQ(sink.get("new_violations"), expected_violations);
+  EXPECT_EQ(sink.get("new_method_violations"), 0);
+  // The worst offender is reported under a nested scope, which exercises the
+  // sink's key assembly.
+  auto name = show(method);
+  EXPECT_EQ(sink.get("top_changes.0.delta." + name), expected_violations);
+  EXPECT_TRUE(sink.get("top_changes.0.size." + name).has_value());
+}
+
+TEST_F(SourceBlocksTest, violations_helper_reports_nothing_without_a_sink) {
+  auto* method = create_method("LFoo");
+  ASSERT_NE(method, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  method->set_code(assembler::ircode_from_string(kBranchWithSourceBlocks));
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto* code = method->get_code();
+  ASSERT_NE(code, nullptr);
+
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  ::Scope scope{type_class(method->get_class())};
+  ViolationsHelper vh(ViolationsHelper::Violation::kUncoveredSourceBlocks,
+                      scope,
+                      /*top_n=*/10,
+                      /*to_vis=*/{},
+                      /*track_intermethod_violations=*/false,
+                      /*print_all_violations=*/false,
+                      /*ignore_undefined=*/false);
+
+  code->build_cfg();
+  strip_source_blocks(code->cfg());
+  code->clear_cfg();
+
+  // The nullable contract the destructor relies on: no sink, no crash, and the
+  // subsequent destructor must not report a second time either.
   vh.process(nullptr);
 }

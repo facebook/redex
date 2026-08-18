@@ -123,6 +123,7 @@ check_PROGRAMS = \
     method_inline_test \
     method_splitting_test \
     method_util_test \
+    metrics_sink_test \
     monitor_count_test \
     mutf8_compare_test \
     leb_test \
@@ -405,6 +406,8 @@ tail_duplication_test_SOURCES = TailDuplicationTest.cpp
 method_splitting_test_SOURCES = MethodSplittingTest.cpp
 
 method_util_test_SOURCES = MethodUtilTest.cpp
+
+metrics_sink_test_SOURCES = MetricsSinkTest.cpp
 
 monitor_count_test_SOURCES = MonitorCountTest.cpp
 

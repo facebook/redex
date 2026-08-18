@@ -17,6 +17,8 @@ namespace method_profiles {
 class MethodProfiles;
 } // namespace method_profiles
 
+class MetricsSink;
+
 namespace source_blocks {
 
 void fix_chain_violations(ControlFlowGraph* cfg);
@@ -28,7 +30,7 @@ void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg);
 size_t compute_method_violations(const call_graph::Graph& call_graph,
                                  const Scope& scope);
 
-void track_source_block_coverage(ScopedMetrics& sm,
+void track_source_block_coverage(MetricsSink& sm,
                                  const DexStoresVector& stores);
 
 // [count-integrity] Interprocedural exact-call cap assessment. For each covered
@@ -70,7 +72,9 @@ struct ViolationsHelper {
                    bool ignore_undefined);
   ~ViolationsHelper();
 
-  void process(ScopedMetrics* sm);
+  // A null sink reports nothing; the destructor uses that to fall back to
+  // trace-only output.
+  void process(MetricsSink* sm);
   void silence();
 
   ViolationsHelper(ViolationsHelper&& other) noexcept;
