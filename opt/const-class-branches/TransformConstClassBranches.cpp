@@ -319,13 +319,12 @@ Stats apply_transform(const PassState& pass_state,
           (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
               ->set_dest(extra_reg);
       instructions.push_back(move_result_pseudo);
-      auto* append = (new IRInstruction(OPCODE_INVOKE_VIRTUAL))
-                         ->set_srcs_size(2)
-                         ->set_src(0, sb_reg)
-                         ->set_src(1, extra_reg)
-                         ->set_method(DexMethod::get_method(
-                             "Ljava/lang/StringBuilder;.append:(Ljava/lang/"
-                             "String;)Ljava/lang/StringBuilder;"));
+      auto* append =
+          (new IRInstruction(OPCODE_INVOKE_VIRTUAL))
+              ->set_srcs_size(2)
+              ->set_src(0, sb_reg)
+              ->set_src(1, extra_reg)
+              ->set_method(method::java_lang_StringBuilder_append_String());
       instructions.push_back(append);
     }
     auto* to_string =

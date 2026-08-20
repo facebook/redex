@@ -78,6 +78,9 @@
   FOR_EACH(java_lang_String_length, "Ljava/lang/String;.length:()I")          \
   FOR_EACH(java_lang_String_isEmpty, "Ljava/lang/String;.isEmpty:()Z")        \
   FOR_EACH(java_lang_String_charAt, "Ljava/lang/String;.charAt:(I)C")         \
+  FOR_EACH(java_lang_StringBuilder_append_String,                             \
+           "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/" \
+           "StringBuilder;")                                                  \
   FOR_EACH(java_lang_StringBuilder_toString,                                  \
            "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")         \
   FOR_EACH(java_lang_Objects_clone,                                           \

@@ -210,12 +210,10 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
       "Ljava/lang/Integer;.toString:(I)Ljava/lang/String;");
   auto* str_builder_init_method =
       DexMethod::get_method("Ljava/lang/StringBuilder;.<init>:()V");
-  auto* append_method = DexMethod::get_method(
-      "Ljava/lang/StringBuilder;.append:(Ljava/lang/"
-      "String;)Ljava/lang/StringBuilder;");
+  auto* append_method = method::java_lang_StringBuilder_append_String();
   auto* str_builder_to_str_method = method::java_lang_StringBuilder_toString();
 
-  if ((to_str_method == nullptr) || (append_method == nullptr)) {
+  if (to_str_method == nullptr) {
     return nullptr;
   }
   auto str_ind = method_creator.make_local(str_type);

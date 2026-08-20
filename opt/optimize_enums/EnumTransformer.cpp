@@ -139,9 +139,8 @@ struct EnumUtil {
       "StringBuilder;");
   DexMethodRef* STRING_HASHCODE_METHOD =
       DexMethod::make_method("Ljava/lang/String;.hashCode:()I");
-  DexMethodRef* STRINGBUILDER_APPEND_STR_METHOD = DexMethod::make_method(
-      "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
-      "StringBuilder;");
+  DexMethodRef* STRINGBUILDER_APPEND_STR_METHOD =
+      method::java_lang_StringBuilder_append_String();
   DexMethodRef* INTEGER_INTVALUE_METHOD = method::java_lang_Integer_intValue();
   DexMethodRef* INTEGER_EQUALS_METHOD = DexMethod::make_method(
       "Ljava/lang/Integer;.equals:(Ljava/lang/Object;)Z");
