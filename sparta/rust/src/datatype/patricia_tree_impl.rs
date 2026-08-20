@@ -585,20 +585,23 @@ impl<D: AbstractDomain> Node<D> {
                     Self::is_tree_leq_impl(s_left, t_left, implicit_value)
                         && Self::is_tree_leq_impl(s_right, t_right, implicit_value)
                 } else if s_prefix.begins_with(t_prefix) {
-                    // The tree t only contains bindings present in a subtree of s, and s has bindings not present in t.
+                    // The tree s only contains bindings present in a subtree of t, and t has
+                    // bindings not present in s.
                     let branching_bit = s_prefix.get(t_prefix.len());
-                    implicit_value.is_top()
-                        && Self::is_tree_leq_impl(
-                            if !branching_bit { s_left } else { s_right },
-                            t,
-                            implicit_value,
-                        )
-                } else if t_prefix.begins_with(s_prefix) {
-                    let branching_bit = t_prefix.get(s_prefix.len());
                     implicit_value.is_bottom()
                         && Self::is_tree_leq_impl(
                             s,
                             if !branching_bit { t_left } else { t_right },
+                            implicit_value,
+                        )
+                } else if t_prefix.begins_with(s_prefix) {
+                    // The tree t only contains bindings present in a subtree of s, and s has
+                    // bindings not present in t.
+                    let branching_bit = t_prefix.get(s_prefix.len());
+                    implicit_value.is_top()
+                        && Self::is_tree_leq_impl(
+                            if !branching_bit { s_left } else { s_right },
+                            t,
                             implicit_value,
                         )
                 } else {
