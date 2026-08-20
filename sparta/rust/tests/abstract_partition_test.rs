@@ -168,4 +168,28 @@ mod abstract_partition_test {
         assert!(p1.clone().meet(Partition::bottom()).is_bottom());
         assert!(p1.clone().meet(Partition::top()) == p1);
     }
+
+    #[test]
+    fn test_ptmap_leq_uneven_branch_depths() {
+        type Partition = PatriciaTreeMapAbstractPartition<u32, Domain>;
+
+        // `s` maps a strict subset of the keys mapped by `t`. Their Patricia
+        // trees have branch nodes at different depths, so the branch-vs-branch
+        // `leq` path compares a prefix against one of its proper prefixes.
+        let mut s = Partition::bottom();
+        s.set(0, build_domain(["a"]));
+        s.set(2, build_domain(["b"]));
+
+        let mut t = Partition::bottom();
+        t.set(0, build_domain(["a"]));
+        t.set(1, build_domain(["c"]));
+        t.set(2, build_domain(["b"]));
+        t.set(3, build_domain(["d"]));
+
+        // The bindings missing from `s` are implicitly Bottom, which is <= any
+        // value, so s <= t holds even though t has extra bindings.
+        assert!(s.leq(&t));
+        // The extra bindings in `t` are not <= Bottom, so t <= s does not hold.
+        assert!(!t.leq(&s));
+    }
 }

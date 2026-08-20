@@ -150,4 +150,29 @@ mod abstract_environment_test {
         assert!(e1.clone().meet(Environment::bottom()).is_bottom());
         assert!(e1.clone().meet(Environment::top()) == e1);
     }
+
+    #[test]
+    fn test_ptmae_leq_uneven_branch_depths() {
+        type Environment = PatriciaTreeMapAbstractEnvironment<u32, Domain>;
+
+        // `s` maps a strict superset of the keys mapped by `t`. Their Patricia
+        // trees have branch nodes at different depths, so the branch-vs-branch
+        // `leq` path compares a prefix against one of its proper prefixes.
+        let mut s = Environment::top();
+        s.set(0, build_domain(["a"]));
+        s.set(1, build_domain(["c"]));
+        s.set(2, build_domain(["b"]));
+        s.set(3, build_domain(["d"]));
+
+        let mut t = Environment::top();
+        t.set(0, build_domain(["a"]));
+        t.set(2, build_domain(["b"]));
+
+        // The bindings missing from `t` are implicitly Top. `s`'s extra
+        // bindings are <= Top, so s <= t holds.
+        assert!(s.leq(&t));
+        // The bindings missing from `s` are Top, which is not <= the explicit
+        // values in `t`, so t <= s does not hold.
+        assert!(!t.leq(&s));
+    }
 }
