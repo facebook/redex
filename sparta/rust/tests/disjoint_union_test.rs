@@ -120,6 +120,59 @@ fn test_meet_diff_arm() {
     assert!(met_mudom.is_bottom());
 }
 
+fn first_case_inner(dom: MyUnionedDomain) -> HashSetAbstractDomain<i32> {
+    match dom {
+        MyUnionedDomain::FirstCase(inner) => inner,
+        _ => panic!("Expected FirstCase"),
+    }
+}
+
+#[test]
+fn test_join_with_bottom_is_identity() {
+    let value_inner: HashSetAbstractDomain<_> = [1, 2].into_iter().collect();
+    let value = MyUnionedDomain::FirstCase(value_inner.clone());
+
+    // Bottom is the identity element for join, so joining with it in either
+    // order yields the original value rather than top.
+    let bot: MyUnionedDomain = AbstractDomain::bottom();
+    assert_eq!(
+        first_case_inner(value.clone().join(bot.clone())),
+        value_inner
+    );
+    assert_eq!(first_case_inner(bot.join(value.clone())), value_inner);
+
+    // The bottom of a different arm is still bottom and must behave the same.
+    let other_arm_bottom = MyUnionedDomain::SecondCase(AbstractDomain::bottom());
+    assert!(other_arm_bottom.is_bottom());
+    assert_eq!(
+        first_case_inner(other_arm_bottom.join(value.clone())),
+        value_inner
+    );
+}
+
+#[test]
+fn test_meet_with_top_is_identity() {
+    let value_inner: HashSetAbstractDomain<_> = [1, 2].into_iter().collect();
+    let value = MyUnionedDomain::FirstCase(value_inner.clone());
+
+    // Top is the identity element for meet, so meeting with it in either order
+    // yields the original value rather than bottom.
+    let top: MyUnionedDomain = AbstractDomain::top();
+    assert_eq!(
+        first_case_inner(value.clone().meet(top.clone())),
+        value_inner
+    );
+    assert_eq!(first_case_inner(top.meet(value.clone())), value_inner);
+
+    // The top of a different arm is still top and must behave the same.
+    let other_arm_top = MyUnionedDomain::SecondCase(AbstractDomain::top());
+    assert!(other_arm_top.is_top());
+    assert_eq!(
+        first_case_inner(other_arm_top.meet(value.clone())),
+        value_inner
+    );
+}
+
 #[allow(dead_code)]
 #[derive(Clone, DisjointUnion, PartialEq, Eq)]
 enum TestGenericsDeriveTypechecks<S, T>
