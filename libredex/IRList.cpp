@@ -791,19 +791,23 @@ bool IRList::structural_equals(
     auto p = delayed_matches.emplace(mie1, mie2);
     return p.second || p.first->second == mie2;
   };
-  for (; it1 != m_list.end() && it2 != other.end();) {
+  // Skip metadata (debug, position, source block, remark) and no-op
+  // (MFLOW_FALLTHROUGH) entries. These carry neither code nor control flow, so
+  // they are elided when comparing two IRLists for structural equality.
+  auto skip_noops = [&](IRList::iterator& it, const IRList& list) {
+    while (it != list.end() &&
+           (is_metadata(it->type) || it->type == MFLOW_FALLTHROUGH)) {
+      ++it;
+    }
+  };
+  for (;;) {
+    skip_noops(it1, *this);
+    skip_noops(it2, other);
+    if (it1 == this->end() || it2 == other.end()) {
+      break;
+    }
     always_assert(it1->type != MFLOW_DEX_OPCODE);
     always_assert(it2->type != MFLOW_DEX_OPCODE);
-    // Skip metadata (debug, position, source block, remark).
-    if (is_metadata(it1->type)) {
-      ++it1;
-      continue;
-    }
-
-    if (is_metadata(it2->type)) {
-      ++it2;
-      continue;
-    }
 
     if (it1->type != it2->type) {
       return false;
