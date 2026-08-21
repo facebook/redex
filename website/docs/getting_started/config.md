@@ -26,7 +26,6 @@ in [config/default.config](https://github.com/facebook/redex/blob/master/config/
     "MethodInlinePass",
     "StaticReloPassV2",
     "RemoveUnreachablePass",
-    "ShortenSrcStringsPass",
     "RegAllocPass"
   ]
 }
@@ -46,7 +45,7 @@ it?  Let's move on to something more advanced.
 
 Changing the set of optimizations ReDex runs is easy; just add (or remove) the
 pass name from the redex.passes list.  For example, let's say you want to remove
-the ShortenSrcStrings optimization while you're debugging something.  Just use
+the StaticReloPassV2 optimization while you're debugging something.  Just use
 this config:
 
 ```
@@ -73,21 +72,19 @@ that pass.  These are often blocklists (or allowlists) indicating what code the
 optimization should leave alone (for blocklists) or what code should be
 optimized (for allowlists).
 
-A simple example is ShortenSrcStrings.  This pass removes filenames indicating
-what source code produced each class.  It's a waste to ship those source strings
-to production, but it's useful to be able to map the shortened names back to the
-original names (e.g., for solving user bug reports).  You can tell
-ShortenSrcStrings to produce this map by adding a config entry:
+A simple example is ReachableNativesPass.  This pass reports which methods are
+reachable from native code.  You can tell it where to write that report by adding
+a config entry:
 
 ```
 "redex" : {
   "passes" : [
-    ShortenSrcStringsPass,
+    "ReachableNativesPass",
     "RegAllocPass"
   ]
 },
-"ShortenSrcStringsPass" : {
-  "filename_mappings" : "/tmp/filename_mappings.txt"
+"ReachableNativesPass" : {
+  "output_file_name" : "redex-reachable-natives.txt"
 }
 ```
 

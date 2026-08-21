@@ -82,7 +82,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/resource-value-merging-pass \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shrinker \
-	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/split_huge_switches \
 	-I$(top_srcdir)/opt/split_resource_tables \

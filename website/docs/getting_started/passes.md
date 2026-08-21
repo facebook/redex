@@ -538,12 +538,6 @@ b.text(myText)
 See related:
 * [RemoveBuildersPass](#removebuilderspass)
 
-## ShortenSrcStringsPass
-
-Replaces long filename strings with strings used elsewhere in the APK. This
-munges the filename component of stack traces. Logview and bug reports
-automatically reverse this for you.
-
 ## MethodInlinePass
 
 For example, in this code, if `run` is inlined to `main` and the access of `bar`

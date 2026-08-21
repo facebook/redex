@@ -201,7 +201,7 @@ Json::Value default_config() {
   const auto passes = {
       "ReBindRefsPass",   "BridgeSynthInlinePass", "FinalInlinePassV2",
       "DelSuperPass",     "SingleImplPass",        "MethodInlinePass",
-      "StaticReloPassV2", "ShortenSrcStringsPass", "RegAllocPass",
+      "StaticReloPassV2", "RegAllocPass",
   };
   std::istringstream temp_json("{\"redex\":{\"passes\":[]}}");
   Json::Value cfg;
@@ -1435,9 +1435,8 @@ ProguardConfig load_early_pg_config(ConfigFiles& conf) {
 
 // Emits `<deobfuscated class name>,<source file>` for every class that carries
 // a source file. Must run in the frontend: StripDebugInfoPass clears the source
-// file of every class (drop_src_files defaults to true) and
-// ShortenSrcStringsPass replaces it with an unrelated recycled string, so the
-// mapping is only recoverable at load time.
+// file of every class (drop_src_files defaults to true), so the mapping is only
+// recoverable at load time.
 void dump_class_to_files_map(const std::string& file_path,
                              const DexStoresVector& stores) {
   std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);

@@ -521,7 +521,6 @@ libopt_la_SOURCES = \
 	opt/resources-inlining-pass/ResourcesInliningPass.cpp \
 	opt/resource-value-merging-pass/ResourceValueMergingPass.cpp \
 	opt/resource-value-merging-pass/Styles.cpp \
-	opt/shorten-srcstrings/Shorten.cpp \
 	opt/shrinker/ShrinkerPass.cpp \
 	opt/shrinker/TailDuplicationPass.cpp \
 	opt/unreachable/UnreachableLoweringPass.cpp \
