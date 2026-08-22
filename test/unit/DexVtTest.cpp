@@ -301,10 +301,9 @@ TEST_F(DexVtTest, emitInternsCallerSets) {
   auto conf = make_config();
 
   namespace fs = std::filesystem;
-  fs::path dir = fs::path(::testing::TempDir()) / "dexvt_emit_intern";
-  fs::remove_all(dir);
-  fs::create_directories(dir);
-  conf.set_outdir(dir.string());
+  auto tmp = redex::make_tmp_dir("dexvt_emit_intern%%%%%%%%");
+  fs::path dir(tmp.path);
+  conf.set_outdir(tmp.path);
 
   dexvt::Exporter exporter;
   exporter.capture_pre_lowering(stores, conf);
@@ -349,7 +348,6 @@ TEST_F(DexVtTest, emitInternsCallerSets) {
     }
   }
   EXPECT_TRUE(found);
-  fs::remove_all(dir);
 }
 
 // Dex strings are MUTF-8: a supplementary char (here U+1F9D9) is a surrogate
@@ -399,10 +397,9 @@ TEST_F(DexVtTest, emitsBlockOffsets) {
   auto conf = make_config();
 
   namespace fs = std::filesystem;
-  fs::path dir = fs::path(::testing::TempDir()) / "dexvt_block_offsets";
-  fs::remove_all(dir);
-  fs::create_directories(dir);
-  conf.set_outdir(dir.string());
+  auto tmp = redex::make_tmp_dir("dexvt_block_offsets%%%%%%%%");
+  fs::path dir(tmp.path);
+  conf.set_outdir(tmp.path);
 
   dexvt::Exporter exporter;
   exporter.capture_pre_lowering(stores,
