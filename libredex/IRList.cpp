@@ -794,7 +794,7 @@ bool IRList::structural_equals(
   // Skip metadata (debug, position, source block, remark) and no-op
   // (MFLOW_FALLTHROUGH) entries. These carry neither code nor control flow, so
   // they are elided when comparing two IRLists for structural equality.
-  auto skip_noops = [&](IRList::iterator& it, const IRList& list) {
+  auto skip_noops = [&](IRList::const_iterator& it, const IRList& list) {
     while (it != list.end() &&
            (is_metadata(it->type) || it->type == MFLOW_FALLTHROUGH)) {
       ++it;
