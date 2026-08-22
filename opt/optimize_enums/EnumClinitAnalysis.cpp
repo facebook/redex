@@ -9,7 +9,8 @@
 
 #include "ConstantPropagationAnalysis.h"
 #include "Debug.h"
-#include "DexUtil.h"
+#include "DeterministicContainers.h"
+#include "DexAccess.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
