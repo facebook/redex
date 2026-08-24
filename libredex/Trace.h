@@ -172,6 +172,7 @@ class DexType;
   TM(TYPE)             \
   TM(TYPE_TRANSFORM)   \
   TM(UCM)              \
+  TM(ULH)              \
   TM(UNREF_INTF)       \
   TM(UNREACHABLE)      \
   TM(USES_NAMES)       \
