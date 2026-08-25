@@ -2270,6 +2270,23 @@ int64_t strip_and_count_uncovered(DexMethod* m) {
   return count;
 }
 
+// How many carriers `descriptor` resolves to, with nothing happening to the
+// program in between, so the answer is resolution and resolution only.
+std::optional<int64_t> resolved_methods(const DexStoresVector& stores,
+                                        const std::string& descriptor) {
+  ViolationsTrackingConfig config;
+  config.enabled = true;
+  config.violation_kinds = {"UncoveredSourceBlocks"};
+  config.source_blocks_to_track = {descriptor};
+  ViolationsTracking tracking(config);
+
+  RecordingSink sink;
+  {
+    auto handler = tracking.maybe_track(&sink, stores);
+  }
+  return sink.get("~violation~tracking.targets." + descriptor + ".methods");
+}
+
 } // namespace
 
 TEST_F(SourceBlocksTest, targeted_tracking_ignores_untargeted_methods) {
@@ -2401,9 +2418,9 @@ TEST_F(SourceBlocksTest, params_default_kinds_are_usable) {
 }
 
 TEST_F(SourceBlocksTest, targeted_tracking_skips_home_method_missing_the_id) {
-  // The descriptor has to NAME a real method for the direct-lookup step to
-  // find it, which is the step under test -- so attribute the blocks to the
-  // method's own signature and build the descriptor from it.
+  // The blocks are attributed to the method's own signature, so the descriptor
+  // names the method that still holds them -- the case where a reader would
+  // most expect the method to be reported whatever the id says.
   auto* method = create_method("LHomeMethod");
   ASSERT_NE(method, nullptr);
   // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
@@ -2415,25 +2432,38 @@ TEST_F(SourceBlocksTest, targeted_tracking_skips_home_method_missing_the_id) {
   auto stores = make_stores({method});
   ASSERT_NE(DexMethod::get_method(name), nullptr);
 
-  auto track = [&](const std::string& descriptor) {
-    ViolationsTrackingConfig config;
-    config.enabled = true;
-    config.violation_kinds = {"UncoveredSourceBlocks"};
-    config.source_blocks_to_track = {descriptor};
-    ViolationsTracking tracking(config);
-    RecordingSink sink;
-    {
-      auto handler = tracking.maybe_track(&sink, stores);
-    }
-    return sink.get("~violation~tracking.targets." + descriptor + ".methods");
-  };
-
   // The method carries ids 0..3, so naming one of them resolves to it.
-  EXPECT_EQ(track(name + "@0"), 1);
-  // It does not carry 99. Counting the home method anyway would report
-  // "methods: 1, new_violations: 0", which reads as "carried and clean" when
-  // the truth is "that block is not here".
-  EXPECT_EQ(track(name + "@99"), 0);
-  // A descriptor with no id still keeps the method it names.
-  EXPECT_EQ(track(name), 1);
+  EXPECT_EQ(resolved_methods(stores, name + "@0"), 1);
+  // It does not carry 99. Reporting the home method anyway would read
+  // "methods: 1, new_violations: 0" -- "carried and clean" when the truth is
+  // "that block is not here".
+  EXPECT_EQ(resolved_methods(stores, name + "@99"), 0);
+  // A descriptor with no id matches every block attributed to the method, and
+  // the method still carries its own.
+  EXPECT_EQ(resolved_methods(stores, name), 1);
+}
+
+TEST_F(SourceBlocksTest, targeted_tracking_ignores_out_of_scope_methods) {
+  // A method that is still in the global DexMethod table but is not part of
+  // the scope this run optimizes -- what one dropped by an earlier pass, or
+  // belonging to a store this run does not see, looks like.
+  auto* gone = create_method("LGone");
+  ASSERT_NE(gone, nullptr);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  auto gone_name = show(gone);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  gone->set_code(
+      assembler::ircode_from_string(branch_code_attributed_to(gone_name)));
+
+  // Only the other method goes into the stores, so `gone` is out of scope
+  // while remaining perfectly findable by name.
+  auto* in_scope = method_attributed_to("LInScope", "LInScopeSrc;.bar:()V");
+  auto stores = make_stores({in_scope});
+  ASSERT_NE(DexMethod::get_method(gone_name), nullptr);
+
+  // Resolving a descriptor by name would find `gone` and report it as a
+  // carrier of blocks this run cannot touch, inflating the carrier count and
+  // attributing violations to a method no pass is going to change.
+  EXPECT_EQ(resolved_methods(stores, gone_name), 0);
+  EXPECT_EQ(resolved_methods(stores, gone_name + "@0"), 0);
 }
