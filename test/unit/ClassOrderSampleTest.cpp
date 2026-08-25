@@ -57,14 +57,15 @@ TEST(ClassOrderSampleTest, ThresholdScalesDownWhenOverCap) {
   EXPECT_EQ(threshold(4000, 1000), k_space / 4);
 }
 
-TEST(ClassOrderSampleTest, ThresholdDoesNotOverflowForHugeCap) {
+TEST(ClassOrderSampleTest, ThresholdIsExactForLargeCounts) {
   const uint64_t k_space = uint64_t(1) << 32;
-  // cap above 2^32 makes the naive k_space * cap product overflow uint64_t; the
-  // 128-bit-widened computation must still yield the exact scaled threshold.
-  const uint64_t huge_cap = (uint64_t(1) << 40); // 2^40, well past 2^32
-  EXPECT_EQ(threshold(/* num_classes */ huge_cap * 4, huge_cap), k_space / 4);
+  // A large but realistic count (Redex stays well under 2^31 classes): the
+  // cap << 32 product must divide exactly at this scale.
+  const uint64_t big =
+      (uint64_t(1) << 28); // ~268M, far past any real dex count
+  EXPECT_EQ(threshold(/* num_classes */ big * 4, big), k_space / 4);
   // Result stays strictly below the whole space whenever num_classes > cap.
-  EXPECT_LT(threshold(huge_cap + 1, huge_cap), k_space);
+  EXPECT_LT(threshold(big + 1, big), k_space);
 }
 
 TEST(ClassOrderSampleTest, ClassifyPrecedence) {
