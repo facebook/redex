@@ -776,11 +776,17 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_CONST_STRING: {
-    set_reference(current_state, RESULT_REGISTER, type::java_lang_String());
+    // Either we get the interned string or the instruction throws, so the
+    // result is never null. java.lang.String is final, so the type is exact.
+    set_reference(current_state, RESULT_REGISTER, type::java_lang_String(),
+                  /* is_not_null */ true);
     break;
   }
   case OPCODE_CONST_CLASS: {
-    set_reference(current_state, RESULT_REGISTER, type::java_lang_Class());
+    // Same as const-string: either we get the class object or the instruction
+    // throws, and java.lang.Class is final.
+    set_reference(current_state, RESULT_REGISTER, type::java_lang_Class(),
+                  /* is_not_null */ true);
     break;
   }
   case OPCODE_CONST_METHOD_HANDLE: {
