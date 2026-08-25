@@ -766,3 +766,99 @@ TEST_F(StringBuilderOutlinerTest, maxLength) {
   )");
   EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
+
+/*
+ * Ensure Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V is outlined
+ * properly.
+ */
+TEST_F(StringBuilderOutlinerTest, stringArgConstructorBecomesAppendInHelper) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-string "foo")
+      (move-result-pseudo-object v1)
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V")
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v0)
+      (return-object v0)
+    )
+  )");
+
+  run_outliner(code.get());
+
+  auto* helper_ref = DexMethod::get_method(
+      "Lcom/redex/OutlinedStringBuilders;.concat:(Ljava/lang/String;Ljava/"
+      "lang/String;)Ljava/lang/String;");
+  ASSERT_NE(helper_ref, nullptr);
+  ASSERT_TRUE(helper_ref->is_def());
+  auto* helper_code = helper_ref->as_def()->get_code();
+  ASSERT_NE(helper_code, nullptr);
+  if (helper_code->cfg_built()) {
+    helper_code->clear_cfg();
+  }
+
+  auto expected_helper = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+      (load-param-object v2)
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (invoke-virtual (v0 v2) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v0)
+      (return-object v0)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_helper.get(), helper_code);
+}
+
+/*
+ * Ensure it doesn't conflate two interwining StringBuilder-append-toString
+ * chains.
+ */
+TEST_F(StringBuilderOutlinerTest, buildersSharingARegisterDoNotConflate) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "a")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "b")
+      (move-result-pseudo-object v3)
+      (invoke-virtual (v2 v3) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-object v0 v2)
+      (const-string "c")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v0 v4) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v0)
+      (return-object v0)
+    )
+  )");
+
+  run_outliner(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const-string "b")
+      (move-result-pseudo-object v3)
+      (move-object v5 v3)
+      (const-string "c")
+      (move-result-pseudo-object v4)
+      (move-object v6 v4)
+      (invoke-static (v5 v6) "Lcom/redex/OutlinedStringBuilders;.concat:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;")
+      (move-result-object v0)
+      (return-object v0)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
+}
