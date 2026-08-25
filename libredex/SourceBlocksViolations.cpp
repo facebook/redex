@@ -1234,55 +1234,18 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
   };
 
-  static bool carries(DexMethod* m, const SourceBlockDescriptor& d) {
-    // @lint-ignore NULLSAFECLANG (callers resolved m from get_method)
-    auto* code = m->get_code();
-    if (code == nullptr) {
-      return false;
-    }
-    cfg::ScopedCFG cfg(code);
-    for (auto* b : cfg->blocks()) {
-      for (auto* sb : gather_source_blocks(b)) {
-        // @lint-ignore NULLSAFECLANG (blocks yield non-null)
-        if (d.matches(*sb)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  // The methods that carry a block matching `d`. A descriptor naming a whole
-  // method also keeps that method even with no blocks left, so the method
-  // still gets reported; one naming a specific id does not, because "the id
-  // is gone" and "the method is clean" are the two answers a reader most
-  // needs to tell apart.
+  // The methods that carry a block matching `d`. Found purely by walking the
+  // scope: the method a descriptor names gets no special treatment, because
+  // DexMethod::get_method also answers for methods that are no longer in the
+  // scope, and reporting one of those as a carrier is worse than reporting
+  // none. A descriptor that matches nothing resolves to zero carriers.
   static std::vector<std::vector<DexMethod*>> resolve_targets(
       const std::vector<SourceBlockDescriptor>& targets, const Scope& scope) {
     std::vector<std::vector<DexMethod*>> res(targets.size());
-    always_assert(res.size() == targets.size());
 
-    // A block is usually still in its own method, so start there: no walk
-    // needed to find it.
-    for (size_t i = 0; i != targets.size(); ++i) {
-      auto* ref = DexMethod::get_method(targets[i].method->str());
-      if (ref == nullptr || !ref->is_def()) {
-        continue;
-      }
-      auto* m = ref->as_def();
-      // @lint-ignore NULLSAFECLANG (is_def() checked above)
-      if (m->get_code() == nullptr) {
-        continue;
-      }
-      if (targets[i].id.has_value() && !carries(m, targets[i])) {
-        continue;
-      }
-      res[i].push_back(m);
-    }
-
-    // Then find the copies inlining moved or duplicated elsewhere. One walk
-    // for all descriptors, and no dominators -- far cheaper than the counting
-    // walk it replaces.
+    // One walk for all descriptors, and no dominators -- far cheaper than the
+    // counting walk it replaces. It finds a block wherever it now lives,
+    // including the copies inlining moved or duplicated elsewhere.
     std::mutex lock;
     walk::parallel::methods(scope, [&](DexMethod* m) {
       auto* code = m->get_code();
@@ -1315,9 +1278,11 @@ struct ViolationsHelper::ViolationsHelperImpl {
       }
     });
 
+    // The walk visits each method once and `hits` is deduped, so a method can
+    // reach `res[i]` at most once; only the order needs fixing, because the
+    // appends above happen in whatever order the threads reach the lock.
     for (auto& methods : res) {
       std::sort(methods.begin(), methods.end(), compare_dexmethods);
-      methods.erase(std::unique(methods.begin(), methods.end()), methods.end());
     }
     return res;
   }
