@@ -164,7 +164,7 @@ void PrintKotlinStats::setup() {
       "Lkotlin/jvm/functions/FunctionN;"
       ".invoke:([Ljava/lang/Object;)Ljava/lang/Object;");
   m_atomic_field_updaters = atomic_field_updaters::present_types();
-  m_new_updater = DexString::get_string("newUpdater");
+  m_new_updater = atomic_field_updaters::new_updater_name();
 }
 
 // Annotate Kotlin classes before StripDebugInfoPass removes it

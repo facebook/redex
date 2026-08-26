@@ -11,6 +11,13 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+/**
+ * Two integration tests compile this fixture and assert against its exact
+ * contents: AtomicFieldUpdaterLoweringTest, on what the lowering produces, and
+ * AtomicFieldUpdaterKotlinStats, on how many updaters and operations
+ * PrintKotlinStats counts. Adding or removing a call site here changes the
+ * counts the latter expects, and the failure will not name this file.
+ */
 public class AtomicFieldUpdaterLowering {
 
   public static class Holder {
