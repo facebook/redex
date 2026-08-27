@@ -39,6 +39,12 @@ struct BaselineProfile {
   void transitively_close_classes(const Scope& scope);
 };
 
+// Only "hot" methods are AOT-compiled by dex2oat; a <clinit> never is.
+bool is_compiled(const DexMethod* method, const MethodFlags& flags);
+
+bool is_compiled(const BaselineProfile& baseline_profile,
+                 const DexMethod* method);
+
 // Returns a tuple of BaselineProfile and UnorderedMap<std::string,
 // BaselineProfile> The first is the default profile that will be fed into the
 // baseline profile driver as a manual input. The second is a mapping of config

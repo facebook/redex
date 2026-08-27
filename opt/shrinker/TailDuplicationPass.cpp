@@ -123,17 +123,7 @@ std::vector<cfg::Block*> get_ordered_blocks(const cfg::ControlFlowGraph& cfg) {
   return blocks;
 }
 
-bool is_compiled(DexMethod* method,
-                 const baseline_profiles::MethodFlags& flags) {
-  return flags.hot && !method::is_clinit(method);
-}
-
-bool is_compiled(const baseline_profiles::BaselineProfile& baseline_profile,
-                 DexMethod* method) {
-  auto it = baseline_profile.methods.find(method);
-  return it != baseline_profile.methods.end() &&
-         is_compiled(method, it->second);
-}
+using baseline_profiles::is_compiled;
 
 } // namespace
 

@@ -66,18 +66,7 @@ bool is_sparse(cfg::Block* switch_block) {
   return ckeb->sufficiently_sparse();
 }
 
-// Only certain "hot" methods get compiled.
-bool is_compiled(DexMethod* method,
-                 const baseline_profiles::MethodFlags& flags) {
-  return flags.hot && !method::is_clinit(method);
-}
-
-bool is_compiled(const baseline_profiles::BaselineProfile& baseline_profile,
-                 DexMethod* method) {
-  auto it = baseline_profile.methods.find(method);
-  return it != baseline_profile.methods.end() &&
-         is_compiled(method, it->second);
-}
+using baseline_profiles::is_compiled;
 
 bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
   auto* code = method->get_code();
