@@ -7,6 +7,8 @@
 
 #include "Configurable.h"
 
+#include <set>
+
 #include "Debug.h"
 #include "DexClass.h"
 
@@ -199,7 +201,9 @@ void Configurable::parse_config(const JsonWrapper& json) {
          const std::tuple<std::string, Configurable::Reflection>& param_type,
          const Json::Value& default_value) {};
   m_trait_reflector = [](const std::string&, const Json::Value&) {};
-  m_parser = [&json](const std::string& name) {
+  std::set<std::string> bound;
+  m_parser = [&json, &bound](const std::string& name) {
+    bound.insert(name);
     // TODO: add std::string API for contains
     if (json.contains(name.c_str())) {
       return OptJsonVal(json[name.c_str()]);
@@ -208,6 +212,15 @@ void Configurable::parse_config(const JsonWrapper& json) {
     }
   };
   bind_config();
+  m_parser = [](const std::string&) { return OptJsonVal{}; };
+  // "disabled" is read straight off the JSON by PassManager, never bound here.
+  for (const auto& name : json.unwrap().getMemberNames()) {
+    if (name == "disabled" || bound.count(name) != 0) {
+      continue;
+    }
+    fprintf(stderr, "WARNING: \"%s\" has no parameter \"%s\"; value ignored.\n",
+            get_config_name().c_str(), name.c_str());
+  }
   // m_after_configuration may have been set in bind_config()
   if (m_after_configuration) {
     m_after_configuration();
