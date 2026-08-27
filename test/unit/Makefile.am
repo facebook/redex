@@ -144,6 +144,7 @@ check_PROGRAMS = \
     proguard_regex_test \
     pure_analysis_test \
     random_forest_test \
+    reachable_natives_test \
     reaching_definitions_test \
     rearrange_enum_clinit_test \
     reduce_array_literals_test \
@@ -459,6 +460,9 @@ pure_analysis_test_SOURCES = PureAnalysisTest.cpp
 pure_analysis_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 random_forest_test_SOURCES = RandomForestTest.cpp
+
+reachable_natives_test_SOURCES = ReachableNativesTest.cpp
+reachable_natives_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 reaching_definitions_test_SOURCES = ReachingDefinitionsTest.cpp
 

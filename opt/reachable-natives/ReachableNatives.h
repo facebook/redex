@@ -78,6 +78,7 @@ class ReachableNativesPass : public Pass {
   std::vector<std::string> m_additional_load_library_names;
   UnorderedSet<DexMethod*> m_load_library_unsafe_methods;
   UnorderedSet<DexMethod*> m_load_library_methods;
+  size_t m_pinned_load_library_entry_points = 0;
   bool m_sweep;
   bool m_sweep_native_methods;
 };
