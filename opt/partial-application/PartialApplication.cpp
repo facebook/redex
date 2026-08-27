@@ -715,23 +715,21 @@ class CalleeInvocationSelector {
   // expected savings.
   void select_invokes(std::atomic<size_t>* total_estimated_savings,
                       InvokeCallSiteSummaries* selected_invokes) {
-    size_t partial_application_methods{0};
-    uint32_t callee_estimated_savings = 0;
-    UnorderedSet<const CallSiteSummary*> selected;
+    UnorderedMap<const CallSiteSummary*, int32_t> selected_net_savings;
     while (!m_pq.empty()) {
       const auto* css = m_pq.front();
       auto net_savings = get_net_savings(css);
       m_pq.erase(css);
       always_assert(net_savings > 0);
-      selected.insert(css);
-      callee_estimated_savings += net_savings;
-      partial_application_methods++;
+      selected_net_savings.emplace(css, net_savings);
       TRACE(PA, 3, "[PartialApplication] Selected %s(%s) with net savings %d",
             SHOW(m_callee), css->get_key().c_str(), net_savings);
     }
-    auto is_selected = [&selected](const CallSiteSummary* css) {
-      return selected.count(css) != 0u;
+    auto is_selected = [&selected_net_savings](const CallSiteSummary* css) {
+      return selected_net_savings.count(css) != 0u;
     };
+
+    UnorderedSet<const CallSiteSummary*> used_csses;
 
     for (auto& p : m_call_site_invoke_summaries) {
       const auto* invoke_insn = p.first;
@@ -756,15 +754,22 @@ class CalleeInvocationSelector {
           }) == aev.end()) {
         continue;
       }
+      used_csses.insert(reduced_css);
       selected_invokes->emplace(invoke_insn, reduced_css);
     }
 
+    // Only summaries that actually ended up serving an invoke will cause a
+    // helper method to be created, so only those contribute savings.
+    uint32_t callee_estimated_savings = 0;
+    for (const auto* css : UnorderedIterable(used_csses)) {
+      callee_estimated_savings += selected_net_savings.at(css);
+    }
     if (callee_estimated_savings > 0) {
       TRACE(PA, 2,
             "[PartialApplication] Selected %s(...) for %zu constant argument "
             "combinations across %zu invokes with net savings %u",
-            SHOW(m_callee), partial_application_methods,
-            selected_invokes->size(), callee_estimated_savings);
+            SHOW(m_callee), used_csses.size(), selected_invokes->size(),
+            callee_estimated_savings);
       *total_estimated_savings += callee_estimated_savings;
     }
   }
