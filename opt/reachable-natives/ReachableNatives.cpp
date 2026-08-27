@@ -7,8 +7,12 @@
 
 #include "ReachableNatives.h"
 
+#include <array>
 #include <fstream>
+#include <iterator>
+#include <span>
 #include <string>
+#include <string_view>
 
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
@@ -78,6 +82,122 @@ bool ReachableNativesPass::gather_load_library(
   return success;
 }
 
+namespace {
+
+constexpr std::string_view kSoLoader = "Lcom/facebook/soloader/SoLoader;";
+constexpr std::string_view kNativeLoader =
+    "Lcom/facebook/soloader/nativeloader/NativeLoader;";
+
+constexpr auto kSoLoaderUnsafeMethods = std::to_array<std::string_view>(
+    {"Lcom/facebook/soloader/SoLoader;.loadLibraryUnsafe:(Ljava/lang/String;)Z",
+     "Lcom/facebook/soloader/SoLoader;.loadLibraryUnsafe:(Ljava/lang/"
+     "String;I)Z"});
+
+constexpr auto kSoLoaderMethods = std::to_array<std::string_view>(
+    {"Lcom/facebook/soloader/SoLoader;.loadLibrary:(Ljava/lang/String;)Z",
+     "Lcom/facebook/soloader/SoLoader;.loadLibrary:(Ljava/lang/String;I)Z"});
+
+constexpr auto kNativeLoaderMethods = std::to_array<std::string_view>(
+    {"Lcom/facebook/soloader/nativeloader/NativeLoader;.loadLibrary:(Ljava/"
+     "lang/String;)Z",
+     "Lcom/facebook/soloader/nativeloader/NativeLoader;.loadLibrary:(Ljava/"
+     "lang/String;I)Z"});
+
+constexpr size_t kSoLoaderEntryPointCount =
+    std::size(kSoLoaderUnsafeMethods) + std::size(kSoLoaderMethods);
+
+// Pin a load-library entry point so later passes cannot inline, outline or
+// delete it, and hand it back so the caller can recognize calls to it. Returns
+// nullptr when the input contains no reference to the method at all; whether
+// that is legitimate is a question about the declaring class, decided by
+// assert_class_fully_recognized below.
+//
+// A method that IS referenced is an assert in both of the ways it can fail to
+// be usable:
+//
+//   - referenced but not defined in the input (SoLoader supplied as a library
+//     jar rather than in the dexes). The app demonstrably loads native
+//     libraries, but the pass cannot pin the entry point, so
+//     gather_load_library will not recognize those call sites and the analysis
+//     would silently under-approximate the live library set. Failing loudly
+//     beats stripping native code that is actually reachable.
+//   - defined but not static. That signature belongs to SoLoader, so a
+//     non-static one means the input is not the SoLoader this pass knows how to
+//     reason about.
+DexMethod* pin_load_library_entry_point(std::string_view method_name) {
+  auto* method_ref = DexMethod::get_method(method_name);
+  if (method_ref == nullptr) {
+    return nullptr;
+  }
+  auto* method = method_ref->as_def();
+  always_assert_log(method,
+                    "%s is referenced but not defined in the input; the "
+                    "load-library analysis cannot pin it",
+                    std::string(method_name).c_str());
+  always_assert_log(is_static(method), "Expected %s to be static",
+                    std::string(method_name).c_str());
+  method->rstate.set_root();
+  method->rstate.set_dont_inline();
+  method->rstate.set_no_outlining();
+  return method;
+}
+
+size_t pin_entry_points(std::span<const std::string_view> method_names,
+                        UnorderedSet<DexMethod*>* pinned) {
+  size_t count = 0;
+  for (auto method_name : method_names) {
+    if (auto* method = pin_load_library_entry_point(method_name)) {
+      pinned->insert(method);
+      ++count;
+    }
+  }
+  return count;
+}
+
+bool is_class_in_input(std::string_view class_name) {
+  auto* type = DexType::get_type(class_name);
+  if (type == nullptr) {
+    return false;
+  }
+  auto* cls = type_class(type);
+  return cls != nullptr && !cls->is_external();
+}
+
+// The unit of absence is the class.
+//
+// A class the input does not contain is a legitimate shape rather than a
+// configuration error: an app that links no native libraries never pulls
+// SoLoader in, and NativeLoader ships as a standalone artifact that other
+// libraries depend on without SoLoader, so neither class can be demanded of the
+// other. Asserting instead of skipping aborts the build for such an app
+// whenever a shared config enables analyze_load_library, which is a config
+// written for that app's siblings rather than a defect in the app. With no
+// entry points collected there is nothing for the analysis to recognize, and
+// eval_pass returns before walking the program.
+//
+// A class the input DOES contain must declare every entry point this pass
+// knows. A subset means something rewrote it -- a rename, a shrink, or a
+// SoLoader version this pass has not been taught -- and the sibling that was
+// renamed rather than removed still has call sites that gather_load_library
+// would no longer recognize. Skipping an unreferenced method is harmless in
+// itself; staying quiet about a class that no longer looks like SoLoader is
+// not.
+void assert_class_fully_recognized(std::string_view class_name,
+                                   size_t pinned,
+                                   size_t expected) {
+  if (pinned == 0 && !is_class_in_input(class_name)) {
+    return;
+  }
+  always_assert_log(pinned == expected,
+                    "%s is in the input, but only %zu of the %zu load-library "
+                    "entry points this pass knows are present; something "
+                    "rewrote it, and the ones that remain cannot be trusted to "
+                    "be all of them",
+                    std::string(class_name).c_str(), pinned, expected);
+}
+
+} // namespace
+
 void ReachableNativesPass::eval_pass(DexStoresVector& stores,
                                      ConfigFiles&,
                                      PassManager&) {
@@ -87,47 +207,31 @@ void ReachableNativesPass::eval_pass(DexStoresVector& stores,
   if (!m_analyze_load_library) {
     return;
   }
-  for (std::string_view method_name :
-       {"Lcom/facebook/soloader/SoLoader;.loadLibraryUnsafe:(Ljava/lang/"
-        "String;)Z",
-        "Lcom/facebook/soloader/SoLoader;.loadLibraryUnsafe:(Ljava/lang/"
-        "String;I)Z"}) {
-    auto* method_ref = DexMethod::get_method(method_name);
-    always_assert_log(method_ref, "Did not find method ref %s in input",
-                      std::string(method_name).c_str());
-    auto* method = method_ref->as_def();
-    always_assert_log(method, "Did not find method %s in input",
-                      std::string(method_name).c_str());
-    always_assert_log(is_static(method), "Expected %s to be static",
-                      std::string(method_name).c_str());
-    method->rstate.set_root();
-    method->rstate.set_dont_inline();
-    method->rstate.set_no_outlining();
-    m_load_library_unsafe_methods.insert(method);
-  }
-  for (std::string_view method_name :
-       {"Lcom/facebook/soloader/SoLoader;.loadLibrary:(Ljava/lang/String;)Z",
-        "Lcom/facebook/soloader/SoLoader;.loadLibrary:(Ljava/lang/String;I)Z",
-        "Lcom/facebook/soloader/nativeloader/NativeLoader;.loadLibrary:(Ljava/"
-        "lang/String;)Z",
-        "Lcom/facebook/soloader/nativeloader/NativeLoader;.loadLibrary:(Ljava/"
-        "lang/String;I)Z"}) {
-    auto* method_ref = DexMethod::get_method(method_name);
-    always_assert_log(method_ref, "Did not find method ref %s in input",
-                      std::string(method_name).c_str());
-    auto* method = method_ref->as_def();
-    always_assert_log(method, "Did not find method %s in input",
-                      std::string(method_name).c_str());
-    always_assert_log(is_static(method), "Expected %s to be static",
-                      std::string(method_name).c_str());
-    method->rstate.set_root();
-    method->rstate.set_dont_inline();
-    method->rstate.set_no_outlining();
-    m_load_library_methods.insert(method);
-  }
+  size_t soloader_pinned =
+      pin_entry_points(kSoLoaderUnsafeMethods, &m_load_library_unsafe_methods) +
+      pin_entry_points(kSoLoaderMethods, &m_load_library_methods);
+  size_t nativeloader_pinned =
+      pin_entry_points(kNativeLoaderMethods, &m_load_library_methods);
+
+  assert_class_fully_recognized(kSoLoader, soloader_pinned,
+                                kSoLoaderEntryPointCount);
+  assert_class_fully_recognized(kNativeLoader, nativeloader_pinned,
+                                std::size(kNativeLoaderMethods));
+
+  m_pinned_load_library_entry_points = soloader_pinned + nativeloader_pinned;
+  TRACE(NATIVE, 1,
+        "Pinned load-library entry points: %zu on SoLoader, %zu on "
+        "NativeLoader",
+        soloader_pinned, nativeloader_pinned);
 
   for (auto& library_name : m_additional_load_library_names) {
     g_redex->library_names.insert(DexString::make_string(library_name));
+  }
+  if (m_load_library_unsafe_methods.empty() && m_load_library_methods.empty()) {
+    // gather_load_library only recognizes a callee that is in one of these
+    // sets, so the walk below would build a CFG for every method in the app to
+    // match nothing.
+    return;
   }
   InsertOnlyConcurrentSet<DexMethod*> concurrent_non_const_load_library_names;
   walk::parallel::code(
@@ -314,6 +418,10 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
 
   mgr.set_metric("reachable_natives", reachable_natives.size());
   mgr.set_metric("unreachable_natives", unreachable_natives.size());
+  // Recorded in eval_pass and reported here: PassManager only has a current
+  // pass to attribute a metric to while a pass is running.
+  mgr.set_metric("pinned_load_library_entry_points",
+                 m_pinned_load_library_entry_points);
 
   if (m_sweep || m_sweep_native_methods) {
     size_t classes_abstracted{0};
