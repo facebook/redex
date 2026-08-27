@@ -51,6 +51,7 @@ check_PROGRAMS = \
     boxed_boolean_propagation_test \
     branch_prefix_hoisting_test \
     bridge_synth_inline_pass_test \
+    call_site_summary_reductions_test \
     cfg_inliner_test \
     cfg_mutation_test \
     cfg_positions_test \
@@ -240,6 +241,8 @@ boxed_boolean_propagation_test_SOURCES = constant-propagation/BoxedBooleanPropag
 branch_prefix_hoisting_test_SOURCES = BranchPrefixHoistingTest.cpp ScopeHelper.cpp
 
 bridge_synth_inline_pass_test_SOURCES = BridgeSynthInlinePassTest.cpp
+
+call_site_summary_reductions_test_SOURCES = CallSiteSummaryReductionsTest.cpp
 
 cfg_inliner_test_SOURCES = CFGInlinerTest.cpp
 cfg_inliner_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

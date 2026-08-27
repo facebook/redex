@@ -81,11 +81,10 @@
 #include <cinttypes>
 
 #include <boost/format.hpp> // NOLINT
-#include <boost/pending/disjoint_sets.hpp>
-#include <boost/property_map/property_map.hpp>
 
 #include "CFGMutation.h"
 #include "CallSiteSummaries.h"
+#include "CallSiteSummaryReductions.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "Creators.h"
@@ -399,18 +398,11 @@ class CalleeInvocationSelector {
   param_index_t m_src_regs;
   bool m_needs_range;
 
-  // When we are going to merge different call-site summaries after simplifying,
-  // we need to efficiently track what all the underlying call-site summaries
-  // were. We do that via a "disjoint_sets" data structure what all the
-  // underlying call-site summaries are.
-  using Rank = UnorderedMap<const CallSiteSummary*, size_t>;
-  using Parent = UnorderedMap<const CallSiteSummary*, const CallSiteSummary*>;
-  using RankPMap = boost::associative_property_map<Rank>;
-  using ParentPMap = boost::associative_property_map<Parent>;
-  using CallSiteSummarySets = boost::disjoint_sets<RankPMap, ParentPMap>;
-  Rank m_rank;
-  Parent m_parent;
-  CallSiteSummarySets m_css_sets;
+  // When we merge different call-site summaries after simplifying, we need to
+  // track which weaker summary each one got folded into, so that we can later
+  // serve each invoke with a helper method that binds constants the invoke
+  // actually passes.
+  partial_application::CallSiteSummaryReductions m_reductions;
 
   CallSiteSummarySet m_call_site_summaries;
   using ArgumentCosts = UnorderedMap<src_index_t, int32_t>;
@@ -568,7 +560,6 @@ class CalleeInvocationSelector {
         m_callee(callee),
         m_arg_exclusivity(arg_exclusivity),
         m_callee_caller_classes(callee_caller_classes),
-        m_css_sets((RankPMap(m_rank)), (ParentPMap(m_parent))),
         m_cost_config(cost_config) {
     const auto* callee_call_site_invokes =
         call_site_summarizer.get_callee_call_site_invokes(callee);
@@ -613,7 +604,6 @@ class CalleeInvocationSelector {
     }
 
     // For each call-site summary,
-    // - initialize disjoint set singleton, and
     // - compute current constant argument costs that could potentially be saved
     //   when introducing partial-application helper method, and
     // - keep track of which constant value for which parameter is involved in
@@ -623,7 +613,6 @@ class CalleeInvocationSelector {
       const auto* css = p.first;
       auto& aaem = p.second;
       m_call_site_summaries.insert(css);
-      m_css_sets.make_set(css);
       auto& ac = m_call_site_summary_argument_costs[css];
       const auto& bindings = css->arguments.bindings();
       for (const auto& q : bindings) {
@@ -704,10 +693,8 @@ class CalleeInvocationSelector {
         }
         ac_it->second.erase(src_idx);
         m_pq.insert(reduced_css, make_priority(reduced_css));
-        if (m_call_site_summaries.insert(reduced_css).second) {
-          m_css_sets.make_set(reduced_css);
-        }
-        m_css_sets.union_set(css, reduced_css);
+        m_call_site_summaries.insert(reduced_css);
+        m_reductions.add(css, reduced_css);
         TRACE(PA, 4,
               "[PartialApplication] Merging %s(%s ===> %s) with least cost "
               "%u@%u: net savings %d",
@@ -729,32 +716,35 @@ class CalleeInvocationSelector {
   void select_invokes(std::atomic<size_t>* total_estimated_savings,
                       InvokeCallSiteSummaries* selected_invokes) {
     size_t partial_application_methods{0};
-    UnorderedMap<const CallSiteSummary*, const CallSiteSummary*>
-        selected_css_sets;
     uint32_t callee_estimated_savings = 0;
+    UnorderedSet<const CallSiteSummary*> selected;
     while (!m_pq.empty()) {
       const auto* css = m_pq.front();
       auto net_savings = get_net_savings(css);
       m_pq.erase(css);
-      selected_css_sets.emplace(m_css_sets.find_set(css), css);
+      always_assert(net_savings > 0);
+      selected.insert(css);
       callee_estimated_savings += net_savings;
       partial_application_methods++;
       TRACE(PA, 3, "[PartialApplication] Selected %s(%s) with net savings %d",
             SHOW(m_callee), css->get_key().c_str(), net_savings);
-      always_assert(net_savings > 0);
     }
+    auto is_selected = [&selected](const CallSiteSummary* css) {
+      return selected.count(css) != 0u;
+    };
 
     for (auto& p : m_call_site_invoke_summaries) {
       const auto* invoke_insn = p.first;
       const auto* css = p.second;
-      if (m_call_site_summaries.count(css) == 0u) {
+      // Follow the chain of reductions to the strongest selected summary that
+      // this invoke's own constant arguments still satisfy.
+      const auto* reduced_css = m_reductions.find_selected(css, is_selected);
+      if (reduced_css == nullptr) {
         continue;
       }
-      auto it = selected_css_sets.find(m_css_sets.find_set(css));
-      if (it == selected_css_sets.end()) {
-        continue;
-      }
-      const auto* reduced_css = it->second;
+      always_assert_log(partial_application::is_reduction_of(reduced_css, css),
+                        "%s(%s) is not a reduction of %s", SHOW(m_callee),
+                        reduced_css->get_key().c_str(), css->get_key().c_str());
       // This invoke got selected because including it together with all
       // other invokes with the same css was beneficial on average. Check
       // (and filter out) if it's not actually beneficial for this particular
