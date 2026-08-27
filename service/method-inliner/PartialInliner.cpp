@@ -15,9 +15,6 @@
 #include "Trace.h"
 
 namespace {
-// TODO: Make configurable.
-const uint32_t MAX_PARTIALLY_INLINED_CODE_UNITS = 10;
-
 // Computes all blocks backwards-reachable from return instructions. (All other
 // blocks must eventually throw.)
 UnorderedSet<cfg::Block*> get_normal_blocks(const cfg::ControlFlowGraph& cfg) {
@@ -46,7 +43,8 @@ UnorderedSet<cfg::Block*> get_normal_blocks(const cfg::ControlFlowGraph& cfg) {
 namespace inliner {
 
 PartialCode get_partially_inlined_code(const DexMethod* method,
-                                       const cfg::ControlFlowGraph& cfg) {
+                                       const cfg::ControlFlowGraph& cfg,
+                                       uint32_t max_code_units) {
   if (!source_blocks::is_hot(cfg.entry_block())) {
     // No hot entry block? That suggests that something went wrong with our
     // source-blocks. Anyway, we are not going to fight that here.
@@ -119,7 +117,7 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
     }
     inline_blocks.insert(block);
     code_units += block->estimate_code_units();
-    if (code_units > MAX_PARTIALLY_INLINED_CODE_UNITS) {
+    if (code_units > max_code_units) {
       // Too large
       return PartialCode();
     }

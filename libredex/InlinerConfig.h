@@ -19,6 +19,10 @@ const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 5000;
 // too much memory to retain individual larger reduced code.
 const size_t MAX_REDUCED_SIZE = 100;
 
+// Maximum estimated code units of the hot prefix retained when partially
+// inlining a callee.
+const uint32_t MAX_PARTIALLY_INLINED_CODE_UNITS = 10;
+
 namespace inliner {
 
 enum UnfinalizePerfMode {
@@ -75,6 +79,8 @@ struct InlinerConfig {
   // max_reduced_size is maximum size of reduced code to keep for particular
   // callsite.
   size_t max_reduced_size{MAX_REDUCED_SIZE};
+
+  uint32_t max_partially_inlined_code_units{MAX_PARTIALLY_INLINED_CODE_UNITS};
 
   std::string unfinalize_perf_mode_str{"not-cold"};
   UnfinalizePerfMode unfinalize_perf_mode{UnfinalizePerfMode::NOT_COLD};

@@ -21,6 +21,7 @@ bool maybe_hot(cfg::Block* b);
 bool is_hot(cfg::Block* b);
 
 PartialCode get_partially_inlined_code(const DexMethod* method,
-                                       const cfg::ControlFlowGraph& cfg);
+                                       const cfg::ControlFlowGraph& cfg,
+                                       uint32_t max_code_units);
 
 } // namespace inliner

@@ -30,6 +30,10 @@ void InlinerConfig::bind_config() {
   bind("max_cost_for_constant_propagation", max_cost_for_constant_propagation,
        max_cost_for_constant_propagation);
   bind("max_reduced_size", max_reduced_size, max_reduced_size);
+  bind("max_partially_inlined_code_units", max_partially_inlined_code_units,
+       max_partially_inlined_code_units,
+       "Maximum estimated code units of the hot prefix retained when partially "
+       "inlining a callee.");
   bind("multiple_callers", multiple_callers, multiple_callers);
   bind("use_call_site_summaries", use_call_site_summaries,
        use_call_site_summaries);

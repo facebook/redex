@@ -639,7 +639,8 @@ void MultiMethodInliner::make_partial(const DexMethod* method,
       (m_hot_methods.count_unsafe(method) != 0u) &&
       inlined_cost->reduced_code) {
     inlined_cost->partial_code = inliner::get_partially_inlined_code(
-        method, inlined_cost->reduced_code->cfg());
+        method, inlined_cost->reduced_code->cfg(),
+        m_config.max_partially_inlined_code_units);
   }
   inlined_cost->reduced_code.reset();
 }
@@ -1362,15 +1363,17 @@ PartialCode MultiMethodInliner::get_callee_partial_code(
     return PartialCode();
   }
   if (!m_callee_partial_code) {
-    return inliner::get_partially_inlined_code(callee,
-                                               callee->get_code()->cfg());
+    return inliner::get_partially_inlined_code(
+        callee, callee->get_code()->cfg(),
+        m_config.max_partially_inlined_code_units);
   }
   return *m_callee_partial_code
               ->get_or_create_and_assert_equal(
                   callee,
                   [&](const auto&) {
                     return inliner::get_partially_inlined_code(
-                        callee, callee->get_code()->cfg());
+                        callee, callee->get_code()->cfg(),
+                        m_config.max_partially_inlined_code_units);
                   })
               .first;
 }
