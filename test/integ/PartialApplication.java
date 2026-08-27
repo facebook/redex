@@ -90,4 +90,69 @@ public class PartialApplication {
     MoreCallees mc = new MoreCallees();
     return mc.baz(105, 1111, 2222, 3333, 4444, 5555, 6666, 205);
   }
+
+  private static native void consume(int value);
+
+  static class RegressionCallee {
+    static void target(int a, int b, int c) {
+    }
+  }
+
+  public static void call_regression_a(int b, int c) {
+    int a = 1;
+    consume(a);
+    RegressionCallee.target(a, b, c);
+  }
+
+  public static void call_regression_ab1(int c) {
+    int b = 2;
+    consume(b);
+    RegressionCallee.target(1, b, c);
+  }
+
+  public static void call_regression_ab2(int c) {
+    int b = 2;
+    consume(b);
+    RegressionCallee.target(1, b, c);
+  }
+
+  public static void call_regression_c1(int a, int b) {
+    RegressionCallee.target(a, b, 3);
+  }
+
+  public static void call_regression_c2(int a, int b) {
+    RegressionCallee.target(a, b, 3);
+  }
+
+  public static void call_regression_bc1(int a) {
+    int b = 2;
+    consume(b);
+    RegressionCallee.target(a, b, 3);
+  }
+
+  public static void call_regression_bc2(int a) {
+    int b = 2;
+    consume(b);
+    RegressionCallee.target(a, b, 3);
+  }
+
+  public static void call_regression_abc1() {
+    int a = 1;
+    consume(a);
+    RegressionCallee.target(a, 2, 3);
+  }
+
+  public static void call_regression_abc2() {
+    int a = 1;
+    consume(a);
+    RegressionCallee.target(a, 2, 3);
+  }
+
+  public static void call_regression_abc3() {
+    int a = 1;
+    int b = 2;
+    consume(a);
+    consume(b);
+    RegressionCallee.target(a, b, 3);
+  }
 }

@@ -348,3 +348,27 @@ TEST_F(PartialApplicationTest, source_blocks_are_off_by_default) {
                "PartialApplication$Callees;.foo$spa$0$3b9e1bb0b5617ee4$0:()V"),
       expected_code.get());
 }
+
+TEST_F(PartialApplicationTest, does_not_bind_unproven_constant) {
+  std::vector<Pass*> passes = {
+      new PartialApplicationPass(),
+  };
+  Json::Value config;
+  config["PartialApplicationPass"]["cost_method"] = 0;
+
+  run_passes(passes, nullptr, config);
+
+  auto* code = get_code(
+      "Lcom/facebook/redextest/PartialApplication;.call_regression_c1:(II)V");
+  std::vector<IRInstruction*> invokes;
+  for (const auto& mie : InstructionIterable(code)) {
+    if (opcode::is_an_invoke(mie.insn->opcode())) {
+      invokes.push_back(mie.insn);
+    }
+  }
+
+  ASSERT_EQ(1u, invokes.size());
+  const auto* invoke = invokes.front();
+  EXPECT_EQ(2u, invoke->srcs_size());
+  EXPECT_EQ(2u, invoke->get_method()->get_proto()->get_args()->size());
+}
