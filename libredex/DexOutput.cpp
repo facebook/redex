@@ -561,11 +561,31 @@ constexpr uint32_t k_output_red_zone = 250000;
 
 constexpr uint32_t k_default_max_dex_size = 64 * 1024 * 1024;
 
-uint32_t get_dex_output_size(const ConfigFiles& conf) {
+// Upper bound on the configured value. The whole allocation -- the configured
+// value, doubled for BytecodeDebugger, plus the red zone -- has to fit in a
+// 32-bit byte count: m_offset is a uint32_t cursor into it, and m_output_size
+// is a size_t, which is 32 bits on the i686 OSS CI configuration.
+//
+// Bounding only the configured value is not enough. At (2^31 - 4) the doubled
+// total is 4295217288, which truncates to 249992 there and makes
+// `m_output_size - k_output_red_zone` underflow to ~1.8e19 -- disarming the
+// very check this is meant to arm.
+//
+// uint64_t rather than size_t for the same reason: a size_t return would leave
+// the caller's `* 2` wrapping in 32-bit arithmetic on i686.
+constexpr uint64_t k_max_dex_output_size =
+    (uint64_t{UINT32_MAX} - k_output_red_zone) / 2;
+
+uint64_t get_dex_output_size(const ConfigFiles& conf) {
   size_t output_size;
   conf.get_json_config().get("dex_output_buffer_size", k_default_max_dex_size,
                              output_size);
-  return (uint32_t)output_size;
+  always_assert_log(
+      output_size <= k_max_dex_output_size,
+      "dex_output_buffer_size is %zu, above the maximum of %" PRIu64
+      ". Lower `-J dex_output_buffer_size=`.",
+      output_size, k_max_dex_output_size);
+  return output_size;
 }
 
 } // namespace
@@ -823,6 +843,8 @@ void DexOutput::generate_typelist_data() {
     align_output();
     m_tl_emit_offsets[tl] = m_offset;
     int size = tl->encode(&m_dodx, (uint32_t*)(m_output.get() + m_offset));
+    always_assert_log(size >= 0, "DexTypeList::encode returned %d for %s", size,
+                      SHOW(tl));
     inc_offset(size);
     m_stats.num_type_lists++;
   }
@@ -916,6 +938,8 @@ void DexOutput::generate_class_data_items() {
     }
     /* No alignment constraints for this data */
     int size = clz->encode(&m_dodx, dco, m_output.get() + m_offset);
+    always_assert_log(size >= 0, "DexClass::encode returned %d for %s", size,
+                      SHOW(clz));
     if (m_dex_output_config.write_class_sizes) {
       m_stats.class_size[clz] = size;
     }
@@ -1108,7 +1132,7 @@ void DexOutput::generate_static_values() {
       memcpy(m_output.get() + m_offset, encdata.data(), encdatasize);
       enc_arrays.emplace(std::move(*deva), m_offset);
       m_static_values[clz] = m_offset;
-      inc_offset((uint32_t)encdatasize);
+      inc_offset(encdatasize);
       m_stats.num_static_values++;
     }
   }
@@ -1129,7 +1153,7 @@ void DexOutput::generate_static_values() {
         memcpy(m_output.get() + m_offset, encdata.data(), encdatasize);
         enc_arrays.emplace(std::move(eva), m_offset);
         m_call_site_items[callsite] = m_offset;
-        inc_offset((uint32_t)encdatasize);
+        inc_offset(encdatasize);
         m_stats.num_static_values++;
       }
     }
@@ -2311,9 +2335,12 @@ void DexOutput::generate_debug_items() {
       dbgcount++;
       size_t num_params =
           static_cast<size_t>(it.method->get_proto()->get_args()->size());
-      inc_offset(emit_debug_info(&m_dodx, emit_positions, dbg, dc, dci,
-                                 m_pos_mapper, m_output.get(), m_offset,
-                                 num_params, m_code_debug_lines));
+      int dbg_size = emit_debug_info(&m_dodx, emit_positions, dbg, dc, dci,
+                                     m_pos_mapper, m_output.get(), m_offset,
+                                     num_params, m_code_debug_lines);
+      always_assert_log(dbg_size >= 0, "emit_debug_info returned %d for %s",
+                        dbg_size, SHOW(it.method));
+      inc_offset(dbg_size);
     }
   }
   if (emit_positions) {
@@ -2335,7 +2362,7 @@ void DexOutput::generate_map() {
   for (auto const& mit : m_map_items) {
     *map++ = mit;
   }
-  inc_offset(static_cast<uint32_t>(reinterpret_cast<uint8_t*>(map) -
+  inc_offset(static_cast<uint64_t>(reinterpret_cast<uint8_t*>(map) -
                                    reinterpret_cast<uint8_t*>(mapout)));
 }
 
@@ -3198,14 +3225,17 @@ enhanced_dex_stats_t write_classes_to_dex(
   return dout.m_stats;
 }
 
-void DexOutput::inc_offset(uint32_t v) {
-  // If this asserts hits, we already wrote out of bounds.
-  always_assert(m_offset + v < m_output_size);
-  // If this assert hits, we are too close.
-  always_assert_log(
-      m_offset + v < m_output_size - k_output_red_zone,
-      "Running into output safety margin: %u of %zu(%zu). Increase the buffer "
-      "size with `-J dex_output_buffer_size=`.",
-      m_offset + v, m_output_size - k_output_red_zone, m_output_size);
-  m_offset += v;
+void DexOutput::inc_offset(uint64_t v) {
+  // m_offset is uint32_t, so `m_offset + v` would wrap mod 2^32 before it could
+  // exceed m_output_size. Widen first.
+  uint64_t next = (uint64_t)m_offset + v;
+  // m_output_size is oversized by k_output_red_zone, so this bound is the
+  // configured dex_output_buffer_size. The `< m_output_size` check this
+  // replaces was strictly weaker, and so unreachable.
+  always_assert_log(next < m_output_size - k_output_red_zone,
+                    "Running into output safety margin: %" PRIu64
+                    " of %zu(%zu). Increase the buffer "
+                    "size with `-J dex_output_buffer_size=`.",
+                    next, m_output_size - k_output_red_zone, m_output_size);
+  m_offset = (uint32_t)next;
 }

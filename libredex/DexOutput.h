@@ -379,7 +379,7 @@ class DexOutput {
   uint32_t align(uint32_t offset) { return (offset + 3) & ~3; }
   void align_output() { m_offset = align(m_offset); }
 
-  void inc_offset(uint32_t v);
+  void inc_offset(uint64_t v);
 
   friend struct DexOutputTestHelper;
 
