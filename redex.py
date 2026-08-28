@@ -1596,6 +1596,20 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             CompressionLevel.DEFAULT,  # Bit larger.
         ),
         CompressionEntry(
+            "Redex Method ID Map",
+            lambda args: not _is_preserve_input_dexes(args),
+            False,
+            # Not written in no-custom-debug mode, too complicated to filter.
+            [],
+            ["redex-method-id-map.txt"],
+            "redex-method-id-map.txt.zst",
+            None,
+            # Large. BETTER would raise the window to 128MB, and with it the
+            # multi-threading job size to 512MB, so the whole map compresses as
+            # a single job: ~40s instead of ~0.5s, for ~20% off.
+            CompressionLevel.DEFAULT,
+        ),
+        CompressionEntry(
             "Redex Class ID Map",
             lambda args: not _is_preserve_input_dexes(args),
             False,
