@@ -588,6 +588,19 @@ uint64_t get_dex_output_size(const ConfigFiles& conf) {
   return output_size;
 }
 
+// Several encoders report how many bytes they wrote as a signed `int`. A
+// negative value converted to an unsigned byte count is a cursor that rewinds
+// over already-emitted sections, which `finalize_header` then signs -- so it
+// has to be rejected where the conversion happens, not downstream. Named
+// rather than repeated so that adding a producer means calling this.
+uint64_t checked_encoded_size(int size,
+                              const char* producer,
+                              const char* subject) {
+  always_assert_log(size >= 0, "%s returned %d for %s", producer, size,
+                    subject);
+  return (uint64_t)size;
+}
+
 } // namespace
 
 CodeItemEmit::CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci)
@@ -843,9 +856,7 @@ void DexOutput::generate_typelist_data() {
     align_output();
     m_tl_emit_offsets[tl] = m_offset;
     int size = tl->encode(&m_dodx, (uint32_t*)(m_output.get() + m_offset));
-    always_assert_log(size >= 0, "DexTypeList::encode returned %d for %s", size,
-                      SHOW(tl));
-    inc_offset(size);
+    inc_offset(checked_encoded_size(size, "DexTypeList::encode", SHOW(tl)));
     m_stats.num_type_lists++;
   }
   /// insert_map_item returns early if num_tls is zero
@@ -938,8 +949,7 @@ void DexOutput::generate_class_data_items() {
     }
     /* No alignment constraints for this data */
     int size = clz->encode(&m_dodx, dco, m_output.get() + m_offset);
-    always_assert_log(size >= 0, "DexClass::encode returned %d for %s", size,
-                      SHOW(clz));
+    checked_encoded_size(size, "DexClass::encode", SHOW(clz));
     if (m_dex_output_config.write_class_sizes) {
       m_stats.class_size[clz] = size;
     }
@@ -1087,7 +1097,7 @@ void DexOutput::generate_methodhandle_data() {
 void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
                                                     int size,
                                                     const char* method_name) {
-  always_assert_log(size >= 0, "Size of method cannot be negative: %d\n", size);
+  checked_encoded_size(size, "DexCode::encode", method_name);
 
   uint32_t instruction_size_bitwidth_limit =
       conf.get_instruction_size_bitwidth_limit();
@@ -2338,9 +2348,8 @@ void DexOutput::generate_debug_items() {
       int dbg_size = emit_debug_info(&m_dodx, emit_positions, dbg, dc, dci,
                                      m_pos_mapper, m_output.get(), m_offset,
                                      num_params, m_code_debug_lines);
-      always_assert_log(dbg_size >= 0, "emit_debug_info returned %d for %s",
-                        dbg_size, SHOW(it.method));
-      inc_offset(dbg_size);
+      inc_offset(
+          checked_encoded_size(dbg_size, "emit_debug_info", SHOW(it.method)));
     }
   }
   if (emit_positions) {
