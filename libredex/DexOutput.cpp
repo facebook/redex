@@ -363,7 +363,7 @@ void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
                    });
 }
 
-DexOutputIdx GatheredTypes::get_dodx(const uint8_t* base) {
+DexOutputIdx GatheredTypes::get_dodx() {
   /*
    * These are symbol table indices.  Symbols which are used
    * should be bunched together.  We will pass a different
@@ -383,8 +383,7 @@ DexOutputIdx GatheredTypes::get_dodx(const uint8_t* base) {
                       get_method_index(),
                       std::move(typelist),
                       get_callsite_index(),
-                      get_methodhandle_index(),
-                      base);
+                      get_methodhandle_index());
 }
 
 namespace {
@@ -607,7 +606,7 @@ DexOutput::DexOutput(
                     k_output_red_zone),
       m_output(std::make_unique<uint8_t[]>(m_output_size)),
       m_gtypes(std::move(gtypes)),
-      m_dodx(m_gtypes->get_dodx(m_output.get())),
+      m_dodx(m_gtypes->get_dodx()),
       // Required because the BytecodeDebugger setting creates huge amounts
       // of debug information (multiple dex debug entries per instruction)
       m_offset(0),

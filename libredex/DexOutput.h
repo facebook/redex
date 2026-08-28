@@ -49,7 +49,6 @@ class DexOutputIdx {
   std::vector<DexTypeList*> m_typelist;
   dexcallsite_to_idx m_callsite;
   dexmethodhandle_to_idx m_methodhandle;
-  const uint8_t* m_base;
 
  public:
   DexOutputIdx(dexstring_to_idx string,
@@ -59,8 +58,7 @@ class DexOutputIdx {
                dexmethod_to_idx method,
                std::vector<DexTypeList*> typelist,
                dexcallsite_to_idx callsite,
-               dexmethodhandle_to_idx methodhandle,
-               const uint8_t* base)
+               dexmethodhandle_to_idx methodhandle)
       : m_string(std::move(string)),
         m_type(std::move(type)),
         m_proto(std::move(proto)),
@@ -68,8 +66,7 @@ class DexOutputIdx {
         m_method(std::move(method)),
         m_typelist(std::move(typelist)),
         m_callsite(std::move(callsite)),
-        m_methodhandle(std::move(methodhandle)),
-        m_base(base) {}
+        m_methodhandle(std::move(methodhandle)) {}
 
   DexOutputIdx(const DexOutputIdx&) = delete;
   DexOutputIdx& operator=(const DexOutputIdx&) = delete;
@@ -105,10 +102,6 @@ class DexOutputIdx {
   size_t methodsize() const { return m_method.size(); }
   size_t callsitesize() const { return m_callsite.size(); }
   size_t methodhandlesize() const { return m_methodhandle.size(); }
-
-  uint32_t get_offset(uint8_t* ptr) { return (uint32_t)(ptr - m_base); }
-
-  uint32_t get_offset(uint32_t* ptr) { return get_offset((uint8_t*)ptr); }
 };
 
 class IODIMetadata;
@@ -250,7 +243,7 @@ class GatheredTypes {
  public:
   explicit GatheredTypes(DexClasses* classes);
 
-  DexOutputIdx get_dodx(const uint8_t* base);
+  DexOutputIdx get_dodx();
   template <class T = decltype(compare_dexstrings)>
   std::vector<const DexString*> get_dexstring_emitlist(
       T cmp = compare_dexstrings);

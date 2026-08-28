@@ -242,7 +242,7 @@ void MethodSimilarityCompressionConsciousOrderer::order(
 
   // We assume no method takes more than 512KB
   auto output = std::make_unique<uint8_t[]>(METHOD_MAX_OUTPUT_SIZE);
-  auto dodx = m_gtypes->get_dodx(output.get());
+  auto dodx = m_gtypes->get_dodx();
 
   // Collect binary functions in the original order
   std::vector<BinaryFunction> functions;
