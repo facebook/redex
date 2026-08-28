@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <functional>
 #include <map>
 #include <optional>
@@ -33,6 +34,7 @@
 #include "Inliner.h"
 #include "InlinerConfig.h"
 #include "LiveRange.h"
+#include "LocalDce.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "ReflectionAnalysis.h"
@@ -1503,6 +1505,7 @@ void report(PassManager& mgr,
 void lower_calls(const Scope& scope,
                  const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
                  const std::function<const Helpers&()>& ensure_helpers,
+                 ConfigFiles& conf,
                  int min_sdk,
                  PassManager& mgr) {
   const auto updater_kinds = atomic_field_updaters::present_kinds();
@@ -1513,7 +1516,198 @@ void lower_calls(const Scope& scope,
   const Stats totals =
       analyze_calls(scope, by_field, updater_kinds, min_sdk, &rewrites);
   const EmitStats emitted = emit_rewrites(scope, rewrites, ensure_helpers);
+  if (!rewrites.empty()) {
+    auto method_override_graph = method_override_graph::build_graph(scope);
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, conf.create_init_class_insns(), method_override_graph.get());
+    const UnorderedSet<DexMethodRef*> pure_methods;
+    LocalDce local_dce(&init_classes_with_side_effects, pure_methods,
+                       method_override_graph.get());
+    for (auto&& [method, ignored] : UnorderedIterable(rewrites)) {
+      local_dce.dce(method->get_code(), true, method->get_class());
+    }
+  }
   report(mgr, totals, emitted, updater_kinds);
+}
+
+struct CleanupStats {
+  size_t updater_fields_removed{0};
+  size_t updater_inits_removed{0};
+  size_t offset_fields_removed{0};
+  size_t offset_inits_removed{0};
+};
+
+IRInstruction* find_static_store(DexMethod* method,
+                                 DexField* field,
+                                 IROpcode store_opcode) {
+  auto* code = method->get_code();
+  if (code == nullptr) {
+    return nullptr;
+  }
+  auto& cfg = code->cfg();
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == store_opcode && insn->has_field() &&
+        insn->get_field()->is_def() && insn->get_field()->as_def() == field) {
+      return insn;
+    }
+  }
+  return nullptr;
+}
+
+void collect_single_use_init_slice(cfg::ControlFlowGraph& cfg,
+                                   const live_range::UseDefChains& use_defs,
+                                   const live_range::DefUseChains& def_uses,
+                                   IRInstruction* insn,
+                                   UnorderedSet<IRInstruction*>* slice) {
+  if (!slice->insert(insn).second) {
+    return;
+  }
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    auto def_it =
+        use_defs.find(live_range::Use{insn, static_cast<src_index_t>(i)});
+    if (def_it == use_defs.end() || def_it->second.size() != 1) {
+      continue;
+    }
+    auto* def = *def_it->second.begin();
+    auto use_it = def_uses.find(def);
+    if (use_it == def_uses.end()) {
+      continue;
+    }
+    size_t n_uses = 0;
+    bool only_used_by_insn = true;
+    for (const auto& use : UnorderedIterable(use_it->second)) {
+      n_uses++;
+      only_used_by_insn &= use.insn == insn;
+    }
+    if (n_uses != 1 || !only_used_by_insn) {
+      continue;
+    }
+    collect_single_use_init_slice(cfg, use_defs, def_uses, def, slice);
+  }
+}
+
+CleanupStats cleanup_redundant_fields(const Scope& scope,
+                                      std::vector<UpdaterInfo>* updaters,
+                                      PassManager& mgr) {
+  CleanupStats stats;
+  if (updaters->empty()) {
+    mgr.set_metric("updater_fields_removed", 0);
+    mgr.set_metric("updater_inits_removed", 0);
+    mgr.set_metric("offset_fields_removed", 0);
+    mgr.set_metric("offset_inits_removed", 0);
+    return stats;
+  }
+
+  struct Counts {
+    std::atomic<size_t> updater_refs{0};
+    std::atomic<size_t> offset_refs{0};
+  };
+  UnorderedMap<const DexField*, UpdaterInfo*> by_updater;
+  UnorderedMap<const DexField*, UpdaterInfo*> by_offset;
+  UnorderedMap<UpdaterInfo*, Counts> counts;
+  for (auto& info : *updaters) {
+    by_updater.emplace(info.updater, &info);
+    if (info.offset_field != nullptr) {
+      by_offset.emplace(info.offset_field, &info);
+    }
+    counts.try_emplace(&info);
+  }
+
+  walk::parallel::methods(scope, [&](DexMethod* method) {
+    auto* code = method->get_code();
+    if (code == nullptr) {
+      return;
+    }
+    if (!code->cfg_built()) {
+      code->build_cfg();
+    }
+    for (auto& mie : cfg::InstructionIterable(code->cfg())) {
+      auto* insn = mie.insn;
+      if (!insn->has_field() || !insn->get_field()->is_def()) {
+        continue;
+      }
+      auto* field = insn->get_field()->as_def();
+      auto up_it = by_updater.find(field);
+      if (up_it != by_updater.end()) {
+        if (insn->opcode() != OPCODE_SPUT_OBJECT) {
+          counts.at(up_it->second)
+              .updater_refs.fetch_add(1, std::memory_order_relaxed);
+        }
+        continue;
+      }
+      auto off_it = by_offset.find(field);
+      if (off_it != by_offset.end() && insn->opcode() != OPCODE_SPUT_WIDE) {
+        counts.at(off_it->second)
+            .offset_refs.fetch_add(1, std::memory_order_relaxed);
+      }
+    }
+  });
+
+  UnorderedMap<DexMethod*, UnorderedSet<IRInstruction*>> remove_from_method;
+  std::vector<std::pair<DexClass*, DexField*>> fields_to_delete;
+  for (auto& info : *updaters) {
+    auto* holder_cls = type_class(info.holder);
+    auto* clinit = holder_cls == nullptr ? nullptr : holder_cls->get_clinit();
+    if (clinit == nullptr || clinit->get_code() == nullptr) {
+      continue;
+    }
+    auto& cfg = clinit->get_code()->cfg();
+    live_range::MoveAwareChains chains(cfg);
+    auto use_defs = chains.get_use_def_chains();
+    auto def_uses = chains.get_def_use_chains();
+    const auto& c = counts.at(&info);
+    if (c.offset_refs.load(std::memory_order_relaxed) == 0 &&
+        info.offset_field != nullptr) {
+      auto* offset_store =
+          find_static_store(clinit, info.offset_field, OPCODE_SPUT_WIDE);
+      fields_to_delete.emplace_back(holder_cls, info.offset_field);
+      stats.offset_fields_removed++;
+      if (offset_store != nullptr) {
+        collect_single_use_init_slice(cfg, use_defs, def_uses, offset_store,
+                                      &remove_from_method[clinit]);
+      }
+      info.offset_field = nullptr;
+      stats.offset_inits_removed++;
+    }
+    if (c.updater_refs.load(std::memory_order_relaxed) == 0) {
+      auto* updater_store =
+          find_static_store(clinit, info.updater, OPCODE_SPUT_OBJECT);
+      fields_to_delete.emplace_back(holder_cls, info.updater);
+      stats.updater_fields_removed++;
+      if (updater_store != nullptr) {
+        collect_single_use_init_slice(cfg, use_defs, def_uses, updater_store,
+                                      &remove_from_method[clinit]);
+      }
+      stats.updater_inits_removed++;
+    }
+  }
+
+  for (auto&& [method, to_remove] : UnorderedIterable(remove_from_method)) {
+    auto& cfg = method->get_code()->cfg();
+    cfg::CFGMutation mutation(cfg);
+    auto iterable = cfg::InstructionIterable(cfg);
+    for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+      if (to_remove.count(it->insn) == 0u) {
+        continue;
+      }
+      auto mr_it = cfg.move_result_of(it);
+      if (!mr_it.is_end()) {
+        mutation.remove(mr_it);
+      }
+      mutation.remove(it);
+    }
+    mutation.flush();
+  }
+  for (auto&& [cls, field] : fields_to_delete) {
+    cls->remove_field_definition(field);
+  }
+
+  mgr.set_metric("updater_fields_removed", stats.updater_fields_removed);
+  mgr.set_metric("updater_inits_removed", stats.updater_inits_removed);
+  mgr.set_metric("offset_fields_removed", stats.offset_fields_removed);
+  mgr.set_metric("offset_inits_removed", stats.offset_inits_removed);
+  return stats;
 }
 
 } // namespace
@@ -1573,8 +1767,9 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
     }
     return *helpers;
   };
-  lower_calls(scope, by_field, ensure_helpers, mgr.get_redex_options().min_sdk,
-              mgr);
+  lower_calls(scope, by_field, ensure_helpers, conf,
+              mgr.get_redex_options().min_sdk, mgr);
+  cleanup_redundant_fields(scope, &updaters, mgr);
 }
 
 static AtomicFieldUpdaterLoweringPass s_pass;
