@@ -14,6 +14,7 @@ class TestArtifactsGeneration(ArtifactsTestFixture):
         "redex-debug-line-map-v2",
         "redex-class-id-map.txt",
         "redex-method-id-map.txt",
+        "redex-method-id-map.txt.zst",
         "redex-class-rename-map.txt",
         "redex-class-method-info-map.txt",
         "redex-class-dependencies.txt.xz",
