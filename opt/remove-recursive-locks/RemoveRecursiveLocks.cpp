@@ -663,7 +663,7 @@ struct Stats {
   static constexpr size_t kArraySize = analysis::kMaxLockDepth + 1;
   std::array<UnorderedSet<DexMethod*>, kArraySize> counts;
   std::array<UnorderedSet<DexMethod*>, kArraySize> counts_per;
-  size_t all_methods{1};
+  size_t all_methods{0};
   size_t methods_with_locks{0};
   size_t removed{0};
   UnorderedSet<DexMethod*> methods_with_issues;
@@ -754,10 +754,15 @@ void run_impl(DexStoresVector& stores,
   Stats stats =
       walk::parallel::methods<Stats>(scope, [](DexMethod* method) -> Stats {
         auto* code = method->get_code();
-        if (code != nullptr && !method->rstate.no_optimizations()) {
-          return run_locks_removal(method, code);
-        }
-        return Stats{};
+        // `Stats{}` is the identity of the walker's reduction, and the walker
+        // default-constructs one per thread, so only the value returned for a
+        // method may carry a count.
+        Stats method_stats =
+            code != nullptr && !method->rstate.no_optimizations()
+                ? run_locks_removal(method, code)
+                : Stats{};
+        method_stats.all_methods = 1;
+        return method_stats;
       });
 
   auto print = [&mgr, &stats_prefix](const std::string& name, size_t stat) {
