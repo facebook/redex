@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <bitset>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -27,8 +28,10 @@
 using namespace std::literals::string_literals;
 
 struct DexOutputTestHelper {
-  static std::unique_ptr<uint8_t[]> steal_output(DexOutput& output) {
-    return std::move(output.m_output);
+  // Valid only while `output` is alive: DexOutput owns a single mapping that it
+  // unmaps on destruction, so the bytes cannot be detached from it.
+  static std::span<const uint8_t> output_bytes(const DexOutput& output) {
+    return {output.m_output.get(), output.m_offset};
   }
 };
 
@@ -107,9 +110,9 @@ class IODITest : public ::testing::Test {
       *iodi_data = sstream.str();
     }
     reset_redex();
-    auto data = DexOutputTestHelper::steal_output(output);
+    auto data = DexOutputTestHelper::output_bytes(output);
     auto result =
-        load_classes_from_dex(reinterpret_cast<dex_header*>(data.get()),
+        load_classes_from_dex(reinterpret_cast<const dex_header*>(data.data()),
                               DexLocation::make_location("", "tmp.dex"),
                               /*balloon=*/false);
     return result;
