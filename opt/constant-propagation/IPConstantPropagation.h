@@ -35,6 +35,7 @@ class PassImpl : public Pass {
     UnorderedSet<const DexType*> field_blocklist;
     bool compute_definitely_assigned_ifields{true};
     bool reduce_stringbuilder_concat{false};
+    bool merge_adjacent_constant_appends{false};
 
     Transform::Config transform;
     RuntimeAssertTransform::Config runtime_assert;
@@ -116,6 +117,12 @@ weak reference to it.
          "run, which is where the saving comes from. Introduces a semantic "
          "change -- see this pass's documentation. Has no effect once InterDex "
          "has run.");
+    bind("merge_adjacent_constant_appends", false,
+         m_config.merge_adjacent_constant_appends,
+         "Merge a run of adjacent `StringBuilder.append(String)` calls whose "
+         "operands are all compile-time constants into a single append of the "
+         "concatenation, saving one invocation per append removed. Has no "
+         "effect once InterDex has run.");
   }
 
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -176,6 +183,8 @@ weak reference to it.
     FixpointIterator::Stats fp_iter;
   } m_stats;
   Transform::Stats m_transform_stats;
+  // Number of adjacent constant-String appends eliminated by merging.
+  size_t m_appends_merged{0};
   // Number of two-append concatenations rewritten to String.concat.
   size_t m_concat_reduced{0};
   // Defaults to true: `run()` never sets it, and treating an unknown pipeline

@@ -249,10 +249,14 @@ void PassImpl::optimize(
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
     const NullCheckMethods& null_check_methods) {
   const auto& pure_methods = ::get_pure_methods();
-  // The reduction can add a String.concat ref, which there is no room for once
-  // InterDex has packed the dexes.
+  // Both add a ref that a dex InterDex has already packed may have no room
+  // for: the concatenated string for the merge, `String.concat` for the concat
+  // reduction.
+  const bool merge_appends =
+      m_config.merge_adjacent_constant_appends && !m_interdex_has_run;
   const bool reduce_concat =
       m_config.reduce_stringbuilder_concat && !m_interdex_has_run;
+  AtomicStatCounter<size_t> appends_merged{0};
   AtomicStatCounter<size_t> concat_reduced{0};
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
@@ -287,6 +291,15 @@ void PassImpl::optimize(
           wrapped_primitives::optimize_method(type_system, ipa->fp_iter,
                                               fp_iter.get_whole_program_state(),
                                               method, code.cfg());
+          // The merge goes first: shortening a chain to two appends brings it
+          // within the concat reduction's reach, and the concatenation it
+          // materializes is a const-string, which that reduction requires to be
+          // provably non-null.
+          if (merge_appends) {
+            appends_merged +=
+                stringbuilder_append_chain::merge_adjacent_constant_appends(
+                    ipa->fp_iter, code.cfg());
+          }
           if (reduce_concat) {
             concat_reduced +=
                 stringbuilder_append_chain::reduce_two_append_concats(
@@ -295,6 +308,7 @@ void PassImpl::optimize(
           return tf.get_stats();
         }
       });
+  m_appends_merged = appends_merged.load();
   m_concat_reduced = concat_reduced.load();
 }
 
@@ -380,6 +394,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
 
   mgr.set_metric("config.max_heap_analysis_iterations",
                  m_config.max_heap_analysis_iterations);
+  mgr.incr_metric("stringbuilder_appends_merged", m_appends_merged);
   mgr.incr_metric("stringbuilder_concat_reduced", m_concat_reduced);
 }
 
