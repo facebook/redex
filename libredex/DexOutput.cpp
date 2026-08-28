@@ -615,9 +615,10 @@ DexOutput::DexOutput(
       m_config_files(config_files),
       m_min_sdk(min_sdk),
       m_dex_output_config(std::move(dex_output_config)) {
-  // Ensure a clean slate.
-  memset(m_output.get(), 0, m_output_size);
-
+  // The buffer is not memset here: std::make_unique<uint8_t[]> already
+  // value-initializes it. The zero fill is load-bearing, not hygiene --
+  // align_output() advances the cursor without writing, and finalize_header
+  // hashes the gaps it leaves behind.
   always_assert_log(
       m_dodx.method_to_idx().size() <= kMaxMethodRefs,
       "Trying to encode too many method refs in dex %s: %zu (limit: %zu). Run "
