@@ -119,7 +119,7 @@ weak reference to it.
          "has run.");
     bind("merge_adjacent_constant_appends", false,
          m_config.merge_adjacent_constant_appends,
-         "Merge a run of adjacent `StringBuilder.append(String)` calls whose "
+         "Merge consecutive `StringBuilder.append(String)` calls whose "
          "operands are all compile-time constants into a single append of the "
          "concatenation, saving one invocation per append removed. Has no "
          "effect once InterDex has run.");
