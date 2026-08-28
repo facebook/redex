@@ -679,7 +679,7 @@ struct Stats {
     all_methods += rhs.all_methods;
     methods_with_locks += rhs.methods_with_locks;
     removed += rhs.removed;
-    insert_unordered_iterable(methods_with_issues, methods_with_issues);
+    insert_unordered_iterable(methods_with_issues, rhs.methods_with_issues);
     insert_unordered_iterable(non_singleton_rdefs, rhs.non_singleton_rdefs);
     return *this;
   }
@@ -800,7 +800,8 @@ void run_impl(DexStoresVector& stores,
   print("all_methods", stats.all_methods);
   print("methods_with_locks", stats.methods_with_locks);
   print("methods_with_issues", stats.methods_with_issues.size());
-  if (!stats.methods_with_issues.empty()) {
+  if ((kDebugPass || traceEnabled(LOCKS, 2)) &&
+      !stats.methods_with_issues.empty()) {
     std::cerr << "Lock analysis failed for:\n";
     for (auto* m : sorted(stats.methods_with_issues)) {
       std::cerr << " * " << show(m) << '\n';
