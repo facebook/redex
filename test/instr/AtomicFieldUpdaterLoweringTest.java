@@ -42,6 +42,17 @@ public class AtomicFieldUpdaterLoweringTest {
         AtomicLongFieldUpdater.newUpdater(Holder.class, "l");
   }
 
+  static class OtherHolder {
+    volatile Object ref = "other";
+  }
+
+  static class StringHolder {
+    volatile String value = "initial";
+
+    static final AtomicReferenceFieldUpdater<StringHolder, String> REF =
+        AtomicReferenceFieldUpdater.newUpdater(StringHolder.class, String.class, "value");
+  }
+
   private Holder h;
 
   @Before
@@ -148,6 +159,25 @@ public class AtomicFieldUpdaterLoweringTest {
 
     assertThatThrownBy(() -> Holder.I.incrementAndGet(nullHolder))
         .isInstanceOf(ClassCastException.class);
+  }
+
+  @Test
+  public void wrongHolderTypeThrowsClassCastException() {
+    AtomicReferenceFieldUpdater raw = Holder.REF;
+
+    assertThatThrownBy(() -> raw.get(new OtherHolder())).isInstanceOf(ClassCastException.class);
+    assertThatThrownBy(() -> raw.compareAndSet(new OtherHolder(), "a", "b"))
+        .isInstanceOf(ClassCastException.class);
+  }
+
+  @Test
+  public void wrongValueTypeThrowsClassCastException() {
+    AtomicReferenceFieldUpdater raw = StringHolder.REF;
+    StringHolder stringHolder = new StringHolder();
+
+    assertThatThrownBy(() -> raw.set(stringHolder, new Object()))
+        .isInstanceOf(ClassCastException.class);
+    assertThat(StringHolder.REF.get(stringHolder)).isEqualTo("initial");
   }
 
   @Test
