@@ -70,6 +70,12 @@ inline uint32_t read_uleb128p1(const uint8_t** _ptr) {
 }
 
 /*
+ * Largest number of bytes any of the leb128 writers below can emit for a
+ * 32-bit value. Used to bound an encoded item's size before writing it.
+ */
+constexpr size_t kMaxLeb128Size = 5;
+
+/*
  * Number of bytes it takes to encode a particular integer in a uleb128.
  */
 inline uint8_t uleb128_encoding_size(uint32_t v) {

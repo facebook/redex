@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "DexDefs.h"
+#include "DexEncoding.h"
 #include "Gatherable.h"
 #include "Util.h"
 
@@ -37,6 +38,12 @@ class DexDebugInstruction : public Gatherable {
       : m_value(v), m_signed(true), m_opcode(op) {}
 
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
+
+  // Upper bound on the bytes `encode` writes: the opcode byte plus at most one
+  // leb128. Virtual rather than a constant so a subclass that emits more
+  // cannot silently invalidate the bound.
+  virtual size_t max_encoded_size() const { return 1 + kMaxLeb128Size; }
+
   static DexDebugInstruction* make_instruction(DexIdx* idx,
                                                std::string_view& encdata_ptr);
   virtual std::unique_ptr<DexDebugInstruction> clone() const {
@@ -75,6 +82,10 @@ class DexDebugOpcodeSetFile : public DexDebugInstruction {
   }
 
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
+
+  // opcode + file name index.
+  size_t max_encoded_size() const override { return 1 + 2 * kMaxLeb128Size; }
+
   void gather_strings(std::vector<const DexString*>& lstring) const override;
 
   std::unique_ptr<DexDebugInstruction> clone() const override {
@@ -107,6 +118,10 @@ class DexDebugOpcodeStartLocal : public DexDebugInstruction {
   }
 
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
+
+  // opcode + register + name + type + optional signature.
+  size_t max_encoded_size() const override { return 1 + 4 * kMaxLeb128Size; }
+
   void gather_strings(std::vector<const DexString*>& lstring) const override;
   void gather_types(std::vector<const DexType*>& ltype) const override;
 
