@@ -1705,7 +1705,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     m_stats.branches_eliminated += m_dead_edges.size();
   }
 
-  if (m_forward.empty()) {
+  if (m_forward.empty() && m_unboxing.empty()) {
     return !m_dead_edges.empty();
   }
 

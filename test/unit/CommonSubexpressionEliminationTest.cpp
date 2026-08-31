@@ -1538,6 +1538,42 @@ TEST_F(CommonSubexpressionEliminationTest, no_unwrap_across_loop_with_retype) {
        DexTypeList::make_type_list({type::_int()}));
 }
 
+// The unboxing rewrite must not depend on there being an unrelated forwarding
+// opportunity in the same method. Here the boxed value comes from a parameter,
+// so nothing is forwardable and m_forward stays empty - the rewrite is still
+// due.
+TEST_F(CommonSubexpressionEliminationTest, unwrap_without_any_forwarding) {
+  const auto* code_str = R"(
+    (
+      (load-param v0)
+      (invoke-static (v0) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+      (move-result-object v1)
+      (invoke-virtual (v1) "Ljava/lang/Number;.intValue:()I")
+      (move-result v2)
+      (return v2)
+    )
+  )";
+
+  const auto* expected_str = R"(
+    (
+      (load-param v0)
+      (invoke-static (v0) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+      (move-result-object v1)
+      (check-cast v1 "Ljava/lang/Integer;")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v1) "Ljava/lang/Integer;.intValue:()I")
+      (move-result v2)
+      (return v2)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str,
+       /* expected_instructions_eliminated */ 0,
+       /* is_static */ true,
+       /* is_init_or_clinit */ false,
+       /* declaring_type */ nullptr,
+       DexTypeList::make_type_list({type::_int()}));
+}
+
 TEST_F(CommonSubexpressionEliminationTest, unwrap_and_wrap) {
   const auto* code_str = R"(
     (
