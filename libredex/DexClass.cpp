@@ -623,6 +623,18 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
   return dbgops;
 }
 
+size_t DexDebugItem::max_encoded_size(
+    uint32_t num_params,
+    const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops) {
+  // line_start + num_params + one uleb128p1 per parameter, then the ops, then
+  // DBG_END_SEQUENCE.
+  size_t size = 2 * kMaxLeb128Size + (size_t)num_params * kMaxLeb128Size + 1;
+  for (const auto& dbgop : dbgops) {
+    size += dbgop->max_encoded_size();
+  }
+  return size;
+}
+
 int DexDebugItem::encode(
     DexOutputIdx* dodx,
     uint8_t* output,

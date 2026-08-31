@@ -689,6 +689,12 @@ class DexDebugItem {
   uint32_t get_source_offset() const { return m_source_offset; }
   void bind_positions(DexMethod* method, const DexString* file);
 
+  // Upper bound on the bytes `encode` writes. Computable before the write,
+  // which is what lets DexOutput check that the item fits.
+  static size_t max_encoded_size(
+      uint32_t num_params,
+      const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops);
+
   /* Returns number of bytes encoded, *output has no alignment requirements */
   static int encode(
       DexOutputIdx* dodx,
