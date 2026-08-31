@@ -637,6 +637,15 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     return m_unboxing_insns;
   }
 
+  // The list is populated as a side effect of get_value_id, which runs on the
+  // intermediate (not yet converged) states of the fixpoint iteration as well.
+  // Callers must discard those speculative entries and re-collect them while
+  // replaying the converged states.
+  void clear_unboxing_insns() {
+    m_unboxing_insns.clear();
+    m_unboxing_insns_set.clear();
+  }
+
  private:
   // After analysis, the insns in this list should be refined to call its
   // unboxing implementor.
@@ -1525,7 +1534,6 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       m_abs_map(shared_state->get_abstract_map()) {
   Analyzer analyzer(shared_state, cfg, is_static, is_init_or_clinit,
                     declaring_type);
-  m_unboxing = analyzer.get_unboxing_insns();
   m_stats.max_value_ids = analyzer.get_value_ids_size();
   if (analyzer.using_other_tracked_location_bit()) {
     m_stats.methods_using_other_tracked_location_bit = 1;
@@ -1553,6 +1561,11 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
 
   // identify all instruction pairs where the result of the first instruction
   // can be forwarded to the second
+
+  // Drop whatever the fixpoint iteration speculatively recorded from its
+  // intermediate states; the replay below re-collects it from the converged
+  // states, the same way m_forward is derived.
+  analyzer.clear_unboxing_insns();
 
   for (cfg::Block* block : cfg.blocks()) {
     auto env = analyzer.get_entry_state_at(block);
@@ -1619,6 +1632,8 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       }
     }
   }
+
+  m_unboxing = analyzer.get_unboxing_insns();
 }
 
 size_t CommonSubexpressionElimination::get_earlier_insn_id(

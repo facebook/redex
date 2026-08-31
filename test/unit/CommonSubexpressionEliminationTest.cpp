@@ -1479,6 +1479,65 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_5) {
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
 }
 
+// The boxing-unboxing pattern only holds on the first iteration of the loop:
+// v4 is a Long on entry, but a Double on every subsequent iteration. The
+// fixpoint sees the matching pattern in its first (not yet converged) pass, so
+// the unboxing rewrite must not be applied - refining the receiver to
+// Long.longValue() behind a check-cast would throw ClassCastException.
+// The unrelated add-int pair is there so that CSE has something to forward and
+// therefore gets as far as applying the unboxing rewrites.
+TEST_F(CommonSubexpressionEliminationTest, no_unwrap_across_loop_with_retype) {
+  const auto* code_str = R"(
+    (
+      (load-param v0)
+      (const-wide v2 3)
+      (invoke-static (v2) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
+      (move-result-object v4)
+      (const v5 7)
+      (:loop)
+      (invoke-virtual (v4) "Ljava/lang/Number;.longValue:()J")
+      (move-result-wide v6)
+      (const-wide v8 4)
+      (invoke-static (v8) "Ljava/lang/Double;.valueOf:(D)Ljava/lang/Double;")
+      (move-result-object v4)
+      (add-int v10 v5 v5)
+      (add-int v11 v5 v5)
+      (add-int/lit v0 v0 -1)
+      (if-gtz v0 :loop)
+      (return-wide v6)
+    )
+  )";
+
+  const auto* expected_str = R"(
+    (
+      (load-param v0)
+      (const-wide v2 3)
+      (invoke-static (v2) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
+      (move-result-object v4)
+      (const v5 7)
+      (:loop)
+      (invoke-virtual (v4) "Ljava/lang/Number;.longValue:()J")
+      (move-result-wide v6)
+      (const-wide v8 4)
+      (invoke-static (v8) "Ljava/lang/Double;.valueOf:(D)Ljava/lang/Double;")
+      (move-result-object v4)
+      (add-int v10 v5 v5)
+      (move v12 v10)
+      (add-int v11 v5 v5)
+      (move v11 v12)
+      (add-int/lit v0 v0 -1)
+      (if-gtz v0 :loop)
+      (return-wide v6)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str,
+       /* expected_instructions_eliminated */ 1,
+       /* is_static */ true,
+       /* is_init_or_clinit */ false,
+       /* declaring_type */ nullptr,
+       DexTypeList::make_type_list({type::_int()}));
+}
+
 TEST_F(CommonSubexpressionEliminationTest, unwrap_and_wrap) {
   const auto* code_str = R"(
     (
