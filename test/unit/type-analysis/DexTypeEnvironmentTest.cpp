@@ -1074,6 +1074,42 @@ TEST_F(DexTypeEnvironmentTest, BaseClassInterfaceJoinTest) {
   EXPECT_FALSE(intf_array.is_top());
 }
 
+/*
+ * A framework interface is often referenced by name without its definition
+ * being available -- Lorg/apache/http/HttpEntity; left the Android SDK at API
+ * 23, for instance. The implementing class still names it in its own interface
+ * list, so joining the two is answerable even though the interface has no
+ * DexClass of its own.
+ */
+TEST_F(DexTypeEnvironmentTest, ExternalInterfaceWithoutClassJoinTest) {
+  auto* external_intf = DexType::make_type("Lorg/example/ExternalIntf;");
+  ASSERT_EQ(nullptr, type_class(external_intf));
+
+  auto* impl_type = DexType::make_type("LExternalIntfImpl;");
+  ClassCreator impl_creator(impl_type);
+  impl_creator.set_super(type::java_lang_Object());
+  impl_creator.add_interface(external_intf);
+  impl_creator.create();
+
+  auto intf = SingletonDexTypeDomain(external_intf);
+  auto impl = SingletonDexTypeDomain(impl_type);
+  intf.join_with(impl);
+  EXPECT_EQ(intf, SingletonDexTypeDomain(external_intf));
+  EXPECT_FALSE(impl.is_top());
+
+  intf = SingletonDexTypeDomain(external_intf);
+  impl.join_with(intf);
+  EXPECT_EQ(impl, SingletonDexTypeDomain(external_intf));
+  EXPECT_FALSE(intf.is_top());
+
+  // An unrelated class shares nothing with it, and the interface has no class
+  // to walk, so there is still no answer.
+  auto unrelated = SingletonDexTypeDomain(m_type_a);
+  intf = SingletonDexTypeDomain(external_intf);
+  unrelated.join_with(intf);
+  EXPECT_TRUE(unrelated.is_top());
+}
+
 TEST_F(DexTypeEnvironmentTest, TypedefAnnotationDomain) {
   auto d1 = DexTypeDomain::create_for_anno(m_anno_d1);
   EXPECT_FALSE(d1.is_top());

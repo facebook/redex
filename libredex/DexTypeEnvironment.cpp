@@ -77,16 +77,21 @@ const DexType* find_common_super_class(const DexType* l, const DexType* r) {
 const DexType* find_common_type(const DexType* l, const DexType* r) {
   const DexClass* l_cls = type_class(l);
   const DexClass* r_cls = type_class(r);
-  if ((l_cls == nullptr) || (r_cls == nullptr)) {
-    return nullptr;
-  }
 
-  // One is interface, and the other implements it.
-  if (is_interface(l_cls) && !is_interface(r_cls) && implements(r_cls, l)) {
+  // One is interface, and the other implements it. This is answered from the
+  // implementing class alone: it names the interface in its own interface
+  // list, so the interface's own DexClass is not needed. Framework interfaces
+  // often have none -- Lorg/apache/http/HttpEntity; left the Android SDK at
+  // API 23 -- and bailing on that would send an answerable join to Top.
+  if ((r_cls != nullptr) && !is_interface(r_cls) && implements(r_cls, l)) {
     return l;
   }
-  if (is_interface(r_cls) && !is_interface(l_cls) && implements(l_cls, r)) {
+  if ((l_cls != nullptr) && !is_interface(l_cls) && implements(l_cls, r)) {
     return r;
+  }
+
+  if ((l_cls == nullptr) || (r_cls == nullptr)) {
+    return nullptr;
   }
 
   const auto* parent = find_common_super_class(l, r);
