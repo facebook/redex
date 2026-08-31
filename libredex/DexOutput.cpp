@@ -1409,11 +1409,23 @@ DebugMetadata calculate_debug_metadata(
   return metadata;
 }
 
+// `capacity` is the number of bytes writable at `output`. Checked BEFORE the
+// write: DexDebugItem::encode advances a raw pointer with no notion of an end,
+// so an oversized debug program would otherwise be detected, if at all, only
+// after it had already run off the buffer.
 int emit_debug_info_for_metadata(DexOutputIdx* dodx,
                                  const DebugMetadata& metadata,
                                  uint8_t* output,
                                  uint32_t offset,
+                                 uint64_t capacity,
                                  bool set_dci_offset = true) {
+  uint64_t bound =
+      DexDebugItem::max_encoded_size(metadata.num_params, metadata.dbgops);
+  always_assert_log(offset + bound <= capacity,
+                    "A debug program of up to %" PRIu64
+                    " bytes does not fit at offset %u of a %" PRIu64
+                    "-byte buffer.",
+                    bound, offset, capacity);
   int size = DexDebugItem::encode(dodx, output + offset, metadata.line_start,
                                   metadata.num_params, metadata.dbgops);
   if (set_dci_offset) {
@@ -1431,14 +1443,15 @@ int emit_debug_info(
     PositionMapper* pos_mapper,
     uint8_t* output,
     uint32_t offset,
+    uint64_t capacity,
     uint32_t num_params,
     UnorderedMap<DexCode*, std::vector<DebugLineItem>>* dbg_lines) {
   // No align requirement for debug items.
   DebugMetadata metadata = calculate_debug_metadata(
       dbg, dc, dci, pos_mapper, num_params, dbg_lines, /*line_addin=*/0);
-  return emit_positions
-             ? emit_debug_info_for_metadata(dodx, metadata, output, offset)
-             : 0;
+  return emit_positions ? emit_debug_info_for_metadata(dodx, metadata, output,
+                                                       offset, capacity)
+                        : 0;
 }
 
 struct MethodKey {
@@ -1535,6 +1548,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
     size_t dex_number,
     uint8_t* output,
     uint32_t offset,
+    uint64_t capacity,
     int* dbgcount,
     UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
   // Algo is as follows:
@@ -1575,8 +1589,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
                                  param_size, code_debug_map, line_addin);
 
     int debug_size =
-        emit_debug_info_for_metadata(dodx, metadata, tmp, 0, false);
-    always_assert_log(debug_size < TMP_SIZE, "Tmp buffer overrun");
+        emit_debug_info_for_metadata(dodx, metadata, tmp, 0, TMP_SIZE, false);
     metadata.size = debug_size;
     const auto dex_size = dc->size();
     metadata.dex_size = dex_size;
@@ -2188,8 +2201,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
                                      /*line_addin=*/0);
         metadata = &no_line_addin_metadata;
       }
-      offset +=
-          emit_debug_info_for_metadata(dodx, *metadata, output, offset, true);
+      offset += emit_debug_info_for_metadata(dodx, *metadata, output, offset,
+                                             capacity, true);
       *dbgcount += 1;
     }
     to_remove.insert(method);
@@ -2215,6 +2228,7 @@ uint32_t emit_instruction_offset_debug_info(
     size_t dex_number,
     uint8_t* output,
     uint32_t offset,
+    uint64_t capacity,
     int* dbgcount,
     UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
   // IODI only supports non-ambiguous methods, i.e., an overload cluster is
@@ -2280,7 +2294,7 @@ uint32_t emit_instruction_offset_debug_info(
       offset += emit_instruction_offset_debug_info_helper(
           dodx, pos_mapper, code_items_tmp, iodi_metadata, i,
           i << DexOutput::kIODILayerShift, store_number, dex_number, output,
-          offset, dbgcount, code_debug_map);
+          offset, capacity, dbgcount, code_debug_map);
       const size_t after_size = code_items_tmp.size();
       redex_assert(after_size < before_size);
     }
@@ -2299,8 +2313,8 @@ uint32_t emit_instruction_offset_debug_info(
     DebugMetadata metadata =
         calculate_debug_metadata(dbg_item, dc, cie->code_item, pos_mapper,
                                  param_size, code_debug_map, /*line_addin=*/0);
-    offset +=
-        emit_debug_info_for_metadata(dodx, metadata, output, offset, true);
+    offset += emit_debug_info_for_metadata(dodx, metadata, output, offset,
+                                           capacity, true);
     *dbgcount += 1;
     iodi_metadata.mark_method_huge(method);
   }
@@ -2327,6 +2341,7 @@ void DexOutput::generate_debug_items() {
         m_dex_number,
         m_output.get(),
         m_offset,
+        m_output_size,
         &dbgcount,
         m_code_debug_lines));
   } else {
@@ -2343,11 +2358,11 @@ void DexOutput::generate_debug_items() {
         continue;
       }
       dbgcount++;
-      size_t num_params =
-          static_cast<size_t>(it.method->get_proto()->get_args()->size());
-      int dbg_size = emit_debug_info(&m_dodx, emit_positions, dbg, dc, dci,
-                                     m_pos_mapper, m_output.get(), m_offset,
-                                     num_params, m_code_debug_lines);
+      uint32_t num_params =
+          static_cast<uint32_t>(it.method->get_proto()->get_args()->size());
+      int dbg_size = emit_debug_info(
+          &m_dodx, emit_positions, dbg, dc, dci, m_pos_mapper, m_output.get(),
+          m_offset, m_output_size, num_params, m_code_debug_lines);
       inc_offset(
           checked_encoded_size(dbg_size, "emit_debug_info", SHOW(it.method)));
     }
