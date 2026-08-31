@@ -633,24 +633,36 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     return m_using_other_tracked_location_bit;
   }
 
+  // Only meaningful once collection has been enabled; see
+  // start_collecting_unboxing_insns.
   const std::vector<IRInstruction*>& get_unboxing_insns() {
-    return m_unboxing_insns;
+    always_assert(m_unboxing_collection);
+    return m_unboxing_collection->insns;
   }
 
-  // The list is populated as a side effect of get_value_id, which runs on the
-  // intermediate (not yet converged) states of the fixpoint iteration as well.
-  // Callers must discard those speculative entries and re-collect them while
-  // replaying the converged states.
-  void clear_unboxing_insns() {
-    m_unboxing_insns.clear();
-    m_unboxing_insns_set.clear();
-  }
+  // get_value_id records unboxing candidates as a side effect, and it runs on
+  // the intermediate (not yet converged) states of the fixpoint as well as on
+  // the converged ones. An intermediate state can be more precise than the
+  // fixed point - a loop head is at its most precise before the back edge is
+  // joined in - so a match seen there may not hold at convergence, and acting
+  // on it emits a check-cast for a type the value need not have.
+  //
+  // Collection is therefore off while the fixpoint runs, and is enabled for
+  // the replay over the converged states.
+  void start_collecting_unboxing_insns() { m_unboxing_collection.emplace(); }
 
  private:
   // After analysis, the insns in this list should be refined to call its
   // unboxing implementor.
-  mutable std::vector<IRInstruction*> m_unboxing_insns;
-  mutable UnorderedSet<IRInstruction*> m_unboxing_insns_set;
+  // `seen` dedups: the same instruction can be recorded more than once in a
+  // single pass, and applying a refinement twice trips the always_assert in
+  // the patch loop, because the first application rewrites the method ref that
+  // the second one looks up.
+  struct UnboxingCollection {
+    std::vector<IRInstruction*> insns;
+    UnorderedSet<IRInstruction*> seen;
+  };
+  mutable std::optional<UnboxingCollection> m_unboxing_collection;
 
   CseUnorderedLocationSet get_clobbered_locations(
       const IRInstruction* insn, const CseEnvironment* current_state) const {
@@ -761,6 +773,13 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
       m_pre_state_value_ids.insert(id);
     } else {
       const auto& abs_map = m_shared_state->get_abstract_map();
+      // First match wins over an unordered iteration, which is only
+      // deterministic because at most one pair can match: several pairs may
+      // share an abstract unwrap method (Number.intValue backs both
+      // Integer.intValue and Short.intValue), but unwrap_value also requires
+      // the producer's method to equal this pair's wrap method, and the
+      // producer has exactly one. unwrap_value is free of side effects, so the
+      // pairs probed before the winner leave nothing behind either.
 #if __GNUC__ >= 11 && __GNUC__ <= 14 && !defined(__clang__)
 #pragma GCC diagnostic push
 // Work around https://gcc.gnu.org/bugzilla/show_bug.cgi?id=116731
@@ -780,14 +799,18 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
             value, unbox_method, box_method, abs_method, /* unboxed */ true);
         if (optional_unboxed_value_id) {
           // boxing-unboxing
-          if (value.opcode == IOPCODE_POSITIONAL_UNBOXING) {
-            // Since value is in boxing-unboxing pattern, we record it in
-            // m_unboxing_insns.
+          if (value.opcode == IOPCODE_POSITIONAL_UNBOXING &&
+              m_unboxing_collection) {
             auto* insn = const_cast<IRInstruction*>(value.positional_insn);
-            if (m_unboxing_insns_set.insert(insn).second) {
-              m_unboxing_insns.emplace_back(insn);
+            if (m_unboxing_collection->seen.insert(insn).second) {
+              m_unboxing_collection->insns.emplace_back(insn);
             }
           }
+          // Deliberately returns without entering `value` into `m_value_ids`.
+          // The replay over the converged states re-runs this to rebuild the
+          // unboxing list, and a cache hit here would skip the record above and
+          // leave that list empty. Memoizing would also need a separate map:
+          // the id returned here belongs to the inner value, not to `value`.
           return optional_unboxed_value_id;
         }
         auto optional_boxed_value_id = unwrap_value(
@@ -1562,10 +1585,9 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
   // identify all instruction pairs where the result of the first instruction
   // can be forwarded to the second
 
-  // Drop whatever the fixpoint iteration speculatively recorded from its
-  // intermediate states; the replay below re-collects it from the converged
-  // states, the same way m_forward is derived.
-  analyzer.clear_unboxing_insns();
+  // Collect unboxing candidates from here on, so that they come from the
+  // converged states the replay below walks, the same way m_forward is derived.
+  analyzer.start_collecting_unboxing_insns();
 
   for (cfg::Block* block : cfg.blocks()) {
     auto env = analyzer.get_entry_state_at(block);
@@ -1898,7 +1920,11 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
       auto* method_ref = unboxing_insn->get_method();
       auto abs_it = unordered_find_if(
           m_abs_map, [method_ref](auto& p) { return p.second == method_ref; });
-      always_assert(abs_it != m_abs_map.end());
+      // set_method below rewrites the ref, so a repeated instruction would not
+      // resolve here on its second visit.
+      always_assert_log(abs_it != m_abs_map.end(),
+                        "not an abstract unboxing method: %s",
+                        SHOW(unboxing_insn));
       const auto* impl = abs_it->first;
       auto src_reg = unboxing_insn->src(0);
       auto* check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
