@@ -146,6 +146,18 @@ void PrintKotlinStats::setup() {
   m_kotlin_lambdas_base = DexType::get_type(KOTLIN_LAMBDA);
   m_kotlin_coroutin_continuation_base = DexType::get_type(CONTINUATION_IMPL);
   m_instance = DexString::make_string("INSTANCE");
+  // Build descriptors for kotlin.jvm.functions.Function<i>.invoke at arities
+  // 0-22, plus the vararg FunctionN.invoke(Object[]) for arities >= 23.
+  std::string args;
+  for (size_t i = 0; i < 23; ++i) {
+    std::string desc = "Lkotlin/jvm/functions/Function" + std::to_string(i) +
+                       ";.invoke:(" + args + ")Ljava/lang/Object;";
+    m_kotlin_function_invokes[i] = DexMethod::get_method(desc);
+    args += "Ljava/lang/Object;";
+  }
+  m_kotlin_function_invokes[23] = DexMethod::get_method(
+      "Lkotlin/jvm/functions/FunctionN;"
+      ".invoke:([Ljava/lang/Object;)Ljava/lang/Object;");
 }
 
 // Annotate Kotlin classes before StripDebugInfoPass removes it
@@ -404,6 +416,17 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
       }
       stats.kotlin_and_lit_insns++;
     } break;
+    case OPCODE_INVOKE_INTERFACE: {
+      auto* called_method = insn->get_method();
+      for (size_t i = 0; i < m_kotlin_function_invokes.size(); ++i) {
+        if (m_kotlin_function_invokes[i] != nullptr &&
+            called_method == m_kotlin_function_invokes[i]) {
+          stats
+              .kotlin_invoke_interface_function_insns[std::min(i, size_t{4})]++;
+          break;
+        }
+      }
+    } break;
     default:
       break;
     }
@@ -471,6 +494,14 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
                   kotlin_trivial_non_capturing_lambdas);
   mgr.incr_metric("kotlin_unique_trivial_non_capturing_lambdas",
                   kotlin_unique_trivial_non_capturing_lambdas);
+  for (size_t i = 0; i < kotlin_invoke_interface_function_insns.size(); ++i) {
+    std::string name = "kotlin_invoke_interface_function" +
+                       (i < 4 ? std::to_string(i) : std::string("4plus")) +
+                       "_insns";
+    mgr.incr_metric(name, kotlin_invoke_interface_function_insns[i]);
+    TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: %s = %zu", name.c_str(),
+          kotlin_invoke_interface_function_insns[i]);
+  }
 
   TRACE(KOTLIN_STATS, 1,
         "KOTLIN_STATS: kotlin_null_check_param_insns_in_root_method = %zu",

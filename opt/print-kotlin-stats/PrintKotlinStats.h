@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <array>
+
 #include "AnalysisUsage.h"
 #include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
@@ -64,6 +66,9 @@ class PrintKotlinStats : public Pass {
     size_t kotlin_enum_class{0};
     size_t kotlin_trivial_non_capturing_lambdas{0};
     size_t kotlin_unique_trivial_non_capturing_lambdas{0};
+    // Counts of `invoke-interface` to `kotlin.jvm.functions.FunctionN.invoke`
+    // for arities 0..3 and 4+. Index 4 holds the aggregate for arities >= 4.
+    std::array<size_t, 5> kotlin_invoke_interface_function_insns{};
 
     Stats& operator+=(const Stats& that) {
       unknown_null_check_insns += that.unknown_null_check_insns;
@@ -117,6 +122,11 @@ class PrintKotlinStats : public Pass {
           that.kotlin_trivial_non_capturing_lambdas;
       kotlin_unique_trivial_non_capturing_lambdas +=
           that.kotlin_unique_trivial_non_capturing_lambdas;
+      for (size_t i = 0; i < kotlin_invoke_interface_function_insns.size();
+           ++i) {
+        kotlin_invoke_interface_function_insns[i] +=
+            that.kotlin_invoke_interface_function_insns[i];
+      }
       return *this;
     }
 
@@ -162,5 +172,9 @@ class PrintKotlinStats : public Pass {
   DexType* m_kotlin_lambdas_base = nullptr;
   DexType* m_kotlin_coroutin_continuation_base = nullptr;
   const DexString* m_instance = nullptr;
+  // `kotlin.jvm.functions.Function<i>.invoke` refs for arities 0..22, plus
+  // `FunctionN.invoke(Object[])` for arities >= 23 at index 23. Entries are
+  // null when the corresponding ref is absent from the program.
+  std::array<DexMethodRef*, 24> m_kotlin_function_invokes{};
   Stats m_stats;
 };
