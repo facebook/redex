@@ -471,6 +471,8 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
+// A and B declare different interfaces, but B is still A's super class, so the
+// merge is B -- which inherits I_C from C. The cast is therefore redundant.
 TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("differentTypeInterfaceCheckCast");
@@ -514,8 +516,6 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (move-result-pseudo-object v1)
       (invoke-direct (v1) "LB;.<init>:()V")
       (:lb0)
-      (check-cast v1 "LI_C;")
-      (move-result-pseudo-object v1)
       (sput-object v1 "LDummy;.foo:LI_C;")
       (return-void)
       (:lb1)

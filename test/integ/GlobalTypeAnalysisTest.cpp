@@ -391,12 +391,17 @@ TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestO$B;")));
 
+  // The two callees return A and B, siblings that both implement I and extend
+  // Object. I is their least upper bound, and it happens to be exactly the
+  // declared return type.
   auto* call_diff =
       get_method("TestO;.callDiff", "I", "Lcom/facebook/redextest/TestO$I;");
   EXPECT_TRUE(call_diff != nullptr);
   rtype = wps.get_return_type(call_diff);
   EXPECT_FALSE(rtype.is_top());
-  EXPECT_TRUE(rtype.get_single_domain().is_top());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(
+                get_type_simple("Lcom/facebook/redextest/TestO$I;")));
 }
 
 // This makes sure we are no longer running in a bug where all code following an

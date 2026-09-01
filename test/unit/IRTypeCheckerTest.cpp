@@ -1087,8 +1087,10 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithConflictingInterface) {
   EXPECT_EQ(type_a, *checker.get_dex_type(insns[3], 0));
   EXPECT_EQ(type_b, *checker.get_dex_type(insns[6], 0));
   EXPECT_EQ(type_b, *checker.get_dex_type(insns[7], 0));
-  EXPECT_EQ(std::nullopt, checker.get_dex_type(insns[8], 0));
-  EXPECT_EQ(std::nullopt, checker.get_dex_type(insns[9], 0));
+  // B's interface I cannot survive a merge with A, but that is no reason to
+  // lose the common base class as well.
+  EXPECT_EQ(type_base, *checker.get_dex_type(insns[8], 0));
+  EXPECT_EQ(type_base, *checker.get_dex_type(insns[9], 0));
 }
 
 /**
@@ -1200,6 +1202,194 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithMergableInterface) {
   EXPECT_EQ(type_b, *checker.get_dex_type(insns[7], 0));
   EXPECT_EQ(type_base, *checker.get_dex_type(insns[8], 0));
   EXPECT_EQ(type_base, *checker.get_dex_type(insns[9], 0));
+}
+
+namespace {
+
+// First instruction with the given opcode, or null. Used to name the
+// instruction a type error is expected to be attributed to.
+IRInstruction* find_insn(DexMethod* method, IROpcode opcode) {
+  for (const auto& mie : InstructionIterable(method->get_code())) {
+    if (mie.insn->opcode() == opcode) {
+      return mie.insn;
+    }
+  }
+  return nullptr;
+}
+
+} // namespace
+
+/**
+ * Two unrelated classes merge, one of them declaring an interface. Their least
+ * upper bound genuinely is Ljava/lang/Object;, and storing that into a field of
+ * a more derived type is what the Android verifier rejects.
+ *
+ * The join used to report Top for this instead, because the merge point could
+ * not carry LStoredIntf; -- and assume_assignable does nothing when there is no
+ * type, so the store went unchecked. That is the shape that shipped in S697124.
+ */
+TEST_F(IRTypeCheckerTest, iputObjectOfUnrelatedJoinIsRejected) {
+  auto* const type_intf = DexType::make_type("LStoredIntf;");
+  ClassCreator intf_creator(type_intf);
+  intf_creator.set_super(type::java_lang_Object());
+  intf_creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
+  intf_creator.create();
+
+  // Declares an interface, so the merge point cannot preserve its full
+  // identity. That is not a reason to give up on the class part.
+  auto* const type_stored = DexType::make_type("LStored;");
+  ClassCreator stored_creator(type_stored);
+  stored_creator.set_super(type::java_lang_Object());
+  stored_creator.add_interface(type_intf);
+  stored_creator.add_method(DexMethod::make_method("LStored;.<init>:()V")
+                                ->make_concrete(ACC_PUBLIC, false));
+  stored_creator.create();
+
+  // Shares nothing with LStored; but Object.
+  auto* const type_other = DexType::make_type("LOther;");
+  ClassCreator other_creator(type_other);
+  other_creator.set_super(type::java_lang_Object());
+  other_creator.add_method(DexMethod::make_method("LOther;.<init>:()V")
+                               ->make_concrete(ACC_PUBLIC, false));
+  other_creator.create();
+
+  auto* const type_holder = DexType::make_type("LHolder;");
+  ClassCreator holder_creator(type_holder);
+  holder_creator.set_super(type::java_lang_Object());
+  holder_creator.add_method(DexMethod::make_method("LHolder;.<init>:()V")
+                                ->make_concrete(ACC_PUBLIC, false));
+  holder_creator.add_field(
+      DexField::make_field("LHolder;.f:LStored;")->make_concrete(ACC_PUBLIC));
+  holder_creator.create();
+
+  auto* method = DexMethod::make_method("LHolder;.store:(I)V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param v2)
+
+      (if-eqz v2 :other)
+      (new-instance "LStored;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LStored;.<init>:()V")
+      (goto :join)
+
+      (:other)
+      (new-instance "LOther;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LOther;.<init>:()V")
+
+      (:join)
+      (new-instance "LHolder;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LHolder;.<init>:()V")
+      (iput-object v0 v1 "LHolder;.f:LStored;")
+      (return-void)
+    )
+  )"));
+
+  auto* iput_insn = find_insn(method, OPCODE_IPUT_OBJECT);
+  ASSERT_NE(nullptr, iput_insn);
+
+  IRTypeChecker checker(method);
+  checker.run();
+
+  // Pin what the join produced, not just that something was rejected.
+  EXPECT_EQ(type::java_lang_Object(), *checker.get_dex_type(iput_insn, 0));
+  EXPECT_FALSE(checker.good());
+  EXPECT_THAT(checker.what(),
+              HasSubstr("Ljava/lang/Object; is not assignable to LStored;"));
+  EXPECT_EQ(iput_insn, checker.error_insn());
+}
+
+/**
+ * The same bad store, but reached around a loop back edge rather than through
+ * a branch. This is the shape S697124 actually shipped: a value live across a
+ * loop is clobbered on one path through the body, so from the second iteration
+ * on the store sees the wrong type.
+ *
+ * Worth knowing if this ever starts failing: the join is only half the story
+ * here. `DexTypeValue::widen_with` drops straight to Top for any two distinct
+ * types, and Sparta widens at a loop head from its second iteration on, so a
+ * merge that needs more rounds than this one to settle would be unchecked
+ * regardless of what `find_common_type` returns.
+ */
+TEST_F(IRTypeCheckerTest, iputObjectOfLoopCarriedUnrelatedJoinIsRejected) {
+  auto* const type_intf = DexType::make_type("LLoopIntf;");
+  ClassCreator intf_creator(type_intf);
+  intf_creator.set_super(type::java_lang_Object());
+  intf_creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
+  intf_creator.create();
+
+  auto* const type_stored = DexType::make_type("LLoopStored;");
+  ClassCreator stored_creator(type_stored);
+  stored_creator.set_super(type::java_lang_Object());
+  stored_creator.add_interface(type_intf);
+  stored_creator.add_method(DexMethod::make_method("LLoopStored;.<init>:()V")
+                                ->make_concrete(ACC_PUBLIC, false));
+  stored_creator.create();
+
+  auto* const type_other = DexType::make_type("LLoopOther;");
+  ClassCreator other_creator(type_other);
+  other_creator.set_super(type::java_lang_Object());
+  other_creator.add_method(DexMethod::make_method("LLoopOther;.<init>:()V")
+                               ->make_concrete(ACC_PUBLIC, false));
+  other_creator.create();
+
+  auto* const type_holder = DexType::make_type("LLoopHolder;");
+  ClassCreator holder_creator(type_holder);
+  holder_creator.set_super(type::java_lang_Object());
+  holder_creator.add_method(DexMethod::make_method("LLoopHolder;.<init>:()V")
+                                ->make_concrete(ACC_PUBLIC, false));
+  holder_creator.add_field(DexField::make_field("LLoopHolder;.f:LLoopStored;")
+                               ->make_concrete(ACC_PUBLIC));
+  holder_creator.create();
+
+  auto* method = DexMethod::make_method("LLoopHolder;.storeInLoop:(I)V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param v2)
+
+      ; v0 starts out as the type the field expects
+      (new-instance "LLoopStored;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LLoopStored;.<init>:()V")
+
+      (:loop)
+      (if-eqz v2 :store)
+
+      ; the other path through the body reuses v0 as scratch space, so
+      ; `stored` does not survive the iteration
+      (new-instance "LLoopOther;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LLoopOther;.<init>:()V")
+      (goto :latch)
+
+      (:store)
+      (new-instance "LLoopHolder;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LLoopHolder;.<init>:()V")
+      (iput-object v0 v1 "LLoopHolder;.f:LLoopStored;")
+
+      (:latch)
+      (if-eqz v2 :loop)
+      (return-void)
+    )
+  )"));
+
+  auto* iput_insn = find_insn(method, OPCODE_IPUT_OBJECT);
+  ASSERT_NE(nullptr, iput_insn);
+
+  IRTypeChecker checker(method);
+  checker.run();
+
+  EXPECT_EQ(type::java_lang_Object(), *checker.get_dex_type(iput_insn, 0));
+  EXPECT_FALSE(checker.good());
+  EXPECT_THAT(
+      checker.what(),
+      HasSubstr("Ljava/lang/Object; is not assignable to LLoopStored;"));
+  EXPECT_EQ(iput_insn, checker.error_insn());
 }
 
 /**

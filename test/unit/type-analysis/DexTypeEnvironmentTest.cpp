@@ -544,15 +544,17 @@ TEST_F(DexTypeEnvironmentTest, AnnotationJoinWithTest) {
 }
 
 TEST_F(DexTypeEnvironmentTest, InterfaceJoinTest) {
+  // Sub1 and Sub2 implement different interfaces, so nothing survives the
+  // merge but their common super class.
   auto sub1 = SingletonDexTypeDomain(m_type_sub1);
   auto sub2 = SingletonDexTypeDomain(m_type_sub2);
   sub1.join_with(sub2);
-  EXPECT_TRUE(sub1.is_top());
+  EXPECT_EQ(sub1, SingletonDexTypeDomain(m_type_base));
   EXPECT_FALSE(sub2.is_top());
 
   sub1 = SingletonDexTypeDomain(m_type_sub1);
   sub2.join_with(sub1);
-  EXPECT_TRUE(sub2.is_top());
+  EXPECT_EQ(sub2, SingletonDexTypeDomain(m_type_base));
   EXPECT_FALSE(sub1.is_top());
 
   sub1 = SingletonDexTypeDomain(m_type_sub1);
@@ -568,26 +570,29 @@ TEST_F(DexTypeEnvironmentTest, InterfaceJoinTest) {
   EXPECT_FALSE(sub3.is_top());
   EXPECT_FALSE(sub1.is_top());
 
+  // Sub4 adds If1 on top of the If2 it inherits from Sub2. Sub2 is still a
+  // super class of Sub4, so it is the answer; only the extra If1 is dropped,
+  // and no super type of both could have kept it.
   sub2 = SingletonDexTypeDomain(m_type_sub2);
   auto sub4 = SingletonDexTypeDomain(m_type_sub4);
   sub2.join_with(sub4);
-  EXPECT_TRUE(sub2.is_top());
+  EXPECT_EQ(sub2, SingletonDexTypeDomain(m_type_sub2));
   EXPECT_FALSE(sub4.is_top());
 
   sub2 = SingletonDexTypeDomain(m_type_sub2);
   sub4.join_with(sub2);
-  EXPECT_TRUE(sub4.is_top());
+  EXPECT_EQ(sub4, SingletonDexTypeDomain(m_type_sub2));
   EXPECT_FALSE(sub2.is_top());
 
   auto base = SingletonDexTypeDomain(m_type_base);
   sub4 = SingletonDexTypeDomain(m_type_sub4);
   base.join_with(sub4);
-  EXPECT_TRUE(base.is_top());
+  EXPECT_EQ(base, SingletonDexTypeDomain(m_type_base));
   EXPECT_FALSE(sub4.is_top());
 
   base = SingletonDexTypeDomain(m_type_base);
   sub4.join_with(base);
-  EXPECT_TRUE(sub4.is_top());
+  EXPECT_EQ(sub4, SingletonDexTypeDomain(m_type_base));
   EXPECT_FALSE(base.is_top());
 }
 
@@ -599,18 +604,23 @@ TEST_F(DexTypeEnvironmentTest, ExtendedInterfaceJoinTest) {
   EXPECT_EQ(sub1, SingletonDexTypeDomain(m_type_if1));
   EXPECT_FALSE(if1.is_top());
 
+  // Sub1 does not implement If2 and they share no interface, so Object really
+  // is the least upper bound here.
   sub1 = SingletonDexTypeDomain(m_type_sub1);
   auto if2 = SingletonDexTypeDomain(m_type_if2);
   sub1.join_with(if2);
-  EXPECT_TRUE(sub1.is_top());
+  EXPECT_EQ(sub1, SingletonDexTypeDomain(type::java_lang_Object()));
   EXPECT_FALSE(if2.is_top());
 }
 
 TEST_F(DexTypeEnvironmentTest, ArrayJoinTest) {
+  // The element join drives the array join, so Sub1[] and Sub2[] merge to
+  // Base[] for the same reason Sub1 and Sub2 merge to Base.
   auto sub1_array = SingletonDexTypeDomain(m_sub1_array);
   auto sub2_array = SingletonDexTypeDomain(m_sub2_array);
   sub1_array.join_with(sub2_array);
-  EXPECT_TRUE(sub1_array.is_top());
+  EXPECT_EQ(sub1_array,
+            SingletonDexTypeDomain(type::make_array_type(m_type_base)));
   EXPECT_FALSE(sub2_array.is_top());
 
   sub1_array = SingletonDexTypeDomain(m_sub1_array);
@@ -1108,6 +1118,136 @@ TEST_F(DexTypeEnvironmentTest, ExternalInterfaceWithoutClassJoinTest) {
   intf = SingletonDexTypeDomain(external_intf);
   unrelated.join_with(intf);
   EXPECT_TRUE(unrelated.is_top());
+}
+
+namespace {
+
+// A class extending Object directly, implementing the given interfaces. The
+// shared fixture's Sub* types all extend Base, so their common super class is
+// never Object and the shared-interface path is never reached.
+DexType* make_object_rooted_impl(const char* name,
+                                 std::initializer_list<DexType*> intfs) {
+  auto* type = DexType::make_type(name);
+  ClassCreator creator(type);
+  creator.set_super(type::java_lang_Object());
+  for (auto* intf : intfs) {
+    creator.add_interface(intf);
+  }
+  creator.create();
+  return type;
+}
+
+DexType* make_interface(const char* name,
+                        std::initializer_list<DexType*> supers) {
+  auto* type = DexType::make_type(name);
+  ClassCreator creator(type);
+  creator.set_super(type::java_lang_Object());
+  creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
+  for (auto* super : supers) {
+    creator.add_interface(super);
+  }
+  creator.create();
+  return type;
+}
+
+} // namespace
+
+/*
+ * Two classes related only by an interface. The super class walk reaches
+ * Object and stops there, but Object is not the least upper bound -- the
+ * shared interface is. This is the shape behind the media3 HttpEntity merge.
+ */
+TEST_F(DexTypeEnvironmentTest, SharedInterfaceJoinTest) {
+  auto* shared = make_interface("LShared;", {});
+  auto* impl_a = make_object_rooted_impl("LSharedImplA;", {shared});
+  auto* impl_b = make_object_rooted_impl("LSharedImplB;", {shared});
+
+  auto a = SingletonDexTypeDomain(impl_a);
+  auto b = SingletonDexTypeDomain(impl_b);
+  a.join_with(b);
+  EXPECT_EQ(a, SingletonDexTypeDomain(shared));
+
+  // Commutative.
+  b = SingletonDexTypeDomain(impl_b);
+  auto a2 = SingletonDexTypeDomain(impl_a);
+  b.join_with(a2);
+  EXPECT_EQ(b, SingletonDexTypeDomain(shared));
+
+  // An interface only one of them implements is not a bound for both, so the
+  // answer stays the shared one.
+  auto* extra = make_interface("LExtraOnA;", {});
+  auto* impl_a_extra =
+      make_object_rooted_impl("LSharedImplAExtra;", {shared, extra});
+  auto ae = SingletonDexTypeDomain(impl_a_extra);
+  auto b2 = SingletonDexTypeDomain(impl_b);
+  ae.join_with(b2);
+  EXPECT_EQ(ae, SingletonDexTypeDomain(shared));
+}
+
+/*
+ * Sharing several incomparable interfaces has no single answer: the least
+ * upper bound is an intersection type, which one DexType cannot hold. Top is
+ * the honest result -- reporting Object instead would be read as an exact
+ * type by IRTypeChecker and reject legal code.
+ */
+TEST_F(DexTypeEnvironmentTest, MultipleSharedInterfacesJoinToTopTest) {
+  auto* i = make_interface("LBothI;", {});
+  auto* j = make_interface("LBothJ;", {});
+  auto* x = make_object_rooted_impl("LBothX;", {i, j});
+  auto* y = make_object_rooted_impl("LBothY;", {i, j});
+
+  auto dx = SingletonDexTypeDomain(x);
+  auto dy = SingletonDexTypeDomain(y);
+  dx.join_with(dy);
+  EXPECT_TRUE(dx.is_top());
+}
+
+/*
+ * When one shared interface extends another, only the most specific one is
+ * the bound. This also covers the transitive walk: LDeepBase; is reached only
+ * through LDeepSub;, which the local `implements` helper cannot do.
+ */
+TEST_F(DexTypeEnvironmentTest, MostSpecificSharedInterfaceJoinTest) {
+  auto* base_intf = make_interface("LDeepBase;", {});
+  auto* sub_intf = make_interface("LDeepSub;", {base_intf});
+  auto* x = make_object_rooted_impl("LDeepX;", {sub_intf});
+  auto* y = make_object_rooted_impl("LDeepY;", {sub_intf});
+
+  auto dx = SingletonDexTypeDomain(x);
+  auto dy = SingletonDexTypeDomain(y);
+  dx.join_with(dy);
+  EXPECT_EQ(dx, SingletonDexTypeDomain(sub_intf));
+
+  // Sharing only the base interface resolves to it.
+  auto* z = make_object_rooted_impl("LDeepZ;", {base_intf});
+  auto dx2 = SingletonDexTypeDomain(x);
+  auto dz = SingletonDexTypeDomain(z);
+  dx2.join_with(dz);
+  EXPECT_EQ(dx2, SingletonDexTypeDomain(base_intf));
+}
+
+/*
+ * A class hierarchy takes precedence over a shared interface: the common super
+ * class is more specific than anything both merely implement.
+ */
+TEST_F(DexTypeEnvironmentTest, CommonSuperClassPreferredOverInterfaceTest) {
+  auto* shared = make_interface("LPreferShared;", {});
+  auto* common = make_object_rooted_impl("LPreferCommon;", {shared});
+
+  auto* left = DexType::make_type("LPreferLeft;");
+  ClassCreator left_creator(left);
+  left_creator.set_super(common);
+  left_creator.create();
+
+  auto* right = DexType::make_type("LPreferRight;");
+  ClassCreator right_creator(right);
+  right_creator.set_super(common);
+  right_creator.create();
+
+  auto dl = SingletonDexTypeDomain(left);
+  auto dr = SingletonDexTypeDomain(right);
+  dl.join_with(dr);
+  EXPECT_EQ(dl, SingletonDexTypeDomain(common));
 }
 
 TEST_F(DexTypeEnvironmentTest, TypedefAnnotationDomain) {
