@@ -3108,6 +3108,298 @@ TEST_F(MethodInlineTest, partially_inline) {
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
 
+// A true-virtual call site poisons only itself: the caller's other, ordinary
+// call sites remain eligible for partial inlining. This pins the
+// `it2 == cvc.insns.end()` branch of `get_callee`, which those ordinary call
+// sites take because their caller has a true-virtual call site elsewhere.
+TEST_F(MethodInlineTest,
+       partially_inline_with_unrelated_true_virtual_callsite) {
+  auto* foo_cls = create_a_class("LFoo;");
+
+  DexMethod* caller =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* callee = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
+  callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* vcallee =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.vcallee:()V"));
+  vcallee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  foo_cls->add_method(caller);
+  foo_cls->add_method(callee);
+  foo_cls->add_method(vcallee);
+
+  const auto& caller_str = R"(
+    (
+      (.src_block "LFoo;.caller:()V" 1 (1.0 1.0))
+      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (const v2 0)
+      (const-string "Some string")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-virtual (v2) "LFoo;.vcallee:()V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+  caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
+
+  const auto& callee_str = R"(
+    (
+      (load-param-object v0)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 1 (1.0 1.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 20)
+      (if-eqz v0 :exit)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 30)
+      (const v1 0)
+      (invoke-static (v1) "Ldummy;.dummy:(Ljava/lang/Object;)V")
+      (throw v1)
+      (:exit)
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  const auto& vcallee_str = R"(
+    (
+      (load-param-object v0)
+      (.src_block "LFoo;.vcallee:()V" 1 (1.0 1.0))
+      (return-void)
+    )
+  )";
+
+  vcallee->set_code(assembler::ircode_from_string(vcallee_str));
+
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  UnorderedSet<DexMethod*> candidates;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    // `vcallee` is deliberately not a candidate: it must enter
+    // `m_caller_callee` only via `true_virtual_callers`, so that it lands in
+    // `exclusive_callees` while `callee` does not.
+    candidates.insert(caller);
+    candidates.insert(callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.partial_hot_hot_inline = true;
+  inliner_config.virtual_inline = true;
+  inliner_config.true_virtual_inline = true;
+  inliner_config.multiple_callers = false;
+  inliner_config.use_call_site_summaries = false;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = false;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
+  vcallee->get_code()->build_cfg();
+
+  // Register only the invoke-virtual, so the two invoke-statics miss in
+  // `cvc.insns` while the caller still has an entry in
+  // `m_caller_virtual_callees`.
+  CalleeCallerInsns true_virtual_callers;
+  for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      true_virtual_callers[vcallee].caller_insns[caller].insert(mie.insn);
+    }
+  }
+  ASSERT_EQ(true_virtual_callers[vcallee].caller_insns[caller].size(), 1);
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex, true_virtual_callers);
+    inliner.inline_methods();
+
+    // Both ordinary call sites get partially inlined.
+    EXPECT_EQ(inliner.get_info().partially_inlined, 2u);
+  }
+
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+  vcallee->get_code()->clear_cfg();
+}
+
+// A callee reached only through a true virtual must not be inlined at a call
+// site that was NOT registered as one: `get_callee` returns nullopt there. That
+// guard is what makes it safe for the test above to stop blocking partial
+// inlining across the rest of the method.
+TEST_F(MethodInlineTest,
+       no_partial_inline_at_an_unregistered_exclusive_callee_site) {
+  auto* foo_cls = create_a_class("LFoo;");
+
+  DexMethod* caller =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* callee = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
+  callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* vcallee =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.vcallee:()V"));
+  vcallee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  foo_cls->add_method(caller);
+  foo_cls->add_method(callee);
+  foo_cls->add_method(vcallee);
+
+  const auto& caller_str = R"(
+    (
+      (.src_block "LFoo;.caller:()V" 1 (1.0 1.0))
+      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (const v2 0)
+      (const-string "Some string")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-virtual (v2) "LFoo;.vcallee:()V")
+      (invoke-virtual (v2) "LFoo;.vcallee:()V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+  caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
+
+  const auto& callee_str = R"(
+    (
+      (load-param-object v0)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 1 (1.0 1.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 20)
+      (if-eqz v0 :exit)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 30)
+      (const v1 0)
+      (invoke-static (v1) "Ldummy;.dummy:(Ljava/lang/Object;)V")
+      (throw v1)
+      (:exit)
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  const auto& vcallee_str = R"(
+    (
+      (load-param-object v0)
+      (.src_block "LFoo;.vcallee:()V" 1 (1.0 1.0))
+      (return-void)
+    )
+  )";
+
+  vcallee->set_code(assembler::ircode_from_string(vcallee_str));
+
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  UnorderedSet<DexMethod*> candidates;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    // `vcallee` is deliberately not a candidate: it must enter
+    // `m_caller_callee` only via `true_virtual_callers`, so that it lands in
+    // `exclusive_callees` while `callee` does not.
+    candidates.insert(caller);
+    candidates.insert(callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.partial_hot_hot_inline = true;
+  inliner_config.virtual_inline = true;
+  inliner_config.true_virtual_inline = true;
+  inliner_config.multiple_callers = false;
+  inliner_config.use_call_site_summaries = false;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = false;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
+  vcallee->get_code()->build_cfg();
+
+  // Register only the invoke-virtual, so the two invoke-statics miss in
+  // `cvc.insns` while the caller still has an entry in
+  // `m_caller_virtual_callees`.
+  CalleeCallerInsns true_virtual_callers;
+  for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      true_virtual_callers[vcallee].caller_insns[caller].insert(mie.insn);
+      break;
+    }
+  }
+  ASSERT_EQ(true_virtual_callers[vcallee].caller_insns[caller].size(), 1);
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex, true_virtual_callers);
+    inliner.inline_methods();
+
+    // The ordinary call sites are unaffected, as in the test above.
+    EXPECT_EQ(inliner.get_info().partially_inlined, 2u);
+
+    // The real assertion. `partially_inlined` is 2 either way, so it cannot see
+    // this: what distinguishes the two behaviours is which of the two
+    // invoke-virtuals survives. The registered one is inlined; the unregistered
+    // one resolves to a callee that only ever arrives through a true virtual,
+    // so `get_callee` must return nullopt and leave it alone. Drop the
+    // exclusivity check and this count goes to 0.
+    size_t surviving_virtual_calls = 0;
+    for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+      if (mie.insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+        surviving_virtual_calls++;
+      }
+    }
+    EXPECT_EQ(surviving_virtual_calls, 1u)
+        << "the unregistered call site of an exclusive callee must not be "
+           "inlined";
+  }
+
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+  vcallee->get_code()->clear_cfg();
+}
+
 // Partially inlining invoke-super is not supported.
 TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   auto* base_cls = create_a_class("LBase;");

@@ -363,7 +363,7 @@ void MultiMethodInliner::inline_methods() {
         m_shrinker, m_callee_caller, m_caller_callee,
         [this](DexMethod* caller, IRInstruction* insn) -> DexMethod* {
           auto callee_opt = this->get_callee(caller, insn);
-          return callee_opt ? callee_opt->method : nullptr;
+          return callee_opt.value_or(nullptr);
         },
         [this](DexMethod* callee) -> bool {
           return (m_recursive_callees.count(callee) != 0u) || root(callee) ||
@@ -412,8 +412,8 @@ void MultiMethodInliner::inline_methods() {
   info.waited_seconds = m_scheduler.get_thread_pool().get_waited_seconds();
 }
 
-std::optional<Callee> MultiMethodInliner::get_callee(DexMethod* caller,
-                                                     IRInstruction* insn) {
+std::optional<DexMethod*> MultiMethodInliner::get_callee(DexMethod* caller,
+                                                         IRInstruction* insn) {
   if (!opcode::is_an_invoke(insn->opcode())) {
     return std::nullopt;
   }
@@ -421,7 +421,7 @@ std::optional<Callee> MultiMethodInliner::get_callee(DexMethod* caller,
       m_concurrent_resolver(insn->get_method(), opcode_to_search(insn), caller);
   auto it = m_caller_virtual_callees.find(caller);
   if (it == m_caller_virtual_callees.end()) {
-    return std::make_optional<Callee>({callee, /* true_virtual */ false});
+    return callee;
   }
   const auto& cvc = it->second;
   auto it2 = cvc.insns.find(insn);
@@ -430,9 +430,9 @@ std::optional<Callee> MultiMethodInliner::get_callee(DexMethod* caller,
     // it's not exclusive to matching true virtuals.
     return cvc.exclusive_callees.count(callee) != 0u
                ? std::nullopt
-               : std::make_optional<Callee>({callee, /* true_virtual */ true});
+               : std::make_optional(callee);
   }
-  return std::make_optional<Callee>({it2->second, /* true_virtual */ false});
+  return it2->second;
 }
 
 void MultiMethodInliner::inline_callees(DexMethod* caller,
@@ -455,8 +455,7 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
         if (!callee_opt) {
           continue;
         }
-        auto* callee = callee_opt->method;
-        auto true_virtual = callee_opt->true_virtual;
+        auto* callee = *callee_opt;
         if (callees.count(callee) == 0u) {
           continue;
         }
@@ -480,7 +479,7 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
             no_return = false;
             reduced_code = nullptr;
             insn_size = get_callee_insn_size(callee);
-          } else if (should_partially_inline(block, insn, true_virtual, callee,
+          } else if (should_partially_inline(block, insn, callee,
                                              &partial_code)) {
             partial = true;
             reduced_code = partial_code.reduced_code;
@@ -538,7 +537,7 @@ size_t MultiMethodInliner::inline_callees(
       if (!callee_opt) {
         continue;
       }
-      auto* callee = callee_opt->method;
+      auto* callee = *callee_opt;
       always_assert(callee->is_concrete());
       auto it2 = m_inlined_invokes_need_cast.find(insn);
       const auto* needs_receiver_cast =
@@ -2106,22 +2105,22 @@ bool MultiMethodInliner::should_inline_at_call_site(
 
 bool MultiMethodInliner::should_partially_inline(cfg::Block* block,
                                                  IRInstruction* insn,
-                                                 bool true_virtual,
                                                  DexMethod* callee,
                                                  PartialCode* partial_code) {
   always_assert(opcode::is_an_invoke(insn->opcode()));
   always_assert(insn->has_method());
-  // We don't want to partially inline true virtuals.
-  // To avoid dealing with inserting additional casts, we also avoid callees
-  // which don't match the formal method given by the instruction exactly. We
-  // also don't want to attempt to partially inline an invoke-super instruction,
-  // as this would make it necessary to track different versions of
-  // partially-inlined code based on the invoke-instruction, as then the
-  // fallback invocation that's contained in the partial code may have to be
-  // either invoke-super or invoke-virtual depending on the context.
-  if (!m_config.partial_hot_hot_inline || true_virtual ||
-      insn->get_method() != callee || insn->opcode() == OPCODE_INVOKE_SUPER ||
-      !source_blocks::is_hot(block)) {
+  // Partial inlining peels off the callee's hot prefix and lets the peeled-off
+  // code fall back to a plain invocation of the callee, which
+  // `get_partially_inlined_code` regenerates from the callee alone. That must
+  // be a valid stand-in for the instruction it replaces: it names the callee
+  // and it re-dispatches virtually, so we take only instructions that name the
+  // callee themselves and are not an invoke-super.
+  //
+  // That the peeled-off prefix is the code that would actually run at this
+  // callsite is not established here: everything `get_callee` hands out is the
+  // implementation that the receiver dispatches to.
+  if (!m_config.partial_hot_hot_inline || insn->get_method() != callee ||
+      insn->opcode() == OPCODE_INVOKE_SUPER || !source_blocks::is_hot(block)) {
     return false;
   }
   // If we don't already have pre-computed partially inlined code for this

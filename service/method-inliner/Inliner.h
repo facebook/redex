@@ -185,11 +185,6 @@ struct CallerInsns {
   bool empty() const { return caller_insns.empty() && !other_call_sites; }
 };
 
-struct Callee {
-  DexMethod* method;
-  bool true_virtual;
-};
-
 using CalleeCallerInsns = UnorderedMap<DexMethod*, CallerInsns>;
 
 class ReducedCode {
@@ -433,7 +428,16 @@ class MultiMethodInliner {
   bool get_needs_constructor_fence(const DexMethod* caller,
                                    const DexMethod* callee) const;
 
-  std::optional<Callee> get_callee(DexMethod* caller, IRInstruction* insn);
+  /**
+   * The method that `insn` invokes, or std::nullopt if we must not inline at
+   * `insn` at all. For a callsite that the true-virtual analysis registered,
+   * that is the unique implementation it found. Otherwise it is the resolved
+   * method, which is inlinable only if it is also in `caller`'s callee set,
+   * where plain resolution puts overrideless candidates alone. Either way the
+   * result is the implementation that actually runs, which is what makes it
+   * sound to inline (part of) its body.
+   */
+  std::optional<DexMethod*> get_callee(DexMethod* caller, IRInstruction* insn);
 
   size_t inline_inlinables(DexMethod* caller,
                            const std::vector<Inlinable>& inlinables);
@@ -581,11 +585,11 @@ class MultiMethodInliner {
       PartialCode* partial_code = nullptr);
 
   /**
-   * Whether we should partially inline a particular callee.
+   * Whether we should, and legally can, partially inline a particular callee
+   * at a particular callsite.
    */
   bool should_partially_inline(cfg::Block* block,
                                IRInstruction* insn,
-                               bool true_virtual,
                                DexMethod* callee,
                                PartialCode* partial_code);
 
