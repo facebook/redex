@@ -320,6 +320,7 @@ void never_inline(bool attach_annotations,
   std::atomic<size_t> callees_too_large = 0;
   std::atomic<size_t> callees_always_throw = 0;
   std::atomic<size_t> callees_annotation_attached = 0;
+  std::atomic<size_t> callees_annotated = 0;
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     if (has_anno(method, type::dalvik_annotation_optimization_NeverInline())) {
       callees_already_never_inline.fetch_add(1);
@@ -357,10 +358,20 @@ void never_inline(bool attach_annotations,
       return;
     }
 
+    // Counts callees that PASSED every gate, whether or not an annotation is
+    // then attached -- deliberately, because it is what makes an estimate-mode
+    // run
+    // (`never_inline_estimate` without `attach_annotations`) report what the
+    // pass would do without touching bytecode. The name predates that use and
+    // reads as a count of attachments, so `never_inline_callees_annotated`
+    // below is the one to read for those; this one is kept under its old name
+    // because it is a published metric and renaming it would silently empty
+    // whatever consumes it.
     callees_annotation_attached.fetch_add(1);
     if (!attach_annotations) {
       return;
     }
+    callees_annotated.fetch_add(1);
     if (method->get_anno_set() != nullptr) {
       method->get_anno_set()->combine_with(anno_set);
       return;
@@ -385,6 +396,7 @@ void never_inline(bool attach_annotations,
                   callees_always_throw.load());
   mgr.incr_metric("never_inline_callees_annotation_attached",
                   callees_annotation_attached.load());
+  mgr.incr_metric("never_inline_callees_annotated", callees_annotated.load());
 }
 
 bool never_compile_callcount_threshold_met(
