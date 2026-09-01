@@ -67,6 +67,11 @@ outliner::PerfSensitivity parse_perf_sensitivity(const std::string& str);
 
 class CanOutlineBlockDecider {
  private:
+  // Precondition, unenforced: the two referents must outlive not just this
+  // object but every cache it hands out, because the lazy caches below bind to
+  // them and a decider may be moved into a container that outlives the scope
+  // it was built in. Both current callers pass pass-level state that is
+  // loop-invariant across every decider they construct.
   const outliner::ProfileGuidanceConfig& m_config;
   const UnorderedSet<size_t>& m_throughput_interaction_indices;
   bool m_throughput;

@@ -440,17 +440,30 @@ CanOutlineBlockDecider::can_outline_from_big_block(
       if (!m_throughput_interaction_indices.empty()) {
         // Make sure m_is_throughput is initialized
         if (!m_is_throughput) {
+          // Capture the referents, not `this`. A decider is a stack local in
+          // the walk::parallel::code body of get_recurring_cores, is queried
+          // there (which is what builds this cache), and is only then moved
+          // into the caller's map. A lambda holding `this` would therefore
+          // point into a worker thread's stack frame that is destroyed the
+          // moment that walker body returns, while the cache itself lives on
+          // in the map and gets queried again by get_beneficial_candidates.
+          // Both members are references to state owned by the caller, which
+          // outlives every decider, so binding to them directly is what makes
+          // the cache independent of where its decider happens to live.
+          // Init-captures, so that what is captured is unambiguously the
+          // referenced object rather than a local reference variable.
           m_is_throughput.reset(new LazyUnorderedMap<cfg::Block*, bool>(
-              [this](cfg::Block* block) -> bool {
+              [&config = m_config, &throughput_interaction_indices =
+                                       m_throughput_interaction_indices](
+                  cfg::Block* block) -> bool {
                 auto* sb = source_blocks::get_first_source_block(block);
                 if (sb == nullptr) {
                   return false;
                 }
                 for (auto index :
-                     UnorderedIterable(m_throughput_interaction_indices)) {
+                     UnorderedIterable(throughput_interaction_indices)) {
                   const auto& val_pair = sb->get_at(index);
-                  if (val_pair &&
-                      val_pair->val > m_config.block_profiles_hits) {
+                  if (val_pair && val_pair->val > config.block_profiles_hits) {
                     return true;
                   }
                 }
