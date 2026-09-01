@@ -13,6 +13,7 @@
 
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
+#include "DexClass.h"
 #include "DexTypeEnvironment.h"
 #include "InstructionAnalyzer.h"
 #include "MethodUtil.h"
@@ -154,7 +155,12 @@ class WholeProgramState {
       return DexTypeDomain::top();
     }
     DexTypeDomain ret = DexTypeDomain::bottom();
-    for (const DexMethod* callee : UnorderedIterable(callees)) {
+    // `DexTypeValue::join_with` is not associative: it answers with whatever
+    // common supertype `find_common_type` reaches, and gives up to Top when it
+    // reaches none, so folding it over three or more callees can land on a
+    // different type per visit order. Fold in a stable method order.
+    for (const DexMethod* callee :
+         unordered_to_ordered(callees, compare_dexmethods)) {
       if (callee->get_code() == nullptr) {
         always_assert(is_abstract(callee) || is_native(callee));
         return DexTypeDomain::top();

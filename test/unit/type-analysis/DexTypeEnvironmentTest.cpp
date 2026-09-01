@@ -1333,3 +1333,59 @@ TEST_F(DexTypeEnvironmentTest, TypedefAnnotationDomain) {
   EXPECT_EQ(d1.get_annotation_domain(),
             TypedefAnnotationDomain(type::java_lang_Object()));
 }
+
+/*
+ * `find_common_type` resolves two classes with no common super class below
+ * Object through the interfaces they share. Sharing exactly one is
+ * representable; sharing several incomparable ones is not, because the least
+ * upper bound is an intersection type that a single DexType cannot hold, so
+ * the join gives up to Top. Whether a fold ever reaches that state depends on
+ * the order, so callers folding over a set must impose one.
+ */
+TEST_F(DexTypeEnvironmentTest, JoinOverThreeTypesIsOrderDependent) {
+  // Object-rooted, unlike every Sub*, so a join between them has no common
+  // super class below Object and falls through to the interfaces.
+  auto make = [this](const char* name, bool both) {
+    auto* type = DexType::make_type(name);
+    ClassCreator cc(type);
+    cc.set_super(type::java_lang_Object());
+    cc.add_interface(m_type_if1);
+    if (both) {
+      cc.add_interface(m_type_if2);
+    }
+    cc.create();
+    return type;
+  };
+  auto* two_if_a = make("LTwoIfA;", true);
+  auto* two_if_b = make("LTwoIfB;", true);
+  auto* one_if = make("LOneIf;", false);
+
+  auto join3 = [](const DexType* x, const DexType* y, const DexType* z) {
+    auto acc = SingletonDexTypeDomain(x);
+    acc.join_with(SingletonDexTypeDomain(y));
+    acc.join_with(SingletonDexTypeDomain(z));
+    return acc;
+  };
+
+  // The claim: two pairings of the same three types disagree.
+  auto both_first = join3(two_if_a, two_if_b, one_if);
+  auto single_first = join3(two_if_a, one_if, two_if_b);
+  EXPECT_NE(both_first, single_first);
+
+  // And which is which. Joining the two classes that share If1 and If2 has no
+  // representable answer, and Top is absorbing thereafter.
+  EXPECT_TRUE(both_first.is_top());
+  // Taking the one-interface class first shares only If1, which is
+  // representable, and the remaining operand implements it.
+  EXPECT_EQ(single_first, SingletonDexTypeDomain(m_type_if1));
+
+  // These two operands happen to commute. That is not general: when the LCA
+  // reaches Object, `find_common_interfaces` collects the shared set from the
+  // left operand only, so an interface joined with one of its implementors
+  // answers differently depending on which side it sits.
+  auto ab = SingletonDexTypeDomain(two_if_a);
+  ab.join_with(SingletonDexTypeDomain(one_if));
+  auto ba = SingletonDexTypeDomain(one_if);
+  ba.join_with(SingletonDexTypeDomain(two_if_a));
+  EXPECT_EQ(ab, ba);
+}
