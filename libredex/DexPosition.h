@@ -9,6 +9,7 @@
 
 #include <boost/functional/hash.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -17,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 
 class DexClass;
@@ -41,20 +43,25 @@ struct DexPosition final {
   static std::unique_ptr<DexPosition> make_synthetic_entry_position(
       const DexMethod* method);
 };
-inline size_t hash_value(const DexPosition* pos) {
-  return pos == nullptr ? 0
-                        : (reinterpret_cast<size_t>(pos->method) +
-                           reinterpret_cast<size_t>(pos->file) + pos->line +
-                           hash_value(pos->parent));
-}
-using ConstDexPositionPtrHasher = boost::hash<const DexPosition*>;
-
-inline size_t hash_value(const DexPosition& pos) {
-  return reinterpret_cast<size_t>(pos.method) +
-         reinterpret_cast<size_t>(pos.file) + pos.line +
-         (pos.parent == nullptr ? 0 : hash_value(*pos.parent));
-}
-using DexPositionHasher = boost::hash<DexPosition>;
+// Identity of an interned position. Keep these two adjacent: they are a pair,
+// and a hash that stops agreeing with its equality is the bug this replaced.
+// A parent is interned before its child, so a whole inlining chain is
+// identified by one pointer and neither of these recurses.
+struct InternedPositionHash {
+  size_t operator()(const DexPosition& pos) const {
+    size_t h = reinterpret_cast<size_t>(pos.method);
+    boost::hash_combine(h, reinterpret_cast<size_t>(pos.file));
+    boost::hash_combine(h, pos.line);
+    boost::hash_combine(h, reinterpret_cast<size_t>(pos.parent));
+    return h;
+  }
+};
+struct InternedPositionEqual {
+  bool operator()(const DexPosition& a, const DexPosition& b) const {
+    return a.method == b.method && a.file == b.file && a.line == b.line &&
+           a.parent == b.parent;
+  }
+};
 
 using PositionPattern = std::vector<DexPosition*>;
 using PositionPatternHasher = boost::hash<PositionPattern>;
@@ -130,13 +137,33 @@ class PositionPatternSwitchManager {
 
   const std::vector<PositionSwitch>& get_switches() const { return m_switches; }
 
+  // How many positions `internalize` was asked for, and how many distinct ones
+  // it kept. The gap between them is the clone the interning avoided; when the
+  // interning was broken the two were equal.
+  size_t get_num_internalize_calls() const {
+    return m_internalize_calls.load();
+  }
+  size_t get_num_interned_positions() const { return m_positions.size(); }
+
  private:
   DexPosition* internalize(DexPosition* pos);
 
-  UnorderedMap<const DexPosition*,
-               std::unique_ptr<DexPosition>,
-               ConstDexPositionPtrHasher>
+  // The element IS the manager's copy of the position, so no key can outlive
+  // what it names. Nothing is ever erased and elements are pinned for the
+  // container's lifetime, so a pointer to one stays valid for the run. Do not
+  // mutate an interned position: it is its own key -- which is also why
+  // provenance is kept out of the key, so `mark_unreliable` stays safe.
+  //
+  // Concurrent because the manager hangs off RedexContext and any pass can
+  // reach it, and making canonicalisation thread-safe costs one atomic. The id
+  // tables below are a separate matter: they are unsynchronised, so a caller
+  // that registers from more than one thread has to serialise them itself.
+  InsertOnlyConcurrentSet<DexPosition,
+                          InternedPositionHash,
+                          InternedPositionEqual>
       m_positions;
+  std::atomic<size_t> m_internalize_calls{0};
+
   UnorderedMap<PositionPattern, uint32_t, PositionPatternHasher> m_patterns_map;
   std::vector<PositionPattern> m_patterns;
   UnorderedMap<PositionSwitch, uint32_t, PositionSwitchHasher> m_switches_map;

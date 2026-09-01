@@ -3363,6 +3363,15 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   mgr.incr_metric("num_baseline_method_profile_rows_added",
                   resolution.baseline_rows_added);
   mgr.incr_metric("num_reused_methods", num_reused_methods);
+
+  // Position interning. These are cumulative manager state rather than
+  // per-iteration counts, so set rather than incr. The gap between them is
+  // what the interning saves; when it was broken they were equal.
+  auto* position_manager = g_redex->get_position_pattern_switch_manager();
+  mgr.set_metric("num_internalize_calls",
+                 position_manager->get_num_internalize_calls());
+  mgr.set_metric("num_interned_positions",
+                 position_manager->get_num_interned_positions());
 }
 
 static InstructionSequenceOutliner s_pass;
