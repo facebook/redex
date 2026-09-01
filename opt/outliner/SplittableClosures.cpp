@@ -410,8 +410,14 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
       [](const auto* c) { return !c->reduced_block->is_hot; },
       [](const auto* c) { return c->reduced_block->is_hot; },
       [](const auto*) { return true; }};
-  for (auto&& [switch_block, switched] :
-       UnorderedIterable(remaining_switch_case_closures)) {
+  // Visit switch blocks in id order. Each iteration can append to
+  // `scored_closures`, and that vector's order survives into emission, so
+  // iterating the map in hash order would let the addresses of the switch
+  // blocks decide the order candidates are considered in.
+  for (auto* switch_block : unordered_to_ordered_keys(
+           remaining_switch_case_closures,
+           [](cfg::Block* a, cfg::Block* b) { return a->id() < b->id(); })) {
+    const auto& switched = remaining_switch_case_closures.at(switch_block);
     auto is_large_packed_switch =
         is_large(config, switch_block) && is_packed(switch_block);
     for (const auto& predicate : predicates) {
