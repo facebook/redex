@@ -142,7 +142,17 @@ class MethodProfiles {
   UnorderedSet<dex_member_refs::MethodDescriptorTokens>
   get_unresolved_method_descriptor_tokens() const;
 
-  void resolve_method_descriptor_tokens(
+  // How much of the profile the given map actually resolved. Distinct from the
+  // number of name matches the caller offered: a match only counts here if an
+  // unresolved line was keyed on it.
+  struct ResolutionStats {
+    size_t lines_resolved{0};
+    size_t rows_added{0};
+    size_t baseline_lines_resolved{0};
+    size_t baseline_rows_added{0};
+  };
+
+  ResolutionStats resolve_method_descriptor_tokens(
       const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
                          std::vector<DexMethodRef*>>& map);
 
@@ -214,10 +224,14 @@ class MethodProfiles {
   bool parse_header(std::string_view line);
 
   void process_unresolved_lines(bool baseline_profile_variant);
-  // Returns the ref_str buffers of the lines that were resolved, for the
-  // caller to erase once BOTH variants are done. The lines cannot be erased
-  // here: `map`'s keys are string_views into those very buffers.
-  UnorderedSet<std::string*> resolve_method_descriptor_tokens(
+  // The ref_str buffers of the lines that were resolved, for the caller to
+  // erase once BOTH variants are done. The lines cannot be erased by the
+  // variant itself: `map`'s keys are string_views into those very buffers.
+  struct VariantResolution {
+    UnorderedSet<std::string*> to_remove;
+    size_t added{0};
+  };
+  VariantResolution resolve_method_descriptor_tokens(
       const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
                          std::vector<DexMethodRef*>>& map,
       bool baseline_profile_variant);

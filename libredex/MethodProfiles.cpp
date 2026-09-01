@@ -938,7 +938,8 @@ MethodProfiles::get_unresolved_method_descriptor_tokens() const {
   return result;
 }
 
-void MethodProfiles::resolve_method_descriptor_tokens(
+MethodProfiles::ResolutionStats
+MethodProfiles::resolve_method_descriptor_tokens(
     const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
                        std::vector<DexMethodRef*>>& map) {
   // The keys of `map` are MethodDescriptorTokens, which are non-owning
@@ -948,10 +949,16 @@ void MethodProfiles::resolve_method_descriptor_tokens(
   // from either vector destroys those buffers, so neither erasure may happen
   // until both variants have finished looking keys up. Otherwise the second
   // lookup hashes and compares keys that point into freed memory.
-  auto baseline_to_remove = resolve_method_descriptor_tokens(map, true);
-  auto to_remove = resolve_method_descriptor_tokens(map, false);
-  erase_resolved_lines(m_baseline_profile_unresolved_lines, baseline_to_remove);
-  erase_resolved_lines(m_unresolved_lines, to_remove);
+  auto baseline = resolve_method_descriptor_tokens(map, true);
+  auto main = resolve_method_descriptor_tokens(map, false);
+  erase_resolved_lines(m_baseline_profile_unresolved_lines, baseline.to_remove);
+  erase_resolved_lines(m_unresolved_lines, main.to_remove);
+  return ResolutionStats{
+      /* lines_resolved */ main.to_remove.size(),
+      /* rows_added */ main.added,
+      /* baseline_lines_resolved */ baseline.to_remove.size(),
+      /* baseline_rows_added */ baseline.added,
+  };
 }
 
 void MethodProfiles::erase_resolved_lines(
@@ -962,7 +969,8 @@ void MethodProfiles::erase_resolved_lines(
   });
 }
 
-UnorderedSet<std::string*> MethodProfiles::resolve_method_descriptor_tokens(
+MethodProfiles::VariantResolution
+MethodProfiles::resolve_method_descriptor_tokens(
     const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
                        std::vector<DexMethodRef*>>& map,
     bool baseline_profile_variant) {
@@ -1001,7 +1009,7 @@ UnorderedSet<std::string*> MethodProfiles::resolve_method_descriptor_tokens(
         "After resolving unresolved lines: %zu unresolved lines removed, %zu "
         "rows added",
         removed, added);
-  return to_remove;
+  return VariantResolution{std::move(to_remove), added};
 }
 
 bool MethodProfiles::parse_header(std::string_view line) {

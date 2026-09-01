@@ -3025,7 +3025,14 @@ class OutlinedMethodBodySetter {
 ////////////////////////////////////////////////////////////////////////////////
 // reorder_all_methods
 ////////////////////////////////////////////////////////////////////////////////
-size_t update_method_profiles(
+struct MethodProfileUpdate {
+  // Name matches offered to MethodProfiles, i.e. (mdt, outlined method) pairs.
+  // This is an upper bound on what gets resolved, not a count of resolutions.
+  size_t name_matches{0};
+  method_profiles::MethodProfiles::ResolutionStats resolution;
+};
+
+MethodProfileUpdate update_method_profiles(
     ConfigFiles& config,
     const OutlinedMethodsToReorder& outlined_methods_to_reorder) {
   // Outlined methods have rather unique method names of the form
@@ -3066,8 +3073,8 @@ size_t update_method_profiles(
       }
     }
   }
-  method_profiles.resolve_method_descriptor_tokens(map);
-  return count;
+  return MethodProfileUpdate{
+      count, method_profiles.resolve_method_descriptor_tokens(map)};
 }
 
 std::vector<DexStore*> get_stores(DexStoresVector& stores,
@@ -3341,9 +3348,20 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
     mgr.incr_metric("num_derived_method_profile_stats",
                     derived_method_profile_stats);
   }
-  size_t resolved_method_profiles =
+  auto method_profile_update =
       update_method_profiles(config, outlined_methods_to_reorder);
-  mgr.incr_metric("num_resolved_method_profiles", resolved_method_profiles);
+  // Kept under its historical name for continuity with existing redex-stats
+  // comparisons, even though it counts name matches rather than resolutions.
+  mgr.incr_metric("num_resolved_method_profiles",
+                  method_profile_update.name_matches);
+  const auto& resolution = method_profile_update.resolution;
+  mgr.incr_metric("num_method_profile_lines_resolved",
+                  resolution.lines_resolved);
+  mgr.incr_metric("num_method_profile_rows_added", resolution.rows_added);
+  mgr.incr_metric("num_baseline_method_profile_lines_resolved",
+                  resolution.baseline_lines_resolved);
+  mgr.incr_metric("num_baseline_method_profile_rows_added",
+                  resolution.baseline_rows_added);
   mgr.incr_metric("num_reused_methods", num_reused_methods);
 }
 
