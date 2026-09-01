@@ -684,6 +684,7 @@ void never_compile(
 void write_classes(const baseline_profiles::BaselineProfile& bp,
                    std::ostream& os) {
   std::vector<std::string_view> class_names;
+  class_names.reserve(bp.classes.size());
   size_t deob_issues{0};
   unordered_for_each(bp.classes, [&](auto* cls) {
     if (cls->is_external()) {
@@ -715,6 +716,7 @@ void write_classes(const baseline_profiles::BaselineProfile& bp,
   os << "# " << bp.unmatched_classes.size()
      << " classes from unresolved types\n";
   std::vector<std::string_view> unmatched;
+  unmatched.reserve(bp.unmatched_classes.size());
   unordered_transform(bp.unmatched_classes, std::back_inserter(unmatched),
                       [](const auto& str) { return std::string_view(str); });
   std::sort(unmatched.begin(), unmatched.end());
