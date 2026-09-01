@@ -21,7 +21,8 @@ class PrintKotlinStats : public Pass {
  public:
   struct Stats {
     size_t unknown_null_check_insns{0};
-    size_t kotlin_null_check_param_insns{0};
+    size_t kotlin_null_check_param_insns_in_root_method{0};
+    size_t kotlin_null_check_param_insns_in_non_root_method{0};
     size_t kotlin_null_check_expr_insns{0};
     size_t kotlin_null_check_notnull_insns{0};
     size_t kotlin_areequal_insns{0};
@@ -66,7 +67,10 @@ class PrintKotlinStats : public Pass {
 
     Stats& operator+=(const Stats& that) {
       unknown_null_check_insns += that.unknown_null_check_insns;
-      kotlin_null_check_param_insns += that.kotlin_null_check_param_insns;
+      kotlin_null_check_param_insns_in_root_method +=
+          that.kotlin_null_check_param_insns_in_root_method;
+      kotlin_null_check_param_insns_in_non_root_method +=
+          that.kotlin_null_check_param_insns_in_non_root_method;
       kotlin_null_check_expr_insns += that.kotlin_null_check_expr_insns;
       kotlin_null_check_notnull_insns += that.kotlin_null_check_notnull_insns;
       kotlin_areequal_insns += that.kotlin_areequal_insns;

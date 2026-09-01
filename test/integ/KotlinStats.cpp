@@ -31,13 +31,25 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
     cls->set_deobfuscated_name(name);
   }
 
+  // Mark one method as a root so that its param null check is counted in
+  // the in-root-method bucket. `Delegate1.getValue` has one non-nullable
+  // parameter (`property: KProperty<*>`) and so contributes one
+  // `checkParameterIsNotNull` call.
+  auto* root_method = DexMethod::get_method(
+                          "LDelegate1;.getValue:(Ljava/lang/Object;Lkotlin/"
+                          "reflect/KProperty;)Ljava/lang/String;")
+                          ->as_def();
+  ASSERT_THAT(root_method, NotNull());
+  root_method->rstate.set_root();
+
   auto* klr = new PrintKotlinStats();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
 
   PrintKotlinStats::Stats stats = klr->get_stats();
 
-  EXPECT_EQ(stats.kotlin_null_check_param_insns, 16);
+  EXPECT_EQ(stats.kotlin_null_check_param_insns_in_root_method, 1);
+  EXPECT_EQ(stats.kotlin_null_check_param_insns_in_non_root_method, 15);
   EXPECT_EQ(stats.kotlin_null_check_expr_insns, 0);
   // KotlinCheckNotNull: 1 from !!, 1 from `as` cast to non-null type
   EXPECT_EQ(stats.kotlin_null_check_notnull_insns, 2);

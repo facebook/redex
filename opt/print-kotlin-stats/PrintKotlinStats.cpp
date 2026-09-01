@@ -14,6 +14,7 @@
 #include "MethodProfiles.h"
 #include "MethodUtil.h"
 #include "PassManager.h"
+#include "ReachableClasses.h"
 #include "UniqueMethodTracker.h"
 #include "Walkers.h"
 
@@ -364,13 +365,19 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
   always_assert(method->get_code()->cfg_built());
   auto& cfg = method->get_code()->cfg();
 
+  const bool method_is_root = root(method);
+
   for (const auto& it : cfg::InstructionIterable(cfg)) {
     auto* insn = it.insn;
     switch (insn->opcode()) {
     case OPCODE_INVOKE_STATIC: {
       auto* called_method = insn->get_method();
       if (m_kotlin_param_null_assertions.count(called_method) != 0u) {
-        stats.kotlin_null_check_param_insns++;
+        if (method_is_root) {
+          stats.kotlin_null_check_param_insns_in_root_method++;
+        } else {
+          stats.kotlin_null_check_param_insns_in_non_root_method++;
+        }
       } else if (m_kotlin_expr_null_assertions.count(called_method) != 0u) {
         stats.kotlin_null_check_expr_insns++;
       } else if (m_kotlin_notnull_assertions.count(called_method) != 0u) {
@@ -405,8 +412,10 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
 }
 
 void PrintKotlinStats::Stats::report(PassManager& mgr) const {
-  mgr.incr_metric("kotlin_null_check_param_insns",
-                  kotlin_null_check_param_insns);
+  mgr.incr_metric("kotlin_null_check_param_insns_in_root_method",
+                  kotlin_null_check_param_insns_in_root_method);
+  mgr.incr_metric("kotlin_null_check_param_insns_in_non_root_method",
+                  kotlin_null_check_param_insns_in_non_root_method);
   mgr.incr_metric("kotlin_null_check_expr_insns", kotlin_null_check_expr_insns);
   mgr.incr_metric("kotlin_null_check_notnull_insns",
                   kotlin_null_check_notnull_insns);
@@ -463,8 +472,12 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_unique_trivial_non_capturing_lambdas",
                   kotlin_unique_trivial_non_capturing_lambdas);
 
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_param_insns = %zu",
-        kotlin_null_check_param_insns);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_null_check_param_insns_in_root_method = %zu",
+        kotlin_null_check_param_insns_in_root_method);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_null_check_param_insns_in_non_root_method = %zu",
+        kotlin_null_check_param_insns_in_non_root_method);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_expr_insns = %zu",
         kotlin_null_check_expr_insns);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_notnull_insns = %zu",

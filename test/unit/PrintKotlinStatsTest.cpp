@@ -93,7 +93,8 @@ TEST_F(PrintKotlinStatsTest, SimpleArgumentPassingTest) {
             return pass.handle_method(meth);
           });
 
-  ASSERT_EQ(stats.kotlin_null_check_param_insns, 1);
+  ASSERT_EQ(stats.kotlin_null_check_param_insns_in_root_method, 0);
+  ASSERT_EQ(stats.kotlin_null_check_param_insns_in_non_root_method, 1);
   ASSERT_EQ(stats.kotlin_null_check_expr_insns, 1);
   ASSERT_EQ(stats.kotlin_null_check_notnull_insns, 0);
 }
@@ -130,7 +131,8 @@ TEST_F(PrintKotlinStatsTest, CheckNotNullTest) {
             return pass.handle_method(meth);
           });
 
-  ASSERT_EQ(stats.kotlin_null_check_param_insns, 0);
+  ASSERT_EQ(stats.kotlin_null_check_param_insns_in_root_method, 0);
+  ASSERT_EQ(stats.kotlin_null_check_param_insns_in_non_root_method, 0);
   ASSERT_EQ(stats.kotlin_null_check_expr_insns, 0);
   ASSERT_EQ(stats.kotlin_null_check_notnull_insns, 2);
 }
