@@ -397,6 +397,17 @@ class walk {
         });
   }
 
+  // Contract for the `Reduce` of every reducing walk::parallel overload:
+  //
+  //   - `Accumulator()` must be an identity for it, because that is what each
+  //     per-thread slot starts from and what an idle thread contributes;
+  //   - it must be associative and commutative, because slots are folded in
+  //     worker-id order and work is distributed by a stealing queue, so which
+  //     element lands in which slot is not reproducible.
+  //
+  // Neither can be expressed as a static_assert, so they are stated here. A
+  // `Reduce` that violates either makes the walk's result depend on the host's
+  // core count and on thread timing.
   template <class T>
   struct plus_assign {
     void operator()(const T& addend, T* accumulator) const {
@@ -442,7 +453,12 @@ class walk {
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads(),
         Accumulator init = Accumulator()) {
-      std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
+      // Seed the per-thread slots with the identity, not with `init`: the
+      // loop below reduces every slot into `init` as well, so seeding them
+      // with `init` folds it num_threads + 1 times, and the result then
+      // depends on the host's thread count.
+      std::vector<CacheAligned<Accumulator>> acc_vec(num_threads,
+                                                     Accumulator());
       auto reduce = Reduce();
       workqueue_run<DexClass*>( // over-parallelized maybe
           [&walker, &acc_vec, &reduce](sparta::WorkerState<DexClass*>* state,
@@ -489,7 +505,12 @@ class walk {
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads(),
         Accumulator init = Accumulator()) {
-      std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
+      // Seed the per-thread slots with the identity, not with `init`: the
+      // loop below reduces every slot into `init` as well, so seeding them
+      // with `init` folds it num_threads + 1 times, and the result then
+      // depends on the host's thread count.
+      std::vector<CacheAligned<Accumulator>> acc_vec(num_threads,
+                                                     Accumulator());
 
       workqueue_run<DexClass*>(
           [&](sparta::WorkerState<DexClass*>* state, DexClass* cls) {
@@ -564,7 +585,12 @@ class walk {
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads(),
         Accumulator init = Accumulator()) {
-      std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
+      // Seed the per-thread slots with the identity, not with `init`: the
+      // loop below reduces every slot into `init` as well, so seeding them
+      // with `init` folds it num_threads + 1 times, and the result then
+      // depends on the host's thread count.
+      std::vector<CacheAligned<Accumulator>> acc_vec(num_threads,
+                                                     Accumulator());
       auto reduce = Reduce();
       workqueue_run<DexClass*>(
           [&walker, &acc_vec, &reduce](sparta::WorkerState<DexClass*>* state,
