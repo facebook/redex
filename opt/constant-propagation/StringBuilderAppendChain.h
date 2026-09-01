@@ -100,6 +100,54 @@ size_t reduce_two_append_concats(
  * Only appends threading a single builder register via the self-loop pattern
  * (R = R.append(...)) are merged, so dropping all but the first leaves that
  * register holding the builder for the following code.
+ *
+ * An append is merged only with others that reach the same set of
+ * `toString()` calls, because a branch can let one `toString()` read the
+ * builder before a later append runs. Before:
+ *
+ *   new-instance v0, StringBuilder
+ *   invoke-direct {v0} StringBuilder.<init>:()V
+ *   const-string v1, "a"
+ *   invoke-virtual {v0, v1} StringBuilder.append:(String)StringBuilder
+ *   const-string v1, "b"
+ *   invoke-virtual {v0, v1} StringBuilder.append:(String)StringBuilder
+ *   if-eqz v5, :long
+ *   invoke-virtual {v0} StringBuilder.toString:()String     ; "ab"
+ *   move-result-object v2
+ *   return-object v2
+ *   :long
+ *   const-string v1, "c"
+ *   invoke-virtual {v0, v1} StringBuilder.append:(String)StringBuilder
+ *   const-string v1, "d"
+ *   invoke-virtual {v0, v1} StringBuilder.append:(String)StringBuilder
+ *   invoke-virtual {v0} StringBuilder.toString:()String     ; "abcd"
+ *   move-result-object v3
+ *   return-object v3
+ *
+ * After:
+ *
+ *   new-instance v0, StringBuilder
+ *   invoke-direct {v0} StringBuilder.<init>:()V
+ *   const-string v1, "a"
+ *   const-string v6, "ab"
+ *   invoke-virtual {v0, v6} StringBuilder.append:(String)StringBuilder
+ *   const-string v1, "b"
+ *   if-eqz v5, :long
+ *   invoke-virtual {v0} StringBuilder.toString:()String     ; "ab"
+ *   move-result-object v2
+ *   return-object v2
+ *   :long
+ *   const-string v1, "c"
+ *   const-string v7, "cd"
+ *   invoke-virtual {v0, v7} StringBuilder.append:(String)StringBuilder
+ *   const-string v1, "d"
+ *   invoke-virtual {v0} StringBuilder.toString:()String     ; "abcd"
+ *   move-result-object v3
+ *   return-object v3
+ *
+ * "a" and "b" reach both `toString()` calls and "c" and "d" only the second,
+ * so they form two groups and each merges on its own. A group ends where that
+ * set changes, not at the branch.
  */
 size_t merge_adjacent_constant_appends(
     const intraprocedural::FixpointIterator& fp_iter,
