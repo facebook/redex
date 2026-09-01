@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <regex>
 #include <sstream>
@@ -2203,6 +2204,106 @@ TEST_F(SourceBlocksTest, parse_source_block_descriptor_rejects_bad_input) {
   EXPECT_FALSE(parse_source_block_descriptor(
                    "LFoo;.bar:()V@" + std::to_string(SourceBlock::kSyntheticId))
                    .has_value());
+}
+
+TEST_F(SourceBlocksTest, vals_equal_ignores_src_and_id) {
+  // The property the entry-block source-block handling depends on: a block and
+  // a synthetic clone of it carry the same profile data, even though
+  // operator== calls them different because it leads with src and id.
+  SourceBlock original(DexString::make_string("LFoo;.bar:()V"), 0,
+                       {SourceBlock::Val(1.0f, 2.0f)});
+  SourceBlock clone(DexString::make_string("LOther;.baz:()V"),
+                    SourceBlock::kSyntheticId,
+                    {SourceBlock::Val(1.0f, 2.0f)});
+
+  EXPECT_TRUE(vals_equal(original, clone));
+  EXPECT_TRUE(vals_equal(clone, original));
+  // This is the disagreement that makes the helper necessary.
+  EXPECT_FALSE(original == clone);
+}
+
+TEST_F(SourceBlocksTest, vals_equal_compares_the_values) {
+  const auto* name = DexString::make_string("LFoo;.bar:()V");
+  SourceBlock a(name, 0, {SourceBlock::Val(1.0f, 2.0f)});
+  SourceBlock same(name, 0, {SourceBlock::Val(1.0f, 2.0f)});
+  SourceBlock other_val(name, 0, {SourceBlock::Val(9.0f, 2.0f)});
+  SourceBlock other_appear100(name, 0, {SourceBlock::Val(1.0f, 9.0f)});
+
+  EXPECT_TRUE(vals_equal(a, same));
+  EXPECT_FALSE(vals_equal(a, other_val));
+  EXPECT_FALSE(vals_equal(a, other_appear100));
+}
+
+TEST_F(SourceBlocksTest, vals_equal_rejects_differing_vals_size) {
+  const auto* name = DexString::make_string("LFoo;.bar:()V");
+  SourceBlock one(name, 0, {SourceBlock::Val(1.0f, 2.0f)});
+  SourceBlock two(name, 0,
+                  {SourceBlock::Val(1.0f, 2.0f), SourceBlock::Val(1.0f, 2.0f)});
+
+  EXPECT_FALSE(vals_equal(one, two));
+  EXPECT_FALSE(vals_equal(two, one));
+}
+
+TEST_F(SourceBlocksTest, vals_equal_default_value_matches_absent_slot) {
+  const auto* name = DexString::make_string("LFoo;.bar:()V");
+  // An all-default vector allocates no storage, so this block's slot is
+  // absent...
+  SourceBlock absent(name, 0, {SourceBlock::Val::default_value()});
+  // ...while writing the default into an already-present slot keeps it there.
+  SourceBlock present(name, 0, {SourceBlock::Val(3.0f, 4.0f)});
+  present.set_at(0, SourceBlock::Val::default_value());
+
+  EXPECT_TRUE(vals_equal(absent, present));
+  EXPECT_TRUE(vals_equal(present, absent));
+}
+
+TEST_F(SourceBlocksTest, set_vals_copies_values_and_keeps_identity) {
+  const auto* dst_name = DexString::make_string("LDst;.m:()V");
+  const auto* chain_name = DexString::make_string("LChain;.m:()V");
+  SourceBlock dst(dst_name, 7, {SourceBlock::Val(0.0f, 0.0f)});
+  dst.append(std::make_unique<SourceBlock>(
+      chain_name, 9,
+      std::vector<SourceBlock::Val>{SourceBlock::Val(5.0f, 6.0f)}));
+  const auto* chain = dst.next.get();
+  ASSERT_NE(chain, nullptr);
+
+  SourceBlock from(DexString::make_string("LFrom;.m:()V"),
+                   SourceBlock::kSyntheticId,
+                   {SourceBlock::Val(1.0f, 2.0f)});
+
+  set_vals(dst, from);
+
+  // The values came across...
+  EXPECT_TRUE(vals_equal(dst, from));
+  ASSERT_TRUE(dst.get_val(0).has_value());
+  EXPECT_FLOAT_EQ(*dst.get_val(0), 1.0f);
+  ASSERT_TRUE(dst.get_appear100(0).has_value());
+  EXPECT_FLOAT_EQ(*dst.get_appear100(0), 2.0f);
+
+  // ...and nothing else did. The identity is what instrumentation resolves,
+  // and the chain is what a traversal over the block is still walking.
+  EXPECT_EQ(dst.src, dst_name);
+  EXPECT_EQ(dst.id, 7u);
+  EXPECT_EQ(dst.next.get(), chain);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  EXPECT_EQ(chain->src, chain_name);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  EXPECT_EQ(chain->id, 9u);
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  ASSERT_TRUE(chain->get_val(0).has_value());
+  // @lint-ignore NULLSAFECLANG (guarded by ASSERT_NE above)
+  EXPECT_FLOAT_EQ(*chain->get_val(0), 5.0f);
+}
+
+TEST_F(SourceBlocksTest, set_vals_rejects_differing_vals_size) {
+  const auto* name = DexString::make_string("LFoo;.bar:()V");
+  SourceBlock one(name, 0, {SourceBlock::Val(1.0f, 2.0f)});
+  SourceBlock two(name, 0,
+                  {SourceBlock::Val(1.0f, 2.0f), SourceBlock::Val(3.0f, 4.0f)});
+
+  // Copying values between blocks of different arity is a bug, not something
+  // to paper over by truncating.
+  EXPECT_THROW(set_vals(one, two), RedexException);
 }
 
 namespace {
