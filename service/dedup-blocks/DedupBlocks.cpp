@@ -94,7 +94,7 @@ static std::vector<cfg::Edge*> get_branch_or_goto_succs(
 // Describe a successor target independently of which block we reached it from:
 // a self-edge becomes a sentinel, anything else stays the target itself.
 //
-// Must be canonical, not a pairwise "…or both point at themselves" test.
+// Must be canonical, not a pairwise "...or both point at themselves" test.
 // `collect_duplicates` uses successor equality as the key equality of a hash
 // map, so it must be a true equivalence relation. The pairwise form is not
 // transitive: with three identical-code blocks where A and B self-loop and C
@@ -296,17 +296,17 @@ static std::string_view get_deobfuscated_class_name(const DexMethodRef* m) {
 
 // Returns true if this invoke-static targets a helper method whose body
 // is "throw new SomeThrowable(...)". Collapsing multiple callsites of such
-// helpers mis-attributes runtime exceptions — the callsite PC is what
+// helpers mis-attributes runtime exceptions -- the callsite PC is what
 // symbolicates in the stack trace.
 //
 // Uses deobfuscated names so the check survives RenameClassesPass (which
 // makes DexType::get_type("Lkotlin/...") return nullptr) and ObfuscatePass
-// (which renames method names, e.g. "throwFoo" → "A0O").
+// (which renames method names, e.g. "throwFoo" -> "A0O").
 //
 // Known producers:
-//   - kotlin.jvm.internal.Intrinsics.throw* — Kotlin compiler (!!,
+//   - kotlin.jvm.internal.Intrinsics.throw* -- Kotlin compiler (!!,
 //     lateinit, contract, parameter null-checks).
-//   - com.redex.UnreachableException.createAndThrow — Redex synthetic.
+//   - com.redex.UnreachableException.createAndThrow -- Redex synthetic.
 static bool check_throw_helper_names(std::string_view cls_name,
                                      std::string_view method_name) {
   if (cls_name == "Lkotlin/jvm/internal/Intrinsics;" &&
@@ -372,7 +372,7 @@ bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
     return true;
   }
   // Explicit virtual call to Throwable.fillInStackTrace?
-  // (Pointer comparison — rename-safe.)
+  // (Pointer comparison -- rename-safe.)
   if (opcode::is_invoke_virtual(op)) {
     resolved_method =
         resolve_method_deprecated(insn->get_method(), MethodSearch::Virtual);
