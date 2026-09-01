@@ -2639,9 +2639,16 @@ UnorderedMap<const DexMethodRef*, double> get_methods_global_order(
           "[instruction sequence outliner] Interaction [%s] gets index %zu",
           interaction_id.c_str(), index);
     for (const auto& q : UnorderedIterable(method_stats)) {
-      auto& global_order = methods_global_order[q.first];
-      global_order = std::min(global_order, static_cast<double>(index * 100) +
-                                                q.second.order_percent);
+      // Seed the running minimum with infinity, as reorder_with_method_profiles
+      // does. operator[] would default-construct 0.0, and every candidate here
+      // is non-negative (index >= 0 and order_percent in [0, 100]), so the
+      // minimum would be 0.0 for every method no matter what the profile says.
+      auto it =
+          methods_global_order
+              .try_emplace(q.first, std::numeric_limits<double>::infinity())
+              .first;
+      it->second = std::min(it->second, static_cast<double>(index * 100) +
+                                            q.second.order_percent);
     }
   }
   auto ordered_methods = unordered_to_ordered_keys(
