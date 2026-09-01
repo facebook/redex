@@ -58,6 +58,9 @@ class ReducedControlFlowGraph {
       const ReducedBlock* head,
       const UnorderedSet<const ReducedEdge*>& except_edges = {}) const;
 
+  // Never returns null: `block` must be non-null and must belong to the cfg
+  // this graph was reduced from. Both are programming errors and abort, in opt
+  // builds too -- callers must not null-check the result.
   ReducedBlock* get_reduced_block(const cfg::Block* block) const;
 
   size_t code_size() const { return m_code_size; }

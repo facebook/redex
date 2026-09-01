@@ -142,8 +142,7 @@ std::vector<const ReducedBlock*> ReducedControlFlowGraph::blocks() const {
 }
 
 const ReducedBlock* ReducedControlFlowGraph::entry_block() const {
-  always_assert(m_blocks.count(m_cfg.entry_block()));
-  return m_blocks.at(m_cfg.entry_block());
+  return get_reduced_block(m_cfg.entry_block());
 }
 
 UnorderedSet<const ReducedBlock*> ReducedControlFlowGraph::reachable(
@@ -168,7 +167,14 @@ UnorderedSet<const ReducedBlock*> ReducedControlFlowGraph::reachable(
 
 ReducedBlock* ReducedControlFlowGraph::get_reduced_block(
     const cfg::Block* block) const {
-  return m_blocks.at(block);
+  // Checked before the lookup, because the not-found message below reports
+  // `block->id()`: a null block is absent from the map too, so without this it
+  // would fail by dereferencing null while building its own diagnostic.
+  always_assert_log(block != nullptr, "no block given");
+  auto it = m_blocks.find(block);
+  always_assert_log(it != m_blocks.end(),
+                    "block B%zu is not in the reduced CFG", block->id());
+  return it->second;
 }
 
 } // namespace method_splitting_impl
