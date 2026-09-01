@@ -15,6 +15,7 @@
 #include "MethodUtil.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
+#include "TypeUtil.h"
 #include "UniqueMethodTracker.h"
 #include "Walkers.h"
 
@@ -374,6 +375,12 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
     }
   }
 
+  // Count method parameters that are Kotlin lambda types.
+  const auto* param_types = method->get_proto()->get_args();
+  stats.kotlin_lambda_type_method_params +=
+      std::count_if(param_types->begin(), param_types->end(),
+                    type::is_kotlin_function_interface);
+
   always_assert(method->get_code()->cfg_built());
   auto& cfg = method->get_code()->cfg();
 
@@ -502,6 +509,10 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
     TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: %s = %zu", name.c_str(),
           kotlin_invoke_interface_function_insns[i]);
   }
+  mgr.incr_metric("kotlin_lambda_type_method_params",
+                  kotlin_lambda_type_method_params);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_lambda_type_method_params = %zu",
+        kotlin_lambda_type_method_params);
 
   TRACE(KOTLIN_STATS, 1,
         "KOTLIN_STATS: kotlin_null_check_param_insns_in_root_method = %zu",
