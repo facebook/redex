@@ -142,6 +142,16 @@ IROperation BlockValues::get_operation(std::map<reg_t, value_id_t>& regs,
     operation.op_data.string = insn->get_string();
   } else if (insn->has_data()) {
     operation.op_data.data = insn->get_data();
+  } else if (insn->has_callsite()) {
+    // op_data is hashed and compared as raw bytes, so storing the ref's
+    // identity in any pointer-sized member is enough to tell refs apart.
+    operation.op_data.literal =
+        reinterpret_cast<uintptr_t>(insn->get_callsite());
+  } else if (insn->has_methodhandle()) {
+    operation.op_data.literal =
+        reinterpret_cast<uintptr_t>(insn->get_methodhandle());
+  } else if (insn->has_proto()) {
+    operation.op_data.literal = reinterpret_cast<uintptr_t>(insn->get_proto());
   }
   return operation;
 }
