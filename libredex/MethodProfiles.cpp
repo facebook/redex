@@ -1120,18 +1120,26 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
                 return false;
               }
 
-              // Give priority to interactions that happen more often
-              const auto& a_interactions =
-                  m_method_profiles->get_interaction_count(a);
-              const auto& b_interactions =
-                  m_method_profiles->get_interaction_count(b);
-              if (a_interactions != std::nullopt &&
-                  b_interactions != std::nullopt) {
-                return *a_interactions > *b_interactions;
-              }
+              // Give priority to interactions that happen more often, ranking
+              // any interaction with a known count above one without. Comparing
+              // a counted against an uncounted interaction alphabetically
+              // instead would not be a strict weak ordering: with counts Feed=5
+              // and Story=10 and an uncounted Notifications, Story < Feed by
+              // count, Notifications < Story alphabetically, and Feed <
+              // Notifications alphabetically, which is a cycle. std::sort on an
+              // intransitive comparator is undefined behaviour.
+              //
+              // std::optional orders nullopt below every value, which is
+              // exactly that ranking. Do not spell it with a sentinel: in
+              // `count ? *count : -1` the usual arithmetic conversions turn -1
+              // into UINT32_MAX, which sorts uncounted first instead of last.
+              auto a_count = m_method_profiles->get_interaction_count(a);
+              auto b_count = m_method_profiles->get_interaction_count(b);
 
-              // fall back to alphabetical
-              return a < b;
+              // Ties -- equal counts, or two uncounted interactions -- fall
+              // back to alphabetical, so the unstable sort has nothing left to
+              // decide.
+              return a_count == b_count ? a < b : a_count > b_count;
             });
 
   for (auto* method : initial_order) {
