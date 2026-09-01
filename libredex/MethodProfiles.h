@@ -214,10 +214,16 @@ class MethodProfiles {
   bool parse_header(std::string_view line);
 
   void process_unresolved_lines(bool baseline_profile_variant);
-  void resolve_method_descriptor_tokens(
+  // Returns the ref_str buffers of the lines that were resolved, for the
+  // caller to erase once BOTH variants are done. The lines cannot be erased
+  // here: `map`'s keys are string_views into those very buffers.
+  UnorderedSet<std::string*> resolve_method_descriptor_tokens(
       const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
                          std::vector<DexMethodRef*>>& map,
       bool baseline_profile_variant);
+  static void erase_resolved_lines(
+      std::vector<ParsedMain>& unresolved_lines_ref,
+      const UnorderedSet<std::string*>& to_remove);
 };
 
 // NOTE: Do not use this comparator directly in `std::sort` calls, as it is

@@ -941,18 +941,36 @@ MethodProfiles::get_unresolved_method_descriptor_tokens() const {
 void MethodProfiles::resolve_method_descriptor_tokens(
     const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
                        std::vector<DexMethodRef*>>& map) {
-  resolve_method_descriptor_tokens(map, true);
-  resolve_method_descriptor_tokens(map, false);
+  // The keys of `map` are MethodDescriptorTokens, which are non-owning
+  // string_views into the ref_str buffers of BOTH
+  // m_baseline_profile_unresolved_lines and m_unresolved_lines (see
+  // get_unresolved_method_descriptor_tokens, which merges the two). Erasing
+  // from either vector destroys those buffers, so neither erasure may happen
+  // until both variants have finished looking keys up. Otherwise the second
+  // lookup hashes and compares keys that point into freed memory.
+  auto baseline_to_remove = resolve_method_descriptor_tokens(map, true);
+  auto to_remove = resolve_method_descriptor_tokens(map, false);
+  erase_resolved_lines(m_baseline_profile_unresolved_lines, baseline_to_remove);
+  erase_resolved_lines(m_unresolved_lines, to_remove);
 }
 
-void MethodProfiles::resolve_method_descriptor_tokens(
+void MethodProfiles::erase_resolved_lines(
+    std::vector<ParsedMain>& unresolved_lines_ref,
+    const UnorderedSet<std::string*>& to_remove) {
+  std::erase_if(unresolved_lines_ref, [&to_remove](auto& parsed_main) {
+    return to_remove.count(parsed_main.ref_str.get());
+  });
+}
+
+UnorderedSet<std::string*> MethodProfiles::resolve_method_descriptor_tokens(
     const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
                        std::vector<DexMethodRef*>>& map,
     bool baseline_profile_variant) {
   size_t removed{0};
   size_t added{0};
   // Note that we don't remove unresolved_lines_ref as we go, as the given map
-  // might reference its mdts.
+  // might reference its mdts. The caller performs the removal, once both
+  // variants are done, for the same reason.
   UnorderedSet<std::string*> to_remove;
   auto& unresolved_lines_ref = baseline_profile_variant
                                    ? m_baseline_profile_unresolved_lines
@@ -979,13 +997,11 @@ void MethodProfiles::resolve_method_descriptor_tokens(
       added++;
     }
   }
-  std::erase_if(unresolved_lines_ref, [&to_remove](auto& parsed_main) {
-    return to_remove.count(parsed_main.ref_str.get());
-  });
   TRACE(METH_PROF, 1,
         "After resolving unresolved lines: %zu unresolved lines removed, %zu "
         "rows added",
         removed, added);
+  return to_remove;
 }
 
 bool MethodProfiles::parse_header(std::string_view line) {
