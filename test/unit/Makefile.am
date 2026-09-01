@@ -147,6 +147,7 @@ check_PROGRAMS = \
     proguard_map_test \
     proguard_matcher_test \
     proguard_parser_test \
+    proguard_print_configuration_test \
     proguard_regex_test \
     pure_analysis_test \
     random_forest_test \
@@ -476,6 +477,8 @@ proguard_matcher_test_SOURCES = ProguardMatcherTest.cpp
 
 proguard_parser_test_SOURCES = ProguardParserTest.cpp
 proguard_parser_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+proguard_print_configuration_test_SOURCES = ProguardPrintConfigurationTest.cpp
 
 proguard_regex_test_SOURCES = ProguardRegexTest.cpp
 

@@ -925,10 +925,10 @@ TEST_F(ProguardTest, assortment) {
     EXPECT_THAT(
         unused_keep_rule_strings,
         ::testing::UnorderedElementsAre(
-            "-keep android.support.test.runner.AndroidJUnitRunner {  (...)V "
-            "<init>(); }",
-            "-keepclasseswithmembernames * { native  *(); }",
-            "-keep androidx.test.runner.AndroidJUnitRunner {  (...)V "
+            "-keep class android.support.test.runner.AndroidJUnitRunner {  "
+            "(...)V <init>(); }",
+            "-keepclasseswithmembernames class * { native  *(); }",
+            "-keep class androidx.test.runner.AndroidJUnitRunner {  (...)V "
             "<init>(); }"));
 
     EXPECT_EQ(proguard_rule_recorder.unused_assumenosideeffect_rules.size(), 0);
@@ -942,7 +942,7 @@ TEST_F(ProguardTest, assortment) {
     }
     EXPECT_THAT(used_assumenosideeffects_rule_strings,
                 ::testing::UnorderedElementsAre(
-                    "-assumenosideeffects "
+                    "-assumenosideeffects class "
                     "com.facebook.redex.test.proguard.Delta$U { ()V "
                     "logger(); }"));
   }
