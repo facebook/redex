@@ -25,6 +25,8 @@ class PrintKotlinStats : public Pass {
     size_t kotlin_null_check_expr_insns{0};
     size_t kotlin_null_check_notnull_insns{0};
     size_t kotlin_areequal_insns{0};
+    size_t kotlin_compare_int_insns{0};
+    size_t kotlin_compare_long_insns{0};
     size_t kotlin_default_arg_check_insns{0};
     size_t kotlin_default_arg_1_param{0};
     size_t kotlin_default_arg_2_params{0};
@@ -68,6 +70,8 @@ class PrintKotlinStats : public Pass {
       kotlin_null_check_expr_insns += that.kotlin_null_check_expr_insns;
       kotlin_null_check_notnull_insns += that.kotlin_null_check_notnull_insns;
       kotlin_areequal_insns += that.kotlin_areequal_insns;
+      kotlin_compare_int_insns += that.kotlin_compare_int_insns;
+      kotlin_compare_long_insns += that.kotlin_compare_long_insns;
       kotlin_default_arg_check_insns += that.kotlin_default_arg_check_insns;
       kotlin_default_arg_1_param += that.kotlin_default_arg_1_param;
       kotlin_default_arg_2_params += that.kotlin_default_arg_2_params;
@@ -149,6 +153,8 @@ class PrintKotlinStats : public Pass {
   UnorderedSet<DexMethodRef*> m_kotlin_expr_null_assertions;
   UnorderedSet<DexMethodRef*> m_kotlin_notnull_assertions;
   DexMethodRef* m_kotlin_areequal = nullptr;
+  DexMethodRef* m_kotlin_compare_int = nullptr;
+  DexMethodRef* m_kotlin_compare_long = nullptr;
   DexType* m_kotlin_lambdas_base = nullptr;
   DexType* m_kotlin_coroutin_continuation_base = nullptr;
   const DexString* m_instance = nullptr;

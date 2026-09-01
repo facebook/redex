@@ -138,6 +138,10 @@ void PrintKotlinStats::setup() {
   kotlin_nullcheck_wrapper::get_kotlin_notnull_assertions(
       m_kotlin_notnull_assertions);
   m_kotlin_areequal = method::kotlin_jvm_internal_Intrinsics_areEqual();
+  m_kotlin_compare_int =
+      DexMethod::get_method("Lkotlin/jvm/internal/Intrinsics;.compare:(II)I");
+  m_kotlin_compare_long =
+      DexMethod::get_method("Lkotlin/jvm/internal/Intrinsics;.compare:(JJ)I");
   m_kotlin_lambdas_base = DexType::get_type(KOTLIN_LAMBDA);
   m_kotlin_coroutin_continuation_base = DexType::get_type(CONTINUATION_IMPL);
   m_instance = DexString::make_string("INSTANCE");
@@ -375,6 +379,14 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
       if (m_kotlin_areequal != nullptr && called_method == m_kotlin_areequal) {
         stats.kotlin_areequal_insns++;
       }
+      if (m_kotlin_compare_int != nullptr &&
+          called_method == m_kotlin_compare_int) {
+        stats.kotlin_compare_int_insns++;
+      }
+      if (m_kotlin_compare_long != nullptr &&
+          called_method == m_kotlin_compare_long) {
+        stats.kotlin_compare_long_insns++;
+      }
     } break;
     case OPCODE_AND_INT_LIT: {
       if (is_kotlin_default_arg_method(*method)) {
@@ -399,6 +411,8 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_null_check_notnull_insns",
                   kotlin_null_check_notnull_insns);
   mgr.incr_metric("kotlin_areequal_insns", kotlin_areequal_insns);
+  mgr.incr_metric("kotlin_compare_int_insns", kotlin_compare_int_insns);
+  mgr.incr_metric("kotlin_compare_long_insns", kotlin_compare_long_insns);
   mgr.incr_metric("kotlin_default_arg_check_insns",
                   kotlin_default_arg_check_insns);
   mgr.incr_metric("kotlin_default_arg_1_param", kotlin_default_arg_1_param);
@@ -457,6 +471,10 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
         kotlin_null_check_notnull_insns);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_areequal_insns = %zu",
         kotlin_areequal_insns);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_compare_int_insns = %zu",
+        kotlin_compare_int_insns);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_compare_long_insns = %zu",
+        kotlin_compare_long_insns);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_default_arg_1_param = %zu",
         kotlin_hot_default_arg_1_param);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_hot_default_arg_2_params = %zu",
