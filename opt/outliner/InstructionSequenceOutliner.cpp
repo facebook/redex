@@ -3084,15 +3084,48 @@ std::vector<DexStore*> get_stores(DexStoresVector& stores,
   for (auto& store : stores) {
     res.emplace_back(&store);
   }
-  std::sort(res.begin(), res.end(), [&xstores](DexStore* s, DexStore* t) {
-    if (xstores.get_transitive_resolved_dependencies(t).count(s) != 0u) {
-      return true;
+  // Order dependencies before dependents.
+  //
+  // Answering "is s a transitive dependency of t" directly and falling back to
+  // name order is not a strict weak ordering: dependency is a partial order,
+  // and interleaving it with a total order on the incomparable pairs admits
+  // cycles. std::sort on an intransitive comparator is undefined behaviour.
+  //
+  // Sorting by transitive dependency count preserves the intent. The closure
+  // built by build_transitive_resolved_dependencies is transitive and
+  // necessarily acyclic, so `s in deps(t)` implies `deps(s)` is a subset of
+  // `deps(t)` that does not contain s, hence `|deps(s)| < |deps(t)|`. Name and
+  // then original position break the remaining ties, which makes this a total
+  // order and leaves nothing for the unstable sort to decide.
+  UnorderedMap<const DexStore*, size_t> original_position;
+  for (size_t i = 0; i < res.size(); ++i) {
+    original_position.emplace(res[i], i);
+  }
+  std::sort(res.begin(), res.end(), [&](DexStore* s, DexStore* t) {
+    auto s_deps = xstores.get_transitive_resolved_dependencies(s).size();
+    auto t_deps = xstores.get_transitive_resolved_dependencies(t).size();
+    if (s_deps != t_deps) {
+      return s_deps < t_deps;
     }
-    if (xstores.get_transitive_resolved_dependencies(s).count(t) != 0u) {
-      return false;
+    if (s->get_name() != t->get_name()) {
+      return s->get_name() < t->get_name();
     }
-    return s->get_name() < t->get_name();
+    return original_position.at(s) < original_position.at(t);
   });
+  // The dependency-count argument above is a proof about the closure, not a
+  // check of it. Verify the property it is standing in for: no store precedes
+  // one of its own transitive dependencies. Quadratic, but there are a few
+  // dozen stores, and it is compiled out in opt builds.
+  if (debug) {
+    for (size_t i = 0; i < res.size(); ++i) {
+      const auto& deps = xstores.get_transitive_resolved_dependencies(res[i]);
+      for (size_t j = i + 1; j < res.size(); ++j) {
+        assert_log(deps.count(res[j]) == 0u,
+                   "store %s was ordered before its dependency %s",
+                   res[i]->get_name().c_str(), res[j]->get_name().c_str());
+      }
+    }
+  }
   return res;
 }
 
