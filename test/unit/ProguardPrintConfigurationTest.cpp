@@ -38,10 +38,12 @@ TEST(ProguardPrintConfigurationTest, a_plain_class_rule_says_class) {
   EXPECT_EQ(round_trip("-keep class Foo"), "-keep class Foo ");
 }
 
-// The kinds that carry an access flag are printed from the flag, and are left
-// exactly as they were.
-TEST(ProguardPrintConfigurationTest, other_class_kinds_are_unchanged) {
+// The kinds that carry an access flag are printed from the flag. `interface`
+// and `@interface` are different kinds of rule and have to stay apart: an '@'
+// prefixed onto the interface flag turned the first into the second.
+TEST(ProguardPrintConfigurationTest, class_kinds_round_trip) {
   EXPECT_EQ(round_trip("-keep enum Foo"), "-keep enum Foo ");
+  EXPECT_EQ(round_trip("-keep interface Foo"), "-keep interface Foo ");
   EXPECT_EQ(round_trip("-keep @interface Foo"), "-keep @interface Foo ");
-  EXPECT_EQ(round_trip("-keep interface Foo"), "-keep @interface Foo ");
+  EXPECT_EQ(round_trip("-keep !interface Foo"), "-keep !interface class Foo ");
 }

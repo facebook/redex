@@ -60,9 +60,10 @@ std::string show_access_flags(const DexAccessFlags flags,
     if ((flags & access) == 0) {
       continue;
     }
-    if (is_interface(access)) {
-      ss << "@";
-    }
+    // No '@' here: `show_access` returns "interface" for ACC_INTERFACE and
+    // "@interface" for ACC_ANNOTATION, which are different kinds of rule.
+    // Prefixing the interface flag turned "interface Foo" into
+    // "@interface Foo", which matches annotations instead.
     ss << show_access(access, isMethod) << " ";
   }
   for (int offset = 0; offset < 32; offset++) {
@@ -71,9 +72,6 @@ std::string show_access_flags(const DexAccessFlags flags,
       continue;
     }
     ss << "!";
-    if (is_interface(access)) {
-      ss << "@";
-    }
     ss << show_access(access, isMethod) << " ";
   }
   return ss.str();
