@@ -49,6 +49,17 @@ struct DexTypeEnvironmentTest : public RedexTest {
    *  Sub3(If1)   Sub4(If1, If2)
    *
    *  Ljava/lang/Object;
+   *  |            |           |
+   *  ImplIf1If2A  ImplIf1If2B ImplIf1Only
+   *  (If1, If2)   (If1, If2)  (If1)
+   *
+   *  These three are Object-rooted, unlike every Sub*, so a join between them
+   *  has no common super class below Object and has to fall through to the
+   *  interfaces. That is what SingletonJoinIsNotAssociativeTest needs: two
+   *  classes sharing several incomparable interfaces have an intersection type
+   *  as their bound, which no single DexType can hold.
+   *
+   *  Ljava/lang/Object;
    *  |
    *  AbstractMapEntry(MapEntry)
    *  |
@@ -185,6 +196,26 @@ struct DexTypeEnvironmentTest : public RedexTest {
     creator.add_interface(m_type_if2);
     creator.create();
 
+    m_type_ij1 = DexType::make_type("LImplIf1If2A;");
+    creator = ClassCreator(m_type_ij1);
+    creator.set_super(type::java_lang_Object());
+    creator.add_interface(m_type_if1);
+    creator.add_interface(m_type_if2);
+    creator.create();
+
+    m_type_ij2 = DexType::make_type("LImplIf1If2B;");
+    creator = ClassCreator(m_type_ij2);
+    creator.set_super(type::java_lang_Object());
+    creator.add_interface(m_type_if1);
+    creator.add_interface(m_type_if2);
+    creator.create();
+
+    m_type_i_only = DexType::make_type("LImplIf1Only;");
+    creator = ClassCreator(m_type_i_only);
+    creator.set_super(type::java_lang_Object());
+    creator.add_interface(m_type_if1);
+    creator.create();
+
     m_string_array = DexType::make_type("[Ljava/lang/String;");
     m_int_array = type::make_array_type(type::_int());
     m_sub1_array = type::make_array_type(m_type_sub1);
@@ -282,6 +313,9 @@ struct DexTypeEnvironmentTest : public RedexTest {
   DexType* m_type_sub2;
   DexType* m_type_sub3;
   DexType* m_type_sub4;
+  DexType* m_type_ij1;
+  DexType* m_type_ij2;
+  DexType* m_type_i_only;
   DexType* m_type_if1;
   DexType* m_type_if2;
 
@@ -594,6 +628,45 @@ TEST_F(DexTypeEnvironmentTest, InterfaceJoinTest) {
   sub4.join_with(base);
   EXPECT_EQ(sub4, SingletonDexTypeDomain(m_type_base));
   EXPECT_FALSE(base.is_top());
+}
+
+// `join_with` is an upper-bound operator, not a least-upper-bound one, and it
+// is neither associative nor commutative. Folding it over a collection gives an
+// answer that depends on the visit order, which is why callers that fold over
+// an unordered container must impose one.
+//
+// The mechanism, on the types below: when the common super class walk reaches
+// Object, `find_common_type` resolves through the interfaces the two operands
+// share. Sharing exactly one is representable. Sharing several incomparable
+// ones is not -- the bound is an intersection type -- so the join gives up to
+// Top, and Top absorbs every operand that follows.
+TEST_F(DexTypeEnvironmentTest, SingletonJoinIsNotAssociativeTest) {
+  // Two classes sharing If1 and If2 have no representable bound: the least
+  // upper bound is the intersection type If1 & If2, which one DexType cannot
+  // hold, so the join gives up to Top and stays there.
+  auto both_first = SingletonDexTypeDomain(m_type_ij1);
+  both_first.join_with(SingletonDexTypeDomain(m_type_ij2));
+  EXPECT_TRUE(both_first.is_top());
+  both_first.join_with(SingletonDexTypeDomain(m_type_i_only));
+  EXPECT_TRUE(both_first.is_top());
+
+  // Folding the same three types in a different order never reaches that
+  // state: the first join shares only If1, which is representable, and the
+  // remaining operand implements it.
+  auto single_first = SingletonDexTypeDomain(m_type_ij1);
+  single_first.join_with(SingletonDexTypeDomain(m_type_i_only));
+  EXPECT_EQ(single_first, SingletonDexTypeDomain(m_type_if1));
+  single_first.join_with(SingletonDexTypeDomain(m_type_ij2));
+  EXPECT_EQ(single_first, SingletonDexTypeDomain(m_type_if1));
+  EXPECT_FALSE(single_first.is_top());
+
+  // The two fold orders disagree, which is the property the fix rests on.
+  EXPECT_NE(both_first, single_first);
+
+  // A single join is still commutative; only the fold order matters.
+  auto swapped = SingletonDexTypeDomain(m_type_i_only);
+  swapped.join_with(SingletonDexTypeDomain(m_type_ij1));
+  EXPECT_EQ(swapped, SingletonDexTypeDomain(m_type_if1));
 }
 
 TEST_F(DexTypeEnvironmentTest, ExtendedInterfaceJoinTest) {
