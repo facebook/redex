@@ -73,11 +73,23 @@ UnorderedSet<const ReducedEdge*> get_except_preds(
         if (reduced_components.count(pred->src) != 0u) {
           continue;
         }
+        // Decide first, then collect. The two questions are independent, and
+        // interleaving them made the answer depend on hash order: the old loop
+        // broke out on the first non-switch edge, so a pred that was going to
+        // be erased anyway still contributed the case keys of whichever of its
+        // edges happened to be visited before that one.
+        //
+        // An erased pred contributes no keys. It keeps a way into the host that
+        // does not come from the switch, so its cases are not eliminated by
+        // splitting and must not be counted as if they were.
+        if (unordered_any_of(pred->edges, [switch_block](const cfg::Edge* e) {
+              return e->src() != switch_block;
+            })) {
+          except_preds.erase(pred);
+          continue;
+        }
         for (const auto* e : UnorderedIterable(pred->edges)) {
-          if (e->src() != switch_block) {
-            except_preds.erase(pred);
-            break;
-          } else if (e->type() == cfg::EDGE_BRANCH) {
+          if (e->type() == cfg::EDGE_BRANCH) {
             except_case_keys->insert(*e->case_key());
           }
         }
