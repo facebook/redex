@@ -109,9 +109,22 @@ bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
   return it->insn == last_it->insn;
 }
 
+// Eligibility bounds for the never-inline analysis. Each shadows a threshold
+// inside ART's own inliner, and each default is a deliberate margin over ART's
+// number -- see the doc strings in bind_config. Grouped in a struct rather than
+// passed as four loose parameters because three of them are size_t and a
+// positional transposition would compile silently.
+struct NeverInlineThresholds {
+  size_t max_caller_instructions;
+  size_t max_caller_registers;
+  uint32_t max_callee_code_units;
+  size_t min_callee_instructions;
+};
+
 void never_inline(bool attach_annotations,
                   float hot_block_appear_threshold,
                   float hot_method_appear_threshold,
+                  const NeverInlineThresholds& thresholds,
                   const Scope& scope,
                   const baseline_profiles::BaselineProfile& baseline_profile,
                   PassManager& mgr,
@@ -238,15 +251,12 @@ void never_inline(bool attach_annotations,
       return;
     }
     size_t caller_instructions = estimated_instructions.at(caller);
-    // Over the 1024 threshold of the AOT compiler, to be conservative.
-    size_t MAX_INSTRUCTIONS = 1100;
-    if (caller_instructions > MAX_INSTRUCTIONS) {
+    if (caller_instructions > thresholds.max_caller_instructions) {
       callers_too_many_instructions.fetch_add(1);
       return;
     }
     size_t caller_registers = code.cfg().get_registers_size();
-    size_t MAX_REGISTERS = 32;
-    if (caller_registers > MAX_REGISTERS) {
+    if (caller_registers > thresholds.max_caller_registers) {
       callers_too_many_registers.fetch_add(1);
       return;
     }
@@ -331,14 +341,13 @@ void never_inline(bool attach_annotations,
     }
 
     auto ecu = estimated_code_units.at(method);
-    if (ecu > 40) {
-      // Way over the 14 threshold of the AOT compiler, to be conservative.
+    if (ecu > thresholds.max_callee_code_units) {
       callees_too_large.fetch_add(1);
       return;
     }
 
     auto instructions = estimated_instructions.at(method);
-    if (instructions <= 3) {
+    if (instructions < thresholds.min_callee_instructions) {
       callees_too_small.fetch_add(1);
       return;
     }
@@ -726,6 +735,31 @@ void ArtProfileWriterPass::bind_config() {
        m_never_inline_hot_block_appear_threshold);
   bind("never_inline_hot_method_appear_threshold", -1.0f,
        m_never_inline_hot_method_appear_threshold);
+  bind("never_inline_max_caller_instructions", 1100,
+       m_never_inline_max_caller_instructions,
+       "Skip a caller with more estimated instructions "
+       "(`IRCode::count_opcodes`) than this. Shadows ART's 1024-HIR caller "
+       "budget, with a margin -- but in a DIFFERENT UNIT: HIR instructions are "
+       "not IR opcodes (measured 1.83-1.99 HIR per distinct dex pc, up to 3.60 "
+       "on tiny methods), so this value can land on either side of 1024 HIR "
+       "depending on the method.");
+  bind("never_inline_max_caller_registers", 32,
+       m_never_inline_max_caller_registers,
+       "Skip a caller needing more registers than this. Shadows ART's 32-slot "
+       "inlining environment budget, with no margin.");
+  bind(
+      "never_inline_max_callee_code_units", 40,
+      m_never_inline_max_callee_code_units,
+      "Do not annotate a callee larger than this many estimated code units "
+      "(`IRCode::estimate_code_units`). Shadows ART's own callee size cliff, "
+      "with a large margin: the cliff is cited as 14 code units in this file's "
+      "history and as 32 (`NotInlinedCodeItem`) elsewhere, and neither number "
+      "has been verified against a measurement.");
+  bind("never_inline_min_callee_instructions", 4,
+       m_never_inline_min_callee_instructions,
+       "Do not annotate a callee with fewer estimated instructions than this: "
+       "ART inlines trivial bodies whatever the annotation says, so the "
+       "annotation would be dead DEX weight.");
 
   bind("include_strings_lookup_class", false, m_include_strings_lookup_class);
   bind("override_strip_classes", std::nullopt, m_override_strip_classes,
@@ -1098,10 +1132,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  never_inline(m_never_inline_attach_annotations,
-               m_never_inline_hot_block_appear_threshold,
-               m_never_inline_hot_method_appear_threshold, scope,
-               manual_profile, mgr, method_profiles);
+  never_inline(
+      m_never_inline_attach_annotations,
+      m_never_inline_hot_block_appear_threshold,
+      m_never_inline_hot_method_appear_threshold,
+      NeverInlineThresholds{
+          .max_caller_instructions = m_never_inline_max_caller_instructions,
+          .max_caller_registers = m_never_inline_max_caller_registers,
+          .max_callee_code_units = m_never_inline_max_callee_code_units,
+          .min_callee_instructions = m_never_inline_min_callee_instructions,
+      },
+      scope, manual_profile, mgr, method_profiles);
 }
 
 static ArtProfileWriterPass s_pass;
