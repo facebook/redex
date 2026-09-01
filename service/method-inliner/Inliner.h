@@ -439,6 +439,15 @@ class MultiMethodInliner {
    */
   std::optional<DexMethod*> get_callee(DexMethod* caller, IRInstruction* insn);
 
+  /**
+   * Whether a plain invocation of `callee`, as the partially inlined code's
+   * fallback performs it, can stand in for `insn`. It must dispatch the same
+   * way, and, as it names `callee`, the receiver must be an instance of the
+   * callee's class.
+   */
+  bool can_invoke_callee_directly(IRInstruction* insn,
+                                  const DexMethod* callee) const;
+
   size_t inline_inlinables(DexMethod* caller,
                            const std::vector<Inlinable>& inlinables);
 

@@ -42,6 +42,23 @@ UnorderedSet<cfg::Block*> get_normal_blocks(const cfg::ControlFlowGraph& cfg) {
 
 namespace inliner {
 
+IROpcode get_fallback_invoke_opcode(const DexMethod* method) {
+  if (is_static(method)) {
+    return OPCODE_INVOKE_STATIC;
+  }
+  if (!method->is_virtual()) {
+    return OPCODE_INVOKE_DIRECT;
+  }
+  auto* cls = type_class(method->get_class());
+  // Callers reach this only for an inliner candidate, which is concrete and
+  // defined by a class in scope. A null here means a non-scope or external
+  // method got through, and guessing invoke-virtual for it would emit a wrong
+  // opcode rather than surface the bug -- `is_interface` would also just
+  // dereference the null.
+  always_assert_log(cls != nullptr, "%s has no DexClass\n", SHOW(method));
+  return is_interface(cls) ? OPCODE_INVOKE_INTERFACE : OPCODE_INVOKE_VIRTUAL;
+}
+
 PartialCode get_partially_inlined_code(const DexMethod* method,
                                        const cfg::ControlFlowGraph& cfg,
                                        uint32_t max_code_units) {
@@ -190,12 +207,9 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
   partial_cfg.insert_before(entry_block->to_cfg_instruction_iterator(insert_it),
                             arg_copy_insns);
 
-  auto* invoke_insn =
-      (new IRInstruction(is_static(method)      ? OPCODE_INVOKE_STATIC
-                         : method->is_virtual() ? OPCODE_INVOKE_VIRTUAL
-                                                : OPCODE_INVOKE_DIRECT))
-          ->set_method(const_cast<DexMethod*>(method))
-          ->set_srcs_size(arg_copy_insns.size());
+  auto* invoke_insn = (new IRInstruction(get_fallback_invoke_opcode(method)))
+                          ->set_method(const_cast<DexMethod*>(method))
+                          ->set_srcs_size(arg_copy_insns.size());
   for (src_index_t i = 0; i < arg_copies.size(); i++) {
     invoke_insn->set_src(i, arg_copies[i]);
   }

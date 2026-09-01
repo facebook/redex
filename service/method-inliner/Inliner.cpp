@@ -2103,6 +2103,37 @@ bool MultiMethodInliner::should_inline_at_call_site(
   return true;
 }
 
+bool MultiMethodInliner::can_invoke_callee_directly(
+    IRInstruction* insn, const DexMethod* callee) const {
+  auto op = insn->opcode();
+  auto fallback_op = inliner::get_fallback_invoke_opcode(callee);
+  if (fallback_op == OPCODE_INVOKE_STATIC) {
+    return op == OPCODE_INVOKE_STATIC;
+  }
+  // A virtual fallback re-resolves the callee against the receiver's runtime
+  // class. An invoke-interface original does the same, so devirtualizing it is
+  // fine; an invoke-super or invoke-direct original deliberately does not.
+  //
+  // Invoke-super is excluded for cost, not for soundness. The peeled-off code
+  // is spliced into the very caller the instruction sat in, and invoke-super is
+  // interpreted relative to the enclosing class, so an invoke-super fallback
+  // would reach the same target without any further analysis. Taking it needs a
+  // second variant of the peeled-off code per callee, which means keying both
+  // the `get_callee_partial_code` cache and `InlinedCost::partial_code` by
+  // variant, and it leaves a live invoke-super in inlined code, where
+  // `CFGInliner::rewrite_invoke_supers` is waiting to rewrite it.
+  bool dispatches_alike =
+      fallback_op == OPCODE_INVOKE_VIRTUAL
+          ? (op == OPCODE_INVOKE_VIRTUAL || op == OPCODE_INVOKE_INTERFACE)
+          : op == fallback_op;
+  if (!dispatches_alike) {
+    return false;
+  }
+  // The fallback names `callee`, so the receiver must be an instance of the
+  // callee's class, which it is when the instruction names the callee itself.
+  return insn->get_method() == callee;
+}
+
 bool MultiMethodInliner::should_partially_inline(cfg::Block* block,
                                                  IRInstruction* insn,
                                                  DexMethod* callee,
@@ -2110,17 +2141,14 @@ bool MultiMethodInliner::should_partially_inline(cfg::Block* block,
   always_assert(opcode::is_an_invoke(insn->opcode()));
   always_assert(insn->has_method());
   // Partial inlining peels off the callee's hot prefix and lets the peeled-off
-  // code fall back to a plain invocation of the callee, which
-  // `get_partially_inlined_code` regenerates from the callee alone. That must
-  // be a valid stand-in for the instruction it replaces: it names the callee
-  // and it re-dispatches virtually, so we take only instructions that name the
-  // callee themselves and are not an invoke-super.
+  // code fall back to a plain invocation of the callee, which must be a valid
+  // stand-in for the instruction it replaces.
   //
   // That the peeled-off prefix is the code that would actually run at this
   // callsite is not established here: everything `get_callee` hands out is the
   // implementation that the receiver dispatches to.
-  if (!m_config.partial_hot_hot_inline || insn->get_method() != callee ||
-      insn->opcode() == OPCODE_INVOKE_SUPER || !source_blocks::is_hot(block)) {
+  if (!m_config.partial_hot_hot_inline || !source_blocks::is_hot(block) ||
+      !can_invoke_callee_directly(insn, callee)) {
     return false;
   }
   // If we don't already have pre-computed partially inlined code for this
