@@ -272,6 +272,34 @@ bool has_source_block_positive_val(const SourceBlock* sb);
 
 bool has_source_block_undefined_val(const SourceBlock* sb);
 
+// Whether two source blocks carry the same profile data, ignoring src, id and
+// next. SourceBlock::operator== leads with src and id, so it answers "are these
+// the same block", which is not the same question and is always false for
+// blocks of differing identity -- for example an original block and a synthetic
+// clone of it, which always carries kSyntheticId.
+inline bool vals_equal(const SourceBlock& lhs, const SourceBlock& rhs) {
+  if (lhs.vals_size != rhs.vals_size) {
+    return false;
+  }
+  for (size_t i = 0; i != lhs.vals_size; i++) {
+    if (lhs.get_at(i) != rhs.get_at(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Overwrite dst's profile data with from's, leaving dst's src, id and next
+// alone. SourceBlock::operator= copies the identity as well and replaces the
+// next chain, which loses the ids instrumentation resolves and, mid-traversal,
+// frees the chain still being walked.
+inline void set_vals(SourceBlock& dst, const SourceBlock& from) {
+  always_assert(dst.vals_size == from.vals_size);
+  for (size_t i = 0; i != dst.vals_size; i++) {
+    dst.set_at(i, from.get_at(i));
+  }
+}
+
 void scale_source_blocks(cfg::Block* block);
 
 inline bool has_source_blocks(const cfg::Block* b) {
