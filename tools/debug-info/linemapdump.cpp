@@ -15,6 +15,10 @@ int main(int argc, char** argv) {
     abort();
   }
   auto map = read_map(argv[1]);
+  if (map == nullptr) {
+    // read_map has already said what was wrong with the file.
+    return 1;
+  }
   for (size_t i = 0; i < map->positions_size; ++i) {
     auto pi = map->positions[i];
     std::cout << map->string_pool[pi.class_id] << "."

@@ -19,6 +19,10 @@ int main(int argc, char** argv) {
     abort();
   }
   auto map = read_map(argv[1]);
+  if (map == nullptr) {
+    // read_map has already said what was wrong with the file.
+    return 1;
+  }
   for (std::string line; std::getline(std::cin, line);) {
     boost::smatch matches;
     if (boost::regex_match(line, matches, trace_regex)) {

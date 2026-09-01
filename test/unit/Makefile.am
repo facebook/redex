@@ -144,6 +144,7 @@ check_PROGRAMS = \
     partial_pass_test \
     peephole_test \
     position_interning_test \
+    position_map_reader_test \
     print_kotlin_stats_test \
     proguard_lexer_test \
     proguard_map_test \
@@ -474,6 +475,10 @@ partial_pass_test_SOURCES = PartialPassTest.cpp
 peephole_test_SOURCES = PeepholeTest.cpp
 
 position_interning_test_SOURCES = PositionInterningTest.cpp
+
+position_map_reader_test_SOURCES = PositionMapReaderTest.cpp \
+	$(top_srcdir)/tools/debug-info/PositionMap.cpp
+position_map_reader_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/tools/debug-info
 
 print_kotlin_stats_test_SOURCES = PrintKotlinStatsTest.cpp
 
