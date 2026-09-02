@@ -1139,3 +1139,58 @@ TEST_F(StringBuilderAppendChainTest,
   )");
   EXPECT_CODE_EQ(long_first_expected.get(), long_first->get_code());
 }
+
+/*
+ * A non-constant append ends the mergeable group: in `"a" + "b" + p` the two
+ * constants merge and the append of `p` is left alone.
+ */
+TEST_F(StringBuilderAppendChainTest, constantAppendsBeforeANonConstantMerge) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:(Ljava/lang/String;)Ljava/lang/String;"
+      (
+        (load-param-object v5)
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const-string "a")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (const-string "b")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (invoke-virtual (v0 v5) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (return-object v2)
+      )
+    )
+  )");
+
+  EXPECT_EQ(run_merge(method), 1);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v5)
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "a")
+      (move-result-pseudo-object v1)
+      (const-string "ab")
+      (move-result-pseudo-object v6)
+      (invoke-virtual (v0 v6) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (const-string "b")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v5) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v2)
+      (return-object v2)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
