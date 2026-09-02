@@ -809,6 +809,29 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   return dc;
 }
 
+size_t DexCode::max_encoded_size() const {
+  // The header, then every instruction -- unfiltered, so that DexOpcodeData's
+  // payload (m_data_count + 1 code units) is included exactly as `encode`
+  // writes it.
+  size_t size = sizeof(dex_code_item);
+  for (auto const& opc : get_instructions()) {
+    size += opc->size() * sizeof(uint16_t);
+  }
+  if (m_tries.empty()) {
+    return size;
+  }
+  // The uint16 pad that 4-aligns the tries table, the table itself, then the
+  // handler stream: one uleb128 for the distinct-handler count, and per try a
+  // sleb128 count followed by a type index and an address per catch.
+  size += sizeof(uint16_t);
+  size += m_tries.size() * sizeof(dex_tries_item);
+  size += kMaxLeb128Size;
+  for (auto const& dextry : m_tries) {
+    size += kMaxLeb128Size + dextry->m_catches.size() * 2 * kMaxLeb128Size;
+  }
+  return size;
+}
+
 int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   dex_code_item* code = (dex_code_item*)output;
   code->registers_size = m_registers_size;

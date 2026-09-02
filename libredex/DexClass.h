@@ -824,6 +824,12 @@ class DexCode {
    */
   int encode(DexOutputIdx* dodx, uint32_t* output);
 
+  // Upper bound on the bytes `encode` writes. Note this is NOT `size()`, which
+  // filters fopcodes and so under-counts every switch and array-data payload;
+  // `encode` emits them. Computable before the write, which is what lets
+  // DexOutput check that the item fits.
+  size_t max_encoded_size() const;
+
   /*
    * Returns the number of 2-byte code units needed to encode all the
    * instructions.

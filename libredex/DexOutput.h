@@ -305,6 +305,8 @@ class DexOutput {
 
  private:
   DexClasses* m_classes;
+  // The ALLOCATION -- the configured dex_output_buffer_size plus
+  // k_output_margin. Not the size policy: that is policy_cap(), below.
   const size_t m_output_size;
   std::unique_ptr<uint8_t[]> m_output;
   std::shared_ptr<GatheredTypes> m_gtypes;
@@ -380,6 +382,15 @@ class DexOutput {
   void align_output() { m_offset = align(m_offset); }
 
   void inc_offset(uint64_t v);
+
+  // The size policy the cursor is held below, as distinct from the allocation.
+  // Derived rather than stored so the two cannot drift apart.
+  uint64_t policy_cap() const;
+
+  // Aborts unless `bytes` can be written at the current cursor. Every producer
+  // that advances a raw pointer with no notion of an end goes through this
+  // first; adding one means calling it.
+  void ensure_fits(uint64_t bytes, const char* what, const char* subject) const;
 
   friend struct DexOutputTestHelper;
 

@@ -556,8 +556,16 @@ void GatheredTypes::build_method_map() {
 
 namespace {
 
-// Leave 250K empty as a margin to not overrun.
-constexpr uint32_t k_output_red_zone = 250000;
+// Headroom past the size policy, so that an item which overshoots the policy
+// still lands inside the allocation and is reported by inc_offset with its
+// actionable message, rather than by ensure_fits as a memory-safety failure.
+//
+// INVARIANT: this must be at least the largest single encoded item. It is not
+// checked -- no static bound on item size exists -- so if a producer can emit
+// more than this, the diagnostic silently degrades to the allocation check.
+// Not a "red zone": nothing overshoots into it accidentally any more, because
+// every write is bounds-checked before it happens.
+constexpr uint32_t k_output_margin = 250000;
 
 constexpr uint32_t k_default_max_dex_size = 64 * 1024 * 1024;
 
@@ -568,13 +576,13 @@ constexpr uint32_t k_default_max_dex_size = 64 * 1024 * 1024;
 //
 // Bounding only the configured value is not enough. At (2^31 - 4) the doubled
 // total is 4295217288, which truncates to 249992 there and makes
-// `m_output_size - k_output_red_zone` underflow to ~1.8e19 -- disarming the
+// `m_output_size - k_output_margin` underflow to ~1.8e19 -- disarming the
 // very check this is meant to arm.
 //
 // uint64_t rather than size_t for the same reason: a size_t return would leave
 // the caller's `* 2` wrapping in 32-bit arithmetic on i686.
 constexpr uint64_t k_max_dex_output_size =
-    (uint64_t{UINT32_MAX} - k_output_red_zone) / 2;
+    (uint64_t{UINT32_MAX} - k_output_margin) / 2;
 
 uint64_t get_dex_output_size(const ConfigFiles& conf) {
   size_t output_size;
@@ -636,7 +644,7 @@ DexOutput::DexOutput(
       m_output_size((debug_info_kind == DebugInfoKind::BytecodeDebugger
                          ? get_dex_output_size(config_files) * 2
                          : get_dex_output_size(config_files)) +
-                    k_output_red_zone),
+                    k_output_margin),
       m_output(std::make_unique<uint8_t[]>(m_output_size)),
       m_gtypes(std::move(gtypes)),
       m_dodx(m_gtypes->get_dodx()),
@@ -1035,6 +1043,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
         "Undefined method in generate_code_items()\n\t prototype: %s\n",
         SHOW(meth));
     align_output();
+    ensure_fits(code->max_encoded_size(), "code item", SHOW(meth));
     int size = code->encode(&m_dodx, (uint32_t*)(m_output.get() + m_offset));
     check_method_instruction_size_limit(m_config_files, size, SHOW(meth));
     if (m_dex_output_config.write_method_sizes) {
@@ -3249,17 +3258,31 @@ enhanced_dex_stats_t write_classes_to_dex(
   return dout.m_stats;
 }
 
+uint64_t DexOutput::policy_cap() const {
+  return m_output_size - k_output_margin;
+}
+
+void DexOutput::ensure_fits(uint64_t bytes,
+                            const char* what,
+                            const char* subject) const {
+  always_assert_log((uint64_t)m_offset + bytes <= m_output_size,
+                    "A %s of up to %" PRIu64
+                    " bytes does not fit at offset %u of the %zu-byte dex "
+                    "output buffer: %s",
+                    what, bytes, m_offset, m_output_size, subject);
+}
+
 void DexOutput::inc_offset(uint64_t v) {
   // m_offset is uint32_t, so `m_offset + v` would wrap mod 2^32 before it could
   // exceed m_output_size. Widen first.
   uint64_t next = (uint64_t)m_offset + v;
-  // m_output_size is oversized by k_output_red_zone, so this bound is the
+  // m_output_size is oversized by k_output_margin, so this bound is the
   // configured dex_output_buffer_size. The `< m_output_size` check this
   // replaces was strictly weaker, and so unreachable.
-  always_assert_log(next < m_output_size - k_output_red_zone,
-                    "Running into output safety margin: %" PRIu64
-                    " of %zu(%zu). Increase the buffer "
+  always_assert_log(next < policy_cap(),
+                    "Running into output safety margin: %" PRIu64 " of %" PRIu64
+                    "(%zu). Increase the buffer "
                     "size with `-J dex_output_buffer_size=`.",
-                    next, m_output_size - k_output_red_zone, m_output_size);
+                    next, policy_cap(), m_output_size);
   m_offset = (uint32_t)next;
 }
