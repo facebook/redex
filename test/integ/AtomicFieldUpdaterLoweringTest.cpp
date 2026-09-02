@@ -20,6 +20,9 @@
 
 namespace {
 
+constexpr const char* kHolder =
+    "Lcom/facebook/redextest/AtomicFieldUpdaterLowering$Holder;";
+
 std::string method_name(const std::string& sig) {
   return "Lcom/facebook/redextest/AtomicFieldUpdaterLowering;." + sig;
 }
@@ -98,4 +101,66 @@ TEST_F(AtomicFieldUpdaterLoweringIntegTest, leavesUnresolvableUpdaterAlone) {
   // instance of the same shape, and pinning the count here would make the test
   // a record of desugaring behavior.
   EXPECT_GE(metric("calls_skipped_unresolved_updater"), 1);
+}
+
+// A provably non-null holder lowers with no guard: the updater calls are gone
+// and the corresponding Unsafe primitives are in their place.
+//
+// `compareAndSet` is deliberately not asserted on here. D8 rewrites the
+// reference-flavored one into a `$$ExternalSyntheticBackportWithForwarding0`
+// forwarder that receives the updater as a parameter, so at this call site it
+// is no longer an updater operation at all. That is a property of desugaring,
+// not of the pass; `primitives` below covers compare-and-set on the Integer
+// flavor, which D8 leaves alone.
+TEST_F(AtomicFieldUpdaterLoweringIntegTest, lowersProvenHolder) {
+  run();
+  auto names = invoked_in("provenHolder:()Ljava/lang/Object;");
+  EXPECT_EQ(names.count("getObjectVolatile"), 1);
+  EXPECT_EQ(names.count("get"), 0);
+  // `set(h, "a")` writes a String into an Object-typed field. The value
+  // obligation cannot lean on `check_cast` here: that walks the hierarchy via
+  // `type_class`, which is null for a framework type no dex defines, so it
+  // answers "not provably castable" for String. An Object field admits any
+  // reference, and this is what checks the obligation knows it.
+  EXPECT_EQ(names.count("putObjectVolatile"), 1);
+  EXPECT_EQ(names.count("set"), 0);
+  EXPECT_EQ(names.count("checkHolder"), 0) << "holder is a fresh instance";
+}
+
+// Each offset lives on the class declaring the field, not on the shared
+// synthetic class: a holder is often not public, and reflecting on it from
+// another package throws IllegalAccessError as that class initializes. Only
+// an end-to-end run over real classes can show the placement is right.
+TEST_F(AtomicFieldUpdaterLoweringIntegTest, offsetsLiveOnTheDeclaringClass) {
+  run();
+  auto* holder = type_class(DexType::get_type(kHolder));
+  ASSERT_NE(holder, nullptr);
+  size_t offsets = 0;
+  for (auto* f : holder->get_sfields()) {
+    if (show(f->get_type()) == "J") {
+      offsets++;
+    }
+  }
+  EXPECT_EQ(offsets, 3) << "one offset per updater the holder declares";
+
+  auto* synth =
+      type_class(DexType::get_type("Lredex/AtomicFieldUpdaterUnsafe;"));
+  ASSERT_NE(synth, nullptr);
+  for (auto* f : synth->get_sfields()) {
+    EXPECT_NE(show(f->get_type()), "J")
+        << "offset " << show(f) << " must not live on the shared class";
+  }
+}
+
+// The holder arrives as a parameter, so nothing proves it non-null. The check
+// that would make the rewrite safe does not exist yet -- it arrives with the
+// next diff -- so the site is counted as reachable and left exactly as it was.
+TEST_F(AtomicFieldUpdaterLoweringIntegTest, leavesUnprovenHolderAlone) {
+  run();
+  auto names = invoked_in(std::string("unprovenHolder:(") + kHolder +
+                          ")Ljava/lang/Object;");
+  EXPECT_EQ(names.count("get"), 1) << "still the updater call";
+  EXPECT_EQ(names.count("getObjectVolatile"), 0);
+  EXPECT_EQ(metric("needs_null_check_total"), 1);
+  EXPECT_EQ(metric("null_checks_emitted"), -1) << "no guard exists yet";
 }

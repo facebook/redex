@@ -21,6 +21,9 @@ const char* const INTEGER_DESC =
 const char* const LONG_DESC =
     "Ljava/util/concurrent/atomic/AtomicLongFieldUpdater;";
 
+const char* const UNSAFE_DESC = "Lsun/misc/Unsafe;";
+const char* const SYNTH_HOLDER_DESC = "Lredex/AtomicFieldUpdaterUnsafe;";
+
 std::array<Kind, 3> all_kinds() {
   return {Kind::REFERENCE, Kind::INTEGER, Kind::LONG};
 }
