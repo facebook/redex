@@ -40,8 +40,10 @@
  *                                                "next");
  *   }
  *
- * This stage recognizes such updaters and reports how many operation call
- * sites exist, per flavor and operation. It does not modify code.
+ * This stage recognizes such updaters, reports how many operation call sites
+ * exist per flavor and operation, and inlines the synthetic accessors that
+ * would otherwise hide an updater from that analysis. No operation is
+ * rewritten yet.
  */
 class AtomicFieldUpdaterLoweringPass : public Pass {
  public:

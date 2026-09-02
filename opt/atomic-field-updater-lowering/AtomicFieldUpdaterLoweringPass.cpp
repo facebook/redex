@@ -17,15 +17,22 @@
 #include <vector>
 
 #include "ConcurrentContainers.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "InitClassesWithSideEffects.h"
+#include "Inliner.h"
+#include "InlinerConfig.h"
 #include "LiveRange.h"
+#include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "ReflectionAnalysis.h"
+#include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeInference.h"
@@ -293,6 +300,214 @@ void census_ops(const Scope& scope, PassManager& mgr) {
   }
 }
 
+// Kotlin emits the `$FU` field as private and reads it through a
+// synthetic static getter (`get_state$volatile$FU()`), with an
+// `access$getOwner$volatile$FU()` bridge on top for nested-class use. So at a
+// call site the updater receiver is defined by an invoke-static, not by a bare
+// sget-object.
+//
+// Those calls are found by following the receiver rather than by searching for
+// them: the use-def walk that resolution already performs lands on the accessor
+// by construction, so there is no shape to guess at and nothing to decide about
+// which methods are worth considering.
+
+// Does this method invoke an updater operation at all? Asked before any
+// dataflow machinery is built, because the great majority of methods touch no
+// updater and `MoveAwareChains` is not free.
+bool uses_updater(cfg::ControlFlowGraph& cfg,
+                  const UnorderedMap<const DexType*, Kind>& updater_kinds) {
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
+    auto* insn = mie.insn;
+    if (opcode::is_invoke_virtual(insn->opcode()) &&
+        updater_kinds.count(insn->get_method()->get_class()) != 0u) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Is `m` an accessor for a recognized updater? On success `chain` gets every
+// method on the path, which is what has to be inlined: flattening a bridge
+// alone would leave the getter it calls still standing between the call site
+// and the field.
+//
+// The pattern is small and fixed. A method reads one recognized updater field
+// and hands it back, or hands back what one other such method returns. A
+// second read, a second call, or any other instruction is not this pattern, so
+// bail and leave the call site unresolved. Having exactly one source is also
+// what makes the chain a simple path, walked with a loop.
+//
+// Every step stays on the accessor's own class -- the field it reads and the
+// method it delegates to are both declared there. That is not a coincidence to
+// be exploited but the JVM's rule for synthetic accessors, which are emitted in
+// the class owning the private member they reach. Requiring it is what makes
+// the body free of observable effect in the strict sense: the only <clinit> a
+// permitted instruction can trigger is the accessor's own class's, and calling
+// the accessor already triggered that.
+//
+// Two properties fall out of that whitelist rather than being tested for.
+// Nothing else in it can produce an object value, so whatever `return-object`
+// hands back must be the field that was read or the result of the delegate --
+// there is no second value for it to return. And a method taking arguments has
+// `load-param` instructions, which the whitelist does not admit, so it bails;
+// being static is guaranteed by arriving here from an `invoke-static`.
+//
+// Not a safety condition -- inlining preserves semantics whatever the body
+// does, class initialization included -- but scope discipline: "log, then
+// return NEXT" would be copied into every caller for no reason.
+bool is_accessor_chain(DexMethod* m,
+                       const UnorderedSet<DexField*>& recognized_fields,
+                       UnorderedSet<DexMethod*>* chain) {
+  UnorderedSet<DexMethod*> walked;
+  while (m != nullptr && m->get_code() != nullptr &&
+         !m->rstate.no_optimizations() && walked.insert(m).second) {
+    DexField* field = nullptr;
+    DexMethod* delegate = nullptr;
+    for (auto& mie : cfg::InstructionIterable(m->get_code()->cfg())) {
+      auto* insn = mie.insn;
+      auto op = insn->opcode();
+      if (opcode::is_sget_object(op) && field == nullptr &&
+          delegate == nullptr && insn->get_field()->is_def()) {
+        field = insn->get_field()->as_def();
+      } else if (opcode::is_invoke_static(op) && field == nullptr &&
+                 delegate == nullptr) {
+        delegate = resolve_method(insn->get_method(), MethodSearch::Static);
+      } else if (!opcode::is_move_result_pseudo_object(op) &&
+                 !opcode::is_move_result_object(op) &&
+                 !opcode::is_move_object(op) && !opcode::is_return_object(op)) {
+        return false;
+      }
+    }
+    if (delegate != nullptr) {
+      if (delegate->get_class() != m->get_class()) {
+        return false;
+      }
+      m = delegate;
+      continue;
+    }
+    if (field == nullptr || field->get_class() != m->get_class() ||
+        !recognized_fields.contains(field)) {
+      return false;
+    }
+    insert_unordered_iterable(*chain, walked);
+    return true;
+  }
+  return false;
+}
+
+// The accessors standing between an operation and its updater field.
+//
+// Driven by the call sites rather than by a scan of the program: every
+// operation's receiver is walked back through `MoveAwareChains`, and a receiver
+// defined by an invoke-static names the accessor directly. So relevance is not
+// judged, it is where the walk arrived, and a bridge is reached by following
+// the chain rather than by iterating selection to a fixed point.
+UnorderedSet<DexMethod*> find_receiver_chain_accessors(
+    const Scope& scope,
+    const UnorderedMap<const DexType*, Kind>& updater_kinds,
+    const UnorderedSet<DexField*>& recognized_fields,
+    PassManager& mgr) {
+  InsertOnlyConcurrentSet<DexMethod*> selected;
+  // Callees a receiver came from that could not be followed. Recorded per
+  // method rather than per call site, so a body reached from twenty sites
+  // counts once.
+  InsertOnlyConcurrentSet<DexMethod*> rejected;
+
+  walk::parallel::methods(scope, [&](DexMethod* method) {
+    auto* code = method->get_code();
+    if (code == nullptr || method->rstate.no_optimizations()) {
+      return;
+    }
+    always_assert(code->cfg_built());
+    auto& cfg = code->cfg();
+    if (!uses_updater(cfg, updater_kinds)) {
+      return;
+    }
+    live_range::MoveAwareChains chains(cfg);
+    auto use_defs = chains.get_use_def_chains();
+
+    for (auto& mie : cfg::InstructionIterable(cfg)) {
+      auto* insn = mie.insn;
+      if (!opcode::is_invoke_virtual(insn->opcode()) ||
+          updater_kinds.count(insn->get_method()->get_class()) == 0u) {
+        continue;
+      }
+      auto it = use_defs.find(live_range::Use{insn, 0});
+      if (it == use_defs.end()) {
+        continue;
+      }
+      for (auto* def : it->second) {
+        // An sget-object receiver already resolves; anything that is not a
+        // call is not something inlining could help with.
+        if (!opcode::is_invoke_static(def->opcode())) {
+          continue;
+        }
+        auto* callee = resolve_method(def->get_method(), MethodSearch::Static);
+        UnorderedSet<DexMethod*> chain;
+        if (is_accessor_chain(callee, recognized_fields, &chain)) {
+          for (auto* on_chain : UnorderedIterable(chain)) {
+            selected.insert(on_chain);
+          }
+        } else if (callee != nullptr) {
+          rejected.insert(callee);
+          TRACE(ATOMUP, 3, "receiver of %s comes from %s, which is not a chain",
+                SHOW(insn), SHOW(callee));
+        }
+      }
+    }
+  });
+
+  UnorderedSet<DexMethod*> result;
+  insert_unordered_iterable(result, selected);
+  mgr.set_metric("accessors_rejected_impure", rejected.size());
+  return result;
+}
+
+// Inline the selected accessors so the updater reaches its call sites as a
+// plain sget-object. Uses the shared inliner rather than splicing by hand: it
+// already models init-class side effects, which matters because a bridge in one
+// class delegating to a getter in another would otherwise silently drop the
+// bridge class's static initializer.
+size_t inline_updater_accessors(DexStoresVector& stores,
+                                const Scope& scope,
+                                ConfigFiles& conf,
+                                PassManager& mgr,
+                                const UnorderedSet<DexMethod*>& candidates) {
+  mgr.set_metric("accessors_selected", candidates.size());
+  if (candidates.empty()) {
+    // Record it anyway: a metric that vanishes when the count is zero is
+    // indistinguishable from the pass not having run.
+    mgr.set_metric("accessors_inlined", 0);
+    return 0;
+  }
+  auto method_override_graph = method_override_graph::build_graph(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns(), method_override_graph.get());
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
+  auto inliner_config =
+      *conf.get_global_config().get_config_by_name<InlinerConfig>("inliner");
+  // The global config has `shrink_other_methods` on, which schedules *every*
+  // method in the scope for shrinking, not just the ones inlined into. That is
+  // right for MethodInlinePass and wrong here: it would run a whole-app shrink
+  // as a side effect of inlining 65 accessors, duplicating ShrinkerPass a few
+  // passes ahead of it, and leave this pass's size effect unmeasurable because
+  // the delta would be dominated by work that has nothing to do with atomics.
+  // Callers we inline into are still shrunk.
+  inliner_config.shrink_other_methods = false;
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, conf, candidates,
+      std::ref(concurrent_method_resolver), inliner_config,
+      mgr.get_redex_options().min_sdk, MultiMethodInlinerMode::InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined().size();
+  mgr.set_metric("accessors_inlined", inlined);
+  TRACE(ATOMUP, 1,
+        "SUMMARY accessors selected=%zu inlined=%zu (rejected_impure counted "
+        "separately)",
+        candidates.size(), inlined);
+  return inlined;
+}
+
 // Evaluate every updater operation call site against the obligations that
 // lowering it to `sun.misc.Unsafe` must discharge, and report how many pass.
 // This is analysis only: it counts what could be lowered without changing it.
@@ -390,16 +605,7 @@ void analyze_calls(const Scope& scope,
     always_assert(code->cfg_built());
     auto& cfg = code->cfg();
 
-    bool any = false;
-    for (auto& mie : cfg::InstructionIterable(cfg)) {
-      auto* insn = mie.insn;
-      if (opcode::is_invoke_virtual(insn->opcode()) &&
-          updater_kinds.count(insn->get_method()->get_class()) != 0u) {
-        any = true;
-        break;
-      }
-    }
-    if (!any) {
+    if (!uses_updater(cfg, updater_kinds)) {
       return stats;
     }
 
@@ -641,7 +847,7 @@ void analyze_calls(const Scope& scope,
 } // namespace
 
 void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
-                                              ConfigFiles& /* conf */,
+                                              ConfigFiles& conf,
                                               PassManager& mgr) {
   auto scope = build_class_scope(stores);
   census_ops(scope, mgr);
@@ -673,6 +879,18 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
   for (const auto& info : updaters) {
     by_field.emplace(info.updater, &info);
   }
+  // Flatten the synthetic accessors Kotlin puts between a call site
+  // and a recognized updater field, so resolution below sees a plain field
+  // read rather than a call.
+  UnorderedSet<DexField*> recognized_fields;
+  for (const auto& info : updaters) {
+    recognized_fields.insert(info.updater);
+  }
+  const auto updater_kinds = atomic_field_updaters::present_kinds();
+  auto accessors = find_receiver_chain_accessors(scope, updater_kinds,
+                                                 recognized_fields, mgr);
+  inline_updater_accessors(stores, scope, conf, mgr, accessors);
+
   analyze_calls(scope, by_field, mgr);
 }
 
