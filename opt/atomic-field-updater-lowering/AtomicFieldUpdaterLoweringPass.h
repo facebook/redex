@@ -58,8 +58,16 @@
  * bridge when the use is from a nested class, so the receiver of an operation
  * is defined by an invoke rather than by the field load resolution looks for.
  *
- * A receiver the pass cannot trace back to a static updater field -- one passed
- * in as a parameter, say -- has no offset to substitute and is left alone.
+ * The supported shape is intentionally the statically obvious updater-field
+ * pattern coroutines and atomicfu emit: a `static final Atomic*FieldUpdater`
+ * field on the class that declares the volatile field it updates, optionally
+ * hidden behind Kotlin synthetic accessor chains. Helper objects that keep the
+ * updater on some other class, like the AbstractFuture-style safe-helper
+ * pattern, are outside this pass's scope and are left alone.
+ *
+ * A receiver the pass cannot trace back to one of those static updater fields
+ * -- one passed in as a parameter, or read from a helper object -- has no
+ * offset to substitute and is left alone.
  *
  */
 class AtomicFieldUpdaterLoweringPass : public Pass {
