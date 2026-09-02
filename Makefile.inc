@@ -107,6 +107,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/virtual_merging \
 	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/service/api-levels \
+	-I$(top_srcdir)/service/atomic-field-updaters \
 	-I$(top_srcdir)/service/branch-prefix-hoisting \
 	-I$(top_srcdir)/service/class-init \
 	-I$(top_srcdir)/service/class-merging \

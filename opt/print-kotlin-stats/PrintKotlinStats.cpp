@@ -6,6 +6,8 @@
  */
 
 #include "PrintKotlinStats.h"
+
+#include "AtomicFieldUpdaters.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexUtil.h"
@@ -159,6 +161,8 @@ void PrintKotlinStats::setup() {
   m_kotlin_function_invokes[23] = DexMethod::get_method(
       "Lkotlin/jvm/functions/FunctionN;"
       ".invoke:([Ljava/lang/Object;)Ljava/lang/Object;");
+  m_atomic_field_updaters = atomic_field_updaters::present_types();
+  m_new_updater = DexString::get_string("newUpdater");
 }
 
 // Annotate Kotlin classes before StripDebugInfoPass removes it
@@ -413,6 +417,11 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
           called_method == m_kotlin_compare_long) {
         stats.kotlin_compare_long_insns++;
       }
+      if (m_new_updater != nullptr &&
+          called_method->get_name() == m_new_updater &&
+          m_atomic_field_updaters.count(called_method->get_class()) != 0u) {
+        stats.atomic_field_updater_newupdater_insns++;
+      }
     } break;
     case OPCODE_AND_INT_LIT: {
       if (is_kotlin_default_arg_method(*method)) {
@@ -432,6 +441,12 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
               .kotlin_invoke_interface_function_insns[std::min(i, size_t{4})]++;
           break;
         }
+      }
+    } break;
+    case OPCODE_INVOKE_VIRTUAL: {
+      if (m_atomic_field_updaters.count(insn->get_method()->get_class()) !=
+          0u) {
+        stats.atomic_field_updater_op_insns++;
       }
     } break;
     default:
@@ -501,6 +516,13 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
                   kotlin_trivial_non_capturing_lambdas);
   mgr.incr_metric("kotlin_unique_trivial_non_capturing_lambdas",
                   kotlin_unique_trivial_non_capturing_lambdas);
+  mgr.incr_metric("atomic_field_updater_newupdater_insns",
+                  atomic_field_updater_newupdater_insns);
+  mgr.incr_metric("atomic_field_updater_op_insns",
+                  atomic_field_updater_op_insns);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: atomic_field_updater newUpdater=%zu op=%zu",
+        atomic_field_updater_newupdater_insns, atomic_field_updater_op_insns);
   for (size_t i = 0; i < kotlin_invoke_interface_function_insns.size(); ++i) {
     std::string name = "kotlin_invoke_interface_function" +
                        (i < 4 ? std::to_string(i) : std::string("4plus")) +

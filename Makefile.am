@@ -297,6 +297,7 @@ libredex_la_SOURCES = \
 	service/dedup-blocks/DedupBlockValueNumbering.cpp \
 	service/escape-analysis/BlamingAnalysis.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
+	service/atomic-field-updaters/AtomicFieldUpdaters.cpp \
 	service/field-ops/FieldOpTracker.cpp \
 	service/init-classes/InitClassPruner.cpp \
 	service/init-deps/InitDeps.cpp \
