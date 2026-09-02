@@ -51,6 +51,47 @@ size_t count_invokes_to(DexClass* cls, const std::string& owner_descriptor) {
   return n;
 }
 
+size_t count_invokes_to(DexMethod* method,
+                        const std::string& owner_descriptor) {
+  auto* code = method->get_dex_code();
+  if (code == nullptr) {
+    return 0;
+  }
+  size_t n = 0;
+  for (auto* insn : code->get_instructions()) {
+    if (!insn->has_method()) {
+      continue;
+    }
+    const auto* mop = dynamic_cast<const DexOpcodeMethod*>(insn);
+    if (mop != nullptr &&
+        show(mop->get_method()->get_class()) == owner_descriptor) {
+      n++;
+    }
+  }
+  return n;
+}
+
+size_t count_invokes_to_methods_named_like(
+    DexClass* cls,
+    const std::string& method_name_fragment,
+    const std::string& owner_descriptor) {
+  size_t n = 0;
+  auto count = [&](DexMethod* method) {
+    if (show(method->get_name()).find(method_name_fragment) ==
+        std::string::npos) {
+      return;
+    }
+    n += count_invokes_to(method, owner_descriptor);
+  };
+  for (auto* method : cls->get_dmethods()) {
+    count(method);
+  }
+  for (auto* method : cls->get_vmethods()) {
+    count(method);
+  }
+  return n;
+}
+
 } // namespace
 
 /*
@@ -83,10 +124,24 @@ TEST_F(PostVerify, AtomicFieldUpdaterLowering) {
       << "no Unsafe calls after the pass: the lowering did not fire, so the "
          "on-device assertions prove nothing about the rewritten code";
 
-  // Every updater operation in the test should have been lowered. The holder
-  // is `this`-free here (the updaters are static and the receivers are locals),
-  // so the remaining count is a direct check that nothing was left behind.
-  EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::REFERENCE_DESC), 0u);
+  // Every lowerable updater operation in the test should have been lowered.
+  // The two raw-typed negative tests intentionally keep their reference-updater
+  // calls: those sites are exactly the wrong-holder / wrong-value shapes the
+  // pass must leave in place so the JUnit half still exercises the library's
+  // own runtime checks. javac/desugaring moves those calls into `lambda$...`
+  // helpers, so match the compiled method-name fragment rather than the public
+  // test method body.
+  EXPECT_EQ(count_invokes_to_methods_named_like(
+                test,
+                "wrongValueTypeThrowsClassCastException",
+                atomic_field_updaters::REFERENCE_DESC),
+            1u);
+  EXPECT_GE(count_invokes_to_methods_named_like(
+                test,
+                "wrongHolderTypeThrowsClassCastException",
+                atomic_field_updaters::REFERENCE_DESC),
+            1u);
+  EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::REFERENCE_DESC), 2u);
   EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::INTEGER_DESC), 0u);
   EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::LONG_DESC), 0u);
 
