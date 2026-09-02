@@ -40,11 +40,12 @@
  *                                                "next");
  *   }
  *
- * Reference-flavored `get`, `set` and `compareAndSet` on a provably non-null
- * holder are rewritten to the corresponding `Unsafe` primitive. Each field
- * offset lives on the class that declares the field and is computed in that
- * class's own `<clinit>`; only the `Unsafe` instance is shared. Other flavors
- * and operations, and holders whose non-nullness is unproven, are counted and
+ * Reference-flavored `get`, `set` and `compareAndSet` are rewritten to the
+ * corresponding `Unsafe` primitive. Each field offset lives on the class that
+ * declares the field and is computed in that class's own `<clinit>`; only the
+ * `Unsafe` instance is shared. A holder whose non-nullness cannot be proven
+ * gets an explicit check that throws ClassCastException, matching what
+ * `accessCheck` would have done. Other flavors and operations are counted and
  * left in place.
  *
  * Before any of that the pass inlines the synthetic accessors that would

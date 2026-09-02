@@ -152,15 +152,14 @@ TEST_F(AtomicFieldUpdaterLoweringIntegTest, offsetsLiveOnTheDeclaringClass) {
   }
 }
 
-// The holder arrives as a parameter, so nothing proves it non-null. The check
-// that would make the rewrite safe does not exist yet -- it arrives with the
-// next diff -- so the site is counted as reachable and left exactly as it was.
-TEST_F(AtomicFieldUpdaterLoweringIntegTest, leavesUnprovenHolderAlone) {
+// A holder that cannot be proven non-null is still lowered, behind a check
+// that reproduces the ClassCastException `accessCheck` would have thrown.
+TEST_F(AtomicFieldUpdaterLoweringIntegTest, guardsUnprovenHolder) {
   run();
-  auto names = invoked_in(std::string("unprovenHolder:(") + kHolder +
-                          ")Ljava/lang/Object;");
-  EXPECT_EQ(names.count("get"), 1) << "still the updater call";
-  EXPECT_EQ(names.count("getObjectVolatile"), 0);
-  EXPECT_EQ(metric("needs_null_check_total"), 1);
-  EXPECT_EQ(metric("null_checks_emitted"), -1) << "no guard exists yet";
+  auto names = invoked_in(
+      "unprovenHolder:(Lcom/facebook/redextest/"
+      "AtomicFieldUpdaterLowering$Holder;)Ljava/lang/Object;");
+  EXPECT_EQ(names.count("getObjectVolatile"), 1);
+  EXPECT_EQ(names.count("checkHolder"), 1);
+  EXPECT_GE(metric("null_checks_emitted"), 1);
 }
