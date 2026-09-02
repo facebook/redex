@@ -12,6 +12,8 @@
 #include <utility>
 #include <vector>
 
+#include "Debug.h"
+
 // Expands `$NAME`-style placeholders in an IR template.
 //
 // A test that needs a symbol interpolated into assembled IR should substitute
@@ -24,9 +26,19 @@
 // Placeholders are matched left to right and a replacement is never rescanned,
 // so a value containing a `$` (a Kotlin-style nested name, say) cannot be
 // corrupted by a later substitution. No placeholder may be a prefix of another.
+//
+// A placeholder must be non-empty and start with `$`. Both are asserted rather
+// than left to the reader: an empty key matches at every position and advances
+// the scan by zero, which hangs instead of failing, and a key without the `$`
+// can never match, so the template comes back with the placeholder still in it
+// and the test asserts against text nobody intended.
 inline std::string ir(
     std::string_view tmpl,
     const std::vector<std::pair<std::string_view, std::string>>& subs) {
+  for (const auto& sub : subs) {
+    always_assert_log(!sub.first.empty() && sub.first.front() == '$',
+                      "ir(): placeholder must be non-empty and start with '$'");
+  }
   std::string out;
   out.reserve(tmpl.size());
   for (size_t i = 0; i < tmpl.size();) {
