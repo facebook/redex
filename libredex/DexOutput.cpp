@@ -822,6 +822,7 @@ void DexOutput::generate_string_data(SortMode mode) {
     uint32_t idx = m_dodx.stringidx(str);
     TRACE(CUSTOMSORT, 3, "str emit %s", SHOW(str));
     stringids[idx].offset = m_offset;
+    ensure_fits(str->get_entry_size(), "string", str->c_str());
     str->encode(m_output.get() + m_offset);
     inc_offset(str->get_entry_size());
     m_stats.num_strings++;
@@ -863,6 +864,8 @@ void DexOutput::generate_typelist_data() {
     ++num_tls;
     align_output();
     m_tl_emit_offsets[tl] = m_offset;
+    ensure_fits(sizeof(uint32_t) + tl->size() * sizeof(uint16_t), "type list",
+                SHOW(tl));
     int size = tl->encode(&m_dodx, (uint32_t*)(m_output.get() + m_offset));
     inc_offset(checked_encoded_size(size, "DexTypeList::encode", SHOW(tl)));
     m_stats.num_type_lists++;
@@ -956,6 +959,7 @@ void DexOutput::generate_class_data_items() {
       continue;
     }
     /* No alignment constraints for this data */
+    ensure_fits(clz->max_encoded_size(), "class data item", SHOW(clz));
     int size = clz->encode(&m_dodx, dco, m_output.get() + m_offset);
     checked_encoded_size(size, "DexClass::encode", SHOW(clz));
     if (m_dex_output_config.write_class_sizes) {
@@ -1148,6 +1152,7 @@ void DexOutput::generate_static_values() {
       always_assert_log((((uint64_t)encdatasize) >> 32) == 0,
                         "buffer size (%zu) is too big", encdatasize);
       /* No alignment requirements */
+      ensure_fits(encdatasize, "static value array", SHOW(clz));
       memcpy(m_output.get() + m_offset, encdata.data(), encdatasize);
       enc_arrays.emplace(std::move(*deva), m_offset);
       m_static_values[clz] = m_offset;
@@ -1169,6 +1174,7 @@ void DexOutput::generate_static_values() {
         size_t encdatasize = encdata.size();
         always_assert_log((((uint64_t)encdatasize) >> 32) == 0,
                           "buffer size (%zu) is too big", encdatasize);
+        ensure_fits(encdatasize, "call site value array", "call site");
         memcpy(m_output.get() + m_offset, encdata.data(), encdatasize);
         enc_arrays.emplace(std::move(eva), m_offset);
         m_call_site_items[callsite] = m_offset;
@@ -1208,6 +1214,7 @@ void DexOutput::unique_annotations(annomap_t& annomap,
     annotation_byte_offsets[annotation_bytes] = m_offset;
     annomap[anno] = m_offset;
     /* Not a dupe, encode... */
+    ensure_fits(annotation_bytes.size(), "annotation", "annotation");
     uint8_t* annoout = (uint8_t*)(m_output.get() + m_offset);
     memcpy(annoout, annotation_bytes.data(), annotation_bytes.size());
     inc_offset(annotation_bytes.size());
@@ -1242,6 +1249,8 @@ void DexOutput::unique_asets(annomap_t& annomap,
     aset_offsets[aset_bytes] = m_offset;
     asetmap[aset] = m_offset;
     /* Not a dupe, encode... */
+    ensure_fits(aset_bytes.size() * sizeof(uint32_t), "annotation set",
+                "annotation set");
     uint8_t* asetout = (uint8_t*)(m_output.get() + m_offset);
     memcpy(asetout, aset_bytes.data(), aset_bytes.size() * sizeof(uint32_t));
     inc_offset(aset_bytes.size() * sizeof(uint32_t));
@@ -1281,6 +1290,8 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
     xref_offsets[xref_bytes] = m_offset;
     xrefmap[xref] = m_offset;
     /* Not a dupe, encode... */
+    ensure_fits(xref_bytes.size() * sizeof(uint32_t), "param annotations",
+                "param annotations");
     uint8_t* xrefout = (uint8_t*)(m_output.get() + m_offset);
     memcpy(xrefout, xref_bytes.data(), xref_bytes.size() * sizeof(uint32_t));
     inc_offset(xref_bytes.size() * sizeof(uint32_t));
@@ -1315,6 +1326,8 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
     adir_offsets[adir_bytes] = m_offset;
     adirmap[adir] = m_offset;
     /* Not a dupe, encode... */
+    ensure_fits(adir_bytes.size() * sizeof(uint32_t), "annotation directory",
+                "annotation directory");
     uint8_t* adirout = (uint8_t*)(m_output.get() + m_offset);
     memcpy(adirout, adir_bytes.data(), adir_bytes.size() * sizeof(uint32_t));
     inc_offset(adir_bytes.size() * sizeof(uint32_t));
@@ -2390,6 +2403,12 @@ void DexOutput::generate_map() {
   hdr.map_off = m_offset;
   insert_map_item(TYPE_MAP_LIST, 1, m_offset,
                   sizeof(uint32_t) + m_map_items.size() * sizeof(dex_map_item));
+  // The map list is itself a map item, so the insert above grew the vector the
+  // loop below writes. Bound the write against that final vector, not the one
+  // we arrived with. Nothing has reached the buffer yet, so the guard still
+  // precedes every write.
+  ensure_fits(sizeof(uint32_t) + m_map_items.size() * sizeof(dex_map_item),
+              "map list", "map list");
   *mapout = (uint32_t)m_map_items.size();
   dex_map_item* map = (dex_map_item*)(mapout + 1);
   for (auto const& mit : m_map_items) {

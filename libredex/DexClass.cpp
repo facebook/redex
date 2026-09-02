@@ -1511,6 +1511,12 @@ bool DexClass::has_class_data() const {
          !m_sfields.empty();
 }
 
+size_t DexClass::max_encoded_size() const {
+  return 4 * kMaxLeb128Size +
+         (m_sfields.size() + m_ifields.size()) * 2 * kMaxLeb128Size +
+         (m_dmethods.size() + m_vmethods.size()) * 3 * kMaxLeb128Size;
+}
+
 int DexClass::encode(DexOutputIdx* dodx,
                      dexcode_to_offset& dco,
                      uint8_t* output) {

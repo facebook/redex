@@ -1394,6 +1394,11 @@ class DexClass {
   /* Encodes class_data_item, returns size in bytes.  No
    * alignment requirements on *output
    */
+  // Upper bound on the bytes `encode` writes: four uleb128 counts, then per
+  // field an index delta and access flags, and per method those plus a code
+  // offset.
+  size_t max_encoded_size() const;
+
   int encode(DexOutputIdx* dodx, dexcode_to_offset& dco, uint8_t* output);
 
   template <typename C>
