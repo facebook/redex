@@ -669,6 +669,46 @@ TEST_F(DexTypeEnvironmentTest, SingletonJoinIsNotAssociativeTest) {
   EXPECT_EQ(swapped, SingletonDexTypeDomain(m_type_if1));
 }
 
+/*
+ * `find_common_interfaces` intersects the interfaces of the two operands, so
+ * it has to see the same candidate set whichever way round they arrive.
+ * `collect_interfaces` reports what a type DECLARES, while the other side is
+ * tested with `check_cast`, which also admits the reflexive case -- so an
+ * interface operand contributed nothing about itself and the intersection was
+ * silently one-sided. `LNestedJ;` extends `LNestedI;`, so the fast path above
+ * cannot rescue it either: `implements` walks super classes, not
+ * interface-extends.
+ */
+TEST_F(DexTypeEnvironmentTest, JoinIsCommutativeAcrossInheritedInterfaces) {
+  auto* t_i = DexType::make_type("LNestedI;");
+  ClassCreator i_creator(t_i);
+  i_creator.set_super(type::java_lang_Object());
+  i_creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
+  i_creator.create();
+
+  auto* t_j = DexType::make_type("LNestedJ;");
+  ClassCreator j_creator(t_j);
+  j_creator.set_super(type::java_lang_Object());
+  j_creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
+  j_creator.add_interface(t_i);
+  j_creator.create();
+
+  auto* t_c = DexType::make_type("LNestedImpl;");
+  ClassCreator c_creator(t_c);
+  c_creator.set_super(type::java_lang_Object());
+  c_creator.add_interface(t_j);
+  c_creator.create();
+
+  // Both operand orders must reach LNestedI;. Before the fix, join(I, C) gave
+  // Ljava/lang/Object; while join(C, I) gave LNestedI;.
+  auto ic = SingletonDexTypeDomain(t_i);
+  ic.join_with(SingletonDexTypeDomain(t_c));
+  auto ci = SingletonDexTypeDomain(t_c);
+  ci.join_with(SingletonDexTypeDomain(t_i));
+  EXPECT_EQ(ic, ci);
+  EXPECT_EQ(ic, SingletonDexTypeDomain(t_i));
+}
+
 TEST_F(DexTypeEnvironmentTest, ExtendedInterfaceJoinTest) {
   auto sub1 = SingletonDexTypeDomain(m_type_sub1);
   auto if1 = SingletonDexTypeDomain(m_type_if1);
@@ -1160,9 +1200,9 @@ TEST_F(DexTypeEnvironmentTest, BaseClassInterfaceJoinTest) {
 /*
  * A framework interface is often referenced by name without its definition
  * being available -- Lorg/apache/http/HttpEntity; left the Android SDK at API
- * 23, for instance. The implementing class still names it in its own interface
- * list, so joining the two is answerable even though the interface has no
- * DexClass of its own.
+ * 23, for instance. The implementing class still names it in its own
+ * interface list, so joining the two is answerable even though the interface
+ * has no DexClass of its own.
  */
 TEST_F(DexTypeEnvironmentTest, ExternalInterfaceWithoutClassJoinTest) {
   auto* external_intf = DexType::make_type("Lorg/example/ExternalIntf;");
@@ -1300,8 +1340,8 @@ TEST_F(DexTypeEnvironmentTest, MostSpecificSharedInterfaceJoinTest) {
 }
 
 /*
- * A class hierarchy takes precedence over a shared interface: the common super
- * class is more specific than anything both merely implement.
+ * A class hierarchy takes precedence over a shared interface: the common
+ * super class is more specific than anything both merely implement.
  */
 TEST_F(DexTypeEnvironmentTest, CommonSuperClassPreferredOverInterfaceTest) {
   auto* shared = make_interface("LPreferShared;", {});

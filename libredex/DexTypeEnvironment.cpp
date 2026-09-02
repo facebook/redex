@@ -64,6 +64,13 @@ void collect_interfaces(const DexType* type,
 std::vector<const DexType*> find_common_interfaces(const DexType* l,
                                                    const DexType* r) {
   UnorderedSet<const DexType*> l_intfs;
+  // An interface is castable to itself, and `collect_interfaces` reports only
+  // what a type DECLARES. Without this the candidate set for an interface
+  // operand is empty and the intersection below is silently one-sided.
+  const auto* l_cls = type_class(l);
+  if ((l_cls != nullptr) && is_interface(l_cls)) {
+    l_intfs.insert(l);
+  }
   collect_interfaces(l, &l_intfs);
   std::vector<const DexType*> shared;
   for (const auto* intf : UnorderedIterable(l_intfs)) {
