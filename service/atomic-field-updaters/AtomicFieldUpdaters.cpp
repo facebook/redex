@@ -7,6 +7,8 @@
 
 #include "AtomicFieldUpdaters.h"
 
+#include <string_view>
+
 #include "Debug.h"
 #include "TypeUtil.h"
 
@@ -19,6 +21,10 @@ const char* const INTEGER_DESC =
 const char* const LONG_DESC =
     "Ljava/util/concurrent/atomic/AtomicLongFieldUpdater;";
 
+std::array<Kind, 3> all_kinds() {
+  return {Kind::REFERENCE, Kind::INTEGER, Kind::LONG};
+}
+
 const char* kind_name(Kind kind) {
   switch (kind) {
   case Kind::REFERENCE:
@@ -30,6 +36,46 @@ const char* kind_name(Kind kind) {
   }
   not_reached();
 }
+
+const DexString* new_updater_name() {
+  // `get_string`, not `make_string`: absence means the program cannot contain
+  // a call, so interning it would only grow the string table.
+  return DexString::get_string("newUpdater");
+}
+
+namespace {
+// The operations a lowering can express directly.
+const UnorderedSet<std::string_view> kModeled{"get",
+                                              "set",
+                                              "lazySet",
+                                              "compareAndSet",
+                                              "getAndSet",
+                                              "weakCompareAndSet",
+                                              "getAndAdd",
+                                              "addAndGet",
+                                              "getAndIncrement",
+                                              "getAndDecrement",
+                                              "incrementAndGet",
+                                              "decrementAndGet"};
+
+// Plus the functional forms, which are operations but take an operator.
+const UnorderedSet<std::string_view> kFunctional{
+    "getAndUpdate", "updateAndGet", "getAndAccumulate", "accumulateAndGet"};
+} // namespace
+
+bool is_operation_name(std::string_view name) {
+  return kModeled.count(name) != 0u || kFunctional.count(name) != 0u;
+}
+
+bool is_modeled_operation(std::string_view name) {
+  return kModeled.count(name) != 0u;
+}
+
+uint16_t field_name_arg_index(Kind kind) {
+  return kind == Kind::REFERENCE ? 2 : 1;
+}
+
+bool has_value_check(Kind kind) { return kind == Kind::REFERENCE; }
 
 DexType* value_type(Kind kind) {
   switch (kind) {

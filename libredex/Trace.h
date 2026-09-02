@@ -24,6 +24,7 @@ class DexType;
   TM(ARGS)             \
   TM(ARSC)             \
   TM(ASSESSOR)         \
+  TM(ATOMUP)           \
   TM(BBPROFILE)        \
   TM(BBREORDERING)     \
   TM(BIND)             \

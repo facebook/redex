@@ -44,6 +44,7 @@ check_PROGRAMS = \
     array_propagation_test \
     arsc_attribution_test \
     assert_test \
+    atomic_field_updater_lowering_test \
     atomic_map_test \
     blaming_escape_test \
     block_offset_sink_test \
@@ -218,6 +219,8 @@ arsc_attribution_test_SOURCES = ArscAttributionTest.cpp $(top_srcdir)/tools/arsc
 arsc_attribution_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/tools/arsc -I$(top_srcdir)/test/unit/arsc
 
 assert_test_SOURCES = AssertTest.cpp
+
+atomic_field_updater_lowering_test_SOURCES = AtomicFieldUpdaterLoweringTest.cpp
 
 atomic_stat_counter_test_SOURCES = AtomicStatCounterTest.cpp
 
