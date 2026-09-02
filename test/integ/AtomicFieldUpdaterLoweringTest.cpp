@@ -163,3 +163,13 @@ TEST_F(AtomicFieldUpdaterLoweringIntegTest, guardsUnprovenHolder) {
   EXPECT_EQ(names.count("checkHolder"), 1);
   EXPECT_GE(metric("null_checks_emitted"), 1);
 }
+
+TEST_F(AtomicFieldUpdaterLoweringIntegTest, lowersIntegerAndLong) {
+  run();
+  auto names = invoked_in("primitives:()J");
+  EXPECT_EQ(names.count("getIntVolatile"), 1);
+  EXPECT_EQ(names.count("putIntVolatile"), 1);
+  EXPECT_EQ(names.count("compareAndSwapInt"), 1);
+  EXPECT_EQ(names.count("getLongVolatile"), 1);
+  EXPECT_EQ(names.count("putLongVolatile"), 1);
+}

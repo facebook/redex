@@ -99,6 +99,11 @@ uint16_t field_name_arg_index(Kind kind);
 // no such test. A lowering must discharge this obligation only where it holds.
 bool has_value_check(Kind kind);
 
+// Does a value of this flavor occupy a wide register pair? Only long does,
+// which decides whether a lowering needs wide temporaries and
+// `move-result-wide`.
+bool is_wide(Kind kind);
+
 // The type of the field a given flavor updates: Object, int or long.
 DexType* value_type(Kind kind);
 
