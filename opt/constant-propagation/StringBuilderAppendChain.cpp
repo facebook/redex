@@ -326,4 +326,89 @@ size_t merge_adjacent_constant_appends(
   return merged_away;
 }
 
+size_t replace_constant_tostring_with_const_string(
+    const intraprocedural::FixpointIterator& fp_iter,
+    cfg::ControlFlowGraph& cfg) {
+  auto tostring_instructions =
+      stringbuilder_analysis::find_tostring_instructions(
+          cfg, method::java_lang_StringBuilder_toString());
+  if (tostring_instructions.empty()) {
+    return 0;
+  }
+  auto tostring_to_state =
+      stringbuilder_analysis::gather_builder_states(cfg, tostring_instructions);
+
+  UnorderedMap<const IRInstruction*, const IRInstruction*> tostring_to_append;
+  for (const auto& [tostring_insn, state] : tostring_to_state) {
+    // We only need to handle chains with single append because
+    // merge_adjacent_constant_appends should have merged consecutive appends on
+    // constants.
+    if (state.size() == 1u && is_string_append(state[0])) {
+      tostring_to_append.emplace(tostring_insn, state[0]);
+    }
+  }
+
+  if (tostring_to_append.empty()) {
+    return 0;
+  }
+
+  UnorderedMap<const IRInstruction*, const DexString*>
+      append_invocation_to_constant;
+  for (auto* block : cfg.blocks()) {
+    auto env = fp_iter.get_entry_state_at(block);
+    if (env.is_bottom()) {
+      continue;
+    }
+    auto last_insn = block->get_last_insn();
+    for (auto& mie : InstructionIterable(block)) {
+      auto* insn = mie.insn;
+      if (is_string_append(insn)) {
+        auto value = env.get(insn->src(1));
+        if (const auto& sd = value.maybe_get<StringDomain>()) {
+          if (auto c = sd->get_constant()) {
+            append_invocation_to_constant.emplace(insn, *c);
+          }
+        }
+      }
+      fp_iter.analyze_instruction(insn, &env, insn == last_insn->insn);
+    }
+  }
+
+  size_t replaced = 0;
+  cfg::CFGMutation mutation(cfg);
+  for (auto* block : cfg.blocks()) {
+    for (auto& mie : InstructionIterable(block)) {
+      auto* insn = mie.insn;
+      const auto append_it = tostring_to_append.find(insn);
+      if (append_it == tostring_to_append.end()) {
+        continue;
+      }
+      auto constant_string_it =
+          append_invocation_to_constant.find(append_it->second);
+      if (constant_string_it == append_invocation_to_constant.end()) {
+        continue;
+      }
+      auto result_it =
+          cfg.move_result_of(block->to_cfg_instruction_iterator(mie));
+      // No need to handle a toString() whose result is discarded. A dead code
+      // elimination pass will delete it.
+      if (result_it.is_end()) {
+        continue;
+      }
+      auto* const_insn = (new IRInstruction(OPCODE_CONST_STRING))
+                             ->set_string(constant_string_it->second);
+      // Replacing the toString() removes its move-result-object too, so this
+      // must write the same register.
+      auto* move_insn = (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                            ->set_dest(result_it->insn->dest());
+      mutation.replace(block->to_cfg_instruction_iterator(mie),
+                       {const_insn, move_insn});
+      replaced++;
+    }
+  }
+  mutation.flush();
+
+  return replaced;
+}
+
 } // namespace constant_propagation::stringbuilder_append_chain

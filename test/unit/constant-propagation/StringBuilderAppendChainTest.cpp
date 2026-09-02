@@ -75,6 +75,28 @@ class StringBuilderAppendChainTest : public RedexTest {
                              merge_adjacent_constant_appends);
   }
 
+  size_t run_replace(DexMethod* method) {
+    return run_transform(method,
+                         constant_propagation::stringbuilder_append_chain::
+                             replace_constant_tostring_with_const_string);
+  }
+
+  // Both reductions over one CFG, in the pass's order, sharing a fixpoint
+  // solved before the merge runs. Returns {appends merged, toString()s
+  // replaced}.
+  std::pair<size_t, size_t> run_merge_then_replace(DexMethod* method) {
+    size_t merged = 0;
+    size_t replaced = run_transform(
+        method, [&merged](const cp::intraprocedural::FixpointIterator& fp_iter,
+                          cfg::ControlFlowGraph& cfg) {
+          merged = constant_propagation::stringbuilder_append_chain::
+              merge_adjacent_constant_appends(fp_iter, cfg);
+          return constant_propagation::stringbuilder_append_chain::
+              replace_constant_tostring_with_const_string(fp_iter, cfg);
+        });
+    return {merged, replaced};
+  }
+
   // Both reductions over one CFG and one fixpoint, in the order
   // InterproceduralConstantPropagationPass runs them. The concat reduction
   // therefore replays a fixpoint solved before the merge edited the CFG, as it
@@ -90,6 +112,26 @@ class StringBuilderAppendChainTest : public RedexTest {
               reduce_two_append_concats(fp_iter, cfg);
         });
     return {merged, reduced};
+  }
+
+  // All three reductions over one CFG and one fixpoint, in the order
+  // InterproceduralConstantPropagationPass runs them. Returns
+  // {appends merged, builders replaced, sites concatenated}.
+  std::tuple<size_t, size_t, size_t> run_reductions_in_pass_order(
+      DexMethod* method) {
+    size_t merged = 0;
+    size_t replaced = 0;
+    size_t reduced = run_transform(
+        method, [&](const cp::intraprocedural::FixpointIterator& fp_iter,
+                    cfg::ControlFlowGraph& cfg) {
+          merged = constant_propagation::stringbuilder_append_chain::
+              merge_adjacent_constant_appends(fp_iter, cfg);
+          replaced = constant_propagation::stringbuilder_append_chain::
+              replace_constant_tostring_with_const_string(fp_iter, cfg);
+          return constant_propagation::stringbuilder_append_chain::
+              reduce_two_append_concats(fp_iter, cfg);
+        });
+    return {merged, replaced, reduced};
   }
 };
 
@@ -1138,6 +1180,309 @@ TEST_F(StringBuilderAppendChainTest,
     )
   )");
   EXPECT_CODE_EQ(long_first_expected.get(), long_first->get_code());
+}
+
+/*
+ * A builder holding a single constant String is replaced by that string: the
+ * toString() becomes a const-string into the same register.
+ */
+TEST_F(StringBuilderAppendChainTest, constantBuilderBecomesConstString) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:()Ljava/lang/String;"
+      (
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const-string "ab")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (return-object v2)
+      )
+    )
+  )");
+
+  EXPECT_EQ(run_replace(method), 1);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "ab")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (const-string "ab")
+      (move-result-pseudo-object v2)
+      (return-object v2)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+/*
+ * A StringBuilder(String) constructor contributes contents no append accounts
+ * for, so a builder built from one is left alone: replacing it from its appends
+ * would emit "b" where new StringBuilder("a").append("b") produces "ab".
+ */
+TEST_F(StringBuilderAppendChainTest, stringConstructorBuilderNotReplaced) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:()Ljava/lang/String;"
+      (
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (const-string "a")
+        (move-result-pseudo-object v1)
+        (invoke-direct (v0 v1) "Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V")
+        (const-string "b")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (return-object v2)
+      )
+    )
+  )");
+
+  auto original = assembler::to_s_expr(method->get_code());
+  EXPECT_EQ(run_replace(method), 0);
+  EXPECT_EQ(original, assembler::to_s_expr(method->get_code()));
+}
+
+/*
+ * A builder holding a value the fixpoint cannot pin to a constant -- here a
+ * parameter -- keeps its chain.
+ */
+TEST_F(StringBuilderAppendChainTest, nonConstantBuilderNotReplaced) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:(Ljava/lang/String;)Ljava/lang/String;"
+      (
+        (load-param-object v1)
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (return-object v2)
+      )
+    )
+  )");
+
+  auto original = assembler::to_s_expr(method->get_code());
+  EXPECT_EQ(run_replace(method), 0);
+  EXPECT_EQ(original, assembler::to_s_expr(method->get_code()));
+}
+
+/*
+ * A constant of a non-String type is left alone: the text an append writes for
+ * it is a conversion this reduction does not model.
+ */
+TEST_F(StringBuilderAppendChainTest, constantNonStringBuilderNotReplaced) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:()Ljava/lang/String;"
+      (
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const v1 7)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(I)Ljava/lang/StringBuilder;")
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (return-object v2)
+      )
+    )
+  )");
+
+  auto original = assembler::to_s_expr(method->get_code());
+  EXPECT_EQ(run_replace(method), 0);
+  EXPECT_EQ(original, assembler::to_s_expr(method->get_code()));
+}
+
+/*
+ * A toString() whose result is discarded has no register to hold the string, so
+ * the builder is left for a dead-code pass.
+ */
+TEST_F(StringBuilderAppendChainTest, discardedToStringNotReplaced) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:()V"
+      (
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const-string "ab")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (return-void)
+      )
+    )
+  )");
+
+  auto original = assembler::to_s_expr(method->get_code());
+  EXPECT_EQ(run_replace(method), 0);
+  EXPECT_EQ(original, assembler::to_s_expr(method->get_code()));
+}
+
+/*
+ * The replacement takes advantage of the merge's result: two constant appends
+ * collapse into one, and the single-append builder that leaves behind becomes
+ * the string it produces.
+ */
+TEST_F(StringBuilderAppendChainTest, mergedConstantChainBecomesConstString) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:()Ljava/lang/String;"
+      (
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const-string "a")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (const-string "b")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (return-object v2)
+      )
+    )
+  )");
+
+  auto [merged, replaced] = run_merge_then_replace(method);
+  EXPECT_EQ(merged, 1);
+  EXPECT_EQ(replaced, 1);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "a")
+      (move-result-pseudo-object v1)
+      (const-string "ab")
+      (move-result-pseudo-object v3)
+      (invoke-virtual (v0 v3) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (const-string "b")
+      (move-result-pseudo-object v1)
+      (const-string "ab")
+      (move-result-pseudo-object v2)
+      (return-object v2)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+/*
+ * A cross-block move-result-object is still replaced: inside a try region the
+ * toString() ends its block, so its move-result starts the goto successor.
+ */
+TEST_F(StringBuilderAppendChainTest,
+       crossBlockMoveResultConstantChainReplaced) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:()Ljava/lang/String;"
+      (
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const-string "ab")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (.try_start t)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (.try_end t)
+        (return-object v2)
+        (.catch (t))
+        (move-exception v3)
+        (throw v3)
+      )
+    )
+  )");
+
+  EXPECT_EQ(run_replace(method), 1);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "ab")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (.try_start t)
+      (const-string "ab")
+      (move-result-pseudo-object v2)
+      (return-object v2)
+      (.try_end t)
+      (.catch (t))
+      (move-exception v3)
+      (throw v3)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+/*
+ * The register a toString() writes is live on the exception edge too: a handler
+ * reading it must still see what it held before the call. Replacing the
+ * toString() keeps the const-string inside the try region, and its
+ * move-result-pseudo cannot run without it, so a throw leaves the register
+ * alone exactly as the toString() would have.
+ */
+TEST_F(StringBuilderAppendChainTest, resultRegisterUntouchedOnThrowingEdge) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:()Ljava/lang/String;"
+      (
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const-string "ab")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (const-string "before")
+        (move-result-pseudo-object v2)
+        (.try_start t)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (.try_end t)
+        (return-object v2)
+        (.catch (t))
+        (return-object v2)
+      )
+    )
+  )");
+
+  EXPECT_EQ(run_replace(method), 1);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "ab")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (const-string "before")
+      (move-result-pseudo-object v2)
+      (.try_start t)
+      (const-string "ab")
+      (move-result-pseudo-object v2)
+      (return-object v2)
+      (.try_end t)
+      (.catch (t))
+      (return-object v2)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 /*
