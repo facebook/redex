@@ -121,8 +121,7 @@ weak reference to it.
          m_config.merge_adjacent_constant_appends,
          "Merge consecutive `StringBuilder.append(String)` calls whose "
          "operands are all compile-time constants into a single append of the "
-         "concatenation, saving one invocation per append removed. Has no "
-         "effect once InterDex has run.");
+         "concatenation, saving one invocation per append removed.");
   }
 
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

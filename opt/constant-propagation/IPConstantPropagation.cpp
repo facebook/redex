@@ -245,11 +245,8 @@ void PassImpl::optimize(
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
     const NullCheckMethods& null_check_methods) {
   const auto& pure_methods = ::get_pure_methods();
-  // Both add a ref that a dex InterDex has already packed may have no room
-  // for: the concatenated string for the merge, `String.concat` for the concat
-  // reduction.
-  const bool merge_appends =
-      m_config.merge_adjacent_constant_appends && !m_interdex_has_run;
+  // `String.concat` is a method ref, which InterDex budgets per dex, so one it
+  // has already packed may have no room for it.
   const bool reduce_concat =
       m_config.reduce_stringbuilder_concat && !m_interdex_has_run;
   AtomicStatCounter<size_t> appends_merged{0};
@@ -291,7 +288,7 @@ void PassImpl::optimize(
           // within the concat reduction's reach, and the concatenation it
           // materializes is a const-string, which that reduction requires to be
           // provably non-null.
-          if (merge_appends) {
+          if (m_config.merge_adjacent_constant_appends) {
             appends_merged +=
                 stringbuilder_append_chain::merge_adjacent_constant_appends(
                     ipa->fp_iter, code.cfg());
