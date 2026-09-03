@@ -718,14 +718,15 @@ class walk {
           num_threads);
     }
 
-    // Call `walker` on all given virtual scopes in parallel.
-    //   WalkerFn should accept `const VirtualScope*`.
+    // Call `walker` on all given virtual scopes in parallel. The scope pointer
+    // type is deduced from the container, so this works with both legacy
+    // `virt_scope::VirtualScope*` and new `virtual_scope::VirtualScope*`.
     template <class VirtualScopes, typename WalkerFn>
     static void virtual_scopes(
         const VirtualScopes& virtual_scopes,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      workqueue_run<const virt_scope::VirtualScope*>(
+      workqueue_run<typename VirtualScopes::value_type>(
           walker, virtual_scopes, num_threads);
     }
   };

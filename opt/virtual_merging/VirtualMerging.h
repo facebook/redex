@@ -15,9 +15,18 @@
 #include "InlinerConfig.h"
 #include "Pass.h"
 #include "Resolver.h"
-#include "TypeSystem.h"
+#include "VirtualScopes.h"
 
 class MultiMethodInliner;
+
+// Orders scopes by their top def, mirroring legacy `virtualscopes_comparator`,
+// so `MergeablePairsByVirtualScope` iterates deterministically.
+struct virtual_scope_comparator {
+  bool operator()(const virtual_scope::VirtualScope* a,
+                  const virtual_scope::VirtualScope* b) const {
+    return compare_dexmethods(a->top_def(), b->top_def());
+  }
+};
 
 namespace method_profiles {
 class MethodProfiles;
@@ -135,7 +144,7 @@ class VirtualMerging {
   Scope m_scope;
   XStoreRefs m_xstores;
   XDexRefs m_xdexes;
-  TypeSystem m_type_system;
+  virtual_scope::VirtualScopes m_vscopes;
   size_t m_max_overriding_method_instructions;
   ConcurrentMethodResolverDeprecated m_concurrent_method_resolver;
   inliner::InlinerConfig m_inliner_config;
@@ -145,19 +154,20 @@ class VirtualMerging {
   VirtualMergingStats m_stats;
 
   void find_unsupported_virtual_scopes();
-  UnorderedSet<const VirtualScope*> m_unsupported_virtual_scopes;
+  UnorderedSet<const virtual_scope::VirtualScope*> m_unsupported_virtual_scopes;
   UnorderedMap<const DexString*, UnorderedSet<DexProto*>>
       m_unsupported_named_protos;
 
   void compute_mergeable_scope_methods();
-  ConcurrentMap<const VirtualScope*, UnorderedSet<const DexMethod*>>
+  ConcurrentMap<const virtual_scope::VirtualScope*,
+                UnorderedSet<const DexMethod*>>
       m_mergeable_scope_methods;
 
  public:
   using MergeablePairsByVirtualScope =
-      std::map<const VirtualScope*,
+      std::map<const virtual_scope::VirtualScope*,
                std::vector<std::pair<const DexMethod*, const DexMethod*>>,
-               virtualscopes_comparator>;
+               virtual_scope_comparator>;
 
   void flush();
 
