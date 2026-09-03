@@ -65,6 +65,46 @@ size_t reduce_two_append_concats(
     const intraprocedural::FixpointIterator& fp_iter,
     cfg::ControlFlowGraph& cfg);
 
+/*
+ * Merge consecutive `append(String)` calls whose operands are all
+ * compile-time constant Strings into a single `append` of the concatenation:
+ * `...append("a").append("b")...` becomes `...append("ab")...`, saving one
+ * invocation per merged append. It targets mixed builders (constant appends
+ * interspersed with non-constant ones), since the source compilers already
+ * fold a fully-constant concatenation into a single constant. Constant values
+ * are read from `fp_iter`. Returns the number of appends eliminated. Before:
+ *
+ *   new-instance v0, StringBuilder
+ *   invoke-direct {v0} StringBuilder.<init>:()V
+ *   invoke-virtual {v0, v3} StringBuilder.append:(String)StringBuilder
+ *   const-string v1, "a"
+ *   invoke-virtual {v0, v1} StringBuilder.append:(String)StringBuilder
+ *   const-string v1, "b"
+ *   invoke-virtual {v0, v1} StringBuilder.append:(String)StringBuilder
+ *
+ * After:
+ *
+ *   new-instance v0, StringBuilder
+ *   invoke-direct {v0} StringBuilder.<init>:()V
+ *   invoke-virtual {v0, v3} StringBuilder.append:(String)StringBuilder
+ *   const-string v1, "a"
+ *   const-string v4, "ab"
+ *   invoke-virtual {v0, v4} StringBuilder.append:(String)StringBuilder
+ *   const-string v1, "b"
+ *
+ * A fresh register holds the concatenation, since an operand load may have
+ * consumers elsewhere and so cannot be overwritten in place. The original
+ * loads stay behind; where nothing else reads them, a later LocalDce run
+ * removes them.
+ *
+ * Only appends threading a single builder register via the self-loop pattern
+ * (R = R.append(...)) are merged, so dropping all but the first leaves that
+ * register holding the builder for the following code.
+ */
+size_t merge_adjacent_constant_appends(
+    const intraprocedural::FixpointIterator& fp_iter,
+    cfg::ControlFlowGraph& cfg);
+
 } // namespace stringbuilder_append_chain
 
 } // namespace constant_propagation
