@@ -153,6 +153,57 @@ size_t merge_adjacent_constant_appends(
     const intraprocedural::FixpointIterator& fp_iter,
     cfg::ControlFlowGraph& cfg);
 
+/*
+ * Replace a builder holding one compile-time constant String with the string
+ * it would have produced: the `toString()` becomes a `const-string` of that
+ * constant, and nothing reads the builder. Its single operation must be an
+ * `append(String)` whose operand `fp_iter` proves constant. A
+ * `StringBuilder(String)` constructor contributes contents of its own, so a
+ * builder built from one is left alone.
+ *
+ * A builder with several operations is left alone as well.
+ * `merge_adjacent_constant_appends` collapses a constant run to one append
+ * ahead of this, and what it cannot collapse is a builder that several
+ * toString()s read at different points, which is rare enough not to be worth
+ * the concatenation. Returns the number of toString() calls replaced, which
+ * exceeds the number of builders when several of them read one builder. Before:
+ *
+ *   new-instance v0, StringBuilder
+ *   invoke-direct {v0} StringBuilder.<init>:()V
+ *   const-string v1, "ab"
+ *   invoke-virtual {v0, v1} StringBuilder.append:(String)StringBuilder
+ *   invoke-virtual {v0} StringBuilder.toString:()String
+ *   move-result-object v2
+ *
+ * After:
+ *
+ *   new-instance v0, StringBuilder
+ *   invoke-direct {v0} StringBuilder.<init>:()V
+ *   const-string v1, "ab"
+ *   invoke-virtual {v0, v1} StringBuilder.append:(String)StringBuilder
+ *   const-string v2, "ab"
+ *
+ * The allocation, the constructor and the appends are left in place: proving
+ * the builder unreachable is an escape analysis, which a later
+ * ObjectSensitiveDce run performs. Removing them is what makes this profitable
+ * -- the chain costs an allocation, a backing array and two invocations,
+ * where the result costs a resolved string reference.
+ *
+ * The other reductions in this file preserve the identity of the produced
+ * String; this one does not. `toString()` returns a fresh String, whereas a
+ * `const-string` of a literal resolves to the interned instance, so a `==`
+ * comparison against an equal literal changes from false to true, as does
+ * anything else keyed on object identity, such as `IdentityHashMap` or
+ * `synchronized`. Content-wise the two are always equal.
+ *
+ * Only a `toString()` whose result is captured by a `move-result-object` is
+ * replaced; one whose result is discarded leaves the builder for a dead-code
+ * pass.
+ */
+size_t replace_constant_tostring_with_const_string(
+    const intraprocedural::FixpointIterator& fp_iter,
+    cfg::ControlFlowGraph& cfg);
+
 } // namespace stringbuilder_append_chain
 
 } // namespace constant_propagation

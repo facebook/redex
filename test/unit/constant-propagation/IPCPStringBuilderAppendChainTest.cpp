@@ -165,10 +165,12 @@ struct IPCPStringBuilderAppendChainTest : public RedexTest {
   // InterDex has run, reporting it as run or not. PassManager parses each
   // pass's options from the JSON config, so the reduction is enabled there
   // rather than through a Config passed to the constructor.
-  static void run_through_pass_manager(const Scope& scope,
-                                       bool interdex_has_run) {
+  static void run_through_pass_manager(
+      const Scope& scope,
+      bool interdex_has_run,
+      const char* option = "reduce_stringbuilder_concat") {
     Json::Value pass_config(Json::objectValue);
-    pass_config["reduce_stringbuilder_concat"] = true;
+    pass_config[option] = true;
     pass_config["max_heap_analysis_iterations"] = 1;
     Json::Value json_config(Json::objectValue);
     json_config["InterproceduralConstantPropagationPass"] = pass_config;
@@ -238,4 +240,56 @@ TEST_F(IPCPStringBuilderAppendChainTest,
   run_through_pass_manager(scope, /* interdex_has_run */ false);
 
   EXPECT_FALSE(code_has_string_concat(methods.callee));
+}
+
+/*
+ * A builder holding one constant append is replaced by the string it produces,
+ * so its toString() is gone once the pass runs with
+ * replace_constant_stringbuilder_tostring_with_const_string enabled.
+ */
+TEST_F(IPCPStringBuilderAppendChainTest, constantBuilderReplacedThroughPass) {
+  Scope scope;
+  ClassCreator creator(DexType::make_type("LBar;"));
+  creator.set_super(type::java_lang_Object());
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LBar;.f:()Ljava/lang/String;"
+     (
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "a")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v0)
+      (return-object v0)
+     )
+    )
+  )");
+  creator.add_method(method);
+  method->get_code()->build_cfg();
+  method->rstate.set_root();
+  scope.push_back(creator.create());
+
+  run_through_pass_manager(
+      scope, /* interdex_has_run */ false,
+      "replace_constant_stringbuilder_tostring_with_const_string");
+
+  method->get_code()->clear_cfg();
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "a")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (const-string "a")
+      (move-result-pseudo-object v0)
+      (return-object v0)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }

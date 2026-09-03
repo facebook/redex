@@ -250,6 +250,7 @@ void PassImpl::optimize(
   const bool reduce_concat =
       m_config.reduce_stringbuilder_concat && !m_interdex_has_run;
   AtomicStatCounter<size_t> appends_merged{0};
+  AtomicStatCounter<size_t> stringbuilder_constant_tostrings_replaced{0};
   AtomicStatCounter<size_t> concat_reduced{0};
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
@@ -293,6 +294,17 @@ void PassImpl::optimize(
                 stringbuilder_append_chain::merge_adjacent_constant_appends(
                     ipa->fp_iter, code.cfg());
           }
+          // This must come after merge_adjacent_constant_appends because it can
+          // take advantage of the result of merge_adjacent_constant_appends,
+          // which increases the number of of StringBuilder-append-toString
+          // chains that contain only one append on constant.
+          if (m_config
+                  .replace_constant_stringbuilder_tostring_with_const_string) {
+            stringbuilder_constant_tostrings_replaced +=
+                stringbuilder_append_chain::
+                    replace_constant_tostring_with_const_string(ipa->fp_iter,
+                                                                code.cfg());
+          }
           if (reduce_concat) {
             concat_reduced +=
                 stringbuilder_append_chain::reduce_two_append_concats(
@@ -302,6 +314,8 @@ void PassImpl::optimize(
         }
       });
   m_appends_merged = appends_merged.load();
+  m_stringbuilder_constant_tostrings_replaced =
+      stringbuilder_constant_tostrings_replaced.load();
   m_concat_reduced = concat_reduced.load();
 }
 
@@ -377,6 +391,8 @@ void PassImpl::run_pass(DexStoresVector& stores,
   mgr.set_metric("config.max_heap_analysis_iterations",
                  m_config.max_heap_analysis_iterations);
   mgr.incr_metric("stringbuilder_appends_merged", m_appends_merged);
+  mgr.incr_metric("stringbuilder_constant_tostrings_replaced",
+                  m_stringbuilder_constant_tostrings_replaced);
   mgr.incr_metric("stringbuilder_concat_reduced", m_concat_reduced);
 }
 
