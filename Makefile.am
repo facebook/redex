@@ -341,6 +341,7 @@ libredex_la_SOURCES = \
 	service/resources/ReachableResources.cpp \
 	service/resources/StaticIds.cpp \
 	service/shrinker/Shrinker.cpp \
+	service/stringbuilder/StringBuilderAnalysis.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/StringSwitchFinder.cpp \
 	service/switch-partitioning/StringSwitchTransform.cpp \
