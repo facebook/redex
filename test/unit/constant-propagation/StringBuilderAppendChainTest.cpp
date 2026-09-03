@@ -43,9 +43,7 @@ class StringBuilderAppendChainTest : public RedexTest {
   // Builds an intraprocedural constant-propagation fixpoint that proves
   // const-string operands non-null (StringAnalyzer) and values non-null on the
   // continuation of a dereference/guard (the no-throw analyzer), then applies
-  // the reduction and returns the number of sites rewritten. This is the same
-  // shape of fixpoint IPConstantPropagation hands to the reduction, minus the
-  // interprocedural WholeProgramState seeding.
+  // the reduction and returns the number of sites rewritten.
   size_t run_transform(
       DexMethod* method,
       const std::function<size_t(const cp::intraprocedural::FixpointIterator&,

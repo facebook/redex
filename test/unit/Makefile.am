@@ -542,7 +542,7 @@ static_field_dependency_graph_test_SOURCES = StaticFieldDependencyGraphTest.cpp
 
 static_relo_v2_test_SOURCES = StaticReloV2Test.cpp
 
-stringbuilder_append_chain_test_SOURCES = StringBuilderAppendChainTest.cpp
+stringbuilder_append_chain_test_SOURCES = constant-propagation/StringBuilderAppendChainTest.cpp
 
 stringbuilder_outline_test_SOURCES = StringBuilderOutlinerTest.cpp
 
