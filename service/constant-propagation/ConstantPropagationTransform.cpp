@@ -173,8 +173,6 @@ std::optional<std::string> verify_areequal_semantics() {
   return std::nullopt;
 }
 
-namespace {
-
 bool is_known_non_null(const ConstantValue& val) {
   if (constant_propagation_transform_internal::
           enable_object_domain_null_check_elim) {
@@ -183,8 +181,6 @@ bool is_known_non_null(const ConstantValue& val) {
   auto scd = val.maybe_get<SignedConstantDomain>();
   return scd && scd->interval() == sign_domain::Interval::NEZ;
 }
-
-} // namespace
 
 bool Transform::eliminate_redundant_null_check(
     const ConstantEnvironment& env,
