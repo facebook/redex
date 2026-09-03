@@ -228,10 +228,9 @@ MultiMethodInliner::MultiMethodInliner(
                             .second;
         always_assert(emplaced);
       }
-      insert_unordered_iterable(
-          m_inlined_invokes_need_cast,
-          callee_callers.second.inlined_invokes_need_cast);
     }
+    insert_unordered_iterable(m_inlined_invokes_need_cast,
+                              callee_callers.second.inlined_invokes_need_cast);
   }
   if (mode == IntraDex) {
     m_x_dex = std::make_unique<XDexMethodRefs>(stores);

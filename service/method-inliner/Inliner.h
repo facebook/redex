@@ -806,6 +806,9 @@ class MultiMethodInliner {
   // Mapping from callers to auxiliary data for contained true virtual callees
   UnorderedMap<const DexMethod*, CallerVirtualCallees> m_caller_virtual_callees;
 
+  // Casts that a partially-inlined fallback invocation needs, keyed by invoke
+  // instruction. Flattened from the per-callee CallerInsns, so each callee
+  // contributes its whole map once, not once per caller.
   UnorderedMap<IRInstruction*, const DexType*> m_inlined_invokes_need_cast;
 
   UnorderedSet<const DexMethod*> m_true_virtual_callees_with_other_call_sites;
