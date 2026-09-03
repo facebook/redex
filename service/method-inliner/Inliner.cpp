@@ -60,6 +60,26 @@ float block_max_count(cfg::Block* block) {
 }
 
 /*
+ * Whether an invocation naming `callee` verifies at `insn` as far as the
+ * receiver goes, which a static callee trivially does.
+ */
+bool has_receiver_of_callee_class(const IRInstruction* insn,
+                                  const DexMethod* callee) {
+  return is_static(callee) ||
+         type::check_cast(insn->get_method()->get_class(), callee->get_class());
+}
+
+/*
+ * The type the receiver of `insn` must be cast to for an invocation naming
+ * `callee` to verify, or nullptr if no cast is needed.
+ */
+const DexType* get_needs_receiver_cast(const IRInstruction* insn,
+                                       const DexMethod* callee) {
+  return has_receiver_of_callee_class(insn, callee) ? nullptr
+                                                    : callee->get_class();
+}
+
+/*
  * Given a method, gather all resolved init-class instruction types. This
  * gathering-logic mimics (the first part of) what
  * DexStructure::resolve_init_classes does.
@@ -511,9 +531,7 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
           }
         }
 
-        auto it2 = m_inlined_invokes_need_cast.find(insn);
-        const auto* needs_receiver_cast =
-            it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
+        const auto* needs_receiver_cast = get_recorded_receiver_cast(insn);
         inlinables.push_back((Inlinable){callee, insn, no_return, partial,
                                          for_speed, std::move(reduced_code),
                                          insn_size, needs_receiver_cast});
@@ -539,9 +557,7 @@ size_t MultiMethodInliner::inline_callees(
       }
       auto* callee = *callee_opt;
       always_assert(callee->is_concrete());
-      auto it2 = m_inlined_invokes_need_cast.find(insn);
-      const auto* needs_receiver_cast =
-          it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
+      const auto* needs_receiver_cast = get_recorded_receiver_cast(insn);
       inlinables.push_back((Inlinable){callee, insn, false, false, false,
                                        nullptr, get_callee_insn_size(callee),
                                        needs_receiver_cast});
@@ -565,12 +581,7 @@ size_t MultiMethodInliner::inline_callees(
     auto* callee = it->second;
     always_assert(callee->is_concrete());
     always_assert(opcode::is_an_invoke(insn->opcode()));
-    auto* needs_receiver_cast =
-        is_static(callee) ||
-                type::check_cast(mie.insn->get_method()->get_class(),
-                                 callee->get_class())
-            ? nullptr
-            : callee->get_class();
+    const auto* needs_receiver_cast = get_needs_receiver_cast(insn, callee);
     inlinables.push_back((Inlinable){callee, insn, false, false, false, nullptr,
                                      get_callee_insn_size(callee),
                                      needs_receiver_cast});
@@ -2103,6 +2114,12 @@ bool MultiMethodInliner::should_inline_at_call_site(
   return true;
 }
 
+const DexType* MultiMethodInliner::get_recorded_receiver_cast(
+    IRInstruction* insn) const {
+  auto it = m_inlined_invokes_need_cast.find(insn);
+  return it == m_inlined_invokes_need_cast.end() ? nullptr : it->second;
+}
+
 bool MultiMethodInliner::can_invoke_callee_directly(
     IRInstruction* insn, const DexMethod* callee) const {
   auto op = insn->opcode();
@@ -2129,9 +2146,13 @@ bool MultiMethodInliner::can_invoke_callee_directly(
   if (!dispatches_alike) {
     return false;
   }
-  // The fallback names `callee`, so the receiver must be an instance of the
-  // callee's class, which it is when the instruction names the callee itself.
-  return insn->get_method() == callee;
+  const auto* recorded_cast = get_recorded_receiver_cast(insn);
+  if (recorded_cast != nullptr) {
+    // The receiver gets cast ahead of the inlined code, so the fallback sees
+    // the cast value rather than the original one.
+    return type::check_cast(recorded_cast, callee->get_class());
+  }
+  return has_receiver_of_callee_class(insn, callee);
 }
 
 bool MultiMethodInliner::should_partially_inline(cfg::Block* block,

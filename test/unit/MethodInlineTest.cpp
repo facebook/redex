@@ -3400,6 +3400,126 @@ TEST_F(MethodInlineTest,
   vcallee->get_code()->clear_cfg();
 }
 
+// A callsite may name an inherited method via the subtype it is invoked on.
+// The fallback invocation names the callee, `LBase;.callee`, where the
+// original names `LSub;.callee`; the receiver is a `LSub;` and hence also a
+// `LBase;`, so that invocation is a valid stand-in.
+TEST_F(MethodInlineTest, partially_inline_inherited_formal_method) {
+  auto* base_cls = create_a_class("LBase;");
+  ClassCreator sub_cc(DexType::make_type("LSub;"));
+  sub_cc.set_super(base_cls->get_type());
+  auto* sub_cls = sub_cc.create();
+
+  DexMethod* caller =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LSub;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* callee = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LBase;.callee:(Ljava/lang/Object;)V"));
+  callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  base_cls->add_method(callee);
+  sub_cls->add_method(caller);
+
+  // `LSub;` does not define `callee`, so both callsites resolve to
+  // `LBase;.callee`.
+  const auto& caller_str = R"(
+    (
+      (.src_block "LSub;.caller:()V" 1 (1.0 1.0))
+      (.pos "LSub;.caller:()V" "Sub.java" 10)
+      (const v0 0)
+      (const-string "Some string")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "LSub;.callee:(Ljava/lang/Object;)V")
+      (invoke-virtual (v0 v1) "LSub;.callee:(Ljava/lang/Object;)V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+  caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
+
+  // We insert a "dummy" instruction into the cold portion of the callee to
+  // make the callee large enough to make the transformation worthwhile.
+  const auto& callee_str = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (.src_block "LBase;.callee:(Ljava/lang/Object;)V" 1 (1.0 1.0))
+      (.pos "LBase;.callee:(Ljava/lang/Object;)V" "Base.java" 20)
+      (if-eqz v1 :exit)
+      (.src_block "LBase;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))
+      (.pos "LBase;.callee:(Ljava/lang/Object;)V" "Base.java" 30)
+      (const v1 0)
+      (invoke-static (v1) "Ldummy;.dummy:(Ljava/lang/Object;)V")
+      (throw v1)
+      (:exit)
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  UnorderedSet<DexMethod*> candidates;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({base_cls, sub_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    candidates.insert(caller);
+    candidates.insert(callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.partial_hot_hot_inline = true;
+  inliner_config.virtual_inline = true;
+  inliner_config.true_virtual_inline = true;
+  inliner_config.multiple_callers = false;
+  inliner_config.use_call_site_summaries = false;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = false;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex);
+    inliner.inline_methods();
+
+    EXPECT_EQ(inliner.get_info().partially_inlined, 2u);
+  }
+
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+
+  // Each peeled-off prefix falls back to an invocation naming the callee.
+  size_t fallback_invokes = 0;
+  for (const auto& mie : InstructionIterable(caller->get_code())) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
+        mie.insn->get_method() == callee) {
+      fallback_invokes++;
+    }
+  }
+  EXPECT_EQ(fallback_invokes, 2u);
+}
+
 // A callee declared in an interface is invoked with an `invoke-interface`, so
 // that is what the fallback invocation uses.
 TEST_F(MethodInlineTest, partially_inline_interface_callee) {
@@ -3627,6 +3747,422 @@ TEST_F(MethodInlineTest, partially_inline_direct_callee) {
   EXPECT_EQ(fallback_invokes, 2u);
 }
 
+// A true-virtual callsite reaches its unique implementation through a receiver
+// cast: the callee is a `LFoo;` method while the callsite names `LBase;`. The
+// cast must land ahead of the peeled-off prefix, so that the fallback
+// invocation of `LFoo;.callee` sees the cast receiver.
+TEST_F(MethodInlineTest, partially_inline_true_virtual_with_receiver_cast) {
+  auto* base_cls = create_a_class("LBase;");
+  base_cls->set_access(base_cls->get_access() | ACC_ABSTRACT);
+  ClassCreator foo_cc(DexType::make_type("LFoo;"));
+  foo_cc.set_super(base_cls->get_type());
+  auto* foo_cls = foo_cc.create();
+
+  DexMethod* caller =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* base_callee = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LBase;.callee:(Ljava/lang/Object;)V"));
+  base_callee->make_concrete(ACC_ABSTRACT, /* is_virtual */ true);
+
+  DexMethod* callee = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
+  callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  base_cls->add_method(base_callee);
+  foo_cls->add_method(caller);
+  foo_cls->add_method(callee);
+
+  const auto& caller_str = R"(
+    (
+      (.src_block "LFoo;.caller:()V" 1 (1.0 1.0))
+      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (const v0 0)
+      (const-string "Some string")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "LBase;.callee:(Ljava/lang/Object;)V")
+      (invoke-virtual (v0 v1) "LBase;.callee:(Ljava/lang/Object;)V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+  caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
+
+  // We insert a "dummy" instruction into the cold portion of the callee to
+  // make the callee large enough to make the transformation worthwhile.
+  const auto& callee_str = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 1 (1.0 1.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 20)
+      (if-eqz v1 :exit)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 30)
+      (const v1 0)
+      (invoke-static (v1) "Ldummy;.dummy:(Ljava/lang/Object;)V")
+      (throw v1)
+      (:exit)
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  UnorderedSet<DexMethod*> candidates;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({base_cls, foo_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    candidates.insert(caller);
+    candidates.insert(callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.partial_hot_hot_inline = true;
+  inliner_config.virtual_inline = true;
+  inliner_config.true_virtual_inline = true;
+  inliner_config.multiple_callers = false;
+  inliner_config.use_call_site_summaries = false;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = false;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
+
+  // Both callsites resolve to `LFoo;.callee` only via a receiver cast, as the
+  // true-virtual analysis would record it.
+  CalleeCallerInsns true_virtual_callers;
+  for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      true_virtual_callers[callee].caller_insns[caller].insert(mie.insn);
+      true_virtual_callers[callee].inlined_invokes_need_cast.emplace(
+          mie.insn, foo_cls->get_type());
+    }
+  }
+  ASSERT_EQ(true_virtual_callers[callee].caller_insns[caller].size(), 2);
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex, true_virtual_callers);
+    inliner.inline_methods();
+
+    EXPECT_EQ(inliner.get_info().partially_inlined, 2u);
+  }
+
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+
+  // Each fallback invocation must take its receiver from the cast, which
+  // requires the cast to precede the argument copies that feed it.
+  UnorderedMap<reg_t, bool> from_cast;
+  bool pending_cast = false;
+  size_t fallback_invokes = 0;
+  for (const auto& mie : InstructionIterable(caller->get_code())) {
+    auto* insn = mie.insn;
+    auto op = insn->opcode();
+    if (op == OPCODE_CHECK_CAST) {
+      pending_cast = insn->get_type() == foo_cls->get_type();
+    } else if (op == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
+      if (pending_cast) {
+        from_cast[insn->dest()] = true;
+        pending_cast = false;
+      }
+    } else if (op == OPCODE_MOVE_OBJECT) {
+      from_cast[insn->dest()] = from_cast[insn->src(0)];
+    } else if (op == OPCODE_INVOKE_VIRTUAL && insn->get_method() == callee) {
+      EXPECT_TRUE(from_cast[insn->src(0)]);
+      fallback_invokes++;
+    }
+  }
+  EXPECT_EQ(fallback_invokes, 2u);
+}
+
+// A receiver cast to a supertype of the callee's class, as a
+// same-implementation cluster records, leaves the receiver something other than
+// an instance of that class -- the fallback invocation of `LFoo;.callee` would
+// not verify -- so such a callsite is not partially inlined.
+TEST_F(MethodInlineTest,
+       partially_inline_receiver_cast_to_supertype_regression) {
+  auto* base_cls = create_a_class("LBase;");
+  base_cls->set_access(base_cls->get_access() | ACC_ABSTRACT);
+  ClassCreator foo_cc(DexType::make_type("LFoo;"));
+  foo_cc.set_super(base_cls->get_type());
+  auto* foo_cls = foo_cc.create();
+
+  DexMethod* caller =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* base_callee = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LBase;.callee:(Ljava/lang/Object;)V"));
+  base_callee->make_concrete(ACC_ABSTRACT, /* is_virtual */ true);
+
+  DexMethod* callee = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
+  callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  base_cls->add_method(base_callee);
+  foo_cls->add_method(caller);
+  foo_cls->add_method(callee);
+
+  const auto& caller_str = R"(
+    (
+      (.src_block "LFoo;.caller:()V" 1 (1.0 1.0))
+      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (const v0 0)
+      (const-string "Some string")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "LBase;.callee:(Ljava/lang/Object;)V")
+      (invoke-virtual (v0 v1) "LBase;.callee:(Ljava/lang/Object;)V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+  caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
+
+  // We insert a "dummy" instruction into the cold portion of the callee to
+  // make the callee large enough to make the transformation worthwhile.
+  const auto& callee_str = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 1 (1.0 1.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 20)
+      (if-eqz v1 :exit)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 30)
+      (const v1 0)
+      (invoke-static (v1) "Ldummy;.dummy:(Ljava/lang/Object;)V")
+      (throw v1)
+      (:exit)
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  UnorderedSet<DexMethod*> candidates;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({base_cls, foo_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    candidates.insert(caller);
+    candidates.insert(callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.partial_hot_hot_inline = true;
+  inliner_config.virtual_inline = true;
+  inliner_config.true_virtual_inline = true;
+  inliner_config.multiple_callers = false;
+  inliner_config.use_call_site_summaries = false;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = false;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
+
+  // Both callsites are registered with a cast to `LBase;`, which is what a
+  // same-implementation cluster spanning several `LBase;` subtypes records.
+  CalleeCallerInsns true_virtual_callers;
+  for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      true_virtual_callers[callee].caller_insns[caller].insert(mie.insn);
+      true_virtual_callers[callee].inlined_invokes_need_cast.emplace(
+          mie.insn, base_cls->get_type());
+    }
+  }
+  ASSERT_EQ(true_virtual_callers[callee].caller_insns[caller].size(), 2);
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex, true_virtual_callers);
+    inliner.inline_methods();
+
+    EXPECT_EQ(inliner.get_info().partially_inlined, 0u);
+  }
+
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+}
+
+// An invoke-interface callsite whose unique implementation is a class method:
+// the receiver is cast to `LImpl;` and the fallback invocation devirtualizes to
+// an `invoke-virtual` of `LImpl;.callee`, which dispatches on the receiver just
+// as the original did.
+TEST_F(MethodInlineTest, partially_inline_devirtualized_interface_callsite) {
+  ClassCreator intf_cc(DexType::make_type("LI;"));
+  intf_cc.set_super(type::java_lang_Object());
+  intf_cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
+  auto* intf_cls = intf_cc.create();
+
+  ClassCreator impl_cc(DexType::make_type("LImpl;"));
+  impl_cc.set_super(type::java_lang_Object());
+  impl_cc.add_interface(intf_cls->get_type());
+  auto* impl_cls = impl_cc.create();
+
+  DexMethod* caller =
+      dynamic_cast<DexMethod*>(DexMethod::make_method("LImpl;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* intf_callee = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LI;.callee:(Ljava/lang/Object;)V"));
+  intf_callee->make_concrete(ACC_PUBLIC | ACC_ABSTRACT, /* is_virtual */ true);
+
+  DexMethod* callee = dynamic_cast<DexMethod*>(
+      DexMethod::make_method("LImpl;.callee:(Ljava/lang/Object;)V"));
+  callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  intf_cls->add_method(intf_callee);
+  impl_cls->add_method(caller);
+  impl_cls->add_method(callee);
+
+  const auto& caller_str = R"(
+    (
+      (.src_block "LImpl;.caller:()V" 1 (1.0 1.0))
+      (.pos "LImpl;.caller:()V" "Impl.java" 10)
+      (const v0 0)
+      (const-string "Some string")
+      (move-result-pseudo-object v1)
+      (invoke-interface (v0 v1) "LI;.callee:(Ljava/lang/Object;)V")
+      (invoke-interface (v0 v1) "LI;.callee:(Ljava/lang/Object;)V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+  caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
+
+  // We insert a "dummy" instruction into the cold portion of the callee to
+  // make the callee large enough to make the transformation worthwhile.
+  const auto& callee_str = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (.src_block "LImpl;.callee:(Ljava/lang/Object;)V" 1 (1.0 1.0))
+      (.pos "LImpl;.callee:(Ljava/lang/Object;)V" "Impl.java" 20)
+      (if-eqz v1 :exit)
+      (.src_block "LImpl;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))
+      (.pos "LImpl;.callee:(Ljava/lang/Object;)V" "Impl.java" 30)
+      (const v1 0)
+      (invoke-static (v1) "Ldummy;.dummy:(Ljava/lang/Object;)V")
+      (throw v1)
+      (:exit)
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  UnorderedSet<DexMethod*> candidates;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({intf_cls, impl_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    candidates.insert(caller);
+    candidates.insert(callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.partial_hot_hot_inline = true;
+  inliner_config.virtual_inline = true;
+  inliner_config.true_virtual_inline = true;
+  inliner_config.multiple_callers = false;
+  inliner_config.use_call_site_summaries = false;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = false;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
+
+  // Both interface callsites reach `LImpl;.callee` via a cast to `LImpl;`, as
+  // the true-virtual analysis records for a sole implementation.
+  CalleeCallerInsns true_virtual_callers;
+  for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_INTERFACE) {
+      true_virtual_callers[callee].caller_insns[caller].insert(mie.insn);
+      true_virtual_callers[callee].inlined_invokes_need_cast.emplace(
+          mie.insn, impl_cls->get_type());
+    }
+  }
+  ASSERT_EQ(true_virtual_callers[callee].caller_insns[caller].size(), 2);
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, conf, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex, true_virtual_callers);
+    inliner.inline_methods();
+
+    EXPECT_EQ(inliner.get_info().partially_inlined, 2u);
+  }
+
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+
+  size_t fallback_invokes = 0;
+  for (const auto& mie : InstructionIterable(caller->get_code())) {
+    if (mie.insn->has_method() && mie.insn->get_method() == callee) {
+      EXPECT_EQ(mie.insn->opcode(), OPCODE_INVOKE_VIRTUAL);
+      fallback_invokes++;
+    }
+  }
+  EXPECT_EQ(fallback_invokes, 2u);
+}
+
 // Partially inlining invoke-super is not supported.
 TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   auto* base_cls = create_a_class("LBase;");
@@ -3756,7 +4292,9 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
 
-// Partially inlining non-matching formal methods is not supported.
+// The fallback invocation names the callee, so the receiver must be an
+// instance of the callee's class. Here it is only known to be a `Base`, and
+// no cast is on record, so partial inlining is off the table.
 TEST_F(MethodInlineTest,
        partially_inline_non_matching_formal_method_regression) {
   auto* base_cls = create_a_class("LBase;");

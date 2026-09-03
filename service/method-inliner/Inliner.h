@@ -440,10 +440,17 @@ class MultiMethodInliner {
   std::optional<DexMethod*> get_callee(DexMethod* caller, IRInstruction* insn);
 
   /**
+   * The type the true-virtual analysis recorded for `insn`'s receiver to be
+   * cast to on the way into the inlined code, or nullptr if it recorded none.
+   */
+  const DexType* get_recorded_receiver_cast(IRInstruction* insn) const;
+
+  /**
    * Whether a plain invocation of `callee`, as the partially inlined code's
    * fallback performs it, can stand in for `insn`. It must dispatch the same
-   * way, and, as it names `callee`, the receiver must be an instance of the
-   * callee's class.
+   * way, and, as it names `callee` where `insn` names its own method ref, the
+   * receiver must be an instance of the callee's class by the time it reaches
+   * the fallback.
    */
   bool can_invoke_callee_directly(IRInstruction* insn,
                                   const DexMethod* callee) const;
