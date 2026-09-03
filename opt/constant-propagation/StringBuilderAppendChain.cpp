@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "StringBuilderConcat.h"
+#include "StringBuilderAppendChain.h"
 
 #include <utility>
 #include <vector>
@@ -21,7 +21,7 @@
 #include "IROpcode.h"
 #include "StringBuilderAnalysis.h"
 
-namespace constant_propagation::stringbuilder_concat {
+namespace constant_propagation::stringbuilder_append_chain {
 
 namespace {
 
@@ -162,4 +162,4 @@ size_t reduce_two_append_concats(
   return reduced;
 }
 
-} // namespace constant_propagation::stringbuilder_concat
+} // namespace constant_propagation::stringbuilder_append_chain

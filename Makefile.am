@@ -427,7 +427,7 @@ libopt_la_SOURCES = \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \
 	opt/constant-propagation/ReserveAreEqualRefPass.cpp \
-	opt/constant-propagation/StringBuilderConcat.cpp \
+	opt/constant-propagation/StringBuilderAppendChain.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/cse/CommonSubexpressionEliminationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \

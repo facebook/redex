@@ -21,7 +21,7 @@
 #include "PassManager.h"
 #include "Purity.h"
 #include "ScopedMetrics.h"
-#include "StringBuilderConcat.h"
+#include "StringBuilderAppendChain.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WrappedPrimitives.h"
@@ -284,8 +284,9 @@ void PassImpl::optimize(
                                               fp_iter.get_whole_program_state(),
                                               method, code.cfg());
           if (reduce_concat) {
-            concat_reduced += stringbuilder_concat::reduce_two_append_concats(
-                ipa->fp_iter, code.cfg());
+            concat_reduced +=
+                stringbuilder_append_chain::reduce_two_append_concats(
+                    ipa->fp_iter, code.cfg());
           }
           return tf.get_stats();
         }

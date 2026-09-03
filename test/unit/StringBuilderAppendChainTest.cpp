@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "StringBuilderConcat.h"
+#include "StringBuilderAppendChain.h"
 
 #include <string>
 #include <string_view>
@@ -28,7 +28,7 @@ using StringAnalyzer =
     InstructionAnalyzerCombiner<cp::StringAnalyzer, cp::PrimitiveAnalyzer>;
 } // namespace
 
-class StringBuilderConcatTest : public RedexTest {
+class StringBuilderAppendChainTest : public RedexTest {
  public:
   void SetUp() override {
     std::string sdk_jar = android_sdk_jar_path();
@@ -55,9 +55,8 @@ class StringBuilderConcatTest : public RedexTest {
         cp::intraprocedural::make_default_no_throw_analyzer(
             &null_check_methods));
     fp_iter.run(ConstantEnvironment());
-    size_t rewritten =
-        constant_propagation::stringbuilder_concat::reduce_two_append_concats(
-            fp_iter, cfg);
+    size_t rewritten = constant_propagation::stringbuilder_append_chain::
+        reduce_two_append_concats(fp_iter, cfg);
     code->clear_cfg();
     return rewritten;
   }
@@ -69,7 +68,7 @@ class StringBuilderConcatTest : public RedexTest {
  * builder, its constructor and its appends remain -- nothing reads the builder
  * afterwards, but removing a dead allocation is a later dead-code pass's job.
  */
-TEST_F(StringBuilderConcatTest, twoNonNullStringAppendsBecomeConcat) {
+TEST_F(StringBuilderAppendChainTest, twoNonNullStringAppendsBecomeConcat) {
   auto* method = assembler::method_from_string(R"(
     (method (public static) "LTest;.f:()Ljava/lang/String;"
       (
@@ -119,7 +118,8 @@ TEST_F(StringBuilderConcatTest, twoNonNullStringAppendsBecomeConcat) {
  * reading the value that was appended rather than the register's later
  * contents.
  */
-TEST_F(StringBuilderConcatTest, reassignedOperandStillConcatsAppendedValue) {
+TEST_F(StringBuilderAppendChainTest,
+       reassignedOperandStillConcatsAppendedValue) {
   auto* method = assembler::method_from_string(R"(
     (method (public static) "LTest;.f:()Ljava/lang/String;"
       (
@@ -181,7 +181,7 @@ struct NullableOperandCase {
  * different subset of the operands as bare parameters.
  */
 class NullableOperandTest
-    : public StringBuilderConcatTest,
+    : public StringBuilderAppendChainTest,
       public ::testing::WithParamInterface<NullableOperandCase> {};
 
 TEST_P(NullableOperandTest, notReduced) {
@@ -249,7 +249,7 @@ constexpr std::string_view kIntAppend =
  * type keeps the builder. Each case gives a different subset of the operands a
  * non-String type.
  */
-class AppendTypeTest : public StringBuilderConcatTest,
+class AppendTypeTest : public StringBuilderAppendChainTest,
                        public ::testing::WithParamInterface<AppendTypeCase> {};
 
 TEST_P(AppendTypeTest, notReduced) {
@@ -291,7 +291,7 @@ INSTANTIATE_TEST_SUITE_P(
 /*
  * Three appends are not transformed, and are left to StringBuilderOutlinerPass.
  */
-TEST_F(StringBuilderConcatTest, threeAppendsNotReduced) {
+TEST_F(StringBuilderAppendChainTest, threeAppendsNotReduced) {
   auto* method = assembler::method_from_string(R"(
     (method (public static) "LTest;.f:()Ljava/lang/String;"
       (
@@ -325,7 +325,7 @@ TEST_F(StringBuilderConcatTest, threeAppendsNotReduced) {
  * This is the intraprocedural stand-in for the interprocedural case IPCP adds:
  * a parameter proven non-null across all callers is likewise seeded NEZ.
  */
-TEST_F(StringBuilderConcatTest, dereferencedParamsReduced) {
+TEST_F(StringBuilderAppendChainTest, dereferencedParamsReduced) {
   auto* method = assembler::method_from_string(R"(
     (method (public static) "LTest;.f:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"
       (
