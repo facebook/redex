@@ -899,3 +899,245 @@ TEST_F(StringBuilderAppendChainTest, mergedChainIsReducedToConcat) {
   )");
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
+
+/*
+ * Two appends past the branch, reaching only the later toString(). They agree
+ * with each other on that, so they are their own group and merge together --
+ * a group ends where the set of toString()s changes, not at the branch.
+ *
+ *   static String f(int c) {
+ *     StringBuilder sb = new StringBuilder();
+ *     sb = sb.append("a");
+ *     sb = sb.append("b");
+ *     if (c != 0) {
+ *       return sb.toString();   // "ab"
+ *     }
+ *     sb = sb.append("c");
+ *     sb = sb.append("d");
+ *     return sb.toString();     // "abcd"
+ *   }
+ */
+TEST_F(StringBuilderAppendChainTest, appendsPastABranchMergeAmongThemselves) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:(I)Ljava/lang/String;"
+      (
+        (load-param v5)
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const-string "a")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (const-string "b")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (if-eqz v5 :long)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (return-object v2)
+        (:long)
+        (const-string "c")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (const-string "d")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v3)
+        (return-object v3)
+      )
+    )
+  )");
+
+  EXPECT_EQ(run_merge(method), 2);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v5)
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "a")
+      (move-result-pseudo-object v1)
+      (const-string "ab")
+      (move-result-pseudo-object v6)
+      (invoke-virtual (v0 v6) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (const-string "b")
+      (move-result-pseudo-object v1)
+      (if-eqz v5 :long)
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v2)
+      (return-object v2)
+      (:long)
+      (const-string "c")
+      (move-result-pseudo-object v1)
+      (const-string "cd")
+      (move-result-pseudo-object v7)
+      (invoke-virtual (v0 v7) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (const-string "d")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v3)
+      (return-object v3)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+/*
+ * One builder reaching two toString()s past a branch: the shared appends
+ * belong to both, the branch's own append only to the later one. Collapsing
+ * all three would put "abc" at the shared appends' position, where the
+ * toString() that skips the branch reads it, so only the shared pair merges.
+ * Which toString() the walk reaches first is block iteration order, which is
+ * not dominance order, so the resulting code has to be the same either way --
+ * hence the two orderings, each asserted against its exact IR.
+ *
+ *   static String f(int c) {
+ *     StringBuilder sb = new StringBuilder();
+ *     sb = sb.append("a");
+ *     sb = sb.append("b");
+ *     if (c != 0) {
+ *       return sb.toString();   // "ab"
+ *     }
+ *     sb = sb.append("c");
+ *     return sb.toString();     // "abc"
+ *   }
+ *
+ * `g` is the same with the condition inverted, which lays out the arm holding
+ * the third append first.
+ */
+TEST_F(StringBuilderAppendChainTest,
+       appendPastABranchNotMergedIntoSharedPrefix) {
+  auto* short_first = assembler::method_from_string(R"(
+    (method (public static) "LTest;.f:(I)Ljava/lang/String;"
+      (
+        (load-param v5)
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const-string "a")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (const-string "b")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (if-eqz v5 :long)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (return-object v2)
+        (:long)
+        (const-string "c")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v3)
+        (return-object v3)
+      )
+    )
+  )");
+
+  EXPECT_EQ(run_merge(short_first), 1);
+
+  auto short_first_expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v5)
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "a")
+      (move-result-pseudo-object v1)
+      (const-string "ab")
+      (move-result-pseudo-object v6)
+      (invoke-virtual (v0 v6) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (const-string "b")
+      (move-result-pseudo-object v1)
+      (if-eqz v5 :long)
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v2)
+      (return-object v2)
+      (:long)
+      (const-string "c")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v3)
+      (return-object v3)
+    )
+  )");
+  EXPECT_CODE_EQ(short_first_expected.get(), short_first->get_code());
+
+  auto* long_first = assembler::method_from_string(R"(
+    (method (public static) "LTest;.g:(I)Ljava/lang/String;"
+      (
+        (load-param v5)
+        (new-instance "Ljava/lang/StringBuilder;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+        (const-string "a")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (const-string "b")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (if-eqz v5 :short)
+        (const-string "c")
+        (move-result-pseudo-object v1)
+        (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+        (move-result-object v0)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v3)
+        (return-object v3)
+        (:short)
+        (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+        (move-result-object v2)
+        (return-object v2)
+      )
+    )
+  )");
+
+  EXPECT_EQ(run_merge(long_first), 1);
+
+  auto long_first_expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v5)
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "a")
+      (move-result-pseudo-object v1)
+      (const-string "ab")
+      (move-result-pseudo-object v6)
+      (invoke-virtual (v0 v6) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (const-string "b")
+      (move-result-pseudo-object v1)
+      (if-eqz v5 :short)
+      (const-string "c")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result-object v0)
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v3)
+      (return-object v3)
+      (:short)
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v2)
+      (return-object v2)
+    )
+  )");
+  EXPECT_CODE_EQ(long_first_expected.get(), long_first->get_code());
+}

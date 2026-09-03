@@ -232,20 +232,34 @@ size_t merge_adjacent_constant_appends(
            self_loop_appends.contains(op);
   };
 
-  // Two or more consecutive ops that are all mergeable and all thread the same
-  // register collapse to the first of them, retargeted to the concatenation,
-  // with the rest dropped. Threading one register is what lets that survivor
-  // leave the builder where the following code reads it.
+  // Which toString()s each append contributes to, as indices into
+  // `tostring_to_state`. Recorded in state order, so two appends reaching the
+  // same calls compare equal as vectors.
+  UnorderedMap<const IRInstruction*, std::vector<size_t>>
+      append_invocation_to_tostrings;
+  for (size_t index = 0; index < tostring_to_state.size(); ++index) {
+    for (const auto* op : tostring_to_state[index].second) {
+      append_invocation_to_tostrings[op].push_back(index);
+    }
+  }
+
+  // A group is two or more consecutive ops that are all mergeable, all take
+  // the builder from the same register and all contribute to the same
+  // toString()s. It becomes one append: the first op's operand is replaced by
+  // the concatenation of the group's constants, and the rest are deleted.
   UnorderedMap<const IRInstruction*, const DexString*>
       first_append_invocation_to_concatenation;
   UnorderedSet<const IRInstruction*> append_invocations_to_drop;
   UnorderedSet<const IRInstruction*> merged_append_invocations;
   size_t merged_away = 0;
-  auto get_mergeable_append_end = [&is_mergeable](const auto& state,
-                                                  size_t begin) {
+  auto find_mergeable_append_end = [&is_mergeable,
+                                    &append_invocation_to_tostrings](
+                                       const auto& state, size_t begin) {
     reg_t r = state[begin]->src(0);
+    const auto& tostrings = append_invocation_to_tostrings.at(state[begin]);
     for (size_t end = begin + 1; end < state.size(); ++end) {
-      if (!is_mergeable(state[end]) || state[end]->src(0) != r) {
+      if (!is_mergeable(state[end]) || state[end]->src(0) != r ||
+          append_invocation_to_tostrings.at(state[end]) != tostrings) {
         return end;
       }
     }
@@ -257,7 +271,7 @@ size_t merge_adjacent_constant_appends(
         ++begin;
         continue;
       }
-      size_t end = get_mergeable_append_end(state, begin);
+      size_t end = find_mergeable_append_end(state, begin);
       if (end - begin >= 2) {
         // Overlapping an already recorded merge would merge the same append
         // twice.
