@@ -14,6 +14,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "LiveRange.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
@@ -212,11 +213,9 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
   auto* append_method = DexMethod::get_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/"
       "String;)Ljava/lang/StringBuilder;");
-  auto* str_builder_to_str_method = DexMethod::get_method(
-      "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;");
+  auto* str_builder_to_str_method = method::java_lang_StringBuilder_toString();
 
-  if ((to_str_method == nullptr) || (append_method == nullptr) ||
-      (str_builder_to_str_method == nullptr)) {
+  if ((to_str_method == nullptr) || (append_method == nullptr)) {
     return nullptr;
   }
   auto str_ind = method_creator.make_local(str_type);
