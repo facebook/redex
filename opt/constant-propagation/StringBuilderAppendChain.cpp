@@ -73,9 +73,7 @@ size_t reduce_two_append_concats(
 
   // String.concat takes a String receiver and argument, so appends of the other
   // modeled types are not candidates.
-  const auto* append_string = DexMethod::get_method(
-      "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
-      "StringBuilder;");
+  const auto* append_string = method::java_lang_StringBuilder_append_String();
 
   struct TwoAppendInsns {
     const IRInstruction* tostring;

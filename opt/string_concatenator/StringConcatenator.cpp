@@ -123,10 +123,7 @@ struct ConcatenatorConfig {
     init_string = DexMethod::get_method(
         "Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V");
     always_assert(init_string != nullptr);
-    append = DexMethod::get_method(
-        "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
-        "StringBuilder;");
-    always_assert(append != nullptr);
+    append = method::java_lang_StringBuilder_append_String();
     to_string = method::java_lang_StringBuilder_toString();
   }
 };
