@@ -52,10 +52,31 @@ public class StringBuilderConcatInstrTest {
     return a + b;
   }
 
+  // Three appends are not transformed. The operands are guarded so the count is
+  // the only reason this one keeps its builder.
+  // CHECK-LABEL: method: virtual redex.StringBuilderConcatInstrTest.threeGuardedOperands
+  String threeGuardedOperands(String a, String b, String c) {
+    if (a == null || b == null || c == null) {
+      return "";
+    }
+    // CHECK: new-instance {{.*}} java.lang.StringBuilder
+    // CHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
+    // CHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
+    // CHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
+    // CHECK-NOT: java.lang.String.concat
+    // CHECK: invoke-virtual {{.*}} java.lang.StringBuilder.toString
+    return a + b + c;
+  }
+
   // CHECK-LABEL: method: virtual redex.StringBuilderConcatInstrTest.guardedOperandsConcatenate
   @Test
   public void guardedOperandsConcatenate() {
     assertThat(guardedOperands("foo", "bar")).isEqualTo("foobar");
+  }
+
+  @Test
+  public void threeOperandsConcatenate() {
+    assertThat(threeGuardedOperands("foo", "bar", "baz")).isEqualTo("foobarbaz");
   }
 
   @Test

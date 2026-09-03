@@ -289,8 +289,7 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 /*
- * Three or more appends have no two-argument String.concat form and are left to
- * StringBuilderOutlinerPass.
+ * Three appends are not transformed, and are left to StringBuilderOutlinerPass.
  */
 TEST_F(StringBuilderConcatTest, threeAppendsNotReduced) {
   auto* method = assembler::method_from_string(R"(
