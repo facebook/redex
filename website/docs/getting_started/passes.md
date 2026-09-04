@@ -427,33 +427,6 @@ See related:
 * [`RemoveUnreachablePass`](#removeunreachablepass)
 * [`ResultPropagationPass`](#resultpropagationpass)
 
-## RemoveInterfacePass
-
-The motivation of this pass is to remove a hierarchy of interfaces extending
-each others. The removal of the interfaces simplifies the type system and
-enables additional type system level optimizations.
-
-We remove each interface by replacing each invoke-interface site with a
-generated dispatch stub that models the interface call semantic at bytecode
-level. After that we remove the existing references to them from the
-implementors and remove them completely. We start at the leaf level of the
-interface hierarchy. After removing the leaf level, we iteratively apply the
-same transformation to the now newly formed leaf level again and again until all
-interfaces are removed.
-
-Note that this is a critical pass for optimizing GraphQL generated fragment
-models. Aside from the fragment model classes themselves, the GraphQL tool chain
-also generates a Java interface for each GraphQL fragment namely fragment
-interface. The existence of these interfaces greatly complicates the type system
-of the generated GraphQL fragment models making merging the underlying model
-classes virtually impossible. The other interface removal optimizations like
-`SingleImpl` as well as `RemoveUnreachablePass` can address this issue to some
-extend. But they are not able to remove the majority of them.
-`RemoveInterfacePass` is capable of removing most of the fragment interfaces at
-the expense of producing the above mentioned dispatch stubs. Doing so before
-Class Merging paves the way for maximizing the code size reduction we can achieve
-in Class Merging.
-
 ## RemoveUnreachablePass
 
 Starting from the roots, recursively mark the other elements that the roots

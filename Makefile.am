@@ -498,7 +498,6 @@ libopt_la_SOURCES = \
 	opt/regalloc-fast/FastRegAlloc.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
-	opt/remove-interfaces/RemoveInterfacePass.cpp \
 	opt/remove-recursive-locks/RemoveRecursiveLocks.cpp \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
