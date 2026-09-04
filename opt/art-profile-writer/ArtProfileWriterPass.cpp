@@ -965,17 +965,18 @@ MethodWriteStats write_methods(
       if (reason != UncompilableReason::kNone) {
         stats.uncompilable_code_units += code_units;
         if (wanted) {
-          // The profile asks dex2oat to compile something it structurally
-          // cannot. This is the number to drive to zero.
+          // The profile asked dex2oat to compile something it structurally
+          // cannot. Counted before the entry is dropped, so this reports what
+          // upstream produced rather than what ships.
           ++stats.uncompilable_but_requested;
         }
-        // Recorded, not acted on: this commit only measures, so the entry is
-        // still written below and this class therefore also lands in
-        // classes_with_written_method. `classes_left_without_entry` is
-        // consequently 0 here by construction; it takes its real value in the
-        // follow-up that stops writing these entries, and the 0 -> N delta
-        // across the two is the cost of the exclusion.
+        // Dropped. dex2oat evaluates all four gates before it consults the
+        // profile, so nothing here can ever become compiled code; keeping it
+        // only costs bytes in the .aab and in every device's .dm.
+        // `classes_left_without_entry` below reports the one exposure.
         classes_only_uncompilable.insert(cls->get_type());
+        ++stats.stripped;
+        continue;
       }
 
       classes_with_written_method.insert(cls->get_type());
@@ -1082,10 +1083,18 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       baseline_profiles::MethodFlags flags;
       flags.hot = true;
       flags.startup = false;
+      // walk::code, not walk::methods: the latter also visits abstract and
+      // native methods, which have no code for dex2oat to compile. This is the
+      // only insertion path that can put a code-less method into a
+      // BaselineProfile. <clinit> and @NeverCompile still have code, so the
+      // full predicate is applied rather than just a code check.
       size_t inserted = 0;
-      walk::methods(
+      walk::code(
           coldstart_classes,
-          [&baseline_profile, &inserted, flags](DexMethod* method) {
+          [&baseline_profile, &inserted, flags](DexMethod* method, IRCode&) {
+            if (uncompilable_reason(method) != UncompilableReason::kNone) {
+              return;
+            }
             if (baseline_profile.methods.emplace(method, flags).second) {
               ++inserted;
             }
@@ -1314,7 +1323,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       mgr.set_metric(prefix + "dex2oat_compilable_code_units",
                      s.dex2oat_compilable_code_units);
 
-      // Everything shipped that cannot become code. Alert on this.
+      // Everything the profile handed us that cannot become code. These are
+      // no longer written, so this measures upstream quality: drive it to zero
+      // by fixing what puts them in the profile, not by filtering harder.
       mgr.set_metric(prefix + "uncompilable", s.uncompilable());
       mgr.set_metric(prefix + "uncompilable_code_units",
                      s.uncompilable_code_units);
