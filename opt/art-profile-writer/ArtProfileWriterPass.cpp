@@ -16,6 +16,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp> // NOLINT
 #include <fstream>
+#include <sstream>
 #include <string>
 
 #include "BaselineProfile.h"
@@ -66,6 +67,63 @@ bool is_sparse(cfg::Block* switch_block) {
   return ckeb->sufficiently_sparse();
 }
 
+// Why dex2oat can never turn a profile entry into compiled code. Mirrors the
+// gates in the quick_fn lambda of CompileMethodQuick in
+// art/dex2oat/driver/compiler_driver.cc (android16-release lines 481-516), all
+// of which are evaluated BEFORE the profile is consulted:
+//   * native  -> a JNI stub is emitted, never a body compiled from the profile
+//   * abstract-> "Abstract methods don't have code."
+//   * @NeverCompile -> "Method is annotated with @NeverCompile and should not
+//   be
+//     compiled."
+//   * <clinit>-> "Don't compile class initializers unless kEverything", i.e.
+//     (filter == kEverything) || !(ACC_CONSTRUCTOR && ACC_STATIC). App builds
+//     use speed-profile, never kEverything.
+// An entry in any of these categories is pure profile weight: it costs bytes in
+// the shipped .aab and in every device's .dm, and produces nothing.
+enum class UncompilableReason {
+  kNone,
+  kNoCode, // abstract or native
+  kClinit,
+  kNeverCompile,
+};
+
+UncompilableReason uncompilable_reason(DexMethod* method) {
+  if (method->get_code() == nullptr || is_abstract(method) ||
+      is_native(method)) {
+    return UncompilableReason::kNoCode;
+  }
+  // Test the access flags rather than the name: dex2oat's gate is
+  // ACC_CONSTRUCTOR && ACC_STATIC, and matching it exactly keeps this in step
+  // with the compiler even if a name-based helper drifts.
+  if (is_static(method) && method::is_constructor(method)) {
+    return UncompilableReason::kClinit;
+  }
+  if (has_anno(method, type::dalvik_annotation_optimization_NeverCompile())) {
+    return UncompilableReason::kNeverCompile;
+  }
+  return UncompilableReason::kNone;
+}
+
+// Whether the profile flags ask dex2oat to compile this entry:
+//   IsHotMethod() || (!IsLowMemoryMode() && IsStartupMethod())
+// (compiler_driver.cc ShouldCompileBasedOnProfile, lines 434-440).
+//
+// We model the non-low-memory device, which is what these bundles target. On a
+// low-RAM device the startup term drops out and the true count is lower; it is
+// not worth a knob, because a startup-only entry that is not also hot does not
+// occur in practice. A post-startup-only entry is never compiled anywhere.
+bool flags_request_compilation(const baseline_profiles::MethodFlags& flags) {
+  return flags.hot || flags.startup;
+}
+
+// NOTE: `baseline_profiles::is_compiled` is a deliberate under-approximation,
+// kept because the never_inline analysis below has been tuned against it. It
+// ignores the startup flag and the no-code / @NeverCompile gates. For
+// profile-health reporting use `uncompilable_reason` and
+// `flags_request_compilation` above, which model dex2oat exactly; the gap
+// between the two is reported as
+// `profile_<name>_compiled_legacy_overcount`.
 using baseline_profiles::is_compiled;
 
 bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
@@ -681,13 +739,55 @@ void never_compile(
   }
 }
 
-void write_classes(const baseline_profiles::BaselineProfile& bp,
-                   std::ostream& os) {
+// What write_methods() actually emitted, and why it dropped what it dropped.
+// `dex2oat_compilable` is the headline health number: entries that survive
+// every dex2oat gate AND whose flags ask for compilation. Everything else in a
+// profile is weight without benefit.
+struct MethodWriteStats {
+  size_t in_scope{0}; // profile entries whose class is in scope
+  size_t written{0}; // lines actually emitted
+  size_t stripped{0};
+
+  size_t dex2oat_compilable{0};
+  size_t dex2oat_compilable_code_units{0};
+  size_t compilable_but_not_requested{0};
+
+  size_t uncompilable_clinit{0};
+  size_t uncompilable_clinit_code_units{0};
+  size_t uncompilable_no_code{0};
+  size_t uncompilable_never_compile{0};
+  size_t uncompilable_never_compile_code_units{0};
+  size_t uncompilable_code_units{0};
+  size_t uncompilable_but_requested{0};
+
+  size_t classes_written_to{0};
+  size_t classes_left_without_entry{0};
+
+  UnorderedMap<std::string, size_t> by_flags;
+
+  size_t uncompilable() const {
+    return uncompilable_clinit + uncompilable_no_code +
+           uncompilable_never_compile;
+  }
+};
+
+// What write_classes() actually emitted, so the caller can report it.
+struct ClassWriteStats {
+  size_t written{0};
+  size_t external_skipped{0};
+  size_t deobfuscation_failures{0};
+  size_t unmatched{0};
+};
+
+ClassWriteStats write_classes(const baseline_profiles::BaselineProfile& bp,
+                              std::ostream& os) {
+  ClassWriteStats stats;
   std::vector<std::string_view> class_names;
   class_names.reserve(bp.classes.size());
   size_t deob_issues{0};
   unordered_for_each(bp.classes, [&](auto* cls) {
     if (cls->is_external()) {
+      ++stats.external_skipped;
       return;
     }
     auto* deobf_str = cls->get_deobfuscated_name_or_null();
@@ -723,6 +823,11 @@ void write_classes(const baseline_profiles::BaselineProfile& bp,
   for (auto& cls : unmatched) {
     os << cls << "\n";
   }
+
+  stats.written = class_names.size();
+  stats.deobfuscation_failures = deob_issues;
+  stats.unmatched = unmatched.size();
+  return stats;
 }
 
 } // namespace
@@ -791,9 +896,11 @@ void ArtProfileWriterPass::eval_pass(DexStoresVector& /*stores*/,
   }
 }
 
-void write_methods(const Scope& scope,
-                   const baseline_profiles::BaselineProfile& baseline_profile,
-                   std::ofstream& ofs) {
+MethodWriteStats write_methods(
+    const Scope& scope,
+    const baseline_profiles::BaselineProfile& baseline_profile,
+    std::ofstream& ofs) {
+  MethodWriteStats stats;
   // We order H before not-H. In each category, we order SP -> S -> P -> none.
   struct MethodFlagsLess {
     bool operator()(const baseline_profiles::MethodFlags& lhs,
@@ -811,23 +918,88 @@ void write_methods(const Scope& scope,
            MethodFlagsLess>
       methods;
 
+  UnorderedSet<const DexType*> classes_with_written_method;
+  UnorderedSet<const DexType*> classes_only_uncompilable;
+
   walk::classes(scope, [&](DexClass* cls) {
     for (auto* method : cls->get_all_methods()) {
       auto it = baseline_profile.methods.find(method);
       if (it == baseline_profile.methods.end()) {
         continue;
       }
+      const auto& flags = it->second;
+      ++stats.in_scope;
+
+      std::ostringstream flags_ss;
+      flags_ss << flags;
+      ++stats.by_flags[flags_ss.str()];
+
+      auto* code = method->get_code();
+      size_t code_units = code == nullptr ? 0 : code->estimate_code_units();
+      auto reason = uncompilable_reason(method);
+      bool wanted = flags_request_compilation(flags);
+
+      switch (reason) {
+      case UncompilableReason::kNoCode:
+        ++stats.uncompilable_no_code;
+        break;
+      case UncompilableReason::kClinit:
+        ++stats.uncompilable_clinit;
+        stats.uncompilable_clinit_code_units += code_units;
+        break;
+      case UncompilableReason::kNeverCompile:
+        ++stats.uncompilable_never_compile;
+        stats.uncompilable_never_compile_code_units += code_units;
+        break;
+      case UncompilableReason::kNone:
+        if (wanted) {
+          ++stats.dex2oat_compilable;
+          stats.dex2oat_compilable_code_units += code_units;
+        } else {
+          // Compilable in principle, but the flags do not ask for it. Today
+          // this only happens for post-startup-only entries.
+          ++stats.compilable_but_not_requested;
+        }
+        break;
+      }
+      if (reason != UncompilableReason::kNone) {
+        stats.uncompilable_code_units += code_units;
+        if (wanted) {
+          // The profile asks dex2oat to compile something it structurally
+          // cannot. This is the number to drive to zero.
+          ++stats.uncompilable_but_requested;
+        }
+        // Recorded, not acted on: this commit only measures, so the entry is
+        // still written below and this class therefore also lands in
+        // classes_with_written_method. `classes_left_without_entry` is
+        // consequently 0 here by construction; it takes its real value in the
+        // follow-up that stops writing these entries, and the 0 -> N delta
+        // across the two is the cost of the exclusion.
+        classes_only_uncompilable.insert(cls->get_type());
+      }
+
+      classes_with_written_method.insert(cls->get_type());
       std::string descriptor = show_deobfuscated(method);
       // reformat it into manual profile pattern so baseline profile
       // generator in post-process can recognize the method
       boost::replace_all(descriptor, ".", "->");
       boost::replace_all(descriptor, ":(", "(");
-      methods[it->second].emplace_back(std::move(descriptor));
+      methods[flags].emplace_back(std::move(descriptor));
     }
   });
 
+  // Stripping is only free for a class that keeps at least one other entry.
+  // Where it does not, the class disappears from whatever class set the
+  // HRF-to-binary converter derives from the method lines, which can cost
+  // app-image preloading. Report it rather than guessing.
+  unordered_erase_if(classes_only_uncompilable, [&](const auto* type) {
+    return classes_with_written_method.count(type) != 0;
+  });
+  stats.classes_left_without_entry = classes_only_uncompilable.size();
+
   for (auto& p : methods) {
     if (!p.second.empty()) {
+      stats.written += p.second.size();
       ofs << "# " << p.second.size() << " " << p.first
           << " methods from write_methods().\n";
       std::sort(p.second.begin(), p.second.end());
@@ -836,6 +1008,8 @@ void write_methods(const Scope& scope,
       }
     }
   }
+  stats.classes_written_to = classes_with_written_method.size();
+  return stats;
 }
 
 void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
@@ -908,10 +1082,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       baseline_profiles::MethodFlags flags;
       flags.hot = true;
       flags.startup = false;
-      walk::methods(coldstart_classes,
-                    [&baseline_profile, flags](DexMethod* method) {
-                      baseline_profile.methods.emplace(method, flags);
-                    });
+      size_t inserted = 0;
+      walk::methods(
+          coldstart_classes,
+          [&baseline_profile, &inserted, flags](DexMethod* method) {
+            if (baseline_profile.methods.emplace(method, flags).second) {
+              ++inserted;
+            }
+          });
+      mgr.incr_metric(std::string("profile_") + config_name +
+                          "_from_include_all_startup_classes",
+                      inserted);
     }
   }
 
@@ -956,6 +1137,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     }
   }
 
+  // Reported per profile below, in gather_metrics.
+  UnorderedMap<std::string, MethodWriteStats> method_write_stats;
+  UnorderedMap<std::string, ClassWriteStats> class_write_stats;
+
   for (const auto& entry : UnorderedIterable(baseline_profiles)) {
     const auto& bp_name = entry.first;
     const auto& bp = entry.second;
@@ -964,15 +1149,15 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
     std::ofstream ofs{output_name.c_str()};
     if (!strip_classes) {
-      write_classes(bp, ofs);
+      class_write_stats[bp_name] = write_classes(bp, ofs);
     }
-    write_methods(scope, bp, ofs);
+    method_write_stats[bp_name] = write_methods(scope, bp, ofs);
   }
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
   if (!resolve_strip_classes(conf.get_default_baseline_profile_config())) {
-    write_classes(manual_profile, ofs);
+    class_write_stats["manual"] = write_classes(manual_profile, ofs);
   }
-  write_methods(scope, manual_profile, ofs);
+  method_write_stats["manual"] = write_methods(scope, manual_profile, ofs);
 
   auto gather_metrics = [&](const auto& bp_name, const auto& bp_config_name,
                             const auto& profile) {
@@ -1115,6 +1300,107 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
     mgr.incr_metric(prefix + "root_dexes_with_profile_methods",
                     root_dexes_with_methods);
+
+    // --- Profile health -----------------------------------------------------
+    // The question these answer: of everything we are about to ship, how much
+    // can dex2oat actually turn into compiled code, and what is the rest?
+    auto mws_it = method_write_stats.find(bp_name);
+    if (mws_it != method_write_stats.end()) {
+      const auto& s = mws_it->second;
+
+      // Headline. Entries that clear every dex2oat gate AND whose flags ask
+      // for compilation. This is the only number that buys anything.
+      mgr.set_metric(prefix + "dex2oat_compilable", s.dex2oat_compilable);
+      mgr.set_metric(prefix + "dex2oat_compilable_code_units",
+                     s.dex2oat_compilable_code_units);
+
+      // Everything shipped that cannot become code. Alert on this.
+      mgr.set_metric(prefix + "uncompilable", s.uncompilable());
+      mgr.set_metric(prefix + "uncompilable_code_units",
+                     s.uncompilable_code_units);
+      mgr.set_metric(prefix + "uncompilable_clinit", s.uncompilable_clinit);
+      mgr.set_metric(prefix + "uncompilable_clinit_code_units",
+                     s.uncompilable_clinit_code_units);
+      mgr.set_metric(prefix + "uncompilable_no_code", s.uncompilable_no_code);
+      mgr.set_metric(prefix + "uncompilable_never_compile",
+                     s.uncompilable_never_compile);
+      mgr.set_metric(prefix + "uncompilable_never_compile_code_units",
+                     s.uncompilable_never_compile_code_units);
+      // Entries the profile marks for compilation that dex2oat will refuse.
+      // Drive this to zero.
+      mgr.set_metric(prefix + "uncompilable_but_requested",
+                     s.uncompilable_but_requested);
+      // Compilable, but flagged post-startup only, so never compiled anywhere.
+      mgr.set_metric(prefix + "compilable_but_not_requested",
+                     s.compilable_but_not_requested);
+
+      // Useful share of everything the profile asked us to consider, in basis
+      // points so it survives the integer metric type. Denominator is the
+      // pre-exclusion population, so this stays comparable across a change
+      // that removes entries -- it measures upstream profile quality.
+      mgr.set_metric(
+          prefix + "dex2oat_compilable_bp",
+          s.in_scope == 0 ? 0 : (10000 * s.dex2oat_compilable / s.in_scope));
+      // Useful share of what actually ships. This one does move when entries
+      // are excluded, and is the number that should approach 10000.
+      mgr.set_metric(
+          prefix + "dex2oat_compilable_shipped_bp",
+          s.written == 0 ? 0 : (10000 * s.dex2oat_compilable / s.written));
+
+      mgr.set_metric(prefix + "entries_in_scope", s.in_scope);
+      mgr.set_metric(prefix + "entries_written", s.written);
+      mgr.set_metric(prefix + "entries_stripped", s.stripped);
+      // Entries in the profile whose class never showed up in scope, so no
+      // line was written for them at all.
+      mgr.set_metric(prefix + "entries_out_of_scope",
+                     profile.methods.size() - s.in_scope);
+      mgr.set_metric(prefix + "classes_with_written_method",
+                     s.classes_written_to);
+      // Only non-zero when stripping is on: classes that lost their last
+      // entry. Check this before trusting a size win.
+      mgr.set_metric(prefix + "classes_left_without_entry",
+                     s.classes_left_without_entry);
+
+      // Flag census, so a regression can be attributed to the interaction
+      // config that produced it. Emit every key, including the zeros: a metric
+      // that only appears once it becomes non-zero shows up in a BSB report as
+      // a new row rather than as a delta, which is easy to miss. Anything
+      // outside H/HS/HP/HSP asks for no AOT compilation at all.
+      // {key as written by operator<<, metric suffix}
+      static const std::array<std::pair<const char*, const char*>, 8>
+          kFlagCombos = {{{"HSP", "HSP"},
+                          {"HS", "HS"},
+                          {"HP", "HP"},
+                          {"H", "H"},
+                          {"SP", "SP"},
+                          {"S", "S"},
+                          {"P", "P"},
+                          {"", "none"}}};
+      for (const auto& [key, suffix] : kFlagCombos) {
+        auto it = s.by_flags.find(key);
+        mgr.set_metric(prefix + "entries_flags_" + suffix,
+                       it == s.by_flags.end() ? 0 : it->second);
+      }
+
+      // How far the legacy is_compiled() predicate is from modelling dex2oat.
+      // Non-zero means the never_inline analysis is working off a wrong idea
+      // of what gets compiled.
+      int64_t legacy = static_cast<int64_t>(compiled_methods.load());
+      mgr.set_metric(prefix + "compiled_legacy_overcount",
+                     legacy - static_cast<int64_t>(s.dex2oat_compilable));
+    }
+
+    auto cws_it = class_write_stats.find(bp_name);
+    if (cws_it != class_write_stats.end()) {
+      const auto& c = cws_it->second;
+      mgr.set_metric(prefix + "classes_written", c.written);
+      mgr.set_metric(prefix + "classes_external_skipped", c.external_skipped);
+      mgr.set_metric(prefix + "classes_unmatched_written", c.unmatched);
+      // Every one of these ships an obfuscated name that the converter cannot
+      // resolve, i.e. a dead line.
+      mgr.set_metric(prefix + "classes_deobfuscation_failures",
+                     c.deobfuscation_failures);
+    }
   };
   gather_metrics("manual",
                  baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME,
@@ -1123,6 +1409,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     always_assert(name != "manual");
     gather_metrics(name, name, profile);
   }
+  // Absence of a metric is invisible in a base-vs-diff report: drop a config
+  // and every profile_<thatname>_* row stops existing rather than going to
+  // zero. Report how many profiles were actually accounted for.
+  mgr.set_metric("baseline_profiles_reported", baseline_profiles.size() + 1);
 
   mgr.incr_metric("method_refs_without_def", method_refs_without_def.size());
 
