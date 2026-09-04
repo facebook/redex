@@ -937,7 +937,7 @@ struct FindCandidatesStats {
 static MethodCandidates find_method_candidates(
     const Config& config,
     const RefChecker& ref_checker,
-    const CanOutlineBlockDecider& block_decider,
+    const OutlineabilityContext& outlineability,
     DexMethod* method,
     cfg::ControlFlowGraph& cfg,
     const CandidateInstructionCoresSet& recurring_cores,
@@ -1111,36 +1111,37 @@ static MethodCandidates find_method_candidates(
             lstats.res_type_illegal++;
             return;
           }
-          auto result = block_decider.can_outline_from_big_block(big_block);
-          if (result != CanOutlineBlockDecider::Result::CanOutline) {
+          auto result =
+              outlineability.can_outline_from_big_block(method, big_block);
+          if (result != OutlineabilityContext::Result::CanOutline) {
             // We could bail out on this way earlier, but doing it last gives us
             // better statistics on what the damage really is
             switch (result) {
-            case CanOutlineBlockDecider::Result::WarmLoop:
+            case OutlineabilityContext::Result::WarmLoop:
               lstats.loop++;
               return;
-            case CanOutlineBlockDecider::Result::WarmLoopExceedsThresholds:
+            case OutlineabilityContext::Result::WarmLoopExceedsThresholds:
               lstats.block_warm_loop_exceeds_thresholds++;
               return;
-            case CanOutlineBlockDecider::Result::WarmLoopNoSourceBlocks:
+            case OutlineabilityContext::Result::WarmLoopNoSourceBlocks:
               lstats.block_warm_loop_no_source_blocks++;
               return;
-            case CanOutlineBlockDecider::Result::Throughput:
+            case OutlineabilityContext::Result::Throughput:
               lstats.block_throughput++;
               return;
-            case CanOutlineBlockDecider::Result::ThroughputExceedsThresholds:
+            case OutlineabilityContext::Result::ThroughputExceedsThresholds:
               lstats.block_throughput_exceeds_thresholds++;
               return;
-            case CanOutlineBlockDecider::Result::ThroughputNoSourceBlocks:
+            case OutlineabilityContext::Result::ThroughputNoSourceBlocks:
               lstats.block_throughput_no_source_blocks++;
               return;
-            case CanOutlineBlockDecider::Result::Hot:
+            case OutlineabilityContext::Result::Hot:
               lstats.block_hot++;
               return;
-            case CanOutlineBlockDecider::Result::HotExceedsThresholds:
+            case OutlineabilityContext::Result::HotExceedsThresholds:
               lstats.block_hot_exceeds_thresholds++;
               return;
-            case CanOutlineBlockDecider::Result::HotNoSourceBlocks:
+            case OutlineabilityContext::Result::HotNoSourceBlocks:
               lstats.block_hot_no_source_blocks++;
               return;
             default:
@@ -1207,36 +1208,23 @@ static bool can_outline_from_method(DexMethod* method) {
 // Gather set of recurring small (MIN_INSNS_SIZE) adjacent instruction
 // sequences that are outlinable. Note that all longer recurring outlinable
 // instruction sequences must be comprised of shorter recurring ones.
-static void get_recurring_cores(
-    const Config& config,
-    PassManager& mgr,
-    const Scope& scope,
-    const UnorderedSet<size_t>& throughput_interaction_indices,
-    const UnorderedSet<DexMethod*>& throughput_methods,
-    const UnorderedSet<DexMethod*>& sufficiently_warm_methods,
-    const UnorderedSet<DexMethod*>& sufficiently_hot_methods,
-    const RefChecker& ref_checker,
-    CandidateInstructionCoresSet* recurring_cores,
-    InsertOnlyConcurrentMap<DexMethod*, CanOutlineBlockDecider>*
-        block_deciders) {
+static void get_recurring_cores(const Config& config,
+                                PassManager& mgr,
+                                const Scope& scope,
+                                const OutlineabilityContext& outlineability,
+                                const RefChecker& ref_checker,
+                                CandidateInstructionCoresSet* recurring_cores) {
   AtomicMap<CandidateInstructionCores, size_t, CandidateInstructionCoresHasher>
       concurrent_cores;
   walk::parallel::code(
       scope,
-      [&config, &ref_checker, &throughput_interaction_indices,
-       &throughput_methods, &sufficiently_warm_methods,
-       &sufficiently_hot_methods, &concurrent_cores,
-       block_deciders](DexMethod* method, IRCode& code) {
+      [&config, &ref_checker, &outlineability,
+       &concurrent_cores](DexMethod* method, IRCode& code) {
         if (!can_outline_from_method(method)) {
           return;
         }
         always_assert(code.cfg_built());
         code.cfg().calculate_exit_block();
-        CanOutlineBlockDecider block_decider(
-            config.profile_guidance, throughput_interaction_indices,
-            throughput_methods.count(method) != 0u,
-            sufficiently_warm_methods.count(method) != 0u,
-            sufficiently_hot_methods.count(method) != 0u);
         auto& cfg = code.cfg();
         OptionalReachingInitializedsEnvironments
             reaching_initialized_init_first_param;
@@ -1246,8 +1234,8 @@ static void get_recurring_cores(
                   cfg, reaching_initializeds::Mode::FirstLoadParam);
         }
         for (auto& big_block : big_blocks::get_big_blocks(cfg)) {
-          if (block_decider.can_outline_from_big_block(big_block) !=
-              CanOutlineBlockDecider::Result::CanOutline) {
+          if (outlineability.can_outline_from_big_block(method, big_block) !=
+              OutlineabilityContext::Result::CanOutline) {
             continue;
           }
           CandidateInstructionCoresBuilder cores_builder;
@@ -1265,7 +1253,6 @@ static void get_recurring_cores(
             }
           }
         }
-        block_deciders->emplace(method, std::move(block_decider));
       });
   size_t singleton_cores{0};
   for (auto& p : UnorderedIterable(concurrent_cores)) {
@@ -1502,8 +1489,7 @@ static void get_beneficial_candidates(
     const Scope& dex,
     const RefChecker& ref_checker,
     const CandidateInstructionCoresSet& recurring_cores,
-    const InsertOnlyConcurrentMap<DexMethod*, CanOutlineBlockDecider>&
-        block_deciders,
+    const OutlineabilityContext& outlineability,
     const ReusableOutlinedMethods* outlined_methods,
     std::vector<CandidateWithInfo>* candidates_with_infos,
     UnorderedMap<DexMethod*, UnorderedSet<CandidateId>>*
@@ -1512,14 +1498,14 @@ static void get_beneficial_candidates(
       concurrent_candidates;
   FindCandidatesStats stats;
   walk::parallel::code(dex, [&config, &ref_checker, &recurring_cores,
-                             &concurrent_candidates, &block_deciders,
+                             &concurrent_candidates, &outlineability,
                              &stats](DexMethod* method, IRCode& code) {
     if (!can_outline_from_method(method)) {
       return;
     }
-    auto method_candidates = find_method_candidates(
-        config, ref_checker, block_deciders.at_unsafe(method), method,
-        code.cfg(), recurring_cores, &stats);
+    auto method_candidates =
+        find_method_candidates(config, ref_checker, outlineability, method,
+                               code.cfg(), recurring_cores, &stats);
     for (auto& p : UnorderedIterable(method_candidates)) {
       std::vector<CandidateMethodLocation>& cmls = p.second;
       concurrent_candidates.update(p.first,
@@ -3302,6 +3288,9 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                   sufficiently_warm_methods.size());
   mgr.incr_metric("num_sufficiently_hot_methods",
                   sufficiently_hot_methods.size());
+  const OutlineabilityContext outlineability(
+      m_config.profile_guidance, throughput_interaction_indices,
+      throughput_methods, sufficiently_warm_methods, sufficiently_hot_methods);
   auto methods_global_order = get_methods_global_order(config, m_config);
   mgr.incr_metric("num_ordered_methods", methods_global_order.size());
   XStoreRefs xstores(stores, config.normal_primary_dex());
@@ -3344,17 +3333,13 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                                  }) == dex.end());
       RefChecker ref_checker{&xstores, store_idx, min_sdk_api};
       CandidateInstructionCoresSet recurring_cores;
-      InsertOnlyConcurrentMap<DexMethod*, CanOutlineBlockDecider>
-          block_deciders;
-      get_recurring_cores(m_config, mgr, dex, throughput_interaction_indices,
-                          throughput_methods, sufficiently_warm_methods,
-                          sufficiently_hot_methods, ref_checker,
-                          &recurring_cores, &block_deciders);
+      get_recurring_cores(m_config, mgr, dex, outlineability, ref_checker,
+                          &recurring_cores);
       std::vector<CandidateWithInfo> candidates_with_infos;
       UnorderedMap<DexMethod*, UnorderedSet<CandidateId>>
           candidate_ids_by_methods;
       get_beneficial_candidates(m_config, mgr, store, store_dependencies, dex,
-                                ref_checker, recurring_cores, block_deciders,
+                                ref_checker, recurring_cores, outlineability,
                                 &outlined_methods, &candidates_with_infos,
                                 &candidate_ids_by_methods);
 

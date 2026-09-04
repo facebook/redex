@@ -7,11 +7,14 @@
 
 #pragma once
 
+#include <boost/functional/hash.hpp>
+
 #include <optional>
+#include <utility>
 
 #include "BigBlocks.h"
+#include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
-#include "Lazy.h"
 #include "OutliningProfileGuidance.h"
 
 struct ConfigFiles;
@@ -65,30 +68,31 @@ void propagate_hotness(const Scope& scope,
 
 outliner::PerfSensitivity parse_perf_sensitivity(const std::string& str);
 
-class CanOutlineBlockDecider {
- private:
-  // Precondition, unenforced: the two referents must outlive not just this
-  // object but every cache it hands out, because the lazy caches below bind to
-  // them and a decider may be moved into a container that outlives the scope
-  // it was built in. Both current callers pass pass-level state that is
-  // loop-invariant across every decider they construct.
-  const outliner::ProfileGuidanceConfig& m_config;
-  const UnorderedSet<size_t>& m_throughput_interaction_indices;
-  bool m_throughput;
-  bool m_sufficiently_warm;
-  bool m_sufficiently_hot;
-  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_in_loop;
-  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, std::optional<float>>>
-      m_max_vals;
-  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_throughput;
-
+// Answers "may the outliner take code out of this big block", for every method
+// in a pass.
+//
+// One instance serves the whole pass, so its memo tables outlive the blocks
+// they describe: the outliner rewrites each dex's CFGs as it finishes with
+// them. Entries are therefore keyed by something that stays meaningful after
+// the block is gone rather than by the block's address -- see `BlockKey`. That
+// is what makes a pass-lifetime cache answer the same way regardless of how the
+// allocator reuses memory, which matters here because the answers decide what
+// gets outlined.
+//
+// The type is immovable on purpose: callers hold it by reference for the length
+// of the pass, and a cache that could be relocated under them is a cache whose
+// identity is harder to reason about than the one property it needs.
+class OutlineabilityContext {
  public:
-  CanOutlineBlockDecider(
+  OutlineabilityContext(
       const outliner::ProfileGuidanceConfig& config,
-      const UnorderedSet<size_t>& throughput_interaction_indices,
-      bool throughput,
-      bool sufficiently_warm,
-      bool sufficiently_hot);
+      UnorderedSet<size_t> throughput_interaction_indices,
+      const UnorderedSet<DexMethod*>& throughput_methods,
+      const UnorderedSet<DexMethod*>& sufficiently_warm_methods,
+      const UnorderedSet<DexMethod*>& sufficiently_hot_methods);
+
+  OutlineabilityContext(const OutlineabilityContext&) = delete;
+  OutlineabilityContext& operator=(const OutlineabilityContext&) = delete;
 
   enum class Result {
     CanOutline,
@@ -105,7 +109,40 @@ class CanOutlineBlockDecider {
   };
 
   Result can_outline_from_big_block(
-      const big_blocks::BigBlock& big_block) const;
+      DexMethod* method, const big_blocks::BigBlock& big_block) const;
+
+ private:
+  // A block identifies itself only for as long as it is alive: outlining
+  // rewrites the CFGs it has finished with, and a freed block's address is free
+  // to name a different block afterwards. A cache that outlives one method
+  // therefore cannot key on the pointer -- it would answer for whichever block
+  // happened to occupy the address first, and which block that is depends on
+  // the allocator rather than on the code. Block ids are unique within a
+  // method's CFG and methods outlive the pass, so the pair is stable for as
+  // long as the entry is reachable.
+  using BlockKey = std::pair<const DexMethod*, cfg::BlockId>;
+
+  // Every generator is a pure function of the block, so two threads racing on a
+  // key agree by construction.
+  bool is_in_loop(const DexMethod* method, cfg::Block* block) const;
+  bool is_throughput(const DexMethod* method, cfg::Block* block) const;
+  std::optional<float> max_val(const DexMethod* method,
+                               cfg::Block* block) const;
+
+  const outliner::ProfileGuidanceConfig& m_config;
+  const UnorderedSet<size_t> m_throughput_interaction_indices;
+  const UnorderedSet<DexMethod*>& m_throughput_methods;
+  const UnorderedSet<DexMethod*>& m_sufficiently_warm_methods;
+  const UnorderedSet<DexMethod*>& m_sufficiently_hot_methods;
+
+  mutable InsertOnlyConcurrentMap<BlockKey, bool, boost::hash<BlockKey>>
+      m_is_in_loop;
+  mutable InsertOnlyConcurrentMap<BlockKey, bool, boost::hash<BlockKey>>
+      m_is_throughput;
+  mutable InsertOnlyConcurrentMap<BlockKey,
+                                  std::optional<float>,
+                                  boost::hash<BlockKey>>
+      m_max_vals;
 };
 
 } // namespace outliner_impl

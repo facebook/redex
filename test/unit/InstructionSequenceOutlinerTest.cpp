@@ -228,11 +228,16 @@ TEST_F(InstructionSequenceOutlinerTest,
   UnorderedSet<size_t> throughput_indices;
   throughput_indices.insert(0);
 
-  CanOutlineBlockDecider decider(config, throughput_indices,
-                                 /*throughput=*/false,
-                                 /*sufficiently_warm=*/true,
-                                 /*sufficiently_hot=*/false);
+  auto* method = DexMethod::make_method("LC;.bar:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  UnorderedSet<DexMethod*> throughput_methods;
+  UnorderedSet<DexMethod*> warm_methods{method};
+  UnorderedSet<DexMethod*> hot_methods;
+
+  const OutlineabilityContext outlineability(config, throughput_indices,
+                                             throughput_methods, warm_methods,
+                                             hot_methods);
   big_blocks::BigBlock big_block({entry});
-  EXPECT_EQ(decider.can_outline_from_big_block(big_block),
-            CanOutlineBlockDecider::Result::WarmLoopExceedsThresholds);
+  EXPECT_EQ(outlineability.can_outline_from_big_block(method, big_block),
+            OutlineabilityContext::Result::WarmLoopExceedsThresholds);
 }

@@ -389,89 +389,112 @@ PerfSensitivity parse_perf_sensitivity(const std::string& str) {
   always_assert_log(false, "Unknown perf sensitivity: %s", str.c_str());
 }
 
-CanOutlineBlockDecider::CanOutlineBlockDecider(
+OutlineabilityContext::OutlineabilityContext(
     const outliner::ProfileGuidanceConfig& config,
-    const UnorderedSet<size_t>& throughput_interaction_indices,
-    bool throughput,
-    bool sufficiently_warm,
-    bool sufficiently_hot)
+    UnorderedSet<size_t> throughput_interaction_indices,
+    const UnorderedSet<DexMethod*>& throughput_methods,
+    const UnorderedSet<DexMethod*>& sufficiently_warm_methods,
+    const UnorderedSet<DexMethod*>& sufficiently_hot_methods)
     : m_config(config),
-      m_throughput_interaction_indices(throughput_interaction_indices),
-      m_throughput(throughput),
-      m_sufficiently_warm(sufficiently_warm),
-      m_sufficiently_hot(sufficiently_hot) {}
+      m_throughput_interaction_indices(
+          std::move(throughput_interaction_indices)),
+      m_throughput_methods(throughput_methods),
+      m_sufficiently_warm_methods(sufficiently_warm_methods),
+      m_sufficiently_hot_methods(sufficiently_hot_methods) {}
 
-CanOutlineBlockDecider::Result
-CanOutlineBlockDecider::can_outline_from_big_block(
-    const big_blocks::BigBlock& big_block) const {
-  if (!m_throughput && !m_sufficiently_hot && !m_sufficiently_warm) {
+bool OutlineabilityContext::is_in_loop(const DexMethod* method,
+                                       cfg::Block* block) const {
+  return *m_is_in_loop
+              .get_or_create_and_assert_equal(
+                  BlockKey{method, block->id()},
+                  [b = block](const BlockKey&) {
+                    UnorderedSet<cfg::Block*> visited;
+                    std::queue<cfg::Block*> work_queue;
+                    for (auto* e : b->succs()) {
+                      work_queue.push(e->target());
+                    }
+                    while (!work_queue.empty()) {
+                      auto* other_block = work_queue.front();
+                      work_queue.pop();
+                      if (visited.insert(other_block).second) {
+                        if (b == other_block) {
+                          return true;
+                        }
+                        for (auto* e : other_block->succs()) {
+                          work_queue.push(e->target());
+                        }
+                      }
+                    }
+                    return false;
+                  })
+              .first;
+}
+
+bool OutlineabilityContext::is_throughput(const DexMethod* method,
+                                          cfg::Block* block) const {
+  return *m_is_throughput
+              .get_or_create_and_assert_equal(
+                  BlockKey{method, block->id()},
+                  [this, b = block](const BlockKey&) {
+                    auto* sb = source_blocks::get_first_source_block(b);
+                    if (sb == nullptr) {
+                      return false;
+                    }
+                    for (auto index :
+                         UnorderedIterable(m_throughput_interaction_indices)) {
+                      const auto& val_pair = sb->get_at(index);
+                      if (val_pair &&
+                          val_pair->val > m_config.block_profiles_hits) {
+                        return true;
+                      }
+                    }
+                    return false;
+                  })
+              .first;
+}
+
+std::optional<float> OutlineabilityContext::max_val(const DexMethod* method,
+                                                    cfg::Block* block) const {
+  return *m_max_vals
+              .get_or_create_and_assert_equal(
+                  BlockKey{method, block->id()},
+                  [b = block](const BlockKey&) -> std::optional<float> {
+                    auto* sb = source_blocks::get_first_source_block(b);
+                    if (sb == nullptr) {
+                      return std::nullopt;
+                    }
+                    std::optional<float> max_val;
+                    sb->foreach_val([&](const auto& val_pair) {
+                      if (!val_pair) {
+                        return;
+                      }
+                      if (!max_val || (val_pair && val_pair->val > *max_val)) {
+                        max_val = val_pair->val;
+                      }
+                    });
+                    return max_val;
+                  })
+              .first;
+}
+
+OutlineabilityContext::Result OutlineabilityContext::can_outline_from_big_block(
+    DexMethod* method, const big_blocks::BigBlock& big_block) const {
+  const bool throughput = m_throughput_methods.count(method) != 0u;
+  const bool sufficiently_warm =
+      m_sufficiently_warm_methods.count(method) != 0u;
+  const bool sufficiently_hot = m_sufficiently_hot_methods.count(method) != 0u;
+
+  if (!throughput && !sufficiently_hot && !sufficiently_warm) {
     return Result::CanOutline;
   }
 
-  if (!m_throughput && !m_sufficiently_hot) {
-    always_assert(m_sufficiently_warm);
-
-    // Make sure m_is_in_loop is initialized
-    if (!m_is_in_loop) {
-      m_is_in_loop.reset(
-          new LazyUnorderedMap<cfg::Block*, bool>([](cfg::Block* block) {
-            UnorderedSet<cfg::Block*> visited;
-            std::queue<cfg::Block*> work_queue;
-            for (auto* e : block->succs()) {
-              work_queue.push(e->target());
-            }
-            while (!work_queue.empty()) {
-              auto* other_block = work_queue.front();
-              work_queue.pop();
-              if (visited.insert(other_block).second) {
-                if (block == other_block) {
-                  return true;
-                }
-                for (auto* e : other_block->succs()) {
-                  work_queue.push(e->target());
-                }
-              }
-            }
-            return false;
-          }));
-    }
-    if (!(*m_is_in_loop)[big_block.get_first_block()]) {
+  if (!throughput && !sufficiently_hot) {
+    always_assert(sufficiently_warm);
+    if (!is_in_loop(method, big_block.get_first_block())) {
       bool has_throughput_source_block = false;
       if (!m_throughput_interaction_indices.empty()) {
-        // Make sure m_is_throughput is initialized
-        if (!m_is_throughput) {
-          // Capture the referents, not `this`. A decider is a stack local in
-          // the walk::parallel::code body of get_recurring_cores, is queried
-          // there (which is what builds this cache), and is only then moved
-          // into the caller's map. A lambda holding `this` would therefore
-          // point into a worker thread's stack frame that is destroyed the
-          // moment that walker body returns, while the cache itself lives on
-          // in the map and gets queried again by get_beneficial_candidates.
-          // Both members are references to state owned by the caller, which
-          // outlives every decider, so binding to them directly is what makes
-          // the cache independent of where its decider happens to live.
-          // Init-captures, so that what is captured is unambiguously the
-          // referenced object rather than a local reference variable.
-          m_is_throughput.reset(new LazyUnorderedMap<cfg::Block*, bool>(
-              [&config = m_config, &throughput_interaction_indices =
-                                       m_throughput_interaction_indices](
-                  cfg::Block* block) -> bool {
-                auto* sb = source_blocks::get_first_source_block(block);
-                if (sb == nullptr) {
-                  return false;
-                }
-                for (auto index :
-                     UnorderedIterable(throughput_interaction_indices)) {
-                  const auto& val_pair = sb->get_at(index);
-                  if (val_pair && val_pair->val > config.block_profiles_hits) {
-                    return true;
-                  }
-                }
-                return false;
-              }));
-        }
         for (auto* block : big_block.get_blocks()) {
-          if ((*m_is_throughput)[block]) {
+          if (is_throughput(method, block)) {
             has_throughput_source_block = true;
             break;
           }
@@ -488,48 +511,28 @@ CanOutlineBlockDecider::can_outline_from_big_block(
   // - the method is neither throughput nor hot but warm, and the big block is
   // in a loop or has a throughput interaction sourceblock
   if (m_config.block_profiles_hits < 0) {
-    return m_throughput         ? Result::Throughput
-           : m_sufficiently_hot ? Result::Hot
-                                : Result::WarmLoop;
+    return throughput         ? Result::Throughput
+           : sufficiently_hot ? Result::Hot
+                              : Result::WarmLoop;
   }
-  // Make sure m_max_vals is initialized
-  if (!m_max_vals) {
-    m_max_vals.reset(new LazyUnorderedMap<cfg::Block*, std::optional<float>>(
-        [](cfg::Block* block) -> std::optional<float> {
-          auto* sb = source_blocks::get_first_source_block(block);
-          if (sb == nullptr) {
-            return std::nullopt;
-          }
-          std::optional<float> max_val;
-          sb->foreach_val([&](const auto& val_pair) {
-            if (!val_pair) {
-              return;
-            }
-            if (!max_val || (val_pair && val_pair->val > *max_val)) {
-              max_val = val_pair->val;
-            }
-          });
-          return max_val;
-        }));
-  }
-  // Via m_max_vals, we consider the maximum hit number for each block.
-  // Across all blocks, we are also computing the maximum value.
+  // Via max_val, we consider the maximum hit number for each block. Across all
+  // blocks, we are also computing the maximum value.
   std::optional<float> val;
   for (auto* block : big_block.get_blocks()) {
-    auto block_val = (*m_max_vals)[block];
+    auto block_val = max_val(method, block);
     if (!val || (block_val && *block_val > *val)) {
       val = block_val;
     }
   }
   if (!val) {
-    return m_throughput         ? Result::ThroughputNoSourceBlocks
-           : m_sufficiently_hot ? Result::HotNoSourceBlocks
-                                : Result::WarmLoopNoSourceBlocks;
+    return throughput         ? Result::ThroughputNoSourceBlocks
+           : sufficiently_hot ? Result::HotNoSourceBlocks
+                              : Result::WarmLoopNoSourceBlocks;
   }
   if (*val > m_config.block_profiles_hits) {
-    return m_throughput         ? Result::ThroughputExceedsThresholds
-           : m_sufficiently_hot ? Result::HotExceedsThresholds
-                                : Result::WarmLoopExceedsThresholds;
+    return throughput         ? Result::ThroughputExceedsThresholds
+           : sufficiently_hot ? Result::HotExceedsThresholds
+                              : Result::WarmLoopExceedsThresholds;
   }
   return Result::CanOutline;
 }

@@ -261,12 +261,8 @@ using CalleeCallerClasses =
 // instructions we should exclude, and how many classes calls are distributed
 // over.
 void gather_caller_callees(
-    const ProfileGuidanceConfig& profile_guidance_config,
+    const OutlineabilityContext& outlineability,
     const Scope& scope,
-    const UnorderedSet<size_t>& throughput_interaction_indices,
-    const UnorderedSet<DexMethod*>& throughput_methods,
-    const UnorderedSet<DexMethod*>& sufficiently_warm_methods,
-    const UnorderedSet<DexMethod*>& sufficiently_hot_methods,
     const GetCalleeFunction& get_callee_fn,
     ConcurrentMethodToMethodOccurrences* callee_caller,
     ConcurrentMethodToMethodOccurrences* caller_callee,
@@ -280,17 +276,13 @@ void gather_caller_callees(
       return;
     }
     always_assert(code.cfg_built());
-    CanOutlineBlockDecider block_decider(
-        profile_guidance_config, throughput_interaction_indices,
-        throughput_methods.count(caller) != 0u,
-        sufficiently_warm_methods.count(caller) != 0u,
-        sufficiently_hot_methods.count(caller) != 0u);
     MoveAwareChains move_aware_chains(code.cfg());
     const auto use_def_chains = move_aware_chains.get_use_def_chains();
     const auto def_use_chains = move_aware_chains.get_def_use_chains();
     for (auto& big_block : big_blocks::get_big_blocks(code.cfg())) {
-      auto can_outline = block_decider.can_outline_from_big_block(big_block) ==
-                         CanOutlineBlockDecider::Result::CanOutline;
+      auto can_outline =
+          outlineability.can_outline_from_big_block(caller, big_block) ==
+          OutlineabilityContext::Result::CanOutline;
       for (auto& mie : big_blocks::InstructionIterable(big_block)) {
         auto* insn = mie.insn;
         auto* callee = get_callee_fn(caller, insn);
@@ -1345,11 +1337,12 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   ConcurrentMethodToMethodOccurrences caller_callee;
   InsnsArgExclusivity arg_exclusivity;
   CalleeCallerClasses callee_caller_classes;
-  gather_caller_callees(
-      m_profile_guidance_config, scope, throughput_interaction_indices,
-      throughput_methods, sufficiently_warm_methods, sufficiently_hot_methods,
-      get_callee_fn, &callee_caller, &caller_callee, &arg_exclusivity,
-      &excluded_invoke_insns, &callee_caller_classes);
+  const OutlineabilityContext outlineability(
+      m_profile_guidance_config, throughput_interaction_indices,
+      throughput_methods, sufficiently_warm_methods, sufficiently_hot_methods);
+  gather_caller_callees(outlineability, scope, get_callee_fn, &callee_caller,
+                        &caller_callee, &arg_exclusivity,
+                        &excluded_invoke_insns, &callee_caller_classes);
 
   TRACE(PA, 1, "[PartialApplication] %zu callers, %zu callees",
         caller_callee.size(), callee_caller.size());
