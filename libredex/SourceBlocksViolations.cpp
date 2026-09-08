@@ -2127,7 +2127,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           }
         }
 
-        void end_block(std::ostream& os, cfg::Block* b) {
+        void end_block(std::ostream&, cfg::Block*) {
           // Empty - don't call Base::end_block
         }
       };
