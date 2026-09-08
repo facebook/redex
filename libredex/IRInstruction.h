@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/range/iterator_range.hpp>
+#include <boost/range/iterator_range_core.hpp>
 #include <limits>
 #include <memory>
 #include <string>
