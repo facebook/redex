@@ -14,9 +14,12 @@
 #include <unistd.h>
 
 #include "ConfigFiles.h"
+#include "Creators.h"
 #include "GlobalConfig.h"
 #include "RedexTest.h"
+#include "RedexTestUtils.h"
 #include "SourceBlocksViolations.h"
+#include "TypeUtil.h"
 
 class ConfigFilesTest : public RedexTest {
  public:
@@ -351,4 +354,100 @@ TEST_F(ConfigFilesTest, violations_tracking_unset_old_key_is_fine) {
           "pass_manager");
   ASSERT_NE(pm_config, nullptr);
   EXPECT_TRUE(pm_config->dump_mrefs);
+}
+
+namespace {
+
+std::string write_lines(const std::string& dir,
+                        const std::string& name,
+                        const std::vector<std::string>& lines) {
+  std::string path = dir + "/" + name;
+  std::ofstream out(path);
+  for (const auto& line : lines) {
+    out << line << "\n";
+  }
+  return path;
+}
+
+// The betamap complement only considers methods whose class is in scope, so the
+// profile entries below need a real class backing them.
+void define_class_with_method(const std::string& descriptor) {
+  ClassCreator cc(DexType::make_type(descriptor));
+  cc.set_super(type::java_lang_Object());
+  cc.add_method(DexMethod::make_method(descriptor + ".m:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false));
+  cc.create();
+}
+
+} // namespace
+
+// `complement_betamap_with_method_profiles_symbols` splits method-profile
+// classes at appear_percent 20 and splices each bucket in immediately before
+// its own marker. "all-20pct" keeps the 20pct bucket and drops the other.
+TEST_F(ConfigFilesTest, complement_betamap_bucket_selection) {
+  auto tmp_dir = redex::make_tmp_dir("redex_complement_betamap_%%%%%%%%");
+
+  define_class_with_method("LHot;"); // 50 pct -> 20pct bucket
+  define_class_with_method("LWarm;"); // 5 pct -> 1pct bucket
+
+  // Neither class is listed in the betamap, so neither is deduped away.
+  auto betamap =
+      write_lines(tmp_dir.path,
+                  "betamap.txt",
+                  {"some/Existing.class", "ColdStart20PctEnd.class",
+                   "another/Existing.class", "ColdStart1PctEnd.class"});
+  auto profiles = write_lines(
+      tmp_dir.path,
+      "profiles.csv",
+      {"interaction,appear#", "ColdStart,2",
+       std::string("index,name,appear100,appear#,avg_call,avg_order,") +
+           "avg_rank100,min_api_level",
+       "1,LHot;.m:()V,50.0000,1,2.0000,0.0000,0.000000,29",
+       "2,LWarm;.m:()V,5.0000,2,3.0000,0.0000,0.000000,29"});
+
+  auto coldstart_classes_for = [&](const std::string& mode) {
+    Json::Value cfg;
+    std::istringstream ss(R"({"redex": {"passes": []}})");
+    ss >> cfg;
+    cfg["coldstart_classes"] = betamap;
+    Json::Value mp = Json::arrayValue;
+    mp.resize(1);
+    mp[0] = profiles;
+    cfg["agg_method_stats_files"] = mp;
+    cfg["complement_betamap_with_method_profiles_symbols"] = mode;
+    ConfigFiles conf(cfg);
+    return std::vector<std::string>(conf.get_coldstart_classes());
+  };
+
+  EXPECT_EQ(coldstart_classes_for("all"),
+            (std::vector<std::string>{
+                "Lsome/Existing;", "LHot;", "LColdStart20PctEnd;",
+                "Lanother/Existing;", "LWarm;", "LColdStart1PctEnd;"}));
+
+  EXPECT_EQ(coldstart_classes_for("all-20pct"),
+            (std::vector<std::string>{
+                "Lsome/Existing;", "LHot;", "LColdStart20PctEnd;",
+                "Lanother/Existing;", "LColdStart1PctEnd;"}));
+
+  // Neither class is anonymous, so "anon" splices nothing.
+  EXPECT_EQ(
+      coldstart_classes_for("anon"),
+      (std::vector<std::string>{"Lsome/Existing;", "LColdStart20PctEnd;",
+                                "Lanother/Existing;", "LColdStart1PctEnd;"}));
+}
+
+TEST_F(ConfigFilesTest, complement_betamap_rejects_unknown_mode) {
+  auto tmp_dir = redex::make_tmp_dir("redex_complement_betamap_%%%%%%%%");
+  // A betamap is required: load_coldstart_classes() returns early without one,
+  // before it ever parses the mode.
+  auto betamap =
+      write_lines(tmp_dir.path, "betamap.txt", {"some/Existing.class"});
+
+  Json::Value cfg;
+  std::istringstream ss(R"({"redex": {"passes": []}})");
+  ss >> cfg;
+  cfg["coldstart_classes"] = betamap;
+  cfg["complement_betamap_with_method_profiles_symbols"] = "20pct";
+  ConfigFiles conf(cfg);
+  EXPECT_ANY_THROW(conf.get_coldstart_classes());
 }
