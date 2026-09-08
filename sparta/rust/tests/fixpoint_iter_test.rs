@@ -765,6 +765,71 @@ mod numerical {
         program
     }
 
+    /**
+     * bb1: x = 0;
+     *      y = 0;
+     *      z = 0;
+     *      while (...) {
+     * bb3:   while (...) {
+     * bb4:     y = 1;
+     *          z = x + 0;
+     *        }
+     * bb5:   x = 5;
+     *        z = 0;
+     *      }
+     * bb6: return
+     *
+     * The inner component stabilizes once before the outer one grows `x`, so
+     * the re-entered inner head is extrapolated with a local iteration count
+     * of 0 and a global one of 1. Joining there keeps `z` finite; widening
+     * loses it.
+     */
+    fn build_program3() -> Program {
+        let mut program = Program::default();
+        let bb1 = program.create_block();
+        let bb2 = program.create_block();
+        let bb3 = program.create_block();
+        let bb4 = program.create_block();
+        let bb5 = program.create_block();
+        let bb6 = program.create_block();
+
+        let x = 0u32; // "x"
+        let y = 1u32; // "y"
+        let z = 2u32; // "z"
+        let bb1_block = program.get_block_mut(bb1);
+        bb1_block.add(Statement::Assignment { var: x, value: 0 });
+        bb1_block.add(Statement::Assignment { var: y, value: 0 });
+        bb1_block.add(Statement::Assignment { var: z, value: 0 });
+        program.add_edge(bb1, bb2);
+
+        // bb2 is the head of the outer loop.
+        program.add_edge(bb2, bb3);
+        program.add_edge(bb2, bb6);
+
+        // bb3 is the head of the inner loop.
+        program.add_edge(bb3, bb4);
+        program.add_edge(bb3, bb5);
+
+        let bb4_block = program.get_block_mut(bb4);
+        bb4_block.add(Statement::Assignment { var: y, value: 1 });
+        bb4_block.add(Statement::Addition {
+            result: z,
+            lhs: x,
+            rhs: 0,
+        });
+        program.add_edge(bb4, bb3);
+
+        let bb5_block = program.get_block_mut(bb5);
+        bb5_block.add(Statement::Assignment { var: x, value: 5 });
+        bb5_block.add(Statement::Assignment { var: z, value: 0 });
+        program.add_edge(bb5, bb2);
+
+        program.set_entry(bb1);
+        program.set_exit(bb6);
+
+        program
+    }
+
     #[test]
     fn test_fixpoint_iter_integerset_program1() {
         let prog = build_program1();
@@ -862,6 +927,48 @@ mod numerical {
         assert_eq!(
             fp.get_exit_state_at(bb3).get(&x).into_owned(),
             IntegerSetAbstractDomain::top()
+        );
+    }
+
+    #[test]
+    fn test_fixpoint_iter_integerset_program3() {
+        let prog = build_program3();
+
+        let transformer = IntegerSetTransformer::new(&prog);
+        let mut fp = MonotonicFixpointIterator::new(&prog, 6, transformer, &prog);
+        fp.run(IntegerSetAbstractEnvironment::top());
+
+        let x = 0u32;
+        let y = 1u32;
+        let z = 2u32;
+
+        let bb2 = 1;
+        assert_eq!(
+            fp.get_entry_state_at(bb2).get(&x).into_owned(),
+            IntegerSetAbstractDomain::Value([0, 5].into())
+        );
+
+        // The inner loop is re-entered after the outer one grew `x`. Its head
+        // has already been extrapolated once, but not since the component last
+        // stabilized, so the widening operator must not be applied yet.
+        let bb3 = 2;
+        assert_eq!(
+            fp.get_entry_state_at(bb3).get(&y).into_owned(),
+            IntegerSetAbstractDomain::Value([0, 1].into())
+        );
+        assert_eq!(
+            fp.get_entry_state_at(bb3).get(&z).into_owned(),
+            IntegerSetAbstractDomain::Value([0, 5].into())
+        );
+
+        let bb4 = 3;
+        assert_eq!(
+            fp.get_entry_state_at(bb4).get(&z).into_owned(),
+            IntegerSetAbstractDomain::Value([0, 5].into())
+        );
+        assert_eq!(
+            fp.get_exit_state_at(bb4).get(&z).into_owned(),
+            IntegerSetAbstractDomain::Value([0, 5].into())
         );
     }
 }

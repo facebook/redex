@@ -202,15 +202,19 @@ where
     }
 
     /// Default strategy for applying widening operator (apply
-    /// join at the first iteration and then widening in all
-    /// rest iterations).
+    /// join at the first iteration of the current local stabilization
+    /// loop and then widening in all rest iterations).
     pub fn extrapolate(
         context: &MonotonicFixpointIteratorContext<G, D>,
         n: G::NodeId,
         current_state: &mut D,
         new_state: D,
     ) {
-        if 0 == context.get_global_iterations_for(n) {
+        // The local iteration count, not the global one: it is reset whenever
+        // the component of `n` stabilizes, so a component that is entered
+        // again after an outer component grew is joined once more before the
+        // widening operator is applied to it again.
+        if 0 == context.get_local_iterations_for(n) {
             // TODO: we need to revisit this design, should we use
             // move or clone of domain?
             current_state.join_with(new_state);
