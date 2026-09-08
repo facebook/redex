@@ -38,6 +38,10 @@ enum class ComplementBetamapMode {
   kDisabled,
   kAnon,
   kAll,
+  // Like kAll, but only complements the betamap's 20% tier: classes below the
+  // 20% appearance threshold are dropped instead of being spliced in before
+  // COLD_START_1PCT_END.
+  kAll20Pct,
 };
 
 ComplementBetamapMode parse_complement_betamap_mode(const std::string& mode) {
@@ -50,10 +54,14 @@ ComplementBetamapMode parse_complement_betamap_mode(const std::string& mode) {
   if (mode == "all") {
     return ComplementBetamapMode::kAll;
   }
-  always_assert_log(false,
-                    "Unknown complement_betamap_with_method_profiles_symbols "
-                    "mode: %s. Expected \"disabled\", \"anon\", or \"all\".",
-                    mode.c_str());
+  if (mode == "all-20pct") {
+    return ComplementBetamapMode::kAll20Pct;
+  }
+  always_assert_log(
+      false,
+      "Unknown complement_betamap_with_method_profiles_symbols "
+      "mode: %s. Expected \"disabled\", \"anon\", \"all\", or \"all-20pct\".",
+      mode.c_str());
 }
 
 class StringTabSplitter {
@@ -366,7 +374,8 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
 
       if (meth_stats.second.appear_percent >= 20.0) {
         coldstart_20pct_classes.insert(method->get_class());
-      } else if (meth_stats.second.appear_percent >= 1.0) {
+      } else if (complement_mode != ComplementBetamapMode::kAll20Pct &&
+                 meth_stats.second.appear_percent >= 1.0) {
         coldstart_1pct_classes.insert(method->get_class());
       }
     }
