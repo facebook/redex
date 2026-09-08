@@ -2111,7 +2111,7 @@ int main(int argc, char* argv[]) {
         args.config.get("record_keep_reasons", false).asBool());
 
     signed_constant_domain_internal::enable_low6bits =
-        args.config.get("enable_low6bits_constant_propagation", false).asBool();
+        args.config.get("enable_low6bits_constant_propagation", true).asBool();
 
     constant_propagation_transform_internal::
         enable_object_domain_null_check_elim =

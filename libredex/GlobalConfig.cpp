@@ -342,7 +342,7 @@ void GlobalConfig::bind_config() {
   bind("force_single_dex", false, bool_param);
   bind("emit_incoming_hashes", false, bool_param);
   bind("emit_outgoing_hashes", false, bool_param);
-  bind("enable_low6bits_constant_propagation", false, bool_param,
+  bind("enable_low6bits_constant_propagation", true, bool_param,
        "When true, enable low 6 bit constant propagation");
   bind("enable_object_domain_null_check_elim", false, bool_param,
        "When true, enable null check elimination for object domains "

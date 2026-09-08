@@ -23,7 +23,7 @@ enum class SignedConstantDomain::BitShiftMask : int32_t {
 
 namespace signed_constant_domain_internal {
 // TODO(T236830337): Remove this.
-bool enable_low6bits = false;
+bool enable_low6bits = true;
 
 std::unique_ptr<const MinimizeSubdomainsBase>
     MinimizeSubdomainsSingleton::instance{
