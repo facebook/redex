@@ -7,13 +7,13 @@
 
 #include <sparta/WeakPartialOrdering.h>
 
-#include <array>
 #include <gtest/gtest.h>
 #include <set>
 #include <sstream>
 #include <stack>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 using namespace sparta;
 
@@ -110,7 +110,7 @@ TEST(WeakPartialOrderingTest, exampleFromWtoPaper) {
 
   // node, plain, head, exit, num_succs, num_preds, num_outer_preds
   // Notice that forward edges are not considered.
-  auto lst = std::to_array<Answer>({
+  auto lst = std::vector<Answer>({
       {"1", true, false, false, 1, 0, 0},
       {"2", true, false, false, 1, 1, 0},
       {"3", false, true, false, 1, 1, 0},
@@ -199,7 +199,7 @@ TEST(WeakPartialOrderingTest, SingletonSccAtEnd) {
     EXPECT_EQ(3, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", true, false, false, 1, 0, 0},
         {"2", false, true, false, 1, 1, 0},
         {"2", false, false, true, 0, 1, 1},
@@ -279,7 +279,7 @@ TEST(WeakPartialOrderingTest, SingletonSccAtEnd) {
     EXPECT_EQ(5, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", false, true, false, 1, 0, 0},
         {"2", false, true, false, 1, 1, 0},
         {"2", false, false, true, 1, 1, 1},
@@ -365,7 +365,7 @@ TEST(WeakPartialOrderingTest, SccAtEnd) {
     EXPECT_EQ(4, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", true, false, false, 1, 0, 0},
         {"2", false, true, false, 1, 1, 0},
         {"3", true, false, false, 1, 1, 0},
@@ -448,7 +448,7 @@ TEST(WeakPartialOrderingTest, SccAtEnd) {
     EXPECT_EQ(6, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", false, true, false, 1, 0, 0},
         {"2", false, true, false, 1, 1, 0},
         {"3", true, false, false, 1, 1, 0},
@@ -521,7 +521,7 @@ TEST(WeakPartialOrderingTest, SingleNode) {
     EXPECT_EQ(1, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", true, false, false, 0, 0, 0},
     });
 
@@ -601,7 +601,7 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaper) {
     EXPECT_EQ(13, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", true, false, false, 1, 0, 0},
         {"2", false, true, false, 2, 1, 0},
         {"3", false, true, false, 1, 1, 0},
@@ -701,7 +701,7 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaperIrreducible) {
     EXPECT_EQ(8, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", true, false, false, 2, 0, 0},
         {"2", false, true, false, 2, 1, 0},
         {"3", false, true, false, 1, 1, 0},
@@ -787,7 +787,7 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaperIrreducible) {
     EXPECT_EQ(8, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", true, false, false, 2, 0, 0},
         {"6", true, false, false, 1, 1, 0},
         {"2", false, true, false, 2, 2, 0},
@@ -885,7 +885,7 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
     EXPECT_EQ(16, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", true, false, false, 4, 0, 0},
         {"12", true, false, false, 1, 1, 0},
         {"16", true, false, false, 2, 1, 0},
@@ -990,7 +990,7 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
     EXPECT_EQ(10, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", true, false, false, 2, 0, 0},
         {"2", false, true, false, 1, 1, 0},
         {"3", false, true, false, 1, 1, 0},
@@ -1071,7 +1071,7 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
     EXPECT_EQ(10, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", true, false, false, 2, 0, 0},
         {"2", false, true, false, 1, 1, 0},
         {"8", true, false, false, 1, 1, 0},
@@ -1153,7 +1153,7 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
     EXPECT_EQ(11, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", false, true, false, 2, 0, 0},
         {"2", false, true, false, 1, 1, 0},
         {"3", false, true, false, 1, 1, 0},
@@ -1238,7 +1238,7 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
     EXPECT_EQ(13, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"0", true, false, false, 1, 0, 0},
         {"1", false, true, false, 2, 1, 0},
         {"2", false, true, false, 1, 1, 0},
@@ -1322,7 +1322,7 @@ TEST(WeakPartialOrderingTest, handleNestedLoopsWithBranch) {
     EXPECT_EQ(7, wpo.size());
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
-    auto lst = std::to_array<Answer>({
+    auto lst = std::vector<Answer>({
         {"1", false, true, false, 2, 0, 0},
         {"2", false, true, false, 1, 1, 0},
         {"3", true, false, false, 1, 1, 0},
