@@ -137,8 +137,14 @@ impl<V> Node<V> {
                                 Self::update_node_by_key(Some(left.clone()), key, op);
                             match maybe_new_left {
                                 Some(new_left) => {
-                                    // Possible optimization: If `new_left` ptr_eq to `left`, do nothing.
-                                    Some(Rc::new(Node::make_branch(new_left, right.clone())))
+                                    if Rc::ptr_eq(&new_left, left) {
+                                        // The subtree is unchanged, so is this branch.
+                                        // Returning it as-is keeps the tree shared with
+                                        // whatever else points at it.
+                                        Some(node.clone())
+                                    } else {
+                                        Some(Rc::new(Node::make_branch(new_left, right.clone())))
+                                    }
                                 }
                                 None => Some(right.clone()),
                             }
@@ -147,7 +153,11 @@ impl<V> Node<V> {
                                 Self::update_node_by_key(Some(right.clone()), key, op);
                             match maybe_new_right {
                                 Some(new_right) => {
-                                    Some(Rc::new(Node::make_branch(left.clone(), new_right)))
+                                    if Rc::ptr_eq(&new_right, right) {
+                                        Some(node.clone())
+                                    } else {
+                                        Some(Rc::new(Node::make_branch(left.clone(), new_right)))
+                                    }
                                 }
                                 None => Some(left.clone()),
                             }
@@ -427,7 +437,13 @@ impl<V> Node<V> {
                     match (new_left, new_right) {
                         (left, None) => left,
                         (None, right) => right,
-                        (Some(left), Some(right)) => Some(Rc::new(Self::make_branch(left, right))),
+                        (Some(left), Some(right)) => {
+                            if Rc::ptr_eq(&left, s_left) && Rc::ptr_eq(&right, s_right) {
+                                Some(s.clone())
+                            } else {
+                                Some(Rc::new(Self::make_branch(left, right)))
+                            }
+                        }
                     }
                 } else if t_prefix.begins_with(s_prefix) {
                     let branching_bit = t_prefix.get(s_prefix.len());
@@ -682,7 +698,10 @@ impl<V> PatriciaTree<V> {
 
     fn get_leaf_combine_with_value_op_semantics(
         value_op_on_duplicate_key: impl Fn(&V, &V) -> V,
-    ) -> impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>> {
+    ) -> impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>>
+    where
+        V: Eq,
+    {
         use Node::*;
 
         move |one_leaf: Rc<Node<V>>, other_leaf: Rc<Node<V>>| match (
@@ -698,10 +717,19 @@ impl<V> PatriciaTree<V> {
                     key: _,
                     value: r_value,
                 },
-            ) => Some(Rc::new(Leaf {
-                key: key.clone(),
-                value: value_op_on_duplicate_key(l_value, r_value),
-            })),
+            ) => {
+                let new_value = value_op_on_duplicate_key(l_value, r_value);
+                if new_value == *l_value {
+                    // Keeping the existing leaf is what lets the callers above
+                    // recognize an unchanged subtree and share it.
+                    Some(one_leaf.clone())
+                } else {
+                    Some(Rc::new(Leaf {
+                        key: key.clone(),
+                        value: new_value,
+                    }))
+                }
+            }
             _ => panic!("leaf_combine should only be called on leaves!"),
         }
     }
@@ -710,7 +738,9 @@ impl<V> PatriciaTree<V> {
         &mut self,
         other: &Self,
         value_op_on_duplicate_key: impl Fn(&V, &V) -> V,
-    ) {
+    ) where
+        V: Eq,
+    {
         match (self.root.as_ref(), other.root.as_ref()) {
             (None, _) => self.root = other.root.clone(),
             (Some(_), None) => {}
@@ -728,7 +758,9 @@ impl<V> PatriciaTree<V> {
         &mut self,
         other: &Self,
         value_op_on_duplicate_key: impl Fn(&V, &V) -> V,
-    ) {
+    ) where
+        V: Eq,
+    {
         match (self.root.as_ref(), other.root.as_ref()) {
             (None, _) => {}
             (Some(_), None) => {
@@ -863,6 +895,61 @@ impl<'a, V> Iterator for PatriciaTreePostOrderIterator<'a, V> {
 #[cfg(test)]
 mod tests {
     use crate::datatype::patricia_tree_impl::*;
+
+    fn root_ptr<V>(tree: &PatriciaTree<V>) -> *const Node<V> {
+        tree.root.as_ref().map_or(std::ptr::null(), Rc::as_ptr)
+    }
+
+    fn set_of(range: std::ops::Range<u32>) -> PatriciaTree<()> {
+        let mut tree = PatriciaTree::new();
+        for i in range {
+            tree.insert(i.into(), ());
+        }
+        tree
+    }
+
+    /// Operations whose result is equal to their input must return the input
+    /// tree itself, so that it stays shared with anything else pointing at it.
+    #[test]
+    fn test_no_op_operations_preserve_sharing() {
+        let tree = set_of(0..1000);
+        let root = root_ptr(&tree);
+
+        let mut removed = tree.clone();
+        removed.remove(&999_999u32.into());
+        assert_eq!(root_ptr(&removed), root);
+
+        let mut intersected = tree.clone();
+        intersected.intersect_with(&set_of(0..1500), |_, _| ());
+        assert_eq!(root_ptr(&intersected), root);
+
+        let mut united = tree.clone();
+        united.union_with(&set_of(0..100), |_, _| ());
+        assert_eq!(root_ptr(&united), root);
+    }
+
+    /// The leaf reuse above must not swallow an actual change of value.
+    #[test]
+    fn test_combine_still_updates_changed_values() {
+        let mut s: PatriciaTree<u32> = PatriciaTree::new();
+        s.insert(1u32.into(), 10);
+        s.insert(2u32.into(), 20);
+
+        let mut t: PatriciaTree<u32> = PatriciaTree::new();
+        t.insert(2u32.into(), 5);
+        t.insert(3u32.into(), 30);
+
+        let mut union = s.clone();
+        union.union_with(&t, |l, r| l + r);
+        assert_eq!(union.get(&1u32.into()), Some(&10));
+        assert_eq!(union.get(&2u32.into()), Some(&25));
+        assert_eq!(union.get(&3u32.into()), Some(&30));
+
+        let mut intersection = s.clone();
+        intersection.intersect_with(&t, |l, r| l + r);
+        assert_eq!(intersection.len(), 1);
+        assert_eq!(intersection.get(&2u32.into()), Some(&25));
+    }
 
     #[test]
     fn test_basic_insertion() {
