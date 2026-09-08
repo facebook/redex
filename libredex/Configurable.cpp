@@ -195,11 +195,10 @@ void Configurable::parse_config(const JsonWrapper& json) {
   m_after_configuration = {};
   m_reflecting = false;
   m_param_reflector =
-      [](const std::string& param_name, const std::string& param_doc,
-         const bool param_is_required, const bindflags_t param_bindflags,
-         const Configurable::ReflectionParam::Type param_type_tag,
-         const std::tuple<std::string, Configurable::Reflection>& param_type,
-         const Json::Value& default_value) {};
+      [](const std::string&, const std::string&, const bool, const bindflags_t,
+         const Configurable::ReflectionParam::Type,
+         const std::tuple<std::string, Configurable::Reflection>&,
+         const Json::Value&) {};
   m_trait_reflector = [](const std::string&, const Json::Value&) {};
   std::set<std::string> bound;
   m_parser = [&json, &bound](const std::string& name) {
