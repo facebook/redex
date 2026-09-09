@@ -6,7 +6,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <set>
 #include <string>
 
 #include "AtomicFieldUpdaterLoweringPass.h"
@@ -16,7 +15,6 @@
 #include "DexClass.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "IROpcode.h"
 #include "IRTemplate.h"
 #include "PassManager.h"
 #include "RedexTest.h"
@@ -78,6 +76,11 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
   // takes (Class, Class, String); the Integer and Long flavors take
   // (Class, String) -- the field name therefore sits at a different argument
   // index, which is the recognizer's main flavor-specific concern.
+  // Runs at min_sdk 24 unconditionally: that is where `getAndSet` and
+  // `getAndAdd` become expressible at all, so any lower value would have the
+  // API gate answer first and no test here would reach the behaviour it means
+  // to pin. The sub-24 side of that gate belongs to the integ test
+  // (AtomicFieldUpdaterApiGateTest), which drives both sides of the boundary.
   void run(const std::string& cls_name,
            const std::string& updater_desc,
            const std::string& field_name,
@@ -113,9 +116,11 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
     auto* cls = cc.create();
 
     AtomicFieldUpdaterLoweringPass pass;
-    PassManager manager({&pass});
     ConfigFiles config(Json::nullValue);
     config.parse_global_config();
+    RedexOptions options;
+    options.min_sdk = 24;
+    PassManager manager({&pass}, config, options);
     DexStore store("classes");
     store.add_classes({cls});
     std::vector<DexStore> stores;
@@ -219,4 +224,92 @@ TEST_F(AtomicFieldUpdaterLoweringTest, wrongArityIsNotAnOperation) {
   run("LRef;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {m});
   EXPECT_EQ(metric("rewritable_total"), 0);
   EXPECT_EQ(metric("feasible_total"), 0);
+}
+
+// Android's non-SDK interface policy is the reason four Unsafe members may not
+// be named from app code. The table is the pass's only knowledge of it, so a
+// member silently dropping out of it -- or an unvetted one being waved through
+// -- is the regression this pins. See T287786534.
+TEST_F(AtomicFieldUpdaterLoweringTest, hiddenApiTableClassifiesUnsafeMembers) {
+  using atomic_field_updaters::hidden_api_status;
+  using atomic_field_updaters::HiddenApiStatus;
+
+  // max-target-r: the read-modify-write forms over int and long.
+  for (const char* member :
+       {"getAndAddInt", "getAndAddLong", "getAndSetInt", "getAndSetLong"}) {
+    auto status = hidden_api_status(member);
+    ASSERT_TRUE(status.has_value()) << member;
+    EXPECT_EQ(*status, HiddenApiStatus::RESTRICTED) << member;
+  }
+
+  // The reference flavor's getAndSet sits beside the two restricted ones and is
+  // not restricted. Asserted explicitly because the obvious over-correction is
+  // to block the whole `getAndSet` family, which would cost reference sites for
+  // nothing.
+  for (const char* member :
+       {"getAndSetObject", "compareAndSwapObject", "compareAndSwapInt",
+        "compareAndSwapLong", "getObjectVolatile", "getIntVolatile",
+        "getLongVolatile", "putObjectVolatile", "putIntVolatile",
+        "putLongVolatile", "putOrderedObject", "putOrderedInt",
+        "putOrderedLong", "objectFieldOffset"}) {
+    auto status = hidden_api_status(member);
+    ASSERT_TRUE(status.has_value()) << member;
+    EXPECT_EQ(*status, HiddenApiStatus::ALLOWED) << member;
+  }
+
+  // An unclassified member is not implicitly permitted.
+  EXPECT_FALSE(hidden_api_status("getAndBitwiseOrInt").has_value());
+}
+
+// A restricted member is recognized and left alone rather than emitted. Before
+// this gate existed the pass emitted `Unsafe.getAndAddInt` here, which links
+// fine at build time and throws NoSuchMethodError on Android 12+.
+TEST_F(AtomicFieldUpdaterLoweringTest, restrictedMemberIsNotLowered) {
+  using atomic_field_updaters::INTEGER_DESC;
+  static constexpr const char* kIncrement = R"((
+    (load-param-object v0)
+    (sget-object "LCounter;.U:$UPD")
+    (move-result-pseudo-object v1)
+    (invoke-virtual (v1 v0) "$UPD.getAndIncrement:(Ljava/lang/Object;)I")
+    (move-result v2)
+    (return-void)
+  ))";
+  auto* m = DexMethod::make_method("LCounter;.bump:(LCounter;)V")
+                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  m->set_code(
+      assembler::ircode_from_string(ir(kIncrement, {{"$UPD", INTEGER_DESC}})));
+
+  run("LCounter;", INTEGER_DESC, "n", "I", {m});
+  EXPECT_EQ(metric("updaters_recognized"), 1) << "found, just not emittable";
+  EXPECT_EQ(metric("blocked_hidden_api"), 1);
+  EXPECT_EQ(metric("blocked_min_sdk"), 0)
+      << "min_sdk 24 supplies the member; the policy is what withholds it";
+  EXPECT_EQ(metric("rewritable_total"), 0);
+  EXPECT_EQ(metric("calls_rewritten"), 0);
+}
+
+// The same operation on the reference flavor lowers to `getAndSetObject`, which
+// carries no restriction. The pair of tests is the point: a gate keyed on the
+// updater operation rather than on the Unsafe member it resolves to would fail
+// this one.
+TEST_F(AtomicFieldUpdaterLoweringTest, referenceGetAndSetIsStillLowered) {
+  static constexpr const char* kGetAndSet = R"((
+    (load-param-object v0)
+    (load-param-object v1)
+    (sget-object "LRefSwap;.U:$UPD")
+    (move-result-pseudo-object v2)
+    (invoke-virtual (v2 v0 v1) "$UPD.getAndSet:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+    (move-result-object v3)
+    (return-void)
+  ))";
+  auto* m =
+      DexMethod::make_method("LRefSwap;.swap:(LRefSwap;Ljava/lang/Object;)V")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  m->set_code(assembler::ircode_from_string(
+      ir(kGetAndSet, {{"$UPD", REFERENCE_DESC}})));
+
+  run("LRefSwap;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {m});
+  EXPECT_EQ(metric("blocked_hidden_api"), 0);
+  EXPECT_EQ(metric("rewritable_total"), 1);
+  EXPECT_EQ(metric("calls_rewritten"), 1);
 }

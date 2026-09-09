@@ -42,6 +42,21 @@ TEST_F(AtomicFieldUpdaterApiGateTest, apiGatedOpIsNotRewrittenBelowApi24) {
   EXPECT_EQ(metric("updaters_recognized"), 1) << "found, just not lowerable";
   EXPECT_EQ(metric("ops_total"), 1);
   EXPECT_EQ(metric("blocked_min_sdk"), 1);
+  EXPECT_EQ(metric("blocked_hidden_api"), 0)
+      << "getAndSetObject is unrestricted; only min_sdk withholds it here";
   EXPECT_EQ(metric("rewritable_total"), 0);
   EXPECT_EQ(metric("calls_rewritten"), 0);
+}
+
+// Above the API boundary the same site lowers, which is what makes the
+// assertion above about min_sdk rather than about the operation.
+TEST_F(AtomicFieldUpdaterApiGateTest, apiGatedOpIsRewrittenAtApi24) {
+  RedexOptions options;
+  options.min_sdk = 24;
+  std::vector<Pass*> passes{new AtomicFieldUpdaterLoweringPass()};
+  run_passes(passes, nullptr, Json::nullValue, options);
+
+  EXPECT_EQ(metric("blocked_min_sdk"), 0);
+  EXPECT_EQ(metric("blocked_hidden_api"), 0);
+  EXPECT_EQ(metric("calls_rewritten"), 1);
 }

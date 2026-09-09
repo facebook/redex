@@ -64,7 +64,46 @@ const UnorderedSet<std::string_view> kModeled{"get",
 // Plus the functional forms, which are operations but take an operator.
 const UnorderedSet<std::string_view> kFunctional{
     "getAndUpdate", "updateAndGet", "getAndAccumulate", "accumulateAndGet"};
+
+// Every `sun.misc.Unsafe` member a lowering of this family may name, with the
+// classification the platform gives it. Checked against
+// `hiddenapi-flags.csv` (see the header) on 2026-09-08.
+//
+// The split is not by vintage or by naming: `getAndSetObject` is `unsupported`
+// while `getAndSetInt` and `getAndSetLong` beside it are `max-target-r`. The
+// four restricted members are the read-modify-write forms over primitives, and
+// nothing about their spelling says so -- which is why this is a table and not
+// a rule.
+const UnorderedMap<std::string_view, HiddenApiStatus> kUnsafeMembers{
+    {"objectFieldOffset", HiddenApiStatus::ALLOWED},
+    {"getObjectVolatile", HiddenApiStatus::ALLOWED},
+    {"getIntVolatile", HiddenApiStatus::ALLOWED},
+    {"getLongVolatile", HiddenApiStatus::ALLOWED},
+    {"putObjectVolatile", HiddenApiStatus::ALLOWED},
+    {"putIntVolatile", HiddenApiStatus::ALLOWED},
+    {"putLongVolatile", HiddenApiStatus::ALLOWED},
+    {"putOrderedObject", HiddenApiStatus::ALLOWED},
+    {"putOrderedInt", HiddenApiStatus::ALLOWED},
+    {"putOrderedLong", HiddenApiStatus::ALLOWED},
+    {"compareAndSwapObject", HiddenApiStatus::ALLOWED},
+    {"compareAndSwapInt", HiddenApiStatus::ALLOWED},
+    {"compareAndSwapLong", HiddenApiStatus::ALLOWED},
+    {"getAndSetObject", HiddenApiStatus::ALLOWED},
+    {"getAndSetInt", HiddenApiStatus::RESTRICTED},
+    {"getAndSetLong", HiddenApiStatus::RESTRICTED},
+    {"getAndAddInt", HiddenApiStatus::RESTRICTED},
+    {"getAndAddLong", HiddenApiStatus::RESTRICTED},
+};
 } // namespace
+
+std::optional<HiddenApiStatus> hidden_api_status(
+    std::string_view unsafe_member) {
+  auto it = kUnsafeMembers.find(unsafe_member);
+  if (it == kUnsafeMembers.end()) {
+    return std::nullopt;
+  }
+  return it->second;
+}
 
 bool is_operation_name(std::string_view name) {
   return kModeled.count(name) != 0u || kFunctional.count(name) != 0u;
