@@ -11,7 +11,7 @@
 #include "DexClass.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
-#include "TypeSystem.h"
+#include "VirtualScopes.h"
 
 namespace builder_pattern {
 
@@ -19,7 +19,6 @@ class BuilderTransform {
  public:
   BuilderTransform(const Scope& scope,
                    const ConfigFiles& conf,
-                   const TypeSystem& type_system,
                    const DexType* root,
                    const init_classes::InitClassesWithSideEffects&
                        init_classes_with_side_effects,
@@ -46,7 +45,7 @@ class BuilderTransform {
   shrinker::Shrinker& get_shrinker() { return m_inliner->get_shrinker(); }
 
  private:
-  const TypeSystem& m_type_system;
+  virtual_scope::VirtualScopes m_vscopes;
   const DexType* m_root;
   std::unique_ptr<MultiMethodInliner> m_inliner;
   inliner::InlinerConfig m_inliner_config;

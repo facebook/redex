@@ -100,7 +100,6 @@ class RemoveClasses {
         m_type_system(scope),
         m_transform(scope,
                     conf,
-                    m_type_system,
                     super_cls,
                     init_classes_with_side_effects,
                     inliner_config,

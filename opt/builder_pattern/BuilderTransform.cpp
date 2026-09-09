@@ -21,13 +21,12 @@ namespace builder_pattern {
 BuilderTransform::BuilderTransform(
     const Scope& scope,
     const ConfigFiles& conf,
-    const TypeSystem& type_system,
     const DexType* root,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     inliner::InlinerConfig inliner_config,
     DexStoresVector& stores)
-    : m_type_system(type_system),
+    : m_vscopes(scope),
       m_root(root),
       m_inliner_config(std::move(inliner_config)) {
   UnorderedSet<DexMethod*> no_default_inlinables;
@@ -138,9 +137,9 @@ void BuilderTransform::update_virtual_calls(
 
       if (method->get_class() == m_root) {
         // replace it with the actual implementation if any provided.
-        const auto* virtual_scope = m_type_system.find_virtual_scope(method);
-        for (const auto& v_pair : virtual_scope->methods) {
-          auto* m = v_pair.first;
+        const auto* virtual_scope = m_vscopes.find(method);
+        for (const auto* scope_meth : virtual_scope->methods()) {
+          auto* m = const_cast<DexMethod*>(scope_meth);
           if (m->get_class() == current_instance && m->is_def()) {
             TRACE(BLD_PATTERN, 3,
                   "Replace virtual method %s with the current implementation "
