@@ -8,6 +8,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 #include <string_view>
 
 #include "DeterministicContainers.h"
@@ -60,6 +61,31 @@ extern const char* const LONG_DESC;
 // for it.
 extern const char* const UNSAFE_DESC;
 extern const char* const SYNTH_HOLDER_DESC;
+
+// May app code link a given `sun.misc.Unsafe` member?
+//
+// Android's non-SDK interface policy classifies every bootclasspath member.
+// `unsupported` members are callable from an app; `max-target-<letter>` members
+// are callable only by an app whose targetSdkVersion is at or below that
+// release, and Android refuses the link for anything above it. Four of Unsafe's
+// members are `max-target-r`, so an app targeting past API 30 -- which is every
+// app here -- gets NoSuchMethodError on Android 12 and newer.
+//
+// The policy keys on the *caller*, not on the member.
+// `AtomicIntegerFieldUpdater` reaches these same members all day long, because
+// libcore is on the bootclasspath and exempt. A lowering moves the call into
+// app code, where the exemption does not apply, so the member the updater used
+// is not automatically a member the lowering may use.
+enum class HiddenApiStatus { ALLOWED, RESTRICTED };
+
+// `std::nullopt` for a member no one has classified. That is a programming
+// error, not permission: assuming a member is fine because it looks like its
+// neighbours is exactly how `getAndAddInt` shipped and crashed FB4A on launch
+// (T287786534). Classify it against the platform's flags first --
+// `fbandroid/apps/oxygen/testing/veridex/hiddenapi-flags.csv`, the list
+// Google's own veridex scanner reads -- and record the answer here.
+std::optional<HiddenApiStatus> hidden_api_status(
+    std::string_view unsafe_member);
 
 // The factory every recognizer matches on. Each flavor declares exactly one
 // `newUpdater` overload, so the name identifies it uniquely once the receiver

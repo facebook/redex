@@ -3,9 +3,22 @@
           package="com.facebook.redex.test.instr"
           android:versionCode="1"
           android:versionName="1.0">
+  <!--
+    minSdkVersion 24 is what this manifest exists for: sun.misc.Unsafe gains
+    getAndSet/getAndAdd at Android N, and below that the lowering leaves those
+    sites alone, so the JUnit half would assert against code that was never
+    rewritten.
+
+    targetSdkVersion must stay above 30. Android's non-SDK interface policy
+    only withholds a "max-target-r" member from an app targeting past API 30.
+    At the 28 this once declared, a lowering emitting a restricted member ran
+    happily here and still crashed a shipping app, which is what happened in
+    T287786534. Tracking the apps' own target keeps the boundary this test runs
+    at the same one they ship at.
+  -->
   <uses-sdk
       android:minSdkVersion="24"
-      android:targetSdkVersion="28"/>
+      android:targetSdkVersion="36"/>
   <instrumentation
       android:label="redex"
       android:name="androidx.test.runner.AndroidJUnitRunner"
@@ -13,9 +26,12 @@
   <application
       android:debuggable="true"
       android:allowBackup="false">
+    <!-- Explicit `exported` is mandatory from API 31 for a component with an
+         intent filter; without it the package manager refuses to install. -->
     <activity
         android:name=".RedexTest"
-        android:label="RedexTest" >
+        android:label="RedexTest"
+        android:exported="true" >
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>

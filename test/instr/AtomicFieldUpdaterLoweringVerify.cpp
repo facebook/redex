@@ -21,8 +21,10 @@ constexpr const char* kTest =
     "Lcom/facebook/redex/test/instr/AtomicFieldUpdaterLoweringTest;";
 
 // Counts invocations, by the class the invoked method belongs to, across every
-// method of `cls`.
-size_t count_invokes_to(DexClass* cls, const std::string& owner_descriptor) {
+// method of `cls`. An empty `member_name` counts every member of that class.
+size_t count_invokes_to(DexClass* cls,
+                        const std::string& owner_descriptor,
+                        const std::string& member_name = "") {
   size_t n = 0;
   auto count = [&](DexMethod* m) {
     auto* code = m->get_dex_code();
@@ -37,7 +39,9 @@ size_t count_invokes_to(DexClass* cls, const std::string& owner_descriptor) {
       // DexInstruction only knows that a reference is present.
       const auto* mop = dynamic_cast<const DexOpcodeMethod*>(insn);
       if (mop != nullptr &&
-          show(mop->get_method()->get_class()) == owner_descriptor) {
+          show(mop->get_method()->get_class()) == owner_descriptor &&
+          (member_name.empty() ||
+           show(mop->get_method()->get_name()) == member_name)) {
         n++;
       }
     }
@@ -69,6 +73,13 @@ size_t count_invokes_to(DexMethod* method,
     }
   }
   return n;
+}
+
+// Counts invocations of one named `sun.misc.Unsafe` member across every method
+// of `cls`. Expressed through `count_invokes_to` so the two cannot drift.
+size_t count_invokes_to_unsafe_member(DexClass* cls,
+                                      const std::string& member_name) {
+  return count_invokes_to(cls, atomic_field_updaters::UNSAFE_DESC, member_name);
 }
 
 size_t count_invokes_to_methods_named_like(
@@ -142,8 +153,49 @@ TEST_F(PostVerify, AtomicFieldUpdaterLowering) {
                 atomic_field_updaters::REFERENCE_DESC),
             1u);
   EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::REFERENCE_DESC), 2u);
-  EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::INTEGER_DESC), 0u);
-  EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::LONG_DESC), 0u);
+
+  // Android's non-SDK interface policy denies these four to app code whenever
+  // the app targets past API 30, which this test now does and every shipping
+  // app already did. They link at build time and throw NoSuchMethodError on
+  // Android 12+, so emitting one is invisible until it reaches a device --
+  // which is how T287786534 became a launch-blocking crash. This is the
+  // assertion that would have caught it.
+  for (const char* member :
+       {"getAndAddInt", "getAndAddLong", "getAndSetInt", "getAndSetLong"}) {
+    EXPECT_EQ(count_invokes_to_unsafe_member(test, member), 0u)
+        << "the lowering emitted sun.misc.Unsafe." << member
+        << ", which is max-target-r: this build cannot link it at runtime";
+  }
+
+  // Consequently the arithmetic forms over int and long, and the numeric
+  // getAndSet, keep calling their updater. Bounded both ways rather than just
+  // asserted non-zero: too few would mean a restricted member is being emitted
+  // after all, too many that an allowed operation quietly stopped lowering,
+  // and neither direction is caught by the checks above.
+  //
+  // These counts track the fixture. Adding or removing an arithmetic operation
+  // in AtomicFieldUpdaterLoweringTest.java changes them, and that is a
+  // deliberate update here, not a regression.
+  constexpr size_t kIntegerCallsLeft = 8u;
+  constexpr size_t kLongCallsLeft = 5u;
+  EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::INTEGER_DESC),
+            kIntegerCallsLeft)
+      << "integer updater calls left unlowered changed; if you edited the "
+         "JUnit fixture's arithmetic operations, update kIntegerCallsLeft";
+  EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::LONG_DESC),
+            kLongCallsLeft)
+      << "long updater calls left unlowered changed; if you edited the JUnit "
+         "fixture's arithmetic operations, update kLongCallsLeft";
+
+  // The unrestricted operations on those same flavors still lower, so the
+  // narrowing above is confined to the four members and has not quietly
+  // switched the primitive flavors off altogether.
+  EXPECT_GT(count_invokes_to_unsafe_member(test, "compareAndSwapInt"), 0u);
+  EXPECT_GT(count_invokes_to_unsafe_member(test, "compareAndSwapLong"), 0u);
+  EXPECT_GT(count_invokes_to_unsafe_member(test, "getIntVolatile"), 0u);
+  EXPECT_GT(count_invokes_to_unsafe_member(test, "getLongVolatile"), 0u);
+  // And the reference flavor keeps its getAndSet, which is unrestricted.
+  EXPECT_GT(count_invokes_to_unsafe_member(test, "getAndSetObject"), 0u);
 
   // The shared class supplies only the Unsafe instance. It must NOT carry the
   // offsets: computing one needs `Holder.class`, and this class sits in

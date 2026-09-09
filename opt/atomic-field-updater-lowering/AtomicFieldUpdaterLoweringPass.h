@@ -40,12 +40,28 @@
  *                                                "next");
  *   }
  *
- * All three flavors are lowered, across the full operation set: `get`, `set`,
- * `lazySet`, `compareAndSet`, `weakCompareAndSet`, `getAndSet`, and the
- * arithmetic forms (`getAndAdd`, `addAndGet`, `getAndIncrement` and friends,
- * which reduce to `getAndAdd` with a constant, plus a fixup where the caller
- * wants the new value). `getAndSet` and `getAndAdd` require API 24, so below
- * that min_sdk those sites are counted and skipped.
+ * All three flavors are lowered, across `get`, `set`, `lazySet`,
+ * `compareAndSet`, `weakCompareAndSet` and -- for the reference flavor --
+ * `getAndSet`. Two things narrow that:
+ *
+ *   - `getAndSet` and `getAndAdd` reached `sun.misc.Unsafe` only in Android N,
+ *     so below min_sdk 24 those sites are counted and skipped. In practice this
+ *     bucket only ever holds `getAndSetObject`: the numeric members are
+ *     withheld by the restriction below, which is checked first, so they are
+ *     counted there whatever the min_sdk.
+ *   - `Unsafe.getAndAdd{Int,Long}` and `Unsafe.getAndSet{Int,Long}` are
+ *     `max-target-r` under Android's non-SDK interface policy: app code that
+ *     targets past API 30 cannot link them, and Android 12 and newer refuse
+ *     with NoSuchMethodError. So the arithmetic forms over `int` and `long`
+ *     (`getAndAdd`, `addAndGet`, `getAndIncrement` and friends) and the numeric
+ *     `getAndSet` are recognized but left alone. `getAndSetObject` carries no
+ *     such restriction, so the reference flavor keeps its `getAndSet`.
+ *
+ * That second restriction is a property of the *caller*, not of the member: an
+ * updater's own implementation calls the restricted members freely, because
+ * libcore is on the bootclasspath and exempt from the policy. Moving the call
+ * into app code is what forfeits the exemption, so every member this pass emits
+ * must be classified in `atomic_field_updaters::hidden_api_status` first.
  *
  * Each field offset lives on the class that declares the field and is computed
  * in that class's own `<clinit>`; only the `Unsafe` instance is shared. A

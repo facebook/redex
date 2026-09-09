@@ -359,7 +359,21 @@ DexMethodRef* field_get_value() {
 }
 
 // Unsafe.objectFieldOffset(Field) -> long
+//
+// The helper synthesis emits this rather than a lowering plan, so it does not
+// pass through `plan_is_linkable`. Classified here instead, so that "every
+// Unsafe member this pass emits is vetted" holds for every emission path and
+// not merely the planned ones. Unlike a plan there is no call site to decline,
+// so anything but ALLOWED is a programming error rather than a refusal.
 DexMethodRef* unsafe_object_field_offset() {
+  static constexpr std::string_view kMember = "objectFieldOffset";
+  const auto status = atomic_field_updaters::hidden_api_status(kMember);
+  always_assert_log(
+      status.has_value() &&
+          *status == atomic_field_updaters::HiddenApiStatus::ALLOWED,
+      "sun.misc.Unsafe.objectFieldOffset is not classified as permitted in "
+      "atomic_field_updaters::hidden_api_status, but the offset synthesis has "
+      "no way to skip it.");
   return DexMethod::make_method(
       unsafe_type(), DexString::make_string("objectFieldOffset"),
       DexProto::make_proto(
@@ -882,14 +896,39 @@ std::optional<UnsafePlan> plan_for(Kind kind, std::string_view op) {
   return std::nullopt;
 }
 
-// Resolve a plan's name template and build the Unsafe method reference.
-DexMethodRef* unsafe_ref(const UnsafePlan& plan) {
+// Resolve a plan's name template against its flavor: getAndAdd%s ->
+// getAndAddInt.
+std::string unsafe_member_name(const UnsafePlan& plan) {
   std::string n{plan.name};
   auto at = n.find("%s");
   always_assert_log(at != std::string::npos,
                     "Unsafe method template %s has no flavor placeholder",
                     plan.name);
   n.replace(at, 2, unsafe_suffix(plan.kind));
+  return n;
+}
+
+// Whether Android permits app code to link what this plan would emit.
+//
+// An unclassified member is a programming error rather than a refusal: someone
+// has taught the pass to emit something nobody checked, and silently declining
+// to lower it would hide that until the same question is asked again the hard
+// way.
+bool plan_is_linkable(const UnsafePlan& plan) {
+  const auto member = unsafe_member_name(plan);
+  auto status = atomic_field_updaters::hidden_api_status(member);
+  always_assert_log(
+      status.has_value(),
+      "sun.misc.Unsafe.%s has no hidden-API classification. Look it up in "
+      "fbandroid/apps/oxygen/testing/veridex/hiddenapi-flags.csv and record it "
+      "in atomic_field_updaters::hidden_api_status before emitting it.",
+      member.c_str());
+  return *status == atomic_field_updaters::HiddenApiStatus::ALLOWED;
+}
+
+// Resolve a plan's name template and build the Unsafe method reference.
+DexMethodRef* unsafe_ref(const UnsafePlan& plan) {
+  std::string n = unsafe_member_name(plan);
   auto* object_type = type::java_lang_Object();
   auto* long_type = type::_long();
   auto* vtype = atomic_field_updaters::value_type(plan.kind);
@@ -1000,6 +1039,7 @@ struct Stats {
   size_t blocked_value_type{0};
   size_t blocked_unmodeled_op{0};
   size_t blocked_min_sdk{0};
+  size_t blocked_hidden_api{0};
   // Breakdown of why resolution failed, to tell a fixable receiver pattern
   // apart from a fundamentally untrackable one.
   size_t no_defs{0};
@@ -1018,6 +1058,7 @@ struct Stats {
     blocked_value_type += that.blocked_value_type;
     blocked_unmodeled_op += that.blocked_unmodeled_op;
     blocked_min_sdk += that.blocked_min_sdk;
+    blocked_hidden_api += that.blocked_hidden_api;
     no_defs += that.no_defs;
     def_not_sget += that.def_not_sget;
     field_not_def += that.field_not_def;
@@ -1119,6 +1160,7 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
                                      Kind kind,
                                      const MethodAnalysis& ma,
                                      Stats* stats) {
+  always_assert(stats != nullptr);
   const auto* name = insn->get_method()->get_name();
 
   // Every argument after the holder must be a value of the flavor's type.
@@ -1202,9 +1244,31 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
     }
   }
 
-  // `getAndAdd`/`getAndSet` arrived in Android N. On an older min_sdk the
-  // site is not reachable however complete this pass becomes, so it is
-  // counted apart from the reachable set rather than inflating it.
+  // Both remaining gates put the site outside what any lowering could reach,
+  // so they are counted apart from the reachable set rather than inflating it.
+  //
+  // The hidden-API gate goes first because it is the permanent one: a
+  // restricted member stays restricted whatever the app's min_sdk, so counting
+  // it under min_sdk would suggest raising min_sdk would recover the site.
+  //
+  // Asked here rather than alongside `platform_supports` above, so that a plan
+  // naming an unclassified member aborts the run only once the site is one the
+  // pass would otherwise have emitted -- and so that the member name is not
+  // built for sites the checks above already rejected.
+  if (plan.has_value() && !plan_is_linkable(*plan)) {
+    stats->blocked_hidden_api++;
+    // TODO(T287844992): the four restricted members are all expressible as a
+    // compareAndSwap{Int,Long} retry loop, which is unrestricted, so these
+    // sites are recoverable rather than fundamentally out of reach. Measured on
+    // b4a they are 37 of 295, and disproportionately hot: they are the
+    // coroutine counters. The loop belongs in one shared static helper called
+    // per site, not inlined at each -- that is how R8 backports `getAndSet`
+    // below API 24, and it costs an invoke rather than a loop per site. What it
+    // gives up is the intrinsic: load-CAS-branch, retried under contention, in
+    // place of a single atomic.
+    return std::nullopt;
+  }
+  // `getAndAdd`/`getAndSet` arrived in Android N.
   if (!platform_supports) {
     stats->blocked_min_sdk++;
     return std::nullopt;
@@ -1438,6 +1502,7 @@ void report(PassManager& mgr,
   mgr.set_metric("calls_rewritten", emitted.rewritten);
   mgr.set_metric("null_checks_emitted", emitted.null_checks);
   mgr.set_metric("blocked_min_sdk", totals.blocked_min_sdk);
+  mgr.set_metric("blocked_hidden_api", totals.blocked_hidden_api);
   mgr.set_metric("calls_skipped_unresolved_updater", totals.skipped_unresolved);
   mgr.set_metric("calls_skipped_unproven_types", totals.skipped_unproven);
 
@@ -1490,12 +1555,13 @@ void report(PassManager& mgr,
         "SUMMARY rewritten=%zu null_checks=%zu rewritable=%zu (proven=%zu "
         "needs_null_check=%zu) "
         "unresolved=%zu blocked_holder_type=%zu blocked_value_type=%zu "
-        "unmodeled_op=%zu blocked_min_sdk=%zu",
+        "unmodeled_op=%zu blocked_min_sdk=%zu blocked_hidden_api=%zu",
         emitted.rewritten, emitted.null_checks,
         feasible_total + needs_null_check_total, feasible_total,
         needs_null_check_total, totals.skipped_unresolved,
         totals.blocked_holder_type, totals.blocked_value_type,
-        totals.blocked_unmodeled_op, totals.blocked_min_sdk);
+        totals.blocked_unmodeled_op, totals.blocked_min_sdk,
+        totals.blocked_hidden_api);
 }
 
 // `ensure_helpers` synthesizes the shared `Unsafe` holder, the null-check
