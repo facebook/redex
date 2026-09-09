@@ -9,6 +9,7 @@
 
 #include "ControlFlow.h"
 #include "Creators.h"
+#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "Purity.h"
@@ -16,15 +17,14 @@
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "ThrowPropagationImpl.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 class ThrowPropagationTest : public RedexTest {
  public:
   ThrowPropagationTest() {
-    // Calling get_vmethods under the hood initializes the object-class, which
-    // we need in the tests to create a proper scope
-    virt_scope::get_vmethods(type::java_lang_Object());
+    // The tests need java.lang.Object to resolve to a DexClass to build a
+    // proper scope.
+    create_object_class();
   }
 };
 

@@ -12,17 +12,17 @@
 #include "MethodUtil.h"
 #include "RedexTest.h"
 
+#include "DexUtil.h"
 #include "ObjectSensitiveDcePass.h"
 #include "Show.h"
 #include "TypeUtil.h"
-#include "VirtualScope.h"
 
 class ObjectSensitiveDceTest : public RedexIntegrationTest {
  public:
   ObjectSensitiveDceTest() {
-    // Calling get_vmethods under the hood initializes the object-class, which
-    // we need in the tests to create a proper scope
-    virt_scope::get_vmethods(type::java_lang_Object());
+    // The tests need java.lang.Object to resolve to a DexClass to build a
+    // proper scope.
+    create_object_class();
 
     auto* object_ctor = method::java_lang_Object_ctor();
     object_ctor->set_access(ACC_PUBLIC | ACC_CONSTRUCTOR);

@@ -18,7 +18,6 @@
 #include "InlinerConfig.h"
 #include "LegacyInliner.h"
 #include "RedexTest.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 struct MethodInlineTest : public RedexTest {
@@ -555,7 +554,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
 TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
   ConcurrentMethodResolverDeprecated concurrent_method_resolver;
 
-  virt_scope::get_vmethods(type::java_lang_Object());
+  create_object_class();
 
   // Only inline methods within dex.
   bool intra_dex = true;

@@ -16,15 +16,15 @@
 #include "IROpcode.h"
 #include "RedexTest.h"
 
+#include "DexUtil.h"
 #include "GlobalTypeAnalysisPass.h"
 #include "RemoveUnreachable.h"
 #include "Show.h"
 #include "TypeAnalysisAwareRemoveUnreachable.h"
-#include "VirtualScope.h"
 
 class RemoveUnreachableTest : public RedexIntegrationTest {
   void SetUp() override {
-    virt_scope::get_vmethods(type::java_lang_Object());
+    create_object_class();
     auto* cls = type_class(type::java_lang_Object());
     // To make the assertion in reachability analysis happy
     cls->set_external();

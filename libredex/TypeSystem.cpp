@@ -76,9 +76,7 @@ void load_interface_children(const Scope& scope, ClassHierarchy& children) {
 namespace {
 
 // The instanceof/interface tables are rooted at java.lang.Object and assume it
-// resolves to a DexClass. Building a ClassScopes used to materialize it as a
-// side effect (via virt_scope::get_vmethods); now that TypeSystem builds the
-// hierarchy directly, it has to say so.
+// resolves to a DexClass, so make sure it does.
 ClassHierarchy build_hierarchy_with_object(const Scope& scope) {
   // No-op when Object already resolves.
   create_object_class();

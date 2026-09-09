@@ -10,18 +10,18 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InitClassLoweringPass.h"
 #include "RedexTest.h"
-#include "VirtualScope.h"
 
 class InitClassLoweringPassTest : public RedexTest {
  public:
   ::sparta::s_expr run_pass(const std::string& code) {
-    // Calling get_vmethods under the hood initializes the object-class, which
-    // we need in the tests to create a proper scope
-    virt_scope::get_vmethods(type::java_lang_Object());
+    // The tests need java.lang.Object to resolve to a DexClass to build a
+    // proper scope.
+    create_object_class();
 
     auto* a_type = DexType::make_type("LA;");
     auto* b_type = DexType::make_type("LB;");

@@ -8,15 +8,15 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
+#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "PureMethods.h"
 #include "RedexTest.h"
-#include "VirtualScope.h"
 
 class PureAnalysisTest : public RedexTest {
  public:
-  PureAnalysisTest() { virt_scope::get_vmethods(type::java_lang_Object()); }
+  PureAnalysisTest() { create_object_class(); }
 };
 
 void test(const char* signature, const std::string& code_str, bool is_pure) {

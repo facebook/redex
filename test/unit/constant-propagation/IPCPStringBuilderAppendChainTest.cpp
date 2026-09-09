@@ -20,7 +20,6 @@
 #include "PassManager.h"
 #include "RedexTest.h"
 #include "TypeUtil.h"
-#include "VirtualScope.h"
 
 using namespace constant_propagation;
 using namespace constant_propagation::interprocedural;
@@ -78,7 +77,7 @@ struct IPCPStringBuilderAppendChainTest : public RedexTest {
   IPCPStringBuilderAppendChainTest() {
     // Mirrors InterproceduralConstantPropagationTest: get_vmethods initializes
     // the object class, which is needed to build a proper scope.
-    virt_scope::get_vmethods(type::java_lang_Object());
+    create_object_class();
     auto* object_ctor = method::java_lang_Object_ctor();
     object_ctor->set_access(ACC_PUBLIC | ACC_CONSTRUCTOR);
     object_ctor->set_external();

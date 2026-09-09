@@ -19,7 +19,6 @@
 #include "Match.h"
 #include "Thread.h"
 #include "Trace.h"
-#include "VirtualScope.h"
 #include "WorkQueue.h"
 
 /**
@@ -720,7 +719,6 @@ class walk {
 
     // Call `walker` on all given virtual scopes in parallel. The scope pointer
     // type is deduced from the container, so this works with both legacy
-    // `virt_scope::VirtualScope*` and new `virtual_scope::VirtualScope*`.
     template <class VirtualScopes, typename WalkerFn>
     static void virtual_scopes(
         const VirtualScopes& virtual_scopes,

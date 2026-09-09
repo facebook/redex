@@ -20,15 +20,10 @@ class Graph;
 } // namespace method_override_graph
 
 /*
- * A modern, encapsulated "virtual scope" API for ClassMerging (and future
- * consumers), backed by `MethodOverrideGraph` (MOG) + the class hierarchy
- * instead of the legacy signature-map machinery in `VirtualScope.h`.
+ * An encapsulated "virtual scope" API backed by `MethodOverrideGraph` (MOG)
+ * plus the class hierarchy.
  *
- * It reproduces the observable result of legacy `virt_scope::ClassScopes::get`
- * exactly -- verified per shape by test/unit/VirtualScopesDifferentialTest --
- * so the ClassMerging migration on top is behavior-preserving (NFC). The point
- * of being MOG-backed (rather than delegating to legacy) is that it lets the
- * legacy `VirtualScope`/`ClassScopes` be retired once all consumers move over.
+ * Behavior is pinned per shape by test/unit/VirtualScopesTest.
  *
  * Terminology (unchanged):
  *  - virtual scope: the virtual methods sharing one signature connected through

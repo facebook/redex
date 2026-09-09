@@ -8,19 +8,19 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
+#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "TypeUtil.h"
 #include "UnreachableLoweringPass.h"
-#include "VirtualScope.h"
 
 class UnreachableLoweringPassTest : public RedexTest {
  public:
   ::sparta::s_expr run_pass(const std::string& code) {
-    // Calling get_vmethods under the hood initializes the object-class, which
-    // we need in the tests to create a proper scope
-    virt_scope::get_vmethods(type::java_lang_Object());
+    // The tests need java.lang.Object to resolve to a DexClass to build a
+    // proper scope.
+    create_object_class();
 
     std::string class_name = "LTest;";
     ClassCreator creator(DexType::make_type(class_name));

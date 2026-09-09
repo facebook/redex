@@ -21,7 +21,6 @@
 #include "IRAssembler.h"
 #include "MethodOverrideGraph.h"
 #include "RedexTest.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 using namespace constant_propagation;
@@ -30,9 +29,9 @@ using namespace constant_propagation::interprocedural;
 struct InterproceduralConstantPropagationTest : public RedexTest {
  public:
   InterproceduralConstantPropagationTest() {
-    // Calling get_vmethods under the hood initializes the object-class, which
-    // we need in the tests to create a proper scope
-    virt_scope::get_vmethods(type::java_lang_Object());
+    // The tests need java.lang.Object to resolve to a DexClass to build a
+    // proper scope.
+    create_object_class();
 
     auto* object_ctor =
         static_cast<DexMethod*>(method::java_lang_Object_ctor());

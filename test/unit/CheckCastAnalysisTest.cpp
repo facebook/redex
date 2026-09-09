@@ -9,16 +9,16 @@
 
 #include "CheckCastAnalysis.h"
 #include "Creators.h"
+#include "DexUtil.h"
 #include "FrameworkApi.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
-#include "VirtualScope.h"
 
 struct CheckCastAnalysisTest : public RedexTest {
   CheckCastAnalysisTest() {
-    // Calling get_vmethods under the hood initializes the object-class, which
-    // we need in the tests to create a proper scope
-    virt_scope::get_vmethods(type::java_lang_Object());
+    // The tests need java.lang.Object to resolve to a DexClass to build a
+    // proper scope.
+    create_object_class();
     type_class(type::java_lang_Object())->set_external();
     if (type_class(type::java_lang_String()) == nullptr) {
       ClassCreator cc(type::java_lang_String());

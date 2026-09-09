@@ -9,6 +9,7 @@
 
 #include "Creators.h"
 #include "DexAsm.h"
+#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"
@@ -19,15 +20,14 @@
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 #include "Show.h"
-#include "VirtualScope.h"
 
 struct LocalDceTryTest : public RedexTest {
   DexMethod* m_method;
 
   LocalDceTryTest() {
-    // Calling get_vmethods under the hood initializes the object-class, which
-    // we need in the tests to create a proper scope
-    virt_scope::get_vmethods(type::java_lang_Object());
+    // The tests need java.lang.Object to resolve to a DexClass to build a
+    // proper scope.
+    create_object_class();
 
     auto* args = DexTypeList::make_type_list({});
     auto* proto = DexProto::make_proto(type::_void(), args);
