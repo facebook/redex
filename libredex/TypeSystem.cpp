@@ -8,9 +8,9 @@
 #include "TypeSystem.h"
 
 #include "Debug.h"
+#include "DexUtil.h"
 #include "RedexContext.h"
-#include "Show.h"
-#include "Trace.h"
+#include "TypeUtil.h"
 
 namespace {
 
@@ -73,7 +73,23 @@ void load_interface_children(const Scope& scope, ClassHierarchy& children) {
 
 } // namespace
 
-TypeSystem::TypeSystem(const Scope& scope) : m_class_scopes(scope) {
+namespace {
+
+// The instanceof/interface tables are rooted at java.lang.Object and assume it
+// resolves to a DexClass. Building a ClassScopes used to materialize it as a
+// side effect (via virt_scope::get_vmethods); now that TypeSystem builds the
+// hierarchy directly, it has to say so.
+ClassHierarchy build_hierarchy_with_object(const Scope& scope) {
+  // No-op when Object already resolves.
+  create_object_class();
+  return build_type_hierarchy(scope);
+}
+
+} // namespace
+
+TypeSystem::TypeSystem(const Scope& scope)
+    : m_hierarchy(build_hierarchy_with_object(scope)),
+      m_interface_map(build_interface_map(m_hierarchy)) {
   load_interface_children(scope, m_intf_children);
   make_instanceof_interfaces_table();
 }
@@ -122,66 +138,9 @@ TypeSet TypeSystem::get_local_interfaces(const TypeSet& classes) {
   return implemented_intfs;
 }
 
-const VirtualScope* TypeSystem::find_virtual_scope(
-    const DexMethod* meth) const {
-
-  const auto match = [](const DexMethod* meth1, const DexMethod* meth2) {
-    return meth1->get_name() == meth2->get_name() &&
-           meth1->get_proto() == meth2->get_proto();
-  };
-
-  auto* type = meth->get_class();
-  while (type != nullptr) {
-    TRACE(VIRT, 5, "check... %s", SHOW(type));
-    for (const auto& scope : m_class_scopes.get(type)) {
-      TRACE(VIRT, 5, "check... %s", SHOW(scope->methods[0].first));
-      if (match(scope->methods[0].first, meth)) {
-        TRACE(VIRT, 5, "return scope");
-        return scope;
-      }
-    }
-    auto* const cls = type_class(type);
-    if (cls == nullptr) {
-      break;
-    }
-    type = cls->get_super_class();
-  }
-
-  return nullptr;
-}
-
-std::vector<const DexMethod*> TypeSystem::select_from(
-    const VirtualScope* scope, const DexType* type) const {
-  std::vector<const DexMethod*> refined_scope;
-  UnorderedMap<const DexType*, DexMethod*> non_child_methods;
-  bool found_root_method = false;
-  for (const auto& method : scope->methods) {
-    if (is_subtype(type, method.first->get_class())) {
-      found_root_method =
-          found_root_method || type == method.first->get_class();
-      refined_scope.emplace_back(method.first);
-    } else {
-      non_child_methods[method.first->get_class()] = method.first;
-    }
-  }
-  if (!found_root_method) {
-    const auto& parents = parent_chain(type);
-    for (auto parent = parents.rbegin(); parent != parents.rend(); ++parent) {
-      const auto& meth = non_child_methods.find(*parent);
-      if (meth == non_child_methods.end()) {
-        continue;
-      }
-      refined_scope.emplace_back(meth->second);
-      break;
-    }
-  }
-  return refined_scope;
-}
-
 void TypeSystem::make_instanceof_interfaces_table() {
   TypeVector no_parents;
-  const auto& hierarchy = m_class_scopes.get_class_hierarchy();
-  for (const auto& children_it : UnorderedIterable(hierarchy)) {
+  for (const auto& children_it : UnorderedIterable(m_hierarchy)) {
     const auto* const parent = children_it.first;
     auto* const parent_cls = type_class(parent);
     if (parent_cls != nullptr) {
@@ -191,7 +150,7 @@ void TypeSystem::make_instanceof_interfaces_table() {
   }
   no_parents.emplace_back(type::java_lang_Object());
   for (const auto& root : no_parents) {
-    make_instanceof_table(m_instanceof_table, hierarchy, root);
+    make_instanceof_table(m_instanceof_table, m_hierarchy, root);
   }
   for (const auto& root : no_parents) {
     make_interfaces_table(root);
@@ -215,62 +174,11 @@ void TypeSystem::make_interfaces_table(const DexType* type) {
     }
   }
 
-  const auto& hierarchy = m_class_scopes.get_class_hierarchy();
-  const auto& children = hierarchy.find(type);
-  if (children == hierarchy.end()) {
+  const auto& children = m_hierarchy.find(type);
+  if (children == m_hierarchy.end()) {
     return;
   }
   for (const auto& child : children->second) {
     make_interfaces_table(child);
-  }
-}
-
-void TypeSystem::select_methods(const VirtualScope& scope,
-                                const UnorderedSet<DexType*>& types,
-                                UnorderedSet<DexMethod*>& methods) const {
-  TRACE(VIRT, 1, "select_methods make filter");
-  UnorderedSet<DexType*> filter;
-  insert_unordered_iterable(filter, types);
-
-  TRACE(VIRT, 1, "select_methods make type_method map");
-  UnorderedMap<const DexType*, DexMethod*> type_method;
-  for (const auto& vmeth : scope.methods) {
-    auto* const meth = vmeth.first;
-    if (!meth->is_def()) {
-      continue;
-    }
-    type_method[meth->get_class()] = meth;
-  }
-
-  TRACE(VIRT, 1, "select_methods walk hierarchy");
-  while (!filter.empty()) {
-    auto it = unordered_any(filter);
-    auto* const type = *it;
-    filter.erase(it);
-    TRACE(VIRT, 1, "check... %s", SHOW(type));
-    if (!is_subtype(scope.type, type)) {
-      continue;
-    }
-    const auto& meth = type_method.find(type);
-    if (meth != type_method.end()) {
-      methods.insert(meth->second);
-      continue;
-    }
-    auto* const super = type_class(type)->get_super_class();
-    if (super == nullptr) {
-      continue;
-    }
-    if (types.count(super) > 0) {
-      continue;
-    }
-    filter.insert(super);
-  }
-}
-
-void TypeSystem::select_methods(const InterfaceScope& scope,
-                                const UnorderedSet<DexType*>& types,
-                                UnorderedSet<DexMethod*>& methods) const {
-  for (const auto& virt_scope : scope) {
-    select_methods(*virt_scope, types, methods);
   }
 }

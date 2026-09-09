@@ -12,6 +12,7 @@
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 #include "TypeSystem.h"
+#include "TypeUtil.h"
 
 /**
  * class java.lang.Object { // Object methods ... }

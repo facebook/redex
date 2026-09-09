@@ -27,7 +27,6 @@
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 #include "Show.h"
-#include "TypeSystem.h" // legacy TypeSystem::find_virtual_scope
 #include "TypeUtil.h"
 #include "VirtualScope.h" // legacy virt_scope
 #include "VirtualScopes.h" // new virtual_scope
@@ -229,6 +228,32 @@ std::string walk_intf_new(const virtual_scope::VirtualScopes& vs) {
   return join(lines);
 }
 
+// The reference implementation of by-method scope lookup, ported here from the
+// since-deleted `TypeSystem::find_virtual_scope`: climb `meth`'s superclass
+// chain and return the first scope whose top def matches its (name, proto), or
+// nullptr. Legacy's own `ClassScopes::find_virtual_scope` is NOT equivalent --
+// it asserts rather than returning nullptr -- so the climb lives here, in the
+// only place that still needs it, rather than in production code.
+const virt_scope::VirtualScope* legacy_find_virtual_scope(
+    const virt_scope::ClassScopes& cs, const DexMethod* meth) {
+  const auto* type = meth->get_class();
+  while (type != nullptr) {
+    for (const auto* scope : cs.get(type)) {
+      const auto* top = scope->methods[0].first;
+      if (top->get_name() == meth->get_name() &&
+          top->get_proto() == meth->get_proto()) {
+        return scope;
+      }
+    }
+    const auto* cls = type_class(type);
+    if (cls == nullptr) {
+      break;
+    }
+    type = cls->get_super_class();
+  }
+  return nullptr;
+}
+
 // Compare legacy vs new for every non-interface class in `scope`, INCLUDING
 // external classes -- at(externalType) (e.g. java.lang.Object) must match
 // legacy get(externalType), since ClassMerging's distribute walks parent_chain
@@ -236,13 +261,12 @@ std::string walk_intf_new(const virtual_scope::VirtualScopes& vs) {
 // gap.
 //
 // Also checks find-parity: for every vmethod of every non-interface class,
-// VirtualScopes::find(m) must resolve to the same scope legacy
-// TypeSystem::find_virtual_scope(m) does. This is the accessor VirtualMerging
-// uses (by-method scope lookup), so it is on the NFC path for that migration.
+// VirtualScopes::find(m) must resolve to the same scope the reference climb
+// above does. This is the accessor VirtualMerging and BuilderTransform use
+// (by-method scope lookup).
 void expect_parity(Scope& scope) {
   virt_scope::ClassScopes cs(scope);
   virtual_scope::VirtualScopes vs(scope);
-  TypeSystem ts(scope);
   // Interface-scope walk parity (the accessor VirtualRenamer's interface pass
   // uses); compared once for the whole scope.
   EXPECT_EQ(walk_intf_legacy(cs), walk_intf_new(vs));
@@ -265,7 +289,7 @@ void expect_parity(Scope& scope) {
     }
     for (auto* m : cls->get_vmethods()) {
       SCOPED_TRACE(std::string("find ") + SHOW(m));
-      EXPECT_EQ(find_sig_legacy(ts.find_virtual_scope(m)),
+      EXPECT_EQ(find_sig_legacy(legacy_find_virtual_scope(cs, m)),
                 find_sig_new(vs.find(m)));
     }
   }

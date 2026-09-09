@@ -10,24 +10,22 @@
 #include "ClassHierarchy.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
-#include "VirtualScope.h"
 
 using TypeVector = std::vector<const DexType*>;
 using InstanceOfTable = UnorderedMap<const DexType*, TypeVector>;
 using TypeToTypeSet = UnorderedMap<const DexType*, TypeSet>;
-using namespace virt_scope;
 
 /**
  * TypeSystem
  * A class that computes information and caches on the current known state
  * of the universe given a Scope.
  * It provides common API to an object-oriented type system: inheritance
- * relationships, interface relationships, virtual scopes.
+ * relationships and interface relationships.
  *
- * NOTE: Computing virtual scopes is relatively expensive. If you only need
- * class-level and not method-level relationships, consider using ClassHierarchy
- * directly. Also, for method-level relationships, prefer the
- * MethodOverrideGraph over the VirtualScopes used here; the former is faster.
+ * NOTE: if you only need class-level relationships, use ClassHierarchy
+ * directly -- the interface tables built here are the reason to reach for
+ * TypeSystem. For method-level relationships use MethodOverrideGraph, or
+ * virtual_scope::VirtualScopes when you need scopes rather than edges.
  */
 class TypeSystem {
  private:
@@ -40,7 +38,8 @@ class TypeSystem {
     return empty_vec;
   }
 
-  ClassScopes m_class_scopes;
+  ClassHierarchy m_hierarchy;
+  InterfaceMap m_interface_map;
   ClassHierarchy m_intf_children;
   InstanceOfTable m_instanceof_table;
   TypeToTypeSet m_interfaces;
@@ -53,10 +52,8 @@ class TypeSystem {
    * The type must be a class (not an interface).
    */
   const TypeSet& get_children(const DexType* type) const {
-    const auto& children = m_class_scopes.get_class_hierarchy().find(type);
-    return children != m_class_scopes.get_class_hierarchy().end()
-               ? children->second
-               : get_empty_set();
+    const auto& children = m_hierarchy.find(type);
+    return children != m_hierarchy.end() ? children->second : get_empty_set();
   }
 
   /**
@@ -64,8 +61,7 @@ class TypeSystem {
    * The type must be a class (not an interface).
    */
   void get_all_children(const DexType* type, TypeSet& children) const {
-    return ::get_all_children(
-        m_class_scopes.get_class_hierarchy(), type, children);
+    return ::get_all_children(m_hierarchy, type, children);
   }
 
   /**
@@ -134,8 +130,8 @@ class TypeSystem {
    * or an interface DAG.
    */
   bool implements(const DexType* cls, const DexType* intf) const {
-    const auto& implementors = m_class_scopes.get_interface_map().find(intf);
-    if (implementors == m_class_scopes.get_interface_map().end()) {
+    const auto& implementors = m_interface_map.find(intf);
+    if (implementors == m_interface_map.end()) {
       return false;
     }
     return implementors->second.count(cls) > 0;
@@ -149,8 +145,8 @@ class TypeSystem {
    * interface will be included in the returning set.
    */
   const TypeSet& get_implementors(const DexType* intf) const {
-    const auto& implementors = m_class_scopes.get_interface_map().find(intf);
-    if (implementors == m_class_scopes.get_interface_map().end()) {
+    const auto& implementors = m_interface_map.find(intf);
+    if (implementors == m_interface_map.end()) {
       return get_empty_set();
     }
     return implementors->second;
@@ -191,48 +187,11 @@ class TypeSystem {
   }
 
   /**
-   * Return the ClassScopes known when building the type system.
-   * The ClassScopes lifetime is tied to that of the TypeSystem, as
-   * such it should not exceed it.
+   * Return the ClassHierarchy known when building the type system.
+   * Its lifetime is tied to that of the TypeSystem, as such it should not
+   * exceed it.
    */
-  const ClassScopes& get_class_scopes() const { return m_class_scopes; }
-
-  /**
-   * Given a DexMethod return the scope the method is in.
-   */
-  const VirtualScope* find_virtual_scope(const DexMethod* meth) const;
-  InterfaceScope find_interface_scope(const DexMethod* meth) const {
-    return m_class_scopes.find_interface_scope(meth);
-  }
-
-  /**
-   * Given a set of types select the concrete methods invoked for those
-   * types in a given scope.
-   */
-  void select_methods(const VirtualScope& scope,
-                      const UnorderedSet<DexType*>& types,
-                      UnorderedSet<DexMethod*>& methods) const;
-  void select_methods(const InterfaceScope& scope,
-                      const UnorderedSet<DexType*>& types,
-                      UnorderedSet<DexMethod*>& methods) const;
-
-  /**
-   * Given a VirtualScope and a type return the list of methods that
-   * could bind for that type in that scope.
-   * There is no specific order to the methods returned.
-   * Consider
-   * class A { void m() {} }
-   * class B extends A { void m() {} }
-   * class C extends B { void m() {} }
-   * class D extends C { void m() {} }
-   * class E extends A { void m() {} }
-   * The Virtual scope for m() starts in A.m() and contains all the m()
-   * in the A hierarchy.
-   * A call to select_from() with C with return only C.m() and D.m() which
-   * are the only 2 methods in scope for C.
-   */
-  std::vector<const DexMethod*> select_from(const VirtualScope* scope,
-                                            const DexType* type) const;
+  const ClassHierarchy& get_class_hierarchy() const { return m_hierarchy; }
 
  private:
   void make_instanceof_interfaces_table();

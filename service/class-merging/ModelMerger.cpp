@@ -665,8 +665,8 @@ std::vector<DexClass*> ModelMerger::merge_model(
   auto type_tag_fields = get_type_tag_fields(to_materialize, input_has_type_tag,
                                              model_spec.generate_type_tag());
   UnorderedMap<DexMethod*, std::string> method_debug_map;
-  auto parent_to_children =
-      model.get_type_system().get_class_scopes().get_parent_to_children();
+  const auto& parent_to_children =
+      model.get_type_system().get_class_hierarchy();
   update_refs_to_mergeable_types(
       scope, parent_to_children, to_materialize, mergeable_to_merger, type_tags,
       type_tag_fields, method_debug_map, model_spec.has_type_tag(),
