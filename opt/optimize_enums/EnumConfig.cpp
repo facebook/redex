@@ -11,6 +11,7 @@
 #include "LocalPointersAnalysis.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 #include <utility>
 

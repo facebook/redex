@@ -17,6 +17,7 @@
 #include "InitClassPruner.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
+#include "TypeUtil.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"
 

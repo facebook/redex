@@ -28,6 +28,7 @@
 #include "RedexResources.h"
 #include "Show.h"
 #include "TypeStringRewriter.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 #include "Trace.h"

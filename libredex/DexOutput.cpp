@@ -55,6 +55,7 @@
 #include "Sha1.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 /*

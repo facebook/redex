@@ -21,6 +21,7 @@
 #include "Show.h"
 #include "Trace.h"
 #include "TypeReference.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {

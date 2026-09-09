@@ -20,6 +20,7 @@
 #include "ScopedCFG.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {

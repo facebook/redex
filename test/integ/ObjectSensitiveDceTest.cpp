@@ -14,6 +14,7 @@
 
 #include "ObjectSensitiveDcePass.h"
 #include "Show.h"
+#include "TypeUtil.h"
 #include "VirtualScope.h"
 
 class ObjectSensitiveDceTest : public RedexIntegrationTest {

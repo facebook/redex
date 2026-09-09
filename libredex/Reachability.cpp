@@ -24,6 +24,7 @@
 #include "ThrowPropagationImpl.h"
 #include "Timer.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 

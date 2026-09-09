@@ -11,6 +11,7 @@
 
 #include "Debug.h"
 #include "Show.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 

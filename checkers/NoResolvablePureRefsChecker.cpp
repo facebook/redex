@@ -14,6 +14,7 @@
 #include "FrameworkApi.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {

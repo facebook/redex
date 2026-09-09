@@ -46,6 +46,7 @@
 #include <optional>
 
 #include "CFGMutation.h"
+#include "ClassHierarchy.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"

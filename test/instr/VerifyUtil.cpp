@@ -22,6 +22,7 @@
 // NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
 #include "Show.h"
+#include "TypeUtil.h"
 #include "VerifyUtil.h"
 #include "Walkers.h"
 

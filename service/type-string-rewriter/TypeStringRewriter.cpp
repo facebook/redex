@@ -11,6 +11,7 @@
 #include "Debug.h"
 #include "DexUtil.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {

@@ -14,6 +14,7 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "StringBuilder.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {

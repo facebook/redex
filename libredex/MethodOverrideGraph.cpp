@@ -12,11 +12,13 @@
 #include <sparta/PatriciaTreeSet.h>
 
 #include "BinarySerialization.h"
+#include "ClassHierarchy.h"
 #include "CppUtil.h"
 #include "Debug.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "Timer.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 using namespace method_override_graph;

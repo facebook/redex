@@ -17,6 +17,7 @@
 #include "Show.h"
 #include "Trace.h"
 #include "TypeReference.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 using MethodToType = std::map<DexMethod*, DexProto*, dexmethods_comparator>;

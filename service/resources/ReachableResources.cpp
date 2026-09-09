@@ -15,6 +15,7 @@
 #include "IRInstruction.h"
 #include "RedexResources.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {

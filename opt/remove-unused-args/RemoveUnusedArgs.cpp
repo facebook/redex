@@ -28,6 +28,7 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 using namespace opt_metadata;

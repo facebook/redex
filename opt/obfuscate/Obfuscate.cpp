@@ -15,6 +15,7 @@
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "VirtualRenamer.h"
 #include "Walkers.h"
 

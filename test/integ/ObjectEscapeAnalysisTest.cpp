@@ -22,6 +22,7 @@
 #include "MethodUtil.h"
 #include "ObjectEscapeAnalysis.h"
 #include "RedexTest.h"
+#include "TypeUtil.h"
 #include "VirtualScope.h"
 
 class ObjectEscapeAnalysisTest : public RedexIntegrationTest {

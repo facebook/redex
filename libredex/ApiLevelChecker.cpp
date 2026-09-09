@@ -7,9 +7,11 @@
 
 #include "ApiLevelChecker.h"
 
+#include "ClassHierarchy.h"
 #include "Debug.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace api {
