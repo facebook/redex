@@ -81,11 +81,14 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
   // API gate answer first and no test here would reach the behaviour it means
   // to pin. The sub-24 side of that gate belongs to the integ test
   // (AtomicFieldUpdaterApiGateTest), which drives both sides of the boundary.
+  // `extra_classes` join the same store, for tests whose shape needs a second
+  // class in the pass's scope rather than merely in the global type registry.
   void run(const std::string& cls_name,
            const std::string& updater_desc,
            const std::string& field_name,
            const std::string& field_type,
-           const std::vector<DexMethod*>& extra_methods = {}) {
+           const std::vector<DexMethod*>& extra_methods = {},
+           const std::vector<DexClass*>& extra_classes = {}) {
     ClassCreator cc(DexType::make_type(cls_name));
     cc.set_super(type::java_lang_Object());
     cc.add_field(
@@ -122,13 +125,18 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
     options.min_sdk = 24;
     PassManager manager({&pass}, config, options);
     DexStore store("classes");
-    store.add_classes({cls});
+    std::vector<DexClass*> in_store{cls};
+    in_store.insert(in_store.end(), extra_classes.begin(), extra_classes.end());
+    store.add_classes(in_store);
     std::vector<DexStore> stores;
     stores.emplace_back(std::move(store));
     manager.run_passes(stores, config);
+    capture(manager);
+  }
 
-    // `get_metric` reads the *currently running* pass and is only valid during
-    // a run; after `run_passes` the recorded metrics live in the pass info.
+  // `get_metric` reads the *currently running* pass and is only valid during a
+  // run; after `run_passes` the recorded metrics live in the pass info.
+  void capture(PassManager& manager) {
     metrics.clear();
     for (const auto& info : manager.get_pass_info()) {
       if (info.name.find("AtomicFieldUpdaterLowering") != std::string::npos) {
@@ -192,16 +200,8 @@ TEST_F(AtomicFieldUpdaterLoweringTest, registerReuseDoesNotMisattribute) {
   stores.emplace_back(std::move(store));
   manager.run_passes(stores, config);
 
-  int64_t recognized = -1;
-  for (const auto& info : manager.get_pass_info()) {
-    if (info.name.find("AtomicFieldUpdaterLowering") != std::string::npos) {
-      auto it = info.metrics.find("updaters_recognized");
-      if (it != info.metrics.end()) {
-        recognized = it->second;
-      }
-    }
-  }
-  EXPECT_EQ(recognized, 0);
+  capture(manager);
+  EXPECT_EQ(metric("updaters_recognized"), 0);
 }
 
 // The allow-list matches names, which says what the API calls an operation --
@@ -224,6 +224,69 @@ TEST_F(AtomicFieldUpdaterLoweringTest, wrongArityIsNotAnOperation) {
   run("LRef;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {m});
   EXPECT_EQ(metric("rewritable_total"), 0);
   EXPECT_EQ(metric("feasible_total"), 0);
+}
+
+// A method the app has opted out of optimizing keeps its updater calls. The bit
+// covers classes whose build-time bytecode does not match what runs, so a
+// rewrite there is reasoning about code that will not be executed.
+TEST_F(AtomicFieldUpdaterLoweringTest, noOptimizationsMethodIsNotRewritten) {
+  static constexpr const char* kGet = R"((
+    (load-param-object v0)
+    (sget-object "LPinned;.U:$UPD")
+    (move-result-pseudo-object v1)
+    (invoke-virtual (v1 v0) "$UPD.get:(Ljava/lang/Object;)Ljava/lang/Object;")
+    (move-result-object v2)
+    (return-void)
+  ))";
+  auto* m = DexMethod::make_method("LPinned;.read:(LPinned;)V")
+                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  m->set_code(
+      assembler::ircode_from_string(ir(kGet, {{"$UPD", REFERENCE_DESC}})));
+  m->rstate.set_no_optimizations();
+
+  run("LPinned;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {m});
+  EXPECT_EQ(metric("updaters_recognized"), 1)
+      << "recognized, just not rewritten";
+  EXPECT_EQ(metric("calls_rewritten"), 0);
+}
+
+// A holder that is a strict subclass of the type the updater was created for is
+// still a valid holder -- `accessCheck` tests `isInstance`, not identity -- so
+// these sites must lower rather than be conservatively skipped.
+TEST_F(AtomicFieldUpdaterLoweringTest, subclassHolderIsLowered) {
+  // LSub; extends LBase;, and the call passes a LSub; where the updater names
+  // LBase;.
+  ClassCreator sub(DexType::make_type("LSub;"));
+  sub.set_super(DexType::make_type("LBase;"));
+  auto* sub_init = DexMethod::make_method("LSub;.<init>:()V")
+                       ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
+  // A concrete method with no code is not a shape any real dex has, and the
+  // other assembled classes here are given a body for the same reason.
+  sub_init->set_code(assembler::ircode_from_string(kInit));
+  sub.add_method(sub_init);
+  auto* sub_cls = sub.create();
+
+  static constexpr const char* kGet = R"((
+    (load-param-object v0)
+    (sget-object "LBase;.U:$UPD")
+    (move-result-pseudo-object v1)
+    (invoke-virtual (v1 v0) "$UPD.get:(Ljava/lang/Object;)Ljava/lang/Object;")
+    (move-result-object v2)
+    (return-void)
+  ))";
+  auto* m = DexMethod::make_method("LBase;.read:(LSub;)V")
+                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  m->set_code(
+      assembler::ircode_from_string(ir(kGet, {{"$UPD", REFERENCE_DESC}})));
+
+  // `LSub;` joins the store so the subclass sits in the pass's scope, not only
+  // in the global type registry.
+  run("LBase;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {m}, {sub_cls});
+  // `blocked_holder_type` is a trace counter, not a metric, so the observable
+  // form of "the subclass was accepted" is that nothing was skipped as
+  // unproven and the site was emitted.
+  EXPECT_EQ(metric("calls_skipped_unproven_types"), 0);
+  EXPECT_EQ(metric("calls_rewritten"), 1);
 }
 
 // Android's non-SDK interface policy is the reason four Unsafe members may not

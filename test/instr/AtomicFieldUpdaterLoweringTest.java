@@ -55,6 +55,26 @@ public class AtomicFieldUpdaterLoweringTest {
 
   private Holder h;
 
+  /**
+   * A weak CAS may fail spuriously, so a single attempt proves nothing; an unbounded retry would
+   * hang if the lowering made success impossible. This caps the retries so that case fails as an
+   * assertion naming the operation instead of as a harness timeout.
+   */
+  private static final int MAX_CAS_ATTEMPTS = 1000;
+
+  private interface WeakCas {
+    boolean attempt();
+  }
+
+  private static boolean retryWeakCas(WeakCas cas) {
+    for (int i = 0; i < MAX_CAS_ATTEMPTS; i++) {
+      if (cas.attempt()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @Before
   public void setup() {
     h = new Holder();
@@ -141,6 +161,39 @@ public class AtomicFieldUpdaterLoweringTest {
     assertThat(Holder.L.addAndGet(h, -0x1_0000_0000L)).isEqualTo(big + 3);
     assertThat(Holder.L.getAndSet(h, Long.MIN_VALUE)).isEqualTo(big + 3);
     assertThat(Holder.L.get(h)).isEqualTo(Long.MIN_VALUE);
+  }
+
+  @Test
+  public void primitiveLazySetAndWeakCompareAndSet() {
+    // The only two Unsafe members the pass can emit that no other test here
+    // executes: lazySet on the primitive flavors lowers to putOrderedInt and
+    // putOrderedLong. An ordered store is a weaker write than a volatile one,
+    // so getting the width or the ordering wrong produces a value that is
+    // simply never observed -- nothing an IR-level assertion can see.
+    Holder.I.lazySet(h, 11);
+    assertThat(Holder.I.get(h)).isEqualTo(11);
+
+    final long big = 0x2_0000_0003L;
+    Holder.L.lazySet(h, big);
+    assertThat(Holder.L.get(h)).isEqualTo(big);
+
+    // weakCompareAndSet lowers to the same compareAndSwap* as compareAndSet, so
+    // this pins the mapping rather than the member. Retried because the weak
+    // form is permitted to fail spuriously; lowering it to the strong form is
+    // sound precisely because a caller must already tolerate that.
+    //
+    // Bounded rather than a bare `while`: a lowering that compared the wrong
+    // offset or width would never succeed, and an unbounded loop would report
+    // that as a harness timeout instead of naming the broken operation.
+    assertThat(retryWeakCas(() -> Holder.I.weakCompareAndSet(h, 11, 12)))
+        .as("integer weakCompareAndSet never succeeded in %d attempts", MAX_CAS_ATTEMPTS)
+        .isTrue();
+    assertThat(Holder.I.get(h)).isEqualTo(12);
+
+    assertThat(retryWeakCas(() -> Holder.L.weakCompareAndSet(h, big, big + 1)))
+        .as("long weakCompareAndSet never succeeded in %d attempts", MAX_CAS_ATTEMPTS)
+        .isTrue();
+    assertThat(Holder.L.get(h)).isEqualTo(big + 1);
   }
 
   @Test
