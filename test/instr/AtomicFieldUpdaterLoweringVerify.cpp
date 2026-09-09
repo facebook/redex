@@ -197,6 +197,14 @@ TEST_F(PostVerify, AtomicFieldUpdaterLowering) {
   // And the reference flavor keeps its getAndSet, which is unrestricted.
   EXPECT_GT(count_invokes_to_unsafe_member(test, "getAndSetObject"), 0u);
 
+  // `lazySet` lowers to the ordered stores. These three are the members with
+  // the least coverage elsewhere: an ordered write is not observable by
+  // inspecting the caller, so if the JUnit half did not drive all three
+  // flavors, a wrong width or a dropped store would pass everything.
+  EXPECT_GT(count_invokes_to_unsafe_member(test, "putOrderedObject"), 0u);
+  EXPECT_GT(count_invokes_to_unsafe_member(test, "putOrderedInt"), 0u);
+  EXPECT_GT(count_invokes_to_unsafe_member(test, "putOrderedLong"), 0u);
+
   // The shared class supplies only the Unsafe instance. It must NOT carry the
   // offsets: computing one needs `Holder.class`, and this class sits in
   // package `redex` while a holder is often not public, so the lookup would
