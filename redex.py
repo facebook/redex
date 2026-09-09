@@ -1640,6 +1640,17 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             CompressionLevel.DEFAULT,
         ),
         CompressionEntry(
+            "Redex Resource Mapping",
+            lambda args: not _is_preserve_input_dexes(args),
+            False,
+            # Only written when resource files are renamed.
+            [],
+            ["resource-mapping.txt"],
+            "redex-resource-mapping.txt.zst",
+            None,
+            CompressionLevel.BETTER,
+        ),
+        CompressionEntry(
             "Redex Class ID Map",
             lambda args: not _is_preserve_input_dexes(args),
             False,
