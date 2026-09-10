@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-use std::rc::Rc;
 use std::string::ToString;
+
+use triomphe::Arc;
 
 use crate::datatype::AbstractDomain;
 use crate::datatype::bitvec::BitVec;
@@ -22,12 +23,10 @@ enum Node<V> {
         key: BitVec,
         value: V,
     },
-    // Rust doesn't have higher kinded types for Rc.
-    // Ideally we should reuse this enum for an Arc variant of it.
     Branch {
         prefix: BitVec,
-        left: Rc<Node<V>>,
-        right: Rc<Node<V>>,
+        left: Arc<Node<V>>,
+        right: Arc<Node<V>>,
     },
 }
 
@@ -59,8 +58,8 @@ impl<V: Eq> PartialEq for Node<V> {
                 },
             ) => {
                 (l_prefix == r_prefix)
-                    && ((Rc::ptr_eq(l_left, r_left) || l_left == r_left)
-                        && (Rc::ptr_eq(l_right, r_right) || l_right == r_right))
+                    && ((Arc::ptr_eq(l_left, r_left) || l_left == r_left)
+                        && (Arc::ptr_eq(l_right, r_right) || l_right == r_right))
             }
             (_, _) => false,
         }
@@ -98,12 +97,12 @@ impl<V> Node<V> {
     ///   return value of `op` is emplaced to the tree. If the return value of `op` is `None`, a
     ///   value equivalent to the original tree `maybe_node` is returned.
     fn update_node_by_key<F>(
-        maybe_node: Option<Rc<Node<V>>>,
+        maybe_node: Option<Arc<Node<V>>>,
         key: &BitVec,
         op: F,
-    ) -> Option<Rc<Node<V>>>
+    ) -> Option<Arc<Node<V>>>
     where
-        F: FnOnce(Option<Rc<Node<V>>>) -> Option<Rc<Node<V>>>,
+        F: FnOnce(Option<Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
     {
         use Node::*;
 
@@ -119,7 +118,7 @@ impl<V> Node<V> {
                         let maybe_new_node = op(None);
                         match maybe_new_node {
                             Some(new_node) => {
-                                Some(Rc::new(Node::make_branch(new_node, node.clone())))
+                                Some(Arc::new(Node::make_branch(new_node, node.clone())))
                             }
                             None => maybe_node,
                         }
@@ -137,13 +136,13 @@ impl<V> Node<V> {
                                 Self::update_node_by_key(Some(left.clone()), key, op);
                             match maybe_new_left {
                                 Some(new_left) => {
-                                    if Rc::ptr_eq(&new_left, left) {
+                                    if Arc::ptr_eq(&new_left, left) {
                                         // The subtree is unchanged, so is this branch.
                                         // Returning it as-is keeps the tree shared with
                                         // whatever else points at it.
                                         Some(node.clone())
                                     } else {
-                                        Some(Rc::new(Node::make_branch(new_left, right.clone())))
+                                        Some(Arc::new(Node::make_branch(new_left, right.clone())))
                                     }
                                 }
                                 None => Some(right.clone()),
@@ -153,10 +152,10 @@ impl<V> Node<V> {
                                 Self::update_node_by_key(Some(right.clone()), key, op);
                             match maybe_new_right {
                                 Some(new_right) => {
-                                    if Rc::ptr_eq(&new_right, right) {
+                                    if Arc::ptr_eq(&new_right, right) {
                                         Some(node.clone())
                                     } else {
-                                        Some(Rc::new(Node::make_branch(left.clone(), new_right)))
+                                        Some(Arc::new(Node::make_branch(left.clone(), new_right)))
                                     }
                                 }
                                 None => Some(left.clone()),
@@ -166,7 +165,7 @@ impl<V> Node<V> {
                         // Branch differs, create new branch like how you'd do with another leaf.
                         match op(None) {
                             Some(new_node) => {
-                                Some(Rc::new(Node::make_branch(new_node, node.clone())))
+                                Some(Arc::new(Node::make_branch(new_node, node.clone())))
                             }
                             None => maybe_node,
                         }
@@ -179,9 +178,9 @@ impl<V> Node<V> {
     }
 
     fn find_node_by_key<'a>(
-        maybe_node: Option<&'a Rc<Node<V>>>,
+        maybe_node: Option<&'a Arc<Node<V>>>,
         lookup_key: &BitVec,
-    ) -> Option<&'a Rc<Node<V>>> {
+    ) -> Option<&'a Arc<Node<V>>> {
         use Node::*;
         if let Some(node) = maybe_node {
             match node.as_ref() {
@@ -216,9 +215,9 @@ impl<V> Node<V> {
     }
 
     fn find_leaf_by_key<'a>(
-        maybe_node: Option<&'a Rc<Node<V>>>,
+        maybe_node: Option<&'a Arc<Node<V>>>,
         lookup_key: &BitVec,
-    ) -> Option<&'a Rc<Node<V>>> {
+    ) -> Option<&'a Arc<Node<V>>> {
         if let Some(found_node) = Self::find_node_by_key(maybe_node, lookup_key) {
             return match found_node.as_ref() {
                 Node::Leaf { key: _, value: _ } => Some(found_node),
@@ -228,7 +227,7 @@ impl<V> Node<V> {
         None
     }
 
-    fn contains_leaf_with_key(maybe_node: Option<&Rc<Node<V>>>, lookup_key: &BitVec) -> bool {
+    fn contains_leaf_with_key(maybe_node: Option<&Arc<Node<V>>>, lookup_key: &BitVec) -> bool {
         Self::find_leaf_by_key(maybe_node, lookup_key).is_some()
     }
 
@@ -244,7 +243,7 @@ impl<V> Node<V> {
         }
     }
 
-    fn make_branch(one: Rc<Self>, other: Rc<Self>) -> Self {
+    fn make_branch(one: Arc<Self>, other: Arc<Self>) -> Self {
         let v1 = one.key_or_prefix();
         let v2 = other.key_or_prefix();
         assert!(v1 != v2);
@@ -274,11 +273,11 @@ impl<V> Node<V> {
     }
 
     fn combine_leaves_by_key(
-        node: Rc<Node<V>>,
+        node: Arc<Node<V>>,
         key: &BitVec,
-        other: Rc<Node<V>>,
-        leaf_combine: &impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>>,
-    ) -> Rc<Node<V>> {
+        other: Arc<Node<V>>,
+        leaf_combine: &impl Fn(Arc<Node<V>>, Arc<Node<V>>) -> Option<Arc<Node<V>>>,
+    ) -> Arc<Node<V>> {
         let updated = Self::update_node_by_key(Some(node), key, move |leaf| match leaf {
             Some(leaf) => leaf_combine(leaf, other),
             None => Some(other),
@@ -290,13 +289,13 @@ impl<V> Node<V> {
     /// If duplicate keys are found, two nodes are passed to `leaf_combine` shall be called
     /// with values from s on the left hand side and values from t on the right hand side.
     fn merge_trees(
-        s: &Rc<Node<V>>,
-        t: &Rc<Node<V>>,
-        leaf_combine: &impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>>,
-    ) -> Rc<Node<V>> {
+        s: &Arc<Node<V>>,
+        t: &Arc<Node<V>>,
+        leaf_combine: &impl Fn(Arc<Node<V>>, Arc<Node<V>>) -> Option<Arc<Node<V>>>,
+    ) -> Arc<Node<V>> {
         use Node::*;
 
-        if Rc::ptr_eq(s, t) {
+        if Arc::ptr_eq(s, t) {
             // Quickly checking if the two trees are identical to allow union
             // operation to complete in sublinear time when operands share some structures.
             return s.clone();
@@ -343,50 +342,50 @@ impl<V> Node<V> {
                     let new_left = Self::merge_trees(s_left, t_left, leaf_combine);
                     let new_right = Self::merge_trees(s_right, t_right, leaf_combine);
 
-                    if Rc::ptr_eq(&new_left, s_left) && Rc::ptr_eq(&new_right, s_right) {
+                    if Arc::ptr_eq(&new_left, s_left) && Arc::ptr_eq(&new_right, s_right) {
                         s.clone()
-                    } else if Rc::ptr_eq(&new_left, t_left) && Rc::ptr_eq(&new_right, t_right) {
+                    } else if Arc::ptr_eq(&new_left, t_left) && Arc::ptr_eq(&new_right, t_right) {
                         t.clone()
                     } else {
-                        Rc::new(Node::make_branch(new_left, new_right))
+                        Arc::new(Node::make_branch(new_left, new_right))
                     }
                 } else if t_prefix.begins_with(s_prefix) {
                     let branching_bit = t_prefix.get(s_prefix.len());
                     if !branching_bit {
                         let new_left = Self::merge_trees(s_left, t, leaf_combine);
-                        if Rc::ptr_eq(s_left, &new_left) {
+                        if Arc::ptr_eq(s_left, &new_left) {
                             s.clone()
                         } else {
-                            Rc::new(Node::make_branch(new_left, s_right.clone()))
+                            Arc::new(Node::make_branch(new_left, s_right.clone()))
                         }
                     } else {
                         let new_right = Self::merge_trees(s_right, t, leaf_combine);
-                        if Rc::ptr_eq(s_right, &new_right) {
+                        if Arc::ptr_eq(s_right, &new_right) {
                             s.clone()
                         } else {
-                            Rc::new(Node::make_branch(s_left.clone(), new_right))
+                            Arc::new(Node::make_branch(s_left.clone(), new_right))
                         }
                     }
                 } else if s_prefix.begins_with(t_prefix) {
                     let branching_bit = s_prefix.get(t_prefix.len());
                     if !branching_bit {
                         let new_left = Self::merge_trees(s, t_left, leaf_combine);
-                        if Rc::ptr_eq(t_left, &new_left) {
+                        if Arc::ptr_eq(t_left, &new_left) {
                             t.clone()
                         } else {
-                            Rc::new(Node::make_branch(new_left, t_right.clone()))
+                            Arc::new(Node::make_branch(new_left, t_right.clone()))
                         }
                     } else {
                         let new_right = Self::merge_trees(s, t_right, leaf_combine);
-                        if Rc::ptr_eq(t_right, &new_right) {
+                        if Arc::ptr_eq(t_right, &new_right) {
                             t.clone()
                         } else {
-                            Rc::new(Node::make_branch(t_left.clone(), new_right))
+                            Arc::new(Node::make_branch(t_left.clone(), new_right))
                         }
                     }
                 } else {
                     // The prefixes disagree.
-                    Rc::new(Node::make_branch(s.clone(), t.clone()))
+                    Arc::new(Node::make_branch(s.clone(), t.clone()))
                 }
             }
         }
@@ -396,13 +395,13 @@ impl<V> Node<V> {
     /// s and t. If duplicate keys are found, two nodes are passed to `leaf_combine` shall be
     /// called with values from s on the left hand side and values from t on the right hand side.
     fn intersect_trees(
-        s: &Rc<Node<V>>,
-        t: &Rc<Node<V>>,
-        leaf_combine: &impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>>,
-    ) -> Option<Rc<Node<V>>> {
+        s: &Arc<Node<V>>,
+        t: &Arc<Node<V>>,
+        leaf_combine: &impl Fn(Arc<Node<V>>, Arc<Node<V>>) -> Option<Arc<Node<V>>>,
+    ) -> Option<Arc<Node<V>>> {
         use Node::*;
 
-        if Rc::ptr_eq(s, t) {
+        if Arc::ptr_eq(s, t) {
             // This conditions allows the inclusion test to run in sublinear time
             // when comparing Patricia trees that share some structure.
             return Some(s.clone());
@@ -438,10 +437,10 @@ impl<V> Node<V> {
                         (left, None) => left,
                         (None, right) => right,
                         (Some(left), Some(right)) => {
-                            if Rc::ptr_eq(&left, s_left) && Rc::ptr_eq(&right, s_right) {
+                            if Arc::ptr_eq(&left, s_left) && Arc::ptr_eq(&right, s_right) {
                                 Some(s.clone())
                             } else {
-                                Some(Rc::new(Self::make_branch(left, right)))
+                                Some(Arc::new(Self::make_branch(left, right)))
                             }
                         }
                     }
@@ -467,10 +466,10 @@ impl<V> Node<V> {
     }
 
     /// Returns true if s is a subset of t.
-    fn is_tree_subset_of(s: &Rc<Node<V>>, t: &Rc<Node<V>>) -> bool {
+    fn is_tree_subset_of(s: &Arc<Node<V>>, t: &Arc<Node<V>>) -> bool {
         use Node::*;
 
-        if Rc::ptr_eq(s, t) {
+        if Arc::ptr_eq(s, t) {
             // This conditions allows the inclusion test to run in sublinear time
             // when comparing Patricia trees that share some structure.
             return true;
@@ -513,7 +512,7 @@ impl<V> Node<V> {
 }
 
 impl<D: AbstractDomain> Node<D> {
-    fn is_tree_leq(s: Option<&Rc<Node<D>>>, t: Option<&Rc<Node<D>>>, implicit_value: &D) -> bool {
+    fn is_tree_leq(s: Option<&Arc<Node<D>>>, t: Option<&Arc<Node<D>>>, implicit_value: &D) -> bool {
         match (s, t) {
             (None, None) => true,
             (None, _) => implicit_value.is_bottom(),
@@ -522,10 +521,10 @@ impl<D: AbstractDomain> Node<D> {
         }
     }
 
-    fn is_tree_leq_impl(s: &Rc<Node<D>>, t: &Rc<Node<D>>, implicit_value: &D) -> bool {
+    fn is_tree_leq_impl(s: &Arc<Node<D>>, t: &Arc<Node<D>>, implicit_value: &D) -> bool {
         use Node::*;
 
-        if Rc::ptr_eq(s, t) {
+        if Arc::ptr_eq(s, t) {
             return true;
         }
 
@@ -631,7 +630,7 @@ impl<D: AbstractDomain> Node<D> {
 // Create an interface that gives the user a "mutable" illusion of an immutable data structure.
 #[derive(Debug)]
 pub(crate) struct PatriciaTree<V> {
-    root: Option<Rc<Node<V>>>,
+    root: Option<Arc<Node<V>>>,
 }
 
 impl<V> PatriciaTree<V> {
@@ -654,7 +653,7 @@ impl<V> PatriciaTree<V> {
 
     fn apply_root_operation<F>(&mut self, op: F)
     where
-        F: FnOnce(Option<Rc<Node<V>>>) -> Option<Rc<Node<V>>>,
+        F: FnOnce(Option<Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
     {
         let mut temp_root = None;
         std::mem::swap(&mut self.root, &mut temp_root);
@@ -666,7 +665,7 @@ impl<V> PatriciaTree<V> {
         V: Eq,
     {
         let leaf_key = key.clone();
-        let node_op = move |existing: Option<Rc<Node<V>>>| {
+        let node_op = move |existing: Option<Arc<Node<V>>>| {
             let value_is_unchanged = matches!(
                 existing.as_deref(),
                 Some(Node::Leaf { value: old_value, .. }) if *old_value == value
@@ -677,7 +676,7 @@ impl<V> PatriciaTree<V> {
                 // shared rather than rebuilt.
                 existing
             } else {
-                Some(Rc::new(Node::Leaf {
+                Some(Arc::new(Node::Leaf {
                     key: leaf_key,
                     value,
                 }))
@@ -714,13 +713,13 @@ impl<V> PatriciaTree<V> {
 
     fn get_leaf_combine_with_value_op_semantics(
         value_op_on_duplicate_key: impl Fn(&V, &V) -> V,
-    ) -> impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>>
+    ) -> impl Fn(Arc<Node<V>>, Arc<Node<V>>) -> Option<Arc<Node<V>>>
     where
         V: Eq,
     {
         use Node::*;
 
-        move |one_leaf: Rc<Node<V>>, other_leaf: Rc<Node<V>>| match (
+        move |one_leaf: Arc<Node<V>>, other_leaf: Arc<Node<V>>| match (
             one_leaf.as_ref(),
             other_leaf.as_ref(),
         ) {
@@ -740,7 +739,7 @@ impl<V> PatriciaTree<V> {
                     // recognize an unchanged subtree and share it.
                     Some(one_leaf.clone())
                 } else {
-                    Some(Rc::new(Leaf {
+                    Some(Arc::new(Leaf {
                         key: key.clone(),
                         value: new_value,
                     }))
@@ -824,7 +823,7 @@ impl<V: Eq> PartialEq for PatriciaTree<V> {
         match (self.root.as_ref(), other.root.as_ref()) {
             (None, None) => true,
             (Some(ref self_node), Some(ref other_node)) => {
-                Rc::ptr_eq(self_node, other_node) || (self_node == other_node)
+                Arc::ptr_eq(self_node, other_node) || (self_node == other_node)
             }
             (_, _) => false,
         }
@@ -854,7 +853,7 @@ impl<'a, V> PatriciaTreePostOrderIterator<'a, V> {
         ret
     }
 
-    fn next_leaf(&mut self, subtree: &'a Rc<Node<V>>) {
+    fn next_leaf(&mut self, subtree: &'a Arc<Node<V>>) {
         let mut node = subtree.as_ref();
 
         while let Node::Branch {
@@ -913,7 +912,7 @@ mod tests {
     use crate::datatype::patricia_tree_impl::*;
 
     fn root_ptr<V>(tree: &PatriciaTree<V>) -> *const Node<V> {
-        tree.root.as_ref().map_or(std::ptr::null(), Rc::as_ptr)
+        tree.root.as_ref().map_or(std::ptr::null(), Arc::as_ptr)
     }
 
     fn set_of(range: std::ops::Range<u32>) -> PatriciaTree<()> {
