@@ -661,12 +661,28 @@ impl<V> PatriciaTree<V> {
         self.root = op(temp_root);
     }
 
-    pub(crate) fn insert(&mut self, key: BitVec, value: V) {
-        let new_leaf = Rc::new(Node::Leaf {
-            key: key.clone(),
-            value,
-        });
-        let node_op = move |_| Some(new_leaf);
+    pub(crate) fn insert(&mut self, key: BitVec, value: V)
+    where
+        V: Eq,
+    {
+        let leaf_key = key.clone();
+        let node_op = move |existing: Option<Rc<Node<V>>>| {
+            let value_is_unchanged = matches!(
+                existing.as_deref(),
+                Some(Node::Leaf { value: old_value, .. }) if *old_value == value
+            );
+
+            if value_is_unchanged {
+                // Keep the existing leaf, so that the branches above it are
+                // shared rather than rebuilt.
+                existing
+            } else {
+                Some(Rc::new(Node::Leaf {
+                    key: leaf_key,
+                    value,
+                }))
+            }
+        };
         let root_op = move |root| Node::update_node_by_key(root, &key, node_op);
         self.apply_root_operation(root_op);
     }
@@ -926,6 +942,33 @@ mod tests {
         let mut united = tree.clone();
         united.union_with(&set_of(0..100), |_, _| ());
         assert_eq!(root_ptr(&united), root);
+
+        let mut inserted = tree.clone();
+        inserted.insert(500u32.into(), ());
+        assert_eq!(root_ptr(&inserted), root);
+    }
+
+    /// Re-inserting an equal binding must be free, but a different value must
+    /// still take effect and must not disturb trees sharing the old one.
+    #[test]
+    fn test_insert_of_existing_binding_preserves_sharing() {
+        let mut tree: PatriciaTree<u32> = PatriciaTree::new();
+        for i in 0u32..1000 {
+            tree.insert(i.into(), i * 2);
+        }
+        let root = root_ptr(&tree);
+
+        let mut same = tree.clone();
+        same.insert(500u32.into(), 1000);
+        assert_eq!(root_ptr(&same), root);
+        assert_eq!(same.get(&500u32.into()), Some(&1000));
+
+        let mut changed = tree.clone();
+        changed.insert(500u32.into(), 7);
+        assert_ne!(root_ptr(&changed), root);
+        assert_eq!(changed.len(), 1000);
+        assert_eq!(changed.get(&500u32.into()), Some(&7));
+        assert_eq!(tree.get(&500u32.into()), Some(&1000));
     }
 
     /// The leaf reuse above must not swallow an actual change of value.
