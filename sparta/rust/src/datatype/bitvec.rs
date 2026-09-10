@@ -12,21 +12,22 @@ use std::string::ToString;
 
 const POINTER_SIZE_IN_BITS: usize = std::mem::size_of::<usize>() * 8;
 
-union PointerOrBits {
-    pointer: *mut usize, // TODO: When len > pointer size, allocate and store pointer here.
-    bits: usize,
-}
-
+/// A bit string of at most `POINTER_SIZE_IN_BITS` bits, indexed from the least
+/// significant bit.
+///
+/// This is used both for leaf keys, where `len` is the full width of the key
+/// type, and for branch prefixes, where `len` is the branching bit position and
+/// is therefore variable.
+#[derive(Clone, PartialEq, Eq)]
 pub struct BitVec {
-    actual_storage: PointerOrBits,
+    bits: usize,
     len: usize,
 }
 
 impl Debug for BitVec {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        let bits_str = format!("{:#b}", unsafe { self.actual_storage.bits });
         f.debug_struct("BitVec")
-            .field("actual_storage", &bits_str)
+            .field("bits", &format_args!("{:#b}", self.bits))
             .field("len", &self.len)
             .finish()
     }
@@ -44,25 +45,20 @@ fn make_mask(len: usize) -> usize {
 
 impl BitVec {
     pub fn new() -> Self {
-        BitVec {
-            actual_storage: PointerOrBits { bits: 0 },
-            len: 0,
-        }
+        BitVec { bits: 0, len: 0 }
     }
 
     pub fn from_int(v: usize) -> Self {
         BitVec {
-            actual_storage: PointerOrBits { bits: v },
+            bits: v,
             len: POINTER_SIZE_IN_BITS,
         }
     }
 
     pub fn from_int_with_len(v: usize, len: usize) -> Self {
-        assert!(len <= POINTER_SIZE_IN_BITS);
-
         let mask = make_mask(len);
         BitVec {
-            actual_storage: PointerOrBits { bits: v & mask },
+            bits: v & mask,
             len,
         }
     }
@@ -70,39 +66,8 @@ impl BitVec {
     pub fn get(&self, idx: usize) -> bool {
         assert!(idx < self.len, "idx: {}, len: {}", idx, self.len);
 
-        let storage_unit;
-        let intraunit_offset;
-
-        if self.len <= POINTER_SIZE_IN_BITS {
-            // Actual vector is stored in where it's supposed to be a pointer.
-            storage_unit = unsafe { self.actual_storage.bits };
-            intraunit_offset = idx;
-        } else {
-            todo!("Long bitvec not implemented");
-        }
-
-        let mask: usize = 1 << intraunit_offset;
-        (storage_unit & mask) != 0
-    }
-
-    fn push(&mut self, val: bool) {
-        let storage_unit: &mut usize;
-        let intraunit_offset: usize;
-
-        if self.len < POINTER_SIZE_IN_BITS {
-            storage_unit = unsafe { &mut self.actual_storage.bits };
-            intraunit_offset = self.len;
-        } else {
-            todo!("Long bitvec not implemented");
-        }
-
-        if val {
-            *storage_unit |= 1 << intraunit_offset;
-        } else {
-            *storage_unit &= !(1 << intraunit_offset);
-        }
-
-        self.len += 1;
+        let mask: usize = 1 << idx;
+        (self.bits & mask) != 0
     }
 
     pub fn len(&self) -> usize {
@@ -114,25 +79,15 @@ impl BitVec {
             return false;
         }
 
-        if self.len() <= POINTER_SIZE_IN_BITS {
-            let compare_mask = make_mask(prefix.len());
-            let compare_left = unsafe { self.actual_storage.bits & compare_mask };
-            let compare_right = unsafe { prefix.actual_storage.bits & compare_mask };
-            compare_left == compare_right
-        } else {
-            todo!("Long bitvec not implemented");
-        }
+        let compare_mask = make_mask(prefix.len());
+        (self.bits & compare_mask) == (prefix.bits & compare_mask)
     }
 
     pub fn common_prefix(v1: &BitVec, v2: &BitVec) -> BitVec {
         let min_len = std::cmp::min(v1.len(), v2.len());
 
-        if min_len > POINTER_SIZE_IN_BITS {
-            todo!("Long bitvec not implemented");
-        }
-
-        let cmp1 = unsafe { v1.actual_storage.bits };
-        let cmp2 = unsafe { v2.actual_storage.bits };
+        let cmp1 = v1.bits;
+        let cmp2 = v2.bits;
 
         let mask = make_mask(min_len);
 
@@ -165,45 +120,11 @@ impl Default for BitVec {
     }
 }
 
-impl Clone for BitVec {
-    fn clone(&self) -> Self {
-        if self.len <= POINTER_SIZE_IN_BITS {
-            Self {
-                actual_storage: PointerOrBits {
-                    bits: unsafe { self.actual_storage.bits },
-                },
-                len: self.len,
-            }
-        } else {
-            todo!("Long bitvec not implemented");
-        }
-    }
-}
-
 impl ToString for BitVec {
     fn to_string(&self) -> String {
-        let bits = unsafe { self.actual_storage.bits };
-        format!("({} bits {:#b} aka {})", self.len, bits, bits)
+        format!("({} bits {:#b} aka {})", self.len, self.bits, self.bits)
     }
 }
-
-impl PartialEq for BitVec {
-    fn eq(&self, other: &Self) -> bool {
-        if self.len != other.len {
-            return false;
-        }
-
-        if self.len > POINTER_SIZE_IN_BITS {
-            todo!("Long bitvec not implemented");
-        }
-
-        let compare_left = unsafe { self.actual_storage.bits };
-        let compare_right = unsafe { other.actual_storage.bits };
-        compare_left == compare_right
-    }
-}
-
-impl Eq for BitVec {}
 
 macro_rules! impl_bitvec_convert_for_integral_type {
     ( $ ($type:ty), * ) => {
@@ -221,8 +142,7 @@ macro_rules! impl_bitvec_convert_for_integral_type {
                     if bv.len() > LIMIT {
                         panic!("BitVec too long for $type")
                     } else {
-                        let bits = unsafe { bv.actual_storage.bits };
-                        (bits & make_mask(bv.len())) as $type
+                        (bv.bits & make_mask(bv.len())) as $type
                     }
                 }
             }
