@@ -13,6 +13,9 @@ disjoint-sets = "0.4.2"
 im = "15.1.0"
 petgraph = "0.6.2"
 sparta-proc-macros = { path = "../rust-proc-macros", version = "0.1.1" }
+# `default-features = false` drops the optional serde (and its syn/proc-macro
+# chain) and stable_deref_trait dependencies, which this crate does not use.
+triomphe = { version = "0.1.16", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 rand = "0.10"
