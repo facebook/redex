@@ -90,23 +90,27 @@ impl<V> Node<V> {
     /// Returns: updated tree.
     ///
     /// `op` will be called in two separate occasions.
-    /// - When node with `key` is found. Then `op` will be called with a `Some` value containing
-    ///   the matching node. The entire matching subtree will be replaced by return value of `op`.
-    ///   If `op` returned `None`, the entire subtree will be removed.
+    /// - When node with `key` is found. Then `op` will be called with a reference to the matching
+    ///   node. The entire matching subtree will be replaced by return value of `op`. If `op`
+    ///   returned `None`, the entire subtree will be removed.
     /// - When node with `key` is not found. Then `op` will be called with a `None` value. The
     ///   return value of `op` is emplaced to the tree. If the return value of `op` is `None`, a
     ///   value equivalent to the original tree `maybe_node` is returned.
+    ///
+    /// The node is borrowed rather than owned: taking it by value would clone an
+    /// `Arc` at every level of the descent, and each of those is an atomic
+    /// increment on a node the recursion usually hands straight back.
     fn update_node_by_key<F>(
-        maybe_node: Option<Arc<Node<V>>>,
+        maybe_node: Option<&Arc<Node<V>>>,
         key: &BitVec,
         op: F,
     ) -> Option<Arc<Node<V>>>
     where
-        F: FnOnce(Option<Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
+        F: FnOnce(Option<&Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
     {
         use Node::*;
 
-        if let Some(ref node) = maybe_node {
+        if let Some(node) = maybe_node {
             match node.as_ref() {
                 Leaf {
                     key: node_key,
@@ -120,7 +124,7 @@ impl<V> Node<V> {
                             Some(new_node) => {
                                 Some(Arc::new(Node::make_branch(new_node, node.clone())))
                             }
-                            None => maybe_node,
+                            None => maybe_node.cloned(),
                         }
                     }
                 }
@@ -132,8 +136,7 @@ impl<V> Node<V> {
                     if key.begins_with(prefix) {
                         let branching_bit = key.get(prefix.len());
                         if !branching_bit {
-                            let maybe_new_left =
-                                Self::update_node_by_key(Some(left.clone()), key, op);
+                            let maybe_new_left = Self::update_node_by_key(Some(left), key, op);
                             match maybe_new_left {
                                 Some(new_left) => {
                                     if Arc::ptr_eq(&new_left, left) {
@@ -148,8 +151,7 @@ impl<V> Node<V> {
                                 None => Some(right.clone()),
                             }
                         } else {
-                            let maybe_new_right =
-                                Self::update_node_by_key(Some(right.clone()), key, op);
+                            let maybe_new_right = Self::update_node_by_key(Some(right), key, op);
                             match maybe_new_right {
                                 Some(new_right) => {
                                     if Arc::ptr_eq(&new_right, right) {
@@ -167,7 +169,7 @@ impl<V> Node<V> {
                             Some(new_node) => {
                                 Some(Arc::new(Node::make_branch(new_node, node.clone())))
                             }
-                            None => maybe_node,
+                            None => maybe_node.cloned(),
                         }
                     }
                 }
@@ -273,13 +275,13 @@ impl<V> Node<V> {
     }
 
     fn combine_leaves_by_key(
-        node: Arc<Node<V>>,
+        node: &Arc<Node<V>>,
         key: &BitVec,
         other: Arc<Node<V>>,
         leaf_combine: &impl Fn(Arc<Node<V>>, Arc<Node<V>>) -> Option<Arc<Node<V>>>,
     ) -> Arc<Node<V>> {
         let updated = Self::update_node_by_key(Some(node), key, move |leaf| match leaf {
-            Some(leaf) => leaf_combine(leaf, other),
+            Some(leaf) => leaf_combine(leaf.clone(), other),
             None => Some(other),
         });
         updated.unwrap() // Leaf combine should not make deletions.
@@ -313,7 +315,7 @@ impl<V> Node<V> {
             ) => {
                 // Insert t into s, where s may or may not be a leaf.
                 // If t has the same key as one of the element in s, t is rhs of the combine operator.
-                Self::combine_leaves_by_key(s.clone(), t_key, t.clone(), leaf_combine)
+                Self::combine_leaves_by_key(s, t_key, t.clone(), leaf_combine)
             }
             (
                 Leaf {
@@ -323,7 +325,7 @@ impl<V> Node<V> {
                 _,
             ) => {
                 // Insert s into t
-                Self::combine_leaves_by_key(t.clone(), s_key, s.clone(), leaf_combine)
+                Self::combine_leaves_by_key(t, s_key, s.clone(), leaf_combine)
             }
             (
                 Branch {
@@ -665,16 +667,16 @@ impl<V> PatriciaTree<V> {
         V: Eq,
     {
         let leaf_key = key.clone();
-        let node_op = move |existing: Option<Arc<Node<V>>>| {
+        let node_op = move |existing: Option<&Arc<Node<V>>>| {
             let value_is_unchanged = matches!(
-                existing.as_deref(),
+                existing.map(Arc::as_ref),
                 Some(Node::Leaf { value: old_value, .. }) if *old_value == value
             );
 
             if value_is_unchanged {
                 // Keep the existing leaf, so that the branches above it are
                 // shared rather than rebuilt.
-                existing
+                existing.cloned()
             } else {
                 Some(Arc::new(Node::Leaf {
                     key: leaf_key,
@@ -682,7 +684,9 @@ impl<V> PatriciaTree<V> {
                 }))
             }
         };
-        let root_op = move |root| Node::update_node_by_key(root, &key, node_op);
+        let root_op = move |root: Option<Arc<Node<V>>>| {
+            Node::update_node_by_key(root.as_ref(), &key, node_op)
+        };
         self.apply_root_operation(root_op);
     }
 
@@ -703,7 +707,9 @@ impl<V> PatriciaTree<V> {
     }
 
     pub(crate) fn remove(&mut self, key: &BitVec) {
-        let root_op = move |root| Node::update_node_by_key(root, key, |_| None);
+        let root_op = move |root: Option<Arc<Node<V>>>| {
+            Node::update_node_by_key(root.as_ref(), key, |_| None)
+        };
         self.apply_root_operation(root_op);
     }
 
@@ -921,6 +927,27 @@ mod tests {
             tree.insert(i.into(), ());
         }
         tree
+    }
+
+    #[test]
+    fn test_update_node_by_key_borrows_matching_node() {
+        let key: BitVec = 42u32.into();
+        let root = Arc::new(Node::Leaf {
+            key: key.clone(),
+            value: (),
+        });
+
+        let updated = Node::update_node_by_key(Some(&root), &key, |existing| {
+            let existing = existing.expect("the root leaf should match the key");
+            assert!(
+                Arc::is_unique(existing),
+                "the operation should not receive a cloned `Arc`"
+            );
+            Some(existing.clone())
+        })
+        .expect("the operation should retain the matching root");
+
+        assert!(Arc::ptr_eq(&updated, &root));
     }
 
     /// Operations whose result is equal to their input must return the input
